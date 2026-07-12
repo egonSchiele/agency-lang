@@ -3425,6 +3425,10 @@ export class TypeScriptBuilder {
       this.agencyConfig.maxToolCallRounds || 10,
     );
     runPromptEntries.removedTools = ts.self("__removedTools");
+    // Decision 8: hand runPrompt this function's own locals object so a
+    // destructive tool executed inside the call marks OUR `__destructiveRan`,
+    // which our exit stamp reads. By-reference, exactly like `removedTools`.
+    runPromptEntries.destructiveSink = ts.runtime.self;
     runPromptEntries.checkpointInfo = ts.raw("runner.getCheckpointInfo()");
 
     const runPromptCall = $(ts.id("runPrompt"))

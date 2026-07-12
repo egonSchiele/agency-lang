@@ -561,6 +561,7 @@ graph.node("neutralStaysCallable", async (__state) => {
           },
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
+          destructiveSink: __self,
           checkpointInfo: runner2.getCheckpointInfo()
         });
         if (hasInterrupts(__stack.locals.result)) {
@@ -655,6 +656,7 @@ graph.node("destructiveRemoved", async (__state) => {
           },
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
+          destructiveSink: __self,
           checkpointInfo: runner2.getCheckpointInfo()
         });
         if (hasInterrupts(__stack.locals.result)) {
@@ -713,6 +715,907 @@ graph.node("destructiveRemoved", async (__state) => {
     };
   }
 });
+async function __succeedTool_impl(id) {
+  const __setupData = setupFunction();
+  const __stack = __setupData.stack;
+  const __step = __setupData.step;
+  const __self = __setupData.self;
+  const __ctx = getRuntimeContext().ctx;
+  let __forked;
+  let __functionCompleted = false;
+  if (!__globals().isInitialized("tests/agency-js/tool-tiers/agent.agency")) {
+    await __initializeGlobals(__ctx);
+  }
+  let __funcStartTime = performance.now();
+  __stack.args["id"] = id;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "tests/agency-js/tool-tiers/agent.agency", scopeName: "succeedTool", threads: __setupData.threads });
+  let __resultCheckpointId = -1;
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = void 0;
+    if ("id" in __overrides) {
+      id = __overrides["id"];
+      __stack.args["id"] = id;
+    }
+  }
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+        await callHook({
+          name: "onFunctionStart",
+          data: {
+            functionName: "succeedTool",
+            args: {
+              id
+            },
+            moduleId: "tests/agency-js/tool-tiers/agent.agency"
+          }
+        });
+      });
+      await runner.step(1, async (runner2) => {
+        __functionCompleted = true;
+        runner2.halt(1);
+        return;
+      });
+    });
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+      }
+      return runner.haltResult;
+    }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error;
+    }
+    if (__error instanceof AgencyAbort) {
+      throw __error;
+    }
+    {
+      const __errMsg = __error instanceof Error ? __error.message : String(__error);
+      const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+      const __log = __createLogger(__ctx.logLevel);
+      __log.error("Function succeedTool threw an exception (converted to Failure): " + __errMsg);
+      if (__errStack) __log.error(__errStack);
+      __ctx.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: __errMsg,
+        functionName: "succeedTool"
+      });
+    }
+    return failure(
+      __error instanceof Error ? __error.message : String(__error),
+      {
+        checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+        destructiveRan: __self.__destructiveRan,
+        functionName: "succeedTool",
+        args: __stack.args
+      }
+    );
+  } finally {
+    __stateStack()?.pop();
+    if (__functionCompleted) {
+      await callHook({
+        name: "onFunctionEnd",
+        data: {
+          functionName: "succeedTool",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      });
+    }
+  }
+}
+const succeedTool = __AgencyFunction.create({
+  name: "succeedTool",
+  module: "tests/agency-js/tool-tiers/agent.agency",
+  fn: __succeedTool_impl,
+  params: [{
+    name: "id",
+    hasDefault: false,
+    defaultValue: void 0,
+    variadic: false,
+    isFunctionTyped: false,
+    acceptsResult: false
+  }],
+  toolDefinition: {
+    name: "succeedTool",
+    description: "No description provided.",
+    schema: z.object({ "id": z.string() })
+  },
+  exported: false,
+  markers: {
+    destructive: true
+  }
+}, __toolRegistry);
+async function __callerRunsSucceed_impl() {
+  const __setupData = setupFunction();
+  const __stack = __setupData.stack;
+  const __step = __setupData.step;
+  const __self = __setupData.self;
+  const __ctx = getRuntimeContext().ctx;
+  let __forked;
+  let __functionCompleted = false;
+  if (!__globals().isInitialized("tests/agency-js/tool-tiers/agent.agency")) {
+    await __initializeGlobals(__ctx);
+  }
+  let __funcStartTime = performance.now();
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "tests/agency-js/tool-tiers/agent.agency", scopeName: "callerRunsSucceed", threads: __setupData.threads });
+  let __resultCheckpointId = -1;
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = void 0;
+  }
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+        await callHook({
+          name: "onFunctionStart",
+          data: {
+            functionName: "callerRunsSucceed",
+            args: {},
+            moduleId: "tests/agency-js/tool-tiers/agent.agency"
+          }
+        });
+      });
+      await runner.step(1, async (runner2) => {
+        __self.__removedTools = __self.__removedTools || [];
+        __stack.locals._ = await runPrompt({
+          prompt: `Use succeedTool on 'y'.`,
+          messages: __threads().getOrCreateActive(),
+          clientConfig: {
+            "tools": [succeedTool]
+          },
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          destructiveSink: __self,
+          checkpointInfo: runner2.getCheckpointInfo()
+        });
+        if (hasInterrupts(__stack.locals._)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          runner2.halt(__stack.locals._);
+          return;
+        }
+      });
+      await runner.step(2, async (runner2) => {
+        __functionCompleted = true;
+        runner2.halt(failure(`caller failed after a successful destructive tool`, { checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), functionName: "callerRunsSucceed", args: __stack.args }));
+        return;
+      });
+    });
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+      }
+      return runner.haltResult;
+    }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error;
+    }
+    if (__error instanceof AgencyAbort) {
+      throw __error;
+    }
+    {
+      const __errMsg = __error instanceof Error ? __error.message : String(__error);
+      const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+      const __log = __createLogger(__ctx.logLevel);
+      __log.error("Function callerRunsSucceed threw an exception (converted to Failure): " + __errMsg);
+      if (__errStack) __log.error(__errStack);
+      __ctx.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: __errMsg,
+        functionName: "callerRunsSucceed"
+      });
+    }
+    return failure(
+      __error instanceof Error ? __error.message : String(__error),
+      {
+        checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+        destructiveRan: __self.__destructiveRan,
+        functionName: "callerRunsSucceed",
+        args: __stack.args
+      }
+    );
+  } finally {
+    __stateStack()?.pop();
+    if (__functionCompleted) {
+      await callHook({
+        name: "onFunctionEnd",
+        data: {
+          functionName: "callerRunsSucceed",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      });
+    }
+  }
+}
+const callerRunsSucceed = __AgencyFunction.create({
+  name: "callerRunsSucceed",
+  module: "tests/agency-js/tool-tiers/agent.agency",
+  fn: __callerRunsSucceed_impl,
+  params: [],
+  toolDefinition: {
+    name: "callerRunsSucceed",
+    description: "No description provided.",
+    schema: z.object({})
+  },
+  exported: false
+}, __toolRegistry);
+graph.node("callerPoisonedBySuccess", async (__state) => {
+  const __setupData = setupNode({
+    state: __state
+  });
+  const __stack = __setupData.stack;
+  const __step = __setupData.step;
+  const __self = __setupData.self;
+  const __ctx = getRuntimeContext().ctx;
+  let __forked;
+  let __functionCompleted = false;
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/agency-js/tool-tiers/agent.agency", scopeName: "callerPoisonedBySuccess", threads: __setupData.threads });
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+        await callHook({
+          name: "onNodeStart",
+          data: {
+            nodeName: "callerPoisonedBySuccess"
+          }
+        });
+      });
+      await runner.step(1, async (runner2) => {
+        __stack.locals.r = await __call(callerRunsSucceed, {
+          type: "positional",
+          args: []
+        });
+        if (hasInterrupts(__stack.locals.r)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          runner2.halt({
+            ...__state,
+            data: __stack.locals.r
+          });
+          return;
+        }
+      });
+      await runner.ifElse(2, [
+        {
+          condition: async () => await isFailure(__stack.locals.r),
+          body: async (runner2) => {
+            await runner2.step(0, async (runner3) => {
+              runner3.halt({
+                messages: __threads(),
+                data: __stack.locals.r.destructiveRan
+              });
+              return;
+            });
+          }
+        }
+      ]);
+      await runner.step(3, async (runner2) => {
+        runner2.halt({
+          messages: __threads(),
+          data: `unexpected`
+        });
+        return;
+      });
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.hook(4, async () => {
+      await callHook({
+        name: "onNodeEnd",
+        data: {
+          nodeName: "callerPoisonedBySuccess",
+          data: void 0
+        }
+      });
+    });
+    return {
+      messages: __threads(),
+      data: void 0
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error;
+    }
+    if (__error instanceof AgencyAbort) {
+      throw __error;
+    }
+    {
+      const __errMsg = __error instanceof Error ? __error.message : String(__error);
+      const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+      const __log = __createLogger(__ctx.logLevel);
+      __log.error(`Node callerPoisonedBySuccess crashed: ${__errMsg}`);
+      if (__errStack) __log.error(__errStack);
+      __ctx.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: __errMsg,
+        functionName: "callerPoisonedBySuccess"
+      });
+    }
+    return {
+      messages: __threads(),
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "callerPoisonedBySuccess" })
+    };
+  }
+});
+async function __refuseTool_impl(id) {
+  const __setupData = setupFunction();
+  const __stack = __setupData.stack;
+  const __step = __setupData.step;
+  const __self = __setupData.self;
+  const __ctx = getRuntimeContext().ctx;
+  let __forked;
+  let __functionCompleted = false;
+  if (!__globals().isInitialized("tests/agency-js/tool-tiers/agent.agency")) {
+    await __initializeGlobals(__ctx);
+  }
+  let __funcStartTime = performance.now();
+  __stack.args["id"] = id;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "tests/agency-js/tool-tiers/agent.agency", scopeName: "refuseTool", threads: __setupData.threads });
+  let __resultCheckpointId = -1;
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = void 0;
+    if ("id" in __overrides) {
+      id = __overrides["id"];
+      __stack.args["id"] = id;
+    }
+  }
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+        await callHook({
+          name: "onFunctionStart",
+          data: {
+            functionName: "refuseTool",
+            args: {
+              id
+            },
+            moduleId: "tests/agency-js/tool-tiers/agent.agency"
+          }
+        });
+      });
+      await runner.step(1, async (runner2) => {
+        __functionCompleted = true;
+        runner2.halt(failure(`refused before doing anything`, { checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), functionName: "refuseTool", args: __stack.args }));
+        return;
+      });
+    });
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+      }
+      return runner.haltResult;
+    }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error;
+    }
+    if (__error instanceof AgencyAbort) {
+      throw __error;
+    }
+    {
+      const __errMsg = __error instanceof Error ? __error.message : String(__error);
+      const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+      const __log = __createLogger(__ctx.logLevel);
+      __log.error("Function refuseTool threw an exception (converted to Failure): " + __errMsg);
+      if (__errStack) __log.error(__errStack);
+      __ctx.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: __errMsg,
+        functionName: "refuseTool"
+      });
+    }
+    return failure(
+      __error instanceof Error ? __error.message : String(__error),
+      {
+        checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+        destructiveRan: __self.__destructiveRan,
+        functionName: "refuseTool",
+        args: __stack.args
+      }
+    );
+  } finally {
+    __stateStack()?.pop();
+    if (__functionCompleted) {
+      await callHook({
+        name: "onFunctionEnd",
+        data: {
+          functionName: "refuseTool",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      });
+    }
+  }
+}
+const refuseTool = __AgencyFunction.create({
+  name: "refuseTool",
+  module: "tests/agency-js/tool-tiers/agent.agency",
+  fn: __refuseTool_impl,
+  params: [{
+    name: "id",
+    hasDefault: false,
+    defaultValue: void 0,
+    variadic: false,
+    isFunctionTyped: false,
+    acceptsResult: false
+  }],
+  toolDefinition: {
+    name: "refuseTool",
+    description: "No description provided.",
+    schema: z.object({ "id": z.string() })
+  },
+  exported: false,
+  markers: {
+    destructive: true
+  }
+}, __toolRegistry);
+async function __callerRunsRefuse_impl() {
+  const __setupData = setupFunction();
+  const __stack = __setupData.stack;
+  const __step = __setupData.step;
+  const __self = __setupData.self;
+  const __ctx = getRuntimeContext().ctx;
+  let __forked;
+  let __functionCompleted = false;
+  if (!__globals().isInitialized("tests/agency-js/tool-tiers/agent.agency")) {
+    await __initializeGlobals(__ctx);
+  }
+  let __funcStartTime = performance.now();
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "tests/agency-js/tool-tiers/agent.agency", scopeName: "callerRunsRefuse", threads: __setupData.threads });
+  let __resultCheckpointId = -1;
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = void 0;
+  }
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+        await callHook({
+          name: "onFunctionStart",
+          data: {
+            functionName: "callerRunsRefuse",
+            args: {},
+            moduleId: "tests/agency-js/tool-tiers/agent.agency"
+          }
+        });
+      });
+      await runner.step(1, async (runner2) => {
+        __self.__removedTools = __self.__removedTools || [];
+        __stack.locals._ = await runPrompt({
+          prompt: `Use refuseTool on 'x'.`,
+          messages: __threads().getOrCreateActive(),
+          clientConfig: {
+            "tools": [refuseTool]
+          },
+          maxToolCallRounds: 10,
+          removedTools: __self.__removedTools,
+          destructiveSink: __self,
+          checkpointInfo: runner2.getCheckpointInfo()
+        });
+        if (hasInterrupts(__stack.locals._)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          runner2.halt(__stack.locals._);
+          return;
+        }
+      });
+      await runner.step(2, async (runner2) => {
+        __functionCompleted = true;
+        runner2.halt(failure(`caller failed after a refusing destructive tool`, { checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), functionName: "callerRunsRefuse", args: __stack.args }));
+        return;
+      });
+    });
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+      }
+      return runner.haltResult;
+    }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error;
+    }
+    if (__error instanceof AgencyAbort) {
+      throw __error;
+    }
+    {
+      const __errMsg = __error instanceof Error ? __error.message : String(__error);
+      const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+      const __log = __createLogger(__ctx.logLevel);
+      __log.error("Function callerRunsRefuse threw an exception (converted to Failure): " + __errMsg);
+      if (__errStack) __log.error(__errStack);
+      __ctx.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: __errMsg,
+        functionName: "callerRunsRefuse"
+      });
+    }
+    return failure(
+      __error instanceof Error ? __error.message : String(__error),
+      {
+        checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+        destructiveRan: __self.__destructiveRan,
+        functionName: "callerRunsRefuse",
+        args: __stack.args
+      }
+    );
+  } finally {
+    __stateStack()?.pop();
+    if (__functionCompleted) {
+      await callHook({
+        name: "onFunctionEnd",
+        data: {
+          functionName: "callerRunsRefuse",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      });
+    }
+  }
+}
+const callerRunsRefuse = __AgencyFunction.create({
+  name: "callerRunsRefuse",
+  module: "tests/agency-js/tool-tiers/agent.agency",
+  fn: __callerRunsRefuse_impl,
+  params: [],
+  toolDefinition: {
+    name: "callerRunsRefuse",
+    description: "No description provided.",
+    schema: z.object({})
+  },
+  exported: false
+}, __toolRegistry);
+graph.node("callerNotPoisoned", async (__state) => {
+  const __setupData = setupNode({
+    state: __state
+  });
+  const __stack = __setupData.stack;
+  const __step = __setupData.step;
+  const __self = __setupData.self;
+  const __ctx = getRuntimeContext().ctx;
+  let __forked;
+  let __functionCompleted = false;
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/agency-js/tool-tiers/agent.agency", scopeName: "callerNotPoisoned", threads: __setupData.threads });
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+        await callHook({
+          name: "onNodeStart",
+          data: {
+            nodeName: "callerNotPoisoned"
+          }
+        });
+      });
+      await runner.step(1, async (runner2) => {
+        __stack.locals.r = await __call(callerRunsRefuse, {
+          type: "positional",
+          args: []
+        });
+        if (hasInterrupts(__stack.locals.r)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          runner2.halt({
+            ...__state,
+            data: __stack.locals.r
+          });
+          return;
+        }
+      });
+      await runner.ifElse(2, [
+        {
+          condition: async () => await isFailure(__stack.locals.r),
+          body: async (runner2) => {
+            await runner2.step(0, async (runner3) => {
+              runner3.halt({
+                messages: __threads(),
+                data: __stack.locals.r.destructiveRan
+              });
+              return;
+            });
+          }
+        }
+      ]);
+      await runner.step(3, async (runner2) => {
+        runner2.halt({
+          messages: __threads(),
+          data: `unexpected`
+        });
+        return;
+      });
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.hook(4, async () => {
+      await callHook({
+        name: "onNodeEnd",
+        data: {
+          nodeName: "callerNotPoisoned",
+          data: void 0
+        }
+      });
+    });
+    return {
+      messages: __threads(),
+      data: void 0
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error;
+    }
+    if (__error instanceof AgencyAbort) {
+      throw __error;
+    }
+    {
+      const __errMsg = __error instanceof Error ? __error.message : String(__error);
+      const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+      const __log = __createLogger(__ctx.logLevel);
+      __log.error(`Node callerNotPoisoned crashed: ${__errMsg}`);
+      if (__errStack) __log.error(__errStack);
+      __ctx.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: __errMsg,
+        functionName: "callerNotPoisoned"
+      });
+    }
+    return {
+      messages: __threads(),
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "callerNotPoisoned" })
+    };
+  }
+});
+async function __callerRunsSucceedInBlock_impl() {
+  const __setupData = setupFunction();
+  const __stack = __setupData.stack;
+  const __step = __setupData.step;
+  const __self = __setupData.self;
+  const __ctx = getRuntimeContext().ctx;
+  let __forked;
+  let __functionCompleted = false;
+  if (!__globals().isInitialized("tests/agency-js/tool-tiers/agent.agency")) {
+    await __initializeGlobals(__ctx);
+  }
+  let __funcStartTime = performance.now();
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "tests/agency-js/tool-tiers/agent.agency", scopeName: "callerRunsSucceedInBlock", threads: __setupData.threads });
+  let __resultCheckpointId = -1;
+  if (__ctx._pendingArgOverrides) {
+    const __overrides = __ctx._pendingArgOverrides;
+    __ctx._pendingArgOverrides = void 0;
+  }
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+        await callHook({
+          name: "onFunctionStart",
+          data: {
+            functionName: "callerRunsSucceedInBlock",
+            args: {},
+            moduleId: "tests/agency-js/tool-tiers/agent.agency"
+          }
+        });
+      });
+      await runner.handle(1, async (__data) => approve(), async (runner2) => {
+        await runner2.step(0, async (runner3) => {
+          __self.__removedTools = __self.__removedTools || [];
+          __stack.locals._ = await runPrompt({
+            prompt: `Use succeedTool on 'z'.`,
+            messages: __threads().getOrCreateActive(),
+            clientConfig: {
+              "tools": [succeedTool]
+            },
+            maxToolCallRounds: 10,
+            removedTools: __self.__removedTools,
+            destructiveSink: __self,
+            checkpointInfo: runner3.getCheckpointInfo()
+          });
+          if (hasInterrupts(__stack.locals._)) {
+            await getRuntimeContext().ctx.pendingPromises.awaitAll();
+            runner3.halt(__stack.locals._);
+            return;
+          }
+        });
+      });
+      await runner.step(2, async (runner2) => {
+        __functionCompleted = true;
+        runner2.halt(failure(`caller failed after a block with a successful destructive tool`, { checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), functionName: "callerRunsSucceedInBlock", args: __stack.args }));
+        return;
+      });
+    });
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+      }
+      return runner.haltResult;
+    }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error;
+    }
+    if (__error instanceof AgencyAbort) {
+      throw __error;
+    }
+    {
+      const __errMsg = __error instanceof Error ? __error.message : String(__error);
+      const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+      const __log = __createLogger(__ctx.logLevel);
+      __log.error("Function callerRunsSucceedInBlock threw an exception (converted to Failure): " + __errMsg);
+      if (__errStack) __log.error(__errStack);
+      __ctx.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: __errMsg,
+        functionName: "callerRunsSucceedInBlock"
+      });
+    }
+    return failure(
+      __error instanceof Error ? __error.message : String(__error),
+      {
+        checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+        destructiveRan: __self.__destructiveRan,
+        functionName: "callerRunsSucceedInBlock",
+        args: __stack.args
+      }
+    );
+  } finally {
+    __stateStack()?.pop();
+    if (__functionCompleted) {
+      await callHook({
+        name: "onFunctionEnd",
+        data: {
+          functionName: "callerRunsSucceedInBlock",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      });
+    }
+  }
+}
+const callerRunsSucceedInBlock = __AgencyFunction.create({
+  name: "callerRunsSucceedInBlock",
+  module: "tests/agency-js/tool-tiers/agent.agency",
+  fn: __callerRunsSucceedInBlock_impl,
+  params: [],
+  toolDefinition: {
+    name: "callerRunsSucceedInBlock",
+    description: "No description provided.",
+    schema: z.object({})
+  },
+  exported: false
+}, __toolRegistry);
+graph.node("callerBlockPoisoned", async (__state) => {
+  const __setupData = setupNode({
+    state: __state
+  });
+  const __stack = __setupData.stack;
+  const __step = __setupData.step;
+  const __self = __setupData.self;
+  const __ctx = getRuntimeContext().ctx;
+  let __forked;
+  let __functionCompleted = false;
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "tests/agency-js/tool-tiers/agent.agency", scopeName: "callerBlockPoisoned", threads: __setupData.threads });
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __ctx.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+        await callHook({
+          name: "onNodeStart",
+          data: {
+            nodeName: "callerBlockPoisoned"
+          }
+        });
+      });
+      await runner.step(1, async (runner2) => {
+        __stack.locals.r = await __call(callerRunsSucceedInBlock, {
+          type: "positional",
+          args: []
+        });
+        if (hasInterrupts(__stack.locals.r)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          runner2.halt({
+            ...__state,
+            data: __stack.locals.r
+          });
+          return;
+        }
+      });
+      await runner.ifElse(2, [
+        {
+          condition: async () => await isFailure(__stack.locals.r),
+          body: async (runner2) => {
+            await runner2.step(0, async (runner3) => {
+              runner3.halt({
+                messages: __threads(),
+                data: __stack.locals.r.destructiveRan
+              });
+              return;
+            });
+          }
+        }
+      ]);
+      await runner.step(3, async (runner2) => {
+        runner2.halt({
+          messages: __threads(),
+          data: `unexpected`
+        });
+        return;
+      });
+    });
+    if (runner.halted) return runner.haltResult;
+    await runner.hook(4, async () => {
+      await callHook({
+        name: "onNodeEnd",
+        data: {
+          nodeName: "callerBlockPoisoned",
+          data: void 0
+        }
+      });
+    });
+    return {
+      messages: __threads(),
+      data: void 0
+    };
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+      throw __error;
+    }
+    if (__error instanceof AgencyAbort) {
+      throw __error;
+    }
+    {
+      const __errMsg = __error instanceof Error ? __error.message : String(__error);
+      const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+      const __log = __createLogger(__ctx.logLevel);
+      __log.error(`Node callerBlockPoisoned crashed: ${__errMsg}`);
+      if (__errStack) __log.error(__errStack);
+      __ctx.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: __errMsg,
+        functionName: "callerBlockPoisoned"
+      });
+    }
+    return {
+      messages: __threads(),
+      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "callerBlockPoisoned" })
+    };
+  }
+});
 async function neutralStaysCallable({ messages, callbacks } = {}) {
   return runNode({
     ctx: __globalCtx,
@@ -739,9 +1642,51 @@ async function destructiveRemoved({ messages, callbacks } = {}) {
   });
 }
 const __destructiveRemovedNodeParams = [];
+async function callerPoisonedBySuccess({ messages, callbacks } = {}) {
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "callerPoisonedBySuccess",
+    data: {},
+    messages,
+    callbacks,
+    initializeGlobals: __initializeGlobals,
+    registerTopLevelCallbacks: __registerTopLevelCallbacks,
+    moduleDir: __dirname
+  });
+}
+const __callerPoisonedBySuccessNodeParams = [];
+async function callerNotPoisoned({ messages, callbacks } = {}) {
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "callerNotPoisoned",
+    data: {},
+    messages,
+    callbacks,
+    initializeGlobals: __initializeGlobals,
+    registerTopLevelCallbacks: __registerTopLevelCallbacks,
+    moduleDir: __dirname
+  });
+}
+const __callerNotPoisonedNodeParams = [];
+async function callerBlockPoisoned({ messages, callbacks } = {}) {
+  return runNode({
+    ctx: __globalCtx,
+    nodeName: "callerBlockPoisoned",
+    data: {},
+    messages,
+    callbacks,
+    initializeGlobals: __initializeGlobals,
+    registerTopLevelCallbacks: __registerTopLevelCallbacks,
+    moduleDir: __dirname
+  });
+}
+const __callerBlockPoisonedNodeParams = [];
 var stdin_default = graph;
-const __sourceMap = { "tests/agency-js/tool-tiers/agent.agency:flakyTool": { "1": { "line": 5, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:destructiveTool": { "1": { "line": 11, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:resetTool": { "1": { "line": 15, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:neutralStaysCallable": { "1": { "line": 21, "col": 2 }, "2": { "line": 22, "col": 2 }, "3": { "line": 23, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:destructiveRemoved": { "1": { "line": 28, "col": 2 }, "2": { "line": 29, "col": 2 } } };
+const __sourceMap = { "tests/agency-js/tool-tiers/agent.agency:flakyTool": { "1": { "line": 5, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:destructiveTool": { "1": { "line": 11, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:resetTool": { "1": { "line": 15, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:neutralStaysCallable": { "1": { "line": 21, "col": 2 }, "2": { "line": 22, "col": 2 }, "3": { "line": 23, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:destructiveRemoved": { "1": { "line": 28, "col": 2 }, "2": { "line": 29, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:succeedTool": { "1": { "line": 36, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:callerRunsSucceed": { "1": { "line": 39, "col": 2 }, "2": { "line": 40, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:callerPoisonedBySuccess": { "1": { "line": 43, "col": 2 }, "2": { "line": 44, "col": 2 }, "3": { "line": 47, "col": 2 }, "2.0": { "line": 45, "col": 4 } }, "tests/agency-js/tool-tiers/agent.agency:refuseTool": { "1": { "line": 55, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:callerRunsRefuse": { "1": { "line": 58, "col": 2 }, "2": { "line": 59, "col": 2 } }, "tests/agency-js/tool-tiers/agent.agency:callerNotPoisoned": { "1": { "line": 62, "col": 2 }, "2": { "line": 63, "col": 2 }, "3": { "line": 66, "col": 2 }, "2.0": { "line": 64, "col": 4 } }, "tests/agency-js/tool-tiers/agent.agency:callerRunsSucceedInBlock": { "1": { "line": 74, "col": 2 }, "2": { "line": 77, "col": 2 }, "1.0": { "line": 75, "col": 4 } }, "tests/agency-js/tool-tiers/agent.agency:callerBlockPoisoned": { "1": { "line": 80, "col": 2 }, "2": { "line": 81, "col": 2 }, "3": { "line": 84, "col": 2 }, "2.0": { "line": 82, "col": 4 } } };
 export {
+  __callerBlockPoisonedNodeParams,
+  __callerNotPoisonedNodeParams,
+  __callerPoisonedBySuccessNodeParams,
   __destructiveRemovedNodeParams,
   __getCheckpoints,
   __invokeFunction,
@@ -752,6 +1697,12 @@ export {
   __sourceMap,
   __toolRegistry,
   approve,
+  callerBlockPoisoned,
+  callerNotPoisoned,
+  callerPoisonedBySuccess,
+  callerRunsRefuse,
+  callerRunsSucceed,
+  callerRunsSucceedInBlock,
   stdin_default as default,
   destructiveRemoved,
   destructiveTool,
@@ -761,8 +1712,10 @@ export {
   isDebugger,
   isInterrupt,
   neutralStaysCallable,
+  refuseTool,
   reject,
   resetTool,
   respondToInterrupts,
-  rewindFrom
+  rewindFrom,
+  succeedTool
 };

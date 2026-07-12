@@ -768,6 +768,13 @@ export async function runPrompt(args: {
   retryConfig?: RetryConfig;
   maxToolCallRounds?: number;
   removedTools?: string[];
+  /** The CALLING function's `__self` (its locals object), threaded in by the
+   *  `llm()` codegen as `destructiveSink: __self`. When a tool does
+   *  destructive work, decision 8 marks `destructiveSink.__destructiveRan`
+   *  so the caller's exit stamp reports it. Passed by reference — the same
+   *  by-reference trick `removedTools` uses. Absent for direct TS callers
+   *  (e.g. `agency.llm`), so the mark is a no-op there. */
+  destructiveSink?: Record<string, any>;
   checkpointInfo?: SourceLocationOpts;
 }): Promise<any> {
   const {
@@ -801,6 +808,9 @@ export async function runPrompt(args: {
 
   const removedTools: string[] = self.removedTools;
   const toolErrorCounts: Record<string, number> = self.toolErrorCounts;
+  // The calling function's locals, for decision 8. Read from `args` (not the
+  // frame) because it belongs to the CALLER, not to runPrompt's own frame.
+  const destructiveSink: Record<string, any> | undefined = args.destructiveSink;
 
   const rawTools: any[] = args.clientConfig?.tools || [];
   const agencyFunctions: AgencyFunction[] = rawTools.map((entry: any) => {
@@ -1128,9 +1138,8 @@ export async function runPrompt(args: {
       }
 
       // Decision 8: destructive work performed via a tool inside an llm()
-      // call must propagate to the calling function's activation, so a later
-      // failure THERE reports destructiveRan. Write the same locals slot the
-      // codegen flag lives in; the enclosing function's exit stamp reads it.
+      // call must propagate to the CALLING function's activation, so a later
+      // failure THERE reports destructiveRan.
       //
       // Mirror the codegen assignment-flip EXACTLY (`isFailure(r) ?
       // r.destructiveRan : true` for a destructive callee): a FAILURE carries
@@ -1144,11 +1153,15 @@ export async function runPrompt(args: {
       const toolDidDestructiveWork = isFailure(toolResult)
         ? toolResult.destructiveRan
         : !!handler.markers?.destructive;
-      if (toolDidDestructiveWork) {
-        // `stack` is the calling function's activation frame (a State with
-        // `.locals`); its exit stamp reads `__self.__destructiveRan` ===
-        // `stack.locals.__destructiveRan`.
-        markDestructiveWork(stack);
+      if (toolDidDestructiveWork && destructiveSink) {
+        // Mark the CALLER's `__self` (threaded in as `destructiveSink`), NOT
+        // `stack` — `stack` is runPrompt's own frame from setupFunction(),
+        // which is thrown away when runPrompt returns, so the caller would
+        // never see it. The caller's exit stamp reads
+        // `destructiveSink.__destructiveRan`, the slot markDestructiveWork
+        // writes. Sticky: only ever set to true, so repeated llm() calls in
+        // one function accumulate correctly.
+        markDestructiveWork({ locals: destructiveSink });
       }
 
       if (isFailure(toolResult)) {

@@ -1,4 +1,10 @@
-import { neutralStaysCallable, destructiveRemoved } from "./agent.js";
+import {
+  neutralStaysCallable,
+  destructiveRemoved,
+  callerPoisonedBySuccess,
+  callerNotPoisoned,
+  callerBlockPoisoned,
+} from "./agent.js";
 import { writeFileSync } from "fs";
 
 const results = {};
@@ -35,6 +41,29 @@ const results = {};
     toolCallCount: toolCalls.length,
     hasResult: result.data !== undefined,
   };
+}
+
+// Decision 8 (the frame fix): a destructive tool that SUCCEEDS inside llm()
+// propagates to the calling function, so its later failure is destructiveRan
+// true. Before the fix this was false (the mark landed on runPrompt's
+// throwaway frame).
+{
+  const result = await callerPoisonedBySuccess({});
+  results.callerPoisonedBySuccess = { callerDestructiveRan: result.data };
+}
+
+// The gating still holds: a destructive tool that cleanly refuses
+// (destructiveRan false) does NOT propagate, so the caller stays false.
+{
+  const result = await callerNotPoisoned({});
+  results.callerNotPoisoned = { callerDestructiveRan: result.data };
+}
+
+// llm() inside a block: block-locals get marked, and the block-join fold
+// must carry it to the function, so the later failure is destructiveRan true.
+{
+  const result = await callerBlockPoisoned({});
+  results.callerBlockPoisoned = { callerDestructiveRan: result.data };
 }
 
 writeFileSync("__result.json", JSON.stringify(results, null, 2));

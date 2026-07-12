@@ -7,5 +7,14 @@
     "scriptedCalls": 2,
     "toolCallCount": 1,
     "hasResult": true
+  },
+  "callerPoisonedBySuccess": {
+    "callerDestructiveRan": true
+  },
+  "callerNotPoisoned": {
+    "callerDestructiveRan": false
+  },
+  "callerBlockPoisoned": {
+    "callerDestructiveRan": true
   }
 }

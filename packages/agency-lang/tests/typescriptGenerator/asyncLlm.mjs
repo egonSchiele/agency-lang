@@ -211,6 +211,7 @@ __stack.locals.x = runPrompt({
           clientConfig: {},
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
+          destructiveSink: __self,
           checkpointInfo: runner.getCheckpointInfo()
         });
 __self.__pendingKey_x = getRuntimeContext().ctx.pendingPromises.add(__stack.locals.x, (val) => { __stack.locals.x = val; });
@@ -223,6 +224,7 @@ __stack.locals.y = runPrompt({
           clientConfig: {},
           maxToolCallRounds: 10,
           removedTools: __self.__removedTools,
+          destructiveSink: __self,
           checkpointInfo: runner.getCheckpointInfo()
         });
 __self.__pendingKey_y = getRuntimeContext().ctx.pendingPromises.add(__stack.locals.y, (val) => { __stack.locals.y = val; });

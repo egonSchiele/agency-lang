@@ -29,3 +29,58 @@ node destructiveRemoved() {
   const result = llm("Use destructiveTool on 'b'.", { tools: [destructiveTool] })
   return result
 }
+
+// A destructive tool that SUCCEEDS. Decision 8 propagates its destructive
+// work to the CALLING function, so a later failure in that function reports
+// destructiveRan == true. This is the core proof of the frame fix.
+destructive def succeedTool(id: string): number {
+  return 1
+}
+def callerRunsSucceed(): Result {
+  const _ = llm("Use succeedTool on 'y'.", { tools: [succeedTool] })
+  return failure("caller failed after a successful destructive tool")
+}
+node callerPoisonedBySuccess() {
+  const r = callerRunsSucceed()
+  if (isFailure(r)) {
+    return r.destructiveRan
+  }
+  return "unexpected"
+}
+
+// A destructive tool that CLEANLY REFUSES: it returns a failure before doing
+// any destructive work, so its failure carries destructiveRan == false. The
+// gating condition must NOT propagate to the caller, so the caller's later
+// failure stays destructiveRan == false.
+destructive def refuseTool(id: string): Result {
+  return failure("refused before doing anything")
+}
+def callerRunsRefuse(): Result {
+  const _ = llm("Use refuseTool on 'x'.", { tools: [refuseTool] })
+  return failure("caller failed after a refusing destructive tool")
+}
+node callerNotPoisoned() {
+  const r = callerRunsRefuse()
+  if (isFailure(r)) {
+    return r.destructiveRan
+  }
+  return "unexpected"
+}
+
+// The llm() call sits inside a block (the writeAgency pattern). Inside a
+// block `__self` is the block's locals, so decision 8 marks the block. The
+// block-join fold must carry that up to the function, so a failure AFTER the
+// block still reports destructiveRan == true.
+def callerRunsSucceedInBlock(): Result {
+  handle {
+    const _ = llm("Use succeedTool on 'z'.", { tools: [succeedTool] })
+  } with approve
+  return failure("caller failed after a block with a successful destructive tool")
+}
+node callerBlockPoisoned() {
+  const r = callerRunsSucceedInBlock()
+  if (isFailure(r)) {
+    return r.destructiveRan
+  }
+  return "unexpected"
+}

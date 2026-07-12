@@ -172,18 +172,26 @@ In `synthesizer.ts`, change all 27 `return "any"` to `return ANY_T` (already imp
 
 `resolveResultFieldType` (`synthesizer.ts:75`) and the `:199` site return `VariableType | "any" | null`, where `"any"` is a signal ("caller returns any") and `null` means "no resolution." Narrow the return to `VariableType | null`. Replace `return "any"` with `return ANY_T`. Then read each caller: where it did `if (x === "any") return "any"`, it now receives `ANY_T` (a real type) and should set/return it as the type; where it checked `null`, that branch is unchanged. Confirm the control flow matches the original for both the any-case and the null-case.
 
-- [ ] **Step 3: Migrate the nine `flow.test.ts` assertions**
+These signal-site folds are the riskiest edits in the migration, and they rely on manual "the caller behaves the same" reasoning. Before trusting it, grep the suite for coverage: confirm a test exercises `resolveResultFieldType`'s any-branch (a field in `RESULT_FIELDS` on an un-narrowed Result) AND its null-branch (a non-Result field). If neither is covered, add a synth test in `synthesizer`-adjacent tests that reads a Result field both ways and asserts the resulting type. Do not rely on tsc alone for these.
 
-`uniteTypes` and `typeAt` now return `ANY_T`, so `expect(...).toBe("any")` fails. Change each of the nine sites (`flow.test.ts:41,106,149,303,309,400,519,529,568`) from:
+- [ ] **Step 3: Migrate ALL `flow.test.ts` edits (assertions AND value inputs)**
+
+Narrowing `ScopeType`/`uniteTypes`/`typeAt` breaks two kinds of site in this file. Both must be done here.
+
+**(a) Nine assertion right-hand sides** (`:41,106,149,303,309,400,519,529,568`). `uniteTypes`/`typeAt` now return `ANY_T`, so `.toBe("any")` fails. Use `toEqual(ANY_T)`, not `isAnyType(...)`:
 
 ```ts
-expect(typeAt(ref("y"), start, env(scope))).toBe("any");
+expect(typeAt(ref("y"), start, env(scope))).toEqual(ANY_T);
 ```
-to:
-```ts
-expect(isAnyType(typeAt(ref("y"), start, env(scope)))).toBe(true);
-```
-Import `isAnyType` from `./utils.js` in the test file. This is an assertion update, not a behavior change.
+
+`toEqual(ANY_T)` deep-equals the object and fails on the string form. `isAnyType(...)` is too weak here: during this task `isAnyType` still accepts both forms, so it could not tell a correctly-migrated `ANY_T` from a half-migrated string. Import `ANY_T` from `./primitives.js`.
+
+**(b) Three value-input sites** that pass the string into a now-narrowed `VariableType` slot. These are `"any"` → `ANY_T` substitutions, not assertion swaps:
+- `:41` `uniteTypes(["any", STR], {})` → `uniteTypes([ANY_T, STR], {})` (line 41 needs BOTH halves: the input here and its assertion RHS).
+- `:559` `scope.declare("x", "any")` → `scope.declare("x", ANY_T)`.
+- `:565` `type: "any"` on the assign `FlowNode` literal → `type: ANY_T`.
+
+Task 3 Step 4 (follow the compiler) will flag (b) as type errors if missed, but list them here so the executor does not mark Step 3 done after only the nine assertions.
 
 - [ ] **Step 4: Follow the compiler outward**
 
@@ -205,7 +213,8 @@ Narrow the any-sentinel spine to VariableType (#472)
 
 synthType, ScopeType, inferredReturnTypes, uniteTypes, typeAt now return/store
 VariableType and produce ANY_T. Handle the resolveResultFieldType | null signal
-sites. Migrate flow.test.ts assertions from `.toBe("any")` to isAnyType checks.
+sites. Migrate flow.test.ts: nine assertions to toEqual(ANY_T) plus three
+"any" -> ANY_T value-input substitutions.
 ```
 
 ---
@@ -214,7 +223,7 @@ sites. Migrate flow.test.ts assertions from `.toBe("any")` to isAnyType checks.
 
 Continue the narrow-and-fix pass until no `VariableType | "any"` signature remains. Each file or producer-cluster that compiles cleanly on its own may be its own commit; keep the invariant (returns + signature together).
 
-**Files (as the compiler surfaces them):** `checker.ts` (with its `| undefined` signal sites at `:50,:74,:979`), `scopes.ts`, `resolveCall.ts`, `builtins.ts`, `inference.ts`, `matchExprTypes.ts`, `typeCases.ts`, `interruptAnalysis.ts`, `functionTypeRaises.ts` (`| null | undefined` sites at `:38,:131`), `functionValueEffects.ts`, `effectSets.ts`, `effectPayloadCheck.ts`, `matchExhaustiveness.ts`, `narrowing.ts`, `flowBuilder.ts`, `index.ts`.
+**Files (as the compiler surfaces them):** `types.ts` (remaining sentinel signatures at `:67-70`, `:85`, `:106`, `:117`, `:139` — `:99` was done in Task 3; `:106` `matchExprTypes` and `:67-70` ripple widely), `checker.ts` (with its `| undefined` signal sites at `:50,:74,:979`), `scopes.ts`, `resolveCall.ts`, `builtins.ts`, `inference.ts`, `matchExprTypes.ts`, `typeCases.ts`, `interruptAnalysis.ts`, `functionTypeRaises.ts` (`| null | undefined` sites at `:38,:131`), `functionValueEffects.ts`, `effectSets.ts`, `effectPayloadCheck.ts`, `matchExhaustiveness.ts`, `narrowing.ts`, `flowBuilder.ts`, `assignability.ts`, `index.ts`.
 
 - [ ] **Step 1: Find remaining sentinel signatures**
 
@@ -228,22 +237,59 @@ Work through the list. For each producer: change its `return "any"` (if any) to 
 
 `checker.ts:50,:74,:979` (`VariableType | "any" | undefined`) and `functionTypeRaises.ts:38,:131` (`VariableType | "any" | null | undefined`): keep `null`/`undefined` with their meanings; fold only the `"any"` disjunct into `VariableType` as `ANY_T`, verifying each caller treated the any-case like any other unknown-type result.
 
-- [ ] **Step 3: Collapse the back-to-back assignability check**
+- [ ] **Step 3: Delete the redundant assignability FAST PATH (not the alias-aware check)**
 
-In `assignability.ts`, once `isAssignable`'s `source`/`target` are `VariableType`, the string-form check (now `isAnyType(source) || isAnyType(target)`) and the object-form check at `:487-488` (`resolvedSource.value === "any" || ...`) are redundant. Keep one. Delete the other and its apologetic comment (symptom #3 in the spec).
+`assignability.ts` has two `any` checks, and they are NOT interchangeable — deleting the wrong one regresses `type Foo = any`.
 
-- [ ] **Step 4: Confirm no sentinel signatures remain**
+- `:435` is in `isAssignableGuarded`, **before** `safeResolveType`. Task 2 rewrote it to `if (isAnyType(source) || isAnyType(target)) return true;`. It only catches a *bare* `ANY_T` source/target. For an alias node like `type Foo = any`, `source` is a `typeAliasVariable`, so `isAnyType(source)` is `false` here.
+- `:487-488` is in `isAssignableInner`, **after** `safeResolveType` resolves aliases. It catches both the bare case and `type Foo = any` (which resolves to `primitiveType("any")`). The apologetic comment at `:485` sits on THIS check.
+
+`safeResolveType` of a bare `ANY_T` returns itself, so `:487-488` already covers everything `:435` covers, plus aliases. **Delete `:435` (the redundant pre-resolution fast path). KEEP `:487-488`.** Deleting `:487-488` instead would make an `any`-aliased value non-assignable to anything — a real regression, and finding 5's test below would catch it.
+
+Then fold the surviving `:487-488` object-form check into the predicate: `if (isAnyType(resolvedSource) || isAnyType(resolvedTarget)) return true;`. Reword or drop the `:485` comment.
+
+- [ ] **Step 4: Add the alias-to-any assignability regression test**
+
+Nothing in `assignability.test.ts` covers an alias whose body is `any` — exactly the case Step 3's wrong deletion would break. Add it to `lib/typeChecker/assignability.test.ts` (match the file's existing helper style for `isAssignable` and alias maps):
+
+```ts
+it("a value typed as an any-alias is assignable both directions", () => {
+  const aliases = { Foo: { type: "primitiveType", value: "any" } };
+  const FooRef = { type: "typeAliasVariable", aliasName: "Foo" };
+  expect(isAssignable(FooRef, NUMBER_T, aliases)).toBe(true); // any-alias -> concrete
+  expect(isAssignable(NUMBER_T, FooRef, aliases)).toBe(true); // concrete -> any-alias
+});
+```
+
+Run it BEFORE and AFTER the Step 3 edit. It passes both times if Step 3 is correct. It fails after if `:487-488` was deleted by mistake.
+
+- [ ] **Step 5: Fold the orphaned object-form `.value === "any"` checks into `isAnyType`**
+
+The spec's goal is that every "is this any?" test is one call to `isAnyType`. Task 2 deliberately left the object-form checks alone; pick them up now (nothing is left that could still be the string, so the fold is safe and satisfies the goal). Fold each:
+
+| Site | Current | Fold to |
+|---|---|---|
+| `checker.ts:523` | `hint.type === "primitiveType" && hint.value === "any"` | `isAnyType(hint)` |
+| `synthesizer.ts:910` | `resolved.type === "primitiveType" && resolved.value === "any"` | `isAnyType(resolved)` |
+| `typeCases.ts:119` | `members.some((rm) => rm.type === "primitiveType" && rm.value === "any")` | `members.some(isAnyType)` |
+| `effectSets.ts:47` | `t.type === "primitiveType" && t.value === "any"` | `isAnyType(t)` |
+| `utils.ts:122` | `t.type === "primitiveType" && t.value === "any"` | `isAnyType(t)` |
+| `assignability.ts:406` | `resolved.value === "null" \|\| resolved.value === "any"` | `resolved.value === "null" \|\| isAnyType(resolved)` (fold the any-half only; leave the null-half) |
+
+(`utils.ts:49` is the `isAnyType` body itself — leave it. `inference.ts:130` is the duplicate deleted in Task 5.)
+
+- [ ] **Step 6: Confirm no sentinel signatures OR object-form checks remain**
 
 ```bash
-grep -rn '| "any"' lib/typeChecker/ | grep -v '\.test\.'
+grep -rn '| "any"' lib/typeChecker/ | grep -v '\.test\.'          # expected: empty
+grep -rn '\.value === "any"' lib/typeChecker/ | grep -v '\.test\.' # expected: only utils.ts:49 (the isAnyType body)
 ```
-Expected: empty.
 
-- [ ] **Step 5: Verify green**
+- [ ] **Step 7: Verify green**
 
-Both commands → `/tmp/t4.log`. tsc clean; suite passes.
+Both commands → `/tmp/t4.log`. tsc clean; suite passes, including the new alias-to-any test.
 
-- [ ] **Step 6: Commit** (or several commits across this task)
+- [ ] **Step 8: Commit** (or several commits across this task)
 
 ```bash
 git add lib/typeChecker/
@@ -254,8 +300,10 @@ git commit -F /tmp/commit4.txt
 Narrow remaining any-sentinel producers to VariableType (#472)
 
 All producer signatures now return VariableType. Fold the | undefined and
-| null | undefined signal sites. Collapse the back-to-back any check in
-isAssignable into one.
+| null | undefined signal sites. Delete the redundant pre-resolution any
+fast path in isAssignable (keep the alias-aware post-resolution check) and
+add an alias-to-any regression test. Fold the orphaned object-form
+.value === "any" checks into isAnyType.
 ```
 
 ---
@@ -311,7 +359,7 @@ isAnyType back to VariableType. The string sentinel is now unrepresentable.
 
 ### Task 6: Regression guard test
 
-A cheap test that fails if the sentinel creeps back. The type system already blocks producing it; this documents the intent and catches a stray reintroduction in review.
+A cheap tripwire, not a proof. The compiler is the real guarantee: once every signature is `VariableType`, the sentinel is unrepresentable. This test documents the intent and catches a stray hand-edit that slips past the formatter. It scans for three patterns: the `| "any"` signature (spaced or not, either union order), a bare `return "any"`, and a reintroduced object-form `.value === "any"` check outside the one place it belongs.
 
 **Files:**
 - Create: `lib/typeChecker/anySentinelRetired.test.ts`
@@ -326,25 +374,47 @@ import { fileURLToPath } from "url";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
-function sourceFiles(): string[] {
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
-    .map((f) => path.join(dir, f));
+// Recursive so a future subdir under lib/typeChecker is not silently dropped.
+function sourceFiles(root: string): string[] {
+  const out: string[] = [];
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const full = path.join(root, entry.name);
+    if (entry.isDirectory()) out.push(...sourceFiles(full));
+    else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+      out.push(full);
+    }
+  }
+  return out;
 }
 
+const files = sourceFiles(dir);
+
 describe("the 'any' string sentinel stays retired (#472)", () => {
-  it("no file declares a `VariableType | \"any\"` signature", () => {
-    for (const file of sourceFiles()) {
+  it("no signature unions VariableType with the \"any\" string", () => {
+    // Matches `| "any"` and `"any" |` with any spacing, so a formatter-evading
+    // hand-edit or reversed member order is still caught.
+    const re = /(\|\s*"any")|("any"\s*\|)/;
+    for (const file of files) {
       const src = fs.readFileSync(file, "utf8");
-      expect(src.includes('| "any"'), path.basename(file)).toBe(false);
+      expect(re.test(src), path.basename(file)).toBe(false);
     }
   });
 
-  it("no file returns the bare `\"any\"` string", () => {
-    for (const file of sourceFiles()) {
+  it("no file returns the bare \"any\" string", () => {
+    const re = /return\s+\(?\s*"any"/;
+    for (const file of files) {
       const src = fs.readFileSync(file, "utf8");
-      expect(/return\s+"any"/.test(src), path.basename(file)).toBe(false);
+      expect(re.test(src), path.basename(file)).toBe(false);
+    }
+  });
+
+  it("no inline object-form any-check outside isAnyType", () => {
+    // The one legitimate `.value === "any"` is isAnyType's body in utils.ts.
+    const re = /\.value\s*===\s*"any"/;
+    for (const file of files) {
+      if (path.basename(file) === "utils.ts") continue;
+      const src = fs.readFileSync(file, "utf8");
+      expect(re.test(src), path.basename(file)).toBe(false);
     }
   });
 });
@@ -352,12 +422,17 @@ describe("the 'any' string sentinel stays retired (#472)", () => {
 
 - [ ] **Step 2: Run it**
 
-Run: `pnpm exec vitest run lib/typeChecker/anySentinelRetired.test.ts 2>&1 | tee /tmp/t6.log | tail -10`
-Expected: PASS (both assertions green, proving the retirement is complete).
+Run: `pnpm exec vitest run lib/typeChecker/anySentinelRetired.test.ts 2>&1 | tee /tmp/t6.log | tail -12`
+Expected: PASS (all three green).
 
-- [ ] **Step 3: Sanity-check the guard bites**
+- [ ] **Step 3: Sanity-check that each assertion bites**
 
-Temporarily add `return "any"` to any source file, rerun the test, confirm it FAILS, then revert. (Do not commit the temporary edit.)
+Prove all three catch a violation. One at a time, temporarily introduce a violation, rerun, confirm that specific test FAILS, then revert:
+- add `x: VariableType | "any"` to a source file → assertion 1 fails.
+- add `return "any"` to a function → assertion 2 fails.
+- add `foo.value === "any"` outside `utils.ts` → assertion 3 fails.
+
+Do not commit any temporary edit.
 
 - [ ] **Step 4: Commit**
 
@@ -369,8 +444,9 @@ git commit -F /tmp/commit6.txt
 ```
 Guard against reintroducing the "any" sentinel (#472)
 
-Scans lib/typeChecker source for `| "any"` signatures and bare `return "any"`.
-Backstops the type-level guarantee against a stray reintroduction.
+Recursive scan of lib/typeChecker source for `| "any"` signatures (either
+union order), bare `return "any"`, and inline `.value === "any"` object-form
+checks outside isAnyType. A tripwire backing the type-level guarantee.
 ```
 
 ---
@@ -384,10 +460,13 @@ Backstops the type-level guarantee against a stray reintroduction.
 - Move 3 (spine + remaining producers, signal sites) → Tasks 3, 4. ✓
 - Move 4 (delete maybeAny, inference dups, isAnyType narrow-back, widenType casts, ScopeType) → Task 5. ✓
 - Control-signal sites (`| null` synth, `| undefined` checker, `| null | undefined` functionTypeRaises) → Task 3 Step 2, Task 4 Step 2. ✓
-- flow.test.ts nine-assertion migration → Task 3 Step 3. ✓
+- flow.test.ts migration: nine assertions (`toEqual(ANY_T)`) + three value-input substitutions → Task 3 Step 3. ✓
 - Behavior-preservation gate + stop-on-flip → Global Constraints, per-task verify. ✓
-- Regression guard → Task 6. ✓
-- Symptom #3 (assignability dedup) → Task 4 Step 3. ✓
+- Regression guard (three patterns, recursive, self-bite) → Task 6. ✓
+- Assignability any check: delete the redundant pre-resolution fast path `:435`, KEEP alias-aware `:487-488`, add alias-to-any test → Task 4 Steps 3-4 (review finding 1 + 5). ✓
+- Object-form `.value === "any"` checks folded into `isAnyType` → Task 4 Step 5 (review finding 4). ✓
+- `types.ts` remaining signatures named → Task 4 file list (review finding 3). ✓
+- Signal-site branch coverage confirmed/added → Task 3 Step 2 (review finding 5). ✓
 
 **Placeholder scan:** none. The compiler-discovered edits in Tasks 3-4 are method-plus-grep, not placeholders — the exact set is defined by tsc output, which is the point of a compiler-guided refactor.
 

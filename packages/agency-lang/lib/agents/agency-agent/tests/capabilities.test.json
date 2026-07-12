@@ -154,7 +154,7 @@
     {
       "nodeName": "removeLastFieldDropsEntry",
       "input": "",
-      "expectedOutput": "\"undefined/undefined\"",
+      "expectedOutput": "\"null/null\"",
       "evaluationCriteria": [
         {
           "type": "exact"

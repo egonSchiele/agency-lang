@@ -24,6 +24,7 @@ import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
 import { evalRun } from "@/cli/eval/run.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
+import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
 import {
   AgencyConfig,
   applyCliFlags,
@@ -880,6 +881,25 @@ export function createProgram(deps: CliDependencies = {}): Command {
         }
       }
       if (hasErrors) process.exit(1);
+    });
+
+  program
+    .command("explain")
+    .description("Explain a type-checker diagnostic code (e.g. AG2005)")
+    .argument("[code]", "An AG#### code or registry name; omit to list all")
+    .option("--list", "List every diagnostic code")
+    .action((code: string | undefined, opts: { list?: boolean }) => {
+      if (!code || opts.list) {
+        console.log(renderDiagnosticList());
+        return;
+      }
+      const { text, found } = renderDiagnosticText(code);
+      if (found) {
+        console.log(text);
+      } else {
+        console.error(text);
+        process.exit(1);
+      }
     });
 
   program

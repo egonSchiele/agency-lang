@@ -1,0 +1,10 @@
+{
+  "missingKeyIsNull": true,
+  "outOfBoundsIsNull": true,
+  "negativeIndexIsNull": true,
+  "presentKeyValue": 42,
+  "inBoundsValue": 1,
+  "falsyZeroPreserved": true,
+  "optChainDeepIsNull": true,
+  "optNullIndexIsUndefined": true
+}

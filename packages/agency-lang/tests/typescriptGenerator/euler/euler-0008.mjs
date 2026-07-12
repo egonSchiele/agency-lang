@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq,
+  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -495,7 +495,7 @@ await runner.whileLoop(2, async () => __stack.locals.j < 13, async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.product = __stack.locals.product * await __call(toDigit, {
               type: "positional",
-              args: [__stack.locals.digits[__stack.locals.i + __stack.locals.j]]
+              args: [__nn(__stack.locals.digits[__stack.locals.i + __stack.locals.j])]
             });
           });
 await runner.step(1, async (runner) => {

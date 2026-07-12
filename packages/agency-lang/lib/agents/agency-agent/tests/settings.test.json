@@ -94,7 +94,7 @@
     {
       "nodeName": "nullEntryAndReservedKeySurviveLoad",
       "input": "",
-      "expectedOutput": "\"undefined/true\"",
+      "expectedOutput": "\"null/true\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -104,7 +104,7 @@
     {
       "nodeName": "dropsBareEmbeddingSlotValue",
       "input": "",
-      "expectedOutput": "\"undefined/opus\"",
+      "expectedOutput": "\"null/opus\"",
       "evaluationCriteria": [
         {
           "type": "exact"

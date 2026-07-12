@@ -22,7 +22,7 @@ import {
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq,
+  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn,
   Schema, __validateType, __validateChain, __validateChainRecursive,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -233,7 +233,7 @@ async function __initializeGlobals(__ctx) {
     type: "positional",
     args: [__globals()!.get("arrayAndObject.agency", "config")]
   })
-  __ctx.globals.set("arrayAndObject.agency", "firstNum", __globals()!.get("arrayAndObject.agency", "nums")[0])
+  __ctx.globals.set("arrayAndObject.agency", "firstNum", __nn(__globals()!.get("arrayAndObject.agency", "nums")[0]))
   await __call(print, {
     type: "positional",
     args: [__globals()!.get("arrayAndObject.agency", "firstNum")]

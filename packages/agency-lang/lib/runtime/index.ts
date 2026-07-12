@@ -149,6 +149,7 @@ export type { ResultValue, ResultSuccess, ResultFailure, SkippedFunction } from 
 export { acceptsFailures } from "./failurePropagation.js";
 export { Schema, __validateType } from "./schema.js";
 export { __eq } from "./eq.js";
+export { __nn } from "./nn.js";
 export {
   __validateChain,
   __validateChainRecursive,

@@ -8,7 +8,7 @@ export default defineConfig({
     nav: [
       { text: "Home", link: "/" },
       { text: "Guide", link: "/guide/getting-started" },
-      /* { text: "Agent", link: "/agent/index" }, */
+      { text: "Agent", link: "/agent/index" },
       { text: "CLI", link: "/cli/index" },
       { text: "Standard Library", link: "/stdlib/index" },
       { text: "Packages", link: "/packages/" },
@@ -205,6 +205,12 @@ export default defineConfig({
           text: "Agent",
           items: [
             { text: "Overview", link: "/agent/index" },
+            { text: "Running the agent", link: "/agent/running" },
+            { text: "The agent team", link: "/agent/subagents" },
+            { text: "Models and settings", link: "/agent/models" },
+            { text: "Approvals and policies", link: "/agent/approvals" },
+            { text: "Memory", link: "/agent/memory" },
+            { text: "Project context and commands", link: "/agent/project-context" },
             { text: "MCP servers", link: "/agent/mcp" },
           ],
         },

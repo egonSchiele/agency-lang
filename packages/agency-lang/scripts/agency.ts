@@ -850,10 +850,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // first. `SymbolTable.build` accepts an array of entrypoints and crawls
       // reachable files (imports + stdlib) from each, deduping via its visited
       // set. Seeding from only the first file leaves files whose imports are
-      // unreachable from it with an empty resolution -> false-positive "unknown
-      // symbol" errors and missing interrupt-effect metadata. The symbol table
-      // stays file-keyed, so adding more entrypoints never merges or pollutes
-      // across files; it only makes resolution complete.
+      // unreachable from it unable to resolve those imports: the imported
+      // functions/types become `any` (unresolved agency imports are fail-open),
+      // so real cross-file type errors are SILENTLY MISSED, and interrupt-effect
+      // metadata is dropped. Seeding from every file makes typechecking of the
+      // whole directory complete. The symbol table stays file-keyed, so adding
+      // more entrypoints never merges or pollutes across files.
       const filePaths = sources
         .filter((s) => s.kind === "file")
         .map((s) => path.resolve(s.path));

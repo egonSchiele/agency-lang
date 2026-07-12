@@ -53,11 +53,11 @@ describe("resolveInputSources", () => {
     ]);
   });
 
-  it("returns null and prints a notice for a directory with no .agency files", () => {
+  it("returns null and prints a notice to stderr for a directory with no .agency files", () => {
     const dir = makeTempDir();
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(resolveInputSources([dir])).toBeNull();
-    expect(log).toHaveBeenCalledWith(
+    expect(err).toHaveBeenCalledWith(
       expect.stringContaining("No .agency files found"),
     );
   });
@@ -84,21 +84,46 @@ describe("forEachSource", () => {
     vi.restoreAllMocks();
   });
 
-  it("hands each resolved source's contents to the handler in order", async () => {
+  it("hands each source's contents to the handler in argument order", async () => {
+    // Explicit file arguments keep a deterministic order (resolveInputSources
+    // preserves argument order), so this asserts ordering without sorting.
     const dir = makeTempDir();
-    fs.writeFileSync(path.join(dir, "first.agency"), "node first() {}\n");
-    fs.writeFileSync(path.join(dir, "second.agency"), "node second() {}\n");
+    const zeta = path.join(dir, "zeta.agency");
+    const alpha = path.join(dir, "alpha.agency");
+    fs.writeFileSync(zeta, "node zeta() {}\n");
+    fs.writeFileSync(alpha, "node alpha() {}\n");
     const seen: string[] = [];
-    await forEachSource([dir], (contents, src) => {
+    await forEachSource([zeta, alpha], (contents, src) => {
       seen.push(src.kind === "file" ? path.basename(src.path) : "-");
       expect(contents.length).toBeGreaterThan(0);
     });
-    expect(seen.sort()).toEqual(["first.agency", "second.agency"]);
+    expect(seen).toEqual(["zeta.agency", "alpha.agency"]);
+  });
+
+  it("awaits an async handler before moving to the next source", async () => {
+    const dir = makeTempDir();
+    const one = path.join(dir, "one.agency");
+    const two = path.join(dir, "two.agency");
+    fs.writeFileSync(one, "node one() {}\n");
+    fs.writeFileSync(two, "node two() {}\n");
+    const order: string[] = [];
+    await forEachSource([one, two], async (_contents, src) => {
+      const name = src.kind === "file" ? path.basename(src.path) : "-";
+      order.push(`start:${name}`);
+      await Promise.resolve();
+      order.push(`end:${name}`);
+    });
+    expect(order).toEqual([
+      "start:one.agency",
+      "end:one.agency",
+      "start:two.agency",
+      "end:two.agency",
+    ]);
   });
 
   it("does nothing when the inputs resolve to no sources", async () => {
     const dir = makeTempDir();
-    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const handle = vi.fn();
     await forEachSource([dir], handle);
     expect(handle).not.toHaveBeenCalled();

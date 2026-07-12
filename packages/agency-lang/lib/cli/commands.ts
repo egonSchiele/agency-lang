@@ -141,9 +141,10 @@ export type InputSource = { kind: "file"; path: string } | { kind: "stdin" };
  * - a missing path -> prints an error and exits 1
  * - a second stdin -> prints an error and exits 1 (stdin is read-once)
  *
- * Returns null (after printing a notice) when arguments were given but no
- * .agency files were found, so the caller can exit cleanly instead of
- * hanging on stdin.
+ * Returns null (after printing a notice to stderr) when arguments were given
+ * but no .agency files were found, so the caller can exit cleanly instead of
+ * hanging on stdin. The notice goes to stderr, not stdout, so it never
+ * corrupts a command's machine-consumed output (e.g. `diagnostics` JSON).
  */
 export function resolveInputSources(inputs: string[]): InputSource[] | null {
   if (inputs.length === 0) {
@@ -174,7 +175,7 @@ export function resolveInputSources(inputs: string[]): InputSource[] | null {
     }
   }
   if (sources.length === 0) {
-    console.log("No .agency files found in the given input(s).");
+    console.error("No .agency files found in the given input(s).");
     return null;
   }
   return sources;
@@ -193,14 +194,14 @@ export async function readSource(src: InputSource): Promise<string> {
  */
 export async function forEachSource(
   inputs: string[],
-  handle: (contents: string, src: InputSource) => void,
+  handle: (contents: string, src: InputSource) => void | Promise<void>,
 ): Promise<void> {
   const sources = resolveInputSources(inputs);
   if (sources === null) {
     return;
   }
   for (const src of sources) {
-    handle(await readSource(src), src);
+    await handle(await readSource(src), src);
   }
 }
 

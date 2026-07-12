@@ -1,0 +1,10 @@
+{
+  "neutral": {
+    "toolCallCount": 2,
+    "succeeded": true
+  },
+  "destructive": {
+    "toolCallCount": 1,
+    "hasResult": true
+  }
+}

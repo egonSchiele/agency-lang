@@ -10,7 +10,47 @@ const {
   assertUniqueToolNames,
   unwrapToolResultForLlm,
   toolErrorMessage,
+  failureTier,
+  TIER_SUFFIX,
+  MAX_TOOL_FAILURES,
 } = _internal;
+
+describe("failureTier", () => {
+  const f = (over: { destructiveRan?: boolean; neverStarted?: boolean }) => over;
+
+  it("returns destructive when destructiveRan, even alongside neverStarted", () => {
+    expect(failureTier(f({ destructiveRan: true }))).toBe("destructive");
+    expect(
+      failureTier(f({ destructiveRan: true, neverStarted: true })),
+    ).toBe("destructive");
+  });
+
+  it("returns neverStarted when only neverStarted", () => {
+    expect(failureTier(f({ neverStarted: true }))).toBe("neverStarted");
+  });
+
+  it("returns idempotent when the tool is idempotent and nothing more specific", () => {
+    expect(failureTier(f({}), { idempotent: true })).toBe("idempotent");
+    // destructiveRan still wins over an idempotent marker.
+    expect(
+      failureTier(f({ destructiveRan: true }), { idempotent: true }),
+    ).toBe("destructive");
+  });
+
+  it("returns neutral otherwise, including a legacy failure with undefined fields", () => {
+    expect(failureTier(f({}))).toBe("neutral");
+    expect(failureTier({})).toBe("neutral");
+  });
+
+  it("has a distinct suffix for every tier", () => {
+    const suffixes = new Set(Object.values(TIER_SUFFIX));
+    expect(suffixes.size).toBe(4);
+  });
+
+  it("MAX_TOOL_FAILURES is the documented circuit-breaker cap", () => {
+    expect(MAX_TOOL_FAILURES).toBe(5);
+  });
+});
 
 describe("assertUniqueToolNames", () => {
   it("accepts a list of distinct tool names", () => {

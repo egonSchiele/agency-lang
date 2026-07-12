@@ -65,6 +65,13 @@ export type ToolDefinition = {
   schema: unknown;
 };
 
+/** Retry-safety markers carried on a registered tool. Inline shape so the
+ *  runtime stays decoupled from the compiler's AST types. */
+export type ToolMarkers = {
+  destructive?: boolean;
+  idempotent?: boolean;
+};
+
 export type AgencyFunctionOpts = {
   name: string;
   module: string;
@@ -73,6 +80,7 @@ export type AgencyFunctionOpts = {
   toolDefinition: ToolDefinition | null;
   exported?: boolean;
   safe?: boolean;
+  markers?: ToolMarkers;
   isPreapproved?: boolean;
 };
 
@@ -90,6 +98,7 @@ export class AgencyFunction {
   private readonly _checksFailures: boolean;
   readonly exported: boolean;
   readonly safe: boolean;
+  readonly markers: ToolMarkers;
   private readonly _isPreapproved: boolean;
 
   constructor(opts: AgencyFunctionOpts) {
@@ -100,6 +109,7 @@ export class AgencyFunction {
     this.toolDefinition = opts.toolDefinition;
     this.exported = opts.exported ?? false;
     this.safe = opts.safe ?? false;
+    this.markers = opts.markers ?? {};
     this._isPreapproved = opts.isPreapproved ?? false;
     this._unboundParams = opts.params.filter(p => !p.isBound);
     this._nonVariadicUnbound = this._unboundParams.filter(p => !p.variadic);

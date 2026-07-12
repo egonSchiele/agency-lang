@@ -319,7 +319,7 @@ function reportNotAssignable(
   expected: VariableType | "any",
   loc: SourceLocation | undefined,
 ): void {
-  if (actual === "any" || expected === "any") return;
+  if (isAnyType(actual) || isAnyType(expected)) return;
   if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
   ctx.errors.push(
     diagnostic(

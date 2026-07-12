@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import { diagnostic } from "./diagnostics.js";
 import type { TypeCheckerContext, ScopeInfo } from "./types.js";
 import type { EffectDeclaration } from "../types/effectDeclaration.js";
@@ -174,7 +175,7 @@ function checkRaiseSite(
   // After the named/splat filters above, `dataArg` is a positional Expression
   // which is a subset of AgencyNode (the union just isn't narrow enough for TS).
   const argType = synthType(dataArg as Parameters<typeof synthType>[0], info.scope, ctx);
-  if (argType === "any") return; // can't say anything useful
+  if (isAnyType(argType)) return; // can't say anything useful
 
   // Per-field checks against the resolved data object for precise messages.
   if (argType.type === "objectType") {

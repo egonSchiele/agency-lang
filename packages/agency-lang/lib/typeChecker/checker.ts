@@ -382,9 +382,9 @@ function checkCallAgainstBuiltinSig(
     // Validate the named-arg value's type against the declared one
     // (Copilot #4). Skip when the allowlist entry is `"any"`.
     const expected = allowedNamed[a.name];
-    if (expected !== "any") {
+    if (!isAnyType(expected)) {
       const actual = synthType(a.value, scope, ctx);
-      if (actual !== "any" && !isAssignable(actual, expected, typeAliases)) {
+      if (!isAnyType(actual) && !isAssignable(actual, expected, typeAliases)) {
         ctx.errors.push(
           diagnostic(
             "namedArgTypeMismatch",
@@ -745,7 +745,7 @@ function checkArgsAgainstParams(
     }
     const argType = synthType(innerArg, scope, ctx);
     const paramType = slot?.type;
-    if (paramType === undefined || paramType === "any" || argType === "any") {
+    if (paramType === undefined || isAnyType(paramType) || isAnyType(argType)) {
       continue;
     }
     // Validated params accept either the un-bang'd type T or any Result —
@@ -791,7 +791,7 @@ function checkSplatAgainstRemainingParams(
   ctx: TypeCheckerContext,
 ): void {
   const splatType = synthType(splatSource, scope, ctx);
-  if (splatType === "any") return;
+  if (isAnyType(splatType)) return;
   if (splatType.type !== "arrayType") {
     const splatStr = formatTypeHint(splatType);
     ctx.errors.push(
@@ -813,7 +813,7 @@ function checkSplatAgainstRemainingParams(
     const slot = sig.resolveSlot({ kind: "positional", index: i });
     if (!slot) continue;
     const paramType = slot.type;
-    if (paramType === undefined || paramType === "any") continue;
+    if (paramType === undefined || isAnyType(paramType)) continue;
     if (isAssignable(elementType, paramType, typeAliases)) continue;
     const paramStr = formatTypeHint(paramType);
     ctx.errors.push(
@@ -951,10 +951,10 @@ function validatePipeArg(
   ctx: TypeCheckerContext,
 ): void {
   const slotType = pipeRhsSlotType(expr.right, ctx);
-  if (slotType === undefined || slotType === "any") return;
+  if (slotType === undefined || isAnyType(slotType)) return;
 
   const leftType = synthType(expr.left, scope, ctx);
-  if (leftType === "any") return;
+  if (isAnyType(leftType)) return;
   const flowingType =
     leftType.type === "resultType" ? leftType.successType : leftType;
   if (isAnyType(flowingType)) return;
@@ -1005,7 +1005,7 @@ function checkCatchDefaultType(
   ctx: TypeCheckerContext,
 ): void {
   const left = synthType(node.left, scope, ctx);
-  if (left === "any") return;
+  if (isAnyType(left)) return;
   const expected = left.type === "resultType" ? left.successType : left;
   checkType(node.right, expected, scope, "catch default", ctx);
 }

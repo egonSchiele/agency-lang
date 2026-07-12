@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
 import type { SourceLocation } from "../types/base.js";
 import type { TypeCheckError } from "./types.js";
@@ -131,7 +132,7 @@ function targetAllowed(
   target: VariableType | "any" | null | undefined,
   ctx: TypeCheckerContext,
 ): { labels: string[]; name: string } | null {
-  if (!target || target === "any") return null;
+  if (!target || isAnyType(target)) return null;
   const resolved = safeResolveType(target, ctx.getTypeAliases());
   if (resolved.type !== "blockType" || !resolved.raises) return null;
   const allowed = resolveEffectSet(resolved.raises, ctx.getTypeAliases());

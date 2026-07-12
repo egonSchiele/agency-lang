@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import { Tag, TypeAliasEntry, TypeParam, VariableType } from "../types.js";
 import { ANY_T, BOOLEAN_T, NUMBER_T, STRING_T } from "./primitives.js";
 import { substituteTypeParams } from "./substitute.js";
@@ -339,6 +340,10 @@ function collectLiteralKeys(keyType: VariableType): string[] | null {
 }
 
 export function widenType(vt: VariableType | "any"): VariableType | "any" {
+  // NOTE: string-only check on purpose. widenType is a structure-preserving
+  // map; the ANY_T *object* must fall through to `return vt` (default) so it
+  // stays an object. Collapsing it to the string here corrupts nested fields
+  // (e.g. resultType.successType). Task 5 deletes this line with the sentinel.
   if (vt === "any") return "any";
   switch (vt.type) {
     case "stringLiteralType":
@@ -389,7 +394,7 @@ export function widenType(vt: VariableType | "any"): VariableType | "any" {
 
 /** True iff `vt` is the bottom type `never`. */
 export function isNever(vt: VariableType | "any"): boolean {
-  return vt !== "any" && vt.type === "primitiveType" && vt.value === "never";
+  return !isAnyType(vt) && vt.type === "primitiveType" && vt.value === "never";
 }
 
 /**
@@ -435,7 +440,7 @@ function isAssignableGuarded(
   typeAliases: Record<string, TypeAliasEntry>,
   inProgress: Set<string>,
 ): boolean {
-  if (source === "any" || target === "any") return true;
+  if (isAnyType(source) || isAnyType(target)) return true;
 
   const named =
     source.type === "typeAliasVariable" ||

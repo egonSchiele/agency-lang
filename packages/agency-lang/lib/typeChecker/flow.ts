@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import type { AgencyNode, TypeAliasEntry, VariableType } from "../types.js";
 import type { Refine, NarrowCandidate } from "./narrowing.js";
 import { narrowByRefine } from "./narrowing.js";
@@ -37,7 +38,7 @@ function resolvePath(
 ): ScopeType {
   let current: ScopeType = baseType;
   for (const seg of chain) {
-    if (current === "any") return "any";
+    if (isAnyType(current)) return "any";
     const resolved = safeResolveType(current, aliases);
     if (seg.kind === "prop") {
       if (resolved.type === "objectType") {
@@ -155,7 +156,7 @@ export function uniteTypes(
   types: ScopeType[],
   aliases: Record<string, TypeAliasEntry>,
 ): ScopeType {
-  if (types.some((t) => t === "any")) return "any";
+  if (types.some((t) => isAnyType(t))) return "any";
   const concrete = (types as VariableType[]).filter((t) => !isNever(t));
   if (concrete.length === 0) return NEVER_T;
   const seen: Record<string, VariableType> = {};
@@ -240,7 +241,7 @@ function computeTypeAt(
     case "narrow": {
       if (referenceKey(at.ref) !== key) return typeAt(ref, at.prev, env);
       const base = typeAt(ref, at.prev, env);
-      if (base === "any") return "any";
+      if (isAnyType(base)) return "any";
       return applyRefine(base, at.refine, env.typeAliases) ?? base;
     }
     case "join":
@@ -358,7 +359,7 @@ export function widenAtLoopBackEdge(
     const before = typeAt(r, loopEntry, env);
     const after = bodyEnd.kind === "exit" ? before : typeAt(r, bodyEnd, env);
     const unchanged =
-      before === "any" || after === "any"
+      isAnyType(before) || isAnyType(after)
         ? before === after
         : typeKey(before, env.typeAliases) === typeKey(after, env.typeAliases);
     if (unchanged) {

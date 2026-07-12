@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import {
   AgencyNode,
   FunctionDefinition,
@@ -80,7 +81,7 @@ export function inferReturnTypeFor(
     } else {
       const typeAliases = ctx.getTypeAliases();
       const types = returnValues.map((v) => synthType(v, scope, ctx));
-      if (types.some((t) => t === "any")) {
+      if (types.some((t) => isAnyType(t))) {
         inferred = "any";
       } else {
         const concrete = types as VariableType[];
@@ -111,7 +112,7 @@ export function inferReturnTypeFor(
     // explicitly annotated a non-Result return type are caught earlier in
     // index.ts (section 1d) — this branch only handles unannotated returns.
     const hasValidatedParam = def.parameters.some((p) => p.validated);
-    if (hasValidatedParam && inferred !== "any") {
+    if (hasValidatedParam && !isAnyType(inferred)) {
       inferred = resultTypeForValidation(inferred, true);
     }
 
@@ -124,11 +125,6 @@ export function inferReturnTypeFor(
 type ResultTypes = readonly ResultType[];
 
 const ANY_T: VariableType = { type: "primitiveType", value: "any" };
-
-/** True when t is the "any" sentinel synth result expressed as a primitive. */
-function isAnyType(t: VariableType): boolean {
-  return t.type === "primitiveType" && t.value === "any";
-}
 
 /**
  * Merge multiple Result types from different return paths. The success type

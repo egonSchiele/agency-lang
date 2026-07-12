@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import { diagnostic } from "./diagnostics.js";
 import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
 import { parseMatchValId } from "../matchVal.js";
@@ -234,7 +235,7 @@ function accessResultField(
  * primitiveType("any") so the inner field is a real VariableType.
  */
 function maybeAny(t: VariableType | "any"): VariableType {
-  return t === "any" ? ANY_T : t;
+  return isAnyType(t) ? ANY_T : t;
 }
 
 /**
@@ -379,7 +380,7 @@ function synthTryExpression(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const inner = synthType(expr.call, scope, ctx);
-  if (inner === "any") return inner;
+  if (isAnyType(inner)) return inner;
   if (inner.type === "resultType") return inner;
   return { type: "resultType", successType: inner, failureType: ANY_T };
 }
@@ -440,7 +441,7 @@ function synthBinOp(
     const leftType = synthType(expr.left, scope, ctx);
     const rightType = synthType(expr.right, scope, ctx);
     const isString = (t: VariableType | "any") =>
-      t !== "any" &&
+      !isAnyType(t) &&
       ((t.type === "primitiveType" && t.value === "string") ||
         t.type === "stringLiteralType");
     if (isString(leftType) || isString(rightType)) {
@@ -466,7 +467,7 @@ function synthLogical(
 ): VariableType | "any" {
   const left = synthType(expr.left, scope, ctx);
   const right = synthType(expr.right, scope, ctx);
-  if (left === "any" || right === "any") return "any";
+  if (isAnyType(left) || isAnyType(right)) return "any";
   const seen = new Map<string, VariableType>();
   const aliases = ctx.getTypeAliases();
   const collect = (t: VariableType) => {
@@ -496,7 +497,7 @@ function synthNullishCoalesce(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const left = synthType(expr.left, scope, ctx);
-  if (left === "any") return synthType(expr.right, scope, ctx);
+  if (isAnyType(left)) return synthType(expr.right, scope, ctx);
   const stripped = stripNullable(left);
   if (stripped === undefined) return synthType(expr.right, scope, ctx);
   return stripped;
@@ -531,7 +532,7 @@ function synthCatch(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const left = synthType(expr.left, scope, ctx);
-  if (left === "any") return left;
+  if (isAnyType(left)) return left;
   if (left.type === "resultType") {
     // `catch` on a non-Result is a no-op at runtime — type is just left.
     return left.successType;
@@ -555,7 +556,7 @@ function synthPipe(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const right = synthPipeRhs(expr.right, scope, ctx);
-  if (right === "any") return right;
+  if (isAnyType(right)) return right;
   if (right.type === "resultType") return right;
   return { type: "resultType", successType: right, failureType: ANY_T };
 }
@@ -571,10 +572,10 @@ function synthPipeRhs(
   ctx: TypeCheckerContext,
 ): VariableType | "any" {
   const rhsType = synthType(rhs, scope, ctx);
-  if (rhsType !== "any" && rhsType.type === "functionRefType") {
+  if (!isAnyType(rhsType) && rhsType.type === "functionRefType") {
     const returnType =
       rhsType.returnType ??
-      (ctx.inferredReturnTypes[rhsType.name] !== "any"
+      (!isAnyType(ctx.inferredReturnTypes[rhsType.name])
         ? (ctx.inferredReturnTypes[rhsType.name] as VariableType | undefined)
         : undefined);
     if (returnType) return resultTypeForValidation(returnType, rhsType.returnTypeValidated);
@@ -635,14 +636,14 @@ function synthArray(
   for (const item of expr.items) {
     if (item.type === "splat") {
       const splatType = synthType(item.value, scope, ctx);
-      if (splatType === "any") return "any";
+      if (isAnyType(splatType)) return "any";
       if (splatType.type !== "arrayType") return "any";
       itemTypes.push(splatType.elementType);
       continue;
     }
     itemTypes.push(synthType(item, scope, ctx));
   }
-  const concreteTypes = itemTypes.filter((t) => t !== "any");
+  const concreteTypes = itemTypes.filter((t): t is VariableType => !isAnyType(t));
   if (concreteTypes.length === 0) return "any";
   if (concreteTypes.length === 1) {
     return { type: "arrayType", elementType: concreteTypes[0] };
@@ -686,7 +687,7 @@ function synthObject(
   for (const entry of expr.entries) {
     if ("type" in entry && entry.type === "splat") {
       const splatType = synthType(entry.value, scope, ctx);
-      if (splatType === "any") return "any";
+      if (isAnyType(splatType)) return "any";
       if (splatType.type !== "objectType") return "any";
       for (const prop of splatType.properties)
         properties.set(prop.key, prop.value);
@@ -707,7 +708,7 @@ function synthObject(
     const valueType = isNullLiteralExpr(kv.value)
       ? NULL_T
       : synthType(kv.value, scope, ctx);
-    if (valueType === "any") {
+    if (isAnyType(valueType)) {
       return "any";
     }
     if (kv.computedKey) {
@@ -797,7 +798,7 @@ function validateAgencyFunctionMethod(
           ? param.typeHint
           : { type: "arrayType", elementType: param.typeHint };
         const actual = synthType(arg.value, scope, ctx);
-        if (actual === "any") continue;
+        if (isAnyType(actual)) continue;
         if (!isAssignable(actual, expected, typeAliases)) {
           ctx.errors.push(
             diagnostic(
@@ -905,7 +906,7 @@ export function synthValueAccess(
       }
     }
 
-    if (currentType === "any") return "any";
+    if (isAnyType(currentType)) return "any";
     const resolved = safeResolveType(currentType, typeAliases);
     if (resolved.type === "primitiveType" && resolved.value === "any")
       return "any";
@@ -930,7 +931,7 @@ export function synthValueAccess(
             ctx,
             expr.loc,
           );
-          if (fieldType === "any") return "any";
+          if (fieldType !== null && isAnyType(fieldType)) return "any";
           if (fieldType !== null) {
             currentType = fieldType;
             break;
@@ -1039,7 +1040,7 @@ export function synthValueAccess(
         if (member && member.kind === "method") {
           const sig = resolveSig(member.sig, resolved);
           validatePrimitiveMethodCall(expr, element.functionCall, sig, scope, ctx);
-          currentType = sig.returnType === "any" ? ANY_T : sig.returnType;
+          currentType = isAnyType(sig.returnType) ? ANY_T : sig.returnType;
           break;
         }
         return "any";
@@ -1113,9 +1114,9 @@ function validatePrimitiveMethodCall(
     if ("type" in arg && arg.type === "splat") continue; // skip splat element check for primitives
     const slotType =
       i < sig.params.length ? sig.params[i] : (sig.restParam as VariableType | "any" | undefined);
-    if (slotType === undefined || slotType === "any") continue;
+    if (slotType === undefined || isAnyType(slotType)) continue;
     const argType = synthType(arg as AgencyNode, scope, ctx);
-    if (argType === "any") continue;
+    if (isAnyType(argType)) continue;
     if (!isAssignable(argType, slotType, typeAliases)) {
       ctx.errors.push(
         diagnostic(
@@ -1167,11 +1168,11 @@ function synthArrayCallbackMethod(
   const cbReturn = synthCallbackReturnType(call, elementT, scope, ctx);
 
   if (cbKind === "arrayU") {
-    if (cbReturn === "any") return ANY_T;
+    if (isAnyType(cbReturn)) return ANY_T;
     return { type: "arrayType", elementType: cbReturn };
   }
   if (cbKind === "flatten") {
-    if (cbReturn === "any") return ANY_T;
+    if (isAnyType(cbReturn)) return ANY_T;
     // `flatMap`'s callback returns `Array<U>`; we unwrap one level.
     if (cbReturn.type === "arrayType") return cbReturn;
     // Callback returned a non-array — flatMap silently treats it as a
@@ -1217,7 +1218,7 @@ function synthCallbackReturnType(
   const args = (call.arguments as AgencyNode[]) ?? [];
   if (args.length === 0) return "any";
   const cbType = synthType(args[0], scope, ctx);
-  if (cbType === "any") return "any";
+  if (isAnyType(cbType)) return "any";
   if (cbType.type === "functionRefType") return cbType.returnType ?? "any";
   if (cbType.type === "blockType") return cbType.returnType;
   return "any";
@@ -1257,7 +1258,7 @@ function synthBlockReturnType(
     }
   }
   if (returnTypes.length === 0) return "any";
-  const concrete = returnTypes.filter((t): t is VariableType => t !== "any");
+  const concrete = returnTypes.filter((t): t is VariableType => !isAnyType(t));
   if (concrete.length === 0) return "any";
   if (concrete.length === 1) return concrete[0];
   // Dedupe structurally identical types.

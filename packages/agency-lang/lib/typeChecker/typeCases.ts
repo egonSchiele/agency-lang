@@ -1,3 +1,4 @@
+import { isAnyType } from "./utils.js";
 import type { VariableType, TypeAliasEntry } from "../types.js";
 import { safeResolveType } from "./assignability.js";
 import { unescapeStringLiteralValue } from "../parsers/parsers.js";
@@ -101,7 +102,7 @@ export function decomposeCases(
   type: VariableType | "any",
   aliases: Record<string, TypeAliasEntry>,
 ): CaseSet {
-  if (type === "any") return OPEN;
+  if (isAnyType(type)) return OPEN;
   // safeResolveType yields ANY_T (a primitiveType "any"), never the string
   // "any"; an unresolved/any type falls through to the default OPEN below.
   const resolved = safeResolveType(type, aliases);

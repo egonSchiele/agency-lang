@@ -178,7 +178,7 @@ export function checkType(
   }
 
   const actualType = synthType(expr, scope, ctx);
-  if (actualType === "any") return;
+  if (isAnyType(actualType)) return;
 
   // Literal value nodes may carry no loc of their own; anchor on the
   // enclosing statement when the caller supplied one.
@@ -202,7 +202,7 @@ export function emitAssignabilityError(
   context: string,
   ctx: TypeCheckerContext,
 ): void {
-  if (actual === "any") return;
+  if (isAnyType(actual)) return;
   if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
   ctx.errors.push(
     diagnostic(
@@ -232,7 +232,7 @@ export function checkConditionType(
   ctx: TypeCheckerContext,
 ): void {
   const actualType = synthType(condition, scope, ctx);
-  if (actualType === "any") {
+  if (isAnyType(actualType)) {
     return;
   }
   const typeAliases = ctx.getTypeAliases();

@@ -6,7 +6,7 @@ name: "Types and aliases"
 
 <a id="ag1001"></a>
 
-## AG1001 — Type parameter '{param}' (no default) must come before parameters that have defaults in '{alias}'.
+## AG1001 — Type parameter '&#123;param&#125;' (no default) must come before parameters that have defaults in '&#123;alias&#125;'.
 
 *Default severity: error.*
 
@@ -16,7 +16,7 @@ A type alias lists its type parameters left to right, and — like default funct
 
 <a id="ag1002"></a>
 
-## AG1002 — Type '{alias}' is not a value-parameterized type but was given {count} value {argumentWord} (referenced in '{context}').
+## AG1002 — Type '&#123;alias&#125;' is not a value-parameterized type but was given &#123;count&#125; value &#123;argumentWord&#125; (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 
@@ -26,7 +26,7 @@ Some type aliases take *value* arguments in parentheses (like a validated length
 
 <a id="ag1003"></a>
 
-## AG1003 — {alias} expects at most {max} value {argumentWord}, got {count} (referenced in '{context}').
+## AG1003 — &#123;alias&#125; expects at most &#123;max&#125; value &#123;argumentWord&#125;, got &#123;count&#125; (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 
@@ -36,7 +36,7 @@ A value-parameterized alias accepts a fixed maximum number of value arguments, a
 
 <a id="ag1004"></a>
 
-## AG1004 — '{alias}' is a value-parameterized type and requires value arguments — write '{alias}({formals})' (referenced in '{context}').
+## AG1004 — '&#123;alias&#125;' is a value-parameterized type and requires value arguments — write '&#123;alias&#125;(&#123;formals&#125;)' (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 
@@ -46,7 +46,7 @@ This alias is value-parameterized: it needs its value arguments supplied in pare
 
 <a id="ag1005"></a>
 
-## AG1005 — {alias} requires at least {min} value {argumentWord} (referenced in '{context}').
+## AG1005 — &#123;alias&#125; requires at least &#123;min&#125; value &#123;argumentWord&#125; (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 
@@ -56,7 +56,7 @@ A value-parameterized alias requires at least some minimum number of value argum
 
 <a id="ag1006"></a>
 
-## AG1006 — Type alias '{alias}' is not defined (referenced in '{context}').
+## AG1006 — Type alias '&#123;alias&#125;' is not defined (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 
@@ -66,7 +66,7 @@ A type name was used that has no `type` declaration in scope and is not a built-
 
 <a id="ag1007"></a>
 
-## AG1007 — Generic type '{alias}' requires type arguments (referenced in '{context}').
+## AG1007 — Generic type '&#123;alias&#125;' requires type arguments (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 
@@ -76,7 +76,7 @@ This is a generic type — it is parameterized by other types (like the element 
 
 <a id="ag1008"></a>
 
-## AG1008 — {alias} expects {expected} type {argumentWord}, got {count} (referenced in '{context}').
+## AG1008 — &#123;alias&#125; expects &#123;expected&#125; type &#123;argumentWord&#125;, got &#123;count&#125; (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 
@@ -86,7 +86,7 @@ A built-in generic type (such as an array or Record) was given the wrong number 
 
 <a id="ag1009"></a>
 
-## AG1009 — Unknown generic type '{alias}' (referenced in '{context}').
+## AG1009 — Unknown generic type '&#123;alias&#125;' (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 
@@ -96,7 +96,7 @@ A generic type name was used with type arguments, but no generic type by that na
 
 <a id="ag1010"></a>
 
-## AG1010 — Type '{alias}' is not a generic type (referenced in '{context}').
+## AG1010 — Type '&#123;alias&#125;' is not a generic type (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 
@@ -106,7 +106,7 @@ Type arguments in angle brackets were applied to a name that is not a generic ty
 
 <a id="ag1011"></a>
 
-## AG1011 — {alias} expects at most {max} type {argumentWord}, got {count} (referenced in '{context}').
+## AG1011 — &#123;alias&#125; expects at most &#123;max&#125; type &#123;argumentWord&#125;, got &#123;count&#125; (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 
@@ -116,7 +116,7 @@ A generic type accepts a fixed maximum number of type arguments, and you supplie
 
 <a id="ag1012"></a>
 
-## AG1012 — {alias} requires at least {min} type {argumentWord} (referenced in '{context}').
+## AG1012 — &#123;alias&#125; requires at least &#123;min&#125; type &#123;argumentWord&#125; (referenced in '&#123;context&#125;').
 
 *Default severity: error.*
 

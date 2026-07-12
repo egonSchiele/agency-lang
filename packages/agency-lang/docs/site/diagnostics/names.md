@@ -6,7 +6,7 @@ name: "Names, scope, and reserved words"
 
 <a id="ag4001"></a>
 
-## AG4001 — '{name}' shadows an imported function.
+## AG4001 — '&#123;name&#125;' shadows an imported function.
 
 *Default severity: warning.*
 
@@ -16,7 +16,7 @@ A local name here has the same name as a function you imported, so the local sha
 
 <a id="ag4002"></a>
 
-## AG4002 — '{name}' is a reserved built-in; cannot be redefined.
+## AG4002 — '&#123;name&#125;' is a reserved built-in; cannot be redefined.
 
 *Default severity: error.*
 
@@ -26,7 +26,7 @@ The name is a reserved built-in and cannot be redefined. Built-ins are part of t
 
 <a id="ag4003"></a>
 
-## AG4003 — '{name}' is a reserved built-in type; cannot be redefined.
+## AG4003 — '&#123;name&#125;' is a reserved built-in type; cannot be redefined.
 
 *Default severity: error.*
 
@@ -36,7 +36,7 @@ The name is a reserved built-in type and cannot be redefined for the same reason
 
 <a id="ag4004"></a>
 
-## AG4004 — Function '{name}' is not defined.
+## AG4004 — Function '&#123;name&#125;' is not defined.
 
 *Default severity: error.*
 
@@ -46,7 +46,7 @@ A function was called that has no definition in scope and is not a built-in. The
 
 <a id="ag4005"></a>
 
-## AG4005 — Cannot reassign to constant '{name}'.
+## AG4005 — Cannot reassign to constant '&#123;name&#125;'.
 
 *Default severity: error.*
 
@@ -64,7 +64,7 @@ node main() {
 
 <a id="ag4006"></a>
 
-## AG4006 — `{keyword}` is a reserved block keyword. Write `{keyword} {{ ... }}` or `{keyword}(args) {{ ... }}` directly — the `as` keyword is not supported on {keyword} blocks (there's nothing to bind).
+## AG4006 — `&#123;keyword&#125;` is a reserved block keyword. Write `&#123;keyword&#125; &#123; ... &#125;` or `&#123;keyword&#125;(args) &#123; ... &#125;` directly — the `as` keyword is not supported on &#123;keyword&#125; blocks (there's nothing to bind).
 
 *Default severity: error.*
 
@@ -74,7 +74,7 @@ This keyword introduces a block directly — you write it followed by braces (or
 
 <a id="ag4007"></a>
 
-## AG4007 — Variable '{name}' is not defined.
+## AG4007 — Variable '&#123;name&#125;' is not defined.
 
 *Default severity: error.*
 

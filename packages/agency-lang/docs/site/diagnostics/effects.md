@@ -16,7 +16,7 @@ Handler parameters carry the payload of an interrupt, and the `!` validation syn
 
 <a id="ag3002"></a>
 
-## AG3002 — Effect '{effect}' is declared more than once in the same file.
+## AG3002 — Effect '&#123;effect&#125;' is declared more than once in the same file.
 
 *Default severity: error.*
 
@@ -26,7 +26,7 @@ An effect was declared more than once in the same file. Each effect name should 
 
 <a id="ag3003"></a>
 
-## AG3003 — Conflicting payload types for effect '{effect}'. All declarations of an effect must agree on its payload.
+## AG3003 — Conflicting payload types for effect '&#123;effect&#125;'. All declarations of an effect must agree on its payload.
 
 *Default severity: error.*
 
@@ -46,7 +46,7 @@ Two declarations of the same effect disagree about its payload type. Every decla
 
 <a id="ag3005"></a>
 
-## AG3005 — Effect '{effect}' expects data {payload}, but none was supplied.
+## AG3005 — Effect '&#123;effect&#125;' expects data &#123;payload&#125;, but none was supplied.
 
 *Default severity: error.*
 
@@ -56,7 +56,7 @@ The effect declares a payload, but this `raise`/`interrupt` supplied none. A dec
 
 <a id="ag3006"></a>
 
-## AG3006 — Effect '{effect}' data field '{field}' is missing.
+## AG3006 — Effect '&#123;effect&#125;' data field '&#123;field&#125;' is missing.
 
 *Default severity: error.*
 
@@ -66,7 +66,7 @@ The effect's payload is a structured type, and a required field of it was not su
 
 <a id="ag3007"></a>
 
-## AG3007 — Effect '{effect}' data field '{field}' has the wrong type.
+## AG3007 — Effect '&#123;effect&#125;' data field '&#123;field&#125;' has the wrong type.
 
 *Default severity: error.*
 
@@ -76,7 +76,7 @@ A field of the effect's payload was supplied with a value whose type does not ma
 
 <a id="ag3008"></a>
 
-## AG3008 — Effect '{effect}' data does not match the declared {payload}.
+## AG3008 — Effect '&#123;effect&#125;' data does not match the declared &#123;payload&#125;.
 
 *Default severity: error.*
 
@@ -86,7 +86,7 @@ The payload supplied at the raise site does not match the shape the effect decla
 
 <a id="ag3009"></a>
 
-## AG3009 — Function '{fn}' may throw interrupts [{effects}] but is not inside a handler.
+## AG3009 — Function '&#123;fn&#125;' may throw interrupts [&#123;effects&#125;] but is not inside a handler.
 
 *Default severity: warning.*
 
@@ -96,7 +96,7 @@ This function may raise interrupts, but it is called from a place that is not in
 
 <a id="ag3010"></a>
 
-## AG3010 — Handler {handler} may raise interrupts [{effects}]. That would re-enter the handler chain (the dispatcher visits every handler, even the one currently running) and recurse until `HandlerRecursionError` fires at runtime. Restructure so the handler doesn't call interrupt-raising code (e.g. hoist file I/O out of the handler), or suppress this error with `// @tc-ignore` on the line above the `handle` block.
+## AG3010 — Handler &#123;handler&#125; may raise interrupts [&#123;effects&#125;]. That would re-enter the handler chain (the dispatcher visits every handler, even the one currently running) and recurse until `HandlerRecursionError` fires at runtime. Restructure so the handler doesn't call interrupt-raising code (e.g. hoist file I/O out of the handler), or suppress this error with `// @tc-ignore` on the line above the `handle` block.
 
 *Default severity: error.*
 
@@ -106,7 +106,7 @@ A handler that itself raises interrupts would re-enter the handler chain — the
 
 <a id="ag3011"></a>
 
-## AG3011 — `interrupt` is not allowed inside a callback body (callback registered on '{hook}' may raise [{effects}]). Callbacks fire as side effects; their body cannot pause execution to ask the user a question. Move the `interrupt` into the calling node/function instead, or use a runtime guard if you wanted budget enforcement.
+## AG3011 — `interrupt` is not allowed inside a callback body (callback registered on '&#123;hook&#125;' may raise [&#123;effects&#125;]). Callbacks fire as side effects; their body cannot pause execution to ask the user a question. Move the `interrupt` into the calling node/function instead, or use a runtime guard if you wanted budget enforcement.
 
 *Default severity: error.*
 
@@ -116,7 +116,7 @@ Callbacks fire as side effects at points where execution cannot pause, so their 
 
 <a id="ag3012"></a>
 
-## AG3012 — 'raises {ref}' is not an effect set. Declare '{ref}' with 'effectSet' (not 'type'), or use an inline set like '<...>'.
+## AG3012 — 'raises &#123;ref&#125;' is not an effect set. Declare '&#123;ref&#125;' with 'effectSet' (not 'type'), or use an inline set like '&lt;...&gt;'.
 
 *Default severity: error.*
 
@@ -126,7 +126,7 @@ A `raises` clause must name an effect set, but the reference given is declared a
 
 <a id="ag3013"></a>
 
-## AG3013 — {kind} '{name}' raises effect '{effect}', which exceeds its declared 'raises {declared}'. Add '{effect}' to the clause.
+## AG3013 — &#123;kind&#125; '&#123;name&#125;' raises effect '&#123;effect&#125;', which exceeds its declared 'raises &#123;declared&#125;'. Add '&#123;effect&#125;' to the clause.
 
 *Default severity: error.*
 
@@ -136,7 +136,7 @@ The function or node raises an effect that its own `raises` clause does not list
 
 <a id="ag3014"></a>
 
-## AG3014 — {who} may raise any effect (its type has no 'raises' clause), which exceeds the 'raises <{allowed}>' allowed by type '{type}'. Add a 'raises' clause to the value's type.
+## AG3014 — &#123;who&#125; may raise any effect (its type has no 'raises' clause), which exceeds the 'raises &lt;&#123;allowed&#125;&gt;' allowed by type '&#123;type&#125;'. Add a 'raises' clause to the value's type.
 
 *Default severity: error.*
 
@@ -146,7 +146,7 @@ A value is being used where the target type limits which effects may be raised, 
 
 <a id="ag3015"></a>
 
-## AG3015 — {who} raises effect '{effect}', which exceeds the 'raises <{allowed}>' allowed by type '{type}'. Add '{effect}' to the clause, or use a target type that allows it.
+## AG3015 — &#123;who&#125; raises effect '&#123;effect&#125;', which exceeds the 'raises &lt;&#123;allowed&#125;&gt;' allowed by type '&#123;type&#125;'. Add '&#123;effect&#125;' to the clause, or use a target type that allows it.
 
 *Default severity: error.*
 

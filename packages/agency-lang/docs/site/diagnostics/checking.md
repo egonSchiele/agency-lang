@@ -6,7 +6,7 @@ name: "Assignability and checking"
 
 <a id="ag2001"></a>
 
-## AG2001 — Type '{actual}' is not assignable to type '{expected}' ({context}).
+## AG2001 — Type '&#123;actual&#125;' is not assignable to type '&#123;expected&#125;' (&#123;context&#125;).
 
 *Default severity: error.*
 
@@ -16,7 +16,7 @@ Agency assigns each value a type and checks that it fits where you use it. This 
 
 <a id="ag2002"></a>
 
-## AG2002 — Type '{actual}' is not assignable to type 'boolean' (condition).
+## AG2002 — Type '&#123;actual&#125;' is not assignable to type 'boolean' (condition).
 
 *Default severity: error.*
 
@@ -26,7 +26,7 @@ The condition of an `if` or `while` must be a boolean. Agency does not treat non
 
 <a id="ag2003"></a>
 
-## AG2003 — Unknown property '{key}' on type '{expected}' ({context}).
+## AG2003 — Unknown property '&#123;key&#125;' on type '&#123;expected&#125;' (&#123;context&#125;).
 
 *Default severity: error.*
 
@@ -36,7 +36,7 @@ An object literal (or similar structured value) included a key that the target t
 
 <a id="ag2004"></a>
 
-## AG2004 — Variable '{name}' has no type annotation (strict mode).
+## AG2004 — Variable '&#123;name&#125;' has no type annotation (strict mode).
 
 *Default severity: error.*
 
@@ -46,7 +46,7 @@ In strict mode every variable needs a type annotation; this one has none and its
 
 <a id="ag2005"></a>
 
-## AG2005 — Type '{actual}' is not assignable to type '{expected}'.
+## AG2005 — Type '&#123;actual&#125;' is not assignable to type '&#123;expected&#125;'.
 
 *Default severity: error.*
 
@@ -67,7 +67,7 @@ node main() {
 
 <a id="ag2006"></a>
 
-## AG2006 — For-loop iterable must be an array or Record, got '{actual}'.
+## AG2006 — For-loop iterable must be an array or Record, got '&#123;actual&#125;'.
 
 *Default severity: error.*
 
@@ -86,7 +86,7 @@ node main() {
 
 <a id="ag2007"></a>
 
-## AG2007 — {kind} '{name}' has validated parameters but its return type is not a Result type. Validated parameters can short-circuit with a failure, so the return type must be 'Result<...>'.
+## AG2007 — &#123;kind&#125; '&#123;name&#125;' has validated parameters but its return type is not a Result type. Validated parameters can short-circuit with a failure, so the return type must be 'Result&lt;...&gt;'.
 
 *Default severity: error.*
 
@@ -96,7 +96,7 @@ A parameter marked with `!` validation can short-circuit the call with a failure
 
 <a id="ag2008"></a>
 
-## AG2008 — Property '{field}' is not available on every member of '{union}'; narrow the value (e.g. with a guard) before accessing it.
+## AG2008 — Property '&#123;field&#125;' is not available on every member of '&#123;union&#125;'; narrow the value (e.g. with a guard) before accessing it.
 
 *Default severity: error.*
 
@@ -106,7 +106,7 @@ The value has a union type, and the field you accessed exists on some members of
 
 <a id="ag2009"></a>
 
-## AG2009 — '.{field}' is only available on a {branch} Result; guard with 'if (isSuccess(r))' / 'if (isFailure(r))', use 'r catch …', or 'match (r) {{ … }}'.
+## AG2009 — '.&#123;field&#125;' is only available on a &#123;branch&#125; Result; guard with 'if (isSuccess(r))' / 'if (isFailure(r))', use 'r catch …', or 'match (r) &#123; … &#125;'.
 
 *Default severity: error.*
 
@@ -125,7 +125,7 @@ node main() {
 
 <a id="ag2010"></a>
 
-## AG2010 — Cannot {op} values of different dimensions ({leftDim} and {rightDim}): '{left}' and '{right}'.
+## AG2010 — Cannot &#123;op&#125; values of different dimensions (&#123;leftDim&#125; and &#123;rightDim&#125;): '&#123;left&#125;' and '&#123;right&#125;'.
 
 *Default severity: error.*
 
@@ -135,7 +135,7 @@ Agency tracks physical dimensions (like duration versus size) on some values and
 
 <a id="ag2011"></a>
 
-## AG2011 — Property '{property}' does not exist on type '{type}'.
+## AG2011 — Property '&#123;property&#125;' does not exist on type '&#123;type&#125;'.
 
 *Default severity: error.*
 
@@ -145,7 +145,7 @@ The property you accessed is not declared on the value's type. The checker knows
 
 <a id="ag2012"></a>
 
-## AG2012 — Not all code paths return a value in '{fn}'.
+## AG2012 — Not all code paths return a value in '&#123;fn&#125;'.
 
 *Default severity: error.*
 

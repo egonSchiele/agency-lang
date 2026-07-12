@@ -53,6 +53,15 @@ describe("generateDiagnosticsPages", () => {
     }
   });
 
+  it("emits no `{{` — VitePress would parse it as a Vue interpolation", () => {
+    // The docs are built by VitePress (Vue), which reads `{{ … }}` as a
+    // template expression and hard-fails the build. Message templates use it
+    // as the literal-brace escape, so the generator must neutralize it.
+    for (const { relPath, contents } of pages) {
+      expect(contents.includes("{{"), relPath).toBe(false);
+    }
+  });
+
   it("has unique heading anchors within each page", () => {
     for (const { contents } of pages) {
       const headings = [...contents.matchAll(/^## (.+)$/gm)].map((m) => m[1]);

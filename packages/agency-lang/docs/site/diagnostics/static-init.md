@@ -6,7 +6,7 @@ name: "Static init, config, and imports"
 
 <a id="ag7001"></a>
 
-## AG7001 — Only 'static const' declarations can be exported. Use 'export static const {name} = ...' instead.
+## AG7001 — Only 'static const' declarations can be exported. Use 'export static const &#123;name&#125; = ...' instead.
 
 *Default severity: error.*
 
@@ -16,7 +16,7 @@ Only `static const` declarations can be exported from a module. A plain `const`,
 
 <a id="ag7002"></a>
 
-## AG7002 — {contextLabel} cannot call `{builtin}(...)` — {reason}, but static initializers run once at process startup before any per-run state exists. Move this call into a node or a function called from a node.
+## AG7002 — &#123;contextLabel&#125; cannot call `&#123;builtin&#125;(...)` — &#123;reason&#125;, but static initializers run once at process startup before any per-run state exists. Move this call into a node or a function called from a node.
 
 *Default severity: error.*
 
@@ -26,7 +26,7 @@ Static initializers run once at process startup, before any per-run state exists
 
 <a id="ag7003"></a>
 
-## AG7003 — {contextLabel} cannot `interrupt(...)` — interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body.
+## AG7003 — &#123;contextLabel&#125; cannot `interrupt(...)` — interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body.
 
 *Default severity: error.*
 
@@ -36,7 +36,7 @@ Interrupts pause the per-run execution stack, but static initializers run once a
 
 <a id="ag7004"></a>
 
-## AG7004 — Cannot reassign static `{name}` at module top level — statics are immutable after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.
+## AG7004 — Cannot reassign static `&#123;name&#125;` at module top level — statics are immutable after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.
 
 *Default severity: error.*
 
@@ -46,7 +46,7 @@ Statics are immutable after they initialize, so a static cannot be reassigned at
 
 <a id="ag7005"></a>
 
-## AG7005 — Cannot mutate static `{name}` via `.{method}(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.
+## AG7005 — Cannot mutate static `&#123;name&#125;` via `.&#123;method&#125;(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.
 
 *Default severity: error.*
 
@@ -56,7 +56,7 @@ Statics are deep-frozen after initialization, so mutating one through a method (
 
 <a id="ag7006"></a>
 
-## AG7006 — Function '{name}' cannot be both destructive and idempotent — those markers are contradictory. Pick one.
+## AG7006 — Function '&#123;name&#125;' cannot be both destructive and idempotent — those markers are contradictory. Pick one.
 
 *Default severity: error.*
 

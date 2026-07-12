@@ -6,7 +6,7 @@ name: "Calls, tools, and LLM usage"
 
 <a id="ag6001"></a>
 
-## AG6001 — 'regex' cannot appear in an llm() structured-output type ({context}); LLMs can't return regex values through JSON.
+## AG6001 — 'regex' cannot appear in an llm() structured-output type (&#123;context&#125;); LLMs can't return regex values through JSON.
 
 *Default severity: error.*
 
@@ -16,7 +16,7 @@ An `llm()` call returns its result as structured JSON, and a `regex` value has n
 
 <a id="ag6002"></a>
 
-## AG6002 — Cannot interpolate parameter '{param}' in doc string — parameter values are not known when the tool description is sent to the LLM. Use a global variable instead.
+## AG6002 — Cannot interpolate parameter '&#123;param&#125;' in doc string — parameter values are not known when the tool description is sent to the LLM. Use a global variable instead.
 
 *Default severity: error.*
 
@@ -36,7 +36,7 @@ A function's doc string becomes the tool description sent to the LLM, and that d
 
 <a id="ag6004"></a>
 
-## AG6004 — Unknown parameter '{name}' in .partial() call. '{fn}' has parameters: {params}.
+## AG6004 — Unknown parameter '&#123;name&#125;' in .partial() call. '&#123;fn&#125;' has parameters: &#123;params&#125;.
 
 *Default severity: error.*
 
@@ -46,7 +46,7 @@ A `.partial()` call named a parameter that the function does not have. Binding a
 
 <a id="ag6005"></a>
 
-## AG6005 — Argument type '{actual}' is not assignable to parameter type '{expected}' in .partial() call to '{fn}'.
+## AG6005 — Argument type '&#123;actual&#125;' is not assignable to parameter type '&#123;expected&#125;' in .partial() call to '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -56,7 +56,7 @@ An argument passed to `.partial()` has a type that does not match the parameter 
 
 <a id="ag6006"></a>
 
-## AG6006 — Named arguments are not supported on built-in method '.{method}()'.
+## AG6006 — Named arguments are not supported on built-in method '.&#123;method&#125;()'.
 
 *Default severity: error.*
 
@@ -66,7 +66,7 @@ Built-in methods take their arguments positionally; named arguments are only sup
 
 <a id="ag6007"></a>
 
-## AG6007 — Method '.{method}()' expects {expected} argument(s), got {count}.
+## AG6007 — Method '.&#123;method&#125;()' expects &#123;expected&#125; argument(s), got &#123;count&#125;.
 
 *Default severity: error.*
 
@@ -76,7 +76,7 @@ A built-in method was called with the wrong number of arguments; this method tak
 
 <a id="ag6008"></a>
 
-## AG6008 — Method '.{method}()' expects at least {min} argument(s), got {count}.
+## AG6008 — Method '.&#123;method&#125;()' expects at least &#123;min&#125; argument(s), got &#123;count&#125;.
 
 *Default severity: error.*
 
@@ -86,7 +86,7 @@ A built-in method was called with too few arguments; it requires at least a mini
 
 <a id="ag6009"></a>
 
-## AG6009 — Method '.{method}()' expects {min}–{max} argument(s), got {count}.
+## AG6009 — Method '.&#123;method&#125;()' expects &#123;min&#125;–&#123;max&#125; argument(s), got &#123;count&#125;.
 
 *Default severity: error.*
 
@@ -96,7 +96,7 @@ A built-in method accepts a range of argument counts, and this call fell outside
 
 <a id="ag6010"></a>
 
-## AG6010 — Argument type '{actual}' is not assignable to parameter type '{expected}' in call to '.{method}()'.
+## AG6010 — Argument type '&#123;actual&#125;' is not assignable to parameter type '&#123;expected&#125;' in call to '.&#123;method&#125;()'.
 
 *Default severity: error.*
 
@@ -106,7 +106,7 @@ An argument to a built-in method has a type that does not match the parameter it
 
 <a id="ag6011"></a>
 
-## AG6011 — Named arguments can only be used with Agency-defined functions, not '{fn}'.
+## AG6011 — Named arguments can only be used with Agency-defined functions, not '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -116,7 +116,7 @@ Named arguments work only with functions defined in Agency. The target here is n
 
 <a id="ag6012"></a>
 
-## AG6012 — '{fn}' does not accept the named argument '{name}'. Allowed: {allowed}.
+## AG6012 — '&#123;fn&#125;' does not accept the named argument '&#123;name&#125;'. Allowed: &#123;allowed&#125;.
 
 *Default severity: error.*
 
@@ -126,7 +126,7 @@ A named argument was supplied that the function does not declare. The checker kn
 
 <a id="ag6013"></a>
 
-## AG6013 — Duplicate named argument '{name}' in call to '{fn}'.
+## AG6013 — Duplicate named argument '&#123;name&#125;' in call to '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -136,7 +136,7 @@ The same named argument was supplied twice in one call. Each parameter can be bo
 
 <a id="ag6014"></a>
 
-## AG6014 — Named argument '{name}' on '{fn}' expects type '{expected}', got '{actual}'.
+## AG6014 — Named argument '&#123;name&#125;' on '&#123;fn&#125;' expects type '&#123;expected&#125;', got '&#123;actual&#125;'.
 
 *Default severity: error.*
 
@@ -146,7 +146,7 @@ A named argument's value has a type that does not match the parameter's declared
 
 <a id="ag6015"></a>
 
-## AG6015 — '{fn}' does not accept a block argument.
+## AG6015 — '&#123;fn&#125;' does not accept a block argument.
 
 *Default severity: error.*
 
@@ -156,7 +156,7 @@ A block argument (a trailing `{ ... }`) was passed to a function that does not d
 
 <a id="ag6016"></a>
 
-## AG6016 — Expected {expected} argument(s) for '{fn}', but got {count}.
+## AG6016 — Expected &#123;expected&#125; argument(s) for '&#123;fn&#125;', but got &#123;count&#125;.
 
 *Default severity: error.*
 
@@ -166,7 +166,7 @@ A function was called with the wrong number of positional arguments; it takes an
 
 <a id="ag6017"></a>
 
-## AG6017 — Expected at least {min} argument(s) for '{fn}', but got {count}.
+## AG6017 — Expected at least &#123;min&#125; argument(s) for '&#123;fn&#125;', but got &#123;count&#125;.
 
 *Default severity: error.*
 
@@ -176,7 +176,7 @@ A function was called with too few positional arguments; it requires at least a 
 
 <a id="ag6018"></a>
 
-## AG6018 — Expected {min}-{max} argument(s) for '{fn}', but got {count}.
+## AG6018 — Expected &#123;min&#125;-&#123;max&#125; argument(s) for '&#123;fn&#125;', but got &#123;count&#125;.
 
 *Default severity: error.*
 
@@ -186,7 +186,7 @@ A function accepts a range of argument counts (some parameters have defaults or 
 
 <a id="ag6019"></a>
 
-## AG6019 — Argument type '{actual}' is not assignable to parameter type '{expected}' in call to '{fn}'.
+## AG6019 — Argument type '&#123;actual&#125;' is not assignable to parameter type '&#123;expected&#125;' in call to '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -196,7 +196,7 @@ A positional argument's type does not match the parameter it fills. Each argumen
 
 <a id="ag6020"></a>
 
-## AG6020 — Splat argument must be an array, got '{actual}' in call to '{fn}'.
+## AG6020 — Splat argument must be an array, got '&#123;actual&#125;' in call to '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -206,7 +206,7 @@ A splat argument (`...xs`) spreads an array's elements into positional arguments
 
 <a id="ag6021"></a>
 
-## AG6021 — Splat element type '{actual}' is not assignable to parameter type '{expected}' in call to '{fn}'.
+## AG6021 — Splat element type '&#123;actual&#125;' is not assignable to parameter type '&#123;expected&#125;' in call to '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -216,7 +216,7 @@ The array being splatted has an element type that does not match the parameters 
 
 <a id="ag6022"></a>
 
-## AG6022 — Type '{actual}' is not assignable to pipe slot of type '{expected}'.
+## AG6022 — Type '&#123;actual&#125;' is not assignable to pipe slot of type '&#123;expected&#125;'.
 
 *Default severity: error.*
 
@@ -226,7 +226,7 @@ A pipe feeds its left-hand value into a slot on the right, and that value's type
 
 <a id="ag6023"></a>
 
-## AG6023 — Splat argument cannot follow a named argument in call to '{fn}'.
+## AG6023 — Splat argument cannot follow a named argument in call to '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -236,7 +236,7 @@ A splat argument cannot come after a named argument in a call. The splat fills p
 
 <a id="ag6024"></a>
 
-## AG6024 — Positional argument cannot follow a named argument in call to '{fn}'.
+## AG6024 — Positional argument cannot follow a named argument in call to '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -246,7 +246,7 @@ Once a call uses a named argument, every following argument must also be named �
 
 <a id="ag6025"></a>
 
-## AG6025 — Unknown named argument '{name}' in call to '{fn}'.
+## AG6025 — Unknown named argument '&#123;name&#125;' in call to '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -256,7 +256,7 @@ A named argument in this call does not correspond to any parameter of the functi
 
 <a id="ag6026"></a>
 
-## AG6026 — Named argument '{name}' conflicts with positional argument at position {position} in call to '{fn}'.
+## AG6026 — Named argument '&#123;name&#125;' conflicts with positional argument at position &#123;position&#125; in call to '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -266,7 +266,7 @@ A parameter was filled both positionally and by name in the same call, so it is 
 
 <a id="ag6027"></a>
 
-## AG6027 — Positional argument cannot feed variadic parameter '{param}' when it is also bound by name in call to '{fn}'.
+## AG6027 — Positional argument cannot feed variadic parameter '&#123;param&#125;' when it is also bound by name in call to '&#123;fn&#125;'.
 
 *Default severity: error.*
 
@@ -276,7 +276,7 @@ A positional argument would feed a variadic parameter that is also being bound b
 
 <a id="ag6028"></a>
 
-## AG6028 — Tool '{tool}' has required function-typed parameter '{param}' is unbound. Bind it with .partial({param}: <value>) before passing as a tool.
+## AG6028 — Tool '&#123;tool&#125;' has required function-typed parameter '&#123;param&#125;' is unbound. Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing as a tool.
 
 *Default severity: error.*
 
@@ -286,7 +286,7 @@ A function passed as a tool has a required function-typed parameter that is stil
 
 <a id="ag6029"></a>
 
-## AG6029 — Tool '{tool}' has required function-typed parameter '{param}' is unbound ({type}). Bind it with .partial({param}: <value>) before passing as a tool.
+## AG6029 — Tool '&#123;tool&#125;' has required function-typed parameter '&#123;param&#125;' is unbound (&#123;type&#125;). Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing as a tool.
 
 *Default severity: error.*
 
@@ -296,7 +296,7 @@ This is the same problem as an unbound required function-typed tool parameter, w
 
 <a id="ag6030"></a>
 
-## AG6030 — Tool '{tool}' will be exposed to the LLM without optional function-typed parameter(s): {params}. The function body must be prepared to run with the declared default for each.
+## AG6030 — Tool '&#123;tool&#125;' will be exposed to the LLM without optional function-typed parameter(s): &#123;params&#125;. The function body must be prepared to run with the declared default for each.
 
 *Default severity: warning.*
 

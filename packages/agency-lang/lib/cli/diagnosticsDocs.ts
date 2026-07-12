@@ -17,6 +17,25 @@ function escapeCell(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
 
+/**
+ * Render a message template as literal text for a VitePress page. Templates
+ * contain characters VitePress/Vue would otherwise interpret: `{{ … }}` reads
+ * as a Vue interpolation (hard build error) and `<...>` reads as an HTML tag.
+ * Collapse the template's literal-brace escape (`{{ }}` -> `{ }`) so the real
+ * braces show, then HTML-escape every metacharacter so the whole string is
+ * inert text. Order matters: escape `&` before introducing entities.
+ */
+function messageForMd(msg: string): string {
+  return msg
+    .replace(/\{\{/g, "{")
+    .replace(/\}\}/g, "}")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\{/g, "&#123;")
+    .replace(/\}/g, "&#125;");
+}
+
 function indexPage(): string {
   const lines = [
     "---",
@@ -37,7 +56,7 @@ function indexPage(): string {
     lines.push("| Code | Message |", "| --- | --- |");
     for (const [, e] of entries) {
       const anchor = e.code.toLowerCase();
-      lines.push(`| [${e.code}](${cat.slug}.md#${anchor}) | ${escapeCell(e.message)} |`);
+      lines.push(`| [${e.code}](${cat.slug}.md#${anchor}) | ${escapeCell(messageForMd(e.message))} |`);
     }
     lines.push("");
   }
@@ -51,7 +70,7 @@ function categoryPage(cat: (typeof DIAGNOSTIC_CATEGORIES)[number]): string {
     // text ("## AG2001 — Type ..."), so the index's `#ag2001` fragment would
     // not match. This bare-code anchor is what the index links resolve to.
     lines.push(`<a id="${e.code.toLowerCase()}"></a>`, "");
-    lines.push(`## ${e.code} — ${e.message}`, "");
+    lines.push(`## ${e.code} — ${messageForMd(e.message)}`, "");
     lines.push(`*Default severity: ${e.severity}.*`, "");
     lines.push(DIAGNOSTIC_EXPLANATIONS[name as keyof typeof DIAGNOSTIC_EXPLANATIONS], "");
   }

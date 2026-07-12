@@ -42,7 +42,7 @@ export function inferReturnTypeFor(
   }
 
   // in a cycle trying to infer the return type,
-  // just bail out and return "any" to avoid infinite recursion.
+  // just bail out with ANY_T to avoid infinite recursion.
   if (ctx.inferringReturnType.has(name)) {
     return ANY_T;
   }

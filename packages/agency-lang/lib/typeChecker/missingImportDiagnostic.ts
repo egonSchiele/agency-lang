@@ -9,6 +9,10 @@ type ImportSpec = {
   modulePath: string;
   names: readonly string[];
   loc: SourceLocation | null;
+  // `import test { ... }` may see non-exported symbols (first-party test wiring),
+  // so it bypasses the export-visibility check — matching the importResolver
+  // preprocessor's `assertImportable`.
+  testOnly: boolean;
 };
 
 /**
@@ -21,10 +25,11 @@ function toImportSpec(node: AgencyNode): ImportSpec | null {
     const names = node.importedNames
       .filter((nameType) => nameType.type === "namedImport")
       .flatMap((nameType) => nameType.importedNames);
-    return { modulePath: node.modulePath, names, loc: node.loc ?? null };
+    return { modulePath: node.modulePath, names, loc: node.loc ?? null, testOnly: !!node.testOnly };
   }
   if (node.type === "importNodeStatement") {
-    return { modulePath: node.agencyFile, names: node.importedNodes, loc: node.loc ?? null };
+    // Nodes are importable without `export`, so testOnly is irrelevant here.
+    return { modulePath: node.agencyFile, names: node.importedNodes, loc: node.loc ?? null, testOnly: false };
   }
   return null;
 }
@@ -64,6 +69,17 @@ export function checkMissingImports(ctx: TypeCheckerContext): void {
       if (!Object.prototype.hasOwnProperty.call(resolution.symbols, name)) {
         ctx.errors.push(
           diagnostic("importNameNotFound", { name, module: spec.modulePath }, spec.loc),
+        );
+        continue;
+      }
+      // Export-visibility: a name that exists but isn't `export`ed can't be
+      // imported. Nodes are exempt (importable without `export`); `import test`
+      // is exempt. Mirrors importResolver's `assertImportable`, which already
+      // throws for this on the compile path — this surfaces it in `tc` too.
+      const symbol = resolution.symbols[name];
+      if (!spec.testOnly && symbol.kind !== "node" && !symbol.exported) {
+        ctx.errors.push(
+          diagnostic("importNameNotExported", { name, module: spec.modulePath }, spec.loc),
         );
       }
     }

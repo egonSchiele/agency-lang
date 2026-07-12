@@ -239,6 +239,10 @@ node main() {
 
 **How to fix:** correct the path, create the missing file, or install the package that provides it. Agency imports must resolve to a real module.`,
 
+  importNameNotExported: `An import names a symbol that its target module defines but does not \`export\`. A plain \`import { ... }\` can only see \`export\`ed functions, types, and constants — a bare \`def\`/\`type\` without \`export\` is module-private. (Nodes are the exception: they are importable without \`export\`.) The compile path already rejects this; the type checker reports it too.
+
+**How to fix:** add the \`export\` keyword to the definition in the target file, or import a symbol that is exported.`,
+
   reassignToConst: `A \`const\` binding is fixed after its initial value: it cannot be reassigned. This assignment targets a name that was declared \`const\`.
 
 **How to fix:** declare it with \`let\` if it needs to change, or assign to a different variable.

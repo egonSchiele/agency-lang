@@ -1022,3 +1022,56 @@ describe("AgencyGenerator - test-only imports", () => {
     expect(result.output).not.toContain("import test");
   });
 });
+
+describe("AgencyGenerator - destructive/idempotent markers", () => {
+  const roundTrip = (input: string): string => {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) throw new Error("parse failed");
+    return new AgencyGenerator().generate(parseResult.result).output.trim();
+  };
+
+  it("round-trips destructive and idempotent defs", () => {
+    expect(roundTrip("destructive def rm(p: string) {\n  return 1\n}")).toContain(
+      "destructive def rm",
+    );
+    expect(roundTrip("idempotent def f() {\n  return 1\n}")).toContain(
+      "idempotent def f",
+    );
+  });
+
+  it("round-trips destructive on a single named import", () => {
+    expect(roundTrip('import { destructive rm } from "./t.js"')).toContain(
+      "destructive rm",
+    );
+  });
+
+  it("round-trips destructive through the mixed/default import path", () => {
+    expect(
+      roundTrip('import foo, { destructive rm, stat } from "./t.js"'),
+    ).toContain("destructive rm");
+  });
+
+  it("round-trips destructive on export-from", () => {
+    expect(
+      roundTrip('export { destructive rm } from "./t.agency"'),
+    ).toContain("destructive rm");
+  });
+
+  it("round-trips destructive with alias", () => {
+    expect(
+      roundTrip('import { destructive rm as remove } from "./t.js"'),
+    ).toContain("destructive rm as remove");
+  });
+
+  it("preserves safe during the deprecation window", () => {
+    expect(roundTrip("safe def add(a: number) {\n  return a\n}")).toContain(
+      "safe def add",
+    );
+  });
+
+  it("is idempotent under double formatting", () => {
+    const once = roundTrip("destructive def rm(p: string) {\n  return 1\n}");
+    expect(roundTrip(once)).toBe(once);
+  });
+});

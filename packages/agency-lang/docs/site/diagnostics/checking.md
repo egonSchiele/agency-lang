@@ -4,6 +4,8 @@ name: "Assignability and checking"
 
 # Assignability and checking
 
+<a id="ag2001"></a>
+
 ## AG2001 — Type '{actual}' is not assignable to type '{expected}' ({context}).
 
 *Default severity: error.*
@@ -11,6 +13,8 @@ name: "Assignability and checking"
 Agency assigns each value a type and checks that it fits where you use it. This is the assignability error with the surrounding context named (a return, an argument, a field) — the value's type does not fit that slot.
 
 **How to fix:** change one side so they line up — convert the value, widen the declared type, or fix the expression that produced the wrong type. If the value can legitimately be several types, declare the slot as a union.
+
+<a id="ag2002"></a>
 
 ## AG2002 — Type '{actual}' is not assignable to type 'boolean' (condition).
 
@@ -20,6 +24,8 @@ The condition of an `if` or `while` must be a boolean. Agency does not treat non
 
 **How to fix:** compare explicitly — e.g. `count > 0` instead of `count`, or `name != ""` instead of `name`.
 
+<a id="ag2003"></a>
+
 ## AG2003 — Unknown property '{key}' on type '{expected}' ({context}).
 
 *Default severity: error.*
@@ -28,6 +34,8 @@ An object literal (or similar structured value) included a key that the target t
 
 **How to fix:** remove the stray key, fix a typo in the key name, or add the field to the target type if it belongs there.
 
+<a id="ag2004"></a>
+
 ## AG2004 — Variable '{name}' has no type annotation (strict mode).
 
 *Default severity: error.*
@@ -35,6 +43,8 @@ An object literal (or similar structured value) included a key that the target t
 In strict mode every variable needs a type annotation; this one has none and its type could not be inferred with certainty. Strict mode trades a little verbosity for catching type mistakes early.
 
 **How to fix:** add an annotation, e.g. `let total: number = …`, or turn strict mode off if you do not want this requirement.
+
+<a id="ag2005"></a>
 
 ## AG2005 — Type '{actual}' is not assignable to type '{expected}'.
 
@@ -55,6 +65,8 @@ node main() {
 }
 ```
 
+<a id="ag2006"></a>
+
 ## AG2006 — For-loop iterable must be an array or Record, got '{actual}'.
 
 *Default severity: error.*
@@ -72,6 +84,8 @@ node main() {
 }
 ```
 
+<a id="ag2007"></a>
+
 ## AG2007 — {kind} '{name}' has validated parameters but its return type is not a Result type. Validated parameters can short-circuit with a failure, so the return type must be 'Result<...>'.
 
 *Default severity: error.*
@@ -80,6 +94,8 @@ A parameter marked with `!` validation can short-circuit the call with a failure
 
 **How to fix:** change the return type to `Result<...>`, or remove the `!` validation from the parameters if the call cannot fail.
 
+<a id="ag2008"></a>
+
 ## AG2008 — Property '{field}' is not available on every member of '{union}'; narrow the value (e.g. with a guard) before accessing it.
 
 *Default severity: error.*
@@ -87,6 +103,8 @@ A parameter marked with `!` validation can short-circuit the call with a failure
 The value has a union type, and the field you accessed exists on some members of the union but not all. Reading it directly would be unsafe on the members that lack it.
 
 **How to fix:** narrow the value first — for example with a guard that establishes which member you have — then access the field inside that narrowed branch.
+
+<a id="ag2009"></a>
 
 ## AG2009 — '.{field}' is only available on a {branch} Result; guard with 'if (isSuccess(r))' / 'if (isFailure(r))', use 'r catch …', or 'match (r) {{ … }}'.
 
@@ -105,6 +123,8 @@ node main() {
 }
 ```
 
+<a id="ag2010"></a>
+
 ## AG2010 — Cannot {op} values of different dimensions ({leftDim} and {rightDim}): '{left}' and '{right}'.
 
 *Default severity: error.*
@@ -113,6 +133,8 @@ Agency tracks physical dimensions (like duration versus size) on some values and
 
 **How to fix:** operate on values of the same dimension, or convert one so both agree before combining them.
 
+<a id="ag2011"></a>
+
 ## AG2011 — Property '{property}' does not exist on type '{type}'.
 
 *Default severity: error.*
@@ -120,6 +142,8 @@ Agency tracks physical dimensions (like duration versus size) on some values and
 The property you accessed is not declared on the value's type. The checker knows the type's shape and only allows the fields it declares.
 
 **How to fix:** fix a typo in the property name, access a field the type actually has, or add the field to the type if it belongs there.
+
+<a id="ag2012"></a>
 
 ## AG2012 — Not all code paths return a value in '{fn}'.
 

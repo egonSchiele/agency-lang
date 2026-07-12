@@ -9,7 +9,10 @@ import { color } from "@/utils/termcolors.js";
 
 function lookup(codeOrName: string): DiagnosticName | undefined {
   const q = codeOrName.trim();
-  if (q in DIAGNOSTICS) return q as DiagnosticName;
+  // Own-property check, not `in`: `q` is user input, so an inherited key
+  // like "toString"/"constructor" must not resolve via the prototype chain
+  // (it would then crash on `entry.code`). Same guard as lib/optimize/registry.ts.
+  if (Object.hasOwn(DIAGNOSTICS, q)) return q as DiagnosticName;
   const upper = q.toUpperCase();
   for (const [name, entry] of Object.entries(DIAGNOSTICS)) {
     if (entry.code.toUpperCase() === upper) return name as DiagnosticName;

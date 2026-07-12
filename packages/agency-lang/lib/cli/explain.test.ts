@@ -30,6 +30,14 @@ describe("renderDiagnosticText", () => {
     expect(plain(text)).toContain("AG9999");
     expect(plain(text)).toContain("agency explain --list");
   });
+
+  it("does not resolve inherited Object keys as diagnostics", () => {
+    // `toString`/`constructor` are on the prototype; an `in` check would
+    // match them and then crash on `entry.code`. Must be treated as unknown.
+    for (const key of ["toString", "constructor", "hasOwnProperty"]) {
+      expect(renderDiagnosticText(key).found, key).toBe(false);
+    }
+  });
 });
 
 describe("renderDiagnosticList", () => {

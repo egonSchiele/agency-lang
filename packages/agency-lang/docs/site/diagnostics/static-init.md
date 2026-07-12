@@ -4,6 +4,8 @@ name: "Static init, config, and imports"
 
 # Static init, config, and imports
 
+<a id="ag7001"></a>
+
 ## AG7001 — Only 'static const' declarations can be exported. Use 'export static const {name} = ...' instead.
 
 *Default severity: error.*
@@ -11,6 +13,8 @@ name: "Static init, config, and imports"
 Only `static const` declarations can be exported from a module. A plain `const`, `let`, or other declaration is per-run state and is not part of a module's public surface.
 
 **How to fix:** declare the exported value as `static const`, or remove the `export`.
+
+<a id="ag7002"></a>
 
 ## AG7002 — {contextLabel} cannot call `{builtin}(...)` — {reason}, but static initializers run once at process startup before any per-run state exists. Move this call into a node or a function called from a node.
 
@@ -20,6 +24,8 @@ Static initializers run once at process startup, before any per-run state exists
 
 **How to fix:** move the call into a node, or into a function called from a node, where per-run state is available.
 
+<a id="ag7003"></a>
+
 ## AG7003 — {contextLabel} cannot `interrupt(...)` — interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body.
 
 *Default severity: error.*
@@ -27,6 +33,8 @@ Static initializers run once at process startup, before any per-run state exists
 Interrupts pause the per-run execution stack, but static initializers run once at startup before any run has begun — there is no stack to pause. So `interrupt(...)` is not allowed in a static initializer.
 
 **How to fix:** move the `interrupt` into a node body.
+
+<a id="ag7004"></a>
 
 ## AG7004 — Cannot reassign static `{name}` at module top level — statics are immutable after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.
 
@@ -36,6 +44,8 @@ Statics are immutable after they initialize, so a static cannot be reassigned at
 
 **How to fix:** use a global (`const` or `let` without `static`) if you need a value that changes.
 
+<a id="ag7005"></a>
+
 ## AG7005 — Cannot mutate static `{name}` via `.{method}(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.
 
 *Default severity: error.*
@@ -43,6 +53,8 @@ Statics are immutable after they initialize, so a static cannot be reassigned at
 Statics are deep-frozen after initialization, so mutating one through a method (like `.push(...)`) at module top level is not allowed — the frozen value rejects the change.
 
 **How to fix:** use a global (`const` or `let` without `static`) if you need a mutable value.
+
+<a id="ag7006"></a>
 
 ## AG7006 — Function '{name}' cannot be both destructive and idempotent — those markers are contradictory. Pick one.
 

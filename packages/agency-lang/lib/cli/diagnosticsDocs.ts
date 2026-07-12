@@ -47,6 +47,10 @@ function indexPage(): string {
 function categoryPage(cat: (typeof DIAGNOSTIC_CATEGORIES)[number]): string {
   const lines = ["---", `name: "${cat.title}"`, "---", "", `# ${cat.title}`, ""];
   for (const [name, e] of codesForCategory(cat.prefix)) {
+    // Explicit anchor: VitePress slugifies heading IDs from the FULL heading
+    // text ("## AG2001 — Type ..."), so the index's `#ag2001` fragment would
+    // not match. This bare-code anchor is what the index links resolve to.
+    lines.push(`<a id="${e.code.toLowerCase()}"></a>`, "");
     lines.push(`## ${e.code} — ${e.message}`, "");
     lines.push(`*Default severity: ${e.severity}.*`, "");
     lines.push(DIAGNOSTIC_EXPLANATIONS[name as keyof typeof DIAGNOSTIC_EXPLANATIONS], "");

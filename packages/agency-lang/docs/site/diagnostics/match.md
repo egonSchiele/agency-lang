@@ -4,6 +4,8 @@ name: "Match and narrowing"
 
 # Match and narrowing
 
+<a id="ag5002"></a>
+
 ## AG5002 — match is not exhaustive: missing {missing}.
 
 *Default severity: error.*

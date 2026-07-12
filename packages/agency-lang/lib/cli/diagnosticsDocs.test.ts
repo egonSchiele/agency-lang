@@ -18,10 +18,13 @@ describe("generateDiagnosticsPages", () => {
     }
   });
 
-  it("index lists every code exactly once", () => {
+  it("index links every code exactly once", () => {
+    // Count LINK occurrences, not raw substring: the intro prose contains a
+    // legitimate `agency explain AG2005` example, so a bare-substring count
+    // would read 2. The invariant is one table-row link per code.
     const index = byPath["index.md"];
     for (const code of codes) {
-      expect(index.split(code).length - 1, code).toBeGreaterThanOrEqual(1);
+      expect(index.split(`[${code}](`).length - 1, code).toBe(1);
     }
   });
 
@@ -34,6 +37,19 @@ describe("generateDiagnosticsPages", () => {
         if (other.slug === cat.slug) continue;
         expect(byPath[`${other.slug}.md`].includes(`## ${entry.code}`)).toBe(false);
       }
+    }
+  });
+
+  it("every index link resolves to an explicit anchor on its category page", () => {
+    // VitePress slugifies headings from full text, so the index's #ag#### must
+    // land on an explicit <a id="ag####"> we emit, not on the heading itself.
+    const index = byPath["index.md"];
+    const links = [...index.matchAll(/\]\((\S+?\.md)#(\S+?)\)/g)];
+    expect(links.length).toBeGreaterThan(0);
+    for (const [, file, anchor] of links) {
+      const page = byPath[file];
+      expect(page, `linked page missing: ${file}`).toBeTruthy();
+      expect(page.includes(`<a id="${anchor}"></a>`), `${file}#${anchor}`).toBe(true);
     }
   });
 

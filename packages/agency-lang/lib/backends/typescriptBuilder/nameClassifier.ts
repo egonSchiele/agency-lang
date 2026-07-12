@@ -109,16 +109,16 @@ export class NameClassifier {
   }
 
   /**
-   * True if `functionName` was imported from a non-Agency source (or an
-   * Agency source that wasn't annotated `safe`). The builder uses this to
-   * decide whether a call site needs the impure-call guards that wrap
-   * non-deterministic code.
+   * True if `functionName` was imported from another module. Any imported
+   * call is treated as possibly-effectful: the compiler cannot see inside
+   * it. (Before the `safe` retirement this also consulted `safeFunctions`;
+   * that registry is gone, so every import is impure.)
    */
   isImpureImportedFunction(functionName: string): boolean {
-    const imported =
+    return (
       this.plainTsImportNames.has(functionName) ||
-      this.agencyImportNames.has(functionName);
-    return imported && !this.compilationUnit.safeFunctions[functionName];
+      this.agencyImportNames.has(functionName)
+    );
   }
 
   /** Recursively walks `node` and returns true if any function call within it is impure. */
@@ -128,6 +128,20 @@ export class NameClassifier {
         const name = subNode.functionName;
         if (this.isImpureImportedFunction(name)) return true;
         if (BUILTIN_FUNCTIONS[name]) return true;
+      }
+    }
+    return false;
+  }
+
+  /** Recursively walks `node` and returns true if any function call within
+   *  it targets a function marked `destructive`. Same walker shape as
+   *  containsImpureCall; reads the destructiveFunctions registry. */
+  containsDestructiveCall(node: AgencyNode): boolean {
+    for (const { node: subNode } of walkNodesArray([node])) {
+      if (subNode.type === "functionCall") {
+        if (this.compilationUnit.destructiveFunctions[subNode.functionName]) {
+          return true;
+        }
       }
     }
     return false;

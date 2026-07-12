@@ -5,6 +5,7 @@ import type { AgencyConfig } from "./config.js";
 import type {
   AgencyNode,
   AgencyProgram,
+  FunctionMarkers,
   FunctionParameter,
   Tag,
   TypeParam,
@@ -42,7 +43,9 @@ export type FunctionSymbol = {
   kind: "function";
   name: string;
   loc?: SourceLocation;
+  /** @deprecated inert; kept only for the `safe` deprecation window. */
   safe: boolean;
+  markers?: FunctionMarkers;
   exported: boolean;
   parameters: FunctionParameter[];
   returnType: VariableType | null;
@@ -374,6 +377,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           name: node.functionName,
           loc: node.loc,
           safe: !!node.safe,
+          markers: node.markers,
           exported: !!node.exported,
           parameters: node.parameters,
           returnType: node.returnType ?? null,
@@ -475,7 +479,9 @@ export function mergeExportsFrom(
   if (stmt.body.kind === "starExport") {
     for (const [name, sym] of Object.entries(sourceSymbols)) {
       if (!isExportedSymbol(sym)) continue;
-      mergeOne(targetSymbols, name, name, sym, false, sourcePath, stmt);
+      // Star re-exports carry no per-name modifiers; markers are inherited
+      // from the source symbol via the spread inside mergeOne.
+      mergeOne(targetSymbols, name, name, sym, false, false, sourcePath, stmt);
     }
     return;
   }
@@ -507,7 +513,24 @@ export function mergeExportsFrom(
           `'safe' is only meaningful for functions; nodes do not carry a safe flag.`,
       );
     }
-    mergeOne(targetSymbols, localName, originalName, sym, isSafe, sourcePath, stmt);
+    const isDestructive =
+      stmt.body.destructiveNames?.includes(originalName) ?? false;
+    if (sym.kind === "node" && isDestructive) {
+      throw new Error(
+        `The 'destructive' modifier cannot be applied to node '${originalName}' from '${stmt.modulePath}'. ` +
+          `'destructive' is only meaningful for functions.`,
+      );
+    }
+    mergeOne(
+      targetSymbols,
+      localName,
+      originalName,
+      sym,
+      isSafe,
+      isDestructive,
+      sourcePath,
+      stmt,
+    );
   }
 }
 
@@ -517,6 +540,7 @@ function mergeOne(
   originalName: string,
   sourceSym: SymbolInfo,
   forceSafe: boolean,
+  forceDestructive: boolean,
   sourcePath: string,
   stmt: ExportFromStatement,
 ): void {
@@ -556,6 +580,12 @@ function mergeOne(
         exported: true,
         safe: forceSafe ? true : sourceSym.safe,
       };
+      // `markers` is copied by the spread above (inherited from the source
+      // definition); a `destructive` modifier on the re-export itself adds
+      // it on top. This is the re-export propagation the plan review flagged.
+      if (forceDestructive) {
+        copied.markers = { ...(copied.markers ?? {}), destructive: true };
+      }
       break;
     case "node":
       copied = { ...sourceSym, ...base, exported: true };

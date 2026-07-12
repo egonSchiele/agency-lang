@@ -19,6 +19,8 @@ export function makeProbeUnit(typeAliases: Record<string, TypeAliasEntry>): Comp
     importedNodes: [],
     importStatements: [],
     safeFunctions: {},
+    destructiveFunctions: {},
+    idempotentFunctions: {},
     importedFunctions: {},
     jsImportedNames: {},
   };

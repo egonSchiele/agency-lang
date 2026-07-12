@@ -1,6 +1,7 @@
 import type {
   AgencyProgram,
   FunctionDefinition,
+  FunctionMarkers,
   FunctionParameter,
   GraphNodeDefinition,
   Scope,
@@ -109,7 +110,14 @@ export type CompilationUnit = {
   graphNodes: GraphNodeDefinition[];
   importedNodes: ImportNodeStatement[];
   importStatements: ImportStatement[];
+  /** @deprecated inert; never populated once `safe` was retired. Removed
+   *  with the `safe` keyword. */
   safeFunctions: Record<string, boolean>;
+  /** Local names (defs + imports + re-exports) marked `destructive`. Read
+   *  by codegen's containsDestructiveCall to track destructive execution. */
+  destructiveFunctions: Record<string, boolean>;
+  /** Local names marked `idempotent`. */
+  idempotentFunctions: Record<string, boolean>;
   importedFunctions: Record<string, ImportedFunctionSignature>;
   /**
    * Local names brought in by non-Agency `import { … } from "some.js"`
@@ -158,6 +166,23 @@ export function scopeKey(scope: Scope): string {
   }
 }
 
+/** Record a local name's retry-safety markers into the unit's registries.
+ *  One chokepoint for all three feed paths (local defs, destructive
+ *  imports, resolved Agency imports) so a future marker is a one-field
+ *  change here rather than another parallel-mirror pass. */
+function registerMarkers(
+  unit: CompilationUnit,
+  localName: string,
+  markers: FunctionMarkers | undefined,
+): void {
+  if (markers?.destructive) {
+    unit.destructiveFunctions[localName] = true;
+  }
+  if (markers?.idempotent) {
+    unit.idempotentFunctions[localName] = true;
+  }
+}
+
 export function buildCompilationUnit(
   program: AgencyProgram,
   symbolTable?: SymbolTable,
@@ -173,6 +198,8 @@ export function buildCompilationUnit(
     importedFunctions: {},
     jsImportedNames: {},
     safeFunctions: {},
+    destructiveFunctions: {},
+    idempotentFunctions: {},
     sourceText,
   };
 
@@ -181,7 +208,7 @@ export function buildCompilationUnit(
     switch (node.type) {
       case "function":
         unit.functionDefinitions[node.functionName] = node;
-        if (node.safe) unit.safeFunctions[node.functionName] = true;
+        registerMarkers(unit, node.functionName, node.markers);
         break;
       case "graphNode":
         unit.graphNodes.push(node);
@@ -193,9 +220,9 @@ export function buildCompilationUnit(
         unit.importStatements.push(node);
         for (const nameType of node.importedNames) {
           if (nameType.type !== "namedImport") continue;
-          for (const safeName of nameType.safeNames) {
-            const localSafe = nameType.aliases[safeName] ?? safeName;
-            unit.safeFunctions[localSafe] = true;
+          for (const destructiveName of nameType.destructiveNames ?? []) {
+            const local = nameType.aliases[destructiveName] ?? destructiveName;
+            registerMarkers(unit, local, { destructive: true });
           }
         }
         // JS imports (`import { foo } from "./helpers.js"`) don't have
@@ -276,8 +303,8 @@ export function buildCompilationUnit(
           }
           if (returnType) aliasSeeds.push({ type: returnType, preferFile: r.file });
         }
-        if (r.symbol.kind === "function" && r.symbol.safe) {
-          unit.safeFunctions[r.localName] = true;
+        if (r.symbol.kind === "function") {
+          registerMarkers(unit, r.localName, r.symbol.markers);
         }
         if (r.symbol.kind === "type") {
           unit.typeAliases.add(

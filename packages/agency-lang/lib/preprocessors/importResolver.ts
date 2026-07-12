@@ -2,6 +2,7 @@ import type { AgencyNode, AgencyProgram } from "../types.js";
 import type {
   ImportNodeStatement,
   ImportStatement,
+  NamedImport,
 } from "../types/importStatement.js";
 import type { SymbolTable } from "../symbolTable.js";
 import {
@@ -93,6 +94,7 @@ export function resolveImports(
     const nodeNames: string[] = [];
     const functionNames: string[] = [];
     const safeFunctionNames: string[] = [];
+    const destructiveFunctionNames: string[] = [];
     const typeNames: string[] = [];
     const constantNames: string[] = [];
     const aliases: Record<string, string> = {};
@@ -129,9 +131,17 @@ export function resolveImports(
             assertImportable(name, node.modulePath, symbol.exported, node.testOnly);
             functionNames.push(name);
             // Mark as safe if the function definition is safe OR if the
-            // original import explicitly marked it safe
+            // original import explicitly marked it safe (deprecation window).
             if (symbol.safe || nameType.safeNames.includes(name)) {
               safeFunctionNames.push(name);
+            }
+            // Destructive propagates the same way: the defining function is
+            // destructive OR this import marked it destructive.
+            if (
+              symbol.markers?.destructive ||
+              (nameType.destructiveNames?.includes(name) ?? false)
+            ) {
+              destructiveFunctionNames.push(name);
             }
             break;
           case "type":
@@ -165,16 +175,18 @@ export function resolveImports(
       for (const name of allNames) {
         if (aliases[name]) allAliases[name] = aliases[name];
       }
+      const namedImport: NamedImport = {
+        type: "namedImport",
+        importedNames: allNames,
+        safeNames: safeFunctionNames,
+        aliases: allAliases,
+      };
+      if (destructiveFunctionNames.length > 0) {
+        namedImport.destructiveNames = destructiveFunctionNames;
+      }
       const importStmt: ImportStatement = {
         type: "importStatement",
-        importedNames: [
-          {
-            type: "namedImport",
-            importedNames: allNames,
-            safeNames: safeFunctionNames,
-            aliases: allAliases,
-          },
-        ],
+        importedNames: [namedImport],
         modulePath: node.modulePath,
         isAgencyImport: true,
       };

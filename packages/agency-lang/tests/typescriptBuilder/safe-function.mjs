@@ -392,6 +392,7 @@ if (hasInterrupts(__funcResult)) {
         }
       });
       await runner.step(2, async (runner) => {
+__self.__retryable = false;
 __functionCompleted = true;
 runner.halt(await __call(lookupItem, {
           type: "positional",

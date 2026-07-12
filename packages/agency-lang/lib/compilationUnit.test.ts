@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { writeFileSync, unlinkSync } from "fs";
+import os from "os";
+import path from "path";
 import { buildCompilationUnit, GLOBAL_SCOPE_KEY } from "./compilationUnit.js";
+import { SymbolTable } from "./symbolTable.js";
+import { parseAgency } from "./parser.js";
 import type { AgencyProgram } from "./types.js";
 
 describe("buildCompilationUnit", () => {
@@ -182,4 +187,66 @@ describe("buildCompilationUnit", () => {
     expect(info.functionDefinitions["test"]).toBe(funcNode);
   });
 
+});
+
+describe("buildCompilationUnit: marker registries", () => {
+  const unitFromSource = (src: string, file?: string) => {
+    const parsed = parseAgency(src, {}, false);
+    if (!parsed.success) throw new Error(parsed.message ?? "parse failed");
+    const symbolTable = file ? SymbolTable.build(file) : undefined;
+    return buildCompilationUnit(parsed.result, symbolTable, file);
+  };
+
+  it("registers a local destructive def", () => {
+    const unit = unitFromSource("destructive def rm(p: string) { return 1 }");
+    expect(unit.destructiveFunctions["rm"]).toBe(true);
+    expect(unit.idempotentFunctions["rm"]).toBeUndefined();
+  });
+
+  it("registers a local idempotent def", () => {
+    const unit = unitFromSource("idempotent def f(): number { return 1 }");
+    expect(unit.idempotentFunctions["f"]).toBe(true);
+    expect(unit.destructiveFunctions["f"]).toBeUndefined();
+  });
+
+  it("registers a destructive import", () => {
+    const unit = unitFromSource(
+      'import { destructive rm } from "./t.js"\nnode main() { return 1 }',
+    );
+    expect(unit.destructiveFunctions["rm"]).toBe(true);
+  });
+
+  it("does not populate safeFunctions anymore", () => {
+    const unit = unitFromSource("safe def f(): number { return 1 }");
+    expect(Object.keys(unit.safeFunctions)).toHaveLength(0);
+  });
+
+  it("propagates destructive through a re-export chain", () => {
+    // A defines `destructive def rm`; B re-exports it; C imports from B.
+    // Pins the symbol-copy path (mergeOne) that carries markers across
+    // re-exports.
+    const suffix = "destructive-reexport";
+    const aPath = path.join(os.tmpdir(), `cu-a-${suffix}.agency`);
+    const bPath = path.join(os.tmpdir(), `cu-b-${suffix}.agency`);
+    const cPath = path.join(os.tmpdir(), `cu-c-${suffix}.agency`);
+    writeFileSync(aPath, `export destructive def rm(p: string) { return 1 }`);
+    writeFileSync(bPath, `export { rm } from "${aPath}"`);
+    writeFileSync(cPath, `import { rm } from "${bPath}"\nnode main() { rm("x") }`);
+    try {
+      const src = `import { rm } from "${bPath}"\nnode main() { rm("x") }`;
+      const parsed = parseAgency(src, {}, false);
+      if (!parsed.success) throw new Error("parse failed");
+      const symbolTable = SymbolTable.build(cPath);
+      const unit = buildCompilationUnit(parsed.result, symbolTable, cPath);
+      expect(unit.destructiveFunctions["rm"]).toBe(true);
+    } finally {
+      for (const p of [aPath, bPath, cPath]) {
+        try {
+          unlinkSync(p);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  });
 });

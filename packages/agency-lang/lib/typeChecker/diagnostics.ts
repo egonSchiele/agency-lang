@@ -487,6 +487,12 @@ export const DIAGNOSTICS = {
     message:
       "Cannot mutate static `{name}` via `.{method}(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value.",
   },
+  deprecatedSafe: {
+    code: "AG7006",
+    severity: "warning",
+    message:
+      "'safe' is deprecated and has no effect; use idempotent (okay to re-run) or destructive (dangerous to re-run) instead. safe will be removed in a future release.",
+  },
 } as const;
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;

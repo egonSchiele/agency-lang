@@ -44,7 +44,13 @@ function assertNoTypeErrors(name: string, filePath: string) {
   const info = buildCompilationUnit(parseResult.result, symbolTable, absPath, contents);
 
   // 3. Typecheck
-  const { errors } = typeCheck(parseResult.result, {}, info);
+  const { errors: allErrors } = typeCheck(parseResult.result, {}, info);
+
+  // Ignore the `safe` deprecation warning (AG7006) during the migration
+  // window: the stdlib and some codegen fixtures still use `safe def`, and
+  // the warning firing on them is expected, not a regression. Remove this
+  // filter once `safe` is deleted.
+  const errors = allErrors.filter((e) => (e as { code?: string }).code !== "AG7006");
 
   // 4. Fail on any errors or warnings
   if (errors.length > 0) {

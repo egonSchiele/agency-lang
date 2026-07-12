@@ -42,7 +42,6 @@ const RESULT_FIELDS = new Set<string>([
   "checkpoint",
   "functionName",
   "args",
-  "retryable",
   "neverStarted",
   "destructiveRan",
   "success",

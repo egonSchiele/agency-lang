@@ -51,7 +51,6 @@ export type ResultSuccess = {
 
 export type FailureOpts = {
   checkpoint?: any;
-  retryable?: boolean;
   /** The call failed before its function body began (argument binding,
    *  arity, schema). Its only producer is the tool loop, from the invoke
    *  layer's pre-execution tag — trust-the-producer, because nothing can
@@ -78,7 +77,6 @@ export type ResultFailure = {
   success: false;
   error: any;
   checkpoint: any;
-  retryable: boolean;
   /** The call failed before its function body began. Birth default false;
    *  set only by the tool loop from the invoke layer's pre-execution tag.
    *  Trust-the-producer: there is no correcting machinery, so nothing else
@@ -103,7 +101,6 @@ export function failure(error: any, opts?: FailureOpts): ResultFailure {
     success: false,
     error,
     checkpoint: opts?.checkpoint ?? null,
-    retryable: opts?.retryable ?? false,
     // Birth false: boundary stamps are the authority. A false birth
     // default for destructiveRan is safe because the exit stamp ORs the
     // activation flag in; neverStarted has no correcting stamp, so its

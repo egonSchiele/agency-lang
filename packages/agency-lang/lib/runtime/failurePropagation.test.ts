@@ -24,7 +24,7 @@ describe("propagateFailure", () => {
   it("appends a skip entry, preserving every other field, without mutating the original", () => {
     const orig = failure("boom", {
       functionName: "getReport",
-      retryable: true,
+      destructiveRan: true,
       checkpoint: { step: 3 },
       args: { id: "abc" },
     });
@@ -32,7 +32,7 @@ describe("propagateFailure", () => {
     expect(propagated.skippedFunctions).toEqual([{ name: "wordCount", param: "text" }]);
     expect(propagated.error).toBe("boom");
     expect(propagated.functionName).toBe("getReport");
-    expect(propagated.retryable).toBe(true);
+    expect(propagated.destructiveRan).toBe(true);
     expect(propagated.checkpoint).toEqual({ step: 3 });
     expect(propagated.args).toEqual({ id: "abc" });
     expect(orig.skippedFunctions).toEqual([]);

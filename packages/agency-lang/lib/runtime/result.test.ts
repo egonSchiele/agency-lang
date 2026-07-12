@@ -192,7 +192,6 @@ describe("failure", () => {
       success: false,
       error: "something went wrong",
       checkpoint: null,
-      retryable: false,
       neverStarted: false,
       destructiveRan: false,
       functionName: null,
@@ -208,7 +207,6 @@ describe("failure", () => {
       success: false,
       error: { code: 404, message: "not found" },
       checkpoint: null,
-      retryable: false,
       neverStarted: false,
       destructiveRan: false,
       functionName: null,
@@ -257,16 +255,14 @@ describe("markDestructiveWork", () => {
     expect(() => markDestructiveWork(undefined)).not.toThrow();
   });
 
-  it("accepts opts with checkpoint, retryable, functionName, args", () => {
+  it("accepts opts with checkpoint, functionName, args", () => {
     const cp = { id: 1 };
     const result = failure("error", {
       checkpoint: cp,
-      retryable: true,
       functionName: "myFunc",
       args: { x: 10 },
     });
     expect(result.checkpoint).toBe(cp);
-    expect(result.retryable).toBe(true);
     expect(result.functionName).toBe("myFunc");
     expect(result.args).toEqual({ x: 10 });
   });

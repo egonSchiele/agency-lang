@@ -1,0 +1,18 @@
+import { benign } from "../helpers/destructiveExterns.js"
+
+// Migration guard: the deprecated `safe` keyword is fully INERT. A `safe def`
+// that calls an extern and returns a failure must behave EXACTLY like an
+// unmarked def — the failure carries destructiveRan === false, because `safe`
+// no longer flips any tracking. This is the only thing standing between
+// "deprecation window" and "safe silently still does something".
+safe def safeFn(): Result {
+  const s = benign()
+  return failure("boom")
+}
+node safeMigration() {
+  const r = safeFn()
+  if (isFailure(r)) {
+    return r.destructiveRan
+  }
+  return "unexpected"
+}

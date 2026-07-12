@@ -275,14 +275,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "add",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "add",
     args: __stack.args,
@@ -419,14 +417,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "greet",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "greet",
     args: __stack.args,
@@ -561,14 +557,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "calculateArea",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "calculateArea",
     args: __stack.args,
@@ -703,14 +697,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "processData",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "processData",
     args: __stack.args,
@@ -825,14 +817,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "versionedTool",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "versionedTool",
     args: __stack.args,

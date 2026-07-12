@@ -221,6 +221,15 @@ describe("buildCompilationUnit: marker registries", () => {
     expect(Object.keys(unit.safeFunctions)).toHaveLength(0);
   });
 
+  it("a deprecated `safe def` lands in NO marker registry (fully inert)", () => {
+    // Migration guard: `safe` must behave exactly like an unmarked def —
+    // absent from safeFunctions, idempotentFunctions, AND destructiveFunctions.
+    const unit = unitFromSource("safe def f() { return 1 }");
+    expect(Object.keys(unit.safeFunctions)).toHaveLength(0);
+    expect(unit.idempotentFunctions["f"]).toBeUndefined();
+    expect(unit.destructiveFunctions["f"]).toBeUndefined();
+  });
+
   it("propagates destructive through a re-export chain", () => {
     // A defines `destructive def rm`; B re-exports it; C imports from B.
     // Pins the symbol-copy path (mergeOne) that carries markers across

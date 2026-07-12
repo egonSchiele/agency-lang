@@ -297,14 +297,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "add",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "add",
     args: __stack.args,
@@ -462,14 +460,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "greet",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "greet",
     args: __stack.args,
@@ -626,14 +622,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "mixed",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "mixed",
     args: __stack.args,
@@ -791,14 +785,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "processArray",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "processArray",
     args: __stack.args,
@@ -949,14 +941,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "flexible",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "flexible",
     args: __stack.args,

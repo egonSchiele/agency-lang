@@ -9,3 +9,10 @@ export function boomDestructive() {
 export function boomPlain() {
   throw new Error("plain extern blew up");
 }
+
+// A benign extern that returns normally — used by the `safe` migration test
+// to prove a `safe def` calling an extern still produces destructiveRan false
+// (i.e. `safe` is fully inert, exactly like an unmarked def).
+export function benign() {
+  return "ok";
+}

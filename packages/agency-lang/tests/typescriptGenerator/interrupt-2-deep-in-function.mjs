@@ -250,7 +250,7 @@ if (__response) {
     // rejected, halt
     
     
-    runner.halt(failure("interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+    runner.halt(failure("interrupt rejected", { checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
     
     return;
   }
@@ -260,7 +260,7 @@ if (__response) {
   if (isRejected(__handlerResult)) {
     
     
-    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { retryable: false, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
     
     return;
   }
@@ -318,14 +318,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "greet",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "greet",
     args: __stack.args,
@@ -506,14 +504,12 @@ if (__error instanceof AgencyAbort) {
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "foo2",
-    retryable: false,
   });
 }
 return failure(
   __error instanceof Error ? __error.message : String(__error),
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    retryable: false,
     destructiveRan: __self.__destructiveRan,
     functionName: "foo2",
     args: __stack.args,

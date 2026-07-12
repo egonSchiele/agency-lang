@@ -244,15 +244,13 @@ async function __flakyTool_impl(id) {
       __ctx.statelogClient?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
-        functionName: "flakyTool",
-        retryable: false
+        functionName: "flakyTool"
       });
     }
     return failure(
       __error instanceof Error ? __error.message : String(__error),
       {
         checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-        retryable: false,
         destructiveRan: __self.__destructiveRan,
         functionName: "flakyTool",
         args: __stack.args
@@ -366,15 +364,13 @@ async function __destructiveTool_impl(id) {
       __ctx.statelogClient?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
-        functionName: "destructiveTool",
-        retryable: false
+        functionName: "destructiveTool"
       });
     }
     return failure(
       __error instanceof Error ? __error.message : String(__error),
       {
         checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-        retryable: false,
         destructiveRan: __self.__destructiveRan,
         functionName: "destructiveTool",
         args: __stack.args
@@ -480,15 +476,13 @@ async function __resetTool_impl() {
       __ctx.statelogClient?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
-        functionName: "resetTool",
-        retryable: false
+        functionName: "resetTool"
       });
     }
     return failure(
       __error instanceof Error ? __error.message : String(__error),
       {
         checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-        retryable: false,
         destructiveRan: __self.__destructiveRan,
         functionName: "resetTool",
         args: __stack.args

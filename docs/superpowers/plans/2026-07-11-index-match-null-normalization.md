@@ -4,7 +4,11 @@
 
 **Goal:** Make missing object-key lookups (`obj[key]`), out-of-bounds array indexing (`arr[i]`), and unmatched `match` expressions yield `null` instead of `undefined`, completing the value-side of Agency's "one nothing-value" invariant.
 
-**Architecture:** Add a tiny `__nn(x) => x ?? null` runtime helper, wired exactly like the existing `__eq` helper. Emit `__nn(...)` around two codegen sites in `typescriptBuilder.ts`: the index access chain element, and the `__matchval_<id>` read that consumes a match result. No type-checker changes — this is a runtime-value fix only.
+**Architecture:** Add a tiny `__nn(x) => x ?? null` runtime helper, wired exactly like the existing `__eq` helper. Emit `__nn(...)` around two codegen sites in `typescriptBuilder.ts`: the **terminal** index read of an access chain (wrapped once, after the chain is built — NOT per index element), and the `__matchval_<id>` read that consumes a match result. No type-checker changes — this is a runtime-value fix only.
+
+**Why terminal-only for index reads:** Wrapping each `case "index"` element individually inserts `__nn` *between* an optional index and any following access, which captures JS optional-chain short-circuit and turns it into a thrown `TypeError`. Concretely, `a?.[b].c` with a null `a` currently yields `undefined` (whole-chain short-circuit); `__nn(a?.[b]).c` would evaluate `null.c` and throw. Wrapping only the completed chain when its last element is an index avoids this, still normalizes the terminal missing-key / out-of-bounds read to `null`, and emits one `__nn(...)` per read instead of nested `__nn(__nn(...))`.
+
+**Coercion caveat (intended):** `null` and `undefined` coerce differently in arithmetic (`undefined + 1` is `NaN`; `null + 1` is `1`) and string contexts (`` `${undefined}` `` is `"undefined"`; `` `${null}` `` is `"null"`). The string-context change is the fix the issue wants. The arithmetic change is a deliberate side effect of collapsing to one nothing-value; it is consistent with Agency's model (do not do math on a missing key) and introduces no new nullish value that was not already there.
 
 **Tech Stack:** TypeScript (compiler + runtime), typestache templates (`pnpm run templates`), vitest (unit + integration tests), Agency execution tests under `tests/agency-js/`.
 
@@ -138,12 +142,12 @@ git commit -m "Add __nn nullish-normalize runtime helper (#409)"
 
 ---
 
-### Task 2: Coerce index reads to `null`
+### Task 2: Coerce the terminal index read to `null`
 
-Wrap the index access-chain codegen in `__nn(...)` so both `obj[key]` (missing key) and `arr[i]` (out of bounds) yield `null`.
+Wrap the completed access chain in `__nn(...)` when its last element is an index, so both `obj[key]` (missing key) and `arr[i]` (out of bounds) yield `null` as a consumed value.
 
 **Files:**
-- Modify: `lib/backends/typescriptBuilder.ts:1107` (the `case "index":` in `processValueAccess`)
+- Modify: `lib/backends/typescriptBuilder.ts:1154` (the `return result;` tail of `processValueAccess`)
 - Create: `tests/agency-js/index-missing-key-null/agent.agency`
 - Create: `tests/agency-js/index-missing-key-null/test.js`
 - Create: `tests/agency-js/index-missing-key-null/fixture.json`
@@ -164,19 +168,34 @@ node lookups() {
     missingKey: obj["absent"],
     presentKey: obj["present"],
     outOfBounds: arr[10],
+    negativeIndex: arr[-1],
     inBounds: arr[0],
     falsyZero: zero["z"]
   }
+}
+
+// Regression guard for the terminal-only wrap decision (Step 3). `a` is null, so
+// `a?.["x"]` short-circuits and `["y"]` is never evaluated: with terminal-only
+// wrapping the whole chain is `__nn(a?.["x"]["y"])` → null (NO throw). If the fix
+// ever regresses to per-element wrapping it becomes `__nn(__nn(a?.["x"])["y"])` →
+// `null["y"]` → THROWS, and this node crashes the test.
+node optChainNoThrow() {
+  const a: Record<string, Record<string, number>> | null = null
+  return { deep: a?.["x"]["y"] }
 }
 ```
 
 Create `tests/agency-js/index-missing-key-null/test.js`:
 
 ```js
-import { lookups } from "./agent.js";
+import { lookups, optChainNoThrow } from "./agent.js";
 import { writeFileSync } from "fs";
 
 const r = (await lookups()).data;
+
+// Must not throw. With per-element wrapping this call crashes (null["y"]);
+// with terminal-only wrapping `deep` is null and this resolves cleanly.
+const opt = (await optChainNoThrow()).data;
 
 writeFileSync(
   "__result.json",
@@ -184,9 +203,11 @@ writeFileSync(
     {
       missingKeyIsNull: r.missingKey === null,
       outOfBoundsIsNull: r.outOfBounds === null,
+      negativeIndexIsNull: r.negativeIndex === null,
       presentKeyValue: r.presentKey,
       inBoundsValue: r.inBounds,
       falsyZeroPreserved: r.falsyZero === 0,
+      optChainDeepIsNull: opt.deep === null,
     },
     null,
     2,
@@ -200,42 +221,54 @@ Create `tests/agency-js/index-missing-key-null/fixture.json`:
 {
   "missingKeyIsNull": true,
   "outOfBoundsIsNull": true,
+  "negativeIndexIsNull": true,
   "presentKeyValue": 42,
   "inBoundsValue": 1,
-  "falsyZeroPreserved": true
+  "falsyZeroPreserved": true,
+  "optChainDeepIsNull": true
 }
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test js tests/agency-js/index-missing-key-null 2>&1 | tee /tmp/index-test.log`
-Expected: FAIL — `missingKeyIsNull` and `outOfBoundsIsNull` come back `false` (the raw value is `undefined`, and `undefined === null` is `false`), so `__result.json` differs from `fixture.json`.
+Expected: FAIL — `missingKeyIsNull`, `outOfBoundsIsNull`, and `negativeIndexIsNull` come back `false` (the raw value is `undefined`, and `undefined === null` is `false`), so `__result.json` differs from `fixture.json`.
 
-- [ ] **Step 3: Wrap the index codegen in `__nn`**
+- [ ] **Step 3: Normalize the terminal index read to `null`**
 
-In `lib/backends/typescriptBuilder.ts`, `processValueAccess`, the `case "index":` (line ~1107) currently reads:
+Do NOT wrap inside `case "index":`. Wrapping each index element inserts `__nn` *between* an optional index and any following access, which captures JS optional-chain short-circuit and converts it to a thrown `TypeError` (e.g. `a?.[b].c` with a null `a` goes from `undefined` to `null.c` → throw). Instead, leave `case "index":` exactly as-is and normalize once, after the chain is built, when the chain's last element is an index (a value read).
 
-```ts
-        case "index":
-          result = ts.index(result, this.processNode(element.index), {
-            optional: element.optional,
-          });
-          break;
-```
-
-Change it to wrap the built index node in `__nn`:
+In `lib/backends/typescriptBuilder.ts`, `processValueAccess`, the chain loop currently ends (line ~1153-1154):
 
 ```ts
-        case "index":
-          result = ts.call(ts.id("__nn"), [
-            ts.index(result, this.processNode(element.index), {
-              optional: element.optional,
-            }),
-          ]);
-          break;
+      }
+    }
+    return result;
+  }
 ```
 
-Leave the assignment-LHS index emitter (`lib/backends/typescriptBuilder/assignmentEmitter.ts:104`) untouched — it is a write target, not a value read.
+Change the tail so a terminal index read is wrapped in `__nn`:
+
+```ts
+      }
+    }
+    const lastElement = node.chain[node.chain.length - 1];
+    if (lastElement?.kind === "index") {
+      return ts.call(ts.id("__nn"), [result]);
+    }
+    return result;
+  }
+```
+
+This normalizes the observable value of a terminal `obj[key]` / `arr[i]` read (missing key, out of bounds, negative) to `null`, while:
+- preserving JS short-circuit *within* the chain (no mid-chain `__nn`), so `a?.[b].c` is unchanged and does not throw;
+- leaving intermediate missing reads to throw exactly as today (`obj[a][b]` where `obj[a]` is missing throws before the terminal `__nn` runs);
+- emitting a single `__nn(...)` per read instead of nested `__nn(__nn(...))`.
+
+**Explicitly untouched (intentionally left raw):**
+- Property-terminal chains (`obj.foo`) are out of scope — the guard fires only when the last element is an `index`.
+- The assignment-LHS index emitter (`lib/backends/typescriptBuilder/assignmentEmitter.ts:105`) is a write target, not a value read.
+- The two compiler-internal `ts.index` sites — `stackBranches[branchKey]` (`typescriptBuilder.ts:398`) and the for-in `keys[i]` iterator (`typescriptBuilder.ts:3672`) — index known-present keys and never surface an observable `undefined`.
 
 - [ ] **Step 4: Rebuild the compiler**
 
@@ -251,7 +284,11 @@ Expected: PASS — `__result.json` matches `fixture.json` (all booleans `true`, 
 
 Run: `make fixtures 2>&1 | tail -20`
 Run: `git status --short tests/typescriptGenerator/ && git diff tests/typescriptGenerator/ | head -80`
-Expected: `.mjs` fixtures that use indexing now show index expressions wrapped as `__nn(...)`. Confirm the ONLY change is added `__nn(...)` wrappers around index/subscript expressions — no unrelated churn.
+Expected: `.mjs` fixtures that end a value read on an index now show that read wrapped as `__nn(...)`, exactly once per terminal read (no nested `__nn(__nn(...))`). Two guards to confirm in the diff:
+- No `__nn` appears *between* an optional index and a following access (grep the diff for `__nn(` immediately followed by `)?.` or `).` on a chain — there should be none). This is the regression the terminal-only wrap exists to avoid.
+- Property-terminal chains (`obj.foo`), assignment LHS (`arr[i] = ...`), and for-in `keys[i]` iterators are unchanged.
+
+Confirm no other unrelated churn.
 
 - [ ] **Step 7: Run the codegen integration tests**
 
@@ -283,7 +320,9 @@ Coerce the single `__matchval_<id>` read chokepoint so every unmatched-`match` p
 
 - [ ] **Step 1: Write the failing execution test**
 
-The design relies on the fact (confirmed in `lib/typeChecker/matchExhaustiveness.ts`, `missingCases`) that a `match` over an **open** type like `string` is never required to be exhaustive, so this compiles cleanly at the default `matchExhaustiveness: "error"` — no config override needed. At runtime the unmatched scrutinee falls through and (pre-fix) yields `undefined`.
+The design relies on the fact (confirmed in `lib/typeChecker/matchExhaustiveness.ts:181`, `missingCases` returns `[]` when `!caseSet.closed`) that a `match` over an **open** type like `string` is never required to be exhaustive, so this compiles cleanly at the default `matchExhaustiveness: "error"` — no config override needed. At runtime the unmatched scrutinee falls through and (pre-fix) yields `undefined`.
+
+Note: this **supersedes** the spec (case 4), which suggested setting `matchExhaustiveness: "warn"`. That override is unnecessary for an open scrutinee type — do not add it, and do not "fix" this test by adding one.
 
 Create `tests/agency-js/match-no-arm-null/agent.agency`:
 
@@ -295,16 +334,32 @@ node classify(s: string) {
   }
   return result
 }
+
+// Guards spec case 5: an arm that genuinely yields `null` must stay `null` (no
+// double-coercion surprise), and a real-valued arm passes through `__nn`
+// unchanged. `classifyNullable("z")` also exercises the no-arm path alongside an
+// explicit null arm so the two null sources are not conflated.
+node classifyNullable(s: string) {
+  const result = match (s) {
+    "a" => "got-a"
+    "n" => null
+  }
+  return result
+}
 ```
 
 Create `tests/agency-js/match-no-arm-null/test.js`:
 
 ```js
-import { classify } from "./agent.js";
+import { classify, classifyNullable } from "./agent.js";
 import { writeFileSync } from "fs";
 
 const matched = (await classify("a")).data;
 const unmatched = (await classify("z")).data;
+
+const realArm = (await classifyNullable("a")).data;
+const nullArm = (await classifyNullable("n")).data;
+const noArm = (await classifyNullable("z")).data;
 
 writeFileSync(
   "__result.json",
@@ -312,6 +367,9 @@ writeFileSync(
     {
       matchedValue: matched,
       unmatchedIsNull: unmatched === null,
+      realArmValue: realArm,
+      nullArmIsNull: nullArm === null,
+      noArmIsNull: noArm === null,
     },
     null,
     2,
@@ -324,14 +382,17 @@ Create `tests/agency-js/match-no-arm-null/fixture.json`:
 ```json
 {
   "matchedValue": "got-a",
-  "unmatchedIsNull": true
+  "unmatchedIsNull": true,
+  "realArmValue": "got-a",
+  "nullArmIsNull": true,
+  "noArmIsNull": true
 }
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test js tests/agency-js/match-no-arm-null 2>&1 | tee /tmp/match-test.log`
-Expected: FAIL — `unmatchedIsNull` comes back `false` (the match result is `undefined`).
+Expected: FAIL — the two no-arm paths, `unmatchedIsNull` and `noArmIsNull`, come back `false` (their match result is `undefined`). Note `nullArmIsNull` and `realArmValue` already pass pre-fix (an explicit `null` arm is already `null`, and a real arm is unchanged) — they are passthrough guards proving the fix does not disturb matched values, not failing cases.
 
 - [ ] **Step 3: Coerce the match-result read**
 
@@ -439,12 +500,21 @@ git commit -m "Document index/match null normalization (#409)"
 
 **Spec coverage:**
 - `__nn` helper + wiring → Task 1. ✅
-- Fix 1, index reads (issue #1 object missing key + #2 array OOB, shared site) → Task 2. ✅
+- Fix 1, index reads (issue #1 object missing key + #2 array OOB + negative, shared terminal site) → Task 2. ✅
 - Fix 2, match no-arm (all three paths via the read chokepoint) + valueless-yield source → Task 3. ✅
 - Non-goal: no type-checker change → no task touches `lib/typeChecker/`. ✅
 - Non-goal: match-comparison `===` unchanged → not touched. ✅
 - Testing: falsy-passthrough guard (`0`/`""`/`false`/`NaN`) in Task 1 unit test + `falsyZero`/`presentKey` in Task 2; `=== null` JS observation (not `==`, which `__eq` blinds) in Tasks 2-3; matched-arm-still-returns-value in Task 3. ✅
+- Regression guard for the terminal-only decision: `optChainNoThrow` (`a?.["x"]["y"]` with null `a`) in Task 2 — CI-fails (throws) if the fix regresses to per-element wrapping. Emitted shape verified as a single chain `a?.["x"]["y"]` against a fresh build. ✅
+- Spec case 5 (arm genuinely yields `null`; real arm unchanged; no double-coercion) → `classifyNullable` in Task 3. ✅
+- Known coverage limits (accepted): the plain-mode / handler-body match read path funnels through the same `isMatchValName` chokepoint (verified — `processMatchExpressionPlain` writes `__matchval_<id>` that "the consumer reads"), so it is covered by the fix but exercised only indirectly. The valueless-`yield` source change (Task 3 Step 4) is masked by the read-site wrap and cannot be isolated by a runtime test; it is defense-in-depth, not independently asserted. ✅
 - Docs + fixture rebuild note → Task 4 + `make fixtures` steps in Tasks 2-3. ✅
+
+**Altitude / regression review:**
+- Index normalization is emitted once, at the **terminal** index read (chain tail), not per index element. This preserves JS optional-chain short-circuit inside a chain (`a?.[b].c` does not throw) and avoids nested `__nn(__nn(...))`. The "how" (nullish-normalize) stays encapsulated in the single `__nn` helper; the codegen only declares *where* to normalize. ✅
+- All four `ts.index(` emit sites accounted for: terminal user read (wrapped), assignment LHS + `stackBranches[branchKey]` + for-in `keys[i]` (intentionally raw, named in Task 2 Step 3). ✅
+- Coercion-profile change (`null` vs `undefined` in arithmetic/string) is a deliberate, documented consequence — Architecture "Coercion caveat". ✅
+- Divergence from spec case 4 (`matchExhaustiveness: "warn"`) is intentional and flagged in Task 3 Step 1. ✅
 
 **Placeholder scan:** No TBD/TODO/"handle edge cases"; every code step shows full content. ✅
 

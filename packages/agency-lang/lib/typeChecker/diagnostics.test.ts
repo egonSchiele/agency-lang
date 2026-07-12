@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { DIAGNOSTICS, diagnostic, renderMessage } from "./diagnostics.js";
+import {
+  DIAGNOSTICS,
+  DIAGNOSTIC_CATEGORIES,
+  categoryForCode,
+  diagnostic,
+  renderMessage,
+} from "./diagnostics.js";
 import {
   formatOptionalUnboundWarning,
   formatRequiredUnboundError,
@@ -33,6 +39,21 @@ describe("diagnostic registry invariants", () => {
       const withoutEscapes = entry.message.replace(/\{\{|\}\}/g, "");
       expect(withoutEscapes.replace(/\{\w+\}/g, "")).not.toMatch(/[{}]/);
     }
+  });
+
+  it("every code maps to exactly one category", () => {
+    for (const [name, entry] of entries) {
+      const cat = categoryForCode(entry.code);
+      expect(
+        cat,
+        `${name} (${entry.code}) has no DIAGNOSTIC_CATEGORIES entry for prefix '${entry.code.slice(0, 3)}' — add one`,
+      ).toBeDefined();
+    }
+  });
+
+  it("no two categories share a prefix", () => {
+    const prefixes = DIAGNOSTIC_CATEGORIES.map((c) => c.prefix);
+    expect(new Set(prefixes).size).toBe(prefixes.length);
   });
 });
 

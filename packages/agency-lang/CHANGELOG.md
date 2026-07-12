@@ -1,3 +1,45 @@
+## Jul 12 2026 — v0.8.0
+
+### Language / Typechecker
+- **Intersection types** — `A & B` now works.
+- **`keyof` and indexed access** type operators (`keyof T`, `T[K]`).
+- **Built-in utility types** — `Partial`, `Required`, `Pick`, `Omit`, and `NonNullable`.
+- `raises` clauses are now **enforced on function types**, so effects are checked when passing functions around.
+- **Breaking — tool safety annotations reworked.** `safe` is replaced by `destructive` and `idempotent`, and tools that fail stay callable.
+- Fixed several recursive type bugs.
+- Fixed an early `return` skipping past a `for` loop and a `thread` with an eager iterable.
+
+### Standard Library
+- **`std::agency`** — new `writeAgency`, `review`, `getEffects`, and `runCode` functions, plus the ability to set a cost limit in `run()`. Added a `docsSkill` function to `std::skills`.
+- **New `std::data` connectors** — `usaspending` and `wikidata`.
+- **`std::http`** — `POST` requests now support a request body.
+- **Cross-provider memory** — `enableMemory` accepts an assignable embedding slot with key validation, so memory can use a different provider for embeddings.
+
+### Runtime
+- **Failure propagation is now on by default** (Stage 2). If a `Failure` is passed to a function that doesn't expect it, the call is skipped and the failure propagates, with a `skippedFunctions` array added to the failure object.
+- **Strict structured-output validation** with opt-in validation retries.
+- Tool-call `Result` values are now unwrapped before being handed back to the LLM.
+- If the LLM sets a tool-call argument to `null` and that argument has a default value, the **default is used** instead of `null`.
+- `maxToolCallRounds` and `maxToolResultChars` are now settable.
+- `spawn` now validates that its `cwd` exists before running and gives a clear error otherwise.
+- Statelog gains `promptStart`/`promptCancelled` pairing and `threadEndHooks` attribution for better visibility.
+- New per-run and agent debug flags.
+
+### CLI
+- **`agency run --interactive`** allows users to respond to interrupts on the command line.
+- **`agency run --policy`** — drive interrupt policies from the command line.
+- **`agency doc`** renders `raises` in signatures and wraps long signatures.
+
+### Diagnostics
+- **Diagnostics overhaul** — stable error codes, required severity, source spans, and a template registry.
+
+### Agency Agent
+- The agent can now **connect to MCP servers** and use their tools.
+- **`--policy` flag** plus more built-in policies.
+- **Per-model capability profiles** and a `/settings` command to change defaults.
+- A fresh-eyes verification step in one-shot mode.
+- Assorted fixes: `maxTokens` raised to 20000, one-shot mode no longer asks for human input, an `approveAllPolicy`, and system/dev messages are excluded from thread summaries.
+
 ## Jul 8 2026 — v0.7.0
 
 ### Language / Typechecker

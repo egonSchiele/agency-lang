@@ -79,6 +79,21 @@ describe("exportFromStatementParser", () => {
     });
   });
 
+  it("parses per-name `destructive` modifier", () => {
+    const result = exportFromStatementParser(
+      'export { destructive rm } from "./fs-utils.agency"',
+    );
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.body).toEqual({
+      kind: "namedExport",
+      names: ["rm"],
+      aliases: {},
+      safeNames: [],
+      destructiveNames: ["rm"],
+    });
+  });
+
   it("parses a star re-export", () => {
     const result = exportFromStatementParser(
       'export * from "std::wikipedia"',

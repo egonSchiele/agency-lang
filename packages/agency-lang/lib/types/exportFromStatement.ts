@@ -15,6 +15,8 @@ export type NamedExportBody = {
   aliases: Record<string, string>;
   /** Source-side names marked with the `safe` modifier. */
   safeNames: string[];
+  /** Source-side names marked `destructive`. Present only when non-empty. */
+  destructiveNames?: string[];
 };
 
 export type StarExportBody = {

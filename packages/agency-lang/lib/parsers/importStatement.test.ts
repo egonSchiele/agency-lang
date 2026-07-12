@@ -217,6 +217,75 @@ describe("importStatmentParser", () => {
     }
   });
 
+  it('should parse: import { destructive rm, stat } from "./tools.js"', () => {
+    const result = importStatmentParser(
+      'import { destructive rm, stat } from "./tools.js"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqualWithoutLoc({
+        type: "importStatement",
+        importedNames: [
+          {
+            type: "namedImport",
+            importedNames: ["rm", "stat"],
+            safeNames: [],
+            destructiveNames: ["rm"],
+            aliases: {},
+          },
+        ],
+        modulePath: "./tools.js",
+        isAgencyImport: false,
+      });
+    }
+  });
+
+  it('should parse: import { safe a, destructive b } from "./tools.js"', () => {
+    const result = importStatmentParser(
+      'import { safe a, destructive b } from "./tools.js"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqualWithoutLoc({
+        type: "importStatement",
+        importedNames: [
+          {
+            type: "namedImport",
+            importedNames: ["a", "b"],
+            safeNames: ["a"],
+            destructiveNames: ["b"],
+            aliases: {},
+          },
+        ],
+        modulePath: "./tools.js",
+        isAgencyImport: false,
+      });
+    }
+  });
+
+  it('should parse: import { destructive rm as remove } from "./tools.js"', () => {
+    const result = importStatmentParser(
+      'import { destructive rm as remove } from "./tools.js"',
+    );
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.result).toEqualWithoutLoc({
+        type: "importStatement",
+        importedNames: [
+          {
+            type: "namedImport",
+            importedNames: ["rm"],
+            safeNames: [],
+            destructiveNames: ["rm"],
+            aliases: { rm: "remove" },
+          },
+        ],
+        modulePath: "./tools.js",
+        isAgencyImport: false,
+      });
+    }
+  });
+
   // Aliased imports
   it('should parse: import { foo as bar } from "./foo.ts"', () => {
     const result = importStatmentParser(

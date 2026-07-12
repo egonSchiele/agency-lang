@@ -2245,6 +2245,65 @@ describe("functionParser with export keyword", () => {
   });
 });
 
+describe("functionParser with destructive/idempotent markers", () => {
+  it("parses destructive def", () => {
+    const r = functionParser("destructive def rm(p: string) { return 1 }");
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.result.markers?.destructive).toBe(true);
+      expect(r.result.safe).toBeFalsy();
+    }
+  });
+
+  it("parses idempotent def", () => {
+    const r = functionParser("idempotent def f(): number { return 1 }");
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.result.markers?.idempotent).toBe(true);
+    }
+  });
+
+  it("parses export + marker in either order", () => {
+    for (const src of [
+      "export destructive def rm(p: string) { return 1 }",
+      "destructive export def rm(p: string) { return 1 }",
+      "export idempotent def f() { return 1 }",
+    ]) {
+      const r = functionParser(src);
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.result.exported).toBe(true);
+      }
+    }
+  });
+
+  it("rejects conflicting markers in any order", () => {
+    for (const src of [
+      "safe destructive def f() { return 1 }",
+      "destructive safe def f() { return 1 }",
+      "destructive idempotent def f() { return 1 }",
+      "idempotent destructive def f() { return 1 }",
+      "safe idempotent def f() { return 1 }",
+    ]) {
+      expect(functionParser(src).success).toBe(false);
+    }
+  });
+
+  it("a def named destructive still parses", () => {
+    expect(functionParser("def destructive(): number { return 1 }").success).toBe(
+      true,
+    );
+  });
+
+  it("does not set markers on a plain def", () => {
+    const r = functionParser("def f() { return 1 }");
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.result.markers).toBeUndefined();
+    }
+  });
+});
+
 describe("graphNodeParser", () => {
   const testCases = [
     // Basic graph nodes without return types

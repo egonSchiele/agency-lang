@@ -17,6 +17,9 @@ export type NamedImport = {
   type: "namedImport";
   importedNames: string[];
   safeNames: string[];
+  /** Source-side names marked `destructive`. Present only when non-empty
+   *  (matching `testOnly` above) so exact-match AST comparisons stay clean. */
+  destructiveNames?: string[];
   aliases: Record<string, string>;
 };
 

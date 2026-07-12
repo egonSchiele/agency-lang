@@ -44,6 +44,18 @@ export const VALID_CALLBACK_NAMES = [
 
 export type CallbackName = (typeof VALID_CALLBACK_NAMES)[number];
 
+/** Per-function retry-safety markers. Carried as one object from the AST
+ *  through the symbol table and registries so adding a marker is a
+ *  one-field change, not a parallel-boolean mirror pass across many files.
+ *  Each field is present only when true. */
+export type FunctionMarkers = {
+  /** Re-running (or re-calling after a failure that started executing) may
+   *  cause harm — the tool loop removes the tool if this ran. */
+  destructive?: boolean;
+  /** Re-calling with the same arguments has no additional effect. */
+  idempotent?: boolean;
+};
+
 export type FunctionDefinition = BaseNode & {
   type: "function";
   functionName: string;
@@ -54,7 +66,11 @@ export type FunctionDefinition = BaseNode & {
   docString?: MultiLineStringLiteral;
   docComment?: AgencyMultiLineComment;
   async?: boolean;
+  /** @deprecated The `safe` keyword is inert and slated for removal.
+   *  Populated by the parser during the deprecation window so the
+   *  formatter round-trips it; nothing else reads it. */
   safe?: boolean;
+  markers?: FunctionMarkers;
   exported?: boolean;
   tags?: Tag[];
   /** Declared effect set this function may raise (`raises <...>`).

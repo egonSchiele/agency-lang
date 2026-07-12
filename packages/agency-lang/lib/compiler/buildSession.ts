@@ -23,7 +23,7 @@ import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
 import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
-import { formatErrors, typeCheck } from "@/typeChecker/index.js";
+import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import {
   agencyImportTargets,
   buildCompiledClosure,
@@ -644,12 +644,16 @@ function runTypecheck(
   const tcEndTime = performance.now();
   logTime({ label: `Type checked ${absoluteInputFile}`, start: tcStartTime, end: tcEndTime, verbose });
   if (errors.length === 0) return;
+  const hint = formatDiagnosticsHint(errors);
   if (tc?.strict) {
     console.error(formatErrors(errors));
+    if (hint) console.error(hint);
     const hasFatal = errors.some((e) => e.severity === "error");
     if (hasFatal) process.exit(1);
   } else {
     console.warn(formatErrors(errors));
+    // warn-mode output is warnings-first; a hint only fires on error severity
+    if (hint) console.warn(hint);
   }
 }
 

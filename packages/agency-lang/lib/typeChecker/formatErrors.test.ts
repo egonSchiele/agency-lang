@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatErrors, typeCheck } from "./index.js";
+import { formatErrors, formatDiagnosticsHint, typeCheck } from "./index.js";
 import { diagnostic } from "./diagnostics.js";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
@@ -85,5 +85,32 @@ describe("end-to-end file stamping + formatting", () => {
     expect(lines[0]).toMatch(
       /^\/tmp\/stamp-test\.agency:\d+:\d+ - error AG\d{4}: /,
     );
+  });
+});
+
+describe("formatDiagnosticsHint", () => {
+  const err = (code: string, severity: "error" | "warning") => ({
+    code,
+    name: "x" as never,
+    message: "m",
+    severity,
+    params: {},
+    loc: null,
+  });
+
+  it("names the first ERROR-severity code, not errors[0]", () => {
+    const hint = formatDiagnosticsHint([
+      err("AG3009", "warning"),
+      err("AG2005", "error"),
+    ]);
+    expect(hint).not.toBeNull();
+    expect(hint!).toContain("AG2005");
+    expect(hint!).not.toContain("AG3009");
+    expect(hint!).toContain("agency explain");
+  });
+
+  it("returns null when there are no error-severity diagnostics", () => {
+    expect(formatDiagnosticsHint([err("AG3009", "warning")])).toBeNull();
+    expect(formatDiagnosticsHint([])).toBeNull();
   });
 });

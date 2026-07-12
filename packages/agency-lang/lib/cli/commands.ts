@@ -130,6 +130,81 @@ export function readStdin(): Promise<string> {
   });
 }
 
+export type InputSource = { kind: "file"; path: string } | { kind: "stdin" };
+
+/**
+ * Turn raw CLI arguments into an ordered list of input sources.
+ * - no arguments   -> a single stdin source
+ * - "-"            -> a stdin source (mixable with files/dirs)
+ * - a directory    -> every .agency file under it (recursive)
+ * - a file         -> that file
+ * - a missing path -> prints an error and exits 1
+ * - a second stdin -> prints an error and exits 1 (stdin is read-once)
+ *
+ * Returns null (after printing a notice to stderr) when arguments were given
+ * but no .agency files were found, so the caller can exit cleanly instead of
+ * hanging on stdin. The notice goes to stderr, not stdout, so it never
+ * corrupts a command's machine-consumed output (e.g. `diagnostics` JSON).
+ */
+export function resolveInputSources(inputs: string[]): InputSource[] | null {
+  if (inputs.length === 0) {
+    return [{ kind: "stdin" }];
+  }
+  const sources: InputSource[] = [];
+  let sawStdin = false;
+  for (const input of inputs) {
+    if (input === "-") {
+      if (sawStdin) {
+        console.error("Error: stdin ('-') can only be read once");
+        process.exit(1);
+      }
+      sawStdin = true;
+      sources.push({ kind: "stdin" });
+      continue;
+    }
+    if (!fs.existsSync(input)) {
+      console.error(`Error: Input file '${input}' not found`);
+      process.exit(1);
+    }
+    if (fs.statSync(input).isDirectory()) {
+      for (const { path: filePath } of findRecursively(input)) {
+        sources.push({ kind: "file", path: filePath });
+      }
+    } else {
+      sources.push({ kind: "file", path: input });
+    }
+  }
+  if (sources.length === 0) {
+    console.error("No .agency files found in the given input(s).");
+    return null;
+  }
+  return sources;
+}
+
+export async function readSource(src: InputSource): Promise<string> {
+  return src.kind === "stdin" ? readStdin() : readFile(src.path);
+}
+
+/**
+ * Resolve `inputs` to sources, then read and hand each to `handle`. Returns
+ * early (no-op) when `resolveInputSources` returns null (arguments given but
+ * no .agency files found). This is the shared "iterate every input" scaffold
+ * for commands that process each source independently. typecheck does NOT use
+ * it — it needs the whole resolved list up front to seed one SymbolTable.
+ */
+export async function forEachSource(
+  inputs: string[],
+  handle: (contents: string, src: InputSource) => void | Promise<void>,
+): Promise<void> {
+  const sources = resolveInputSources(inputs);
+  if (sources === null) {
+    return;
+  }
+  for (const src of sources) {
+    await handle(await readSource(src), src);
+  }
+}
+
 export function parse(
   contents: string,
   config: AgencyConfig,

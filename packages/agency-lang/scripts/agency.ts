@@ -2,12 +2,14 @@
 import {
   compile,
   compileWarning,
+  forEachSource,
   format,
   formatFile,
   loadConfig,
   parse,
-  readFile,
+  readSource,
   readStdin,
+  resolveInputSources,
   run,
 } from "@/cli/commands.js";
 import {
@@ -571,17 +573,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("[inputs...]", "Paths to .agency input files")
     .action(async (inputs: string[]) => {
       const config = getConfig();
-      if (inputs.length === 0) {
-        const contents = await readStdin();
+      await forEachSource(inputs, (contents) => {
         const result = parse(contents, config);
         console.log(JSON.stringify(result, null, 2));
-      } else {
-        for (const input of inputs) {
-          const contents = readFile(input);
-          const result = parse(contents, config);
-          console.log(JSON.stringify(result, null, 2));
-        }
-      }
+      });
     });
 
   program
@@ -605,15 +600,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
         console.log(JSON.stringify(preprocessor.program, null, 2));
       };
 
-      if (inputs.length === 0) {
-        const contents = await readStdin();
+      await forEachSource(inputs, (contents) => {
         processInput(contents);
-      } else {
-        for (const input of inputs) {
-          const contents = readFile(input);
-          processInput(contents);
-        }
-      }
+      });
     });
 
   function formatDuration(ms: number): string {
@@ -810,8 +799,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Run diagnostics for VSCode")
     .argument("[inputs...]", "Paths to .agency input files")
     .action(async (inputs: string[]) => {
-      if (inputs.length === 0) {
-        const contents = await readStdin();
+      await forEachSource(inputs, (contents) => {
         try {
           _parseAgency(contents);
         } catch (error) {
@@ -821,20 +809,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
             throw error;
           }
         }
-      } else {
-        for (const input of inputs) {
-          const contents = readFile(input);
-          try {
-            _parseAgency(contents);
-          } catch (error) {
-            if (error instanceof TarsecError) {
-              console.log(JSON.stringify(error.data, null, 2));
-            } else {
-              throw error;
-            }
-          }
-        }
-      }
+      });
     });
 
   program
@@ -870,16 +845,32 @@ export function createProgram(deps: CliDependencies = {}): Command {
       if (opts.strict) {
         config.typechecker = { ...config.typechecker, strictTypes: true };
       }
-      if (inputs.length === 0) {
-        const contents = await readStdin();
-        runTypeCheck(contents);
-      } else {
-        // Build one SymbolTable seeded from the first input. Reachable files
-        // (including stdlib) are crawled once, not once per input file.
-        const symbolTable = SymbolTable.build(path.resolve(inputs[0]), config);
-        for (const input of inputs) {
-          const contents = readFile(input);
-          runTypeCheck(contents, input, symbolTable);
+      const sources = resolveInputSources(inputs);
+      if (sources === null) {
+        return;
+      }
+      // Build one SymbolTable seeded from EVERY file source, not just the
+      // first. `SymbolTable.build` accepts an array of entrypoints and crawls
+      // reachable files (imports + stdlib) from each, deduping via its visited
+      // set. Seeding from only the first file leaves files whose imports are
+      // unreachable from it unable to resolve those imports: the imported
+      // functions/types become `any` (unresolved agency imports are fail-open),
+      // so real cross-file type errors are SILENTLY MISSED, and interrupt-effect
+      // metadata is dropped. Seeding from every file makes typechecking of the
+      // whole directory complete. The symbol table stays file-keyed, so adding
+      // more entrypoints never merges or pollutes across files.
+      const filePaths = sources
+        .filter((s) => s.kind === "file")
+        .map((s) => path.resolve(s.path));
+      const symbolTable = filePaths.length
+        ? SymbolTable.build(filePaths, config)
+        : undefined;
+      for (const src of sources) {
+        const contents = await readSource(src);
+        if (src.kind === "stdin") {
+          runTypeCheck(contents);
+        } else {
+          runTypeCheck(contents, src.path, symbolTable);
         }
       }
       if (hasErrors) process.exit(1);

@@ -19,9 +19,9 @@ agency tc foo.agency
 You can give it
 - a file
 - a list of files
-- input on stdin.
-
-Directories are not supported yet.
+- a directory (scanned recursively for `.agency` files)
+- a mix of the above
+- input on stdin (no arguments, or a literal `-` that can be mixed with files and directories).
 
 Pass `--strict` to treat variables without types as errors.
 

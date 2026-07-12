@@ -104,7 +104,9 @@ function runLogged(label, file, args = [], opts = {}) {
   if (result.status !== 0) {
     throw new Error(`Command failed: ${command}\nLog: ${logPath}\n${output}`);
   }
-  return stdout;
+  // Some assertions need stderr (e.g. the "no .agency files" notice, which is
+  // routed to stderr so it never corrupts machine-consumed stdout).
+  return opts.combined ? output : stdout;
 }
 
 function runAgency(label, args, opts = {}) {
@@ -467,6 +469,27 @@ try {
     "stdinMain",
   );
 
+  // parse: directory support (#438)
+  const parseDir = join(dir, "parse-dir");
+  mkdirSync(parseDir, { recursive: true });
+  writeFileSync(
+    join(parseDir, "alpha.agency"),
+    `node alphaMain() {
+  return "alpha"
+}
+`,
+  );
+  writeFileSync(
+    join(parseDir, "beta.agency"),
+    `node betaMain() {
+  return "beta"
+}
+`,
+  );
+  const parseDirOut = runAgency("17a-parse-dir", ["parse", "parse-dir"]);
+  assertIncludes(parseDirOut, "alphaMain");
+  assertIncludes(parseDirOut, "betaMain");
+
   // coverage
 
   console.log("--- coverage ---");
@@ -528,6 +551,108 @@ try {
   ));
   assertIncludes(strictError, "no type annotation");
   assertIncludes(strictError, "strict mode");
+
+  // tc: directories and '-' stdin (#438)
+  const tcDir = join(dir, "tc-clean");
+  mkdirSync(tcDir, { recursive: true });
+  writeFileSync(
+    join(tcDir, "one.agency"),
+    `node oneCheck(): string {
+  return "ok"
+}
+`,
+  );
+  writeFileSync(
+    join(tcDir, "two.agency"),
+    `node twoCheck(): number {
+  return 42
+}
+`,
+  );
+  const tcDirOut = runAgency("28a-tc-dir", ["tc", "tc-clean"]);
+  assert(
+    (tcDirOut.match(/No type errors found\./g) || []).length >= 2,
+    "tc on a directory should type check every .agency file in it",
+  );
+
+  // tc: a directory with TWO disjoint import pairs, each importer making a
+  // wrong-typed call to its imported function. This guards the multi-entrypoint
+  // SymbolTable seed and fails on a revert regardless of `findRecursively`
+  // traversal order.
+  //
+  // What single-seed actually breaks: an imported function whose defining file
+  // is unreachable from the seed resolves to nothing and is treated as `any`,
+  // so a wrong-typed call to it is SILENTLY MISSED (a false negative — not a
+  // false-positive "unknown symbol" error; unresolved imports are fail-open).
+  //
+  // `aay` calls `xFromCee(1)` (wants string); `bee` calls `yFromDee(2)`. The two
+  // pairs share nothing, so `SymbolTable.build([<any single file>])` reaches at
+  // most one target — the other importer's function stays `any` and its error is
+  // missed. Seeding from EVERY file visits both targets, so BOTH errors surface.
+  // Asserting both call names appear is therefore true only under multi-seed.
+  const tcImportDir = join(dir, "tc-imports");
+  mkdirSync(tcImportDir, { recursive: true });
+  writeFileSync(
+    join(tcImportDir, "cee.agency"),
+    `export def xFromCee(name: string): string {
+  return "c:" + name
+}
+`,
+  );
+  writeFileSync(
+    join(tcImportDir, "aay.agency"),
+    `import { xFromCee } from "./cee.agency"
+
+node aayMain(): string {
+  return xFromCee(1)
+}
+`,
+  );
+  writeFileSync(
+    join(tcImportDir, "dee.agency"),
+    `export def yFromDee(name: string): string {
+  return "d:" + name
+}
+`,
+  );
+  writeFileSync(
+    join(tcImportDir, "bee.agency"),
+    `import { yFromDee } from "./dee.agency"
+
+node beeMain(): string {
+  return yFromDee(2)
+}
+`,
+  );
+  const tcImportOut = stripAnsi(
+    runAgency("28a2-tc-dir-imports", ["tc", "tc-imports"], { expectFail: true }),
+  );
+  assertIncludes(tcImportOut, "in call to 'xFromCee'");
+  assertIncludes(tcImportOut, "in call to 'yFromDee'");
+
+  const tcMixedOut = runAgency("28b-tc-dir-mixed", ["tc", "tc-clean", "src/type-ok.agency"]);
+  assert(
+    (tcMixedOut.match(/No type errors found\./g) || []).length >= 3,
+    "tc should accept mixed directory and file arguments",
+  );
+
+  assertIncludes(
+    runAgency("28c-tc-dash", ["tc", "-"], {
+      input: `node dashCheck(): string {
+  return "dash-ok"
+}
+`,
+    }),
+    "No type errors found.",
+  );
+
+  const tcEmptyDir = join(dir, "tc-empty");
+  mkdirSync(tcEmptyDir, { recursive: true });
+  // The notice is on stderr, so capture combined output.
+  assertIncludes(
+    runAgency("28d-tc-empty-dir", ["tc", "tc-empty"], { combined: true }),
+    "No .agency files found",
+  );
 
   // bundle and unbundle
 

@@ -3,6 +3,8 @@ name: TypeScript helpers — the `agency.*` namespace
 description: Reference for the `agency` namespace exported from `agency-lang/runtime`, which lets TypeScript code participate in an Agency run — reading context, manipulating threads, installing handlers, taking checkpoints, and issuing LLM calls.
 ---
 
+*This feature is in active development. This information was written by an LLM and may be out of date.*
+
 # TypeScript helpers — the `agency.*` namespace
 
 Agency's runtime exposes a single namespace, `agency`, that lets TypeScript code participate fully in an agent run: read execution context, push thread messages, install handlers and guards, take checkpoints, issue LLM calls, and write resumable workflows. Everything you need for first-class TS interop is reachable from one import.

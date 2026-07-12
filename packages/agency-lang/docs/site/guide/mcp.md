@@ -47,16 +47,7 @@ That's it. The `mcp()` function connects to the server, fetches its tools, and r
 
 > Important: Make sure you register the tools with `registerTools()` so Agency recognizes them!
 
-## How it works
-
-`mcp()` returns a `Result` type. If the connection fails, it returns a `failure`. Use `catch` to provide a default:
-
-```ts
-import { mcp } from "pkg::@agency-lang/mcp"
-
-// If the server is down, use an empty tool list instead of crashing
-const tools = mcp("filesystem") catch []
-```
+## Usage notes
 
 Each tool in the array is an `AgencyFunction` with a `name`, `description`, and schema. Tool names are prefixed with the server name to avoid collisions: a `read_file` tool from a server named `filesystem` becomes `filesystem__read_file`.
 
@@ -69,27 +60,7 @@ const allTools = mcp("filesystem") catch []
 const safeTools = filter(allTools) as tool {
   return tool.name != "filesystem__delete_file"
 }
-const result = llm("Summarize my files", { tools: [...safeTools] })
-```
-
-You can also combine tools from multiple servers and your own Agency functions:
-
-```ts
-import { mcp } from "pkg::@agency-lang/mcp"
-
-def summarize(text: string): string {
-  return llm("Summarize this: ${text}")
-}
-
-node main() {
-  const fsTools = mcp("filesystem") catch []
-  const dbTools = mcp("database") catch []
-
-  const result = llm("Read my files, query the database, and summarize everything", {
-    tools: [summarize, ...fsTools, ...dbTools]
-  })
-  print(result)
-}
+const result = llm("Summarize my files", tools: [...safeTools])
 ```
 
 ## Configuration
@@ -271,25 +242,22 @@ npx @agency-lang/mcp auth --revoke github
 
 ## Interrupts and handlers
 
-MCP tools are external and cannot throw Agency interrupts. If you want safety checks on MCP tool usage, you can:
+MCP tools are external and cannot throw Agency interrupts. If you want safety checks on MCP tool usage, you'll need to filter out dangerous tools before passing them to `llm()`.
 
-- Filter out dangerous tools before passing them to `llm()`
-- Wrap the `llm()` call in a `handle` block to intercept any interrupts from your own tools
+## Turning an agent into an MCP server
 
-## Bundling another module's tools into your server
+You can easily create an MCP server from one of your agents. Simply mark the nodes and functions you would like to export as tools:
 
-To expose every tool from `std::wikipedia` (or any Agency module) through `agency serve mcp`, re-export them:
-
-```
-// my-server.agency
-export * from "std::wikipedia"
+```ts
+export def add(a: number, b: number): number {
+  return a + b
+}
 ```
 
-Then `agency serve mcp my-server.agency` exposes `search`, `fetch`, etc. as MCP tools. To rename or mark them safe, use the explicit form:
+Then run:
 
-```
-export { search as wikipediaSearch } from "std::wikipedia"
-export { safe fetch } from "std::wikipedia"
+```bash
+agency serve mcp myagent.agency
 ```
 
-See [Re-exporting from another module](./imports-and-packages.md#re-exporting-from-another-module) for the full syntax.
+See [Serving Agency Code](/guide/serving.md) for more details.

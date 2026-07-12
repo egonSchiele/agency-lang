@@ -175,15 +175,13 @@ export default defineConfig({
               link: "/guide/builtins",
             },
             {
-              text: "Advanced Types",
-              link: "/guide/advanced-types",
+              text: "Notes on Types",
+              link: "/guide/notes-on-types",
             },
             {
               text: "TypeScript Helpers (agency.*)",
               link: "/guide/ts-helpers",
             },
-
-            { text: "CLI Argument Parsing", link: "/guide/cli-args" },
             {
               text: "Schema Parameter Injection",
               link: "/guide/schema-parameter-injection",
@@ -192,7 +190,7 @@ export default defineConfig({
             { text: "Serving Agency Code", link: "/guide/serving" },
             { text: "Build Integration", link: "/guide/build-integration" },
             {
-              text: "Custom & local model providers",
+              text: "Custom Providers",
               link: "/guide/custom-providers",
             },
             {

@@ -128,7 +128,14 @@ export class DestructiveTracking {
       call = value.call;
     }
     if (!call?.functionName) return null;
-    return this.compilationUnit.destructiveFunctions[call.functionName]
+    // Object.hasOwn, not a truthy index: `destructiveFunctions` is a plain
+    // object, so a call to a function named `toString` / `constructor` would
+    // otherwise resolve an inherited prototype member as truthy and be
+    // misclassified as destructive.
+    return Object.hasOwn(
+      this.compilationUnit.destructiveFunctions,
+      call.functionName,
+    )
       ? asn.variableName
       : null;
   }

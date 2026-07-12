@@ -73,6 +73,48 @@ describe("DestructiveTracking", () => {
     );
   });
 
+  it("a `try`-wrapped destructive call still gets the outcome POST flip", () => {
+    const { tracking, body } = setup(
+      `destructive def rm(p: string): Result { return failure("x") }\n` +
+        `def caller(): Result { const r = try rm("x")\n  return r }`,
+      "caller",
+    );
+    const f = flips(tracking, body[0], false);
+    expect(f.pre).toBeUndefined();
+    expect(f.post).toBe(
+      "__self.__destructiveRan = __self.__destructiveRan || (isFailure(__self.r) ? (__self.r.destructiveRan) : (true));",
+    );
+  });
+
+  it("a destructive call nested in an expression falls through to the conservative PRE flip", () => {
+    // `wrap(rm(...))` is not a simple assignment-bound call, so
+    // destructiveOutcomeVar returns null and the containsDestructiveCall
+    // fallback fires the pre-flip. Pins the else-branch ordering.
+    const { tracking, body } = setup(
+      `destructive def rm(p: string): string { return p }\n` +
+        `def wrap(s: string): string { return s }\n` +
+        `def caller(): string { const r = wrap(rm("x"))\n  return r }`,
+      "caller",
+    );
+    const f = flips(tracking, body[0], false);
+    expect(f.pre).toBe("__self.__destructiveRan = true;");
+    expect(f.post).toBeUndefined();
+  });
+
+  it("a call to a function whose name is a prototype key is NOT treated as destructive", () => {
+    // `toString` lives on Object.prototype; a truthy index read would
+    // misclassify it. Object.hasOwn keeps it out of the destructive set.
+    const { tracking, body } = setup(
+      `def toString(): string { return "x" }\n` +
+        `def caller(): string { const r = toString()\n  return r }`,
+      "caller",
+    );
+    expect(flips(tracking, body[0], false)).toEqual({
+      pre: undefined,
+      post: undefined,
+    });
+  });
+
   it("a bare destructive call (not assignment-bound) gets the conservative PRE flip", () => {
     const { tracking, body } = setup(
       `destructive def rm(p: string) { return 1 }\n` +

@@ -145,7 +145,10 @@ export class NameClassifier {
       const name = this.callTarget(subNode);
       if (name === undefined) continue;
       if (this.isImpureImportedFunction(name)) return true;
-      if (BUILTIN_FUNCTIONS[name]) return true;
+      // Object.hasOwn, not a truthy index: a call to a function named
+      // `toString`/`constructor` would otherwise match an inherited
+      // prototype member on the plain BUILTIN_FUNCTIONS object.
+      if (Object.hasOwn(BUILTIN_FUNCTIONS, name)) return true;
     }
     return false;
   }
@@ -156,7 +159,11 @@ export class NameClassifier {
   containsDestructiveCall(node: AgencyNode): boolean {
     for (const { node: subNode } of walkNodesArray([node])) {
       const name = this.callTarget(subNode);
-      if (name !== undefined && this.compilationUnit.destructiveFunctions[name]) {
+      // Object.hasOwn, not a truthy index — see containsImpureCall.
+      if (
+        name !== undefined &&
+        Object.hasOwn(this.compilationUnit.destructiveFunctions, name)
+      ) {
         return true;
       }
     }

@@ -1,10 +1,4 @@
-import { failOpenFeedback, feedbackHasErrors, Feedback, verify } from "std::agency"
-
-// Referencing `verify` proves it is exported and typechecks (its behavior is
-// covered by the real-LLM efficacy suite).
-node verifyExported(): boolean {
-  return true
-}
+import { failOpenFeedback, feedbackHasErrors, Feedback } from "std::agency"
 
 node passesSuccessThrough(): boolean {
   const items: Feedback[] = [{ error: true, feedback: "x" }]

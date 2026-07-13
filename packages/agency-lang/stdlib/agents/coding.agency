@@ -1,7 +1,7 @@
 /** @module
   General-purpose coding agent: writes, edits, and runs code to complete a
   task, then verifies the produced artifact against the task's own success
-  criteria. Composable — call it directly or from another agent.
+  criteria.
 */
 import { bash, ls, glob, grep } from "std::shell"
 import { edit } from "std::fs"
@@ -22,12 +22,12 @@ static const codingTools: any[] = [
 static const codingSysPrompt = """You are an expert software engineer. Solve the task by writing and running real code with your tools.
 
 - The deliverable is a working artifact backed by real tool output, not a description. Actually run and exercise what you build.
-- Match the output contract EXACTLY: the requested filename, path, format, fields, units, and trailing newline. A near-miss fails.
+- Match the output contract exactly: the requested filename, path, format, and fields. Follow the task's stated whitespace and trailing-newline requirement precisely, whether it asks for one or forbids one. A near-miss fails.
 - NEVER fabricate output you did not actually produce."""
 
-static const finalizeReminder = "Before finishing: re-read the task's exact output requirements (filename, format, fields) and confirm the artifact on disk matches them exactly."
+static const finalizeReminder = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
 
-export def codingAgent(task: string, context: string = "", maxCost: number = $50.00, maxTime: number = 10m): string {
+export def codingAgent(task: string, context: string = "", maxAttempts: number = 3, maxCost: number = $50.00, maxTime: number = 30m): string {
   """
   General-purpose coding agent. Writes and runs code to complete a task and
   verifies the result against the task's success criteria. Returns a short
@@ -35,16 +35,17 @@ export def codingAgent(task: string, context: string = "", maxCost: number = $50
 
   @param task - What to build or fix.
   @param context - Optional extra material (data, examples, constraints).
+  @param maxAttempts - Max verify-and-fix attempts before returning (default 3).
   @param maxCost - Hard spend cap for the whole run (default $50).
-  @param maxTime - Hard wall-clock cap for the whole run (default 10 minutes).
+  @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
   """
   const captured = guard(cost: maxCost, time: maxTime) as {
     let reply = ""
     let msg = withContext(task, context)
-    thread(label: "codingAgent", summarize: true) {
+    thread(label: "codingAgent") {
       systemMessage(codingSysPrompt)
       let done = false
-      let attemptsLeft = 3
+      let attemptsLeft = maxAttempts
       while (!done && attemptsLeft > 0) {
         reply = llm("${msg}\n\n${finalizeReminder}", { tools: codingTools })
         const fb = verify(task)

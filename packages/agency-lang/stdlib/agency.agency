@@ -521,7 +521,7 @@ export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
 }
 
 /** Pass a successful feedback list through unchanged; map any failure to
-  no findings. Used to make verification fail open — a verifier that could
+  no findings. Used to make verification fail open. A verifier that could
   not run reports nothing rather than a blocking error. */
 export def failOpenFeedback(r: Result<Feedback[]>): Result<Feedback[]> {
   return match (r) {
@@ -530,17 +530,27 @@ export def failOpenFeedback(r: Result<Feedback[]>): Result<Feedback[]> {
   }
 }
 
-/** A specific syntax reminder to inject next to a typecheck error, or ""
-  when no known pattern matches. Point-of-need guidance: the rule lands
-  better delivered alongside the error than buried in the system prompt. */
+/** A specific syntax reminder to inject next to a diagnostic, or "" when no
+  known pattern matches. Point-of-need guidance: the rule lands better delivered
+  alongside the error than buried in the system prompt. Matches on the actual
+  diagnostic wording the compiler emits, not on the user's source. */
 export def syntaxHintFor(errors: string): string {
-  if (errors =~ re/for\s*\([^)]*;/) {
-    return "Reminder: Agency has no C-style for loop. Count with a while loop."
-  }
-  if (errors =~ re/no node named .?main/) {
-    return "Reminder: the program MUST have a node named `main` as its entry point."
+  if (errors =~ re/for loop condition/) {
+    return "Reminder: Agency has no C-style for loop. Count with a while loop, or iterate with for (x in items)."
   }
   return ""
+}
+
+/** True when the source declares a `node main` entry point. Missing main is
+  not a typecheck diagnostic, so writeAgency checks for it directly. */
+def hasMainNode(source: string): boolean {
+  return source =~ re/node\s+main\s*\(/
+}
+
+/** Prepend the point-of-need syntax hint to a diagnostic block, if one applies. */
+def withSyntaxHint(findings: string): string {
+  const hint = syntaxHintFor(findings)
+  return if hint == "" then findings else "${hint}\n\n${findings}"
 }
 
 static const verifyTools: any[] = [
@@ -551,9 +561,9 @@ static const verifyTools: any[] = [
   exec.partial(useAgentCwd: true),
 ]
 
-static const verifySysPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything — inspect, run, and report.
+static const verifySysPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, run, and report.
 
-The grading tests are hidden and NOT in this environment. Reconstruct the success check from the task's own description and any example usage, then RUN the artifact through it with the `exec` tool. Check the output contract STRICTLY: exact file path and name, exact format (JSON keys, field types, units, signed-vs-unsigned, a trailing newline), and every explicit criterion. A near-miss on the output contract is an error."""
+The grading tests are hidden and NOT in this environment. Reconstruct the success check from the task's own description and any example usage, then RUN the artifact through it with the `exec` tool. Check the output contract STRICTLY: exact file path and name, exact format (JSON keys, field types, units, signed-vs-unsigned), the task's stated whitespace and trailing-newline requirement (present or absent), and every explicit criterion. A near-miss on the output contract is an error."""
 
 // The throwing inner: two-phase inspection. `verify` wraps it fail-open.
 def verifyInner(task: string): Feedback[] {
@@ -610,9 +620,9 @@ Agency syntax rules you MUST follow:
 - Declare variables with let or const before use.
 - No Python-style colon blocks. Always { ... }.
 
-Here are two complete, correct Agency programs. Copy their structure — the imports (if any), the `node main`, and the explicit `return` at the end.
+Here are complete, correct Agency programs. Copy their structure: the imports, the `node main`, and the explicit `return` at the end.
 
-EXAMPLE 1 — compute and return a value:
+EXAMPLE 1, compute and return a value:
 node main(): number {
   let total = 0
   for (x in [1, 2, 3]) {
@@ -621,10 +631,28 @@ node main(): number {
   return total
 }
 
-EXAMPLE 2 — call the model and return its answer:
-node main(): string {
-  return llm("Reply with a friendly greeting.")
+EXAMPLE 2, import a tool and define and call a helper:
+import { bash } from "std::shell"
+def greet(name: string): string {
+  return "Hello, \${name}"
 }
+node main(): string {
+  bash(command: "echo starting")
+  return greet("world")
+}
+
+EXAMPLE 3, get structured output from the model by annotating the result type:
+type Summary = { title: string; points: string[] }
+node main(): Summary {
+  const s: Summary = llm("Summarize the water cycle with a title and three bullet points.")
+  return s
+}
+
+Commonly useful standard library modules:
+- std::shell: bash, exec, ls, grep, glob (run commands, inspect files)
+- std::http: fetch, fetchJSON (call web APIs)
+- std::array: map, filter (transform lists)
+- std::agency: writeAgency, runCode, review (generate and run Agency code)
 
 If you are unsure about syntax or a standard-library function, read the
 relevant page with the docs tool before writing code.
@@ -670,20 +698,19 @@ export def writeAgency(
         if (findings == "") {
           findings = "${parseErr}"
         }
-        const hint = syntaxHintFor(findings)
-        const body = if hint == "" then findings else "${hint}\n\n${findings}"
-        prompt = "That code has problems:\n${body}\nReturn a corrected complete program."
+        prompt = "That code has problems:\n${withSyntaxHint(findings)}\nReturn a corrected complete program."
       } else if (checked.value.errors.length > 0) {
         result = failure({ source: source, errors: checked.value.errors })
         const findings = renderFeedback(success(reportFeedback(checked.value)))
-        const hint = syntaxHintFor(findings)
-        const body = if hint == "" then findings else "${hint}\n\n${findings}"
-        prompt = "That code has problems:\n${body}\nReturn a corrected complete program."
+        prompt = "That code has problems:\n${withSyntaxHint(findings)}\nReturn a corrected complete program."
       } else {
         const compiled = try _compile(source)
         if (compiled is failure(compileErr)) {
           result = failure({ source: source, errors: [] })
-          prompt = "That code failed to compile: ${compileErr}\nReturn a corrected complete program."
+          prompt = "That code failed to compile:\n${withSyntaxHint("${compileErr}")}\nReturn a corrected complete program."
+        } else if (!hasMainNode(source)) {
+          result = failure({ source: source, errors: [] })
+          prompt = "The program compiles but has no `node main`. Every program MUST have a node named `main` as its entry point. Add one and return the complete program."
         } else {
           result = success(source)
           done = true

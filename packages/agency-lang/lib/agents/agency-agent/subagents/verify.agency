@@ -1,8 +1,8 @@
-import { map } from "std::array"
-import { verify as stdVerify, feedbackHasErrors, renderFeedback } from "std::agency"
+import { map, filter } from "std::array"
+import { verify as stdVerify, Feedback } from "std::agency"
 
 /*
- * Verify subagent — a thin adapter over `std::agency::verify` for the code
+ * Verify subagent: a thin adapter over `std::agency::verify` for the code
  * agent's one-shot loop. The verification logic now lives in std::agency
  * (lifted so stdlib agents can share it); this module converts its
  * `Result<Feedback[]>` into the `Verdict` shape the code-agent loop matches on.
@@ -20,8 +20,8 @@ export def renderGaps(gaps: string[]): string {
 }
 
 // Unwrap a `try verify(...)` Result to a plain Verdict, failing OPEN on any
-// Failure — verification can only help, never block. Kept as a plain `def`
-// so the caller's loop body stays free of binder-in-`if` patterns (which the
+// Failure. Verification can only help, never block. Kept as a plain `def` so
+// the caller's loop body stays free of binder-in-`if` patterns (which the
 // stepped-loop codegen doesn't handle).
 export def unwrapVerdict(r: Result<Verdict>): Verdict {
   return match (r) {
@@ -35,17 +35,24 @@ def failOpenVerdict(err: string): Verdict {
   return { satisfied: true, gaps: ["verification could not run: ${err}"] }
 }
 
+// One gap string per ERROR finding (error:false observations are dropped, and
+// a verifier that could not run fails open to no gaps).
+def errorGaps(fb: Result<Feedback[]>): string[] {
+  return match (fb) {
+    failure(_) => []
+    success(items) => map(filter(items, \f -> f.error), \f -> f.feedback)
+  }
+}
+
 export def verify(originalUserMsg: string): Verdict {
   """
   Fresh-eyes verification of the code agent's work: delegates to
   `std::agency::verify` (which inspects the working directory and runs the
   artifact against the task's own success criteria) and converts its findings
-  into a Verdict.
+  into a Verdict, one gap per error finding.
 
   @param originalUserMsg - the original task description to verify against.
   """
-  const fb = stdVerify(originalUserMsg)
-  const hasErr = feedbackHasErrors(fb)
-  const gaps = if hasErr then [renderFeedback(fb)] else []
-  return { satisfied: !hasErr, gaps: gaps }
+  const gaps = errorGaps(stdVerify(originalUserMsg))
+  return { satisfied: gaps.length == 0, gaps: gaps }
 }

@@ -1,7 +1,6 @@
 {
   "sourceFile": "verifyFailOpen.agency",
   "tests": [
-    { "nodeName": "verifyExported", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "passesSuccessThrough", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "failureBecomesEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
   ]

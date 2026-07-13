@@ -4,8 +4,8 @@ name: "research"
 
 # research
 
-Research agent: gathers from web/Wikipedia sources and synthesizes a cited,
-  grounded answer. Composable — call it directly or from another agent.
+Research agent: gathers from web and Wikipedia sources and synthesizes a
+  cited, grounded answer.
 
 ## Functions
 
@@ -15,18 +15,20 @@ Research agent: gathers from web/Wikipedia sources and synthesizes a cited,
 researchAgent(
   task: string,
   context: string = "",
+  maxAttempts: number = 2,
   maxCost: number = $50.00,
-  maxTime: number = 10m,
+  maxTime: number = 30m,
 ): string
 ```
 
-Research agent: gathers from web/Wikipedia sources and synthesizes a cited
-  answer, checked for grounding and completeness.
+Research agent: gathers from web and Wikipedia sources and synthesizes a
+  cited answer, checked for grounding and completeness.
 
   @param task - The research question.
   @param context - Optional extra material.
+  @param maxAttempts - Max answer-and-fix attempts before returning (default 2).
   @param maxCost - Hard spend cap for the whole run (default $50).
-  @param maxTime - Hard wall-clock cap for the whole run (default 10 minutes).
+  @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
 
 **Parameters:**
 
@@ -34,9 +36,10 @@ Research agent: gathers from web/Wikipedia sources and synthesizes a cited
 |---|---|---|
 | task | `string` |  |
 | context | `string` | "" |
+| maxAttempts | `number` | 2 |
 | maxCost | `number` | $50.00 |
-| maxTime | `number` | 10m |
+| maxTime | `number` | 30m |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/research.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/research.agency#L30))

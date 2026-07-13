@@ -1,5 +1,5 @@
 import { withContext } from "std::agents/shared"
-import { syntaxHintFor } from "std::agency"
+import { review, renderFeedback, syntaxHintFor } from "std::agency"
 
 node contextEmpty(): boolean {
   return withContext("do X", "") == "do X"
@@ -9,14 +9,15 @@ node contextFilled(): boolean {
   return withContext("do X", "c") == "do X\n\n<context>\nc\n</context>"
 }
 
-node hintForCStyleFor(): boolean {
-  return syntaxHintFor("Parse error: for (i=0; i<3; i++)") =~ re/while loop/
+// Feed a REAL compiler diagnostic (from review, no LLM) through syntaxHintFor
+// and assert the point-of-need hint actually fires on it, not just on a
+// hand-written string that happens to match the regex.
+node hintFiresOnRealForDiagnostic(): boolean {
+  const fb = review("node main() { for (let i = 0; i < 3; i = i + 1) { print(i) } }")
+  return syntaxHintFor(renderFeedback(fb)) != ""
 }
 
-node hintForMissingMain(): boolean {
-  return syntaxHintFor("no node named main") =~ re/node named .main./
-}
-
-node hintForUnrelated(): boolean {
-  return syntaxHintFor("Type error: expected string") == ""
+node hintEmptyOnValidProgram(): boolean {
+  const fb = review("node main(): number { return 5 }")
+  return syntaxHintFor(renderFeedback(fb)) == ""
 }

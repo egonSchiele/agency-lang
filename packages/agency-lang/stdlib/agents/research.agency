@@ -1,47 +1,54 @@
 /** @module
-  Research agent: gathers from web/Wikipedia sources and synthesizes a cited,
-  grounded answer. Composable — call it directly or from another agent.
+  Research agent: gathers from web and Wikipedia sources and synthesizes a
+  cited, grounded answer.
 */
 import { search as webSearch } from "std::web/search"
 import { fetch, fetchMarkdown } from "std::http"
 import { search as wikiSearch } from "std::wikipedia"
 import { systemMessage, guard } from "std::thread"
 import { Feedback, feedbackHasErrors, renderFeedback } from "std::agency"
+import { env } from "std::system"
 import { withContext } from "std::agents/shared"
 
-static const researchTools: any[] = [
-  webSearch,
-  wikiSearch,
-  fetchMarkdown,
-  fetch,
-  read.partial(useAgentCwd: true),
-]
-
-static const researchSysPrompt = """You are a research analyst. Answer the task using your source tools (web search, Wikipedia, page fetch).
+static const researchSysPrompt = """You are a research analyst. Answer the task using your source tools.
 
 - Ground every factual claim in a source and cite it.
-- If your tools cannot retrieve the needed information, say so plainly — NEVER fabricate sources or facts."""
+- If your tools cannot retrieve the needed information, say so plainly. NEVER fabricate sources or facts."""
 
-export def researchAgent(task: string, context: string = "", maxCost: number = $50.00, maxTime: number = 10m): string {
+// Wikipedia and page fetch need no API key. Web search (Brave) does, so it is
+// only offered when BRAVE_API_KEY is set; otherwise the agent falls back to the
+// keyless tools rather than failing on a missing key.
+def buildResearchTools(): any[] {
+  let tools: any[] = [wikiSearch, fetchMarkdown, fetch, read.partial(useAgentCwd: true)]
+  const braveKey = env("BRAVE_API_KEY")
+  if (braveKey != null && braveKey != "") {
+    tools.push(webSearch)
+  }
+  return tools
+}
+
+export def researchAgent(task: string, context: string = "", maxAttempts: number = 2, maxCost: number = $50.00, maxTime: number = 30m): string {
   """
-  Research agent: gathers from web/Wikipedia sources and synthesizes a cited
-  answer, checked for grounding and completeness.
+  Research agent: gathers from web and Wikipedia sources and synthesizes a
+  cited answer, checked for grounding and completeness.
 
   @param task - The research question.
   @param context - Optional extra material.
+  @param maxAttempts - Max answer-and-fix attempts before returning (default 2).
   @param maxCost - Hard spend cap for the whole run (default $50).
-  @param maxTime - Hard wall-clock cap for the whole run (default 10 minutes).
+  @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
   """
+  const researchTools = buildResearchTools()
   const captured = guard(cost: maxCost, time: maxTime) as {
     let answer = ""
     let msg = withContext(task, context)
-    thread(label: "researchAgent", summarize: true) {
+    thread(label: "researchAgent") {
       systemMessage(researchSysPrompt)
       let done = false
-      let attemptsLeft = 2
+      let attemptsLeft = maxAttempts
       while (!done && attemptsLeft > 0) {
         answer = llm(msg, { tools: researchTools })
-        const items: Feedback[] = llm("Judge the answer against the task. One Feedback item per finding: error=true if a claim is ungrounded/uncited or the task is not fully answered (name it), error=false for a well-supported point.\n\nTask: ${task}\n\nAnswer:\n${answer}")
+        const items: Feedback[] = llm("Judge the answer against the task. For each finding, return a Feedback item: error=true if a claim is ungrounded or uncited or the task is not fully answered (name it), error=false for a well-supported point.\n\nTask: ${task}\n\nAnswer:\n${answer}")
         const fb = success(items)
         if (feedbackHasErrors(fb)) {
           msg = "Your answer has gaps:\n\n${renderFeedback(fb)}\n\nRetrieve more and fix them."

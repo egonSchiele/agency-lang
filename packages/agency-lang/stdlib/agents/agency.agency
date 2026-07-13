@@ -1,7 +1,7 @@
 /** @module
   Agency-coding agent: writes an Agency program for a task, runs it, and
   verifies the program's actual result satisfies the task. Built on
-  writeAgency + runCode. Composable — call it directly or from another agent.
+  writeAgency and runCode.
 */
 import { writeAgency, runCode, feedbackHasErrors, renderFeedback, Feedback, WriteFailure } from "std::agency"
 import { guard } from "std::thread"
@@ -12,21 +12,21 @@ type AttemptOutcome = {
   feedback: string
 }
 
-// Loop state, threaded through plain helpers so no `match` lives in the
-// stepped `while` body (which the stepped-loop codegen mishandles).
-type StepState = {
-  result: Result<string, WriteFailure>;
-  done: boolean
+static const judgeResultPrompt = """Does this program's result satisfy the task? For each finding, return a Feedback item: set error=true when it fails the task (name the specific problem), error=false for a satisfied point."""
+
+def stopOutcome(): AttemptOutcome {
+  return { done: true, feedback: "" }
 }
 
 def failedToRun(err: any): AttemptOutcome {
   return { done: false, feedback: "The program failed to run: ${err}" }
 }
 
-// Judge the program's ACTUAL result against the task (its deliverable is the
-// return value, not a disk artifact — so the disk-running `verify` is wrong here).
+// Judge the program's ACTUAL result against the task. Its deliverable is the
+// return value, not a disk artifact, so the disk-running verify is the wrong
+// checker here.
 def outcomeFromJudge(task: string, data: any): AttemptOutcome {
-  const items: Feedback[] = llm("Does this program's result satisfy the task? One Feedback item per finding; error=true if it fails the task (name it), error=false for a satisfied point.\n\nTask: ${task}\n\nResult: ${data}")
+  const items: Feedback[] = llm("${judgeResultPrompt}\n\nTask: ${task}\n\nResult: ${data}")
   const fb = success(items)
   const failed = feedbackHasErrors(fb)
   const detail = if failed then renderFeedback(fb) else ""
@@ -34,54 +34,56 @@ def outcomeFromJudge(task: string, data: any): AttemptOutcome {
 }
 
 def judgeRun(task: string, src: string): AttemptOutcome {
-  return match (runCode(src)) {
+  const ran = runCode(src)
+  return match (ran) {
     failure(err) => failedToRun(err)
     success(data) => outcomeFromJudge(task, data)
   }
 }
 
-def keepResult(state: StepState): StepState {
-  return { result: state.result, done: true }
-}
-
-def advanceFromSource(task: string, context: string, state: StepState, src: string): StepState {
-  const outcome = judgeRun(task, src)
-  if (outcome.done) {
-    return { result: state.result, done: true }
-  }
-  const extra = "${context}\n\nA prior attempt had these problems; fix them:\n${outcome.feedback}"
-  return { result: writeAgency(task, extra), done: false }
-}
-
-def stepOnce(task: string, context: string, state: StepState): StepState {
-  return match (state.result) {
-    failure(_) => keepResult(state)
-    success(src) => advanceFromSource(task, context, state, src)
+// Judge the current generation. A failed generation (writeAgency gave up)
+// cannot be run, so stop and return it as-is.
+def judgeState(task: string, result: Result<string, WriteFailure>): AttemptOutcome {
+  return match (result) {
+    failure(_) => stopOutcome()
+    success(src) => judgeRun(task, src)
   }
 }
 
-export def agencyCodingAgent(task: string, context: string = "", maxCost: number = $50.00, maxTime: number = 10m): Result<string, WriteFailure> {
+export def agencyCodingAgent(task: string, context: string = "", maxAttempts: number = 3, maxCost: number = $50.00, maxTime: number = 30m): Result<string, WriteFailure> {
   """
-  Writes an Agency program for the task, runs it, and verifies its result
-  satisfies the task. Returns source that compiles, typechecks, and passes
-  verification.
+  Writes an Agency program for the task, runs it, and judges its result against
+  the task. On success returns source that compiles, typechecks, and passed the
+  result check. If the result check keeps failing within maxAttempts (or the
+  cost/time budget trips), returns the last attempt as a best effort.
 
   @param task - What the generated program should do.
   @param context - Optional extra material.
+  @param maxAttempts - Max generation attempts before giving up (default 3).
   @param maxCost - Hard spend cap for the whole run (default $50).
-  @param maxTime - Hard wall-clock cap for the whole run (default 10 minutes).
+  @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
   """
   const captured = guard(cost: maxCost, time: maxTime) as {
-    let state: StepState = { result: writeAgency(task, context), done: false }
-    let attemptsLeft = 2
-    while (!state.done && attemptsLeft > 0) {
-      state = stepOnce(task, context, state)
-      attemptsLeft = attemptsLeft - 1
+    let result: Result<string, WriteFailure> = writeAgency(task, context)
+    let attemptsLeft = maxAttempts - 1
+    let done = false
+    while (!done) {
+      const outcome = judgeState(task, result)
+      if (outcome.done) {
+        done = true
+      } else if (attemptsLeft <= 0) {
+        done = true
+      } else {
+        const extra = "${context}\n\nA prior attempt had these problems; fix them:\n${outcome.feedback}"
+        const next = writeAgency(task, extra)
+        result = next
+        attemptsLeft = attemptsLeft - 1
+      }
     }
-    return state.result
+    return result
   }
   return match (captured) {
     success(r) => r
-    failure(_) => failure({ source: "", errors: [] })
+    failure(e) => failure({ source: "budget exceeded: ${e.type}", errors: [] })
   }
 }

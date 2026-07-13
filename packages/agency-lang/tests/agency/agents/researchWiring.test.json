@@ -1,6 +1,0 @@
-{
-  "sourceFile": "researchWiring.agency",
-  "tests": [
-    { "nodeName": "researchAgentExported", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
-  ]
-}

@@ -1,6 +1,0 @@
-{
-  "sourceFile": "codingWiring.agency",
-  "tests": [
-    { "nodeName": "codingAgentExported", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
-  ]
-}

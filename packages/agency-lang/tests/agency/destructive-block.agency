@@ -60,3 +60,20 @@ def ib2(): string {
 node interruptAfter() {
   return ib2()
 }
+
+// The migrated-stdlib contract: an interrupt gate placed BEFORE the region.
+// Rejecting the gate fails before the region is entered, so the failure is
+// retryable (destructiveRan = false) — the tool is NOT removed.
+def gated(): Result {
+  const ok = interrupt("Proceed?")
+  destructive {
+    return failure("did the destructive work")
+  }
+}
+node rejectGateBeforeRegion() {
+  const r = gated()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}

@@ -621,7 +621,10 @@ export const writeThing = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
-  exported: false
+  exported: false,
+  markers: {
+    destructive: true
+  }
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
@@ -650,6 +653,7 @@ await callHook({
         })
       });
       await runner.step(1, async (runner) => {
+__self.__destructiveRan = true;
 runner.halt({
           messages: __threads(),
           data: await __call(writeThing, {

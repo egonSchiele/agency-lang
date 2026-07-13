@@ -7,9 +7,9 @@ import type { NameClassifier } from "./nameClassifier.js";
 /**
  * Emits the destructive-execution tracking codegen: the per-function
  * `__destructiveRan` init, the function-exit boundary stamp, the region-entry
- * flip (`blockEntryFlip`, emitted by a `markDestructiveRan` node from an inlined
- * `destructive { }` region), and the Rule-2 caller-side flips. Extracted from
- * TypeScriptBuilder so the tracking rules live in one declarative place.
+ * flip (`markDestructiveRan`, emitted by a `markDestructiveRan` node from an
+ * inlined `destructive { }` region), and the Rule-2 caller-side flips. Extracted
+ * from TypeScriptBuilder so the tracking rules live in one declarative place.
  *
  * Stateless by design: every method is a pure function of its arguments (the
  * `inDestructiveFunction` flag is passed in, not held), so it can be
@@ -53,13 +53,6 @@ export class DestructiveTracking {
     );
   }
 
-  /** `__self.__destructiveRan = true` — the entry flip a `destructive { }`
-   *  region emits (via the `markDestructiveRan` node). Because the region is
-   *  inlined into the function body, `ts.self` resolves to the function's
-   *  `__self`, not a block frame. */
-  blockEntryFlip(): TsNode {
-    return this.markTrue();
-  }
 
   /** `stampFailureBoundary(runner.haltResult, __self.__destructiveRan)` — the
    *  expression the function-exit halt check embeds to fold this activation's
@@ -92,12 +85,14 @@ export class DestructiveTracking {
       return { post: this.outcomeFlip(outcomeVar) };
     }
     return this.names.containsDestructiveCall(stmt)
-      ? { pre: this.markTrue() }
+      ? { pre: this.markDestructiveRan() }
       : {};
   }
 
-  /** `__self.__destructiveRan = true` — the conservative pre-flip. */
-  private markTrue(): TsNode {
+  /** `__self.__destructiveRan = true` — sets the activation's destructive-ran
+   *  flag. Emitted at a `destructive { }` region entry (via the
+   *  `markDestructiveRan` node) and as the Rule-2 conservative pre-flip. */
+  markDestructiveRan(): TsNode {
     return ts.assign(ts.self("__destructiveRan"), ts.bool(true));
   }
 

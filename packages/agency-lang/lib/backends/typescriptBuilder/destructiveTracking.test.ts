@@ -58,8 +58,8 @@ describe("DestructiveTracking", () => {
     );
   });
 
-  it("blockEntryFlip() sets the flag true (destructive { } region entry)", () => {
-    expect(printTs(bareTracker().blockEntryFlip()).trim()).toBe(
+  it("markDestructiveRan() sets the flag true (destructive { } region entry)", () => {
+    expect(printTs(bareTracker().markDestructiveRan()).trim()).toBe(
       "__self.__destructiveRan = true;",
     );
   });

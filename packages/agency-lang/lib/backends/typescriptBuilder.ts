@@ -554,7 +554,7 @@ export class TypeScriptBuilder {
       case "markDestructiveRan":
         // Synthetic flip from an inlined `destructive { }` region. Inlined into
         // the function body, so `__self` is the function activation.
-        return this.tracking.blockEntryFlip();
+        return this.tracking.markDestructiveRan();
       case "typeAlias":
         if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
         return this.processTypeAlias(node);

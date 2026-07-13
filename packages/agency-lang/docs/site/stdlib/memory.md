@@ -284,7 +284,7 @@ Retrieve relevant facts from the knowledge graph as a formatted
 
 **Throws:** `std::memory::recall`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L211))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L213))
 
 ### forget
 
@@ -306,4 +306,4 @@ Soft-delete facts matching the query from the knowledge graph. Data is
 
 **Throws:** `std::memory::forget`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L229))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L231))

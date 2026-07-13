@@ -1,9 +1,88 @@
 {
   "tests": [
-    { "nodeName": "frameEscape", "description": "failure escaping the function after a destructive region carries destructiveRan", "input": "", "expectedOutput": "[true]", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "returnInBlock", "description": "return inside a destructive region exits the function", "input": "", "expectedOutput": "42", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "declVisible", "description": "a let declared inside the region is visible after it (transparent)", "input": "", "expectedOutput": "11", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "interruptInBlock", "description": "interrupt inside a destructive region pauses and resumes", "input": "", "expectedOutput": "\"done\"", "evaluationCriteria": [{ "type": "exact" }], "interruptHandlers": [{ "action": "approve", "expectedMessage": "go?" }] },
-    { "nodeName": "interruptAfter", "description": "interrupt in region resumes onto the statement after the region", "input": "", "expectedOutput": "\"after\"", "evaluationCriteria": [{ "type": "exact" }], "interruptHandlers": [{ "action": "approve", "expectedMessage": "go?" }] }
+    {
+      "nodeName": "frameEscape",
+      "description": "failure escaping the function after a destructive region carries destructiveRan",
+      "input": "",
+      "expectedOutput": "[true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "returnInBlock",
+      "description": "return inside a destructive region exits the function",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "declVisible",
+      "description": "a let declared inside the region is visible after it (transparent)",
+      "input": "",
+      "expectedOutput": "11",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "interruptInBlock",
+      "description": "interrupt inside a destructive region pauses and resumes",
+      "input": "",
+      "expectedOutput": "\"done\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "go?"
+        }
+      ]
+    },
+    {
+      "nodeName": "interruptAfter",
+      "description": "interrupt in region resumes onto the statement after the region",
+      "input": "",
+      "expectedOutput": "\"after\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "go?"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectGateBeforeRegion",
+      "description": "rejecting an interrupt gate placed before a destructive region is retryable (destructiveRan false)",
+      "input": "",
+      "expectedOutput": "[false]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Proceed?"
+        }
+      ]
+    }
   ]
 }

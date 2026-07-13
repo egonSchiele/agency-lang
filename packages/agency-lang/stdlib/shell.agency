@@ -91,10 +91,10 @@ export def exec(
       timeout,
       stdin,
       {
-      allowedExecutables: allowedExecutables,
-      blockedCommands: blockedCommands,
-      allowedPaths: allowedPaths
-    },
+        allowedExecutables: allowedExecutables,
+        blockedCommands: blockedCommands,
+        allowedPaths: allowedPaths
+      },
     )
   }
 }
@@ -141,9 +141,9 @@ export def bash(
       timeout,
       stdin,
       {
-      blockedCommands: blockedCommands,
-      allowedPaths: allowedPaths
-    },
+        blockedCommands: blockedCommands,
+        allowedPaths: allowedPaths
+      },
     )
   }
 }

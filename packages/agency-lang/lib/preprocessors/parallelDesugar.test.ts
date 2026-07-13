@@ -100,6 +100,36 @@ describe("validateParallelBlock", () => {
     expect(() => validateParallelBlock(findParallelBlock(body))).not.toThrow();
   });
 
+  it("rejects a `destructive { }` region as a direct parallel arm (fail-open guard)", () => {
+    const body = getMainBody(`
+      node main() {
+        parallel {
+          destructive { rm() }
+          let b = bar()
+        }
+      }
+    `);
+    expect(() => validateParallelBlock(findParallelBlock(body))).toThrow(
+      /`destructive \{ \}` region is not allowed inside a `parallel` block/,
+    );
+  });
+
+  it("rejects a `destructive { }` region nested inside a `seq` arm", () => {
+    const body = getMainBody(`
+      node main() {
+        parallel {
+          seq {
+            destructive { rm() }
+          }
+          let b = bar()
+        }
+      }
+    `);
+    expect(() => validateParallelBlock(findParallelBlock(body))).toThrow(
+      /`destructive \{ \}` region is not allowed inside a `parallel` block/,
+    );
+  });
+
   it("rejects cross-arm references", () => {
     const body = getMainBody(`
       node main() {

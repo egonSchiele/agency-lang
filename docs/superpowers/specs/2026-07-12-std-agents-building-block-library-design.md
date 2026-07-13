@@ -138,10 +138,13 @@ def codingAgent(task: string, context: string = "",
 ```
 - Tools: `read`/`write` (prelude), `edit` (`std::fs`), `ls`/`glob`/`grep`/`bash`
   (`std::shell`).
-- Loop: `guard(cost: maxCost, time: maxTime) as { while (!done) { run;
-  verify(task); done = !feedbackHasErrors(fb) } }`. The `guard` is the hard cap;
-  `done` is the clean exit. No numeric round-counter.
-- Verify: `verify(task)` — runs the produced files/programs.
+- Loop: **all state lives inside** a `guard(cost:, time:)` block that `return`s
+  the reply; the agent captures the `Result<T, GuardFailureData>` and `match`es
+  it (only the return value escapes a guard — `guards.md:28`). A small attempt
+  cap gives normal termination (so the reply returns via the success path);
+  `guard` is the cost/time backstop. On a trip, return a `"stopped: <cap>"`
+  string.
+- Verify: `verify(task)` (fail-open) — runs the produced files/programs.
 - Returns: a short summary reply; the real output is filesystem side effects.
 
 ```
@@ -160,7 +163,10 @@ def agencyCodingAgent(task: string, context: string = "",
 ```
 - The flagship — "`writeAgency` done right."
 - Flow: generate (improved `writeAgency`) → typecheck-repair → `runCode` →
-  `verify`. Wrapped in `guard(cost:, time:)`.
+  **judge `runCode`'s actual result** against the task (its deliverable is the
+  return value, not a disk artifact, so the disk-running `verify` is the wrong
+  checker here). The per-attempt `match` is hoisted into a helper `def` to keep
+  binder patterns out of the stepped `while`. Wrapped in `guard(cost:, time:)`.
 - Caveat: `runCode` runs *inside* the guard; `guard` + nested pause/resume has
   the `#513` bug, so a paused generated program can lose the guard value.
   Acceptable for v1 (rare in these tasks); documented, watched.

@@ -519,6 +519,29 @@ export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
   return true
 }
 
+/** Pass a successful feedback list through unchanged; map any failure to
+  no findings. Used to make verification fail open — a verifier that could
+  not run reports nothing rather than a blocking error. */
+export def failOpenFeedback(r: Result<Feedback[]>): Result<Feedback[]> {
+  return match (r) {
+    success(items) => success(items)
+    failure(_) => success([])
+  }
+}
+
+/** A specific syntax reminder to inject next to a typecheck error, or ""
+  when no known pattern matches. Point-of-need guidance: the rule lands
+  better delivered alongside the error than buried in the system prompt. */
+export def syntaxHintFor(errors: string): string {
+  if (errors =~ re/for\s*\([^)]*;/) {
+    return "Reminder: Agency has no C-style for loop. Count with a while loop."
+  }
+  if (errors =~ re/no node named .?main/) {
+    return "Reminder: the program MUST have a node named `main` as its entry point."
+  }
+  return ""
+}
+
 type GeneratedCode = {
   code: string
 }

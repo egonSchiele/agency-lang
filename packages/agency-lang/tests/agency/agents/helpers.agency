@@ -1,0 +1,22 @@
+import { withContext } from "std::agents/shared"
+import { syntaxHintFor } from "std::agency"
+
+node contextEmpty(): boolean {
+  return withContext("do X", "") == "do X"
+}
+
+node contextFilled(): boolean {
+  return withContext("do X", "c") == "do X\n\n<context>\nc\n</context>"
+}
+
+node hintForCStyleFor(): boolean {
+  return syntaxHintFor("Parse error: for (i=0; i<3; i++)") =~ re/while loop/
+}
+
+node hintForMissingMain(): boolean {
+  return syntaxHintFor("no node named main") =~ re/node named .main./
+}
+
+node hintForUnrelated(): boolean {
+  return syntaxHintFor("Type error: expected string") == ""
+}

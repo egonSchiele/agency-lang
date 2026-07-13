@@ -2,196 +2,257 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stop the code agent's `review()` step from crashing on non-Agency replies and unblock the shadowed `verify` step, by reviewing the `.agency` files the agent actually changed (found via `std::git`) instead of extracting snippets from the chat reply.
+**Goal:** Stop the code agent's `review()` step from crashing on non-Agency replies and unblock the shadowed `verify`, by reviewing the `.agency` files the agent changed **this turn** (git-dirty now minus a task-start baseline) instead of extracting snippets from the chat reply.
 
-**Architecture:** Replace the code agent's auto-review of the chat message with an auto-review of the changed `.agency` files on disk. For a Python/C/shell task no `.agency` files change, so review is a no-op, `feedbackHasErrors` is false, and the loop falls through to `verify` — which is exactly the fix. The `--agent review` specialist keeps its snippet-based `review(userMsg)`.
+**Architecture:** Split into a **pure review core** (`reviewSources`, deterministic parse+typecheck, no LLM, no IO) and a thin **IO glue** (`currentDirtyAgencyFiles` via `std::git`, `readAll` via the file tool). For a Python/C/shell task the agent changes no `.agency` files, so review returns `success([])`, `feedbackHasErrors` is false, and the loop reaches `verify` — the unblock. Turn-scoping (baseline set-difference) prevents re-reviewing pre-existing dirty files, which would re-trigger the thrash. The pure/IO split makes the spec's deterministic tests real without any mocking construct (`provide{}` is not shipped).
 
-**Tech Stack:** Agency stdlib (`std::git` `gitStatus`, `std::agency` `review`, `std::index` `read`), the `agency test` harness. Builds on the `std::agents` PR (#534) where `verify` was lifted to `std::agency` and the agent's `verify.agency` delegates; the loop change here is independent of that but assumes it is present.
+**Tech Stack:** `std::git` (`gitStatus` → `GitStatus.entries: FileStatus[]`, each `.path`), `std::agency` (`review`, `mergeFeedback`), prelude `read`/`filter`/`map`, `std::statelog` for fail-open breadcrumbs, the `agency test` harness. Builds on the `std::agents` PR (#534): `verify` lifted to `std::agency`, `verify.agency` delegates. Implement **after #534 merges**, off updated `main`.
 
 ## Global Constraints
 
-- **Do not change `reviewAgent` / `review(userMsg)`** — the `--agent review` specialist legitimately reviews snippets a user pastes. Add a new entry point for the code agent's auto-check instead.
-- **Reviewing files, not chat text.** The code agent's auto-review must only ever see `.agency` file contents, never the model's prose reply.
-- **Fail safe on non-git dirs.** If the working directory is not a git repo (or `gitStatus` fails), the auto-review returns no findings (a no-op) so `verify` still runs. A `glob`+snapshot fallback is an optional enhancement, not required for v1.
-- **Agency syntax:** `{ }` blocks, parens+braces on control flow, `for (x in xs)`, no lambdas (blocks/`\x -> ...`), prefer `match`. `try expr` yields a `Result`. Verify snippets with `pnpm run ast <file>`.
-- **Build:** `make` after editing stdlib/agent `.agency` files. Save test output to a file; do NOT run the full agency suite locally.
+- **Do not change `reviewAgent` / `review(userMsg)`** — the `--agent review` specialist legitimately reviews pasted snippets. Add new functions for the code agent's auto-check.
+- **Reviewing files, not chat text.** The code agent's auto-review only ever sees `.agency` file *contents*, never the model's prose reply.
+- **Turn-scoped.** Review only `.agency` files that became dirty *during* the turn (`current git-dirty − task-start baseline`), never pre-existing dirty files.
+- **Fail open with a breadcrumb.** Non-git dir / `gitStatus` failure → `[]`; unreadable/deleted path → skip. In every fail-open arm, emit a `std::statelog` debug event so a silently-disabled review is diagnosable.
+- **`read` returns `Result`** — always `match`/unwrap; never `!`. `GitStatus` exposes `entries` (not `files`), each `FileStatus` has `.path`.
+- **Agency syntax:** `{ }` blocks; parens+braces on control flow; `for (x in xs)`. **Lambdas via blocks are supported**: inline `\name -> expr` or trailing `f() as name { }`. Prefer `match` over nested `if`. `try expr` yields a `Result`; `expr catch default` unwraps with a default. `filter`/`map` are prelude — do NOT import them from `std::array`. Verify snippets with `pnpm run ast <file>`.
+- **Build:** `make` after editing agent/stdlib `.agency`. Save test output to a file; do NOT run the full agency suite locally.
 - **Spec:** `/Users/adityabhargava/agency-lang/docs/superpowers/specs/2026-07-12-fix-review-crash-unblock-verify-design.md`.
 
 ## File Structure
 
-- **Modify `packages/agency-lang/lib/agents/agency-agent/subagents/review.agency`** — add `filterAgencyPaths` (pure), `changedAgencyFiles` (git-driven), and `reviewWrittenFiles()` (the new code-agent entry point). Keep `review(userMsg)`, `reviewAgent`, and the `Feedback`/render/haserrors surface unchanged.
-- **Modify `packages/agency-lang/lib/agents/agency-agent/subagents/code.agency`** — change the one call site from `review(reply)` to `reviewWrittenFiles()`.
-- **Create `packages/agency-lang/tests/agency/agents/filterAgencyPaths.agency` + `.test.json`** — deterministic unit test of the pure path filter.
-- **Create `packages/agency-lang/tests/integration/agents/review_crash.mjs`** (or extend the existing `tests/integration/agents/test.mjs`) — real-LLM regression: a Python task completes without phantom-error thrash and `verify` runs.
+- **Modify `packages/agency-lang/lib/agents/agency-agent/subagents/review.agency`** — add `filterAgencyPaths`, `subtractBaseline` (pure), `reviewSources` (pure), `currentDirtyAgencyFiles` + `readAll` (IO), and `reviewWrittenFiles(baseline)`. Keep `review(userMsg)`, `reviewAgent`, and the `Feedback`/render/haserrors surface unchanged.
+- **Modify `packages/agency-lang/lib/agents/agency-agent/subagents/code.agency`** — capture `baseline = currentDirtyAgencyFiles()` once at `codeAgent` entry; change the call site from `review(reply)` to `reviewWrittenFiles(baseline)`.
+- **Create deterministic tests** under `packages/agency-lang/tests/agency/agents/`: `filterAgencyPaths`, `subtractBaseline`, `reviewSources` (the two spec cases + a valid case).
+- **Extend `packages/agency-lang/tests/integration/agents/test.mjs`** — real-LLM regression, asserted on statelog events (not substring absence).
 
 ---
 
-### Task 1: `filterAgencyPaths` — pure path filter (no git, no LLM)
+### Task 1: Pure helpers — `filterAgencyPaths` + `subtractBaseline`
 
-**Files:**
-- Modify: `lib/agents/agency-agent/subagents/review.agency`
-- Test: `tests/agency/agents/filterAgencyPaths.agency` + `.test.json`
+**Files:** Modify `review.agency`; test `tests/agency/agents/pathHelpers.agency` + `.test.json`.
 
-**Interfaces:**
-- Produces: `def filterAgencyPaths(paths: string[]): string[]` — keeps only paths ending in `.agency`.
+**Interfaces:** `def filterAgencyPaths(paths: string[]): string[]` (keeps `*.agency`); `def subtractBaseline(current: string[], baseline: string[]): string[]` (items in `current` not in `baseline`).
 
-- [ ] **Step 1: Write the failing test** — `tests/agency/agents/filterAgencyPaths.agency`:
+- [ ] **Step 1: Failing tests** — `tests/agency/agents/pathHelpers.agency`:
 
 ```ts
-import { filterAgencyPaths } from "../../../lib/agents/agency-agent/subagents/review.agency"
+import { filterAgencyPaths, subtractBaseline } from "../../../lib/agents/agency-agent/subagents/review.agency"
 
 node keepsOnlyAgency(): boolean {
-  const got = filterAgencyPaths(["a.agency", "b.py", "sub/c.agency", "d.txt"])
+  const got = filterAgencyPaths(["a.agency", "b.py", "sub/c.agency", "d.txt", "e.agency.txt"])
   return got.length == 2 && got[0] == "a.agency" && got[1] == "sub/c.agency"
 }
-
-node emptyWhenNone(): boolean {
-  return filterAgencyPaths(["x.py", "y.txt"]).length == 0
+node emptyInput(): boolean {
+  return filterAgencyPaths([]).length == 0
+}
+node baselineRemovesPreexisting(): boolean {
+  const got = subtractBaseline(["new.agency", "old.agency"], ["old.agency"])
+  return got.length == 1 && got[0] == "new.agency"
 }
 ```
 
-> Confirm the relative import path to `review.agency` resolves from `tests/agency/agents/` (adjust the `../` depth if the harness rejects it; alternatively export `filterAgencyPaths` and import via the module path the other agent tests use).
+> `e.agency.txt` must NOT match (ends in `.txt`). Confirm the `../../../` import depth resolves from `tests/agency/agents/` to `packages/agency-lang/`; adjust if the harness rejects it.
 
-`.test.json` maps both nodes → `"true"` (exact).
+`.test.json` maps the three nodes → `"true"` (exact).
 
-- [ ] **Step 2: Run, expect failure** (`filterAgencyPaths` undefined):
+- [ ] **Step 2: Run, expect failure** — `cd packages/agency-lang && pnpm run a test tests/agency/agents/pathHelpers.agency` → FAIL.
 
-Run: `cd packages/agency-lang && pnpm run a test tests/agency/agents/filterAgencyPaths.agency`
-Expected: FAIL.
-
-- [ ] **Step 3: Implement** — add to `review.agency` (import `filter` from `std::array`):
+- [ ] **Step 3: Implement** in `review.agency` (prelude `filter`/`map`; `endsWith`, not regex; descriptive params):
 
 ```ts
-import { filter } from "std::array"
-
 /** Keep only the .agency files from a list of paths. */
 export def filterAgencyPaths(paths: string[]): string[] {
-  return filter(paths, \p -> p =~ re/\.agency$/)
+  return filter(paths, \path -> path.endsWith(".agency"))
+}
+
+/** Items in `current` that are not in `baseline` (turn-scoping). */
+export def subtractBaseline(current: string[], baseline: string[]): string[] {
+  return filter(current, \path -> !baseline.includes(path))
 }
 ```
 
-- [ ] **Step 4: Build + run** — `make && pnpm run a test tests/agency/agents/filterAgencyPaths.agency` → PASS.
+> Confirm `.endsWith` and `.includes` are available on Agency strings/arrays (used across stdlib, e.g. `stdlib/skills.agency`); if `includes` is not a method, use `filter(current, \path -> indexOf(baseline, path) == -1)` or an equivalent prelude helper.
 
-- [ ] **Step 5: Commit** ("Add filterAgencyPaths helper").
+- [ ] **Step 4: Build + run** — `make && pnpm run a test tests/agency/agents/pathHelpers.agency` → PASS.
+
+- [ ] **Step 5: Commit** ("Add filterAgencyPaths and subtractBaseline helpers").
 
 ---
 
-### Task 2: `changedAgencyFiles` — the changed `.agency` files via `std::git`
+### Task 2: `reviewSources` — the pure, deterministic review core
 
-**Files:**
-- Modify: `lib/agents/agency-agent/subagents/review.agency`
+**Files:** Modify `review.agency`; test `tests/agency/agents/reviewSources.agency` + `.test.json`.
 
-**Interfaces:**
-- Produces: `def changedAgencyFiles(): string[]` — the `.agency` files changed in the agent's working directory, or `[]` when the dir is not a git repo / git fails.
+**Interfaces:** `def reviewSources(sources: string[]): Result<Feedback[]>` — parse+typecheck each source via `agencyReview` (no `task`, so no LLM), folded with `mergeFeedback`. `success([])` for an empty list.
 
-- [ ] **Step 1: Confirm the `GitStatus` shape.** `GitStatus` is imported into `stdlib/git.agency` from the runtime types. Find its changed-files field:
-
-Run: `cd packages/agency-lang && pnpm run ast <(printf 'import { gitStatus } from "std::git"\nnode main() { const s = gitStatus(); return s }') 2>&1 | head` — or grep the generated `stdlib/git.d.mts` / runtime types for `GitStatus`. Record the exact field holding changed paths (e.g. `files: { path: string; status: string }[]`, or separate staged/unstaged lists).
-
-- [ ] **Step 2: Implement** using the confirmed shape (illustrative — adjust field access to Step 1):
+- [ ] **Step 1: Failing tests** (these are the two the spec asks for, plus a valid case; all deterministic — no LLM) — `tests/agency/agents/reviewSources.agency`:
 
 ```ts
-import { gitStatus } from "std::git"
-import { map } from "std::array"
+import { reviewSources, feedbackHasErrors } from "../../../lib/agents/agency-agent/subagents/review.agency"
 
-/** The .agency files changed in the agent working directory, or [] when the
-  working dir is not a git repo (fail open so review is a no-op, never a crash). */
-export def changedAgencyFiles(): string[] {
-  const statusResult = try gitStatus()
-  return match (statusResult) {
-    failure(_) => []
-    success(status) => filterAgencyPaths(map(status.files, \f -> f.path))
-  }
+node emptyIsClean(): boolean {
+  return !feedbackHasErrors(reviewSources([]))
+}
+node brokenSurfacesError(): boolean {
+  return feedbackHasErrors(reviewSources(["node main() { for (let i = 0; i < 3; i = i + 1) { } }"]))
+}
+node validIsClean(): boolean {
+  return !feedbackHasErrors(reviewSources(["node main(): number { return 5 }"]))
 }
 ```
 
-> `gitStatus()` raises `std::git::status`, which the agent's policy approves. `try` converts a non-repo failure into a Result we fold to `[]`.
+`.test.json` maps the three → `"true"`. **These are the PR-tier guard for the fix**: `emptyIsClean` proves the no-Agency path reaches `verify`; `brokenSurfacesError` proves the swap did not neuter review; `validIsClean` guards against false positives that would re-trigger thrash.
 
-- [ ] **Step 3: Manual smoke** — in a temp git repo with one changed `foo.agency` and one `bar.py`, a scratch program calling `changedAgencyFiles()` prints `["foo.agency"]`; in a non-git dir it prints `[]`.
+- [ ] **Step 2: Run, expect failure** → FAIL.
 
-Run: build, then run the scratch program in each dir (approve interrupts with `with approve`).
-Expected: correct lists, no crash in the non-git case.
-
-- [ ] **Step 4: Commit** ("Add changedAgencyFiles via std::git").
-
----
-
-### Task 3: `reviewWrittenFiles` — review the changed `.agency` files
-
-**Files:**
-- Modify: `lib/agents/agency-agent/subagents/review.agency`
-
-**Interfaces:**
-- Consumes: `changedAgencyFiles`, `agencyReview` (`std::agency::review`), `read` (prelude), `mergeFeedback`.
-- Produces: `def reviewWrittenFiles(): Result<Feedback[]>` — reviews each changed `.agency` file's contents; `success([])` when none changed.
-
-- [ ] **Step 1: Implement** in `review.agency`:
+- [ ] **Step 3: Implement** in `review.agency` (fold matches the established `std::agency::review` idiom — keep it, do not "declarative-ify"):
 
 ```ts
-export def reviewWrittenFiles(): Result<Feedback[]> {
+/** Parse+typecheck each source (no LLM: `task` omitted) and merge the findings.
+  Deterministic and IO-free — the git/read glue lives in reviewWrittenFiles. */
+export def reviewSources(sources: string[]): Result<Feedback[]> {
   let feedback: Result<Feedback[]> = success([])
-  for (path in changedAgencyFiles()) {
-    const source = read(filename: path, useAgentCwd: true)
+  for (source in sources) {
     feedback = mergeFeedback(feedback, agencyReview(source))
   }
   return feedback
 }
 ```
 
-> `read` is the prelude file tool (raises `std::read`, approved by policy). `useAgentCwd: true` resolves `path` against the agent working dir, matching where `changedAgencyFiles` found it. No `thread`/LLM here — this is deterministic file review, unlike the old snippet-extraction `review(userMsg)`.
+> Deliberate: no `task` arg to `agencyReview`, so `std::agency::review` runs only parse+typecheck (no `llmFeedback`). This is what makes `reviewSources` deterministic and crash-free on real `.agency` source.
 
-- [ ] **Step 2: ast-check + build** — `pnpm run ast lib/agents/agency-agent/subagents/review.agency` then `make`. Expected: parses, builds, no new typecheck errors (diff `make` output against a pre-change baseline).
+- [ ] **Step 4: Build + run** → PASS (3/3).
 
-- [ ] **Step 3: Commit** ("Add reviewWrittenFiles: review changed .agency files").
+- [ ] **Step 5: Commit** ("Add reviewSources: deterministic parse+typecheck review core").
 
 ---
 
-### Task 4: Switch the code agent to `reviewWrittenFiles()`
+### Task 3: IO glue — `currentDirtyAgencyFiles` + `readAll`
 
-**Files:**
-- Modify: `lib/agents/agency-agent/subagents/code.agency` (the one call site, ~line 480)
+**Files:** Modify `review.agency`.
 
-**Interfaces:**
-- Consumes: `reviewWrittenFiles` (Task 3). The import line already pulls from `./review.agency`; add `reviewWrittenFiles` to it.
+**Interfaces:** `def currentDirtyAgencyFiles(): string[]` (git-dirty `.agency` paths, `[]` on non-git/failure); `def readAll(paths: string[]): string[]` (contents of readable paths; skips deleted/unreadable).
 
-- [ ] **Step 1: Read** `code.agency` around the loop (~454-506) to confirm the single `review(reply)` call site and the import from `./review.agency`.
+- [ ] **Step 1: Implement** in `review.agency` (import `gitStatus` from `std::git`; a statelog breadcrumb helper — confirm the exact `std::statelog` emit function):
 
-- [ ] **Step 2: Change the call site.** Add `reviewWrittenFiles` to the `./review.agency` import, then:
+```ts
+import { gitStatus } from "std::git"
+
+/** The .agency files dirty in the working tree right now, or [] when the dir is
+  not a git repo / git fails (fail open — review becomes a no-op, never a crash).
+  Turn-scoping (excluding pre-existing dirty files) is applied by the caller. */
+export def currentDirtyAgencyFiles(): string[] {
+  return match (try gitStatus()) {
+    success(status) => filterAgencyPaths(map(status.entries, \entry -> entry.path))
+    failure(err) => onGitUnavailable(err)
+  }
+}
+
+def onGitUnavailable(err: any): string[] {
+  logDebug("review: gitStatus unavailable, skipping .agency review: ${err}")
+  return []
+}
+
+/** Read each path; skip (with a breadcrumb) any that cannot be read, e.g. a
+  deleted (`D`) entry whose path no longer exists on disk. */
+def readAll(paths: string[]): string[] {
+  let sources: string[] = []
+  for (path in paths) {
+    match (read(filename: path, useAgentCwd: true)) {
+      success(text) => { sources.push(text) }
+      failure(err) => { logDebug("review: could not read ${path}, skipping: ${err}") }
+    }
+  }
+  return sources
+}
+```
+
+> `status.entries` (NOT `.files`) — `GitStatus = { branch, upstream, ahead, behind, entries: FileStatus[] }`, `FileStatus = { path, index, worktree, renamedFrom? }` (`lib/stdlib/gitCore.ts`). `entries` includes untracked (`?`, good — new agent files are caught) and deleted (`D`) files; the `readAll` `failure` arm fails those open. `logDebug` = a thin wrapper over the `std::statelog` debug emit; confirm the function name and add the wrapper.
+
+- [ ] **Step 2: ast-check + build** — `pnpm run ast lib/agents/agency-agent/subagents/review.agency`, then `make`. Diff `make` errors against a pre-change baseline; expect none new.
+
+- [ ] **Step 3: Manual smoke** (IO can't be unit-tested without a repo): in a temp git repo with a changed `foo.agency`, a deleted `gone.agency`, and a `bar.py`, a scratch program calling `currentDirtyAgencyFiles()` prints `["foo.agency", "gone.agency"]` and `readAll(...)` returns only `foo.agency`'s contents; in a non-git dir `currentDirtyAgencyFiles()` prints `[]`. (Approve interrupts with `with approve`.) Save output to a file.
+
+- [ ] **Step 4: Commit** ("Add currentDirtyAgencyFiles and readAll IO glue").
+
+---
+
+### Task 4: `reviewWrittenFiles(baseline)` — compose glue + core
+
+**Files:** Modify `review.agency`.
+
+**Interfaces:** `def reviewWrittenFiles(baseline: string[]): Result<Feedback[]>` — review the `.agency` files that became dirty since `baseline`.
+
+- [ ] **Step 1: Implement** in `review.agency`:
+
+```ts
+export def reviewWrittenFiles(baseline: string[]): Result<Feedback[]> {
+  const changed = subtractBaseline(currentDirtyAgencyFiles(), baseline)
+  return reviewSources(readAll(changed))
+}
+```
+
+> All four pieces are already tested or smoke-verified. The composition is the "declarative what" the call site sees; the git/read "how" is encapsulated.
+
+- [ ] **Step 2: Build** — `make`. Expect clean.
+
+- [ ] **Step 3: Commit** ("Add reviewWrittenFiles composing turn-scoped file review").
+
+---
+
+### Task 5: Wire the code agent — baseline capture + call-site swap
+
+**Files:** Modify `lib/agents/agency-agent/subagents/code.agency`.
+
+- [ ] **Step 1: Read** `code.agency` `codeAgent` (~420-506): confirm the entry point (before the `thread`/`while`), the single `review(reply)` call site (~480), and the `./review.agency` import.
+
+- [ ] **Step 2: Capture the baseline once at entry.** Near the top of `codeAgent`, before the loop:
+
+```ts
+const agencyBaseline = currentDirtyAgencyFiles()
+```
+
+- [ ] **Step 3: Swap the call site.** Add `reviewWrittenFiles`, `currentDirtyAgencyFiles` to the `./review.agency` import, then:
 
 ```ts
 // was: const feedback = review(reply)
-const feedback = reviewWrittenFiles()
+const feedback = reviewWrittenFiles(agencyBaseline)
 ```
 
-Leave the surrounding `if (feedbackHasErrors(feedback)) { … } else { … verify … }` structure unchanged: for a non-Agency task `reviewWrittenFiles()` returns `success([])`, so `feedbackHasErrors` is false and the loop reaches `verify` — the unblock. For a real Agency task, genuine file errors are surfaced as before.
+Leave the `if (feedbackHasErrors(feedback)) { … } else { … verify … }` structure intact: non-Agency turn → `success([])` → `else` → `verify` runs (the unblock); real Agency errors in files the agent wrote this turn still surface.
 
-- [ ] **Step 3: Build** — `make`. Confirm `code.agency` compiles and `reply` is no longer consumed by review (it is still returned to the user; only the review input changed).
+- [ ] **Step 4: Build** — `make`. Confirm `code.agency` compiles; `reply` is still returned to the user, only the review input changed. Confirm no re-export TDZ from adding imports (see `review.agency`'s header comment).
 
-- [ ] **Step 4: Commit** ("Code agent reviews written .agency files, not the chat reply").
+- [ ] **Step 5: Commit** ("Code agent reviews the .agency files it wrote this turn, not the chat reply").
 
 ---
 
-### Task 5: Regression tests (deterministic unit + real-LLM behavior)
+### Task 6: Real-LLM regression (statelog-asserted)
 
-**Files:**
-- (Task 1 already added the deterministic `filterAgencyPaths` test.)
-- Create/extend: `tests/integration/agents/test.mjs` with a `review-no-thrash` case.
+**Files:** Extend `tests/integration/agents/test.mjs`.
 
-- [ ] **Step 1: Real-LLM regression case.** In `tests/integration/agents/test.mjs`, add a case that runs the **code agent** (`agency agent --agent code --policy approve-all -p -- "<task>"`) on a Python output-contract task in a temp **git** repo (so `gitStatus` works), where the previous behavior thrashed. Assert: (a) the deliverable file is correct, and (b) the transcript shows **no** `"The last code had errors"` phantom re-prompts and that `verify` ran (grep the statelog / transcript). This is the regression guard for the whole bug.
+- [ ] **Step 1: Add a `review-no-thrash` case.** Run the code agent (`agency agent --agent code --policy approve-all -p -- "<python output-contract task>"`) in a temp **git** repo (so `gitStatus` works). Pass `--log-file <statelog.jsonl>`. Assert on **statelog events**, not substrings:
+  - the deliverable file matches the contract byte-for-byte;
+  - review produced **0 error findings** (no `feedbackHasErrors`-true iteration);
+  - `verify` was invoked **≥ 1** time (a `promptStart`/thread event for the `verify` session).
 
-- [ ] **Step 2: Run locally with a key** (NOT the full suite): `cd packages/agency-lang && make && node tests/integration/agents/test.mjs` (or the `--only` filter for this case). Save output to a file.
-Expected: the case passes; transcript is thrash-free.
+  This guards the end-to-end behavior and cannot rot the way an "absence of `The last code had errors`" substring check would.
 
-- [ ] **Step 3: Commit** ("Add review-crash regression test").
+- [ ] **Step 2: Run locally with a key** (NOT the full suite): `cd packages/agency-lang && make && node tests/integration/agents/test.mjs` (or an `--only` filter). Save output to a file.
+
+- [ ] **Step 3: Commit** ("Add statelog-asserted review-crash regression test").
 
 ---
 
 ## Self-Review
 
-**1. Spec coverage:** Review the `.agency` files not the chat reply ✓ (Tasks 2-4, via `std::git`). Decouple `verify` from `review` ✓ (Task 4 — the review swap alone unblocks the `else` branch; no loop restructure needed). Fail-open on non-git dirs ✓ (Task 2). Preserve `reviewAgent`/`review(userMsg)` ✓ (untouched). `std::git` as the detection mechanism ✓ (Task 2). The spec's optional `agencyReview` fail-safe softening is **not needed** and omitted: reviewing real `.agency` files means the parser only ever sees Agency source, so it cannot crash on non-Agency input; genuine `.agency` syntax errors should still surface. Noted here rather than silently dropped.
+**1. Spec coverage:** Review `.agency` files not the chat reply ✓ (Tasks 2-5). **Turn-scoped** via `current − baseline` ✓ (Tasks 1,3-5) — the altitude bug the prior draft stamped "✓" is now actually handled, and the spec's turn-scoping language is honored. Decouple `verify` from `review` ✓ (Task 5, the swap alone unblocks the `else`). Fail-open on non-git dirs / deleted files, **with breadcrumbs** ✓ (Task 3). Preserve `reviewAgent`/`review(userMsg)` ✓. `std::git` mechanism ✓. Deliberate `task=""` (no LLM) ✓ (Task 2, explicit).
 
-**2. Placeholder scan:** No TBD/TODO in requirements. The one confirm-at-implementation item (the exact `GitStatus` field) is an explicit first step of Task 2 with a command to resolve it, not a placeholder. Commit messages via a temp file (apostrophe convention).
+**2. Placeholder scan:** No requirement placeholders. Explicit confirm-at-implementation items: the `GitStatus` field is now **stated** (`entries`, not guessed), the `std::statelog` emit name (Task 3), and `.endsWith`/`.includes` method availability (Task 1) — each with a fallback. Commit messages via a temp file.
 
-**3. Type consistency:** `Result<Feedback[]>` from `reviewWrittenFiles` matches what `feedbackHasErrors`/`renderFeedback` in `code.agency` already consume. `filterAgencyPaths(string[]) -> string[]` and `changedAgencyFiles() -> string[]` compose in `reviewWrittenFiles`. `read(filename, useAgentCwd)` matches the prelude signature used elsewhere in the agent.
+**3. Type consistency:** `read` returns `Result` → unwrapped via `match` in `readAll` (fixes the prior type bug). `GitStatus.entries[].path` used (fixes the prior `.files` bug). `reviewSources(string[]) -> Result<Feedback[]>` matches `feedbackHasErrors`/`mergeFeedback`. `reviewWrittenFiles(baseline: string[]) -> Result<Feedback[]>` matches the `code.agency` consumer. `currentDirtyAgencyFiles() -> string[]` feeds both the baseline capture and `subtractBaseline`.
 
-**Risks to verify during implementation:** (a) the exact `GitStatus` field (Task 2 Step 1); (b) the relative import path in the deterministic test (Task 1 Step 1 note); (c) `read` raising `std::read` inside `reviewWrittenFiles` is approved by the agent policy in one-shot (it is, under `approve-all`); (d) confirm `code.agency`'s existing import from `./review.agency` so adding `reviewWrittenFiles` doesn't hit the re-export TDZ noted in `review.agency`'s header comment.
+**4. Test pyramid (addressing the prior draft's inverted coverage):** the *fix itself* is now guarded by **deterministic PR-tier tests** — `reviewSources` (empty→clean, broken→error, valid→clean) is the heart of the fix and runs without an LLM; `filterAgencyPaths`/`subtractBaseline` cover the set logic and edge cases (`.agency.txt`, empty, pre-existing baseline). The real-LLM test is a hardened, statelog-asserted end-to-end belt-and-suspenders, not the sole guard. IO-only functions (`currentDirtyAgencyFiles`, `readAll`) are smoke-verified (Task 3) because they need a real git repo; their pure inputs/outputs are covered by the composed helpers.
+
+**Anti-pattern note:** the `reviewSources`/`readAll` mutable-accumulator folds are kept deliberately — they match the established `std::agency::review` idiom; rewriting as `reduce` would violate "inconsistent patterns" to satisfy "imperative code." Lambda params are descriptive (`\path`, `\entry`), and every fail-open arm leaves a `std::statelog` breadcrumb so a silently-disabled review is diagnosable.

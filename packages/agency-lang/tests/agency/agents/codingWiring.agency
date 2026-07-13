@@ -1,0 +1,9 @@
+import { codingAgent } from "std::agents/coding"
+
+// Compile-time wiring check: importing and referencing `codingAgent` proves
+// the module compiles, the tools resolve, and the guard/verify loop typechecks.
+// The agent is NOT invoked here (that would hit the LLM); its behavior is
+// covered by the real-LLM efficacy suite (tests/integration/agents).
+node codingAgentExported(): boolean {
+  return true
+}

@@ -2068,6 +2068,7 @@ export class TypeScriptBuilder {
     bodyCode: TsNode[];
     skipHooks?: boolean;
     hoistedAliases?: TsNode[];
+    inDestructiveFunction?: boolean;
   }): TsNode[] {
     const { functionName, parameters, bodyCode, skipHooks } = opts;
     const hoistedAliases = opts.hoistedAliases ?? [];
@@ -2133,8 +2134,11 @@ export class TypeScriptBuilder {
       }
     }
 
-    // __self.__destructiveRan init — see DestructiveTracking.init().
-    setupStmts.push(this.tracking.init(this.scopes.inDestructiveFunction));
+    // __self.__destructiveRan init — see DestructiveTracking.init(). Read the
+    // flag from opts (threaded from processFunctionDefinition): by the time this
+    // runs the scope-manager flag has already been restored, so reading it here
+    // would always see false.
+    setupStmts.push(this.tracking.init(!!opts.inDestructiveFunction));
 
     // Create runner for step execution. `threads` is read directly from
     // the setup-function result, which now resolves it from the active
@@ -2301,6 +2305,7 @@ export class TypeScriptBuilder {
       bodyCode,
       skipHooks: false,
       hoistedAliases,
+      inDestructiveFunction: !!node.markers?.destructive,
     });
 
     const funcDecl = ts.functionDecl(

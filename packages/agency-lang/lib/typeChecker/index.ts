@@ -48,6 +48,8 @@ import { checkConflictingMarkers } from "./conflictingMarkers.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
+import { isNonTemplatedStdlib } from "../importPaths.js";
+import * as path from "node:path";
 import { checkUndefinedFunctions } from "./undefinedFunctionDiagnostic.js";
 import { checkMissingImports } from "./missingImportDiagnostic.js";
 import { checkUndefinedVariables } from "./undefinedVariableDiagnostic.js";
@@ -212,13 +214,25 @@ export class TypeChecker {
     // on `success(x)` and `failure(msg)` parameterizing ResultType, and on
     // `Result` being the built-in type. Allowing user definitions of these
     // names would silently change semantics.
+    //
+    // Exempt the non-templated stdlib prelude (`std::index`): it is the
+    // canonical *definition* site of these built-ins (e.g. `export def
+    // callback(...)`), so its own declarations must be allowed. Without this,
+    // typechecking the prelude reports AG4002 against its own `callback`, and
+    // because the prelude is auto-imported everywhere that failure cascades
+    // into every file's typecheck step.
+    const isPreludeSource = this.currentFile
+      ? isNonTemplatedStdlib(path.resolve(this.currentFile))
+      : false;
     const reservedFn = (name: string, loc: SourceLocation | undefined) =>
       this.errors.push(diagnostic("reservedBuiltinRedefined", { name }, loc ?? null));
-    for (const [name, def] of Object.entries(this.functionDefs)) {
-      if (RESERVED_FUNCTION_NAMES.has(name)) reservedFn(name, def.loc);
-    }
-    for (const [name, def] of Object.entries(this.nodeDefs)) {
-      if (RESERVED_FUNCTION_NAMES.has(name)) reservedFn(name, def.loc);
+    if (!isPreludeSource) {
+      for (const [name, def] of Object.entries(this.functionDefs)) {
+        if (RESERVED_FUNCTION_NAMES.has(name)) reservedFn(name, def.loc);
+      }
+      for (const [name, def] of Object.entries(this.nodeDefs)) {
+        if (RESERVED_FUNCTION_NAMES.has(name)) reservedFn(name, def.loc);
+      }
     }
     for (const [, aliases] of this.scopedTypeAliases.scopes()) {
       for (const name of Object.keys(aliases)) {
@@ -242,6 +256,7 @@ export class TypeChecker {
     // graphNode bodies — and check the variable name. Only fires on actual
     // declarations (where `declKind` is set), not reassignments.
     for (const { node } of walkNodes(this.program.nodes)) {
+      if (isPreludeSource) break;
       if (node.type !== "assignment") continue;
       if (!node.declKind) continue;
       if (RESERVED_FUNCTION_NAMES.has(node.variableName)) {

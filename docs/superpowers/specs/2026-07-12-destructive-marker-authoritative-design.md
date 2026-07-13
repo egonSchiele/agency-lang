@@ -114,22 +114,49 @@ before failing. Otherwise it is retryable.
 
 The block introduces **no new lexical scope** — it is purely a
 destructive-region marker; declarations inside it are visible after it, like a
-plain statement group. Its body statements must be compiled through the **same
-step-aware statement machinery as the enclosing function body**
-(`processBodyAsParts`, which assigns substep ids and drives interrupt
-pause/resume), NOT through `processBlockPlain` (which is the interrupt-free
-"plain" path used for expression-position match arms). Concretely,
-`destructive { s1; s2 }` compiles as the stream `[flip, s1, s2]` inside the
-enclosing function's stepped statements, so `s1`/`s2` get normal substep ids.
+plain statement group. Its body statements are compiled through the **same
+step-aware statement machinery as the enclosing function body**, spliced INLINE
+into that stream. Concretely, `destructive { s1; s2 }` compiles as
+`[flip, s1, s2]` inside the enclosing function's stepped statements, so
+`s1`/`s2` get substep ids continuous with the rest of the body.
+
+**HEADLINE CONSTRAINT for the codegen task — a conventional block flips the flag
+into the wrong frame and fails OPEN.** Inside a normal Agency block,
+`__self = __bstack.locals` (the block's own frame, `typescriptBuilder.ts`
+~3118). If `destructive { }` were compiled as a conventional block, the entry
+flip `__self.__destructiveRan = true` would write the **block's** locals and
+**evaporate at block exit**. The failure leaving the function would then carry
+`destructiveRan = false` → the tool is **NOT removed**. That is the dangerous
+(fail-open) direction, and it is the same pre-existing hole where writeAgency's
+guard-block flips already evaporate. The flip must land on the **enclosing
+function's** activation `__self` — which is exactly why the block must be
+inlined (transparent), not compiled as a frame-bearing block.
+
+**Implementation mechanism (pin this, don't paraphrase as "use
+`processBodyAsParts`").** Mirror the existing pipe-chain expansion inside
+`processBodyAsParts` (`typescriptBuilder.ts` ~3956–3972): special-case a
+`destructiveBlock` node in that loop — `flushPart()`, push the entry flip into
+the active part, then process the block's body statements **inline with
+continuing substep ids**, then `continue`. Do NOT return one compound node from
+`processStatement`: that silently breaks both interrupt-resume (ids no longer
+continuous with statements after the block) and declaration visibility
+(bindings trapped in a nested node). Use `processBlockPlain` nowhere here (it is
+the interrupt-free "plain" path for expression-position match arms).
 
 **Interrupts inside a destructive block must work correctly** (explicit
 requirement). Because the region commits at entry, an interrupt inside the block
 is after the commit: rejecting it removes the tool (you placed the gate inside
-the destructive region). The mechanics must hold regardless: an `interrupt(...)`
-or async call inside the block pauses and resumes at the right substep, and the
-entry `__destructiveRan = true` survives checkpoint/resume — it re-applies
-idempotently on replay and is already preserved across serialization (per the
-#522 boundary-folding design). This is mandated by tests (below).
+the destructive region). Because the block is inlined, an `interrupt(...)` or
+async call inside it pauses and resumes at the correct substep relative to
+statements *after* the block, and the entry `__destructiveRan = true` survives
+checkpoint/resume — it re-applies idempotently on replay and is preserved across
+serialization (per the #522 boundary-folding design). A `return` inside the
+block halts the **function** (again, only because the block is inline) and hits
+the function exit stamp that folds `destructiveRan`. All of this is mandated by
+tests (below), including one that asserts `destructiveRan` is true on a failure
+that **escapes the whole function after the block** (reaches the function's exit
+stamp / activation `__self`) — testing only at block entry would pass even in
+the broken frame-local implementation.
 
 ### `destructiveRan` meaning
 
@@ -192,12 +219,17 @@ move, remove), `stdlib/shell.agency` (exec, bash), `stdlib/index.agency`
 (write, writeBinary), `stdlib/clipboard.agency` (copy), and any others surfaced
 by `grep -rn "destructive def" stdlib/`.
 
-Per-function the exact gate/work boundary must be identified — several use the
-`return interrupt <effect>(...)` continuation form, where the statement after
-the gate is the work performed on approval; the `destructive { }` wraps that
-work. Because these functions contain a `destructive { }` block, they remain
-`markers.destructive`-true for client hints and the Rule 2 registry (see "Two
-notions"). Rebuild with `make` after editing any stdlib `.agency`.
+The uniform three-line pattern will NOT hold for every function — some split
+effectful work across statements, interleave post-processing, or use the
+`return interrupt <effect>(...)` continuation form (where the statement after
+the gate is the work performed on approval). The **plan must enumerate each
+function's gate/work split explicitly** rather than assume the pattern: a
+mis-drawn boundary either leaves committed work *outside* the region (fail-open:
+the tool is not removed after doing damage) or pulls the gate *inside* it
+(removes the tool on a legitimate rejection). Because these functions contain a
+`destructive { }` block, they remain `isDestructive`-true for client hints and
+the Rule 2 registry (see "Two notions"). Rebuild with `make` after editing any
+stdlib `.agency`.
 
 ## Blast radius / files
 
@@ -214,10 +246,16 @@ notions"). Rebuild with `make` after editing any stdlib `.agency`.
   would wrongly turn on `inDestructiveFunction`/the entry flip for a
   contains-block-only function. Note the emitted descriptor marker is also read
   at runtime on the SUCCESS path (`handler.markers?.destructive` →
-  `toolDidDestructiveWork`, `prompt.ts` ~1157); for a contains-block function
-  this coarsely assumes the block ran on success, consistent with today's
-  `destructive def` success handling. The failure path stays precise (it uses
-  the runtime `destructiveRan`).
+  `toolDidDestructiveWork`, `prompt.ts` ~1156–1158). For a contains-block
+  function this is true whenever the tool succeeds, **even if execution never
+  entered the block** — e.g. an early `return success()` before the block, or a
+  block behind a condition. Under the old whole-function model success ⇒
+  did-work was exact; under the block model this over-taint becomes reachable in
+  ordinary control flow, propagating `destructiveRan` to the caller via
+  decision-8 when the block may not have run. It is the **safe** direction
+  (over-taint, never under-taint), so it is acceptable — see the non-goal option
+  to unify the success path onto the runtime flag. The failure path stays
+  precise (it uses the runtime `destructiveRan`).
 - `lib/compilationUnit.ts` — populate `destructiveFunctions` from marked-OR-
   contains-block (~180).
 - `lib/backends/typescriptBuilder/nameClassifier.ts` — remove `containsImpureCall`
@@ -237,19 +275,34 @@ notions"). Rebuild with `make` after editing any stdlib `.agency`.
 - Rewrite `destructive-tracking` agency tests to the region model:
   `destructive def` body entry → `destructiveRan` true; `destructive { }` entry
   → true; failure before a block (prep/gate) → false; bad-args → false.
+- **Frame-escape test (Finding A — the anti-fail-open guard):** a failure that
+  escapes the **whole function** after passing through a `destructive { }` block
+  must carry `destructiveRan = true` at the function exit stamp / activation
+  `__self` — NOT merely observable at block entry. A test that only checks the
+  flag at block entry would pass even in the broken frame-local implementation,
+  so this test must assert at function-escape.
 - **Interrupts in a destructive block** (mandated): an execution test where a
   `destructive { }` block contains an interrupt — approve path resumes and
   completes; reject path removes the tool; a pause/resume across the block
-  preserves `destructiveRan`. These are deterministic (no real LLM needed;
-  removal is `destructiveRan`-driven).
+  preserves `destructiveRan`. Deterministic (no real LLM; removal is
+  `destructiveRan`-driven).
+- **Inline-splice test (Finding B):** a `let` declared inside `destructive { }`
+  is used *after* the block (declaration visibility), and an interrupt inside the
+  block resumes correctly with a statement following the block (continuous
+  substep ids).
+- **Return-in-block test (Finding D):** a `return` inside `destructive { }` exits
+  the function; an escaping failure after such a block carries
+  `destructiveRan = true`.
 - Tool-removal behavior test: a tool that fails inside its destructive region is
   removed after one failure; one that fails/rejects before the region is
   retryable.
 - Stdlib: a representative migrated tool (e.g. `write`) — rejecting the gate is
   retryable; failing inside the block removes it; MCP/HTTP still report it
   destructive.
-- Parser/formatter unit tests for `destructive { }`; typescriptGenerator
-  fixtures.
+- **Parser disambiguation (Finding E):** `destructive { }` as a statement;
+  `destructive def` unchanged; `destructive` as an ordinary identifier still
+  parses; a nested `destructive { }` inside a `destructive def` compiles (no-op,
+  flag already true). Plus formatter unit tests and typescriptGenerator fixtures.
 - Full lib suite (8000+) green.
 
 ## Non-goals
@@ -258,3 +311,31 @@ notions"). Rebuild with `make` after editing any stdlib `.agency`.
   separate question (the `interrupt.test.json` flake, PR #533).
 - Success-path semantics — a successful destructive tool stays callable.
 - Block-level lexical scoping — `destructive { }` introduces no new scope.
+- **Unifying the success path onto the runtime flag (Finding C option, not
+  taken):** the SUCCESS-path `toolDidDestructiveWork` could consult the runtime
+  `destructiveRan` (which the transparent-block flip already maintains on
+  `__self`) instead of the coarse descriptor marker, collapsing the success and
+  failure paths onto one signal and removing the over-taint. Left out to keep
+  this change scoped; the current over-taint is the safe direction. Revisit if
+  the extra caller-taint proves noisy.
+
+## Rejected alternatives
+
+- **A per-statement heuristic (round-1 predicate approach).** Flip
+  `destructiveRan` before the first "non-interrupt" (or "impure-call") statement.
+  Rejected: every real stdlib `destructive def` preps before its gate, so the
+  first statement commits and rejecting the gate removes the tool. No
+  whole-function rule can express "gate outside, committed work inside."
+- **Marking the interrupt itself** (e.g. a "committing interrupt"). Rejected: the
+  commit boundary is the *work*, not the gate; a function may have work with no
+  gate, or a gate far from the work. A region names the work directly.
+- **An `idempotent { }` block, for syntactic symmetry with `destructive { }`.**
+  Rejected: the two markers are not mirror concepts. `destructive` is a *commit
+  point* — a function has a natural before/after boundary (clean prep/gate, then
+  touching the world), which a region expresses. `idempotent` is a *global
+  promise* that re-running the whole tool from the start is safe; a retry always
+  restarts the tool, never resumes at a sub-region, so there is nothing for a
+  region boundary to attach to and nothing consumes a per-region idempotency
+  signal. An `idempotent { }` block would compile to nothing operational and
+  would falsely imply a tool can be "partly idempotent." `idempotent` stays a
+  function marker only.

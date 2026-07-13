@@ -164,7 +164,7 @@ export idempotent def read(
   return try _read(dir, filename, offset, limit)
 }
 
-export destructive def write(
+export def write(
   filename: string,
   content: string,
   dir: string = ".",
@@ -189,10 +189,12 @@ export destructive def write(
     content: content,
     mode: mode
   })
-  return try _write(dir, filename, content, mode)
+  destructive {
+    return try _write(dir, filename, content, mode)
+  }
 }
 
-export destructive def writeBinary(
+export def writeBinary(
   filename: string,
   base64: string,
   dir: string = ".",
@@ -217,7 +219,9 @@ export destructive def writeBinary(
     filename: filename,
     mode: mode
   })
-  return try _writeBinary(dir, filename, base64, mode)
+  destructive {
+    return try _writeBinary(dir, filename, base64, mode)
+  }
 }
 
 export idempotent def readBinary(

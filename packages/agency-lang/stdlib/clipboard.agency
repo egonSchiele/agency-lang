@@ -15,7 +15,7 @@ import { _copy, _paste } from "agency-lang/stdlib-lib/clipboard.js"
 effect std::clipboardCopy {}
 effect std::clipboardPaste {}
 
-export destructive def copy(text: string) {
+export def copy(text: string) {
   """
   Copy text to the system clipboard.
 
@@ -23,7 +23,9 @@ export destructive def copy(text: string) {
   """
   return interrupt std::clipboardCopy("Are you sure you want to copy text to the clipboard?")
 
-  _copy(text)
+  destructive {
+    _copy(text)
+  }
 }
 
 export def paste(): string {

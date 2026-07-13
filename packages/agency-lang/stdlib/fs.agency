@@ -44,7 +44,7 @@ effect std::remove { target: string }
  * whole interrupt object, so the contents are at `data.data.before` /
  * `data.data.after` (e.g. `print(diff(data.data.before, data.data.after, color: true))`).
  */
-export destructive def edit(filename: string, edits: Edit[], dir: string = ".", useAgentCwd: boolean = false): Result {
+export def edit(filename: string, edits: Edit[], dir: string = ".", useAgentCwd: boolean = false): Result {
   """
   Edit a single file by applying one or more text replacements atomically. Each edit's oldText must match a unique, non-overlapping region of the file as it stands when that edit runs (after earlier edits in the same call). If any edit fails, nothing is written.
 
@@ -67,7 +67,9 @@ export destructive def edit(filename: string, edits: Edit[], dir: string = ".", 
     after: preview.after
   })
 
-  return try _multiedit(dir, filename, edits)
+  destructive {
+    return try _multiedit(dir, filename, edits)
+  }
 }
 
 type PatchResult = {
@@ -75,7 +77,7 @@ type PatchResult = {
   files: string[]
 }
 
-export destructive def applyPatch(patch: string, allowedPaths: string[] = []): Result {
+export def applyPatch(patch: string, allowedPaths: string[] = []): Result {
   """
   Apply a unified diff to the working tree. Supports file creation (--- /dev/null), line additions, deletions, and context. Fails on a malformed diff or on a context-line mismatch against the current file contents.
 
@@ -86,10 +88,12 @@ export destructive def applyPatch(patch: string, allowedPaths: string[] = []): R
     patch: patch
   })
 
-  return try _applyPatch(patch, allowedPaths)
+  destructive {
+    return try _applyPatch(patch, allowedPaths)
+  }
 }
 
-export destructive def mkdir(dir: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
+export def mkdir(dir: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
   Create a directory, including any missing parent directories. Idempotent: succeeds if the directory already exists. Fails if a non-directory entry already occupies the path, or on permission errors.
 
@@ -104,10 +108,12 @@ export destructive def mkdir(dir: string, allowedPaths: string[] = [], useAgentC
     dir: dir
   })
 
-  return try _mkdir(dir, allowedPaths)
+  destructive {
+    return try _mkdir(dir, allowedPaths)
+  }
 }
 
-export destructive def copy(src: string, dest: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
+export def copy(src: string, dest: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
   Copy a file or directory. Directories are copied recursively. Fails if src does not exist or dest cannot be written.
 
@@ -125,10 +131,12 @@ export destructive def copy(src: string, dest: string, allowedPaths: string[] = 
     dest: dest
   })
 
-  return try _copy(src, dest, allowedPaths)
+  destructive {
+    return try _copy(src, dest, allowedPaths)
+  }
 }
 
-export destructive def move(src: string, dest: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
+export def move(src: string, dest: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
   Move or rename a file or directory. Falls back to copy+remove if src and dest are on different filesystems. Fails if src does not exist.
 
@@ -146,10 +154,12 @@ export destructive def move(src: string, dest: string, allowedPaths: string[] = 
     dest: dest
   })
 
-  return try _move(src, dest, allowedPaths)
+  destructive {
+    return try _move(src, dest, allowedPaths)
+  }
 }
 
-export destructive def remove(target: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
+export def remove(target: string, allowedPaths: string[] = [], useAgentCwd: boolean = false): Result {
   """
   Delete a file or directory. Directories are removed recursively. Does not fail if the target does not exist.
 
@@ -164,6 +174,8 @@ export destructive def remove(target: string, allowedPaths: string[] = [], useAg
     target: target
   })
 
-  return try _remove(target, allowedPaths)
+  destructive {
+    return try _remove(target, allowedPaths)
+  }
 }
 

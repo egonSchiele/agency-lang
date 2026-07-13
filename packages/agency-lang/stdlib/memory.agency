@@ -180,7 +180,7 @@ export def memory(config: MemoryConfig, block: () -> any = null): Result {
   return result
 }
 
-export destructive def remember(content: string) {
+export def remember(content: string) {
   """
   Extract structured facts (entities, observations, and relations) from
   the given text and store them in the knowledge graph.
@@ -192,17 +192,19 @@ export destructive def remember(content: string) {
       contentLength: content.length
     })
 
-    thread {
-      const prompt = _buildExtractionPrompt(content)
-      // Bang validation: a malformed extraction is a failure Result, not
-      // a mistyped value. Before this, a provider returning prose or an
-      // empty string crashed the tool and memory silently stopped
-      // persisting (issue #494).
-      const result: ExtractionResult! = llm(prompt)
-      if (result is success(extraction)) {
-        _applyExtractionResult(extraction)
-      } else {
-        return result
+    destructive {
+      thread {
+        const prompt = _buildExtractionPrompt(content)
+        // Bang validation: a malformed extraction is a failure Result, not
+        // a mistyped value. Before this, a provider returning prose or an
+        // empty string crashed the tool and memory silently stopped
+        // persisting (issue #494).
+        const result: ExtractionResult! = llm(prompt)
+        if (result is success(extraction)) {
+          _applyExtractionResult(extraction)
+        } else {
+          return result
+        }
       }
     }
   }

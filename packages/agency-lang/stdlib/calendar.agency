@@ -101,7 +101,7 @@ export def listEvents(maxResults: number = 10, timeMin: string = "", timeMax: st
   })
 }
 
-export destructive def createEvent(summary: string, start: string, end: string, description: string = "", location: string = "", calendarId: string = "primary"): Result {
+export def createEvent(summary: string, start: string, end: string, description: string = "", location: string = "", calendarId: string = "primary"): Result {
   """
   Create a new event on Google Calendar. Returns the created event.
 
@@ -120,17 +120,19 @@ export destructive def createEvent(summary: string, start: string, end: string, 
     location: location
   })
 
-  return try _createEvent({
-    summary: summary,
-    start: start,
-    end: end,
-    description: description,
-    location: location,
-    calendarId: calendarId
-  })
+  destructive {
+    return try _createEvent({
+      summary: summary,
+      start: start,
+      end: end,
+      description: description,
+      location: location,
+      calendarId: calendarId
+    })
+  }
 }
 
-export destructive def updateEvent(eventId: string, summary: string = "", start: string = "", end: string = "", description: string = "", location: string = "", calendarId: string = "primary"): Result {
+export def updateEvent(eventId: string, summary: string = "", start: string = "", end: string = "", description: string = "", location: string = "", calendarId: string = "primary"): Result {
   """
   Update an existing event on Google Calendar. Pass the eventId and any fields to change. An empty string means "don't change". Returns the updated event.
 
@@ -149,18 +151,20 @@ export destructive def updateEvent(eventId: string, summary: string = "", start:
     end: end
   })
 
-  return try _updateEvent({
-    eventId: eventId,
-    summary: summary,
-    start: start,
-    end: end,
-    description: description,
-    location: location,
-    calendarId: calendarId
-  })
+  destructive {
+    return try _updateEvent({
+      eventId: eventId,
+      summary: summary,
+      start: start,
+      end: end,
+      description: description,
+      location: location,
+      calendarId: calendarId
+    })
+  }
 }
 
-export destructive def deleteEvent(eventId: string, calendarId: string = "primary"): Result {
+export def deleteEvent(eventId: string, calendarId: string = "primary"): Result {
   """
   Delete an event from Google Calendar by its event ID. Returns { deleted: true } on success.
 
@@ -172,5 +176,7 @@ export destructive def deleteEvent(eventId: string, calendarId: string = "primar
     calendarId: calendarId
   })
 
-  return try _deleteEvent(eventId, calendarId)
+  destructive {
+    return try _deleteEvent(eventId, calendarId)
+  }
 }

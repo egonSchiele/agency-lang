@@ -38,7 +38,7 @@ effect std::ls { dir: string, recursive: boolean, maxResults: number }
 effect std::grep { pattern: string, dir: string, flags: string, maxResults: number }
 effect std::glob { pattern: string, dir: string, maxResults: number }
 
-export destructive def exec(
+export def exec(
   command: string,
   args: string[] = [],
   cwd: string = "",
@@ -83,18 +83,20 @@ export destructive def exec(
     stdin: stdin
   })
 
-  return _exec(
-    command,
-    args,
-    cwd,
-    timeout,
-    stdin,
-    {
-    allowedExecutables: allowedExecutables,
-    blockedCommands: blockedCommands,
-    allowedPaths: allowedPaths
-  },
-  )
+  destructive {
+    return _exec(
+      command,
+      args,
+      cwd,
+      timeout,
+      stdin,
+      {
+      allowedExecutables: allowedExecutables,
+      blockedCommands: blockedCommands,
+      allowedPaths: allowedPaths
+    },
+    )
+  }
 }
 
 /**
@@ -102,7 +104,7 @@ export destructive def exec(
  * shell command string itself, so prefer running an executable directly with
  * structured arguments when capability narrowing matters.
  */
-export destructive def bash(
+export def bash(
   command: string,
   cwd: string = "",
   timeout: number = 0,
@@ -132,16 +134,18 @@ export destructive def bash(
     stdin: stdin
   })
 
-  return _bash(
-    command,
-    cwd,
-    timeout,
-    stdin,
-    {
-    blockedCommands: blockedCommands,
-    allowedPaths: allowedPaths
-  },
-  )
+  destructive {
+    return _bash(
+      command,
+      cwd,
+      timeout,
+      stdin,
+      {
+      blockedCommands: blockedCommands,
+      allowedPaths: allowedPaths
+    },
+    )
+  }
 }
 
 type LsEntry = {

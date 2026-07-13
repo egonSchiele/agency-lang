@@ -1,0 +1,62 @@
+// Finding A (anti-fail-open): a failure escaping the WHOLE function after a
+// destructive region must carry destructiveRan. In a frame-local mis-impl the
+// flip would evaporate at block exit and this would be [false].
+def wf(): Result {
+  destructive {
+    return failure("boom")
+  }
+}
+node frameEscape() {
+  const r = wf()
+  if (isFailure(r)) {
+    return [r.destructiveRan]
+  }
+  return "unexpected"
+}
+
+// Finding D: a `return` inside a destructive region exits the function.
+def wr(): number {
+  destructive {
+    return 42
+  }
+}
+node returnInBlock() {
+  return wr()
+}
+
+// Finding B: a `let` declared inside the region is visible after it (the region
+// is transparent — no new scope). A frame-bearing block would leave `y`
+// unresolved.
+def dv(): number {
+  destructive {
+    let y = 10
+  }
+  return y + 1
+}
+node declVisible() {
+  return dv()
+}
+
+// Interrupts work inside a destructive region: pause on the interrupt, resume,
+// and complete.
+def ib(): string {
+  destructive {
+    interrupt("go?")
+    return "done"
+  }
+}
+node interruptInBlock() {
+  return ib()
+}
+
+// Interrupt inside the region, with a statement AFTER the region — resume must
+// land on the correct (continuous) substep.
+def ib2(): string {
+  destructive {
+    interrupt("go?")
+  }
+  return "after"
+}
+node interruptAfter() {
+  return ib2()
+}

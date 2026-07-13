@@ -1,0 +1,7 @@
+import { agencyCodingAgent } from "std::agents/agency"
+
+// Compile-time wiring check (not invoked — would hit the LLM + subprocess).
+// Behavior covered by the real-LLM efficacy suite.
+node agencyCodingAgentExported(): boolean {
+  return true
+}

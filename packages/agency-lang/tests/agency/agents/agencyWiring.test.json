@@ -1,0 +1,6 @@
+{
+  "sourceFile": "agencyWiring.agency",
+  "tests": [
+    { "nodeName": "agencyCodingAgentExported", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

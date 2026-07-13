@@ -2,6 +2,7 @@
 
 **Date:** 2026-07-12
 **Status:** Design (awaiting review → implementation plan)
+**Revised:** 2026-07-12 after plan review — reuse `Feedback` (not a new `Verdict`); lift `verify` into stdlib; file-per-agent; `guard`-based caps.
 
 ## Motivation
 
@@ -19,245 +20,219 @@ Two problems motivate this work:
    wire prompts + tools + loops by hand every time.
 2. **`writeAgency` is unreliable.** Its system prompt *states* the syntax rules
    ("must have a `node main`", "return the value") yet the model still breaks
-   them — wrong `for`-loop syntax, missing `main`, printing instead of
-   returning. Stated rules "wash out."
+   them. Stated rules "wash out."
 
-This design ships a small library of **callable, batteries-included agent
-primitives** (`std::agents`) and fixes the reliability problem with two
-mechanisms proven in the literature and in a recent LangChain "tune the harness,
-not the model" playbook: **worked examples** and **guidance at the point of
-need**.
+This design ships a small library of **callable, composable, batteries-included
+agent primitives** and fixes the reliability problem with two mechanisms proven
+in the literature and in a recent LangChain "tune the harness, not the model"
+playbook: **worked examples** and **guidance at the point of need**.
 
 ### Prior art this builds on
 
 - **CodeAct** (ICML 2024): code-as-action beats JSON tool calls (~+20pp on
-  complex tasks, ~30% fewer steps). Validates plan/action-as-code.
+  complex tasks, ~30% fewer steps).
 - **ADAS / Meta Agent Search** (ICLR 2025): a meta-agent programs new agents in
-  code; large gains, but via *offline search with a fitness signal*, not
-  zero-shot generation.
-- **Voyager** (2023): agent writes code skills into a retrievable library with
-  iterative refinement; its worst failure mode is *unsandboxed* runaway code —
-  exactly what Agency's handler-sandbox + `runCode` ceilings fix.
+  code — big gains, but via *offline search with a fitness signal*.
+- **Voyager** (2023): agent writes code skills with iterative refinement; its
+  worst failure mode is *unsandboxed* runaway code — what Agency's
+  handler-sandbox + `runCode` ceilings fix.
 - **MAST failure taxonomy** (2025): multi-agent systems fail 41–86.7%; dominant
-  modes are specification (42%) and verification gaps (21%) — i.e. the "domino"
-  risk of agents-writing-agents is real and must be bounded.
-- **Agentless** (FSE 2025): a simple pipeline beat complex agents on SWE-bench —
-  added machinery must earn its keep; route simple tasks straight through.
-- **LangChain "Tuning the harness, not the model" (Nemotron 3 Ultra)**: pure
-  harness tuning lifted 0.80 → 0.84 (0.86 best) at ~10× lower cost than Opus.
-  Key lever: **guidance delivered at the point of need** works where the same
-  wording in the system prompt washes out.
+  modes are specification (42%) and verification gaps (21%) — the "domino" risk
+  is real and must be bounded.
+- **Agentless** (FSE 2025): a simple pipeline beat complex agents — added
+  machinery must earn its keep; route simple tasks straight through.
+- **LangChain "Tuning the harness, not the model" (Nemotron 3 Ultra)**: harness
+  tuning lifted 0.80 → 0.84 at ~10× lower cost. Key lever: **guidance at the
+  point of need** works where the same wording in the system prompt washes out.
 
 ## Goals
 
-- Ship `std::agents`: callable, batteries-included agent primitives the
-  meta-agent (or a human) composes directly.
+- Ship `std::agents`: callable, composable, batteries-included agent primitives.
+- **Composition, not configuration** (hard constraint): agents are independent
+  `def`s combinable in any way. No mandatory base, no config schema, no
+  `verifyMode` enum. Shared logic is only ever a plain callable helper.
 - Make each primitive reliable out of the box: strong prompt with worked
   examples, curated tools, a built-in verify→fix loop, output-contract
   discipline, and point-of-need guidance injection.
 - Improve `writeAgency` itself (worked examples + point-of-need typecheck-error
   guidance) — a strict upgrade that helps every caller.
-- Provide the substrate for idea #2 ("the agent writes an agent as its plan")
-  via `plannerAgent`, with the domino risk structurally bounded.
+- Provide the substrate for idea #2 (`plannerAgent`) with the domino risk
+  structurally bounded. (Deferred to a Part-2 plan.)
 
 ## Non-goals (v1)
 
-- Rewiring the main `agency agent` (`--agent code`) to use these primitives, or
-  fixing its shadowed-`verify` / crashing-`review()` bug. Separate follow-up.
-- `getEffects` support for a compiled `CompiledProgram` (needed for a pre-run
-  effect-envelope preview). Fast-follow; v1 shows source for approval and relies
-  on runtime handlers for safety.
+- Rewiring the main `agency agent` (`--agent code`), or fixing its shadowed-
+  `verify` / crashing-`review()` bug. Separate follow-up.
+- Introducing a new result type. We **reuse the existing `Feedback`** type.
+- `getEffects` for a compiled `CompiledProgram` (pre-run effect-envelope
+  preview). Fast-follow; v1 shows source for approval and relies on handlers.
 - Deep agent-writes-agent recursion beyond one level.
 - A higher-order `verified(agent, criteria)` combinator (see Architecture).
 
 ## Architecture
 
-New module **`std::agents`** (distinct from `std::agency`, which holds the
-lower-level `writeAgency` / `runCode` / `getEffects` / `review`).
+New module namespace **`std::agents`**, one file per agent (nested stdlib
+modules, like `std::ui/layout` and `std::web/search`):
+
+- `stdlib/agents/coding.agency`  → `std::agents/coding`   (`codingAgent`)
+- `stdlib/agents/research.agency` → `std::agents/research` (`researchAgent`)
+- `stdlib/agents/agency.agency`  → `std::agents/agency`   (`agencyCodingAgent`)
+
+Each agent is imported directly. **No `std::agents` barrel** that re-exports
+them — re-exporting types alongside tool-schema'd functions is the TDZ init
+crash the ADAS work hit.
+
+### Result type: reuse `Feedback`
+
+We do **not** introduce a `Verdict` type. Both verifiers return the existing
+`std::agency` `Feedback`:
+
+```
+type Feedback = { error: boolean; feedback: string; data?: any }
+```
+
+`error` (per-line) lets a verifier report what the agent did *well* (`error:
+false`) as well as what's wrong (`error: true`) — useful signal for the fix
+loop. `data` stays as an arbitrary-detail escape hatch. Agents gate their loop
+on the existing `feedbackHasErrors(...)` and feed `renderFeedback(...)` back.
+Reused as-is: `Feedback`, `feedbackHasErrors`, `renderFeedback`,
+`mergeFeedback`.
 
 ### Why no `verified()` combinator
 
 An earlier proposal factored verification into a `verified(makeAgent, criteria)`
-combinator. Rejected, for two reasons:
+combinator. Rejected: (1) verification methods genuinely differ per agent, and
+(2) Agency can't express it cleanly — no lambdas; one trailing block per call;
+blocks can't be assigned or returned; and agent bodies throw interrupts, so
+re-invoking one inside a retry loop hits block interrupt-replay fragility (the
+`#513` family).
 
-1. **Verification methods genuinely differ per agent** — running produced files
-   (coding) vs judging grounding/completeness (research) vs typecheck + run
-   (Agency). Only the *loop shape* is common.
-2. **Agency can't express it cleanly.** No lambdas; only one trailing block per
-   call; blocks can't be assigned or returned; and — decisively — agent bodies
-   throw interrupts (tool approvals), so re-invoking an agent body inside a
-   retry loop hits block interrupt-replay fragility (same family as the `#513`
-   nested-pause value loss).
+**Instead:** each agent owns its own small verify→fix loop inline, re-prompting
+its own `llm()` with `renderFeedback(...)`. Composition for idea #2 is ordinary
+sequential code: `writeAgency(subTask) → runCode(source) → verify(subTask)`.
 
-**Instead:** each agent owns its own small verify→fix loop inline (the pattern
-`lib/agents/agency-agent/subagents/code.agency` already uses), re-prompting its
-*own* `llm()` with the gaps as a plain string. What's shared are **plain
-functions**, not a combinator:
+### Verifiers: two, not three
 
-- `verifyArtifact(task): Verdict` — reconstruct success criteria from the task,
-  run the produced files/programs, check the output contract literally. New in
-  `std::agents`, adapted from the agent's `verify.agency`. Used by
-  `codingAgent`, `agencyCodingAgent`, and `plannerAgent`.
-- `Verdict` type + `renderGaps(gaps)` — new in `std::agents` (the existing
-  `verify.agency` versions live in the agent tree, not stdlib).
-- `review` / `Feedback` / `renderFeedback` — reused from `std::agency` for the
-  Agency-specific typecheck path.
+- **`review(source, task)`** (exists in `std::agency`): *static* Agency analysis
+  — parse + typecheck + optional LLM code-vs-task judgment. Returns
+  `Result<Feedback[]>`. Keep as-is.
+- **`verify(task)`**: *dynamic* — reconstruct the task's success criteria and
+  **run the artifact** against them. Currently lives in the agent tree
+  (`lib/agents/agency-agent/subagents/verify.agency`, returning a bespoke
+  `Verdict`). **Lift it into `std::agency`**, change its return to
+  `Result<Feedback[]>`, and have the agent's `verify.agency` *delegate* to it —
+  exactly how `review.agency` already delegates to `std::agency::review`.
 
-Composition for idea #2 falls out as ordinary sequential code, no combinator:
-`writeAgency(subTask) → runCode(source) → verifyArtifact(subTask)`.
+So there are two verification primitives (static `review`, dynamic `verify`),
+both returning `Result<Feedback[]>`. No `verifyArtifact`.
 
 ## Exports
 
-Minimal signatures on purpose: an LLM caller configures poorly (cf. the
-`memory: 512`-bytes unit bug), so caps stay internal; the only optional param is
-`context` for extra material passed down.
-
-### Worker agents
+Signature convention (uniform, so agents compose interchangeably), with the
+`guard`-based runaway caps exposed as parameters (a high cap beats an infinite
+loop):
 
 ```
-def codingAgent(task: string, context: string = ""): string
+def codingAgent(task: string, context: string = "",
+                maxCost: number = $50.00, maxTime: number = 10m): string
 ```
-- Tools: `read`, `write`, `edit`, `ls`, `glob`, `grep`, and a shell tool
-  (`bash`/`exec`). Exact sourcing pinned in the plan (`std::shell` provides
-  `ls`/`glob`/`grep`/`exec`).
-- Verify: `verifyArtifact(task)` — runs the produced files/programs.
+- Tools: `read`/`write` (prelude), `edit` (`std::fs`), `ls`/`glob`/`grep`/`bash`
+  (`std::shell`).
+- Loop: `guard(cost: maxCost, time: maxTime) as { while (!done) { run;
+  verify(task); done = !feedbackHasErrors(fb) } }`. The `guard` is the hard cap;
+  `done` is the clean exit. No numeric round-counter.
+- Verify: `verify(task)` — runs the produced files/programs.
 - Returns: a short summary reply; the real output is filesystem side effects.
-- Reliability: output-contract discipline in the prompt + point-of-need
-  reminder before finalizing (see Reliability).
 
 ```
-def researchAgent(task: string, context: string = ""): string
+def researchAgent(task: string, context: string = "",
+                  maxCost: number = $50.00, maxTime: number = 10m): string
 ```
-- Tools: `fetch`/`fetchJSON`/`fetchMarkdown` (`std::http`), `search`
-  (`std::wikipedia`), and the LLM's built-in web-search capability where the
-  configured backend provides it (degrades gracefully when search is off).
-- Verify: a grounding/completeness judge over the answer + its sources (NOT
-  `verifyArtifact` — there is no artifact to run).
+- Tools: `search` (`std::web/search`), `fetch`/`fetchMarkdown` (`std::http`),
+  `search` (`std::wikipedia`), `read`. Degrades gracefully if web search is off.
+- Verify: a grounding/completeness LLM judge returning `Result<Feedback[]>` (NOT
+  the artifact-running `verify` — there is no artifact to run).
 - Returns: synthesized findings, with sources.
 
 ```
-def agencyCodingAgent(task: string, context: string = ""): Result<string, WriteFailure>
+def agencyCodingAgent(task: string, context: string = "",
+                      maxCost: number = $50.00, maxTime: number = 10m): Result<string, WriteFailure>
 ```
 - The flagship — "`writeAgency` done right."
-- Flow: generate (improved prompt with worked examples + docs) →
-  typecheck-repair (existing `writeAgency` loop) → `runCode` → `verifyArtifact`.
+- Flow: generate (improved `writeAgency`) → typecheck-repair → `runCode` →
+  `verify`. Wrapped in `guard(cost:, time:)`.
+- Caveat: `runCode` runs *inside* the guard; `guard` + nested pause/resume has
+  the `#513` bug, so a paused generated program can lose the guard value.
+  Acceptable for v1 (rare in these tasks); documented, watched.
 - Returns: source that compiles, typechecks, AND does the task.
-- Built on the improved `writeAgency` (below).
 
-### Meta-agent (idea #2)
-
-```
-def plannerAgent(task: string, context: string = "", maxCost: number = $2.00): string
-```
-
-Control flow, built to bound the domino risk:
-
-1. **Route by complexity first** (Agentless). Straightforward tasks skip
-   code-gen and delegate to `codingAgent`/`researchAgent`. Code-gen only for
-   genuinely multi-part tasks.
-2. **Write the agent-as-plan:** `writeAgency(task, context)` generates a program
-   that composes the worker agents + tools. The generated agent *is* the plan.
-3. **Gate + run:** surface the generated source for approval, then
-   `runCode(source, maxCost: <remaining budget>)`. Handler-sandboxed: every
-   effect is gated by the parent's handlers at runtime even if the code drifted.
-4. **Verify:** `verifyArtifact(task)`; on gaps with budget left, feed them back
-   to `writeAgency` to patch and re-run (capped).
-5. **Fallback:** on repeated failure, degrade to `codingAgent(task)`. A drifting
-   generation never strands the task.
-
-**Recursion is bounded structurally, not by a counter:** the generated agent's
-import surface includes the *worker* agents (non-recursive) but NOT
-`plannerAgent` itself. So agent-writes-agent is one level deep by construction.
-
-**Caveat:** a pre-run *effect-envelope* preview wants `getEffects` on a compiled
-program, which today works only per-exported-symbol of a static unit. v1 shows
-the source for approval; runtime handlers provide the actual safety.
-
-### Shared helper
+### Meta-agent (idea #2) — Part-2 plan
 
 ```
-def verifyArtifact(task: string): Verdict
+def plannerAgent(task: string, context: string = "",
+                 maxCost: number = $50.00, maxTime: number = 20m): string
 ```
-Plus `Verdict` and `renderGaps` (new in `std::agents`).
+Route by complexity first (Agentless); otherwise write the agent-as-plan via
+`writeAgency`, gate + `runCode` it, `verify`, patch on failure, and fall back to
+`codingAgent`. Recursion is bounded structurally: the generated agent's import
+surface includes the worker agents but NOT `plannerAgent`. Deferred to Part 2.
 
-## Reliability recipe (how we guarantee usefulness)
+## Reliability recipe
 
-Every agent gets:
-
-1. **Worked examples where they matter.** The "examples beat rules" lesson
-   applies hardest to agents that emit *Agency* code:
-   - `agencyCodingAgent` / `writeAgency`: prompt embeds 2–3 complete, typechecked
-     Agency programs (imports, `node main`, explicit `return`) as static consts.
-     One source of truth — the same consts few-shot `writeAgency`.
-   - `codingAgent` / `researchAgent`: emit Python/shell/prose, so full Agency
-     examples don't apply; reliability comes from output-contract discipline +
-     the verify loop.
-
-2. **Guidance at the point of need** (the Nemotron lever). Baseline rules +
-   examples live in the system prompt, but the rules that empirically wash out
-   are *also* delivered as a message at the moment they are needed:
-   - `agencyCodingAgent` / `writeAgency`: when a typecheck error returns, inject
-     the *specific* syntax rule next to *that* error (e.g. "Agency has no
-     C-style `for`; count with `while`"), not just the up-front rule list.
-   - `codingAgent`: inject the output-contract reminder ("report the concrete
-     result; match the exact filename/format") as a message right before the
-     model finalizes.
-   - `verifyArtifact` gap feedback is already this pattern (a message at the
-     decision point) — lean into it, don't treat it as a fallback.
-
+1. **Worked examples where they matter.** Hardest for agents emitting *Agency*
+   code: `agencyCodingAgent` / `writeAgency` embed 2–3 complete, typechecked
+   Agency programs (imports, `node main`, explicit `return`) as static consts —
+   the same consts few-shot `writeAgency`. `codingAgent`/`researchAgent` emit
+   Python/shell/prose, so they rely on output-contract discipline + the verify
+   loop.
+2. **Guidance at the point of need** (the Nemotron lever): rules that wash out in
+   the system prompt are *also* delivered as a message when needed —
+   typecheck-error → the specific syntax rule; pre-finalize → the output-contract
+   reminder; `renderFeedback(...)` gap feedback is already this pattern.
 3. **Curated, fixed toolset** — no LLM-chosen tool wiring.
+4. **`guard`-capped verify→fix loop** — `guard(cost:, time:)` + boolean exit.
+5. **Output-contract discipline** in the prompt (the gap all four surveyed
+   harnesses under-do for Claude).
 
-4. **Built-in verify→fix loop** — capped by rounds + `maxCost`.
+### Principles noted, out of v1 scope
 
-5. **Output-contract discipline** — the gap all four surveyed harnesses
-   (opencode / pi / hermes / our own) under-do for Claude.
-
-### Design principles noted but out of v1 scope
-
-- **Plan-then-review injected beats** — a cheap injected "plan first / review
-  before finalizing" message could help the worker agents (validated by
-  Nemotron). Considered for a later iteration.
-- **Cost-ladder evaluation** — screen changes on a cheap sample first, run the
-  full suite only when the win holds and regresses nothing. A testing/CI
-  discipline (below), not agent behavior.
+- Plan-then-review injected beats (Nemotron). Later iteration.
+- Cost-ladder evaluation (cheap sample first). A testing/CI discipline.
 
 ## `writeAgency` improvement
 
-A strict upgrade to the existing function, independent of the new agents:
-
-- Add 2–3 worked Agency examples to `writeSysPrompt`.
-- On a typecheck-repair round, inject the specific rule matched to the error
-  (point-of-need), rather than relying on the static rule list.
+Strict upgrade, independent of the new agents: add 2–3 worked Agency examples to
+`writeSysPrompt`, and on a typecheck-repair round inject the specific rule
+matched to the error (point-of-need) before the diagnostics.
 
 ## Testing
 
-Two tiers, reusing existing infrastructure:
-
-- **PR tier** — deterministic mock-LLM tests in the `test:agents` suite assert
-  *wiring* (each agent registers, routes, caps apply). Fast, free, no secrets.
+- **PR tier** — deterministic mock-LLM tests assert *wiring* (each agent exports,
+  typechecks, caps present). Fast, no secrets.
 - **Post-merge tier** — real-LLM tests in `.github/workflows/test-with-llm.yml`
-  assert *efficacy*: each agent solves a known task and its `verifyArtifact`
-  passes. This is also the natural feed for the over-time performance graph
-  (separate CI-tracking idea).
+  assert *efficacy* (each agent solves a known task; its `verify`/judge passes),
+  non-blocking (`continue-on-error`). Natural feed for the over-time graph.
 - **Cost-ladder discipline** — screen on a cheap sample before the full suite.
 
 ## Dependencies (all exist)
 
-`std::agency` (`writeAgency`, `runCode`, `getEffects`, `review`, `Feedback`,
-`renderFeedback`, `WriteFailure`), `std::shell` (`ls`/`glob`/`grep`/`exec`),
-`std::http`, `std::wikipedia`, `std::thread` (`systemMessage`), and `docsSkill`
-for the Agency agent.
+`std::agency` (`writeAgency`, `runCode`, `review`, `Feedback`,
+`feedbackHasErrors`, `renderFeedback`, `mergeFeedback`, `WriteFailure`),
+`std::shell` (`ls`/`glob`/`grep`/`exec`/`bash`), `std::fs` (`edit`), `std::http`,
+`std::wikipedia`, `std::web/search`, `std::thread` (`systemMessage`), the
+`guard` primitive, prelude (`read`/`write`), and `docsSkill` for the Agency
+agent.
 
 ## Risks / open questions
 
-- **Point-of-need injection mechanics.** Delivering a rule "next to the data"
-  means putting it in the tool result or as an injected message. Confirm the
-  cleanest way to do this in Agency's `llm()`/thread model during planning.
-- **`verifyArtifact` fail-open vs strict.** The current `verify.agency` leans
-  "satisfied when unsure." For output-contract checks (exact filename, keys,
-  units, trailing newline) it should be *strict*. Decide the default.
+- **Lifting `verify` to `std::agency`.** Confirm no circular-import or prelude
+  issue when a stdlib module hosts a tool-using LLM agent; confirm the agent's
+  `verify.agency` can delegate cleanly (mirror `review.agency`).
+- **`verify` strictness.** The current `verify.agency` leans "satisfied when
+  unsure." For output-contract checks (exact filename, keys, units, trailing
+  newline) it should be *strict* — emit `error: true` findings on near-misses.
 - **`researchAgent` web-search availability** varies by backend; the grounding
-  judge must not hard-fail when search is off.
-- **`plannerAgent` cost accounting** across `runCode` + verify rounds must stay
-  within the single `maxCost` budget (watch the `#513` nested-pause interaction
-  if the generated program itself pauses).
+  judge must not hard-fail when search is off (documented skip in CI).
+- **`guard` + `#513`** interaction inside `agencyCodingAgent` / `plannerAgent`
+  when a generated program pauses.
+- **Point-of-need injection mechanics** in Agency's `llm()`/thread model.

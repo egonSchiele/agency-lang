@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { writeFileSync, unlinkSync } from "fs";
+import { writeFileSync, unlinkSync, readFileSync } from "fs";
 import path from "path";
 import os from "os";
 import { parseAgency } from "../parser.js";
 import { SymbolTable } from "../symbolTable.js";
+import { getStdlibDir } from "../importPaths.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
 import type { TypeCheckError } from "./types.js";
@@ -105,5 +106,29 @@ describe("reserved-name declaration check", () => {
       (e) => e.message.includes("callback") && e.message.includes("reserved"),
     );
     expect(reserved).toHaveLength(1);
+  });
+
+  // Regression: the non-templated stdlib prelude (`std::index`) is the
+  // canonical *definition* site of these built-ins (e.g. `export def
+  // callback(...)`), so it must be exempt from the reserved-name check.
+  // Before the exemption, typechecking the prelude reported AG4002 against its
+  // own `callback`, and because the prelude is auto-imported everywhere that
+  // one error cascaded into every file's typecheck step (whole suite -> ~34%).
+  it("exempts the stdlib prelude from the reserved-name check (its own builtins)", () => {
+    const preludePath = path.join(getStdlibDir(), "index.agency");
+    const source = readFileSync(preludePath, "utf-8");
+    const parseResult = parseAgency(source, {});
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return;
+    const symbolTable = SymbolTable.build(preludePath, {});
+    const info = buildCompilationUnit(
+      parseResult.result,
+      symbolTable,
+      preludePath,
+      source,
+    );
+    const errors = typeCheck(parseResult.result, {}, info).errors;
+    const reserved = errors.filter((e) => e.message.includes("reserved built-in"));
+    expect(reserved).toEqual([]);
   });
 });

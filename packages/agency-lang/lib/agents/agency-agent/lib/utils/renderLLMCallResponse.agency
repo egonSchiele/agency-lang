@@ -1,0 +1,27 @@
+import { formatArgs } from "../utils.agency"
+
+type ToolCallData = {
+  name: string;
+  arguments: any
+}
+
+type LLMResponse = {
+  output?: string;
+  toolCalls: ToolCallData[];
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens: number };
+  cost: { inputCost: number; outputCost: number; cachedInputCost: number; totalCost: number; currency: string };
+  model: string
+}
+
+export def renderLLMCallResponse(data: LLMResponse): string {
+  let response = []
+  if (data.output != "" && data.output != null && data.output != undefined) {
+    response.push(data.output)
+  }
+  if (data.toolCalls.length > 0) {
+    for (toolCall in data.toolCalls) {
+      response.push(`${toolCall.name}(${formatArgs(toolCall.arguments)})`)
+    }
+  }
+  return response.join("\n")
+}

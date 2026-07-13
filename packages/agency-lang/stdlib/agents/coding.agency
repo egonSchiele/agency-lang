@@ -7,7 +7,7 @@ import { bash, ls, glob, grep } from "std::shell"
 import { edit } from "std::fs"
 import { systemMessage, guard } from "std::thread"
 import { verify, feedbackHasErrors, renderFeedback } from "std::agency"
-import { withContext } from "std::agents/shared"
+import { withContext, unwrapGuard } from "std::agents/shared"
 
 static const codingTools: any[] = [
   read.partial(useAgentCwd: true),
@@ -59,8 +59,5 @@ export def codingAgent(task: string, context: string = "", maxAttempts: number =
     }
     return reply
   }
-  return match (captured) {
-    success(v) => v
-    failure(e) => "Agent stopped before completing: ${e.type} cap reached."
-  }
+  return unwrapGuard(captured, "Coding")
 }

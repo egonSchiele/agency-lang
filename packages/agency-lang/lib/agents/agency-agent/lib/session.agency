@@ -1,0 +1,217 @@
+/** @module In-session model selection for the agency agent. Holds the
+  `/model` command's switch logic and the model pickers. This module sits
+  ABOVE the resolution / slot / shared layers: it imports from them, and
+  nothing they own imports back, so there is no import cycle. */
+
+import { listHostedModels } from "std::llm"
+import { disableMemory } from "std::memory"
+import { ChoiceItem } from "std::ui"
+import { pushMessage } from "std::ui/cli"
+
+import {
+  filterHostedModels,
+  ModelFilters,
+ } from "./modelFilters.agency"
+import {
+  parseModelFlag,
+  embeddingSpecHasProvider,
+  knownProviders,
+  missingProviderEnvVar,
+  Resolved,
+ } from "./models.agency"
+import {
+  buildLayers,
+  resolveAll,
+  diffResolved,
+  Ctx,
+  SlotChange,
+ } from "./resolution.agency"
+import {
+  getModelSettings,
+  loadSettings,
+ } from "./settings.agency"
+import { SLOTS } from "./slots.agency"
+import {
+  demoteProvider,
+  applyResolved,
+  promoteAll,
+  overrideFromResolved,
+ } from "../shared.agency"
+
+// In-session model selection state.
+export type Session = {
+  pin: string;
+  slots: Record<string, string>
+}
+
+// Whether startup enabled memory WITH the embedding override. The pause
+// guard in reactToSlotChange consults this instead of re-deriving from the
+// slots: a keyless override took the fallback path, so memory runs on
+// DERIVED embeddings and a main-provider change still shifts the embedding
+// space. Exported mutator so tests (and agent startup) can drive the guard.
+let _memoryEmbeddingsPinned = false
+
+export def markMemoryEmbeddingsPinned(pinned: boolean) {
+  _memoryEmbeddingsPinned = pinned
+}
+
+/** Apply an in-session model selection. Takes effect on
+  the NEXT turn; no in-flight call is mutated. */
+export def switchModel(
+  prior: Session,
+  spec: string,
+  ctx: Ctx,
+  before: Record<string, Resolved>,
+): { session: Session; resolved: Record<string, Resolved>; changes: SlotChange[] } {
+  // The caller builds ctx from currentProvider(), which returns the
+  // PROMOTED name on openai sessions. priceDefault and the built-in
+  // tables key by public provider names, so demote before resolving —
+  // otherwise a switch that lets any slot fall through to the built-in
+  // defaults fails with "openai-responses has no built-in defaults".
+  const ctx2: Ctx = {
+    provider: demoteProvider(ctx.provider),
+    price: ctx.price
+  }
+  let next: Session = JSON.parse(JSON.stringify(prior))
+  const parsed = parseModelFlag(spec)
+  if (parsed.slot != "" && !SLOTS.includes(parsed.slot)) {
+    pushMessage(
+      color.red(
+      "Unknown model slot '${parsed.slot}'. Valid slots: ${SLOTS.join(", ")}.",
+    ),
+    )
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
+  }
+  if (parsed.slot == "embedding" && !embeddingSpecHasProvider(parsed.model)) {
+    // The embedding slot exists to point AWAY from the chat provider, so
+    // the provider can never be inferred. Require the explicit form.
+    pushMessage(
+      color.red(
+      "Embedding models need the provider/model form, e.g. embedding=openai/text-embedding-3-small.",
+    ),
+    )
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
+  }
+  if (parsed.slot == "") {
+    next.pin = parsed.model
+  } else {
+    next.slots[parsed.slot] = parsed.model
+  }
+
+  // A saved provider (settings.model.provider) means a provider is established,
+  // so a unified provider/model spec should not be split during resolution.
+  const settings = getModelSettings(loadSettings())
+  const providerEstablished = settings.provider != null && settings.provider != ""
+  const layers = buildLayers(
+    next.pin,
+    next.slots,
+    "",
+    {},
+    settings,
+    knownProviders(),
+    providerEstablished,
+  )
+  const all = resolveAll(layers, ctx2)
+  if (isFailure(all)) {
+    pushMessage(color.red("Could not switch model: ${all.error}"))
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
+  }
+  const resolved = promoteAll(all.value)
+  applyResolved(resolved)
+  return {
+    session: next,
+    resolved: resolved,
+    changes: diffResolved(before, resolved)
+  }
+}
+
+/** React to one resolved-slot change. Phase 1: a `main`-slot provider change
+  means the embedding space behind memory changed, so pause memory and warn.
+  (std::memory has no tier-2-only toggle yet -- full pause; structured recall
+  returns when a selective toggle lands.) Returns true if it emitted the notice. */
+export def reactToSlotChange(change: SlotChange): boolean {
+  if (change.slot == "main" && change.before.provider != change.after.provider) {
+    // Skip the pause only when startup actually enabled memory WITH the
+    // override. A set-but-keyless slot took the fallback path, so memory
+    // runs on derived embeddings and the provider change still shifts
+    // the embedding space behind recall.
+    if (_memoryEmbeddingsPinned) {
+      return false
+    }
+    pushMessage(
+      color.dim(
+      "Warning: provider changed - memory is paused until restart (recall would be unreliable).",
+    ),
+    )
+    // `with approve`: the agent is deliberately auto-pausing memory on a
+    // provider switch, not asking the user — so don't surface an approval prompt.
+    disableMemory() with approve
+    return true
+  }
+  if (change.slot == "embedding") {
+    const override = overrideFromResolved(change.after)
+    if (override != null) {
+      const missing = missingProviderEnvVar(override.provider)
+      if (missing != "") {
+        pushMessage(
+          color.yellow(
+          "Warning: the embedding slot needs ${missing}, which is not set. The assignment takes effect at next agent start, and memory falls back to the default embedding behavior until it is exported.",
+        ),
+        )
+        return true
+      }
+      // The healthy path must not be silent: enableMemory already ran,
+      // so the user would otherwise believe embeddings switched now.
+      pushMessage(
+        color.dim(
+        "Embedding slot set: memory embeddings use ${override.provider}/${override.model} at next agent start.",
+      ),
+      )
+      return true
+    }
+  }
+  return false
+}
+
+// ChoiceItem list for the model pickers: the hosted catalog, filtered, each
+// labeled with provider + input price for an informed pick.
+export def modelChoiceItems(filters: ModelFilters): ChoiceItem[] {
+  let items: ChoiceItem[] = []
+  for (model in filterHostedModels(listHostedModels(), filters)) {
+    const label = "${model.name}  (${model.provider}, $${model.inputCost}/1M in)"
+    items.push({
+      key: model.name,
+      label: label
+    })
+  }
+  return items
+}
+
+// Parse a `/models [provider]` command line into filters. Bare `/models` (or a
+// trailing-space-only arg) yields no filters; `/models <provider>` narrows to
+// one provider. Extracted from the handler so it is unit-testable.
+export def parseModelsFilters(cmd: string): ModelFilters {
+  const prefix = "/models "
+  if (!cmd.startsWith(prefix)) {
+    return {}
+  }
+  const arg = cmd.substring(prefix.length).trim()
+  if (arg == "") {
+    return {}
+  }
+  return {
+    provider: arg
+  }
+}

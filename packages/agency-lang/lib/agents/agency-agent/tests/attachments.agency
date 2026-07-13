@@ -1,5 +1,6 @@
 import { detectAttachments, modalityFilter } from "../lib/attachments.agency"
 import { applyResolved } from "../shared.agency"
+import { AttachmentSource } from "std::thread"
 import { setAgentCwd } from "std::index"
 import { exec } from "std::shell"
 import { setEnv } from "std::system"
@@ -15,7 +16,11 @@ node detectsPngPath(): string {
     return "count=${detected.attached.length}"
   }
   const item = detected.attached[0]
-  return "1|${item.label}|${item.attachment.type}|${item.attachment.source.kind}"
+  // Annotate the source so the checker collapses the `AttachmentSource |
+  // AttachmentSource` union (from the two Attachment variants) to the single
+  // alias, whose `kind` discriminant is then accessible.
+  const source: AttachmentSource = item.attachment.source
+  return "1|${item.label}|${item.attachment.type}|${source.kind}"
 }
 
 node detectsPdfPath(): string {

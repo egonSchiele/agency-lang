@@ -1,0 +1,6 @@
+{
+  "sourceFile": "plannerReject.agency",
+  "tests": [
+    { "nodeName": "rejectReturnsRejectedWithoutRunning", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

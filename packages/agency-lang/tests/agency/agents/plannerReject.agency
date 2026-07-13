@@ -1,0 +1,13 @@
+import { runApproved } from "std::agents/planner"
+
+// Deterministic safety invariant: when the plan-approval interrupt is REJECTED,
+// runApproved returns the "rejected" state and never runs the generated code.
+// `with reject` auto-rejects the planApprove interrupt; runApproved's try-gate
+// then folds that to rejectedState. runCode is on the mutually-exclusive
+// (approved) path, so reaching rejectedState proves nothing ran. No LLM: this
+// exercises the control flow only (getEffects is a pure parse of the source).
+node rejectReturnsRejectedWithoutRunning(): boolean {
+  const state = { summary: "", done: false, extra: "" }
+  const result = runApproved("t", "export node main() { return 1 }", state) with reject
+  return result.summary =~ re/rejected/ && result.done
+}

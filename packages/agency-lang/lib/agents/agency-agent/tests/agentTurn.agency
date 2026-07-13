@@ -7,13 +7,15 @@
  * testable — this harness just calls it with the deterministic LLM
  * provider (see agentTurn.test.json) and checks the reply comes back.
  */
+import { agentReply } from "../agent.agency"
 import {
-  agentReply,
   switchModel,
   reactToSlotChange,
   markMemoryEmbeddingsPinned,
+  modelChoiceItems,
+  parseModelsFilters,
   Session,
- } from "../agent.agency"
+ } from "../lib/session.agency"
 import { knownProviders, Resolved } from "../lib/models.agency"
 import {
   resolveAll,
@@ -184,8 +186,33 @@ node reactSilentOnSameProvider(): boolean {
 }
 
 
-import { modelChoiceItems, parseModelsFilters } from "../agent.agency"
+import { headerModelLines } from "../lib/header.agency"
 import { hostedModelInfo } from "std::llm"
+
+// The splash header lists the resolved main + reasoning models. The internal
+// `openai-responses` promotion is demoted to the public `openai` for display.
+node headerLinesDemoteAndFormat(): string {
+  const lines = headerModelLines({
+    main: { model: "gpt-5.5", provider: "openai-responses", via: "x" },
+    reasoning: { model: "o3", provider: "openai-responses", via: "y" }
+  })
+  return lines.join(" | ")
+}
+
+// Local models resolve to a `.gguf` path; the header shows just the filename.
+node headerLinesLocalBasename(): string {
+  const lines = headerModelLines({
+    main: { model: "/home/u/models/qwen2.5-coder-7b.gguf", provider: "llama-cpp", via: "local" }
+  })
+  return lines.join(" | ")
+}
+
+// A slot that didn't resolve is skipped rather than shown blank.
+node headerLinesSkipsMissing(): number {
+  return headerModelLines({
+    main: { model: "claude-opus-4-8", provider: "anthropic", via: "x" }
+  }).length
+}
 
 // Built from the real baked catalog, so a bare filter yields items.
 node modelItemsNonEmpty(): boolean {

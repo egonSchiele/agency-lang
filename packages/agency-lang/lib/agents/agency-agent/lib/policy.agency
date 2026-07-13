@@ -1,0 +1,36 @@
+import { chooseOption } from "std::ui"
+// Print `--policy` usage and list the built-in policies (name + one-line
+// description). Shown when `--policy` is passed with no value.
+export def printPolicyHelp() {
+  print(color.bold("Usage: agency agent --policy <name | path>"))
+  print(
+    "Select the approval policy for this run: a built-in name below, or a path to a policy JSON file.",
+  )
+  print("")
+  print(color.bold("Built-in policies:"))
+  for (p in BUILTIN_POLICIES) {
+    print("  ${color.cyan(p.name)}")
+    print("      ${p.description}")
+  }
+}
+
+export def givePolicyChoice() {
+  const title = "Welcome to the agency agent. Please pick a policy to start."
+  const body = "Don't worry, you can change this later. The policy just controls how the agent asks for your approval when it wants to do something. You can also create your own custom policy file at ${POLICY_PATH} and the agent will use it automatically."
+  let items: ChoiceItem[] = [
+    {
+    key: "minimal",
+    label: "minimal default policy, you do most approvals manually"
+  },
+    {
+    key: "recommended",
+    label: "recommended default policy, allow reading files and browsing the web, no writes"
+  },
+  ]
+
+  const answer = chooseOption(title, body, items, allowFreeText: true)
+  return match(answer) {
+    "minimal" => minimalAutoApprovePolicy
+    "recommended" => recommendedAutoApprovePolicy
+  }
+}

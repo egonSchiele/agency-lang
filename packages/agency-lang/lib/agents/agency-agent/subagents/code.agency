@@ -31,6 +31,7 @@ import { withWebSearch, getSearchBackend } from "../lib/search.agency"
 import { oracleAgent } from "./oracle.agency"
 import { reviewWrittenFiles, renderFeedback, feedbackHasErrors } from "./review.agency"
 import { verify, renderGaps, unwrapVerdict } from "./verify.agency"
+import { plannerAgent } from "std::agents/planner"
 
 
 // The file-system tools (`read` / `write` / `edit` / `ls` / `glob` /
@@ -322,6 +323,13 @@ Don't force a diagram where prose is clearer — a function
 signature is a function signature. Diagrams earn their space when
 they show **relationships** or **flow**. Keep them small; if your
 diagram needs scrolling, prose is probably better.
+
+## Planning complex tasks
+
+Most tasks run directly with your tools. A genuinely multi-step task may instead
+be handled by writing and running a purpose-built plan — either automatically at
+the start, or when you call the `escalate` tool — and the plan is shown before it
+runs. After an `escalate`, report its result; do not redo the work it already did.
 """
 
 // The file-system / shell tools are partially applied with
@@ -417,6 +425,44 @@ export def setCodeOneShot(oneShot: boolean) {
 // only add system message the first time
 let _first = true
 
+// ---- Plan-as-code routing: simple tasks stay on the direct loop; complex,
+// multi-part tasks are delegated to plannerAgent (which shows a plan first).
+// The escalation runs under a tighter budget than plannerAgent's own defaults.
+
+static const ESCALATE_MAX_COST = $20.00
+static const ESCALATE_MAX_TIME = 15m
+
+type TriageResult = {
+  path: "simple" | "complex";
+  plan: string
+}
+
+static const triagePrompt = """Classify this coding task. If it is a single, straightforward change, set path to "simple" and leave plan empty. If it is multi-part or needs decomposition, set path to "complex" and outline the plan in 2 to 4 short bullets."""
+
+def triage(task: string): TriageResult {
+  const result: TriageResult = llm("${triagePrompt}\n\nTask:\n${task}")
+  return result
+}
+
+/** Pure routing decision, testable without the classifier: "planner" or "direct". */
+export def routeFor(decision: TriageResult): string {
+  return if decision.path == "complex" then "planner" else "direct"
+}
+
+def escalate(task: string, reason: string, plan: string): string {
+  """
+  Switch this task to plan-as-code: writes and runs a purpose-built agent for a
+  multi-step task, showing you the plan first. Reach for this ONLY when the task
+  genuinely needs a multi-step plan you cannot finish in a few direct edits. Do
+  NOT use it for ordinary follow-ups. After it returns, REPORT its result; do not
+  redo the work it already did.
+
+  @param reason - why this task needs a multi-step plan.
+  @param plan - your outline of the steps.
+  """
+  return plannerAgent(task, context: reason, plan: plan, maxCost: ESCALATE_MAX_COST, maxTime: ESCALATE_MAX_TIME)
+}
+
 export def codeAgent(userMsg: string, allowHandoff: boolean) {
   """
   This agent can help with all coding-related tasks,
@@ -428,7 +474,15 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
   @param allowHandoff - whether this agent is allowed to handoff to other agents.
   """
   const originalUserMsg = userMsg
+  // Triage: a multi-part task is delegated to plannerAgent (shows a plan, then
+  // runs it) instead of the direct loop. Simple tasks fall through.
+  const decision = triage(userMsg)
+  if (routeFor(decision) == "planner") {
+    return plannerAgent(userMsg, plan: decision.plan, maxCost: ESCALATE_MAX_COST, maxTime: ESCALATE_MAX_TIME)
+  }
   const tools = [...codeTools]
+  // A "simple" task that turns out to need a plan can still switch mid-flight.
+  tools.push(escalate.partial(task: userMsg))
   const otherAgents = filter(agentNames, \name -> name != "code")
   if (allowHandoff) {
     tools.push(handoff.partial(validCategories: otherAgents))

@@ -1,3 +1,6 @@
+import { applyAgentCwd } from "std::index"
+import { isAbsolute } from "std::path"
+
 import {
   _ls,
   _grep,
@@ -8,8 +11,7 @@ import {
   _exec,
   _bash,
  } from "agency-lang/stdlib-lib/shell.js"
-import { isAbsolute } from "std::path"
-import { applyAgentCwd } from "std::index"
+
 
 /** @module
   Run commands and inspect the filesystem. `exec` and `bash` run programs and
@@ -32,11 +34,36 @@ type ExecResult = {
   exitCode: number
 }
 
-effect std::exec { command: string, args: string[], subcommand: string, cwd: string, timeout: number, stdin: string }
-effect std::bash { command: string, cwd: string, timeout: number, stdin: string }
-effect std::ls { dir: string, recursive: boolean, maxResults: number }
-effect std::grep { pattern: string, dir: string, flags: string, maxResults: number }
-effect std::glob { pattern: string, dir: string, maxResults: number }
+effect std::exec {
+  command: string;
+  args: string[];
+  subcommand: string;
+  cwd: string;
+  timeout: number;
+  stdin: string
+}
+effect std::bash {
+  command: string;
+  cwd: string;
+  timeout: number;
+  stdin: string
+}
+effect std::ls {
+  dir: string;
+  recursive: boolean;
+  maxResults: number
+}
+effect std::grep {
+  pattern: string;
+  dir: string;
+  flags: string;
+  maxResults: number
+}
+effect std::glob {
+  pattern: string;
+  dir: string;
+  maxResults: number
+}
 
 export def exec(
   command: string,
@@ -83,20 +110,18 @@ export def exec(
     stdin: stdin
   })
 
-  destructive {
-    return _exec(
-      command,
-      args,
-      cwd,
-      timeout,
-      stdin,
-      {
-        allowedExecutables: allowedExecutables,
-        blockedCommands: blockedCommands,
-        allowedPaths: allowedPaths
-      },
-    )
-  }
+  return _exec(
+    command,
+    args,
+    cwd,
+    timeout,
+    stdin,
+    {
+    allowedExecutables: allowedExecutables,
+    blockedCommands: blockedCommands,
+    allowedPaths: allowedPaths
+  },
+  )
 }
 
 /**
@@ -134,18 +159,16 @@ export def bash(
     stdin: stdin
   })
 
-  destructive {
-    return _bash(
-      command,
-      cwd,
-      timeout,
-      stdin,
-      {
-        blockedCommands: blockedCommands,
-        allowedPaths: allowedPaths
-      },
-    )
-  }
+  return _bash(
+    command,
+    cwd,
+    timeout,
+    stdin,
+    {
+    blockedCommands: blockedCommands,
+    allowedPaths: allowedPaths
+  },
+  )
 }
 
 type LsEntry = {

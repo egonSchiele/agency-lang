@@ -1,0 +1,175 @@
+/** @module
+  plannerAgent: the plan-as-code meta-agent. Given a task, generate an Agency
+  program (an agent-as-plan) that composes the worker agents and tools to solve
+  it, show the plan, source, and capability envelope for approval, run it in a
+  handler-sandboxed subprocess, verify, and fall back to codingAgent on failure.
+*/
+import { writeAgency, runCode, getEffects, verify, feedbackHasErrors, renderFeedback, EffectsByExport } from "std::agency"
+import { codingAgent } from "std::agents/coding"
+import { withContext, unwrapGuard } from "std::agents/shared"
+import { guard } from "std::thread"
+import { getAgentCwd } from "std::index"
+
+/** Raised before a generated plan-agent runs, so the plan, source, and
+  capability envelope can be shown and approved. Reject halts and fails. */
+effect std::agents::planApprove {
+  plan: string;
+  source: string;
+  effects: string
+}
+
+// The building blocks a generated plan-agent may import. All std::, so runCode's
+// sandbox accepts them; `std::agents/planner` is included so a plan can decompose
+// further (recursion bounded by the runtime's subprocess maxDepth).
+static const importableSurface = """You may import and compose these building blocks (all standard library, so they run in the sandbox):
+- import { codingAgent } from "std::agents/coding"      general coding: read/write/edit/run files and shell
+- import { researchAgent } from "std::agents/research"  gather from web and Wikipedia and synthesize
+- import { agencyCodingAgent } from "std::agents/agency" write and run Agency code
+- import { plannerAgent } from "std::agents/planner"    decompose a genuinely complex sub-task into its own planned agent
+- direct tools from std::shell, std::fs, std::http, and the rest of the standard library
+
+Prefer to DO THE WORK directly: call codingAgent (or researchAgent, or direct tools) to actually create files, run commands, and produce the deliverable. Use plannerAgent ONLY for a sub-task that is itself large and multi-step; never call plannerAgent for a concrete, single-step piece of work, and never just re-plan without doing anything."""
+
+static const planExample = """EXAMPLE, compose a worker in a node main:
+import { codingAgent } from "std::agents/coding"
+node main(): string {
+  return codingAgent("clone the repo, install deps, and run the test suite")
+}"""
+
+/** Build the writeAgency instruction: emit a program whose `node main` composes
+  the building blocks to carry out `planText` for `task`. */
+export def planCodePrompt(task: string, planText: string): string {
+  return """Write a complete Agency program (a node main) that carries out this plan, composing the building blocks below.
+
+Task:
+${task}
+
+Plan:
+${planText}
+
+${importableSurface}
+
+${planExample}
+
+Return only the complete program."""
+}
+
+// One "name: eff, eff" line per exported symbol; `unknown` effects are kept so
+// the approval prompt never under-reports what the code can do.
+def renderEffectLines(byExport: Record<string, string[]>): string {
+  let lines: string[] = []
+  for (name, effs in byExport) {
+    lines.push("${name}: ${effs.join(", ")}")
+  }
+  return lines.join("\n")
+}
+
+/** Human-readable capability envelope for the approval prompt, or an honest
+  note when the effects could not be computed. */
+export def renderEffects(effects: Result<EffectsByExport>): string {
+  return match (effects) {
+    failure(_) => "(capabilities could not be computed)"
+    success(byExport) => renderEffectLines(byExport)
+  }
+}
+
+/** Show the plan, generated source, and capability envelope, and pause for
+  approval. Interactive: prompts the user. One-shot: the CLI policy decides
+  (approve-all in the benchmark sandbox). REJECT halts execution and returns a
+  failure (see docs/site/guide/interrupts.md), so callers `try` this and read a
+  failure as "not approved". */
+def requestApproval(plan: string, source: string, effects: string) raises <std::agents::planApprove> {
+  interrupt std::agents::planApprove(
+    "Approve this plan before running it?",
+    { plan: plan, source: source, effects: effects },
+  )
+}
+
+// ---- The flow. State is threaded through plain helpers so no binder-`match`
+// sits in the stepped loop (mirrors agencyCodingAgent's StepState family). ----
+
+static const PLANNER_MAX_ATTEMPTS = 2
+
+type PlanState = {
+  summary: string;
+  done: boolean;
+  extra: string
+}
+
+def rejectedState(state: PlanState): PlanState {
+  return { summary: "Plan rejected; nothing was run.", done: true, extra: state.extra }
+}
+
+def completedState(state: PlanState): PlanState {
+  return { summary: "Plan completed and verified.", done: true, extra: state.extra }
+}
+
+def regenState(state: PlanState, gaps: string): PlanState {
+  return { summary: state.summary, done: false, extra: "${state.extra}\n\nA prior attempt had problems; fix them:\n${gaps}" }
+}
+
+def fallbackState(task: string, state: PlanState): PlanState {
+  return { summary: codingAgent(task), done: true, extra: state.extra }
+}
+
+def judgeAfterRun(task: string, state: PlanState): PlanState {
+  const fb = verify(task)
+  return if feedbackHasErrors(fb) then regenState(state, renderFeedback(fb)) else completedState(state)
+}
+
+// runCode failure is handled here, not silently fallen through to verify.
+def afterRun(task: string, src: string, state: PlanState): PlanState {
+  // Run the generated agent in the agent's working directory so its file writes
+  // land where the caller expects (runCode's subprocess otherwise inherits the
+  // package dir, not the caller's cwd).
+  return match (runCode(src, cwd: getAgentCwd())) {
+    failure(err) => regenState(state, "The generated agent failed to run: ${err}")
+    success(_) => judgeAfterRun(task, state)
+  }
+}
+
+// Reject halts+fails, so the gate is try-wrapped: a failure means the run was
+// not approved and nothing ran.
+export def runApproved(task: string, src: string, state: PlanState): PlanState raises <std::agents::planApprove> {
+  const eff = getEffects(src)
+  const gate = try requestApproval("", src, renderEffects(eff))
+  return match (gate) {
+    failure(_) => rejectedState(state)
+    success(_) => afterRun(task, src, state)
+  }
+}
+
+def planStep(task: string, planText: string, state: PlanState): PlanState raises <std::agents::planApprove> {
+  const gen = writeAgency(planCodePrompt(task, planText), state.extra)
+  return match (gen) {
+    failure(_) => fallbackState(task, state)
+    success(src) => runApproved(task, src, state)
+  }
+}
+
+export def plannerAgent(task: string, context: string = "", plan: string = "", maxCost: number = $100.00, maxTime: number = 60m): string raises <std::agents::planApprove> {
+  """
+  Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
+  task, show the plan/source/effects for approval, run it in a sandboxed
+  subprocess, and verify. Falls back to codingAgent on generation failure or
+  repeated verification gaps. Recursion (a generated agent calling plannerAgent)
+  is bounded by the runtime's subprocess maxDepth and by maxCost/maxTime.
+
+  @param task - what to accomplish.
+  @param context - optional extra material.
+  @param plan - optional seed plan; when non-empty the analysis step is skipped.
+  @param maxCost - hard spend cap for the whole tree (default $100).
+  @param maxTime - hard wall-clock cap (default 60 minutes).
+  """
+  const captured = guard(cost: maxCost, time: maxTime) as {
+    const planText = if plan == "" then llm("Analyse this task and outline the steps:\n${withContext(task, context)}") else plan
+    let state: PlanState = { summary: "", done: false, extra: withContext(task, context) }
+    let attemptsLeft = PLANNER_MAX_ATTEMPTS
+    while (!state.done && attemptsLeft > 0) {
+      state = planStep(task, planText, state)
+      attemptsLeft = attemptsLeft - 1
+    }
+    return state.summary
+  }
+  return unwrapGuard(captured, "Planner")
+}

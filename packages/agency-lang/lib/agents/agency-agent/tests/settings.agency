@@ -24,7 +24,11 @@ node roundTripsTheSearchBackend(): string {
     }
   }) with approve
   const loaded = loadSettings() with approve
-  return loaded.search.backend
+  const search = loaded.search
+  if (search == null || search.backend == null) {
+    return ""
+  }
+  return search.backend
 }
 
 node missingFileLoadsAsEmpty(): string {

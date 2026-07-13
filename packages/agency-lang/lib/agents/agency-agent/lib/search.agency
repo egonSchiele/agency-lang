@@ -66,7 +66,24 @@ export type SearchBackend = "hosted" | "tavily" | "brave" | "off"
 // the earlier draft of this plan flagged.
 export type SearchSession = {
   isLocal: boolean;
-  activeBackend: string;
+  activeBackend: SearchBackend;
+}
+
+// Coerce an untrusted string (a saved settings value, a slash-command
+// argument) to a known backend, defaulting anything unrecognized to "off".
+// The write boundary (`setActiveBackend`) runs this so `activeBackend` only
+// ever holds a valid SearchBackend, which is what getSearchBackend promises.
+def coerceBackend(s: string): SearchBackend {
+  if (s == "hosted") {
+    return "hosted"
+  }
+  if (s == "tavily") {
+    return "tavily"
+  }
+  if (s == "brave") {
+    return "brave"
+  }
+  return "off"
 }
 
 // Pure data descriptor for one backend. Listed availability rules
@@ -285,10 +302,11 @@ export def setActiveBackend(backend: string, persist: boolean) {
   @param backend - One of "hosted", "tavily", "brave", or "off".
   @param persist - Whether to also persist the choice to disk.
   """
-  session.activeBackend = backend
+  const resolved = coerceBackend(backend)
+  session.activeBackend = resolved
   if (persist) {
     const settings = loadSettings()
-    settings.search = { backend: backend }
+    settings.search = { backend: resolved }
     saveSettings(settings)
   }
 }

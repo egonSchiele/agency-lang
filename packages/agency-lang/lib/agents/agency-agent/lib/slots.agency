@@ -31,4 +31,3 @@ export def isKnownSlot(name: string): boolean {
 export def slotKind(name: string): SlotKind {
   return SLOT_KIND[canonicalSlot(name)]
 }
-

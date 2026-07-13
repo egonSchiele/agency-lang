@@ -63,3 +63,46 @@ node emptyDirectoryProducesEmptySkillList(): boolean {
   const d = emptyDesc()
   return d.includes("<available_skills>\n\n</available_skills>")
 }
+
+// ---- Tool-name derivation: providers cap tool names (OpenAI 64), so a deep
+// directory path must not overflow. A nonexistent dir is fine here — the tool
+// name is derived from the path; the skill list is just empty.
+
+const DEEP_BASE = "a/very/deeply/nested/path/that/keeps/going/and/going/until/it/overflows/the/limit/stdlib/docs"
+
+def deepToolName(leaf: string): string {
+  const tool = skillsDir("${DEEP_BASE}/${leaf}", "flat") with approve
+  return tool.name
+}
+
+// A path long enough to overflow is capped to <= 64 chars.
+node derivedNameCappedTo64(): boolean {
+  return deepToolName("guide").length <= 64
+}
+
+// The cap keeps the distinctive TAIL (the leaf skill dir), not the shared
+// leading path — so the name stays readable and meaningful.
+node derivedNameKeepsTail(): boolean {
+  return deepToolName("guide").endsWith("docs_guide")
+}
+
+// Two sibling deep paths still get DISTINCT capped names (uniqueness is what
+// the derivation exists for; keeping the tail preserves it under the cap).
+node siblingDeepPathsStayDistinct(): boolean {
+  const guide = deepToolName("guide")
+  const cli = deepToolName("cli")
+  return guide != cli && guide.length <= 64 && cli.length <= 64
+}
+
+// An explicit name overrides the derived one.
+node explicitNameOverrides(): boolean {
+  const tool = skillsDir("skills-dir-fixture/flat", "flat", "my_docs") with approve
+  return tool.name == "my_docs"
+}
+
+// An explicit name is still sanitized (spaces/punctuation rejected by
+// providers) and capped.
+node explicitNameSanitized(): boolean {
+  const tool = skillsDir("skills-dir-fixture/flat", "flat", "My Cool Skill!") with approve
+  return tool.name == "My_Cool_Skill"
+}

@@ -7,6 +7,11 @@
     { "nodeName": "flatFallsBackToTitle", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "flatFallsBackToFilenameWhenNoFrontmatter", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "flatXmlEscapesDescription", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "emptyDirectoryProducesEmptySkillList", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "emptyDirectoryProducesEmptySkillList", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "derivedNameCappedTo64", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "derivedNameKeepsTail", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "siblingDeepPathsStayDistinct", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "explicitNameOverrides", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "explicitNameSanitized", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

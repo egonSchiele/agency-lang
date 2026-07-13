@@ -58,7 +58,7 @@ effect std::skills::skillsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L184))
 
 ### std::skills::commandsDir
 
@@ -68,20 +68,25 @@ effect std::skills::commandsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L185))
 
 ## Functions
 
 ### skillsDir
 
 ```ts
-skillsDir(dir: string, layout: "flat" | "standard" = "standard")
+skillsDir(
+  dir: string,
+  layout: "flat" | "standard" = "standard",
+  name: string = "",
+)
 ```
 
 Build a skills tool for an LLM over a directory of skills.
 
   @param dir - Directory containing the skills.
   @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
+  @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters. Defaults to a name derived from `dir`; set this to override it — e.g. for a stable, readable name, or to disambiguate two tools whose derived names would collide.
 
 **Parameters:**
 
@@ -89,10 +94,11 @@ Build a skills tool for an LLM over a directory of skills.
 |---|---|---|
 | dir | `string` |  |
 | layout | `"flat" \| "standard"` | "standard" |
+| name | `string` | "" |
 
 **Throws:** `std::skills::skillsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L223))
 
 ### docsSkill
 
@@ -115,7 +121,7 @@ Build a docs tool for an LLM over the packaged Agency documentation.
 |---|---|---|
 | section | `"guide" \| "cli" \| "diagnostics"` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L200))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L239))
 
 ### commandsDir
 
@@ -169,7 +175,7 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L286))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L325))
 
 ### expandSlash
 
@@ -208,4 +214,4 @@ Expand a /command in `msg` into its command body. Returns the rendered
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L343))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L382))

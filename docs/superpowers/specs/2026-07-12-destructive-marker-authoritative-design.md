@@ -1,4 +1,4 @@
-# Make the `destructive` marker authoritative for tool removal-on-failure
+# Make the `destructive` marker authoritative for removal-on-failure, via destructive regions
 
 Date: 2026-07-12
 Status: Design (approved, pre-plan)
@@ -7,197 +7,254 @@ Status: Design (approved, pre-plan)
 
 When an LLM-callable tool marked `destructive` fails, it should be removed from
 the tool set so the model cannot call it again — a failure may have left the
-world in an unclean state. Today that does not reliably happen. Removal is gated
-on a runtime flag, `destructiveRan`, and the flag is set by a compiler heuristic
-that has nothing to do with the `destructive` declaration.
+world in an unclean state. Today that does not reliably happen, and *whether* it
+happens depends on an accident of the function body.
 
-Inside a `destructive`-marked function, `DestructiveTracking.statementFlips`
-(in `lib/backends/typescriptBuilder/destructiveTracking.ts`) emits
-`__self.__destructiveRan = true` before any statement for which
-`NameClassifier.containsImpureCall(stmt)` is true. `containsImpureCall` returns
-true only when the statement calls an **imported** name or a member of
-`BUILTIN_FUNCTIONS`. `BUILTIN_FUNCTIONS` is `{}` (empty, `lib/config.ts`), so in
-practice the flag flips only before a statement that calls an imported symbol.
+Removal is gated on a runtime flag, `destructiveRan`. `failureTier`
+(`lib/runtime/prompt.ts`) returns the `destructive` tier (→ remove the tool)
+only when a failure carries `destructiveRan === true`. Inside a
+`destructive`-marked function, `DestructiveTracking.statementFlips`
+(`lib/backends/typescriptBuilder/destructiveTracking.ts`) sets the flag before
+any statement for which `NameClassifier.containsImpureCall(stmt)` is true —
+i.e. the statement calls an **imported** symbol (`BUILTIN_FUNCTIONS` is empty,
+`lib/config.ts`). So the flag flips based on whether the body happened to call
+an import (e.g. `print`) versus a same-file `def`, not on the `destructive`
+declaration. Verified by compiling probes: a call to a local `def` emits no
+flip; the flip appears only before an imported call. `print("hello")` before an
+interrupt flips it; a local helper does not.
 
-Consequences, all verified by compiling probes and running the real LLM:
-
-- A `destructive` function whose interrupt is its first statement, rejected,
-  keeps `destructiveRan = false` → the tool-loop classifies the failure as the
-  `neutral` tier ("you may call this tool again") → the model retries it up to
-  `MAX_TOOL_FAILURES` (5). Removal never happens after a single failure.
-- Adding `print("hello")` before the interrupt *does* cause removal — only
-  because `print` is a prelude **import**, so `containsImpureCall` fires. The
-  effect turns on an unrelated accident (import vs. local `def`), not on the
-  `destructive` declaration.
-- A call to a same-file `def` (which could do arbitrary destructive I/O) does
-  **not** flip the flag, because a local `def` is not an import.
-
-So whether a failed destructive tool is removed depends on whether its body
-happened to call an imported symbol before failing. That is incoherent: the
-`destructive` marker is a user declaration and should be authoritative.
-
-## Goal
-
-A tool declared `destructive` that **fails** is removed and cannot be called
-again by the LLM, regardless of the body — with one narrow, principled
-exception: failures where **no non-interrupt statement of the body executed**.
-Success stays re-callable (unchanged).
-
-### Retryable vs. removed (agreed)
-
-A destructive tool's failure is **retryable** iff *no non-interrupt statement of
-its body executed before the failure*; otherwise the tool is **removed**.
-
-| Failure point | non-interrupt stmt ran? | Outcome |
-|---|---|---|
-| Bad arguments — argument binding fails, body never starts | no | retryable (`neverStarted` tier) |
-| Rejected at an interrupt that is the first/only statement executed | no | retryable (`neutral` tier) |
-| Any statement other than a leading interrupt runs, then fails | **yes** | **removed** (`destructive` tier) |
-| Success | — | stays callable (unchanged) |
-
-Accepted trade-off: pure validation-refusals in destructive tools become
-non-retryable. A guard like `if (x < 0) { return failure(...) }` is a
-non-interrupt statement, so reaching it commits the tool. The model can no
-longer "fix the arguments and retry" *once the body has started*; it can still
-retry a call that failed **argument binding** (see the bad-args row), because
-there the body never ran.
-
-## Approach (chosen: redefine the flip predicate)
-
-Change the single predicate that decides when `destructiveRan` flips inside a
-destructive function, from "the statement calls an import" to "the statement is
-anything other than raising an interrupt." This makes one concept mean one thing
-across all three consumers of `destructiveRan` (the observable `r.destructiveRan`
-Result field, decision-8 caller propagation, and statelog), and deletes the
-import heuristic from this path.
-
-Rejected alternative — *tool-loop only*: leave `destructiveRan`'s import
-heuristic in place for the field/decision-8, and make `failureTier` key on
-`handler.markers.destructive` plus a new parallel signal for "a non-interrupt
-statement ran." Rejected because it adds a second flag and leaves the incoherent
-import-heuristic meaning of `destructiveRan` in place — the exact thing this
-change is meant to remove.
-
-## Design
-
-### 1. Codegen: the flip predicate
-
-In `DestructiveTracking.statementFlips`, the `inDestructiveFunction` branch
-currently returns a pre-flip when `containsImpureCall(stmt)`. Replace that
-condition with `!isInterruptOnlyStatement(stmt)`:
+The interrupt-guard idea does not rescue this in practice. Every real
+`destructive` function in stdlib validates/preps **before** its interrupt gate:
 
 ```
-if (inDestructiveFunction) {
-  return isInterruptOnlyStatement(stmt) ? {} : { pre: markTrue() };
+export destructive def write(...) {
+  if (useAgentCwd) { dir = applyAgentCwd(dir) }          // prep
+  return interrupt std::write("Are you sure?", {...})     // gate
+  return try _write(...)                                  // the destructive work
 }
 ```
 
-Emitting `markTrue()` before every non-interrupt statement is redundant after
-the first (the flag is sticky `= true`) but harmless and needs no "first
-statement" bookkeeping. The `init()` (`__destructiveRan = __destructiveRan ?? false`)
-and `exitStamp()` (`stampFailureBoundary(runner.haltResult, __self.__destructiveRan)`)
-are unchanged. The non-destructive branch (Rule 2, `containsDestructiveCall`
-before calls to `destructive` functions) is unchanged.
+Any rule that keys "committed" on "a non-interrupt statement ran" would treat
+the `if (useAgentCwd)` prep as committing, so rejecting the confirmation would
+remove `write` for the rest of the session. Rejecting one write should not
+disable writes forever. The gate needs to sit *outside* the destructive region,
+which a whole-function marker cannot express.
 
-`containsImpureCall` in `NameClassifier` is no longer used by this rule. Confirm
-during implementation that it has no remaining consumer; if dead, remove it.
+## Goal
 
-### 2. `isInterruptOnlyStatement(stmt)`
+Make the `destructive` declaration authoritative and let the user say exactly
+which code is destructive:
 
-True only for a statement whose *sole* action is raising an interrupt:
+- A function marked `destructive def` — its **entire body** is destructive.
+  Entering the body commits; any failure removes the tool. (No interrupt
+  special-case: the whole body is destructive by declaration.)
+- A new `destructive { ... }` **block** — only the code inside is destructive.
+  Entering the block commits; failing inside removes the tool. Code before the
+  block (prep, an interrupt gate) is not destructive, so failing there — or
+  rejecting the gate — is retryable.
+- Success stays re-callable (unchanged). Argument-binding failures (body never
+  runs) stay retryable (`neverStarted`).
 
-- a bare `interruptStatement` (`interrupt(...)` or `raise ...`); or
-- a `returnStatement` whose `value` is directly an `interruptStatement`
-  (`return interrupt(...)`); or
-- an assignment whose value is directly an `interruptStatement`
-  (`let x = interrupt(...)`).
+No compiler heuristic. The user declares the boundary; the compiler marks it.
 
-Everything else is non-interrupt and flips the flag: pure computation, property
-access, calls (local or imported), `if`/`while`/`for` (even one that merely
-wraps an interrupt in its body), and any expression that only *contains* an
-interrupt as a sub-part. Deliberately conservative — only a leading, direct
-interrupt gate is treated as clean. (`return interrupt(...)` parses as a
-`returnStatement` whose `value.type === "interruptStatement"`; verified.)
+### Retryable vs. removed
 
-Correctness edge: the predicate must fire only on **executable** statements.
-Non-executable nodes (comments, blank lines, type-only nodes) must not flip the
-flag. Today `containsImpureCall` returns false for them so they never flip;
-`!isInterruptOnlyStatement` would return true for them, so the implementation
-must confirm `statementFlips` is reached only for executable statements (it is
-guarded by an earlier `continue`/skip in the statement loop) or exclude those
-node types explicitly.
+A destructive tool's failure removes the tool iff execution **entered a
+destructive region** (a `destructive def` body, or a `destructive { }` block)
+before failing. Otherwise it is retryable.
 
-### 3. New meaning of `destructiveRan`
+| Failure point | Entered a destructive region? | Outcome |
+|---|---|---|
+| Bad arguments — binding fails, body never runs | no | retryable (`neverStarted`) |
+| Rejected at an interrupt gate placed before the region | no | retryable (`neutral`) |
+| Inside a `destructive def` body (any statement) | yes | removed |
+| Inside a `destructive { }` block | yes | removed |
+| Success | — | stays callable |
 
-"At least one non-interrupt statement of a destructive function's body began
-executing." This replaces "a statement was about to call an imported symbol." It
-is the same value observed by:
+## Design
 
-- the `r.destructiveRan` field on `ResultFailure` (`lib/runtime/result.ts`),
-  typed in the checker (`resultUnion.ts`, `synthesizer.ts`);
-- decision-8 propagation, where a destructive tool inside `llm()` folds its flag
-  into the caller's activation (`lib/runtime/prompt.ts`, `markDestructiveWork`);
-- statelog (`lib/statelogClient.ts`).
+### Two notions, deliberately separated
 
-Consequence to note: decision-8 propagation now fires on *any* non-interrupt
-work in a destructive callee, not just imported calls — so an enclosing
-agent-as-tool is tainted more readily. This is consistent with the model (a
-destructive sub-operation that did work and then failed taints the caller).
+1. **Is a function destructive?** (metadata) — true if it is marked
+   `destructive def` **OR** its body contains a `destructive { }` block. This
+   drives the tool descriptor `markers.destructive` (`typescriptBuilder.ts`
+   ~2340), the MCP `destructiveHint` and HTTP `/list` boolean
+   (`lib/serve/*/adapter.ts`, both read `markers?.destructive`), and the
+   `compilationUnit.destructiveFunctions` registry used by Rule 2. A migrated
+   `def gitAdd(...) { … destructive { … } }` therefore still reports as
+   destructive to clients and to callers.
+2. **When does `destructiveRan` flip?** (runtime removal) — at **function
+   entry** for `destructive def`, or at **block entry** for `destructive { }`.
+   Only entering a region commits.
 
-### 4. Removal wiring — unchanged
+### Runtime commit points (codegen)
 
-`failureTier` (`lib/runtime/prompt.ts`) already returns the `destructive` tier
-(→ `removedTools.push`) when `failure.destructiveRan` is true, and the
-`neverStarted` tier (retryable) when the body never started. With the corrected
-flip, no tool-loop change is needed:
+- `destructive def`: `DestructiveTracking.init()` currently emits
+  `__self.__destructiveRan = __self.__destructiveRan ?? false`. For a
+  destructive-marked function, emit `__self.__destructiveRan = true` instead.
+  `init()` runs after argument binding and before the body, so an
+  argument-binding failure (`neverStarted`) still carries `destructiveRan =
+  false` and stays retryable; once the body begins, the tool is committed.
+- `destructive { }` block: emit `__self.__destructiveRan = true` at block entry,
+  as a non-step-consuming preamble (the same way the current pre-flip is pushed
+  into the active "part" without its own substep id), then compile the block
+  body.
+- A function that only **contains** a block (not itself marked `destructive
+  def`) does **not** flip at entry — it keeps the `?? false` init and commits
+  only when the block is entered. The entry flip is tied to the `destructive
+  def` marker alone; "contains a block" affects only the metadata notion below.
+- The per-statement Rule 1 scan (`containsImpureCall`) is **removed**.
+- Rule 2 (a non-destructive function calling a destructive function: the
+  outcome-flip that ORs the callee's `destructiveRan` into the caller, plus the
+  conservative pre-flip) is **unchanged**. It already trusts the callee's
+  runtime flag, so a function whose `destructive { }` block was not reached
+  returns `destructiveRan = false` and does not taint its caller.
 
-- bad args → body never runs → `destructiveRan` false, `neverStarted` true →
-  `neverStarted` tier (retryable);
-- rejected at a leading interrupt → `destructiveRan` false, `neverStarted` false
-  → `neutral` tier (retryable);
-- any other statement then fail → `destructiveRan` true → `destructive` tier
-  (removed);
-- success → not a failure → no removal.
+### The `destructive { }` block is a transparent, stepped region
 
-The `destructive` tier already removes the tool after a **single** such failure
-and messages the model that the tool can no longer be called.
+The block introduces **no new lexical scope** — it is purely a
+destructive-region marker; declarations inside it are visible after it, like a
+plain statement group. Its body statements must be compiled through the **same
+step-aware statement machinery as the enclosing function body**
+(`processBodyAsParts`, which assigns substep ids and drives interrupt
+pause/resume), NOT through `processBlockPlain` (which is the interrupt-free
+"plain" path used for expression-position match arms). Concretely,
+`destructive { s1; s2 }` compiles as the stream `[flip, s1, s2]` inside the
+enclosing function's stepped statements, so `s1`/`s2` get normal substep ids.
+
+**Interrupts inside a destructive block must work correctly** (explicit
+requirement). Because the region commits at entry, an interrupt inside the block
+is after the commit: rejecting it removes the tool (you placed the gate inside
+the destructive region). The mechanics must hold regardless: an `interrupt(...)`
+or async call inside the block pauses and resumes at the right substep, and the
+entry `__destructiveRan = true` survives checkpoint/resume — it re-applies
+idempotently on replay and is already preserved across serialization (per the
+#522 boundary-folding design). This is mandated by tests (below).
+
+### `destructiveRan` meaning
+
+"Execution entered a destructive region" — a `destructive def` body or a
+`destructive { }` block. One meaning across all consumers: the `r.destructiveRan`
+field on `ResultFailure` (`lib/runtime/result.ts`, typed in `resultUnion.ts` /
+`synthesizer.ts`), decision-8 caller propagation
+(`lib/runtime/prompt.ts` / `markDestructiveWork`), and statelog
+(`lib/statelogClient.ts`).
+
+### Removal wiring — unchanged
+
+`failureTier` already returns the `destructive` tier (→ single-failure removal)
+when `destructiveRan` is true, and `neverStarted` (retryable) when the body
+never started. With commit driven by region-entry, the table above holds with
+no tool-loop change.
+
+## New construct: `destructive { }`
+
+Following `docs/dev/adding-features.md` (adding an AST node):
+
+- **Type** — `DestructiveBlock = BaseNode & { type: "destructiveBlock"; body:
+  AgencyNode[] }` in `lib/types/`; export from `lib/types.ts`; add to the
+  `AgencyNode` union.
+- **Parser** — parse `destructive { … }` in `lib/parsers/parsers.ts`, wired into
+  the statement parser; co-located tests. Must disambiguate `destructive {`
+  (block) from the `destructive def` function marker and from `destructive` used
+  as an identifier.
+- **Formatter** — format `destructive { … }` (block body indented).
+- **Codegen** — a case that emits the entry flip and compiles the body through
+  the stepped statement path (see above).
+- **Typecheck / symbol table** — the block body typechecks and resolves in the
+  enclosing scope (no new bindings semantics). Confirm the generic node walkers
+  (`walkNodes`) descend into `.body` so symbol resolution, effect/`raises`
+  checking, and narrowing see the body; add a passthrough case where a pass
+  dispatches on node type.
+- **Fixtures** — `.agency`/`.mts` pairs in `tests/typescriptGenerator/`.
+
+Nesting notes: a `destructive { }` inside a `destructive def`, or nested
+`destructive { }` blocks, are harmless no-ops (the flag is already/again set).
+
+## Stdlib migration (in scope, this change)
+
+Migrate every stdlib `destructive def` whose interrupt gate should stay
+retryable-on-rejection to `def` + `destructive { }` around only the effectful
+work. Pattern:
+
+```
+export destructive def f(...) {          export def f(...) {
+  prep                              →       prep
+  interrupt gate                            interrupt gate
+  work                                       destructive { work }
+}                                         }
+```
+
+Functions to migrate (~20+): `stdlib/git.agency` (gitAdd, gitCommit,
+gitCheckout, gitSwitch, gitBranchCreate, gitBranchDelete, gitStashPush,
+gitStashPop, gitRestore), `stdlib/fs.agency` (edit, applyPatch, mkdir, copy,
+move, remove), `stdlib/shell.agency` (exec, bash), `stdlib/index.agency`
+(write, writeBinary), `stdlib/clipboard.agency` (copy), and any others surfaced
+by `grep -rn "destructive def" stdlib/`.
+
+Per-function the exact gate/work boundary must be identified — several use the
+`return interrupt <effect>(...)` continuation form, where the statement after
+the gate is the work performed on approval; the `destructive { }` wraps that
+work. Because these functions contain a `destructive { }` block, they remain
+`markers.destructive`-true for client hints and the Rule 2 registry (see "Two
+notions"). Rebuild with `make` after editing any stdlib `.agency`.
 
 ## Blast radius / files
 
-- `lib/backends/typescriptBuilder/destructiveTracking.ts` — predicate change +
-  `isInterruptOnlyStatement` (here or on `NameClassifier`); its unit tests
-  (`destructiveTracking.test.ts`) — the "impure call flips" cases become
-  "non-interrupt statement flips"; the `init()` unconditional test is unchanged.
-- `NameClassifier` (`lib/backends/typescriptBuilder/nameClassifier.ts`) — remove
-  `containsImpureCall` if it becomes dead.
-- `tests/agency/destructive-tracking.agency` (+ `.test.json`) — rewrite the
-  expectations. Under the new rule `burn(-1)` fails at `if (x < 0) return
-  failure(...)`, a non-interrupt statement, so `destructiveRan` is now **true**;
-  it is no longer a "clean refusal." Replace/extend with genuine clean cases
-  (interrupt-first reject → false; bad-args → false) and keep a work-then-fail
-  case (→ true).
-- `lib/runtime/result.ts` — JSDoc on the `destructiveRan` field.
-- `docs/site/guide/llm-part-2.md` — the "when a tool call fails" section:
-  reword "clean refusal" to "pre-body / interrupt-gate only."
-- Doc comments in `destructiveTracking.ts` referencing the old rationale.
+- `lib/backends/typescriptBuilder/destructiveTracking.ts` — `init()` sets `true`
+  for destructive functions; remove the `statementFlips` Rule-1 scan; its unit
+  tests.
+- `lib/backends/typescriptBuilder.ts` — `destructiveBlock` codegen case. Two
+  distinct predicates: (a) the **entry flip** (`init()` → `= true`) and
+  `inDestructiveFunction` (~2266) key on the raw `destructive def` marker ALONE
+  (`node.markers?.destructive`); (b) the **emitted descriptor** marker (~2340),
+  the MCP/HTTP hint, and the `destructiveFunctions` registry use a *derived*
+  `isDestructive = node.markers?.destructive || containsDestructiveBlock(node)`.
+  Do NOT mutate `node.markers.destructive` to fold in "contains a block" — that
+  would wrongly turn on `inDestructiveFunction`/the entry flip for a
+  contains-block-only function. Note the emitted descriptor marker is also read
+  at runtime on the SUCCESS path (`handler.markers?.destructive` →
+  `toolDidDestructiveWork`, `prompt.ts` ~1157); for a contains-block function
+  this coarsely assumes the block ran on success, consistent with today's
+  `destructive def` success handling. The failure path stays precise (it uses
+  the runtime `destructiveRan`).
+- `lib/compilationUnit.ts` — populate `destructiveFunctions` from marked-OR-
+  contains-block (~180).
+- `lib/backends/typescriptBuilder/nameClassifier.ts` — remove `containsImpureCall`
+  (sole consumer was Rule 1); confirm no other consumer.
+- New AST node plumbing: `lib/types/`, `lib/types.ts`, `lib/parsers/parsers.ts`
+  (+ tests), formatter, typecheck/symbol-table passthrough.
+- `tests/agency/destructive-tracking.agency` (+ `.test.json`) — rewrite to the
+  region model (see Testing).
+- Stdlib `.agency` files listed above (+ their tests where behavior asserts
+  removal/retryability).
+- `lib/runtime/result.ts` JSDoc on `destructiveRan`; `docs/site/guide/llm-part-2.md`
+  ("when a tool call fails" + document the `destructive { }` block);
+  doc comments in `destructiveTracking.ts`.
 
 ## Testing
 
-- Rewrite the `destructive-tracking` agency tests to encode the agreed table:
-  interrupt-first reject → retryable/`destructiveRan` false; any other statement
-  then fail → removed/`destructiveRan` true; bad-args → retryable.
-- Add a tool-removal behavior test (agency or agency-js, deterministic LLM — no
-  real model needed, since removal is driven by `destructiveRan`, which is
-  deterministic): a `destructive` tool that runs a non-interrupt statement then
-  fails is removed after one failure; one rejected only at its leading interrupt
-  is not.
-- Unit tests for `isInterruptOnlyStatement` and the flip predicate.
-- Full lib suite (8000+) must stay green.
+- Rewrite `destructive-tracking` agency tests to the region model:
+  `destructive def` body entry → `destructiveRan` true; `destructive { }` entry
+  → true; failure before a block (prep/gate) → false; bad-args → false.
+- **Interrupts in a destructive block** (mandated): an execution test where a
+  `destructive { }` block contains an interrupt — approve path resumes and
+  completes; reject path removes the tool; a pause/resume across the block
+  preserves `destructiveRan`. These are deterministic (no real LLM needed;
+  removal is `destructiveRan`-driven).
+- Tool-removal behavior test: a tool that fails inside its destructive region is
+  removed after one failure; one that fails/rejects before the region is
+  retryable.
+- Stdlib: a representative migrated tool (e.g. `write`) — rejecting the gate is
+  retryable; failing inside the block removes it; MCP/HTTP still report it
+  destructive.
+- Parser/formatter unit tests for `destructive { }`; typescriptGenerator
+  fixtures.
+- Full lib suite (8000+) green.
 
 ## Non-goals
 
-- Whether a **non-destructive** tool's rejected interrupt should be retryable at
-  all — that is a separate question (surfaced by the `interrupt.test.json`
-  flake, PR #533) and is not addressed here.
-- Success-path semantics — a successful destructive tool remains callable
-  (unchanged).
+- Whether a **non-destructive** tool's rejected interrupt should be retryable —
+  separate question (the `interrupt.test.json` flake, PR #533).
+- Success-path semantics — a successful destructive tool stays callable.
+- Block-level lexical scoping — `destructive { }` introduces no new scope.

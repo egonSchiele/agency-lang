@@ -6,9 +6,10 @@ import type { NameClassifier } from "./nameClassifier.js";
 
 /**
  * Emits the destructive-execution tracking codegen: the per-function
- * `__destructiveRan` init, the function-exit boundary stamp, and the
- * per-statement flips. Extracted from TypeScriptBuilder so the tracking rules
- * live in one declarative place instead of scattered through a 4k-line file.
+ * `__destructiveRan` init, the function-exit boundary stamp, the region-entry
+ * flip (`blockEntryFlip`, emitted by a `markDestructiveRan` node from an inlined
+ * `destructive { }` region), and the Rule-2 caller-side flips. Extracted from
+ * TypeScriptBuilder so the tracking rules live in one declarative place.
  *
  * Stateless by design: every method is a pure function of its arguments (the
  * `inDestructiveFunction` flag is passed in, not held), so it can be
@@ -16,8 +17,13 @@ import type { NameClassifier } from "./nameClassifier.js";
  *
  * How the flag works: every function activation carries a boolean
  * `__self.__destructiveRan`. It starts false and is only ever flipped to true
- * (sticky). The function exit folds it into any departing failure via
- * `stampFailureBoundary`, so a failure reports whether destructive work ran.
+ * (sticky). It is set at ENTRY for a `destructive def` (init(true)), or at
+ * region entry for a `destructive { }` region. The function exit folds it into
+ * any departing failure via `stampFailureBoundary`, so a failure reports whether
+ * execution entered a destructive region. NOTE: because a `destructive { }`
+ * region is inlined into the function body before codegen, its flip lands on the
+ * function's `__self` — never a block frame — which is what keeps a failure
+ * escaping the function from carrying a false (fail-open) flag.
  */
 export class DestructiveTracking {
   constructor(

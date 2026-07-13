@@ -33,9 +33,28 @@ destructive def chargeCard(amount: number): string {
 }
 ```
 
-If a `destructive` tool starts running and then fails, Agency removes it from the conversation. The model cannot call it again, and the tool result tells it so: the operation may have partially completed, so the state must be verified by hand rather than by retrying.
+A `destructive def` marks the **whole body** as destructive: entering it commits. If the tool then fails anywhere in its body, Agency removes it from the conversation. The model cannot call it again, and the tool result tells it so: the operation may have partially completed, so the state must be verified by hand rather than by retrying.
 
-There is one exception. If the call fails *before the tool body starts* — the model passed the wrong arguments, or too few — then nothing happened yet, so the tool stays callable. Only a failure *after* the destructive work began locks the tool out.
+There is one exception. If the call fails *before the body starts* — the model passed the wrong arguments, or too few — then nothing ran yet, so the tool stays callable.
+
+#### `destructive { }` regions
+
+Marking a whole function `destructive` is often too coarse. Real tools validate their arguments and ask the user to confirm *before* doing anything dangerous — and rejecting that confirmation should leave the tool callable, not lock it out. Use a `destructive { }` region to mark only the effectful part, and leave the prep and the confirmation gate outside it:
+
+```agency
+def write(filename: string, content: string): Result {
+  const path = resolvePath(filename)
+  // Ask first — rejecting this is retryable, nothing has happened yet.
+  return interrupt std::write("Write to this file?", { path: path })
+  // Only this commits. A failure here removes the tool; a rejected
+  // confirmation above does not.
+  destructive {
+    return try _write(path, content)
+  }
+}
+```
+
+Entering the region flips the tool into "committed": a failure inside it (or after it) removes the tool, exactly like a `destructive def`. A failure *before* the region — a validation refusal, or a rejected interrupt gate — is retryable. The region introduces no new scope; variables declared inside it are visible afterward. A function that contains a `destructive { }` region is reported as destructive to clients (MCP/HTTP) just like a `destructive def`.
 
 ### `idempotent`
 
@@ -55,7 +74,7 @@ An `idempotent` tool stays callable after a failure (like the default), but the 
 |---|---|---|
 | *(unmarked)* | Yes | Re-callable, but not promised safe to repeat blindly. |
 | `idempotent` | Yes | Always safe to re-run. |
-| `destructive` | Only if it never started | Dangerous to repeat; locked out once it begins. |
+| `destructive` | Only if the body/region never started | Dangerous to repeat; locked out once a destructive region is entered. |
 
 These markers are about *retry safety* only. They are independent of [interrupts](/guide/interrupts), which gate whether a tool runs at all.
 

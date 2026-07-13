@@ -3986,6 +3986,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   lazy(() => whileLoopParser),
   lazy(() => parallelBlockParser),
   lazy(() => seqBlockParser),
+  lazy(() => destructiveBlockParser),
   matchBlockParser,
   lazy(() => ifParser),
   lazy(() => messageThreadParser),
@@ -4473,6 +4474,32 @@ export const seqBlockParser: Parser<SeqBlock> = label("a seq block", withLoc(mem
       parseError(
         "expected `{` to open seq block body",
         char("{"),
+        optionalSpacesOrNewline,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
+        char("}"),
+      ),
+    ),
+  ),
+)));
+
+// A `destructive { ... }` region parses to a `seqBlock` flagged `destructive`.
+// The `char("{")` is a SOFT gate OUTSIDE `parseError` (a committing cut): a
+// leading `destructive def` fails here and the statement parser backtracks.
+// `not(varNameChar)` alone cannot disambiguate — both `destructive {` and
+// `destructive def` have a space after the keyword.
+export const destructiveBlockParser: Parser<SeqBlock> = label("a destructive block", withLoc(memo(
+  "destructiveBlockParser",
+  seqC(
+    set("type", "seqBlock"),
+    set("destructive", true as boolean),
+    str("destructive"),
+    not(varNameChar),
+    optionalSpaces,
+    char("{"),
+    captureCaptures(
+      parseError(
+        "unterminated destructive block",
         optionalSpacesOrNewline,
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,

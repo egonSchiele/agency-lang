@@ -56,7 +56,8 @@ export type FailureOpts = {
    *  layer's pre-execution tag — trust-the-producer, because nothing can
    *  correct a wrongly-true claim. */
   neverStarted?: boolean;
-  /** A statement containing a destructive-marked call had started. */
+  /** Execution entered a destructive region — a `destructive def` body (which
+   *  commits at entry) or a `destructive { }` region. */
   destructiveRan?: boolean;
   functionName?: string;
   args?: Record<string, any>;
@@ -82,9 +83,10 @@ export type ResultFailure = {
    *  Trust-the-producer: there is no correcting machinery, so nothing else
    *  may set it. */
   neverStarted: boolean;
-  /** A destructive-marked call had started when this failure was produced.
-   *  Birth default false; boundaries OR the activation's flag in via
-   *  stampFailureBoundary. */
+  /** Execution had entered a destructive region — a `destructive def` body
+   *  (commits at function entry) or a `destructive { }` region (commits at
+   *  region entry) — when this failure was produced. Birth default false;
+   *  boundaries OR the activation's flag in via stampFailureBoundary. */
   destructiveRan: boolean;
   functionName: string | null;
   args: Record<string, any> | null;

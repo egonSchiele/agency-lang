@@ -1,0 +1,9 @@
+destructive def f(): number {
+  destructive {
+    return 1
+  }
+}
+
+node main() {
+  return f()
+}

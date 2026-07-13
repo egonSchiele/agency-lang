@@ -136,6 +136,9 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
       return [bodyField(node as ParallelBlock)];
     case "seqBlock":
       return [bodyField(node as SeqBlock)];
+    case "markDestructiveRan":
+      // Synthetic leaf (no body) introduced post-typecheck by parallelDesugar.
+      return [];
     case "messageThread":
       return [bodyField(node as MessageThread)];
     case "blockArgument":

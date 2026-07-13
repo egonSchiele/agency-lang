@@ -112,6 +112,7 @@ import { SourceMapBuilder } from "./sourceMap.js";
 import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
+import { functionContainsDestructiveBlock } from "./functionContainsDestructiveBlock.js";
 import { DestructiveTracking } from "./typescriptBuilder/destructiveTracking.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
 import { AssignmentEmitter } from "./typescriptBuilder/assignmentEmitter.js";
@@ -550,6 +551,10 @@ export class TypeScriptBuilder {
 
   private processNode(node: AgencyNode): TsNode {
     switch (node.type) {
+      case "markDestructiveRan":
+        // Synthetic flip from an inlined `destructive { }` region. Inlined into
+        // the function body, so `__self` is the function activation.
+        return this.tracking.markDestructiveRan();
       case "typeAlias":
         if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
         return this.processTypeAlias(node);
@@ -2063,6 +2068,7 @@ export class TypeScriptBuilder {
     bodyCode: TsNode[];
     skipHooks?: boolean;
     hoistedAliases?: TsNode[];
+    inDestructiveFunction?: boolean;
   }): TsNode[] {
     const { functionName, parameters, bodyCode, skipHooks } = opts;
     const hoistedAliases = opts.hoistedAliases ?? [];
@@ -2128,8 +2134,11 @@ export class TypeScriptBuilder {
       }
     }
 
-    // __self.__destructiveRan init — see DestructiveTracking.init().
-    setupStmts.push(this.tracking.init());
+    // __self.__destructiveRan init — see DestructiveTracking.init(). Read the
+    // flag from opts (threaded from processFunctionDefinition): by the time this
+    // runs the scope-manager flag has already been restored, so reading it here
+    // would always see false.
+    setupStmts.push(this.tracking.init(!!opts.inDestructiveFunction));
 
     // Create runner for step execution. `threads` is read directly from
     // the setup-function result, which now resolves it from the active
@@ -2296,6 +2305,7 @@ export class TypeScriptBuilder {
       bodyCode,
       skipHooks: false,
       hoistedAliases,
+      inDestructiveFunction: !!node.markers?.destructive,
     });
 
     const funcDecl = ts.functionDecl(
@@ -2337,10 +2347,18 @@ export class TypeScriptBuilder {
     };
     // Carry the retry-safety markers so the tool loop and MCP adapter can
     // read them off the registered AgencyFunction. Emitted only when set.
-    if (node.markers?.destructive || node.markers?.idempotent) {
+    // "Destructive" for metadata purposes is DERIVED: the raw `destructive def`
+    // marker OR the presence of a `destructive { }` region in the body. (The
+    // entry flip / `inDestructiveFunction` still key on the raw marker alone —
+    // see `:2266` — so a contains-region-only function does not commit at
+    // entry.)
+    const isDestructive =
+      !!node.markers?.destructive ||
+      functionContainsDestructiveBlock(node.body);
+    if (isDestructive || node.markers?.idempotent) {
       const markerProps: Record<string, TsNode> = {};
-      if (node.markers.destructive) markerProps.destructive = ts.bool(true);
-      if (node.markers.idempotent) markerProps.idempotent = ts.bool(true);
+      if (isDestructive) markerProps.destructive = ts.bool(true);
+      if (node.markers?.idempotent) markerProps.idempotent = ts.bool(true);
       createProps.markers = ts.obj(markerProps);
     }
     const createCall = $.id("__AgencyFunction")

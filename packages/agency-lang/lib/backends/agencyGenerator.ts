@@ -1636,7 +1636,8 @@ export class AgencyGenerator {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    return this.indentStr(`seq {\n${bodyCodeStr}${this.indentStr("}")}`);
+    const kw = node.destructive ? "destructive" : "seq";
+    return this.indentStr(`${kw} {\n${bodyCodeStr}${this.indentStr("}")}`);
   }
 
   protected processHandleBlock(node: HandleBlock): string {

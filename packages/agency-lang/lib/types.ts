@@ -27,6 +27,7 @@ import { TypeAlias, VariableType } from "./types/typeHints.js";
 import { EffectDeclaration } from "./types/effectDeclaration.js";
 import { WhileLoop } from "./types/whileLoop.js";
 import { ParallelBlock, SeqBlock } from "./types/parallelBlock.js";
+import { MarkDestructiveRan } from "./types/markDestructiveRan.js";
 import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
@@ -64,6 +65,7 @@ export * from "./types/gotoStatement.js";
 export * from "./types/typeHints.js";
 export * from "./types/whileLoop.js";
 export * from "./types/parallelBlock.js";
+export * from "./types/markDestructiveRan.js";
 export * from "./types/forLoop.js";
 export * from "./types/handleBlock.js";
 export * from "./types/keyword.js";
@@ -315,6 +317,7 @@ export type AgencyNode =
   | WhileLoop
   | ParallelBlock
   | SeqBlock
+  | MarkDestructiveRan
   | IfElse
   | NewLine
   | RawCode

@@ -67,4 +67,4 @@ Read text from the system clipboard and return it.
 
 **Throws:** `std::clipboardPaste`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/clipboard.agency#L31))

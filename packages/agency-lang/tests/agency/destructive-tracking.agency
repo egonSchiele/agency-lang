@@ -1,14 +1,32 @@
-destructive def burn(x: number): Result {
+// A `def` whose destructive work sits in a `destructive { }` region, guarded by
+// a validation refusal BEFORE the region. Refuse before the region → clean
+// (retryable); fail inside → committed.
+def burn(x: number): Result {
   if (x < 0) {
     return failure("refused before doing anything")
   }
-  print("burning")
-  return failure("failed after starting")
+  destructive {
+    print("burning")
+    return failure("failed after starting")
+  }
 }
 
 destructive def burnOk(): number {
   print("burning fine")
   return 42
+}
+
+// A `destructive def` commits its WHOLE body at entry: failing anywhere (even
+// the first statement) carries destructiveRan.
+destructive def burnWhole(): Result {
+  return failure("committed at entry")
+}
+node wholeEntry() {
+  const r = burnWhole()
+  if (isFailure(r)) {
+    return [r.neverStarted, r.destructiveRan]
+  }
+  return "unexpected"
 }
 
 def caller(x: number): Result {

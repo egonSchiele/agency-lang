@@ -195,7 +195,7 @@ export idempotent def gitStashList(cwd: string = ""): GitStash[] raises <std::gi
 /** `all` and `allowedPaths` are developer guardrails: bind `all: false` and/or
     a prefix list for `allowedPaths` via `.partial()` before handing this to an
     agent. */
-export destructive def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::add> {
+export def gitAdd(paths: string[] = [], all: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::add> {
   """
   Stage changes for commit.
   @param paths - Files to stage (may not start with "-").
@@ -207,11 +207,13 @@ export destructive def gitAdd(paths: string[] = [], all: boolean = false, allowe
   assertAllNotRestricted(all, allowedPaths)
   assertPathsContained(paths, allowedPaths, dir)
   return interrupt std::git::add("Stage changes", { cwd: dir, paths: paths, all: all })
-  _gitRun(dir, addArgs({ paths: paths, all: all }))
-  return "Staged changes"
+  destructive {
+    _gitRun(dir, addArgs({ paths: paths, all: all }))
+    return "Staged changes"
+  }
 }
 
-export destructive def gitCommit(message: string, cwd: string = ""): string raises <std::git::commit> {
+export def gitCommit(message: string, cwd: string = ""): string raises <std::git::commit> {
   """
   Create a commit from the staged changes.
   @param message - The commit message.
@@ -219,11 +221,13 @@ export destructive def gitCommit(message: string, cwd: string = ""): string rais
   """
   const dir = repoDir(cwd)
   return interrupt std::git::commit("Create commit: ${message}", { cwd: dir, message: message })
-  return _gitRun(dir, commitArgs({ message: message }))
+  destructive {
+    return _gitRun(dir, commitArgs({ message: message }))
+  }
 }
 
 /** Bind `force: false` via `.partial()` to forbid discarding local changes. */
-export destructive def gitCheckout(target: string, force: boolean = false, cwd: string = ""): string raises <std::git::checkout> {
+export def gitCheckout(target: string, force: boolean = false, cwd: string = ""): string raises <std::git::checkout> {
   """
   Check out a branch, commit, or path.
   @param target - The branch/commit/path (may not start with "-").
@@ -236,10 +240,12 @@ export destructive def gitCheckout(target: string, force: boolean = false, cwd: 
     message = "Force checkout ${target} (DISCARDS local changes, cannot be undone)"
   }
   return interrupt std::git::checkout(message, { cwd: dir, target: target, force: force })
-  return _gitRun(dir, checkoutArgs({ target: target, force: force }))
+  destructive {
+    return _gitRun(dir, checkoutArgs({ target: target, force: force }))
+  }
 }
 
-export destructive def gitSwitch(branch: string, create: boolean = false, cwd: string = ""): string raises <std::git::switch> {
+export def gitSwitch(branch: string, create: boolean = false, cwd: string = ""): string raises <std::git::switch> {
   """
   Switch to a branch.
   @param branch - The branch to switch to (may not start with "-").
@@ -248,10 +254,12 @@ export destructive def gitSwitch(branch: string, create: boolean = false, cwd: s
   """
   const dir = repoDir(cwd)
   return interrupt std::git::switch("Switch to branch ${branch}", { cwd: dir, branch: branch, create: create })
-  return _gitRun(dir, switchArgs({ branch: branch, create: create }))
+  destructive {
+    return _gitRun(dir, switchArgs({ branch: branch, create: create }))
+  }
 }
 
-export destructive def gitBranchCreate(branch: string, cwd: string = ""): string raises <std::git::branchCreate> {
+export def gitBranchCreate(branch: string, cwd: string = ""): string raises <std::git::branchCreate> {
   """
   Create a new branch at HEAD (does not switch to it).
   @param branch - The new branch name (may not start with "-").
@@ -259,13 +267,15 @@ export destructive def gitBranchCreate(branch: string, cwd: string = ""): string
   """
   const dir = repoDir(cwd)
   return interrupt std::git::branchCreate("Create branch ${branch}", { cwd: dir, branch: branch })
-  _gitRun(dir, branchCreateArgs({ branch: branch }))
-  return "Created branch ${branch}"
+  destructive {
+    _gitRun(dir, branchCreateArgs({ branch: branch }))
+    return "Created branch ${branch}"
+  }
 }
 
 /** Guardrails: bind `force: false` and/or a `protectedBranches` list via
     `.partial()` before handing this to an agent. */
-export destructive def gitBranchDelete(branch: string, force: boolean = false, protectedBranches: string[] = [], cwd: string = ""): string raises <std::git::branchDelete> {
+export def gitBranchDelete(branch: string, force: boolean = false, protectedBranches: string[] = [], cwd: string = ""): string raises <std::git::branchDelete> {
   """
   Delete a local branch.
   @param branch - The branch to delete (may not start with "-").
@@ -280,11 +290,13 @@ export destructive def gitBranchDelete(branch: string, force: boolean = false, p
     message = "Force-delete branch ${branch} (may discard unmerged commits, cannot be undone)"
   }
   return interrupt std::git::branchDelete(message, { cwd: dir, branch: branch, force: force })
-  _gitRun(dir, branchDeleteArgs({ branch: branch, force: force, protectedBranches: protectedBranches }))
-  return "Deleted branch ${branch}"
+  destructive {
+    _gitRun(dir, branchDeleteArgs({ branch: branch, force: force, protectedBranches: protectedBranches }))
+    return "Deleted branch ${branch}"
+  }
 }
 
-export destructive def gitStashPush(message: string = "", cwd: string = ""): string raises <std::git::stashPush> {
+export def gitStashPush(message: string = "", cwd: string = ""): string raises <std::git::stashPush> {
   """
   Stash the working-tree changes.
   @param message - Optional stash message.
@@ -292,22 +304,26 @@ export destructive def gitStashPush(message: string = "", cwd: string = ""): str
   """
   const dir = repoDir(cwd)
   return interrupt std::git::stashPush("Stash changes", { cwd: dir, message: message })
-  return _gitRun(dir, stashPushArgs({ message: message }))
+  destructive {
+    return _gitRun(dir, stashPushArgs({ message: message }))
+  }
 }
 
-export destructive def gitStashPop(cwd: string = ""): string raises <std::git::stashPop> {
+export def gitStashPop(cwd: string = ""): string raises <std::git::stashPop> {
   """
   Apply and drop the most recent stash.
   @param cwd - The git repo directory. Defaults to the agent working directory. Pass an absolute path to target a different repo.
   """
   const dir = repoDir(cwd)
   return interrupt std::git::stashPop("Pop the latest stash", { cwd: dir })
-  return _gitRun(dir, stashPopArgs())
+  destructive {
+    return _gitRun(dir, stashPopArgs())
+  }
 }
 
 /** `allowedPaths` is a developer guardrail: bind a prefix list via `.partial()`
     to constrain which paths the model may restore. */
-export destructive def gitRestore(paths: string[], staged: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::restore> {
+export def gitRestore(paths: string[], staged: boolean = false, allowedPaths: string[] = [], cwd: string = ""): string raises <std::git::restore> {
   """
   Restore files to a previous state.
   @param paths - Files to restore (may not start with "-").
@@ -322,6 +338,8 @@ export destructive def gitRestore(paths: string[], staged: boolean = false, allo
     message = "Unstage ${paths.length} file(s)"
   }
   return interrupt std::git::restore(message, { cwd: dir, paths: paths, staged: staged })
-  _gitRun(dir, restoreArgs({ paths: paths, staged: staged }))
-  return "Restored ${paths.length} file(s)"
+  destructive {
+    _gitRun(dir, restoreArgs({ paths: paths, staged: staged }))
+    return "Restored ${paths.length} file(s)"
+  }
 }

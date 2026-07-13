@@ -33,9 +33,26 @@ destructive def chargeCard(amount: number): string {
 }
 ```
 
-If a `destructive` tool starts running and then fails, Agency removes it from the conversation. The model cannot call it again, and the tool result tells it so: the operation may have partially completed, so the state must be verified by hand rather than by retrying.
+A `destructive def` marks the whole body as destructive. Once the body starts, a failure anywhere removes the tool. The model cannot call it again: the operation may have half-finished, so its state needs a manual check.
 
-There is one exception. If the call fails *before the tool body starts* — the model passed the wrong arguments, or too few — then nothing happened yet, so the tool stays callable. Only a failure *after* the destructive work began locks the tool out.
+One exception: a call that fails before the body starts (wrong or missing arguments) ran nothing, so the tool stays callable.
+
+#### `destructive { }` regions
+
+Marking a whole function is often too coarse. Most tools validate their arguments and ask for confirmation first. Rejecting that confirmation should leave the tool callable. Wrap only the effectful part in a `destructive { }` region, and keep the prep and the gate outside it:
+
+```agency
+def write(filename: string, content: string): Result {
+  const path = resolvePath(filename)
+  // Rejecting this gate is retryable: nothing has happened yet.
+  return interrupt std::write("Write to this file?", { path: path })
+  destructive {
+    return try _write(path, content)
+  }
+}
+```
+
+Entering the region commits the tool. A failure inside it, or after it, removes the tool. A failure before it stays retryable, whether a validation refusal or a rejected gate. The region adds no new scope, so a variable declared inside it is visible afterward. A function with a `destructive { }` region is reported as destructive to clients, the same as a `destructive def`.
 
 ### `idempotent`
 
@@ -55,7 +72,7 @@ An `idempotent` tool stays callable after a failure (like the default), but the 
 |---|---|---|
 | *(unmarked)* | Yes | Re-callable, but not promised safe to repeat blindly. |
 | `idempotent` | Yes | Always safe to re-run. |
-| `destructive` | Only if it never started | Dangerous to repeat; locked out once it begins. |
+| `destructive` | Only if the body/region never started | Dangerous to repeat; locked out once a destructive region is entered. |
 
 These markers are about *retry safety* only. They are independent of [interrupts](/guide/interrupts), which gate whether a tool runs at all.
 

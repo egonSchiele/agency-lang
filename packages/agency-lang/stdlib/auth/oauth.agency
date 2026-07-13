@@ -91,7 +91,7 @@ export def isAuthorized(name: string): boolean {
   return _isAuthorized(name)
 }
 
-export destructive def revokeAuth(name: string): Result {
+export def revokeAuth(name: string): Result {
   """
   Delete stored OAuth tokens for a provider. Re-authorization is required before the provider can be used again.
 
@@ -101,5 +101,7 @@ export destructive def revokeAuth(name: string): Result {
     name: name
   })
 
-  return try _revokeAuth(name)
+  destructive {
+    return try _revokeAuth(name)
+  }
 }

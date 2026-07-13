@@ -15,6 +15,7 @@ import {
 } from "@/types.js";
 import { BinOpExpression } from "@/types/binop.js";
 import { BlockArgument } from "@/types/blockArgument.js";
+import { functionContainsDestructiveBlock } from "@/backends/functionContainsDestructiveBlock.js";
 
 /**
  * Statement allowlist enforcement and cross-arm reference checks for `parallel`
@@ -77,6 +78,18 @@ function isAssignmentDecl(node: AgencyNode): node is Assignment {
  * then check cross-arm references. Throws on violation.
  */
 export function validateParallelBlock(pb: ParallelBlock): void {
+  // 0. A `destructive { }` region cannot live inside a `parallel` block. Each
+  //    arm runs in its own fork branch, whose `__self` is the branch frame — so
+  //    a region's `__destructiveRan` flip would land there, never on the calling
+  //    tool's activation, and could never remove the tool on failure (a silent
+  //    fail-open). Reject it rather than accept broken commit semantics. This
+  //    walks the whole subtree, so a region nested in a `seq` arm is caught too.
+  if (functionContainsDestructiveBlock(pb.body)) {
+    throw new Error(
+      "A `destructive { }` region is not allowed inside a `parallel` block: it would run in a fork branch and could not commit its destructive work to the calling tool. Move the destructive region out of the `parallel` block.",
+    );
+  }
+
   // 1. Allowlist check.
   for (const child of pb.body) {
     if (!ALLOWED_ARM_TYPES.has(child.type)) {
@@ -423,7 +436,13 @@ export function desugarParallelInBody(body: AgencyNode[]): AgencyNode[] {
       result.push(...desugarOneParallel(node));
     } else if (node.type === "seqBlock") {
       // Outside a parallel context, a seq block has no runtime effect; inline
-      // its body after recursively desugaring.
+      // its body after recursively desugaring. A `destructive` seqBlock also
+      // commits: prepend the flip so it runs on the ENCLOSING function's
+      // `__self` (this inlining is exactly why `__self` is the function, not a
+      // block frame — the fail-open guard).
+      if (node.destructive) {
+        result.push({ type: "markDestructiveRan" } as AgencyNode);
+      }
       result.push(...desugarParallelInBody(node.body));
     } else {
       // Recurse into nested control-flow bodies, then keep the node.

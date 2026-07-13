@@ -13,4 +13,9 @@ export type ParallelBlock = BaseNode & {
 export type SeqBlock = BaseNode & {
   type: "seqBlock";
   body: AgencyNode[];
+  /** True when written as `destructive { ... }` rather than `seq { ... }`.
+   *  Marks the region destructive: parallelDesugar prepends a
+   *  `markDestructiveRan` when inlining it, and the formatter prints
+   *  `destructive {`. */
+  destructive?: boolean;
 };

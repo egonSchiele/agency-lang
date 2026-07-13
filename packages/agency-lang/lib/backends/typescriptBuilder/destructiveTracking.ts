@@ -6,9 +6,10 @@ import type { NameClassifier } from "./nameClassifier.js";
 
 /**
  * Emits the destructive-execution tracking codegen: the per-function
- * `__destructiveRan` init, the function-exit boundary stamp, and the
- * per-statement flips. Extracted from TypeScriptBuilder so the tracking rules
- * live in one declarative place instead of scattered through a 4k-line file.
+ * `__destructiveRan` init, the function-exit boundary stamp, the region-entry
+ * flip (`markDestructiveRan`, emitted by a `markDestructiveRan` node from an
+ * inlined `destructive { }` region), and the Rule-2 caller-side flips. Extracted
+ * from TypeScriptBuilder so the tracking rules live in one declarative place.
  *
  * Stateless by design: every method is a pure function of its arguments (the
  * `inDestructiveFunction` flag is passed in, not held), so it can be
@@ -16,8 +17,13 @@ import type { NameClassifier } from "./nameClassifier.js";
  *
  * How the flag works: every function activation carries a boolean
  * `__self.__destructiveRan`. It starts false and is only ever flipped to true
- * (sticky). The function exit folds it into any departing failure via
- * `stampFailureBoundary`, so a failure reports whether destructive work ran.
+ * (sticky). It is set at ENTRY for a `destructive def` (init(true)), or at
+ * region entry for a `destructive { }` region. The function exit folds it into
+ * any departing failure via `stampFailureBoundary`, so a failure reports whether
+ * execution entered a destructive region. NOTE: because a `destructive { }`
+ * region is inlined into the function body before codegen, its flip lands on the
+ * function's `__self` — never a block frame — which is what keeps a failure
+ * escaping the function from carrying a false (fail-open) flag.
  */
 export class DestructiveTracking {
   constructor(
@@ -33,12 +39,20 @@ export class DestructiveTracking {
    *  destructive tool inside an llm() call), which the builder cannot see
    *  statically; the unconditional boolean init keeps the exit stamp from
    *  ever computing `x || undefined`. */
-  init(): TsNode {
+  init(inDestructiveFunction: boolean): TsNode {
+    // A `destructive def` commits its whole body: set the flag true at entry.
+    // `init()` runs AFTER argument binding, so an arg-binding failure that halts
+    // before it stays retryable (`neverStarted`). A non-destructive function
+    // keeps the `?? false` default so an externally set value (decision-8, or a
+    // `destructive { }` region's flip) is preserved.
     return ts.assign(
       ts.self("__destructiveRan"),
-      ts.binOp(ts.self("__destructiveRan"), "??", ts.bool(false)),
+      inDestructiveFunction
+        ? ts.bool(true)
+        : ts.binOp(ts.self("__destructiveRan"), "??", ts.bool(false)),
     );
   }
+
 
   /** `stampFailureBoundary(runner.haltResult, __self.__destructiveRan)` — the
    *  expression the function-exit halt check embeds to fold this activation's
@@ -50,10 +64,9 @@ export class DestructiveTracking {
     ]);
   }
 
-  /** Pre- and post-statement destructive flips for one statement.
-   *
-   *  Rule 1 (inside a destructive-marked function): any possibly-effectful
-   *  statement marks the activation before it runs.
+  /** Post-statement destructive flip for one statement, for a function that is
+   *  NOT itself `destructive`. A `destructive def` commits at entry (see
+   *  `init`), so it needs no per-statement flips.
    *
    *  Rule 2 (any function calling a destructive fn): when the call's result
    *  binds to a simple local (`const r = burn()` / `const r = try burn()`), an
@@ -65,20 +78,21 @@ export class DestructiveTracking {
     stmt: AgencyNode,
     inDestructiveFunction: boolean,
   ): { pre?: TsNode; post?: TsNode } {
-    if (inDestructiveFunction) {
-      return this.names.containsImpureCall(stmt) ? { pre: this.markTrue() } : {};
-    }
+    // A `destructive def` commits at entry; no per-statement flips.
+    if (inDestructiveFunction) return {};
     const outcomeVar = this.destructiveOutcomeVar(stmt);
     if (outcomeVar) {
       return { post: this.outcomeFlip(outcomeVar) };
     }
     return this.names.containsDestructiveCall(stmt)
-      ? { pre: this.markTrue() }
+      ? { pre: this.markDestructiveRan() }
       : {};
   }
 
-  /** `__self.__destructiveRan = true` — the conservative pre-flip. */
-  private markTrue(): TsNode {
+  /** `__self.__destructiveRan = true` — sets the activation's destructive-ran
+   *  flag. Emitted at a `destructive { }` region entry (via the
+   *  `markDestructiveRan` node) and as the Rule-2 conservative pre-flip. */
+  markDestructiveRan(): TsNode {
     return ts.assign(ts.self("__destructiveRan"), ts.bool(true));
   }
 

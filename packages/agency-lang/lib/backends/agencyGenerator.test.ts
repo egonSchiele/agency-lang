@@ -1075,3 +1075,25 @@ describe("AgencyGenerator - destructive/idempotent markers", () => {
     expect(roundTrip(once)).toBe(once);
   });
 });
+
+describe("AgencyGenerator - destructive/seq blocks", () => {
+  function formatAgency(input: string): string {
+    const parseResult = parseAgency(input, {}, false);
+    expect(parseResult.success).toBe(true);
+    if (!parseResult.success) return "";
+    const generator = new AgencyGenerator();
+    return generator.generate(parseResult.result).output.trim();
+  }
+
+  it("formats a destructive block with the destructive keyword", () => {
+    const output = formatAgency('def f() {\n  destructive {\n    return _w(x)\n  }\n}');
+    expect(output).toContain("destructive {");
+    expect(output).not.toContain("seq {");
+  });
+
+  it("still formats a seq block as seq", () => {
+    const output = formatAgency('def f() {\n  seq {\n    return 1\n  }\n}');
+    expect(output).toContain("seq {");
+    expect(output).not.toContain("destructive {");
+  });
+});

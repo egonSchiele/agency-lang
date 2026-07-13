@@ -38,7 +38,7 @@ type EmailResult = {
 effect std::sendEmail { from: string, to: string, subject: string }
 
 /** Send an email using the Resend API. Requires `RESEND_API_KEY` env var or pass apiKey directly. */
-export destructive def sendWithResend(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = "", allowList: string[] = [], blockList: string[] = []): Result {
+export def sendWithResend(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = "", allowList: string[] = [], blockList: string[] = []): Result {
   """
   Send an email using the Resend API.
 
@@ -60,24 +60,26 @@ export destructive def sendWithResend(from: string, to: string, subject: string,
     subject: subject
   })
 
-  return try _sendWithResend({
-    from: from,
-    to: to,
-    subject: subject,
-    html: html,
-    text: text,
-    cc: cc,
-    bcc: bcc,
-    replyTo: replyTo
-  }, {
-    apiKey: apiKey,
-    allowList: allowList,
-    blockList: blockList
-  })
+  destructive {
+    return try _sendWithResend({
+      from: from,
+      to: to,
+      subject: subject,
+      html: html,
+      text: text,
+      cc: cc,
+      bcc: bcc,
+      replyTo: replyTo
+    }, {
+      apiKey: apiKey,
+      allowList: allowList,
+      blockList: blockList
+    })
+  }
 }
 
 /** Send an email using the SendGrid API. Requires `SENDGRID_API_KEY` env var or pass apiKey directly. */
-export destructive def sendWithSendGrid(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = "", allowList: string[] = [], blockList: string[] = []): Result {
+export def sendWithSendGrid(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = "", allowList: string[] = [], blockList: string[] = []): Result {
   """
   Send an email using the SendGrid API.
 
@@ -99,24 +101,26 @@ export destructive def sendWithSendGrid(from: string, to: string, subject: strin
     subject: subject
   })
 
-  return try _sendWithSendGrid({
-    from: from,
-    to: to,
-    subject: subject,
-    html: html,
-    text: text,
-    cc: cc,
-    bcc: bcc,
-    replyTo: replyTo
-  }, {
-    apiKey: apiKey,
-    allowList: allowList,
-    blockList: blockList
-  })
+  destructive {
+    return try _sendWithSendGrid({
+      from: from,
+      to: to,
+      subject: subject,
+      html: html,
+      text: text,
+      cc: cc,
+      bcc: bcc,
+      replyTo: replyTo
+    }, {
+      apiKey: apiKey,
+      allowList: allowList,
+      blockList: blockList
+    })
+  }
 }
 
 /** Send an email using the Mailgun API. Requires `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` env vars, or pass them directly. Set region to "eu" for the EU endpoint. */
-export destructive def sendWithMailgun(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = "", domain: string = "", region: string = "", allowList: string[] = [], blockList: string[] = []): Result {
+export def sendWithMailgun(from: string, to: string, subject: string, html: string = "", text: string = "", cc: string = "", bcc: string = "", replyTo: string = "", apiKey: string = "", domain: string = "", region: string = "", allowList: string[] = [], blockList: string[] = []): Result {
   """
   Send an email using the Mailgun API.
 
@@ -140,20 +144,22 @@ export destructive def sendWithMailgun(from: string, to: string, subject: string
     subject: subject
   })
 
-  return try _sendWithMailgun({
-    from: from,
-    to: to,
-    subject: subject,
-    html: html,
-    text: text,
-    cc: cc,
-    bcc: bcc,
-    replyTo: replyTo
-  }, {
-    apiKey: apiKey,
-    domain: domain,
-    region: region,
-    allowList: allowList,
-    blockList: blockList
-  })
+  destructive {
+    return try _sendWithMailgun({
+      from: from,
+      to: to,
+      subject: subject,
+      html: html,
+      text: text,
+      cc: cc,
+      bcc: bcc,
+      replyTo: replyTo
+    }, {
+      apiKey: apiKey,
+      domain: domain,
+      region: region,
+      allowList: allowList,
+      blockList: blockList
+    })
+  }
 }

@@ -46,9 +46,21 @@ const flips = (
 };
 
 describe("DestructiveTracking", () => {
-  it("init() is the unconditional boolean init", () => {
-    expect(printTs(bareTracker().init()).trim()).toBe(
+  it("init(false) is the `?? false` default for a non-destructive function", () => {
+    expect(printTs(bareTracker().init(false)).trim()).toBe(
       "__self.__destructiveRan = __self.__destructiveRan ?? false;",
+    );
+  });
+
+  it("init(true) commits at entry for a `destructive def`", () => {
+    expect(printTs(bareTracker().init(true)).trim()).toBe(
+      "__self.__destructiveRan = true;",
+    );
+  });
+
+  it("markDestructiveRan() sets the flag true (destructive { } region entry)", () => {
+    expect(printTs(bareTracker().markDestructiveRan()).trim()).toBe(
+      "__self.__destructiveRan = true;",
     );
   });
 
@@ -138,16 +150,17 @@ describe("DestructiveTracking", () => {
     });
   });
 
-  it("inside a destructive function, an impure statement gets the PRE flip", () => {
-    // `read` is an imported stdlib function → impure. Inside a destructive
-    // function, any impure statement marks the activation.
+  it("inside a destructive function, no per-statement flips (commit is at entry)", () => {
+    // A `destructive def` commits at entry via init(true); statementFlips emits
+    // nothing per-statement, regardless of what the statement calls.
     const { tracking, body } = setup(
       `import { read } from "std::index"\n` +
         `destructive def burn() { const s = read("f") }`,
       "burn",
     );
-    const f = flips(tracking, body[0], true);
-    expect(f.pre).toBe("__self.__destructiveRan = true;");
-    expect(f.post).toBeUndefined();
+    expect(flips(tracking, body[0], true)).toEqual({
+      pre: undefined,
+      post: undefined,
+    });
   });
 });

@@ -1,0 +1,6 @@
+import { codingAgent } from "std::agents/coding"
+
+node main(): string {
+  const r = codingAgent("""Create a file named data.json in the current working directory. Its exact bytes must be {"count":3} — the key count with value 3, no spaces anywhere, and NO trailing newline. Write nothing else to the file.""", maxCost: $3.00, maxTime: 4m) with approve
+  return r
+}

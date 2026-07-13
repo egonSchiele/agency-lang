@@ -69,3 +69,12 @@ jobs:
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: pnpm run test:optimize-efficacy
+
+    - name: std::agents efficacy tests (real LLM)
+      # Non-blocking: this tracks worker-agent quality over time; a flaky
+      # real-LLM miss should not fail the post-merge build.
+      continue-on-error: true
+      working-directory: packages/agency-lang
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: pnpm run test:agents-efficacy

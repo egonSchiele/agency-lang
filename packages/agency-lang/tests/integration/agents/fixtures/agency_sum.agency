@@ -1,0 +1,18 @@
+import { agencyCodingAgent } from "std::agents/agency"
+import { runCode } from "std::agency"
+
+def report(src: string): string {
+  return match (runCode(src)) {
+    failure(_) => "RESULT=ERR"
+    success(data) => "RESULT=${data}"
+  }
+}
+
+node main() {
+  const r = agencyCodingAgent("Return the sum of the numbers 1, 2, and 3.", maxCost: $3.00, maxTime: 4m) with approve
+  const marker = match (r) {
+    failure(_) => "WRITEFAIL"
+    success(src) => report(src)
+  }
+  print(marker)
+}

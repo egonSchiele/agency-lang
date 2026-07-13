@@ -1,0 +1,6 @@
+import { researchAgent } from "std::agents/research"
+
+node main() {
+  const answer = researchAgent("In what year was the Eiffel Tower completed? Give the exact year and cite a source.", maxCost: $3.00, maxTime: 4m) with approve
+  print(answer)
+}

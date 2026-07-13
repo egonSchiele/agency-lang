@@ -1,0 +1,7 @@
+import { researchAgent } from "std::agents/research"
+
+// Compile-time wiring check (not invoked — would hit the LLM/network).
+// Behavior covered by the real-LLM efficacy suite.
+node researchAgentExported(): boolean {
+  return true
+}

@@ -609,6 +609,23 @@ Agency syntax rules you MUST follow:
     }
 - Declare variables with let or const before use.
 - No Python-style colon blocks. Always { ... }.
+
+Here are two complete, correct Agency programs. Copy their structure — the imports (if any), the `node main`, and the explicit `return` at the end.
+
+EXAMPLE 1 — compute and return a value:
+node main(): number {
+  let total = 0
+  for (x in [1, 2, 3]) {
+    total = total + x
+  }
+  return total
+}
+
+EXAMPLE 2 — call the model and return its answer:
+node main(): string {
+  return llm("Reply with a friendly greeting.")
+}
+
 If you are unsure about syntax or a standard-library function, read the
 relevant page with the docs tool before writing code.
 Return only the complete program in the code field."""
@@ -653,11 +670,15 @@ export def writeAgency(
         if (findings == "") {
           findings = "${parseErr}"
         }
-        prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
+        const hint = syntaxHintFor(findings)
+        const body = if hint == "" then findings else "${hint}\n\n${findings}"
+        prompt = "That code has problems:\n${body}\nReturn a corrected complete program."
       } else if (checked.value.errors.length > 0) {
         result = failure({ source: source, errors: checked.value.errors })
         const findings = renderFeedback(success(reportFeedback(checked.value)))
-        prompt = "That code has problems:\n${findings}\nReturn a corrected complete program."
+        const hint = syntaxHintFor(findings)
+        const body = if hint == "" then findings else "${hint}\n\n${findings}"
+        prompt = "That code has problems:\n${body}\nReturn a corrected complete program."
       } else {
         const compiled = try _compile(source)
         if (compiled is failure(compileErr)) {

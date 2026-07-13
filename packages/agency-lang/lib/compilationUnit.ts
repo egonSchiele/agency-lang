@@ -19,6 +19,7 @@ import { getImportedNames } from "./types/importStatement.js";
 import type { SymbolTable, InterruptEffect } from "./symbolTable.js";
 import { collectTypeAliasTags } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
+import { functionContainsDestructiveBlock } from "./backends/functionContainsDestructiveBlock.js";
 import { resultTypeForValidation } from "./typeChecker/validation.js";
 import { visitTypes } from "./typeChecker/typeWalker.js";
 
@@ -175,8 +176,11 @@ function registerMarkers(
   unit: CompilationUnit,
   localName: string,
   markers: FunctionMarkers | undefined,
+  containsDestructiveBlock = false,
 ): void {
-  if (markers?.destructive) {
+  // A function is destructive for the registry (Rule 2 caller propagation) if it
+  // is marked `destructive def` OR contains a `destructive { }` region.
+  if (markers?.destructive || containsDestructiveBlock) {
     unit.destructiveFunctions[localName] = true;
   }
   if (markers?.idempotent) {
@@ -208,7 +212,12 @@ export function buildCompilationUnit(
     switch (node.type) {
       case "function":
         unit.functionDefinitions[node.functionName] = node;
-        registerMarkers(unit, node.functionName, node.markers);
+        registerMarkers(
+          unit,
+          node.functionName,
+          node.markers,
+          functionContainsDestructiveBlock(node.body),
+        );
         break;
       case "graphNode":
         unit.graphNodes.push(node);

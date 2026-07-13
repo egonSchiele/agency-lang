@@ -28,6 +28,156 @@ Typed, safe git tools for agents. Each tool builds its own git command
 
 ## Types
 
+### ChangeCode
+
+git porcelain change codes: "." unmodified, "M" modified, "A" added,
+  "D" deleted, "R" renamed, "C" copied, "U" unmerged, "T" type-changed,
+  "?" untracked, "!" ignored.
+
+```ts
+/** git porcelain change codes: "." unmodified, "M" modified, "A" added,
+  "D" deleted, "R" renamed, "C" copied, "U" unmerged, "T" type-changed,
+  "?" untracked, "!" ignored. */
+export type ChangeCode =
+  | "."
+  | "M"
+  | "A"
+  | "D"
+  | "R"
+  | "C"
+  | "U"
+  | "T"
+  | "?"
+  | "!"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L47))
+
+### FileStatus
+
+```ts
+export type FileStatus = {
+  path: string;
+  index: ChangeCode;
+  worktree: ChangeCode;
+  renamedFrom?: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L48))
+
+### GitStatus
+
+```ts
+export type GitStatus = {
+  branch: string;
+  upstream: string;
+  ahead: number;
+  behind: number;
+  entries: FileStatus[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L54))
+
+### GitCommit
+
+```ts
+export type GitCommit = {
+  sha: string;
+  author: string;
+  email: string;
+  date: string;
+  subject: string;
+  body: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L61))
+
+### GitLog
+
+```ts
+export type GitLog = {
+  commits: GitCommit[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L69))
+
+### FileDiff
+
+```ts
+export type FileDiff = {
+  path: string;
+  status: ChangeCode;
+  additions?: number;
+  deletions?: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L70))
+
+### GitDiff
+
+```ts
+export type GitDiff = {
+  files: FileDiff[];
+  patch: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L76))
+
+### GitBranch
+
+```ts
+export type GitBranch = {
+  name: string;
+  current: boolean;
+  upstream: string;
+  sha: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L77))
+
+### BlameLine
+
+```ts
+export type BlameLine = {
+  sha: string;
+  author: string;
+  line: number;
+  content: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L83))
+
+### GitRemote
+
+```ts
+export type GitRemote = {
+  name: string;
+  url: string;
+  direction: "fetch" | "push"
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L89))
+
+### GitStash
+
+```ts
+export type GitStash = {
+  ref: string;
+  description: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L90))
+
 ### GitRead
 
 Read-only git effects, auto-approvable.
@@ -37,7 +187,7 @@ Read-only git effects, auto-approvable.
 export effectSet GitRead = <std::git::status, std::git::log, std::git::diff, std::git::show, std::git::branchList, std::git::remoteList, std::git::blame, std::git::stashList>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L116))
 
 ### GitWrite
 
@@ -48,7 +198,7 @@ Mutating git effects, should prompt.
 export effectSet GitWrite = <std::git::add, std::git::commit, std::git::checkout, std::git::switch, std::git::branchCreate, std::git::branchDelete, std::git::stashPush, std::git::stashPop, std::git::restore>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L118))
 
 ### Git
 
@@ -59,7 +209,7 @@ All git effects.
 export effectSet Git = <GitRead, GitWrite>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L120))
 
 ## Effects
 
@@ -71,7 +221,7 @@ effect std::git::status {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L96))
 
 ### std::git::log
 
@@ -83,7 +233,7 @@ effect std::git::log {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L97))
 
 ### std::git::diff
 
@@ -97,7 +247,7 @@ effect std::git::diff {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L98))
 
 ### std::git::show
 
@@ -108,7 +258,7 @@ effect std::git::show {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L99))
 
 ### std::git::branchList
 
@@ -118,7 +268,7 @@ effect std::git::branchList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L100))
 
 ### std::git::remoteList
 
@@ -128,7 +278,7 @@ effect std::git::remoteList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L101))
 
 ### std::git::blame
 
@@ -139,7 +289,7 @@ effect std::git::blame {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L102))
 
 ### std::git::stashList
 
@@ -149,7 +299,7 @@ effect std::git::stashList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L103))
 
 ### std::git::add
 
@@ -161,7 +311,7 @@ effect std::git::add {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L105))
 
 ### std::git::commit
 
@@ -172,7 +322,7 @@ effect std::git::commit {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L106))
 
 ### std::git::checkout
 
@@ -184,7 +334,7 @@ effect std::git::checkout {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L107))
 
 ### std::git::switch
 
@@ -196,7 +346,7 @@ effect std::git::switch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L108))
 
 ### std::git::branchCreate
 
@@ -207,7 +357,7 @@ effect std::git::branchCreate {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L109))
 
 ### std::git::branchDelete
 
@@ -219,7 +369,7 @@ effect std::git::branchDelete {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L110))
 
 ### std::git::stashPush
 
@@ -230,7 +380,7 @@ effect std::git::stashPush {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L111))
 
 ### std::git::stashPop
 
@@ -240,7 +390,7 @@ effect std::git::stashPop {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L112))
 
 ### std::git::restore
 
@@ -252,7 +402,7 @@ effect std::git::restore {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L113))
 
 ## Functions
 
@@ -272,11 +422,11 @@ Show the working-tree status: current branch, ahead/behind counts, and
 |---|---|---|
 | cwd | `string` | "" |
 
-**Returns:** `GitStatus`
+**Returns:** [GitStatus](#gitstatus)
 
 **Throws:** `std::git::status`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L135))
 
 ### gitLog
 
@@ -316,11 +466,11 @@ Show commit history as structured commits.
 | allowedPaths | `string[]` | [] |
 | cwd | `string` | "" |
 
-**Returns:** `GitLog`
+**Returns:** [GitLog](#gitlog)
 
 **Throws:** `std::git::log`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L148))
 
 ### gitDiff
 
@@ -357,11 +507,11 @@ Show a diff as a structured per-file summary plus the raw unified patch.
 | allowedPaths | `string[]` | [] |
 | cwd | `string` | "" |
 
-**Returns:** `GitDiff`
+**Returns:** [GitDiff](#gitdiff)
 
 **Throws:** `std::git::diff`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L173))
 
 ### gitShow
 
@@ -381,11 +531,11 @@ Show a commit as a structured per-file summary plus the raw patch. Line
 | ref | `string` | "HEAD" |
 | cwd | `string` | "" |
 
-**Returns:** `GitDiff`
+**Returns:** [GitDiff](#gitdiff)
 
 **Throws:** `std::git::show`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L194))
 
 ### gitBranchList
 
@@ -406,7 +556,7 @@ List local branches with their current-marker, upstream, and sha.
 
 **Throws:** `std::git::branchList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L151))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L206))
 
 ### gitRemoteList
 
@@ -427,7 +577,7 @@ List configured remotes with their fetch/push URLs.
 
 **Throws:** `std::git::remoteList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L161))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L216))
 
 ### gitBlame
 
@@ -456,7 +606,7 @@ Show line-by-line authorship for a file.
 
 **Throws:** `std::git::blame`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L171))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L226))
 
 ### gitStashList
 
@@ -477,7 +627,7 @@ List stashes with their ref and description.
 
 **Throws:** `std::git::stashList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L183))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L238))
 
 ### gitAdd
 
@@ -513,7 +663,7 @@ Stage changes for commit.
 
 **Throws:** `std::git::add`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L253))
 
 ### gitCommit
 
@@ -536,7 +686,7 @@ Create a commit from the staged changes.
 
 **Throws:** `std::git::commit`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L214))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L269))
 
 ### gitCheckout
 
@@ -567,7 +717,7 @@ Bind `force: false` via `.partial()` to forbid discarding local changes.
 
 **Throws:** `std::git::checkout`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L226))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L281))
 
 ### gitSwitch
 
@@ -596,7 +746,7 @@ Switch to a branch.
 
 **Throws:** `std::git::switch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L242))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L297))
 
 ### gitBranchCreate
 
@@ -622,7 +772,7 @@ Create a new branch at HEAD (does not switch to it).
 
 **Throws:** `std::git::branchCreate`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L254))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L309))
 
 ### gitBranchDelete
 
@@ -657,7 +807,7 @@ Guardrails: bind `force: false` and/or a `protectedBranches` list via
 
 **Throws:** `std::git::branchDelete`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L268))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L323))
 
 ### gitStashPush
 
@@ -683,7 +833,7 @@ Stash the working-tree changes.
 
 **Throws:** `std::git::stashPush`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L287))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L342))
 
 ### gitStashPop
 
@@ -704,7 +854,7 @@ Apply and drop the most recent stash.
 
 **Throws:** `std::git::stashPop`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L298))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L353))
 
 ### gitRestore
 
@@ -739,4 +889,4 @@ Restore files to a previous state.
 
 **Throws:** `std::git::restore`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L310))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/git.agency#L365))

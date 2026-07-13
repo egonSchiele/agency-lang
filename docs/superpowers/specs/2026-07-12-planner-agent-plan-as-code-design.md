@@ -35,10 +35,10 @@ CodeAct (code-as-action beats JSON), ADAS/Meta Agent Search (a meta-agent progra
 ## Interface
 
 ```
-def plannerAgent(task: string, context: string = "", maxCost: number = $50.00, maxTime: number = 30m): string
+def plannerAgent(task: string, context: string = "", maxCost: number = $100.00, maxTime: number = 60m): string
 ```
 
-Returns a short summary; the real output is the filesystem side effects of the generated agent (for build/edit tasks) or the reported result. Wrapped in `guard(cost: maxCost, time: maxTime)` like the worker agents, using the capture-and-`match` pattern.
+Returns a short summary; the real output is the filesystem side effects of the generated agent (for build/edit tasks) or the reported result. Wrapped in `guard(cost: maxCost, time: maxTime)` like the worker agents, using the capture-and-`match` pattern. The defaults are higher than the worker agents ($50 / 30m) because the planner fans out into a generated agent (and possibly recursive sub-agents), so its whole-tree budget is larger.
 
 ## Flow
 

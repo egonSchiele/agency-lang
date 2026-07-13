@@ -32,9 +32,9 @@ Confirmed empirically across three failing tasks: 76/70/152 phantom-error re-pro
 
 The crash comes from treating the model's prose reply as Agency source. The fix is to **review the actual `.agency` files the agent produced on disk**, never the chat text.
 
-- After the model turn, discover the `.agency` files in the agent's working directory (`glob("**/*.agency")` under `getAgentCwd()`), restricted to files created or modified this session.
-- Run `std::agency::review(source)` on each such file's contents.
-- If the agent wrote no `.agency` files (the common case for Python/C/shell tasks), `review()` is a **no-op** — there is nothing Agency to review, so nothing can crash.
+- After the model turn, discover the `.agency` files the agent created or modified this turn. **Preferred mechanism: `std::git`** — the working directory is typically a git repo, so `git status` / `git diff --name-only` (via `std::git`) gives exactly the changed paths, filtered to `*.agency`. This is cleaner and more accurate than mtime/hash snapshots (it tracks real content changes and ignores untouched files). Fallback for a non-git working directory: `glob("**/*.agency")` under `getAgentCwd()` diffed against a snapshot taken at task start.
+- Run `std::agency::review(source)` on each changed `.agency` file's contents.
+- If the agent changed no `.agency` files (the common case for Python/C/shell tasks), `review()` is a **no-op** — there is nothing Agency to review, so nothing can crash.
 
 This removes the unreliable "extract Agency snippets from a chat message" step entirely. Non-Agency replies can no longer reach the Agency parser.
 
@@ -76,6 +76,6 @@ The key change from today: `review()` returning "no findings" (because there wer
 
 ## Risks / open questions
 
-- **Detecting "files written this session"**: simplest is to snapshot the `.agency` files (path + mtime/hash) at task start and diff at review time, or to have the write/edit tools record touched paths. Decide the mechanism in the plan.
+- **Detecting changed `.agency` files**: use `std::git` (`git status`/`git diff --name-only`, filter to `*.agency`) when the working dir is a git repo; fall back to a `glob` + start-of-task snapshot otherwise. Confirm the `std::git` surface (which functions expose changed-file lists) in the plan.
 - **Interactive Agency authoring**: when a user is iterating on Agency code in a REPL, `review()` should still fire on their `.agency` files — the file-based approach preserves this (it reviews the files, which is what they are editing).
 - **`agencyReview` softening scope**: must not weaken `writeAgency`'s repair loop, which relies on real parse/typecheck diagnostics. Keep the softening on the agent's review path only.

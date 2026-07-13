@@ -423,7 +423,13 @@ export function desugarParallelInBody(body: AgencyNode[]): AgencyNode[] {
       result.push(...desugarOneParallel(node));
     } else if (node.type === "seqBlock") {
       // Outside a parallel context, a seq block has no runtime effect; inline
-      // its body after recursively desugaring.
+      // its body after recursively desugaring. A `destructive` seqBlock also
+      // commits: prepend the flip so it runs on the ENCLOSING function's
+      // `__self` (this inlining is exactly why `__self` is the function, not a
+      // block frame — the fail-open guard).
+      if (node.destructive) {
+        result.push({ type: "markDestructiveRan" } as AgencyNode);
+      }
       result.push(...desugarParallelInBody(node.body));
     } else {
       // Recurse into nested control-flow bodies, then keep the node.

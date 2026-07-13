@@ -1,0 +1,18 @@
+def prep(x: number): number {
+  return x
+}
+
+def _doWrite(p: number): number {
+  return p
+}
+
+def writeThing(x: number): number {
+  const p = prep(x)
+  destructive {
+    return _doWrite(p)
+  }
+}
+
+node main() {
+  return writeThing(1)
+}

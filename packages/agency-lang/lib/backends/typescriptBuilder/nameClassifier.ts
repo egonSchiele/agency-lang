@@ -2,7 +2,6 @@ import type { AgencyNode } from "../../types.js";
 import type { CompilationUnit } from "../../compilationUnit.js";
 import { getImportedNames } from "../../types/importStatement.js";
 import { walkNodesArray } from "../../utils/node.js";
-import { BUILTIN_FUNCTIONS } from "../../config.js";
 
 /**
  * Plain JS functions that bypass the `__call` dispatcher and are invoked
@@ -108,19 +107,6 @@ export class NameClassifier {
     return false;
   }
 
-  /**
-   * True if `functionName` was imported from another module. Any imported
-   * call is treated as possibly-effectful: the compiler cannot see inside
-   * it. (Before the `safe` retirement this also consulted `safeFunctions`;
-   * that registry is gone, so every import is impure.)
-   */
-  isImpureImportedFunction(functionName: string): boolean {
-    return (
-      this.plainTsImportNames.has(functionName) ||
-      this.agencyImportNames.has(functionName)
-    );
-  }
-
   /** The function name a call-bearing node targets, if any. Handles a plain
    *  `functionCall` and the `try f()` case (`walkNodes` yields the
    *  tryExpression node but does not descend into its `.call`, so the common
@@ -139,27 +125,15 @@ export class NameClassifier {
     return undefined;
   }
 
-  /** Recursively walks `node` and returns true if any function call within it is impure. */
-  containsImpureCall(node: AgencyNode): boolean {
-    for (const { node: subNode } of walkNodesArray([node])) {
-      const name = this.callTarget(subNode);
-      if (name === undefined) continue;
-      if (this.isImpureImportedFunction(name)) return true;
-      // Object.hasOwn, not a truthy index: a call to a function named
-      // `toString`/`constructor` would otherwise match an inherited
-      // prototype member on the plain BUILTIN_FUNCTIONS object.
-      if (Object.hasOwn(BUILTIN_FUNCTIONS, name)) return true;
-    }
-    return false;
-  }
-
   /** Recursively walks `node` and returns true if any function call within
-   *  it targets a function marked `destructive`. Same walker shape as
-   *  containsImpureCall; reads the destructiveFunctions registry. */
+   *  it targets a function marked `destructive`; reads the destructiveFunctions
+   *  registry. */
   containsDestructiveCall(node: AgencyNode): boolean {
     for (const { node: subNode } of walkNodesArray([node])) {
       const name = this.callTarget(subNode);
-      // Object.hasOwn, not a truthy index — see containsImpureCall.
+      // Object.hasOwn, not a truthy index: a call to a function named
+      // `toString`/`constructor` would otherwise match an inherited prototype
+      // member on the plain destructiveFunctions object.
       if (
         name !== undefined &&
         Object.hasOwn(this.compilationUnit.destructiveFunctions, name)

@@ -550,6 +550,10 @@ export class TypeScriptBuilder {
 
   private processNode(node: AgencyNode): TsNode {
     switch (node.type) {
+      case "markDestructiveRan":
+        // Synthetic flip from an inlined `destructive { }` region. Inlined into
+        // the function body, so `__self` is the function activation.
+        return this.tracking.blockEntryFlip();
       case "typeAlias":
         if (this.hoistedTypeAliasNodes.has(node)) return ts.empty();
         return this.processTypeAlias(node);
@@ -2129,7 +2133,7 @@ export class TypeScriptBuilder {
     }
 
     // __self.__destructiveRan init — see DestructiveTracking.init().
-    setupStmts.push(this.tracking.init());
+    setupStmts.push(this.tracking.init(this.scopes.inDestructiveFunction));
 
     // Create runner for step execution. `threads` is read directly from
     // the setup-function result, which now resolves it from the active

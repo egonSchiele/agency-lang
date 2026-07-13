@@ -33,11 +33,26 @@ export class DestructiveTracking {
    *  destructive tool inside an llm() call), which the builder cannot see
    *  statically; the unconditional boolean init keeps the exit stamp from
    *  ever computing `x || undefined`. */
-  init(): TsNode {
+  init(inDestructiveFunction: boolean): TsNode {
+    // A `destructive def` commits its whole body: set the flag true at entry.
+    // `init()` runs AFTER argument binding, so an arg-binding failure that halts
+    // before it stays retryable (`neverStarted`). A non-destructive function
+    // keeps the `?? false` default so an externally set value (decision-8, or a
+    // `destructive { }` region's flip) is preserved.
     return ts.assign(
       ts.self("__destructiveRan"),
-      ts.binOp(ts.self("__destructiveRan"), "??", ts.bool(false)),
+      inDestructiveFunction
+        ? ts.bool(true)
+        : ts.binOp(ts.self("__destructiveRan"), "??", ts.bool(false)),
     );
+  }
+
+  /** `__self.__destructiveRan = true` — the entry flip a `destructive { }`
+   *  region emits (via the `markDestructiveRan` node). Because the region is
+   *  inlined into the function body, `ts.self` resolves to the function's
+   *  `__self`, not a block frame. */
+  blockEntryFlip(): TsNode {
+    return this.markTrue();
   }
 
   /** `stampFailureBoundary(runner.haltResult, __self.__destructiveRan)` — the
@@ -50,10 +65,9 @@ export class DestructiveTracking {
     ]);
   }
 
-  /** Pre- and post-statement destructive flips for one statement.
-   *
-   *  Rule 1 (inside a destructive-marked function): any possibly-effectful
-   *  statement marks the activation before it runs.
+  /** Post-statement destructive flip for one statement, for a function that is
+   *  NOT itself `destructive`. A `destructive def` commits at entry (see
+   *  `init`), so it needs no per-statement flips.
    *
    *  Rule 2 (any function calling a destructive fn): when the call's result
    *  binds to a simple local (`const r = burn()` / `const r = try burn()`), an
@@ -65,9 +79,8 @@ export class DestructiveTracking {
     stmt: AgencyNode,
     inDestructiveFunction: boolean,
   ): { pre?: TsNode; post?: TsNode } {
-    if (inDestructiveFunction) {
-      return this.names.containsImpureCall(stmt) ? { pre: this.markTrue() } : {};
-    }
+    // A `destructive def` commits at entry; no per-statement flips.
+    if (inDestructiveFunction) return {};
     const outcomeVar = this.destructiveOutcomeVar(stmt);
     if (outcomeVar) {
       return { post: this.outcomeFlip(outcomeVar) };

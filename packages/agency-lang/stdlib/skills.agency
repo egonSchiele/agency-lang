@@ -92,6 +92,46 @@ def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
   }
 }
 
+// Providers cap tool-name length: OpenAI at 64 characters, Anthropic at 128.
+// Cap to the stricter 64 so a name is accepted everywhere.
+const MAX_TOOL_NAME_LEN = 64
+
+def sanitizeToolSegment(raw: string): string {
+  """
+  Reduce an arbitrary string to characters providers accept in a tool name.
+  Replace every run of non-alphanumerics with a single underscore — one pass
+  handles `/`, `.`, `-`, space, and crucially the Windows backslash and
+  drive-letter colon (`C:\\docs\\guide`) — then trim edge underscores left by
+  a leading `../` or a trailing slash so names read cleanly.
+  """
+  let cleaned = raw.replaceAll(re/[^a-zA-Z0-9]+/g, "_")
+  while (cleaned.startsWith("_")) {
+    cleaned = cleaned.slice(1)
+  }
+  while (cleaned.endsWith("_")) {
+    cleaned = cleaned.slice(0, cleaned.length - 1)
+  }
+  return cleaned
+}
+
+def capToolName(name: string): string {
+  """
+  Cap a tool name to the provider limit, keeping the TAIL. For a deep path
+  the distinctive part (the leaf skill dir, e.g. `docs_guide`) is at the end,
+  and sibling skill dirs share a long common prefix, so dropping the head
+  preserves both readability and uniqueness better than truncating the tail.
+  """
+  if (name.length <= MAX_TOOL_NAME_LEN) {
+    return name
+  }
+  let capped = name.slice(name.length - MAX_TOOL_NAME_LEN, name.length)
+  // A tail slice can begin mid-segment with a leading underscore; trim it.
+  while (capped.startsWith("_")) {
+    capped = capped.slice(1)
+  }
+  return capped
+}
+
 def skillToolName(dir: string): string {
   """
   Derive a unique, readable LLM tool name from a skills directory. The
@@ -99,27 +139,16 @@ def skillToolName(dir: string): string {
   name `read`. So two `skillsDir(...)` results in one `tools:` list would
   collide, because providers require unique tool names. Naming each after
   its directory keeps them distinct AND makes tool-call traces legible.
+  The result is capped at 64 characters (see `capToolName`); pass an explicit
+  `name` to `skillsDir` to override the derived name entirely.
 
   @param dir - The skills directory the tool reads from.
   """
-  // Replace every run of non-alphanumeric characters with a single
-  // underscore. One pass handles all separators and unsafe characters —
-  // `/`, `.`, `-`, space, and crucially the Windows backslash and
-  // drive-letter colon (`C:\docs\guide`) — which providers reject in tool
-  // names and which would otherwise defeat the uniqueness fix.
-  let cleaned = dir.replaceAll(re/[^a-zA-Z0-9]+/g, "_")
-  // Trim the leading/trailing underscores left by edge separators (a
-  // leading `../` or a trailing slash) so names read cleanly.
-  while (cleaned.startsWith("_")) {
-    cleaned = cleaned.slice(1)
-  }
-  while (cleaned.endsWith("_")) {
-    cleaned = cleaned.slice(0, cleaned.length - 1)
-  }
+  let cleaned = sanitizeToolSegment(dir)
   if (cleaned == "") {
     cleaned = "root"
   }
-  return "skills_${cleaned}"
+  return capToolName("skills_${cleaned}")
 }
 
 def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
@@ -155,7 +184,7 @@ def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
 effect std::skills::skillsDir { dir: string, layout: "flat" | "standard" }
 effect std::skills::commandsDir { dir: string }
 
-def buildSkillsTool(dir: string, layout: "flat" | "standard") {
+def buildSkillsTool(dir: string, layout: "flat" | "standard", name: string = "") {
   let pattern = "*/SKILL.md"
   if (layout == "flat") {
     pattern = "*.{md,markdown}"
@@ -179,22 +208,32 @@ def buildSkillsTool(dir: string, layout: "flat" | "standard") {
   // `.rename(...)` is essential, not cosmetic: without it every skillsDir
   // tool is named `read` (the base of `read.partial`), so two of them in one
   // `tools:` list trip the provider's unique-name requirement.
-  return read.partial(dir: dir).describe(description).rename(skillToolName(dir))
+  let toolName = skillToolName(dir)
+  if (name != "") {
+    // An explicit name still gets sanitized (providers reject spaces /
+    // punctuation) and capped, but overrides the path-derived name.
+    const explicit = sanitizeToolSegment(name)
+    if (explicit != "") {
+      toolName = capToolName(explicit)
+    }
+  }
+  return read.partial(dir: dir).describe(description).rename(toolName)
 }
 
-export def skillsDir(dir: string, layout: "flat" | "standard" = "standard") {
+export def skillsDir(dir: string, layout: "flat" | "standard" = "standard", name: string = "") {
   """
   Build a skills tool for an LLM over a directory of skills.
 
   @param dir - Directory containing the skills.
   @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
+  @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters. Defaults to a name derived from `dir`; set this to override it — e.g. for a stable, readable name, or to disambiguate two tools whose derived names would collide.
   """
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
     dir: dir,
     layout: layout
   })
 
-  return buildSkillsTool(dir, layout)
+  return buildSkillsTool(dir, layout, name)
 }
 
 export def docsSkill(section: "guide" | "cli" | "diagnostics") {

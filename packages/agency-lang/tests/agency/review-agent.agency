@@ -1,0 +1,76 @@
+import {
+  filterAgencyPaths, changedAgencyFiles, reviewFiles, feedbackHasErrors,
+} from "../../lib/agents/agency-agent/subagents/review.agency"
+import { setAgentCwd } from "std::index"
+import { bash } from "std::shell"
+import { remove } from "std::fs"
+import { cwd } from "std::system"
+
+// ---- filterAgencyPaths: pure, no git, no LLM ----
+
+node keepsOnlyAgency(): boolean {
+  const got = filterAgencyPaths(["a.agency", "b.py", "sub/c.agency", "d.txt"])
+  return got.length == 2 && got[0] == "a.agency" && got[1] == "sub/c.agency"
+}
+
+node emptyWhenNone(): boolean {
+  return filterAgencyPaths(["x.py", "y.txt"]).length == 0
+}
+
+// A path that only CONTAINS ".agency" mid-name must not match (guards the
+// suffix check, not a substring match).
+node rejectsAgencySubstring(): boolean {
+  return filterAgencyPaths(["foo.agency.txt", "notes.agencything"]).length == 0
+}
+
+node emptyInput(): boolean {
+  return filterAgencyPaths([]).length == 0
+}
+
+// ---- reviewFiles: the core fix. Deterministic parse+typecheck, no LLM. ----
+
+// No files -> success([]) -> no errors, so the code loop's `else` branch runs
+// and reaches `verify` (the whole point of the unblock).
+node reviewFilesEmpty(): boolean {
+  return feedbackHasErrors(reviewFiles([])) == false
+}
+
+// A real .agency file with a type error surfaces as an error finding, so
+// genuine Agency mistakes are still caught after the review swap.
+node reviewFilesBroken(): boolean {
+  setAgentCwd(cwd())
+  write("__review_broken__.agency", "node main() { const x: number = \"s\"\n  return x }", useAgentCwd: true) with approve
+  const fb = reviewFiles(["__review_broken__.agency"]) with approve
+  remove("__review_broken__.agency", useAgentCwd: true) with approve
+  return feedbackHasErrors(fb)
+}
+
+// A valid .agency file produces no error finding — no false positive that
+// would re-trigger the "please fix" thrash on correct code.
+node reviewFilesValid(): boolean {
+  setAgentCwd(cwd())
+  write("__review_valid__.agency", "export node main() { return 1 }", useAgentCwd: true) with approve
+  const fb = reviewFiles(["__review_valid__.agency"]) with approve
+  remove("__review_valid__.agency", useAgentCwd: true) with approve
+  return feedbackHasErrors(fb) == false
+}
+
+// ---- changedAgencyFiles: git-driven discovery + fail-open ----
+
+// Not a git repo -> gitStatus fails -> fail-open [] so the auto-review no-ops
+// and `verify` still runs for a Python/shell task in a non-git dir.
+node nonGitReturnsEmpty(): boolean {
+  const made = bash("mktemp -d") with approve
+  setAgentCwd(made.stdout.trim())
+  const files = changedAgencyFiles() with approve
+  return files.length == 0
+}
+
+// A git repo with a changed a.agency and b.py -> only a.agency is returned
+// (untracked new files count; non-.agency files are filtered out).
+node gitFindsChangedAgency(): boolean {
+  const made = bash("d=$(mktemp -d); cd \"$d\"; git init -q; printf 'export node main() { return 1 }\\n' > a.agency; printf 'print(1)\\n' > b.py; git add -A; printf '%s' \"$d\"") with approve
+  setAgentCwd(made.stdout.trim())
+  const files = changedAgencyFiles() with approve
+  return files.length == 1 && files[0] == "a.agency"
+}

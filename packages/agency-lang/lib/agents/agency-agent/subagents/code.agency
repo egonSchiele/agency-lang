@@ -29,7 +29,7 @@ import { systemMessage } from "std::thread"
 import { agentNames } from "../lib/config.agency"
 import { withWebSearch, getSearchBackend } from "../lib/search.agency"
 import { oracleAgent } from "./oracle.agency"
-import { review, renderFeedback, feedbackHasErrors } from "./review.agency"
+import { reviewWrittenFiles, renderFeedback, feedbackHasErrors } from "./review.agency"
 import { verify, renderGaps, unwrapVerdict } from "./verify.agency"
 
 
@@ -477,7 +477,13 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
       }),
       )
 
-      const feedback = review(reply)
+      // Review the .agency files the agent changed this iteration, NOT the
+      // chat reply. `reply` is still returned to the user below; only the
+      // review input changed. `with approve` discharges the read-only git /
+      // file effects this internal check raises (the agent already reads its
+      // own files). For a non-Agency task no .agency files change, so this is
+      // success([]) and the loop falls through to `verify`.
+      const feedback = reviewWrittenFiles() with approve
       if (feedbackHasErrors(feedback)) {
         const rendered = renderFeedback(feedback)
         userMsg = "The last code had errors:\n\n${rendered}\n\nPlease fix them."

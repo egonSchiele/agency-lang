@@ -25,6 +25,16 @@ export type GitStatus = {
   behind: number;
   entries: FileStatus[];
 };
+
+/** The path of every file listed in a git status, in status order. Agency code
+  cannot destructure the TS-imported `GitStatus` (its record fields are opaque
+  to the Agency typechecker), so this pure helper does the `entries -> paths`
+  projection in TS. Untracked new files are included (they are what a coding
+  agent just wrote); deleted paths are also included, so a caller that reads
+  them should fail open on a missing file. */
+export function changedFilePaths(status: GitStatus): string[] {
+  return status.entries.map((entry) => entry.path);
+}
 export type GitCommit = {
   sha: string;
   author: string;

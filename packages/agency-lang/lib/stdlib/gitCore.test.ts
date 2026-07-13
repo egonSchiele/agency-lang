@@ -4,6 +4,7 @@ import {
   statusArgs, logArgs, diffArgs, showArgs, branchListArgs, remoteListArgs,
   blameArgs, stashListArgs, addArgs, commitArgs, checkoutArgs, switchArgs,
   branchCreateArgs, branchDeleteArgs, stashPushArgs, stashPopArgs, restoreArgs,
+  changedFilePaths, type GitStatus,
 } from "./gitCore.js";
 
 describe("hardenPositional", () => {
@@ -150,5 +151,33 @@ describe("argv builders — writes", () => {
     expect(restoreArgs({ paths: ["a.ts"], staged: false })).toEqual(["restore", "--", "a.ts"]);
     expect(restoreArgs({ paths: ["a.ts"], staged: true })).toEqual(["restore", "--staged", "--", "a.ts"]);
     expect(() => restoreArgs({ paths: ["-x"], staged: false })).toThrow(/path/);
+  });
+});
+
+describe("changedFilePaths", () => {
+  const status = (entries: GitStatus["entries"]): GitStatus => ({
+    branch: "main",
+    upstream: "",
+    ahead: 0,
+    behind: 0,
+    entries,
+  });
+
+  it("projects entries to their paths in order", () => {
+    const s = status([
+      { path: "a.agency", index: "M", worktree: "." },
+      { path: "sub/b.py", index: "A", worktree: "." },
+      { path: "c.agency", index: "?", worktree: "?" },
+    ]);
+    expect(changedFilePaths(s)).toEqual(["a.agency", "sub/b.py", "c.agency"]);
+  });
+
+  it("returns [] for a clean tree", () => {
+    expect(changedFilePaths(status([]))).toEqual([]);
+  });
+
+  it("includes deleted paths (caller reads them fail-open)", () => {
+    const s = status([{ path: "gone.agency", index: "D", worktree: "." }]);
+    expect(changedFilePaths(s)).toEqual(["gone.agency"]);
   });
 });

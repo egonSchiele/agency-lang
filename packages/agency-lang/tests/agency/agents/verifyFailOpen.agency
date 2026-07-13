@@ -1,0 +1,13 @@
+import { failOpenFeedback, feedbackHasErrors, Feedback } from "std::agency"
+
+node passesSuccessThrough(): boolean {
+  const items: Feedback[] = [{ error: true, feedback: "x" }]
+  const r = failOpenFeedback(success(items))
+  return feedbackHasErrors(r)
+}
+
+node failureBecomesEmpty(): boolean {
+  const r: Result<Feedback[]> = failure("boom")
+  const out = failOpenFeedback(r)
+  return !feedbackHasErrors(out)
+}

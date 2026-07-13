@@ -59,6 +59,9 @@ tests/integration/statelog/.tmp/
 # clean pass; kept on failure or when OPTIMIZE_EFFICACY_KEEP_RUNS=1 for
 # debugging real-LLM runs without re-spending tokens)
 **/optimize-efficacy-runs-*/
+# transient temp dirs from the std::agents efficacy harness
+# (tests/integration/agents/test.mjs); cleaned on a clean pass
+**/agents-efficacy-*/
 
 # A/B verdict artifact from `eval optimize` runs at the agency-lang package
 # root — transient output, never a fixture (got committed by accident once;

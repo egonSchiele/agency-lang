@@ -1,0 +1,9 @@
+/** @module
+  Shared helpers for the `std::agents` worker agents.
+*/
+
+/** Fold optional context material into a task prompt. Returns the task
+  unchanged when no context is given. */
+export def withContext(task: string, context: string): string {
+  return if context == "" then task else "${task}\n\n<context>\n${context}\n</context>"
+}

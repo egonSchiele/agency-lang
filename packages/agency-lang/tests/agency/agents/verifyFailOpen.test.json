@@ -1,0 +1,7 @@
+{
+  "sourceFile": "verifyFailOpen.agency",
+  "tests": [
+    { "nodeName": "passesSuccessThrough", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "failureBecomesEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

@@ -1,0 +1,7 @@
+import { verify, feedbackHasErrors } from "std::agency"
+
+node main() {
+  const fb = verify("There must be a file named answer.txt in the current directory containing exactly the number 42 followed by a single trailing newline, and nothing else.") with approve
+  const marker = if feedbackHasErrors(fb) then "HAS_ERRORS" else "NO_ERRORS"
+  print(marker)
+}

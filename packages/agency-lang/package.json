@@ -11,6 +11,7 @@
     "test:agency-js": "time node ./dist/scripts/agency.js test js tests/agency-js -p 12",
     "test:agents": "time node ./dist/scripts/agency.js test lib/agents -p 12",
     "test:optimize-efficacy": "node tests/integration/optimize-efficacy/test.mjs",
+    "test:agents-efficacy": "node tests/integration/agents/test.mjs",
     "build": "make build",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",

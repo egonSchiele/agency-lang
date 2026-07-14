@@ -5,9 +5,6 @@
  *   - Compute the per-user state directory `$HOME/.agency-agent`.
  *   - Enable persistent memory so each subagent's `remember`/`recall`
  *     calls land in a stable on-disk knowledge graph.
- *
- * Routing + handoff used to live here; those moved to `std::agent`'s
- * `route()` / `handoff()` and the agent now consumes them directly.
  */
 import { registerLocalModel } from "std::agency/local"
 import { keys } from "std::object"

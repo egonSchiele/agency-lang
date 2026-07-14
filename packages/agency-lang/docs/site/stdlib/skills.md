@@ -146,7 +146,7 @@ Discover .md files under `dir` and parse each as a slash-command
  * static const commands = commandsDir("${cwd()}/.claude/commands") with approve
  * def _runTurn(msg: string) {
  *   const prompt = expandSlash(msg, commands)
- *   route(..., prompt)
+ *   const reply = llm(prompt, { tools })
  * }
  * ```
  *

@@ -57,7 +57,10 @@ export def getHeader(): string {
       r.column(width: "66%") as left {
         left.text("Welcome to the Agency Agent!", bold: true)
         left.text("Ask me to write code, look up docs, or just chat.")
-        left.text("All costs are estimates. Actual costs may be higher.", dim: true)
+        left.text(
+          "Interactions use your API key. All costs are estimates. Actual costs may be higher.",
+          dim: true,
+        )
         if (modelLines.length > 0) {
           left.hline()
           left.text("Models", bold: true, fgColor: "cyan")

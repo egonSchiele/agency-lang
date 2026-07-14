@@ -12,7 +12,7 @@
     "callerDestructiveRan": true
   },
   "callerNotPoisoned": {
-    "callerDestructiveRan": false
+    "callerDestructiveRan": true
   },
   "callerBlockPoisoned": {
     "callerDestructiveRan": true

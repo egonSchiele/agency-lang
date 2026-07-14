@@ -214,4 +214,18 @@ describe("extractStructuredResponse — markdown code fences (step 2)", () => {
     const r = extractStructuredResponse("```json\nnot json\n```", schema);
     expect(isFailure(r)).toBe(true);
   });
+
+  it("extracts a fenced block with prose AFTER it (real Sonnet triage shape)", () => {
+    const s = "```json\n" + JSON.stringify(value) + "\n```\n\nThis is complex because it needs decomposition.";
+    const r = extractStructuredResponse(s, schema);
+    expect(isSuccess(r)).toBe(true);
+    if (isSuccess(r)) expect(r.value).toEqual(value);
+  });
+
+  it("extracts a fenced block with prose BEFORE it", () => {
+    const s = "Here's the classification:\n```json\n" + JSON.stringify(value) + "\n```";
+    const r = extractStructuredResponse(s, schema);
+    expect(isSuccess(r)).toBe(true);
+    if (isSuccess(r)) expect(r.value).toEqual(value);
+  });
 });

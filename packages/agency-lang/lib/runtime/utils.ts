@@ -31,15 +31,17 @@ export function deepFreeze<T>(obj: T, seen: WeakSet<object> = new WeakSet()): T 
   return obj;
 }
 
-/** Strip a surrounding markdown code fence (```json … ``` or ``` … ```)
- *  from a string, returning it unchanged when no fence is present. Mirrors
- *  smoltalk's client-side `stripCodeFence` so the strict validator here
- *  accepts fenced JSON the same way the lenient client path does. */
+/** Pull JSON out of a markdown code fence. Returns the contents of the first
+ *  ```json … ``` (or ``` … ```) block found ANYWHERE in the string, or the
+ *  trimmed input unchanged when no fence is present. Non-anchored on purpose:
+ *  models routinely emit prose *around* the fenced block ("Here's the
+ *  classification:\n```json\n{…}\n```\nThis is complex because…"), so an
+ *  anchored ^```/```$ strip is not enough — the trailing prose defeats it and
+ *  JSON.parse throws. Non-greedy so the first block wins. */
 function stripCodeFence(s: string): string {
-  return s
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```\s*$/, "");
+  const trimmed = s.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  return fenced ? fenced[1].trim() : trimmed;
 }
 
 /** Strict structured-output extraction: unwrap the provider's response

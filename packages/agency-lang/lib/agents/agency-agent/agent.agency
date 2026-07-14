@@ -65,7 +65,11 @@ import {
   missingProviderEnvVar,
   Resolved,
  } from "./lib/models.agency"
-import { givePolicyChoice, printPolicyHelp } from "./lib/policy.agency"
+import {
+  givePolicyChoice,
+  printPolicyHelp,
+  getPolicyForAgent,
+ } from "./lib/policy.agency"
 import {
   buildLayers,
   resolveAll,
@@ -639,93 +643,33 @@ def renderUserTurn(trimmed: string, msg: string): boolean {
   return true
 }
 
-def roundedCost(): string {
-  return "$${getCost().toFixed(4)}"
-}
-
 def _buildStatus(): { left: string; right: string; context: string } {
+  const roundedCost = "$${getCost().toFixed(4)}"
   return {
     left: "",
-    right: roundedCost(),
+    right: roundedCost,
     context: ""
   }
 }
 
 // Shared session setup for both interactive and one-shot modes. Builds
 // the per-run grounding context, loads (or initializes) the policy, and
-// returns the installed CLI policy handler. `interactive` gates the
-// first-run policy-choice prompt: one-shot has no user to answer it, so
-// it falls back to the recommended default (reads/web auto-approved;
-// writes still require approval, which a non-interactive run can't
-// grant — those tasks block, which is the safe behavior).
+// returns the installed CLI policy handler.
 def setupSession(interactive: boolean): any {
-  // Point every path-taking tool at the user's working directory so the
-  // agent's relative file/shell commands resolve against where the user
-  // launched it. The user (via the agent) can change this later with
-  // setAgentCwd.
   setAgentCwd(cwd())
 
   // Grounding: the LLM shouldn't have to ask where it is or what day it
-  // is. Project context: inline an AGENTS.md from the workspace root if
-  // present so the LLM follows the project's conventions.
+  // is. Also load `AGENTS.md` if present.
   const projectContext = loadAgentsMd(cwd()) with approve
-  _context = "\n\nCurrent date: ${today()}\nCurrent working directory: ${cwd()}${projectContext}"
+  _context = """
 
-  // Which file the handler persists against, and an optional in-memory
-  // policy to start from. Normally the user's saved policy loaded from
-  // POLICY_PATH; a `--policy` override redirects this (see below) so the
-  // saved policy is never read or written.
-  let policyFile = POLICY_PATH
-  let sessionPolicy: any = null
+  Current date: ${today()}
+  Current working directory: ${cwd()}
+  ${projectContext}
+  """
 
-  if (_policyArg != "") {
-    // `--policy` override: a built-in name or a path to a policy file.
-    // The cwd-scoped built-ins pin the launch directory, so we resolve
-    // them against `cwd()` (what `setAgentCwd` just stored, and what the
-    // write/git/bash interrupts resolve their default paths back to).
-    const builtin = builtinPolicy(_policyArg, cwd())
-    if (builtin != null) {
-      // Hand the policy to the handler in memory (no disk write): a
-      // one-off, cwd-scoped override must not clobber the saved policy
-      // or leak into a later run from a different directory. Any new
-      // interactive "always" decision persists to the session file.
-      policyFile = SESSION_POLICY_PATH
-      sessionPolicy = builtin
-    } else {
-      // Not a built-in name — treat it as a policy file path and use it
-      // directly (the handler loads/persists it). Validate up front so a
-      // typo fails fast instead of silently starting from empty.
-      const loaded = parsePolicyFile(_policyArg)
-      if (loaded is failure(f)) {
-        print(
-          color.red(
-          "--policy '${_policyArg}' is neither a built-in policy (${builtinPolicyNames().join(", ")}) nor a readable policy file (${f.status}).",
-        ),
-        )
-        process.exit(1)
-      }
-      policyFile = _policyArg
-    }
-  } else {
-    const policy = parsePolicyFile(POLICY_PATH)
-    if (policy is failure(f)) {
-      if (f.status == "doesnt-exist") {
-        if (interactive) {
-          print(color.yellow("No existing policy found at ${POLICY_PATH}."))
-          setPolicy(POLICY_PATH, givePolicyChoice())
-        } else {
-          setPolicy(POLICY_PATH, recommendedAutoApprovePolicy)
-        }
-      } else {
-        print(color.red("Failed to load policy: ${JSON.stringify(f.error)}"))
-        process.exit(1)
-      }
-    } else {
-      setPolicy(POLICY_PATH, policy.value)
-    }
-  }
-  // Bind the handler to a local var so `with handler` parses (the
-  // `with` clause only accepts an identifier, not a call expression).
+  const { policyFile, sessionPolicy } = getPolicyForAgent(_policyArg, interactive)
+
   return cliPolicyHandler(
     file: policyFile,
     fields: ALWAYS_FIELDS,
@@ -737,25 +681,18 @@ def setupSession(interactive: boolean): any {
 // REPL uses, with the same session setup and policy handler, and return
 // the reply. Used for `agency agent -p "..."`, a positional query, or
 // piped stdin. Slash commands are expanded so `-p /foo bar` works like
-// typing it in the REPL; the loop-only built-ins (`/exit` etc.) are
-// meaningless here and aren't checked.
+// typing it in the REPL.
 def oneShotAgent(target: string, prompt: string): string {
   _isInteractive = false
   const handler = setupSession(false)
   let reply: string = ""
   handle {
-    // `try` converts a terminal LLM failure (retries exhausted on a dropped
-    // connection / timeout) into a friendly message; aborts/interrupts still
-    // propagate to the handler below.
     const result = try agentReplyVia(target, prompt)
-    if (result is success(r)) {
-      reply = r
-    } else if (result is failure(f)) {
-      reply = formatTurnFailure("${f.error}")
+    reply = match(result) {
+      success(r) => r
+      failure(f) => formatTurnFailure("${f.error}")
     }
-  } with (data) {
-    return handler(data)
-  }
+  } with handler
   return reply
 }
 

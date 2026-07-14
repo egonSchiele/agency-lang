@@ -1,11 +1,11 @@
 import { withLock } from "std::concurrency"
 import { keys } from "std::object"
-import { render, text } from "std::ui/layout"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
 import { highlight, diff } from "std::syntax"
-import { table } from "std::ui/table"
 import { chooseOption, ChoiceItem } from "std::ui"
+import { render, text } from "std::ui/layout"
+import { table } from "std::ui/table"
 
 import {
   _checkPolicy,
@@ -108,7 +108,7 @@ export def withWritesPolicy(baseDir: string) {
   return _withWritesPolicy(baseDir)
 }
 
-export def builtinPolicy(name: string, baseDir: string) {
+export def builtinPolicy(name: string, baseDir: string): Policy | null {
   return _builtinPolicy(name, baseDir)
 }
 
@@ -555,7 +555,7 @@ def describeScopedMatch(intr: any): string {
  */
 type AskUserResult = {
   action: Decision;
-  reason: string | null
+  reason?: string
 }
 
 // Render a `std::edit` interrupt's payload as a colored diff. `payload` is
@@ -599,7 +599,10 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
   // `before`/`after` (huge, shown in the diff), `edits` (the raw op list,
   // redundant with the diff), and `filename` (already in the diff header).
   if (effect == "std::edit") {
-    const meta = renderObjAsTable(data, excludeKeys: ["before", "after", "filename", "edits"])
+    const meta = renderObjAsTable(
+      data,
+      excludeKeys: ["before", "after", "filename", "edits"],
+    )
     const editDiff = renderEditDiff(data)
     if (meta == "") {
       return editDiff
@@ -631,7 +634,10 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
 // Render an object's key/value pairs as a two-column table. Keys in
 // `excludeKeys` are skipped. Returns "" when no rows remain so callers can
 // omit an empty table.
-def renderObjAsTable(obj: Record<string, any>, excludeKeys: string[] = null): string {
+def renderObjAsTable(
+  obj: Record<string, any>,
+  excludeKeys: string[] = null,
+): string {
   const skip = excludeKeys || []
   let rows = 0
   const paramTable = table() as t {
@@ -701,7 +707,7 @@ def askUser(intr: any): AskUserResult {
   // cancellation that unwinds the turn back to the REPL prompt) instead of
   // re-prompting. The "r" option still lets you reject a single action
   // (and optionally tell the agent what to do instead).
-  const answer = withLock("std::tty") as {
+  const answer = withLock("std::tty") {
     return chooseOption(title, body, items, allowFreeText: true, allowCancel: true)
   }
   return match(answer) {
@@ -867,7 +873,11 @@ def _handler(intr: any): any {
  *   over — a saved policy on disk. Omit (null) for the normal
  *   load-from-`file` behavior.
  */
-export def cliPolicyHandler(file: string, fields: ScopedRuleFields, policy: Policy | null = null): any {
+export def cliPolicyHandler(
+  file: string,
+  fields: ScopedRuleFields,
+  policy: Policy | null = null,
+): any {
   """
   CLI sugar for an interactive policy handler. Loads and saves the policy file, prompts the user on new interrupts, records "always" decisions, and returns approve/reject. Install on the outermost `handle`. Call exactly once per program — internal state is module-level.
 

@@ -48,10 +48,13 @@ node callerPoisonedBySuccess() {
   return "unexpected"
 }
 
-// A destructive tool that CLEANLY REFUSES: it returns a failure before doing
-// any destructive work, so its failure carries destructiveRan == false. The
-// gating condition must NOT propagate to the caller, so the caller's later
-// failure stays destructiveRan == false.
+// A destructive tool that returns a failure as its FIRST statement, before
+// doing any destructive work. Because the `destructive` marker is authoritative
+// and commits at BODY ENTRY (PR #535), merely entering the tool marks
+// destructiveRan == true — the immediate refusal does not undo the commit. So
+// the mark propagates to the caller and its later failure carries
+// destructiveRan == true. (To have a refusal NOT poison the caller, the tool
+// must be non-destructive.)
 destructive def refuseTool(id: string): Result {
   return failure("refused before doing anything")
 }

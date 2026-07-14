@@ -1,0 +1,79 @@
+import { basename } from "std::path"
+import { box, render } from "std::ui/layout"
+
+import { figs } from "../images/images.agency"
+import { demoteProvider, getResolvedSlots } from "../shared.agency"
+import { Resolved } from "./models.agency"
+
+
+def sample(arr: any[]): any {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+// Human-readable "model (provider)" for one resolved slot, or "" when the
+// slot is unset. Local models resolve to a `.gguf` path, so show just the
+// filename; the internal `openai-responses` promotion is demoted back to the
+// public `openai` for display.
+def slotModelLabel(resolved: Resolved | null): string {
+  if (resolved == null) {
+    return ""
+  }
+  let modelName = resolved.model
+  if (resolved.provider == "llama-cpp") {
+    modelName = basename(modelName)
+  }
+  return "${modelName} (${demoteProvider(resolved.provider)})"
+}
+
+/** The model-slot lines for the splash header: one padded
+  "<label>  <model> (<provider>)" per resolved slot. Shows the main (chat /
+  coordinator) and reasoning (oracle / explorer) slots so the user can confirm,
+  at startup, which models the run resolved to from their env / flags. Skips a
+  slot that didn't resolve. Exported for the header test. */
+export def headerModelLines(slots: Record<string, Resolved>): string[] {
+  let lines: string[] = []
+  const mainLabel = slotModelLabel(slots["main"])
+  if (mainLabel != "") {
+    lines.push("Main       ${mainLabel}")
+  }
+  const reasoningLabel = slotModelLabel(slots["reasoning"])
+  if (reasoningLabel != "") {
+    lines.push("Reasoning  ${reasoningLabel}")
+  }
+  return lines
+}
+
+export def getHeader(): string {
+  const fig = sample(figs)
+  const modelLines = headerModelLines(getResolvedSlots())
+  const data = box(
+    title: "Agency",
+    padding: 1,
+    borderColor: "cyan",
+    titleColor: "cyan",
+    width: "full",
+  ) as b {
+    b.row(gap: 1) as r {
+      r.column(width: "66%") as left {
+        left.text("Welcome to the Agency Agent!", bold: true)
+        left.text("Ask me to write code, look up docs, or just chat.")
+        left.text("All costs are estimates. Actual costs may be higher.", dim: true)
+        if (modelLines.length > 0) {
+          left.hline()
+          left.text("Models", bold: true, fgColor: "cyan")
+          for (line in modelLines) {
+            left.text(line, dim: true)
+          }
+        }
+        left.hline()
+        left.text("Getting Started", bold: true, fgColor: "cyan")
+        left.text("/help for commands · /exit to quit", dim: true)
+      }
+      r.vline()
+      r.column(width: "30%", align: "center") as right {
+        right.raw(fig, align: "center")
+      }
+    }
+  }
+  return render(data, color: true)
+}

@@ -265,6 +265,36 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "headerLinesDemoteAndFormat",
+      "input": "",
+      "expectedOutput": "\"Main       gpt-5.5 (openai) | Reasoning  o3 (openai)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "headerLinesLocalBasename",
+      "input": "",
+      "expectedOutput": "\"Main       qwen2.5-coder-7b.gguf (llama-cpp)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "headerLinesSkipsMissing",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

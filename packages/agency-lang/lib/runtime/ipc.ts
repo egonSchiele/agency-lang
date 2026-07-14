@@ -41,6 +41,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Resolved filesystem path to the subprocess bootstrap script. */
 export const subprocessBootstrapPath = path.join(__dirname, "subprocess-bootstrap.js");
 
+/** The agency-lang package root (this file lives at <root>/dist/lib/runtime).
+ * The compiled child script is materialized under here — not `process.cwd()` —
+ * so its `import "agency-lang"` always resolves via node_modules regardless of
+ * the caller's cwd (a temp dir, or `/app` under a global install). The child's
+ * file writes follow the fork cwd (buildForkOptions), which is separate. */
+const agencyPackageRoot = path.resolve(__dirname, "..", "..", "..");
+
 // ── Resource limits ──
 // Hardcoded ceilings clamp any user-supplied limit value to a safe maximum.
 // See docs/superpowers/specs/2026-05-09-subprocess-resource-limits-design.md.
@@ -626,7 +633,7 @@ export function materializeCompiledScript(compiled: { moduleId: string; code: st
       "Values from older Agency versions carried a file path instead and must be recompiled.",
     );
   }
-  const tempDir = path.join(process.cwd(), ".agency-tmp", nanoid());
+  const tempDir = path.join(agencyPackageRoot, ".agency-tmp", nanoid());
   mkdirSync(tempDir, { recursive: true });
   const scriptPath = path.join(tempDir, `${compiled.moduleId}.js`);
   writeFileSync(scriptPath, compiled.code, "utf-8");
@@ -652,7 +659,7 @@ export function materializeCompiledScript(compiled: { moduleId: string; code: st
 function cleanupTempDir(compiledPath: string): void {
   try {
     const tempDir = path.resolve(dirname(compiledPath));
-    const allowedPrefix = path.resolve(process.cwd(), ".agency-tmp");
+    const allowedPrefix = path.resolve(agencyPackageRoot, ".agency-tmp");
     if (tempDir.startsWith(allowedPrefix + path.sep)) {
       rmSync(tempDir, { recursive: true, force: true });
     }

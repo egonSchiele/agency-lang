@@ -1,0 +1,38 @@
+import { commandsDir } from "std::skills"
+import { cwd } from "std::system"
+export static const projectCommands = commandsDir("${cwd()}/.claude/commands") with approve
+
+export def builtinPalette(): Record<string, string> {
+  return {
+    "/exit": "Exit the agent",
+    "/clear": "Clear the conversation transcript",
+    "/clear-history": "Clear the input history (recall + saved file)",
+    "/cost": "Show cumulative LLM cost and tokens",
+    "/model": "Switch the model (bare to pick, or slot=model)",
+    "/models": "List / filter the hosted model catalog",
+    "/local": "Switch to a local model",
+    "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
+    "/settings": "View and change capability settings for the current model",
+    "/mcp": "List configured MCP servers and their tools",
+    "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
+    "/help": "Show available slash commands"
+  }
+}
+
+// Built-ins win over file commands so a user `/clear.md` can't shadow
+// the built-in `/clear`. Build file entries first, then overlay builtins.
+export def mergedPalette(): Record<string, string> {
+  let out: Record<string, string> = {}
+  for (cmd in projectCommands) {
+    let label = cmd.description
+    if (cmd.argHint != "") {
+      label = "${cmd.description} ${cmd.argHint}"
+    }
+    out["/${cmd.name}"] = label
+  }
+  const builtins = builtinPalette()
+  for (key in builtins) {
+    out[key] = builtins[key]
+  }
+  return out
+}

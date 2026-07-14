@@ -58,7 +58,15 @@ export async function gitRunImpl(
     },
   );
   if (res.exitCode !== 0) {
-    throw new Error(res.stderr.trim() || `git exited with code ${res.exitCode}`);
+    const stderr = res.stderr.trim();
+    // Normalize the most common failure — running any git tool outside a repo —
+    // to one clear message, instead of git's raw "fatal: not a git repository
+    // (or any of the parent directories): .git". Every git tool routes through
+    // here, so they all report it consistently.
+    if (/not a git repository/i.test(stderr)) {
+      throw new Error("current directory is not a git repository");
+    }
+    throw new Error(stderr || `git exited with code ${res.exitCode}`);
   }
   return res.stdout;
 }
@@ -67,6 +75,21 @@ export async function gitRunImpl(
 export async function _gitRun(cwd: string, args: string[]): Promise<string> {
   const { ctx, stack } = getRuntimeContext();
   return gitRunImpl(cwd, args, { signal: ctx.getAbortSignal(stack) });
+}
+
+/** True when `cwd` is inside a git work tree. Never throws — a non-repo (or a
+ * missing/inaccessible directory) returns false — so callers can branch on it
+ * without a try. */
+export async function _gitIsRepo(cwd: string): Promise<boolean> {
+  const { ctx, stack } = getRuntimeContext();
+  try {
+    const out = await gitRunImpl(cwd, ["rev-parse", "--is-inside-work-tree"], {
+      signal: ctx.getAbortSignal(stack),
+    });
+    return out.trim() === "true";
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -1,0 +1,62 @@
+import { map } from "std::array"
+import { generateImage } from "std::image"
+import { applyAgentCwd } from "std::index"
+import { basename, dirname } from "std::path"
+import { attachToReply, image } from "std::thread"
+
+export def resolveEditInputs(images: string[]): string[] {
+  return map(images) as inputPath {
+    if (inputPath.startsWith("http://") || inputPath.startsWith("https://") || inputPath.startsWith("data:")) {
+      return inputPath
+    }
+    return applyAgentCwd(inputPath)
+  }
+}
+
+// Direct image generation for the coordinator. Saves to disk and
+// returns the path — never base64, which would flood the LLM context.
+// The write rides the std::writeBinary interrupt gate (writes are not
+// auto-approved by policy) and generation cost accrues to the agent's
+// cost tracking like any llm() call.
+export def generateImageFile(
+  prompt: string,
+  path: string,
+  size: string = "",
+  images: string[] = [],
+): string {
+  """
+  Generate an image from a text prompt and save it to `path`. To MODIFY
+  existing images (edit / variation), pass their paths in `images`.
+  Returns the saved path on success. Use this when the user asks to
+  create, draw, edit, or restyle an image.
+
+  @param prompt - What to generate, or how to modify the input images.
+  @param path - Where to save the resulting image (e.g. "diagram.png").
+  @param size - Optional size like "1024x1024".
+  @param images - Optional input image paths to edit / vary.
+  """
+  // LLM-supplied paths resolve against the agent cwd, like every other
+  // agent file tool.
+  const inputs = resolveEditInputs(images)
+  const generated = generateImage(prompt, size: size, images: inputs)
+  if (isFailure(generated)) {
+    return "Image generation failed: ${generated.error}"
+  }
+  // writeBinary rejects an absolute filename when dir is set, so split
+  // path into (dir, name); useAgentCwd resolves a relative dir against
+  // the agent cwd (absolute dirs pass through untouched).
+  const written = writeBinary(
+    basename(path),
+    generated.value.base64,
+    dirname(path),
+    useAgentCwd: true,
+  )
+  if (isFailure(written)) {
+    return "Generated the image, but saving to ${path} failed: ${written.error}"
+  }
+  // Show the model what it made (generate -> view -> refine). The loop
+  // inlines the bytes when it builds the injected user message; the
+  // path resolves the same way the write did.
+  attachToReply(image(applyAgentCwd(path)))
+  return "Saved image to ${path}"
+}

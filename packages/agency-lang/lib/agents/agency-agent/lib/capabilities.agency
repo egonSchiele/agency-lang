@@ -17,7 +17,7 @@ export type Capabilities = {
   prompt: string;
   summarize: boolean;
   memory: boolean;
-  maxTokens: (number | null)
+  maxTokens?: number
 }
 
 /** A partial entry: states only what it changes. */
@@ -62,25 +62,25 @@ export type CapabilityField = {
 
 export static const CAPABILITY_FIELDS: CapabilityField[] = [
   {
-    key: "prompt",
-    label: "prompt",
-    description: "large or small system prompt"
-  },
+  key: "prompt",
+  label: "prompt",
+  description: "large or small system prompt"
+},
   {
-    key: "summarize",
-    label: "summarize",
-    description: "thread summary after each turn"
-  },
+  key: "summarize",
+  label: "summarize",
+  description: "thread summary after each turn"
+},
   {
-    key: "memory",
-    label: "memory",
-    description: "persistent knowledge graph"
-  },
+  key: "memory",
+  label: "memory",
+  description: "persistent knowledge graph"
+},
   {
-    key: "maxTokens",
-    label: "maxTokens",
-    description: "default output cap per LLM call"
-  }
+  key: "maxTokens",
+  label: "maxTokens",
+  description: "default output cap per LLM call"
+},
 ]
 
 /** The built-in base: what a capable hosted model gets.
@@ -102,7 +102,7 @@ export static const CAPABILITY_DEFAULT: Capabilities = {
 export static const PROVIDER_CAPABILITIES: Record<string, CapabilityPatch> = {
   // No embeddings endpoint. Users who want memory anyway can override;
   // it runs with Tier-2 semantic recall disabled.
-  "anthropic": {
+  anthropic: {
     memory: false
   },
   // The safety profile for local models. Every un-curated local model
@@ -138,7 +138,7 @@ export def providerLacksEmbeddings(provider: string): boolean {
   a new ResolvedCapabilities. A null/missing patch is a no-op. */
 def applyPatch(
   current: ResolvedCapabilities,
-  patch: (CapabilityPatch | null),
+  patch: CapabilityPatch | null,
   source: string,
 ): ResolvedCapabilities {
   if (patch == null) {
@@ -276,7 +276,9 @@ def validCapabilityEntry(key: string, entry: any, section: string): boolean {
 
 /** Sanitize the whole capabilities section from settings.json. Never throws;
   returns a NEW object (does not mutate the input). */
-export def sanitizeCapabilitySettings(user: CapabilitySettings): CapabilitySettings {
+export def sanitizeCapabilitySettings(
+  user: CapabilitySettings,
+): CapabilitySettings {
   let out: CapabilitySettings = {}
   const models = user.models
   if (models != null) {

@@ -1,6 +1,6 @@
 import { getAgentCwd } from "std::index"
 import {
-  _gitRun, assertPathsContained, assertAllNotRestricted, assertBranchAllowed,
+  _gitRun, _gitIsRepo, assertPathsContained, assertAllNotRestricted, assertBranchAllowed,
   statusArgs, logArgs, diffArgs, showArgs, branchListArgs,
   remoteListArgs, blameArgs, stashListArgs,
   addArgs, commitArgs, checkoutArgs, switchArgs,
@@ -131,6 +131,18 @@ def repoDir(cwd: string): string {
 }
 
 // ---- Reads -----------------------------------------------------------------
+
+export idempotent def gitIsRepo(cwd: string = ""): boolean raises <std::git::status> {
+  """
+  True when `cwd` is inside a git work tree. Never fails: a directory that is not
+  a git repository (or does not exist) returns false, so callers can guard on it
+  before running other git tools.
+  @param cwd - The directory to check. Defaults to the agent working directory.
+  """
+  const dir = repoDir(cwd)
+  return interrupt std::git::status("Check whether this is a git repository", { cwd: dir })
+  return _gitIsRepo(dir)
+}
 
 export idempotent def gitStatus(cwd: string = ""): GitStatus raises <std::git::status> {
   """

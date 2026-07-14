@@ -9,9 +9,12 @@ benchmarking effort — the agent lives in `lib/agents/agency-agent/`.
 - **Harness:** Harbor (`harbor` 0.17.1) driving **Terminal-Bench 2.0** (89 tasks:
   4 easy / 55 medium / 30 hard), graded on hidden tests against container
   filesystem state.
-- **Backend:** Daytona (`--env daytona`); the agent is installed via
-  `npm i -g agency-lang` **per trial**, so a run uses whatever version is
-  published to npm.
+- **Backend:** Daytona (`--env daytona`). The adapter installs the agent
+  **per trial** in one of two modes so you can benchmark an *unpublished*
+  version (no npm publish needed): a **local tarball** (`AGENCY_TARBALL`, packs
+  your working tree — uncommitted changes and all) or a **git branch**
+  (`AGENCY_BRANCH`, cloned + built in the container). See
+  [Install modes](#install-modes).
 - **Adapter:** `~/bench-agency/adapter.py` (`AgencyAgent`, a
   `harbor.BaseInstalledAgent`).
 - **Best result so far (honest):** Claude **Sonnet 4.5 ≈ 0.38** on the full
@@ -31,8 +34,11 @@ Everything runs from `~/bench-agency/` (a separate dir, not this repo).
   (each has `instruction.md`, `task.toml` with `difficulty`/`timeout_sec`, and a
   hidden `tests/` dir).
 - **The adapter** (`~/bench-agency/adapter.py`) — a `BaseInstalledAgent`:
-  - `install()`: `apt-get install -y curl ca-certificates` → NodeSource
-    setup_22 → `npm i -g agency-lang` (base images lack curl; install it first).
+  - `install()`: base images lack curl, so `apt-get install -y curl
+    ca-certificates` → NodeSource setup_22 → then one of the two
+    [install modes](#install-modes) below (tarball or git branch). The old
+    `npm i -g agency-lang` registry install is gone — every mode now benchmarks
+    a specific unpublished build.
   - `run()`: forwards provider keys into the container (the container has no env
     of its own — a missing key makes the agent exit with `No API key for
     provider '<p>'`), then runs one-shot:
@@ -84,6 +90,52 @@ cd ~/bench-agency && PYTHONPATH=. harbor run \
 Results land in `~/bench-agency/jobs/<timestamp>/result.json` plus per-trial
 dirs `<task>__<id>/{agent/{agency.txt,commands.txt}, verifier/reward.txt,
 result.json, exception.txt}`.
+
+## Install modes
+
+`install()` builds/installs the agent **per trial**, in one of two modes,
+selected by env vars (no per-run edits to `adapter.py`). The point of both: test
+a new agent version **without publishing to npm**. Tarball wins if both are set.
+
+### 1. Local tarball — `AGENCY_TARBALL` (recommended for iterating)
+
+Benchmarks your **local working tree**, including uncommitted changes. No git
+push, no npm publish, and the container does no build — the tarball already
+carries the compiled `dist/` + stdlib. On the host, build a tarball and point
+the run at it:
+
+```bash
+cd packages/agency-lang && make clean && make && npm pack   # → agency-lang-<v>.tgz
+AGENCY_TARBALL=/abs/path/to/agency-lang-0.8.0.tgz \
+  PYTHONPATH=. harbor run -d terminal-bench@2.0 -a adapter:AgencyAgent \
+  -m anthropic/claude-sonnet-4-5 --env daytona -k 1 -n 10 -i <task>
+```
+
+The adapter uploads the `.tgz` (`environment.upload_file`) and `npm i -g`s it.
+`npm pack` includes `dist/` and the agency-generated `stdlib/**/*.js` via the
+package's `files` allowlist even though both are gitignored. Iterate:
+edit → `make && npm pack` → rerun.
+
+### 2. Git branch — `AGENCY_BRANCH` (default `main`)
+
+Builds from a **pushed branch** in the container: shallow clone → `pnpm install`
+→ `make` → symlink the built bin. No local build needed, but you pay a full
+`pnpm install` + `make` **inside every trial container**, so it's much slower
+than the tarball. Use it to test a branch on a machine that can't build locally.
+
+```bash
+AGENCY_BRANCH=my-feature-branch \
+  PYTHONPATH=. harbor run -d terminal-bench@2.0 -a adapter:AgencyAgent \
+  -m anthropic/claude-sonnet-4-5 --env daytona -k 1 -n 10
+```
+
+Overridable knobs: `AGENCY_REPO` (default the public
+`github.com/egonSchiele/agency-lang.git` — set a fork), `AGENCY_PNPM_VERSION`
+(default `10`; reads the repo's v9 lockfile). `--branch` takes a branch or tag,
+**not** a raw commit SHA.
+
+Both modes end with `agency --version`, so a broken install fails the trial
+loudly rather than silently running a stale binary.
 
 ### Reading results (gotchas)
 
@@ -169,7 +221,9 @@ Agent (published to npm; committed on `main` unless noted):
   **PR #497** (in review).
 
 Adapter (`~/bench-agency/adapter.py`, local, not npm): `-p --` separator; key
-forwarding for all providers; `--policy approve-all`; direct-to-file transcript.
+forwarding for all providers; `--policy approve-all`; direct-to-file transcript;
+tarball / git-branch [install modes](#install-modes) (replaced the
+`npm i -g agency-lang` registry install).
 
 ## Known issues / gotchas
 

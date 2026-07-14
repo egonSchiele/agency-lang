@@ -1,0 +1,330 @@
+/** @module The `/settings` command UI for the agency agent: render the
+  current capability profile and interactively edit it. This module sits
+  ABOVE the capability / shared / settings layers (it imports from them and
+  nothing imports back), so there is no import cycle. */
+
+import { setLlmOptions } from "std::llm"
+import { disableMemory } from "std::memory"
+import { ChoiceItem, chooseOption } from "std::ui"
+import { pushMessage } from "std::ui/cli"
+
+import {
+  CAPABILITY_FIELDS,
+  CapabilityPatch,
+  mergeCapabilityOverride,
+  removeCapabilityField,
+  providerLacksEmbeddings,
+ } from "./capabilities.agency"
+import {
+  getCapabilitySettings,
+  loadSettings,
+  saveSettings,
+ } from "./settings.agency"
+import {
+  getCapabilities,
+  getCapabilitiesResolved,
+  getCapabilityModelKey,
+  getCapabilityProvider,
+  refreshCapabilities,
+  embeddingKeyStatus,
+  getResolvedSlots,
+ } from "../shared.agency"
+
+/** Human label for a capability source layer. Interprets the source
+  strings resolveCapabilities emits (capabilities.agency). */
+def capabilitySourceLabel(source: string): string {
+  if (source == "default") {
+    return "built-in default"
+  }
+  if (source == "provider") {
+    return "provider default: ${getCapabilityProvider()}"
+  }
+  if (source == "model") {
+    return "built-in for ${getCapabilityModelKey()}"
+  }
+  if (source == "user-global") {
+    return "your global override"
+  }
+  if (source == "user-provider") {
+    return "your override for ${getCapabilityProvider()}"
+  }
+  return "your override for ${getCapabilityModelKey()}"
+}
+
+/** One "value (source)" cell. The typed Capabilities shape cannot be
+  indexed by a dynamic key, so this is the renderer's per-field switch. */
+def capabilityRow(fieldKey: string): string {
+  const resolved = getCapabilitiesResolved()
+  const values = resolved.values
+  const sources = resolved.sources
+  if (fieldKey == "prompt") {
+    return "${values.prompt}   (${capabilitySourceLabel(sources.prompt)})"
+  }
+  if (fieldKey == "summarize") {
+    return "${values.summarize}   (${capabilitySourceLabel(sources.summarize)})"
+  }
+  if (fieldKey == "memory") {
+    return "${values.memory}   (${capabilitySourceLabel(sources.memory)})"
+  }
+  let cap = "none"
+  if (values.maxTokens != null) {
+    cap = "${values.maxTokens}"
+  }
+  return "${cap}   (${capabilitySourceLabel(sources.maxTokens)})"
+}
+
+/** Render the current profile with per-field provenance. */
+export def showCapabilities() {
+  pushMessage(
+    "Capabilities for ${getCapabilityModelKey()} (${getCapabilityProvider()}):",
+  )
+  for (field in CAPABILITY_FIELDS) {
+    pushMessage("  ${field.label}   ${capabilityRow(field.key)}")
+  }
+}
+
+/** The settings.json key a scope writes under. Global's key is unused. */
+def scopeTargetName(scopeKey: string): string {
+  if (scopeKey == "provider") {
+    return getCapabilityProvider()
+  }
+  return getCapabilityModelKey()
+}
+
+/** Persist one override patch at a scope, then re-resolve. */
+def saveCapabilityOverride(scopeKey: string, patch: CapabilityPatch) {
+  let settings = loadSettings()
+  settings.capabilities = mergeCapabilityOverride(
+    getCapabilitySettings(settings),
+    scopeKey,
+    scopeTargetName(scopeKey),
+    patch,
+  )
+  saveSettings(settings)
+  refreshCapabilities(getCapabilityModelKey(), getCapabilityProvider())
+}
+
+/** Remove one field override at a scope, then re-resolve. */
+def removeCapabilityOverride(scopeKey: string, fieldKey: string) {
+  let settings = loadSettings()
+  settings.capabilities = removeCapabilityField(
+    getCapabilitySettings(settings),
+    scopeKey,
+    scopeTargetName(scopeKey),
+    fieldKey,
+  )
+  saveSettings(settings)
+  refreshCapabilities(getCapabilityModelKey(), getCapabilityProvider())
+}
+
+/** Ask which scope an override applies to. Returns "" on cancel. */
+def pickOverrideScope(): string {
+  let scopeItems: ChoiceItem[] = []
+  scopeItems.push(
+    {
+    key: "model",
+    label: "this model (${getCapabilityModelKey()})"
+  },
+  )
+  scopeItems.push(
+    {
+    key: "provider",
+    label: "this provider (${getCapabilityProvider()})"
+  },
+  )
+  scopeItems.push({
+    key: "global",
+    label: "all models"
+  })
+  const scopeKey = chooseOption(
+    "Scope",
+    "Where should this apply?",
+    scopeItems,
+    allowCancel: true,
+  )
+  if (scopeKey == null) {
+    return ""
+  }
+  return scopeKey
+}
+
+/** Re-apply the resolved cap as the branch default. After a reset the
+  resolved value falls back to a built-in layer, which is always numeric
+  for known providers, so live-apply covers removal too. */
+def applyLiveMaxTokens() {
+  const capValue = getCapabilities().maxTokens
+  if (capValue != null) {
+    setLlmOptions({
+      maxTokens: capValue
+    })
+  }
+}
+
+/** Interactive edit: field → value → scope → save → live-apply. */
+export def editCapabilities() {
+  let fieldItems: ChoiceItem[] = []
+  for (field in CAPABILITY_FIELDS) {
+    fieldItems.push(
+      {
+      key: field.key,
+      label: "${field.label} — ${field.description}"
+    },
+    )
+  }
+  const fieldKey = chooseOption(
+    "Settings",
+    "Pick a setting to change (empty to exit).",
+    fieldItems,
+    allowCancel: true,
+  )
+  if (fieldKey == "" || fieldKey == null) {
+    return
+  }
+
+  let patch: CapabilityPatch = {}
+  if (fieldKey == "prompt") {
+    let promptItems: ChoiceItem[] = []
+    promptItems.push(
+      {
+      key: "large",
+      label: "large — full coordinator prompt"
+    },
+    )
+    promptItems.push(
+      {
+      key: "small",
+      label: "small — compact prompt for small-context models"
+    },
+    )
+    const picked = chooseOption(
+      "prompt",
+      "System prompt size.",
+      promptItems,
+      allowCancel: true,
+    )
+    if (picked == "" || picked == null) {
+      return
+    }
+    patch = {
+      prompt: picked
+    }
+  }
+  if (fieldKey == "summarize" || fieldKey == "memory") {
+    let onOffItems: ChoiceItem[] = []
+    onOffItems.push({
+      key: "on",
+      label: "on"
+    })
+    onOffItems.push({
+      key: "off",
+      label: "off"
+    })
+    const picked = chooseOption(fieldKey, "Enable ${fieldKey}?", onOffItems, allowCancel: true)
+    if (picked == "" || picked == null) {
+      return
+    }
+    if (fieldKey == "summarize") {
+      patch = {
+        summarize: picked == "on"
+      }
+    } else {
+      patch = {
+        memory: picked == "on"
+      }
+      if (picked == "on") {
+        const status = embeddingKeyStatus(getResolvedSlots())
+        if (status.state == "key-missing") {
+          pushMessage(
+            color.red(
+            "Cannot enable memory: the embedding slot needs ${status.varName}, which is not set. Export it, or point the embedding slot elsewhere via /model.",
+          ),
+          )
+          return
+        }
+        if (status.state == "no-override" && providerLacksEmbeddings(getCapabilityProvider())) {
+          pushMessage(
+            color.dim(
+            "Note: ${getCapabilityProvider()} has no embeddings endpoint, so Tier-2 semantic recall stays off. Point the embedding slot at a provider that has one, e.g. /model embedding=openai/text-embedding-3-small.",
+          ),
+          )
+        }
+      }
+    }
+  }
+  if (fieldKey == "maxTokens") {
+    let capItems: ChoiceItem[] = []
+    capItems.push(
+      {
+      key: "reset",
+      label: "reset — remove my override, use the default"
+    },
+    )
+    const picked = chooseOption(
+      "maxTokens",
+      "Default output-token cap. Type a number, or pick reset.",
+      capItems,
+      allowFreeText: true,
+      allowCancel: true,
+    )
+    if (picked == "" || picked == null) {
+      return
+    }
+    if (picked == "reset") {
+      const scopeKey = pickOverrideScope()
+      if (scopeKey == "") {
+        return
+      }
+      removeCapabilityOverride(scopeKey, "maxTokens")
+      applyLiveMaxTokens()
+      pushMessage("Override removed.")
+      showCapabilities()
+      return
+    }
+    const parsed = parseInt(picked)
+    if (parsed <= 0) {
+      pushMessage(color.red("Not a positive number: ${picked}"))
+      return
+    }
+    patch = {
+      maxTokens: parsed
+    }
+  }
+
+  const scopeKey = pickOverrideScope()
+  if (scopeKey == "") {
+    return
+  }
+  saveCapabilityOverride(scopeKey, patch)
+
+  // Live-apply what can apply now; explain what can't.
+  if (fieldKey == "memory") {
+    if (getCapabilities().memory) {
+      // The ON direction cannot live-apply. enableAgentMemory's
+      // `with approve` cannot override the outer policy handler that
+      // startInteractive installed, so the memory-dir fs interrupts
+      // would surface as policy prompts mid-flow, or get denied and
+      // half-apply the toggle. The OFF direction stays live below:
+      // disableMemory raises no fs interrupts and already runs in-REPL
+      // from reactToSlotChange.
+      pushMessage(
+        color.dim(
+        "Memory turns on at next agent start (enabling mid-session would raise policy prompts).",
+      ),
+      )
+    } else {
+      disableMemory() with approve
+    }
+  }
+  if (fieldKey == "maxTokens") {
+    applyLiveMaxTokens()
+  }
+  if (fieldKey == "prompt") {
+    pushMessage(
+      color.dim(
+      "Prompt change applies on next agent start (this session's system message is already sent).",
+    ),
+    )
+  }
+  pushMessage("Saved.")
+  showCapabilities()
+}

@@ -1,0 +1,111 @@
+import {
+  ScopedRuleFields,
+  cliPolicyHandler,
+  parsePolicyFile,
+  setPolicy,
+  minimalAutoApprovePolicy,
+  recommendedAutoApprovePolicy,
+  builtinPolicy,
+  builtinPolicyNames,
+  BUILTIN_POLICIES,
+  Policy,
+ } from "std::policy"
+import { cwd } from "std::system"
+import { ChoiceItem, chooseOption } from "std::ui"
+
+import { POLICY_PATH } from "./config.agency"
+
+
+// Print `--policy` usage and list the built-in policies (name + one-line
+// description). Shown when `--policy` is passed with no value.
+export def printPolicyHelp() {
+  print(color.bold("Usage: agency agent --policy <name | path>"))
+  print(
+    "Select the approval policy for this run: a built-in name below, or a path to a policy JSON file.",
+  )
+  print("")
+  print(color.bold("Built-in policies:"))
+  for (p in BUILTIN_POLICIES) {
+    print("  ${color.cyan(p.name)}")
+    print("      ${p.description}")
+  }
+}
+
+export def givePolicyChoice() {
+  const title = "Welcome to the agency agent. Please pick a policy to start."
+  const body = "Don't worry, you can change this later. The policy just controls how the agent asks for your approval when it wants to do something. You can also create your own custom policy file at ${POLICY_PATH} and the agent will use it automatically."
+  let items: ChoiceItem[] = [
+    {
+    key: "minimal",
+    label: "minimal default policy, you do most approvals manually"
+  },
+    {
+    key: "recommended",
+    label: "recommended default policy, allow reading files and browsing the web, no writes"
+  },
+  ]
+
+  const answer = chooseOption(title, body, items, allowFreeText: true)
+  // allowFreeText means `answer` can be anything (another built-in name the user
+  // typed, or "" on cancel), so the match must be total. Fall back to the
+  // conservative `minimal` policy for anything we don't recognize rather than
+  // erroring on an unhandled arm.
+  return match(answer) {
+    "recommended" => recommendedAutoApprovePolicy
+    _ => minimalAutoApprovePolicy
+  }
+}
+
+export def getPolicyForAgent(
+  _policyArg: string,
+  interactive: boolean,
+): { policyFile: string; sessionPolicy: Policy | null } {
+  let policyFile = POLICY_PATH
+  let sessionPolicy: Policy | null = null
+
+  if (_policyArg == "") {
+    const policy = parsePolicyFile(POLICY_PATH)
+    if (policy is failure(f)) {
+      if (f.status == "doesnt-exist") {
+        if (interactive) {
+          print(color.yellow("No existing policy found at ${POLICY_PATH}."))
+          setPolicy(POLICY_PATH, givePolicyChoice())
+        } else {
+          setPolicy(POLICY_PATH, recommendedAutoApprovePolicy)
+        }
+      } else {
+        print(color.red("Failed to load policy: ${JSON.stringify(f.error)}"))
+        process.exit(1)
+      }
+    } else {
+      setPolicy(POLICY_PATH, policy.value)
+    }
+  } else {
+    const builtin = builtinPolicy(_policyArg, cwd())
+    policyFile = match(builtin) {
+      null => {
+        const loaded = parsePolicyFile(_policyArg)
+        return match(loaded) {
+          success(_) => _policyArg
+          failure(f) => {
+            print(
+              color.red(
+              "--policy '${_policyArg}' is neither a built-in policy (${builtinPolicyNames().join(", ")}) nor a readable policy file (${f.status}).",
+            ),
+            )
+            process.exit(1)
+            return ""
+          }
+        }
+      }
+      _ => {
+        sessionPolicy = builtin
+        return SESSION_POLICY_PATH
+      }
+    }
+  }
+  return {
+    policyFile: policyFile,
+    sessionPolicy: sessionPolicy
+  }
+}

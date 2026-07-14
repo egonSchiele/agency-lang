@@ -1,0 +1,10 @@
+{
+  "sourceFile": "plannerHelpers.agency",
+  "tests": [
+    { "nodeName": "weavesTaskAndPlan", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "listsAllWorkers", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "renderEffectsListsExports", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "renderEffectsKeepsUnknown", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "renderEffectsFailureIsHonest", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

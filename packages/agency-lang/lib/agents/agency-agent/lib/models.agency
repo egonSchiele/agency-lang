@@ -348,7 +348,7 @@ export def priceDefault(
   base-URL proxy providers. Source-of-truth derived (MODELS + BASE_URL_PROVIDERS),
   not a hand-maintained list, so it never drifts. Used by parseModelSpec. */
 export def knownProviders(): string[] {
-  return Object.keys(MODELS).concat(Object.keys(BASE_URL_PROVIDERS))
+  return [...Object.keys(MODELS), ...Object.keys(BASE_URL_PROVIDERS)]
 }
 
 /** Split a --model value: `slot=model` becomes per-slot (alias-resolved); a bare
@@ -369,4 +369,3 @@ export def parseModelFlag(value: string): { slot: string; model: string } {
     model: value
   }
 }
-

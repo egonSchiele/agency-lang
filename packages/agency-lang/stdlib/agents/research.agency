@@ -8,7 +8,7 @@ import { search as wikiSearch } from "std::wikipedia"
 import { systemMessage, guard } from "std::thread"
 import { Feedback, feedbackHasErrors, renderFeedback } from "std::agency"
 import { env } from "std::system"
-import { withContext } from "std::agents/shared"
+import { withContext, unwrapGuard } from "std::agents/shared"
 
 static const researchSysPrompt = """You are a research analyst. Answer the task using your source tools.
 
@@ -60,8 +60,5 @@ export def researchAgent(task: string, context: string = "", maxAttempts: number
     }
     return answer
   }
-  return match (captured) {
-    success(v) => v
-    failure(e) => "Research stopped before completing: ${e.type} cap reached."
-  }
+  return unwrapGuard(captured, "Research")
 }

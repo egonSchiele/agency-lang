@@ -1,0 +1,12 @@
+import { routeFor } from "../../../lib/agents/agency-agent/subagents/code.agency"
+
+// The routing LOGIC, tested without the (non-deterministic) classifier: given a
+// TriageResult, does codeAgent route correctly? "complex" -> plannerAgent,
+// anything else -> the direct loop.
+node complexRoutesToPlanner(): boolean {
+  return routeFor({ path: "complex", plan: "outline" }) == "planner"
+}
+
+node simpleRoutesToDirect(): boolean {
+  return routeFor({ path: "simple", plan: "" }) == "direct"
+}

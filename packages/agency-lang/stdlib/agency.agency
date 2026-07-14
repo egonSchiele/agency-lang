@@ -309,6 +309,7 @@ export def runCode(
   ipcPayload: number = 100mb,
   stdout: number = 1mb,
   maxCost: number | null = null,
+  cwd: string = "",
 ): Result {
   """
   Compile Agency source code and execute one of its nodes in a subprocess,
@@ -325,6 +326,7 @@ export def runCode(
   @param ipcPayload - Max single IPC message size in BYTES (default 104857600 = 100mb, max 1073741824 = 1gb). Pass null for the default.
   @param stdout - Max combined stdout+stderr output in BYTES (default 1048576 = 1mb, max 104857600 = 100mb). Pass null for the default.
   @param maxCost - Max subprocess LLM spend in dollars (e.g. 0.50). null = no cost limit.
+  @param cwd - Working directory for the subprocess. Empty inherits the caller's process cwd (which may be the package dir, not where you want files); pass the agent working directory so the generated program's file writes land there.
   """
   const limitError = checkRunCodeLimits(wallClock, memory, ipcPayload, stdout)
   if (limitError != "") {
@@ -343,6 +345,7 @@ export def runCode(
     ipcPayload: ipcPayload,
     stdout: stdout,
     maxCost: maxCost,
+    cwd: cwd,
   )
   // run() succeeds with a subprocess envelope ({ data, tokens, ... }).
   // runCode is built for LLM tool use, where the envelope reads as noise

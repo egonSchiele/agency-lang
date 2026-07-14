@@ -1,0 +1,7 @@
+{
+  "sourceFile": "routing.agency",
+  "tests": [
+    { "nodeName": "complexRoutesToPlanner", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "simpleRoutesToDirect", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

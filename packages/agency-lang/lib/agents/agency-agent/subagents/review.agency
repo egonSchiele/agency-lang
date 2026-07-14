@@ -5,7 +5,7 @@ import {
   feedbackHasErrors as stdFeedbackHasErrors,
  } from "std::agency"
 import { setMemoryId } from "std::memory"
-import { gitStatus } from "std::git"
+import { gitStatus, gitIsRepo } from "std::git"
 import { filter, map } from "std::array"
 
 // The review core (parse + typecheck findings, optional LLM code-vs-task
@@ -86,9 +86,15 @@ export def filterAgencyPaths(paths: string[]): string[] {
   non-repo/error yields no files so the auto-review is a no-op, never a crash.
   Includes untracked new files (they are what a coding agent just wrote). */
 export def changedAgencyFiles(): string[] raises <std::git::status> {
-  // `try` folds a non-repo failure (git status exits non-zero) to a Result we
-  // read as "no changed files". The interrupt propagates to the caller's
-  // handler (the agent policy auto-approves this read effect).
+  // The auto-review only makes sense in a git repo. Skip it explicitly when the
+  // working directory is not one (the common case — the agent often runs in a
+  // plain dir), so review is a clean no-op rather than a caught git failure.
+  if (!gitIsRepo()) {
+    return []
+  }
+  // `try` still folds any other git failure to a Result we read as "no changed
+  // files". The interrupt propagates to the caller's handler (the agent policy
+  // auto-approves this read effect).
   const statusResult = try gitStatus()
   if (statusResult is success(status)) {
     return filterAgencyPaths(map(status.entries, \entry -> entry.path))

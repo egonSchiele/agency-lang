@@ -303,7 +303,7 @@ withWritesPolicy(baseDir: string)
 ### builtinPolicy
 
 ```ts
-builtinPolicy(name: string, baseDir: string)
+builtinPolicy(name: string, baseDir: string): Policy | null
 ```
 
 **Parameters:**
@@ -312,6 +312,8 @@ builtinPolicy(name: string, baseDir: string)
 |---|---|---|
 | name | `string` |  |
 | baseDir | `string` |  |
+
+**Returns:** `Policy | null`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L111))
 
@@ -707,4 +709,4 @@ CLI sugar for an interactive policy handler. Loads and saves the policy file, pr
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L870))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L876))

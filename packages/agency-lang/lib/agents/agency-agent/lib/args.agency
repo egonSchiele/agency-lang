@@ -1,0 +1,87 @@
+import { getVersion } from "std::agency"
+import { parseArgs } from "std::args"
+export def parseAgentArgs() {
+  return parseArgs(
+    {
+    programName: "agency agent",
+    description: "Agency language assistant — interactive REPL by default; one-shot when piped or passed a query / --print.",
+    version: getVersion(),
+    flags: {
+      print: {
+        type: "boolean",
+        short: "p",
+        description: "Run one-shot: print the reply to stdout and exit (no REPL)"
+      },
+      debug: {
+        type: "boolean",
+        description: "Log tool returns (toolName, result, timing). Same as AGENT_DEBUG=1"
+      },
+      verbose: {
+        type: "boolean",
+        description: "Echo tool-call starts to stdout in non-interactive mode"
+      },
+      model: {
+        type: "string",
+        description: "Model for all LLM calls (overrides provider auto-detection)"
+      },
+      fastmodel: {
+        type: "string",
+        description: "Model for ordinary work (default: per detected provider)"
+      },
+      slowmodel: {
+        type: "string",
+        description: "Model for deep reasoning, e.g. the oracle/explorer subagents"
+      },
+      provider: {
+        type: "string",
+        description: "Force the LLM provider. Given alone (openai/anthropic/google/openrouter) it selects that provider's default models and skips env auto-detection; pair it with --model for any other provider (e.g. litellm, openai-compat, or a custom/local model)"
+      },
+      interactive: {
+        type: "boolean",
+        short: "i",
+        description: "Run the given prompt as the first turn of an interactive session, then hand over the REPL (instead of one-shot)"
+      },
+      agent: {
+        type: "string",
+        description: "Route the starting prompt to a named subagent: code, research, oracle, explorer, review (default: coordinator)"
+      },
+      policy: {
+        type: "string",
+        optional: true,
+        description: "Approval policy for this run: a built-in name (minimal, recommended, with-writes, approve-all) or a path to a policy JSON file. with-writes auto-approves file writes and git changes scoped to the current directory and its children; approve-all approves EVERY interrupt with no scoping (sandbox use only). Overrides the saved policy without persisting it. Pass --policy with no value to list the built-in policies."
+      },
+      "agent-home": {
+        type: "string",
+        description: "Directory to use instead of ~/.agency-agent for settings, policy, and history (equivalent to the AGENCY_AGENT_HOME env var; the flag wins when both are set)"
+      },
+      local: {
+        type: "string",
+        optional: true,
+        description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Run without a value for guided setup. Pins all slots to the local model; mutually exclusive with --model/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
+      },
+      "local-model": {
+        type: "string",
+        optional: true,
+        description: "Deprecated alias for --local."
+      },
+      trace: {
+        type: "string",
+        optional: true,
+        description: "Write an execution trace to this file for debugging (bare --trace writes <runId>.agencytrace in the current directory)"
+      },
+      "log-file": {
+        type: "string",
+        description: "Append structured statelog events (one JSON object per line) to this file for debugging"
+      },
+      "max-tool-call-rounds": {
+        type: "number",
+        description: "Max LLM tool-call rounds before a tool loop halts (default 10 interactive, 50 in one-shot/-p mode)"
+      },
+      "max-tool-result-chars": {
+        type: "number",
+        description: "Max chars of a single tool result fed back to the model (0 disables; default 100000)"
+      }
+    }
+  },
+  )
+}

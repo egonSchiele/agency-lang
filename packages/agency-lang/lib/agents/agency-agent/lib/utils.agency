@@ -55,3 +55,45 @@ export def indentStr(str: string, amount: number): string {
 export def repeatStr(str: string, times: number): string {
   return Array(times).fill(str).join("")
 }
+
+// Map a transient LLM retry reason (an `LLMRetryReason` from the runtime
+// retry layer) to a short, human-facing label. `connectionLost` is the
+// lost-internet / closed-the-laptop case; the rest cover provider hiccups
+// and our own per-call timeout.
+export def retryReasonLabel(reason: string): string {
+  if (reason == "connectionLost") {
+    return "Connection lost"
+  }
+  if (reason == "timeout") {
+    return "Request timed out"
+  }
+  if (reason == "streamInterrupted") {
+    return "Connection interrupted"
+  }
+  if (reason == "rateLimit") {
+    return "Rate limited"
+  }
+  if (reason == "overloaded") {
+    return "Model overloaded"
+  }
+  if (reason == "serverError") {
+    return "Server error"
+  }
+  if (reason == "invalidStructuredOutput") {
+    return "Output failed validation"
+  }
+  return reason
+}
+
+export def formatTurnFailure(errText: string): string {
+  if (errText.includes("(connectionLost)") || errText.includes("(streamInterrupted)")) {
+    return "⚠ Lost the connection to the model and couldn't recover after retrying.\nCheck your internet connection and try again."
+  }
+  if (errText.includes("(timeout)")) {
+    return "⚠ The model took too long to respond — the request timed out after retrying.\nTry again, perhaps with a smaller request."
+  }
+  if (errText.includes("(rateLimit)") || errText.includes("(overloaded)") || errText.includes("(serverError)")) {
+    return "⚠ The model provider is busy and the request failed after retrying.\nWait a moment and try again."
+  }
+  return "⚠ The request failed: ${errText}"
+}

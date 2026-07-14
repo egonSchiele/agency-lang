@@ -1,0 +1,7 @@
+{
+  "sourceFile": "unwrapGuard.agency",
+  "tests": [
+    { "nodeName": "returnsValueOnSuccess", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "returnsTripMessageOnFailure", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

@@ -1,0 +1,27 @@
+import { planCodePrompt, renderEffects } from "std::agents/planner"
+import { EffectsByExport } from "std::agency"
+
+node weavesTaskAndPlan(): boolean {
+  const p = planCodePrompt("BUILD_XYZ", "STEP_ABC")
+  return p =~ re/BUILD_XYZ/ && p =~ re/STEP_ABC/
+}
+
+node listsAllWorkers(): boolean {
+  const p = planCodePrompt("t", "s")
+  return p =~ re/std::agents\/coding/ && p =~ re/std::agents\/research/ && p =~ re/std::agents\/agency/ && p =~ re/std::agents\/planner/
+}
+
+node renderEffectsListsExports(): boolean {
+  const eff: Result<EffectsByExport> = success({ main: ["std::read", "std::run"] })
+  return renderEffects(eff) =~ re/main/ && renderEffects(eff) =~ re/std::run/
+}
+
+node renderEffectsKeepsUnknown(): boolean {
+  const eff: Result<EffectsByExport> = success({ main: ["unknown"] })
+  return renderEffects(eff) =~ re/unknown/
+}
+
+node renderEffectsFailureIsHonest(): boolean {
+  const eff: Result<EffectsByExport> = failure("boom")
+  return renderEffects(eff) =~ re/could not/
+}

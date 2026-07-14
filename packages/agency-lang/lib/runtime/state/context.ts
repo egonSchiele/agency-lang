@@ -213,7 +213,7 @@ export class RuntimeContext<T> {
   }) {
     // One runtime merge, applied for BOTH transports so a subprocess launched
     // with explicit IPC overrides still inherits the env override (e.g. a
-    // tree-wide --log-file). Env first, then IPC on top: IPC (explicit,
+    // tree-wide --log). Env first, then IPC on top: IPC (explicit,
     // per-child) wins per field, env fills the rest. Sequential application
     // also layers nested `log`/`trace` objects rather than clobbering them.
     args = applyRuntimeConfigOverridesToContextArgs(args, readConfigOverrides());

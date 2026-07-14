@@ -13,6 +13,7 @@ import { typecheck, parseAST } from "std::agency"
  */
 import { todoWrite, todoList } from "std::agent"
 import { plannerAgent } from "std::agents/planner"
+import { expertAgent } from "std::agents/expert"
 import { edit } from "std::fs"
 import {
   gitStatus,
@@ -450,7 +451,7 @@ static const ESCALATE_MAX_TIME = 15m
 
 type TriageResult = {
   path: "simple" | "complex";
-  plan: string
+  plan: string[]
 }
 
 static const triagePrompt = """Classify this coding task. If it is a single, straightforward change, set path to "simple" and leave plan empty. If it is multi-part or needs decomposition, set path to "complex" and outline the plan in 2 to 4 short bullets."""
@@ -499,9 +500,12 @@ export def codeAgent(userMsg: string) {
   // runs it) instead of the direct loop. Simple tasks fall through.
   const decision = triage(userMsg)
   if (routeFor(decision) == "planner") {
-    return plannerAgent(
+    // TEMPORARY EXPERIMENT: route "complex" tasks to the expert-guided coding
+    // agent (acquire domain expertise, then solve) instead of plannerAgent, to
+    // see how front-loaded expertise performs. `escalate` (the mid-flight tool)
+    // still uses plannerAgent.
+    return expertAgent(
       userMsg,
-      plan: decision.plan,
       maxCost: ESCALATE_MAX_COST,
       maxTime: ESCALATE_MAX_TIME,
     )

@@ -698,7 +698,7 @@ node main() {
   // usage errors, before any handlers or the TUI are installed.
   const args = parseAgentArgs()
 
-  // NOTE: --trace / --log-file / --agent-home are declared here only for
+  // NOTE: --trace / --log / --agent-home are declared here only for
   // --help and so parseArgs accepts them. runBundledAgent extracts them from
   // the forwarded args and passes them to this process via env vars
   // (AGENCY_CONFIG_OVERRIDES for the first two, AGENCY_AGENT_HOME for the
@@ -806,6 +806,8 @@ node main() {
       prompt = fromStdin
     }
     print(oneShotAgent(startAgent, prompt))
+    const roundedCost = "$${getCost().toFixed(4)}"
+    print(color.dim("\nSession cost: ${roundedCost}"))
   } else {
     setTitle("Agency Agent")
     clearScreen()

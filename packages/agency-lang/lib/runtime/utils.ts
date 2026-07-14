@@ -31,6 +31,17 @@ export function deepFreeze<T>(obj: T, seen: WeakSet<object> = new WeakSet()): T 
   return obj;
 }
 
+/** Strip a surrounding markdown code fence (```json … ``` or ``` … ```)
+ *  from a string, returning it unchanged when no fence is present. Mirrors
+ *  smoltalk's client-side `stripCodeFence` so the strict validator here
+ *  accepts fenced JSON the same way the lenient client path does. */
+function stripCodeFence(s: string): string {
+  return s
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/, "");
+}
+
 /** Strict structured-output extraction: unwrap the provider's response
  *  shape and validate against the schema. Returns success(value) with the
  *  validated value, or failure(schemaError) — never the raw content. The
@@ -68,11 +79,15 @@ export function extractStructuredResponse(
     return extractStructuredResponse(rawValue.properties, schema);
   }
 
-  // 2. String → try JSON.parse, then recurse. A string that is not JSON
-  // cannot satisfy an object/wrapped schema that already failed step 1.
+  // 2. String → strip any markdown code fence, JSON.parse, then recurse.
+  // Models routinely wrap JSON in a ```json … ``` fence despite being asked
+  // for raw output; stripping here (before the parse) lets the strict
+  // validator accept fenced JSON the same way smoltalk's lenient client
+  // path does. A string that is not JSON cannot satisfy an object/wrapped
+  // schema that already failed step 1.
   if (typeof rawValue === "string") {
     try {
-      return extractStructuredResponse(JSON.parse(rawValue), schema);
+      return extractStructuredResponse(JSON.parse(stripCodeFence(rawValue)), schema);
     } catch {
       return failure(schemaError);
     }

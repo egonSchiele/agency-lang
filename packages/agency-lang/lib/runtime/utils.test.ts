@@ -185,3 +185,33 @@ describe("extractStructuredResponse — wrapper-key unwrapping (step 5)", () => 
     expect(isFailure(r)).toBe(true);
   });
 });
+
+describe("extractStructuredResponse — markdown code fences (step 2)", () => {
+  const schema = z.object({ path: z.string(), plan: z.array(z.string()) });
+  const value = { path: "complex", plan: ["a", "b"] };
+
+  it("extracts JSON wrapped in a ```json fence", () => {
+    const fenced = "```json\n" + JSON.stringify(value) + "\n```";
+    const r = extractStructuredResponse(fenced, schema);
+    expect(isSuccess(r)).toBe(true);
+    if (isSuccess(r)) expect(r.value).toEqual(value);
+  });
+
+  it("extracts JSON wrapped in a bare ``` fence (no language tag)", () => {
+    const fenced = "```\n" + JSON.stringify(value) + "\n```";
+    const r = extractStructuredResponse(fenced, schema);
+    expect(isSuccess(r)).toBe(true);
+    if (isSuccess(r)) expect(r.value).toEqual(value);
+  });
+
+  it("still parses an un-fenced JSON string (regression)", () => {
+    const r = extractStructuredResponse(JSON.stringify(value), schema);
+    expect(isSuccess(r)).toBe(true);
+    if (isSuccess(r)) expect(r.value).toEqual(value);
+  });
+
+  it("fails on a fenced blob that is not valid JSON", () => {
+    const r = extractStructuredResponse("```json\nnot json\n```", schema);
+    expect(isFailure(r)).toBe(true);
+  });
+});

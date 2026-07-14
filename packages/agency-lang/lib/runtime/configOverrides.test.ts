@@ -200,7 +200,7 @@ describe("writer→reader override contract", () => {
       traceConfig: { program: "agent" },
     };
     // The exact object runBundledAgent serializes into AGENCY_CONFIG_OVERRIDES.
-    const overrides = agentConfigOverride(["--trace", "t.trace", "--log-file", "l.jsonl"]);
+    const overrides = agentConfigOverride(["--trace", "t.trace", "--log", "l.jsonl"]);
     const r = applyRuntimeConfigOverridesToContextArgs(base, overrides);
     expect(r.traceConfig?.traceFile).toBe("t.trace");
     expect(r.statelogConfig.logFile).toBe("l.jsonl");

@@ -189,9 +189,16 @@ describe("applyCliFlags", () => {
     expect(applyCliFlags({}, { trace: "" }).traceFile).toBeUndefined();
   });
 
-  it("--log-file sets log.logFile and enables observability, preserving log.host", () => {
+  it("--log <path> sets log.logFile and enables observability, preserving log.host", () => {
     const out = applyCliFlags({ log: { host: "https://h" } }, { logFile: "x" });
     expect(out.log).toEqual({ host: "https://h", logFile: "x" });
+    expect(out.observability).toBe(true);
+  });
+
+  it("--log stdout sets log.host=stdout, blanks any file sink, and enables observability", () => {
+    const out = applyCliFlags({ log: { host: "https://h", logFile: "x" } }, { logStdout: true });
+    // logFile blanked to "" so it overrides an agency.json logFile at merge time.
+    expect(out.log).toEqual({ host: "stdout", logFile: "" });
     expect(out.observability).toBe(true);
   });
 

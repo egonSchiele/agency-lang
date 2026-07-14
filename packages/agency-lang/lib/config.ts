@@ -568,7 +568,7 @@ export function findProjectRoot(startPath: string): string | null {
 //
 //   1. agency.json           — the file, found by walking up from cwd
 //                              (loadConfigSafe / findProjectRoot). The base.
-//   2. CLI flags             — per-invocation flags (--trace, --log-file,
+//   2. CLI flags             — per-invocation flags (--trace, --log,
 //                              --strict, ...) mapped onto config by
 //                              applyCliFlags(). This is the ONLY place that
 //                              defines what each flag means in config terms.
@@ -595,6 +595,7 @@ export function findProjectRoot(startPath: string): string | null {
 export type CliFlags = {
   trace?: string | true;
   logFile?: string;
+  logStdout?: boolean;
   observability?: boolean;
   strict?: boolean;
   maxToolCallRounds?: number;
@@ -608,7 +609,9 @@ export type CliFlags = {
  *   --trace (bare)   → trace + traceFile=<input>.trace when an input path is
  *                      known (agency run), else traceDir="." (a bundled agent
  *                      with no input file → a per-run file in cwd)
- *   --log-file <p>   → log.logFile=<p> and observability=true
+ *   --log <p>        → log.logFile=<p> and observability=true (bare → log.jsonl,
+ *                      resolved in the caller that reads the flag value)
+ *   --log stdout     → log.host="stdout" and observability=true (stream to stdout)
  *   --observability  → observability=true
  *   --strict         → typechecker.strict + strictTypes (the compile-path gate
  *                      never runs the checker on strictTypes alone)
@@ -636,6 +639,19 @@ export function applyCliFlags(
   }
   if (flags.logFile) {
     next.log = { ...next.log, logFile: flags.logFile };
+    next.observability = true;
+  }
+  if (flags.logStdout) {
+    // Stream statelog events to stdout ONLY. stdout is a REPLACEMENT sink, not
+    // additive: explicitly blank out the file sink so `--log stdout` behaves
+    // identically with or without a config file — CLI flags override config.
+    // Setting logFile to "" (rather than dropping the key) is deliberate: this
+    // override is deep-merged ONTO the resolved config later, so an empty
+    // string is needed to overwrite an agency.json `logFile`; a missing key
+    // would let the config value show through. The statelog client treats an
+    // empty logFile as "no file" and host "stdout" as its stdout sink (see
+    // StatelogClient.post).
+    next.log = { ...next.log, host: "stdout", logFile: "" };
     next.observability = true;
   }
   if (flags.observability) {
@@ -676,7 +692,7 @@ export function readConfigOverrides(
     const result = AgencyConfigSchema.safeParse(JSON.parse(raw));
     if (!result.success) {
       // Don't brick startup, but never fail silently — a typo'd override that
-      // makes --trace/--log-file quietly do nothing is the worst failure mode.
+      // makes --trace/--log quietly do nothing is the worst failure mode.
       console.error(
         `Ignoring invalid ${CONFIG_OVERRIDES_ENV}: ${result.error.issues
           .map((i) => i.path.join("."))

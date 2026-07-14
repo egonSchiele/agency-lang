@@ -178,3 +178,11 @@ import {
  import { x,, y } from "asd"
 
  the generator should just remove the extra comma
+
+ ---
+
+ no func to print to stderr
+
+ ---
+
+ agent should not be allowed to use node imports like `process` 

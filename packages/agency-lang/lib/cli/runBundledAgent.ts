@@ -15,7 +15,7 @@ const currentDir = path.dirname(new URL(import.meta.url).pathname);
 
 // The flags every bundled agent understands that this launcher pre-scans
 // out of the forwarded argv (the agent also declares them, for --help).
-const AGENT_PRESCAN_FLAGS = ["--trace", "--log-file", "--agent-home"] as const;
+const AGENT_PRESCAN_FLAGS = ["--trace", "--log", "--agent-home"] as const;
 
 /**
  * Rewrite a bare pre-scanned flag to its empty attached form (`--trace` →
@@ -46,7 +46,7 @@ function normalizeBareFlags(args: string[]): string[] {
 }
 
 /**
- * Extract the debug flags (`--trace`, `--log-file`) from a bundled agent's
+ * Extract the debug flags (`--trace`, `--log`) from a bundled agent's
  * forwarded argv, as a config override. This is the ONE place these flags are
  * handled — every bundled agent gets them for free by going through
  * `runBundledAgent`; no agent writes flag code.
@@ -60,7 +60,7 @@ function normalizeBareFlags(args: string[]): string[] {
 export function agentConfigOverride(args: string[]): Partial<AgencyConfig> {
   const { values } = parseArgs({
     args: normalizeBareFlags(args),
-    options: { trace: { type: "string" }, "log-file": { type: "string" } },
+    options: { trace: { type: "string" }, log: { type: "string" } },
     strict: false,
     allowPositionals: true,
   });
@@ -69,9 +69,15 @@ export function agentConfigOverride(args: string[]): Partial<AgencyConfig> {
   if (typeof values.trace === "string") {
     flags.trace = values.trace;
   }
-  // --log-file requires a value; a bare (now "") --log-file is ignored.
-  if (typeof values["log-file"] === "string" && values["log-file"] !== "") {
-    flags.logFile = values["log-file"];
+  // --log: bare (now "") → the default ./log.jsonl; `stdout` (any case) →
+  // stream to standard out (a host sink, not a file); anything else → that
+  // file path. The flag→config meaning lives in `applyCliFlags`.
+  if (typeof values.log === "string") {
+    if (values.log.toLowerCase() === "stdout") {
+      flags.logStdout = true;
+    } else {
+      flags.logFile = values.log === "" ? "log.jsonl" : values.log;
+    }
   }
   return applyCliFlags({}, flags);
 }

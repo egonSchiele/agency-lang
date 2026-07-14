@@ -43,14 +43,22 @@ describe("agentConfigOverride", () => {
     });
     expect(agentConfigOverride(["--trace", "-p"])).toEqual({ trace: true, traceDir: "." });
   });
-  it("bare --log-file (or one followed by a flag) is ignored, not a file named --print", () => {
-    expect(agentConfigOverride(["--log-file"])).toEqual({});
-    expect(agentConfigOverride(["--log-file", "--print"])).toEqual({});
+  it("bare --log (or one followed by a flag) → default log.jsonl, not a file named --print", () => {
+    const expected = { log: { logFile: "log.jsonl" }, observability: true };
+    expect(agentConfigOverride(["--log"])).toEqual(expected);
+    expect(agentConfigOverride(["--log", "--print"])).toEqual(expected);
   });
-  it("--log-file <path> → log.logFile + observability, space and attached forms", () => {
+  it("--log <path> → log.logFile + observability, space and attached forms", () => {
     const expected = { log: { logFile: "l.jsonl" }, observability: true };
-    expect(agentConfigOverride(["--log-file", "l.jsonl"])).toEqual(expected);
-    expect(agentConfigOverride(["--log-file=l.jsonl"])).toEqual(expected);
+    expect(agentConfigOverride(["--log", "l.jsonl"])).toEqual(expected);
+    expect(agentConfigOverride(["--log=l.jsonl"])).toEqual(expected);
+  });
+  it("--log stdout (any case) → log.host=stdout, blanks the file sink, + observability", () => {
+    // logFile: "" so stdout overrides an agency.json logFile at merge time.
+    const expected = { log: { host: "stdout", logFile: "" }, observability: true };
+    expect(agentConfigOverride(["--log", "stdout"])).toEqual(expected);
+    expect(agentConfigOverride(["--log", "STDOUT"])).toEqual(expected);
+    expect(agentConfigOverride(["--log=stdout"])).toEqual(expected);
   });
   it("stops at the -- terminator", () => {
     expect(agentConfigOverride(["--", "--trace", "x"])).toEqual({});
@@ -63,7 +71,7 @@ describe("agentConfigOverride", () => {
   });
   it("combines trace + log and ignores the agent's own flags/positionals", () => {
     expect(
-      agentConfigOverride(["--model", "gpt", "hi", "--trace", "t", "--log-file", "l"]),
+      agentConfigOverride(["--model", "gpt", "hi", "--trace", "t", "--log", "l"]),
     ).toEqual({
       trace: true,
       traceFile: "t",
@@ -107,7 +115,7 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     const onMock = vi.fn();
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: onMock }) as never);
 
-    runBundledAgent({}, "agency-agent", ["--trace", "t.trace", "--log-file", "l.jsonl"], {
+    runBundledAgent({}, "agency-agent", ["--trace", "t.trace", "--log", "l.jsonl"], {
       spawn: spawnMock as never,
     });
 

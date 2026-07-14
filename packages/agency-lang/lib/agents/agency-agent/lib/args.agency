@@ -69,9 +69,10 @@ export def parseAgentArgs() {
         optional: true,
         description: "Write an execution trace to this file for debugging (bare --trace writes <runId>.agencytrace in the current directory)"
       },
-      "log-file": {
+      log: {
         type: "string",
-        description: "Append structured statelog events (one JSON object per line) to this file for debugging"
+        optional: true,
+        description: "Append structured statelog events (one JSON object per line) for debugging. Bare --log writes ./log.jsonl; --log <path> writes that file; --log stdout streams events to standard out."
       },
       "max-tool-call-rounds": {
         type: "number",

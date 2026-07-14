@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildDoctorArgs } from "./doctor.js";
 
 describe("buildDoctorArgs", () => {
-  it("appends --trace / --log-file before the -- terminator", () => {
+  it("appends --trace / --log before the -- terminator", () => {
     const args = buildDoctorArgs({
       file: "x.agency",
       symptom: "boom",
@@ -14,7 +14,7 @@ describe("buildDoctorArgs", () => {
     expect(dashDash).toBeGreaterThan(-1);
     expect(args.indexOf("--trace")).toBeGreaterThan(-1);
     expect(args.indexOf("--trace")).toBeLessThan(dashDash);
-    expect(args.indexOf("--log-file")).toBeLessThan(dashDash);
+    expect(args.indexOf("--log")).toBeLessThan(dashDash);
     expect(args.slice(args.indexOf("--trace"), args.indexOf("--trace") + 2)).toEqual([
       "--trace",
       "t.trace",
@@ -32,7 +32,7 @@ describe("buildDoctorArgs", () => {
   it("omits the debug flags entirely when not requested", () => {
     const args = buildDoctorArgs({ file: "x.agency", symptom: "boom" });
     expect(args).not.toContain("--trace");
-    expect(args).not.toContain("--log-file");
+    expect(args).not.toContain("--log");
     expect(args[args.length - 2]).toBe("--");
   });
 });

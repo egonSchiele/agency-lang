@@ -13,7 +13,7 @@ import {
 import { cwd } from "std::system"
 import { ChoiceItem, chooseOption } from "std::ui"
 
-import { POLICY_PATH } from "./config.agency"
+import { POLICY_PATH, SESSION_POLICY_PATH } from "./config.agency"
 
 
 // Print `--policy` usage and list the built-in policies (name + one-line

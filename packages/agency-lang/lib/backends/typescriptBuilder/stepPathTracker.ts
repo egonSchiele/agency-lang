@@ -1,3 +1,5 @@
+import { makeBlockName } from "@/runtime/blockNames.js";
+
 /**
  * Tracks the per-statement bookkeeping that the TypeScriptBuilder needs to
  * generate stepped function bodies, loop break/continue cleanup, and
@@ -87,6 +89,6 @@ export class StepPathTracker {
 
   /** Returns the next unique `__block_<n>` name. */
   nextBlockName(): string {
-    return `__block_${this.blockCounter++}`;
+    return makeBlockName(this.blockCounter++);
   }
 }

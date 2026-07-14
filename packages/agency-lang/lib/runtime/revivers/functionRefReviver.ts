@@ -1,6 +1,7 @@
 import { BaseReviver } from "./baseReviver.js";
 import { AgencyFunction } from "../agencyFunction.js";
 import type { FuncParam, ToolDefinition } from "../agencyFunction.js";
+import { isBlockName } from "../blockNames.js";
 
 type FunctionRefRegistry = Record<string, AgencyFunction>;
 
@@ -107,9 +108,38 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
       }
     }
 
+    // Compiler-generated blocks register themselves only when their creating
+    // line executes. A fresh process restoring a checkpoint has executed
+    // nothing yet, so a miss here is EXPECTED for blocks — replay rebinds
+    // block args at function entry before anything can call them (#513).
+    if (isBlockName(name)) {
+      return makeBlockStub(name, module);
+    }
     throw new Error(
       `FunctionRefReviver: function "${name}" from module "${module}" not found in registry. ` +
       `The function may have been renamed or removed since this state was serialized.`
     );
   }
+}
+
+/** A lazy tripwire for an unregistered block reference: a real
+ *  AgencyFunction (so restore succeeds and the frame slot is filled) whose
+ *  body throws a precise error IF anything invokes it. In every correct
+ *  replay the generated def body overwrites the slot with a fresh block
+ *  before any call, so this never fires. Plain `new` on purpose — the stub
+ *  must NOT self-register the way AgencyFunction.create does. */
+function makeBlockStub(name: string, module: string): AgencyFunction {
+  return new AgencyFunction({
+    name,
+    module,
+    fn: () => {
+      throw new Error(
+        `Block "${name}" from module "${module}" crossed a serialization ` +
+          `boundary and was invoked before replay rebound it. This is a ` +
+          `runtime bug — please report it.`,
+      );
+    },
+    params: [],
+    toolDefinition: null,
+  });
 }

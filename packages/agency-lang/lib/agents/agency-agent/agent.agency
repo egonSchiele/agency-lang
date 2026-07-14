@@ -1,8 +1,4 @@
-import {
-  printLocalCatalog,
-  localModelsSupported,
-  listModelNames,
- } from "std::agency/local"
+import { localModelsSupported, listModelNames } from "std::agency/local"
 import { parseArgs } from "std::args"
 import { map } from "std::array"
 import { today } from "std::date"
@@ -61,7 +57,6 @@ import {
   parseModelFlag,
   parseModelSpec,
   knownProviders,
-  embeddingSpecHasProvider,
   missingProviderEnvVar,
   Resolved,
  } from "./lib/models.agency"
@@ -90,6 +85,7 @@ import {
   modelChoiceItems,
   parseModelsFilters,
   markMemoryEmbeddingsPinned,
+  pickModelsForAgent,
  } from "./lib/session.agency"
 import {
   getCapabilitySettings,
@@ -631,15 +627,7 @@ def renderUserTurn(trimmed: string, msg: string): boolean {
     return modelsSlashCommand(trimmed)
   }
   const result = try agentReply(msg)
-  if (result is success(reply)) {
-    if (reply != "" && reply != null && reply != undefined) {
-      pushMessage(highlight("${reply}\n", language: "markdown"))
-    } else {
-      pushMessage(color.red("No reply generated."))
-    }
-  } else if (result is failure(f)) {
-    pushMessage(color.red(formatTurnFailure("${f.error}")))
-  }
+  renderAgentResponse(result)
   return true
 }
 
@@ -685,44 +673,42 @@ def setupSession(interactive: boolean): any {
 def oneShotAgent(target: string, prompt: string): string {
   _isInteractive = false
   const handler = setupSession(false)
-  let reply: string = ""
   handle {
     const result = try agentReplyVia(target, prompt)
-    reply = match(result) {
+    return match(result) {
       success(r) => r
       failure(f) => formatTurnFailure("${f.error}")
     }
   } with handler
-  return reply
 }
 
-// Render one seeded turn into the REPL scroll area: echo the auto-run
-// prompt so the user sees what was asked, then push the agent's reply.
-// Mirrors the reply-rendering half of `_runTurn`.
-def _runSeedTurn(target: string, msg: string) {
+/* A seeded turn is if the user invokes the Agency agent with
+an initial prompt – by using the agency doctor command, for example.
+It means that agent starts with an initial prompt already there to respond to. */
+def runSeedTurn(target: string, msg: string) {
   pushMessage(color.dim("> ${msg}"))
-  const result = try agentReplyVia(target, msg)
-  if (result is success(reply)) {
-    if (reply != "" && reply != null && reply != undefined) {
+  const response = try agentReplyVia(target, msg)
+  renderAgentResponse(response)
+}
+
+def renderAgentResponse(
+  response: Result<string | null, { error: string }>,
+): void {
+  if (response is success(reply)) {
+    if (reply != "" && reply != null) {
       pushMessage(highlight("${reply}\n", language: "markdown"))
     } else {
       pushMessage(color.red("No reply generated."))
     }
-  } else if (result is failure(f)) {
+  } else if (response is failure(f)) {
     pushMessage(color.red(formatTurnFailure("${f.error}")))
   }
 }
 
-// Start the interactive REPL. When `seedPrompt` is non-empty it is run as
-// the first turn (routed via `seedTarget`) *inside* the handle block so
-// its interrupts reach the policy `handler`; the user is then left at the
-// prompt. `seedPrompt == ""` is the plain REPL with no seed. Subsequent
-// turns always go through `_runTurn` (the coordinator) regardless of
-// `seedTarget` — the target only kicks off the first turn.
 def startInteractive(handler: any, seedTarget: string, seedPrompt: string) {
   handle {
     if (seedPrompt != "") {
-      _runSeedTurn(seedTarget, seedPrompt)
+      runSeedTurn(seedTarget, seedPrompt)
     }
     repl(
       status: _buildStatus,
@@ -732,9 +718,7 @@ def startInteractive(handler: any, seedTarget: string, seedPrompt: string) {
       historyMax: 1000,
       paletteCommands: mergedPalette(),
     )
-  } with (data) {
-    return handler(data)
-  }
+  } with handler
   print(color.cyan("\nGoodbye!"))
 }
 
@@ -747,10 +731,7 @@ node main() {
   // --help and so parseArgs accepts them. runBundledAgent extracts them from
   // the forwarded args and passes them to this process via env vars
   // (AGENCY_CONFIG_OVERRIDES for the first two, AGENCY_AGENT_HOME for the
-  // last), read before this main() runs — the RuntimeContext consumes the
-  // config overrides at construction, and lib/config.agency derives the
-  // settings/policy/history paths from the agent home in its static-const
-  // initializers. Do not re-handle them here.
+  // last).
 
   if (args.flags.debug) {
     AGENT_DEBUG = true
@@ -767,106 +748,7 @@ node main() {
   }
   _policyArg = args.flags.policy ?? ""
 
-  // Model setup. `--local` (deprecated alias: `--local-model`) is an optional-
-  // value flag with three states: absent (null); bare empty-string for guided
-  // setup; a value for that local model. `--local` and the hosted flags
-  // (--model / --fastmodel / --slowmodel) are mutually exclusive -- local and
-  // hosted are different in kind (provider llama-cpp, no embedding endpoint).
-  const localVal = args.flags["local"] ?? args.flags["local-model"]
-  const modelArg = args.flags.model ?? ""
-  const hasModelFlags = modelArg != "" || (args.flags.fastmodel ?? "") != "" || (args.flags.slowmodel ?? "") != ""
-  if (localVal != null && hasModelFlags) {
-    print(
-      color.red("Pass either --model (hosted) or --local (local), not both."),
-    )
-    process.exit(1)
-  }
-  if (localVal == "") {
-    // Bare --local: guided setup. Non-interactive can't prompt, so keep the
-    // print-catalog-and-exit behavior there.
-    if (!isTTY()) {
-      printLocalCatalog()
-      process.exit(0)
-    }
-    if (!localModelsSupported()) {
-      print(color.yellow("Local models need the smoltalk-llama-cpp package."))
-      print("Install it, then re-run:  ! npm i -g smoltalk-llama-cpp")
-      process.exit(1)
-    }
-    let items: ChoiceItem[] = []
-    for (modelName in listModelNames()) {
-      items.push({
-        key: modelName.name,
-        label: modelName.name
-      })
-    }
-    const choice = chooseOption(
-      "Local model",
-      "Pick a model, or type an hf: URI / .gguf path (downloads on first use):",
-      items,
-      allowFreeText: true,
-      allowCancel: true,
-    )
-    if (choice == "" || choice == null) {
-      process.exit(0)
-    }
-    configureLocalModel(choice)
-    configureSearch(true)
-    // fall through into the session on the chosen local model
-  } else if (localVal != null) {
-    configureLocalModel(localVal)
-    configureSearch(true)
-  } else {
-    // Hosted path. --model accepts `slot=model` (per-slot) or a bare model
-    // (global pin); explicit --fastmodel/--slowmodel win over a --model slot=.
-    const parsed = parseModelFlag(modelArg)
-    let modelGlobal = ""
-    let fastFlag = ""
-    let slowFlag = ""
-    let embeddingFlag = ""
-    if (modelArg != "") {
-      if (parsed.slot == "") {
-        modelGlobal = parsed.model
-      } else if (parsed.slot == "main") {
-        fastFlag = parsed.model
-      } else if (parsed.slot == "reasoning") {
-        slowFlag = parsed.model
-      } else if (parsed.slot == "embedding") {
-        if (!embeddingSpecHasProvider(parsed.model)) {
-          print(
-            color.red(
-            "Embedding models need the provider/model form, e.g. --model embedding=openai/text-embedding-3-small.",
-          ),
-          )
-          process.exit(1)
-        }
-        embeddingFlag = parsed.model
-      } else {
-        print(
-          color.red(
-          "Unknown model slot '${parsed.slot}' in --model. Valid slots: ${SLOTS.join(", ")}.",
-        ),
-        )
-        process.exit(1)
-      }
-    }
-    const fm = args.flags.fastmodel ?? ""
-    const sm = args.flags.slowmodel ?? ""
-    if (fm != "") {
-      fastFlag = fm
-    }
-    if (sm != "") {
-      slowFlag = sm
-    }
-    configureModels(
-      modelGlobal,
-      fastFlag,
-      slowFlag,
-      embeddingFlag,
-      args.flags.provider ?? "",
-    )
-    configureSearch(false)
-  }
+  pickModelsForAgent(args)
 
   // Persistent knowledge graph, gated on the capability profile. Must run
   // before any handler/REPL is installed.
@@ -882,6 +764,16 @@ node main() {
   const positionalQuery = args.positionals.join(" ")
   const hasQuery = positionalQuery != ""
   const startAgent = args.flags.agent ?? ""
+  // Validate the target subagent name up front (empty = coordinator).
+  if (startAgent != "" && !START_AGENTS.includes(startAgent)) {
+    print(
+      color.red(
+      "Unknown --agent value: ${startAgent}. Valid: ${START_AGENTS.join(", ")}",
+    ),
+    )
+    process.exit(1)
+  }
+
   const wantInteractive = args.flags.interactive
 
   // Seeded interactive: run the prompt as the first turn, then hand over the
@@ -889,14 +781,6 @@ node main() {
   const seededInteractive = wantInteractive && hasQuery && isTTY() && !args.flags.print
   const runningOneShot = !seededInteractive && (args.flags.print || hasQuery || !isTTY())
 
-  // Tool-loop caps. One-shot runs (--print / piped / a positional query) have
-  // no REPL to continue an autonomous task, so maxToolCallRounds defaults
-  // higher (resolveMaxToolCallRounds); an explicit --max-tool-call-rounds always
-  // wins. Set as branch-scoped defaults on the root branch BEFORE any subagent
-  // is dispatched, so every (fork-seeded) subagent inherits them. setLlmOptions
-  // merges only present keys, so this never clobbers the model defaults above.
-  // Separate calls, each gated on its own value: setLlmOptions only skips
-  // `undefined`, not `null`, so passing an absent key would clobber the bag.
   const maxRounds = resolveMaxToolCallRounds(
     args.flags["max-tool-call-rounds"] ?? null,
     runningOneShot,
@@ -913,11 +797,6 @@ node main() {
     })
   }
 
-  // Per-model default output cap from the capability profile. The hosted
-  // default of 20000 carries the adaptive-thinking empty-reply fix that
-  // used to live here as a TEMPORARY block. Local profiles cap lower.
-  // Branch-scoped, so every subagent inherits it. A per-call
-  // llm(..., { maxTokens }) still wins, e.g. the summarizer's 256.
   const capsMaxTokens = getCapabilities().maxTokens
   if (capsMaxTokens != null) {
     setLlmOptions({
@@ -931,31 +810,6 @@ node main() {
   // coordinator (which calls codeAgent as a tool) pick it up.
   setCodeOneShot(runningOneShot)
 
-  // Validate the target subagent name up front (empty = coordinator).
-  if (startAgent != "" && !START_AGENTS.includes(startAgent)) {
-    print(
-      color.red(
-      "Unknown --agent value: ${startAgent}. Valid: ${START_AGENTS.join(", ")}",
-    ),
-    )
-    process.exit(1)
-  }
-
-  // Seeded interactive: run the given prompt as the first turn, then hand
-  // the REPL to the user. Requires a seed prompt and a TTY (the REPL reads
-  // stdin). `--print` wins if both are passed — its whole job is to print
-  // and exit with no REPL. Without a TTY (or with `--print`) we fall
-  // through to one-shot below; `--interactive` with no prompt falls through
-  // to the plain REPL.
-  if (seededInteractive) {
-    setTitle("Agency Agent")
-    clearScreen()
-    print(getHeader())
-    const seededHandler = setupSession(true)
-    startInteractive(seededHandler, startAgent, positionalQuery)
-    process.exit(0)
-  }
-
   // One-shot invocation: run one turn through the same agent the REPL uses
   // and write the reply to stdout. No banner, no REPL. Entered when
   // `--print` / `-p` is passed, a positional query is given, or stdin is
@@ -966,8 +820,7 @@ node main() {
   // degrade gracefully. The prompt comes from the positional when present,
   // otherwise from stdin. (Title/clearScreen are skipped so piped output
   // stays free of escape codes.)
-  const forceOneShot = args.flags.print || hasQuery
-  if (forceOneShot || !isTTY()) {
+  if (args.flags.print || hasQuery || !isTTY()) {
     let prompt = positionalQuery
     if (!hasQuery) {
       const fromStdin = readStdin()
@@ -977,17 +830,11 @@ node main() {
       prompt = fromStdin
     }
     print(oneShotAgent(startAgent, prompt))
-    process.exit(0)
+  } else {
+    setTitle("Agency Agent")
+    clearScreen()
+    print(getHeader())
+    const handler = setupSession(true)
+    startInteractive(handler, startAgent, positionalQuery)
   }
-
-  // Plain interactive REPL (no seed). `startInteractive` owns the runloop;
-  // every Enter dispatches into `_runTurn` which calls `mainAgent`.
-  // Interrupts raised during a turn propagate to the policy handler
-  // installed by the enclosing `handle` block via the AsyncLocalStorage
-  // handler stack.
-  setTitle("Agency Agent")
-  clearScreen()
-  print(getHeader())
-  const handler = setupSession(true)
-  startInteractive(handler, "", "")
 }

@@ -3,9 +3,15 @@
   ABOVE the resolution / slot / shared layers: it imports from them, and
   nothing they own imports back, so there is no import cycle. */
 
+import {
+  printLocalCatalog,
+  localModelsSupported,
+  listModelNames,
+ } from "std::agency/local"
 import { listHostedModels } from "std::llm"
 import { disableMemory } from "std::memory"
-import { ChoiceItem } from "std::ui"
+import { isTTY } from "std::system"
+import { chooseOption, ChoiceItem } from "std::ui"
 import { pushMessage } from "std::ui/cli"
 
 import {
@@ -19,6 +25,7 @@ import {
   missingProviderEnvVar,
   Resolved,
  } from "./models.agency"
+import { configureSearch } from "./search.agency"
 import {
   buildLayers,
   resolveAll,
@@ -36,6 +43,8 @@ import {
   applyResolved,
   promoteAll,
   overrideFromResolved,
+  configureModels,
+  configureLocalModel,
  } from "../shared.agency"
 
 // In-session model selection state.
@@ -213,5 +222,110 @@ export def parseModelsFilters(cmd: string): ModelFilters {
   }
   return {
     provider: arg
+  }
+}
+
+/** Resolve and apply the agent's models from parsed CLI args at startup.
+  `--local` (guided or with a value) pins the llama-cpp model; otherwise the
+  hosted path applies `--model` / `--fastmodel` / `--slowmodel` / `--provider`.
+  Side-effecting (configureModels/configureLocalModel/configureSearch, and
+  process.exit on unresolvable input), so it lives here above shared, not in
+  the pure models.agency. */
+export def pickModelsForAgent(args: Record<string, any>) {
+  const localVal = args.flags["local"]
+  const modelArg = args.flags.model ?? ""
+  const hasModelFlags = modelArg != "" || (args.flags.fastmodel ?? "") != "" || (args.flags.slowmodel ?? "") != ""
+  if (localVal != null && hasModelFlags) {
+    print(
+      color.red("Pass either --model (hosted) or --local (local), not both."),
+    )
+    process.exit(1)
+  }
+  if (localVal == "") {
+    // Bare --local: guided setup.
+    // Non-interactive can't prompt, so just print the local catalog and exit.
+    // Interactive = prompt the user to pick a model.
+    if (!isTTY()) {
+      printLocalCatalog()
+      process.exit(0)
+    }
+    if (!localModelsSupported()) {
+      print(color.yellow("Local models need the smoltalk-llama-cpp package."))
+      print("Install it, then re-run:  ! npm i -g smoltalk-llama-cpp")
+      process.exit(1)
+    }
+    let items: ChoiceItem[] = []
+    for (modelName in listModelNames()) {
+      items.push({
+        key: modelName.name,
+        label: modelName.name
+      })
+    }
+    const choice = chooseOption(
+      "Local model",
+      "Pick a model, or type an hf: URI / .gguf path (downloads on first use):",
+      items,
+      allowFreeText: true,
+      allowCancel: true,
+    )
+    if (choice == "" || choice == null) {
+      process.exit(0)
+    }
+    configureLocalModel(choice)
+    configureSearch(true)
+    // fall through into the session on the chosen local model
+  } else if (localVal != null) {
+    configureLocalModel(localVal)
+    configureSearch(true)
+  } else {
+    // Hosted path. --model accepts `slot=model` (per-slot) or a bare model
+    // (global pin); explicit --fastmodel/--slowmodel win over a --model slot=.
+    const parsed = parseModelFlag(modelArg)
+    let modelGlobal = ""
+    let fastFlag = ""
+    let slowFlag = ""
+    let embeddingFlag = ""
+    if (modelArg != "") {
+      if (parsed.slot == "") {
+        modelGlobal = parsed.model
+      } else if (parsed.slot == "main") {
+        fastFlag = parsed.model
+      } else if (parsed.slot == "reasoning") {
+        slowFlag = parsed.model
+      } else if (parsed.slot == "embedding") {
+        if (!embeddingSpecHasProvider(parsed.model)) {
+          print(
+            color.red(
+            "Embedding models need the provider/model form, e.g. --model embedding=openai/text-embedding-3-small.",
+          ),
+          )
+          process.exit(1)
+        }
+        embeddingFlag = parsed.model
+      } else {
+        print(
+          color.red(
+          "Unknown model slot '${parsed.slot}' in --model. Valid slots: ${SLOTS.join(", ")}.",
+        ),
+        )
+        process.exit(1)
+      }
+    }
+    const fm = args.flags.fastmodel ?? ""
+    const sm = args.flags.slowmodel ?? ""
+    if (fm != "") {
+      fastFlag = fm
+    }
+    if (sm != "") {
+      slowFlag = sm
+    }
+    configureModels(
+      modelGlobal,
+      fastFlag,
+      slowFlag,
+      embeddingFlag,
+      args.flags.provider ?? "",
+    )
+    configureSearch(false)
   }
 }

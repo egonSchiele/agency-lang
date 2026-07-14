@@ -138,3 +138,43 @@ Ideas for examples:
 ---
 
 Add a function in stdlib/agency.agency that can write the agency code that then gets compiled and executed by the other functions
+
+---
+
+Agency generator is struggling with this:
+
+```ts
+def renderAgentResponse(reply: Result<string | null>): void {
+  match(reply) {
+    success(r) => {
+      if (r != "" && r != null) {
+      pushMessage(highlight("${r}\n", language: "markdown"))
+    } else {
+      pushMessage(color.red("No reply generated."))
+    }
+    }
+    failure(f) => pushMessage(color.red(formatTurnFailure("${f.error}")))
+  }
+}
+```
+
+---
+
+Allow comments in imports:
+
+```
+import {
+  configureSearch,
+/*   setSearchBackend,
+  getSearchBackend,
+  availableBackendItems,
+ */ } from "./lib/search.agency"
+```
+
+ ---
+
+ LSP import inserts extra comma in import, eg
+
+ import { x,, y } from "asd"
+
+ the generator should just remove the extra comma

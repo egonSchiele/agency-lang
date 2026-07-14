@@ -528,8 +528,8 @@ def maybeEnableMemory() {
 }
 
 def mainAgent(prompt: string | (string | Attachment)[]): string {
-  const doSummarize = getCapabilities().summarize
-  thread(label: "main", summarize: doSummarize, session: "main") {
+  // const doSummarize = getCapabilities().summarize
+  thread(label: "main", session: "main") {
     setMemoryId("main")
     if (first) {
       const promptSize = getCapabilities().prompt
@@ -562,10 +562,6 @@ def checkForAttachments(expanded: string): Attachment[] {
     )
   }
   if (detected.attached.length == 0) {
-    // Deliberate special case: a text-only turn stays a bare string. A
-    // one-element array is API-equivalent, but the stored thread message
-    // shape (string vs parts array) — and with it every serialized
-    // session and message fixture — would change for EVERY turn.
     return []
   }
   for (item in detected.attached) {
@@ -643,7 +639,7 @@ def setupSession(interactive: boolean): any {
 
 def oneShotAgent(target: string, prompt: string): string {
   _isInteractive = false
-  const handler = setupSession(false)
+  const handler = setupSession(interactive: false)
   handle {
     const result = try dispatchAgent(target, prompt)
     return match(result) {
@@ -765,11 +761,11 @@ node main() {
   // Seeded interactive: run the prompt as the first turn, then hand over the
   // REPL (needs a TTY + query, and not --print). Everything else is one-shot.
   const seededInteractive = wantInteractive && hasQuery && isTTY() && !args.flags.print
-  const runningOneShot = !seededInteractive && (args.flags.print || hasQuery || !isTTY())
+  const isOneShot = !seededInteractive && (args.flags.print || hasQuery || !isTTY())
 
   const maxRounds = resolveMaxToolCallRounds(
     args.flags["max-tool-call-rounds"] ?? null,
-    runningOneShot,
+    isOneShot,
   )
   if (maxRounds != null) {
     setLlmOptions({
@@ -794,7 +790,7 @@ node main() {
   // questions and no next turn, so it must drive to a finished artifact.
   // Set before any dispatch so both the pinned `--agent code` path and the
   // coordinator (which calls codeAgent as a tool) pick it up.
-  setCodeOneShot(runningOneShot)
+  setCodeOneShot(isOneShot)
 
   // One-shot invocation: run one turn through the same agent the REPL uses
   // and write the reply to stdout. No banner, no REPL. Entered when
@@ -820,7 +816,7 @@ node main() {
     setTitle("Agency Agent")
     clearScreen()
     print(getHeader())
-    const handler = setupSession(true)
+    const handler = setupSession(interactive: true)
     startInteractive(handler, startAgent, positionalQuery)
   }
 }

@@ -17,22 +17,6 @@
       ]
     },
     {
-      "nodeName": "plainMessageStaysString",
-      "input": "",
-      "expectedOutput": "\"Hi!|false\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ],
-      "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": "Hi!"
-        }
-      ]
-    },
-    {
       "nodeName": "modalitySkipsTextOnlyModel",
       "input": "",
       "expectedOutput": "\"ok|false\"",

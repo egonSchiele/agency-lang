@@ -7,7 +7,7 @@
  * testable — this harness just calls it with the deterministic LLM
  * provider (see agentTurn.test.json) and checks the reply comes back.
  */
-import { agentReply } from "../agent.agency"
+import { dispatchAgent } from "../agent.agency"
 import {
   switchModel,
   reactToSlotChange,
@@ -28,7 +28,7 @@ import { setEnv } from "std::system"
 import { applyResolved, getResolvedSlots, promoteAll } from "../shared.agency"
 
 node respondsToAMessage(): boolean {
-  const reply = agentReply("hello")
+  const reply = dispatchAgent("coordinator", "hello")
   return reply == "Hi from the agent!"
 }
 

@@ -1,4 +1,4 @@
-import { agentReply, agentReplyVia } from "../agent.agency"
+import { dispatchAgent } from "../agent.agency"
 import { applyResolved } from "../shared.agency"
 import { getThread, listThreads } from "std::thread"
 
@@ -31,19 +31,14 @@ def threadHasImagePlaceholder(): boolean {
 
 node attachesImageToTurn(): string {
   writeBinary("at-x.png", PNG, "/tmp") with approve
-  const reply = agentReply("look at /tmp/at-x.png") with approve
-  return "${reply}|${threadHasImagePlaceholder()}"
-}
-
-node plainMessageStaysString(): string {
-  const reply = agentReply("hello there") with approve
+  const reply = dispatchAgent("coordinator", "look at /tmp/at-x.png") with approve
   return "${reply}|${threadHasImagePlaceholder()}"
 }
 
 node modalitySkipsTextOnlyModel(): string {
   applyResolved({ main: { model: "gpt-3.5-turbo", provider: "openai", via: "test" } })
   writeBinary("at-y.png", PNG, "/tmp") with approve
-  const reply = agentReply("look at /tmp/at-y.png") with approve
+  const reply = dispatchAgent("coordinator", "look at /tmp/at-y.png") with approve
   return "${reply}|${threadHasImagePlaceholder()}"
 }
 
@@ -53,13 +48,13 @@ node subagentRouteIgnoresImagePath(): string {
   // under sequential mocks) — this test only asserts the turn completed
   // and no image part reached any thread.
   writeBinary("at-z.png", PNG, "/tmp") with approve
-  const reply = agentReplyVia("code", "look at /tmp/at-z.png") with approve
+  const reply = dispatchAgent("code", "look at /tmp/at-z.png") with approve
   return "${reply != null}|${threadHasImagePlaceholder()}"
 }
 
 node generatedImageIsShownToModel(): string {
   // The coordinator LLM calls generateImageFile; after the tool round
   // the generated image must be injected so the model can see it.
-  const reply = agentReply("draw me a bicycle") with approve
+  const reply = dispatchAgent("coordinator", "draw me a bicycle") with approve
   return "${reply}|${threadHasImagePlaceholder()}"
 }

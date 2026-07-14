@@ -467,7 +467,15 @@ def _runTurn(msg: string): boolean {
     "/model" => modelSlashCommand()
     "/models" => modelsSlashCommand(trimmed)
     "/local" => localSlashCommand()
-    _ => renderUserTurn(trimmed, msg)
+    _ => {
+      if (trimmed.startsWith("/model ")) {
+        return modelSlashCommand()
+      }
+      if (trimmed.startsWith("/models ")) {
+        return modelsSlashCommand(trimmed)
+      }
+      return renderUserTurn(trimmed, msg)
+    }
   }
 }
 
@@ -524,12 +532,10 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
   thread(label: "main", summarize: doSummarize, session: "main") {
     setMemoryId("main")
     if (first) {
-      // `_context` carries the per-run grounding (date, cwd, AGENTS.md),
-      // set by `setupSession`. Appending it to the system prompt is what
-      // actually gets that context to the LLM.
-      let sysPrompt = MAIN_PROMPT_LARGE
-      if (getCapabilities().prompt == "small") {
-        sysPrompt = MAIN_PROMPT_SMALL
+      const promptSize = getCapabilities().prompt
+      const sysPrompt = match(promptSize) {
+        "small" => MAIN_PROMPT_SMALL catch ""
+        _ => MAIN_PROMPT_LARGE catch ""
       }
       systemMessage("${sysPrompt}${_context}")
       first = false
@@ -544,20 +550,6 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
   }
   return result
 }
-
-// Dispatch one turn. `target` empty (or "main") runs the coordinator
-// `mainAgent`, which routes as usual; any subagent name routes the turn
-// directly to that subagent. All subagents share `(userMsg, allowHandoff)`
-// and the seed turn never hands off (allowHandoff: false). Used by both
-// the one-shot path and the interactive seed turn.
-type AgentTarget =
-  | "code"
-  | "explorer"
-  | "main"
-  | "oracle"
-  | "research"
-  | "review"
-  | null
 
 def checkForAttachments(expanded: string): Attachment[] {
   // Auto-attach image/PDF files the user referenced (drag-drop or typed
@@ -585,63 +577,32 @@ def checkForAttachments(expanded: string): Attachment[] {
   return attachments
 }
 
-// Run the coordinator on a prompt, auto-attaching any image/PDF paths found in
-// it. A text-only turn stays a bare string (checkForAttachments returns []) so
-// the stored thread-message shape is unchanged for the common case; only a turn
-// with real attachments becomes a parts array.
-def coordinatorReply(expanded: string): string {
-  const attachments = checkForAttachments(expanded)
-  if (attachments.length == 0) {
-    return mainAgent(expanded)
-  }
-  return mainAgent([expanded, ...attachments])
-}
+type AgentTarget =
+  | "code"
+  | "explorer"
+  | "main"
+  | "oracle"
+  | "research"
+  | "review"
+  | "coordinator"
 
-export def agentReplyVia(target: AgentTarget, userMsg: string): string {
+export def dispatchAgent(agentName: AgentTarget, userMsg: string): string {
   const expanded = expandSlash(userMsg, projectCommands)
-  return match(target) {
+  return match(agentName) {
     "code" => codeAgent(expanded, false)
     "research" => researchAgent(expanded, false)
     "oracle" => oracleAgent(expanded, false)
     "explorer" => explorerAgent(expanded, false)
     "review" => reviewAgent(expanded, false)
     _ => {
-      // Coordinator default. `null` (from `agentReply`), `"main"`, and `""` (the
-      // one-shot / seed-turn value when `--agent` is unset) all run the full
-      // coordinator, which routes as usual. Anything unrecognized degrades to the
-      // coordinator too, rather than returning a null reply. All three paths
-      // attach identically, so `--agent main` matches the default coordinator.
-      return coordinatorReply(expanded)
+      const attachments = checkForAttachments(expanded)
+      return mainAgent([expanded, ...attachments])
     }
   }
 }
 
-// The agent's core turn, decoupled from the terminal: expand any project
-// slash command, then run the prompt through `mainAgent` and return the
-// reply. The REPL (`main` / `_runTurn`) owns input, output, and built-in
-// commands; everything the *agent* does for a user message lives here, so
-// it can be driven and tested without a terminal or user input. See
-// `tests/agentTurn.agency`.
-export def agentReply(userMsg: string): string {
-  return agentReplyVia(null, userMsg)
-}
-
-// Handle a non-command message: expand `/model <arg>`, otherwise run the turn
-// through `agentReply` and render the reply. Split out of `_runTurn` so that
-// function's dispatch stays a clean `return match` with a wildcard arm. A bare
-// `try agentReply(...)` sitting AFTER a `return match` trips the flow checker
-// (AG2009: it stops seeing the `try` result as a Result), so the turn-render
-// path lives here in its own function instead. `try` renders a terminal LLM
-// failure as a friendly heads-up; aborts/interrupts re-throw so an Esc-cancel
-// still reaches the policy handler.
 def renderUserTurn(trimmed: string, msg: string): boolean {
-  if (trimmed.startsWith("/model ")) {
-    return modelSlashCommand()
-  }
-  if (trimmed.startsWith("/models ")) {
-    return modelsSlashCommand(trimmed)
-  }
-  const result = try agentReply(msg)
+  const result = try dispatchAgent("coordinator", msg)
   renderAgentResponse(result)
   return true
 }
@@ -656,7 +617,7 @@ def _buildStatus(): { left: string; right: string; context: string } {
 }
 
 // Shared session setup for both interactive and one-shot modes. Builds
-// the per-run grounding context, loads (or initializes) the policy, and
+// the grounding context, loads (or initializes) the policy, and
 // returns the installed CLI policy handler.
 def setupSession(interactive: boolean): any {
   setAgentCwd(cwd())
@@ -680,16 +641,11 @@ def setupSession(interactive: boolean): any {
   )
 }
 
-// One-shot entry: run a single turn through the same `mainAgent` the
-// REPL uses, with the same session setup and policy handler, and return
-// the reply. Used for `agency agent -p "..."`, a positional query, or
-// piped stdin. Slash commands are expanded so `-p /foo bar` works like
-// typing it in the REPL.
 def oneShotAgent(target: string, prompt: string): string {
   _isInteractive = false
   const handler = setupSession(false)
   handle {
-    const result = try agentReplyVia(target, prompt)
+    const result = try dispatchAgent(target, prompt)
     return match(result) {
       success(r) => r
       failure(f) => formatTurnFailure("${f.error}")
@@ -702,7 +658,7 @@ an initial prompt – by using the agency doctor command, for example.
 It means that agent starts with an initial prompt already there to respond to. */
 def runSeedTurn(target: string, msg: string) {
   pushMessage(color.dim("> ${msg}"))
-  const response = try agentReplyVia(target, msg)
+  const response = try dispatchAgent(target, msg)
   renderAgentResponse(response)
 }
 
@@ -754,6 +710,21 @@ node main() {
   if (args.flags.verbose) {
     VERBOSE = true
   }
+
+  if (isFailure(MAIN_PROMPT_LARGE)) {
+    print(
+      color.red("Failed to read prompts/main-large.md: ${MAIN_PROMPT_LARGE.error}"),
+    )
+    process.exit(1)
+  }
+
+  if (isFailure(MAIN_PROMPT_SMALL)) {
+    print(
+      color.red("Failed to read prompts/main-small.md: ${MAIN_PROMPT_SMALL.error}"),
+    )
+    process.exit(1)
+  }
+
   // `--policy` is an optional-value flag: a bare `--policy` (no name or
   // path) prints the usage + the built-in policies and exits, rather than
   // silently doing nothing.

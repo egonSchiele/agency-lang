@@ -1,10 +1,20 @@
-import { ChoiceItem, chooseOption } from "std::ui"
 import {
-  BUILTIN_POLICIES,
+  ScopedRuleFields,
+  cliPolicyHandler,
+  parsePolicyFile,
+  setPolicy,
   minimalAutoApprovePolicy,
   recommendedAutoApprovePolicy,
+  builtinPolicy,
+  builtinPolicyNames,
+  BUILTIN_POLICIES,
+  Policy,
  } from "std::policy"
+import { cwd } from "std::system"
+import { ChoiceItem, chooseOption } from "std::ui"
+
 import { POLICY_PATH } from "./config.agency"
+
 
 // Print `--policy` usage and list the built-in policies (name + one-line
 // description). Shown when `--policy` is passed with no value.
@@ -43,5 +53,59 @@ export def givePolicyChoice() {
   return match(answer) {
     "recommended" => recommendedAutoApprovePolicy
     _ => minimalAutoApprovePolicy
+  }
+}
+
+export def getPolicyForAgent(
+  _policyArg: string,
+  interactive: boolean,
+): { policyFile: string; sessionPolicy: Policy | null } {
+  let policyFile = POLICY_PATH
+  let sessionPolicy: Policy | null = null
+
+  if (_policyArg == "") {
+    const policy = parsePolicyFile(POLICY_PATH)
+    if (policy is failure(f)) {
+      if (f.status == "doesnt-exist") {
+        if (interactive) {
+          print(color.yellow("No existing policy found at ${POLICY_PATH}."))
+          setPolicy(POLICY_PATH, givePolicyChoice())
+        } else {
+          setPolicy(POLICY_PATH, recommendedAutoApprovePolicy)
+        }
+      } else {
+        print(color.red("Failed to load policy: ${JSON.stringify(f.error)}"))
+        process.exit(1)
+      }
+    } else {
+      setPolicy(POLICY_PATH, policy.value)
+    }
+  } else {
+    const builtin = builtinPolicy(_policyArg, cwd())
+    policyFile = match(builtin) {
+      null => {
+        const loaded = parsePolicyFile(_policyArg)
+        return match(loaded) {
+          success(_) => _policyArg
+          failure(f) => {
+            print(
+              color.red(
+              "--policy '${_policyArg}' is neither a built-in policy (${builtinPolicyNames().join(", ")}) nor a readable policy file (${f.status}).",
+            ),
+            )
+            process.exit(1)
+            return ""
+          }
+        }
+      }
+      _ => {
+        sessionPolicy = builtin
+        return SESSION_POLICY_PATH
+      }
+    }
+  }
+  return {
+    policyFile: policyFile,
+    sessionPolicy: sessionPolicy
   }
 }

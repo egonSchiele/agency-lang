@@ -585,23 +585,33 @@ def checkForAttachments(expanded: string): Attachment[] {
   return attachments
 }
 
+// Run the coordinator on a prompt, auto-attaching any image/PDF paths found in
+// it. A text-only turn stays a bare string (checkForAttachments returns []) so
+// the stored thread-message shape is unchanged for the common case; only a turn
+// with real attachments becomes a parts array.
+def coordinatorReply(expanded: string): string {
+  const attachments = checkForAttachments(expanded)
+  if (attachments.length == 0) {
+    return mainAgent(expanded)
+  }
+  return mainAgent([expanded, ...attachments])
+}
+
 export def agentReplyVia(target: AgentTarget, userMsg: string): string {
   const expanded = expandSlash(userMsg, projectCommands)
   return match(target) {
-    "main" => mainAgent(expanded)
     "code" => codeAgent(expanded, false)
     "research" => researchAgent(expanded, false)
     "oracle" => oracleAgent(expanded, false)
     "explorer" => explorerAgent(expanded, false)
     "review" => reviewAgent(expanded, false)
     _ => {
-      // Coordinator default. `null` (from `agentReply`) and `""` (the one-shot /
-      // seed-turn value when `--agent` is unset) both land here and run the full
+      // Coordinator default. `null` (from `agentReply`), `"main"`, and `""` (the
+      // one-shot / seed-turn value when `--agent` is unset) all run the full
       // coordinator, which routes as usual. Anything unrecognized degrades to the
-      // coordinator too, rather than returning a null reply. Attachments are
-      // detected here so image/PDF paths in the prompt reach the model.
-      const attachments = checkForAttachments(expanded)
-      return mainAgent([expanded, ...attachments])
+      // coordinator too, rather than returning a null reply. All three paths
+      // attach identically, so `--agent main` matches the default coordinator.
+      return coordinatorReply(expanded)
     }
   }
 }

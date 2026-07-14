@@ -13,25 +13,43 @@ import { handoff } from "std::agent"
  * cwd at startup.
  */
 import { todoWrite, todoList } from "std::agent"
+import { plannerAgent } from "std::agents/planner"
 import { filter } from "std::array"
 import { edit } from "std::fs"
+import {
+  gitStatus,
+  gitLog,
+  gitDiff,
+  gitShow,
+  gitBranchList,
+  gitRemoteList,
+  gitBlame,
+  gitStashList,
+  gitAdd,
+  gitCommit,
+  gitCheckout,
+  gitSwitch,
+  gitBranchCreate,
+  gitBranchDelete,
+  gitStashPush,
+  gitStashPop,
+  gitRestore,
+ } from "std::git"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { remember, recall, setMemoryId } from "std::memory"
 import { exec, ls, glob, grep, bash } from "std::shell"
-import {
-  gitStatus, gitLog, gitDiff, gitShow, gitBranchList, gitRemoteList, gitBlame, gitStashList,
-  gitAdd, gitCommit, gitCheckout, gitSwitch, gitBranchCreate, gitBranchDelete,
-  gitStashPush, gitStashPop, gitRestore,
- } from "std::git"
 import { skillsDir, docsSkill } from "std::skills"
 import { systemMessage } from "std::thread"
 
 import { agentNames } from "../lib/config.agency"
 import { withWebSearch, getSearchBackend } from "../lib/search.agency"
 import { oracleAgent } from "./oracle.agency"
-import { reviewWrittenFiles, renderFeedback, feedbackHasErrors } from "./review.agency"
+import {
+  reviewWrittenFiles,
+  renderFeedback,
+  feedbackHasErrors,
+ } from "./review.agency"
 import { verify, renderGaps, unwrapVerdict } from "./verify.agency"
-import { plannerAgent } from "std::agents/planner"
 
 
 // The file-system tools (`read` / `write` / `edit` / `ls` / `glob` /
@@ -418,6 +436,7 @@ questions and there is NO next turn. Therefore:
 // Set by `agent.agency` (`setCodeOneShot`) before the first dispatch when the
 // run is non-interactive. Gates `ONE_SHOT_NOTE`.
 let _oneShot = false
+
 export def setCodeOneShot(oneShot: boolean) {
   _oneShot = oneShot
 }
@@ -460,7 +479,13 @@ def escalate(task: string, reason: string, plan: string): string {
   @param reason - why this task needs a multi-step plan.
   @param plan - your outline of the steps.
   """
-  return plannerAgent(task, context: reason, plan: plan, maxCost: ESCALATE_MAX_COST, maxTime: ESCALATE_MAX_TIME)
+  return plannerAgent(
+    task,
+    context: reason,
+    plan: plan,
+    maxCost: ESCALATE_MAX_COST,
+    maxTime: ESCALATE_MAX_TIME,
+  )
 }
 
 export def codeAgent(userMsg: string, allowHandoff: boolean) {
@@ -478,7 +503,12 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
   // runs it) instead of the direct loop. Simple tasks fall through.
   const decision = triage(userMsg)
   if (routeFor(decision) == "planner") {
-    return plannerAgent(userMsg, plan: decision.plan, maxCost: ESCALATE_MAX_COST, maxTime: ESCALATE_MAX_TIME)
+    return plannerAgent(
+      userMsg,
+      plan: decision.plan,
+      maxCost: ESCALATE_MAX_COST,
+      maxTime: ESCALATE_MAX_TIME,
+    )
   }
   const tools = [...codeTools]
   // A "simple" task that turns out to need a plan can still switch mid-flight.
@@ -488,10 +518,7 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
     tools.push(handoff.partial(validCategories: otherAgents))
   }
 
-  let hasErrors = false
-  // Verification loop state (one-shot only). `needsFix` keeps the loop
-  // going when the verifier found gaps; `verifyRounds` caps the extra
-  // verify-fix cycles so cost stays bounded.
+  let hasErrorsFromFeedback = false
   let needsFix = false
   let verifyRounds = 0
   let iterations = 0
@@ -505,9 +532,10 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
   // the tool-enabled llm() entirely — the agent appeared to "lose" its
   // tools on the second turn.
   let firstIteration = true
-  thread(label: "code", summarize: true, session: "code") {
+  // const doSummarize = getCapabilities().summarize
+  thread(label: "code", session: "code") {
     setMemoryId("code")
-    while ((hasErrors || needsFix || firstIteration) && iterations < 5) {
+    while ((hasErrorsFromFeedback || needsFix || firstIteration) && iterations < 5) {
       firstIteration = false
       iterations += 1
       if (_first) {
@@ -531,37 +559,34 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
       }),
       )
 
-      // Review the .agency files the agent changed this iteration, NOT the
-      // chat reply. `reply` is still returned to the user below; only the
-      // review input changed. `with approve` discharges the read-only git /
-      // file effects this internal check raises (the agent already reads its
-      // own files). For a non-Agency task no .agency files change, so this is
-      // success([]) and the loop falls through to `verify`.
       const feedback = reviewWrittenFiles() with approve
-      if (feedbackHasErrors(feedback)) {
+      hasErrorsFromFeedback = feedbackHasErrors(feedback)
+      if (hasErrorsFromFeedback) {
         const rendered = renderFeedback(feedback)
-        userMsg = "The last code had errors:\n\n${rendered}\n\nPlease fix them."
-        hasErrors = true
-      } else {
-        hasErrors = false
-        // Default: done unless the verifier says otherwise. Resetting here
-        // (not only inside the gate) means that once the verify-fix cap is
-        // reached and the block below is skipped, `needsFix` can't stay
-        // true and spin the loop to the `iterations` cap.
-        needsFix = false
-        // Fresh-eyes verification — one-shot only, only after the code
-        // typechecks clean, capped at 2 verify-fix cycles. `try` yields a
-        // Result: a Failure (verifier crashed / no verdict) is unwrapped to
-        // a fail-open verdict, since verification can only help — never
-        // block or corrupt (the verifier never writes).
-        if (_oneShot && verifyRounds < 2) {
-          const verdictResult = try verify(originalUserMsg)
-          const verdict = unwrapVerdict(verdictResult)
-          if (!verdict.satisfied) {
-            userMsg = "Your work isn't complete yet. A fresh review found these gaps:\n\n${renderGaps(verdict.gaps)}\n\nFix each gap; your work will be re-verified."
-            needsFix = true
-            verifyRounds += 1
-          }
+        userMsg = """
+        The last code had errors:
+
+        ${rendered}
+
+        Please fix the errors.
+        """
+      } else if (_oneShot && verifyRounds < 2) {
+        const verdictResult = try verify(originalUserMsg)
+        const verdict = unwrapVerdict(verdictResult)
+        if (!verdict.satisfied) {
+          userMsg = """
+            Your work isn't complete yet. A fresh review found these gaps:
+
+            <gaps>
+            ${renderGaps(verdict.gaps)}
+            </gaps>
+
+            Fix each gap; your work will be re-verified.
+            """
+          needsFix = true
+          verifyRounds += 1
+        } else {
+          needsFix = false
         }
       }
     }

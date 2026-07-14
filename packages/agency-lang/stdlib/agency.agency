@@ -568,7 +568,7 @@ The grading tests are hidden and NOT in this environment. Reconstruct the succes
 // The throwing inner: two-phase inspection. `verify` wraps it fail-open.
 def verifyInner(task: string): Feedback[] {
   let items: Feedback[] = []
-  thread(label: "verify", summarize: true) {
+  thread(label: "verify") {
     systemMessage(verifySysPrompt)
     const analysis: string = llm("The task was:\n\n${task}\n\nInspect the working directory, run the artifact against the task's own success criteria, and describe what passes and what fails.", { tools: verifyTools })
     const parsed: Feedback[] = llm("Convert this analysis into Feedback items — one per concrete finding: error=true for an unmet criterion (name it), error=false for a satisfied one. Empty list if you cannot tell.\n\nAnalysis:\n${analysis}")

@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "#513: run(maxCost:) on the middle hop; grandchild interrupt pauses the tree; one approval resumes through the internal guard block",
+      "input": "",
+      "expectedOutput": "\"OK: deep-ok\\n\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

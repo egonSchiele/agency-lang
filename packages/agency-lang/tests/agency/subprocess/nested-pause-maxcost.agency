@@ -1,0 +1,56 @@
+import { compile, run } from "std::agency"
+
+// #513 regression: the middle hop's run() uses maxCost, which wraps _run in
+// a guard block INSIDE run(). The grandchild's bash is unhandled anywhere, so
+// the middle process pauses and serializes WHILE the guard block's frame
+// (holding a FunctionRef to the block) is on its stack. Resume must revive
+// that state in a fresh process: before the fix, FunctionRefReviver threw on
+// the unregistered "__block_<n>" ref and the resume died.
+node main() {
+  const grandSource = """
+import { bash } from "std::shell"
+node main() {
+  let r = bash("echo deep-ok")
+  return r.stdout
+}
+"""
+  const childSource = """
+import { compile, run } from "std::agency"
+node main(grandSource: string) {
+  const c = compile(grandSource)
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "main", maxCost: 1.0)
+    if (isSuccess(result)) {
+      return result.value.data
+    }
+    return "inner run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      args: { grandSource: grandSource },
+    )
+    if (isSuccess(result)) {
+      return "OK: ${result.value.data}"
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

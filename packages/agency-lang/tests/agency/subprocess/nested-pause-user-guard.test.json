@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "#513: user-level guard(cost:) as { } around the middle hop's run(); one approval resumes through the user block",
+      "input": "",
+      "expectedOutput": "\"OK: deep-ok\\n\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+import { compile, run } from "std::agency"
+
+// #513 regression, userland variant: a USER-DEFINED function with a block
+// parameter wraps the middle hop's run(). Its frame serializes a FunctionRef
+// to the anonymous block, exactly like guard()'s does. This pins the spec's
+// goal that guard-like constructs are buildable in userland with no runtime
+// changes and stay pause-safe across process boundaries.
+node main() {
+  const grandSource = """
+import { bash } from "std::shell"
+node main() {
+  let r = bash("echo deep-ok")
+  return r.stdout
+}
+"""
+  const childSource = """
+import { compile, run } from "std::agency"
+
+def withWrapper(block: () -> any = null): any {
+  const result = block()
+  return result
+}
+
+node main(grandSource: string) {
+  const c = compile(grandSource)
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const wrapped = withWrapper() as {
+      const result = run(compiled: c.value, node: "main")
+      if (isSuccess(result)) {
+        return result.value.data
+      }
+      return "inner run failed"
+    }
+    return wrapped
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      args: { grandSource: grandSource },
+    )
+    if (isSuccess(result)) {
+      return "OK: ${result.value.data}"
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

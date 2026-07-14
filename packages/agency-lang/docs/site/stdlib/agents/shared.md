@@ -35,7 +35,7 @@ unwrapGuard(r: Result<string, GuardFailureData>, label: string): string
 ```
 
 Unwrap a `guard(...)` Result to the string an agent returns: the block's
-  value on success, or a "<label> stopped..." message when the cost or time cap
+  value on success, or a "[label] stopped..." message when the cost or time cap
   tripped. Shared by every string-returning worker so the trip wording lives in
   one place.
 

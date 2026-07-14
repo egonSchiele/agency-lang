@@ -114,7 +114,6 @@
     "tsc-alias": "^1.8.16",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.59.2",
-    "vitest": "^4.0.16",
-    "zone.js": "^0.16.2"
+    "vitest": "^4.0.16"
   }
 }

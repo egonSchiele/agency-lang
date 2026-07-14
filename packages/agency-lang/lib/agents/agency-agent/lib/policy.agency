@@ -1,4 +1,11 @@
-import { chooseOption } from "std::ui"
+import { ChoiceItem, chooseOption } from "std::ui"
+import {
+  BUILTIN_POLICIES,
+  minimalAutoApprovePolicy,
+  recommendedAutoApprovePolicy,
+ } from "std::policy"
+import { POLICY_PATH } from "./config.agency"
+
 // Print `--policy` usage and list the built-in policies (name + one-line
 // description). Shown when `--policy` is passed with no value.
 export def printPolicyHelp() {
@@ -29,8 +36,12 @@ export def givePolicyChoice() {
   ]
 
   const answer = chooseOption(title, body, items, allowFreeText: true)
+  // allowFreeText means `answer` can be anything (another built-in name the user
+  // typed, or "" on cancel), so the match must be total. Fall back to the
+  // conservative `minimal` policy for anything we don't recognize rather than
+  // erroring on an unhandled arm.
   return match(answer) {
-    "minimal" => minimalAutoApprovePolicy
     "recommended" => recommendedAutoApprovePolicy
+    _ => minimalAutoApprovePolicy
   }
 }

@@ -130,9 +130,11 @@ def afterRun(task: string, src: string, state: PlanState): PlanState {
 
 // Reject halts+fails, so the gate is try-wrapped: a failure means the run was
 // not approved and nothing ran.
-export def runApproved(task: string, src: string, state: PlanState): PlanState raises <std::agents::planApprove> {
+export def runApproved(task: string, plan: string, src: string, state: PlanState): PlanState raises <std::agents::planApprove> {
   const eff = getEffects(src)
-  const gate = try requestApproval("", src, renderEffects(eff))
+  // Show the plan alongside the generated source and capability envelope, so the
+  // approval prompt reflects what the user is actually approving.
+  const gate = try requestApproval(plan, src, renderEffects(eff))
   return match (gate) {
     failure(_) => rejectedState(state)
     success(_) => afterRun(task, src, state)
@@ -143,7 +145,7 @@ def planStep(task: string, planText: string, state: PlanState): PlanState raises
   const gen = writeAgency(planCodePrompt(task, planText), state.extra)
   return match (gen) {
     failure(_) => fallbackState(task, state)
-    success(src) => runApproved(task, src, state)
+    success(src) => runApproved(task, planText, src, state)
   }
 }
 

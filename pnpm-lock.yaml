@@ -86,9 +86,6 @@ importers:
       vitest:
         specifier: ^4.0.16
         version: 4.0.17(@types/node@25.0.6)
-      zone.js:
-        specifier: ^0.16.2
-        version: 0.16.2
 
   packages/agency-lang/docs/site:
     dependencies:
@@ -3059,9 +3056,6 @@ packages:
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
-  zone.js@0.16.2:
-    resolution: {integrity: sha512-Eky7p2Z1Ig3NnbfodSPoARCjKBSTFMnE/ACsP1L/XJEfY4SdOFce19BsUCWVwL6K5ABZFy5J3bjcMWffX+YM3Q==}
-
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
@@ -5949,7 +5943,5 @@ snapshots:
   zod@4.3.6: {}
 
   zod@4.4.3: {}
-
-  zone.js@0.16.2: {}
 
   zwitch@2.0.4: {}

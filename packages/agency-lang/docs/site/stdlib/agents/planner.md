@@ -76,6 +76,7 @@ Human-readable capability envelope for the approval prompt, or an honest
 ```ts
 runApproved(
   task: string,
+  plan: string,
   src: string,
   state: PlanState,
 ): PlanState raises <std::agents::planApprove>
@@ -86,6 +87,7 @@ runApproved(
 | Name | Type | Default |
 |---|---|---|
 | task | `string` |  |
+| plan | `string` |  |
 | src | `string` |  |
 | state | [PlanState](#planstate) |  |
 
@@ -129,4 +131,4 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L152))

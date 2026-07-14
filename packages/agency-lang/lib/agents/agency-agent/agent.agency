@@ -599,8 +599,6 @@ export def agentReplyVia(target: AgentTarget, userMsg: string): string {
     "explorer" => explorerAgent(expanded, false)
     "review" => reviewAgent(expanded, false)
   }
-
-  return mainAgent(parts)
 }
 
 // The agent's core turn, decoupled from the terminal: expand any project

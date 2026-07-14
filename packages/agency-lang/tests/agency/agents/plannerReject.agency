@@ -8,6 +8,6 @@ import { runApproved } from "std::agents/planner"
 // exercises the control flow only (getEffects is a pure parse of the source).
 node rejectReturnsRejectedWithoutRunning(): boolean {
   const state = { summary: "", done: false, extra: "" }
-  const result = runApproved("t", "export node main() { return 1 }", state) with reject
+  const result = runApproved("t", "plan outline", "export node main() { return 1 }", state) with reject
   return result.summary =~ re/rejected/ && result.done
 }

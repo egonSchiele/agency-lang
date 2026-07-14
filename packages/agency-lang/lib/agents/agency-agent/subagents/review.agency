@@ -40,13 +40,12 @@ type AgencyCode = {
   code: string
 }
 
-export def reviewAgent(userMsg: string, allowHandoff: boolean): string {
+export def reviewAgent(userMsg: string): string {
   """
   This agent can review any code written in the agency language.
   It can provide feedback on syntax errors, type errors, and best practices.
 
   @param userMsg - a message describing the code to review or the help needed.
-  @param allowHandoff - whether this agent is allowed to handoff to other agents.
   """
   const feedbackResult = review(userMsg)
   return renderFeedback(feedbackResult)

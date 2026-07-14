@@ -3,14 +3,13 @@
  * up Agency syntax in the bundled docs, searching Wikipedia,
  * fetching URLs, browsing the web, or recalling stored facts.
  *
- * Exports `researchSysPrompt` + `researchTools` consumed by the
- * router in `agent.agency`. The router injects the `handoff` tool
- * itself, so we do NOT add it here. The bundled-docs Skills live
- * here (not in `shared.agency`) because only the research subagent
- * uses them. `static const` caches the Skill across runs.
+ * Exports `researchAgent` (registered as a coordinator tool in
+ * `agent.agency`) plus `researchSysPrompt` / `researchTools`. The
+ * bundled-docs Skills live here (not in `shared.agency`) because only
+ * the research subagent uses them. `static const` caches the Skill
+ * across runs.
  */
-import { todoWrite, todoList, handoff } from "std::agent"
-import { filter } from "std::array"
+import { todoWrite, todoList } from "std::agent"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { remember, recall, setMemoryId } from "std::memory"
 import { docsSkill } from "std::skills"
@@ -22,7 +21,6 @@ import {
   article as wikipediaArticle,
  } from "std::wikipedia"
 
-import { agentNames } from "../lib/config.agency"
 import { withWebSearch } from "../lib/search.agency"
 
 
@@ -43,15 +41,8 @@ background, URL contents, and general conversation backed by recall.
 
 You do NOT have file-system write tools (no write, edit, bash, or
 typecheck). If the user asks you to actually write, edit, or run
-code, call `handoff(reason)` — the only valid target for you is
-the code specialist, so just pass a brief reason. The runtime will
-re-route the user's original message there.
-
-**Bias toward staying in the research thread.** Most follow-up
-messages ("can you say more?", "what about X?", "explain that
-again") are continuations of the current research task, NOT new
-categories. Only call `handoff` when the message clearly needs the
-code-specialist's write/edit/run tools.
+code, say so plainly — the coordinator routes those requests to the
+code specialist.
 
 When you need information:
 
@@ -141,14 +132,13 @@ export static const researchTools: any[] = [
 // only add system message the first time
 let _first = true
 
-export def researchAgent(userMsg: string, allowHandoff: boolean) {
+export def researchAgent(userMsg: string) {
   """
   This agent can help with all research-related tasks,
   such as finding information, summarizing documents, or providing context.
   It can perform web searches, fetch URLs, search Wikipedia, and recall stored facts.
 
   @param userMsg - a message describing what help is needed.
-  @param allowHandoff - whether this agent is allowed to handoff to other agents.
   """
   thread(label: "research", summarize: true, session: "research") {
     setMemoryId("research")
@@ -156,14 +146,9 @@ export def researchAgent(userMsg: string, allowHandoff: boolean) {
       systemMessage(researchSysPrompt)
       _first = false
     }
-    const tools = [...researchTools]
-    const otherAgents = filter(agentNames, \name -> name != "research")
-    if (allowHandoff) {
-      tools.push(handoff.partial(validCategories: otherAgents))
-    }
     reply = llm(userMsg, withWebSearch({
       memory: true,
-      tools: tools
+      tools: researchTools
     }))
   }
   return reply

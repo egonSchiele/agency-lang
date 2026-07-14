@@ -83,7 +83,7 @@ export static const oracleTools: any[] = [
 // only add system message the first time
 let first = true
 
-export def oracleAgent(userMsg: string, allowHandoff: boolean): string {
+export def oracleAgent(userMsg: string): string {
   """
   Ask the oracle — a read-only senior reviewer on a stronger
   reasoning model — for a second opinion on a hard problem. Call
@@ -105,7 +105,6 @@ export def oracleAgent(userMsg: string, allowHandoff: boolean): string {
 
   @param userMsg - the question, with all the context the oracle
     needs to answer it
-  @param allowHandoff - whether this agent is allowed to handoff to other agents.
   """
   thread(label: "oracle", summarize: true, session: "oracle") {
     if (first) {

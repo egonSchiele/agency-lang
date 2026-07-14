@@ -115,7 +115,7 @@ export static const explorerTools: any[] = [
 // only add system message the first time
 let first = true
 
-export def explorerAgent(userMsg: string, allowHandoff: boolean): string {
+export def explorerAgent(userMsg: string): string {
   """
   Ask the explorer — a read-only researcher on a stronger
   reasoning model — to produce a broad, synthesizing answer about
@@ -142,7 +142,6 @@ export def explorerAgent(userMsg: string, allowHandoff: boolean): string {
 
   @param userMsg - the question, with the scope of coverage you
     want covered
-  @param allowHandoff - whether this agent is allowed to handoff to other agents.
   """
   thread(label: "explorer", summarize: true, session: "explorer") {
     if (first) {

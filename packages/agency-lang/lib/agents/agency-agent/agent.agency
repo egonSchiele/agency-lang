@@ -140,14 +140,18 @@ import { reviewAgent } from "./subagents/review.agency"
 /*
  * Agency Agent — helps users create and modify Agency code.
  *
- * Multi-thread architecture: the agent splits work across two
- * specialists, each with its own thread / system prompt / tool set:
+ * Multi-thread architecture: the coordinator (`mainAgent`) runs the
+ * user's message with the specialists registered as tools. Each
+ * specialist has its own thread / system prompt / tool set, and the
+ * coordinator's LLM delegates by calling one as a tool and getting its
+ * reply back (call/return — not a flat hop/handoff loop):
  *   - `code.agency`     — writes, edits, typechecks, runs code
  *   - `research.agency` — looks up docs, fetches URLs, browses web
+ *   - `review.agency`   — parse/typecheck feedback on Agency code
+ *   - `oracle.agency`   — read-only critique on a stronger model
+ *   - `explorer.agency` — read-only broad codebase/docs synthesis
  *
  * The standard library does the heavy lifting:
- *   - `std::agent.route` runs the per-turn hop loop, owns the
- *     handoff signal, and force-answers when the hop limit is hit.
  *   - `std::policy.cliPolicyHandler` provides the interactive
  *     approve/reject/always menu and persists "always" decisions to
  *     `~/.agency-agent/policy.json`.
@@ -160,7 +164,7 @@ import { reviewAgent } from "./subagents/review.agency"
  *      `mainAgent` and printing the reply into the scroll output.
  *   2. Per-effect ALWAYS_FIELDS map for the policy handler's
  *      "approve-always-here" option.
- *   3. Wire the two specialists into one `RouterConfig`.
+ *   3. Wire the specialists into `mainAgentTools`.
  *
  * Other features:
  * - Doc-as-skills: bundles `docs/site/guide` etc. (copied to
@@ -487,11 +491,11 @@ static const MAIN_PROMPT_LARGE = read("prompts/main-large.md") with approve
 static const MAIN_PROMPT_SMALL = read("prompts/main-small.md") with approve
 
 static const mainAgentTools = [
-  researchAgent.partial(allowHandoff: false),
-  codeAgent.partial(allowHandoff: false),
-  reviewAgent.partial(allowHandoff: false),
-  oracleAgent.partial(allowHandoff: false),
-  explorerAgent.partial(allowHandoff: false),
+  researchAgent,
+  codeAgent,
+  reviewAgent,
+  oracleAgent,
+  explorerAgent,
   generateImageFile,
 ]
 
@@ -585,11 +589,11 @@ type AgentTarget =
 export def dispatchAgent(agentName: AgentTarget, userMsg: string): string {
   const expanded = expandSlash(userMsg, projectCommands)
   return match(agentName) {
-    "code" => codeAgent(expanded, false)
-    "research" => researchAgent(expanded, false)
-    "oracle" => oracleAgent(expanded, false)
-    "explorer" => explorerAgent(expanded, false)
-    "review" => reviewAgent(expanded, false)
+    "code" => codeAgent(expanded)
+    "research" => researchAgent(expanded)
+    "oracle" => oracleAgent(expanded)
+    "explorer" => explorerAgent(expanded)
+    "review" => reviewAgent(expanded)
     _ => {
       const attachments = checkForAttachments(expanded)
       return mainAgent([expanded, ...attachments])

@@ -1,20 +1,18 @@
 import { typecheck, parseAST } from "std::agency"
-import { handoff } from "std::agent"
 /*
  * Code subagent — handles anything that touches code or the file
  * system: writing, editing, typechecking, running shell commands.
  *
- * Exports `codeSysPrompt` + `codeTools` consumed by the router in
- * `agent.agency`. The router injects the `handoff` tool itself, so
- * we do NOT add it here. The Workspace state lives here (not in
- * `shared.agency`) because only the code subagent uses file-system
- * tools. Relative paths resolve against the agent working directory
+ * Exports `codeAgent` (registered as a coordinator tool in
+ * `agent.agency`) plus `codeSysPrompt` / `codeTools`. The Workspace
+ * state lives here (not in `shared.agency`) because only the code
+ * subagent uses file-system tools. Relative paths resolve against the
+ * agent working directory
  * (`setAgentCwd`/`getAgentCwd`), which `agent.agency` pins to the user's
  * cwd at startup.
  */
 import { todoWrite, todoList } from "std::agent"
 import { plannerAgent } from "std::agents/planner"
-import { filter } from "std::array"
 import { edit } from "std::fs"
 import {
   gitStatus,
@@ -41,7 +39,6 @@ import { exec, ls, glob, grep, bash } from "std::shell"
 import { skillsDir, docsSkill } from "std::skills"
 import { systemMessage } from "std::thread"
 
-import { agentNames } from "../lib/config.agency"
 import { withWebSearch, getSearchBackend } from "../lib/search.agency"
 import { oracleAgent } from "./oracle.agency"
 import {
@@ -393,7 +390,7 @@ export static const codeTools: any[] = [
   diagnosticsSkill,
   todoWrite,
   todoList,
-  oracleAgent.partial(allowHandoff: false),
+  oracleAgent,
 ]
 
 // Appended to the system prompt only when a web-search backend is active
@@ -488,7 +485,7 @@ def escalate(task: string, reason: string, plan: string): string {
   )
 }
 
-export def codeAgent(userMsg: string, allowHandoff: boolean) {
+export def codeAgent(userMsg: string) {
   """
   This agent can help with all coding-related tasks,
   such as reading, writing, or editing code. It can also
@@ -496,7 +493,6 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
   such as questions related to the Agency syntax or CLI tool.
 
   @param userMsg - a message describing what help is needed.
-  @param allowHandoff - whether this agent is allowed to handoff to other agents.
   """
   const originalUserMsg = userMsg
   // Triage: a multi-part task is delegated to plannerAgent (shows a plan, then
@@ -513,10 +509,6 @@ export def codeAgent(userMsg: string, allowHandoff: boolean) {
   const tools = [...codeTools]
   // A "simple" task that turns out to need a plan can still switch mid-flight.
   tools.push(escalate.partial(task: userMsg))
-  const otherAgents = filter(agentNames, \name -> name != "code")
-  if (allowHandoff) {
-    tools.push(handoff.partial(validCategories: otherAgents))
-  }
 
   let hasErrorsFromFeedback = false
   let needsFix = false

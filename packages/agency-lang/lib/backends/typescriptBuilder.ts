@@ -2243,6 +2243,13 @@ export class TypeScriptBuilder {
         // runs outside any ALS frame (e.g. a function invoked as a tool
         // without an outer agencyStore.run wrap).
         ts.statements([
+          // On NORMAL completion (not an abort/interrupt unwind), clear this
+          // frame's saveDraft draft so a later sibling can't salvage a stale
+          // value. An unwinding frame keeps its draft for the guard boundary.
+          ts.if(
+            ts.id("__functionCompleted"),
+            ts.statements([ts.raw("__clearTopFrameDraft(__stateStack())")]),
+          ),
           ts.raw("__stateStack()?.pop()"),
           ...(skipHooks
             ? []

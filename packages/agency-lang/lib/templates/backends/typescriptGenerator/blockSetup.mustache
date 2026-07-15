@@ -8,6 +8,12 @@ __bstack.args[{{{this.paramNameQuoted}}}] = {{{this.paramName}}};
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}} });
 try {
 {{{body}}}
+// Clear this block frame's saveDraft draft on NORMAL completion only. `halted`
+// is true for BOTH a normal value-return (`return x` lowers to `runner.halt(x)`)
+// and an interrupt — so gate on the haltResult NOT being interrupts: an
+// interrupt keeps the draft for resume; a thrown trip skips this line and keeps
+// it for the guard boundary.
+if (!hasInterrupts(runner.haltResult)) { __clearTopFrameDraft(__bsetup.stateStack); }
 return runner.halted ? runner.haltResult : undefined;
 } finally {
 // Pop the SAME stack `setupFunction` pushed onto (the ALS-current

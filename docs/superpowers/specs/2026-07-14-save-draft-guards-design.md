@@ -336,7 +336,7 @@ makes drafts common enough that aliasing shows up.
   Combining branch drafts into the fork's array is the deferred fork-array
   salvage, which needs `finalize`.
 
-### The three small decisions
+### The small decisions
 
 1. **Transparent result.** A salvaged draft returns as a normal `success(draft)`
    — the caller cannot tell it was a partial-due-to-trip and does not receive the
@@ -346,6 +346,15 @@ makes drafts common enough that aliasing shows up.
    frame's draft, which simply never gets read. No error; permissive.
 3. **Outermost-set-wins**, not deepest — the type-closest-to-the-block choice
    (see rationale above).
+4. **Deep-clone at save (value semantics).** `saveDraft(v)` stores a
+   `deepClone(v)`, not a reference. Two reasons: (a) mutating the object after
+   saving must not retroactively change the salvage; (b) without it, a *live*
+   trip would salvage the post-mutation object while a *post-interrupt-resume*
+   trip salvages the checkpoint-time clone (`StateStack.toJSON` deep-clones
+   `other`) — the *same program* yielding two different salvage values depending
+   on whether a resume intervened. Cloning at save makes both paths identical and
+   matches Agency's value semantics. (Cost: cloning the best-so-far each call;
+   acceptable — the values are data, not large graphs.)
 
 ## Grounding facts (verified in code)
 

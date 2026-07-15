@@ -127,6 +127,7 @@ export {
 export type { Checkpoint } from "./state/checkpointStore.js";
 
 export { setupNode, setupFunction, runNode, runExportedFunction } from "./node.js";
+export { reportBudgetExceededAndExit, formatBudgetExceeded } from "./budgetExit.js";
 export { Runner } from "./runner.js";
 
 export { rewindFrom, applyOverrides } from "./rewind.js";

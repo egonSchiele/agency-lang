@@ -4438,6 +4438,12 @@ export class TypeScriptBuilder {
               ),
             ]),
             ts.statements([
+              // A root budget trip (--max-cost/--max-time) exits 3 with a
+              // user-facing overrun message and never returns; every other
+              // error falls through to the crash path below. User guard()
+              // trips never reach here — _runGuarded converts them to
+              // Results at their boundary.
+              ts.call(ts.id("reportBudgetExceededAndExit"), [ts.id("__error")]),
               ts.consoleError(
                 ts.template([
                   {

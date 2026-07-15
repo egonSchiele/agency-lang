@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { StateStack, State, BranchState } from "./stateStack.js";
 import { _callbackImpl } from "../../stdlib/agency.js";
-import { CostGuard, GuardExceededError } from "../guard.js";
+import { CostGuard, GuardExceededError, TimeGuard } from "../guard.js";
 import { runInTestContext } from "../asyncContext.js";
 import { ThreadStore } from "./threadStore.js";
 
@@ -574,6 +574,58 @@ describe("StateStack guards", () => {
       spent: 1.23,
       guardId: g.guardId,
     });
+  });
+});
+
+describe("StateStack inherited time-guard clones across serialization", () => {
+  it("a branch's accrued time clone survives toJSON/fromJSON + rehydrate", () => {
+    const parent = new StateStack();
+    const pg = new TimeGuard(10_000);
+    parent.pushGuard(pg);
+
+    const child = new StateStack();
+    child.rehydrateInheritedGuardsFrom(parent);
+    const clone = child.guards[0] as TimeGuard;
+    expect(clone).toBeInstanceOf(TimeGuard);
+    expect(clone).not.toBe(pg);
+    clone.addElapsed(2_500); // the branch worked 2.5s before an interrupt
+
+    // Interrupt: the branch serializes and later resumes in a fresh
+    // process. Re-cloning from the parent would RESET the branch's
+    // clock; the deserialized clone must be adopted instead.
+    const revived = StateStack.fromJSON(
+      JSON.parse(JSON.stringify(child.toJSON())),
+    );
+    revived.rehydrateInheritedGuardsFrom(parent);
+    const adopted = revived.guards[0] as TimeGuard;
+    expect(adopted).toBeInstanceOf(TimeGuard);
+    expect(adopted.guardId).toBe(pg.guardId);
+    expect(adopted.snapshotElapsed()).toBe(2_500);
+    expect(adopted.timeLimit).toBe(clone.timeLimit);
+  });
+
+  it("cost refs still re-attach shared; mixed count validation passes", () => {
+    const parent = new StateStack();
+    const cg = new CostGuard(5.0);
+    const tg = new TimeGuard(10_000);
+    parent.pushGuard(cg);
+    parent.pushGuard(tg);
+
+    const child = new StateStack();
+    child.rehydrateInheritedGuardsFrom(parent);
+    expect(child.inheritedGuardCount).toBe(2);
+
+    const revived = StateStack.fromJSON(
+      JSON.parse(JSON.stringify(child.toJSON())),
+    );
+    revived.rehydrateInheritedGuardsFrom(parent);
+    expect(revived.guards).toHaveLength(2);
+    // CostGuard: the SAME shared object as the parent's (real-time
+    // mid-fork billing depends on this identity).
+    expect(revived.guards[0]).toBe(cg);
+    // TimeGuard: an adopted branch-owned clone, not the parent object.
+    expect(revived.guards[1]).not.toBe(tg);
+    expect((revived.guards[1] as TimeGuard).guardId).toBe(tg.guardId);
   });
 });
 

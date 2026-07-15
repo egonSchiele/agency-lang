@@ -817,14 +817,16 @@ export async function _runLineRepl(
   };
 
   // Route nested `input()` calls through the same readline. The
-  // `_input` impl in `builtins.ts` checks `globalThis.__agencyInputOverride`
-  // before creating its own interface; routing through `rl` here
-  // means `chooseOption`'s fallback prompts share line-edit + history
-  // with the main REPL instead of contending for stdin with a second
+  // `_input` impl in `builtins.ts` checks `ctx.inputOverride` before
+  // creating its own interface; routing through `rl` here means
+  // `chooseOption`'s fallback prompts share line-edit + history with
+  // the main REPL instead of contending for stdin with a second
   // readline. Stops any running spinner first (see comment above).
-  const overrideKey = "__agencyInputOverride";
-  const prevOverride = (globalThis as any)[overrideKey];
-  (globalThis as any)[overrideKey] = (p: string): Promise<string> => {
+  // Installed on THIS execution's context (not globalThis) so the
+  // override lives and dies with the run that owns the readline.
+  const { ctx: replCtx } = getRuntimeContext();
+  const prevOverride = replCtx.inputOverride;
+  replCtx.inputOverride = (p: string): Promise<string> => {
     stopActiveSpinner();
     return new Promise<string>((resolve) => {
       rl.question(p, (answer) => resolve(answer));
@@ -1022,7 +1024,7 @@ export async function _runLineRepl(
     }
   } finally {
     teardownSlashTrigger();
-    (globalThis as any)[overrideKey] = prevOverride;
+    replCtx.inputOverride = prevOverride;
     (globalThis as any)[stopSpinnerKey] = prevStopSpinner;
     (globalThis as any)[clearHistoryKey] = prevClearHistory;
     // Persist whatever entries readline accumulated. `rl.history` is

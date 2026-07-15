@@ -71,9 +71,14 @@ function inputImpl(
   stack.guards.forEach((g) => g.pause());
   const resumeGuards = () => stack.guards.forEach((g) => g.resume(stack));
 
-  const override = (globalThis as any).__agencyInputOverride as
-    | ((prompt: string) => Promise<string>)
-    | undefined;
+  // Per-execution override first (REPL readline routing, test seams —
+  // see RuntimeContext.inputOverride). The globalThis fallback exists
+  // only for the TUI debugger, which cannot reach the ctx yet.
+  const override =
+    ctx.inputOverride ??
+    ((globalThis as any).__agencyInputOverride as
+      | ((prompt: string) => Promise<string>)
+      | undefined);
   if (override) {
     // Promise.resolve().then(...) so a synchronously-throwing override
     // still reaches the finally — otherwise the guards stay paused for
@@ -120,10 +125,13 @@ export function __internal_input(
 
 /** Test-only: install an input override that resolves after `delayMs`,
  *  used by guard fixtures to simulate a slow human without touching stdin.
- *  Exposed to fixtures as the non-exported `_installSlowInput` def in
- *  `stdlib/thread.agency` (test imports only). */
+ *  Installs on the EXECUTION's context, not globalThis, so it lives and
+ *  dies with the run that called it. Exposed to fixtures as the
+ *  non-exported `_installSlowInput` def in `stdlib/thread.agency`
+ *  (test imports only). */
 export function _installSlowInputImpl(delayMs: number, answer: string): void {
-  (globalThis as any).__agencyInputOverride = (_prompt: string) =>
+  const { ctx } = getRuntimeContext();
+  ctx.inputOverride = (_prompt: string) =>
     new Promise<string>((resolve) => setTimeout(() => resolve(answer), delayMs));
 }
 

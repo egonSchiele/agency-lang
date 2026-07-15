@@ -105,6 +105,17 @@ export class RuntimeContext<T> {
   emit a checkpoint.*/
   _toolCallDepth: number;
   debuggerState: DebuggerState | null;
+  /** When set, `input()` calls this instead of opening its own readline on
+   *  stdin. Installed by hosts that own the terminal for this execution:
+   *  the REPL routes questions through its readline, and the
+   *  `_installSlowInput` test seam simulates a slow human. Per-execution on
+   *  purpose (never a process global): two runs in one process must not see
+   *  each other's override. Never serialized — checkpoints capture the
+   *  StateStack and GlobalStore, not the context. The TUI debugger still
+   *  uses the legacy `globalThis.__agencyInputOverride` channel because it
+   *  only sees the compiled module's exports; `inputImpl` falls back to
+   *  that global until the debugger migrates. */
+  inputOverride?: (prompt: string) => Promise<string>;
   private traceWriter: TraceWriter | null;
 
   // we need a single statelog client instance that can be used across the entire execution of the graph,

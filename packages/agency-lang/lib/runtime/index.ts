@@ -28,6 +28,15 @@ export {
   type AgencyStore,
 } from "./asyncContext.js";
 export { StateStack, State } from "./state/stateStack.js";
+export {
+  writeDraft,
+  writeCallerDraft,
+  draftRegionStart,
+  readOutermostDraft,
+  sweepDrafts,
+  salvageOwnTrip,
+  __clearTopFrameDraft,
+} from "./drafts.js";
 export { GlobalStore } from "./state/globalStore.js";
 export { MessageThread } from "./state/messageThread.js";
 export { ThreadStore } from "./state/threadStore.js";

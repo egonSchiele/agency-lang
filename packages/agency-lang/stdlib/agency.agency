@@ -376,8 +376,7 @@ type error, or the reviewer judged it does not do the task); `error:
 false` is advisory feedback, including typecheck warnings. */
 export type Feedback = {
   error: boolean;
-  feedback: string;
-  data?: any
+  feedback: string
 }
 
 export def mergeFeedback(
@@ -415,10 +414,10 @@ def parseFeedback(source: string): Result<Feedback[]> {
 def reportFeedback(report: TypeCheckReport): Feedback[] {
   const feedback: Feedback[] = []
   for (error in report.errors) {
-    feedback.push({ error: true, feedback: "Error: ${error.message}", data: error })
+    feedback.push({ error: true, feedback: "Error: ${error.message}" })
   }
   for (warning in report.warnings) {
-    feedback.push({ error: false, feedback: "Warning: ${warning.message}", data: warning })
+    feedback.push({ error: false, feedback: "Warning: ${warning.message}" })
   }
   return feedback
 }
@@ -549,23 +548,34 @@ static const verifyTools: any[] = [
   exec.partial(useAgentCwd: true),
 ]
 
-static const verifySysPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, run, and report.
+static const verifySysPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, COMPUTE, and report.
 
-The grading tests are hidden and NOT in this environment. Reconstruct the success check from the task's own description and any example usage, then RUN the artifact through it with the `exec` tool. Check the output contract STRICTLY: exact file path and name, exact format (JSON keys, field types, units, signed-vs-unsigned), the task's stated whitespace and trailing-newline requirement (present or absent), and every explicit criterion. A near-miss on the output contract is an error."""
+The grading tests are hidden and NOT in this environment, so you must reconstruct and ACTUALLY RUN every check the task states — never eyeball the artifact.
+
+Method:
+1. Enumerate EVERY explicit success criterion in the task. Two kinds: the output contract (exact file path and name, format, JSON keys, field types, units, signed-vs-unsigned, the stated whitespace / trailing-newline requirement) AND every quantitative rule (lengths, ranges, counts, thresholds, temperatures, GC content, percentages, etc.).
+2. For EACH criterion, use the `exec` tool to COMPUTE the artifact's actual value and compare it to the requirement. If the task names a specific tool or command to compute a value (e.g. a CLI with exact flags), install if needed and run THAT tool — it is the ground truth; do not approximate it with your own estimate.
+3. A criterion you did NOT computationally verify is itself a gap — report it as one. A near-miss on any numeric constraint is an error: report the actual computed value vs. the requirement (e.g. "Tm difference 6.5°C, limit 5°C").
+
+Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers."""
 
 // The throwing inner: two-phase inspection. `verify` wraps it fail-open.
-def verifyInner(task: string): Feedback[] {
+def verifyInner(task: string, criteria: string[] = []): Feedback[] {
   let items: Feedback[] = []
   thread(label: "verify") {
     systemMessage(verifySysPrompt)
-    const analysis: string = llm("The task was:\n\n${task}\n\nInspect the working directory, run the artifact against the task's own success criteria, and describe what passes and what fails.", { tools: verifyTools })
+    // When a caller supplies an expert checklist, it is authoritative — verify
+    // must check those exact items (with the exact tool/flags/sub-sequence they
+    // name) rather than re-deriving looser criteria of its own.
+    const criteriaBlock = if criteria.length == 0 then "" else "\n\nThese domain-specific acceptance criteria are AUTHORITATIVE — check EACH one exactly as written, using the exact tool, flags, and input sub-sequence it names:\n- ${criteria.join("\n- ")}"
+    const analysis: string = llm("The task was:\n\n${task}${criteriaBlock}\n\nEnumerate every explicit success criterion (including the authoritative ones above, if any), then for EACH one use `exec` to compute the artifact's actual value and compare it to the requirement (run any tool/command named as ground truth). Report a concrete pass/fail per criterion with the computed numbers. A criterion you did not actually compute counts as a failure.", { tools: verifyTools })
     const parsed: Feedback[] = llm("Convert this analysis into Feedback items — one per concrete finding: error=true for an unmet criterion (name it), error=false for a satisfied one. Empty list if you cannot tell.\n\nAnalysis:\n${analysis}")
     items = parsed
   }
   return items
 }
 
-export def verify(task: string): Result<Feedback[]> {
+export def verify(task: string, criteria: string[] = []): Result<Feedback[]> {
   """
   Reconstruct a task's success criteria, run the produced artifact against
   them, and return findings. `error: true` marks an unmet criterion (strict
@@ -573,8 +583,11 @@ export def verify(task: string): Result<Feedback[]> {
   success) if verification cannot run, so it never blocks.
 
   @param task - The original task description to verify against.
+  @param criteria - Optional authoritative acceptance criteria (e.g. an expert
+    checklist) that verify must check exactly, instead of only re-deriving its
+    own from the task text.
   """
-  return failOpenFeedback(try verifyInner(task))
+  return failOpenFeedback(try verifyInner(task, criteria))
 }
 
 type GeneratedCode = {

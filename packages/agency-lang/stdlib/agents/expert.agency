@@ -58,7 +58,7 @@ static const agencySys = """You are an expert in the Agency programming language
 Return the domain-specific knowledge it needs to get the task right:
 - domain: "agency-lang".
 - rules: the Agency conventions, syntax rules, and gotchas that apply to this task — the things a non-expert gets wrong. Be concrete and cite the guide.
-- checklist: concrete, checkable acceptance criteria the finished code must satisfy (compiles/typechecks, uses the right construct, handles failures, etc).
+- checklist: concrete acceptance criteria the finished code must satisfy (compiles/typechecks, uses the right construct, handles failures, etc). For EACH item, state HOW to verify it — the exact command to run (e.g. `agency typecheck <file>`) or the exact construct to look for. Prefer items checkable by running a command.
 
 The bundled docs (docSkill / cliSkill / diagnosticsSkill) are authoritative — consult them rather than guessing. If the task needs no special Agency knowledge, return empty rules and checklist."""
 
@@ -67,7 +67,7 @@ static const domainSys = """You are a domain expert advising a weaker coding age
 Identify the technical domain, then return the knowledge it needs:
 - domain: a short name for the field (e.g. "molecular biology / primer design", "ELF binaries").
 - rules: the key conventions, constraints, and facts that apply — especially the ones a non-expert gets wrong. Be concrete: exact numeric ranges, formats, encodings, common pitfalls.
-- checklist: concrete, checkable acceptance criteria the finished artifact MUST satisfy, each verifiable by inspection or by running the artifact.
+- checklist: concrete acceptance criteria the finished artifact MUST satisfy. For EACH item, state HOW to verify it — the exact command/tool/flags AND the exact input it applies to (which file, which sub-sequence, which bytes). When the task names a ground-truth tool, use it verbatim with its exact flags. Prefer items that can be checked by running a command over ones checked by eye. Be surgical about scope (e.g. "compute Tm on ONLY the annealing portion, not the whole primer").
 
 Use the wikipedia and fetch tools to confirm specifics when unsure. If the task has no special domain constraints, return empty rules and checklist."""
 
@@ -163,7 +163,10 @@ export def expertAgent(task: string, context: string = "", maxCost: number = $20
     if (context != "") {
       solverContext = if solverContext == "" then context else "${solverContext}\n\n${context}"
     }
-    return codingAgent(task, context: solverContext, maxCost: maxCost, maxTime: maxTime)
+    // Pass the expert checklist to the solver's verify step too (not just its
+    // system context), so the SAME authoritative criteria drive both building
+    // and checking — no independent blind spot between solve and verify.
+    return codingAgent(task, context: solverContext, criteria: guidance.checklist, maxCost: maxCost, maxTime: maxTime)
   }
   return unwrapGuard(captured, "Expert")
 }

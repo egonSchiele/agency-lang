@@ -56,15 +56,6 @@ export function _parseJSON(text: string): any {
  * `AgencyCancelledError`, which `__tryCall` re-throws so cancellation
  * actually propagates.
  */
-/** Test-only: install an input override that resolves after `delayMs`,
- *  used by guard fixtures to simulate a slow human without touching stdin.
- *  Exposed to fixtures as the non-exported `_installSlowInput` def in
- *  `stdlib/thread.agency` (test imports only). */
-export function _installSlowInputImpl(delayMs: number, answer: string): void {
-  (globalThis as any).__agencyInputOverride = (_prompt: string) =>
-    new Promise<string>((resolve) => setTimeout(() => resolve(answer), delayMs));
-}
-
 function inputImpl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
@@ -84,7 +75,12 @@ function inputImpl(
     | ((prompt: string) => Promise<string>)
     | undefined;
   if (override) {
-    return override(prompt).finally(resumeGuards);
+    // Promise.resolve().then(...) so a synchronously-throwing override
+    // still reaches the finally — otherwise the guards stay paused for
+    // the rest of the run.
+    return Promise.resolve()
+      .then(() => override(prompt))
+      .finally(resumeGuards);
   }
   const signal = ctx.getAbortSignal(stack);
   if (signal.aborted) {
@@ -120,6 +116,15 @@ export function __internal_input(
   prompt: string,
 ): Promise<string> {
   return inputImpl(ctx, stack, prompt);
+}
+
+/** Test-only: install an input override that resolves after `delayMs`,
+ *  used by guard fixtures to simulate a slow human without touching stdin.
+ *  Exposed to fixtures as the non-exported `_installSlowInput` def in
+ *  `stdlib/thread.agency` (test imports only). */
+export function _installSlowInputImpl(delayMs: number, answer: string): void {
+  (globalThis as any).__agencyInputOverride = (_prompt: string) =>
+    new Promise<string>((resolve) => setTimeout(() => resolve(answer), delayMs));
 }
 
 /** ALS-reading replacement. Same body as `__internal_input`. */

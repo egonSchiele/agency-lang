@@ -245,8 +245,29 @@ function checkFunctionCallsInScope(
       const parent = ancestors[ancestors.length - 1];
       if (parent?.type === "valueAccess") continue;
       checkSingleFunctionCall(node, info.scope, ctx);
+      checkSaveDraftCall(node, info, ctx);
     }
   }
+}
+
+/** `saveDraft(v)` records a best-so-far value that a tripping enclosing `guard`
+ *  yields in place of a failure — so `v` must be assignable to the enclosing
+ *  scope's return type, the same contract a `return` obeys. This covers def/node
+ *  bodies AND guard blocks (a block's return type is inferred from its `return`).
+ *  Only a scope with no inferred/declared return type (`info.returnType`
+ *  undefined) is skipped. Name-keyed: aliasing `saveDraft` (`const s = saveDraft;
+ *  s(v)`) escapes the check (documented v1 limitation). */
+function checkSaveDraftCall(
+  call: FunctionCall,
+  info: ScopeInfo,
+  ctx: TypeCheckerContext,
+): void {
+  if (call.functionName !== "saveDraft") return;
+  if (info.returnType === undefined) return;
+  if (call.arguments.length !== 1) return;
+  const arg = call.arguments[0];
+  if (arg.type === "splat" || arg.type === "namedArgument") return;
+  checkType(arg, info.returnType, info.scope, "the saveDraft() draft value", ctx);
 }
 
 export function isInsideHandler(ancestors: WalkAncestor[]): boolean {

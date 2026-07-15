@@ -263,7 +263,7 @@ function checkSaveDraftCall(
   ctx: TypeCheckerContext,
 ): void {
   if (call.functionName !== "saveDraft") return;
-  if (info.returnType === undefined) return;
+  if (!info.returnType) return; // no declared/inferred return type in scope
   if (call.arguments.length !== 1) return;
   const arg = call.arguments[0];
   if (arg.type === "splat" || arg.type === "namedArgument") return;

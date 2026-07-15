@@ -11,6 +11,8 @@ import {
   AGENCY_RUN_POLICY,
   AGENCY_RUN_POLICY_INTERACTIVE,
   AGENCY_RUN_POLICY_INTERACTIVE_ON,
+  AGENCY_MAX_COST,
+  AGENCY_MAX_TIME,
 } from "@/constants.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -331,6 +333,7 @@ export function run(
   outputFile?: string,
   resumeFile?: string,
   runPolicy?: { policyJson: string; interactive: boolean },
+  budget?: { maxCost?: string; maxTime?: string },
 ): void {
   const output = compile(config, inputFile, outputFile, {
     importStrategy: new RunStrategy(),
@@ -356,6 +359,13 @@ export function run(
       env[AGENCY_RUN_POLICY_INTERACTIVE] = AGENCY_RUN_POLICY_INTERACTIVE_ON;
     }
   }
+  // Same clear-then-set discipline for the root budget: the env vars are an
+  // internal carrier from THIS run's flags to the child, never a knob a
+  // parent shell can set behind the user's back.
+  delete env[AGENCY_MAX_COST];
+  delete env[AGENCY_MAX_TIME];
+  if (budget?.maxCost !== undefined) env[AGENCY_MAX_COST] = budget.maxCost;
+  if (budget?.maxTime !== undefined) env[AGENCY_MAX_TIME] = budget.maxTime;
 
   // Use process.execPath so the child runs under the same Node as the CLI,
   // and pass our resolver shim so the compiled output's `import "agency-lang"`

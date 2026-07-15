@@ -1,22 +1,32 @@
 import { EXIT_CODE_BUDGET_EXCEEDED } from "../constants.js";
-import { isGuardExceededError, GuardExceededError } from "./guard.js";
+import { readCause } from "./errors.js";
 
 /** User-facing one-line message for a tripped top-level budget. */
-export function formatBudgetExceeded(e: GuardExceededError): string {
-  if (e.type === "cost") {
-    return `Exceeded cost limit of $${e.limit} (used $${e.spent})`;
+export function formatBudgetExceeded(cause: {
+  dimension: "cost" | "time";
+  limit: number;
+  spent: number;
+}): string {
+  if (cause.dimension === "cost") {
+    return `Exceeded cost limit of $${cause.limit} (used $${cause.spent})`;
   }
-  return `Exceeded time limit of ${e.limit}ms (ran ${e.spent}ms)`;
+  return `Exceeded time limit of ${cause.limit}ms (ran ${Math.round(cause.spent)}ms)`;
 }
 
-/** If `error` is a top-level budget trip, report it and exit with code 3.
- *  Otherwise return so the caller can handle it as an ordinary crash. Only a
- *  ROOT guard (no owning try) reaches the compiled entry's catch — a user
- *  guard() trip is always converted to a Result by _runGuarded, so this
- *  never misfires on those. */
+/** If `error` carries a guard-trip cause, report it and exit with code 3.
+ *  Otherwise return so the caller handles it as an ordinary crash.
+ *
+ *  Detection is by CAUSE, not error class, because a root time trip can
+ *  surface two ways: the runner's shouldSkip throws GuardExceededError, or
+ *  an in-flight leaf op (sleep, fetch, LLM call) aborts first and throws
+ *  AgencyCancelledError carrying the same guardTrip cause. Both must exit 3.
+ *  Only a ROOT guard's trip reaches the compiled entry's catch — a user
+ *  guard() trip is converted to a Result at its boundary by _runGuarded,
+ *  so this never misfires on those. */
 export function reportBudgetExceededAndExit(error: unknown): void {
-  if (isGuardExceededError(error)) {
-    console.error(formatBudgetExceeded(error));
+  const cause = readCause(error);
+  if (cause?.kind === "guardTrip") {
+    console.error(formatBudgetExceeded(cause));
     process.exit(EXIT_CODE_BUDGET_EXCEEDED);
   }
 }

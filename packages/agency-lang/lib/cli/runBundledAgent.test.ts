@@ -132,6 +132,36 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(opts.env.PATH).toBe(process.env.PATH);
   });
 
+  it("sets AGENCY_MAX_COST/AGENCY_MAX_TIME from the budget param and clears stale ones", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    vi.stubEnv("AGENCY_MAX_COST", "999");
+    vi.stubEnv("AGENCY_MAX_TIME", "999999");
+
+    runBundledAgent({}, "agency-agent", ["--print", "hi"], {
+      spawn: spawnMock as never,
+    }, { maxCost: "0.5" });
+
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    expect(opts.env.AGENCY_MAX_COST).toBe("0.5");
+    // No --max-time given: the stale inherited value must be CLEARED,
+    // not passed through — the env is an internal carrier, not a knob.
+    expect(opts.env.AGENCY_MAX_TIME).toBeUndefined();
+  });
+
+  it("clears both budget env vars when no budget is passed", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    vi.stubEnv("AGENCY_MAX_COST", "999");
+    vi.stubEnv("AGENCY_MAX_TIME", "999999");
+
+    runBundledAgent({}, "agency-agent", ["--print", "hi"], {
+      spawn: spawnMock as never,
+    });
+
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    expect(opts.env.AGENCY_MAX_COST).toBeUndefined();
+    expect(opts.env.AGENCY_MAX_TIME).toBeUndefined();
+  });
+
   it("does not set the env var when no debug flags are present", () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     runBundledAgent({}, "agency-agent", ["--print", "hi"], { spawn: spawnMock as never });

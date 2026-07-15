@@ -55,3 +55,14 @@ export const AGENCY_RUN_POLICY_INTERACTIVE = "AGENCY_RUN_POLICY_INTERACTIVE";
 
 /** The truthy sentinel value for `AGENCY_RUN_POLICY_INTERACTIVE`. */
 export const AGENCY_RUN_POLICY_INTERACTIVE_ON = "1";
+
+/** Env vars carrying `agency run`/`agency agent` --max-cost / --max-time to
+ *  the spawned child, which installs a root guard from them. Cleared then set
+ *  by the CLI, exactly like AGENCY_RUN_POLICY. Cost is dollars; time is
+ *  milliseconds (the CLI parses duration strings before setting it). */
+export const AGENCY_MAX_COST = "AGENCY_MAX_COST";
+export const AGENCY_MAX_TIME = "AGENCY_MAX_TIME";
+
+/** Process exit code when a top-level cost/time budget is exceeded. Distinct
+ *  from 1 (generic failure) and 2 (usage error). */
+export const EXIT_CODE_BUDGET_EXCEEDED = 3;

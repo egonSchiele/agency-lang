@@ -14,6 +14,12 @@ the guard boundary runs (verified: `typescriptBuilder.ts` finally-pop +
 a boundary sweep) is now load-bearing. `#549`/`#550` facts refreshed; aliasing and
 altitude caveats added.
 
+**Second review incorporated (2026-07-14, on the plan):** salvage must key on the
+tripping guard's **`guardId`** (carried on the failure), not on the failure's
+*shape* — otherwise a `return`ed inner failure is wrongly salvaged. And the
+**interrupt path is not a sweep outcome**: a paused block passes its interrupts
+through untouched and keeps its drafts for resume. Both are now in Trip behavior.
+
 ## Problem
 
 Agency `guard(cost:, time:)` blocks cap a section of work. When the block
@@ -244,14 +250,27 @@ owned-guard branch (`lib/runtime/result.ts:205`), reached via the stdlib
 1. The guard records the **stack depth at guard entry** (an index into
    `stack.stack`) so it knows which drafts are "under" it — those keyed at
    depth ≥ entry.
-2. When `_runGuarded`'s trip belongs to one of its `ids`, before returning the
-   failure it reads `stack.other.drafts` at the **smallest key ≥ entry depth**
-   (the shallowest = outermost-set draft under the guard):
+2. **Ownership by `guardId`, not by shape.** A guard-failure-shaped value can
+   reach `_runGuarded` *without this guard tripping* — a block can `return` an
+   inner guard's failure, and `__tryCall` passes returned Results through
+   untouched (`result.ts:177`). So the salvage must fire **only** for this
+   guard's own trip. The converted failure carries the tripping guard's
+   `guardId` (add it to `guardFailureData`; the conversion site at
+   `result.ts:205` already has `guardCause.guardId`), and `_runGuarded` salvages
+   only when `ids.includes(failure.error.guardId)`. When it does, it reads
+   `stack.other.drafts` at the **smallest key ≥ entry depth** (the shallowest =
+   outermost-set draft under the guard):
    - Found → return `success(draft.value)`.
    - None → return the failure, **exactly as today** (fully additive; no
      `saveDraft` calls ⇒ no behavior change).
-3. On **both** outcomes it then **sweeps** — deletes every `drafts` key ≥ entry
-   depth — so nothing leaks into a later sibling or an outer guard.
+   - A failure whose `guardId` is not in `ids` (a propagated inner failure) is
+     returned untouched — never salvaged.
+3. **The interrupt path is not an outcome to sweep.** If the block *paused* on an
+   interrupt, `__tryCall` returns the `Interrupt[]` as a value; `_runGuarded`
+   passes it through and **does not sweep** — the paused block's drafts must
+   survive to resume. Only on a settled (non-interrupt) exit does it **sweep** —
+   delete every `drafts` key ≥ entry depth — so nothing leaks into a later
+   sibling or an outer guard.
 
 ### Clearing rule (load-bearing)
 
@@ -277,12 +296,15 @@ real invariant.** Two cheap levers, each with the signal already in scope:
   return, not on an abort unwind (an unwinding frame must *keep* its draft for the
   boundary to read).
 - **Blocks** (`blockSetup.mustache`): clear the block frame's `drafts` key as the
-  **last statement of the block's `try` body** — a thrown trip skips it; normal
-  completion runs it. (Equivalently, gate on `runner.halted`.)
+  **last statement of the block's `try` body, gated on `!runner.halted`** — a
+  thrown trip skips it (draft kept for the boundary); a **halt/interrupt keeps**
+  the draft (so it survives resume, per the interrupt-path rule above); only
+  normal completion clears. Needed because a block-taking combinator's `as { }`
+  block runs on the same stack and can leave a stale draft for a sibling.
 - **Guard boundary:** the sweep in Trip-behavior step 3 clears the whole region
-  on the way out.
+  on the way out (settled exits only).
 
-Pinned by test 8 (stale-sibling).
+Pinned by tests 8 (stale-sibling, def) and the block-stale fixture.
 
 ### Type checking
 

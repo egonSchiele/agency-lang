@@ -17,6 +17,9 @@
 - **After any change under `stdlib/` or `lib/`, run `make`** (regenerates stdlib `.js` + runtime). **After editing any `.mustache`, run `pnpm run templates` first.** (per CLAUDE.md)
 - **Agency execution tests run with `pnpm run agency test <file>`**; lib unit tests with `pnpm test:run <file>`. **Save test output to a file** (tests are slow/expensive — redirect and read the file).
 - Banned patterns (per `docs/dev/coding-standards.md`): no dynamic imports; objects not maps; arrays not sets; `type` not `interface`.
+- **Commit convention** (per repo history this week): write the message to a temp file and `git commit -F <file>` (apostrophes break `-m`); **plain imperative subject, no `feat(...)`/`fix(...)`/`test(...)` prefixes**; end the message with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`. The commit steps below show a subject line — write it (plus the Co-Authored-By line) to a file and commit with `-F`.
+- **Branch:** work happens on `worktree-save-draft-guards`; **rename it to `save-draft-guards` before pushing** (the auto worktree- prefix is dropped by convention). Never commit to `main`; re-check `git branch --show-current` before each commit.
+- **Regenerate before running:** after editing a `.mustache`, `pnpm run templates`; after any `stdlib/` or `lib/` change, `make`. Commit regenerated `.ts`/`.js` artifacts alongside their sources.
 
 ---
 
@@ -211,7 +214,8 @@ Expected: PASS (7 tests).
 ```bash
 cd /Users/adityabhargava/agency-lang/.claude/worktrees/save-draft-guards
 git add packages/agency-lang/lib/runtime/drafts.ts packages/agency-lang/lib/runtime/drafts.test.ts packages/agency-lang/lib/runtime/index.ts
-git commit -m "feat(saveDraft): branch-local draft store (StateStack.other)"
+printf '%s\n' "Add branch-local draft store for saveDraft (StateStack.other)" "" "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>" > /tmp/sd-commit.txt
+git commit -F /tmp/sd-commit.txt
 ```
 
 ---
@@ -284,7 +288,8 @@ In `packages/agency-lang/lib/stdlib/thread.ts`, add near the guard helpers (afte
 ```ts
 import { writeDraft, readOutermostDraft, sweepDrafts } from "../runtime/drafts.js";
 import { success, isFailure } from "../runtime/result.js";
-import type { ResultValue, ResultFailure } from "../runtime/result.js";
+import { hasInterrupts } from "../runtime/interrupts.js";
+import type { ResultValue } from "../runtime/result.js";
 ```
 
 Then add:
@@ -305,9 +310,34 @@ export function _saveDraft(value: unknown): void {
 }
 ```
 
-- [ ] **Step 4: Modify `_runGuarded` to salvage on trip and sweep on exit**
+- [ ] **Step 4a: Thread the tripping guard's id into the failure**
 
-In `packages/agency-lang/lib/stdlib/thread.ts`, replace the body of `_runGuarded` (currently just `return __tryCall(...)`) with:
+Shape (`error.type`) is NOT ownership: a block can *return* an inner guard's
+failure value, which `__tryCall` passes through untouched (`result.ts:178`), so a
+guardFailure-shaped value can reach an outer `_runGuarded` without the outer
+guard tripping. We must salvage only when the failure came from **this** guard's
+own trip — so carry the `guardId`.
+
+In `packages/agency-lang/lib/runtime/result.ts`, change `guardFailureData` to
+accept and emit a `guardId` (additive internal field; existing `type`/`maxCost`/…
+consumers are unaffected). Update the signature/return type to add
+`guardId: string` and include `guardId` in BOTH returned objects (the `time` and
+the cost branch). Then at its single call site (the owned-guard branch, ~L212),
+pass the id:
+
+```ts
+return failure(
+  guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent, guardCause.guardId),
+  opts,
+);
+```
+
+- [ ] **Step 4b: Minimal edit to `_runGuarded` — salvage on OWN trip, never on interrupt**
+
+In `packages/agency-lang/lib/stdlib/thread.ts`, edit `_runGuarded` with the
+smallest change: **keep the existing `__tryCall(...)` call and its opts verbatim**
+(do not re-assert `checkpoint`/`functionName`/`args` — copy whatever the current
+source passes), capture `entryDepth` before it, and post-process its result:
 
 ```ts
 export async function _runGuarded(
@@ -317,6 +347,8 @@ export async function _runGuarded(
   const { ctx, stack } = getRuntimeContext();
   // Frames of the block + everything it calls live at indices >= entryDepth.
   const entryDepth = stack.stack.length;
+
+  // --- KEEP THE EXISTING __tryCall CALL EXACTLY AS IT IS TODAY ---
   const result = await __tryCall(
     () => __call(block, { type: "positional", args: [] }),
     {
@@ -326,27 +358,25 @@ export async function _runGuarded(
       args: stack.lastFrame()?.args,
     },
   );
+  // --- END unchanged call ---
 
-  // Salvage: a guardFailureData-shaped failure is produced ONLY by __tryCall's
-  // owned-guard branch, so its presence here means THIS guard tripped. If a
-  // draft was saved under it, return the outermost draft instead of the failure.
+  // The block PAUSED on an interrupt (not done). Pass the interrupts through
+  // untouched and DO NOT sweep — its drafts must survive to resume.
+  if (hasInterrupts(result)) return result;
+
+  // Salvage only when THIS guard tripped: the converted failure carries our
+  // guardId (Step 4a). A propagated inner failure carries a different id and is
+  // returned as-is. A non-guard failure has no guardId → not salvaged.
   let out: ResultValue = result;
-  if (isFailure(result) && isGuardTripFailure(result)) {
+  if (isFailure(result) && ids.includes((result.error as { guardId?: string })?.guardId as string)) {
     const draft = readOutermostDraft(stack, entryDepth);
     if (draft !== undefined) out = success(draft.value);
   }
 
-  // Clean this guard's region on BOTH outcomes so drafts never leak into a
+  // Clean this guard's region on non-interrupt exits so drafts never leak into a
   // later sibling guard or an outer guard.
   sweepDrafts(stack, entryDepth);
   return out;
-}
-
-/** A failure whose error carries GuardFailureData — produced only by the
- *  owned-guard conversion in __tryCall, i.e. this guard's own trip. */
-function isGuardTripFailure(f: ResultFailure): boolean {
-  const t = (f.error as { type?: string } | null | undefined)?.type;
-  return t === "guardFailure" || t === "timeoutFailure";
 }
 ```
 
@@ -512,13 +542,70 @@ node main() {
 
 `save-draft-nested-guards.test.json`: `"expectedOutput": "\"true\""`, `"llmMocks": [{ "return": "pong" }, { "return": "pong" }]`. (Inner trips on the first call and salvages `inner-draft`, sweeping its region; the second call pushes the outer over 0.000003 and it trips with no draft of its own — the swept inner draft must not be read, so `outer` is a failure.)
 
-- [ ] **Step 9: Run all six new tests**
+`save-draft-propagated-failure.agency` (a returned inner failure must NOT be salvaged by the outer guard — pins Step 4a's guardId ownership):
 
-Run each and save output, e.g.:
+```
+import { guard, saveDraft } from "std::thread"
+
+node main() {
+  const outer = guard(cost: 10.0) as {           // generous — outer never trips
+    saveDraft("outer-draft")
+    const inner = guard(cost: 0.000001) as {      // inner trips, saves nothing
+      const reply = llm("Reply with: pong")
+      return reply
+    }
+    return inner                                  // deliberately propagate the failure
+  }
+  return "${isFailure(outer)}"
+}
+```
+
+`save-draft-propagated-failure.test.json`: `"expectedOutput": "\"true\""`, `"useTestLLMProvider": true`, `"llmMocks": [{ "return": "pong" }]`. (Without ownership-by-guardId, the outer would wrongly salvage `"outer-draft"` → `"false"`.)
+
+`save-draft-time-trip.agency` (salvage on a TIME trip — a different delivery path than cost, aborted-leaf with a guardTrip cause; use a ≥500ms budget for CI stability):
+
+```
+import { guard, saveDraft } from "std::thread"
+
+node main() {
+  const result = guard(time: 500ms) as {
+    saveDraft("timed-draft")
+    sleep(2000)                 // exceeds 500ms → time trip
+    return "done"
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}
+```
+
+`save-draft-time-trip.test.json`: `"expectedOutput": "\"timed-draft\""`, `"evaluationCriteria": [{ "type": "exact" }]` (no LLM provider / mocks needed — the trip is time-based).
+
+`save-draft-interrupt-resume.agency` (the pre-interrupt draft survives an interrupt/resume cycle and is salvaged on a later trip — pins the no-sweep-on-interrupt rule / spec test #6):
+
+```
+import { guard, saveDraft } from "std::thread"
+
+node main() {
+  const result = guard(time: 500ms) as {
+    saveDraft("pre-interrupt")
+    interrupt("continue?")      // pause; harness approves → resume
+    sleep(2000)                 // after resume, exceed 500ms → trip
+    return "done"
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}
+```
+
+`save-draft-interrupt-resume.test.json`: `"expectedOutput": "\"pre-interrupt\""`, `"evaluationCriteria": [{ "type": "exact" }]`, `"interruptHandlers": [{ "action": "approve" }]`.
+
+- [ ] **Step 9: Run all new behavior tests**
+
+Run each and save output:
 
 ```
 cd packages/agency-lang
-for t in no-draft last-wins outermost sequential-guards nested-guards; do
+for t in no-draft last-wins outermost sequential-guards nested-guards propagated-failure time-trip interrupt-resume; do
   pnpm run agency test tests/agency/guards/save-draft-$t.agency > /tmp/sd-$t.txt 2>&1
   echo "== $t =="; tail -5 /tmp/sd-$t.txt
 done
@@ -529,8 +616,9 @@ Expected: all PASS.
 
 ```bash
 cd /Users/adityabhargava/agency-lang/.claude/worktrees/save-draft-guards
-git add packages/agency-lang/lib/stdlib/thread.ts packages/agency-lang/stdlib/thread.agency packages/agency-lang/tests/agency/guards/save-draft-*.agency packages/agency-lang/tests/agency/guards/save-draft-*.test.json packages/agency-lang/stdlib/
-git commit -m "feat(saveDraft): salvage outermost draft on guard trip; sweep region"
+git add packages/agency-lang/lib/runtime/result.ts packages/agency-lang/lib/stdlib/thread.ts packages/agency-lang/stdlib/thread.agency packages/agency-lang/tests/agency/guards/save-draft-*.agency packages/agency-lang/tests/agency/guards/save-draft-*.test.json packages/agency-lang/stdlib/
+printf '%s\n' "Salvage outermost draft on guard trip (guardId ownership; sweep region)" "" "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>" > /tmp/sd-commit.txt
+git commit -F /tmp/sd-commit.txt
 ```
 
 ---
@@ -540,7 +628,9 @@ git commit -m "feat(saveDraft): salvage outermost draft on guard trip; sweep reg
 **Files:**
 - Modify: `packages/agency-lang/lib/templates/backends/typescriptGenerator/imports.mustache` (add `__clearTopFrameDraft` to the runtime import)
 - Modify: `packages/agency-lang/lib/backends/typescriptBuilder.ts` (def `finally`: clear before pop)
+- Modify: `packages/agency-lang/lib/templates/backends/typescriptGenerator/blockSetup.mustache` (block: clear on normal completion)
 - Create: `packages/agency-lang/tests/agency/guards/save-draft-stale-sibling.agency` (+ `.test.json`)
+- Create: `packages/agency-lang/tests/agency/guards/save-draft-stale-block.agency` (+ `.test.json`)
 
 **Interfaces:**
 - Consumes: `__clearTopFrameDraft` (Task 1), exported from `agency-lang/runtime`; the generated `__functionCompleted` local and `__stateStack()` accessor (already in the def `finally`).
@@ -579,10 +669,48 @@ node main() {
 
 Create `save-draft-stale-sibling.test.json`: `"expectedOutput": "\"failed\""`, `"useTestLLMProvider": true`, `"llmMocks": [{ "return": "pong" }]`.
 
+Also create `packages/agency-lang/tests/agency/guards/save-draft-stale-block.agency` (the block-frame analogue — pins Step 5b). `withLabel` mirrors `guard`'s own trailing-block signature (`block: () -> any = null`), so the `as { }` call form parses; verify against `stdlib/thread.agency`'s `guard` def if unsure:
+
+```
+import { guard, saveDraft } from "std::thread"
+
+// A user combinator that runs a block on the CURRENT stack. Its block saves a
+// draft and completes NORMALLY (never cleared without Step 5b); then a sibling
+// trips and must NOT salvage the stale block draft.
+def withLabel(block: () -> any = null): any {
+  return block()
+}
+
+def tripper(): string {
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    const x = withLabel() as {
+      saveDraft("stale-block")
+      return 1
+    }
+    const b = tripper()
+    return b
+  }
+  if (isSuccess(result)) { return "leaked:${result.value}" }
+  return "failed"
+}
+```
+
+Create `save-draft-stale-block.test.json`: `"expectedOutput": "\"failed\""`, `"useTestLLMProvider": true`, `"llmMocks": [{ "return": "pong" }]`.
+
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `cd packages/agency-lang && pnpm run agency test tests/agency/guards/save-draft-stale-sibling.agency > /tmp/sd-stale-1.txt 2>&1; tail -20 /tmp/sd-stale-1.txt`
-Expected: FAIL — output is `"leaked:stale"` (saver's draft is stale-read because it is never cleared).
+Run:
+```
+cd packages/agency-lang
+pnpm run agency test tests/agency/guards/save-draft-stale-sibling.agency > /tmp/sd-stale-1.txt 2>&1; tail -8 /tmp/sd-stale-1.txt
+pnpm run agency test tests/agency/guards/save-draft-stale-block.agency > /tmp/sd-block-1.txt 2>&1; tail -8 /tmp/sd-block-1.txt
+```
+Expected: BOTH FAIL — `stale-sibling` outputs `"leaked:stale"` (def draft never cleared) and `stale-block` outputs `"leaked:stale-block"` (block draft never cleared).
 
 - [ ] **Step 3: Add `__clearTopFrameDraft` to the generated runtime import**
 
@@ -625,6 +753,26 @@ ts.statements([
 
 (Only the first `ts.raw(...)` line is new; leave the rest of the block exactly as it is.)
 
+- [ ] **Step 5b: Clear block frames on normal completion too**
+
+Def frames aren't the only frames — a block-taking combinator's `as { }` block
+runs on the same stack and, if it saves a draft and completes normally, would
+leave a stale draft for a later sibling to salvage. Clear it in
+`packages/agency-lang/lib/templates/backends/typescriptGenerator/blockSetup.mustache`.
+The template's `try` body ends with `return runner.halted ? runner.haltResult : undefined;`. Insert the clear as the last statement of the `try` body, **before** that return and gated on `!runner.halted`:
+
+```
+{{{body}}}
+if (!runner.halted) __clearTopFrameDraft(__bsetup.stateStack);
+return runner.halted ? runner.haltResult : undefined;
+```
+
+Why `!runner.halted`: a normal completion clears; a **halt** (interrupt) keeps the
+draft (so it survives resume — matches the no-sweep-on-interrupt rule); a **trip**
+throws before reaching this line, so the `finally` pops without clearing and the
+draft is kept for the boundary. `__clearTopFrameDraft` is already imported by the
+generated preamble (Step 3). Then re-run `pnpm run templates`.
+
 - [ ] **Step 6: Rebuild**
 
 Run: `cd packages/agency-lang && make > /tmp/sd-make-2.txt 2>&1; tail -15 /tmp/sd-make-2.txt`
@@ -634,20 +782,20 @@ Expected: build completes.
 
 ```
 cd packages/agency-lang
-pnpm run agency test tests/agency/guards/save-draft-stale-sibling.agency > /tmp/sd-stale-2.txt 2>&1; tail -8 /tmp/sd-stale-2.txt
-for t in basic no-draft last-wins outermost sequential-guards nested-guards; do
+for t in stale-sibling stale-block basic no-draft last-wins outermost sequential-guards nested-guards propagated-failure time-trip interrupt-resume; do
   pnpm run agency test tests/agency/guards/save-draft-$t.agency > /tmp/sd-re-$t.txt 2>&1
   echo "== $t =="; tail -3 /tmp/sd-re-$t.txt
 done
 ```
-Expected: stale-sibling PASSes (`"failed"`); all six earlier tests still PASS.
+Expected: `stale-sibling` and `stale-block` PASS (`"failed"`); all earlier tests still PASS.
 
 - [ ] **Step 8: Commit**
 
 ```bash
 cd /Users/adityabhargava/agency-lang/.claude/worktrees/save-draft-guards
-git add packages/agency-lang/lib/templates/backends/typescriptGenerator/imports.mustache packages/agency-lang/lib/templates/backends/typescriptGenerator/imports.ts packages/agency-lang/lib/backends/typescriptBuilder.ts packages/agency-lang/tests/agency/guards/save-draft-stale-sibling.*
-git commit -m "feat(saveDraft): clear a frame's draft on normal completion (no stale salvage)"
+git add packages/agency-lang/lib/templates/backends/typescriptGenerator/imports.mustache packages/agency-lang/lib/templates/backends/typescriptGenerator/imports.ts packages/agency-lang/lib/templates/backends/typescriptGenerator/blockSetup.mustache packages/agency-lang/lib/templates/backends/typescriptGenerator/blockSetup.ts packages/agency-lang/lib/backends/typescriptBuilder.ts packages/agency-lang/tests/agency/guards/save-draft-stale-sibling.* packages/agency-lang/tests/agency/guards/save-draft-stale-block.*
+printf '%s\n' "Clear frame drafts on normal completion (def finally + block)" "" "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>" > /tmp/sd-commit.txt
+git commit -F /tmp/sd-commit.txt
 ```
 
 ---
@@ -697,7 +845,8 @@ Expected: PASS — `"a|b|c"` (each branch salvages its own draft; no clobber). I
 ```bash
 cd /Users/adityabhargava/agency-lang/.claude/worktrees/save-draft-guards
 git add packages/agency-lang/tests/agency/guards/save-draft-fork-isolation.*
-git commit -m "test(saveDraft): fork branches salvage their own drafts (branch-local)"
+printf '%s\n' "Test fork branches salvage their own drafts (branch-local)" "" "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>" > /tmp/sd-commit.txt
+git commit -F /tmp/sd-commit.txt
 ```
 
 ---
@@ -781,6 +930,8 @@ if (
 
 > Adjust `arg.value ?? arg` to however the AST exposes a positional argument's expression in this codebase (grep how `checkArgsAgainstParams` reads positional arg expressions — match that exactly). The `checkType(expr, expectedType, scope, label, ctx)` signature is the one used in `checkReturnTypesInScope`.
 
+> **Known limitation (state it, don't hide it):** for a `saveDraft` called *directly* inside a bare `guard(...) as { }` block, the enclosing scope's `returnType` is the block's type, which today is `any` (guard's `block` param is `() -> any`). So `info.returnType` is `any`/undefined there and the draft goes **unchecked** in that position — only drafts inside a typed `def`/`node` are checked. This matches the spec's note. Add a one-line caveat to the `saveDraft` docstring (Task 2 Step 5) — e.g. "type-checked against the enclosing function/node's return type" — so the checked scope is explicit. Do NOT attempt block-scope expected-type inference in this task.
+
 - [ ] **Step 4: Run the type-checker test to verify it passes**
 
 Run: `cd packages/agency-lang && pnpm test:run lib/typeChecker/saveDraft.test.ts > /tmp/sd-tc-2.txt 2>&1; tail -20 /tmp/sd-tc-2.txt`
@@ -796,7 +947,8 @@ Expected: the type-checker unit suite is green.
 ```bash
 cd /Users/adityabhargava/agency-lang/.claude/worktrees/save-draft-guards
 git add packages/agency-lang/lib/typeChecker/checker.ts packages/agency-lang/lib/typeChecker/saveDraft.test.ts
-git commit -m "feat(saveDraft): type-check the draft against the enclosing return type"
+printf '%s\n' "Type-check saveDraft argument against enclosing return type" "" "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>" > /tmp/sd-commit.txt
+git commit -F /tmp/sd-commit.txt
 ```
 
 ---
@@ -843,16 +995,18 @@ Expected: green.
 ```bash
 cd /Users/adityabhargava/agency-lang/.claude/worktrees/save-draft-guards
 git add packages/agency-lang/docs/site/stdlib/thread.md packages/agency-lang/stdlib/
-git commit -m "docs(saveDraft): regenerate stdlib reference"
+printf '%s\n' "Regenerate stdlib reference for saveDraft" "" "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>" > /tmp/sd-commit.txt
+git commit -F /tmp/sd-commit.txt
 ```
 
 - [ ] **Step 5: Push and open a PR (only when the user asks)**
 
-Do not push or open a PR unless the user requests it. When they do:
+Do not push or open a PR unless the user requests it. When they do — **rename the branch off the `worktree-` prefix first** (repo convention):
 
 ```bash
 cd /Users/adityabhargava/agency-lang/.claude/worktrees/save-draft-guards
-git push -u origin worktree-save-draft-guards
+git branch -m save-draft-guards
+git push -u origin save-draft-guards
 ```
 Then open a PR whose body summarizes: the anytime-algorithm motivation, `StateStack.other` storage + clearing rule, outermost-wins/type-safety, and the deferred follow-ups (`finalize`, deep/fork salvage, `sigint`/`sigkill`, LLM-tool exposure, `Both`).
 
@@ -863,13 +1017,15 @@ Then open a PR whose body summarizes: the anytime-algorithm motivation, `StateSt
 **Spec coverage:**
 - `saveDraft(v)` statement-form builtin → Task 2 (Steps 3, 5).
 - Branch-local `StateStack.other` storage keyed by frame depth → Task 1; branch-locality proven in Task 4.
-- Trip read (outermost-set-wins) + sweep → Task 2 (Step 4).
-- Clearing rule (normal completion clears; abort keeps) → Task 3.
+- Trip read (outermost-set-wins) with **guardId ownership** (not shape) + sweep → Task 2 (Steps 4a/4b); propagated-inner-failure fixture proves ownership.
+- **No sweep on the interrupt path** (paused block keeps its drafts) → Task 2 (Step 4b) + interrupt-resume fixture.
+- Clearing rule (normal completion clears; abort/interrupt keeps) → Task 3, **both def frames (Step 5) AND block frames (Step 5b)**; stale-sibling + stale-block fixtures.
 - Additivity (no draft ⇒ failure unchanged) → Task 2 (no-draft test) + Task 6 (guard-cost-trip regression).
-- Type-check against enclosing return type + name-keyed aliasing caveat → Task 5.
-- Interrupt/resume survival → Task 1 serialization round-trip unit test.
+- Time-trip salvage (different delivery path) → Task 2 time-trip fixture.
+- Type-check against enclosing return type + name-keyed aliasing caveat + bare-guard-block `any` limitation → Task 5.
+- Interrupt/resume survival → Task 1 serialization round-trip unit test + Task 2 interrupt-resume execution fixture.
 - Deferred items (`finalize`, deep/fork salvage, `sigint`/`sigkill`, tool exposure, `Both`, root budgets) → out of scope, unchanged; noted in PR body (Task 6).
 
 **Placeholder scan:** every code step shows the code; every test step shows the command and expected output. Two spots say "match the sibling test harness / positional-arg accessor" (Task 5) — these are deliberate: they instruct the engineer to mirror verified existing code rather than invent an API, because the exact harness entry point and AST arg-accessor must match this codebase's conventions.
 
-**Type consistency:** `writeDraft` / `readOutermostDraft` / `sweepDrafts` / `__clearTopFrameDraft` names and signatures are identical across Tasks 1, 2, 3. `_saveDraft` (TS) ↔ `saveDraft` (Agency def) wiring is consistent. `_runGuarded`'s new `isGuardTripFailure` reads `f.error.type` matching `guardFailureData`'s shape from `result.ts`. `entryDepth = stack.stack.length` (captured before `__call`) aligns with `writeDraft` keying at `stack.stack.length - 2` (caller frame) and `__clearTopFrameDraft` at `stack.stack.length - 1` (completing frame) — verified consistent in the spec's depth walk-through.
+**Type consistency:** `writeDraft` / `readOutermostDraft` / `sweepDrafts` / `__clearTopFrameDraft` names and signatures are identical across Tasks 1, 2, 3. `_saveDraft` (TS) ↔ `saveDraft` (Agency def) wiring is consistent. `_runGuarded` gates salvage on `ids.includes(result.error.guardId)` where `guardId` is added to `guardFailureData` in Task 2 Step 4a — ownership, not shape. `entryDepth = stack.stack.length` (captured before `__call`) aligns with `writeDraft` keying at `stack.stack.length - 2` (caller frame), `__clearTopFrameDraft` at `stack.stack.length - 1` (completing frame), and the block clear at the same `length - 1` — verified consistent in the spec's depth walk-through. Interrupt handling matches `__tryCall`'s own `hasInterrupts` passthrough (`result.ts:177`).

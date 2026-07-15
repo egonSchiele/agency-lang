@@ -1,0 +1,28 @@
+import { guard } from "std::thread"
+
+// Race under a time budget: the fast branch wins well inside the
+// budget, the slow loser is aborted mid-sleep. The join charges the
+// parent from banked branch clocks (losers included — they are paused
+// before the charge reads them), so nothing trips and the winner's
+// value comes back.
+def branchWork(item: number): string {
+  if (item == 1) {
+    sleep(50ms)
+    return "fast"
+  }
+  sleep(10s)
+  return "slow"
+}
+
+node main() {
+  const result = guard(time: 800ms) as {
+    const winner = race([1, 2]) as item {
+      return branchWork(item)
+    }
+    return winner
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}"
+  }
+  return result.value
+}

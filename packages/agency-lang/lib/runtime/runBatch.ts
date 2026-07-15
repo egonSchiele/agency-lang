@@ -503,13 +503,6 @@ export async function runBatch<T>(
     seen.add(c.key);
   }
 
-  // Delegate time enforcement to the branch clones for the duration of
-  // the region. Every exit path below either charge-and-resumes (value
-  // joins, throws) or deliberately leaves the parent paused
-  // (interrupted exits — the parent halts next, and the final join
-  // charges once). See chargeAndResumeParentTimeGuards.
-  pauseParentTimeGuards(parentStack);
-
   // 0b. Mode-flip defensive assert. If a previous run recorded a race
   // winner under `raceWinnerLocalKey` but the caller now passes a
   // non-race mode (or vice versa), that's a serious checkpoint/code
@@ -528,6 +521,14 @@ export async function runBatch<T>(
       );
     }
   }
+
+  // Delegate time enforcement to the branch clones for the duration of
+  // the region. Every exit path below either charge-and-resumes (value
+  // joins, throws) or deliberately leaves the parent paused
+  // (interrupted exits — the parent halts next, and the final join
+  // charges once). Placed AFTER the 0a/0b defensive throws so a
+  // caught assert cannot leave the parent's timers paused forever.
+  pauseParentTimeGuards(parentStack);
 
   // 0c. Race resume short-circuit: if a winner is persisted, run only the
   // winner's child. Subsumes the old `resumeRaceWinner` so the caller
@@ -792,6 +793,12 @@ async function runRaceFirstTime<T>(
   }
   hooks?.propagateLoserCost?.(losers, opts.parentStack);
   hooks?.propagateWinnerCost?.(winnerTask.branch, opts.parentStack);
+  // Bank every branch's clock BEFORE reading it for the charge — the
+  // aborted losers' invokes may not have settled yet (their
+  // startInvoke finally fires later), and the charge should read
+  // banked values, not live in-flight windows. Mirrors the
+  // interrupt-stamp path above; the later finally-pause is a no-op.
+  tasks.forEach((t) => pauseBranchTimeGuards(t.branch.stack));
   chargeAndResumeParentTimeGuards(
     opts.parentStack,
     tasks.map((task) => task.branch.stack),

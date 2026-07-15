@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"fast\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A race under a time budget: the fast winner returns, the aborted loser's clock is banked before the join charge, and nothing trips."
+    }
+  ]
+}

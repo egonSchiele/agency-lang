@@ -1,0 +1,76 @@
+import { grep } from "std::shell"
+import { exec } from "std::shell"
+import { pkgDir, repoRoot, stamp, openPr } from "./pr.agency"
+
+/** @module
+  Weekly maintenance agent: flag out-of-date information in `docs/dev/`.
+
+  It reviews each developer doc under `docs/dev/` against the current codebase
+  and opens a PR containing a single findings report (it does NOT edit the docs
+  themselves — a human decides what to change). Each doc is reviewed in its own
+  fresh thread so the reviews stay independent and the context stays small.
+
+  Security posture: runs non-interactively on GitHub Actions with a least-
+  privilege `GITHUB_TOKEN`. The LLM is handed ONLY read-only tools (`read`,
+  `grep`) so a prompt-injection buried in a doc cannot escalate to writing files,
+  running shell commands, or making network calls — the agent itself (not the
+  model) performs every git action. The runner has no on-disk secrets (its
+  tokens live in env vars), and the output is a PR a human reviews. See
+  `pr.agency`.
+*/
+
+node main() {
+  const root = repoRoot()
+  const pkg = pkgDir()
+
+  const listOut = exec("bash", ["-c", "cd '${pkg}' && ls docs/dev/*.md 2>/dev/null"]) with approve
+  const files = listOut.stdout.trim().split("\n")
+
+  const rubric = "You are auditing ONE developer documentation file for a programming language called Agency, checking whether it is out of date relative to the CURRENT source code in this repository. Use the read and grep tools to verify the doc's specific claims: file paths it cites, function/type/flag names, command invocations, and described behavior. Report ONLY concrete staleness: a cited path or symbol that no longer exists, a renamed flag/command, a documented behavior that the code contradicts, or a described feature that was removed. Ignore prose style and subjective wording. If the doc appears accurate and current, reply with exactly the text NO ISSUES and nothing else. Otherwise reply with a short markdown bullet list; each bullet names the stale claim and what the code actually shows now (cite file:line)."
+
+  let sections: string[] = []
+  let idx = 0
+  for (rel in files) {
+    if (rel.length > 0) {
+      const contentOut = exec("cat", ["${pkg}/${rel}"]) with approve
+      const content = contentOut.stdout
+      const prompt = "${rubric}\n\nDoc path (relative to packages/agency-lang): ${rel}\nSearch code with grep/read using paths relative to the repository root (this doc lives at packages/agency-lang/${rel}).\n\nDoc contents:\n${content}"
+      let finding = ""
+      thread(session: "docrev-${idx}") {
+        finding = llm(prompt, tools: [read, grep]) with approve
+      }
+      if (!finding.includes("NO ISSUES")) {
+        sections.push("## ${rel}\n\n${finding}")
+      }
+    }
+    idx += 1
+  }
+
+  if (sections.length == 0) {
+    print("Reviewed ${files.length} docs under docs/dev/; none appear out of date. Nothing to do.")
+    return
+  }
+
+  const joined = sections.join("\n\n")
+  const report = "# docs/dev freshness review\n\nAutomated weekly audit of `docs/dev/` against the current codebase. Each item below is a suspected out-of-date claim for a human to confirm and fix. Nothing here has been applied to the docs.\n\n${joined}\n"
+
+  const reportDir = "${pkg}/docs/dev/_reports"
+  exec("mkdir", ["-p", reportDir]) with approve
+  const w = write("docs-freshness.md", report, dir: reportDir) with approve
+  if (w is failure(err)) {
+    print("Failed to write the report: ${err}. Aborting without a PR.")
+    return
+  }
+
+  const branch = "chore/docs-freshness-${stamp()}"
+  const body = "Automated: weekly audit of `docs/dev/` for out-of-date information.\n\nThis PR adds/updates `docs/dev/_reports/docs-freshness.md` with suspected stale claims. It does NOT edit the docs themselves. Please confirm each finding and make the real fixes as you see fit.\n\nOpened by the weekly `docs-review` scheduled agent."
+  const url = openPr(
+    root,
+    branch,
+    ["packages/agency-lang/docs/dev/_reports/docs-freshness.md"],
+    "chore(docs): weekly docs/dev freshness report",
+    "Weekly docs/dev freshness report",
+    body,
+  )
+  print("Opened PR: ${url}")
+}

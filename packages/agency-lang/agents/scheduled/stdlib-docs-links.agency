@@ -1,0 +1,123 @@
+import { exec } from "std::shell"
+import { pkgDir, repoRoot, stamp, openPr } from "./pr.agency"
+
+/** @module
+  Daily maintenance agent: keep the VitePress sidebar in sync with the
+  generated stdlib docs.
+
+  We generate a Markdown page for every stdlib module under
+  `docs/site/stdlib/`, but the sidebar in `docs/site/.vitepress/config.mts` is
+  hand-maintained. New modules therefore ship with a doc page that nothing
+  links to. This agent finds every generated page that is not yet linked from
+  the config and opens a PR that adds the missing links.
+
+  Security posture: runs non-interactively on GitHub Actions with a least-
+  privilege `GITHUB_TOKEN`. It gives the LLM NO tools — the model only rewrites
+  the config text. A deterministic fail-closed guard then verifies the model
+  neither dropped an existing link nor missed a required one before anything is
+  committed, and the result is a PR a human reviews. See `pr.agency`.
+*/
+
+/** Strip a single leading ```lang fence and trailing ``` fence, if present. */
+def stripFences(s: string): string {
+  """Remove a surrounding Markdown code fence from an LLM response, if present."""
+  const out = s.trim()
+  const lines = out.split("\n")
+  if (lines.length >= 2 && lines[0].startsWith("```")) {
+    let inner: string[] = []
+    let idx = 0
+    for (line in lines) {
+      const isFirst = idx == 0
+      const isLast = idx == lines.length - 1
+      // De Morgan: `!(isLast && line == fence)`. Agency's parser rejects `!(`
+      // applied to a parenthesized expression, so this is written out longhand.
+      if (!isFirst && (!isLast || line.trim() != "```")) {
+        inner.push(line)
+      }
+      idx += 1
+    }
+    return inner.join("\n")
+  }
+  return out
+}
+
+node main() {
+  const root = repoRoot()
+  const pkg = pkgDir()
+  const configPath = "${pkg}/docs/site/.vitepress/config.mts"
+
+  // 1. Every generated stdlib doc, as the sidebar slug it should be linked by
+  //    (e.g. `docs/site/stdlib/agents/coding.md` -> `/stdlib/agents/coding`).
+  const findCmd = "cd '${pkg}' && find docs/site/stdlib -name '*.md' | sed -e 's|docs/site||' -e 's|\\.md$||' | sort"
+  const genOut = exec("bash", ["-c", findCmd]) with approve
+  const genSlugs = genOut.stdout.trim().split("\n")
+
+  // 2. Current config contents.
+  const cfgOut = exec("cat", [configPath]) with approve
+  const config = cfgOut.stdout
+
+  // 3. A slug is missing when its exact quoted link string is absent from the
+  //    config. The quotes make the check exact so `/stdlib/agent` is not
+  //    considered "linked" merely because `/stdlib/agents/coding` is present.
+  let missing: string[] = []
+  for (slug in genSlugs) {
+    const quoted = "\"${slug}\""
+    if (slug.length > 0 && !config.includes(quoted)) {
+      missing.push(slug)
+    }
+  }
+
+  if (missing.length == 0) {
+    print("All ${genSlugs.length} stdlib docs are already linked in config.mts. Nothing to do.")
+    return
+  }
+
+  const missingList = missing.join("\n")
+  print("Found ${missing.length} unlinked stdlib doc(s):\n${missingList}")
+
+  // 4. Ask the model to rewrite config.mts with the missing links inserted into
+  //    the `/stdlib/` sidebar. No tools are provided; the model only edits text.
+  const guidance = "You are editing a VitePress sidebar config file (a TypeScript module). Add a sidebar link for each of the stdlib doc slugs listed below, inserting each into the `/stdlib/` sidebar section in a sensible place: alphabetical within its group, and nest slugs that share a path prefix such as `/stdlib/agents/*` under a collapsible group named after that prefix, mirroring how `/stdlib/data/*` and `/stdlib/ui/*` are already grouped. Use the last path segment as the link text. Do NOT remove or reorder any existing links, and do NOT change anything outside the `/stdlib/` sidebar section. Return the COMPLETE updated file contents and nothing else: no markdown fences, no commentary."
+  const prompt = "${guidance}\n\nSlugs to add:\n${missingList}\n\nCurrent file:\n${config}"
+
+  const raw: string = llm(prompt)
+  const newConfig = stripFences(raw)
+
+  // 5. Fail-closed guard. Extract every link that was in the OLD config and
+  //    require the new config to still contain it, then require every missing
+  //    slug to now be present. Any failure aborts BEFORE writing or pushing.
+  const linkCmd = "grep -oE 'link: \"[^\"]*\"' '${configPath}' | sed -e 's/^link: \"//' -e 's/\"$//'"
+  const oldLinksOut = exec("bash", ["-c", linkCmd]) with approve
+  const oldLinks = oldLinksOut.stdout.trim().split("\n")
+
+  for (link in oldLinks) {
+    const quotedOld = "\"${link}\""
+    if (link.length > 0 && !newConfig.includes(quotedOld)) {
+      print("Guard failed: existing link ${link} was dropped by the rewrite. Aborting without a PR.")
+      return
+    }
+  }
+  for (slug in missing) {
+    const quotedNew = "\"${slug}\""
+    if (!newConfig.includes(quotedNew)) {
+      print("Guard failed: expected new link ${slug} is not present in the rewrite. Aborting without a PR.")
+      return
+    }
+  }
+
+  // 6. Write the file and open a PR.
+  const w = write("config.mts", newConfig, dir: "${pkg}/docs/site/.vitepress") with approve
+  if (w is failure(err)) {
+    print("Failed to write config.mts: ${err}. Aborting without a PR.")
+    return
+  }
+
+  const branch = "chore/stdlib-doc-links-${stamp()}"
+  const bulletList = missing.join("\n- ")
+  const body = "Automated: adds VitePress sidebar links for stdlib docs that were generated but not yet linked from `config.mts`.\n\nNewly linked:\n\n- ${bulletList}\n\nOpened by the daily `stdlib-docs-links` scheduled agent. Please review the sidebar placement before merging."
+  const title = "Link unlinked stdlib docs in the VitePress sidebar"
+  const commitMsg = "chore(docs): link ${missing.length} unlinked stdlib doc(s) in the sidebar"
+  const paths = ["packages/agency-lang/docs/site/.vitepress/config.mts"]
+  const url = openPr(root, branch, paths, commitMsg, title, body)
+  print("Opened PR: ${url}")
+}

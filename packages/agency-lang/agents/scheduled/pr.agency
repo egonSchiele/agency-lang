@@ -1,0 +1,80 @@
+import { exec } from "std::shell"
+
+/** @module
+  Shared helpers for the scheduled maintenance agents in this directory.
+
+  These agents run non-interactively on GitHub Actions (see the generated
+  `.github/workflows/*.yml`), so every effectful call is discharged with
+  `with approve`. Safety does NOT come from in-agent prompting — it comes from
+  the workflow: least-privilege `GITHUB_TOKEN` (`contents: write` +
+  `pull-requests: write`, nothing else), triggers that take no attacker-
+  controlled input (`schedule` + `workflow_dispatch` only), and the fact that
+  every change lands as a pull request a human reviews before merge.
+*/
+
+/** Absolute path to the git repo root of the checkout. */
+export def repoRoot(): string {
+  """Return the absolute path to the root of the checked-out git repository."""
+  const r = exec("git", ["rev-parse", "--show-toplevel"]) with approve
+  return r.stdout.trim()
+}
+
+/** Absolute path to the agency-lang package inside the checkout. */
+export def pkgDir(): string {
+  """Return the absolute path to `packages/agency-lang` inside the checkout."""
+  return "${repoRoot()}/packages/agency-lang"
+}
+
+/** A UTC timestamp suffix suitable for branch names, e.g. `20260713-141500`. */
+export def stamp(): string {
+  """Return a UTC timestamp like `20260713-141500` for use in branch names."""
+  const r = exec("date", ["-u", "+%Y%m%d-%H%M%S"]) with approve
+  return r.stdout.trim()
+}
+
+/**
+  Create a branch, commit all changes in the working tree, push it, and open a
+  pull request against `main`. Returns the URL of the created PR (from
+  `gh pr create` stdout).
+
+  The bot identity and `gh` both authenticate via the ambient `GITHUB_TOKEN`
+  that GitHub Actions injects; there are no credentials in this code.
+*/
+export def openPr(
+  root: string,
+  branch: string,
+  paths: string[],
+  commitMsg: string,
+  title: string,
+  body: string,
+): string {
+  """
+  Commit specific files on a new branch and open a PR to main.
+
+  Only the files in `paths` are staged (never `git add -A`) so a stray build
+  artifact the runner may have produced can never leak into the PR.
+
+  @param root - Absolute path to the repo root
+  @param branch - Name of the branch to create and push
+  @param paths - Repo-root-relative paths to stage and commit
+  @param commitMsg - Commit message
+  @param title - Pull request title
+  @param body - Pull request body (markdown)
+  """
+  exec("git", ["-C", root, "config", "user.name", "agency-scheduler[bot]"]) with approve
+  exec("git", ["-C", root, "config", "user.email", "agency-scheduler@users.noreply.github.com"]) with approve
+  exec("git", ["-C", root, "checkout", "-b", branch]) with approve
+  const addArgs = ["-C", root, "add"]
+  for (p in paths) {
+    addArgs.push(p)
+  }
+  exec("git", addArgs) with approve
+  exec("git", ["-C", root, "commit", "-m", commitMsg]) with approve
+  exec("git", ["-C", root, "push", "-u", "origin", branch]) with approve
+  const pr = exec(
+    "gh",
+    ["pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body],
+    cwd: root,
+  ) with approve
+  return pr.stdout.trim()
+}

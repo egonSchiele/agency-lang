@@ -2,6 +2,7 @@ import * as smoltalk from "smoltalk";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
 import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
 import { __tryCall, type ResultValue } from "../runtime/result.js";
+import { writeCallerDraft, draftRegionStart, salvageOwnTrip } from "../runtime/drafts.js";
 import { __call } from "../runtime/call.js";
 import { CostGuard, TimeGuard } from "../runtime/guard.js";
 import { normalizeModelUsage, type ModelUsage } from "../runtime/utils.js";
@@ -336,6 +337,17 @@ export async function _popGuard(ids: string[]): Promise<void> {
 }
 
 /**
+ * Impl of the Agency `saveDraft(value)` builtin. Records a best-so-far value for
+ * the CALLER's frame (the Agency function/block that called saveDraft), so a
+ * tripping enclosing `guard` can salvage it. The draft-store owns all frame
+ * arithmetic; this helper just forwards. No-op with no caller.
+ */
+export function _saveDraft(value: unknown): void {
+  const { stack } = getRuntimeContext();
+  writeCallerDraft(stack, value);
+}
+
+/**
  * Run the guarded block under a `try` that owns exactly the guards in `ids`,
  * so a `guardTrip` is converted to a Failure ONLY when it belongs to one of
  * THIS guard()'s guards (an outer guard's trip re-throws past it).
@@ -363,13 +375,18 @@ export async function _runGuarded(
   block: unknown,
 ): Promise<ResultValue> {
   const { ctx, stack } = getRuntimeContext();
+  // Mark the draft region BEFORE running the block: drafts saved by the block
+  // and everything it calls sit at stack depth >= this marker. Keyed by this
+  // guard's id-set so the marker is resume-stable (see draftRegionStart).
+  const regionKey = ids.join(",");
+  const region = draftRegionStart(stack, regionKey);
   // Invoke the block through __call (NOT a plain block()) so it runs through
   // the same Agency call machinery the codegen `try block()` used — that is
   // what lets a guard trip inside the block surface as an AgencyAbort with its
   // guardTrip cause instead of a generic error. `stack.lastFrame()` is
   // guard()'s own frame here (a TS call pushes no agency frame), so `.args`
   // matches what the codegen `try block()` captured via `__stack.args`.
-  return __tryCall(
+  const result = await __tryCall(
     () => __call(block, { type: "positional", args: [] }),
     {
       ownedGuardIds: ids,
@@ -378,4 +395,7 @@ export async function _runGuarded(
       args: stack.lastFrame()?.args,
     },
   );
+  // Interrupts pass through untouched (no sweep — drafts must survive resume);
+  // on THIS guard's own trip salvage the outermost draft; then sweep the region.
+  return salvageOwnTrip(stack, region, ids, result, regionKey) as ResultValue;
 }

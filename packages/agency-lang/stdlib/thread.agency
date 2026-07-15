@@ -36,6 +36,7 @@ import {
   _pushGuard,
   _popGuard,
   _runGuarded,
+  _saveDraft,
  } from "agency-lang/stdlib-lib/thread.js"
 
 import { _installSlowInputImpl } from "agency-lang/stdlib-lib/builtins.js"
@@ -252,6 +253,22 @@ export def guard(
   const result = _runGuarded(ids, block)
   _popGuard(ids)
   return result
+}
+
+export def saveDraft(value: any) {
+  """
+  Record a best-so-far value for the current function or guarded block. If an
+  enclosing `guard(...)` trips before this scope returns, the guard yields the
+  last saved draft instead of a failure — an "anytime" result you can always
+  fall back to. Call it repeatedly as your result improves; the last value
+  wins. With no enclosing guard it is a harmless no-op.
+
+  The value is type-checked against the enclosing function/node's return type
+  (a draft inside a bare `guard` block is unchecked — the block's type is `any`).
+
+  @param value - The best-so-far value. Should match the enclosing scope's return type.
+  """
+  _saveDraft(value)
 }
 
 /** Test-only seam (import test { _installSlowInput }): install an input()

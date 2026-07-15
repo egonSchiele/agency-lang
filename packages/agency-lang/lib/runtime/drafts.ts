@@ -47,11 +47,25 @@ export function writeCallerDraft(stack: StateStack, value: unknown): void {
   writeDraft(stack, depth, value);
 }
 
-/** The region marker for a guard entered now: drafts at depth >= this are
- *  "under" the guard. A positional marker is inherent (frames pop before the
- *  boundary reads), but its meaning lives in this named function. */
-export function draftRegionStart(stack: StateStack): number {
-  return stack.stack.length;
+function ensureRegions(stack: StateStack): Record<string, number> {
+  if (!stack.other.draftRegions) stack.other.draftRegions = {};
+  return stack.other.draftRegions as Record<string, number>;
+}
+
+/** The region marker for a guard scope, memoized under `key` (the guard's
+ *  id-set). Drafts saved under the guard sit at depth >= this marker. Memoized
+ *  in serialized `other` because re-capturing `stack.stack.length` on resume
+ *  shifts by the restored block frame — the marker must be resume-stable, like
+ *  the guard's own `ids`. Cleared by `clearDraftRegion` on guard exit. */
+export function draftRegionStart(stack: StateStack, key: string): number {
+  const regions = ensureRegions(stack);
+  if (regions[key] === undefined) regions[key] = stack.stack.length;
+  return regions[key];
+}
+
+function clearDraftRegion(stack: StateStack, key: string): void {
+  const regions = stack.other.draftRegions as Record<string, number> | undefined;
+  if (regions) delete regions[key];
 }
 
 /** The outermost draft under a guard: the shallowest depth >= `region`, or
@@ -89,6 +103,7 @@ export function salvageOwnTrip(
   region: number,
   ids: string[],
   result: ResultValue | unknown,
+  key: string,
 ): ResultValue | unknown {
   if (hasInterrupts(result)) return result;
   let out = result;
@@ -100,6 +115,7 @@ export function salvageOwnTrip(
     if (draft !== undefined) out = success(draft.value);
   }
   sweepDrafts(stack, region);
+  clearDraftRegion(stack, key);
   return out;
 }
 

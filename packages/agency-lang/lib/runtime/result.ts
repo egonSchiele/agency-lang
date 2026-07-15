@@ -11,12 +11,17 @@ function guardFailureData(
   dimension: "cost" | "time",
   limit: number,
   spent: number,
+  guardId: string,
 ): {
   type: string;
   maxCost: number | null;
   actualCost: number | null;
   maxTime: number | null;
   actualTime: number | null;
+  // Internal: which guard tripped. Lets the owning `guard`'s salvage path
+  // (saveDraft) distinguish this guard's OWN trip from a propagated inner
+  // failure. Additive — documented consumers read type/maxCost/maxTime/actuals.
+  guardId: string;
 } {
   if (dimension === "time") {
     return {
@@ -25,6 +30,7 @@ function guardFailureData(
       actualCost: null,
       maxTime: limit,
       actualTime: spent,
+      guardId,
     };
   }
   return {
@@ -33,6 +39,7 @@ function guardFailureData(
     actualCost: spent,
     maxTime: null,
     actualTime: null,
+    guardId,
   };
 }
 
@@ -209,7 +216,7 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
         // The cause object is shared by identity with `signal.reason`.
         guardCause.delivered = true;
         return failure(
-          guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent),
+          guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent, guardCause.guardId),
           opts,
         );
       }

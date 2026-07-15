@@ -1,0 +1,11 @@
+import { guard, saveDraft } from "std::thread"
+
+node main() {
+  const result = guard(time: 500ms) as {
+    saveDraft("timed-draft")
+    sleep(2000)                 // exceeds 500ms → time trip
+    return "done"
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

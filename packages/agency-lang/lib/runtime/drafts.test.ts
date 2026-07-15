@@ -77,23 +77,27 @@ describe("draft store", () => {
     expect(readOutermostDraft(s, 1)?.value).toEqual({ text: "v1" });
   });
 
-  it("draftRegionStart marks the current stack depth", () => {
+  it("draftRegionStart memoizes the region under its key (resume-stable)", () => {
     const s = stackWithFrames(3);
-    expect(draftRegionStart(s)).toBe(3);
+    expect(draftRegionStart(s, "g1")).toBe(3);
+    // A later call at a deeper stack returns the ORIGINAL marker, not 5.
+    s.stack.push(new State());
+    s.stack.push(new State());
+    expect(draftRegionStart(s, "g1")).toBe(3);
   });
 
   it("salvageOwnTrip salvages ONLY on this guard's own trip", () => {
     const s = stackWithFrames(3);
     writeDraft(s, 2, "best");
     const ownTrip = failure({ type: "guardFailure", guardId: "g1" });
-    expect(salvageOwnTrip(s, 0, ["g1"], ownTrip)).toEqual(success("best"));
+    expect(salvageOwnTrip(s, 0, ["g1"], ownTrip, "g1")).toEqual(success("best"));
   });
 
   it("salvageOwnTrip does NOT salvage a propagated (foreign-id) failure", () => {
     const s = stackWithFrames(3);
     writeDraft(s, 2, "best");
     const foreign = failure({ type: "guardFailure", guardId: "inner" });
-    expect(salvageOwnTrip(s, 0, ["g1"], foreign)).toBe(foreign);
+    expect(salvageOwnTrip(s, 0, ["g1"], foreign, "g1")).toBe(foreign);
     expect(readOutermostDraft(s, 0)).toBeUndefined(); // region still swept
   });
 
@@ -101,7 +105,7 @@ describe("draft store", () => {
     const s = stackWithFrames(3);
     writeDraft(s, 2, "best");
     const interrupts = [{ type: "interrupt", id: "i1" }] as any;
-    expect(salvageOwnTrip(s, 0, ["g1"], interrupts)).toBe(interrupts);
+    expect(salvageOwnTrip(s, 0, ["g1"], interrupts, "g1")).toBe(interrupts);
     expect(readOutermostDraft(s, 0)?.value).toBe("best"); // NOT swept
   });
 

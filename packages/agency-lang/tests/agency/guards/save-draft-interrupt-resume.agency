@@ -1,0 +1,12 @@
+import { guard, saveDraft } from "std::thread"
+
+node main() {
+  const result = guard(time: 500ms) as {
+    saveDraft("pre-interrupt")
+    interrupt("continue?")      // pause; harness approves → resume
+    sleep(2000)                 // after resume, exceed 500ms → trip
+    return "done"
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

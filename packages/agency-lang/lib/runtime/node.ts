@@ -18,6 +18,7 @@ import { loadProviderModules } from "./providerModules.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
+import { installRootBudget } from "./rootBudget.js";
 import { GraphState, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
@@ -353,6 +354,12 @@ export async function runNode({
   // subprocess). Installed here — after the exec context exists, before the
   // node body runs — so it is the outermost handler and cannot be bypassed.
   installRunPolicyHandler(execCtx);
+  // Install a root cost/time budget from --max-cost / --max-time (via env).
+  // Same root-only gate as the policy handler (isIpcMode, inside the
+  // installer): no-op in IPC subprocesses, whose budgets are owned by the
+  // parent's guard. Outermost, before the node body runs, so it cannot be
+  // bypassed.
+  installRootBudget(execCtx.stateStack);
   // Externally-passed callbacks are stored on ctx; hook execution merges them
   // with scoped/top-level callbacks at call time.
   if (callbacks) {

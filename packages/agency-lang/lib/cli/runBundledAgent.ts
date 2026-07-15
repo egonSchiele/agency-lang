@@ -6,6 +6,7 @@ import {
   type CliFlags,
 } from "@/config.js";
 import { compile, compiledOutputNodeArgs } from "./commands.js";
+import { AGENCY_MAX_COST, AGENCY_MAX_TIME } from "@/constants.js";
 import { spawn as realSpawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
@@ -110,6 +111,7 @@ export function runBundledAgent(
   agentName: string,
   args: string[] = [],
   deps: { spawn?: typeof realSpawn } = {},
+  budget?: { maxCost?: string; maxTime?: string },
 ): void {
   const spawn = deps.spawn ?? realSpawn;
   const agentDir = path.resolve(currentDir, `../agents/${agentName}`);
@@ -143,6 +145,12 @@ export function runBundledAgent(
   if (agentHome !== null) {
     env.AGENCY_AGENT_HOME = agentHome;
   }
+  // Root budget carrier: cleared-then-set like AGENCY_RUN_POLICY, so a
+  // stale value from the parent shell never constrains the agent.
+  delete env[AGENCY_MAX_COST];
+  delete env[AGENCY_MAX_TIME];
+  if (budget?.maxCost !== undefined) env[AGENCY_MAX_COST] = budget.maxCost;
+  if (budget?.maxTime !== undefined) env[AGENCY_MAX_TIME] = budget.maxTime;
 
   const nodeProcess = spawn(
     process.execPath,

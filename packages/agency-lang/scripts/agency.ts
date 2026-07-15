@@ -17,6 +17,7 @@ import {
   installDirFromUrl,
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
+import { resolveBudget } from "@/cli/budget.js";
 import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
@@ -97,6 +98,8 @@ type RunOptions = CliFlags & {
   approve?: string;
   reject?: string;
   interactive?: boolean;
+  maxCost?: string;
+  maxTime?: string;
 };
 
 // commander option parsers. Match the WHOLE string against digits so
@@ -198,7 +201,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.error(`Error: ${(e as Error).message}`);
       process.exit(2);
     }
-    run(config, input, undefined, options.resume, runPolicy);
+    let budget;
+    try {
+      budget = resolveBudget({
+        maxCost: options.maxCost,
+        maxTime: options.maxTime,
+      });
+    } catch (e) {
+      console.error(`Error: ${(e as Error).message}`);
+      process.exit(2);
+    }
+    run(config, input, undefined, options.resume, runPolicy, budget);
   }
 
   program
@@ -318,6 +331,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option(
         "-i, --interactive",
         "Prompt on interrupts that surface unhandled (default: reject them)",
+      )
+      .option(
+        "--max-cost <dollars>",
+        "Abort if the run's LLM spend exceeds this many dollars (e.g. 0.50). 0 = no paid spend (local models only); negative = no limit",
+      )
+      .option(
+        "--max-time <duration>",
+        "Abort if the run's working time exceeds this duration (e.g. 30s, 5m, 1h, 2d). Waiting on a human is not counted; zero/negative = no limit",
       );
   }
 
@@ -1055,10 +1076,25 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("agent")
     .description("Launch the Agency language assistant agent (run `agency agent --help` for agent flags)")
     .argument("[args...]", "Arguments forwarded to the agent")
+    .option(
+      "--max-cost <dollars>",
+      "Abort if the agent's LLM spend exceeds this many dollars (0 = local models only; negative = no limit)",
+    )
+    .option(
+      "--max-time <duration>",
+      "Abort if the agent's working time exceeds this duration (e.g. 30m or 2d); waiting on a human is not counted; zero/negative = no limit",
+    )
     .helpOption(false)
-    .action((args: string[]) => {
+    .action((args: string[], opts: { maxCost?: string; maxTime?: string }) => {
       const config = getConfig();
-      agent(config, args);
+      let budget;
+      try {
+        budget = resolveBudget({ maxCost: opts.maxCost, maxTime: opts.maxTime });
+      } catch (e) {
+        console.error(`Error: ${(e as Error).message}`);
+        process.exit(2);
+      }
+      agent(config, args, budget);
     });
 
   program

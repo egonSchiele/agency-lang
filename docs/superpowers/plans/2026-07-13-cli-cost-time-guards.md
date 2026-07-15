@@ -387,177 +387,64 @@ Commit this doc change with the same message body (or fold into the Step 10 comm
 
 # PR 2 — Per-branch time budgets
 
-**Context:** Today `TimeGuard.cloneForBranch` returns `undefined` (`lib/runtime/guard.ts:360`), so a `fork` branch has no timer of its own — the parent's single timer trips all branches via a composed abort signal. This PR gives each branch its own timer, inheriting the parent's REMAINING budget at fork time, so a branch's input-wait pauses only its own clock. This is what makes PR 1 correct inside a `fork`.
+**Context:** Today `TimeGuard.cloneForBranch` returns `undefined` (`lib/runtime/guard.ts:360`), so a `fork` branch has no timer of its own — the parent's single timer trips all branches via a composed abort signal. This PR gives each branch its own timer, inheriting the parent's REMAINING budget at fork time, so a branch's input-wait pauses only its own clock. This is what makes PR 1 correct inside a fork.
 
-**Read before starting:** `docs/dev/runBatch.md` (fork/race join), `lib/runtime/state/stateStack.ts:591` (`rehydrateInheritedGuardsFrom`), and the `TimeGuard` class (`lib/runtime/guard.ts:256`).
+**Investigation outcome (Task 2.1, completed 2026-07-14).** The plan's original hope — option (a), "parent timer keeps running, no join accounting" — is FALSE. Verified: the parent is not halted while awaiting `runBatch`, so its timer keeps running, AND `composeBranchAbortSignal` (`runBatch.ts:215`) composes the parent's signal into every branch, so a parent trip kills a waiting branch. Per-branch clones alone would change nothing for input-waits. The implemented semantics are therefore **working time along one causal path**:
 
-## Task 2.1: Investigate the fork join + guard rehydration path
+- At fork entry, parent time guards PAUSE (enforcement is delegated to the branch clones for the duration of the region).
+- Each branch clone carries the parent's remaining budget, the parent's `guardId` (so a branch trip is owned by the same `guard { }` boundary's `try`), and pauses/resumes independently.
+- At the region's final value join, each parent time guard advances by the MAX of its clones' accrued working time, then resumes. Interrupted exits leave the parent paused (the parent halts anyway; clones keep their accrued time in the serialized branch stacks) — the single charge happens at the eventual final join, so no double-charging across pause/resume cycles.
+- Serialization slice rule: inherited guards are sliced off a branch's checkpoint and re-cloned from the parent on resume. Correct for CostGuard (shared reference); WRONG for branch-owned time clones — it would reset a branch's clock on every interrupt. Time clones serialize with the branch and are re-adopted (not re-cloned) on resume, matched by `guardId`.
+- Documented limitation: `runBatch` also runs subprocesses; an `input()` inside a CHILD PROCESS cannot pause the parent-process branch clone. Not a regression (child stdin is a dead pipe — `input()` in a subprocess is not a working feature; real subprocess human-waits go through interrupts, which already pause every clock in the chain). If subprocess `input()` is ever made real, route it through an interrupt rather than IPC pause signaling.
 
-**Files:** none (investigation task producing notes).
-
-- [ ] **Step 1: Trace how a branch stack gets its guards**
-
-Run: `grep -rn "cloneForBranch\|rehydrateInheritedGuardsFrom\|composeBranchAbortSignal" lib/runtime/ | grep -v test`
-Read each call site. Write a short note in the PR description answering:
-- Where is `cloneForBranch` called during fork/race setup, and with what `(parentStack, childStack)`?
-- After branches finish, does any code fold branch elapsed time back into the parent guard? (This determines whether "parent clock advances by the longest branch's working time" needs new join code or happens for free.)
-
-- [ ] **Step 2: Decide the join-accounting approach**
-
-Based on Step 1, choose one and record it:
-- **(a)** If the parent timer keeps running independently through the fork region (real wall clock), no join accounting is needed — the parent already reflects real elapsed time, and per-branch clones only serve the pause-on-input purpose. Prefer this if it holds: it is the smallest change.
-- **(b)** If the parent timer is paused/handed off during the fork, add join code that advances the parent's `elapsedMs` by `max(branch working-time deltas)` at branch completion.
-
-> Expectation from the design: option (a) is likely, because the parent Runner keeps stepping through the fork region. Confirm empirically before writing code.
+**Read before starting:** `docs/dev/runBatch.md`, `lib/runtime/state/stateStack.ts:557-608` (inherited-guard slice/prepend + `inheritedGuardCount` validation), `TimeGuard` (`lib/runtime/guard.ts:256`).
 
 ## Task 2.2: `TimeGuard.cloneForBranch` returns a per-branch timer
 
 **Files:**
-- Modify: `lib/runtime/guard.ts:360-365` (`TimeGuard.cloneForBranch`)
-- Test: `lib/runtime/guard.test.ts` (unit)
-- Test: `tests/agency/guards/guard-time-fork-per-branch.agency` + `.test.json` (create)
+- Modify: `lib/runtime/guard.ts` (`TimeGuard`: `cloneForBranch`, new `currentElapsed()` private helper reused by `check`/`toJSON`, new `snapshotElapsed()`/`addElapsed(ms)` accessors for join accounting)
+- Test: `lib/runtime/guard.test.ts`
 
 **Interfaces:**
-- Consumes: `TimeGuard` fields `timeLimit`, `elapsedMs`, and the `Guard.cloneForBranch(parentStack, childStack)` contract (`lib/runtime/guard.ts:59`).
-- Produces: `TimeGuard.cloneForBranch` returns a NEW `TimeGuard` whose limit is the parent's remaining budget (`timeLimit - elapsedMs`, floored at a tiny positive epsilon), armed independently on the child stack.
+- Produces: `cloneForBranch` returns a NEW `TimeGuard` whose `timeLimit` is the parent's remaining budget (floored at 1ms) and whose `guardId` EQUALS the parent's. `snapshotElapsed(): number` returns accrued-plus-in-flight ms. `addElapsed(ms): void` advances the accumulator (join accounting). Task 2.3 consumes all three.
 
-- [ ] **Step 1: Write the failing unit test**
+Steps: failing unit tests first (clone inherits remaining budget; clone carries the parent guardId; snapshot/addElapsed round-trip), then implement, then `pnpm test:run lib/runtime/guard.test.ts` green. Commit.
 
-In `lib/runtime/guard.test.ts`, add:
+## Task 2.3: runBatch pauses parent time guards and charges max at the join
 
-```ts
-test("TimeGuard.cloneForBranch inherits the parent's remaining budget", () => {
-  const parent = new TimeGuard(10_000); // 10s
-  // Simulate 3s already spent on the parent before the fork.
-  (parent as unknown as { elapsedMs: number }).elapsedMs = 3_000;
-  const parentStack = new StateStack();
-  const childStack = new StateStack();
-  const child = parent.cloneForBranch(parentStack, childStack);
-  expect(child).toBeInstanceOf(TimeGuard);
-  // Child gets the remaining 7s, not a fresh 10s.
-  expect((child as TimeGuard).timeLimit).toBe(7_000);
-});
-```
+**Files:**
+- Modify: `lib/runtime/runBatch.ts` (entry pause; settle helper; call sites on every exit path)
+- Test: `lib/runtime/runBatch` behavior via execution fixtures (Task 2.5) + a focused unit test if a seam exists
 
-- [ ] **Step 2: Run the unit test to verify it fails**
+**Design:**
+- Entry (all modes, before launching children): `pauseParentTimeGuards(parentStack)`.
+- A single `settleParentTimeGuards(parentStack, branchStacks, { charge })` helper: for each parent `TimeGuard`, when `charge` is true find the same-`guardId` TimeGuard on each branch stack, advance the parent by `max(clone.snapshotElapsed())`, then `resume`. Guarded by a per-call settled flag so exactly one settle runs.
+- Exit wiring: fork-all values path (next to `propagateBranchCost`) and race winner/loser joins settle WITH charge; thrown errors settle WITH charge from a catch/finally (a branch's own time trip must both charge and resume the parent before the error reaches the guard boundary); interrupted exits mark settled WITHOUT charging or resuming (parent halts and stays paused; final join charges once after resume).
 
-Run: `pnpm test:run lib/runtime/guard.test.ts 2>&1 | tee /tmp/pr2-t2.log`
-Expected: FAIL — `cloneForBranch` returns `undefined`, so `toBeInstanceOf(TimeGuard)` fails.
+Steps: implement helper + wire exits, run the existing guards suite for no-regression, commit.
 
-- [ ] **Step 3: Implement per-branch cloning**
+## Task 2.4: branch-owned time clones survive serialization
 
-Replace `TimeGuard.cloneForBranch` (`lib/runtime/guard.ts:360`):
+**Files:**
+- Modify: `lib/runtime/state/stateStack.ts` (`rehydrateInheritedGuardsFrom` + the guards-serialization slice)
+- Test: `lib/runtime/state/stateStack.test.ts` (or nearest existing guards-serialization test file)
 
-```ts
-  cloneForBranch(
-    _parentStack: StateStack,
-    _childStack: StateStack,
-  ): Guard {
-    // Wall-clock time is not cumulative across parallel branches, so each
-    // branch gets its OWN timer. It inherits the parent's REMAINING budget
-    // at fork time (timeLimit - elapsedMs), floored at 1ms, so the path
-    // "parent work, then branch" cannot exceed the original budget. Each
-    // branch pauses/resumes independently, so a branch's input-wait frees
-    // only that branch's clock. install()/resume() on the child stack arm
-    // the fresh timer.
-    const remaining = Math.max(1, this.timeLimit - this.currentElapsed());
-    return new TimeGuard(remaining);
-  }
-```
+**Design:** the slice rule keys on `inheritedGuardCount` and today drops ALL inherited entries at serialize time, re-cloning from the parent on resume. Change: serialize inherited TIME guards (value clones) with the branch; on rehydrate, for each parent guard, adopt the branch's already-deserialized clone when one with the same `guardId` exists (time), else `cloneForBranch` as today (cost = shared ref re-attach). The `inheritedGuardCount` mismatch validation stays, adjusted to count both adopted and re-cloned entries.
 
-Add a private helper on `TimeGuard` (near `check()`), since `elapsedMs` excludes the in-flight window:
+Steps: failing serialization round-trip unit test (branch with an accrued time clone → toJSON → fromJSON + rehydrate → clone's elapsedMs preserved, not reset), implement, green, commit.
 
-```ts
-  /** elapsedMs plus any in-flight running window. */
-  private currentElapsed(): number {
-    return (
-      this.elapsedMs +
-      (this.state === "running" && this.windowStart !== undefined
-        ? performance.now() - this.windowStart
-        : 0)
-    );
-  }
-```
+## Task 2.5: execution fixtures + docs + PR
 
-(Reuse `currentElapsed()` inside `check()` and `toJSON()` too, replacing their inline in-flight computations, to keep one source of truth. Optional but DRY.)
+**Fixtures (`tests/agency/guards/`), all with ≥500ms budgets (CI-jitter margin, per the #547 review):**
+- `guard-time-fork-per-branch.agency` — outer time budget; branch A waits on a simulated slow human (longer than the whole budget), branch B does real work; neither trips; both values return. This is the PR 1 limitation reversed.
+- `guard-time-fork-remaining-budget.agency` — parent burns most of the budget before forking; a branch working longer than the REMAINder trips, proving clones inherit remaining, not fresh, budget. Assert the failure is the outer guard's `timeoutFailure` (proves branch-trip ownership via the inherited guardId).
+- `guard-time-branch-survives-interrupt.agency` — a large time budget; a fork branch takes an interrupt and resumes; no spurious trip and correct value (pins Task 2.4's serialization).
+- Full `tests/agency/guards/` sweep + the `nested-pause-*`/`run-max-cost` subprocess fixtures (runBatch touched — the #513 alarm suite must stay green).
 
-- [ ] **Step 4: Run the unit test to verify it passes**
+**Docs:** `docs/site/guide/guards.md` — delete the PR 1 "current limitation" paragraph; document per-branch semantics (remaining-budget inheritance, parent advances by the longest branch's working time) and the subprocess-input note.
 
-Run: `pnpm test:run lib/runtime/guard.test.ts 2>&1 | tee /tmp/pr2-t2.log`
-Expected: PASS.
+Commit, push branch `guards-per-branch-time`, open the PR referencing the plan.
 
-- [ ] **Step 5: Write the per-branch execution test**
-
-Create `tests/agency/guards/guard-time-fork-per-branch.agency`:
-
-```
-import test { _installSlowInput } from "std::builtins"
-import { guard } from "std::thread"
-
-// Two branches under one time budget. Branch A waits on a (simulated)
-// slow human; branch B does a short sleep. With per-branch timers and
-// input-wait exempt, A's wait does not consume the budget, so neither
-// branch trips and both return.
-node main() {
-  _installSlowInput(120, "A")
-  const result = guard(time: 60ms) as {
-    let outA = ""
-    let outB = ""
-    fork([1, 2]) as which {
-      if (which == 1) {
-        outA = input("A? ")
-      } else {
-        sleep(20ms)
-        outB = "B-done"
-      }
-    }
-    return "${outA}:${outB}"
-  }
-  if (isFailure(result)) {
-    return "tripped:${result.error.type}"
-  }
-  return result.value
-}
-```
-
-> Implementer note: verify the exact `fork` syntax and how branch-local writes surface against `tests/agency/guards/guard-cost-fork.agency`. Adjust the fixture to match the real fork idiom (the shape above is illustrative). The assertion that matters: the run does NOT trip.
-
-Create the matching `.test.json`. Set `expectedOutput` to whatever the corrected fixture actually returns on success (run it once after Step 6 to capture, then pin it) — but it MUST NOT be a `tripped:` value.
-
-- [ ] **Step 6: Run the execution test**
-
-Run: `make 2>&1 | tail -3 && pnpm run a test tests/agency/guards/guard-time-fork-per-branch.agency 2>&1 | tee -a /tmp/pr2-t2.log`
-Expected: PASS (no trip).
-
-- [ ] **Step 7: Run all existing guard fixtures**
-
-Run: `for f in tests/agency/guards/*.agency; do echo "== $f =="; pnpm run a test "$f"; done 2>&1 | tee /tmp/pr2-allguards.log`
-Expected: all PASS. Pay special attention to `guard-time-nested-outer-tighter`, `guard-concurrent-branches`, and any `guard-time-*` fork fixture — per-branch cloning must not regress nested/shared time semantics.
-
-- [ ] **Step 8: Verify interrupt+resume inside a fork branch**
-
-Run: `pnpm run a test tests/agency/guards/guard-cost-shared-survives-interrupt.agency 2>&1 | tee -a /tmp/pr2-allguards.log`
-If a time-guard analog does not exist, create `guard-time-branch-survives-interrupt.agency`: a `guard(time: <large>)` around a `fork` where a branch takes an interrupt, then resumes and completes. Assert no spurious trip and correct return. This checks that per-branch clones serialize/rehydrate correctly (`TimeGuard.toJSON`/`fromJSON` + `rehydrateInheritedGuardsFrom`).
-
-- [ ] **Step 9: Commit**
-
-```bash
-git add lib/runtime/guard.ts lib/runtime/guard.test.ts tests/agency/guards/guard-time-fork-per-branch.* tests/agency/guards/guard-time-branch-survives-interrupt.*
-git commit -F /tmp/commit-2-2.txt
-```
-
-`/tmp/commit-2-2.txt`:
-
-```
-Give each fork branch its own time budget
-
-TimeGuard.cloneForBranch now returns a per-branch timer inheriting the
-parent's remaining budget, so wall-clock time is measured per branch
-(not cumulatively) and a branch's input-wait pauses only its own clock.
-Cost stays shared/cumulative. Fixes input-wait exemption inside fork.
-
-Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
-```
 
 ---
 

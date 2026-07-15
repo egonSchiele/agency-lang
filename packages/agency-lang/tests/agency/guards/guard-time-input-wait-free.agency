@@ -1,0 +1,21 @@
+import { guard } from "std::thread"
+import test { _installSlowInput } from "std::thread"
+
+// A 500ms time budget wrapping an input() whose (simulated) human takes
+// 2s to answer. Because input-wait does not count against a time
+// budget, the guard must NOT trip: the block returns the answer.
+// The budget is deliberately large relative to the compute between
+// guard-install and the input pause, so cold-start jitter on a loaded
+// CI runner cannot trip the timer before input() pauses it. The only
+// relation the assertion needs is input_time > budget > compute_time.
+node main() {
+  _installSlowInput(2000, "hello")
+  const result = guard(time: 500ms) as {
+    const answer = input("your name? ")
+    return "got:${answer}"
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}"
+  }
+  return result.value
+}

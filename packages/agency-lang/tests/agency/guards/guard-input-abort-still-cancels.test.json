@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"got:ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Pausing time guards around an input wait does not spuriously abort the wait; the answer returns even when the wait exceeds the raw budget."
+    }
+  ]
+}

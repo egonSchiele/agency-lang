@@ -1,0 +1,20 @@
+import { guard } from "std::thread"
+import test { _installSlowInput } from "std::thread"
+
+// pause() cancels only the guard's own timer; it leaves the composed
+// abort signal intact. Here the simulated human (2s) exceeds the raw
+// budget (500ms), but input-wait is exempt from COUNTING, so the guard
+// never trips and the answer returns. This asserts the wait is not
+// spuriously aborted while guards are paused. Budget sized well above
+// startup jitter (see guard-time-input-wait-free).
+node main() {
+  _installSlowInput(2000, "ok")
+  const result = guard(time: 500ms) as {
+    const answer = input("q? ")
+    return "got:${answer}"
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}"
+  }
+  return result.value
+}

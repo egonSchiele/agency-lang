@@ -1,0 +1,16 @@
+import { guard } from "std::thread"
+
+// A zero time budget disables the time guard: the block runs to
+// completion and returns its value instead of tripping. (A negative
+// budget already disables; this locks in that 0 does too, matching
+// the design's "time <= 0 disables" rule.)
+node main() {
+  const result = guard(time: 0) as {
+    sleep(20ms)
+    return "ran to completion"
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}"
+  }
+  return result.value
+}

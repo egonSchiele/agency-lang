@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"ran to completion\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A zero time budget disables the time guard; the block runs to completion rather than tripping."
+    }
+  ]
+}

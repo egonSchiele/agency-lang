@@ -70,12 +70,6 @@ When the clock ticks:
 - waiting for user input through `input` = no (waiting on a human is free).
 - `sleep` = yes.
 
-One current limitation: the `input` exemption applies to time guards on the
-same execution branch. If `input()` runs inside a `fork` or `race` branch,
-an *outer* time guard's clock keeps running during the wait, because fork
-branches do not yet carry their own copy of the parent's timer. Per-branch
-time budgets (the next change in this series) remove this limitation.
-
 When the time guard fires, any in-flight HTTP requests are cancelled and an abort signal is sent to other code as well.
 
 ## Nested guards

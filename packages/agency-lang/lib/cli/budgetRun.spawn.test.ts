@@ -28,9 +28,29 @@ const SLEEPER = `node main() {
 }
 `;
 
-function makeDir(): string {
+// The tripping work sits inside a USER guard block whose own (time) guard
+// has plenty of budget. The user boundary owns only its OWN guardId, so it
+// must NOT absorb the root budget's trip — the trip propagates to the
+// compiled entry and exits 3. If the boundary wrongly converted it, the
+// program would print GUARD_ABSORBED and exit 0.
+const GUARDED_SLEEPER = `import { guard } from "std::thread"
+
+node main() {
+  const inner = guard(time: 60s) as {
+    sleep(2s)
+    return "inner done"
+  }
+  if (isFailure(inner)) {
+    print("GUARD_ABSORBED:\${inner.error.type}")
+    return "absorbed"
+  }
+  return inner.value
+}
+`;
+
+function makeDir(fixture: string = SLEEPER): string {
   const dir = mkdtempSync(path.join(tmpdir(), "budget-spawn-"));
-  writeFileSync(path.join(dir, "sleeper.agency"), SLEEPER);
+  writeFileSync(path.join(dir, "sleeper.agency"), fixture);
   return dir;
 }
 
@@ -57,6 +77,18 @@ describe.skipIf(!existsSync(CLI))("root budget (end-to-end)", () => {
     const dir = makeDir();
     try {
       const r = await runCli(dir, ["--max-time", "100ms"]);
+      expect(r.stderr).toMatch(/Exceeded time limit/);
+      expect(r.code).toBe(3);
+    } finally {
+      rmTemp(dir);
+    }
+  }, 90_000);
+
+  it("a user guard() boundary does not absorb the root budget's trip", async () => {
+    const dir = makeDir(GUARDED_SLEEPER);
+    try {
+      const r = await runCli(dir, ["--max-time", "100ms"]);
+      expect(r.stdout).not.toMatch(/GUARD_ABSORBED/);
       expect(r.stderr).toMatch(/Exceeded time limit/);
       expect(r.code).toBe(3);
     } finally {

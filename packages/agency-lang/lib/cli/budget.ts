@@ -7,17 +7,25 @@ const UNIT_MS: Record<string, number> = {
   w: 604_800_000,
 };
 
-/** Parse a duration string (`30s`, `5m`, `1h`, `500ms`, or a leading-minus
- *  disable value like `-1s`) to milliseconds. A bare unitless number throws:
- *  the CLI requires an explicit unit so a value's meaning is never guessed. */
+/** Parse a duration string (`500ms`, `30s`, `5m`, `1h`, `2d`, `1w`, or a
+ *  leading-minus disable value like `-1s`) to milliseconds. A bare unitless
+ *  number throws: the CLI requires an explicit unit so a value's meaning is
+ *  never guessed. The computed milliseconds must be finite — an absurdly
+ *  long digit string would otherwise overflow to Infinity, stringify into
+ *  the env, and silently install no guard (fail-open on a cost-control
+ *  feature). */
 export function parseDurationMs(s: string): number {
   const m = /^(-?\d+(?:\.\d+)?)(ms|s|m|h|d|w)$/.exec(s.trim());
   if (!m) {
     throw new Error(
-      `--max-time: expected a duration like 30s, 5m, 1h, or 500ms (got "${s}")`,
+      `--max-time: expected a duration like 500ms, 30s, 5m, 1h, 2d, or 1w (got "${s}")`,
     );
   }
-  return parseFloat(m[1]) * UNIT_MS[m[2]];
+  const ms = parseFloat(m[1]) * UNIT_MS[m[2]];
+  if (!Number.isFinite(ms)) {
+    throw new Error(`--max-time: duration is too large (got "${s}")`);
+  }
+  return ms;
 }
 
 /** Resolve --max-cost / --max-time flag strings into the env-var string

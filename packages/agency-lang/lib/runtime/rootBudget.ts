@@ -18,16 +18,33 @@ export function installRootBudget(stack: StateStack): void {
   if (isIpcMode()) return;
   const rawCost = process.env[AGENCY_MAX_COST];
   if (rawCost !== undefined) {
-    const cost = Number(rawCost);
-    if (Number.isFinite(cost) && cost >= 0) {
+    const cost = parseBudgetValue(rawCost, AGENCY_MAX_COST);
+    if (cost >= 0) {
       stack.pushGuard(new CostGuard(cost));
     }
   }
   const rawTime = process.env[AGENCY_MAX_TIME];
   if (rawTime !== undefined) {
-    const ms = Number(rawTime);
-    if (Number.isFinite(ms) && ms > 0) {
+    const ms = parseBudgetValue(rawTime, AGENCY_MAX_TIME);
+    if (ms > 0) {
       stack.pushGuard(new TimeGuard(ms));
     }
   }
+}
+
+/** FAIL CLOSED on a malformed budget value. The env is an internal
+ *  carrier and the CLI validates before setting it, so a non-finite
+ *  value here means a hand-set env or a bug — and for a cost-control
+ *  feature, silently running UNBOUNDED is the wrong failure direction.
+ *  Refuse the run instead. (Negative values are not malformed: they are
+ *  the documented disable range and fall through the install checks.) */
+function parseBudgetValue(raw: string, name: string): number {
+  const n = Number(raw);
+  if (raw.trim() === "" || !Number.isFinite(n)) {
+    throw new Error(
+      `${name} is set but not a finite number (got "${raw}"). Refusing to ` +
+        `run without the requested budget — unset it or pass a valid value.`,
+    );
+  }
+  return n;
 }

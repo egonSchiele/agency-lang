@@ -7,6 +7,9 @@ import { AGENCY_MAX_COST, AGENCY_MAX_TIME } from "@/constants.js";
 afterEach(() => {
   delete process.env[AGENCY_MAX_COST];
   delete process.env[AGENCY_MAX_TIME];
+  // installRootBudget no-ops under AGENCY_IPC=1; clear it so a leak from
+  // an IPC-mode test elsewhere can't turn these assertions flaky.
+  delete process.env.AGENCY_IPC;
 });
 
 describe("installRootBudget", () => {
@@ -40,6 +43,20 @@ describe("installRootBudget", () => {
     expect(s2.guards.some((g) => g instanceof TimeGuard)).toBe(true);
   });
   test("no env vars: no guards", () => {
+    const stack = new StateStack();
+    installRootBudget(stack);
+    expect(stack.guards.length).toBe(0);
+  });
+  test("malformed values FAIL CLOSED: refuse the run, never run unbounded", () => {
+    process.env[AGENCY_MAX_COST] = "abc";
+    expect(() => installRootBudget(new StateStack())).toThrow(/finite number/);
+    delete process.env[AGENCY_MAX_COST];
+    process.env[AGENCY_MAX_TIME] = "Infinity";
+    expect(() => installRootBudget(new StateStack())).toThrow(/finite number/);
+  });
+  test("no-op in IPC mode (child budgets are the parent guard's job)", () => {
+    process.env[AGENCY_MAX_COST] = "0.5";
+    process.env.AGENCY_IPC = "1";
     const stack = new StateStack();
     installRootBudget(stack);
     expect(stack.guards.length).toBe(0);

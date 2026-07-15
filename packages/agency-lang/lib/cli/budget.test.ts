@@ -11,6 +11,13 @@ describe("parseDurationMs", () => {
   test("accepts a leading minus (disable value)", () => {
     expect(parseDurationMs("-1s")).toBe(-1_000);
   });
+  test("accepts days and weeks (documented units)", () => {
+    expect(parseDurationMs("2d")).toBe(172_800_000);
+    expect(parseDurationMs("1w")).toBe(604_800_000);
+  });
+  test("rejects a duration that overflows to Infinity", () => {
+    expect(() => parseDurationMs("9".repeat(320) + "s")).toThrow(/too large/);
+  });
   test("rejects a bare unitless number", () => {
     expect(() => parseDurationMs("300")).toThrow(/duration/i);
   });

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"tripped:timeoutFailure\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A fork branch inherits the parent's remaining time budget; working past it trips, and the trip is owned by the outer guard boundary."
+    }
+  ]
+}

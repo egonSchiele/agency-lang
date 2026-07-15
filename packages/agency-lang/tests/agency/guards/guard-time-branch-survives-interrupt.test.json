@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"completed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve" },
+        { "action": "approve" }
+      ],
+      "description": "Branch time clones survive an interrupt/resume cycle inside the fork: no spurious trip, and the guarded block completes."
+    }
+  ]
+}

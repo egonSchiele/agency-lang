@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"no trip\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A branch's input-wait pauses only its own clock: a 2s human answer inside an 800ms fork budget does not trip, and the working sibling completes."
+    }
+  ]
+}

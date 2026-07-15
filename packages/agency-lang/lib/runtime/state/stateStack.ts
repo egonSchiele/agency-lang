@@ -1,6 +1,6 @@
 import type { Guard, GuardJSON } from "../guard.js";
 import type { ReplyAttachmentPart } from "../replyAttachments.js";
-import { guardFromJSON } from "../guard.js";
+import { guardFromJSON, TimeGuard } from "../guard.js";
 import { sendCostTelemetryToParent } from "../costTelemetry.js";
 import { Checkpoint } from "../index.js";
 import { MemoryFrame } from "../memory/frame.js";
@@ -317,6 +317,13 @@ export type StateStackJSON = {
    *  validate that the parent's guard stack hasn't drifted. Always 0
    *  for the root stack. */
   inheritedGuardCount?: number;
+  /** Inherited TIME guards, serialized WITH the branch. Unlike cost
+   *  guards (shared references, correctly re-attached by re-cloning
+   *  from the parent on resume), a time clone is branch-OWNED state:
+   *  its accrued working time and remaining budget would reset if
+   *  resume re-cloned it. `rehydrateInheritedGuardsFrom` adopts these
+   *  by guardId instead of calling cloneForBranch. */
+  inheritedTimeGuards?: GuardJSON[];
 };
 
 export class StateStack {
@@ -394,6 +401,33 @@ export class StateStack {
   // double-serializing shared state.
   guards: Guard[] = [];
   inheritedGuardCount: number = 0;
+  /** Deserialized inherited TIME clones awaiting adoption by
+   *  `rehydrateInheritedGuardsFrom` (matched to parent guards by
+   *  guardId). Live-only staging — never re-serialized; cleared once
+   *  rehydrate consumes it. See StateStackJSON.inheritedTimeGuards.
+   *
+   *  INVARIANT: adoption is MANDATORY. A resume path that deserializes
+   *  a branch stack and runs user code without calling
+   *  `rehydrateInheritedGuardsFrom` would silently drop the inherited
+   *  time budget (no enforcement, no error). All branch re-entry goes
+   *  through runBatch today (startInvoke / runRaceResume), which
+   *  rehydrates; `chargeGuards`/`enforceGuards` assert this so a
+   *  future path that skips rehydrate fails loudly at its first
+   *  enforcement point instead. */
+  parkedInheritedTimeGuards: Guard[] = [];
+
+  /** Throw if deserialized inherited time clones were never adopted —
+   *  see the invariant on `parkedInheritedTimeGuards`. */
+  private assertNoParkedGuards(): void {
+    if (this.parkedInheritedTimeGuards.length > 0) {
+      throw new Error(
+        "StateStack: inherited time-guard clones were deserialized but " +
+          "never adopted — a resume path skipped " +
+          "rehydrateInheritedGuardsFrom, so this branch would run with " +
+          "no time enforcement. This is a runtime bug.",
+      );
+    }
+  }
 
   /** Lazy accessor for the frame array, creating it on first push.
    *  Created with sentinel-marking semantics: once the array exists
@@ -521,6 +555,7 @@ export class StateStack {
    * fail first.
    */
   enforceGuards(): void {
+    this.assertNoParkedGuards();
     for (let i = this.guards.length - 1; i >= 0; i--) {
       const err = this.guards[i].check(this);
       if (err) throw err;
@@ -563,6 +598,7 @@ export class StateStack {
    * sites must go through billCharge.
    */
   chargeGuards(amount: number): void {
+    this.assertNoParkedGuards();
     for (const g of this.guards) g.charge(amount);
   }
 
@@ -579,18 +615,31 @@ export class StateStack {
    *    parent pushed an extra guard between snapshot and resume) throws
    *    rather than silently inheriting a different set of guards.
    *
-   * Always invokes `guard.cloneForBranch(parent, child)` on each parent
-   * guard so per-guard semantics (CostGuard returns `this`; TimeGuard
-   * returns `undefined`) drive what gets prepended. Slicing the parent
-   * by `inheritedGuardCount` would lose this filter information.
+   * Invokes `guard.cloneForBranch(parent, child)` on each parent guard
+   * so per-guard semantics (CostGuard returns `this`, a shared ref;
+   * TimeGuard returns a remaining-budget clone) drive what gets
+   * prepended — EXCEPT when a deserialized time clone for the same
+   * guardId was parked by fromJSON. That clone is branch-owned state
+   * (accrued working time); adopting it instead of re-cloning is what
+   * lets a branch's clock survive interrupt/resume.
    *
    * Caller (runBatch) owns the per-execution idempotency check via
    * `BranchState.guardsRehydrated` — this method itself is NOT idempotent;
    * calling it twice on the same stack will double-prepend.
    */
   rehydrateInheritedGuardsFrom(parentStack: StateStack): void {
+    const parked = this.parkedInheritedTimeGuards;
+    this.parkedInheritedTimeGuards = [];
     const inheritedRefs = parentStack.guards
-      .map((g) => g.cloneForBranch(parentStack, this))
+      .map((g) => {
+        if (g instanceof TimeGuard) {
+          const adopted = parked.find(
+            (p) => p instanceof TimeGuard && p.guardId === g.guardId,
+          );
+          if (adopted) return adopted;
+        }
+        return g.cloneForBranch(parentStack, this);
+      })
       .filter((g): g is Guard => g !== undefined);
     if (
       this.inheritedGuardCount > 0 &&
@@ -725,7 +774,7 @@ export class StateStack {
   }
 
   toJSON(): StateStackJSON {
-    return {
+    const json: StateStackJSON = {
       stack: this.stack.map((frame) => frame.toJSON()),
       other: deepClone(this.other),
       mode: this.mode,
@@ -764,6 +813,18 @@ export class StateStack {
       guards: this.guards.slice(this.inheritedGuardCount).map((g) => g.toJSON()),
       inheritedGuardCount: this.inheritedGuardCount,
     };
+    // EXCEPTION to the slice rule above: inherited TIME guards are
+    // branch-owned clones (remaining budget + accrued working time),
+    // not shared references. Re-cloning them from the parent on
+    // resume would reset the branch's clock, so they serialize with
+    // the branch and rehydrate adopts them by guardId.
+    const inheritedTime = this.guards
+      .slice(0, this.inheritedGuardCount)
+      .filter((g) => g instanceof TimeGuard);
+    if (inheritedTime.length > 0) {
+      json.inheritedTimeGuards = inheritedTime.map((g) => g.toJSON());
+    }
+    return json;
   }
 
   static fromJSON(json: StateStackJSON): StateStack {
@@ -792,6 +853,11 @@ export class StateStack {
     // re-entry that reactivates the branch.
     stateStack.guards = (json.guards ?? []).map(guardFromJSON);
     stateStack.inheritedGuardCount = json.inheritedGuardCount ?? 0;
+    // Park deserialized inherited time clones for rehydrate to adopt.
+    // Live-only: consumed (and cleared) by rehydrateInheritedGuardsFrom.
+    stateStack.parkedInheritedTimeGuards = (json.inheritedTimeGuards ?? []).map(
+      guardFromJSON,
+    );
     return stateStack;
   }
 }

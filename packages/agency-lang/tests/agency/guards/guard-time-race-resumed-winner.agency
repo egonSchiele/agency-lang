@@ -1,0 +1,30 @@
+import { guard } from "std::thread"
+
+// Race whose winner INTERRUPTS under a time budget: the interrupted
+// branch settles first (an interrupt is a settle), losers drop, the
+// parent stays paused across the human wait, and the resumed winner
+// completes through runRaceResume's charge-and-resume exit. No trip,
+// and the winner's post-resume value comes back.
+def confirmBranch(item: number): string {
+  if (item == 1) {
+    sleep(20ms)
+    interrupt("approve ${item}?")
+    sleep(20ms)
+    return "resumed"
+  }
+  sleep(10s)
+  return "slow"
+}
+
+node main() {
+  const result = guard(time: 5s) as {
+    const winner = race([1, 2]) as item {
+      return confirmBranch(item)
+    }
+    return winner
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}"
+  }
+  return result.value
+}

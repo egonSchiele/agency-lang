@@ -1,0 +1,27 @@
+import { guard } from "std::thread"
+import test { _installSlowInput } from "std::thread"
+
+// Per-branch time budgets: one branch waits on a (simulated) human for
+// 2s, the other does real work, under an 800ms budget. The waiter's
+// CLONE pauses during the input wait, the parent's own timer is paused
+// for the whole fork region, and the join charges only the max branch
+// WORKING time (~100ms). So nothing trips. Before per-branch budgets,
+// the parent's single wall-clock timer ran through the wait and killed
+// both branches — this fixture is the PR 1 limitation, reversed.
+node main() {
+  _installSlowInput(2000, "hi")
+  const result = guard(time: 800ms) as {
+    fork([1, 2]) as n {
+      if (n == 1) {
+        const answer = input("branch one asks: ")
+      } else {
+        sleep(100ms)
+      }
+    }
+    return "no trip"
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}"
+  }
+  return result.value
+}

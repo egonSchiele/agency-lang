@@ -83,7 +83,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L269))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L271))
 
 ### ThreadInfo
 
@@ -99,7 +99,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L274))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L276))
 
 ## Functions
 
@@ -340,11 +340,13 @@ Run a block under a cost limit, a time limit, or both, aborting the
  * timer is re-armed with the remaining budget.
  *
  * Nested guards are independent. An inner trip does not trip an outer
- * guard. Across fork/race branches, cost guards are cloned per branch, so
- * each tracks its own cost-since-push. The time guard is shared: the
- * parent's timer is the single source of truth, and its abort cascade
- * reaches every branch. `thread`/`subthread` isolate message history but
- * not cost or abort plumbing, so a guard sees every LLM call inside them.
+ * guard. Across fork/race branches, cost guards are SHARED (every branch
+ * charges the same counter in real time), while time guards are cloned
+ * per branch: each branch gets the parent's remaining budget as its own
+ * countdown, a branch's input-wait pauses only its own clock, and the
+ * parent's clock advances by the longest branch's working time at the
+ * join. `thread`/`subthread` isolate message history but not cost or
+ * abort plumbing, so a guard sees every LLM call inside them.
  *
  * Limitations: a tool whose body is a JS function (not Agency code) cannot
  * be aborted mid-execution. It runs to completion in the background, and
@@ -362,7 +364,7 @@ Run a block under a cost limit, a time limit, or both, aborting the
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L213))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L215))
 
 ### listThreads
 
@@ -395,7 +397,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L346))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L348))
 
 ### currentThreadId
 
@@ -410,7 +412,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L399))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L401))
 
 ### getThread
 
@@ -442,4 +444,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L409))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L411))

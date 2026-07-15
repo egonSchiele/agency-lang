@@ -279,12 +279,40 @@ describe("TimeGuard", () => {
     expect(stack.abortSignal!.aborted).toBe(true);
   });
 
-  it("cloneForBranch returns undefined", () => {
+  it("cloneForBranch inherits the parent's REMAINING budget", () => {
     const parent = new StateStack();
     const child = new StateStack();
+    const g = new TimeGuard(10_000);
+    g.addElapsed(3_000); // parent already spent 3s before the fork
+    const clone = g.cloneForBranch(parent, child);
+    expect(clone).toBeInstanceOf(TimeGuard);
+    // Child gets the remaining 7s, not a fresh 10s: the path
+    // "parent work, then branch" must not exceed the original budget.
+    expect((clone as TimeGuard).timeLimit).toBe(7_000);
+  });
+
+  it("cloneForBranch carries the parent's guardId", () => {
+    // Load-bearing for trip ownership: a trip inside a branch must be
+    // owned by the OUTER guard boundary's try (ownedGuardIds matching),
+    // exactly like a shared CostGuard's trips are.
     const g = new TimeGuard(1000);
-    g.install(parent);
-    expect(g.cloneForBranch(parent, child)).toBeUndefined();
+    const clone = g.cloneForBranch(new StateStack(), new StateStack());
+    expect((clone as TimeGuard).guardId).toBe(g.guardId);
+  });
+
+  it("cloneForBranch floors the remaining budget at 1ms", () => {
+    const g = new TimeGuard(1000);
+    g.addElapsed(5_000); // over budget already
+    const clone = g.cloneForBranch(new StateStack(), new StateStack());
+    expect((clone as TimeGuard).timeLimit).toBe(1);
+  });
+
+  it("snapshotElapsed/addElapsed round-trip for join accounting", () => {
+    const g = new TimeGuard(10_000);
+    expect(g.snapshotElapsed()).toBe(0);
+    g.addElapsed(1_200);
+    g.addElapsed(800);
+    expect(g.snapshotElapsed()).toBe(2_000);
   });
 
   it("check() charges in-flight window so spent reflects elapsed time", () => {

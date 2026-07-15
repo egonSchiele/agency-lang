@@ -46,10 +46,11 @@ export function nextGuardId(): string {
  *     array via `StateStack.rehydrateInheritedGuardsFrom`, so a
  *     `charge()` from any branch mutates the same counter the parent
  *     and siblings see — real-time mid-fork enforcement.
- *   - `TimeGuard` returns `undefined` — the parent's timer is the
- *     single source of truth; abort cascade via the composed
- *     `stack.abortSignal` propagates the trip to every branch's
- *     Runner.shouldSkip without an independent guard entry.
+ *   - `TimeGuard` returns a fresh per-branch clone carrying the
+ *     parent's REMAINING budget and the parent's guardId. The parent
+ *     pauses for the duration of the fork region (runBatch delegates
+ *     enforcement to the clones) and advances by the max clone
+ *     working time at the final join.
  *
  * `toJSON` serializes ONLY persistent state — runtime fields
  * (AbortControllers, setTimeout handles, performance.now() stamps)
@@ -79,9 +80,9 @@ export type Guard = {
   /** Return a guard reference for the given child branch.
    *  CostGuard returns `this` (shared in-memory object — child charges
    *  the same counter the parent sees, enabling real-time mid-fork
-   *  enforcement). TimeGuard returns `undefined` (abort cascades via
-   *  stack.abortSignal — no per-branch guard needed). Future guards
-   *  may return a fresh clone if they want per-branch isolation. */
+   *  enforcement). TimeGuard returns a remaining-budget clone with the
+   *  parent's guardId (per-branch working-time isolation; the parent
+   *  pauses across the fork and charges max clone time at the join). */
   cloneForBranch(
     parentStack: StateStack,
     childStack: StateStack,
@@ -241,13 +242,15 @@ export class CostGuard implements Guard {
  * Agency tool bodies stop at the next step boundary. (JS-bodied tool
  * calls cannot be aborted mid-execution in V1 — documented.)
  *
- * Fork/race branches: NOT cloned (`cloneForBranch` returns
- * `undefined`). The parent's timer is the single source of truth; the
- * abort cascade from `composeBranchAbortSignal` propagates the trip
- * to every branch's `stack.abortSignal`. Branches halt silently in
- * their own `Runner.shouldSkip` (no guard present → no throw), and
- * the parent's next sync point sees its own TimeGuard's
- * `tripped === true` and throws `GuardExceededError("time", ...)`.
+ * Fork/race branches: each branch gets its OWN clone via
+ * `cloneForBranch` — remaining budget, parent's guardId, independent
+ * pause state and abort controller. runBatch pauses the parent's
+ * timer at fork entry (enforcement is delegated to the clones so a
+ * branch's input-wait pauses only that branch's clock) and advances
+ * the parent by the max clone working time at the final value join.
+ * A clone's trip aborts only its branch's composed signal; the trip
+ * error carries the parent's guardId, so the outer guard boundary's
+ * `try` owns it exactly like a shared CostGuard trip.
  *
  * Idempotency: `pause()` / `resume()` use the `state` field so
  * multiple Runners halting/stepping in the same JS tick don't
@@ -335,20 +338,16 @@ export class TimeGuard implements Guard {
 
   check(_stack: StateStack): GuardExceededError | null {
     if (!this.tripped || this.consumed) return null;
-    // Charge any in-flight window delta so `spent` reflects the
-    // true elapsed time at the moment of the trip. Without this,
-    // checking inside an active window (the common case — abort
+    // currentElapsed() charges any in-flight window delta so `spent`
+    // reflects the true elapsed time at the moment of the trip. Without
+    // this, checking inside an active window (the common case — abort
     // fires during a sleep / LLM call, runner steps next) would
     // report `elapsedMs === 0` because no pause has happened.
-    const inFlight =
-      this.state === "running"
-        ? performance.now() - this.windowStart!
-        : 0;
     this.consumed = true;
     return new GuardExceededError(
       "time",
       this.timeLimit,
-      this.elapsedMs + inFlight,
+      this.currentElapsed(),
       this.guardId,
     );
   }
@@ -357,24 +356,55 @@ export class TimeGuard implements Guard {
     return this.tripped;
   }
 
+  /** Accrued working time plus any in-flight running window, in ms. */
+  private currentElapsed(): number {
+    return (
+      this.elapsedMs +
+      (this.state === "running" && this.windowStart !== undefined
+        ? performance.now() - this.windowStart
+        : 0)
+    );
+  }
+
+  /** Public read of currentElapsed() for the runBatch join accounting:
+   *  the parent advances by the max of its branch clones' snapshots. */
+  snapshotElapsed(): number {
+    return this.currentElapsed();
+  }
+
+  /** Advance the accumulator without a running window. runBatch calls
+   *  this on the PARENT guard at a fork's final value join, with the
+   *  max of the branch clones' working time — the parallel region's
+   *  contribution to this causal path. */
+  addElapsed(ms: number): void {
+    this.elapsedMs += ms;
+  }
+
   cloneForBranch(
     _parentStack: StateStack,
     _childStack: StateStack,
-  ): undefined {
-    return undefined;
+  ): Guard {
+    // Wall-clock time is not cumulative across parallel branches, so each
+    // branch gets its OWN timer. It inherits the parent's REMAINING budget
+    // at fork time (floored at 1ms, so "parent work, then branch" cannot
+    // exceed the original budget) and the parent's guardId, so a trip
+    // inside the branch is owned by the same guard boundary's try —
+    // mirroring how a shared CostGuard's trips match ownedGuardIds. Each
+    // branch pauses/resumes independently; resume() on the child stack
+    // arms the fresh timer at the branch's first runner step.
+    const remaining = Math.max(1, this.timeLimit - this.currentElapsed());
+    const clone = new TimeGuard(remaining);
+    clone.guardId = this.guardId;
+    return clone;
   }
 
   toJSON(): GuardJSON {
-    // If we're called while running, charge the in-flight window
-    // before serializing so the snapshot reflects all elapsed time.
-    const inFlight =
-      this.state === "running"
-        ? performance.now() - this.windowStart!
-        : 0;
+    // currentElapsed() charges the in-flight window if we're called
+    // while running, so the snapshot reflects all elapsed time.
     return {
       kind: "time",
       timeLimit: this.timeLimit,
-      elapsedMs: this.elapsedMs + inFlight,
+      elapsedMs: this.currentElapsed(),
       guardId: this.guardId,
     };
   }

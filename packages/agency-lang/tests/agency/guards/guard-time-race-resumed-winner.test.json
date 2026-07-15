@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"resumed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }],
+      "description": "A race winner that interrupts and resumes under a time budget: the parent clock stays paused across the wait, runRaceResume charges at its value exit, and no spurious trip fires."
+    }
+  ]
+}

@@ -66,6 +66,7 @@ import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
 import { GlobalStore } from "./state/globalStore.js";
 import type { BranchState, State, StateStack } from "./state/stateStack.js";
+import { TimeGuard } from "./guard.js";
 import type { ThreadStore } from "./state/threadStore.js";
 
 export type BatchChild<T> = {
@@ -227,6 +228,56 @@ function composeBranchAbortSignal(
   return composed;
 }
 
+/** Pause every guard on the parent stack for the duration of a batch
+ * region. Time enforcement is delegated to the branches' remaining-
+ * budget clones (`TimeGuard.cloneForBranch`); the parent is "waiting
+ * on children", which is not working time on its own causal path.
+ * `CostGuard.pause()` is a no-op, so cost enforcement is unaffected.
+ * Idempotent — a paused guard stays paused. */
+function pauseParentTimeGuards(parentStack: StateStack): void {
+  parentStack.guards.forEach((g) => g.pause());
+}
+
+/** Bank a branch's working time and cancel its timers. Called when a
+ * branch settles and on interrupted exits, so a dormant branch cannot
+ * trip (or keep accruing) while a human thinks. */
+function pauseBranchTimeGuards(branchStack: StateStack): void {
+  branchStack.guards.forEach((g) => g.pause());
+}
+
+/** Advance each parent time guard by its branch clones' banked working
+ * time and restart the parent clock. Clones are matched by guardId —
+ * `TimeGuard.cloneForBranch` copies the parent's id. `mode: "sum"`
+ * (sequential batches) adds the branch times because those branches
+ * ARE one causal path; `mode: "max"` (parallel) takes the longest
+ * branch, because concurrent time does not add along a path. Resuming
+ * a parent that the charge pushed over budget arms a zero-delay timer
+ * (`startWindow`), so the trip fires at the join — intended. Called on
+ * every VALUE or THROW exit of a batch region; interrupted exits leave
+ * the parent paused instead (the parent halts, and the single charge
+ * happens at the eventual final join, so pause/resume cycles never
+ * double-charge). */
+function chargeAndResumeParentTimeGuards(
+  parentStack: StateStack,
+  branchStacks: StateStack[],
+  mode: "sum" | "max",
+): void {
+  for (const pg of parentStack.guards) {
+    if (!(pg instanceof TimeGuard)) continue;
+    let acc = 0;
+    for (const bs of branchStacks) {
+      for (const bg of bs.guards) {
+        if (bg === pg || !(bg instanceof TimeGuard)) continue;
+        if (bg.guardId !== pg.guardId) continue;
+        const t = bg.snapshotElapsed();
+        acc = mode === "sum" ? acc + t : Math.max(acc, t);
+      }
+    }
+    if (acc > 0) pg.addElapsed(acc);
+    pg.resume(parentStack);
+  }
+}
+
 /** Thin per-execution idempotency wrapper around
  *  `StateStack.rehydrateInheritedGuardsFrom`. The inner method handles
  *  the slice/prepend invariant and the resume validation; this wrapper
@@ -277,26 +328,36 @@ function startInvoke<T>(
   if (t.cached) {
     return Promise.resolve(t.branch.result!.result);
   }
-  // Rehydrate inherited guards BEFORE composing the abort signal.
-  // For TimeGuard, install runs on the parent only — children don't
-  // need separate installs because the parent's abort signal propagates
-  // through composeBranchAbortSignal. For CostGuard, the child's
-  // stack.guards just holds a shared reference to the parent's instance
-  // — no install plumbing involved. Order is informational only; both
-  // run before invoke.
+  // Rehydrate inherited guards BEFORE composing the abort signal, and
+  // arm them AFTER: a TimeGuard clone's resume() composes its own
+  // controller into the branch signal, and composeBranchAbortSignal
+  // overwrites `stack.abortSignal`, so the arming must come last. For
+  // CostGuard, the child's stack.guards just holds a shared reference
+  // to the parent's instance — no install plumbing involved.
   rehydrateInheritedGuards(t.branch, parentStack);
   inheritBranchMemory(t.branch.stack, parentStack);
   const signal = composeBranchAbortSignal(t.branch, parentStack);
+  // Arm inherited time-guard clones NOW rather than lazily at the
+  // branch's first Runner step: TS-only branches (the subprocess
+  // adopter, parallel tool dispatch) never step a Runner on the branch
+  // stack, and their wall time must accrue on the clone for the join
+  // charge. resume() composes the clone's controller into the signal
+  // composed above; CostGuard.resume() is a no-op. The trailing
+  // finally banks the branch's working time the moment it settles —
+  // also for race losers, whose promises settle after the join.
+  t.branch.stack.guards.forEach((g) => g.resume(t.branch.stack));
   hooks?.seedBranchCost?.(t.branch.stack, parentStack);
   hooks?.onBranchStart?.(t.child.key, i);
   t.startedAt = performance.now();
   const shareGlobals = opts.shareGlobals ?? false;
   const shareThreads = opts.shareThreads ?? false;
-  return ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-    runInBranchAlsFrame(ctx, t.branch, shareGlobals, shareThreads, () =>
-      t.child.invoke(t.branch.stack, signal),
-    ),
-  );
+  return ctx.statelogClient
+    .runInBranchContext(parentSpanStack, () =>
+      runInBranchAlsFrame(ctx, t.branch, shareGlobals, shareThreads, () =>
+        t.child.invoke(t.branch.stack, signal),
+      ),
+    )
+    .finally(() => pauseBranchTimeGuards(t.branch.stack));
 }
 
 /** Wrap `fn` in an `agencyStore.run` frame whose `stack` is the branch's
@@ -442,6 +503,13 @@ export async function runBatch<T>(
     seen.add(c.key);
   }
 
+  // Delegate time enforcement to the branch clones for the duration of
+  // the region. Every exit path below either charge-and-resumes (value
+  // joins, throws) or deliberately leaves the parent paused
+  // (interrupted exits — the parent halts next, and the final join
+  // charges once). See chargeAndResumeParentTimeGuards.
+  pauseParentTimeGuards(parentStack);
+
   // 0b. Mode-flip defensive assert. If a previous run recorded a race
   // winner under `raceWinnerLocalKey` but the caller now passes a
   // non-race mode (or vice versa), that's a serious checkpoint/code
@@ -525,6 +593,15 @@ export async function runBatch<T>(
     const timeMs = cached ? 0 : performance.now() - t.startedAt;
     if (s.status === "rejected") {
       if (!cached) hooks?.onBranchEnd?.(child.key, i, "failure", timeMs);
+      // Charge-and-resume BEFORE the error reaches the guard boundary:
+      // a branch's own time trip must both bill the parent and restart
+      // its clock, or the parent stays paused forever after the
+      // boundary converts the trip to a Failure.
+      chargeAndResumeParentTimeGuards(
+        parentStack,
+        tasks.map((task) => task.branch.stack),
+        mode === "sequential" ? "sum" : "max",
+      );
       // Rethrow: any sibling interrupts collected are discarded (matches
       // today's runForkAll/runRace behavior; documented at top of file).
       throw s.reason;
@@ -553,13 +630,23 @@ export async function runBatch<T>(
 
   // 4. Stamp shared parent checkpoint + overwrite.
   if (interrupts.length > 0) {
+    // Bank every branch's working time BEFORE the checkpoint stamp so
+    // the serialized clones carry accrued-work only (no in-flight
+    // window bleeding into the human's think time). The parent stays
+    // paused — it halts next, and the final value join charges once.
+    tasks.forEach((t) => pauseBranchTimeGuards(t.branch.stack));
     stampSharedCheckpoint(opts, interrupts);
     return { kind: "interrupts", interrupts };
   }
 
-  // 5. No interrupts — propagate cost, clear branches, return values.
+  // 5. No interrupts — propagate cost + time, clear branches, return values.
   const allBranches = tasks.map((t) => t.branch);
   hooks?.propagateBranchCost?.(allBranches, parentStack);
+  chargeAndResumeParentTimeGuards(
+    parentStack,
+    allBranches.map((b) => b.stack),
+    mode === "sequential" ? "sum" : "max",
+  );
   parentFrame.popBranches();
   return {
     kind: "values",
@@ -612,6 +699,11 @@ async function runRaceFirstTime<T>(
         new AgencyCancelledError("race loser", makeAbortCause({ kind: "raceLoser" })),
       );
     }
+    chargeAndResumeParentTimeGuards(
+      opts.parentStack,
+      tasks.map((task) => task.branch.stack),
+      "max",
+    );
     throw err;
   }
 
@@ -668,6 +760,12 @@ async function runRaceFirstTime<T>(
       losers.push(tasks[i].branch);
     }
     hooks?.propagateLoserCost?.(losers, opts.parentStack);
+    // Bank the winner's working time before the stamp (dormant clones
+    // must not accrue or trip during the human wait). Losers' time is
+    // dropped with their branches — a loser cannot have outworked the
+    // winner's wall window, so the eventual max-charge from the winner
+    // alone bounds the region correctly. Parent stays paused.
+    tasks.forEach((t) => pauseBranchTimeGuards(t.branch.stack));
     // Drop loser branches before stamping — losers must not survive into
     // the serialized checkpoint.
     for (let i = 0; i < tasks.length; i++) {
@@ -694,6 +792,11 @@ async function runRaceFirstTime<T>(
   }
   hooks?.propagateLoserCost?.(losers, opts.parentStack);
   hooks?.propagateWinnerCost?.(winnerTask.branch, opts.parentStack);
+  chargeAndResumeParentTimeGuards(
+    opts.parentStack,
+    tasks.map((task) => task.branch.stack),
+    "max",
+  );
   for (let i = 0; i < tasks.length; i++) {
     if (i === winnerIndex) continue;
     parentFrame.deleteBranch(tasks[i].child.key);
@@ -725,7 +828,9 @@ async function runRaceResume<T>(
   // Cached winner — return cached result. Cost was already propagated
   // when the winner first completed; don't double-bill on this defensive
   // path. (Matches today's resumeRaceWinner cached-branch behavior.)
+  // Same for time: resume the parent clock without charging.
   if (branch.result !== undefined) {
+    chargeAndResumeParentTimeGuards(parentStack, [], "max");
     return { kind: "values", values: [branch.result.result as T] };
   }
 
@@ -742,6 +847,10 @@ async function runRaceResume<T>(
   // same helper as `startInvoke` so the composition rule lives in one
   // place.
   const signal = composeBranchAbortSignal(branch, parentStack);
+
+  // Arm the resumed winner's time clones (adopted or re-cloned by the
+  // rehydrate above) — same reasoning as startInvoke's arming.
+  branch.stack.guards.forEach((g) => g.resume(branch.stack));
 
   const parentSpanStack = ctx.statelogClient.snapshotStack();
   const startedAt = performance.now();
@@ -762,6 +871,8 @@ async function runRaceResume<T>(
       "failure",
       performance.now() - startedAt,
     );
+    pauseBranchTimeGuards(branch.stack);
+    chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
     throw err;
   }
 
@@ -772,6 +883,9 @@ async function runRaceResume<T>(
       "interrupted",
       performance.now() - startedAt,
     );
+    // Bank the winner's working time before the stamp; parent stays
+    // paused across yet another human wait.
+    pauseBranchTimeGuards(branch.stack);
     parentFrame.setInterruptOnBranch(
       child.key,
       value[0].interruptId,
@@ -791,5 +905,7 @@ async function runRaceResume<T>(
   );
   parentFrame.setResultOnBranch(child.key, value as any);
   hooks?.propagateWinnerCost?.(branch, parentStack);
+  pauseBranchTimeGuards(branch.stack);
+  chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
   return { kind: "values", values: [value as T] };
 }

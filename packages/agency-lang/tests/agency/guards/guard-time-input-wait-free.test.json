@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"got:hello\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A time budget does not count time spent waiting for a human via input(); a slow answer that exceeds the raw budget does not trip the guard."
+    }
+  ]
+}

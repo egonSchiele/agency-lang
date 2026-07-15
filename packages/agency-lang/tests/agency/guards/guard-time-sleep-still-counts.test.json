@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"tripped:timeoutFailure\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "sleep still counts against a time budget; a sleep that overruns the limit trips, confirming only input-wait is exempt."
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+import { guard } from "std::thread"
+
+// sleep is NOT exempt: it is the program deliberately spending time,
+// not waiting on a human. A sleep that overruns the budget still trips.
+node main() {
+  const result = guard(time: 20ms) as {
+    sleep(150ms)
+    sleep(1ms)
+    return "did not trip"
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}"
+  }
+  return result.value
+}

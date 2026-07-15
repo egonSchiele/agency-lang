@@ -67,7 +67,7 @@ if (isFailure(result)) {
 When the clock ticks:
 - regular code execution = yes.
 - interrupts = no.
-- waiting for user input through `input` = yes.
+- waiting for user input through `input` = no (waiting on a human is free).
 - `sleep` = yes.
 
 When the time guard fires, any in-flight HTTP requests are cancelled and an abort signal is sent to other code as well.

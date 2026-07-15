@@ -56,26 +56,46 @@ export function _parseJSON(text: string): any {
  * `AgencyCancelledError`, which `__tryCall` re-throws so cancellation
  * actually propagates.
  */
+/** Test-only: install an input override that resolves after `delayMs`,
+ *  used by guard fixtures to simulate a slow human without touching stdin.
+ *  Exposed to fixtures as the non-exported `_installSlowInput` def in
+ *  `stdlib/thread.agency` (test imports only). */
+export function _installSlowInputImpl(delayMs: number, answer: string): void {
+  (globalThis as any).__agencyInputOverride = (_prompt: string) =>
+    new Promise<string>((resolve) => setTimeout(() => resolve(answer), delayMs));
+}
+
 function inputImpl(
   ctx: RuntimeContext<any>,
   stack: StateStack,
   prompt: string,
 ): Promise<string> {
+  // Waiting on a human must not count against a time budget. Pause every
+  // guard on the active branch stack before blocking, resume after. These
+  // are the same idempotent calls the runner makes on halt()/step entry;
+  // CostGuard.pause() is a no-op, so only time budgets are affected.
+  // pause() cancels only the guard's own timer — the composed abort signal
+  // stays intact, so external cancellation (Ctrl-C, race-loser) still
+  // releases the wait.
+  stack.guards.forEach((g) => g.pause());
+  const resumeGuards = () => stack.guards.forEach((g) => g.resume(stack));
+
   const override = (globalThis as any).__agencyInputOverride as
     | ((prompt: string) => Promise<string>)
     | undefined;
   if (override) {
-    return override(prompt);
+    return override(prompt).finally(resumeGuards);
   }
   const signal = ctx.getAbortSignal(stack);
   if (signal.aborted) {
+    resumeGuards();
     return Promise.reject(new AgencyCancelledError("input cancelled"));
   }
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const onAbort = () => {
       try { rl.close(); } catch {}
       reject(new AgencyCancelledError("input cancelled"));
@@ -86,7 +106,7 @@ function inputImpl(
       rl.close();
       resolve(answer);
     });
-  });
+  }).finally(resumeGuards);
 }
 
 /** Deprecated context-injected wrapper kept in place during the ALS

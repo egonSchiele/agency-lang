@@ -38,6 +38,7 @@ import {
   _runGuarded,
  } from "agency-lang/stdlib-lib/thread.js"
 
+import { _installSlowInputImpl } from "agency-lang/stdlib-lib/builtins.js"
 import {
   _listThreadsRaw,
   _getThread,
@@ -249,6 +250,20 @@ export def guard(
   const result = _runGuarded(ids, block)
   _popGuard(ids)
   return result
+}
+
+/** Test-only seam (import test { _installSlowInput }): install an input()
+override that answers after a delay, simulating a slow human without
+touching stdin. Guard fixtures use it to prove input-wait does not count
+against time budgets. */
+def _installSlowInput(delayMs: number, answer: string) {
+  """
+  Test-only: make input() resolve with `answer` after `delayMs` milliseconds.
+
+  @param delayMs - How long the simulated human takes to answer.
+  @param answer - The answer input() resolves with.
+  """
+  _installSlowInputImpl(delayMs, answer)
 }
 
 export type ThreadMessage = {

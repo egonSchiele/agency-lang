@@ -278,7 +278,11 @@ function pushGuardImpl(
     stack.pushGuard(g);
     ids.push(g.guardId);
   }
-  if (timeLimit != null && timeLimit >= 0) {
+  // Time: a NON-POSITIVE limit disables (0 would otherwise trip instantly and
+  // has no useful meaning). Cost differs on purpose: cost 0 is a real limit
+  // meaning "no paid spend" (local-models-only), since check() trips on
+  // spent > limit (strict).
+  if (timeLimit != null && timeLimit > 0) {
     const g = new TimeGuard(timeLimit);
     stack.pushGuard(g);
     ids.push(g.guardId);

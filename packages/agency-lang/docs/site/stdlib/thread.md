@@ -316,7 +316,7 @@ Run a block under a cost limit, a time limit, or both, aborting the
   `error.actualTime`, in milliseconds).
 
   @param cost - Maximum cost in dollars (e.g. $2.00 or 2.00). null or negative = no cost limit.
-  @param time - Maximum compute time in milliseconds (e.g. 30s, 5m, or a raw number). null or negative = no time limit.
+  @param time - Maximum compute time in milliseconds (e.g. 30s, 5m, or a raw number). null, zero, or negative = no time limit.
   @param block - The work to run under the guard.
 
   Example:

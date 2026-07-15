@@ -70,11 +70,27 @@ When the clock ticks:
 - waiting for user input through `input` = no (waiting on a human is free).
 - `sleep` = yes.
 
-One current limitation: the `input` exemption applies to time guards on the
-same execution branch. If `input()` runs inside a `fork` or `race` branch,
-an *outer* time guard's clock keeps running during the wait, because fork
-branches do not yet carry their own copy of the parent's timer. Per-branch
-time budgets (the next change in this series) remove this limitation.
+### Time budgets and concurrency
+
+A time budget counts **working time along one causal path**. Inside a
+`fork` or `race`:
+
+- Each branch gets its own countdown, inheriting the parent's *remaining*
+  budget at fork time. If you spend 3 minutes of a 10-minute budget and then
+  fork, each branch gets 7 minutes — no path through the program can exceed
+  the original 10.
+- A branch waiting on a human via `input` pauses only its own clock. Working
+  siblings keep counting on theirs.
+- When the branches rejoin, the parent's clock advances by the longest
+  branch's working time, which is the real time the parallel region cost.
+
+Cost stays shared and cumulative across branches, because money adds up
+under parallelism and time does not. The two dimensions differ on purpose.
+
+One caveat for subprocesses: an `input()` inside a child process started
+with `std::agency.run` cannot pause the parent's clock across the process
+boundary. In practice this does not matter — a subprocess that needs a
+human raises an interrupt, and interrupts stop every clock in the chain.
 
 When the time guard fires, any in-flight HTTP requests are cancelled and an abort signal is sent to other code as well.
 

@@ -1,0 +1,26 @@
+import { guard } from "std::thread"
+
+// A time budget around a fork whose branches take an interrupt and
+// resume. The branch clones pause across the halt (interrupts never
+// count against time budgets), their accrued working time survives
+// the checkpoint cycle (adopted, not re-cloned, on rehydrate), and
+// nothing trips spuriously on resume.
+def confirmBranch(item: number): string {
+  sleep(20ms)
+  interrupt("approve ${item}?")
+  sleep(20ms)
+  return "done ${item}"
+}
+
+node main() {
+  const result = guard(time: 5s) as {
+    fork([1, 2]) as n {
+      const r = confirmBranch(n)
+    }
+    return "completed"
+  }
+  if (isFailure(result)) {
+    return "tripped:${result.error.type}"
+  }
+  return result.value
+}

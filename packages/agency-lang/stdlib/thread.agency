@@ -198,11 +198,13 @@ export type GuardFailureData = {
  * timer is re-armed with the remaining budget.
  *
  * Nested guards are independent. An inner trip does not trip an outer
- * guard. Across fork/race branches, cost guards are cloned per branch, so
- * each tracks its own cost-since-push. The time guard is shared: the
- * parent's timer is the single source of truth, and its abort cascade
- * reaches every branch. `thread`/`subthread` isolate message history but
- * not cost or abort plumbing, so a guard sees every LLM call inside them.
+ * guard. Across fork/race branches, cost guards are SHARED (every branch
+ * charges the same counter in real time), while time guards are cloned
+ * per branch: each branch gets the parent's remaining budget as its own
+ * countdown, a branch's input-wait pauses only its own clock, and the
+ * parent's clock advances by the longest branch's working time at the
+ * join. `thread`/`subthread` isolate message history but not cost or
+ * abort plumbing, so a guard sees every LLM call inside them.
  *
  * Limitations: a tool whose body is a JS function (not Agency code) cannot
  * be aborted mid-execution. It runs to completion in the background, and

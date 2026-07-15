@@ -24,8 +24,7 @@ import { filter, map } from "std::array"
 /** Structurally identical to std::agency Feedback. */
 export type Feedback = {
   error: boolean;
-  feedback: string;
-  data?: any
+  feedback: string
 }
 
 export def renderFeedback(feedback: Result<Feedback[]>): string {

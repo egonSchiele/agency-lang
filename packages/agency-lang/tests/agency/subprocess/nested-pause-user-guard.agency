@@ -1,0 +1,61 @@
+import { compile, run } from "std::agency"
+
+// #513 regression, user-level variant: a hand-written guard(...) as { } wraps
+// the middle hop's run(). The serialized middle stack holds the user block's
+// FunctionRef. This is the case that proves ANY block-taking function is
+// pause-safe across process boundaries, not just run(maxCost:).
+node main() {
+  const grandSource = """
+import { bash } from "std::shell"
+node main() {
+  let r = bash("echo deep-ok")
+  return r.stdout
+}
+"""
+  const childSource = """
+import { compile, run } from "std::agency"
+import { guard } from "std::thread"
+node main(grandSource: string) {
+  const c = compile(grandSource)
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  handle {
+    const guarded = guard(cost: 1.0) as {
+      const result = run(compiled: c.value, node: "main")
+      if (isSuccess(result)) {
+        return result.value.data
+      }
+      return "inner run failed"
+    }
+    if (isSuccess(guarded)) {
+      return guarded.value
+    }
+    return "guard tripped"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      args: { grandSource: grandSource },
+    )
+    if (isSuccess(result)) {
+      return "OK: ${result.value.data}"
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

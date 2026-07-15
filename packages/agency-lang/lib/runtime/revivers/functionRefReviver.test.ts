@@ -84,6 +84,56 @@ describe("FunctionRefReviver", () => {
       expect(() => reviver.revive({ name: "missing", module: "test.agency" }))
         .toThrow("not found in registry");
     });
+
+    it("revives an unregistered block ref to a stub instead of throwing", () => {
+      reviver.registry = {};
+      const stub = reviver.revive({
+        name: "__block_0",
+        module: "stdlib/agency.agency",
+      });
+      expect(AgencyFunction.isAgencyFunction(stub)).toBe(true);
+      expect(stub.name).toBe("__block_0");
+      expect(stub.module).toBe("stdlib/agency.agency");
+    });
+
+    it("the block stub is a tripwire: invoking it surfaces a rebind error", async () => {
+      reviver.registry = {};
+      const stub = reviver.revive({
+        name: "__block_7",
+        module: "test.agency",
+      });
+      // invoke() may reject or convert the throw to a failure Result
+      // depending on failure-propagation settings; accept either, but the
+      // tripwire message must surface.
+      const outcome = await stub
+        .invoke({ type: "positional", args: [] })
+        .then((v: unknown) => v, (e: unknown) => e);
+      const msg =
+        outcome instanceof Error ? outcome.message : JSON.stringify(outcome);
+      expect(msg).toContain("before replay rebound it");
+    });
+
+    it("non-block names still throw eagerly on a registry miss", () => {
+      reviver.registry = {};
+      expect(() =>
+        reviver.revive({ name: "__blockish", module: "test.agency" }),
+      ).toThrow("not found in registry");
+      expect(() =>
+        reviver.revive({ name: "__block_", module: "test.agency" }),
+      ).toThrow("not found in registry");
+    });
+
+    it("a REGISTERED block name resolves to the real function, not a stub", () => {
+      // Pins the lookup-before-regex ordering: moving the block check ahead
+      // of the registry lookup would silently stub every registered block.
+      const real = makeAgencyFunction("__block_0", "test.agency");
+      reviver.registry = { "test.agency:__block_0": real };
+      const result = reviver.revive({
+        name: "__block_0",
+        module: "test.agency",
+      });
+      expect(result).toBe(real);
+    });
   });
 });
 

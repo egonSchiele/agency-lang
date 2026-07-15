@@ -158,28 +158,13 @@ export def run(
     depth: _subprocessDepth() + 1
   })
 
-  // Two call sites on purpose. Wrapping the no-cap path in an inert
-  // guard block breaks nested subprocess pause/resume: when THIS process
-  // is itself a subprocess that pauses on a bubbled interrupt, resuming
-  // its serialized stack through the guard block loses the block's
-  // return value and run() yields undefined (see the nested-pause-resume
-  // fixture, which caught this in CI). Keep the argument lists below
-  // IDENTICAL.
-  if (maxCost == null) {
-    return try _run(
-      compiled,
-      node,
-      args,
-      wallClock,
-      memory,
-      ipcPayload,
-      stdout,
-      configOverrides,
-      cwd,
-      maxDepth,
-    )
-  }
-  const guarded = guard(cost: maxCost) as {
+  // guard() disables a dimension on a NEGATIVE value (null for BOTH
+  // dimensions throws), so a null maxCost maps to the disable value and
+  // one guarded call site serves both cases. Safe since #513: block
+  // frames revive correctly across a nested subprocess pause.
+  const NO_COST_CAP = -1.0
+  const cap = if maxCost != null then maxCost else NO_COST_CAP
+  const guarded = guard(cost: cap) as {
     return try _run(
       compiled,
       node,

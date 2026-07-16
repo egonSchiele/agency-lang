@@ -320,3 +320,55 @@ Overrides are applied via the shared `applyOverrides` helper in `lib/runtime/rew
 | `lib/runtime/state/stateStack.ts` | `State.clearLocalsWithPrefix()` for loop reset |
 | `lib/templates/backends/typescriptGenerator/` | Mustache templates: `blockSetup`, `runnerIfElse`, `imports`, etc. |
 | `tests/agency/substeps/` | Integration tests for all block types |
+
+## Handler verdicts, merge, and registration-site scoping
+
+Three pieces of the handler chain live in the runtime (added for the
+resumable-guards work; see `docs/superpowers/plans/2026-07-16-resumable-guards.md`):
+
+**The `pass()` verdict.** A handler that returns nothing means "no
+opinion." `pass()` is the same verdict as a value, so match arms can
+express it. The chain normalizes `undefined` to `{type: "pass"}` the
+moment a handler returns (`runHandlerChain`, `lib/runtime/interrupts.ts`),
+so statelog and the verdict logic only ever see one spelling.
+
+**Per-effect approval merge.** When several handlers approve one
+interrupt, the values combine through `mergeFor(effect)`
+(`lib/runtime/effectMerge.ts`). The table is total and CONSTANT — no
+registration surface, on purpose: a runtime registry would be per-run
+state in a module global, it would silently diverge across the subprocess
+boundary, and user merge closures would sit on the function-refs-across-
+checkpoints surface. The default merge reproduces the historical
+outer-overwrites behavior byte-for-byte; `std::guard` accumulates. The
+cross-process path (`mergeChainOutcomes`) uses the same table via
+`mergeForIpc`, whose default differs one notch (a valueless outer approve
+defers to the inner value, because JSON cannot distinguish "no value"
+from an explicit undefined).
+
+**Registration-site scoping.** Every handler entry on `ctx.handlers`
+carries `liveGuardIds` — the guard ids live on the registering branch's
+stack at registration time (`HandlerEntry`, `lib/runtime/types.ts`).
+While a handler runs, the raising branch suspends every installed guard
+NOT in that set (`StateStack.beginHandlerSuspension`): the handler's own
+work is metered by its registration site's guards only. Key mechanics,
+each load-bearing:
+
+- The capture point is `Runner.handle` (`lib/runtime/runner.ts`) — the
+  path Agency `handle` blocks actually take. TS callers capture at call
+  time in `withPushedHandler`; `preapprove()`, the top-level init
+  wrappers, and the `--policy` handler register with an explicit `[]`.
+- The captured set is memoized first-write-wins in the registering
+  frame's locals, keyed by the callsite's step path, deleted on pop. On
+  resume the guard array is restored from JSON BEFORE replay re-runs the
+  registration, so a fresh capture would see guards that did not exist
+  at the original registration. Never key this by counting events —
+  replay skips completed statements and iterations (`Runner.handle`
+  returns before `pushHandler` for a completed block), so counters count
+  different events on replay. Position or content only.
+- Cost-guard suspension is STACK-scoped (`suspendedGuardIds`, consulted
+  by `enforceGuards`/`chargeGuards`), not a flag on the guard object: a
+  shared CostGuard flagged object-wide would blind sibling branches.
+  TimeGuard suspension is object-scoped (clones are per-branch) and pins
+  the clock paused across `Runner.beforeStep`'s resume-all.
+- Nothing about suspension serializes. A handler that propagates gets
+  checkpointed mid-suspension; the resumed run's guards must meter.

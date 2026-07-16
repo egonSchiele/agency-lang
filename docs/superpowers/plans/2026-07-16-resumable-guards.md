@@ -591,6 +591,24 @@ whatever the key is.
 
 ### 1.3c: suspension is a guard state, not call-site filters
 
+> **AS IMPLEMENTED (PR 1) — one deviation, found during execution.** An
+> object-level `suspended` flag is WRONG for CostGuard: the object can be
+> SHARED across fork branches (`cloneForBranch` returns `this`), so
+> flagging it would drop sibling branches' charges and open their gates
+> while one branch's handler deliberates — fail-open on the shared
+> budget, in exactly the window a handler is thinking. Cost suspension is
+> therefore STACK-scoped: `StateStack.suspendedGuardIds` (in-memory,
+> branch-local, never serialized), consulted inside `enforceGuards` and
+> `chargeGuards`, bracketed by `beginHandlerSuspension`/
+> `endHandlerSuspension` (save/restore, so nested chains compose).
+> `Guard.suspend()`/`unsuspend()` remain on the interface for the
+> per-branch-object state: TimeGuard pauses its clock and pins `resume()`
+> to a no-op (beforeStep resumes all guards every step); CostGuard's are
+> deliberate no-ops with the explanation in place. PR 2's
+> `scope.suspendAll()` at the raise site must use the SAME stack-scoped
+> bracket, for the same reason: the raising branch's deliberation must
+> not blind siblings sharing the guard.
+
 Add to the `Guard` interface (`guard.ts:20-59`) — and note that interface's
 own contract: StateStack and Runner only ever talk to the interface, no
 variant-specific branching at call sites. Suspension keeps that promise:

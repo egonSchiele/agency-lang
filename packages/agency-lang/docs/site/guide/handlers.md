@@ -181,6 +181,21 @@ Now, all of their interrupts get rejected. As long as all destructive actions ar
 
 Besides `approve` and `reject,` the other keyword is `propagate.` `propagate` means "I don't want to reject the interrupt, but I don't want anyone to be able to programmatically approve it either. I want to make sure it always goes to a user for approval or rejection."
 
+## Pass
+
+`pass()` means "not my interrupt — ask the next handler." It has the same effect as returning nothing, but it is a real value, so you can use it where a value is required. The common case is a `match` over the interrupt's effect: every arm must produce a value, and `pass()` is how an arm says it has no opinion.
+
+```ts
+handle {
+  doWork()
+} with (data) {
+  return match(data.effect) {
+    "std::read" => approve()
+    _ => pass()
+  }
+}
+```
+
 ## The rules of handlers
 
 The rules of handlers are thus:
@@ -188,7 +203,28 @@ The rules of handlers are thus:
 2. Otherwise, if any handler propagates, the interrupt propagates to the user for a decision.
 3. Otherwise, if a handler approves, the interrupt is approved.
 
-Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. If no handler approves, rejects, or propagates, by default, the interrupt propagates up to the user for a decision.
+Of course, a handler doesn't need to approve, reject, or propagate. It can `pass()`, log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. If no handler approves, rejects, or propagates, by default, the interrupt propagates up to the user for a decision.
+
+### When several handlers approve
+
+If more than one handler approves the same interrupt, their approval values combine. How they combine depends on the interrupt's effect. For most effects, the outermost handler's value wins — that is the historical behavior, unchanged. Effects whose approvals carry data that should accumulate define their own merge: `std::guard` approvals (guard budget grants, in a coming release) add their grants together instead of overwriting.
+
+## A handler runs on its own budget
+
+A handler belongs to the place where it was registered. When a handler runs, its work — including its own `llm()` calls — is metered by the guards that enclosed the `handle` block itself, never by guards installed deeper. In this example, the handler's `llm()` call charges the outer `$20` guard and is invisible to the inner `$1` guard, even though the interrupt was raised inside it:
+
+```ts
+guard(cost: $20.00) as {
+  handle {
+    guard(cost: $1.00) as {
+      riskyWork()   // raises an interrupt
+    }
+  } with (data) {
+    const opinion = llm("should this proceed?")  // charges the $20 guard only
+    return approve()
+  }
+}
+```
 
 ## Handlers can't raise interrupts
 

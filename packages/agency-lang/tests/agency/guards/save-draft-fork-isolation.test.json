@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"a|b|c\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }, { "return": "pong" }, { "return": "pong" }],
+      "description": "Each fork branch salvages its own draft; no cross-branch clobber (branch-local other.drafts)."
+    }
+  ]
+}

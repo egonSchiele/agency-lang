@@ -1,0 +1,13 @@
+import { guard, saveDraft } from "std::thread"
+
+node main() {
+  const outer = guard(cost: 10.0) as {           // generous — outer never trips
+    saveDraft("outer-draft")
+    const inner = guard(cost: 0.000001) as {      // inner trips, saves nothing
+      const reply = llm("Reply with: pong")
+      return reply
+    }
+    return inner                                  // deliberately propagate the failure
+  }
+  return "${isFailure(outer)}"
+}

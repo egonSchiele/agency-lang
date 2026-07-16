@@ -1,0 +1,18 @@
+import { guard, saveDraft } from "std::thread"
+
+def branch(tag: string): string {
+  const r = guard(cost: 0.000001) as {
+    saveDraft(tag)
+    const reply = llm("Reply with: pong")
+    return reply
+  }
+  if (isFailure(r)) { return "fail" }
+  return r.value
+}
+
+node main() {
+  const results = fork(["a", "b", "c"]) as tag {
+    return branch(tag)
+  }
+  return "${results[0]}|${results[1]}|${results[2]}"
+}

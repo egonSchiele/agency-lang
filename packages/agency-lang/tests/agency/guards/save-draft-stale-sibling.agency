@@ -1,0 +1,24 @@
+import { guard, saveDraft } from "std::thread"
+
+// `saver` saves a draft and returns NORMALLY (no llm, no cost). `tripper` then
+// trips before saving anything. Without normal-completion clearing, the guard
+// would wrongly salvage "stale" from `saver`; with it, the guard fails.
+def saver(): string {
+  saveDraft("stale")
+  return "ok"
+}
+
+def tripper(): string {
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    const a = saver()
+    const b = tripper()
+    return b
+  }
+  if (isSuccess(result)) { return "leaked:${result.value}" }
+  return "failed"
+}

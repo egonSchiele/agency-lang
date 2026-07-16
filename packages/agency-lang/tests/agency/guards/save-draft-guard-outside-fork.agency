@@ -1,0 +1,17 @@
+import { guard, saveDraft } from "std::thread"
+
+def branch(tag: string): string {
+  saveDraft(tag)          // on the BRANCH's own stack — parent guard can't see it
+  return tag
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    const tags = fork(["a", "b"]) as t {
+      return branch(t)
+    }
+    const reply = llm("Reply with: pong")   // parent trips here, after the fork joins
+    return reply
+  }
+  return "${isFailure(result)}"
+}

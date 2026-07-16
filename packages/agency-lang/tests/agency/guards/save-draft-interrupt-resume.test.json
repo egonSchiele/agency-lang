@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"pre-interrupt\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }],
+      "description": "The pre-interrupt draft survives an interrupt/resume cycle and is salvaged on a later trip."
+    }
+  ]
+}

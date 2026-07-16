@@ -165,32 +165,32 @@ describe("mergeChainOutcomes", () => {
   const silent = { kind: "noResponse" } as const;
 
   it("outer reject wins over inner approve", () => {
-    expect(mergeChainOutcomes(approvedA, rejected)).toEqual(rejected);
+    expect(mergeChainOutcomes("std::bash", approvedA, rejected)).toEqual(rejected);
   });
 
   it("inner reject wins regardless of outer", () => {
-    expect(mergeChainOutcomes(rejected, approvedA)).toEqual(rejected);
+    expect(mergeChainOutcomes("std::bash", rejected, approvedA)).toEqual(rejected);
   });
 
   it("any propagate beats approve", () => {
-    expect(mergeChainOutcomes(propagated, approvedA)).toEqual(propagated);
-    expect(mergeChainOutcomes(approvedA, propagated)).toEqual(propagated);
+    expect(mergeChainOutcomes("std::bash", propagated, approvedA)).toEqual(propagated);
+    expect(mergeChainOutcomes("std::bash", approvedA, propagated)).toEqual(propagated);
   });
 
   it("inner approve + outer silence = approve (the regression fix)", () => {
-    expect(mergeChainOutcomes(approvedA, silent)).toEqual(approvedA);
+    expect(mergeChainOutcomes("std::bash", approvedA, silent)).toEqual(approvedA);
   });
 
   it("outer approved value wins; falls back to inner value", () => {
-    expect(mergeChainOutcomes(approvedA, approvedB)).toEqual(approvedB);
-    expect(mergeChainOutcomes(approvedA, approvedNoValue)).toEqual({
+    expect(mergeChainOutcomes("std::bash", approvedA, approvedB)).toEqual(approvedB);
+    expect(mergeChainOutcomes("std::bash", approvedA, approvedNoValue)).toEqual({
       kind: "approved",
       value: "a",
     });
   });
 
   it("total silence stays noResponse for the caller to map to propagate", () => {
-    expect(mergeChainOutcomes(silent, silent)).toEqual(silent);
+    expect(mergeChainOutcomes("std::bash", silent, silent)).toEqual(silent);
   });
 });
 

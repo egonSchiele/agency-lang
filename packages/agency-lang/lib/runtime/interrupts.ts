@@ -8,6 +8,7 @@ import {
   RestoreSignal,
 } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
+import { mergeFor, mergeForIpc } from "./effectMerge.js";
 import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
@@ -233,8 +234,11 @@ async function runHandlerChain(
     throw new HandlerRecursionError(interruptObj.effect, MAX_HANDLER_CHAIN_DEPTH);
   }
   return handlerChainDepthALS.run(depth, async () => {
-    let approvedValue: any = undefined;
-    let hasApproval = false;
+    // Approvals collect in chain-walk order (innermost handler first) and
+    // are merged once at the end via the effect's merge (effectMerge.ts).
+    // For effects with no specific merge the default reproduces the
+    // historical behavior exactly: the outermost approval overwrites.
+    const approvals: any[] = [];
     let hasPropagation = false;
     const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
     try {
@@ -295,8 +299,7 @@ async function runHandlerChain(
         }
         if (result.type === "approve") {
           ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "approve", value: result.value, interrupt: interruptSummary });
-          hasApproval = true;
-          approvedValue = result.value;
+          approvals.push(result.value);
           continue;
         }
         throw new Error(
@@ -307,7 +310,12 @@ async function runHandlerChain(
       ctx.statelogClient.endSpan(chainSpanId); // end handlerChain span
     }
     if (hasPropagation) return { kind: "propagated" };
-    if (hasApproval) return { kind: "approved", value: approvedValue };
+    if (approvals.length > 0) {
+      return {
+        kind: "approved",
+        value: approvals.reduce(mergeFor(interruptObj.effect)),
+      };
+    }
     return { kind: "noResponse" };
   });
 }
@@ -315,14 +323,14 @@ async function runHandlerChain(
 /** Merge two chain-segment outcomes with single-process precedence:
  * reject > propagate > approve > noResponse. `inner` is the segment closer
  * to the interrupt (e.g. the child process), `outer` the segment farther
- * from it (e.g. the parent). On double-approve the OUTER value wins,
- * falling back to the inner value via `??`. Note this is deliberately
- * WEAKER than the in-process chain (which overwrites unconditionally, so
- * an outer approve-with-no-value clears an inner injected value): the
+ * from it (e.g. the parent). A double-approve merges through the EFFECT's
+ * approval merge (effectMerge.ts) — std::guard grants accumulate; every
+ * other effect keeps the historical IPC default, where the outer value
+ * wins but a VALUELESS outer approve defers to the inner value (the
  * outcome travels as JSON, which cannot distinguish an absent value from
- * an explicit undefined, so a valueless outer approve defers to the
- * inner value instead. */
+ * an explicit undefined). */
 export function mergeChainOutcomes(
+  effect: string,
   inner: HandlerChainOutcome,
   outer: HandlerChainOutcome,
 ): HandlerChainOutcome {
@@ -333,7 +341,10 @@ export function mergeChainOutcomes(
   }
   if (outer.kind === "approved") {
     const innerValue = inner.kind === "approved" ? inner.value : undefined;
-    return { kind: "approved", value: outer.value ?? innerValue };
+    return {
+      kind: "approved",
+      value: mergeForIpc(effect)(innerValue, outer.value),
+    };
   }
   if (inner.kind === "approved") return inner;
   return { kind: "noResponse" };
@@ -372,7 +383,7 @@ export async function gatherChainOutcome(
   if (isIpcMode()) {
     const parentOutcome = await sendInterruptToParent(interruptObj, interruptId);
     return {
-      outcome: mergeChainOutcomes(local, parentOutcome),
+      outcome: mergeChainOutcomes(interruptObj.effect, local, parentOutcome),
       parentDecided: parentOutcome.kind !== "noResponse",
     };
   }

@@ -734,6 +734,23 @@ export class StateStack {
     return this.stack.length <= 1;
   }
 
+  /** Record a saveDraft value on the CALLER's frame — the Agency scope
+   *  that called saveDraft (saveDraft is itself an Agency def, so the top
+   *  frame is saveDraft's own). The value is deep-cloned so later
+   *  mutation cannot change the salvage, and so a live-trip salvage
+   *  matches a post-resume one. Throws in global context: a draft saved
+   *  at module top level has no scope to salvage it and would silently
+   *  do nothing. */
+  setSavedDraft(value: unknown): void {
+    if (this.isGlobalContext()) {
+      throw new Error(
+        "saveDraft() can only be called inside a function, node, or block — " +
+          "there is no enclosing scope at module top level to save a draft for.",
+      );
+    }
+    this.callerFrame().savedDraft = { value: deepClone(value) };
+  }
+
   /** All scoped callbacks registered anywhere in the active stack for this hook,
    *  ordered innermost first (deepest frame's callbacks come first). */
   collectScopedCallbacks(name: string): any[] {

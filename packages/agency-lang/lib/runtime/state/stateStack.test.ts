@@ -844,3 +844,24 @@ describe("State.savedDraft (saveDraft slot)", () => {
     expect("savedDraft" in s.toJSON()).toBe(false);
   });
 });
+
+describe("StateStack.setSavedDraft", () => {
+  it("writes a deep-cloned draft onto the CALLER frame", () => {
+    const stack = new StateStack();
+    const caller = makeFrame();
+    const saveDraftOwn = makeFrame();
+    stack.stack.push(caller);
+    stack.stack.push(saveDraftOwn);
+    const draft = { report: "partial" };
+    stack.setSavedDraft(draft);
+    draft.report = "mutated-later";
+    expect(caller.savedDraft).toEqual({ value: { report: "partial" } });
+    expect(saveDraftOwn.savedDraft).toBeUndefined();
+  });
+
+  it("throws in global context instead of silently doing nothing", () => {
+    const stack = new StateStack();
+    stack.stack.push(makeFrame());
+    expect(() => stack.setSavedDraft("x")).toThrow(/module top level/);
+  });
+});

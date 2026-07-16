@@ -263,10 +263,17 @@ function checkSaveDraftCall(
   ctx: TypeCheckerContext,
 ): void {
   if (call.functionName !== "saveDraft") return;
+  // A user-defined function named saveDraft is an ordinary function. Its
+  // arguments check against its own signature (checkSingleFunctionCall),
+  // not against the enclosing scope's return type.
+  if (ctx.functionDefs["saveDraft"] || ctx.nodeDefs["saveDraft"]) return;
   if (!info.returnType) return; // no declared/inferred return type in scope
   if (call.arguments.length !== 1) return;
-  const arg = call.arguments[0];
-  if (arg.type === "splat" || arg.type === "namedArgument") return;
+  const first = call.arguments[0];
+  if (first.type === "splat") return;
+  // `saveDraft(value: x)` names the parameter but carries the same draft;
+  // check the value it wraps so the named form cannot bypass the rule.
+  const arg = first.type === "namedArgument" ? first.value : first;
   checkType(arg, info.returnType, info.scope, "the saveDraft() draft value", ctx);
 }
 

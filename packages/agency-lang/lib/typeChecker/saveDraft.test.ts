@@ -68,3 +68,29 @@ describe("saveDraft argument type-check", () => {
     expect(bad.length).toBeGreaterThan(0);
   });
 });
+
+describe("saveDraft check — review-round hardening", () => {
+  it("rejects a mismatched draft passed as a NAMED argument", () => {
+    const errors = check(`
+      import { guard, saveDraft } from "std::thread"
+      def f(): string {
+        saveDraft(value: 42)
+        return "x"
+      }
+    `);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it("does not fire on a user-defined function named saveDraft", () => {
+    const errors = check(`
+      def saveDraft(n: number): number {
+        return n
+      }
+      def f(): string {
+        saveDraft(42)
+        return "x"
+      }
+    `);
+    expect(errors).toHaveLength(0);
+  });
+});

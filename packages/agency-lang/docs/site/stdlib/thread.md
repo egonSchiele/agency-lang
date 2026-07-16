@@ -58,7 +58,7 @@ export type ModelCost = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L166))
 
 ### GuardFailureData
 
@@ -73,7 +73,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L182))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L185))
 
 ### ThreadMessage
 
@@ -84,7 +84,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L274))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L277))
 
 ### ThreadInfo
 
@@ -100,14 +100,14 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L279))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L282))
 
 ## Functions
 
 ### systemMessage
 
 ```ts
-systemMessage(msg: string)
+systemMessage(msg: string, label: string = "")
 ```
 
 Add a system message to the current thread's message history.
@@ -115,19 +115,21 @@ Add a system message to the current thread's message history.
   llm() calls.
 
   @param msg - The system message content
+  @param label - Optional debug label shown in statelog. Never sent to the model.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | msg | `string` |  |
+| label | `string` | "" |
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L64))
 
 ### userMessage
 
 ```ts
-userMessage(msg: string | (string | Attachment)[])
+userMessage(msg: string | (string | Attachment)[], label: string = "")
 ```
 
 Add a user message to the current thread's message history. Use this
@@ -135,14 +137,16 @@ Add a user message to the current thread's message history. Use this
   typed by the user this turn.
 
   @param msg - The user message content: a string, or an array mixing text strings and attachments.
+  @param label - Optional debug label shown in statelog. Never sent to the model.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | msg | `string \| (string \| Attachment)[]` |  |
+| label | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L76))
 
 ### image
 
@@ -171,7 +175,7 @@ Build an image attachment for a multimodal llm() call. The source is
 
 **Returns:** [Attachment](#attachment)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L88))
 
 ### file
 
@@ -202,7 +206,7 @@ Build a file (e.g. PDF) attachment for a multimodal llm() call.
 
 **Returns:** [Attachment](#attachment)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L104))
 
 ### attachToReply
 
@@ -224,12 +228,12 @@ Queue an attachment to be shown to the model after the current tool
 |---|---|---|
 | attachment | [Attachment](#attachment) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L121))
 
 ### assistantMessage
 
 ```ts
-assistantMessage(msg: string)
+assistantMessage(msg: string, label: string = "")
 ```
 
 Add an assistant message to the current thread's message history.
@@ -237,14 +241,16 @@ Add an assistant message to the current thread's message history.
   conversation programmatically.
 
   @param msg - The assistant message content
+  @param label - Optional debug label shown in statelog. Never sent to the model.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | msg | `string` |  |
+| label | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L134))
 
 ### getCost
 
@@ -263,7 +269,7 @@ Inside a fork/race branch this includes the parent's accumulated cost
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L151))
 
 ### getTokens
 
@@ -275,7 +281,7 @@ Return the cumulative token count for the current execution branch.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L159))
 
 ### getModelCosts
 
@@ -293,7 +299,7 @@ Unlike the per-branch cost/token accessors, this reads process-wide
 
 **Returns:** `ModelCost[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L173))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L176))
 
 ### guard
 
@@ -368,7 +374,7 @@ Run a block under a cost limit, a time limit, or both, aborting the
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L216))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L219))
 
 ### listThreads
 
@@ -401,7 +407,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L351))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L354))
 
 ### currentThreadId
 
@@ -416,7 +422,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L404))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L407))
 
 ### getThread
 
@@ -448,4 +454,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L414))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L417))

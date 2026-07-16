@@ -17,8 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
-  __stampCarriedDraft,
-  __markReturnCarry,
+  AbortedResult,
+  isAborted,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -218,6 +218,9 @@ if (hasInterrupts(__funcResult)) {
           })
           return;
         }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
+        }
       });
       await runner.step(2, async (runner) => {
 __stack.locals.name = await __call(input, {
@@ -232,6 +235,9 @@ if (hasInterrupts(__stack.locals.name)) {
           })
           return;
         }
+if (isAborted(__stack.locals.name)) {
+          throw __stack.locals.name.toError()
+        }
       });
       await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
@@ -245,6 +251,9 @@ if (hasInterrupts(__funcResult)) {
             data: __funcResult
           })
           return;
+        }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
         }
       });
     })

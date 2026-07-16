@@ -113,12 +113,7 @@ export {
   isAbortError,
 } from "./errors.js";
 export { GuardExceededError, isGuardExceededError } from "./guard.js";
-export {
-  __stampCarriedDraft,
-  __markReturnCarry,
-  closeUnwindSpan,
-  previewForLog,
-} from "./carriedDraft.js";
+export { AbortedResult, isAborted, previewForLog } from "./abortedResult.js";
 export type { Guard, GuardJSON } from "./guard.js";
 export { CostGuard, TimeGuard, guardFromJSON } from "./guard.js";
 export type { RestoreOptions } from "./errors.js";

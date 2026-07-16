@@ -1282,14 +1282,16 @@ export class StatelogClient {
     });
   }
 
-  /** One event per level-rule transition while an abort unwinds (saveDraft
-   *  carry-on-abort). Emitted only when a partial exists on either side of
-   *  the transition, so a trip through undrafted code logs nothing.
-   *  `partial` and `functionArgs` are pre-truncated string previews, nested
-   *  under `data` so post()'s redaction replacer covers them. `spanId` is
-   *  the abort's unwindSpanId, carried explicitly because a branch-origin
-   *  abort crosses span contexts at the fork boundary — currentSpan
-   *  attribution alone would split the trail. */
+  /** One event per hop where an abort's travel touches a saveDraft
+   *  partial: a frame attached its draft (carried), a frame dropped a
+   *  callee's partial by having none of its own (erased), a partial was
+   *  discarded at a boundary (clearedAtFork, droppedAtArgPosition), or a
+   *  guard salvaged one (delivered). An abort through undrafted code
+   *  emits nothing. `partial` and `functionArgs` are pre-truncated string
+   *  previews, nested under `data` so post()'s redaction replacer covers
+   *  them. `spanId` is the abort's unwind span, carried explicitly
+   *  because an abort can cross span contexts (e.g. out of a fork
+   *  branch), where currentSpan attribution alone would split the trail. */
   async abortSalvage({
     action,
     scopeName,
@@ -1297,7 +1299,12 @@ export class StatelogClient {
     functionArgs,
     partial,
   }: {
-    action: "carried" | "passedThrough" | "erased" | "delivered" | "clearedAtFork";
+    action:
+      | "carried"
+      | "erased"
+      | "delivered"
+      | "clearedAtFork"
+      | "droppedAtArgPosition";
     scopeName?: string;
     spanId?: string;
     functionArgs?: string;

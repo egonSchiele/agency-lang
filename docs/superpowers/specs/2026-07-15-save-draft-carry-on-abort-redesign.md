@@ -1,6 +1,6 @@
-# Design: carry the draft on the abort, not in a side map
+# Design: an aborted function returns its draft (carry-on-abort, revision 3)
 
-**Date:** 2026-07-15 (revision 2 — folds in the review findings and the full `finalize` design worked out in discussion)
+**Date:** 2026-07-15 (revision 3 — the abort now travels as a RETURN VALUE between frames, not as an exception; reworked from PR #553's review round. Revision 2 folded in the review findings and the full `finalize` design.)
 **Status:** Agreed design. Supersedes the storage architecture shipped in the `saveDraft` PR (#551) and the salvage semantics in `2026-07-14-save-draft-guards-design.md`.
 **Related:** `lib/runtime/drafts.ts` (the code this replaces).
 
@@ -12,36 +12,38 @@ Guards are binary. A `guard(cost:, time:)` block runs until it exceeds its budge
 
 The shipped version (#551) builds this with a side map: drafts keyed by frame depth, a region marker per guard, a search at the boundary, a sweep, two clearing paths in generated code, and a memoized workaround for a resume bug. Almost all of that machinery exists to answer one question: of all the frames the trip just killed, whose draft should the guard return? The guard ends up owning a ledger for its whole call tree. That is the wrong shape. A draft belongs to the scope that saved it. This redesign makes each scope handle its own draft and deletes the ledger.
 
-## The core mechanism: a carried draft on the abort
+## The core mechanism: an aborted function RETURNS its draft
 
-When a guard trips, the runtime throws an error. That error is an object, and it travels up through every function between the trip and the guard. Because it is an object, we can attach a value to it:
+When a function gets aborted, it does not throw past its own frame. The frame catches the abort and returns an `AbortedResult` instead: a marker that says "my run was aborted", the cause, and the frame's saved draft as its partial. Callers receive it like any other return value. The generated check that already runs after every call (the same place interrupts are checked) spots the marker, and the caller stops too, returning its OWN AbortedResult. So an abort travels up the stack as a plain value, exactly the way interrupts do.
 
 ```ts
-error.carriedDraft = { value: ... }   // "the best partial result so far"
+// what a caller sees after `const x = verify()` when verify was aborted
+if (isAborted(x)) {
+  runner.halt(x.carryThrough(__stack, "code"));   // stop too, with MY draft
+  return;
+}
 ```
 
-Each function the error passes through updates the carried draft, and the guard reads the carried draft when it catches the trip. That is the whole mechanism. `saveDraft(v)` itself does one thing: it sets a `savedDraft` slot on the current frame. No map, no depth, no region.
+Exceptions still exist, but only inside a single frame: a cancelled in-flight `llm()` rejects, and the frame that was running converts that rejection into the value at its own catch (`AbortedResult.fromError`). Above node level — the graph engine, the CLI entry, root budgets — aborted values are converted back into exceptions, so everything outside compiled code behaves exactly as before.
 
-Naming: both fields hold the same kind of thing — a draft, meaning a function's best-so-far return value. The names mark the stage, not the kind. `savedDraft` is a draft filed at a level, sitting on its frame. `carriedDraft` is a draft in transit, riding the abort between two levels. A finalize's return value is also a draft in this sense: it is the frame's freshest draft, computed at the moment of death, and it goes straight onto `carriedDraft` without ever being filed (its only consumer is one level up, and the frame producing it is being popped).
+`saveDraft(v)` itself does one thing: it records a `savedDraft` slot on the calling frame (`StateStack.setSavedDraft`). No map, no depth, no region — and no shared mutable object riding an exception. Every `AbortedResult` is immutable; each hop up the stack builds a new one.
+
+Naming: both fields hold the same kind of thing — a draft, meaning a function's best-so-far return value. `savedDraft` is a draft filed on a frame, waiting. An `AbortedResult`'s `partial` is a draft in transit, being returned. A finalize's return value (future) is also a draft in this sense: the frame's freshest one, computed at the moment it stops.
 
 ## The level rule
 
-The error passes through functions one at a time, innermost first. Each function replaces the carried draft with **its own** partial value, always:
+Every rule is now a consequence of "an aborted function returns its draft" plus where the returned value lands. Nothing is flag-based; there is no case enumeration in the compiler.
 
-1. **If it has a `finalize` block:** run it. The carried draft becomes whatever the finalize returns.
-2. **Else, if it saved a draft:** the carried draft becomes that draft.
-3. **Else, if the trip escaped through a call in `return` position:** the carried draft passes through unchanged. `return verify()` declares that verify's value IS this function's value, and the checker enforced the types. So verify's forced return is this function's forced return.
-4. **Else: the carried draft becomes empty.**
+1. **The frame where the abort strikes** returns its saved draft (or nothing) — `AbortedResult.fromError` at the frame's own catch.
+2. **A caller that receives an aborted result at a statement** (`const x = verify()`, or a bare call) stops and returns ITS OWN saved draft — `carryThrough`. The callee's partial is dropped here: salvage is opt-in per level.
+3. **Return position passes through structurally.** `return verify()` compiles to "halt with verify's result" — when that result is an AbortedResult, returning it IS the pass-through. No code runs, no flag, no marking. This mirrors the success path exactly: `return verify()` returns verify's value, aborted or not.
+4. **Argument position drops at the call boundary.** In `f(g())` with g aborted, the aborted value would arrive as f's ARGUMENT. `__call` refuses to run and forwards the abort with the partial dropped, because an argument-position partial is typed for g, not for f's return. This lives at the one runtime chokepoint every call shape goes through — nested arguments, method chains, named arguments — so no compiler analysis can miss a case.
 
-Rule 4 is load-bearing. A function with nothing to say **erases** the carried draft. A partial value crosses one level at a time, and only because the receiving level chose to pass something on — by re-saving it, translating it in a finalize, or having declared `return callee()` up front. An inner function's partial can never skip levels and reach the guard untyped.
+A partial still crosses one level at a time, and only because the receiving level passes it on: by declaring `return callee()`, by re-saving, or (future) by translating it in a finalize. An inner partial can never skip levels and reach a guard untyped.
 
-### Return-position pass-through: how it works
+**One semantic refinement over revision 2:** at return position the CALLEE's partial now wins even when the caller also saved a draft. Revision 2 ranked "own draft" above pass-through; the value transport exposes that ranking as an artifact of exception thinking. On success, `return verify()` returns verify's value and the caller's draft dies unused — the abort path now mirrors it. (No fixture pinned the old ordering; the walked examples are unaffected.)
 
-The catch rung cannot know which statement the error escaped from, so the compiler marks the abort at the call site. A call in `return` position compiles with a small wrapper that sets a transient `returnCarry` flag on a passing abort; the frame's rung consumes the flag (reads it, then clears it) when applying rule 3. Consume-once per level, like the carried draft itself, so the flag can never skip a level.
-
-The mark wraps only the OUTERMOST call of the return expression, and argument subexpressions are evaluated before the wrapper is entered. So in `return f(g())`: if `g` trips, the abort is unmarked (g never made it into return position; g's type has no relation to this function's return type) and rule 4 erases. If `f` trips, the abort is marked and f's draft — f-return-typed, which is exactly this function's return type — passes through. This is what keeps the type-safety induction intact.
-
-When the error reaches the guard, the guard reads the carried draft. If there is a carried draft, the guard returns it as a success. If not, the guard returns the failure, exactly as today.
+When the aborted value reaches the guard that owns the trip, the guard salvages: `success(partial)` when one arrived, exactly the old failure when none did.
 
 ### Walked example: both levels save
 
@@ -59,28 +61,28 @@ def verify() {
 }
 ```
 
-1. The error leaves `verify`. `verify` saved a draft. Carried draft = `1`.
-2. The error leaves `code`. `code` saved a draft, so it replaces the carried draft. Carried draft = `10`. The `1` is gone — the only thing it could ever have done is be read by a `finalize` in `code`, and `code` has none.
-3. The error leaves the guard block. The block saved nothing and has no finalize, but `return code()` is a return-position call, so rule 3 passes the carried draft through. Still `10`. (This hop is why rule 3 exists: without it, the block level — which almost never saves a draft of its own — would erase every draft on its way to the guard, and this example would return a failure.)
-4. The guard reads the carried draft and returns `success(10)`.
+1. The abort strikes inside `verify`. verify's frame converts it: verify RETURNS an aborted result whose partial is `1`.
+2. `code` receives it at `const x = verify()` — a statement, not a return. code stops and returns its own draft instead: partial = `10`. The `1` is gone — the only thing it could ever have done is be read by a `finalize` in `code`, and `code` has none.
+3. The guard block's `return code()` returns code's result as-is — return position is pass-through by construction. Still `10`.
+4. The guard salvages `success(10)`.
 
 ### Walked example: only the deep level saves
 
 Same program, but `code` never calls `saveDraft` and has no finalize.
 
-1. The error leaves `verify`. Carried draft = `1`.
-2. The error leaves `code`. `code` has nothing to say, and the trip escaped through `const x = verify()` — an assignment, not a return-position call — so rule 3 does not apply. Carried draft = empty. (Had `code` written `return verify()` instead, the `1` would have passed through.)
-3. The guard reads nothing and returns the **failure**.
+1. The abort strikes inside `verify`; verify returns an aborted result with partial `1`.
+2. `code` receives it at `const x = verify()` — a statement. code stops with its own draft, which is nothing. Partial gone. (Had `code` written `return verify()` instead, the `1` would have passed straight through.)
+3. The guard sees no partial and returns the **failure**.
 
 `verify`'s partial existed, but `code` declined to translate it, so it died at `code`'s boundary. This is a deliberate behavior change from #551, which would have returned `1` here (its "outermost-set draft" search falls back to deeper drafts). Salvage is now opt-in per level.
 
 ### The type-safety caveat is gone
 
-Earlier versions of this design documented a limitation: a deep draft could reach the guard unopposed and might not match the type the guard block returns. The level rule deletes that limitation instead of documenting it. By induction: a function's partial is its `saveDraft` value, which the checker verifies against its return type; or its finalize's return, which the checker also verifies against its return type; or a callee's partial passed through a return-position call, where the checker already verified the callee's return type matches this function's. So the carried draft always holds a value typed for the frame the error most recently left, and the guard only ever sees a value typed for its own block.
+Earlier versions of this design documented a limitation: a deep draft could reach the guard unopposed and might not match the type the guard block returns. The level rule deletes that limitation instead of documenting it. By induction: a function's partial is its `saveDraft` value, which the checker verifies against its return type; or its finalize's return, which the checker also verifies against its return type; or a callee's partial passed through return position, where the checker already verified the callee's return type matches this function's. Argument-position partials — the one place a wrongly-typed value could sneak through — are dropped at the call boundary itself. So an aborted result's partial is always typed for the frame that returned it, and the guard only ever sees a value typed for its own block.
 
 ## When a draft becomes a real return value
 
-The model (owner's framing, adopted): a trip does not prevent a function from returning. It forces an **early return**, and the function's draft is what it returns — its finalize result if it has one, else its saved draft, else its callee's forced return when the trip crossed a return-position call, else nothing. `carriedDraft` is that forced return value in transit to the caller. (Pass-through is not a conversion point: the value stays a shadow value; it just crosses a level that had pre-declared identity with its callee.)
+The model (owner's framing, adopted): a trip does not prevent a function from returning. It forces an **early return**, and the function's draft is what it returns — its finalize result if it has one, else its saved draft, else, at a return-position call, whatever its callee's forced return was, else nothing. Revision 3 makes this framing LITERAL: the `AbortedResult` is that forced return value, actually returned. (Pass-through is not a conversion point: the value stays a shadow value; it just flows through a return statement like any other value.)
 
 But a forced return value is a shadow value: the program's normal code never sees it. It is visible in exactly two places, and each place is a conversion point:
 
@@ -103,34 +105,30 @@ Future conversion points, deferred: the root-budget exit reporter (print the bes
 
 **Interrupt and resume.** An interrupt is not an abort; it pauses the block and no carried draft is touched. The draft sits on its frame, the frame serializes, and the draft survives the pause. After resume, a later trip stamps the restored draft. There is no region marker, so #551's resume workaround has nothing to work around.
 
-**Fork and race branches — one deliberate line required.** Branch isolation is NOT automatic under this design, and the first draft of this doc was wrong to claim it. In #551, isolation came from storage: drafts lived on per-branch stacks the parent boundary could not see. The carried draft travels *on the error object*, and a branch's error object crosses the stack boundary: when a trip fires inside a branch, the branch's frames stamp their drafts, `runBatch` rethrows that same object at the join, and it arrives at the outer guard carrying a branch's draft. That is wrong twice over: the guard block's type is the fork's shape, not one branch's value, and in `all` mode whichever branch rejects first wins, which is nondeterministic. The fix is one line with a comment: `runBatch` clears the carried draft when it rethrows a rejected branch's error. Branch drafts stay inside their branch, matching the shipped scoping. A future fork-array salvage (each branch's partial collected into the fork's `T[]` shape) remains the principled extension and stays deferred.
+**Fork and race branches.** An aborted branch fulfills with an AbortedResult (its compiled frames convert aborts to values). At the fork boundary — one `.then` in `startInvoke`, the single point every branch's result passes through — that value becomes a rejection again, with the partial dropped (`atForkBoundary`). Two things fall out. Isolation: branch drafts stay inside their branch, because one branch's value has the wrong shape for the fork and which branch fails first is a race. Simplicity: every join path (all / sequential / race, first-run and resume) already handles branch rejections, so none of them need to know aborted values exist — and an aborted value can never be cached as a branch result. A future fork-array salvage (each branch's partial collected into the fork's `T[]` shape) remains the principled extension and stays deferred.
 
 ## `finalize`: consuming a partial instead of overwriting it
 
 Rule 1 above is the future feature, fully designed here so the carried-draft mechanism is built with the right slot. A finalize block lets a function *read* its callee's partial and translate it into its own return type, instead of blindly replacing it.
 
-### The mechanism is catch, run, re-throw
+### The mechanism: run the finalize where the frame stops
 
-Nothing can run "while an exception propagates" in any language. Destructors, `defer`, `finally` — all of them are code the compiler plants in each frame's catch or finally, and propagation is a chain of catch → do the frame's work → re-throw. Agency's generated code already has exactly this structure: the catch rung that re-throws `AgencyAbort` untouched. The carried draft stamp goes in that rung, and `finalize` is the same rung with user code in it:
+A frame stops in exactly two places: its own catch (the abort struck here) and the post-call check (a callee handed back an aborted result). Both places currently build the frame's AbortedResult from its saved draft; with a finalize declared, they build it from the finalize's return instead:
 
 ```ts
-catch (__error) {
-  if (__error instanceof AgencyAbort) {
-    if (/* this frame declared a finalize */) {
-      __error.carriedDraft = { value: await __runFinalize() };   // rule 1
-    } else if (__stack.savedDraft !== undefined) {
-      __error.carriedDraft = __stack.savedDraft;                  // rule 2
-    } else if (!__error.returnCarry) {                            // rule 3: return-position pass-through
-      __error.carriedDraft = undefined;                           // rule 4: erase
-    }
-    __error.returnCarry = false;                                  // consume-once
-    throw __error;
-  }
-  ...
+// at the frame's own catch
+if (__error instanceof AgencyAbort) {
+  return AbortedResult.fromError(__error, __stack, "code")
+    .withFinalize(await __finalize());
+}
+// at the post-call check
+if (isAborted(x)) {
+  runner.halt(x.carryThrough(__stack, "code").withFinalize(await __finalize()));
+  return;
 }
 ```
 
-The unwind order gives composition for free: inner finalizes run before outer ones, so each finalize receives a value the level below already translated.
+(Exact method shape to be settled in PR B's plan; the point is that finalize slots into the two existing stop sites — no new control flow.) Composition comes for free: an inner function's finalize has already produced its partial by the time the caller's stop site runs, so each finalize receives a value the level below already translated.
 
 ### The finalize sees the function's locals, with partials bound in
 
@@ -149,24 +147,23 @@ def code(): Report {
 }
 ```
 
-This costs almost no new machinery, because locals already live on the frame. Generated code compiles `x` to `__stack.locals.x` everywhere, and the finalize body compiles the same way, in the same frame. What is new is the **binding**: delivering a killed call's partial into the local it was headed for. The compiler wraps each call expression in a function that has a finalize:
+This costs almost no new machinery, because locals already live on the frame — and under the value transport, the binding is nearly free. The callee's aborted result is ALREADY the value of the assignment (`__stack.locals.x = await __call(verify, ...)` assigns it before the post-call check runs). In a finalize-bearing scope, the check unwraps it into the local instead of discarding it:
 
 ```ts
-try {
-  __stack.locals.x = await __call(verify, ...);
-} catch (e) {
-  if (e instanceof AgencyAbort) {
-    __stack.locals.x = e.carriedDraft ? e.carriedDraft.value : null;
-  }
-  throw e;
+__stack.locals.x = await __call(verify, ...);
+if (isAborted(__stack.locals.x)) {
+  const __abortedCallee = __stack.locals.x;
+  __stack.locals.x = __abortedCallee.partial ? __abortedCallee.partial.value : null;
+  runner.halt(__abortedCallee.carryThrough(__stack, "code").withFinalize(await __finalize()));
+  return;
 }
 ```
 
-Binding rules:
+Binding rules — all of them now structural:
 
-- **Per call expression, consume once, innermost first.** In `const x = f(g())`, if `g` trips, g's call site claims the carried draft. It has no variable, so the partial is dropped and `x` stays null. If `f` trips, f's call site claims the carried draft and `x` holds f's partial. This matters: binding per assignment statement instead would shove g's partial into an f-typed variable.
-- **A local whose statement never ran is undefined** — which falls out for free, since the assignment simply never executed.
-- **A bare call's partial is dropped.** `verify()` with no assignment has nowhere to put it.
+- **In `const x = f(g())`, if `g` aborts,** the call boundary drops g's partial before f would run (argument-position rule), so `x` holds null in the finalize. If `f` aborts, its aborted result IS the assignment's value, and `x` holds f's partial. No consume-once flag needed: there is only ever one aborted result in flight per statement.
+- **A local whose statement never ran is undefined** — the assignment simply never executed.
+- **A bare call's partial is dropped** — the statement-site check discards it (nothing was being assigned).
 - Partials are type-correct by the induction above: f's partial is f-return-typed, which is exactly the bound variable's declared type.
 
 ### Surface syntax and namespace
@@ -198,32 +195,34 @@ For `finalize`:
 ## What changes from the shipped version (#551)
 
 - **`saveDraft`** sets a serialized `savedDraft` slot on the calling frame instead of writing to `stack.other.drafts`. Clone-on-save behavior is kept.
-- **The generated def catch rung** (`functionCatchFailure.mustache`) applies the level rule — finalize, else draft, else erase — before re-throwing. This replaces the def clearing path.
-- **Blocks gain a catch.** `blockSetup.mustache` is try/finally today with no catch at all; the first draft of this doc wrongly assumed a "matching block handler" exists. The template gains a catch that applies the same level rule and re-throws; the finally still pops. This replaces the block clearing path — and it is where the flagship case (a `saveDraft` directly inside the guard block) gets its stamp.
-- **The guard boundary** (`__tryCall`'s owned-guard conversion) reads the carried draft off the abort and returns a success when one is present. This replaces the region search and the sweep.
-- **`runBatch`** clears the carried draft when rethrowing a rejected branch's error (the fork isolation line above).
-- **`lib/runtime/drafts.ts` is deleted**: the store, regions, `salvageOwnTrip`, the memo, all of it. The two shipped review findings on that module (the empty-`ids` region collision and the region-key leak) become moot — a disabled guard owns no trips and simply passes the carried draft through to whoever does.
+- **The generated def catch** (`functionCatchFailure.mustache`) converts a caught abort into a returned `AbortedResult` carrying the frame's draft, instead of re-throwing. Blocks gain the same catch (`blockSetup.mustache` was try/finally only) — that is how a `saveDraft` directly inside a guard block reaches the guard.
+- **The post-call check** (the same emission point as the interrupt check) propagates a callee's aborted result: the caller stops with its own draft via `carryThrough`.
+- **The call boundary** (`__call`/`__callMethod`) refuses aborted arguments and forwards the abort with the partial dropped.
+- **The guard boundary** (`__tryCall`'s owned-guard conversion) salvages the aborted value's partial as a success when one arrived. This replaces the region search and the sweep. A thin exception backstop remains for trips thrown from runtime code with no compiled frame in between.
+- **`runBatch`** converts an aborted branch value back into a rejection at `startInvoke`, partial dropped (the fork section above).
+- **`lib/runtime/drafts.ts` is deleted**: the store, regions, `salvageOwnTrip`, the memo, all of it. The two shipped review findings on that module (the empty-`ids` region collision and the region-key leak) become moot — a disabled guard owns no trips and simply passes the aborted value through to whoever does.
 - **Behavior change:** the deep-fallback salvage is removed (see the second walked example). No shipped fixture pins the old behavior.
-- **Tests:** the 13 execution fixtures stay and keep their meaning — stale-sibling and stale-block now pass because the hazard is impossible rather than because a rule handles it; update their comments to say so. The 14 `drafts.ts` unit tests die with the module, replaced by a handful of carried-draft-stamp unit tests. New fixtures: (a) a branch-originated trip under a guard outside the fork, expecting no salvage — the existing guard-outside-fork fixture only covers a parent-side trip; (b) only-deep-level-saves, expecting the failure, pinning the level rule.
+- **Tests:** the 13 execution fixtures stay and keep their meaning — stale-sibling and stale-block now pass because the hazard is impossible rather than because a rule handles it; update their comments to say so. The 14 `drafts.ts` unit tests die with the module, replaced by a handful of carried-draft-stamp unit tests. New fixtures: (a) a branch-originated trip under a guard outside the fork, expecting no salvage; (b) only-deep-level-saves, expecting the failure, pinning the level rule; (c) a return chain carrying a deep draft to the guard, pinning structural pass-through; (d) argument-position aborts — both the cross-type repro from the PR-553 review (partial dropped at the call boundary) and the outer call of `return f(g())` tripping (its partial passes through).
 - `finalize` ships as a separate increment on top of this; everything in its section above is settled design, not open questions.
 
 ## What statelog sees
 
-Every partial that moves is observable. The rungs do not assign the carried draft inline; they call one runtime helper, and that helper is the statelog chokepoint.
+Every partial that moves is observable. The `AbortedResult` methods are the statelog chokepoint — each hop that touches a partial logs itself, so no caller has to remember to.
 
-- The first stamp that involves a partial opens an `abortUnwind` span and stores its id on the abort. An unwind through undrafted code opens nothing and logs nothing.
-- Each level-rule transition that involves a partial emits one `abortSalvage` event inside that span: `carried` (this frame put its draft or finalize result on the carried draft), `passedThrough` (a return-position call let the callee's partial cross this level unchanged), `erased` (this frame killed a partial by having nothing to say), or `clearedAtFork` (a branch's partial was dropped at the fork boundary). The event carries the scope's name, its arguments, and the partial value — all as previews truncated at 500 characters, while the carried draft itself keeps the full value.
-- Delivery — the guard turning the abort into a value — emits a final `delivered` event with what the guard returned, and closes the span.
+- The first hop that involves a partial opens an `abortUnwind` span, whose id rides on the value. An abort through undrafted code opens nothing and logs nothing.
+- Each hop that touches a partial emits one `abortSalvage` event: `carried` (a frame attached its draft — or, future, its finalize result), `erased` (a frame dropped a callee's partial by having none of its own), `droppedAtArgPosition` (an aborted value tried to enter a call as an argument), `clearedAtFork` (a branch's partial stopped at the fork boundary), and `delivered` (the guard salvaged it). Events carry the scope's name, its arguments, and the partial — previews truncated at 500 characters, while the value itself stays whole. Return-position pass-through is silent on purpose: no code runs there, exactly like a normal return.
 
-So the log answers, for any trip: which drafts existed, which level dropped which partial and where, and what the guard finally handed back.
+So the log answers, for any trip: which drafts existed, which hop dropped which partial and why, and what the guard finally handed back.
 
 ## Implementation notes to confirm
 
-- A guard trip arrives in two shapes — a thrown `GuardExceededError` from the runner, and a cancelled leaf op carrying a `guardTrip` cause. Both are `AgencyAbort` values unwinding through the same catch rungs, so both pick up the carried draft. Confirm with the existing time-trip fixture.
-- The carried draft lives as a mutable field on the `AgencyAbort` object. Every rung re-throws the same object, which is what makes the level rule's replace-and-erase work. This is the same idiom the abort taxonomy already uses: `AbortCause` rides the abort, and its `delivered` flag relies on the same shared identity.
-- Only generated code has catch rungs, so the carried draft changes hands exactly at user-visible scopes. Runtime-internal frames, like the one an in-flight `llm()` runs on, never touch it.
-- The `savedDraft` slot on the frame must join `State.toJSON`/`fromJSON` so it survives interrupt/resume.
+- A guard trip arrives in two shapes — a thrown `GuardExceededError` from the runner, and a cancelled leaf op carrying a `guardTrip` cause. Both are exceptions only within one frame's extent: that frame's catch converts either into an AbortedResult. The trip's `cause` object rides the value BY IDENTITY, so the `delivered` de-dup flag keeps working across both delivery paths.
+- `__tryCall` keeps a thin exception backstop: a trip thrown from runtime code between the guard and the block (e.g. the subprocess adapter) reaches the guard without a compiled frame to convert it. Backstop trips carry no partial; the value path is the salvage path.
+- The post-call aborted check rides the SAME emission point as the interrupt check (`assignmentInterruptGuard`), so the two propagation systems cover exactly the same call sites by construction. If a site were missing, interrupts would already be broken there.
+- Node level is the ceiling: a node that receives an aborted value rebuilds the exception (`toError`), so the graph engine, the CLI entry, REPL handling, and root budgets (#550) see aborts exactly as before. Root-budget trips never become values.
+- The `savedDraft` slot on the frame joins `State.toJSON`/`fromJSON` so it survives interrupt/resume. AbortedResults themselves never serialize: they propagate to a guard or a node within one turn.
 - Aborts do not cross the subprocess IPC boundary as live objects, so a child process's drafts die with the child. Same as #551; unchanged.
+- Known shared envelope with interrupts: an aborted value flowing through a binOp operand (`g() + 1`) or into a non-`__call` JS interop path degrades the same way an Interrupt[] would today. Both systems share the fix whenever one lands.
 
 ## Deferred, with homes
 

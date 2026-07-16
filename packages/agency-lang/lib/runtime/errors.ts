@@ -145,31 +145,21 @@ export class AgencyAbort extends Error {
   /** Structured intent for this abort. */
   readonly agencyCause: AbortCause;
 
-  /** saveDraft partial carried up the unwind (carry-on-abort spec). Every
-   *  generated catch rung REPLACES this with the unwinding frame's own
-   *  partial — its draft, or (future) its finalize's return — or erases it
-   *  when the frame has neither. Deliberately mutable: every rung rethrows
-   *  the SAME object, which is what makes the level rule's replace-and-erase
-   *  work. Same idiom as agencyCause.delivered. */
-  carriedDraft?: { value: unknown };
-
-  /** Level-rule rung 3 (return-position pass-through): set by the
-   *  __markReturnCarry wrapper around a return-position call the abort
-   *  just escaped, consumed (read then cleared) by the very next rung.
-   *  Consume-once, so the flag can never skip a level. */
-  returnCarry?: boolean;
-
-  /** Statelog span for this abort's unwind. Opened lazily by the first
-   *  __stampCarriedDraft call that has a partial to report; closed at
-   *  delivery (the guard boundary). Undefined for the common case of an
-   *  unwind that never touches a partial. */
-  unwindSpanId?: string;
-
   constructor(message: string, cause: AbortCause) {
     super(message);
     this.name = "AgencyAbort";
     this.agencyCause = cause;
   }
+}
+
+/** A short, human-readable description of an abort cause. Used when an
+ *  AbortedResult is converted back into an exception at the places that
+ *  still speak exceptions (the graph engine, runBatch join points). */
+export function describeAbortCause(cause: AbortCause): string {
+  if (cause.kind === "guardTrip") {
+    return `Guard exceeded its ${cause.dimension} budget: spent ${cause.spent} of limit ${cause.limit}`;
+  }
+  return `Execution aborted (${cause.kind})`;
 }
 
 export class AgencyCancelledError extends AgencyAbort {

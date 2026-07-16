@@ -6,6 +6,8 @@ import {
   makeAbortCause,
   type AbortCause,
 } from "./errors.js";
+import { AbortedResult } from "./abortedResult.js";
+import { State } from "./state/stateStack.js";
 
 describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
   it("converts a guardTrip-cause-carrying abort to a timeoutFailure (NOT a throw)", async () => {
@@ -359,7 +361,7 @@ describe("__pipeBind", () => {
   });
 });
 
-describe("__tryCall salvages the carried draft on an OWNED trip", () => {
+describe("__tryCall converts an OWNED trip's AbortedResult into a Result", () => {
   function tripCause(guardId: string): AbortCause {
     return makeAbortCause({
       kind: "guardTrip",
@@ -370,20 +372,54 @@ describe("__tryCall salvages the carried draft on an OWNED trip", () => {
     });
   }
 
-  it("returns success(carriedDraft.value) when the abort carries a draft", async () => {
-    const abort = new AgencyCancelledError("sleep cancelled", tripCause("g1"));
-    abort.carriedDraft = { value: "partial-report" };
-    const result = await __tryCall(
-      () => {
-        throw abort;
-      },
-      { ownedGuardIds: ["g1"] },
+  function abortedWithDraft(guardId: string, draft?: unknown): AbortedResult {
+    const frame = new State();
+    if (arguments.length > 1) {
+      frame.savedDraft = { value: draft };
+    }
+    return AbortedResult.fromError(
+      new AgencyCancelledError("sleep cancelled", tripCause(guardId)),
+      frame,
+      "block",
     );
+  }
+
+  it("salvages the partial as a success when the block saved a draft", async () => {
+    const aborted = abortedWithDraft("g1", "partial-report");
+    const result = await __tryCall(async () => aborted, {
+      ownedGuardIds: ["g1"],
+    });
     expect(isSuccess(result)).toBe(true);
     expect((result as { value: unknown }).value).toBe("partial-report");
   });
 
-  it("returns the failure when the abort carries no draft (additive)", async () => {
+  it("returns the failure when no draft was saved (additive)", async () => {
+    const aborted = abortedWithDraft("g1");
+    const result = await __tryCall(async () => aborted, {
+      ownedGuardIds: ["g1"],
+    });
+    expect(isFailure(result)).toBe(true);
+  });
+
+  it("a saved null is a real draft, distinct from no draft", async () => {
+    const aborted = abortedWithDraft("g1", null);
+    const result = await __tryCall(async () => aborted, {
+      ownedGuardIds: ["g1"],
+    });
+    expect(isSuccess(result)).toBe(true);
+    expect((result as { value: unknown }).value).toBe(null);
+  });
+
+  it("an UNOWNED trip keeps travelling as a value, partial intact", async () => {
+    const aborted = abortedWithDraft("outer", "keep-me");
+    const result = await __tryCall(async () => aborted, {
+      ownedGuardIds: ["inner"],
+    });
+    expect(result).toBe(aborted);
+    expect(aborted.partial).toEqual({ value: "keep-me" });
+  });
+
+  it("a trip still in exception form converts to the failure (backstop, no salvage)", async () => {
     const abort = new AgencyCancelledError("sleep cancelled", tripCause("g1"));
     const result = await __tryCall(
       () => {
@@ -392,32 +428,5 @@ describe("__tryCall salvages the carried draft on an OWNED trip", () => {
       { ownedGuardIds: ["g1"] },
     );
     expect(isFailure(result)).toBe(true);
-  });
-
-  it("a saved null is a real draft, distinct from no draft", async () => {
-    const abort = new AgencyCancelledError("sleep cancelled", tripCause("g1"));
-    abort.carriedDraft = { value: null };
-    const result = await __tryCall(
-      () => {
-        throw abort;
-      },
-      { ownedGuardIds: ["g1"] },
-    );
-    expect(isSuccess(result)).toBe(true);
-    expect((result as { value: unknown }).value).toBe(null);
-  });
-
-  it("an UNOWNED trip propagates with its carried draft intact", async () => {
-    const abort = new AgencyCancelledError("x", tripCause("outer"));
-    abort.carriedDraft = { value: "keep-me" };
-    await expect(
-      __tryCall(
-        () => {
-          throw abort;
-        },
-        { ownedGuardIds: ["inner"] },
-      ),
-    ).rejects.toBe(abort);
-    expect(abort.carriedDraft).toEqual({ value: "keep-me" });
   });
 });

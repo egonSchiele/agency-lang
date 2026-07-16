@@ -1,0 +1,48 @@
+import { guard, saveDraft } from "std::thread"
+
+// The cross-type hole from the PR-review repro: a call in ARGUMENT
+// position aborts. leaf's partial is string-typed; the guard block is
+// where f's NUMBER would land. The abort must reach the guard with the
+// partial dropped (a failure), never as a string salvaged into a
+// number-typed result. The drop happens at the call boundary itself
+// (__call refuses aborted arguments), so it holds for any call shape —
+// here a value-access chain call, which no AST scan would classify.
+def leaf(): string {
+  saveDraft("leaf-partial")
+  sleep(2000)
+  return "x"
+}
+
+def f(x: string): number {
+  return 1
+}
+
+node argPositionDrops() {
+  const arr = [leaf]
+  const r = guard(time: 600ms) as {
+    return f(arr[0]())
+  }
+  if (isFailure(r)) { return "failed-no-cross-type-salvage" }
+  return "leaked:${r.value}"
+}
+
+// The mirror case: the OUTER call of `return f2(g())` trips after its
+// argument completed. f2's partial is f2-return-typed, which is exactly
+// the block's type, so it passes through return position to the guard.
+def g(): string {
+  return "g-value"
+}
+
+def f2(x: string): string {
+  saveDraft("f2-partial:${x}")
+  sleep(2000)
+  return x
+}
+
+node outerCallSalvages() {
+  const r = guard(time: 600ms) as {
+    return f2(g())
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return r.value
+}

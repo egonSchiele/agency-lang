@@ -6,6 +6,31 @@ import {
   describeFailureCallTarget,
 } from "./failurePropagation.js";
 import { isFailure } from "./result.js";
+import { type AbortedResult, isAborted } from "./abortedResult.js";
+
+/** Find an aborted result among a call's arguments (`f(g())` where g was
+ *  aborted). Checked at the call boundary itself so the rule holds for
+ *  every call shape — nested arguments, method chains, named args —
+ *  without the compiler having to enumerate them. */
+function findAbortedArg(descriptor: CallType): AbortedResult | undefined {
+  const positional =
+    descriptor.type === "positional"
+      ? descriptor.args
+      : descriptor.positionalArgs;
+  for (const arg of positional) {
+    if (isAborted(arg)) {
+      return arg;
+    }
+  }
+  if (descriptor.type === "named") {
+    for (const value of Object.values(descriptor.namedArgs)) {
+      if (isAborted(value)) {
+        return value;
+      }
+    }
+  }
+  return undefined;
+}
 
 /**
  * Runtime dispatcher for every Agency call site. Generated code emits
@@ -27,6 +52,13 @@ export async function __call(
 ): Promise<unknown> {
   if (optional && (target === null || target === undefined)) {
     return undefined;
+  }
+  // An aborted callee's result must never enter another call as an
+  // argument. The call does not run; the abort continues as this call's
+  // own result, minus the partial (see droppedAtArgPosition).
+  const abortedArg = findAbortedArg(descriptor);
+  if (abortedArg !== undefined) {
+    return abortedArg.droppedAtArgPosition();
   }
   if (AgencyFunction.isAgencyFunction(target)) {
     return target.invoke(descriptor);
@@ -70,6 +102,13 @@ export async function __callMethod(
 ): Promise<unknown> {
   if (optional && (obj === null || obj === undefined)) {
     return undefined;
+  }
+
+  // Same argument rule as __call: an aborted result never enters a method
+  // call; the abort continues without its partial.
+  const abortedArg = findAbortedArg(descriptor);
+  if (abortedArg !== undefined) {
+    return abortedArg.droppedAtArgPosition();
   }
 
   // AgencyFunction methods: .partial() and .describe() are handled directly

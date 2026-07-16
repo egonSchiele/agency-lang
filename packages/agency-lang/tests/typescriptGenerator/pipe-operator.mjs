@@ -17,8 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
-  __stampCarriedDraft,
-  __markReturnCarry,
+  AbortedResult,
+  isAborted,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -260,13 +260,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  // Level rule (saveDraft): this frame REPLACES the carried draft with its
-  // own partial — its savedDraft if it saved one, its callee's partial when
-  // the trip escaped a return-position call, else nothing. A partial crosses
-  // one level at a time; a frame with nothing to say ERASES the carried
-  // draft. See lib/runtime/carriedDraft.ts.
-  __stampCarriedDraft(__error, __stack, "double", __ctx);
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "double");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -415,13 +414,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  // Level rule (saveDraft): this frame REPLACES the carried draft with its
-  // own partial — its savedDraft if it saved one, its callee's partial when
-  // the trip escaped a return-position call, else nothing. A partial crosses
-  // one level at a time; a frame with nothing to say ERASES the carried
-  // draft. See lib/runtime/carriedDraft.ts.
-  __stampCarriedDraft(__error, __stack, "multiply", __ctx);
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "multiply");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -559,28 +557,18 @@ await callHook({
     condition: async () => __eq(__stack.args.b, 0),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
-try {
-                __functionCompleted = true;
+__functionCompleted = true;
 runner.halt(failure(`division by zero`, { checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), functionName: "safeDivide", args: __stack.args }))
 return;
-              } catch (__returnError) {
-                __markReturnCarry(__returnError)
-                throw __returnError
-              }
             });
     },
   },
 
 ]);
       await runner.step(2, async (runner) => {
-try {
-          __functionCompleted = true;
+__functionCompleted = true;
 runner.halt(await success(__stack.args.a / __stack.args.b))
 return;
-        } catch (__returnError) {
-          __markReturnCarry(__returnError)
-          throw __returnError
-        }
       });
     })
     if (runner.halted) {
@@ -601,13 +589,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  // Level rule (saveDraft): this frame REPLACES the carried draft with its
-  // own partial — its savedDraft if it saved one, its callee's partial when
-  // the trip escaped a return-position call, else nothing. A partial crosses
-  // one level at a time; a frame with nothing to say ERASES the carried
-  // draft. See lib/runtime/carriedDraft.ts.
-  __stampCarriedDraft(__error, __stack, "safeDivide", __ctx);
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "safeDivide");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't

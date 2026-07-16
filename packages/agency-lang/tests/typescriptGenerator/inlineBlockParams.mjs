@@ -17,8 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
-  __stampCarriedDraft,
-  __markReturnCarry,
+  AbortedResult,
+  isAborted,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -256,6 +256,10 @@ if (hasInterrupts(__stack.locals.result)) {
             runner.halt(__stack.locals.result)
             return;
           }
+if (isAborted(__stack.locals.result)) {
+            runner.halt(__stack.locals.result.carryThrough(__stack, "mapItems"))
+            return;
+          }
         });
 await runner.step(1, async (runner) => {
 __stack.locals.results = await __callMethod(__stack.locals.results, "concat", {
@@ -288,13 +292,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  // Level rule (saveDraft): this frame REPLACES the carried draft with its
-  // own partial — its savedDraft if it saved one, its callee's partial when
-  // the trip escaped a return-position call, else nothing. A partial crosses
-  // one level at a time; a frame with nothing to say ERASES the carried
-  // draft. See lib/runtime/carriedDraft.ts.
-  __stampCarriedDraft(__error, __stack, "mapItems", __ctx);
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "mapItems");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -413,11 +416,13 @@ return;
   });
 return runner.halted ? runner.haltResult : undefined;
 } catch (__blockError) {
-// Level rule for the block frame — see functionCatchFailure.mustache.
-// This is where a saveDraft placed directly inside a guard block gets its
-// partial onto the abort. __stampCarriedDraft no-ops on non-abort errors,
-// so no instanceof check is needed; the rethrow preserves unwind order.
-__stampCarriedDraft(__blockError, __bstack, "__block_0", __ctx);
+// An abort stopped this block. Like a function, the block returns an
+// AbortedResult instead of throwing on: the marker plus the block's own
+// saved draft. This is how a saveDraft placed directly inside a guard
+// block reaches the guard. Other errors keep throwing as before.
+if (__blockError instanceof AgencyAbort) {
+  return AbortedResult.fromError(__blockError, __bstack, "__block_0");
+}
 throw __blockError;
 } finally {
 // Pop the SAME stack `setupFunction` pushed onto (the ALS-current
@@ -440,6 +445,9 @@ if (hasInterrupts(__stack.locals.doubled)) {
             data: __stack.locals.doubled
           })
           return;
+        }
+if (isAborted(__stack.locals.doubled)) {
+          throw __stack.locals.doubled.toError()
         }
       });
       await runner.step(3, async (runner) => {

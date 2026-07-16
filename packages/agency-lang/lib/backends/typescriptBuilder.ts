@@ -191,20 +191,6 @@ function walkMarkTopLevel(value: unknown): unknown {
   return out;
 }
 
-/** True when the AST fragment contains a functionCall node anywhere.
- *  Used by the return-position pass-through gate: `return f(g())` must
- *  compile unmarked, because g's trip would be wrongly typed for this
- *  scope if it picked up the mark. Walks raw AST objects — conservative
- *  by construction (any nested call, even a JS-level method chain that
- *  parses as a functionCall, disables the mark). */
-function containsFunctionCallDeep(node: unknown): boolean {
-  if (node == null || typeof node !== "object") return false;
-  if (Array.isArray(node)) return node.some(containsFunctionCallDeep);
-  const rec = node as Record<string, unknown>;
-  if (rec.type === "functionCall") return true;
-  return Object.values(rec).some(containsFunctionCallDeep);
-}
-
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
@@ -3121,36 +3107,6 @@ export class TypeScriptBuilder {
     return this.generateNodeCallExpression(node.nodeCall);
   }
 
-  /** Return-position pass-through (carry-on-abort level rule, rung 3):
-   *  `return f(...)` declares that f's value IS this scope's value — the
-   *  checker enforced the types — so a trip escaping f may carry f's
-   *  partial through this frame unchanged. The mark is sound only when no
-   *  OTHER Agency call evaluates inside the wrapped statement: a nested
-   *  call's partial is not return-typed for this scope. So the mark
-   *  applies only when the arguments contain no function calls;
-   *  `return f(g())` compiles unmarked and rung 4 erases instead
-   *  (conservative). llm() returns hoist through their own path and are
-   *  never marked. */
-  private isMarkableReturnCall(value: AgencyNode): boolean {
-    if (value.type !== "functionCall") return false;
-    if (value.functionName === "llm") return false;
-    return !containsFunctionCallDeep(value.arguments);
-  }
-
-  /** Wrap a compiled return-position call so a passing AgencyAbort gets
-   *  the consume-once returnCarry flag before continuing to this frame's
-   *  catch rung. See lib/runtime/carriedDraft.ts. */
-  private markReturnCarryWrap(returnStmt: TsNode): TsNode {
-    return ts.tryCatch(
-      ts.statements([returnStmt]),
-      ts.statements([
-        ts.raw("__markReturnCarry(__returnError)"),
-        ts.raw("throw __returnError"),
-      ]),
-      "__returnError",
-    );
-  }
-
   private processReturnStatement(node: ReturnStatement): TsNode {
     // Bare return (no value)
     if (!node.value) {
@@ -3198,9 +3154,6 @@ export class TypeScriptBuilder {
         ]);
       }
       const valueNode = this.processNode(node.value);
-      if (this.isMarkableReturnCall(node.value)) {
-        return this.markReturnCarryWrap(ts.runnerHalt(valueNode));
-      }
       return ts.runnerHalt(valueNode);
     }
 
@@ -3255,11 +3208,6 @@ export class TypeScriptBuilder {
       ]);
     }
     const valueNode = this.processNode(node.value);
-    if (this.isMarkableReturnCall(node.value)) {
-      return this.markReturnCarryWrap(
-        ts.functionReturn(this.maybeWrapReturnValidation(valueNode)),
-      );
-    }
     return ts.functionReturn(this.maybeWrapReturnValidation(valueNode));
   }
 
@@ -3308,20 +3256,36 @@ export class TypeScriptBuilder {
     return false;
   }
 
-  /** The interrupt guard emitted after a sync assignment whose RHS may
-   * bubble an Interrupt[]: halt the scope (awaitAll first) so the batch
-   * propagates to the caller, or — inside a handler body — throw, since
-   * handlers must not raise interrupts. Returns null at global scope,
-   * where there is no runner to halt. */
+  /** The propagation guards emitted after a sync assignment whose RHS is
+   * a call (or a `try` expression that may deliver a callee's raw
+   * result). Two markers can come back instead of a normal value, and
+   * both must stop this scope:
+   *
+   * - an Interrupt[] — the callee paused; halt so the batch propagates
+   *   (awaitAll first), or throw inside a handler body, where interrupts
+   *   are not allowed.
+   * - an AbortedResult — the callee was aborted; this scope stops too and
+   *   returns ITS OWN saved draft via carryThrough (the callee's partial
+   *   is dropped: salvage is opt-in per level). Nodes and handler bodies
+   *   rebuild the exception instead, so everything above compiled code
+   *   (the graph engine, the CLI entry) sees aborts exactly as before.
+   *
+   * Returns null only at global scope for the interrupt half; the aborted
+   * check still applies there (an abort during module init should crash
+   * init, not become data in a global). */
   private assignmentInterruptGuard(varRef: TsNode): TsNode | null {
-    if (this.scopes.current().type === "global") return null;
+    const abortedGuard = this.assignmentAbortedGuard(varRef);
+    if (this.scopes.current().type === "global") return abortedGuard;
     if (this.insideHandlerBody) {
-      return ts.if(
-        this.interruptCheckRaw(this.str(varRef)),
-        ts.throw(
-          `new Error("Cannot throw an interrupt inside a handler body")`,
+      return ts.statements([
+        ts.if(
+          this.interruptCheckRaw(this.str(varRef)),
+          ts.throw(
+            `new Error("Cannot throw an interrupt inside a handler body")`,
+          ),
         ),
-      );
+        abortedGuard,
+      ]);
     }
     // Sync: interrupt check with awaitAll before halt.
     // In function context, halt with the interrupt array directly so
@@ -3330,17 +3294,46 @@ export class TypeScriptBuilder {
       this.scopes.current().type === "node"
         ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
         : varRef;
+    return ts.statements([
+      ts.if(
+        this.interruptCheck(varRef),
+        ts.statements([
+          ts.awaitMethodCall(
+            // Strict accessor — immediate deref inside step body.
+            ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
+            "awaitAll",
+          ),
+          ts.methodCall(ts.id("runner"), "halt", [haltValue]),
+          ts.return(),
+        ]),
+      ),
+      abortedGuard,
+    ]);
+  }
+
+  /** The aborted-result half of the post-call guard. Function and block
+   * scopes halt with their own AbortedResult (carryThrough applies the
+   * salvage rule); every other scope rebuilds the exception, because
+   * nothing above compiled code consumes aborted values. */
+  private assignmentAbortedGuard(varRef: TsNode): TsNode {
+    const scopeType = this.scopes.current().type;
+    const expr = this.str(varRef);
+    if (scopeType === "function" || scopeType === "block") {
+      const frameVar = scopeType === "block" ? "__bstack" : "__stack";
+      const scopeName = JSON.stringify(this.scopes.currentName());
+      return ts.if(
+        ts.raw(`isAborted(${expr})`),
+        ts.statements([
+          ts.raw(
+            `runner.halt(${expr}.carryThrough(${frameVar}, ${scopeName}))`,
+          ),
+          ts.return(),
+        ]),
+      );
+    }
     return ts.if(
-      this.interruptCheck(varRef),
-      ts.statements([
-        ts.awaitMethodCall(
-          // Strict accessor — immediate deref inside step body.
-          ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
-          "awaitAll",
-        ),
-        ts.methodCall(ts.id("runner"), "halt", [haltValue]),
-        ts.return(),
-      ]),
+      ts.raw(`isAborted(${expr})`),
+      ts.raw(`throw ${expr}.toError()`),
     );
   }
 

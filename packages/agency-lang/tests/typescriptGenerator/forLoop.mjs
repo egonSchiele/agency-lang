@@ -17,8 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
-  __stampCarriedDraft,
-  __markReturnCarry,
+  AbortedResult,
+  isAborted,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -225,6 +225,9 @@ if (hasInterrupts(__funcResult)) {
             })
             return;
           }
+if (isAborted(__funcResult)) {
+            throw __funcResult.toError()
+          }
         });
       });
       await runner.step(4, async (runner) => {
@@ -243,6 +246,9 @@ if (hasInterrupts(__funcResult)) {
               data: __funcResult
             })
             return;
+          }
+if (isAborted(__funcResult)) {
+            throw __funcResult.toError()
           }
         });
       });
@@ -266,6 +272,9 @@ if (hasInterrupts(__funcResult)) {
             })
             return;
           }
+if (isAborted(__funcResult)) {
+            throw __funcResult.toError()
+          }
         });
 await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
@@ -279,6 +288,9 @@ if (hasInterrupts(__funcResult)) {
               data: __funcResult
             })
             return;
+          }
+if (isAborted(__funcResult)) {
+            throw __funcResult.toError()
           }
         });
       });

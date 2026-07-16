@@ -15,11 +15,13 @@ try {
 {{{body}}}
 return runner.halted ? runner.haltResult : undefined;
 } catch (__blockError) {
-// Level rule for the block frame — see functionCatchFailure.mustache.
-// This is where a saveDraft placed directly inside a guard block gets its
-// partial onto the abort. __stampCarriedDraft no-ops on non-abort errors,
-// so no instanceof check is needed; the rethrow preserves unwind order.
-__stampCarriedDraft(__blockError, __bstack, {{{scopeName}}}, __ctx);
+// An abort stopped this block. Like a function, the block returns an
+// AbortedResult instead of throwing on: the marker plus the block's own
+// saved draft. This is how a saveDraft placed directly inside a guard
+// block reaches the guard. Other errors keep throwing as before.
+if (__blockError instanceof AgencyAbort) {
+  return AbortedResult.fromError(__blockError, __bstack, {{{scopeName}}});
+}
 throw __blockError;
 } finally {
 // Pop the SAME stack \`setupFunction\` pushed onto (the ALS-current

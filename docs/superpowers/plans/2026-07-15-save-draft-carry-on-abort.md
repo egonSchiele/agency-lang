@@ -1,5 +1,7 @@
 # saveDraft Carry-On-Abort + finalize Implementation Plan
 
+> **SUPERSEDED IN PART (2026-07-15, PR #553 review round):** the owner's review moved the abort transport from exceptions to RETURN VALUES (`AbortedResult`; see the revision-3 spec). Tasks A0-A2 and A5-A6 shipped as written. Tasks A3/A4's mechanism (carried draft on the exception, `returnCarry` marking, rung stamping) was replaced by the value transport in the same PR. PR B's tasks need re-planning against revision 3 before execution — the finalize surface design is unchanged, but the codegen anchors moved.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task in the main session (owner preference: no subagent-driven development). Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Rebuild `saveDraft` on the carry-on-abort architecture (a `carriedDraft` on the abort object, updated by each frame's catch rung under the level rule), then add the `finalize` keyword — as two sequenced PRs from this one plan.

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { AgencyAbort, isAbortError, readCause } from "./errors.js";
-import { closeUnwindSpan } from "./carriedDraft.js";
+import { isAbortError, readCause } from "./errors.js";
+import { isAborted } from "./abortedResult.js";
 import { hasInterrupts } from "./interrupts.js";
 
 /** Structured `GuardFailureData` for a tripped guard. Shared by the
@@ -176,6 +176,32 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     // paused state. (First hit by `try _run(...)` when a subprocess
     // pauses; applies to any interrupting callee under `try`.)
     if (hasInterrupts(value)) return value as any;
+    // Aborted results travel as values (lib/runtime/abortedResult.ts).
+    // This boundary is where a guard turns its OWN trip into a Result:
+    // salvage the partial as a success, or produce exactly the failure a
+    // trip produced before saveDraft existed. A trip belonging to some
+    // OUTER guard keeps travelling as a value — `try` must not catch it.
+    if (isAborted(value)) {
+      const cause = value.cause;
+      if (
+        cause.kind === "guardTrip" &&
+        opts?.ownedGuardIds?.includes(cause.guardId)
+      ) {
+        // De-dup flag, shared by identity with the abort signal's cause:
+        // the runner's shouldSkip must not re-throw an already-delivered
+        // trip. Same contract as the exception path below.
+        cause.delivered = true;
+        const salvaged = value.deliver();
+        if (salvaged !== undefined) {
+          return success(salvaged.value);
+        }
+        return failure(
+          guardFailureData(cause.dimension, cause.limit, cause.spent),
+          opts,
+        );
+      }
+      return value as any;
+    }
     if (resultValueSchema.safeParse(value).success) return value;
     return success(value);
   } catch (error) {
@@ -209,16 +235,11 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
         // aborted) does NOT re-throw a GuardExceededError for the same trip.
         // The cause object is shared by identity with `signal.reason`.
         guardCause.delivered = true;
-        // saveDraft salvage: the unwind carried the guarded block's own
-        // partial on the abort (level rule — the carried draft always holds
-        // the partial of the frame the error most recently left, which at
-        // this boundary is the guarded block). Present -> the guard yields
-        // it. Absent -> exactly today's failure. Additive by construction.
-        const abort = error as AgencyAbort;
-        closeUnwindSpan(abort);
-        if (abort.carriedDraft !== undefined) {
-          return success(abort.carriedDraft.value);
-        }
+        // Backstop for trips still in exception form when they reach the
+        // guard: a trip thrown from runtime code between the block and
+        // this boundary (e.g. the subprocess adapter), where no compiled
+        // frame existed to convert it into an AbortedResult. Exceptions
+        // carry no partial — the value path above is the salvage path.
         return failure(
           guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent),
           opts,

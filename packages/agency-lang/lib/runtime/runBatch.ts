@@ -61,8 +61,8 @@
  *    undefined)` would overwrite the meaningful value with undefined.
  */
 import { agencyStore } from "./asyncContext.js";
-import { AgencyAbort, AgencyCancelledError, makeAbortCause } from "./errors.js";
-import { previewForLog } from "./carriedDraft.js";
+import { AgencyCancelledError, makeAbortCause } from "./errors.js";
+import { isAborted } from "./abortedResult.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
 import { GlobalStore } from "./state/globalStore.js";
@@ -358,6 +358,22 @@ function startInvoke<T>(
         t.child.invoke(t.branch.stack, signal),
       ),
     )
+    .then((value) => {
+      // An aborted branch fulfills with an AbortedResult (its compiled
+      // frames convert aborts to values). At the fork boundary that value
+      // becomes a rejection again, for two reasons. First, isolation: the
+      // branch's partial stays in the branch (atForkBoundary drops it) —
+      // which branch fails first is a race, and one branch's value has
+      // the wrong shape for the fork. Second, every join path (all /
+      // sequential / race, first-run and resume) already handles branch
+      // rejections; converting here means none of them need to know
+      // aborted values exist, and an aborted value can never be cached
+      // as a branch result.
+      if (isAborted(value)) {
+        throw value.atForkBoundary().toError();
+      }
+      return value;
+    })
     .finally(() => pauseBranchTimeGuards(t.branch.stack));
 }
 
@@ -606,7 +622,6 @@ export async function runBatch<T>(
       );
       // Rethrow: any sibling interrupts collected are discarded (matches
       // today's runForkAll/runRace behavior; documented at top of file).
-      clearCarriedDraftAtForkBoundary(s.reason, ctx);
       throw s.reason;
     }
     const value = s.value;
@@ -660,27 +675,6 @@ export async function runBatch<T>(
 /** Mode "race" first-time path: launch every child, await the first
  * settle, abort the rest, delete loser branches, propagate loser cost,
  * stamp + overwrite if the winner halted. */
-/** Branch drafts stay inside their branch: a rejected branch's error object
- *  crosses the fork boundary carrying the branch's carried draft, and it
- *  must not (which branch rejects first is nondeterministic in "all" mode,
- *  and one branch's value is the wrong type for the fork's shape). Called
- *  at every site that rethrows a branch's error to the parent. The unwind
- *  span is NOT ended here — the abort keeps unwinding in the parent, where
- *  parent frames may stamp their own drafts; delivery ends it. */
-function clearCarriedDraftAtForkBoundary(
-  reason: unknown,
-  ctx: RuntimeContext<any>,
-): void {
-  if (reason instanceof AgencyAbort && reason.carriedDraft !== undefined) {
-    ctx.statelogClient?.abortSalvage({
-      action: "clearedAtFork",
-      spanId: reason.unwindSpanId,
-      partial: previewForLog(reason.carriedDraft.value),
-    });
-    reason.carriedDraft = undefined;
-  }
-}
-
 async function runRaceFirstTime<T>(
   opts: RunBatchOpts<T>,
   tasks: Task<T>[],
@@ -728,7 +722,6 @@ async function runRaceFirstTime<T>(
       tasks.map((task) => task.branch.stack),
       "max",
     );
-    clearCarriedDraftAtForkBoundary(err, opts.ctx);
     throw err;
   }
 
@@ -904,8 +897,22 @@ async function runRaceResume<T>(
     );
     pauseBranchTimeGuards(branch.stack);
     chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
-    clearCarriedDraftAtForkBoundary(err, ctx);
     throw err;
+  }
+
+  if (isAborted(value)) {
+    // An aborted branch fulfilled with a value (its compiled frames
+    // convert aborts to AbortedResults). At the fork boundary that value
+    // becomes a rejection again — see the note in startInvoke.
+    hooks?.onBranchEnd?.(
+      child.key,
+      winnerIndex,
+      "failure",
+      performance.now() - startedAt,
+    );
+    pauseBranchTimeGuards(branch.stack);
+    chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
+    throw value.atForkBoundary().toError();
   }
 
   if (hasInterrupts(value)) {

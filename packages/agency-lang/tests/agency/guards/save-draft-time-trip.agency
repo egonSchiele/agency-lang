@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 node main() {
   const result = guard(time: 500ms) as {

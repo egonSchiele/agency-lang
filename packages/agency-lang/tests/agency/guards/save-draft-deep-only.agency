@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 // Only the DEEP level saves, and code() consumes verify() via an
 // ASSIGNMENT (`const x = ...` — not return position), so the level rule

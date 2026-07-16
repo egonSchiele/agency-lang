@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 def verify(): string {
   saveDraft("verify-draft")

@@ -19,7 +19,7 @@ function check(source: string, config: Partial<AgencyConfig> = {}) {
 describe("saveDraft argument type-check", () => {
   it("accepts a draft assignable to the enclosing return type", () => {
     const errors = check(`
-      import { guard, saveDraft } from "std::thread"
+      import { guard } from "std::thread"
       def f(): string {
         saveDraft("ok")
         return "x"
@@ -30,7 +30,7 @@ describe("saveDraft argument type-check", () => {
 
   it("rejects a draft not assignable to the enclosing return type", () => {
     const errors = check(`
-      import { guard, saveDraft } from "std::thread"
+      import { guard } from "std::thread"
       def f(): string {
         saveDraft(42)
         return "x"
@@ -44,7 +44,7 @@ describe("saveDraft argument type-check", () => {
     // so a matching draft is fine and a mismatched one is flagged — the check is
     // NOT limited to top-level def/node bodies.
     const ok = check(`
-      import { guard, saveDraft } from "std::thread"
+      import { guard } from "std::thread"
       def f(): string {
         const r = guard(cost: 1.0) as {
           saveDraft("ok")
@@ -56,7 +56,7 @@ describe("saveDraft argument type-check", () => {
     expect(ok).toHaveLength(0);
 
     const bad = check(`
-      import { guard, saveDraft } from "std::thread"
+      import { guard } from "std::thread"
       def f(): string {
         const r = guard(cost: 1.0) as {
           saveDraft(42)
@@ -72,7 +72,7 @@ describe("saveDraft argument type-check", () => {
 describe("saveDraft check — review-round hardening", () => {
   it("rejects a mismatched draft passed as a NAMED argument", () => {
     const errors = check(`
-      import { guard, saveDraft } from "std::thread"
+      import { guard } from "std::thread"
       def f(): string {
         saveDraft(value: 42)
         return "x"
@@ -127,10 +127,10 @@ describe("saveDraft check — import-origin gating", () => {
     expect(errors).toHaveLength(0);
   });
 
-  it("still fires for the stdlib thread module's saveDraft", () => {
+  it("still fires for the stdlib prelude's saveDraft", () => {
     const errors = checkWithImport(
       source,
-      "/Users/someone/agency-lang/stdlib/thread.agency",
+      "/Users/someone/agency-lang/stdlib/index.agency",
     );
     expect(errors.length).toBeGreaterThan(0);
   });

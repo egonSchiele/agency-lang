@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 // `saver` saves a draft and returns NORMALLY (no llm, no cost). `tripper` then
 // trips before saving anything. Without normal-completion clearing, the guard

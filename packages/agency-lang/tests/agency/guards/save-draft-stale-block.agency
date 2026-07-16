@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 // A user combinator that runs a block on the CURRENT stack. Its block saves a
 // draft and completes NORMALLY (never cleared without block clearing); then a

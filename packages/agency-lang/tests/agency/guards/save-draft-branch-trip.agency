@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 // The trip fires INSIDE a fork branch. The branch's frames stamp their
 // drafts onto the branch's abort, but runBatch clears the carried draft

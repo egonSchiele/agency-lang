@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 node main() {
   const outer = guard(cost: 10.0) as {           // generous — outer never trips

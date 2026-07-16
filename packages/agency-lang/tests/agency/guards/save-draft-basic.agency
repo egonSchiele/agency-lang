@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 // SYNTHETIC_COST = 0.000002 per llm call; limit 0.000001 trips on the first
 // call. saveDraft runs first, so the guard salvages "partial" instead of failing.

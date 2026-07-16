@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 def branch(tag: string): string {
   saveDraft(tag)          // on the BRANCH's own stack — parent guard can't see it

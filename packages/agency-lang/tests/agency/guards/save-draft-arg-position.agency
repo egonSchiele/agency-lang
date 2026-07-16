@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 // The cross-type hole from the PR-review repro: a call in ARGUMENT
 // position aborts. leaf's partial is string-typed; the guard block is

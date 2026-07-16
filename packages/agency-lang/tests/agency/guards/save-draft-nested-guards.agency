@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 node main() {
   const outer = guard(cost: 0.000003) as {

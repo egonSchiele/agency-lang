@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 def branch(tag: string): string {
   const r = guard(cost: 0.000001) as {

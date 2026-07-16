@@ -1,4 +1,4 @@
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 // Only the DEEP level saves, but every hop up is a return-position call:
 // verify's draft is verify's forced return, `return verify()` makes it

@@ -16,6 +16,7 @@ import {
   _sleep,
  } from "agency-lang/stdlib-lib/builtins.js"
 import { _resolve } from "agency-lang/stdlib-lib/path.js"
+import { _saveDraft } from "agency-lang/stdlib-lib/thread.js"
 import {
   syntaxHighlight as _syntaxHighlight,
  } from "agency-lang/stdlib-lib/syntax.js"
@@ -134,6 +135,24 @@ export def sleep(ms: number) {
   @param ms - The number of milliseconds to pause
   """
   _sleep(ms)
+}
+
+export def saveDraft(value: any) {
+  """
+  Record a best-so-far value for the current function or guarded block. If an
+  enclosing `guard(...)` trips before this scope returns, the guard yields the
+  last saved draft instead of a failure — an "anytime" result you can always
+  fall back to. Call it repeatedly as your result improves; the last value
+  wins. With no enclosing guard it is a harmless no-op. Calling it at module
+  top level is an error: there is no enclosing scope to save a draft for.
+
+  The value is type-checked against the enclosing scope's return type — a
+  function/node body, or a `guard` block (whose return type is inferred from its
+  `return`).
+
+  @param value - The best-so-far value. Should match the enclosing scope's return type.
+  """
+  _saveDraft(value)
 }
 
 export idempotent def read(

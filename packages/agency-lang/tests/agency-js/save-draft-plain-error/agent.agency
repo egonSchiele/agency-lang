@@ -1,5 +1,5 @@
 import { boom } from "./tools.js"
-import { guard, saveDraft } from "std::thread"
+import { guard } from "std::thread"
 
 // A plain thrown error must NEVER salvage a draft. The catch rung stamps
 // only AgencyAbort; a regular exception takes the convert-to-failure path

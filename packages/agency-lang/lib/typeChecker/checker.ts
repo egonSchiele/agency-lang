@@ -272,7 +272,7 @@ function checkSaveDraftCall(
   // only saveDraft people call is the stdlib one.
   if (ctx.functionDefs["saveDraft"] || ctx.nodeDefs["saveDraft"]) return;
   const imported = ctx.importedFunctions["saveDraft"];
-  if (imported && !isStdlibThreadOrigin(imported.originFile)) return;
+  if (imported && !isStdlibSaveDraftOrigin(imported.originFile)) return;
   if (!info.returnType) return; // no declared/inferred return type in scope
   if (call.arguments.length !== 1) return;
   const first = call.arguments[0];
@@ -287,13 +287,14 @@ function checkSaveDraftCall(
   checkType(arg, info.returnType, info.scope, "the saveDraft() draft value", ctx);
 }
 
-/** True when an import's origin file is the stdlib thread module (or the
- *  origin is unknown, which is the fail-open resolution path). Keeps
- *  checkSaveDraftCall pinned to the real builtin even if import
+/** True when an import's origin file is the stdlib prelude (or the
+ *  origin is unknown, which is the fail-open resolution path). saveDraft
+ *  lives in std::index and arrives via the auto-injected prelude import.
+ *  Keeps checkSaveDraftCall pinned to the real builtin even if import
  *  resolution grows to populate importedFunctions in more cases. */
-function isStdlibThreadOrigin(originFile: string | undefined): boolean {
+function isStdlibSaveDraftOrigin(originFile: string | undefined): boolean {
   if (!originFile) return true;
-  return /[\\/]stdlib[\\/]thread\.agency$/.test(originFile);
+  return /[\\/]stdlib[\\/]index\.agency$/.test(originFile);
 }
 
 export function isInsideHandler(ancestors: WalkAncestor[]): boolean {

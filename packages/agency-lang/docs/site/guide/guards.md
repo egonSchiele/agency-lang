@@ -29,13 +29,15 @@ Things to note:
 - `result` is a `Result` type. On success, it has the return value. On failure, it has this data:
 
 ```ts
-// "guardFailure" = cost, "timeoutFailure" = time
+// "guardFailure" = cost, "timeoutFailure" = time.
+// Every field is always present; the ones that don't apply are null.
 type GuardFailureData = {
   type: "guardFailure" | "timeoutFailure"
-  maxCost?: number
-  actualCost?: number
-  maxTime?: number
-  actualTime?: number
+  label: string | null
+  maxCost: number | null
+  actualCost: number | null
+  maxTime: number | null
+  actualTime: number | null
 }
 ```
 
@@ -43,6 +45,17 @@ type GuardFailureData = {
 
 - `cost:` — a `number` of dollars, eg `$2.0`.
 - `time:` — a `number` of milliseconds (or use the unit literals: `30s`, `5m`, `100ms`, `1h`).
+
+You can also name a guard with `label:`. The label comes back on the failure (`error.label`) and in error messages, so code with several guards can tell which one fired:
+
+```ts
+const result = guard(label: "research", cost: $0.50) as {
+  return research(topic)
+}
+if (isFailure(result)) {
+  print("Guard '" + result.error.label + "' tripped")
+}
+```
 
 These use [unit literals](/guide/basic-syntax.html#unit-literals).
 
@@ -71,6 +84,37 @@ When the clock ticks:
 - `sleep` = yes.
 
 When the time guard fires, any in-flight HTTP requests are cancelled and an abort signal is sent to other code as well.
+
+## Partial results with saveDraft
+
+A tripped guard normally throws the block's work away. `saveDraft` lets you keep a best-so-far value instead. Call it as your result improves; if the guard trips, the guard returns the last saved draft as a **success** instead of a failure.
+
+```ts
+node main() {
+  const result = guard(time: 5m) as {
+    let report = ""
+    for (topic in topics) {
+      report = report + research(topic)
+      saveDraft(report)
+    }
+    return report
+  }
+  // Finished in time: the full report.
+  // Tripped: the report so far.
+  print(result.value)
+}
+```
+
+`saveDraft` is always available — no import needed.
+
+Things to note:
+
+- The last saved value wins. Save early, save often.
+- The draft must match the type your function or block returns. The type checker enforces this, the same way it checks your `return` statements.
+- Each function keeps its own draft. If a function you *call* saved a draft but your code did not, your level returns nothing — a draft only crosses a call boundary when you return the callee's result directly (`return verify()`), because then its value *is* your value. This keeps every salvaged value correctly typed for the guard that receives it.
+- Drafts survive interrupts. If your block pauses for user input and trips after resuming, the draft saved before the pause still counts.
+- With no enclosing guard, `saveDraft` is a harmless no-op. At module top level it is a compile error — there is nothing a draft could ever be returned from.
+- A plain thrown error never returns a draft. Drafts are for budget trips, where the work so far is still trustworthy; unexpected failures stay failures.
 
 ## Nested guards
 

@@ -135,3 +135,27 @@ describe("saveDraft check — import-origin gating", () => {
     expect(errors.length).toBeGreaterThan(0);
   });
 });
+
+describe("saveDraft at module top level (AG6031)", () => {
+  it("errors on a top-level saveDraft call", () => {
+    const errors = check(`
+      saveDraft("nothing-can-read-this")
+
+      node main() {
+        return "x"
+      }
+    `);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toContain("module top level");
+  });
+
+  it("does not fire inside a def", () => {
+    const errors = check(`
+      def f(): string {
+        saveDraft("ok")
+        return "x"
+      }
+    `);
+    expect(errors).toHaveLength(0);
+  });
+});

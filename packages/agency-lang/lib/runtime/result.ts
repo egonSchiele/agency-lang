@@ -12,8 +12,10 @@ function guardFailureData(
   dimension: "cost" | "time",
   limit: number,
   spent: number,
+  label?: string,
 ): {
   type: string;
+  label: string | null;
   maxCost: number | null;
   actualCost: number | null;
   maxTime: number | null;
@@ -22,6 +24,7 @@ function guardFailureData(
   if (dimension === "time") {
     return {
       type: "timeoutFailure",
+      label: label ?? null,
       maxCost: null,
       actualCost: null,
       maxTime: limit,
@@ -30,6 +33,7 @@ function guardFailureData(
   }
   return {
     type: "guardFailure",
+    label: label ?? null,
     maxCost: limit,
     actualCost: spent,
     maxTime: null,
@@ -196,7 +200,7 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
           return success(salvaged.value);
         }
         return failure(
-          guardFailureData(cause.dimension, cause.limit, cause.spent),
+          guardFailureData(cause.dimension, cause.limit, cause.spent, cause.label),
           opts,
         );
       }
@@ -247,7 +251,7 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
         // frame existed to convert it into an AbortedResult. Exceptions
         // carry no partial — the value path above is the salvage path.
         return failure(
-          guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent),
+          guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent, guardCause.label),
           opts,
         );
       }

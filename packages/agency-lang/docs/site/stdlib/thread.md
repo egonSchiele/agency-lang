@@ -65,6 +65,7 @@ export type ModelCost = {
 ```ts
 export type GuardFailureData = {
   type: string;
+  label?: string;
   maxCost?: number;
   actualCost?: number;
   maxTime?: number;
@@ -83,7 +84,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L271))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L274))
 
 ### ThreadInfo
 
@@ -99,7 +100,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L276))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L279))
 
 ## Functions
 
@@ -300,6 +301,7 @@ Unlike the per-branch cost/token accessors, this reads process-wide
 guard(
   cost: number | null = null,
   time: number | null = null,
+  label: string | null = null,
   block: () -> any = null,
 ): Result
 ```
@@ -317,6 +319,7 @@ Run a block under a cost limit, a time limit, or both, aborting the
 
   @param cost - Maximum cost in dollars (e.g. $2.00 or 2.00). null or negative = no cost limit.
   @param time - Maximum compute time in milliseconds (e.g. 30s, 5m, or a raw number). null, zero, or negative = no time limit.
+  @param label - Optional name for this guard. On a trip it appears in the failure (`error.label`) and in error messages, so code with several guards can tell which one fired.
   @param block - The work to run under the guard.
 
   Example:
@@ -360,11 +363,12 @@ Run a block under a cost limit, a time limit, or both, aborting the
 |---|---|---|
 | cost | `number \| null` | null |
 | time | `number \| null` | null |
+| label | `string \| null` | null |
 | block | `() => any` | null |
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L215))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L216))
 
 ### listThreads
 
@@ -397,7 +401,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L348))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L351))
 
 ### currentThreadId
 
@@ -412,7 +416,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L401))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L404))
 
 ### getThread
 
@@ -444,4 +448,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L411))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L414))

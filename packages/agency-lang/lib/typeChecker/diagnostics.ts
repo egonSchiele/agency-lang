@@ -488,6 +488,12 @@ export const DIAGNOSTICS = {
     message:
       "Tool '{tool}' will be exposed to the LLM without optional function-typed parameter(s): {params}. The function body must be prepared to run with the declared default for each.",
   },
+  saveDraftAtTopLevel: {
+    code: "AG6031",
+    severity: "error",
+    message:
+      "saveDraft() cannot be called at module top level — there is no enclosing function, node, or block scope to save a draft for.",
+  },
   staticReassignedAtTopLevel: {
     code: "AG7004",
     severity: "error",

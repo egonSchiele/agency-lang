@@ -181,6 +181,7 @@ export def getModelCosts(): ModelCost[] {
 
 export type GuardFailureData = {
   type: string;
+  label: string | null;
   maxCost: number | null;
   actualCost: number | null;
   maxTime: number | null;
@@ -215,6 +216,7 @@ export type GuardFailureData = {
 export def guard(
   cost: number | null = null,
   time: number | null = null,
+  label: string | null = null,
   block: () -> any = null,
 ): Result {
   """
@@ -231,6 +233,7 @@ export def guard(
 
   @param cost - Maximum cost in dollars (e.g. $2.00 or 2.00). null or negative = no cost limit.
   @param time - Maximum compute time in milliseconds (e.g. 30s, 5m, or a raw number). null, zero, or negative = no time limit.
+  @param label - Optional name for this guard. On a trip it appears in the failure (`error.label`) and in error messages, so code with several guards can tell which one fired.
   @param block - The work to run under the guard.
 
   Example:
@@ -248,7 +251,7 @@ export def guard(
   }
   ```
   """
-  const ids = _pushGuard(cost, time)
+  const ids = _pushGuard(cost, time, label)
   const result = _runGuarded(ids, block)
   _popGuard(ids)
   return result

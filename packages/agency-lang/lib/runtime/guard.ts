@@ -95,9 +95,14 @@ export type Guard = {
  *  `try` boundary matches on it (ownedGuardIds), and the boundary's id list
  *  is checkpointed too — if the guard got a fresh id on resume they would no
  *  longer match and the trip would escape its guard. */
+type GuardJSONBase = {
+  guardId?: string;
+  label?: string;
+};
+
 export type GuardJSON =
-  | { kind: "cost"; costLimit: number; spent: number; guardId?: string }
-  | { kind: "time"; timeLimit: number; elapsedMs: number; guardId?: string };
+  | (GuardJSONBase & { kind: "cost"; costLimit: number; spent: number })
+  | (GuardJSONBase & { kind: "time"; timeLimit: number; elapsedMs: number });
 
 /**
  * Cost guard. Trips when its own `spent` counter exceeds `costLimit`.
@@ -152,7 +157,13 @@ export class CostGuard implements Guard {
    *  survive interrupt/resume — see GuardJSON). */
   guardId: string = nextGuardId();
 
-  constructor(public readonly costLimit: number) {}
+  /** `label` is the user-facing name from `guard(label: "...")`. It rides
+   *  the trip cause and the guard failure so users can tell WHICH guard
+   *  tripped; guardId stays the internal identity for ownedGuardIds. */
+  constructor(
+    public readonly costLimit: number,
+    public readonly label?: string,
+  ) {}
 
   install(_stack: StateStack): void {
     /* nothing — no abort controller, no signal composition */
@@ -176,7 +187,13 @@ export class CostGuard implements Guard {
 
   check(_stack: StateStack): GuardExceededError | null {
     if (this.spent <= this.costLimit) return null;
-    return new GuardExceededError("cost", this.costLimit, this.spent, this.guardId);
+    return new GuardExceededError(
+      "cost",
+      this.costLimit,
+      this.spent,
+      this.guardId,
+      this.label,
+    );
   }
 
   /** CostGuards don't compose into `stack.abortSignal`, so they can't
@@ -195,15 +212,19 @@ export class CostGuard implements Guard {
   }
 
   toJSON(): GuardJSON {
-    return {
+    const json: GuardJSON = {
       kind: "cost",
       costLimit: this.costLimit,
       spent: this.spent,
       guardId: this.guardId,
     };
+    if (this.label !== undefined) {
+      json.label = this.label;
+    }
+    return json;
   }
 
-  static fromJSON(j: { costLimit: number; spent: number; guardId?: string }): CostGuard {
+  static fromJSON(j: { costLimit: number; spent: number; guardId?: string; label?: string }): CostGuard {
     // Clean break with the prior `{costAtPush}` JSON shape: refuse to
     // restore a guard whose `spent` is missing rather than silently
     // initializing it to NaN/undefined and producing nonsense trips.
@@ -217,7 +238,7 @@ export class CostGuard implements Guard {
           `runtime; that format is no longer supported.`,
       );
     }
-    const g = new CostGuard(j.costLimit);
+    const g = new CostGuard(j.costLimit, j.label);
     g.spent = j.spent;
     // Restore the serialized id so ownedGuardIds matching survives resume.
     // (Absent only in pre-Increment-2 checkpoints; keep the freshly-minted
@@ -291,7 +312,11 @@ export class TimeGuard implements Guard {
    *  matching breaks). */
   guardId: string = nextGuardId();
 
-  constructor(public readonly timeLimit: number) {}
+  /** See CostGuard's label docstring — same contract. */
+  constructor(
+    public readonly timeLimit: number,
+    public readonly label?: string,
+  ) {}
 
   install(stack: StateStack): void {
     this.installAbortPlumbing(stack);
@@ -349,6 +374,7 @@ export class TimeGuard implements Guard {
       this.timeLimit,
       this.currentElapsed(),
       this.guardId,
+      this.label,
     );
   }
 
@@ -393,7 +419,7 @@ export class TimeGuard implements Guard {
     // branch pauses/resumes independently; resume() on the child stack
     // arms the fresh timer at the branch's first runner step.
     const remaining = Math.max(1, this.timeLimit - this.currentElapsed());
-    const clone = new TimeGuard(remaining);
+    const clone = new TimeGuard(remaining, this.label);
     clone.guardId = this.guardId;
     return clone;
   }
@@ -401,16 +427,20 @@ export class TimeGuard implements Guard {
   toJSON(): GuardJSON {
     // currentElapsed() charges the in-flight window if we're called
     // while running, so the snapshot reflects all elapsed time.
-    return {
+    const json: GuardJSON = {
       kind: "time",
       timeLimit: this.timeLimit,
       elapsedMs: this.currentElapsed(),
       guardId: this.guardId,
     };
+    if (this.label !== undefined) {
+      json.label = this.label;
+    }
+    return json;
   }
 
-  static fromJSON(j: { timeLimit: number; elapsedMs: number; guardId?: string }): TimeGuard {
-    const g = new TimeGuard(j.timeLimit);
+  static fromJSON(j: { timeLimit: number; elapsedMs: number; guardId?: string; label?: string }): TimeGuard {
+    const g = new TimeGuard(j.timeLimit, j.label);
     g.elapsedMs = j.elapsedMs;
     // Restore the serialized id so ownedGuardIds matching survives resume.
     if (j.guardId !== undefined) g.guardId = j.guardId;
@@ -454,6 +484,7 @@ export class TimeGuard implements Guard {
             limit: this.timeLimit,
             spent,
             guardId: this.guardId,
+            label: this.label,
           }),
         ),
       );
@@ -511,10 +542,13 @@ export class GuardExceededError extends AgencyAbort {
     // __tryCall filters on ownedGuardIds, would fail the membership check and
     // escape its own guard. CostGuard.check / TimeGuard.check pass their id.
     guardId: string = "",
+    label?: string,
   ) {
     super(
-      `guard exceeded: ${type} limit ${limit}, spent ${spent}`,
-      makeAbortCause({ kind: "guardTrip", dimension: type, limit, spent, guardId }),
+      label !== undefined
+        ? `guard "${label}" exceeded: ${type} limit ${limit}, spent ${spent}`
+        : `guard exceeded: ${type} limit ${limit}, spent ${spent}`,
+      makeAbortCause({ kind: "guardTrip", dimension: type, limit, spent, guardId, label }),
     );
     this.name = "GuardExceededError";
   }

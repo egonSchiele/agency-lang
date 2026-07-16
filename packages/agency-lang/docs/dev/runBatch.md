@@ -72,6 +72,15 @@ the first one it sees and abandons any interrupts that sibling
 branches collected (the rethrown error wins; callers that need both
 must catch inside `invoke`).
 
+An aborted branch can also FULFILL with an `AbortedResult` (compiled
+frames convert aborts into return values — see `docs/dev/saveDraft.md`).
+`startInvoke` normalizes that immediately: one `.then` drops the
+branch's partial (`atForkBoundary`) and rethrows the exception form, so
+every join path below keeps seeing branch failure as a rejection, and
+an aborted value can never be recorded as a branch result. Raw abort
+exceptions from a branch's own frames (fork-branch blocks have no
+conversion catch) take the rejected path directly, as before.
+
 A pre-Task-4 audit (recorded at the top of `runBatch.ts`) found one
 violation site: `PromptBailout` throws inside `promptRunner.ts`. Those
 were converted to returns when `runPrompt`'s tool loop migrated.

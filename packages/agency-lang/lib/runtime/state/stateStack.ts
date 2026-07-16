@@ -619,17 +619,22 @@ export class StateStack {
     return this.guards.filter((g) => !entry.liveGuardIds.includes(g.guardId));
   }
 
-  /** Suspend everything hidden from `entry` for the duration of one
-   *  handler invocation. Returns the token endHandlerSuspension needs.
-   *  Save/restore (not add/remove) so NESTED handler chains compose: an
-   *  inner chain suspending a guard the outer chain already suspended
-   *  must not un-suspend it when the inner handler returns. Only guards
-   *  newly entering / actually leaving the suspended set get their
-   *  object-level suspend()/unsuspend() calls, so the TimeGuard clock
-   *  pause pairs correctly across nesting. */
-  beginHandlerSuspension(entry: HandlerEntry): string[] {
+  /** Suspend every installed guard NOT in `visibleGuardIds` for the
+   *  duration of one bracket. Two callers: the handler chain (visible =
+   *  the handler's registration-time liveGuardIds) and a guard trip's
+   *  decision window (visible = the guards outside the tripped scope —
+   *  GuardScope.suspendForDecision). Returns the token endSuspension
+   *  needs. Save/restore (not add/remove) so NESTED brackets compose:
+   *  an inner bracket suspending a guard the outer one already
+   *  suspended must not un-suspend it when the inner bracket ends. Only
+   *  guards newly entering / actually leaving the suspended set get
+   *  their object-level suspend()/unsuspend() calls, so the TimeGuard
+   *  clock pause pairs correctly across nesting. */
+  beginSuspension(visibleGuardIds: string[]): string[] {
     const previous = this.suspendedGuardIds;
-    const hidden = this.guardsHiddenFrom(entry);
+    const hidden = this.guards.filter(
+      (g) => !visibleGuardIds.includes(g.guardId),
+    );
     this.suspendedGuardIds = [
       ...previous,
       ...hidden.map((g) => g.guardId).filter((id) => !previous.includes(id)),
@@ -640,7 +645,7 @@ export class StateStack {
     return previous;
   }
 
-  endHandlerSuspension(previous: string[]): void {
+  endSuspension(previous: string[]): void {
     const removed = this.suspendedGuardIds.filter(
       (id) => !previous.includes(id),
     );

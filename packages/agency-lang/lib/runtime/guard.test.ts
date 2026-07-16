@@ -488,29 +488,27 @@ describe("suspension", () => {
     branchA.pushGuard(g);
     branchB.pushGuard(g.cloneForBranch(branchA, branchB)!);
 
-    const token = branchA.beginHandlerSuspension({ fn: async () => undefined, liveGuardIds: [] });
+    const token = branchA.beginSuspension([]);
     // Branch A (the handler's lineage): hidden — charges dropped, gate open.
     branchA.chargeGuards(1.0);
     expect(() => branchA.enforceGuards()).not.toThrow();
     // Branch B: same object, unsuspended stack — charges land, gate trips.
     branchB.chargeGuards(1.0);
     expect(() => branchB.enforceGuards()).toThrow();
-    branchA.endHandlerSuspension(token);
+    branchA.endSuspension(token);
   });
 
   it("nested suspensions compose: the inner end must not unsuspend what the outer began", () => {
     const g = new TimeGuard(60000);
     const stack = new StateStack();
     stack.pushGuard(g);
-    const entry = { fn: async () => undefined, liveGuardIds: [] };
-
-    const outer = stack.beginHandlerSuspension(entry);
-    const inner = stack.beginHandlerSuspension(entry);
-    stack.endHandlerSuspension(inner);
+    const outer = stack.beginSuspension([]);
+    const inner = stack.beginSuspension([]);
+    stack.endSuspension(inner);
     // Still suspended: the outer bracket is open.
     g.resume(stack);
     expect((g as any).state).toBe("paused");
-    stack.endHandlerSuspension(outer);
+    stack.endSuspension(outer);
     g.resume(stack);
     expect((g as any).state).toBe("running");
     stack.popGuard();
@@ -541,9 +539,9 @@ describe("detectTrippedGuard — the one suspension-aware walk", () => {
     stack.chargeGuards(1.0);                       // over budget
     expect(stack.detectTrippedGuard()).not.toBeNull();
 
-    const token = stack.beginHandlerSuspension({ fn: async () => undefined, liveGuardIds: [] });
+    const token = stack.beginSuspension([]);
     expect(stack.detectTrippedGuard()).toBeNull(); // invisible while suspended
-    stack.endHandlerSuspension(token);
+    stack.endSuspension(token);
     expect(stack.detectTrippedGuard()).not.toBeNull();
   });
 });

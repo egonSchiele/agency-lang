@@ -253,7 +253,7 @@ async function runHandlerChain(
         // chain: each handler in the chain has its own registration
         // site and therefore its own hidden set.
         const suspensionToken = stack
-          ? stack.beginHandlerSuspension(entry)
+          ? stack.beginSuspension(entry.liveGuardIds)
           : undefined;
         // Treat handler execution as atomic for the debugger — same as LLM tool calls.
         ctx.enterToolCall();
@@ -263,7 +263,7 @@ async function runHandlerChain(
         } finally {
           ctx.exitToolCall();
           if (suspensionToken !== undefined) {
-            stack!.endHandlerSuspension(suspensionToken);
+            stack!.endSuspension(suspensionToken);
           }
         }
         // A handler that is a compiled def returns an AbortedResult when

@@ -17,6 +17,26 @@ export function nextGuardId(): string {
   return `g${__guardIdCounter}`;
 }
 
+/** Clamp a budget grant at zero, warning on negatives. A handler that
+ *  computes `approve({maxCost: budget - spent})` and goes negative must
+ *  not silently REMOVE metering (negative-as-disable is a construction-
+ *  time convention only; in the additive approve channel it would be
+ *  fail-open on a cost-control feature). Disarming is explicit:
+ *  `approve({disarm: ["cost"]})`. */
+function clampGrant(
+  delta: number,
+  g: { dimension: "cost" | "time"; label?: string },
+): number {
+  if (delta >= 0) return delta;
+  console.warn(
+    `guard grant clamped to 0: a negative ${g.dimension} grant` +
+      `${g.label ? ` for guard "${g.label}"` : ""} (${delta}) does not ` +
+      `disarm the guard — use approve({disarm: ["${g.dimension}"]}) to ` +
+      `stop metering explicitly.`,
+  );
+  return 0;
+}
+
 /**
  * Per-guard scope state for cost / time limits. Held on
  * `StateStack.guards` as an array; `pushGuard` appends + calls
@@ -62,6 +82,51 @@ export type Guard = {
    *  it is on the interface because handler scoping and ownedGuardIds
    *  matching are identity-based (indices do not survive resume/fork). */
   guardId: string;
+  /** Which budget dimension this guard meters. On the interface so call
+   *  sites never need instanceof or a JSON round-trip (the interface
+   *  contract above forbids variant branching at call sites). Mirrors
+   *  GuardJSON's `kind` discriminator. */
+  readonly dimension: "cost" | "time";
+  /** The guardIds of every member of this guard's SCOPE — the pair (or
+   *  singleton) one Agency-level `guard(...)` call pushed. `guard(cost:,
+   *  time:)` is TWO runtime guards; the scope array is how either member
+   *  finds its sibling. Stamped by `_pushGuard`; serialized (a trip's
+   *  interrupt data carries it across checkpoints); hand-copied in
+   *  TimeGuard.cloneForBranch (serialization and cloning are different
+   *  paths). Empty for guards pushed outside `_pushGuard` (root budgets,
+   *  `agency.withCostGuard`) — GuardScope.resolve treats an empty array
+   *  as a single-member scope. */
+  scopeIds: string[];
+  /** True for the operator's --max-cost/--max-time guards. Root budgets
+   *  never raise interrupts (they keep throwing at detection sites) and
+   *  a GuardScope containing one refuses extension: user code cannot
+   *  approve its way past the operator. Serialized — if it dropped on
+   *  resume, root budgets would become approvable after a checkpoint. */
+  isRootBudget: boolean;
+  /** Grant additional budget: limit += max(0, delta). A NEGATIVE delta
+   *  clamps to zero with a runtime warning — a computed grant that goes
+   *  negative must never silently remove metering (that is what disarm
+   *  is for, and it is explicit). Re-arms the tripped latches so the
+   *  guard can trip again at the new limit; missing that reset is
+   *  fail-open (a guard that never trips again), the worse direction. */
+  extendBudget(delta: number): void;
+  /** Stop metering this dimension permanently. Serialized. A disarmed
+   *  guard's check() never trips and isTripped() reports false even if
+   *  it tripped before disarming. */
+  disarm(): void;
+  /** True while the guard is over budget AND still armed — the state a
+   *  useless approval leaves behind. GuardScope's livelock check reads
+   *  it after applying an answer: an answer that leaves the tripped
+   *  dimension in this state would re-trip forever and is a runtime
+   *  error attributed to the answering handler. */
+  overBudgetAndArmed(): boolean;
+  /** The current limit and spend in this guard's own unit (dollars /
+   *  ms). On the interface for the trip interrupt's snapshot and the
+   *  derived trip key — both must read them without variant branching. */
+  currentLimit(): number;
+  spentAmount(): number;
+  /** User-facing name from guard(label:). */
+  readonly label?: string;
   install(stack: StateStack): void;
   uninstall(stack: StateStack): void;
   pause(): void;
@@ -117,6 +182,17 @@ export type Guard = {
 type GuardJSONBase = {
   guardId?: string;
   label?: string;
+  /** See Guard.scopeIds. */
+  scopeIds?: string[];
+  /** See Guard.disarm — MUST serialize (a disarmed dimension staying
+   *  disarmed across resume is the user's explicit decision). Contrast
+   *  with suspension, which must NEVER serialize; the two fail in
+   *  opposite directions. */
+  disarmed?: boolean;
+  /** See Guard.isRootBudget — MUST serialize (a root budget that became
+   *  approvable after a checkpoint would be a hole in the operator's
+   *  ceiling). */
+  isRootBudget?: boolean;
 };
 
 export type GuardJSON =
@@ -166,6 +242,8 @@ export type GuardJSON =
  * durable through serialization via `spent` in `toJSON`.
  */
 export class CostGuard implements Guard {
+  readonly dimension = "cost" as const;
+
   /** Cumulative cost charged since install. Serialized; survives
    *  interrupt/resume cycles. */
   private spent: number = 0;
@@ -176,11 +254,18 @@ export class CostGuard implements Guard {
    *  survive interrupt/resume — see GuardJSON). */
   guardId: string = nextGuardId();
 
+  /** See the Guard interface. All three serialized. `disarmed` is
+   *  public for GuardScope's livelock check; mutate only via disarm(). */
+  scopeIds: string[] = [];
+  isRootBudget: boolean = false;
+  disarmed: boolean = false;
+
   /** `label` is the user-facing name from `guard(label: "...")`. It rides
    *  the trip cause and the guard failure so users can tell WHICH guard
-   *  tripped; guardId stays the internal identity for ownedGuardIds. */
+   *  tripped; guardId stays the internal identity for ownedGuardIds.
+   *  `costLimit` is mutable ONLY through extendBudget. */
   constructor(
-    public readonly costLimit: number,
+    public costLimit: number,
     public readonly label?: string,
   ) {}
 
@@ -205,6 +290,7 @@ export class CostGuard implements Guard {
   }
 
   check(_stack: StateStack): GuardExceededError | null {
+    if (this.disarmed) return null;
     if (this.spent <= this.costLimit) return null;
     return new GuardExceededError(
       "cost",
@@ -213,6 +299,32 @@ export class CostGuard implements Guard {
       this.guardId,
       this.label,
     );
+  }
+
+  extendBudget(delta: number): void {
+    this.costLimit += clampGrant(delta, this);
+    // No latch to reset: cost trips re-derive from spent > costLimit on
+    // every check, so raising the limit is the whole re-arm.
+  }
+
+  disarm(): void {
+    this.disarmed = true;
+  }
+
+  /** True while the guard is over budget AND still armed — the state a
+   *  useless approval leaves behind (resumable-guards decision 8: an
+   *  answer that leaves this true would re-trip forever and is a
+   *  runtime error attributed to the answering handler). */
+  overBudgetAndArmed(): boolean {
+    return !this.disarmed && this.spent > this.costLimit;
+  }
+
+  currentLimit(): number {
+    return this.costLimit;
+  }
+
+  spentAmount(): number {
+    return this.spent;
   }
 
   /** Deliberately no-ops. A CostGuard can be SHARED across fork branches
@@ -264,10 +376,11 @@ export class CostGuard implements Guard {
     if (this.label !== undefined) {
       json.label = this.label;
     }
+    writeSharedGuardJSON(json, this);
     return json;
   }
 
-  static fromJSON(j: { costLimit: number; spent: number; guardId?: string; label?: string }): CostGuard {
+  static fromJSON(j: { costLimit: number; spent: number; guardId?: string; label?: string } & SharedGuardJSONFields): CostGuard {
     // Clean break with the prior `{costAtPush}` JSON shape: refuse to
     // restore a guard whose `spent` is missing rather than silently
     // initializing it to NaN/undefined and producing nonsense trips.
@@ -287,8 +400,37 @@ export class CostGuard implements Guard {
     // (Absent only in pre-Increment-2 checkpoints; keep the freshly-minted
     // id in that case.)
     if (j.guardId !== undefined) g.guardId = j.guardId;
+    readSharedGuardJSON(j, g);
     return g;
   }
+}
+
+/** The GuardJSONBase fields both variants serialize identically. One
+ *  writer/reader pair so a field added to one variant cannot silently
+ *  miss the other (scopeIds nearly did, in review). `suspended`-style
+ *  transient state deliberately has no place here. */
+type SharedGuardJSONFields = {
+  scopeIds?: string[];
+  disarmed?: boolean;
+  isRootBudget?: boolean;
+};
+
+function writeSharedGuardJSON(
+  json: GuardJSON,
+  g: { scopeIds: string[]; disarmed: boolean; isRootBudget: boolean },
+): void {
+  if (g.scopeIds.length > 0) json.scopeIds = g.scopeIds;
+  if (g.disarmed) json.disarmed = true;
+  if (g.isRootBudget) json.isRootBudget = true;
+}
+
+function readSharedGuardJSON(
+  j: SharedGuardJSONFields,
+  g: Guard,
+): void {
+  if (j.scopeIds !== undefined) g.scopeIds = j.scopeIds;
+  if (j.disarmed) g.disarm();
+  if (j.isRootBudget) g.isRootBudget = true;
 }
 
 /**
@@ -363,8 +505,17 @@ export class TimeGuard implements Guard {
   guardId: string = nextGuardId();
 
   /** See CostGuard's label docstring — same contract. */
+  readonly dimension = "time" as const;
+
+  /** See the Guard interface. All three serialized. `disarmed` is
+   *  public for GuardScope's livelock check; mutate only via disarm(). */
+  scopeIds: string[] = [];
+  isRootBudget: boolean = false;
+  disarmed: boolean = false;
+
+  /** `timeLimit` is mutable ONLY through extendBudget. */
   constructor(
-    public readonly timeLimit: number,
+    public timeLimit: number,
     public readonly label?: string,
   ) {}
 
@@ -432,7 +583,7 @@ export class TimeGuard implements Guard {
   }
 
   check(_stack: StateStack): GuardExceededError | null {
-    if (this.suspended) return null;
+    if (this.suspended || this.disarmed) return null;
     if (!this.tripped || this.consumed) return null;
     // currentElapsed() charges any in-flight window delta so `spent`
     // reflects the true elapsed time at the moment of the trip. Without
@@ -450,7 +601,49 @@ export class TimeGuard implements Guard {
   }
 
   isTripped(): boolean {
-    return this.tripped;
+    return !this.disarmed && this.tripped;
+  }
+
+  extendBudget(deltaMs: number): void {
+    this.timeLimit += clampGrant(deltaMs, this);
+    // Reset BOTH latches — they are two fields with different jobs, and
+    // missing either is wrong in a different direction. `tripped` is set
+    // by the abort listener; leaving it set would re-trip at the next
+    // check despite the new budget. `consumed` marks "check() already
+    // returned this trip once"; leaving it set produces a guard that
+    // NEVER trips again — fail-open, the worse direction.
+    this.tripped = false;
+    this.consumed = false;
+    // If the clock is running, the armed timer still fires at the OLD
+    // deadline; re-arm it against the new limit. (Paused/suspended
+    // guards re-arm at their next resume, which reads timeLimit fresh.)
+    if (this.state === "running") {
+      this.cancelTimer();
+      this.state = "paused";
+      this.elapsedMs += performance.now() - this.windowStart!;
+      this.windowStart = undefined;
+      this.startWindow();
+    }
+  }
+
+  disarm(): void {
+    this.disarmed = true;
+    // A disarmed dimension never trips: kill the armed timer so a
+    // late fire cannot abort the branch.
+    this.cancelTimer();
+  }
+
+  /** See CostGuard.overBudgetAndArmed — same contract, time dimension. */
+  overBudgetAndArmed(): boolean {
+    return !this.disarmed && this.currentElapsed() >= this.timeLimit;
+  }
+
+  currentLimit(): number {
+    return this.timeLimit;
+  }
+
+  spentAmount(): number {
+    return this.currentElapsed();
   }
 
   /** Accrued working time plus any in-flight running window, in ms. */
@@ -492,6 +685,13 @@ export class TimeGuard implements Guard {
     const remaining = Math.max(1, this.timeLimit - this.currentElapsed());
     const clone = new TimeGuard(remaining, this.label);
     clone.guardId = this.guardId;
+    // Hand-copied: cloning and serialization are DIFFERENT paths, and a
+    // field added to toJSON alone silently misses branches (rev-3 plan
+    // review). scopeIds is how a branch trip finds its scope siblings;
+    // root/disarmed state must follow the budget into the branch.
+    clone.scopeIds = this.scopeIds;
+    clone.isRootBudget = this.isRootBudget;
+    clone.disarmed = this.disarmed;
     return clone;
   }
 
@@ -507,14 +707,16 @@ export class TimeGuard implements Guard {
     if (this.label !== undefined) {
       json.label = this.label;
     }
+    writeSharedGuardJSON(json, this);
     return json;
   }
 
-  static fromJSON(j: { timeLimit: number; elapsedMs: number; guardId?: string; label?: string }): TimeGuard {
+  static fromJSON(j: { timeLimit: number; elapsedMs: number; guardId?: string; label?: string } & SharedGuardJSONFields): TimeGuard {
     const g = new TimeGuard(j.timeLimit, j.label);
     g.elapsedMs = j.elapsedMs;
     // Restore the serialized id so ownedGuardIds matching survives resume.
     if (j.guardId !== undefined) g.guardId = j.guardId;
+    readSharedGuardJSON(j, g);
     // state stays "paused"; resume() at first runner step re-arms.
     return g;
   }

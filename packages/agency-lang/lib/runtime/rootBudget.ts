@@ -20,14 +20,20 @@ export function installRootBudget(stack: StateStack): void {
   if (rawCost !== undefined) {
     const cost = parseBudgetValue(rawCost, AGENCY_MAX_COST);
     if (cost >= 0) {
-      stack.pushGuard(new CostGuard(cost));
+      const g = new CostGuard(cost);
+      // The operator's ceiling: never raises an interrupt, never
+      // extendable by user code. Serialized with the guard.
+      g.isRootBudget = true;
+      stack.pushGuard(g);
     }
   }
   const rawTime = process.env[AGENCY_MAX_TIME];
   if (rawTime !== undefined) {
     const ms = parseBudgetValue(rawTime, AGENCY_MAX_TIME);
     if (ms > 0) {
-      stack.pushGuard(new TimeGuard(ms));
+      const g = new TimeGuard(ms);
+      g.isRootBudget = true;
+      stack.pushGuard(g);
     }
   }
 }

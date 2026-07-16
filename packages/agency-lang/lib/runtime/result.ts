@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { isAbortError, readCause } from "./errors.js";
+import { AgencyAbort, isAbortError, readCause } from "./errors.js";
+import { closeUnwindSpan } from "./carriedDraft.js";
 import { hasInterrupts } from "./interrupts.js";
 
 /** Structured `GuardFailureData` for a tripped guard. Shared by the
@@ -208,6 +209,16 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
         // aborted) does NOT re-throw a GuardExceededError for the same trip.
         // The cause object is shared by identity with `signal.reason`.
         guardCause.delivered = true;
+        // saveDraft salvage: the unwind carried the guarded block's own
+        // partial on the abort (level rule — the carried draft always holds
+        // the partial of the frame the error most recently left, which at
+        // this boundary is the guarded block). Present -> the guard yields
+        // it. Absent -> exactly today's failure. Additive by construction.
+        const abort = error as AgencyAbort;
+        closeUnwindSpan(abort);
+        if (abort.carriedDraft !== undefined) {
+          return success(abort.carriedDraft.value);
+        }
         return failure(
           guardFailureData(guardCause.dimension, guardCause.limit, guardCause.spent),
           opts,

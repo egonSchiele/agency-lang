@@ -61,7 +61,8 @@
  *    undefined)` would overwrite the meaningful value with undefined.
  */
 import { agencyStore } from "./asyncContext.js";
-import { AgencyCancelledError, makeAbortCause } from "./errors.js";
+import { AgencyAbort, AgencyCancelledError, makeAbortCause } from "./errors.js";
+import { previewForLog } from "./carriedDraft.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
 import { GlobalStore } from "./state/globalStore.js";
@@ -605,6 +606,7 @@ export async function runBatch<T>(
       );
       // Rethrow: any sibling interrupts collected are discarded (matches
       // today's runForkAll/runRace behavior; documented at top of file).
+      clearCarriedDraftAtForkBoundary(s.reason, ctx);
       throw s.reason;
     }
     const value = s.value;
@@ -658,6 +660,27 @@ export async function runBatch<T>(
 /** Mode "race" first-time path: launch every child, await the first
  * settle, abort the rest, delete loser branches, propagate loser cost,
  * stamp + overwrite if the winner halted. */
+/** Branch drafts stay inside their branch: a rejected branch's error object
+ *  crosses the fork boundary carrying the branch's carried draft, and it
+ *  must not (which branch rejects first is nondeterministic in "all" mode,
+ *  and one branch's value is the wrong type for the fork's shape). Called
+ *  at every site that rethrows a branch's error to the parent. The unwind
+ *  span is NOT ended here — the abort keeps unwinding in the parent, where
+ *  parent frames may stamp their own drafts; delivery ends it. */
+function clearCarriedDraftAtForkBoundary(
+  reason: unknown,
+  ctx: RuntimeContext<any>,
+): void {
+  if (reason instanceof AgencyAbort && reason.carriedDraft !== undefined) {
+    ctx.statelogClient?.abortSalvage({
+      action: "clearedAtFork",
+      spanId: reason.unwindSpanId,
+      partial: previewForLog(reason.carriedDraft.value),
+    });
+    reason.carriedDraft = undefined;
+  }
+}
+
 async function runRaceFirstTime<T>(
   opts: RunBatchOpts<T>,
   tasks: Task<T>[],
@@ -705,6 +728,7 @@ async function runRaceFirstTime<T>(
       tasks.map((task) => task.branch.stack),
       "max",
     );
+    clearCarriedDraftAtForkBoundary(err, opts.ctx);
     throw err;
   }
 
@@ -880,6 +904,7 @@ async function runRaceResume<T>(
     );
     pauseBranchTimeGuards(branch.stack);
     chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
+    clearCarriedDraftAtForkBoundary(err, ctx);
     throw err;
   }
 

@@ -358,3 +358,66 @@ describe("__pipeBind", () => {
     if (!r2.success) expect(r2.error).toBe("oops");
   });
 });
+
+describe("__tryCall salvages the carried draft on an OWNED trip", () => {
+  function tripCause(guardId: string): AbortCause {
+    return makeAbortCause({
+      kind: "guardTrip",
+      dimension: "time",
+      limit: 100,
+      spent: 140,
+      guardId,
+    });
+  }
+
+  it("returns success(carriedDraft.value) when the abort carries a draft", async () => {
+    const abort = new AgencyCancelledError("sleep cancelled", tripCause("g1"));
+    abort.carriedDraft = { value: "partial-report" };
+    const result = await __tryCall(
+      () => {
+        throw abort;
+      },
+      { ownedGuardIds: ["g1"] },
+    );
+    expect(isSuccess(result)).toBe(true);
+    expect((result as { value: unknown }).value).toBe("partial-report");
+  });
+
+  it("returns the failure when the abort carries no draft (additive)", async () => {
+    const abort = new AgencyCancelledError("sleep cancelled", tripCause("g1"));
+    const result = await __tryCall(
+      () => {
+        throw abort;
+      },
+      { ownedGuardIds: ["g1"] },
+    );
+    expect(isFailure(result)).toBe(true);
+  });
+
+  it("a saved null is a real draft, distinct from no draft", async () => {
+    const abort = new AgencyCancelledError("sleep cancelled", tripCause("g1"));
+    abort.carriedDraft = { value: null };
+    const result = await __tryCall(
+      () => {
+        throw abort;
+      },
+      { ownedGuardIds: ["g1"] },
+    );
+    expect(isSuccess(result)).toBe(true);
+    expect((result as { value: unknown }).value).toBe(null);
+  });
+
+  it("an UNOWNED trip propagates with its carried draft intact", async () => {
+    const abort = new AgencyCancelledError("x", tripCause("outer"));
+    abort.carriedDraft = { value: "keep-me" };
+    await expect(
+      __tryCall(
+        () => {
+          throw abort;
+        },
+        { ownedGuardIds: ["inner"] },
+      ),
+    ).rejects.toBe(abort);
+    expect(abort.carriedDraft).toEqual({ value: "keep-me" });
+  });
+});

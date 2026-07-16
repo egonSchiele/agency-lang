@@ -1,4 +1,4 @@
-import type { Guard, GuardJSON } from "../guard.js";
+import type { Guard, GuardExceededError, GuardJSON } from "../guard.js";
 import type { HandlerEntry } from "../types.js";
 import type { ReplyAttachmentPart } from "../replyAttachments.js";
 import { guardFromJSON, TimeGuard } from "../guard.js";
@@ -569,11 +569,29 @@ export class StateStack {
    */
   enforceGuards(): void {
     this.assertNoParkedGuards();
+    const err = this.detectTrippedGuard();
+    if (err) throw err;
+  }
+
+  /** THE guard-trip walk: innermost-first, suspension-aware. Every
+   *  caller that asks "did a guard trip?" goes through here —
+   *  `enforceGuards` (the throwing form) and `Runner.shouldSkip` (which
+   *  re-throws an undelivered trip at step boundaries). One walk, one
+   *  suspension rule: a walk that skipped the `suspendedGuardIds`
+   *  consult would let a suspended, over-budget CostGuard throw its
+   *  trip out of the very handler that suspended it (CostGuard's
+   *  object-level suspend() is a deliberate no-op — see guard.ts — so
+   *  the object cannot decline on its own). Returns the trip error
+   *  instead of throwing so callers keep their own throw semantics.
+   *  This is also the detection sibling the resumable-guards plan's
+   *  PR 2 raise sites need. */
+  detectTrippedGuard(): GuardExceededError | null {
     for (let i = this.guards.length - 1; i >= 0; i--) {
       if (this.suspendedGuardIds.includes(this.guards[i].guardId)) continue;
       const err = this.guards[i].check(this);
-      if (err) throw err;
+      if (err) return err;
     }
+    return null;
   }
 
   /** guardIds suspended ON THIS BRANCH while an interrupt handler runs:

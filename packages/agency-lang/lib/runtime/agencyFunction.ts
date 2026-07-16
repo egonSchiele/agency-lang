@@ -266,6 +266,13 @@ export class AgencyFunction {
     // approve on a trip is approve({}) — no budget granted — which the
     // trip machinery treats as a runtime error. Budget questions are for
     // outer handlers or the user, never a tool's auto-approve wrapper.
+    //
+    // TODO(owner, resumable-guards PR 2): revisit this branch once the
+    // trip approve semantics land — the owner flagged it as possibly
+    // temporary. The case to re-check before removing it: a lone
+    // approve({}) (nobody else granting) must not turn a trip into the
+    // useless-approval runtime error where a pass would have let it
+    // propagate to someone who can actually grant budget.
     const autoApprove = async (intr: { effect: string }) =>
       intr.effect === "std::guard" ? pass() : approve();
     const wrapped = (...args: any[]) => {

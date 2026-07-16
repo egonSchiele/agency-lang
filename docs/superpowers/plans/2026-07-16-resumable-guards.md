@@ -608,6 +608,19 @@ whatever the key is.
 > `scope.suspendAll()` at the raise site must use the SAME stack-scoped
 > bracket, for the same reason: the raising branch's deliberation must
 > not blind siblings sharing the guard.
+>
+> **Second execution note (PR 1 review round):** because CostGuard's
+> object cannot decline its own `check()`, EVERY trip-detection walk
+> must consult the stack's suspension set. `Runner.shouldSkip` had its
+> own private `check()` walk that did not — a suspended over-budget
+> cost guard would have thrown its trip out of the handler that
+> suspended it whenever the abort signal was live (normal state in
+> PR 2's deliberations). Fixed by collapsing both walks into ONE
+> suspension-aware method: `StateStack.detectTrippedGuard():
+> GuardExceededError | null` — which is ALSO the detection sibling
+> Task 2.2 needs, already landed. PR 2's raising sites loop on it as
+> planned; it returns the error (which carries the guardId) rather
+> than the guard.
 
 Add to the `Guard` interface (`guard.ts:20-59`) — and note that interface's
 own contract: StateStack and Runner only ever talk to the interface, no

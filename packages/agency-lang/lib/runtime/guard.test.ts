@@ -458,9 +458,10 @@ describe("suspension", () => {
     g.suspend();
     // Runner.beforeStep resumes every guard at every step entry — a
     // handler body executes steps, so this MUST stay a no-op while
-    // suspended or the clock restarts mid-deliberation.
+    // suspended or the clock restarts mid-deliberation. `state`
+    // staying "paused" is the deterministic signal that resume() was
+    // ignored.
     g.resume(stack);
-    expect(g.snapshotElapsed()).toBe(g.snapshotElapsed()); // clock frozen: no running window
     expect((g as any).state).toBe("paused");
     g.unsuspend();
     g.resume(stack);
@@ -524,5 +525,25 @@ describe("suspension", () => {
     stack.pushGuard(after);
     const hidden = stack.guardsHiddenFrom(entry);
     expect(hidden.map((g) => g.guardId)).toEqual([after.guardId]);
+  });
+});
+
+describe("detectTrippedGuard — the one suspension-aware walk", () => {
+  it("a suspended over-budget CostGuard does not report its trip; unsuspended it does", () => {
+    // Pins the review finding on PR #558: Runner.shouldSkip used to run
+    // its own check() walk without consulting suspendedGuardIds, so a
+    // suspended over-budget cost guard could throw its trip out of the
+    // very handler that suspended it. Both shouldSkip and enforceGuards
+    // now route through this walk.
+    const g = new CostGuard(0.5);
+    const stack = new StateStack();
+    stack.pushGuard(g);
+    stack.chargeGuards(1.0);                       // over budget
+    expect(stack.detectTrippedGuard()).not.toBeNull();
+
+    const token = stack.beginHandlerSuspension({ fn: async () => undefined, liveGuardIds: [] });
+    expect(stack.detectTrippedGuard()).toBeNull(); // invisible while suspended
+    stack.endHandlerSuspension(token);
+    expect(stack.detectTrippedGuard()).not.toBeNull();
   });
 });

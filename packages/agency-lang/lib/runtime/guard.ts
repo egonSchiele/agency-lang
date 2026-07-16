@@ -222,7 +222,15 @@ export class CostGuard implements Guard {
    *  fail-open on the shared budget. Cost suspension is therefore
    *  branch-scoped, on the StateStack (`suspendedGuardIds`), where the
    *  enforce/charge walks consult it. Only per-branch-object state
-   *  belongs here, which for cost is nothing. */
+   *  belongs here, which for cost is nothing.
+   *
+   *  CONSEQUENCE: because this is a no-op, this object cannot decline a
+   *  check() on its own — every cost-suspension decision lives in
+   *  StateStack.suspendedGuardIds, and any check() call site that does
+   *  not go through the stack's suspension-aware walk
+   *  (detectTrippedGuard / enforceGuards / chargeGuards) DOES NOT honor
+   *  suspension. Do not add a direct check() walk; route through the
+   *  stack. */
   suspend(): void {
     /* nothing — see above */
   }

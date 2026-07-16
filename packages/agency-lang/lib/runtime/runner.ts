@@ -330,12 +330,14 @@ export class Runner {
           this._matchExit !== null
         );
       }
-      // Walk innermost-first so the deepest guard reports its trip
-      // first. Mirrors the order in prompt.ts's cost-check loop.
-      for (let i = this.stack.guards.length - 1; i >= 0; i--) {
-        const err = this.stack.guards[i].check(this.stack);
-        if (err) throw err;
-      }
+      // THE shared trip walk (innermost-first, suspension-aware) — the
+      // same one enforceGuards throws from. Routing through it matters:
+      // a private loop here would call check() directly and miss the
+      // stack's suspendedGuardIds consult, letting a suspended
+      // over-budget CostGuard throw its trip out of the handler that
+      // suspended it whenever the abort signal is live.
+      const err = this.stack.detectTrippedGuard();
+      if (err) throw err;
       const guardOwnsAbort = this.stack.guards.some((g) => g.isTripped());
       if (!guardOwnsAbort) {
         this.halt(undefined);

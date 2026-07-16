@@ -1,5 +1,6 @@
 import type { TsNode, TsParam, TsScopedVar, TsImportName } from "./tsIR.js";
 import renderRunnerIfElse from "../templates/backends/typescriptGenerator/runnerIfElse.js";
+import renderWithHandlerWrapper from "../templates/backends/typescriptGenerator/withHandlerWrapper.js";
 import renderAgencyFunctionWrap from "../templates/ir/agencyFunctionWrap.js";
 
 const INDENT = "  ";
@@ -388,8 +389,14 @@ export function printTs(node: TsNode, indent = 0): string {
       // here is preferable to silently skipping registration.
       // liveGuardIds: [] — an explicit decision, not a default. These
       // wrappers register during top-level init, before any guard can
-      // exist, so "hide every guard" is vacuously correct.
-      return `getRuntimeContext().ctx.pushHandler(${handler}, []);\n${ind(indent)}try {\n${body}\n${ind(indent)}} finally {\n${ind(indent + 1)}getRuntimeContext().ctx.popHandler();\n${ind(indent)}}`;
+      // exist, so "hide every guard" is vacuously correct. (The []
+      // itself lives in the template.)
+      return renderWithHandlerWrapper({
+        handler,
+        body,
+        indent: ind(indent),
+        indentInner: ind(indent + 1),
+      });
     }
 
     case "runnerDebugger": {

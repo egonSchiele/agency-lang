@@ -65,7 +65,19 @@ function joinOrUndefined(
 /** std::guard approvals accumulate: budget grants add, disarm lists
  *  union, messages concatenate in inner-to-outer order. Two handlers
  *  each granting $0.50 means $1.00 of new budget, not a coin flip over
- *  which fifty cents survives. */
+ *  which fifty cents survives.
+ *
+ *  Shape note for consumers: every key of the merged payload is
+ *  OPTIONAL. `approvals.reduce(merge)` never calls the merge for a lone
+ *  approval, so one handler's `{maxCost: 0.5}` arrives as-is, while two
+ *  handlers' arrive as the full four-key shape with the untouched keys
+ *  explicitly undefined. Read keys defensively
+ *  (`payload.maxCost !== undefined`), never by presence (`"maxTime" in
+ *  payload`).
+ *
+ *  Future improvement (owner): let users define an effect's merge as
+ *  AGENCY code — arrives with the typed-payloads work (#555), which
+ *  also owns the serialization story a user-supplied merge needs. */
 const mergeGuardApprovals: ApprovalMerge = (a, b) => ({
   maxCost: sumOrUndefined(a?.maxCost, b?.maxCost),
   maxTime: sumOrUndefined(a?.maxTime, b?.maxTime),

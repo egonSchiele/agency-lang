@@ -395,6 +395,10 @@ node main() {
 
 **How to fix:** confirm the defaults are correct for the tool use, or bind the parameters explicitly with \`.partial(...)\` if you need specific implementations.`,
 
+  saveDraftAtTopLevel: `\`saveDraft(v)\` records a best-so-far value for the scope that calls it, so an enclosing \`guard(...)\` can return that value if it trips. At module top level there is no enclosing scope: nothing could ever read the draft, and the runtime rejects the call for the same reason.
+
+**How to fix:** move the \`saveDraft\` call inside the function, node, or \`guard\` block whose result it is a draft of.`,
+
   // ---- AG7: static init, config, and imports ----
   exportRequiresStaticConst: `Only \`static const\` declarations can be exported from a module. A plain \`const\`, \`let\`, or other declaration is per-run state and is not part of a module's public surface.
 

@@ -303,3 +303,13 @@ This is the same problem as an unbound required function-typed tool parameter, w
 A function passed as a tool has optional function-typed parameters that the LLM cannot fill, so they are dropped and the tool runs with each parameter's declared default. This is a warning, not an error, because a default exists — but the body must be prepared to run without those functions.
 
 **How to fix:** confirm the defaults are correct for the tool use, or bind the parameters explicitly with `.partial(...)` if you need specific implementations.
+
+<a id="ag6031"></a>
+
+## AG6031 — saveDraft() cannot be called at module top level — there is no enclosing function, node, or block scope to save a draft for.
+
+*Default severity: error.*
+
+`saveDraft(v)` records a best-so-far value for the scope that calls it, so an enclosing `guard(...)` can return that value if it trips. At module top level there is no enclosing scope: nothing could ever read the draft, and the runtime rejects the call for the same reason.
+
+**How to fix:** move the `saveDraft` call inside the function, node, or `guard` block whose result it is a draft of.

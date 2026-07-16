@@ -117,6 +117,7 @@ or suppress one on the next line with `// @tc-ignore AG####`.
 | [AG6028](tools.md#ag6028) | Tool '&#123;tool&#125;' has required function-typed parameter '&#123;param&#125;' is unbound. Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing as a tool. |
 | [AG6029](tools.md#ag6029) | Tool '&#123;tool&#125;' has required function-typed parameter '&#123;param&#125;' is unbound (&#123;type&#125;). Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing as a tool. |
 | [AG6030](tools.md#ag6030) | Tool '&#123;tool&#125;' will be exposed to the LLM without optional function-typed parameter(s): &#123;params&#125;. The function body must be prepared to run with the declared default for each. |
+| [AG6031](tools.md#ag6031) | saveDraft() cannot be called at module top level — there is no enclosing function, node, or block scope to save a draft for. |
 
 ## Static init, config, and imports
 

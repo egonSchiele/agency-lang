@@ -8,7 +8,7 @@ import {
 } from "../types.js";
 import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
 import { parseMatchValId } from "../matchVal.js";
-import { scopeKey as getScopeKey } from "../compilationUnit.js";
+import { GLOBAL_SCOPE_KEY, scopeKey as getScopeKey } from "../compilationUnit.js";
 import type { Scope as WalkScope } from "../types.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import type { ValueAccess } from "../types/access.js";
@@ -273,6 +273,13 @@ function checkSaveDraftCall(
   if (ctx.functionDefs["saveDraft"] || ctx.nodeDefs["saveDraft"]) return;
   const imported = ctx.importedFunctions["saveDraft"];
   if (imported && !isStdlibSaveDraftOrigin(imported.originFile)) return;
+  // At module top level there is no scope whose salvage the draft could
+  // become. The runtime throws for the same reason; this catches it at
+  // compile time.
+  if (info.scopeKey === GLOBAL_SCOPE_KEY) {
+    ctx.errors.push(diagnostic("saveDraftAtTopLevel", {}, call.loc ?? null));
+    return;
+  }
   if (!info.returnType) return; // no declared/inferred return type in scope
   if (call.arguments.length !== 1) return;
   const first = call.arguments[0];

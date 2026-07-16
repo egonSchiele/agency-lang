@@ -39,6 +39,14 @@ export function reject(value?: any): InterruptResponse {
   return { type: "reject", value } as any;
 }
 
+/** Explicit "not my interrupt — ask the next handler." Identical in effect
+ *  to a handler returning nothing, but usable in value position (a match
+ *  arm must produce a value). Returning `undefined` keeps working; the
+ *  chain normalizes it to this shape at the boundary. */
+export function pass(): InterruptResponse {
+  return { type: "pass" } as any;
+}
+
 export type InterruptData = {
   // messages that have been exchanged in the prompt function
   // up till this interrupt was triggered. This is needed to restore
@@ -250,6 +258,12 @@ async function runHandlerChain(
         if (isAborted(result)) {
           throw result.toError();
         }
+        // A handler that returns nothing means "pass". Normalize here so
+        // the loop, statelog, and merge logic never see two spellings of
+        // the same verdict.
+        if (result === undefined) {
+          result = { type: "pass" };
+        }
         // Pre-bind the interrupt summary once so all handlerDecision /
         // interruptResolved events from this dispatch carry the same
         // {effect, message, data} payload — lets log readers see *what*
@@ -261,8 +275,8 @@ async function runHandlerChain(
           message: interruptObj.message,
           data: interruptObj.data,
         };
-        if (result === undefined) {
-          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "none", interrupt: interruptSummary });
+        if (result.type === "pass") {
+          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "pass", interrupt: interruptSummary });
           continue;
         }
         if (result.type === "reject") {
@@ -286,7 +300,7 @@ async function runHandlerChain(
           continue;
         }
         throw new Error(
-          `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", or undefined.`,
+          `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", "pass", or undefined.`,
         );
       }
     } finally {

@@ -6,6 +6,7 @@ import {
   mergeChainOutcomes,
   interruptWithHandlers,
   gatherChainOutcome,
+  pass,
 } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
 
@@ -285,5 +286,57 @@ describe("reportUnhandledInterrupts", () => {
     const printed = err.mock.calls.map((c) => c.join(" ")).join("\n");
     expect(printed).toContain('Interrupt "std::read" was not handled');
     expect(printed).toContain('Interrupt "std::edit" was not handled');
+  });
+});
+
+describe("pass()", () => {
+  const makeCtx = (handlers: any[]): RuntimeContext<any> => {
+    const ctx = new RuntimeContext({
+      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+    ctx.handlers = handlers;
+    // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
+    // ctx.getRunId()), which a real run sets when the exec context is created.
+    ctx.runId = "test-run";
+    return ctx;
+  };
+
+  it("a handler returning pass() defers to the next handler", async () => {
+    const ctx = makeCtx([
+      async () => ({ type: "approve", value: "outer" }), // outer (walked last)
+      async () => pass(),                                // inner (walked first)
+    ]);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    expect(verdict).toEqual({ type: "approve", value: "outer" });
+  });
+
+  it("a handler returning undefined still defers (back-compat)", async () => {
+    const ctx = makeCtx([
+      async () => ({ type: "approve", value: "outer" }),
+      async () => undefined,
+    ]);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    expect(verdict).toEqual({ type: "approve", value: "outer" });
+  });
+
+  it("pass() and undefined both emit a handlerDecision of pass", async () => {
+    const ctx = makeCtx([
+      async () => ({ type: "approve", value: "ok" }),
+      async () => undefined,
+      async () => pass(),
+    ]);
+    const decisions = vi.spyOn(ctx.statelogClient, "handlerDecision");
+    await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    const kinds = decisions.mock.calls.map((c) => c[0].decision);
+    expect(kinds).toEqual(["pass", "pass", "approve"]);
+  });
+
+  it("every handler passing surfaces the interrupt", async () => {
+    const ctx = makeCtx([async () => pass(), async () => pass()]);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    expect(Array.isArray(verdict)).toBe(true);
+    expect((verdict as any)[0].effect).toBe("std::bash");
   });
 });

@@ -1,0 +1,60 @@
+// pass() — the explicit "not my interrupt, ask the next handler" verdict.
+// Identical in effect to a handler returning nothing, but usable in value
+// position: a match arm must produce a value, and every other verdict
+// (approve/reject/propagate) is a decision.
+const log = []
+
+def foo() {
+  log.push("foo start")
+  return interrupt("check")
+  log.push("foo end")
+  return "foo result"
+}
+
+def passHandler(data) {
+  return pass()
+}
+
+// 1. Inner pass, outer approve — the pass defers, the outer decides.
+node testInnerPassOuterApprove() {
+  handle {
+    handle {
+      const result = foo()
+      log.push(result)
+    } with (data) {
+      return pass()
+    }
+  } with (data) {
+    return approve()
+  }
+  return log
+}
+
+// 2. pass() from a match arm — the motivating case: the arm must produce
+// a value, and "no opinion" is now expressible as one.
+node testPassInMatchArm() {
+  handle {
+    handle {
+      const result = foo()
+      log.push(result)
+    } with (data) {
+      return match(data.effect) {
+        "std::guard" => reject()
+        _ => pass()
+      }
+    }
+  } with (data) {
+    return approve()
+  }
+  return log
+}
+
+// 3. Every handler passes — the interrupt reaches the user, exactly like
+// a handler that returns nothing.
+node testAllPass() {
+  handle {
+    const result = foo()
+    log.push(result)
+  } with passHandler
+  return log
+}

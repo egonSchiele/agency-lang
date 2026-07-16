@@ -403,3 +403,49 @@ describe("StateStack guard lifecycle", () => {
     expect(restored.guards[0]).toBeInstanceOf(CostGuard);
   });
 });
+
+describe("guard labels", () => {
+  it("a labeled CostGuard trip carries the label in its message and cause", () => {
+    const g = new CostGuard(1.0, "research");
+    g.charge(2.0);
+    const err = g.check(new StateStack());
+    expect(err).not.toBeNull();
+    expect(err!.message).toContain('guard "research" exceeded');
+    expect(readCause(err!)).toMatchObject({ kind: "guardTrip", label: "research" });
+  });
+
+  it("an unlabeled trip has no label in message or cause", () => {
+    const g = new CostGuard(1.0);
+    g.charge(2.0);
+    const err = g.check(new StateStack());
+    expect(err!.message).not.toContain('"');
+    expect((readCause(err!) as { label?: string }).label).toBeUndefined();
+  });
+
+  it("the label survives a serialization round-trip (both guard kinds)", () => {
+    const cost = CostGuard.fromJSON(
+      JSON.parse(JSON.stringify(new CostGuard(1.0, "budget").toJSON())),
+    );
+    expect(cost.label).toBe("budget");
+    const time = TimeGuard.fromJSON(
+      JSON.parse(JSON.stringify(new TimeGuard(500, "clock").toJSON())) as {
+        timeLimit: number;
+        elapsedMs: number;
+        guardId?: string;
+        label?: string;
+      },
+    );
+    expect(time.label).toBe("clock");
+  });
+
+  it("is absent from JSON when unset", () => {
+    expect("label" in new CostGuard(1.0).toJSON()).toBe(false);
+  });
+
+  it("a TimeGuard branch clone keeps the parent's label", () => {
+    const parent = new TimeGuard(500, "clock");
+    const clone = parent.cloneForBranch(new StateStack(), new StateStack());
+    expect((clone as TimeGuard).label).toBe("clock");
+    expect((clone as TimeGuard).guardId).toBe(parent.guardId);
+  });
+});

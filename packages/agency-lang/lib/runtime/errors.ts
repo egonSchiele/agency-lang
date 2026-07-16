@@ -58,6 +58,10 @@ export type AbortCause =
       limit: number;
       spent: number;
       guardId: string;
+      /** User-facing name from `guard(label: "...")`. Absent when the
+       *  guard was not labeled. Rides the cause so failure messages and
+       *  future trip interrupts can say WHICH guard tripped. */
+      label?: string;
       /**
        * Mutable de-dup flag. A time-guard trip can be delivered by EITHER
        * an aborted leaf op (→ `__tryCall` converts to a Failure) OR the
@@ -157,7 +161,8 @@ export class AgencyAbort extends Error {
  *  still speak exceptions (the graph engine, runBatch join points). */
 export function describeAbortCause(cause: AbortCause): string {
   if (cause.kind === "guardTrip") {
-    return `Guard exceeded its ${cause.dimension} budget: spent ${cause.spent} of limit ${cause.limit}`;
+    const name = cause.label !== undefined ? `Guard "${cause.label}"` : "Guard";
+    return `${name} exceeded its ${cause.dimension} budget: spent ${cause.spent} of limit ${cause.limit}`;
   }
   return `Execution aborted (${cause.kind})`;
 }

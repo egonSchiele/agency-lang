@@ -259,6 +259,7 @@ function pushGuardImpl(
   stack: StateStack,
   costLimit: number | null,
   timeLimit: number | null,
+  label?: string | null,
 ): string[] {
   if (costLimit == null && timeLimit == null) {
     throw new Error(
@@ -274,7 +275,7 @@ function pushGuardImpl(
   // site instead of branching on "no limit".
   const ids: string[] = [];
   if (costLimit != null && costLimit >= 0) {
-    const g = new CostGuard(costLimit);
+    const g = new CostGuard(costLimit, label ?? undefined);
     stack.pushGuard(g);
     ids.push(g.guardId);
   }
@@ -283,7 +284,7 @@ function pushGuardImpl(
   // meaning "no paid spend" (local-models-only), since check() trips on
   // spent > limit (strict).
   if (timeLimit != null && timeLimit > 0) {
-    const g = new TimeGuard(timeLimit);
+    const g = new TimeGuard(timeLimit, label ?? undefined);
     stack.pushGuard(g);
     ids.push(g.guardId);
   }
@@ -304,9 +305,10 @@ export async function __internal_pushGuard(
 export async function _pushGuard(
   costLimit: number | null,
   timeLimit: number | null,
+  label: string | null = null,
 ): Promise<string[]> {
   const { stack } = getRuntimeContext();
-  return pushGuardImpl(stack, costLimit, timeLimit);
+  return pushGuardImpl(stack, costLimit, timeLimit, label);
 }
 
 /**

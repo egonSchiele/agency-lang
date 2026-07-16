@@ -79,6 +79,22 @@ export function redactMessagesForLog(
   return redactAttachments(messages.toJSON().messages) as smoltalk.MessageJSON[];
 }
 
+/** A thread's redacted messages for statelog, each carrying its debug
+ *  label (from `llm(label:)` / `userMessage(msg, label:)`) when it has
+ *  one. Reads the labels off the SAME thread that produced the dump, so
+ *  index `i` lines up: `redactMessagesForLog` maps `messages` in order.
+ *
+ *  Unlabeled messages are emitted unchanged rather than with `label:
+ *  null`, so logs for label-free programs stay byte-identical. */
+export function withMessageLabels(
+  messages: MessageThread,
+): smoltalk.MessageJSON[] {
+  return redactMessagesForLog(messages).map((m, i) => {
+    const label = messages.labelAt(i);
+    return label === null ? m : { ...m, label };
+  });
+}
+
 /** A prompt with attachment payloads redacted, preserving its string-or-array
  *  shape, for statelog / hook data. */
 export function redactPromptForLog(
@@ -672,7 +688,7 @@ async function _runPrompt({
   const modelName = completion.model || clientConfig.model || "unknown model";
 
   ctx.statelogClient.promptCompletion({
-    messages: redactMessagesForLog(messages),
+    messages: withMessageLabels(messages),
     completion,
     model: JSON.stringify(modelName),
     timeTaken: endTime - startTime,

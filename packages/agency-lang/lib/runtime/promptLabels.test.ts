@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
+import * as smoltalk from "smoltalk";
 import type { Result, PromptResult, StreamChunk } from "smoltalk";
 import { agency } from "./agency.js";
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
-import { runPrompt } from "./prompt.js";
+import { redactMessagesForLog, runPrompt, withMessageLabels } from "./prompt.js";
 import { RuntimeContext } from "./state/context.js";
 import { MessageThread } from "./state/messageThread.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -117,5 +118,31 @@ describe("llm() debug label", () => {
   it("keeps labels aligned with messages", async () => {
     const { thread } = await runLabeled("verifier");
     expect(thread.messageLabels).toHaveLength(thread.getMessages().length);
+  });
+});
+
+describe("withMessageLabels (the promptCompletion dump)", () => {
+  it("attaches each message's label by index, leaving unlabeled ones alone", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.systemMessage("sys"));
+    t.push(smoltalk.userMessage("context"), "seed");
+    t.push(smoltalk.userMessage("go"), "coder");
+
+    const dumped = withMessageLabels(t) as any[];
+
+    // Pairing, not presence: a shifted array would still "contain" both
+    // labels but attach them to the wrong messages.
+    expect(dumped).toHaveLength(3);
+    expect("label" in dumped[0]).toBe(false);
+    expect(dumped[1].label).toBe("seed");
+    expect(dumped[2].label).toBe("coder");
+    expect(dumped[0].role).toBe("system");
+  });
+
+  it("is byte-identical to the plain dump when nothing is labeled", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.systemMessage("sys"));
+    t.push(smoltalk.userMessage("go"));
+    expect(withMessageLabels(t)).toEqual(redactMessagesForLog(t));
   });
 });

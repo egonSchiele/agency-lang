@@ -1,0 +1,20 @@
+import { boom } from "./tools.js"
+import { guard, saveDraft } from "std::thread"
+
+// A plain thrown error must NEVER salvage a draft. The catch rung stamps
+// only AgencyAbort; a regular exception takes the convert-to-failure path
+// and the draft is never consulted — an unexpected failure surfaces as a
+// failure instead of being papered over with a stale draft.
+def work(): string {
+  saveDraft("draft-must-not-leak")
+  boom()
+  return "unreachable"
+}
+
+node main() {
+  const result = guard(cost: 1.0) as {
+    return work()
+  }
+  if (isFailure(result)) { return "failed-as-expected" }
+  return "leaked:${result.value}"
+}

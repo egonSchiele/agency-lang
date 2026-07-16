@@ -1,0 +1,27 @@
+import { guard, saveDraft } from "std::thread"
+
+// Only the DEEP level saves, and code() consumes verify() via an
+// ASSIGNMENT (`const x = ...` — not return position), so the level rule
+// erases the carried draft at code's boundary and the guard FAILS. Under
+// #551's deep-fallback this salvaged "verify-draft"; that fallback is
+// removed on purpose: salvage is opt-in per level. This fixture also pins
+// that pass-through does NOT apply to assignments — contrast with
+// save-draft-return-chain, where `return verify()` DOES pass through.
+def verify(): string {
+  saveDraft("verify-draft")
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+def code(): string {
+  const x = verify()
+  return x
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    return code()
+  }
+  if (isFailure(result)) { return "failed-as-designed" }
+  return "leaked:${result.value}"
+}

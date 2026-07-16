@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"failed-no-branch-salvage\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Fork isolation pin: a branch-originated trip's drafts are cleared at the fork boundary; the outer guard fails."
+    }
+  ]
+}

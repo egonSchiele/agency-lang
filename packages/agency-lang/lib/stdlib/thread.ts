@@ -4,7 +4,7 @@ import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
 import { __tryCall, type ResultValue } from "../runtime/result.js";
 import { __call } from "../runtime/call.js";
 import { CostGuard, TimeGuard } from "../runtime/guard.js";
-import { normalizeModelUsage, type ModelUsage } from "../runtime/utils.js";
+import { deepClone, normalizeModelUsage, type ModelUsage } from "../runtime/utils.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -333,6 +333,27 @@ export async function __internal_popGuard(
 export async function _popGuard(ids: string[]): Promise<void> {
   const { stack } = getRuntimeContext();
   popGuardImpl(stack, ids);
+}
+
+/**
+ * Impl of the Agency `saveDraft(value)` builtin. Sets the CALLER frame's
+ * draft slot — the Agency scope that called saveDraft. The value is
+ * deep-cloned so later mutation cannot change the salvage, and so a
+ * live-trip salvage matches a post-resume one.
+ *
+ * The global-context check: saveDraft is itself an Agency def, so when it
+ * runs, the top frame is saveDraft's own frame and callerFrame() is the
+ * user's scope. During module-level init there is no user scope below it
+ * — callerFrame() would return saveDraft's OWN frame (or throw on an
+ * empty stack), and a draft written there dies unread when the frame
+ * pops. So with no caller scope, saveDraft is a deliberate no-op.
+ */
+export async function _saveDraft(value: unknown): Promise<void> {
+  const { stack } = getRuntimeContext();
+  if (stack.isGlobalContext()) {
+    return;
+  }
+  stack.callerFrame().savedDraft = { value: deepClone(value) };
 }
 
 /**

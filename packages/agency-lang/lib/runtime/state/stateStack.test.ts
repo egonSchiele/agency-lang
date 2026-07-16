@@ -829,3 +829,18 @@ describe("StateStack memory frames", () => {
     expect(restored.activeMemoryFrame()).toEqual(richFrame);
   });
 });
+
+describe("State.savedDraft (saveDraft slot)", () => {
+  it("survives a State serialization round-trip", () => {
+    const s = new State();
+    s.savedDraft = { value: { report: "partial" } };
+    const restored = State.fromJSON(JSON.parse(JSON.stringify(s.toJSON())));
+    expect(restored.savedDraft).toEqual({ value: { report: "partial" } });
+  });
+
+  it("is absent by default and absent from JSON when unset", () => {
+    const s = new State();
+    expect(s.savedDraft).toBeUndefined();
+    expect("savedDraft" in s.toJSON()).toBe(false);
+  });
+});

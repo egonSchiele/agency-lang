@@ -75,6 +75,11 @@ export class State {
   private branches?: Record<string, BranchState>;
   private deletedBranches?: Set<string>;
   scopedCallbacks?: Array<{ name: string; fn: any }>;
+  /** saveDraft's best-so-far value for THIS scope. Wrapped so a saved
+   *  null is distinct from "no draft". Serialized: a draft must survive
+   *  interrupt/resume. Read only by this frame's own catch rung (the
+   *  carry-on-abort level rule); no other code walks it. */
+  savedDraft?: { value: any };
 
   constructor(
     opts: {
@@ -215,6 +220,9 @@ export class State {
         fn: cb.fn,
       }));
     }
+    if (this.savedDraft !== undefined) {
+      json.savedDraft = deepClone(this.savedDraft);
+    }
     if (this.branches) {
       json.branches = {};
       for (const [key, branch] of Object.entries(this.branches)) {
@@ -261,6 +269,9 @@ export class State {
         fn: cb.fn,
       }));
     }
+    if (json.savedDraft !== undefined) {
+      state.savedDraft = json.savedDraft;
+    }
     if (json.branches) {
       state.branches = {};
       for (const [key, branch] of Object.entries(json.branches)) {
@@ -294,6 +305,7 @@ export type StateJSON = {
   step: number;
   branches?: Record<string, BranchStateJSON>;
   scopedCallbacks?: Array<{ name: string; fn: any }>;
+  savedDraft?: { value: any };
 };
 
 export type StateStackJSON = {

@@ -139,7 +139,7 @@ If `expand` was stopped mid-way, its own partial (whatever it saved or finalized
 
 Things to note:
 
-- A finalize runs only on a guard trip — never on success, and never for a plain thrown error.
+- A finalize never runs on success, and never for a plain thrown error. It runs when the scope is aborted, but only a guard trip salvages its value; an abort for any other reason (like losing a `race`) discards it.
 - Inside a finalize, every variable might not have been assigned yet, so each one reads as possibly-null. Check with `!= null` before using them.
 - Keep finalize bodies computational. The guard that tripped is still aborting, so an `llm()` or `sleep()` inside the finalize gets cancelled; combine the values you already have.
 - One finalize per function or block, at the top level of its body. Convention: put it last.

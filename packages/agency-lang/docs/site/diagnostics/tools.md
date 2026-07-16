@@ -316,51 +316,53 @@ A function passed as a tool has optional function-typed parameters that the LLM 
 
 <a id="ag6032"></a>
 
-## AG6032 — A scope can declare at most one finalize block. Merge the branches into the first one.
+## AG6032 — A scope can declare at most one finalize block. Combine the logic into one block.
 
 *Default severity: error.*
 
-Only one finalize block per scope: when the scope is stopped, exactly one computation produces its partial result. Two blocks would need merge rules.
+When a scope is stopped, one finalize computes its partial result. A second finalize block would leave the result ambiguous.
 
-**How to fix:** combine the logic into a single finalize; branch inside it if needed.
+**How to fix:** combine the logic into one finalize block. Branch inside it if you need to.
 
 <a id="ag6033"></a>
 
-## AG6033 — A finalize block must sit at the top level of its function or block body, not inside `&#123;construct&#125;`. A finalize is a declaration — it is always active, so nesting it in control flow has no meaning.
+## AG6033 — A finalize block cannot go inside &#123;construct&#125;. Declare it at the top level of the function or block body. A finalize is always active, so nesting it in control flow has no meaning.
 
 *Default severity: error.*
 
-A finalize is a declaration, not a statement: if the scope has one, it is always active. Nesting it inside an `if`, a loop, or a match arm would make it conditionally armed, which needs "was it armed?" bookkeeping the language deliberately avoids.
+A finalize is a declaration, not a statement. If the scope has one, it is always active. Nesting it inside an `if`, a loop, or a match arm would arm it conditionally, and the language would then need to track whether it was armed. The language avoids that bookkeeping.
 
-**How to fix:** move the finalize to the top level of the function or block body (convention: last), and branch INSIDE the finalize instead.
+**How to fix:** move the finalize to the top level of the function or block body. Put it last, by convention. Branch inside the finalize instead.
 
 <a id="ag6034"></a>
 
-## AG6034 — saveDraft() has no effect inside a finalize block: the finalize's return IS the scope's partial result. Return the value instead.
+## AG6034 — saveDraft() has no effect inside a finalize block. The value the finalize returns is already the partial result. Return the value instead.
 
 *Default severity: error.*
 
-Inside a finalize, the scope's partial result is being computed right now — the finalize's return value is that result. Saving a draft there is meaningless.
+Inside a finalize, you are computing the scope's partial result right now. The value the finalize returns is that result. Saving a draft there does nothing.
 
 **How to fix:** `return` the value from the finalize instead of calling `saveDraft`.
 
 <a id="ag6035"></a>
 
-## AG6035 — A finalize block in a node has no effect: nothing above a node consumes a partial result yet. Put the finalize in a function or guard block instead.
+## AG6035 — A finalize block cannot go in a node body. Nothing above a node consumes a partial result yet. Put the finalize in a function or a guard block instead.
 
 *Default severity: error.*
 
-Salvaged partial results are consumed by an enclosing `guard`, and guards cannot span nodes — above a node there is only the graph engine, which does not consume partials (root budgets may, later). A finalize declared directly in a node body would compute a value nobody reads.
+An enclosing `guard` consumes salvaged partial results, and a guard cannot span nodes. Above a node there is only the graph engine, and the graph engine does not consume partials. A finalize declared directly in a node body would compute a value nobody reads.
 
-**How to fix:** put the finalize inside the function or `guard` block doing the guarded work.
+**How to fix:** put the finalize inside the function or `guard` block that does the guarded work.
 
 <a id="ag6036"></a>
 
-## AG6036 — In a scope with a finalize block, a return expression that contains a call must BE a single direct call. Assign the call to a local first, then return the local — otherwise an aborted call's partial would be consumed inside the expression before the finalize can run.
+## AG6036 — This scope has a finalize block, so a return expression cannot bury a call inside a bigger expression. If the call were stopped, the expression would consume its partial result before the finalize could run. Assign the call to a local first, then return the local.
 
 *Default severity: error.*
 
-When a call inside a return expression is aborted, its aborted result is consumed by the surrounding expression (concatenated, wrapped in an array, ...) before any check can run — so the finalize would be silently skipped and garbage returned. A direct `return f(x)` is safe: the compiler intercepts it. Anything more complex is not interceptable without breaking evaluation order.
+Suppose a guard stops a call that sits inside a return expression. The surrounding expression consumes the stopped call's result before any check can run: the result gets concatenated, wrapped in an array, and so on. The finalize would be skipped and the function would return garbage.
+
+A direct `return f(x)` is safe, because the compiler intercepts it. Method and index calls do not count as direct: `return obj.method()` and `return arr[i]()` need the same fix as any other complex return. Nothing more complex than a single direct call can be intercepted without changing evaluation order.
 
 **How to fix:** assign the call to a local first, then return the local:
 

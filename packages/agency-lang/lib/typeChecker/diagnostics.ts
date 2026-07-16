@@ -433,7 +433,7 @@ export const DIAGNOSTICS = {
     code: "AG3016",
     severity: "error",
     message:
-      "A finalize block cannot raise interrupts: it runs while an abort is stopping the scope, with nothing to resume back to. '{callee}' can interrupt.",
+      "'{callee}' can interrupt, and a finalize block cannot contain interrupts. A finalize runs while its scope shuts down, so there is nothing to resume.",
   },
   undefinedFunction: {
     code: "AG4004",
@@ -504,31 +504,31 @@ export const DIAGNOSTICS = {
     code: "AG6032",
     severity: "error",
     message:
-      "A scope can declare at most one finalize block. Merge the branches into the first one.",
+      "A scope can declare at most one finalize block. Combine the logic into one block.",
   },
   finalizeNotTopLevel: {
     code: "AG6033",
     severity: "error",
     message:
-      "A finalize block must sit at the top level of its function or block body, not inside `{construct}`. A finalize is a declaration — it is always active, so nesting it in control flow has no meaning.",
+      "A finalize block cannot go inside {construct}. Declare it at the top level of the function or block body. A finalize is always active, so nesting it in control flow has no meaning.",
   },
   finalizeSaveDraft: {
     code: "AG6034",
     severity: "error",
     message:
-      "saveDraft() has no effect inside a finalize block: the finalize's return IS the scope's partial result. Return the value instead.",
+      "saveDraft() has no effect inside a finalize block. The value the finalize returns is already the partial result. Return the value instead.",
   },
   finalizeInNode: {
     code: "AG6035",
     severity: "error",
     message:
-      "A finalize block in a node has no effect: nothing above a node consumes a partial result yet. Put the finalize in a function or guard block instead.",
+      "A finalize block cannot go in a node body. Nothing above a node consumes a partial result yet. Put the finalize in a function or a guard block instead.",
   },
   finalizeReturnShape: {
     code: "AG6036",
     severity: "error",
     message:
-      "In a scope with a finalize block, a return expression that contains a call must BE a single direct call. Assign the call to a local first, then return the local — otherwise an aborted call's partial would be consumed inside the expression before the finalize can run.",
+      "This scope has a finalize block, so a return expression cannot bury a call inside a bigger expression. If the call were stopped, the expression would consume its partial result before the finalize could run. Assign the call to a local first, then return the local.",
   },
   staticReassignedAtTopLevel: {
     code: "AG7004",

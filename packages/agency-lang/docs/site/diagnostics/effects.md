@@ -156,10 +156,12 @@ A value raises an effect that the target type's `raises` clause does not allow. 
 
 <a id="ag3016"></a>
 
-## AG3016 — A finalize block cannot raise interrupts: it runs while an abort is stopping the scope, with nothing to resume back to. '&#123;callee&#125;' can interrupt.
+## AG3016 — '&#123;callee&#125;' can interrupt, and a finalize block cannot contain interrupts. A finalize runs while its scope shuts down, so there is nothing to resume.
 
 *Default severity: error.*
 
-A finalize block runs at the moment an abort stops its scope — outside the step machinery that interrupts pause and resume through. An interrupt raised there would have nothing to resume back to. This checks transitively for functions defined in your own files: calling one that can interrupt is as forbidden as a direct `interrupt(...)`. An IMPORTED function that interrupts is not visible to this static check; at runtime the finalize is treated as failed and the scope falls back to its saved draft.
+An interrupt pauses the program and waits for an answer. When the answer arrives, the program resumes from the paused step. A finalize block runs while an abort shuts its scope down, so there is no step to resume from. That is why a finalize cannot interrupt, and cannot call a function that interrupts.
 
-**How to fix:** keep the finalize computational — combine the locals you already have. Anything that needs a human belongs in the normal body, before the work that can trip.
+The check follows calls into functions defined in your own files. It cannot see into imported functions. If an imported function interrupts inside a finalize at runtime, the finalize counts as failed and the scope falls back to its saved draft.
+
+**How to fix:** only compute values inside the finalize, using the variables you already have. If you need to ask the user something, ask in the normal body, before the work that can trip.

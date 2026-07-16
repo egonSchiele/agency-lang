@@ -399,27 +399,31 @@ node main() {
 
 **How to fix:** move the \`saveDraft\` call inside the function, node, or \`guard\` block whose result it is a draft of.`,
 
-  finalizeInterrupts: `A finalize block runs at the moment an abort stops its scope — outside the step machinery that interrupts pause and resume through. An interrupt raised there would have nothing to resume back to. This checks transitively for functions defined in your own files: calling one that can interrupt is as forbidden as a direct \`interrupt(...)\`. An IMPORTED function that interrupts is not visible to this static check; at runtime the finalize is treated as failed and the scope falls back to its saved draft.
+  finalizeInterrupts: `An interrupt pauses the program and waits for an answer. When the answer arrives, the program resumes from the paused step. A finalize block runs while an abort shuts its scope down, so there is no step to resume from. That is why a finalize cannot interrupt, and cannot call a function that interrupts.
 
-**How to fix:** keep the finalize computational — combine the locals you already have. Anything that needs a human belongs in the normal body, before the work that can trip.`,
+The check follows calls into functions defined in your own files. It cannot see into imported functions. If an imported function interrupts inside a finalize at runtime, the finalize counts as failed and the scope falls back to its saved draft.
 
-  finalizeDuplicate: `Only one finalize block per scope: when the scope is stopped, exactly one computation produces its partial result. Two blocks would need merge rules.
+**How to fix:** only compute values inside the finalize, using the variables you already have. If you need to ask the user something, ask in the normal body, before the work that can trip.`,
 
-**How to fix:** combine the logic into a single finalize; branch inside it if needed.`,
+  finalizeDuplicate: `When a scope is stopped, one finalize computes its partial result. A second finalize block would leave the result ambiguous.
 
-  finalizeNotTopLevel: `A finalize is a declaration, not a statement: if the scope has one, it is always active. Nesting it inside an \`if\`, a loop, or a match arm would make it conditionally armed, which needs "was it armed?" bookkeeping the language deliberately avoids.
+**How to fix:** combine the logic into one finalize block. Branch inside it if you need to.`,
 
-**How to fix:** move the finalize to the top level of the function or block body (convention: last), and branch INSIDE the finalize instead.`,
+  finalizeNotTopLevel: `A finalize is a declaration, not a statement. If the scope has one, it is always active. Nesting it inside an \`if\`, a loop, or a match arm would arm it conditionally, and the language would then need to track whether it was armed. The language avoids that bookkeeping.
 
-  finalizeSaveDraft: `Inside a finalize, the scope's partial result is being computed right now — the finalize's return value is that result. Saving a draft there is meaningless.
+**How to fix:** move the finalize to the top level of the function or block body. Put it last, by convention. Branch inside the finalize instead.`,
+
+  finalizeSaveDraft: `Inside a finalize, you are computing the scope's partial result right now. The value the finalize returns is that result. Saving a draft there does nothing.
 
 **How to fix:** \`return\` the value from the finalize instead of calling \`saveDraft\`.`,
 
-  finalizeInNode: `Salvaged partial results are consumed by an enclosing \`guard\`, and guards cannot span nodes — above a node there is only the graph engine, which does not consume partials (root budgets may, later). A finalize declared directly in a node body would compute a value nobody reads.
+  finalizeInNode: `An enclosing \`guard\` consumes salvaged partial results, and a guard cannot span nodes. Above a node there is only the graph engine, and the graph engine does not consume partials. A finalize declared directly in a node body would compute a value nobody reads.
 
-**How to fix:** put the finalize inside the function or \`guard\` block doing the guarded work.`,
+**How to fix:** put the finalize inside the function or \`guard\` block that does the guarded work.`,
 
-  finalizeReturnShape: `When a call inside a return expression is aborted, its aborted result is consumed by the surrounding expression (concatenated, wrapped in an array, ...) before any check can run — so the finalize would be silently skipped and garbage returned. A direct \`return f(x)\` is safe: the compiler intercepts it. Anything more complex is not interceptable without breaking evaluation order.
+  finalizeReturnShape: `Suppose a guard stops a call that sits inside a return expression. The surrounding expression consumes the stopped call's result before any check can run: the result gets concatenated, wrapped in an array, and so on. The finalize would be skipped and the function would return garbage.
+
+A direct \`return f(x)\` is safe, because the compiler intercepts it. Method and index calls do not count as direct: \`return obj.method()\` and \`return arr[i]()\` need the same fix as any other complex return. Nothing more complex than a single direct call can be intercepted without changing evaluation order.
 
 **How to fix:** assign the call to a local first, then return the local:
 

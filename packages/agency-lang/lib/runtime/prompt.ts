@@ -500,12 +500,15 @@ function emitPromptStart({
   tools,
   responseFormat,
   clientConfig,
+  callLabel,
 }: {
   ctx: RuntimeContext<GraphState>;
   messages: MessageThread;
   tools: Tool[];
   responseFormat?: any;
   clientConfig: Partial<smoltalk.SmolConfig>;
+  /** This call's `llm(label:)` debug tag, or null. Observability only. */
+  callLabel?: string | null;
 }): void {
   ctx.statelogClient.promptStart({
     model: JSON.stringify(clientConfig.model),
@@ -514,6 +517,7 @@ function emitPromptStart({
     toolCount: tools.length,
     hasResponseFormat: responseFormat != null,
     maxTokens: clientConfig.maxTokens ?? null,
+    label: callLabel ?? null,
   });
 }
 
@@ -526,6 +530,7 @@ async function _runPrompt({
   clientConfig,
   stateStack,
   retryPolicy,
+  callLabel,
 }: {
   ctx: RuntimeContext<GraphState>;
   messages: MessageThread;
@@ -538,6 +543,10 @@ async function _runPrompt({
    * scoping the LLM HTTP abort signal to the current branch. */
   stateStack?: StateStack;
   retryPolicy: RetryPolicy;
+  /** This call's `llm(label:)` debug tag, or null. Stamped on the
+   *  assistant message this call appends. Observability only — the
+   *  provider never sees it (stripped from clientConfig in runPrompt). */
+  callLabel?: string | null;
 }): Promise<RunPromptResult> {
   if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
@@ -585,7 +594,14 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
-  emitPromptStart({ ctx, messages, tools, responseFormat, clientConfig });
+  emitPromptStart({
+    ctx,
+    messages,
+    tools,
+    responseFormat,
+    clientConfig,
+    callLabel,
+  });
 
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];
@@ -674,9 +690,10 @@ async function _runPrompt({
       smoltalk.assistantMessage(completion.output, {
         toolCalls,
       }),
+      callLabel,
     );
   } else {
-    messages.push(smoltalk.assistantMessage(completion.output));
+    messages.push(smoltalk.assistantMessage(completion.output), callLabel);
   }
 
   updateTokenStats({
@@ -853,6 +870,8 @@ export async function runPrompt(args: {
   // smoltalk doesn't understand. `retries` / `timeout` / `backoff` are the
   // resilience policy (resolved below); if the codegen forwarded them on
   // `clientConfig` they'd otherwise hit the LLM client as foreign options.
+  // `label` is an observability-only debug tag — stripping it here is what
+  // keeps it off the provider wire.
   const {
     tools: _extractedTools,
     memory: memoryOption,
@@ -861,13 +880,19 @@ export async function runPrompt(args: {
     timeout: ccTimeout,
     backoff: ccBackoff,
     validationRetries: ccValidationRetries,
+    label: ccLabel,
     ...restClientConfig
   } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> &
     RetryConfig & {
       tools?: any[];
       memory?: boolean | { model?: string };
       maxToolResultChars?: number;
+      label?: string;
     };
+
+  /** This llm() call's debug label, or null when unlabeled. Stamps the
+   *  call's promptStart event and the messages it appends. */
+  const callLabel: string | null = ccLabel || null;
 
   // Resolve the resilience policy. Precedence:
   //   1. `args.retryConfig` (preferred — what `agency.llm` passes directly)
@@ -1017,7 +1042,7 @@ export async function runPrompt(args: {
           );
         }
       }
-      messages.push(smoltalk.userMessage(prompt));
+      messages.push(smoltalk.userMessage(prompt), callLabel);
       // The llmCall span is already open (before the loop). On error,
       // the outer `finally` closes it.
       const result = await _runPrompt({
@@ -1029,6 +1054,7 @@ export async function runPrompt(args: {
         clientConfig,
         stateStack,
         retryPolicy,
+        callLabel,
       });
       messages = result.messages;
       toolCalls = result.toolCalls;
@@ -1617,6 +1643,7 @@ export async function runPrompt(args: {
             clientConfig,
             stateStack,
             retryPolicy,
+            callLabel,
           });
           messages = nextResult.messages;
           toolCalls = nextResult.toolCalls;
@@ -1702,6 +1729,7 @@ export async function runPrompt(args: {
           clientConfig,
           stateStack,
           retryPolicy,
+          callLabel,
         });
         messages = nextResult.messages;
         toolCalls = nextResult.toolCalls;

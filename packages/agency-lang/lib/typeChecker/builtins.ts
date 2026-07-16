@@ -111,6 +111,11 @@ const llmOptionProperties: { key: string; value: VariableType }[] = [
     // Validation retries: re-ask the model when structured output fails
     // schema validation. `0` disables. Independent of `retries`.
     { key: "validationRetries", value: optional(number) },
+    // Observability-only debug label: stamps this call's promptStart event
+    // and the messages the call appends (its prompt and its completion).
+    // Stripped from the config before it reaches smoltalk — the provider
+    // never sees it.
+    { key: "label", value: optional(string) },
     // `any` already accepts undefined, so no need to wrap in optional.
     { key: "metadata", value: ANY_T },
 ];

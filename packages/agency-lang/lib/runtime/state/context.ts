@@ -22,7 +22,7 @@ import { GlobalStore } from "../state/globalStore.js";
 import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
 import type { TraceConfig } from "../trace/types.js";
-import type { HandlerFn } from "../types.js";
+import type { HandlerEntry, HandlerFn } from "../types.js";
 import {
   applyRuntimeConfigOverridesToContextArgs,
   getRuntimeConfigOverrides,
@@ -82,7 +82,7 @@ export class RuntimeContext<T> {
   checkpoints: CheckpointStore;
   callbacks: AgencyCallbacks;
   onStreamLock: boolean;
-  handlers: HandlerFn[];
+  handlers: HandlerEntry[];
   locks: Record<string, Promise<void>>;
   lockOwners: Record<string, string>;
   lockWaiters: Record<string, string[]>;
@@ -528,8 +528,15 @@ export class RuntimeContext<T> {
   async threads. But we could just replace all calls to `forkStack`
   with `new StateStack()`.
   */
-  pushHandler(fn: HandlerFn): void {
-    this.handlers.push(fn);
+  /** Register a handler. `liveGuardIds` is REQUIRED and each caller
+   *  must decide it explicitly (an empty array is NOT neutral — it
+   *  means "hide every guard from this handler", which is correct only
+   *  for handlers registered before any guard can exist, like the
+   *  --policy handler and top-level init wrappers). Agency handle
+   *  blocks capture it in Runner.handle; TS callers capture at call
+   *  time in withPushedHandler. See HandlerEntry. */
+  pushHandler(fn: HandlerFn, liveGuardIds: string[]): void {
+    this.handlers.push({ fn, liveGuardIds });
   }
   popHandler(): void {
     this.handlers.pop();

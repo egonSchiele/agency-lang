@@ -769,19 +769,44 @@ export class Runner {
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
+    // A COMPLETED handle block returns here, before pushHandler — its
+    // scope is over and its handler stays gone on replay. This line is
+    // also why the guard-set memo below cannot be keyed by counting
+    // registrations: replay skips completed registrations, so a counter
+    // counts different events than the original run did. Keys must be
+    // POSITION (stepPath, here) or content — never an event count.
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
-    this.ctx.pushHandler(handlerFn);
+    // Which guards were live when this handler registered? Decides the
+    // handler's budget scoping (HandlerEntry.liveGuardIds). Memoized
+    // FIRST-WRITE-WINS in the registering frame's locals: on resume,
+    // stack.guards is restored from JSON BEFORE this replayed
+    // registration runs, so a fresh capture here would see guards that
+    // did not exist at the original registration — including a guard
+    // whose trip this handler is supposed to adjudicate. The memo makes
+    // the original capture the durable one. Keyed by stepPath (position)
+    // per the note above; stored per-frame so recursive activations of
+    // the same handle block each get their own entry; DELETED on pop so
+    // a loop's next iteration (same stepPath, new guards) writes fresh.
+    const memoKey = `__handlerGuards_${this.stepPath(id)}`;
+    let liveGuardIds = this.frame.locals[memoKey] as string[] | undefined;
+    if (liveGuardIds === undefined) {
+      liveGuardIds = this.stack ? this.stack.guards.map((g) => g.guardId) : [];
+      this.frame.locals[memoKey] = liveGuardIds;
+    }
+
+    this.ctx.pushHandler(handlerFn, liveGuardIds);
     this.path.push(id);
     try {
       await this.runInScope(() => callback(this));
     } finally {
       this.path.pop();
       this.ctx.popHandler();
+      delete this.frame.locals[memoKey];
     }
 
     if (this.halted) return;

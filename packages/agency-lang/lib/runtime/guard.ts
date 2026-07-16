@@ -58,6 +58,10 @@ export function nextGuardId(): string {
  * runner step after deserialization.
  */
 export type Guard = {
+  /** Stable serialized identity — see GuardJSON. Both variants carry it;
+   *  it is on the interface because handler scoping and ownedGuardIds
+   *  matching are identity-based (indices do not survive resume/fork). */
+  guardId: string;
   install(stack: StateStack): void;
   uninstall(stack: StateStack): void;
   pause(): void;
@@ -69,6 +73,21 @@ export type Guard = {
    *  here. */
   charge(amount: number): void;
   check(stack: StateStack): GuardExceededError | null;
+  /** While suspended, a guard is invisible to enforcement: `check()`
+   *  returns null, `charge()` is a no-op, and (TimeGuard) the working-
+   *  time clock is paused. Used while an interrupt HANDLER runs: a
+   *  handler's own work is metered by its registration site's guards,
+   *  never by guards installed deeper (see HandlerEntry.liveGuardIds).
+   *  `resume()` DOES NOT clear suspension — `Runner.beforeStep`
+   *  resumes every guard at every step entry, and a handler body
+   *  executes steps; without this rule the handler's first step would
+   *  silently un-suspend the guard and restart its clock. Only
+   *  `unsuspend()` clears it. NEVER serialized: a handler that
+   *  propagates gets checkpointed mid-suspension, and a suspended
+   *  flag riding the snapshot would resume the run permanently
+   *  unmetered. */
+  suspend(): void;
+  unsuspend(): void;
   /** True iff this guard's limit has been exceeded — even if `check`
    *  has already returned the trip once. Lets `Runner.shouldSkip`
    *  distinguish a still-aborted signal that originated from a
@@ -196,6 +215,22 @@ export class CostGuard implements Guard {
     );
   }
 
+  /** Deliberately no-ops. A CostGuard can be SHARED across fork branches
+   *  (cloneForBranch returns `this`), so an object-level suspended flag
+   *  would blind SIBLING branches too: their charges would drop and
+   *  their gates would open while one branch's handler deliberates —
+   *  fail-open on the shared budget. Cost suspension is therefore
+   *  branch-scoped, on the StateStack (`suspendedGuardIds`), where the
+   *  enforce/charge walks consult it. Only per-branch-object state
+   *  belongs here, which for cost is nothing. */
+  suspend(): void {
+    /* nothing — see above */
+  }
+
+  unsuspend(): void {
+    /* nothing — see above */
+  }
+
   /** CostGuards don't compose into `stack.abortSignal`, so they can't
    *  be the cause of a stuck abort. Always returns false — the
    *  isTripped check in `Runner.shouldSkip` is for guards (like
@@ -306,6 +341,13 @@ export class TimeGuard implements Guard {
    *  steps (popGuard) on its way out. */
   private consumed: boolean = false;
 
+  /** See the Guard interface. Object-level suspension is CORRECT for
+   *  time (unlike cost): time clones are per-branch objects, so pausing
+   *  this object's clock affects exactly one branch. Deliberately NOT
+   *  in toJSON — a snapshot taken mid-suspension (a handler that
+   *  propagates to the user) must revive a guard that meters. */
+  private suspended: boolean = false;
+
   /** Stable id threaded into the emitted `guardTrip` cause. Not `readonly`
    *  so `fromJSON` can restore the serialized id across interrupt/resume
    *  (see GuardJSON — the id must outlive a checkpoint or ownedGuardIds
@@ -350,6 +392,13 @@ export class TimeGuard implements Guard {
   }
 
   resume(stack: StateStack): void {
+    // While suspended, resume() must NOT restart the clock:
+    // Runner.beforeStep resumes every guard at every step entry, and an
+    // interrupt handler's body executes steps — without this gate the
+    // handler's first step would silently un-suspend the guard it is
+    // adjudicating and its deliberation time would be billed. Only
+    // unsuspend() re-enables resumption.
+    if (this.suspended) return;
     if (this.state === "running") return;
     // After deserialization, controller is undefined — re-establish
     // plumbing. (toJSON only serializes elapsedMs + timeLimit.)
@@ -357,11 +406,25 @@ export class TimeGuard implements Guard {
     this.startWindow();
   }
 
+  /** Pause the clock and pin it paused across beforeStep's resume-all.
+   *  See resume() and the Guard interface. */
+  suspend(): void {
+    this.pause();
+    this.suspended = true;
+  }
+
+  unsuspend(): void {
+    // The clock restarts at the next beforeStep resume, not here — the
+    // suspension bracket sits in runtime code, outside any step.
+    this.suspended = false;
+  }
+
   charge(_amount: number): void {
     /* nothing — TimeGuard accumulates wall-clock time, not LLM cost */
   }
 
   check(_stack: StateStack): GuardExceededError | null {
+    if (this.suspended) return null;
     if (!this.tripped || this.consumed) return null;
     // currentElapsed() charges any in-flight window delta so `spent`
     // reflects the true elapsed time at the moment of the trip. Without

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
-import { approve } from "./interrupts.js";
+import { approve, pass } from "./interrupts.js";
 import { agencyStore, withPushedHandler } from "./asyncContext.js";
 import { withCallDepth } from "./callDepth.js";
 import { checkFailureArgs } from "./failurePropagation.js";
@@ -261,11 +261,22 @@ export class AgencyFunction {
     // Doing the wrap here — rather than branching inside `invoke()` —
     // keeps the per-call hot path branch-free.
     const original = this._fn;
+    // The auto-approve must PASS on std::guard interrupts (guard trips,
+    // once guards raise them): approving work is meaningful, but a bare
+    // approve on a trip is approve({}) — no budget granted — which the
+    // trip machinery treats as a runtime error. Budget questions are for
+    // outer handlers or the user, never a tool's auto-approve wrapper.
+    const autoApprove = async (intr: { effect: string }) =>
+      intr.effect === "std::guard" ? pass() : approve();
     const wrapped = (...args: any[]) => {
       const ctx = agencyStore.getStore()?.ctx;
       if (!ctx) return original(...args);
-      return withPushedHandler(ctx, async () => approve(), () =>
+      // liveGuardIds: [] is an explicit decision, not a default — this
+      // handler conceptually registers above any guard (its body never
+      // spends, so the hide-everything reading is also harmless).
+      return withPushedHandler(ctx, autoApprove, () =>
         Promise.resolve(original(...args)),
+        [],
       );
     };
     return new AgencyFunction({

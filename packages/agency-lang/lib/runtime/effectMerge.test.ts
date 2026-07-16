@@ -52,7 +52,7 @@ describe("the chain merges approvals through the effect table", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers;
+    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
     ctx.runId = "test-run";
     return ctx;
   };

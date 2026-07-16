@@ -244,13 +244,27 @@ async function runHandlerChain(
     try {
       for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
         if (ctx.isCancelled(stack)) throw new AgencyCancelledError();
+        const entry = ctx.handlers[i];
+        // A handler runs under its REGISTRATION site's budget: every
+        // guard that was not live when it registered is suspended on
+        // this branch for the duration of the call — not gating, not
+        // charging, clock paused (see HandlerEntry and
+        // StateStack.beginHandlerSuspension). Per handler, not per
+        // chain: each handler in the chain has its own registration
+        // site and therefore its own hidden set.
+        const suspensionToken = stack
+          ? stack.beginHandlerSuspension(entry)
+          : undefined;
         // Treat handler execution as atomic for the debugger — same as LLM tool calls.
         ctx.enterToolCall();
         let result: any;
         try {
-          result = await ctx.handlers[i](interruptObj);
+          result = await entry.fn(interruptObj);
         } finally {
           ctx.exitToolCall();
+          if (suspensionToken !== undefined) {
+            stack!.endHandlerSuspension(suspensionToken);
+          }
         }
         // A handler that is a compiled def returns an AbortedResult when
         // an abort stops it mid-run (compiled frames convert aborts to

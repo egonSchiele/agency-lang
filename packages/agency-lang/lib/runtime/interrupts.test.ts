@@ -27,7 +27,7 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers;
+    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
     return ctx;
   };
 
@@ -115,7 +115,7 @@ describe("interruptWithHandlers expectsValue", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers;
+    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
     // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
     // ctx.getRunId()), which a real run sets when the exec context is created.
     ctx.runId = "test-run";
@@ -296,7 +296,7 @@ describe("pass()", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers;
+    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
     // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
     // ctx.getRunId()), which a real run sets when the exec context is created.
     ctx.runId = "test-run";

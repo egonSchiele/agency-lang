@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"outer-tripped-after-handler-spend\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "allow" },
+        { "return": "two" },
+        { "return": "three" }
+      ],
+      "description": "The handler's own llm() charges the guard enclosing its REGISTRATION (outer) and never the guard it is deciding inside of (inner). Both directions are pinned by spend: a leak into the inner guard trips it at r2; a missing charge on the outer guard lets the extra call fit."
+    }
+  ]
+}

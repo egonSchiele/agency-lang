@@ -449,3 +449,80 @@ describe("guard labels", () => {
     expect((clone as TimeGuard).guardId).toBe(parent.guardId);
   });
 });
+
+describe("suspension", () => {
+  it("a suspended TimeGuard ignores beforeStep-style resume() calls", () => {
+    const g = new TimeGuard(60000);
+    const stack = new StateStack();
+    g.install(stack);
+    g.suspend();
+    // Runner.beforeStep resumes every guard at every step entry — a
+    // handler body executes steps, so this MUST stay a no-op while
+    // suspended or the clock restarts mid-deliberation.
+    g.resume(stack);
+    expect(g.snapshotElapsed()).toBe(g.snapshotElapsed()); // clock frozen: no running window
+    expect((g as any).state).toBe("paused");
+    g.unsuspend();
+    g.resume(stack);
+    expect((g as any).state).toBe("running");
+    g.uninstall(stack);
+  });
+
+  it("a suspended TimeGuard's check() reports nothing even when tripped", () => {
+    const g = new TimeGuard(60000);
+    (g as any).tripped = true;
+    g.suspend();
+    expect(g.check(new StateStack())).toBeNull();
+    g.unsuspend();
+    expect(g.check(new StateStack())).not.toBeNull();
+  });
+
+  it("CostGuard suspension is stack-scoped, never object-scoped: the shared object still meters sibling branches", () => {
+    // The same CostGuard object appears on two branch stacks
+    // (cloneForBranch returns `this`). Suspending it FOR A HANDLER on
+    // branch A must not blind branch B's enforcement or charging.
+    const g = new CostGuard(0.5);
+    const branchA = new StateStack();
+    const branchB = new StateStack();
+    branchA.pushGuard(g);
+    branchB.pushGuard(g.cloneForBranch(branchA, branchB)!);
+
+    const token = branchA.beginHandlerSuspension({ fn: async () => undefined, liveGuardIds: [] });
+    // Branch A (the handler's lineage): hidden — charges dropped, gate open.
+    branchA.chargeGuards(1.0);
+    expect(() => branchA.enforceGuards()).not.toThrow();
+    // Branch B: same object, unsuspended stack — charges land, gate trips.
+    branchB.chargeGuards(1.0);
+    expect(() => branchB.enforceGuards()).toThrow();
+    branchA.endHandlerSuspension(token);
+  });
+
+  it("nested suspensions compose: the inner end must not unsuspend what the outer began", () => {
+    const g = new TimeGuard(60000);
+    const stack = new StateStack();
+    stack.pushGuard(g);
+    const entry = { fn: async () => undefined, liveGuardIds: [] };
+
+    const outer = stack.beginHandlerSuspension(entry);
+    const inner = stack.beginHandlerSuspension(entry);
+    stack.endHandlerSuspension(inner);
+    // Still suspended: the outer bracket is open.
+    g.resume(stack);
+    expect((g as any).state).toBe("paused");
+    stack.endHandlerSuspension(outer);
+    g.resume(stack);
+    expect((g as any).state).toBe("running");
+    stack.popGuard();
+  });
+
+  it("guardsHiddenFrom hides exactly the guards not live at registration", () => {
+    const before = new CostGuard(1);
+    const after = new CostGuard(1);
+    const stack = new StateStack();
+    stack.pushGuard(before);
+    const entry = { fn: async () => undefined, liveGuardIds: [before.guardId] };
+    stack.pushGuard(after);
+    const hidden = stack.guardsHiddenFrom(entry);
+    expect(hidden.map((g) => g.guardId)).toEqual([after.guardId]);
+  });
+});

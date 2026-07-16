@@ -245,8 +245,56 @@ function checkFunctionCallsInScope(
       const parent = ancestors[ancestors.length - 1];
       if (parent?.type === "valueAccess") continue;
       checkSingleFunctionCall(node, info.scope, ctx);
+      checkSaveDraftCall(node, info, ctx);
     }
   }
+}
+
+/** `saveDraft(v)` records a best-so-far value that a tripping enclosing `guard`
+ *  yields in place of a failure — so `v` must be assignable to the enclosing
+ *  scope's return type, the same contract a `return` obeys. This covers def/node
+ *  bodies AND guard blocks (a block's return type is inferred from its `return`).
+ *  Only a scope with no inferred/declared return type (`info.returnType`
+ *  undefined) is skipped. Name-keyed: aliasing `saveDraft` (`const s = saveDraft;
+ *  s(v)`) escapes the check (documented v1 limitation). */
+function checkSaveDraftCall(
+  call: FunctionCall,
+  info: ScopeInfo,
+  ctx: TypeCheckerContext,
+): void {
+  if (call.functionName !== "saveDraft") return;
+  // Only the stdlib saveDraft carries the draft contract. Stand down when
+  // the name resolves to anything the user wrote: a local def or node, or
+  // an import whose origin is not the stdlib thread module. Those are
+  // ordinary functions and their arguments check against their own
+  // signatures. An UNRESOLVED name keeps the check: unresolved imports
+  // already raise their own diagnostics, and in fail-open resolution the
+  // only saveDraft people call is the stdlib one.
+  if (ctx.functionDefs["saveDraft"] || ctx.nodeDefs["saveDraft"]) return;
+  const imported = ctx.importedFunctions["saveDraft"];
+  if (imported && !isStdlibSaveDraftOrigin(imported.originFile)) return;
+  if (!info.returnType) return; // no declared/inferred return type in scope
+  if (call.arguments.length !== 1) return;
+  const first = call.arguments[0];
+  // A splat's runtime expansion is unknowable here: the argument node
+  // holds an ARRAY whose elements become the call's arguments, so
+  // checking the splat expression against the scalar return type would
+  // be a false error. The generic call checks still cover the splat.
+  if (first.type === "splat") return;
+  // `saveDraft(value: x)` names the parameter but carries the same draft;
+  // check the value it wraps so the named form cannot bypass the rule.
+  const arg = first.type === "namedArgument" ? first.value : first;
+  checkType(arg, info.returnType, info.scope, "the saveDraft() draft value", ctx);
+}
+
+/** True when an import's origin file is the stdlib prelude (or the
+ *  origin is unknown, which is the fail-open resolution path). saveDraft
+ *  lives in std::index and arrives via the auto-injected prelude import.
+ *  Keeps checkSaveDraftCall pinned to the real builtin even if import
+ *  resolution grows to populate importedFunctions in more cases. */
+function isStdlibSaveDraftOrigin(originFile: string | undefined): boolean {
+  if (!originFile) return true;
+  return /[\\/]stdlib[\\/]index\.agency$/.test(originFile);
 }
 
 export function isInsideHandler(ancestors: WalkAncestor[]): boolean {

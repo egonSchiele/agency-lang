@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"timed-draft\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Salvage on a TIME trip (aborted-leaf delivery path)."
+    }
+  ]
+}

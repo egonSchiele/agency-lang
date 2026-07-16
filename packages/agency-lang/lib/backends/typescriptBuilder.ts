@@ -3256,20 +3256,36 @@ export class TypeScriptBuilder {
     return false;
   }
 
-  /** The interrupt guard emitted after a sync assignment whose RHS may
-   * bubble an Interrupt[]: halt the scope (awaitAll first) so the batch
-   * propagates to the caller, or — inside a handler body — throw, since
-   * handlers must not raise interrupts. Returns null at global scope,
-   * where there is no runner to halt. */
+  /** The propagation guards emitted after a sync assignment whose RHS is
+   * a call (or a `try` expression that may deliver a callee's raw
+   * result). Two markers can come back instead of a normal value, and
+   * both must stop this scope:
+   *
+   * - an Interrupt[] — the callee paused; halt so the batch propagates
+   *   (awaitAll first), or throw inside a handler body, where interrupts
+   *   are not allowed.
+   * - an AbortedResult — the callee was aborted; this scope stops too and
+   *   returns ITS OWN saved draft via carryThrough (the callee's partial
+   *   is dropped: salvage is opt-in per level). Nodes and handler bodies
+   *   rebuild the exception instead, so everything above compiled code
+   *   (the graph engine, the CLI entry) sees aborts exactly as before.
+   *
+   * Returns null only at global scope for the interrupt half; the aborted
+   * check still applies there (an abort during module init should crash
+   * init, not become data in a global). */
   private assignmentInterruptGuard(varRef: TsNode): TsNode | null {
-    if (this.scopes.current().type === "global") return null;
+    const abortedGuard = this.assignmentAbortedGuard(varRef);
+    if (this.scopes.current().type === "global") return abortedGuard;
     if (this.insideHandlerBody) {
-      return ts.if(
-        this.interruptCheckRaw(this.str(varRef)),
-        ts.throw(
-          `new Error("Cannot throw an interrupt inside a handler body")`,
+      return ts.statements([
+        ts.if(
+          this.interruptCheckRaw(this.str(varRef)),
+          ts.throw(
+            `new Error("Cannot throw an interrupt inside a handler body")`,
+          ),
         ),
-      );
+        abortedGuard,
+      ]);
     }
     // Sync: interrupt check with awaitAll before halt.
     // In function context, halt with the interrupt array directly so
@@ -3278,17 +3294,51 @@ export class TypeScriptBuilder {
       this.scopes.current().type === "node"
         ? ts.obj([ts.setSpread(ts.runtime.state), ts.set("data", varRef)])
         : varRef;
+    return ts.statements([
+      ts.if(
+        this.interruptCheck(varRef),
+        ts.statements([
+          ts.awaitMethodCall(
+            // Strict accessor — immediate deref inside step body.
+            ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
+            "awaitAll",
+          ),
+          ts.methodCall(ts.id("runner"), "halt", [haltValue]),
+          ts.return(),
+        ]),
+      ),
+      abortedGuard,
+    ]);
+  }
+
+  /** The aborted-result half of the post-call guard. Function and block
+   * scopes halt with their own AbortedResult (carryThrough applies the
+   * salvage rule); handler bodies and every other scope rebuild the
+   * exception — handlers run outside the runner-step machinery (there is
+   * no runner to halt), and nothing above compiled code consumes aborted
+   * values. */
+  private assignmentAbortedGuard(varRef: TsNode): TsNode {
+    const scopeType = this.scopes.current().type;
+    const expr = this.str(varRef);
+    if (
+      !this.insideHandlerBody &&
+      (scopeType === "function" || scopeType === "block")
+    ) {
+      const frameVar = scopeType === "block" ? "__bstack" : "__stack";
+      const scopeName = JSON.stringify(this.scopes.currentName());
+      return ts.if(
+        ts.raw(`isAborted(${expr})`),
+        ts.statements([
+          ts.raw(
+            `runner.halt(${expr}.carryThrough(${frameVar}, ${scopeName}))`,
+          ),
+          ts.return(),
+        ]),
+      );
+    }
     return ts.if(
-      this.interruptCheck(varRef),
-      ts.statements([
-        ts.awaitMethodCall(
-          // Strict accessor — immediate deref inside step body.
-          ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
-          "awaitAll",
-        ),
-        ts.methodCall(ts.id("runner"), "halt", [haltValue]),
-        ts.return(),
-      ]),
+      ts.raw(`isAborted(${expr})`),
+      ts.raw(`throw ${expr}.toError()`),
     );
   }
 

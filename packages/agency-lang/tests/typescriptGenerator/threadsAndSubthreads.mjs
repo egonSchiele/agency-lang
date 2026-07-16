@@ -17,6 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
+  AbortedResult,
+  isAborted,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -352,6 +354,10 @@ if (hasInterrupts(__funcResult)) {
           runner.halt(__funcResult)
           return;
         }
+if (isAborted(__funcResult)) {
+          runner.halt(__funcResult.carryThrough(__stack, "foo"))
+          return;
+        }
       });
       await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
@@ -361,6 +367,10 @@ const __funcResult = await __call(print, {
 if (hasInterrupts(__funcResult)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
+          return;
+        }
+if (isAborted(__funcResult)) {
+          runner.halt(__funcResult.carryThrough(__stack, "foo"))
           return;
         }
       });
@@ -374,6 +384,10 @@ if (hasInterrupts(__funcResult)) {
           runner.halt(__funcResult)
           return;
         }
+if (isAborted(__funcResult)) {
+          runner.halt(__funcResult.carryThrough(__stack, "foo"))
+          return;
+        }
       });
       await runner.step(5, async (runner) => {
 const __funcResult = await __call(print, {
@@ -385,6 +399,10 @@ if (hasInterrupts(__funcResult)) {
           runner.halt(__funcResult)
           return;
         }
+if (isAborted(__funcResult)) {
+          runner.halt(__funcResult.carryThrough(__stack, "foo"))
+          return;
+        }
       });
       await runner.step(6, async (runner) => {
 const __funcResult = await __call(print, {
@@ -394,6 +412,10 @@ const __funcResult = await __call(print, {
 if (hasInterrupts(__funcResult)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll()
           runner.halt(__funcResult)
+          return;
+        }
+if (isAborted(__funcResult)) {
+          runner.halt(__funcResult.carryThrough(__stack, "foo"))
           return;
         }
       });
@@ -416,7 +438,12 @@ if (hasInterrupts(__funcResult)) {
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "foo");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -640,6 +667,9 @@ if (hasInterrupts(__funcResult)) {
           })
           return;
         }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
+        }
       });
       await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
@@ -653,6 +683,9 @@ if (hasInterrupts(__funcResult)) {
             data: __funcResult
           })
           return;
+        }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
         }
       });
       await runner.step(4, async (runner) => {
@@ -668,6 +701,9 @@ if (hasInterrupts(__funcResult)) {
           })
           return;
         }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
+        }
       });
       await runner.step(5, async (runner) => {
 const __funcResult = await __call(print, {
@@ -682,6 +718,9 @@ if (hasInterrupts(__funcResult)) {
           })
           return;
         }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
+        }
       });
       await runner.step(6, async (runner) => {
 const __funcResult = await __call(print, {
@@ -695,6 +734,9 @@ if (hasInterrupts(__funcResult)) {
             data: __funcResult
           })
           return;
+        }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
         }
       });
     })

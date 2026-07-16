@@ -1,0 +1,26 @@
+import { guard } from "std::thread"
+
+// A user combinator that runs a block on the CURRENT stack. Its block saves a
+// draft and completes NORMALLY (never cleared without block clearing); then a
+// sibling trips and must NOT salvage the stale block draft.
+def withLabel(block: () -> any = null): any {
+  return block()
+}
+
+def tripper(): string {
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    const x = withLabel() as {
+      saveDraft("stale-block")
+      return 1
+    }
+    const b = tripper()
+    return b
+  }
+  if (isSuccess(result)) { return "leaked:${result.value}" }
+  return "failed"
+}

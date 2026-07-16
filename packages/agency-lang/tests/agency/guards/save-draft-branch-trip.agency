@@ -1,0 +1,24 @@
+import { guard } from "std::thread"
+
+// The trip fires INSIDE a fork branch. The branch's frames stamp their
+// drafts onto the branch's abort, but runBatch clears the carried draft
+// at the fork boundary, so the outer guard fails rather than salvaging
+// one branch's value (nondeterministic in "all" mode and wrong-typed for
+// the fork's shape). The guard-outside-fork fixture covers only a
+// parent-side trip; this one pins the branch-originated case.
+def branchWork(tag: string): string {
+  saveDraft("branch-${tag}")
+  sleep(2000)
+  return tag
+}
+
+node main() {
+  const result = guard(time: 600ms) as {
+    const tags = fork(["a"]) as t {
+      return branchWork(t)
+    }
+    return "joined"
+  }
+  if (isFailure(result)) { return "failed-no-branch-salvage" }
+  return "leaked:${result.value}"
+}

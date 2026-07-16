@@ -17,6 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
+  AbortedResult,
+  isAborted,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -272,7 +274,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "parseValue");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -424,7 +431,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "wrapper");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -525,6 +537,9 @@ if (hasInterrupts(__stack.locals.nums)) {
           })
           return;
         }
+if (isAborted(__stack.locals.nums)) {
+          throw __stack.locals.nums.toError()
+        }
       });
       await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
@@ -538,6 +553,9 @@ if (hasInterrupts(__funcResult)) {
             data: __funcResult
           })
           return;
+        }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
         }
 //  `any` LHS — degenerate but valid: injects `z.any()`. No assertion
 //  about runtime shape, just verifies it compiles.
@@ -558,6 +576,9 @@ if (hasInterrupts(__stack.locals.anything)) {
           })
           return;
         }
+if (isAborted(__stack.locals.anything)) {
+          throw __stack.locals.anything.toError()
+        }
       });
       await runner.step(5, async (runner) => {
 const __funcResult = await __call(print, {
@@ -571,6 +592,9 @@ if (hasInterrupts(__funcResult)) {
             data: __funcResult
           })
           return;
+        }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
         }
 //  `!` validation on the LHS: injection still fires with the bare
 //  type. `!` triggers a separate runtime validation pass at the
@@ -593,6 +617,9 @@ if (hasInterrupts(__stack.locals.validated)) {
           })
           return;
         }
+if (isAborted(__stack.locals.validated)) {
+          throw __stack.locals.validated.toError()
+        }
 __stack.locals.validated = __validateType(__stack.locals.validated, z.array(z.number()));
       });
       await runner.step(7, async (runner) => {
@@ -607,6 +634,9 @@ if (hasInterrupts(__funcResult)) {
             data: __funcResult
           })
           return;
+        }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
         }
 //  Explicit override: the user-supplied schema wins, no injection.
       });
@@ -623,6 +653,9 @@ if (hasInterrupts(__stack.locals.explicit)) {
           })
           return;
         }
+if (isAborted(__stack.locals.explicit)) {
+          throw __stack.locals.explicit.toError()
+        }
       });
       await runner.step(9, async (runner) => {
 const __funcResult = await __call(print, {
@@ -636,6 +669,9 @@ if (hasInterrupts(__funcResult)) {
             data: __funcResult
           })
           return;
+        }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
         }
 //  Bare expression statement — no LHS, no return position, no injection.
 //  The Schema param is omitted; the function would fail at runtime
@@ -654,6 +690,9 @@ if (hasInterrupts(__funcResult)) {
             data: __funcResult
           })
           return;
+        }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
         }
       });
     })

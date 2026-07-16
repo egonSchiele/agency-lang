@@ -335,6 +335,14 @@ export async function _popGuard(ids: string[]): Promise<void> {
   popGuardImpl(stack, ids);
 }
 
+/** Impl of the Agency `saveDraft(value)` builtin. All the real logic —
+ *  which frame owns the draft, cloning, the global-scope rejection —
+ *  lives in `StateStack.setSavedDraft`. */
+export async function _saveDraft(value: unknown): Promise<void> {
+  const { stack } = getRuntimeContext();
+  stack.setSavedDraft(value);
+}
+
 /**
  * Run the guarded block under a `try` that owns exactly the guards in `ids`,
  * so a `guardTrip` is converted to a Failure ONLY when it belongs to one of

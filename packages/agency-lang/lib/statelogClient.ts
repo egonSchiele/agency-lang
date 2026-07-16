@@ -30,6 +30,11 @@ export type SpanType =
   | "forkAll"
   | "race"
   | "handlerChain"
+  // One abort's unwind, from the first catch rung that touches a saveDraft
+  // partial to the guard that converts the abort into a value. The
+  // per-level abortSalvage events nest inside it. Opened lazily — a trip
+  // through undrafted code opens no span. See lib/runtime/abortedResult.ts.
+  | "abortUnwind"
   // Embedding-vector requests. Distinct from `llmCall` so cost
   // roll-ups in the viewer don't conflate chat-completion cost with
   // embedding cost, and so embeddings are filterable on their own.
@@ -1274,6 +1279,43 @@ export class StatelogClient {
       warnType,
       message,
       data: { functionName, param, error },
+    });
+  }
+
+  /** One event per hop where an abort's travel touches a saveDraft
+   *  partial: a frame attached its draft (carried), a frame dropped a
+   *  callee's partial by having none of its own (erased), a partial was
+   *  discarded at a boundary (clearedAtFork, droppedAtArgPosition), or a
+   *  guard salvaged one (delivered). An abort through undrafted code
+   *  emits nothing. `partial` and `functionArgs` are pre-truncated string
+   *  previews, nested under `data` so post()'s redaction replacer covers
+   *  them. `spanId` is the abort's unwind span, carried explicitly
+   *  because an abort can cross span contexts (e.g. out of a fork
+   *  branch), where currentSpan attribution alone would split the trail. */
+  async abortSalvage({
+    action,
+    scopeName,
+    spanId,
+    functionArgs,
+    partial,
+  }: {
+    action:
+      | "carried"
+      | "erased"
+      | "delivered"
+      | "clearedAtFork"
+      | "droppedAtArgPosition";
+    scopeName?: string;
+    spanId?: string;
+    functionArgs?: string;
+    partial?: string;
+  }): Promise<void> {
+    await this.post({
+      type: "abortSalvage",
+      action,
+      scopeName,
+      salvageSpanId: spanId,
+      data: { functionArgs, partial },
     });
   }
 

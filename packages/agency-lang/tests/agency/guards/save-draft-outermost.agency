@@ -1,0 +1,21 @@
+import { guard } from "std::thread"
+
+def verify(): string {
+  saveDraft("verify-draft")
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+def code(): string {
+  saveDraft("code-draft")
+  const x = verify()
+  return x
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    return code()
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

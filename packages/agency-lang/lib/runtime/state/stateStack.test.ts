@@ -829,3 +829,39 @@ describe("StateStack memory frames", () => {
     expect(restored.activeMemoryFrame()).toEqual(richFrame);
   });
 });
+
+describe("State.savedDraft (saveDraft slot)", () => {
+  it("survives a State serialization round-trip", () => {
+    const s = new State();
+    s.savedDraft = { value: { report: "partial" } };
+    const restored = State.fromJSON(JSON.parse(JSON.stringify(s.toJSON())));
+    expect(restored.savedDraft).toEqual({ value: { report: "partial" } });
+  });
+
+  it("is absent by default and absent from JSON when unset", () => {
+    const s = new State();
+    expect(s.savedDraft).toBeUndefined();
+    expect("savedDraft" in s.toJSON()).toBe(false);
+  });
+});
+
+describe("StateStack.setSavedDraft", () => {
+  it("writes a deep-cloned draft onto the CALLER frame", () => {
+    const stack = new StateStack();
+    const caller = makeFrame();
+    const saveDraftOwn = makeFrame();
+    stack.stack.push(caller);
+    stack.stack.push(saveDraftOwn);
+    const draft = { report: "partial" };
+    stack.setSavedDraft(draft);
+    draft.report = "mutated-later";
+    expect(caller.savedDraft).toEqual({ value: { report: "partial" } });
+    expect(saveDraftOwn.savedDraft).toBeUndefined();
+  });
+
+  it("throws in global context instead of silently doing nothing", () => {
+    const stack = new StateStack();
+    stack.stack.push(makeFrame());
+    expect(() => stack.setSavedDraft("x")).toThrow(/module top level/);
+  });
+});

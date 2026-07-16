@@ -17,6 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
+  AbortedResult,
+  isAborted,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -262,7 +264,12 @@ await callHook({
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "add");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -408,7 +415,12 @@ await callHook({
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "greet");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -552,7 +564,12 @@ await callHook({
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "calculateArea");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -696,7 +713,12 @@ await callHook({
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "processData");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -820,7 +842,12 @@ await callHook({
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "versionedTool");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't

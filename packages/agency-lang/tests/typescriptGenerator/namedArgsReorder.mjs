@@ -17,6 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
+  AbortedResult,
+  isAborted,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -270,7 +272,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "greet");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -392,6 +399,9 @@ if (hasInterrupts(__stack.locals.a)) {
           })
           return;
         }
+if (isAborted(__stack.locals.a)) {
+          throw __stack.locals.a.toError()
+        }
 //  Skip middle param with named args
       });
       await runner.step(3, async (runner) => {
@@ -411,6 +421,9 @@ if (hasInterrupts(__stack.locals.b)) {
           })
           return;
         }
+if (isAborted(__stack.locals.b)) {
+          throw __stack.locals.b.toError()
+        }
 //  Mixed positional + named
       });
       await runner.step(4, async (runner) => {
@@ -428,6 +441,9 @@ if (hasInterrupts(__stack.locals.c)) {
             data: __stack.locals.c
           })
           return;
+        }
+if (isAborted(__stack.locals.c)) {
+          throw __stack.locals.c.toError()
         }
       });
       await runner.step(5, async (runner) => {

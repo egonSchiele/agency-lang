@@ -75,6 +75,11 @@ export class State {
   private branches?: Record<string, BranchState>;
   private deletedBranches?: Set<string>;
   scopedCallbacks?: Array<{ name: string; fn: any }>;
+  /** saveDraft's best-so-far value for THIS scope. Wrapped so a saved
+   *  null is distinct from "no draft". Serialized: a draft must survive
+   *  interrupt/resume. Read only by this frame's own catch rung (the
+   *  carry-on-abort level rule); no other code walks it. */
+  savedDraft?: { value: any };
 
   constructor(
     opts: {
@@ -215,6 +220,9 @@ export class State {
         fn: cb.fn,
       }));
     }
+    if (this.savedDraft !== undefined) {
+      json.savedDraft = deepClone(this.savedDraft);
+    }
     if (this.branches) {
       json.branches = {};
       for (const [key, branch] of Object.entries(this.branches)) {
@@ -261,6 +269,9 @@ export class State {
         fn: cb.fn,
       }));
     }
+    if (json.savedDraft !== undefined) {
+      state.savedDraft = json.savedDraft;
+    }
     if (json.branches) {
       state.branches = {};
       for (const [key, branch] of Object.entries(json.branches)) {
@@ -294,6 +305,7 @@ export type StateJSON = {
   step: number;
   branches?: Record<string, BranchStateJSON>;
   scopedCallbacks?: Array<{ name: string; fn: any }>;
+  savedDraft?: { value: any };
 };
 
 export type StateStackJSON = {
@@ -720,6 +732,23 @@ export class StateStack {
    *  `callback(...)` have no real caller frame to register against. */
   isGlobalContext(): boolean {
     return this.stack.length <= 1;
+  }
+
+  /** Record a saveDraft value on the CALLER's frame — the Agency scope
+   *  that called saveDraft (saveDraft is itself an Agency def, so the top
+   *  frame is saveDraft's own). The value is deep-cloned so later
+   *  mutation cannot change the salvage, and so a live-trip salvage
+   *  matches a post-resume one. Throws in global context: a draft saved
+   *  at module top level has no scope to salvage it and would silently
+   *  do nothing. */
+  setSavedDraft(value: unknown): void {
+    if (this.isGlobalContext()) {
+      throw new Error(
+        "saveDraft() can only be called inside a function, node, or block — " +
+          "there is no enclosing scope at module top level to save a draft for.",
+      );
+    }
+    this.callerFrame().savedDraft = { value: deepClone(value) };
   }
 
   /** All scoped callbacks registered anywhere in the active stack for this hook,

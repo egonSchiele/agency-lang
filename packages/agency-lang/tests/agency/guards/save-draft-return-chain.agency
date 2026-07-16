@@ -1,0 +1,23 @@
+import { guard } from "std::thread"
+
+// Only the DEEP level saves, but every hop up is a return-position call:
+// verify's draft is verify's forced return, `return verify()` makes it
+// code's forced return, and `return code()` carries it to the guard.
+// Contrast with save-draft-deep-only, where an assignment breaks the chain.
+def verify(): string {
+  saveDraft("verify-draft")
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+def code(): string {
+  return verify()
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    return code()
+  }
+  if (isFailure(result)) { return "no-salvage" }
+  return result.value
+}

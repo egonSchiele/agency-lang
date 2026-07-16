@@ -152,6 +152,16 @@ export class AgencyAbort extends Error {
   }
 }
 
+/** A short, human-readable description of an abort cause. Used when an
+ *  AbortedResult is converted back into an exception at the places that
+ *  still speak exceptions (the graph engine, runBatch join points). */
+export function describeAbortCause(cause: AbortCause): string {
+  if (cause.kind === "guardTrip") {
+    return `Guard exceeded its ${cause.dimension} budget: spent ${cause.spent} of limit ${cause.limit}`;
+  }
+  return `Execution aborted (${cause.kind})`;
+}
+
 export class AgencyCancelledError extends AgencyAbort {
   constructor(reason?: string, cause?: AbortCause) {
     // The default cause MUST be branded via makeAbortCause — readCause only

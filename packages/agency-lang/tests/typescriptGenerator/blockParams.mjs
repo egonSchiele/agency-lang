@@ -17,6 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
+  AbortedResult,
+  isAborted,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -254,6 +256,10 @@ if (hasInterrupts(__stack.locals.result)) {
             runner.halt(__stack.locals.result)
             return;
           }
+if (isAborted(__stack.locals.result)) {
+            runner.halt(__stack.locals.result.carryThrough(__stack, "mapItems"))
+            return;
+          }
         });
 await runner.step(1, async (runner) => {
 __stack.locals.results = await __call(append, {
@@ -263,6 +269,10 @@ __stack.locals.results = await __call(append, {
 if (hasInterrupts(__stack.locals.results)) {
             await getRuntimeContext().ctx.pendingPromises.awaitAll()
             runner.halt(__stack.locals.results)
+            return;
+          }
+if (isAborted(__stack.locals.results)) {
+            runner.halt(__stack.locals.results.carryThrough(__stack, "mapItems"))
             return;
           }
         });
@@ -291,7 +301,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
-  throw __error;
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "mapItems");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -409,6 +424,15 @@ runner.halt(__bstack.args.x * 2)
 return;
   });
 return runner.halted ? runner.haltResult : undefined;
+} catch (__blockError) {
+// An abort stopped this block. Like a function, the block returns an
+// AbortedResult instead of throwing on: the marker plus the block's own
+// saved draft. This is how a saveDraft placed directly inside a guard
+// block reaches the guard. Other errors keep throwing as before.
+if (__blockError instanceof AgencyAbort) {
+  return AbortedResult.fromError(__blockError, __bstack, "__block_0");
+}
+throw __blockError;
 } finally {
 // Pop the SAME stack `setupFunction` pushed onto (the ALS-current
 // stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this
@@ -431,6 +455,9 @@ if (hasInterrupts(__stack.locals.doubled)) {
           })
           return;
         }
+if (isAborted(__stack.locals.doubled)) {
+          throw __stack.locals.doubled.toError()
+        }
       });
       await runner.step(3, async (runner) => {
 const __funcResult = await __call(print, {
@@ -444,6 +471,9 @@ if (hasInterrupts(__funcResult)) {
             data: __funcResult
           })
           return;
+        }
+if (isAborted(__funcResult)) {
+          throw __funcResult.toError()
         }
       });
     })

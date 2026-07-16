@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "argPositionDrops",
+      "input": "",
+      "expectedOutput": "\"failed-no-cross-type-salvage\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "An aborted call in argument position drops its partial at the call boundary; no cross-type salvage."
+    },
+    {
+      "nodeName": "outerCallSalvages",
+      "input": "",
+      "expectedOutput": "\"f2-partial:g-value\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "The outer call of return f(g()) tripping passes ITS partial through return position — it is return-typed for the block."
+    }
+  ]
+}

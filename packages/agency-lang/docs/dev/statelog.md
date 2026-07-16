@@ -53,6 +53,9 @@ At the start of execution, the full graph topology is logged: all node IDs, all 
 ### Edge transitions
 - **`followEdge(fromNodeId, toNodeId, isConditionalEdge, data)`** — logs when the graph follows an edge, noting whether it was a conditional edge
 
+### Abort salvage (saveDraft)
+- **`abortSalvage({action, scopeName, spanId, functionArgs, partial})`** — one event per hop where an abort's travel touches a saveDraft partial: `carried` (a frame attached its draft), `erased` (a frame dropped a callee's partial by having none of its own), `droppedAtArgPosition` / `clearedAtFork` (a partial discarded at a boundary), and `delivered` (the guard salvaged it). Emitted from inside `AbortedResult`'s methods (`lib/runtime/abortedResult.ts`), never by callers. The hops nest in an `abortUnwind` span, opened lazily by the first hop that touches a partial — an abort through undrafted code emits nothing. `spanId` is carried explicitly in the event because an abort can cross span contexts (out of a fork branch), where current-span attribution alone would split the trail. `functionArgs`/`partial` are previews truncated at 500 chars. See `docs/dev/saveDraft.md`.
+
 ### Other
 - **`debug(message, data)`** — generic debug logging
 - **`diff(itemA, itemB, message)`** — logs a comparison between two items

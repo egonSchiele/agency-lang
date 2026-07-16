@@ -62,6 +62,7 @@
  */
 import { agencyStore } from "./asyncContext.js";
 import { AgencyCancelledError, makeAbortCause } from "./errors.js";
+import { isAborted } from "./abortedResult.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import type { RuntimeContext } from "./state/context.js";
 import { GlobalStore } from "./state/globalStore.js";
@@ -357,6 +358,25 @@ function startInvoke<T>(
         t.child.invoke(t.branch.stack, signal),
       ),
     )
+    .then((value) => {
+      // An aborted branch fulfills with an AbortedResult (its compiled
+      // frames convert aborts to values). At the fork boundary that value
+      // becomes a rejection again. Isolation is one reason: the branch's
+      // partial stays in the branch (atForkBoundary drops it) — which
+      // branch fails first is a race, and one branch's value has the
+      // wrong shape for the fork. The other reason is the join protocol:
+      // inside runBatch a branch failure IS a rejection (allSettled
+      // status, the race's first-rejection seal, sequential's try/catch,
+      // result caching). Converting at this single entry point keeps the
+      // joins on one representation instead of teaching every path a
+      // third settled state — compiled code speaks values, the join
+      // machinery speaks settled promises, and this .then is the adapter
+      // between them. It also makes caching an aborted value impossible.
+      if (isAborted(value)) {
+        throw value.atForkBoundary().toError();
+      }
+      return value;
+    })
     .finally(() => pauseBranchTimeGuards(t.branch.stack));
 }
 
@@ -881,6 +901,21 @@ async function runRaceResume<T>(
     pauseBranchTimeGuards(branch.stack);
     chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
     throw err;
+  }
+
+  if (isAborted(value)) {
+    // An aborted branch fulfilled with a value (its compiled frames
+    // convert aborts to AbortedResults). At the fork boundary that value
+    // becomes a rejection again — see the note in startInvoke.
+    hooks?.onBranchEnd?.(
+      child.key,
+      winnerIndex,
+      "failure",
+      performance.now() - startedAt,
+    );
+    pauseBranchTimeGuards(branch.stack);
+    chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
+    throw value.atForkBoundary().toError();
   }
 
   if (hasInterrupts(value)) {

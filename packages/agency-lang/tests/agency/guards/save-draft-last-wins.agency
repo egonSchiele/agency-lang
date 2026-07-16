@@ -1,0 +1,12 @@
+import { guard } from "std::thread"
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    saveDraft("first")
+    saveDraft("second")
+    const reply = llm("Reply with: pong")
+    return reply
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

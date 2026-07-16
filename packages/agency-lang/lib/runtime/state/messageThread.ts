@@ -150,17 +150,26 @@ export class MessageThread {
   }
 
   toJSON(): MessageThreadJSON {
-    return {
+    const json: MessageThreadJSON = {
       messages: this.messages.map((m) => m.toJSON()),
-      // Copy, not the live array: `messages` above is rebuilt, so handing
-      // out the real one would let a consumer mutating the JSON mutate the
-      // thread — the one way to reach `messageLabels` without a writer.
-      messageLabels: [...this.messageLabels],
       parentId: this.parentId,
       hidden: this.hidden,
       label: this.label,
       summary: this.summary,
     };
+    // Only when something is actually labeled. An all-null array carries
+    // no more information than the absent key (`fromJSON` revives both as
+    // all-null), and emitting it would change the serialized shape of
+    // every thread — checkpoints, statelog, fixtures — for every program
+    // that never labels anything. Same rule as `withMessageLabels`.
+    //
+    // Copy, not the live array: `messages` above is rebuilt, so handing
+    // out the real one would let a consumer mutating the JSON mutate the
+    // thread — the one way to reach `messageLabels` without a writer.
+    if (this.messageLabels.some((l) => l !== null)) {
+      json.messageLabels = [...this.messageLabels];
+    }
+    return json;
   }
 
   static fromJSON(

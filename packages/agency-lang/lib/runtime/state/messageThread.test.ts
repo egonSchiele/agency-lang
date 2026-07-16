@@ -180,6 +180,24 @@ describe("MessageThread label-preserving edits", () => {
     expect(t.labelAt(0)).toBe("seed");
   });
 
+  it("omits messageLabels entirely when nothing is labeled", () => {
+    // An all-null array says nothing the absent key doesn't, and emitting
+    // it would change the serialized shape of every thread for every
+    // program that never labels. Checkpoints and statelog dumps stay
+    // byte-identical.
+    const t = new MessageThread();
+    t.push(smoltalk.userMessage("a"));
+    t.push(smoltalk.assistantMessage("b"));
+    expect("messageLabels" in t.toJSON()).toBe(false);
+  });
+
+  it("emits messageLabels as soon as one message is labeled", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.userMessage("a"));
+    t.push(smoltalk.assistantMessage("b"), "coder");
+    expect(t.toJSON().messageLabels).toEqual([null, "coder"]);
+  });
+
   it("revives labels from a full MessageThreadJSON round-trip (the checkpoint shape)", () => {
     // runPrompt checkpoints the FULL toJSON(); a bare messages array
     // would revive through the legacy branch with no labels at all.

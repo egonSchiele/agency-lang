@@ -1,0 +1,21 @@
+import { guard } from "std::thread"
+
+// A scope with BOTH a saveDraft and a successful finalize: the guard
+// salvages the finalize's return, not the draft.
+def work(): string {
+  saveDraft("the-draft")
+  const reply = llm("Reply with: pong")
+  return reply
+
+  finalize {
+    return "the-finalize"
+  }
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    return work()
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

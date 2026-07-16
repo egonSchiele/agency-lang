@@ -1,0 +1,27 @@
+import { guard } from "std::thread"
+
+// Interrupt, resume, then a TIME trip (the abort-signal delivery path,
+// distinct from a cost trip's post-call check). The finalize runs with
+// the RESTORED locals: progress was assigned before the pause and must
+// survive serialization into the finalize.
+def work(): string {
+  const progress = "pre-interrupt"
+  interrupt("continue?")
+  sleep(2000)
+  return "done"
+
+  finalize {
+    if (progress != null) {
+      return "resumed-finalize:${progress}"
+    }
+    return "lost-locals"
+  }
+}
+
+node main() {
+  const result = guard(time: 600ms) as {
+    return work()
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

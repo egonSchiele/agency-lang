@@ -1,0 +1,34 @@
+import { guard } from "std::thread"
+
+// Composition ordering: inner's finalize runs first; outer's local binds
+// INNER'S FINALIZED value (distinguishable from inner's raw draft); the
+// guard salvages outer's finalize result.
+def inner(): string {
+  saveDraft("inner-raw-draft")
+  const reply = llm("Reply with: pong")
+  return reply
+
+  finalize {
+    return "inner-finalized"
+  }
+}
+
+def outer(): string {
+  const x = inner()
+  return x
+
+  finalize {
+    if (x != null) {
+      return "outer(${x})"
+    }
+    return "outer(nothing)"
+  }
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    return outer()
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

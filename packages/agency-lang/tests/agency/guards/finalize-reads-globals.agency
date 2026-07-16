@@ -1,0 +1,31 @@
+import { guard } from "std::thread"
+
+// Non-frame variable kinds resolve inside a finalize: a module global
+// and a param, alongside the bound partial.
+const label = "report"
+
+def verify(): string {
+  saveDraft("v1")
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+def work(prefix: string): string {
+  const x = verify()
+  return x
+
+  finalize {
+    if (x != null) {
+      return "${prefix}/${label}/${x}"
+    }
+    return "empty"
+  }
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    return work("run7")
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

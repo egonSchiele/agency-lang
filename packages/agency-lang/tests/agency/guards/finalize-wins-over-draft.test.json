@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"the-finalize\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "A successful finalize outranks the scope's saved draft (the success-path complement of finalize-error-falls-back)."
+    }
+  ]
+}

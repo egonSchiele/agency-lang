@@ -1097,3 +1097,36 @@ describe("AgencyGenerator - destructive/seq blocks", () => {
     expect(output).not.toContain("destructive {");
   });
 });
+
+describe("finalize block formatting", () => {
+  it("round-trips a finalize block byte-stably", () => {
+    const source = `def f(): string {
+  const x = worker()
+  return x
+
+  finalize {
+    if (x != null) {
+      return "combined:\${x}"
+    }
+    return "no-inner"
+  }
+}
+`;
+    const parsed = parseAgency(source);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const generated = new AgencyGenerator().generate(parsed.result).output;
+    // The formatted block, exactly as the arm should print it.
+    expect(generated).toContain(
+      `  finalize {\n    if (x != null) {\n      return "combined:\${x}"\n    }\n    return "no-inner"\n  }`,
+    );
+    // And it survives a reparse as a real finalizeBlock node (the full
+    // program is not byte-round-trippable because parseAgency injects the
+    // prelude import each pass — pre-existing, unrelated to finalize).
+    const reparsed = parseAgency(generated);
+    expect(reparsed.success).toBe(true);
+    if (!reparsed.success) return;
+    const regenerated = new AgencyGenerator().generate(reparsed.result).output;
+    expect(regenerated).toContain("finalize {");
+  });
+});

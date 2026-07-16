@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"done:pong\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "Without a trip the finalize never runs; the normal return value comes through."
+    }
+  ]
+}

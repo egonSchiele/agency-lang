@@ -1,0 +1,23 @@
+import { guard } from "std::thread"
+
+// The finalize divides by reading a missing property — it throws. The
+// trip is never masked: the guard salvages the DRAFT the scope saved,
+// and the run does not crash.
+def work(): string {
+  saveDraft("the-draft")
+  const reply = llm("Reply with: pong")
+  return reply
+
+  finalize {
+    const broken: any = null
+    return broken.field
+  }
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    return work()
+  }
+  if (isFailure(result)) { return "unexpected-failure" }
+  return result.value
+}

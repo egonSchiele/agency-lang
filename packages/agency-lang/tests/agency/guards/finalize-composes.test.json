@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"outer(inner-finalized)\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "Finalizes compose: inner runs first and its FINALIZED value (not its raw draft) is what outer's finalize consumes."
+    }
+  ]
+}

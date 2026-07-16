@@ -116,6 +116,36 @@ Things to note:
 - With no enclosing guard, `saveDraft` is a harmless no-op. At module top level it is a compile error — there is nothing a draft could ever be returned from.
 - A plain thrown error never returns a draft. Drafts are for budget trips, where the work so far is still trustworthy; unexpected failures stay failures.
 
+### Computing the partial with finalize
+
+Sometimes the best partial result is not a value you saved along the way, but something you compute from what you have at the moment the guard trips. A `finalize` block does that: it runs only if the scope is stopped, sees the scope's variables, and its `return` becomes the salvaged value.
+
+```ts
+def research(topic: string): string {
+  const outline = draftOutline(topic)
+  const full = expand(outline)     // guard trips in here
+  return full
+
+  finalize {
+    if (outline != null) {
+      return "OUTLINE ONLY: " + outline
+    }
+    return "nothing yet"
+  }
+}
+```
+
+If `expand` was stopped mid-way, its own partial (whatever it saved or finalized) lands in `full`, and your finalize can use it.
+
+Things to note:
+
+- A finalize never runs on success, and never for a plain thrown error. It runs when the scope is aborted, but only a guard trip salvages its value; an abort for any other reason (like losing a `race`) discards it.
+- Inside a finalize, every variable might not have been assigned yet, so each one reads as possibly-null. Check with `!= null` before using them.
+- Keep finalize bodies computational. The guard that tripped is still aborting, so an `llm()` or `sleep()` inside the finalize gets cancelled; combine the values you already have.
+- One finalize per function or block, at the top level of its body. Convention: put it last.
+- If both a `saveDraft` and a finalize exist, the finalize wins; if the finalize itself fails, the saved draft is used instead.
+- In a function with a finalize, a `return` expression that contains a call must be just the call (`return f(x)`). Anything more complex is a compile error — assign to a local first.
+
 ## Nested guards
 
 Guards are scoped — an inner trip does **not** trip an outer guard:

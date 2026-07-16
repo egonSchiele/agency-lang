@@ -1,0 +1,29 @@
+import { guard } from "std::thread"
+
+// A NON-guard abort (race loss) stops a finalize-bearing def. The
+// finalize may compute, but nothing converts a race loss into a
+// success: the race returns the winner's value, the loser's finalize
+// output must never appear, and the run must not crash.
+def slowLoser(): string {
+  saveDraft("loser-draft")
+  sleep(5000)
+  return "loser-finished"
+
+  finalize {
+    return "loser-finalize-leaked"
+  }
+}
+
+def fastWinner(): string {
+  return "winner"
+}
+
+node main() {
+  const result = race(["slow", "fast"]) as which {
+    if (which == "slow") {
+      return slowLoser()
+    }
+    return fastWinner()
+  }
+  return result
+}

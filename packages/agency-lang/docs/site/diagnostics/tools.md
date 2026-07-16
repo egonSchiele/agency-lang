@@ -313,3 +313,66 @@ A function passed as a tool has optional function-typed parameters that the LLM 
 `saveDraft(v)` records a best-so-far value for the scope that calls it, so an enclosing `guard(...)` can return that value if it trips. At module top level there is no enclosing scope: nothing could ever read the draft, and the runtime rejects the call for the same reason.
 
 **How to fix:** move the `saveDraft` call inside the function, node, or `guard` block whose result it is a draft of.
+
+<a id="ag6032"></a>
+
+## AG6032 — A scope can declare at most one finalize block. Combine the logic into one block.
+
+*Default severity: error.*
+
+When a scope is stopped, one finalize computes its partial result. A second finalize block would leave the result ambiguous.
+
+**How to fix:** combine the logic into one finalize block. Branch inside it if you need to.
+
+<a id="ag6033"></a>
+
+## AG6033 — A finalize block cannot go inside &#123;construct&#125;. Declare it at the top level of the function or block body. A finalize is always active, so nesting it in control flow has no meaning.
+
+*Default severity: error.*
+
+A finalize is a declaration, not a statement. If the scope has one, it is always active. Nesting it inside an `if`, a loop, or a match arm would arm it conditionally, and the language would then need to track whether it was armed. The language avoids that bookkeeping.
+
+**How to fix:** move the finalize to the top level of the function or block body. Put it last, by convention. Branch inside the finalize instead.
+
+<a id="ag6034"></a>
+
+## AG6034 — saveDraft() has no effect inside a finalize block. The value the finalize returns is already the partial result. Return the value instead.
+
+*Default severity: error.*
+
+Inside a finalize, you are computing the scope's partial result right now. The value the finalize returns is that result. Saving a draft there does nothing.
+
+**How to fix:** `return` the value from the finalize instead of calling `saveDraft`.
+
+<a id="ag6035"></a>
+
+## AG6035 — A finalize block cannot go in a node body. Nothing above a node consumes a partial result yet. Put the finalize in a function or a guard block instead.
+
+*Default severity: error.*
+
+An enclosing `guard` consumes salvaged partial results, and a guard cannot span nodes. Above a node there is only the graph engine, and the graph engine does not consume partials. A finalize declared directly in a node body would compute a value nobody reads.
+
+**How to fix:** put the finalize inside the function or `guard` block that does the guarded work.
+
+<a id="ag6036"></a>
+
+## AG6036 — This scope has a finalize block, so a return expression cannot bury a call inside a bigger expression. If the call were stopped, the expression would consume its partial result before the finalize could run. Assign the call to a local first, then return the local.
+
+*Default severity: error.*
+
+Suppose a guard stops a call that sits inside a return expression. The surrounding expression consumes the stopped call's result before any check can run: the result gets concatenated, wrapped in an array, and so on. The finalize would be skipped and the function would return garbage.
+
+A direct `return f(x)` is safe, because the compiler intercepts it. Method and index calls do not count as direct: `return obj.method()` and `return arr[i]()` need the same fix as any other complex return. Nothing more complex than a single direct call can be intercepted without changing evaluation order.
+
+**How to fix:** assign the call to a local first, then return the local:
+
+```agency
+def f(): string {
+  const part = verify()
+  return "combined: " + part
+
+  finalize {
+    return "partial: " + part
+  }
+}
+```

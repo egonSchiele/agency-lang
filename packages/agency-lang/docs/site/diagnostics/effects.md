@@ -153,3 +153,15 @@ A value is being used where the target type limits which effects may be raised, 
 A value raises an effect that the target type's `raises` clause does not allow. The target restricts the effect set, and this value steps outside it.
 
 **How to fix:** add the effect to the target type's clause, or use a target type that permits it.
+
+<a id="ag3016"></a>
+
+## AG3016 — '&#123;callee&#125;' can interrupt, and a finalize block cannot contain interrupts. A finalize runs while its scope shuts down, so there is nothing to resume.
+
+*Default severity: error.*
+
+An interrupt pauses the program and waits for an answer. When the answer arrives, the program resumes from the paused step. A finalize block runs while an abort shuts its scope down, so there is no step to resume from. That is why a finalize cannot interrupt, and cannot call a function that interrupts.
+
+The check follows calls into functions defined in your own files. It cannot see into imported functions. If an imported function interrupts inside a finalize at runtime, the finalize counts as failed and the scope falls back to its saved draft.
+
+**How to fix:** only compute values inside the finalize, using the variables you already have. If you need to ask the user something, ask in the normal body, before the work that can trip.

@@ -114,6 +114,10 @@ import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
 import { functionContainsDestructiveBlock } from "./functionContainsDestructiveBlock.js";
 import { DestructiveTracking } from "./typescriptBuilder/destructiveTracking.js";
+import {
+  FinalizeCodegen,
+  type CompiledScopeFinalize,
+} from "./typescriptBuilder/finalizeCodegen.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
 import { AssignmentEmitter } from "./typescriptBuilder/assignmentEmitter.js";
 import {
@@ -218,6 +222,7 @@ export class TypeScriptBuilder {
   private tracking: DestructiveTracking;
   private pipes: PipeChainEmitter;
   private assigns: AssignmentEmitter;
+  private finalize: FinalizeCodegen;
 
   // Config
   private agencyConfig: AgencyConfig = {};
@@ -345,6 +350,9 @@ export class TypeScriptBuilder {
       resolveBlockFrameVar: (blockDepth: number) =>
         this.scopes.blockFrameVar(blockDepth),
     });
+    this.finalize = new FinalizeCodegen(this.scopes, moduleId, (body, stepBase) =>
+      this.processBodyAsParts(body, stepBase),
+    );
     this.moduleId = moduleId;
     this.outputFile = outputFile;
     this.initPlan = initPlan;
@@ -1766,11 +1774,18 @@ export class TypeScriptBuilder {
     const parentScopeName = this.scopes.currentName();
     this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-    const bodyParts = this.processBodyAsParts(block.body);
+    const compiledFinalize = this.finalize.compileScope({
+      body: block.body,
+      scopeName: blockName,
+      errorVar: "__blockError",
+      compileBodyRest: (rest) => this.processBodyAsParts(rest),
+    });
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
 
-    const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
+    const bodyStr = compiledFinalize.bodyCode
+      .map((n) => printTs(n, 1))
+      .join("\n");
 
     const blockSetupCode = renderBlockSetup.default({
       params: block.params.map((p) => ({
@@ -1781,6 +1796,8 @@ export class TypeScriptBuilder {
       scopeName: JSON.stringify(blockName),
       frameVar: `__bframe_${blockName}`,
       body: bodyStr,
+      finalizeDecl: compiledFinalize.declText,
+      abortReturn: compiledFinalize.abortReturn,
     });
 
     const blockFn = ts.arrowFn(
@@ -1811,11 +1828,18 @@ export class TypeScriptBuilder {
     const parentScopeName = this.scopes.currentName();
     this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-    const bodyParts = this.processBodyAsParts(block.body);
+    const compiledFinalize = this.finalize.compileScope({
+      body: block.body,
+      scopeName: blockName,
+      errorVar: "__blockError",
+      compileBodyRest: (rest) => this.processBodyAsParts(rest),
+    });
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
 
-    const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
+    const bodyStr = compiledFinalize.bodyCode
+      .map((n) => printTs(n, 1))
+      .join("\n");
 
     const blockSetupCode = renderBlockSetup.default({
       params: block.params.map((p) => ({
@@ -1826,6 +1850,8 @@ export class TypeScriptBuilder {
       scopeName: JSON.stringify(blockName),
       frameVar: `__bframe_${blockName}`,
       body: bodyStr,
+      finalizeDecl: compiledFinalize.declText,
+      abortReturn: compiledFinalize.abortReturn,
     });
 
     const blockFn = ts.arrowFn(
@@ -2069,6 +2095,11 @@ export class TypeScriptBuilder {
     skipHooks?: boolean;
     hoistedAliases?: TsNode[];
     inDestructiveFunction?: boolean;
+    /** The def's compiled finalize (FinalizeCodegen.compileScope). The
+     *  closure declaration goes in the setup so the catch (and the
+     *  post-call guards inside the body) can call it; the abort return
+     *  goes in the catch template. */
+    finalize: CompiledScopeFinalize;
   }): TsNode[] {
     const { functionName, parameters, bodyCode, skipHooks } = opts;
     const hoistedAliases = opts.hoistedAliases ?? [];
@@ -2190,6 +2221,9 @@ export class TypeScriptBuilder {
             ],
           }),
         ];
+    if (opts.finalize.decl !== undefined) {
+      setupStmts.push(opts.finalize.decl);
+    }
     setupStmts.push(
       ts.tryCatch(
         ts.statements([
@@ -2235,6 +2269,7 @@ export class TypeScriptBuilder {
         ts.raw(
           renderFunctionCatchFailure.default({
             functionName: JSON.stringify(functionName),
+            abortReturn: opts.finalize.abortReturn,
           }),
         ),
         "__error",
@@ -2276,10 +2311,15 @@ export class TypeScriptBuilder {
     // Hoist body-local type aliases to the function's outer scope so
     // every runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(node.body);
-    // Body steps occupy substep ids 1..N — id 0 is reserved for the
-    // onFunctionStart hook (wrapped in `runner.hook` for substep-counter
-    // idempotency on resume).
-    const bodyCode = this.processBodyAsParts(node.body, 1);
+    const compiledFinalize = this.finalize.compileScope({
+      body: node.body,
+      scopeName: functionName,
+      errorVar: "__error",
+      // Body steps occupy substep ids 1..N — id 0 is reserved for the
+      // onFunctionStart hook (wrapped in `runner.hook` for substep-counter
+      // idempotency on resume).
+      compileBodyRest: (rest) => this.processBodyAsParts(rest, 1),
+    });
     this.scopes.inDestructiveFunction = prevDestructive;
     this.scopes.pop();
 
@@ -2302,10 +2342,11 @@ export class TypeScriptBuilder {
     const setupStmts = this.buildFunctionBody({
       functionName,
       parameters,
-      bodyCode,
+      bodyCode: compiledFinalize.bodyCode,
       skipHooks: false,
       hoistedAliases,
       inDestructiveFunction: !!node.markers?.destructive,
+      finalize: compiledFinalize,
     });
 
     const funcDecl = ts.functionDecl(
@@ -2498,7 +2539,9 @@ export class TypeScriptBuilder {
       const tempVar = this.insideHandlerBody
         ? `__funcResult_${this.handlerFuncResultCounter++}`
         : "__funcResult";
-      const guard = this.assignmentInterruptGuard(ts.id(tempVar));
+      const guard = this.assignmentInterruptGuard(ts.id(tempVar), {
+        bindOnAborted: false,
+      });
       return ts.statements([
         ts.constDecl(tempVar, callNode),
         ...(guard ? [guard] : []),
@@ -3154,6 +3197,11 @@ export class TypeScriptBuilder {
         ]);
       }
       const valueNode = this.processNode(node.value);
+      if (this.isFinalizeInterceptedReturn(node.value)) {
+        return this.finalize.interceptedReturn(valueNode, (v) =>
+          ts.runnerHalt(v),
+        );
+      }
       return ts.runnerHalt(valueNode);
     }
 
@@ -3208,7 +3256,23 @@ export class TypeScriptBuilder {
       ]);
     }
     const valueNode = this.processNode(node.value);
+    if (this.isFinalizeInterceptedReturn(node.value)) {
+      return this.finalize.interceptedReturn(valueNode, (v) =>
+        ts.functionReturn(this.maybeWrapReturnValidation(v)),
+      );
+    }
     return ts.functionReturn(this.maybeWrapReturnValidation(valueNode));
+  }
+
+  /** In a finalize-bearing scope, a direct-call return must stop at the
+   *  finalize instead of passing an aborted result through (pass-through
+   *  would silently skip the finalize). AG6036 guarantees a direct call
+   *  is the only call-bearing return shape that reaches codegen here;
+   *  `return llm(...)` hoists through its own path and cannot produce an
+   *  AbortedResult. */
+  private isFinalizeInterceptedReturn(value: AgencyNode): boolean {
+    if (!this.finalize.isActive()) return false;
+    return value.type === "functionCall" && value.functionName !== "llm";
   }
 
   private processAssignment(node: Assignment): TsNode {
@@ -3273,8 +3337,13 @@ export class TypeScriptBuilder {
    * Returns null only at global scope for the interrupt half; the aborted
    * check still applies there (an abort during module init should crash
    * init, not become data in a global). */
-  private assignmentInterruptGuard(varRef: TsNode): TsNode | null {
-    const abortedGuard = this.assignmentAbortedGuard(varRef);
+  private assignmentInterruptGuard(
+    varRef: TsNode,
+    opts?: { bindOnAborted?: boolean },
+  ): TsNode | null {
+    const abortedGuard = this.assignmentAbortedGuard(varRef, {
+      bindOnAborted: opts?.bindOnAborted !== false,
+    });
     if (this.scopes.current().type === "global") return abortedGuard;
     if (this.insideHandlerBody) {
       return ts.statements([
@@ -3316,8 +3385,17 @@ export class TypeScriptBuilder {
    * salvage rule); handler bodies and every other scope rebuild the
    * exception — handlers run outside the runner-step machinery (there is
    * no runner to halt), and nothing above compiled code consumes aborted
-   * values. */
-  private assignmentAbortedGuard(varRef: TsNode): TsNode {
+   * values.
+   *
+   * In a finalize-bearing scope, the stop runs the finalize — and when
+   * the guarded value is a real local (`bindOnAborted`), the callee's
+   * partial is first bound into it via partialValueOrNull(), so the
+   * finalize reads it like any other local. Bare-call temps have nothing
+   * to bind. */
+  private assignmentAbortedGuard(
+    varRef: TsNode,
+    opts?: { bindOnAborted?: boolean },
+  ): TsNode {
     const scopeType = this.scopes.current().type;
     const expr = this.str(varRef);
     if (
@@ -3326,6 +3404,20 @@ export class TypeScriptBuilder {
     ) {
       const frameVar = scopeType === "block" ? "__bstack" : "__stack";
       const scopeName = JSON.stringify(this.scopes.currentName());
+      if (this.finalize.isActive()) {
+        const bind =
+          opts?.bindOnAborted === true
+            ? [ts.raw(`${expr} = __abortedCallee.partialValueOrNull()`)]
+            : [];
+        return ts.if(
+          ts.raw(`isAborted(${expr})`),
+          ts.statements([
+            ts.raw(`const __abortedCallee = ${expr}`),
+            ...bind,
+            ...this.finalize.stopScope("__abortedCallee"),
+          ]),
+        );
+      }
       return ts.if(
         ts.raw(`isAborted(${expr})`),
         ts.statements([

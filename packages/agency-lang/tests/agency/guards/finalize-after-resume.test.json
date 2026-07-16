@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"resumed-finalize:pre-interrupt\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve" }],
+      "description": "A time trip after an interrupt/resume runs the finalize over the RESTORED frame; the pre-pause local survives into it."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"block-finalize:started\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "A finalize declared in a guard block produces the guard's salvage, reading the node's locals through the block."
+    }
+  ]
+}

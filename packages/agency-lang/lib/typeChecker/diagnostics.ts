@@ -429,6 +429,12 @@ export const DIAGNOSTICS = {
     message:
       "{who} raises effect '{effect}', which exceeds the 'raises <{allowed}>' allowed by type '{type}'. Add '{effect}' to the clause, or use a target type that allows it.",
   },
+  finalizeInterrupts: {
+    code: "AG3016",
+    severity: "error",
+    message:
+      "'{callee}' can interrupt, and a finalize block cannot contain interrupts. A finalize runs while its scope shuts down, so there is nothing to resume.",
+  },
   undefinedFunction: {
     code: "AG4004",
     severity: "error",
@@ -493,6 +499,36 @@ export const DIAGNOSTICS = {
     severity: "error",
     message:
       "saveDraft() cannot be called at module top level — there is no enclosing function, node, or block scope to save a draft for.",
+  },
+  finalizeDuplicate: {
+    code: "AG6032",
+    severity: "error",
+    message:
+      "A scope can declare at most one finalize block. Combine the logic into one block.",
+  },
+  finalizeNotTopLevel: {
+    code: "AG6033",
+    severity: "error",
+    message:
+      "A finalize block cannot go inside {construct}. Declare it at the top level of the function or block body. A finalize is always active, so nesting it in control flow has no meaning.",
+  },
+  finalizeSaveDraft: {
+    code: "AG6034",
+    severity: "error",
+    message:
+      "saveDraft() has no effect inside a finalize block. The value the finalize returns is already the partial result. Return the value instead.",
+  },
+  finalizeInNode: {
+    code: "AG6035",
+    severity: "error",
+    message:
+      "A finalize block cannot go in a node body. Nothing above a node consumes a partial result yet. Put the finalize in a function or a guard block instead.",
+  },
+  finalizeReturnShape: {
+    code: "AG6036",
+    severity: "error",
+    message:
+      "This scope has a finalize block, so a return expression cannot bury a call inside a bigger expression. If the call were stopped, the expression would consume its partial result before the finalize could run. Assign the call to a local first, then return the local.",
   },
   staticReassignedAtTopLevel: {
     code: "AG7004",

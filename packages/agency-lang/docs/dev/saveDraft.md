@@ -7,8 +7,7 @@ under the hood, the trade-offs behind the design, and the nuances that
 are easy to miss. User-facing docs live in the guide; this is for people
 changing the implementation.
 
-This doc covers the first increment (the salvage mechanism). It will be
-extended when `finalize` blocks land in the follow-up PR.
+This doc covers the salvage mechanism and the `finalize` keyword.
 
 ## The core idea: an aborted function returns its draft
 
@@ -63,6 +62,60 @@ the checker already matched to the scope; argument position — the one
 place a wrongly-typed value could sneak through — is dropped at the
 boundary. So a guard only ever sees a value typed for its own block.
 
+## finalize: translating a partial instead of replacing it
+
+`finalize { ... }` lets a scope compute its partial result when an abort
+stops it, instead of only returning a pre-saved draft. The body reads the
+scope's locals — including the aborted callee's partial, bound into the
+local its call was assigning — and its `return` becomes the scope's
+forced return value.
+
+Mechanically, finalize plugs into the three stop sites:
+
+- **The frame catch** calls
+  `AbortedResult.fromError(...).withFinalize(__finalize, name)`.
+- **The post-call check** first binds the callee's partial into the
+  assigned local (`partialValueOrNull()`), then stops through
+  `carryThrough(...).withFinalize(...)` — which is why the finalize can
+  just read the local.
+- **Direct-call returns get a checked temp** (finalize scopes only):
+  plain halt-through pass-through would silently skip the finalize.
+  This lowering is exhaustive because AG6036 rejects any other
+  call-bearing return shape in a finalize scope.
+
+`withFinalize` owns the failure rule: a finalize that throws — or
+resolves to interrupts or to an aborted result of its own — never masks
+the trip; the abort continues with the saved draft, or nothing, and the
+failure is logged as a `finalizeError`.
+
+The `__finalize` closure runs a fresh Runner on the SAME frame as its
+container, so locals resolve without any passing. Two non-obvious
+consequences:
+
+- **Step ids live in a disjoint range** (`FINALIZE_STEP_BASE`). Runner
+  step counters are frame-keyed (`frame.step` at the top level, path-only
+  keys nested), so small ids would collide with the main body's counters
+  and silently skip finalize steps.
+- **`fromError` marks a guard trip's cause `delivered`.** Converting the
+  exception into a value IS the delivery; without the mark, a
+  leaf-delivered time trip (the signal still aborted, the cause not yet
+  consumed) makes `Runner.shouldSkip` re-throw inside the finalize's
+  first step and kill pure computation. In-flight leaf ops inside a
+  finalize still cancel via the signal itself — that is the
+  "computational-only" rule: write finalize bodies as pure computation
+  over locals.
+
+The checker enforces six rules (AG6032-AG6036, AG3016): one finalize per
+scope, top level only, defs and guard blocks only (a node finalize would
+compute a partial nothing above a node consumes), no `saveDraft` inside,
+no interrupts (transitive for same-file callees; an imported
+interrupting callee is caught by the runtime backstop instead), and the
+return-shape rule above. Inside a finalize body every local reads as
+`T | null` — the flow graph seeds the body as a side branch off the
+scope START with every local widened, since any statement might not have
+run — and the side branch never touches the main flow, so a finalize
+`return` cannot satisfy definite-returns.
+
 ## Important files
 
 | File | Role |
@@ -79,6 +132,9 @@ boundary. So a guard only ever sees a value typed for its own block.
 | `lib/runtime/runBatch.ts` | `startInvoke`'s `.then`: aborted branch value → rejection, partial dropped |
 | `lib/runtime/interrupts.ts` | Handler chain rethrows an aborted handler verdict as the abort it is |
 | `lib/typeChecker/checker.ts` | `checkSaveDraftCall`: draft type vs enclosing return type |
+| `lib/typeChecker/finalizeChecks.ts` | The finalize-specific checker rules |
+| `lib/typeChecker/flowBuilder.ts` | The finalize flow rule: side branch, nullable locals, definite-returns exemption |
+| `lib/parsers/parsers.ts` + `lib/types/finalizeBlock.ts` | The `finalize { }` grammar and AST node |
 | `lib/statelogClient.ts` | The `abortUnwind` span type and `abortSalvage` event |
 
 ## Trade-offs made, and the designs we rejected

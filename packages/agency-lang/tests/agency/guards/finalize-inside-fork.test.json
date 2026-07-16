@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"failed-no-branch-salvage\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A branch's finalized partial is dropped at the fork boundary, exactly like a branch draft; the outer guard fails."
+    }
+  ]
+}

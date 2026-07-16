@@ -116,6 +116,13 @@ export class Scope {
     return this.parent?.isConst(name) ?? false;
   }
 
+  /** Names declared directly in THIS scope (not parents). Used by the
+   *  finalize flow rule to widen every local to `T | null` inside a
+   *  finalize body — any statement might not have run when it executes. */
+  declaredNames(): string[] {
+    return Object.keys(this.vars);
+  }
+
   has(name: string): boolean {
     return this.lookup(name) !== undefined;
   }

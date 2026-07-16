@@ -61,26 +61,28 @@ export type Attachment =
   | { type: "image", source: AttachmentSource }
   | { type: "file", source: AttachmentSource, filename?: string }
 
-export def systemMessage(msg: string) {
+export def systemMessage(msg: string, label: string = "") {
   """
   Add a system message to the current thread's message history.
   The message becomes part of the conversation context for subsequent
   llm() calls.
 
   @param msg - The system message content
+  @param label - Optional debug label shown in statelog. Never sent to the model.
   """
-  _systemMessage(msg)
+  _systemMessage(msg, label)
 }
 
-export def userMessage(msg: string | (string | Attachment)[]) {
+export def userMessage(msg: string | (string | Attachment)[], label: string = "") {
   """
   Add a user message to the current thread's message history. Use this
   to seed the conversation with prior user context that wasn't actually
   typed by the user this turn.
 
   @param msg - The user message content: a string, or an array mixing text strings and attachments.
+  @param label - Optional debug label shown in statelog. Never sent to the model.
   """
-  _userMessage(msg)
+  _userMessage(msg, label)
 }
 
 export def image(
@@ -129,15 +131,16 @@ export def attachToReply(attachment: Attachment) {
   _attachToReply(attachment)
 }
 
-export def assistantMessage(msg: string) {
+export def assistantMessage(msg: string, label: string = "") {
   """
   Add an assistant message to the current thread's message history.
   Use this to inject prior assistant turns when reconstructing a
   conversation programmatically.
 
   @param msg - The assistant message content
+  @param label - Optional debug label shown in statelog. Never sent to the model.
   """
-  _assistantMessage(msg)
+  _assistantMessage(msg, label)
 }
 
 /** Inside a fork/race branch this includes the parent's accumulated cost

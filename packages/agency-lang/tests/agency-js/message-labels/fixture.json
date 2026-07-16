@@ -1,0 +1,18 @@
+{
+  "promptStartLabel": "coder",
+  "loggedMessages": [
+    {
+      "content": "sys",
+      "label": null
+    },
+    {
+      "content": "context",
+      "label": "seed"
+    },
+    {
+      "content": "go",
+      "label": "coder"
+    }
+  ],
+  "labelReachedProvider": false
+}

@@ -1,0 +1,14 @@
+import { userMessage } from "std::thread"
+
+// A tool interrupts mid-llm(), so the run checkpoints and resumes. The
+// labels must still be there afterwards: runPrompt snapshots the thread
+// into self.messagesJSON on bailout and revives it on resume. See test.js.
+def askTool(): string {
+  interrupt("approve ask-tool")
+  return "TOOL_RESULT"
+}
+
+node main() {
+  userMessage("context", label: "seed")
+  return llm("go", label: "coder", { tools: [askTool] })
+}

@@ -34,7 +34,10 @@ import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js"
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
-import { MessageThread } from "./state/messageThread.js";
+import {
+  MessageThread,
+  type MessageThreadJSON,
+} from "./state/messageThread.js";
 import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { handleStreamingResponse } from "./streaming.js";
@@ -77,6 +80,25 @@ export function redactMessagesForLog(
   messages: MessageThread,
 ): smoltalk.MessageJSON[] {
   return redactAttachments(messages.toJSON().messages) as smoltalk.MessageJSON[];
+}
+
+/** A thread's redacted messages for statelog, each carrying its debug
+ *  label (from `llm(label:)` / `userMessage(msg, label:)`) when it has
+ *  one. Reads the labels off the SAME thread that produced the dump, so
+ *  index `i` lines up: `redactMessagesForLog` maps `messages` in order,
+ *  and smoltalk's `redactAttachments` is 1:1 over an array. That second
+ *  half is someone else's implementation detail, so a test pins the
+ *  pairing through the redaction path with a real attachment.
+ *
+ *  Unlabeled messages are emitted unchanged rather than with `label:
+ *  null`, so logs for label-free programs stay byte-identical. */
+export function withMessageLabels(
+  messages: MessageThread,
+): (smoltalk.MessageJSON & { label?: string })[] {
+  return redactMessagesForLog(messages).map((m, i) => {
+    const label = messages.labelAt(i);
+    return label === null ? m : { ...m, label };
+  });
 }
 
 /** A prompt with attachment payloads redacted, preserving its string-or-array
@@ -500,12 +522,15 @@ function emitPromptStart({
   tools,
   responseFormat,
   clientConfig,
+  callLabel,
 }: {
   ctx: RuntimeContext<GraphState>;
   messages: MessageThread;
   tools: Tool[];
   responseFormat?: any;
   clientConfig: Partial<smoltalk.SmolConfig>;
+  /** This call's `llm(label:)` debug tag, or null. Observability only. */
+  callLabel?: string | null;
 }): void {
   ctx.statelogClient.promptStart({
     model: JSON.stringify(clientConfig.model),
@@ -514,6 +539,7 @@ function emitPromptStart({
     toolCount: tools.length,
     hasResponseFormat: responseFormat != null,
     maxTokens: clientConfig.maxTokens ?? null,
+    label: callLabel ?? null,
   });
 }
 
@@ -526,6 +552,7 @@ async function _runPrompt({
   clientConfig,
   stateStack,
   retryPolicy,
+  callLabel,
 }: {
   ctx: RuntimeContext<GraphState>;
   messages: MessageThread;
@@ -538,6 +565,8 @@ async function _runPrompt({
    * scoping the LLM HTTP abort signal to the current branch. */
   stateStack?: StateStack;
   retryPolicy: RetryPolicy;
+  /** This call's `llm(label:)` debug tag (see `emitPromptStart`), or null. */
+  callLabel?: string | null;
 }): Promise<RunPromptResult> {
   if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
@@ -585,7 +614,7 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
-  emitPromptStart({ ctx, messages, tools, responseFormat, clientConfig });
+  emitPromptStart({ ctx, messages, tools, responseFormat, clientConfig, callLabel });
 
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];
@@ -656,7 +685,7 @@ async function _runPrompt({
   const modelName = completion.model || clientConfig.model || "unknown model";
 
   ctx.statelogClient.promptCompletion({
-    messages: redactMessagesForLog(messages),
+    messages: withMessageLabels(messages),
     completion,
     model: JSON.stringify(modelName),
     timeTaken: endTime - startTime,
@@ -674,9 +703,10 @@ async function _runPrompt({
       smoltalk.assistantMessage(completion.output, {
         toolCalls,
       }),
+      callLabel,
     );
   } else {
-    messages.push(smoltalk.assistantMessage(completion.output));
+    messages.push(smoltalk.assistantMessage(completion.output), callLabel);
   }
 
   updateTokenStats({
@@ -853,6 +883,8 @@ export async function runPrompt(args: {
   // smoltalk doesn't understand. `retries` / `timeout` / `backoff` are the
   // resilience policy (resolved below); if the codegen forwarded them on
   // `clientConfig` they'd otherwise hit the LLM client as foreign options.
+  // `label` is an observability-only debug tag — stripping it here is what
+  // keeps it off the provider wire.
   const {
     tools: _extractedTools,
     memory: memoryOption,
@@ -861,13 +893,19 @@ export async function runPrompt(args: {
     timeout: ccTimeout,
     backoff: ccBackoff,
     validationRetries: ccValidationRetries,
+    label: ccLabel,
     ...restClientConfig
   } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> &
     RetryConfig & {
       tools?: any[];
       memory?: boolean | { model?: string };
       maxToolResultChars?: number;
+      label?: string;
     };
+
+  /** This llm() call's debug label, or null when unlabeled. Stamps the
+   *  call's promptStart event and the messages it appends. */
+  const callLabel: string | null = ccLabel || null;
 
   // Resolve the resilience policy. Precedence:
   //   1. `args.retryConfig` (preferred — what `agency.llm` passes directly)
@@ -942,7 +980,10 @@ export async function runPrompt(args: {
   if (self.messagesJSON) {
     const restored = MessageThread.fromJSON(self.messagesJSON);
     if (args.messages) {
-      args.messages.setMessages(restored.getMessages());
+      // adoptFrom, not setMessages(restored.getMessages()): the latter
+      // takes only the messages and would drop the labels fromJSON just
+      // restored. The alias is still preserved.
+      args.messages.adoptFrom(restored);
       messages = args.messages;
     } else {
       messages = restored;
@@ -955,16 +996,32 @@ export async function runPrompt(args: {
     messages = new MessageThread();
   }
 
+  /** The ONE way this function snapshots the thread for checkpoint/resume.
+   *
+   *  Every bailout path — the PromptRunner callback, the tool loop, the
+   *  reply-attachment injection, the validation retries — stores what this
+   *  returns into `self.messagesJSON`, so the shape decision is made once
+   *  rather than at each site.
+   *
+   *  That shape is the FULL `MessageThreadJSON`, not just `.messages`: a
+   *  bare array revives through `fromJSON`'s legacy branch, which has no
+   *  labels to read, so snapshotting only the messages loses every debug
+   *  label across interrupt/resume. Older checkpoints still hold a bare
+   *  array and keep reviving through that legacy branch, so this stays
+   *  back-compatible.
+   *
+   *  Reads the `messages` binding at call time, so reassignments below
+   *  (e.g. `messages = result.messages`) are observed. */
+  const snapshotThread = (): MessageThreadJSON => messages.toJSON();
+
   // Resumable-step + checkpoint-on-interrupt helper. See
   // docs/superpowers/plans/2026-05-22-prompt-runner.md.
-  // `snapshotMessages` reads the current `messages` binding at call time;
-  // reassignments below (e.g. `messages = result.messages`) are observed.
   const pr = new PromptRunner({
     self,
     ctx,
     stateStack,
     checkpointInfo,
-    snapshotMessages: () => messages.toJSON().messages,
+    snapshotMessages: snapshotThread,
   });
 
   // One llmCall span covers the WHOLE `llm()` call — every tool-loop
@@ -1017,7 +1074,7 @@ export async function runPrompt(args: {
           );
         }
       }
-      messages.push(smoltalk.userMessage(prompt));
+      messages.push(smoltalk.userMessage(prompt), callLabel);
       // The llmCall span is already open (before the loop). On error,
       // the outer `finally` closes it.
       const result = await _runPrompt({
@@ -1029,6 +1086,7 @@ export async function runPrompt(args: {
         clientConfig,
         stateStack,
         retryPolicy,
+        callLabel,
       });
       messages = result.messages;
       toolCalls = result.toolCalls;
@@ -1039,12 +1097,14 @@ export async function runPrompt(args: {
             all[i].role === "system" &&
             all[i].content === injectedFactsContent
           ) {
-            messages.setMessages([...all.slice(0, i), ...all.slice(i + 1)]);
+            // removeAt, not setMessages: this edits ONE message out of the
+            // thread, so it must not reset the labels of all the others.
+            messages.removeAt(i);
             break;
           }
         }
       }
-      self.messagesJSON = messages.toJSON().messages;
+      self.messagesJSON = snapshotThread();
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     });
 
@@ -1598,7 +1658,7 @@ export async function runPrompt(args: {
               ),
             );
             self.runnerState.replyAttachments = [];
-            self.messagesJSON = messages.toJSON().messages;
+            self.messagesJSON = snapshotThread();
           });
         }
 
@@ -1617,13 +1677,14 @@ export async function runPrompt(args: {
             clientConfig,
             stateStack,
             retryPolicy,
+            callLabel,
           });
           messages = nextResult.messages;
           toolCalls = nextResult.toolCalls;
           // Increment the round counter only after a successful LLM round,
           // so resume after a tool-batch interrupt re-enters the SAME round.
           self.toolCallRound = round + 1;
-          self.messagesJSON = messages.toJSON().messages;
+          self.messagesJSON = snapshotThread();
           self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
         });
       }
@@ -1690,7 +1751,7 @@ export async function runPrompt(args: {
           },
         });
         messages.push(smoltalk.userMessage(decision.feedback));
-        self.messagesJSON = messages.toJSON().messages;
+        self.messagesJSON = snapshotThread();
       });
       await pr.step(`validation.${validationAttempt}.llmCall`, async () => {
         const nextResult = await _runPrompt({
@@ -1702,6 +1763,7 @@ export async function runPrompt(args: {
           clientConfig,
           stateStack,
           retryPolicy,
+          callLabel,
         });
         messages = nextResult.messages;
         toolCalls = nextResult.toolCalls;
@@ -1709,7 +1771,7 @@ export async function runPrompt(args: {
         // bailout before this step completes leaves the counter unchanged,
         // so resume re-enters the SAME attempt with the same step keys.
         self.validationAttempt = validationAttempt + 1;
-        self.messagesJSON = messages.toJSON().messages;
+        self.messagesJSON = snapshotThread();
         self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
       });
       // Loop: the retry response may itself contain tool calls; the inner

@@ -461,6 +461,7 @@ export class StatelogClient {
     toolCount,
     hasResponseFormat,
     maxTokens,
+    label,
   }: {
     model?: string;
     threadId?: string | null;
@@ -468,6 +469,10 @@ export class StatelogClient {
     toolCount: number;
     hasResponseFormat: boolean;
     maxTokens?: number | null;
+    /** The `llm(label:)` debug tag for this call, or null when unlabeled.
+     *  Observability only — never sent to the provider. Lets a log reader
+     *  tell, say, a verifier's call from the main one. */
+    label?: string | null;
   }): Promise<void> {
     await this.post({
       type: "promptStart",
@@ -477,6 +482,7 @@ export class StatelogClient {
       toolCount,
       hasResponseFormat,
       maxTokens: maxTokens ?? null,
+      label: label ?? null,
     });
   }
 

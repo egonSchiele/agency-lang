@@ -1,4 +1,5 @@
 import type { MessageJSON } from "smoltalk";
+import type { MessageThreadJSON } from "./state/messageThread.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
 import { runBatch, type RunBatchResult } from "./runBatch.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
@@ -51,8 +52,12 @@ export type PromptRunnerOpts = {
    *  `step()` for the per-key suffix.  */
   checkpointInfo: SourceLocationOpts | undefined;
   /** Callback that snapshots the current message thread JSON. Called only
-   *  on bailout so it doesn't pay the cost on the happy path. */
-  snapshotMessages: () => MessageJSON[];
+   *  on bailout so it doesn't pay the cost on the happy path.
+   *
+   *  Returns the FULL `MessageThreadJSON` so per-message debug labels
+   *  survive the round-trip; `MessageThread.fromJSON` also still accepts
+   *  the bare `MessageJSON[]` that older checkpoints hold. */
+  snapshotMessages: () => MessageThreadJSON | MessageJSON[];
 };
 
 /**

@@ -40,10 +40,15 @@ export async function __internal_systemMessage(
   threads.getOrCreateActive().push(smoltalk.systemMessage(msg));
 }
 
-/** ALS-reading replacement for `__internal_systemMessage`. */
-export async function _systemMessage(msg: string): Promise<void> {
+/** ALS-reading replacement for `__internal_systemMessage`. `label` is an
+ *  observability-only debug tag shown in statelog; "" means unlabeled and
+ *  is normalized to null. Never sent to the provider. */
+export async function _systemMessage(
+  msg: string,
+  label: string = "",
+): Promise<void> {
   const { threads } = getRuntimeContext();
-  threads.getOrCreateActive().push(smoltalk.systemMessage(msg));
+  threads.getOrCreateActive().push(smoltalk.systemMessage(msg), label || null);
 }
 
 export async function __internal_userMessage(
@@ -56,12 +61,14 @@ export async function __internal_userMessage(
 }
 
 /** ALS-reading replacement for `__internal_userMessage`. Accepts a plain
- *  string or an array of text strings and image()/file() attachments. */
+ *  string or an array of text strings and image()/file() attachments.
+ *  `label` is an observability-only debug tag (see `_systemMessage`). */
 export async function _userMessage(
   msg: smoltalk.UserContentInput,
+  label: string = "",
 ): Promise<void> {
   const { threads } = getRuntimeContext();
-  threads.getOrCreateActive().push(smoltalk.userMessage(msg));
+  threads.getOrCreateActive().push(smoltalk.userMessage(msg), label || null);
 }
 
 export async function __internal_assistantMessage(
@@ -73,10 +80,16 @@ export async function __internal_assistantMessage(
   threads.getOrCreateActive().push(smoltalk.assistantMessage(msg));
 }
 
-/** ALS-reading replacement for `__internal_assistantMessage`. */
-export async function _assistantMessage(msg: string): Promise<void> {
+/** ALS-reading replacement for `__internal_assistantMessage`. `label` is
+ *  an observability-only debug tag (see `_systemMessage`). */
+export async function _assistantMessage(
+  msg: string,
+  label: string = "",
+): Promise<void> {
   const { threads } = getRuntimeContext();
-  threads.getOrCreateActive().push(smoltalk.assistantMessage(msg));
+  threads
+    .getOrCreateActive()
+    .push(smoltalk.assistantMessage(msg), label || null);
 }
 
 // --- Multimodal attachment builders -------------------------------------

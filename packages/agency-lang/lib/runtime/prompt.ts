@@ -34,7 +34,10 @@ import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js"
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
-import { MessageThread } from "./state/messageThread.js";
+import {
+  MessageThread,
+  type MessageThreadJSON,
+} from "./state/messageThread.js";
 import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { handleStreamingResponse } from "./streaming.js";
@@ -993,21 +996,32 @@ export async function runPrompt(args: {
     messages = new MessageThread();
   }
 
+  /** The ONE way this function snapshots the thread for checkpoint/resume.
+   *
+   *  Every bailout path — the PromptRunner callback, the tool loop, the
+   *  reply-attachment injection, the validation retries — stores what this
+   *  returns into `self.messagesJSON`, so the shape decision is made once
+   *  rather than at each site.
+   *
+   *  That shape is the FULL `MessageThreadJSON`, not just `.messages`: a
+   *  bare array revives through `fromJSON`'s legacy branch, which has no
+   *  labels to read, so snapshotting only the messages loses every debug
+   *  label across interrupt/resume. Older checkpoints still hold a bare
+   *  array and keep reviving through that legacy branch, so this stays
+   *  back-compatible.
+   *
+   *  Reads the `messages` binding at call time, so reassignments below
+   *  (e.g. `messages = result.messages`) are observed. */
+  const snapshotThread = (): MessageThreadJSON => messages.toJSON();
+
   // Resumable-step + checkpoint-on-interrupt helper. See
   // docs/superpowers/plans/2026-05-22-prompt-runner.md.
-  // `snapshotMessages` reads the current `messages` binding at call time;
-  // reassignments below (e.g. `messages = result.messages`) are observed.
   const pr = new PromptRunner({
     self,
     ctx,
     stateStack,
     checkpointInfo,
-    // The FULL MessageThreadJSON, not just `.messages`: the bare array
-    // revives through fromJSON's legacy branch, which has no labels to
-    // read, so a snapshot of only the messages loses every label across
-    // interrupt/resume. Old checkpoints still hold a bare array and keep
-    // reviving through that same legacy branch, so this is back-compatible.
-    snapshotMessages: () => messages.toJSON(),
+    snapshotMessages: snapshotThread,
   });
 
   // One llmCall span covers the WHOLE `llm()` call — every tool-loop
@@ -1090,7 +1104,7 @@ export async function runPrompt(args: {
           }
         }
       }
-      self.messagesJSON = messages.toJSON();
+      self.messagesJSON = snapshotThread();
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     });
 
@@ -1644,7 +1658,7 @@ export async function runPrompt(args: {
               ),
             );
             self.runnerState.replyAttachments = [];
-            self.messagesJSON = messages.toJSON();
+            self.messagesJSON = snapshotThread();
           });
         }
 
@@ -1670,7 +1684,7 @@ export async function runPrompt(args: {
           // Increment the round counter only after a successful LLM round,
           // so resume after a tool-batch interrupt re-enters the SAME round.
           self.toolCallRound = round + 1;
-          self.messagesJSON = messages.toJSON();
+          self.messagesJSON = snapshotThread();
           self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
         });
       }
@@ -1737,7 +1751,7 @@ export async function runPrompt(args: {
           },
         });
         messages.push(smoltalk.userMessage(decision.feedback));
-        self.messagesJSON = messages.toJSON();
+        self.messagesJSON = snapshotThread();
       });
       await pr.step(`validation.${validationAttempt}.llmCall`, async () => {
         const nextResult = await _runPrompt({
@@ -1757,7 +1771,7 @@ export async function runPrompt(args: {
         // bailout before this step completes leaves the counter unchanged,
         // so resume re-enters the SAME attempt with the same step keys.
         self.validationAttempt = validationAttempt + 1;
-        self.messagesJSON = messages.toJSON();
+        self.messagesJSON = snapshotThread();
         self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
       });
       // Loop: the retry response may itself contain tool calls; the inner

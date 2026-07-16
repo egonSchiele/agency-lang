@@ -1,0 +1,18 @@
+import { userMessage } from "std::thread"
+
+// Parallel tool calls where one interrupts: a different resume path from
+// the single-tool case (PromptRunner.parallel -> runBatch stamps the
+// checkpoint itself). The labels must survive that round-trip too.
+def okTool(): string {
+  return "OK_RESULT"
+}
+
+def askTool(): string {
+  interrupt("approve ask-tool")
+  return "ASK_RESULT"
+}
+
+node main() {
+  userMessage("context", label: "seed")
+  return llm("go", label: "coder", { tools: [okTool, askTool] })
+}

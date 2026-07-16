@@ -39,7 +39,11 @@ Things worth knowing:
 - **`newSubthreadChild()` does not carry the parent's labels**: it seeds the child via `cloneMessages()`, which copies messages only, so the child starts correctly aligned with all-null labels.
 - **`toJSON()` hands out a copy** of `messageLabels`, so a consumer mutating the JSON cannot mutate the thread.
 
-Serialization: `messageLabels` round-trips through `toJSON`/`fromJSON`; legacy JSON without the field revives as all-null. Anything that snapshots a thread for checkpoint/resume must persist the **full `MessageThreadJSON`**, not just `.messages` — a bare array revives through `fromJSON`'s legacy branch, which has no labels to read, so the labels would be gone after resume. `runPrompt`'s `snapshotMessages` does this; `fromJSON` still accepts the bare array so older checkpoints keep working.
+Serialization: `messageLabels` round-trips through `toJSON`/`fromJSON`; legacy JSON without the field revives as all-null. `ThreadStore` serializes each thread with `thread.toJSON()`, so labels ride along there for free.
+
+Anything that snapshots a thread for checkpoint/resume must persist the **full `MessageThreadJSON`**, not just `.messages` — a bare array revives through `fromJSON`'s legacy branch, which has no labels to read, so the labels would be gone after resume. `fromJSON` still accepts the bare array, so older checkpoints keep working.
+
+`runPrompt` has six bailout paths that each store a snapshot into `self.messagesJSON` (the PromptRunner callback, the tool loop, reply-attachment injection, the validation retries). They all go through one local `snapshotThread()` rather than each calling `toJSON()` themselves — the same reasoning as the writers above: the shape decision is made once, so a path that isn't covered by a test is still correct by construction.
 
 **`ThreadStore`** (`lib/runtime/state/threadStore.ts`):
 - Registry of `MessageThread` objects keyed by auto-incremented string IDs

@@ -120,6 +120,14 @@ export type Guard = {
    *  dimension in this state would re-trip forever and is a runtime
    *  error attributed to the answering handler. */
   overBudgetAndArmed(): boolean;
+  /** An open trip question for this guard, while one is being decided.
+   *  LIVE-ONLY (never serialized) and meaningful only for guards shared
+   *  across branches (cost): a sibling branch detecting the same guard
+   *  over budget parks on `settled` instead of asking its own question.
+   *  Time clones are per-branch objects, so for them this is always
+   *  undefined — cost-only dedupe, by construction, on purpose. Set
+   *  and cleared exclusively by guardTripInterrupt.ts. */
+  pendingTrip?: { settled: Promise<void>; settle: () => void };
   /** The current limit and spend in this guard's own unit (dollars /
    *  ms). On the interface for the trip interrupt's snapshot and the
    *  derived trip key — both must read them without variant branching. */
@@ -814,7 +822,9 @@ export class GuardExceededError extends AgencyAbort {
     // a GuardExceededError built WITHOUT one carries guardId === "" and, once
     // __tryCall filters on ownedGuardIds, would fail the membership check and
     // escape its own guard. CostGuard.check / TimeGuard.check pass their id.
-    guardId: string = "",
+    // Public: the trip-raise loop (guardTripInterrupt.ts) resolves the
+    // tripped guard object from it.
+    public readonly guardId: string = "",
     label?: string,
   ) {
     super(

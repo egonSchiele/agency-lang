@@ -17,6 +17,7 @@ import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected, RunNodeResult } from "./types.js";
+import type { HandlerEntry } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
 
@@ -223,6 +224,7 @@ async function runHandlerChain(
   stack: StateStack | undefined,
   interruptId: string,
   interruptObj: InterruptInfo,
+  eligible?: (entry: HandlerEntry) => boolean,
 ): Promise<HandlerChainOutcome> {
   // Descend one level in the CURRENT async lineage (see
   // `handlerChainDepthALS`). Concurrent sibling dispatches each read the same
@@ -245,6 +247,10 @@ async function runHandlerChain(
       for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
         if (ctx.isCancelled(stack)) throw new AgencyCancelledError();
         const entry = ctx.handlers[i];
+        // Ineligible handlers never see the interrupt — no invocation,
+        // no statelog decision, exactly as if they were not registered.
+        // Guard trips use this for the registration-site visibility rule.
+        if (eligible && !eligible(entry)) continue;
         // A handler runs under its REGISTRATION site's budget: every
         // guard that was not live when it registered is suspended on
         // this branch for the duration of the call — not gating, not
@@ -388,8 +394,9 @@ export async function gatherChainOutcome(
   ctx: RuntimeContext<any>,
   stack: StateStack | undefined,
   interruptId: string,
+  eligible?: (entry: HandlerEntry) => boolean,
 ): Promise<{ outcome: HandlerChainOutcome; parentDecided: boolean }> {
-  const local = await runHandlerChain(ctx, stack, interruptId, interruptObj);
+  const local = await runHandlerChain(ctx, stack, interruptId, interruptObj, eligible);
   if (local.kind === "rejected") {
     // Local reject is final — fail-fast, the parent is never consulted.
     return { outcome: local, parentDecided: false };
@@ -467,9 +474,13 @@ export async function interruptWithHandlers<T = any>(
   stack?: StateStack,
   // `expectsValue: true` marks an assignment-position raise (`const x = raise
   // …`): handlers and the surfaced Interrupt see that an approval value is
-  // expected. Optional trailing object so already-compiled 6-arg calls keep
-  // working.
-  opts?: { expectsValue?: boolean },
+  // expected. `eligible` filters WHICH handlers may see this interrupt —
+  // guard trips use it for the registration-site rule (a handler
+  // registered inside the tripped guard cannot adjudicate it); skipped
+  // handlers emit no statelog decision, exactly as if they were not
+  // registered. Optional trailing object so already-compiled 6-arg calls
+  // keep working.
+  opts?: { expectsValue?: boolean; eligible?: (entry: HandlerEntry) => boolean },
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   const interruptObj: InterruptInfo = { effect, message, data, origin };
   if (opts?.expectsValue) interruptObj.expectsValue = true;
@@ -487,6 +498,7 @@ export async function interruptWithHandlers<T = any>(
     ctx,
     stack,
     interruptId,
+    opts?.eligible,
   );
   return renderVerdict(outcome, ctx, interruptId, interruptObj, parentDecided ? "ipc" : "handler");
 }

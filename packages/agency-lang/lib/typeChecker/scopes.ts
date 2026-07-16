@@ -501,6 +501,10 @@ export function walkScopeBody(
           walkScopeBody(caseItem.body, scope, ctx);
         }
         break;
+      case "finalizeBlock":
+        // Same scope: the finalize reads the enclosing scope's locals.
+        walkScopeBody(node.body, scope, ctx);
+        break;
       case "handleBlock":
         walkScopeBody(node.body, scope, ctx);
         if (node.handler.kind === "inline") {

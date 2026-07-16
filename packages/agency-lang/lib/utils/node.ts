@@ -354,6 +354,8 @@ export function* getAllVariablesInBody(
       yield* getAllVariablesInBody(node.body);
     } else if (node.type === "messageThread") {
       yield* getAllVariablesInBody(node.body);
+    } else if (node.type === "finalizeBlock") {
+      yield* getAllVariablesInBody(node.body);
     } else if (node.type === "handleBlock") {
       yield* getAllVariablesInBody(node.body);
       if (node.handler.kind === "inline") {

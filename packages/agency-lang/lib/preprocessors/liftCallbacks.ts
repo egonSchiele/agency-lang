@@ -183,6 +183,9 @@ function transformStatement(
     case "messageThread":
       node.body = transformBody(node.body, scopeName, lifted, nextName);
       return node;
+    case "finalizeBlock":
+      node.body = transformBody(node.body, scopeName, lifted, nextName);
+      return node;
     case "handleBlock":
       node.body = transformBody(node.body, scopeName, lifted, nextName);
       if (node.handler.kind === "inline") {

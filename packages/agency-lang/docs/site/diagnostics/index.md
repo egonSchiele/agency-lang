@@ -61,6 +61,7 @@ or suppress one on the next line with `// @tc-ignore AG####`.
 | [AG3013](effects.md#ag3013) | &#123;kind&#125; '&#123;name&#125;' raises effect '&#123;effect&#125;', which exceeds its declared 'raises &#123;declared&#125;'. Add '&#123;effect&#125;' to the clause. |
 | [AG3014](effects.md#ag3014) | &#123;who&#125; may raise any effect (its type has no 'raises' clause), which exceeds the 'raises &lt;&#123;allowed&#125;&gt;' allowed by type '&#123;type&#125;'. Add a 'raises' clause to the value's type. |
 | [AG3015](effects.md#ag3015) | &#123;who&#125; raises effect '&#123;effect&#125;', which exceeds the 'raises &lt;&#123;allowed&#125;&gt;' allowed by type '&#123;type&#125;'. Add '&#123;effect&#125;' to the clause, or use a target type that allows it. |
+| [AG3016](effects.md#ag3016) | A finalize block cannot raise interrupts: it runs while an abort is stopping the scope, with nothing to resume back to. '&#123;callee&#125;' can interrupt. |
 
 ## Names, scope, and reserved words
 
@@ -118,6 +119,11 @@ or suppress one on the next line with `// @tc-ignore AG####`.
 | [AG6029](tools.md#ag6029) | Tool '&#123;tool&#125;' has required function-typed parameter '&#123;param&#125;' is unbound (&#123;type&#125;). Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing as a tool. |
 | [AG6030](tools.md#ag6030) | Tool '&#123;tool&#125;' will be exposed to the LLM without optional function-typed parameter(s): &#123;params&#125;. The function body must be prepared to run with the declared default for each. |
 | [AG6031](tools.md#ag6031) | saveDraft() cannot be called at module top level — there is no enclosing function, node, or block scope to save a draft for. |
+| [AG6032](tools.md#ag6032) | A scope can declare at most one finalize block. Merge the branches into the first one. |
+| [AG6033](tools.md#ag6033) | A finalize block must sit at the top level of its function or block body, not inside `&#123;construct&#125;`. A finalize is a declaration — it is always active, so nesting it in control flow has no meaning. |
+| [AG6034](tools.md#ag6034) | saveDraft() has no effect inside a finalize block: the finalize's return IS the scope's partial result. Return the value instead. |
+| [AG6035](tools.md#ag6035) | A finalize block in a node has no effect: nothing above a node consumes a partial result yet. Put the finalize in a function or guard block instead. |
+| [AG6036](tools.md#ag6036) | In a scope with a finalize block, a return expression that contains a call must BE a single direct call. Assign the call to a local first, then return the local — otherwise an aborted call's partial would be consumed inside the expression before the finalize can run. |
 
 ## Static init, config, and imports
 

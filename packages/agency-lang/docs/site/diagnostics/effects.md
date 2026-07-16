@@ -153,3 +153,13 @@ A value is being used where the target type limits which effects may be raised, 
 A value raises an effect that the target type's `raises` clause does not allow. The target restricts the effect set, and this value steps outside it.
 
 **How to fix:** add the effect to the target type's clause, or use a target type that permits it.
+
+<a id="ag3016"></a>
+
+## AG3016 — A finalize block cannot raise interrupts: it runs while an abort is stopping the scope, with nothing to resume back to. '&#123;callee&#125;' can interrupt.
+
+*Default severity: error.*
+
+A finalize block runs at the moment an abort stops its scope — outside the step machinery that interrupts pause and resume through. An interrupt raised there would have nothing to resume back to. This checks transitively for functions defined in your own files: calling one that can interrupt is as forbidden as a direct `interrupt(...)`. An IMPORTED function that interrupts is not visible to this static check; at runtime the finalize is treated as failed and the scope falls back to its saved draft.
+
+**How to fix:** keep the finalize computational — combine the locals you already have. Anything that needs a human belongs in the normal body, before the work that can trip.

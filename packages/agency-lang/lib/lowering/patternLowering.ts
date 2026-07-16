@@ -16,6 +16,7 @@ import type {
   Expression,
   ForLoop,
   FunctionCall,
+  FinalizeBlock,
   FunctionDefinition,
   HandleBlock,
   IfElse,
@@ -101,6 +102,12 @@ class PatternLowerer {
         return this.lowerMatchBlock(node);
       case "forLoop":
         return [this.lowerForLoop(node)];
+      case "finalizeBlock": {
+        // Same-scope statements: expression-position match/if inside the
+        // finalize lowers exactly like anywhere else in the scope.
+        const fb = node as FinalizeBlock;
+        return [{ ...fb, body: this.lowerBody(fb.body) }];
+      }
       case "handleBlock": {
         // Descend both the guarded body and the inline handler body. Non-inline
         // handlers have no body to descend.

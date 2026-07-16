@@ -399,6 +399,41 @@ node main() {
 
 **How to fix:** move the \`saveDraft\` call inside the function, node, or \`guard\` block whose result it is a draft of.`,
 
+  finalizeInterrupts: `A finalize block runs at the moment an abort stops its scope — outside the step machinery that interrupts pause and resume through. An interrupt raised there would have nothing to resume back to. This checks transitively for functions defined in your own files: calling one that can interrupt is as forbidden as a direct \`interrupt(...)\`. An IMPORTED function that interrupts is not visible to this static check; at runtime the finalize is treated as failed and the scope falls back to its saved draft.
+
+**How to fix:** keep the finalize computational — combine the locals you already have. Anything that needs a human belongs in the normal body, before the work that can trip.`,
+
+  finalizeDuplicate: `Only one finalize block per scope: when the scope is stopped, exactly one computation produces its partial result. Two blocks would need merge rules.
+
+**How to fix:** combine the logic into a single finalize; branch inside it if needed.`,
+
+  finalizeNotTopLevel: `A finalize is a declaration, not a statement: if the scope has one, it is always active. Nesting it inside an \`if\`, a loop, or a match arm would make it conditionally armed, which needs "was it armed?" bookkeeping the language deliberately avoids.
+
+**How to fix:** move the finalize to the top level of the function or block body (convention: last), and branch INSIDE the finalize instead.`,
+
+  finalizeSaveDraft: `Inside a finalize, the scope's partial result is being computed right now — the finalize's return value is that result. Saving a draft there is meaningless.
+
+**How to fix:** \`return\` the value from the finalize instead of calling \`saveDraft\`.`,
+
+  finalizeInNode: `Salvaged partial results are consumed by an enclosing \`guard\`, and guards cannot span nodes — above a node there is only the graph engine, which does not consume partials (root budgets may, later). A finalize declared directly in a node body would compute a value nobody reads.
+
+**How to fix:** put the finalize inside the function or \`guard\` block doing the guarded work.`,
+
+  finalizeReturnShape: `When a call inside a return expression is aborted, its aborted result is consumed by the surrounding expression (concatenated, wrapped in an array, ...) before any check can run — so the finalize would be silently skipped and garbage returned. A direct \`return f(x)\` is safe: the compiler intercepts it. Anything more complex is not interceptable without breaking evaluation order.
+
+**How to fix:** assign the call to a local first, then return the local:
+
+\`\`\`agency
+def f(): string {
+  const part = verify()
+  return "combined: " + part
+
+  finalize {
+    return "partial: " + part
+  }
+}
+\`\`\``,
+
   // ---- AG7: static init, config, and imports ----
   exportRequiresStaticConst: `Only \`static const\` declarations can be exported from a module. A plain \`const\`, \`let\`, or other declaration is per-run state and is not part of a module's public surface.
 

@@ -8,13 +8,19 @@ import { analyzeCondition } from "./narrowing.js";
 import {
   type FlowNode,
   type FlowEnvironment,
+  type Reference,
   wrapFacts,
   mergeFlows,
   widenAtLoopBackEdge,
   chainToSegments,
   declaredPathType,
   freshMemo,
+  typeAt,
+  uniteTypes,
+  referenceKey,
 } from "./flow.js";
+import { isAnyType } from "./utils.js";
+import { NULL_T } from "./primitives.js";
 
 /**
  * The flow node after an access-chain write (`obj.field = x`, `arr[0] = x`): a
@@ -359,6 +365,28 @@ export function buildFlowGraph(
   env: FlowEnvironment,
 ): FlowNode {
   return nodes.reduce<FlowNode>((flow, node) => {
+    if (node.type === "finalizeBlock") {
+      // A finalize is a declaration: position-free, and NOT dead code
+      // after an unconditional return (which turns `flow` to exit). Its
+      // body is a side branch off the scope's START — when the finalize
+      // runs, any statement might not have executed, so no positional
+      // narrowing applies. Every scope-declared local is widened to
+      // `T | null` (reusing the loop-widening node); a `!= null` check
+      // inside the finalize narrows back through ordinary machinery.
+      // The main flow passes through untouched, so a finalize `return`
+      // never satisfies checkDefiniteReturns.
+      const start: FlowNode = { kind: "start", scope: env.scope };
+      const widened: Record<string, ScopeType> = Object.create(null);
+      for (const name of env.scope.declaredNames()) {
+        const ref: Reference = { variable: name, chain: [] };
+        const declared = typeAt(ref, start, env);
+        widened[referenceKey(ref)] = isAnyType(declared)
+          ? declared
+          : uniteTypes([declared, NULL_T], env.typeAliases);
+      }
+      buildFlowGraph(node.body, { kind: "loop", prev: start, widened }, env);
+      return flow;
+    }
     if (flow.kind === "exit") {
       return flow;
     }

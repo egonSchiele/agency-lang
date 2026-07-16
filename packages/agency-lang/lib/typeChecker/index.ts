@@ -40,6 +40,7 @@ import {
   checkCallbackBodyInterrupts,
   checkHandlerBodyInterrupts,
 } from "./interruptAnalysis.js";
+import { checkFinalizeBlocks } from "./finalizeChecks.js";
 import { checkAllRaises } from "./functionTypeRaises.js";
 import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
 import { computeMatchExprTypes } from "./matchExprTypes.js";
@@ -327,6 +328,7 @@ export class TypeChecker {
     // Reject `interrupt` inside any callback body. Callbacks fire as
     // side effects; their body cannot pause execution.
     checkCallbackBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
+    checkFinalizeBlocks(scopes, interruptEffectsByFunction, ctx);
 
     // Reject handlers whose body may itself raise an interrupt — that
     // re-enters the handler chain and recurses (see HandlerRecursionError).

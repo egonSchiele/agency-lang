@@ -1,0 +1,42 @@
+{
+  "tests": [
+    {
+      "nodeName": "insideGuardBlind",
+      "input": "",
+      "expectedOutput": "\"surfaced-past-inside-handler\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }],
+      "interruptHandlers": [{ "action": "reject" }],
+      "description": "A handler registered inside the guard never sees that guard's trip; it surfaces past it."
+    },
+    {
+      "nodeName": "propagateDiscards",
+      "input": "",
+      "expectedOutput": "\"rejected-by-user\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }],
+      "interruptHandlers": [{ "action": "reject" }],
+      "description": "Inner approve + outer propagate: the human decides and the handler's grant evaporates."
+    },
+    {
+      "nodeName": "draftPreview",
+      "input": "",
+      "expectedOutput": "\"preview:the-draft|salvaged:the-draft\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }],
+      "description": "The trip data carries the savedDraft preview; the reject still salvages authoritatively through the guard's normal conversion."
+    },
+    {
+      "nodeName": "grantsNeverCross",
+      "input": "",
+      "expectedOutput": "[\"trip:inner\",\"trip:outer\",\"inner-done\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }, { "return": "two" }],
+      "description": "Approving the inner guard's trip never widens the outer guard: the outer trips separately with its own label (decision 16)."
+    }
+  ]
+}

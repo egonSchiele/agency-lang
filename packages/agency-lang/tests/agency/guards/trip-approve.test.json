@@ -1,0 +1,58 @@
+{
+  "tests": [
+    {
+      "nodeName": "inlineApprove",
+      "input": "",
+      "expectedOutput": "\"done:two\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }, { "return": "two" }],
+      "description": "A handler approves more budget and the guarded block resumes in place and finishes."
+    },
+    {
+      "nodeName": "bothDimensions",
+      "input": "",
+      "expectedOutput": "\"done\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }, { "return": "two" }],
+      "description": "One approval naming both dimensions extends both members of a cost+time guard scope."
+    },
+    {
+      "nodeName": "disarmCost",
+      "input": "",
+      "expectedOutput": "\"done\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }, { "return": "two" }, { "return": "three" }],
+      "description": "approve({disarm: [cost]}) stops cost metering explicitly; spend past the old limit never trips again."
+    },
+    {
+      "nodeName": "uselessApproval",
+      "input": "",
+      "expectedOutput": "\"failed-as-expected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }],
+      "description": "approve() with no grant on the tripped dimension is a runtime error (it would re-trip forever), surfacing as a Failure."
+    },
+    {
+      "nodeName": "negativeGrant",
+      "input": "",
+      "expectedOutput": "\"failed-as-expected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "one" }],
+      "description": "A negative grant clamps to zero and never silently disarms; the answer is useless and errors."
+    },
+    {
+      "nodeName": "doubleApprove",
+      "input": "",
+      "expectedOutput": "[\"outer-approved\",\"done\"]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "a" }, { "return": "b" }, { "return": "c" }, { "return": "d" }],
+      "description": "Two handlers approving one trip accumulate through the std::guard merge: one trip, four calls fit. Overwrite semantics would trip twice and log two outer approvals."
+    }
+  ]
+}

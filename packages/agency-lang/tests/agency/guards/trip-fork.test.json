@@ -1,0 +1,53 @@
+{
+  "tests": [
+    {
+      "nodeName": "sharedDedupe",
+      "input": "",
+      "expectedOutput": "\"final-trip-rejected\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "b1"
+        },
+        {
+          "return": "b2"
+        },
+        {
+          "return": "b3"
+        },
+        {
+          "return": "after1"
+        },
+        {
+          "return": "after2"
+        }
+      ],
+      "description": "One grant covers the shared guard for all branches (dedupe): total spend of branches + after1 (0.000008) fits the single 0.0000085 grant, after2 (0.00001) trips and is rejected by the spent-based handler. If each branch had been granted separately, the limit would exceed 0.000018 and after2 would fit \u2014 reaching the BUG output."
+    },
+    {
+      "nodeName": "raceLoserClean",
+      "input": "",
+      "expectedOutput": "\"fast\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "slow"
+        },
+        {
+          "return": "slower"
+        }
+      ],
+      "description": "A race loser with in-flight spend under the guard neither hangs the race nor resurfaces after the winner returns."
+    }
+  ]
+}

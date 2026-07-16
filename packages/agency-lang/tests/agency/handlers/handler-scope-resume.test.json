@@ -4,16 +4,27 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"tripped-after-resume\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": [
-        { "return": "one" },
-        { "return": "two" }
+        {
+          "return": "one"
+        },
+        {
+          "return": "two"
+        }
       ],
       "interruptHandlers": [
         {
           "action": "approve",
           "expectedMessage": "continue?"
+        },
+        {
+          "action": "reject"
         }
       ],
       "description": "Propagate surfaces the interrupt mid-run; after the harness approves and the run resumes, the guard still meters and trips on the next spend. Pins that no suspension state rides the checkpoint."

@@ -1,0 +1,25 @@
+// THE HEADLINE FIXTURE (resumable-guards plan, Task 2.5): approve across
+// a REAL checkpoint. No in-program handler exists, so the trip surfaces,
+// the run checkpoints and halts, and the harness answers with a VALUED
+// approve ({"action": "resolve", "resolvedValue": {...}} — the valued
+// approve's action is `resolve`). The block then RESUMES: the extended
+// guard state survived serialize/restore, the recorded answer applied
+// exactly once via the derived trip key, and — after more spending — a
+// SECOND trip (fresh key at the new limit) actually raises and is
+// rejected, running the salvage pipeline.
+//
+// This exercises what no in-program fixture can: inline handlers answer
+// before any halt, so only this path serializes and restores a mutated
+// guard and replays the raise site against a recorded answer.
+import { guard } from "std::thread"
+
+node main() {
+  const r = guard(cost: 0.000001) as {
+    const a = llm("Reply with: one")
+    const b = llm("Reply with: two")
+    const c = llm("Reply with: three")
+    return "never-reached"
+  }
+  if (isFailure(r)) { return "second-trip-rejected" }
+  return "unexpected:${r.value}"
+}

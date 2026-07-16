@@ -4,22 +4,53 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"tripped-after-resume:true\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": [
-        { "return": "b1" },
-        { "return": "b2" },
-        { "return": "b3" },
-        { "return": "b1-p2" },
-        { "return": "b2-p2" },
-        { "return": "b3-p2" }
+        {
+          "return": "b1"
+        },
+        {
+          "return": "b2"
+        },
+        {
+          "return": "b3"
+        },
+        {
+          "return": "b1-p2"
+        },
+        {
+          "return": "b2-p2"
+        },
+        {
+          "return": "b3-p2"
+        }
       ],
       "interruptHandlers": [
-        { "action": "approve" },
-        { "action": "approve" },
-        { "action": "approve" }
+        {
+          "action": "approve"
+        },
+        {
+          "action": "approve"
+        },
+        {
+          "action": "approve"
+        },
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        }
       ],
-      "description": "Shared cost guard survives interrupt/resume cycle. All 3 fork branches charge $0.000002 (total $0.000006, under budget $0.000008) then interrupt. Harness approves all 3. On resume, runBatch's rehydrateInheritedGuards re-prepends a live ref to the parent's OUTER CostGuard onto each child stack. The OUTER's spent counter restored from the parent's snapshot ($0.000006). Post-resume LLM calls continue mutating the shared counter; the trip fires once cumulative cost crosses the budget. The trip MUST come from inside a branch's post-call check after resume — proving the rehydrateInheritedGuards re-link correctly restored the shared reference to the parent's CostGuard. If the re-link were broken, the resumed branches would not see the parent's OUTER at all and the fork would settle successfully."
+      "description": "Shared cost guard survives interrupt/resume cycle. All 3 fork branches charge $0.000002 (total $0.000006, under budget $0.000008) then interrupt. Harness approves all 3. On resume, runBatch's rehydrateInheritedGuards re-prepends a live ref to the parent's OUTER CostGuard onto each child stack. The OUTER's spent counter restored from the parent's snapshot ($0.000006). Post-resume LLM calls continue mutating the shared counter; the trip fires once cumulative cost crosses the budget. The trip MUST come from inside a branch's post-call check after resume \u2014 proving the rehydrateInheritedGuards re-link correctly restored the shared reference to the parent's CostGuard. If the re-link were broken, the resumed branches would not see the parent's OUTER at all and the fork would settle successfully."
     }
   ]
 }

@@ -4,10 +4,23 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"the-finalize\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "pong" }],
-      "description": "A successful finalize outranks the scope's saved draft (the success-path complement of finalize-error-falls-back)."
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ],
+      "description": "A successful finalize outranks the scope's saved draft (the success-path complement of finalize-error-falls-back).",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

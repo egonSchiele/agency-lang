@@ -4,15 +4,41 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"nested-trip:true\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": [
-        { "return": "r11" },
-        { "return": "r12" },
-        { "return": "r21" },
-        { "return": "r22" }
+        {
+          "return": "r11"
+        },
+        {
+          "return": "r12"
+        },
+        {
+          "return": "r21"
+        },
+        {
+          "return": "r22"
+        }
       ],
-      "description": "Nested fork (depth-2) verifies the shared-guard inheritance walks more than one level. OUTER cost guard at depth 0 must reach depth-2 leaves through TWO seedBranchCost / cloneForBranch hops. Each depth-1 branch's guards array contains the OUTER ref (with inheritedGuardCount=1). When depth-1 starts its inner fork, depth-2 branches' seedBranchCost re-runs the cloneForBranch=this contract on depth-1's guards — which propagates OUTER all the way down. Each leaf's charge mutates OUTER's shared counter; the 3rd or 4th leaf's post-call check trips it (spent $0.000008 > limit $0.000005). If inheritance walks were broken at the depth-1 → depth-2 boundary, the depth-2 branches would not see OUTER and the fork would settle successfully."
+      "description": "Nested fork (depth-2) verifies the shared-guard inheritance walks more than one level. OUTER cost guard at depth 0 must reach depth-2 leaves through TWO seedBranchCost / cloneForBranch hops. Each depth-1 branch's guards array contains the OUTER ref (with inheritedGuardCount=1). When depth-1 starts its inner fork, depth-2 branches' seedBranchCost re-runs the cloneForBranch=this contract on depth-1's guards \u2014 which propagates OUTER all the way down. Each leaf's charge mutates OUTER's shared counter; the 3rd or 4th leaf's post-call check trips it (spent $0.000008 > limit $0.000005). If inheritance walks were broken at the depth-1 \u2192 depth-2 boundary, the depth-2 branches would not see OUTER and the fork would settle successfully.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

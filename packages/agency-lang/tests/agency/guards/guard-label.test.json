@@ -4,10 +4,29 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"research-budget|null\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "pong" }, { "return": "pong" }],
-      "description": "A labeled guard's trip carries the label on the failure; an unlabeled guard's label is null."
+      "llmMocks": [
+        {
+          "return": "pong"
+        },
+        {
+          "return": "pong"
+        }
+      ],
+      "description": "A labeled guard's trip carries the label on the failure; an unlabeled guard's label is null.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

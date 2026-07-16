@@ -4,10 +4,29 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"g1-draft|true\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "pong" }, { "return": "pong" }],
-      "description": "The boundary sweep prevents guard B from reading guard A's draft."
+      "llmMocks": [
+        {
+          "return": "pong"
+        },
+        {
+          "return": "pong"
+        }
+      ],
+      "description": "The boundary sweep prevents guard B from reading guard A's draft.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

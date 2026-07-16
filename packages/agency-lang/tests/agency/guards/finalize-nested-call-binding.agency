@@ -55,10 +55,23 @@ def codeF2Trips(): string {
   }
 }
 
+// The trip is rejected IN-PROGRAM (no checkpoint, no resume): this
+// fixture pins the arg-binding semantics, and resuming a trip raised
+// inside a compound call (`f2b(gOk())` — a completed sibling call in
+// the replayed statement) hits a PRE-EXISTING frame-adoption bug that
+// affects runtime-only interrupts generally (tool interrupts included).
+// Tracked separately; see the resumable-guards PR 2 notes.
 node f2TripsCase() {
-  const result = guard(cost: 0.000001) as {
-    return codeF2Trips()
+  handle {
+    const result = guard(cost: 0.000001) as {
+      return codeF2Trips()
+    }
+    if (isFailure(result)) { return "unexpected" }
+    return result.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
   }
-  if (isFailure(result)) { return "unexpected" }
-  return result.value
 }

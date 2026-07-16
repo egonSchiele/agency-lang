@@ -4,10 +4,23 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"failed-as-designed\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "pong" }],
-      "description": "Level-rule pin: a draft saved only in a deep callee dies at an assignment boundary; no deep fallback."
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ],
+      "description": "Level-rule pin: a draft saved only in a deep callee dies at an assignment boundary; no deep fallback.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

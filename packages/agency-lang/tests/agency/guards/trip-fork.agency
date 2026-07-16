@@ -1,0 +1,56 @@
+// Trips under fork and race. Mocked llm() cost = 0.000002.
+import { guard } from "std::thread"
+
+const log = []
+
+// 1. Shared-guard dedupe: three branches under one shared CostGuard all
+// cross the limit together. While one branch's question is out, the
+// siblings PARK on it instead of asking their own — so the handler
+// grants ONCE, and the spend-shaped assertion is the after-fork call:
+// with one 0.000009 grant (limit 0.00001) the three branch charges
+// (0.000006) plus the after call (0.000008) fit; if every branch had
+// been granted separately (0.000027 of headroom) the second after call
+// would ALSO fit and the output would differ.
+// NOTE: the handler decides on i.data.spent, not on shared mutable
+// state — module globals are branch-cloned in forks, so a
+// "grant-once" counter would silently reset at the join.
+node sharedDedupe() {
+  handle {
+    const r = guard(cost: 0.000001) as {
+      fork([1, 2, 3]) as n {
+        const x = llm("branch ${n}")
+      }
+      const after1 = llm("Reply with: after1")
+      const after2 = llm("Reply with: after2")
+      return "never-reached"
+    }
+    if (isFailure(r)) { return "final-trip-rejected" }
+    return "BUG:overgranted:${r.value}"
+  } with (i) {
+    if (i.effect == "std::guard") {
+      if (i.data.spent < 0.000009) {
+        return approve({ maxCost: 0.0000085 })
+      }
+      return reject()
+    }
+    return pass()
+  }
+}
+
+// 2. A race loser holding budget spend does not hang or resurface: the
+// winner returns, the loser is cancelled, the guard settles normally.
+node raceLoserClean() {
+  const r = guard(cost: 0.01) as {
+    const winner = race([1, 2]) as n {
+      if (n == 1) {
+        return "fast"
+      }
+      const slow = llm("Reply with: slow")
+      const slower = llm("Reply with: slower")
+      return "slow"
+    }
+    return winner
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return r.value
+}

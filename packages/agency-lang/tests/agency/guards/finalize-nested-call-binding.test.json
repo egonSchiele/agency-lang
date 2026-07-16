@@ -4,18 +4,39 @@
       "nodeName": "gTripsCase",
       "input": "",
       "expectedOutput": "\"g-tripped:x-null\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "pong" }],
-      "description": "An aborted ARGUMENT call's partial is dropped at the call boundary; the finalize sees x == null."
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ],
+      "description": "An aborted ARGUMENT call's partial is dropped at the call boundary; the finalize sees x == null.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ]
     },
     {
       "nodeName": "f2TripsCase",
       "input": "",
       "expectedOutput": "\"f2-tripped:f2-partial:g-value\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "pong" }],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ],
       "description": "The OUTER call's partial binds into x; the finalize consumes it."
     }
   ]

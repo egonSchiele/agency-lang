@@ -4,17 +4,41 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "[\"iter-tripped\",\"iter-tripped\"]",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": [
-        { "return": "work" },
-        { "return": "yes" },
-        { "return": "more" },
-        { "return": "work" },
-        { "return": "yes" },
-        { "return": "more" }
+        {
+          "return": "work"
+        },
+        {
+          "return": "yes"
+        },
+        {
+          "return": "more"
+        },
+        {
+          "return": "work"
+        },
+        {
+          "return": "yes"
+        },
+        {
+          "return": "more"
+        }
       ],
-      "description": "Both iterations trip: the handler registered inside the per-iteration guard is metered by it, in iteration 2 as much as iteration 1. Under the stale-memo bug, iteration 2's handler spend would not count and iteration 2 would finish under budget."
+      "description": "Both iterations trip: the handler registered inside the per-iteration guard is metered by it, in iteration 2 as much as iteration 1. Under the stale-memo bug, iteration 2's handler spend would not count and iteration 2 would finish under budget.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

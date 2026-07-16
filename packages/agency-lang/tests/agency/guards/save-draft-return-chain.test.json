@@ -4,10 +4,23 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"verify-draft\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "pong" }],
-      "description": "Return-position pass-through: a deep draft rides an unbroken return chain all the way to the guard."
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ],
+      "description": "Return-position pass-through: a deep draft rides an unbroken return chain all the way to the guard.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

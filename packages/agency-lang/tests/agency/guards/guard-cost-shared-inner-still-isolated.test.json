@@ -4,15 +4,32 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "[\"ok-1\",\"tripped-2\",\"ok-3\"]",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": [
-        { "return": "r1" },
-        { "return": "r2a" },
-        { "return": "r2b" },
-        { "return": "r3" }
+        {
+          "return": "r1"
+        },
+        {
+          "return": "r2a"
+        },
+        {
+          "return": "r2b"
+        },
+        {
+          "return": "r3"
+        }
       ],
-      "description": "Inner guards pushed by a branch after the fork opens stay branch-local. OUTER ($0.001) is the shared guard across all 3 branches via cloneForBranch=this. Each branch then pushes its own INNER ($0.000003) onto its own stack — that INNER sits at index >= inheritedGuardCount, invisible to the parent and siblings. Branch 2 spends 2 calls ($0.000004) — its INNER trips inside branch 2's prompt.ts post-call check. Branches 1 and 3 each spend 1 call ($0.000002) — their INNERs don't trip. Critical assertion: branch 2's INNER trip MUST NOT leak into the parent's guards array (would otherwise show up on the shared OUTER's check) and MUST NOT cascade to siblings' branches. The OUTER stays well under its budget across all branches' combined $0.000008 spend."
+      "description": "Inner guards pushed by a branch after the fork opens stay branch-local. OUTER ($0.001) is the shared guard across all 3 branches via cloneForBranch=this. Each branch then pushes its own INNER ($0.000003) onto its own stack \u2014 that INNER sits at index >= inheritedGuardCount, invisible to the parent and siblings. Branch 2 spends 2 calls ($0.000004) \u2014 its INNER trips inside branch 2's prompt.ts post-call check. Branches 1 and 3 each spend 1 call ($0.000002) \u2014 their INNERs don't trip. Critical assertion: branch 2's INNER trip MUST NOT leak into the parent's guards array (would otherwise show up on the shared OUTER's check) and MUST NOT cascade to siblings' branches. The OUTER stays well under its budget across all branches' combined $0.000008 spend.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

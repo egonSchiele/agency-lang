@@ -4,10 +4,23 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"combined:v-partial\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "pong" }],
-      "description": "The walked example: the callee's partial binds into the local, the finalize translates it, the guard salvages the finalize's return."
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ],
+      "description": "The walked example: the callee's partial binds into the local, the finalize translates it, the guard salvages the finalize's return.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

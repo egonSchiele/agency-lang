@@ -4,15 +4,38 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"tripped-mid-fork:true\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": [
-        { "return": "b1" },
-        { "return": "b2" },
-        { "return": "b3" },
-        { "return": "after" }
+        {
+          "return": "b1"
+        },
+        {
+          "return": "b2"
+        },
+        {
+          "return": "b3"
+        },
+        {
+          "return": "after"
+        }
       ],
-      "description": "Outer guard wraps a fork. With the shared-guard model (cloneForBranch returns this), the OUTER CostGuard is a single in-memory object shared across all branches. The first branch's post-call check trips OUTER mid-fork before the fork settles — the trailing llm('after') is unreachable. Regression for real-time mid-fork enforcement. Under the prior per-branch-clone model the trip only fired post-join via the trailing 'after' call."
+      "description": "Outer guard wraps a fork. With the shared-guard model (cloneForBranch returns this), the OUTER CostGuard is a single in-memory object shared across all branches. The first branch's post-call check trips OUTER mid-fork before the fork settles \u2014 the trailing llm('after') is unreachable. Regression for real-time mid-fork enforcement. Under the prior per-branch-clone model the trip only fired post-join via the trailing 'after' call.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

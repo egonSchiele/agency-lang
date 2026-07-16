@@ -4,12 +4,23 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"tripped:0.000001\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": [
-        { "return": "pong" }
+        {
+          "return": "pong"
+        }
       ],
-      "description": "`guard(cost: $0.000001)` must compile and trip exactly the same as `guard(cost: 0.000001)`. The `$` unit literal is a compile-time scale (no-op for dollars)."
+      "description": "`guard(cost: $0.000001)` must compile and trip exactly the same as `guard(cost: 0.000001)`. The `$` unit literal is a compile-time scale (no-op for dollars).",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

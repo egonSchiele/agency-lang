@@ -1,0 +1,31 @@
+import { guard } from "std::thread"
+
+// THE load-bearing fixture — the spec's walked example, values verbatim:
+// verify saves "v-partial" and trips; code's statement-site check binds
+// it into x; code's finalize consumes x; the guard salvages the
+// finalize's return.
+def verify(): string {
+  saveDraft("v-partial")
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+def code(): string {
+  const x = verify()
+  return x
+
+  finalize {
+    if (x != null) {
+      return "combined:${x}"
+    }
+    return "no-inner"
+  }
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    return code()
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

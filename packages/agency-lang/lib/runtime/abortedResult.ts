@@ -73,6 +73,17 @@ export class AbortedResult {
     frame: State,
     scopeName: string,
   ): AbortedResult {
+    // Converting the exception into a value IS the trip's delivery: from
+    // here the abort travels the value pipeline. Marking the cause
+    // delivered (shared by identity with the abort signal's reason)
+    // tells Runner.shouldSkip not to re-throw the same trip at later
+    // steps on the still-aborted signal — the guard's own cleanup steps,
+    // and a finalize's steps, must run. Without this, a leaf-delivered
+    // time trip kills a finalize's first step. In-flight leaf ops still
+    // cancel via the signal itself (the computational-only rule).
+    if (error.agencyCause.kind === "guardTrip") {
+      error.agencyCause.delivered = true;
+    }
     const result = new AbortedResult(
       error.agencyCause,
       frame.savedDraft,

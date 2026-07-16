@@ -1,0 +1,64 @@
+import { guard } from "std::thread"
+
+// f2(g()) both directions. When g aborts, the call boundary drops its
+// partial before f2 runs, so the finalize sees x == null. When f2 aborts
+// (g already succeeded), x holds f2's partial.
+def gTrips(): string {
+  saveDraft("g-partial")
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+def f2a(v: string): string {
+  return "f2a:${v}"
+}
+
+def codeGTrips(): string {
+  const x = f2a(gTrips())
+  return x
+
+  finalize {
+    if (x != null) {
+      return "leak:${x}"
+    }
+    return "g-tripped:x-null"
+  }
+}
+
+node gTripsCase() {
+  const result = guard(cost: 0.000001) as {
+    return codeGTrips()
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}
+
+def gOk(): string {
+  return "g-value"
+}
+
+def f2b(v: string): string {
+  saveDraft("f2-partial:${v}")
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+def codeF2Trips(): string {
+  const x = f2b(gOk())
+  return x
+
+  finalize {
+    if (x != null) {
+      return "f2-tripped:${x}"
+    }
+    return "x-null"
+  }
+}
+
+node f2TripsCase() {
+  const result = guard(cost: 0.000001) as {
+    return codeF2Trips()
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

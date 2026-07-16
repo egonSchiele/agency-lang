@@ -1,0 +1,20 @@
+import { guard } from "std::thread"
+
+// No trip: the finalize must never execute. Its return value is a
+// sentinel that could only surface if it wrongly ran and salvaged.
+def work(): string {
+  const reply = llm("Reply with: pong")
+  return "done:${reply}"
+
+  finalize {
+    return "finalize-ran-wrongly"
+  }
+}
+
+node main() {
+  const result = guard(cost: 1.0) as {
+    return work()
+  }
+  if (isFailure(result)) { return "unexpected-failure" }
+  return result.value
+}

@@ -374,3 +374,12 @@ describe("AbortedResult.withFinalize", () => {
     expect(events.map((e) => e.action)).toContain("carried");
   });
 });
+
+describe("AbortedResult.fromError marks a guard trip delivered", () => {
+  it("sets the cause's delivered flag so later steps on the aborted signal run", () => {
+    const cause = tripCause();
+    expect(cause.kind === "guardTrip" && cause.delivered).toBeFalsy();
+    AbortedResult.fromError(abortError(cause), new State(), "code");
+    expect(cause.kind === "guardTrip" && cause.delivered).toBe(true);
+  });
+});

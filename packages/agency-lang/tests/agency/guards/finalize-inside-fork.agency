@@ -1,0 +1,25 @@
+import { guard } from "std::thread"
+
+// A finalize-bearing def trips INSIDE a fork branch under an outer
+// guard. The branch's finalized partial is dropped at the fork boundary
+// (exactly like a branch's saveDraft), so the outer guard fails.
+def branchWork(tag: string): string {
+  saveDraft("draft-${tag}")
+  sleep(2000)
+  return tag
+
+  finalize {
+    return "branch-finalize-${tag}"
+  }
+}
+
+node main() {
+  const result = guard(time: 600ms) as {
+    const tags = fork(["a"]) as t {
+      return branchWork(t)
+    }
+    return "joined"
+  }
+  if (isFailure(result)) { return "failed-no-branch-salvage" }
+  return "leaked:${result.value}"
+}

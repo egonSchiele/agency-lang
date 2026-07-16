@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"winner\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A race loser's finalize never becomes a success anywhere: the winner's value returns and the loser's abort stays an abort."
+    }
+  ]
+}

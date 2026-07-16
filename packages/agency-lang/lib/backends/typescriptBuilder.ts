@@ -2314,6 +2314,11 @@ export class TypeScriptBuilder {
    *  return-position temp lowering. */
   private finalizePresence: boolean[] = [];
 
+  /** Step-id base for compiled finalize bodies — far above anything a
+   *  main body can reach, so the shared frame's counters never collide.
+   *  See buildFinalizeClosure. */
+  private static readonly FINALIZE_STEP_BASE = 1000000;
+
   private currentScopeHasFinalize(): boolean {
     return this.finalizePresence[this.finalizePresence.length - 1] === true;
   }
@@ -2341,7 +2346,18 @@ export class TypeScriptBuilder {
     containerName: string,
     frameVar: string,
   ): TsNode {
-    const parts = this.processBodyAsParts(finalize.body, 1);
+    // The finalize's Runner shares the container's FRAME (locals live
+    // there), and Runner step counters are frame-keyed: the top-level
+    // counter IS frame.step and nested keys are path-only (no scope
+    // name). Small ids would collide with the main body's counters —
+    // frame.step has already advanced past them, silently skipping the
+    // finalize's steps. A disjoint id base fixes both the top-level
+    // counter and every nested path; advancing the dying frame's step
+    // past the base is inert, because an aborted frame never resumes.
+    const parts = this.processBodyAsParts(
+      finalize.body,
+      TypeScriptBuilder.FINALIZE_STEP_BASE,
+    );
     const bodyStr = parts.map((n) => printTs(n, 1)).join("\n");
     return ts.raw(
       `const __finalize = async (): Promise<any> => {\n` +

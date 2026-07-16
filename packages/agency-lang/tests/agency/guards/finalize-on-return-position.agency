@@ -1,0 +1,27 @@
+import { guard } from "std::thread"
+
+// The trip escapes through `return verify()`. Plain pass-through would
+// deliver verify's OWN partial ("v-partial") — the finalize must
+// intercept, and its output is a value the pass-through path could
+// never produce.
+def verify(): string {
+  saveDraft("v-partial")
+  const reply = llm("Reply with: pong")
+  return reply
+}
+
+def code(): string {
+  return verify()
+
+  finalize {
+    return "finalized-return-position"
+  }
+}
+
+node main() {
+  const result = guard(cost: 0.000001) as {
+    return code()
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

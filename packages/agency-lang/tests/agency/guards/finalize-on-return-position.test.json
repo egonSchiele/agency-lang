@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"finalized-return-position\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "A finalize scope intercepts return-position aborts; if the checked-temp lowering were missing, verify's own partial would leak through and this value could never appear."
+    }
+  ]
+}

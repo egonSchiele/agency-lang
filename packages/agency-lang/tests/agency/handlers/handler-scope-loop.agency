@@ -1,0 +1,40 @@
+// The registration-memo loop hazard (resumable-guards plan, Task 1.3b):
+// a handle block inside a loop registers once per iteration from the SAME
+// callsite, and each iteration pushes its own FRESH guard (new guardId).
+// The memo entry must be deleted when a registration pops, or iteration 2
+// would inherit iteration 1's stale guard set — iteration 2's guard would
+// be missing from it, so the handler would treat the guard it is INSIDE
+// as hidden and its spend would stop counting. Fail-open.
+//
+// Here the handler registers INSIDE the per-iteration guard, so its
+// llm() spend MUST count against that guard. Sized so the handler's
+// charge is the difference between tripping and fitting: body spends 2
+// calls, handler adds a 3rd, limit is 2.25 calls' worth.
+import { guard } from "std::thread"
+
+def work() {
+  const a = llm("Reply with: work")
+  const check = interrupt("go?")
+  const b = llm("Reply with: more")
+  return "iter-done"
+}
+
+node main() {
+  const results = []
+  for (i in [1, 2]) {
+    const r = guard(cost: 0.0000045) as {
+      handle {
+        return work()
+      } with (data) {
+        const opinion = llm("Reply with: yes")
+        return approve()
+      }
+    }
+    if (isFailure(r)) {
+      results.push("iter-tripped")
+    } else {
+      results.push(r.value)
+    }
+  }
+  return results
+}

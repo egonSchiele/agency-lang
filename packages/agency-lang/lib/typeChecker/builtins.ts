@@ -297,6 +297,12 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
     description:
       "Inside a `handle ... with` block, pass the interrupt up to the next handler in the chain.",
   },
+  pass: {
+    params: [],
+    returnType: ANY_T,
+    description:
+      "Inside a `handle ... with` block, decline to answer this interrupt and let the next handler decide.",
+  },
 
   // --- Checkpointing ---
   checkpoint: {

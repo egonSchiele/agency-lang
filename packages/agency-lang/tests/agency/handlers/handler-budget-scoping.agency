@@ -1,0 +1,45 @@
+// A handler runs under its REGISTRATION site's budget. Each mocked llm()
+// call costs exactly 0.000002 (SYNTHETIC_COST in deterministicClient.ts),
+// so the guard limits below are sized in fractions of calls and every
+// assertion is a spend into a gap: the output changes if a charge lands
+// on the wrong guard in EITHER direction.
+//
+// Shape: the outer guard encloses the handler's registration, the inner
+// guard does not. The handler's own llm() must charge the outer guard
+// and must NOT charge the inner one.
+import { guard } from "std::thread"
+
+def work() {
+  const r1 = llm("Reply with: one")
+  const check = interrupt("more?")
+  // 2 calls total inside the inner guard (2.25 allowed): succeeds only
+  // if the handler's call did NOT bill the inner guard.
+  const r2 = llm("Reply with: two")
+  return "inner-done"
+}
+
+node main() {
+  // 3.25 calls' worth. Body spends r1 + handler + r2 = 3 calls, so the
+  // one extra call below trips it — but only because the HANDLER's call
+  // counted. Without the handler charge the total would be 3 and fit.
+  const outer = guard(cost: 0.0000065) as {
+    handle {
+      // 2.25 calls' worth: r1 + r2 fit; r1 + handler + r2 would not.
+      const inner = guard(cost: 0.0000045) as {
+        return work()
+      }
+      if (isFailure(inner)) {
+        return "inner-tripped: handler charge leaked into the inner guard"
+      }
+      const extra = llm("Reply with: three")
+      return "no-trip: handler charge missing from the outer guard"
+    } with (data) {
+      const opinion = llm("Reply with: allow")
+      return approve()
+    }
+  }
+  if (isFailure(outer)) {
+    return "outer-tripped-after-handler-spend"
+  }
+  return outer.value
+}

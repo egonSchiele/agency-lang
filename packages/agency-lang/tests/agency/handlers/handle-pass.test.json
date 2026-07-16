@@ -1,0 +1,43 @@
+{
+  "tests": [
+    {
+      "nodeName": "testInnerPassOuterApprove",
+      "description": "Inner pass() defers; the outer handler approves and the work completes",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testPassInMatchArm",
+      "description": "pass() as a match-arm value — no opinion is expressible where a value is required",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "testAllPass",
+      "description": "Every handler passes — the interrupt reaches the user like an unanswered one",
+      "input": "",
+      "expectedOutput": "[\"foo start\",\"foo end\",\"foo result\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve",
+          "expectedMessage": "check"
+        }
+      ]
+    }
+  ]
+}

@@ -208,12 +208,16 @@ function loadEnvPolicy(): Policy | null {
 // (runNode) and the resume entry (respondToInterrupts) so the never-
 // serialized root handler is re-installed on a resumed leg too.
 export function installRunPolicyHandler(execCtx: {
-  pushHandler: (h: HandlerFn) => void;
+  pushHandler: (h: HandlerFn, liveGuardIds: string[]) => void;
 }): void {
   if (isIpcMode()) return;
   const policy = loadEnvPolicy();
   if (!policy) return;
-  execCtx.pushHandler(makeRunPolicyHandler(policy));
+  // liveGuardIds: [] — explicit: the --policy handler registers at run
+  // start, before any guard exists, and it is the outermost supervisory
+  // layer; a policy answering an interrupt is never metered or gated by
+  // user guards.
+  execCtx.pushHandler(makeRunPolicyHandler(policy), []);
 }
 
 // The user endpoint for a CLI-driven run: called by the generated bootstrap

@@ -83,6 +83,7 @@ export {
   isApproved,
   approve,
   reject,
+  pass,
   interruptWithHandlers,
   respondToInterrupts,
 } from "./interrupts.js";

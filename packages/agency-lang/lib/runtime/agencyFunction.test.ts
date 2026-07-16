@@ -736,3 +736,50 @@ describe("rename()", () => {
     expect(result).toEqual(["/tmp", "a.txt"]);
   });
 });
+
+describe("preapprove verdict shape", () => {
+  it("auto-approves ordinary interrupts but PASSES on std::guard trips", async () => {
+    const ctx = makeMockCtx();
+    let handler: any;
+    const fn = AgencyFunction.create({
+      name: "tool",
+      module: "test",
+      fn: async () => {
+        handler = ctx.handlers[ctx.handlers.length - 1].fn;
+        return "x";
+      },
+      params: [],
+      toolDefinition: null,
+    }, {}).preapprove();
+
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
+      fn.invoke({ type: "positional", args: [] }),
+    );
+    // Ordinary interrupt: auto-approved.
+    expect((await handler({ effect: "std::bash" })).type).toBe("approve");
+    // A guard trip: pass — a bare approve would be approve({}), which
+    // grants no budget and the trip machinery treats as a runtime
+    // error. Budget questions belong to outer handlers or the user.
+    expect((await handler({ effect: "std::guard" })).type).toBe("pass");
+  });
+
+  it("registers with an explicit empty liveGuardIds (above any guard)", async () => {
+    const ctx = makeMockCtx();
+    let entry: any;
+    const fn = AgencyFunction.create({
+      name: "tool",
+      module: "test",
+      fn: async () => {
+        entry = ctx.handlers[ctx.handlers.length - 1];
+        return "x";
+      },
+      params: [],
+      toolDefinition: null,
+    }, {}).preapprove();
+
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
+      fn.invoke({ type: "positional", args: [] }),
+    );
+    expect(entry.liveGuardIds).toEqual([]);
+  });
+});

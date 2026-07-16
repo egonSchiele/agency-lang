@@ -950,7 +950,7 @@ export class StatelogClient {
   }: {
     interruptId: string;
     handlerIndex: number;
-    decision: "approve" | "reject" | "propagate" | "none";
+    decision: "approve" | "reject" | "propagate" | "pass" | "none";
     value?: any;
     /** Optional summary of the interrupt being decided on. Carries
      *  `effect`, `message`, and `data` so log consumers can see *what*

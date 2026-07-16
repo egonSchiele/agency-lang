@@ -1,4 +1,5 @@
-import type { Guard, GuardJSON } from "../guard.js";
+import type { Guard, GuardExceededError, GuardJSON } from "../guard.js";
+import type { HandlerEntry } from "../types.js";
 import type { ReplyAttachmentPart } from "../replyAttachments.js";
 import { guardFromJSON, TimeGuard } from "../guard.js";
 import { sendCostTelemetryToParent } from "../costTelemetry.js";
@@ -568,9 +569,84 @@ export class StateStack {
    */
   enforceGuards(): void {
     this.assertNoParkedGuards();
+    const err = this.detectTrippedGuard();
+    if (err) throw err;
+  }
+
+  /** THE guard-trip walk: innermost-first, suspension-aware. Every
+   *  caller that asks "did a guard trip?" goes through here —
+   *  `enforceGuards` (the throwing form) and `Runner.shouldSkip` (which
+   *  re-throws an undelivered trip at step boundaries). One walk, one
+   *  suspension rule: a walk that skipped the `suspendedGuardIds`
+   *  consult would let a suspended, over-budget CostGuard throw its
+   *  trip out of the very handler that suspended it (CostGuard's
+   *  object-level suspend() is a deliberate no-op — see guard.ts — so
+   *  the object cannot decline on its own). Returns the trip error
+   *  instead of throwing so callers keep their own throw semantics.
+   *  This is also the detection sibling the resumable-guards plan's
+   *  PR 2 raise sites need. */
+  detectTrippedGuard(): GuardExceededError | null {
     for (let i = this.guards.length - 1; i >= 0; i--) {
+      if (this.suspendedGuardIds.includes(this.guards[i].guardId)) continue;
       const err = this.guards[i].check(this);
-      if (err) throw err;
+      if (err) return err;
+    }
+    return null;
+  }
+
+  /** guardIds suspended ON THIS BRANCH while an interrupt handler runs:
+   *  a handler's work is metered by the guards of its REGISTRATION site
+   *  (HandlerEntry.liveGuardIds), so everything deeper is invisible to
+   *  enforcement and charging for the duration of the handler call.
+   *  Branch-local twice over, on purpose: never serialized (a snapshot
+   *  taken mid-suspension — a handler that propagates — must revive
+   *  guards that meter), and never a flag on the guard OBJECT for cost
+   *  (a shared CostGuard flagged object-wide would drop SIBLING
+   *  branches' charges and open their gates while one branch's handler
+   *  deliberates). TimeGuard clocks are per-branch objects and pause
+   *  via Guard.suspend(). */
+  private suspendedGuardIds: string[] = [];
+
+  /** The guards a handler must not see or be metered by: every
+   *  installed guard that was NOT live when the handler registered.
+   *  Identity-based on guardId — ids are serialized and survive resume
+   *  and fork (time clones keep the parent's id), which array indices
+   *  do not. Evaluated against THIS stack, the raising branch's: a
+   *  handler registered in a sibling branch is still metered by shared
+   *  and inherited guards that predate it, and hidden from everything
+   *  branch-local here. */
+  guardsHiddenFrom(entry: HandlerEntry): Guard[] {
+    return this.guards.filter((g) => !entry.liveGuardIds.includes(g.guardId));
+  }
+
+  /** Suspend everything hidden from `entry` for the duration of one
+   *  handler invocation. Returns the token endHandlerSuspension needs.
+   *  Save/restore (not add/remove) so NESTED handler chains compose: an
+   *  inner chain suspending a guard the outer chain already suspended
+   *  must not un-suspend it when the inner handler returns. Only guards
+   *  newly entering / actually leaving the suspended set get their
+   *  object-level suspend()/unsuspend() calls, so the TimeGuard clock
+   *  pause pairs correctly across nesting. */
+  beginHandlerSuspension(entry: HandlerEntry): string[] {
+    const previous = this.suspendedGuardIds;
+    const hidden = this.guardsHiddenFrom(entry);
+    this.suspendedGuardIds = [
+      ...previous,
+      ...hidden.map((g) => g.guardId).filter((id) => !previous.includes(id)),
+    ];
+    for (const g of hidden) {
+      if (!previous.includes(g.guardId)) g.suspend();
+    }
+    return previous;
+  }
+
+  endHandlerSuspension(previous: string[]): void {
+    const removed = this.suspendedGuardIds.filter(
+      (id) => !previous.includes(id),
+    );
+    this.suspendedGuardIds = previous;
+    for (const g of this.guards) {
+      if (removed.includes(g.guardId)) g.unsuspend();
     }
   }
 
@@ -611,7 +687,10 @@ export class StateStack {
    */
   chargeGuards(amount: number): void {
     this.assertNoParkedGuards();
-    for (const g of this.guards) g.charge(amount);
+    for (const g of this.guards) {
+      if (this.suspendedGuardIds.includes(g.guardId)) continue;
+      g.charge(amount);
+    }
   }
 
   /**

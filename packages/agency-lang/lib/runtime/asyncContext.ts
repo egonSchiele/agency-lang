@@ -144,8 +144,19 @@ export async function withPushedHandler<T>(
   ctx: RuntimeContext<any>,
   handler: HandlerFn,
   fn: () => Promise<T>,
+  liveGuardIds?: string[],
 ): Promise<T> {
-  ctx.pushHandler(handler);
+  // TS-side registration captures the live guard set AT CALL TIME, with
+  // no memo: TS callers sit outside the checkpoint replay machinery and
+  // own their own re-execution semantics (unlike Agency handle blocks,
+  // which memoize in Runner.handle). An explicit `liveGuardIds` wins —
+  // preapprove() passes [] because its handler registers conceptually
+  // above any guard (and its body never spends).
+  const captured =
+    liveGuardIds ??
+    agencyStore.getStore()?.stack?.guards.map((g) => g.guardId) ??
+    [];
+  ctx.pushHandler(handler, captured);
   try {
     return await fn();
   } finally {

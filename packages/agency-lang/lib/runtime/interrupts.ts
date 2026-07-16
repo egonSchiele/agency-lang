@@ -8,6 +8,7 @@ import {
   RestoreSignal,
 } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
+import { mergeFor, mergeForIpc } from "./effectMerge.js";
 import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
@@ -37,6 +38,14 @@ export function approve(value?: any): InterruptResponse {
 
 export function reject(value?: any): InterruptResponse {
   return { type: "reject", value } as any;
+}
+
+/** Explicit "not my interrupt — ask the next handler." Identical in effect
+ *  to a handler returning nothing, but usable in value position (a match
+ *  arm must produce a value). Returning `undefined` keeps working; the
+ *  chain normalizes it to this shape at the boundary. */
+export function pass(): InterruptResponse {
+  return { type: "pass" } as any;
 }
 
 export type InterruptData = {
@@ -225,20 +234,37 @@ async function runHandlerChain(
     throw new HandlerRecursionError(interruptObj.effect, MAX_HANDLER_CHAIN_DEPTH);
   }
   return handlerChainDepthALS.run(depth, async () => {
-    let approvedValue: any = undefined;
-    let hasApproval = false;
+    // Approvals collect in chain-walk order (innermost handler first) and
+    // are merged once at the end via the effect's merge (effectMerge.ts).
+    // For effects with no specific merge the default reproduces the
+    // historical behavior exactly: the outermost approval overwrites.
+    const approvals: any[] = [];
     let hasPropagation = false;
     const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
     try {
       for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
         if (ctx.isCancelled(stack)) throw new AgencyCancelledError();
+        const entry = ctx.handlers[i];
+        // A handler runs under its REGISTRATION site's budget: every
+        // guard that was not live when it registered is suspended on
+        // this branch for the duration of the call — not gating, not
+        // charging, clock paused (see HandlerEntry and
+        // StateStack.beginHandlerSuspension). Per handler, not per
+        // chain: each handler in the chain has its own registration
+        // site and therefore its own hidden set.
+        const suspensionToken = stack
+          ? stack.beginHandlerSuspension(entry)
+          : undefined;
         // Treat handler execution as atomic for the debugger — same as LLM tool calls.
         ctx.enterToolCall();
         let result: any;
         try {
-          result = await ctx.handlers[i](interruptObj);
+          result = await entry.fn(interruptObj);
         } finally {
           ctx.exitToolCall();
+          if (suspensionToken !== undefined) {
+            stack!.endHandlerSuspension(suspensionToken);
+          }
         }
         // A handler that is a compiled def returns an AbortedResult when
         // an abort stops it mid-run (compiled frames convert aborts to
@@ -249,6 +275,12 @@ async function runHandlerChain(
         // and the abort's cause would be swallowed.
         if (isAborted(result)) {
           throw result.toError();
+        }
+        // A handler that returns nothing means "pass". Normalize here so
+        // the loop, statelog, and merge logic never see two spellings of
+        // the same verdict.
+        if (result === undefined) {
+          result = { type: "pass" };
         }
         // Pre-bind the interrupt summary once so all handlerDecision /
         // interruptResolved events from this dispatch carry the same
@@ -261,8 +293,8 @@ async function runHandlerChain(
           message: interruptObj.message,
           data: interruptObj.data,
         };
-        if (result === undefined) {
-          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "none", interrupt: interruptSummary });
+        if (result.type === "pass") {
+          ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "pass", interrupt: interruptSummary });
           continue;
         }
         if (result.type === "reject") {
@@ -281,19 +313,23 @@ async function runHandlerChain(
         }
         if (result.type === "approve") {
           ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "approve", value: result.value, interrupt: interruptSummary });
-          hasApproval = true;
-          approvedValue = result.value;
+          approvals.push(result.value);
           continue;
         }
         throw new Error(
-          `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", or undefined.`,
+          `Handler returned invalid result type: ${JSON.stringify(result)}. Expected "approve", "reject", "propagate", "pass", or undefined.`,
         );
       }
     } finally {
       ctx.statelogClient.endSpan(chainSpanId); // end handlerChain span
     }
     if (hasPropagation) return { kind: "propagated" };
-    if (hasApproval) return { kind: "approved", value: approvedValue };
+    if (approvals.length > 0) {
+      return {
+        kind: "approved",
+        value: approvals.reduce(mergeFor(interruptObj.effect)),
+      };
+    }
     return { kind: "noResponse" };
   });
 }
@@ -301,14 +337,14 @@ async function runHandlerChain(
 /** Merge two chain-segment outcomes with single-process precedence:
  * reject > propagate > approve > noResponse. `inner` is the segment closer
  * to the interrupt (e.g. the child process), `outer` the segment farther
- * from it (e.g. the parent). On double-approve the OUTER value wins,
- * falling back to the inner value via `??`. Note this is deliberately
- * WEAKER than the in-process chain (which overwrites unconditionally, so
- * an outer approve-with-no-value clears an inner injected value): the
+ * from it (e.g. the parent). A double-approve merges through the EFFECT's
+ * approval merge (effectMerge.ts) — std::guard grants accumulate; every
+ * other effect keeps the historical IPC default, where the outer value
+ * wins but a VALUELESS outer approve defers to the inner value (the
  * outcome travels as JSON, which cannot distinguish an absent value from
- * an explicit undefined, so a valueless outer approve defers to the
- * inner value instead. */
+ * an explicit undefined). */
 export function mergeChainOutcomes(
+  effect: string,
   inner: HandlerChainOutcome,
   outer: HandlerChainOutcome,
 ): HandlerChainOutcome {
@@ -319,7 +355,10 @@ export function mergeChainOutcomes(
   }
   if (outer.kind === "approved") {
     const innerValue = inner.kind === "approved" ? inner.value : undefined;
-    return { kind: "approved", value: outer.value ?? innerValue };
+    return {
+      kind: "approved",
+      value: mergeForIpc(effect)(innerValue, outer.value),
+    };
   }
   if (inner.kind === "approved") return inner;
   return { kind: "noResponse" };
@@ -358,7 +397,7 @@ export async function gatherChainOutcome(
   if (isIpcMode()) {
     const parentOutcome = await sendInterruptToParent(interruptObj, interruptId);
     return {
-      outcome: mergeChainOutcomes(local, parentOutcome),
+      outcome: mergeChainOutcomes(interruptObj.effect, local, parentOutcome),
       parentDecided: parentOutcome.kind !== "noResponse",
     };
   }

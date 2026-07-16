@@ -33,7 +33,7 @@ export function makeMockCtx(opts: {
     _toolCallDepth: 0,
     runId: null,
     traceConfig: {},
-    pushHandler(fn: any) { this.handlers.push(fn); },
+    pushHandler(fn: any, liveGuardIds: string[] = []) { this.handlers.push({ fn, liveGuardIds }); },
     popHandler() { this.handlers.pop(); },
     isCancelled() { return false; },
     enterToolCall() { this._toolCallDepth++; },

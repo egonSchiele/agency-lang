@@ -1,0 +1,6 @@
+getRuntimeContext().ctx.pushHandler({{{handler}}}, []);
+{{{indent}}}try {
+{{{body}}}
+{{{indent}}}} finally {
+{{{indentInner}}}getRuntimeContext().ctx.popHandler();
+{{{indent}}}}

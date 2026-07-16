@@ -1,0 +1,35 @@
+// Suspension must never survive a checkpoint (resumable-guards plan,
+// Task 1.3 test 4). The handler here PROPAGATES, so the interrupt
+// surfaces to the harness while the handler-suspension machinery has
+// been engaged and released around the handler call. After the harness
+// approves and the run resumes, the guard must still meter: the second
+// llm() pushes spend past the 1.25-call limit and the guard trips.
+//
+// If suspension state leaked into the snapshot in any form (a flag on
+// the guard, the stack's suspended-id set), the resumed guard would be
+// blind and the run would finish under budget — a different output.
+// This also exercises the registration memo across a real restore: the
+// resumed run replays the handle registration and must reconstruct the
+// same scoping.
+import { guard } from "std::thread"
+
+def work() {
+  const a = llm("Reply with: one")
+  const check = interrupt("continue?")
+  const b = llm("Reply with: two")
+  return "done"
+}
+
+node main() {
+  handle {
+    const r = guard(cost: 0.0000025) as {
+      return work()
+    }
+    if (isFailure(r)) {
+      return "tripped-after-resume"
+    }
+    return r.value
+  } with (data) {
+    return propagate()
+  }
+}

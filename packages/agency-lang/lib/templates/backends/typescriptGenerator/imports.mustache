@@ -46,6 +46,7 @@ const getDirname = () => __dirname;
 export function approve(value?: any) { return { type: "approve" as const, value }; }
 export function reject(value?: any) { return { type: "reject" as const, value }; }
 function propagate() { return { type: "propagate" as const }; }
+function pass() { return { type: "pass" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };

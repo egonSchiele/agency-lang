@@ -6,6 +6,7 @@ import {
   mergeChainOutcomes,
   interruptWithHandlers,
   gatherChainOutcome,
+  pass,
 } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
 
@@ -26,7 +27,7 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers;
+    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
     return ctx;
   };
 
@@ -114,7 +115,7 @@ describe("interruptWithHandlers expectsValue", () => {
       smoltalkDefaults: {},
       dirname: process.cwd(),
     });
-    ctx.handlers = handlers;
+    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
     // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
     // ctx.getRunId()), which a real run sets when the exec context is created.
     ctx.runId = "test-run";
@@ -164,32 +165,32 @@ describe("mergeChainOutcomes", () => {
   const silent = { kind: "noResponse" } as const;
 
   it("outer reject wins over inner approve", () => {
-    expect(mergeChainOutcomes(approvedA, rejected)).toEqual(rejected);
+    expect(mergeChainOutcomes("std::bash", approvedA, rejected)).toEqual(rejected);
   });
 
   it("inner reject wins regardless of outer", () => {
-    expect(mergeChainOutcomes(rejected, approvedA)).toEqual(rejected);
+    expect(mergeChainOutcomes("std::bash", rejected, approvedA)).toEqual(rejected);
   });
 
   it("any propagate beats approve", () => {
-    expect(mergeChainOutcomes(propagated, approvedA)).toEqual(propagated);
-    expect(mergeChainOutcomes(approvedA, propagated)).toEqual(propagated);
+    expect(mergeChainOutcomes("std::bash", propagated, approvedA)).toEqual(propagated);
+    expect(mergeChainOutcomes("std::bash", approvedA, propagated)).toEqual(propagated);
   });
 
   it("inner approve + outer silence = approve (the regression fix)", () => {
-    expect(mergeChainOutcomes(approvedA, silent)).toEqual(approvedA);
+    expect(mergeChainOutcomes("std::bash", approvedA, silent)).toEqual(approvedA);
   });
 
   it("outer approved value wins; falls back to inner value", () => {
-    expect(mergeChainOutcomes(approvedA, approvedB)).toEqual(approvedB);
-    expect(mergeChainOutcomes(approvedA, approvedNoValue)).toEqual({
+    expect(mergeChainOutcomes("std::bash", approvedA, approvedB)).toEqual(approvedB);
+    expect(mergeChainOutcomes("std::bash", approvedA, approvedNoValue)).toEqual({
       kind: "approved",
       value: "a",
     });
   });
 
   it("total silence stays noResponse for the caller to map to propagate", () => {
-    expect(mergeChainOutcomes(silent, silent)).toEqual(silent);
+    expect(mergeChainOutcomes("std::bash", silent, silent)).toEqual(silent);
   });
 });
 
@@ -285,5 +286,57 @@ describe("reportUnhandledInterrupts", () => {
     const printed = err.mock.calls.map((c) => c.join(" ")).join("\n");
     expect(printed).toContain('Interrupt "std::read" was not handled');
     expect(printed).toContain('Interrupt "std::edit" was not handled');
+  });
+});
+
+describe("pass()", () => {
+  const makeCtx = (handlers: any[]): RuntimeContext<any> => {
+    const ctx = new RuntimeContext({
+      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
+    // The surfaced path stamps the run id onto the Interrupt (renderVerdict →
+    // ctx.getRunId()), which a real run sets when the exec context is created.
+    ctx.runId = "test-run";
+    return ctx;
+  };
+
+  it("a handler returning pass() defers to the next handler", async () => {
+    const ctx = makeCtx([
+      async () => ({ type: "approve", value: "outer" }), // outer (walked last)
+      async () => pass(),                                // inner (walked first)
+    ]);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    expect(verdict).toEqual({ type: "approve", value: "outer" });
+  });
+
+  it("a handler returning undefined still defers (back-compat)", async () => {
+    const ctx = makeCtx([
+      async () => ({ type: "approve", value: "outer" }),
+      async () => undefined,
+    ]);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    expect(verdict).toEqual({ type: "approve", value: "outer" });
+  });
+
+  it("pass() and undefined both emit a handlerDecision of pass", async () => {
+    const ctx = makeCtx([
+      async () => ({ type: "approve", value: "ok" }),
+      async () => undefined,
+      async () => pass(),
+    ]);
+    const decisions = vi.spyOn(ctx.statelogClient, "handlerDecision");
+    await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    const kinds = decisions.mock.calls.map((c) => c[0].decision);
+    expect(kinds).toEqual(["pass", "pass", "approve"]);
+  });
+
+  it("every handler passing surfaces the interrupt", async () => {
+    const ctx = makeCtx([async () => pass(), async () => pass()]);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    expect(Array.isArray(verdict)).toBe(true);
+    expect((verdict as any)[0].effect).toBe("std::bash");
   });
 });

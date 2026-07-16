@@ -82,13 +82,16 @@ export function redactMessagesForLog(
 /** A thread's redacted messages for statelog, each carrying its debug
  *  label (from `llm(label:)` / `userMessage(msg, label:)`) when it has
  *  one. Reads the labels off the SAME thread that produced the dump, so
- *  index `i` lines up: `redactMessagesForLog` maps `messages` in order.
+ *  index `i` lines up: `redactMessagesForLog` maps `messages` in order,
+ *  and smoltalk's `redactAttachments` is 1:1 over an array. That second
+ *  half is someone else's implementation detail, so a test pins the
+ *  pairing through the redaction path with a real attachment.
  *
  *  Unlabeled messages are emitted unchanged rather than with `label:
  *  null`, so logs for label-free programs stay byte-identical. */
 export function withMessageLabels(
   messages: MessageThread,
-): smoltalk.MessageJSON[] {
+): (smoltalk.MessageJSON & { label?: string })[] {
   return redactMessagesForLog(messages).map((m, i) => {
     const label = messages.labelAt(i);
     return label === null ? m : { ...m, label };
@@ -974,7 +977,10 @@ export async function runPrompt(args: {
   if (self.messagesJSON) {
     const restored = MessageThread.fromJSON(self.messagesJSON);
     if (args.messages) {
-      args.messages.setMessages(restored.getMessages());
+      // adoptFrom, not setMessages(restored.getMessages()): the latter
+      // takes only the messages and would drop the labels fromJSON just
+      // restored. The alias is still preserved.
+      args.messages.adoptFrom(restored);
       messages = args.messages;
     } else {
       messages = restored;
@@ -996,7 +1002,12 @@ export async function runPrompt(args: {
     ctx,
     stateStack,
     checkpointInfo,
-    snapshotMessages: () => messages.toJSON().messages,
+    // The FULL MessageThreadJSON, not just `.messages`: the bare array
+    // revives through fromJSON's legacy branch, which has no labels to
+    // read, so a snapshot of only the messages loses every label across
+    // interrupt/resume. Old checkpoints still hold a bare array and keep
+    // reviving through that same legacy branch, so this is back-compatible.
+    snapshotMessages: () => messages.toJSON(),
   });
 
   // One llmCall span covers the WHOLE `llm()` call — every tool-loop
@@ -1072,12 +1083,14 @@ export async function runPrompt(args: {
             all[i].role === "system" &&
             all[i].content === injectedFactsContent
           ) {
-            messages.setMessages([...all.slice(0, i), ...all.slice(i + 1)]);
+            // removeAt, not setMessages: this edits ONE message out of the
+            // thread, so it must not reset the labels of all the others.
+            messages.removeAt(i);
             break;
           }
         }
       }
-      self.messagesJSON = messages.toJSON().messages;
+      self.messagesJSON = messages.toJSON();
       self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
     });
 
@@ -1631,7 +1644,7 @@ export async function runPrompt(args: {
               ),
             );
             self.runnerState.replyAttachments = [];
-            self.messagesJSON = messages.toJSON().messages;
+            self.messagesJSON = messages.toJSON();
           });
         }
 
@@ -1657,7 +1670,7 @@ export async function runPrompt(args: {
           // Increment the round counter only after a successful LLM round,
           // so resume after a tool-batch interrupt re-enters the SAME round.
           self.toolCallRound = round + 1;
-          self.messagesJSON = messages.toJSON().messages;
+          self.messagesJSON = messages.toJSON();
           self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
         });
       }
@@ -1724,7 +1737,7 @@ export async function runPrompt(args: {
           },
         });
         messages.push(smoltalk.userMessage(decision.feedback));
-        self.messagesJSON = messages.toJSON().messages;
+        self.messagesJSON = messages.toJSON();
       });
       await pr.step(`validation.${validationAttempt}.llmCall`, async () => {
         const nextResult = await _runPrompt({
@@ -1744,7 +1757,7 @@ export async function runPrompt(args: {
         // bailout before this step completes leaves the counter unchanged,
         // so resume re-enters the SAME attempt with the same step keys.
         self.validationAttempt = validationAttempt + 1;
-        self.messagesJSON = messages.toJSON().messages;
+        self.messagesJSON = messages.toJSON();
         self.pendingToolCalls = toolCalls.length > 0 ? toolCalls : null;
       });
       // Loop: the retry response may itself contain tool calls; the inner

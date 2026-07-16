@@ -19,19 +19,27 @@ Agency uses a **ThreadStore** + **MessageThread** system to manage LLM conversat
 
 `messageLabels` holds an optional debug label per message, from `llm(label:)` / `userMessage(msg, label:)` and friends. It is observability-only: labels surface in statelog (see `docs/dev/statelog.md`) and are never sent to the provider. It is **not** the same field as the thread-level `label`, which comes from `thread(label: "...")` and names the whole thread.
 
-`messageLabels` is aligned with `messages` **by index** — `messageLabels[i]` labels `messages[i]`, and the lengths always match. An index-aligned array is what lets labels serialize with the thread (a `WeakMap` keyed by message identity would survive slicing but not `toJSON`). The tradeoff is that nothing in the type system enforces the alignment, so it is enforced by keeping the writers to a minimum:
+Smoltalk messages have no id, so a label cannot be keyed to the message it describes. `messageLabels` is instead aligned with `messages` **by index** — `messageLabels[i]` labels `messages[i]`, and the lengths always match. An index-aligned array is also what lets labels serialize with the thread (a `WeakMap` keyed by message identity would survive slicing but not `toJSON`).
 
-- **`push(message, label?)` is the only append.** `addMessage()` delegates to it rather than appending on its own.
-- **The constructor and `setMessages()` are the only replacements**, and both rebuild `messageLabels` to the new length.
+The tradeoff is that nothing in the type system enforces the alignment. It is enforced instead by keeping the writers few, and by giving every caller an operation that carries the labels along — so no caller has a reason to reach past them:
+
+- **`push(message, label?)`** — the only append. `addMessage()` delegates to it.
+- **`removeAt(index)`** — the only removal. Takes the message's label out with it.
+- **`adoptFrom(other)`** — take on another thread's messages *and* labels, keeping this thread's identity (the resume path needs the alias).
+- **the constructor and `setMessages(messages, labels?)`** — the only replacements. Both rebuild `messageLabels` to the new length.
 - **Nothing else touches `this.messages`.**
 
 Treat any new direct mutation of `this.messages` as a bug: a desync does not degrade gracefully, it shifts every later label onto the wrong message. Each writer has a test in `messageThread.test.ts` that fails on a desync.
 
-Two consequences worth knowing:
-- **`setMessages` drops labels** (rebuilds them as all-null). Thread rewrites — summarization, `threadRepair` — therefore lose labels. Intended.
-- **`newSubthreadChild()` does not carry the parent's labels**: it seeds the child via `cloneMessages()`, which copies messages only, so the child starts correctly aligned with all-null labels.
+This matters in practice. Before `removeAt` and `adoptFrom` existed, two callers reached for `setMessages` for jobs that were not rewrites and silently dropped every label: the memory layer removing its injected-facts message (on the **normal** path, so a labeled program lost its labels after the first `llm()` call), and the resume path overwriting the thread with the messages it had just restored.
 
-Serialization: `messageLabels` round-trips through `toJSON`/`fromJSON`. Legacy JSON without the field revives as all-null. In `fromJSON` the restore must run **after** the internal `setMessages()` call, which would otherwise reset it.
+Things worth knowing:
+- **`setMessages` with no `labels` drops labels.** Wholesale rewrites that cannot say what the labels are — summarization, `threadRepair` — therefore lose them. Intended. Callers that *do* know the labels pass them.
+- **A `labels` array whose length disagrees with `messages` is refused**, not padded or sliced: a disagreement means the source is already wrong, and guessing would put real labels on wrong messages. Unlabeled beats mislabeled.
+- **`newSubthreadChild()` does not carry the parent's labels**: it seeds the child via `cloneMessages()`, which copies messages only, so the child starts correctly aligned with all-null labels.
+- **`toJSON()` hands out a copy** of `messageLabels`, so a consumer mutating the JSON cannot mutate the thread.
+
+Serialization: `messageLabels` round-trips through `toJSON`/`fromJSON`; legacy JSON without the field revives as all-null. Anything that snapshots a thread for checkpoint/resume must persist the **full `MessageThreadJSON`**, not just `.messages` — a bare array revives through `fromJSON`'s legacy branch, which has no labels to read, so the labels would be gone after resume. `runPrompt`'s `snapshotMessages` does this; `fromJSON` still accepts the bare array so older checkpoints keep working.
 
 **`ThreadStore`** (`lib/runtime/state/threadStore.ts`):
 - Registry of `MessageThread` objects keyed by auto-incremented string IDs

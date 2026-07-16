@@ -20,11 +20,13 @@
 
 `messageLabels` is aligned with `messages` **by index**: `messageLabels.length === messages.length` at all times, and `messageLabels[i]` is the label of `messages[i]`.
 
-An index-aligned parallel array is the only shape that serializes (a `WeakMap` keyed by message identity would survive slicing but not `toJSON`). The cost is that the invariant is not enforced by the type — it is enforced by making **exactly one place** able to grow the arrays. So:
+Smoltalk messages have no id (`MessageClass` exposes content/role/name/rawData only), so a label cannot be keyed to its message. An index-aligned parallel array is also the only shape that serializes (a `WeakMap` keyed by message identity would survive slicing but not `toJSON`). The cost is that the invariant is not enforced by the type — it is enforced by keeping the writers few, and by giving every caller an operation that carries the labels along, so no caller has a reason to reach past them:
 
-- **`push(message, label?)` is the ONLY writer that appends.** Every other append delegates to it.
-- **The constructor and `setMessages` are the ONLY writers that replace**, and both rebuild `messageLabels` to match the new `messages` length.
-- **No other code may touch `this.messages` directly.** A plan review found two sites that would have silently desynced (below); the fix is structural, not "remember to update both".
+- **`push(message, label?)`** — the ONLY append. Every other append delegates to it.
+- **`removeAt(index)`** — the ONLY removal.
+- **`adoptFrom(other)`** — take on another thread's messages AND labels, keeping this thread's identity.
+- **The constructor and `setMessages(messages, labels?)`** — the ONLY replacements; both rebuild `messageLabels` to the new length.
+- **No other code may touch `this.messages` directly.** A plan review found two sites that would have silently desynced (below); PR review found two more that reached for `setMessages` for jobs that were not rewrites. The fix is structural, not "remember to update both".
 
 Desync is not a graceful degradation — it **mislabels**. If `messageLabels` is one short, every later `labelAt(i)` returns the *previous* message's label. Treat any new `this.messages` mutation as a bug.
 
@@ -363,3 +365,12 @@ Stdlib reference regenerates from the docstrings written in Task 2. Update the t
 - Task 4 must call `labelAt` on the dumped `MessageThread` (`messages`), not a differently-named `thread`.
 - Task 5's e2e now pins label-to-message pairing with an unlabeled system message at index 0.
 - `llm()` labeling multiple messages (prompt + completion) is **intended**; documented in Task 3 Step 3 so it is not "fixed" later.
+
+### PR review round 2 findings (2026-07-16)
+
+Two more real bugs, both from callers reaching for `setMessages` for a job that was not a rewrite — the same class of problem as `addMessage`, and fixed the same way (give the caller the operation it actually wants):
+
+- **The memory layer lost every label on the normal path.** `prompt.ts` removed its injected-facts system message with `setMessages([...slice, ...slice])`, resetting all labels as collateral — so with memory on, a labeled program lost its labels after the first `llm()` call. Now `removeAt(i)`.
+- **Labels did not survive interrupt/resume.** `runPrompt` snapshotted `messages.toJSON().messages` (a bare array) into `self.messagesJSON`; resume revived it through `fromJSON`'s legacy branch, which has no labels to read. And the resume path then called `setMessages(restored.getMessages())`, discarding whatever had been restored. Now the snapshot persists the full `MessageThreadJSON` (back-compatible: `fromJSON` still accepts the bare array) and resume uses `adoptFrom`. Pinned by `tests/agency-js/message-labels-resume`, verified to fail without the fix (`labeledAfterResume: []`).
+
+Also: `setMessages` gained the optional `labels` argument, which removed the `fromJSON` ordering trap entirely and gave length-normalization one home (a mismatched array is refused, not padded — unlabeled beats mislabeled); `toJSON` now copies the labels array rather than handing out the live one; `withMessageLabels` declares `& { label?: string }`; and the index join through smoltalk's redaction is now pinned by a test with a real attachment rather than assumed.

@@ -45,12 +45,19 @@ export class MessageThread {
    *  Observability only: shown in statelog, never sent to the provider.
    *  Distinct from the thread-level `label` above (set by `thread(label:)`).
    *
-   *  The alignment is maintained by keeping the writers to a minimum:
-   *  `push` is the only append, the constructor and `setMessages` are the
-   *  only replacements, and nothing else touches `this.messages`. A desync
-   *  does not degrade gracefully — it shifts every later label onto the
-   *  wrong message — so keep it that way. A rewrite via `setMessages`
-   *  (summarization, repair) drops labels; that is intended. */
+   *  The alignment is maintained by keeping the writers to a minimum, and
+   *  by giving every caller an operation that carries the labels along
+   *  instead of a reason to reach past them:
+   *
+   *  - `push` — the only append.
+   *  - `removeAt` — the only removal.
+   *  - `adoptFrom` — take on another thread's messages and labels.
+   *  - the constructor and `setMessages` — the only replacements.
+   *
+   *  Nothing else touches `this.messages`. A desync does not degrade
+   *  gracefully — it shifts every later label onto the wrong message — so
+   *  keep it that way. A rewrite via `setMessages` with no labels
+   *  (summarization, repair) drops them; that is intended. */
   messageLabels: (string | null)[];
 
   constructor(messages: smoltalk.Message[] = []) {
@@ -77,9 +84,41 @@ export class MessageThread {
     return this.messages;
   }
 
-  setMessages(messages: smoltalk.Message[]): void {
+  /** Wholesale rewrite: take on `messages`, and `labels` with them when
+   *  the caller has them (the restore path). Without `labels` the new
+   *  messages are unlabeled — a rewrite that cannot say what the labels
+   *  are does not get to keep the old ones, which is why summarization
+   *  and `threadRepair` drop them.
+   *
+   *  A `labels` array whose length disagrees with `messages` is refused
+   *  outright rather than padded or sliced: the lengths disagreeing means
+   *  the source is already wrong, and guessing an alignment would put
+   *  real labels on the wrong messages. Unlabeled beats mislabeled. */
+  setMessages(
+    messages: smoltalk.Message[],
+    labels?: (string | null)[],
+  ): void {
     this.messages = messages;
-    this.messageLabels = messages.map(() => null);
+    this.messageLabels =
+      labels !== undefined && labels.length === messages.length
+        ? [...labels]
+        : messages.map(() => null);
+  }
+
+  /** Remove the message at `index`, taking its label with it. For the
+   *  callers that edit one message out of the thread and would otherwise
+   *  reach for `setMessages` and drop every label as collateral. */
+  removeAt(index: number): void {
+    this.messages.splice(index, 1);
+    this.messageLabels.splice(index, 1);
+  }
+
+  /** Take on `other`'s messages AND labels while keeping this thread's
+   *  identity. The resume path needs the alias preserved, so it cannot
+   *  just swap in the restored object. */
+  adoptFrom(other: MessageThread): void {
+    this.messages = [...other.messages];
+    this.messageLabels = [...other.messageLabels];
   }
 
   /** The ONLY append. Everything that adds a message goes through here,
@@ -113,7 +152,10 @@ export class MessageThread {
   toJSON(): MessageThreadJSON {
     return {
       messages: this.messages.map((m) => m.toJSON()),
-      messageLabels: this.messageLabels,
+      // Copy, not the live array: `messages` above is rebuilt, so handing
+      // out the real one would let a consumer mutating the JSON mutate the
+      // thread — the one way to reach `messageLabels` without a writer.
+      messageLabels: [...this.messageLabels],
       parentId: this.parentId,
       hidden: this.hidden,
       label: this.label,
@@ -169,12 +211,10 @@ export class MessageThread {
       smoltalk.messageFromJSON(m),
     );
 
-    thread.setMessages(smoltalkMessages);
-    // AFTER setMessages: it resets messageLabels to all-null, so the
-    // restore has to come second or it gets clobbered. Legacy JSON (no
-    // messageLabels) keeps the all-null array setMessages just built.
-    thread.messageLabels =
-      _messageLabels ?? smoltalkMessages.map(() => null);
+    // Labels ride along with the messages: legacy JSON has none and
+    // revives unlabeled, and a labels array that disagrees in length is
+    // refused inside setMessages rather than guessed at.
+    thread.setMessages(smoltalkMessages, _messageLabels);
     thread.parentId = _parentId;
     thread.hidden = _hidden;
     thread.label = _label;

@@ -17,6 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
+  __stampCarriedDraft,
+  __markReturnCarry,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -286,6 +288,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "mapItems", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -404,6 +412,13 @@ runner.halt(__bstack.args.x * 2)
 return;
   });
 return runner.halted ? runner.haltResult : undefined;
+} catch (__blockError) {
+// Level rule for the block frame — see functionCatchFailure.mustache.
+// This is where a saveDraft placed directly inside a guard block gets its
+// partial onto the abort. __stampCarriedDraft no-ops on non-abort errors,
+// so no instanceof check is needed; the rethrow preserves unwind order.
+__stampCarriedDraft(__blockError, __bstack, "__block_0", __ctx);
+throw __blockError;
 } finally {
 // Pop the SAME stack `setupFunction` pushed onto (the ALS-current
 // stack via `__bsetup.stateStack`), NOT `__ctx.stateStack`. When this

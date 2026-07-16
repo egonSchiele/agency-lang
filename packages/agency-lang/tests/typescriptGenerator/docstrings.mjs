@@ -17,6 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
+  __stampCarriedDraft,
+  __markReturnCarry,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -262,6 +264,12 @@ await callHook({
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "add", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -408,6 +416,12 @@ await callHook({
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "greet", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -552,6 +566,12 @@ await callHook({
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "calculateArea", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -696,6 +716,12 @@ await callHook({
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "processData", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -820,6 +846,12 @@ await callHook({
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "versionedTool", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before

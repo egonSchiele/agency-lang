@@ -191,6 +191,20 @@ function walkMarkTopLevel(value: unknown): unknown {
   return out;
 }
 
+/** True when the AST fragment contains a functionCall node anywhere.
+ *  Used by the return-position pass-through gate: `return f(g())` must
+ *  compile unmarked, because g's trip would be wrongly typed for this
+ *  scope if it picked up the mark. Walks raw AST objects — conservative
+ *  by construction (any nested call, even a JS-level method chain that
+ *  parses as a functionCall, disables the mark). */
+function containsFunctionCallDeep(node: unknown): boolean {
+  if (node == null || typeof node !== "object") return false;
+  if (Array.isArray(node)) return node.some(containsFunctionCallDeep);
+  const rec = node as Record<string, unknown>;
+  if (rec.type === "functionCall") return true;
+  return Object.values(rec).some(containsFunctionCallDeep);
+}
+
 export class TypeScriptBuilder {
   // Output assembly
   private generatedStatements: TsNode[] = [];
@@ -3107,6 +3121,36 @@ export class TypeScriptBuilder {
     return this.generateNodeCallExpression(node.nodeCall);
   }
 
+  /** Return-position pass-through (carry-on-abort level rule, rung 3):
+   *  `return f(...)` declares that f's value IS this scope's value — the
+   *  checker enforced the types — so a trip escaping f may carry f's
+   *  partial through this frame unchanged. The mark is sound only when no
+   *  OTHER Agency call evaluates inside the wrapped statement: a nested
+   *  call's partial is not return-typed for this scope. So the mark
+   *  applies only when the arguments contain no function calls;
+   *  `return f(g())` compiles unmarked and rung 4 erases instead
+   *  (conservative). llm() returns hoist through their own path and are
+   *  never marked. */
+  private isMarkableReturnCall(value: AgencyNode): boolean {
+    if (value.type !== "functionCall") return false;
+    if (value.functionName === "llm") return false;
+    return !containsFunctionCallDeep(value.arguments);
+  }
+
+  /** Wrap a compiled return-position call so a passing AgencyAbort gets
+   *  the consume-once returnCarry flag before continuing to this frame's
+   *  catch rung. See lib/runtime/carriedDraft.ts. */
+  private markReturnCarryWrap(returnStmt: TsNode): TsNode {
+    return ts.tryCatch(
+      ts.statements([returnStmt]),
+      ts.statements([
+        ts.raw("__markReturnCarry(__returnError)"),
+        ts.raw("throw __returnError"),
+      ]),
+      "__returnError",
+    );
+  }
+
   private processReturnStatement(node: ReturnStatement): TsNode {
     // Bare return (no value)
     if (!node.value) {
@@ -3154,6 +3198,9 @@ export class TypeScriptBuilder {
         ]);
       }
       const valueNode = this.processNode(node.value);
+      if (this.isMarkableReturnCall(node.value)) {
+        return this.markReturnCarryWrap(ts.runnerHalt(valueNode));
+      }
       return ts.runnerHalt(valueNode);
     }
 
@@ -3208,6 +3255,11 @@ export class TypeScriptBuilder {
       ]);
     }
     const valueNode = this.processNode(node.value);
+    if (this.isMarkableReturnCall(node.value)) {
+      return this.markReturnCarryWrap(
+        ts.functionReturn(this.maybeWrapReturnValidation(valueNode)),
+      );
+    }
     return ts.functionReturn(this.maybeWrapReturnValidation(valueNode));
   }
 

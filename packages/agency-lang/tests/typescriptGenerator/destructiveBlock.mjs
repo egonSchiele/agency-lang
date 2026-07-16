@@ -17,6 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
+  __stampCarriedDraft,
+  __markReturnCarry,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -258,6 +260,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "prep", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -401,6 +409,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "_doWrite", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -535,12 +549,17 @@ if (hasInterrupts(__stack.locals.p)) {
 __self.__destructiveRan = true;
       });
       await runner.step(3, async (runner) => {
-__functionCompleted = true;
+try {
+          __functionCompleted = true;
 runner.halt(await __call(_doWrite, {
-          type: "positional",
-          args: [__stack.locals.p]
-        }))
+            type: "positional",
+            args: [__stack.locals.p]
+          }))
 return;
+        } catch (__returnError) {
+          __markReturnCarry(__returnError)
+          throw __returnError
+        }
       });
     })
     if (runner.halted) {
@@ -561,6 +580,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "writeThing", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before

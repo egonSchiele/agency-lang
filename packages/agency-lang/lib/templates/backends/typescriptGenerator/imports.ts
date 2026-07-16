@@ -22,6 +22,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
+  __stampCarriedDraft,
+  __markReturnCarry,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,

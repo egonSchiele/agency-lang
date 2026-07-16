@@ -17,6 +17,8 @@ import {
   runExportedFunction as _runExportedFunction,
   RestoreSignal,
   AgencyAbort,
+  __stampCarriedDraft,
+  __markReturnCarry,
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
@@ -272,6 +274,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "parseValue", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before
@@ -395,15 +403,20 @@ await callHook({
 //  Return-position injection: outer return type provides the hint.
       });
       await runner.step(2, async (runner) => {
-__functionCompleted = true;
+try {
+          __functionCompleted = true;
 runner.halt(await __call(parseValue, {
-          type: "named",
-          positionalArgs: [`[1,2,3]`],
-          namedArgs: {
-            s: new Schema(z.array(z.number()))
-          }
-        }))
+            type: "named",
+            positionalArgs: [`[1,2,3]`],
+            namedArgs: {
+              s: new Schema(z.array(z.number()))
+            }
+          }))
 return;
+        } catch (__returnError) {
+          __markReturnCarry(__returnError)
+          throw __returnError
+        }
       });
     })
     if (runner.halted) {
@@ -424,6 +437,12 @@ return;
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
 if (__error instanceof AgencyAbort) {
+  // Level rule (saveDraft): this frame REPLACES the carried draft with its
+  // own partial — its savedDraft if it saved one, its callee's partial when
+  // the trip escaped a return-position call, else nothing. A partial crosses
+  // one level at a time; a frame with nothing to say ERASES the carried
+  // draft. See lib/runtime/carriedDraft.ts.
+  __stampCarriedDraft(__error, __stack, "wrapper", __ctx);
   throw __error;
 }
 // Surface the underlying exception via logger + statelog before

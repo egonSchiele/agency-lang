@@ -14,6 +14,13 @@ const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{modul
 try {
 {{{body}}}
 return runner.halted ? runner.haltResult : undefined;
+} catch (__blockError) {
+// Level rule for the block frame — see functionCatchFailure.mustache.
+// This is where a saveDraft placed directly inside a guard block gets its
+// partial onto the abort. __stampCarriedDraft no-ops on non-abort errors,
+// so no instanceof check is needed; the rethrow preserves unwind order.
+__stampCarriedDraft(__blockError, __bstack, {{{scopeName}}}, __ctx);
+throw __blockError;
 } finally {
 // Pop the SAME stack \`setupFunction\` pushed onto (the ALS-current
 // stack via \`__bsetup.stateStack\`), NOT \`__ctx.stateStack\`. When this

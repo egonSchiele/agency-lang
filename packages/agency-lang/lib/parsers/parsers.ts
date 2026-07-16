@@ -143,6 +143,7 @@ import { ExportFromStatement, NamedExportBody } from "../types/exportFromStateme
 import { DefaultCase, MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { HandleBlock } from "@/types/handleBlock.js";
+import { FinalizeBlock } from "@/types/finalizeBlock.js";
 import { WithModifier } from "@/types/withModifier.js";
 import { StaticStatement } from "@/types/staticStatement.js";
 import {
@@ -3991,6 +3992,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   lazy(() => ifParser),
   lazy(() => messageThreadParser),
   lazy(() => handleBlockParser),
+  lazy(() => finalizeBlockParser),
   debuggerParser,
   multiLineCommentParser,
   commentParser,
@@ -4224,6 +4226,29 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(memo(
     str("with"),
     optionalSpaces,
     capture(or(inlineHandlerParser, functionRefHandlerParser), "handler"),
+  ),
+));
+
+/** `finalize { ... }` — keyword block, no binder and no `with` clause.
+ *  Mirrors handleBlockParser's keyword handling: the word-boundary check
+ *  keeps an identifier like `finalizer(...)` parsing as a call. */
+export const finalizeBlockParser: Parser<FinalizeBlock> = withLoc(memo(
+  "finalizeBlockParser",
+  seqC(
+    set("type", "finalizeBlock"),
+    str("finalize"),
+    not(varNameChar),
+    optionalSpaces,
+    captureCaptures(
+      parseError(
+        "expected `{` to open finalize block body",
+        char("{"),
+        optionalSpacesOrNewline,
+        capture(bodyParser, "body"),
+        optionalSpacesOrNewline,
+        char("}"),
+      ),
+    ),
   ),
 ));
 

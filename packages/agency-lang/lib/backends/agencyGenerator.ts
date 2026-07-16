@@ -63,6 +63,7 @@ import {
 import { expressionToString } from "@/utils/node.js";
 import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
+import { FinalizeBlock } from "@/types/finalizeBlock.js";
 import { Tag } from "@/types/tag.js";
 import { NewExpression } from "@/types/newExpression.js";
 import {
@@ -496,6 +497,8 @@ export class AgencyGenerator {
         return this.processMessageThread(node);
       case "handleBlock":
         return this.processHandleBlock(node);
+      case "finalizeBlock":
+        return this.processFinalizeBlock(node);
       case "withModifier":
         return `${this.processNode(node.statement)} with ${node.handlerName}`;
       case "staticStatement":
@@ -1662,6 +1665,13 @@ export class AgencyGenerator {
     return this.indentStr(
       `handle {\n${bodyCodeStr}${this.indentStr("}")} with ${handlerStr}`,
     );
+  }
+
+  protected processFinalizeBlock(node: FinalizeBlock): string {
+    this.increaseIndent();
+    const bodyCodeStr = this.renderBody(node.body);
+    this.decreaseIndent();
+    return this.indentStr(`finalize {\n${bodyCodeStr}${this.indentStr("}")}`);
   }
 
   protected processSkill(node: Skill): string {

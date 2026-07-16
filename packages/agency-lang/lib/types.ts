@@ -30,6 +30,7 @@ import { ParallelBlock, SeqBlock } from "./types/parallelBlock.js";
 import { MarkDestructiveRan } from "./types/markDestructiveRan.js";
 import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
+import { FinalizeBlock } from "./types/finalizeBlock.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
 import { WithModifier } from "./types/withModifier.js";
 import { StaticStatement } from "./types/staticStatement.js";
@@ -328,6 +329,7 @@ export type AgencyNode =
   | ForLoop
   | AwaitPending
   | HandleBlock
+  | FinalizeBlock
   | WithModifier
   | StaticStatement
   | DebuggerStatement

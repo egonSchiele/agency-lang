@@ -1,0 +1,12 @@
+import type { AgencyNode, BaseNode } from "../types.js";
+
+/** `finalize { ... }` — runs when an abort stops the enclosing scope; its
+ *  return becomes the scope's forced return value (the salvage a guard
+ *  receives). A declaration, not control flow: position in the body does
+ *  not matter, and at most one is allowed per scope. The body compiles in
+ *  the SAME variable scope as the enclosing function or block, so it
+ *  reads the scope's locals directly. */
+export type FinalizeBlock = BaseNode & {
+  type: "finalizeBlock";
+  body: AgencyNode[];
+};

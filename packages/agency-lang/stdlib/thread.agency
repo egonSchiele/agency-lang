@@ -181,6 +181,7 @@ export def getModelCosts(): ModelCost[] {
 
 export type GuardFailureData = {
   type: string;
+  label: string | null;
   maxCost: number | null;
   actualCost: number | null;
   maxTime: number | null;

@@ -29,14 +29,15 @@ Things to note:
 - `result` is a `Result` type. On success, it has the return value. On failure, it has this data:
 
 ```ts
-// "guardFailure" = cost, "timeoutFailure" = time
+// "guardFailure" = cost, "timeoutFailure" = time.
+// Every field is always present; the ones that don't apply are null.
 type GuardFailureData = {
   type: "guardFailure" | "timeoutFailure"
-  label?: string
-  maxCost?: number
-  actualCost?: number
-  maxTime?: number
-  actualTime?: number
+  label: string | null
+  maxCost: number | null
+  actualCost: number | null
+  maxTime: number | null
+  actualTime: number | null
 }
 ```
 

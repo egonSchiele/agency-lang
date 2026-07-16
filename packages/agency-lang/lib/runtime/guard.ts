@@ -95,9 +95,14 @@ export type Guard = {
  *  `try` boundary matches on it (ownedGuardIds), and the boundary's id list
  *  is checkpointed too — if the guard got a fresh id on resume they would no
  *  longer match and the trip would escape its guard. */
+type GuardJSONBase = {
+  guardId?: string;
+  label?: string;
+};
+
 export type GuardJSON =
-  | { kind: "cost"; costLimit: number; spent: number; guardId?: string; label?: string }
-  | { kind: "time"; timeLimit: number; elapsedMs: number; guardId?: string; label?: string };
+  | (GuardJSONBase & { kind: "cost"; costLimit: number; spent: number })
+  | (GuardJSONBase & { kind: "time"; timeLimit: number; elapsedMs: number });
 
 /**
  * Cost guard. Trips when its own `spent` counter exceeds `costLimit`.

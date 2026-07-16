@@ -19,7 +19,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, {{{functionName}}});
+  {{{abortReturn}}}
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -51,6 +51,7 @@ return failure(
 `;
 
 export type TemplateType = {
+  abortReturn: string | boolean | number;
   functionName: string | boolean | number;
 };
 

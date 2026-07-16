@@ -11,7 +11,7 @@ const {{{frameVar}}} = __bstack;
 __bstack.args[{{{this.paramNameQuoted}}}] = {{{this.paramName}}};
 {{/params}}
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}} });
-try {
+{{{finalizeDecl}}}try {
 {{{body}}}
 return runner.halted ? runner.haltResult : undefined;
 } catch (__blockError) {
@@ -20,7 +20,7 @@ return runner.halted ? runner.haltResult : undefined;
 // saved draft. This is how a saveDraft placed directly inside a guard
 // block reaches the guard. Other errors keep throwing as before.
 if (__blockError instanceof AgencyAbort) {
-  return AbortedResult.fromError(__blockError, __bstack, {{{scopeName}}});
+  {{{abortReturn}}}
 }
 throw __blockError;
 } finally {
@@ -44,7 +44,9 @@ export type TemplateType = {
   }[];
   moduleId: string | boolean | number;
   scopeName: string | boolean | number;
+  finalizeDecl: string | boolean | number;
   body: string | boolean | number;
+  abortReturn: string | boolean | number;
 };
 
 const render = (args: TemplateType) => {

@@ -6,6 +6,7 @@ import {
   Assignment,
   BlockType,
   Expression,
+  FinalizeBlock,
   Keyword,
   Literal,
   NamedArgument,
@@ -1766,7 +1767,13 @@ export class TypeScriptBuilder {
     const parentScopeName = this.scopes.currentName();
     this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-    const bodyParts = this.processBodyAsParts(block.body);
+    const { rest, finalize } = this.extractFinalize(block.body);
+    this.finalizePresence.push(finalize !== undefined);
+    const bodyParts = this.processBodyAsParts(rest);
+    const finalizeDecl = finalize
+      ? this.buildFinalizeClosure(finalize, blockName, "__bstack")
+      : undefined;
+    this.finalizePresence.pop();
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
 
@@ -1781,6 +1788,14 @@ export class TypeScriptBuilder {
       scopeName: JSON.stringify(blockName),
       frameVar: `__bframe_${blockName}`,
       body: bodyStr,
+      // Pre-rendered (see the def-catch note): empty/plain strings keep
+      // the no-finalize block output byte-identical.
+      finalizeDecl:
+        finalizeDecl !== undefined ? printTs(finalizeDecl, 0) + "\n" : "",
+      abortReturn:
+        finalize !== undefined
+          ? `return await AbortedResult.fromError(__blockError, __bstack, ${JSON.stringify(blockName)}).withFinalize(__finalize, ${JSON.stringify(blockName)});`
+          : `return AbortedResult.fromError(__blockError, __bstack, ${JSON.stringify(blockName)});`,
     });
 
     const blockFn = ts.arrowFn(
@@ -1811,7 +1826,13 @@ export class TypeScriptBuilder {
     const parentScopeName = this.scopes.currentName();
     this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-    const bodyParts = this.processBodyAsParts(block.body);
+    const { rest, finalize } = this.extractFinalize(block.body);
+    this.finalizePresence.push(finalize !== undefined);
+    const bodyParts = this.processBodyAsParts(rest);
+    const finalizeDecl = finalize
+      ? this.buildFinalizeClosure(finalize, blockName, "__bstack")
+      : undefined;
+    this.finalizePresence.pop();
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
 
@@ -1826,6 +1847,14 @@ export class TypeScriptBuilder {
       scopeName: JSON.stringify(blockName),
       frameVar: `__bframe_${blockName}`,
       body: bodyStr,
+      // Pre-rendered (see the def-catch note): empty/plain strings keep
+      // the no-finalize block output byte-identical.
+      finalizeDecl:
+        finalizeDecl !== undefined ? printTs(finalizeDecl, 0) + "\n" : "",
+      abortReturn:
+        finalize !== undefined
+          ? `return await AbortedResult.fromError(__blockError, __bstack, ${JSON.stringify(blockName)}).withFinalize(__finalize, ${JSON.stringify(blockName)});`
+          : `return AbortedResult.fromError(__blockError, __bstack, ${JSON.stringify(blockName)});`,
     });
 
     const blockFn = ts.arrowFn(
@@ -2069,6 +2098,10 @@ export class TypeScriptBuilder {
     skipHooks?: boolean;
     hoistedAliases?: TsNode[];
     inDestructiveFunction?: boolean;
+    /** The compiled `__finalize` closure declaration, when the def
+     *  declared a finalize block. Placed in the setup so the catch (and
+     *  the post-call guards inside the body) can call it. */
+    finalizeDecl?: TsNode;
   }): TsNode[] {
     const { functionName, parameters, bodyCode, skipHooks } = opts;
     const hoistedAliases = opts.hoistedAliases ?? [];
@@ -2190,6 +2223,9 @@ export class TypeScriptBuilder {
             ],
           }),
         ];
+    if (opts.finalizeDecl !== undefined) {
+      setupStmts.push(opts.finalizeDecl);
+    }
     setupStmts.push(
       ts.tryCatch(
         ts.statements([
@@ -2235,6 +2271,12 @@ export class TypeScriptBuilder {
         ts.raw(
           renderFunctionCatchFailure.default({
             functionName: JSON.stringify(functionName),
+            // Pre-rendered so the no-finalize output is byte-identical to
+            // the pre-finalize compiler (no mustache section whitespace).
+            abortReturn:
+              opts.finalizeDecl !== undefined
+                ? `return await AbortedResult.fromError(__error, __stack, ${JSON.stringify(functionName)}).withFinalize(__finalize, ${JSON.stringify(functionName)});`
+                : `return AbortedResult.fromError(__error, __stack, ${JSON.stringify(functionName)});`,
           }),
         ),
         "__error",
@@ -2266,6 +2308,49 @@ export class TypeScriptBuilder {
     return setupStmts;
   }
 
+  /** True when the innermost function/block scope being compiled declared
+   *  a finalize. Pushed/popped in lockstep with this.scopes by the def and
+   *  block compilers; drives the finalize-aware post-call guard and the
+   *  return-position temp lowering. */
+  private finalizePresence: boolean[] = [];
+
+  private currentScopeHasFinalize(): boolean {
+    return this.finalizePresence[this.finalizePresence.length - 1] === true;
+  }
+
+  /** Split a body into its statements and its (at most one — the checker
+   *  enforces that) top-level finalize block. Defensive: extras beyond the
+   *  first are dropped here but already rejected by AG6032. */
+  private extractFinalize(body: AgencyNode[]): {
+    rest: AgencyNode[];
+    finalize: FinalizeBlock | undefined;
+  } {
+    const rest = body.filter((n) => n.type !== "finalizeBlock");
+    const finalize = body.find(
+      (n): n is FinalizeBlock => n.type === "finalizeBlock",
+    );
+    return { rest, finalize };
+  }
+
+  /** Compile a finalize body into the `__finalize` closure declaration.
+   *  Runs on the SAME frame as its container (locals live on the frame,
+   *  so the body sees them directly); the fresh Runner's "#finalize"
+   *  scope name keeps its step counters from colliding with the body's. */
+  private buildFinalizeClosure(
+    finalize: FinalizeBlock,
+    containerName: string,
+    frameVar: string,
+  ): TsNode {
+    const parts = this.processBodyAsParts(finalize.body, 1);
+    const bodyStr = parts.map((n) => printTs(n, 1)).join("\n");
+    return ts.raw(
+      `const __finalize = async (): Promise<any> => {\n` +
+        `  const runner = new Runner(__ctx, ${frameVar}, { state: ${frameVar}, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(containerName + "#finalize")} });\n` +
+        bodyStr +
+        `\n  return runner.halted ? runner.haltResult : undefined;\n};`,
+    );
+  }
+
   private processFunctionDefinition(node: FunctionDefinition): TsNode {
     this.scopes.push({ type: "function", functionName: node.functionName });
     this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
@@ -2276,10 +2361,20 @@ export class TypeScriptBuilder {
     // Hoist body-local type aliases to the function's outer scope so
     // every runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(node.body);
+    // A finalize is a declaration, not a statement: strip it from the
+    // statement stream and compile it into the __finalize closure the
+    // stop sites call. finalizePresence drives the finalize-aware
+    // post-call guard + return-position lowering while the body compiles.
+    const { rest, finalize } = this.extractFinalize(node.body);
+    this.finalizePresence.push(finalize !== undefined);
     // Body steps occupy substep ids 1..N — id 0 is reserved for the
     // onFunctionStart hook (wrapped in `runner.hook` for substep-counter
     // idempotency on resume).
-    const bodyCode = this.processBodyAsParts(node.body, 1);
+    const bodyCode = this.processBodyAsParts(rest, 1);
+    const finalizeDecl = finalize
+      ? this.buildFinalizeClosure(finalize, functionName, "__stack")
+      : undefined;
+    this.finalizePresence.pop();
     this.scopes.inDestructiveFunction = prevDestructive;
     this.scopes.pop();
 
@@ -2306,6 +2401,7 @@ export class TypeScriptBuilder {
       skipHooks: false,
       hoistedAliases,
       inDestructiveFunction: !!node.markers?.destructive,
+      finalizeDecl,
     });
 
     const funcDecl = ts.functionDecl(
@@ -2498,7 +2594,9 @@ export class TypeScriptBuilder {
       const tempVar = this.insideHandlerBody
         ? `__funcResult_${this.handlerFuncResultCounter++}`
         : "__funcResult";
-      const guard = this.assignmentInterruptGuard(ts.id(tempVar));
+      const guard = this.assignmentInterruptGuard(ts.id(tempVar), {
+        bindOnAborted: false,
+      });
       return ts.statements([
         ts.constDecl(tempVar, callNode),
         ...(guard ? [guard] : []),
@@ -3154,6 +3252,9 @@ export class TypeScriptBuilder {
         ]);
       }
       const valueNode = this.processNode(node.value);
+      if (this.isFinalizeInterceptedReturn(node.value)) {
+        return this.finalizeReturnLowering(valueNode, (v) => ts.runnerHalt(v));
+      }
       return ts.runnerHalt(valueNode);
     }
 
@@ -3208,7 +3309,49 @@ export class TypeScriptBuilder {
       ]);
     }
     const valueNode = this.processNode(node.value);
+    if (this.isFinalizeInterceptedReturn(node.value)) {
+      return this.finalizeReturnLowering(valueNode, (v) =>
+        ts.functionReturn(this.maybeWrapReturnValidation(v)),
+      );
+    }
     return ts.functionReturn(this.maybeWrapReturnValidation(valueNode));
+  }
+
+  /** In a finalize-bearing scope, a direct-call return must stop at the
+   *  finalize instead of passing an aborted result through (pass-through
+   *  would silently skip the finalize). AG6036 guarantees a direct call
+   *  is the only call-bearing return shape that reaches codegen here;
+   *  `return llm(...)` hoists through its own path and cannot produce an
+   *  AbortedResult. */
+  private isFinalizeInterceptedReturn(value: AgencyNode): boolean {
+    if (!this.currentScopeHasFinalize()) return false;
+    return value.type === "functionCall" && value.functionName !== "llm";
+  }
+
+  /** Lower `return <call>` to a checked temp: interrupts still halt
+   *  through the temp unchanged, an aborted result runs the finalize
+   *  (nothing to bind — the value was headed for the return), and a
+   *  normal value returns exactly as before. */
+  private finalizeReturnLowering(
+    valueNode: TsNode,
+    emit: (value: TsNode) => TsNode,
+  ): TsNode {
+    const scopeType = this.scopes.current().type;
+    const frameVar = scopeType === "block" ? "__bstack" : "__stack";
+    const scopeName = JSON.stringify(this.scopes.currentName());
+    return ts.statements([
+      ts.constDecl("__returnTemp", valueNode),
+      ts.if(
+        ts.raw("isAborted(__returnTemp)"),
+        ts.statements([
+          ts.raw(
+            `runner.halt(await __returnTemp.carryThrough(${frameVar}, ${scopeName}).withFinalize(__finalize, ${scopeName}))`,
+          ),
+          ts.return(),
+        ]),
+      ),
+      emit(ts.id("__returnTemp")),
+    ]);
   }
 
   private processAssignment(node: Assignment): TsNode {
@@ -3273,8 +3416,13 @@ export class TypeScriptBuilder {
    * Returns null only at global scope for the interrupt half; the aborted
    * check still applies there (an abort during module init should crash
    * init, not become data in a global). */
-  private assignmentInterruptGuard(varRef: TsNode): TsNode | null {
-    const abortedGuard = this.assignmentAbortedGuard(varRef);
+  private assignmentInterruptGuard(
+    varRef: TsNode,
+    opts?: { bindOnAborted?: boolean },
+  ): TsNode | null {
+    const abortedGuard = this.assignmentAbortedGuard(varRef, {
+      bindOnAborted: opts?.bindOnAborted !== false,
+    });
     if (this.scopes.current().type === "global") return abortedGuard;
     if (this.insideHandlerBody) {
       return ts.statements([
@@ -3316,8 +3464,17 @@ export class TypeScriptBuilder {
    * salvage rule); handler bodies and every other scope rebuild the
    * exception — handlers run outside the runner-step machinery (there is
    * no runner to halt), and nothing above compiled code consumes aborted
-   * values. */
-  private assignmentAbortedGuard(varRef: TsNode): TsNode {
+   * values.
+   *
+   * In a finalize-bearing scope, the stop runs the finalize — and when
+   * the guarded value is a real local (`bindOnAborted`), the callee's
+   * partial is first bound into it via partialValueOrNull(), so the
+   * finalize reads it like any other local. Bare-call temps have nothing
+   * to bind. */
+  private assignmentAbortedGuard(
+    varRef: TsNode,
+    opts?: { bindOnAborted?: boolean },
+  ): TsNode {
     const scopeType = this.scopes.current().type;
     const expr = this.str(varRef);
     if (
@@ -3326,6 +3483,23 @@ export class TypeScriptBuilder {
     ) {
       const frameVar = scopeType === "block" ? "__bstack" : "__stack";
       const scopeName = JSON.stringify(this.scopes.currentName());
+      if (this.currentScopeHasFinalize()) {
+        const bind =
+          opts?.bindOnAborted === true
+            ? [ts.raw(`${expr} = __abortedCallee.partialValueOrNull()`)]
+            : [];
+        return ts.if(
+          ts.raw(`isAborted(${expr})`),
+          ts.statements([
+            ts.raw(`const __abortedCallee = ${expr}`),
+            ...bind,
+            ts.raw(
+              `runner.halt(await __abortedCallee.carryThrough(${frameVar}, ${scopeName}).withFinalize(__finalize, ${scopeName}))`,
+            ),
+            ts.return(),
+          ]),
+        );
+      }
       return ts.if(
         ts.raw(`isAborted(${expr})`),
         ts.statements([

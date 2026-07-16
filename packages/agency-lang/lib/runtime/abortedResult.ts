@@ -5,6 +5,7 @@ import {
 } from "./errors.js";
 import type { State } from "./state/stateStack.js";
 import { agencyStore } from "./asyncContext.js";
+import { hasInterrupts } from "./interrupts.js";
 import type { StatelogClient } from "../statelogClient.js";
 
 const TRUNCATE_AT = 500;
@@ -109,6 +110,57 @@ export class AbortedResult {
     return this.dropped("clearedAtFork");
   }
 
+  /** The partial's value, or null when there is no partial. The ONLY way
+   *  generated code reads a partial: the `{ value }` wrapper (which keeps
+   *  a saved null distinct from no-partial) is internal to this class. */
+  partialValueOrNull(): unknown {
+    return this.partial !== undefined ? this.partial.value : null;
+  }
+
+  /** A finalize-bearing scope is stopping: run its finalize, and its
+   *  return becomes the scope's partial. A finalize failure never masks
+   *  the trip — the abort continues with the partial this instance
+   *  already holds (the saved draft, or nothing) and the failure is
+   *  logged. Two extra failure shapes are backstops: a finalize that
+   *  resolves to interrupts (the checker forbids what it can see, but an
+   *  IMPORTED interrupting callee is invisible to it), and one that
+   *  resolves to an aborted result of its own (the tripped guard's
+   *  signal is still firing, so a callee inside the finalize can be
+   *  stopped). */
+  async withFinalize(
+    finalize: () => Promise<unknown>,
+    scopeName: string,
+  ): Promise<AbortedResult> {
+    let value: unknown;
+    try {
+      value = await finalize();
+    } catch (finalizeError) {
+      this.logFinalizeFailure(scopeName, finalizeError);
+      return this;
+    }
+    if (hasInterrupts(value) || isAborted(value)) {
+      this.logFinalizeFailure(scopeName, value);
+      return this;
+    }
+    return new AbortedResult(this.cause, { value }, this.unwindSpanId).logged(
+      "carried",
+      undefined,
+      scopeName,
+    );
+  }
+
+  /** A failed finalize is a footnote to the trip, never its replacement:
+   *  log it and keep the abort's existing story. */
+  private logFinalizeFailure(scopeName: string, failure: unknown): void {
+    const client = statelogClient();
+    client?.error?.({
+      errorType: "finalizeError",
+      message:
+        failure instanceof Error ? failure.message : previewForLog(failure),
+      functionName: scopeName,
+    });
+  }
+
   /** The guard that owns this trip is converting it into a Result.
    *  Emits the closing statelog event and ends the unwind span. Returns
    *  the partial to salvage, or undefined for no salvage. */
@@ -160,7 +212,7 @@ export class AbortedResult {
    *  (with the span id filled in), keeping construction declarative. */
   private logged(
     action: "carried",
-    frame: State,
+    frame: State | undefined,
     scopeName: string,
     droppedPartial?: { value: unknown },
   ): AbortedResult {
@@ -178,7 +230,7 @@ export class AbortedResult {
       action: gained !== undefined ? action : "erased",
       scopeName,
       spanId,
-      functionArgs: previewForLog(frame.args),
+      functionArgs: frame !== undefined ? previewForLog(frame.args) : undefined,
       partial: shown !== undefined ? previewForLog(shown.value) : undefined,
     });
     if (spanId === this.unwindSpanId) {

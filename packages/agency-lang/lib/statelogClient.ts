@@ -1225,7 +1225,7 @@ export class StatelogClient {
     sourceLocation,
     tools,
   }: {
-    errorType: "toolError" | "llmError" | "runtimeError" | "validationError" | "limitExceeded" | "structuredOutput";
+    errorType: "toolError" | "llmError" | "runtimeError" | "validationError" | "limitExceeded" | "structuredOutput" | "finalizeError";
     message: string;
     functionName?: string;
     /** Tool-failure classification for the tool loop's retry policy. */

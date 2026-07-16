@@ -51,6 +51,10 @@ function withStubStatelog<T>(fn: () => T): {
       events.push(e);
       return Promise.resolve();
     },
+    error(e: RecordedEvent): Promise<void> {
+      events.push(e);
+      return Promise.resolve();
+    },
   };
   const ctx = { statelogClient: client } as any;
   const result = runInTestContext(
@@ -255,5 +259,118 @@ describe("previewForLog", () => {
     const cyclic: any = {};
     cyclic.self = cyclic;
     expect(previewForLog(cyclic)).toBe("[object Object]");
+  });
+});
+
+describe("AbortedResult.partialValueOrNull", () => {
+  it("returns the partial's value", () => {
+    const aborted = AbortedResult.fromError(
+      abortError(),
+      frameWithDraft("d"),
+      "code",
+    );
+    expect(aborted.partialValueOrNull()).toBe("d");
+  });
+
+  it("returns a saved null (a real partial)", () => {
+    const aborted = AbortedResult.fromError(
+      abortError(),
+      frameWithDraft(null),
+      "code",
+    );
+    expect(aborted.partialValueOrNull()).toBe(null);
+  });
+
+  it("returns null when there is no partial", () => {
+    const aborted = AbortedResult.fromError(abortError(), new State(), "code");
+    expect(aborted.partialValueOrNull()).toBe(null);
+  });
+});
+
+describe("AbortedResult.withFinalize", () => {
+  it("replaces the partial with the finalize's return, cause by identity", async () => {
+    const cause = tripCause();
+    const aborted = AbortedResult.fromError(
+      abortError(cause),
+      frameWithDraft("draft"),
+      "code",
+    );
+    const finalized = await aborted.withFinalize(async () => "finalized", "code");
+    expect(finalized.partialValueOrNull()).toBe("finalized");
+    expect(finalized.cause).toBe(cause);
+  });
+
+  it("a finalize returning null is a real partial", async () => {
+    const aborted = AbortedResult.fromError(
+      abortError(),
+      frameWithDraft("draft"),
+      "code",
+    );
+    const finalized = await aborted.withFinalize(async () => null, "code");
+    expect(finalized.partial).toEqual({ value: null });
+  });
+
+  it("falls back to the saved draft when the finalize throws, and logs", async () => {
+    const { result, events } = withStubStatelog(async () => {
+      const aborted = AbortedResult.fromError(
+        abortError(),
+        frameWithDraft("draft"),
+        "code",
+      );
+      return aborted.withFinalize(async () => {
+        throw new Error("boom");
+      }, "code");
+    });
+    const finalized = await result;
+    expect(finalized.partialValueOrNull()).toBe("draft");
+    expect(events.some((e) => e.errorType === "finalizeError")).toBe(true);
+  });
+
+  it("with NO prior partial: a successful finalize becomes the partial", async () => {
+    const aborted = AbortedResult.fromError(abortError(), new State(), "code");
+    const finalized = await aborted.withFinalize(async () => "f", "code");
+    expect(finalized.partialValueOrNull()).toBe("f");
+  });
+
+  it("with NO prior partial: a throwing finalize leaves no partial and does not crash", async () => {
+    const aborted = AbortedResult.fromError(abortError(), new State(), "code");
+    const finalized = await aborted.withFinalize(async () => {
+      throw new Error("boom");
+    }, "code");
+    expect(finalized.partial).toBeUndefined();
+    expect(finalized.partialValueOrNull()).toBe(null);
+  });
+
+  it("treats an interrupting finalize result as a failure (backstop)", async () => {
+    const aborted = AbortedResult.fromError(
+      abortError(),
+      frameWithDraft("draft"),
+      "code",
+    );
+    const fakeInterrupts = [
+      { type: "interrupt", interruptId: "i1", effect: "std::x", message: "m" },
+    ];
+    const finalized = await aborted.withFinalize(async () => fakeInterrupts, "code");
+    expect(finalized.partialValueOrNull()).toBe("draft");
+  });
+
+  it("treats an aborted finalize result as a failure (backstop)", async () => {
+    const aborted = AbortedResult.fromError(
+      abortError(),
+      frameWithDraft("draft"),
+      "code",
+    );
+    const nested = AbortedResult.fromError(abortError(), new State(), "inner");
+    const finalized = await aborted.withFinalize(async () => nested, "code");
+    expect(finalized.partialValueOrNull()).toBe("draft");
+  });
+
+  it("emits a carried event for the finalize's partial", async () => {
+    const { result, events } = withStubStatelog(async () => {
+      const aborted = AbortedResult.fromError(abortError(), new State(), "code");
+      return aborted.withFinalize(async () => "f", "code");
+    });
+    await result;
+    expect(events.map((e) => e.action)).toContain("carried");
   });
 });

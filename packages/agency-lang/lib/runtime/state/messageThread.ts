@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 
 export type MessageThreadJSON = {
   messages: smoltalk.MessageJSON[];
+  messageLabels?: (string | null)[];
   parentId?: string | null;
   hidden?: boolean;
   label?: string | null;
@@ -39,14 +40,31 @@ export class MessageThread {
    *  module-level state in TS. `null` until the summary is computed.
    *  Round-tripped through `toJSON`/`fromJSON`. */
   summary: string | null = null;
+  /** Per-message debug labels, aligned with `messages` BY INDEX
+   *  (`messageLabels[i]` labels `messages[i]`; the lengths always match).
+   *  Observability only: shown in statelog, never sent to the provider.
+   *  Distinct from the thread-level `label` above (set by `thread(label:)`).
+   *
+   *  The alignment is maintained by keeping the writers to a minimum:
+   *  `push` is the only append, the constructor and `setMessages` are the
+   *  only replacements, and nothing else touches `this.messages`. A desync
+   *  does not degrade gracefully — it shifts every later label onto the
+   *  wrong message — so keep it that way. A rewrite via `setMessages`
+   *  (summarization, repair) drops labels; that is intended. */
+  messageLabels: (string | null)[];
 
   constructor(messages: smoltalk.Message[] = []) {
     this.messages = messages;
+    // Seed, don't default: `new MessageThread([...])` (e.g. via
+    // newSubthreadChild) must start aligned, or a later push lands its
+    // label on message 0.
+    this.messageLabels = messages.map(() => null);
     this.id = nanoid();
   }
 
+  /** Alias for `push` with no label. Kept for the existing public API. */
   addMessage(message: smoltalk.Message): void {
-    this.messages.push(message);
+    this.push(message);
   }
 
   cloneMessages(): smoltalk.Message[] {
@@ -61,10 +79,19 @@ export class MessageThread {
 
   setMessages(messages: smoltalk.Message[]): void {
     this.messages = messages;
+    this.messageLabels = messages.map(() => null);
   }
 
-  push(message: smoltalk.Message): void {
+  /** The ONLY append. Everything that adds a message goes through here,
+   *  so `messages` and `messageLabels` cannot drift apart. */
+  push(message: smoltalk.Message, label: string | null = null): void {
     this.messages.push(message);
+    this.messageLabels.push(label);
+  }
+
+  /** The label of the message at `index`, or null when unlabeled. */
+  labelAt(index: number): string | null {
+    return this.messageLabels[index] ?? null;
   }
 
   newChild(): MessageThread {
@@ -86,6 +113,7 @@ export class MessageThread {
   toJSON(): MessageThreadJSON {
     return {
       messages: this.messages.map((m) => m.toJSON()),
+      messageLabels: this.messageLabels,
       parentId: this.parentId,
       hidden: this.hidden,
       label: this.label,
@@ -104,6 +132,7 @@ export class MessageThread {
     const thread = new MessageThread();
 
     let _messages: any[] = [];
+    let _messageLabels: (string | null)[] | undefined = undefined;
     let _parentId: string | null = null;
     let _hidden = false;
     let _label: string | null = null;
@@ -112,6 +141,9 @@ export class MessageThread {
       _messages = json;
     } else if ("messages" in json) {
       _messages = json.messages;
+      if ("messageLabels" in json && json.messageLabels !== undefined) {
+        _messageLabels = json.messageLabels;
+      }
       if ("parentId" in json && json.parentId !== undefined) {
         _parentId = json.parentId;
       }
@@ -138,6 +170,11 @@ export class MessageThread {
     );
 
     thread.setMessages(smoltalkMessages);
+    // AFTER setMessages: it resets messageLabels to all-null, so the
+    // restore has to come second or it gets clobbered. Legacy JSON (no
+    // messageLabels) keeps the all-null array setMessages just built.
+    thread.messageLabels =
+      _messageLabels ?? smoltalkMessages.map(() => null);
     thread.parentId = _parentId;
     thread.hidden = _hidden;
     thread.label = _label;

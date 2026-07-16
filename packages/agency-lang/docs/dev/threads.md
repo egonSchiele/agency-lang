@@ -13,7 +13,25 @@ Agency uses a **ThreadStore** + **MessageThread** system to manage LLM conversat
 **`MessageThread`** (`lib/runtime/state/messageThread.ts`):
 - Wraps a `smoltalk.Message[]` array (OpenAI-compatible message format)
 - Each instance has a unique `id` (nanoid)
-- Key methods: `addMessage()`, `push()`, `getMessages()`, `cloneMessages()` (deep clone via JSON round-trip)
+- Key methods: `addMessage()`, `push()`, `getMessages()`, `cloneMessages()` (deep clone via JSON round-trip), `labelAt()`
+
+#### Per-message debug labels (`messageLabels`)
+
+`messageLabels` holds an optional debug label per message, from `llm(label:)` / `userMessage(msg, label:)` and friends. It is observability-only: labels surface in statelog (see `docs/dev/statelog.md`) and are never sent to the provider. It is **not** the same field as the thread-level `label`, which comes from `thread(label: "...")` and names the whole thread.
+
+`messageLabels` is aligned with `messages` **by index** — `messageLabels[i]` labels `messages[i]`, and the lengths always match. An index-aligned array is what lets labels serialize with the thread (a `WeakMap` keyed by message identity would survive slicing but not `toJSON`). The tradeoff is that nothing in the type system enforces the alignment, so it is enforced by keeping the writers to a minimum:
+
+- **`push(message, label?)` is the only append.** `addMessage()` delegates to it rather than appending on its own.
+- **The constructor and `setMessages()` are the only replacements**, and both rebuild `messageLabels` to the new length.
+- **Nothing else touches `this.messages`.**
+
+Treat any new direct mutation of `this.messages` as a bug: a desync does not degrade gracefully, it shifts every later label onto the wrong message. Each writer has a test in `messageThread.test.ts` that fails on a desync.
+
+Two consequences worth knowing:
+- **`setMessages` drops labels** (rebuilds them as all-null). Thread rewrites — summarization, `threadRepair` — therefore lose labels. Intended.
+- **`newSubthreadChild()` does not carry the parent's labels**: it seeds the child via `cloneMessages()`, which copies messages only, so the child starts correctly aligned with all-null labels.
+
+Serialization: `messageLabels` round-trips through `toJSON`/`fromJSON`. Legacy JSON without the field revives as all-null. In `fromJSON` the restore must run **after** the internal `setMessages()` call, which would otherwise reset it.
 
 **`ThreadStore`** (`lib/runtime/state/threadStore.ts`):
 - Registry of `MessageThread` objects keyed by auto-incremented string IDs

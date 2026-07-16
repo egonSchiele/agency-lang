@@ -559,9 +559,7 @@ async function _runPrompt({
    * scoping the LLM HTTP abort signal to the current branch. */
   stateStack?: StateStack;
   retryPolicy: RetryPolicy;
-  /** This call's `llm(label:)` debug tag, or null. Stamped on the
-   *  assistant message this call appends. Observability only — the
-   *  provider never sees it (stripped from clientConfig in runPrompt). */
+  /** This call's `llm(label:)` debug tag (see `emitPromptStart`), or null. */
   callLabel?: string | null;
 }): Promise<RunPromptResult> {
   if (ctx.isCancelled(stateStack)) {
@@ -610,14 +608,7 @@ async function _runPrompt({
     metadata: clientConfig,
   } as any;
 
-  emitPromptStart({
-    ctx,
-    messages,
-    tools,
-    responseFormat,
-    clientConfig,
-    callLabel,
-  });
+  emitPromptStart({ ctx, messages, tools, responseFormat, clientConfig, callLabel });
 
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];

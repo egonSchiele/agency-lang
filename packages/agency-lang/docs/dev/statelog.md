@@ -40,8 +40,21 @@ At the start of execution, the full graph topology is logged: all node IDs, all 
 - **`afterHook(nodeId, startData, endData, timeTaken)`** — after-node hook execution
 
 ### LLM calls
-- **`promptStart(model, threadId, messageCount, toolCount, hasResponseFormat, maxTokens)`** — fired immediately before an LLM request is dispatched. Small payload: the request shape, not its content. Pairs with a terminator by span + order (the nth start in an llmCall span pairs with the nth terminator: a `promptCompletion`, an `error` with errorType `llmError`, or a `promptCancelled`). An unpaired start means the call never finished — the signature of a hung or killed-mid-call run, and the live in-flight indicator in follow mode.
-- **`promptCompletion(messages, completion, model, timeTaken, tools, responseFormat)`** — logs the full message history, model response, model name, tools provided, and response format
+- **`promptStart(model, threadId, messageCount, toolCount, hasResponseFormat, maxTokens, label)`** — fired immediately before an LLM request is dispatched. Small payload: the request shape, not its content. Pairs with a terminator by span + order (the nth start in an llmCall span pairs with the nth terminator: a `promptCompletion`, an `error` with errorType `llmError`, or a `promptCancelled`). An unpaired start means the call never finished — the signature of a hung or killed-mid-call run, and the live in-flight indicator in follow mode. `label` is the call's `llm(label: "...")` debug tag, or `null`.
+- **`promptCompletion(messages, completion, model, timeTaken, tools, responseFormat)`** — logs the full message history, model response, model name, tools provided, and response format. Each entry of `messages` carries a `label` key when that message has a debug label; unlabeled messages have no `label` key at all, so logs for programs that never label stay byte-identical.
+
+### Message debug labels
+
+`llm()`, `userMessage()`, `assistantMessage()`, and `systemMessage()` all take an optional `label`. It exists so a log reader can tell, say, a verifier's injected message from a real user turn. Labels are **observability-only and never sent to the provider** — `runPrompt` strips `label` off `clientConfig` before the config reaches smoltalk (the same way it strips the retry fields), and `lib/runtime/promptLabels.test.ts` fails if that strip is removed.
+
+They surface in two places:
+
+- `promptStart.label` — the label of the `llm()` call itself.
+- `promptCompletion.messages[i].label` — the label of each message in the request payload.
+
+One `llm(label: "x")` call tags more than one message by design: its prompt, plus the assistant message of every tool-loop round. Note `promptCompletion` logs the *request*, so the assistant reply of that same round appears in the next round's dump, not its own.
+
+Storage lives on `MessageThread` (see `docs/dev/threads.md`); a thread rewrite via `setMessages` (summarization, repair) drops labels.
 - **`promptCancelled(threadId)`** — terminator for a promptStart whose call was cancelled: a race loser's abort, Esc-cancel, or a timeout. Deliberately not an error event — a cancel is a normal outcome, and without this terminator every healthy `race()` would leave its losers' starts unpaired.
 
 ### Thread-end hooks

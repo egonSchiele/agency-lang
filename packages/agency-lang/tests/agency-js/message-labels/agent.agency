@@ -1,0 +1,10 @@
+import { systemMessage, userMessage } from "std::thread"
+
+// The system message is deliberately UNLABELED and first: it sits at
+// index 0, so an off-by-one in the label/message alignment would show up
+// as "seed" landing on it. See test.js.
+node main() {
+  systemMessage("sys")
+  userMessage("context", label: "seed")
+  return llm("go", label: "coder")
+}

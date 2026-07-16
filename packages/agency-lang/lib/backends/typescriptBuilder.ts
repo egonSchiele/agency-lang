@@ -6,7 +6,6 @@ import {
   Assignment,
   BlockType,
   Expression,
-  FinalizeBlock,
   Keyword,
   Literal,
   NamedArgument,
@@ -115,6 +114,10 @@ import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
 import { functionContainsDestructiveBlock } from "./functionContainsDestructiveBlock.js";
 import { DestructiveTracking } from "./typescriptBuilder/destructiveTracking.js";
+import {
+  FinalizeCodegen,
+  type CompiledScopeFinalize,
+} from "./typescriptBuilder/finalizeCodegen.js";
 import { PipeChainEmitter } from "./typescriptBuilder/pipeChainEmitter.js";
 import { AssignmentEmitter } from "./typescriptBuilder/assignmentEmitter.js";
 import {
@@ -219,6 +222,7 @@ export class TypeScriptBuilder {
   private tracking: DestructiveTracking;
   private pipes: PipeChainEmitter;
   private assigns: AssignmentEmitter;
+  private finalize: FinalizeCodegen;
 
   // Config
   private agencyConfig: AgencyConfig = {};
@@ -346,6 +350,9 @@ export class TypeScriptBuilder {
       resolveBlockFrameVar: (blockDepth: number) =>
         this.scopes.blockFrameVar(blockDepth),
     });
+    this.finalize = new FinalizeCodegen(this.scopes, moduleId, (body, stepBase) =>
+      this.processBodyAsParts(body, stepBase),
+    );
     this.moduleId = moduleId;
     this.outputFile = outputFile;
     this.initPlan = initPlan;
@@ -1767,17 +1774,18 @@ export class TypeScriptBuilder {
     const parentScopeName = this.scopes.currentName();
     this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-    const { rest, finalize } = this.extractFinalize(block.body);
-    this.finalizePresence.push(finalize !== undefined);
-    const bodyParts = this.processBodyAsParts(rest);
-    const finalizeDecl = finalize
-      ? this.buildFinalizeClosure(finalize, blockName, "__bstack")
-      : undefined;
-    this.finalizePresence.pop();
+    const compiledFinalize = this.finalize.compileScope({
+      body: block.body,
+      scopeName: blockName,
+      errorVar: "__blockError",
+      compileBodyRest: (rest) => this.processBodyAsParts(rest),
+    });
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
 
-    const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
+    const bodyStr = compiledFinalize.bodyCode
+      .map((n) => printTs(n, 1))
+      .join("\n");
 
     const blockSetupCode = renderBlockSetup.default({
       params: block.params.map((p) => ({
@@ -1788,14 +1796,8 @@ export class TypeScriptBuilder {
       scopeName: JSON.stringify(blockName),
       frameVar: `__bframe_${blockName}`,
       body: bodyStr,
-      // Pre-rendered (see the def-catch note): empty/plain strings keep
-      // the no-finalize block output byte-identical.
-      finalizeDecl:
-        finalizeDecl !== undefined ? printTs(finalizeDecl, 0) + "\n" : "",
-      abortReturn:
-        finalize !== undefined
-          ? `return await AbortedResult.fromError(__blockError, __bstack, ${JSON.stringify(blockName)}).withFinalize(__finalize, ${JSON.stringify(blockName)});`
-          : `return AbortedResult.fromError(__blockError, __bstack, ${JSON.stringify(blockName)});`,
+      finalizeDecl: compiledFinalize.declText,
+      abortReturn: compiledFinalize.abortReturn,
     });
 
     const blockFn = ts.arrowFn(
@@ -1826,17 +1828,18 @@ export class TypeScriptBuilder {
     const parentScopeName = this.scopes.currentName();
     this.scopes.push({ type: "block", blockName });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
-    const { rest, finalize } = this.extractFinalize(block.body);
-    this.finalizePresence.push(finalize !== undefined);
-    const bodyParts = this.processBodyAsParts(rest);
-    const finalizeDecl = finalize
-      ? this.buildFinalizeClosure(finalize, blockName, "__bstack")
-      : undefined;
-    this.finalizePresence.pop();
+    const compiledFinalize = this.finalize.compileScope({
+      body: block.body,
+      scopeName: blockName,
+      errorVar: "__blockError",
+      compileBodyRest: (rest) => this.processBodyAsParts(rest),
+    });
     this._sourceMapBuilder.enterScope(this.moduleId, parentScopeName);
     this.scopes.pop();
 
-    const bodyStr = bodyParts.map((n) => printTs(n, 1)).join("\n");
+    const bodyStr = compiledFinalize.bodyCode
+      .map((n) => printTs(n, 1))
+      .join("\n");
 
     const blockSetupCode = renderBlockSetup.default({
       params: block.params.map((p) => ({
@@ -1847,14 +1850,8 @@ export class TypeScriptBuilder {
       scopeName: JSON.stringify(blockName),
       frameVar: `__bframe_${blockName}`,
       body: bodyStr,
-      // Pre-rendered (see the def-catch note): empty/plain strings keep
-      // the no-finalize block output byte-identical.
-      finalizeDecl:
-        finalizeDecl !== undefined ? printTs(finalizeDecl, 0) + "\n" : "",
-      abortReturn:
-        finalize !== undefined
-          ? `return await AbortedResult.fromError(__blockError, __bstack, ${JSON.stringify(blockName)}).withFinalize(__finalize, ${JSON.stringify(blockName)});`
-          : `return AbortedResult.fromError(__blockError, __bstack, ${JSON.stringify(blockName)});`,
+      finalizeDecl: compiledFinalize.declText,
+      abortReturn: compiledFinalize.abortReturn,
     });
 
     const blockFn = ts.arrowFn(
@@ -2098,10 +2095,11 @@ export class TypeScriptBuilder {
     skipHooks?: boolean;
     hoistedAliases?: TsNode[];
     inDestructiveFunction?: boolean;
-    /** The compiled `__finalize` closure declaration, when the def
-     *  declared a finalize block. Placed in the setup so the catch (and
-     *  the post-call guards inside the body) can call it. */
-    finalizeDecl?: TsNode;
+    /** The def's compiled finalize (FinalizeCodegen.compileScope). The
+     *  closure declaration goes in the setup so the catch (and the
+     *  post-call guards inside the body) can call it; the abort return
+     *  goes in the catch template. */
+    finalize: CompiledScopeFinalize;
   }): TsNode[] {
     const { functionName, parameters, bodyCode, skipHooks } = opts;
     const hoistedAliases = opts.hoistedAliases ?? [];
@@ -2223,8 +2221,8 @@ export class TypeScriptBuilder {
             ],
           }),
         ];
-    if (opts.finalizeDecl !== undefined) {
-      setupStmts.push(opts.finalizeDecl);
+    if (opts.finalize.decl !== undefined) {
+      setupStmts.push(opts.finalize.decl);
     }
     setupStmts.push(
       ts.tryCatch(
@@ -2271,12 +2269,7 @@ export class TypeScriptBuilder {
         ts.raw(
           renderFunctionCatchFailure.default({
             functionName: JSON.stringify(functionName),
-            // Pre-rendered so the no-finalize output is byte-identical to
-            // the pre-finalize compiler (no mustache section whitespace).
-            abortReturn:
-              opts.finalizeDecl !== undefined
-                ? `return await AbortedResult.fromError(__error, __stack, ${JSON.stringify(functionName)}).withFinalize(__finalize, ${JSON.stringify(functionName)});`
-                : `return AbortedResult.fromError(__error, __stack, ${JSON.stringify(functionName)});`,
+            abortReturn: opts.finalize.abortReturn,
           }),
         ),
         "__error",
@@ -2308,65 +2301,6 @@ export class TypeScriptBuilder {
     return setupStmts;
   }
 
-  /** True when the innermost function/block scope being compiled declared
-   *  a finalize. Pushed/popped in lockstep with this.scopes by the def and
-   *  block compilers; drives the finalize-aware post-call guard and the
-   *  return-position temp lowering. */
-  private finalizePresence: boolean[] = [];
-
-  /** Step-id base for compiled finalize bodies — far above anything a
-   *  main body can reach, so the shared frame's counters never collide.
-   *  See buildFinalizeClosure. */
-  private static readonly FINALIZE_STEP_BASE = 1000000;
-
-  private currentScopeHasFinalize(): boolean {
-    return this.finalizePresence[this.finalizePresence.length - 1] === true;
-  }
-
-  /** Split a body into its statements and its (at most one — the checker
-   *  enforces that) top-level finalize block. Defensive: extras beyond the
-   *  first are dropped here but already rejected by AG6032. */
-  private extractFinalize(body: AgencyNode[]): {
-    rest: AgencyNode[];
-    finalize: FinalizeBlock | undefined;
-  } {
-    const rest = body.filter((n) => n.type !== "finalizeBlock");
-    const finalize = body.find(
-      (n): n is FinalizeBlock => n.type === "finalizeBlock",
-    );
-    return { rest, finalize };
-  }
-
-  /** Compile a finalize body into the `__finalize` closure declaration.
-   *  Runs on the SAME frame as its container (locals live on the frame,
-   *  so the body sees them directly); the fresh Runner's "#finalize"
-   *  scope name keeps its step counters from colliding with the body's. */
-  private buildFinalizeClosure(
-    finalize: FinalizeBlock,
-    containerName: string,
-    frameVar: string,
-  ): TsNode {
-    // The finalize's Runner shares the container's FRAME (locals live
-    // there), and Runner step counters are frame-keyed: the top-level
-    // counter IS frame.step and nested keys are path-only (no scope
-    // name). Small ids would collide with the main body's counters —
-    // frame.step has already advanced past them, silently skipping the
-    // finalize's steps. A disjoint id base fixes both the top-level
-    // counter and every nested path; advancing the dying frame's step
-    // past the base is inert, because an aborted frame never resumes.
-    const parts = this.processBodyAsParts(
-      finalize.body,
-      TypeScriptBuilder.FINALIZE_STEP_BASE,
-    );
-    const bodyStr = parts.map((n) => printTs(n, 1)).join("\n");
-    return ts.raw(
-      `const __finalize = async (): Promise<any> => {\n` +
-        `  const runner = new Runner(__ctx, ${frameVar}, { state: ${frameVar}, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(containerName + "#finalize")} });\n` +
-        bodyStr +
-        `\n  return runner.halted ? runner.haltResult : undefined;\n};`,
-    );
-  }
-
   private processFunctionDefinition(node: FunctionDefinition): TsNode {
     this.scopes.push({ type: "function", functionName: node.functionName });
     this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
@@ -2377,20 +2311,15 @@ export class TypeScriptBuilder {
     // Hoist body-local type aliases to the function's outer scope so
     // every runner.step closure can reference the generated zod schemas.
     const hoistedAliases = this.hoistBodyTypeAliases(node.body);
-    // A finalize is a declaration, not a statement: strip it from the
-    // statement stream and compile it into the __finalize closure the
-    // stop sites call. finalizePresence drives the finalize-aware
-    // post-call guard + return-position lowering while the body compiles.
-    const { rest, finalize } = this.extractFinalize(node.body);
-    this.finalizePresence.push(finalize !== undefined);
-    // Body steps occupy substep ids 1..N — id 0 is reserved for the
-    // onFunctionStart hook (wrapped in `runner.hook` for substep-counter
-    // idempotency on resume).
-    const bodyCode = this.processBodyAsParts(rest, 1);
-    const finalizeDecl = finalize
-      ? this.buildFinalizeClosure(finalize, functionName, "__stack")
-      : undefined;
-    this.finalizePresence.pop();
+    const compiledFinalize = this.finalize.compileScope({
+      body: node.body,
+      scopeName: functionName,
+      errorVar: "__error",
+      // Body steps occupy substep ids 1..N — id 0 is reserved for the
+      // onFunctionStart hook (wrapped in `runner.hook` for substep-counter
+      // idempotency on resume).
+      compileBodyRest: (rest) => this.processBodyAsParts(rest, 1),
+    });
     this.scopes.inDestructiveFunction = prevDestructive;
     this.scopes.pop();
 
@@ -2413,11 +2342,11 @@ export class TypeScriptBuilder {
     const setupStmts = this.buildFunctionBody({
       functionName,
       parameters,
-      bodyCode,
+      bodyCode: compiledFinalize.bodyCode,
       skipHooks: false,
       hoistedAliases,
       inDestructiveFunction: !!node.markers?.destructive,
-      finalizeDecl,
+      finalize: compiledFinalize,
     });
 
     const funcDecl = ts.functionDecl(
@@ -3269,7 +3198,9 @@ export class TypeScriptBuilder {
       }
       const valueNode = this.processNode(node.value);
       if (this.isFinalizeInterceptedReturn(node.value)) {
-        return this.finalizeReturnLowering(valueNode, (v) => ts.runnerHalt(v));
+        return this.finalize.interceptedReturn(valueNode, (v) =>
+          ts.runnerHalt(v),
+        );
       }
       return ts.runnerHalt(valueNode);
     }
@@ -3326,7 +3257,7 @@ export class TypeScriptBuilder {
     }
     const valueNode = this.processNode(node.value);
     if (this.isFinalizeInterceptedReturn(node.value)) {
-      return this.finalizeReturnLowering(valueNode, (v) =>
+      return this.finalize.interceptedReturn(valueNode, (v) =>
         ts.functionReturn(this.maybeWrapReturnValidation(v)),
       );
     }
@@ -3340,34 +3271,8 @@ export class TypeScriptBuilder {
    *  `return llm(...)` hoists through its own path and cannot produce an
    *  AbortedResult. */
   private isFinalizeInterceptedReturn(value: AgencyNode): boolean {
-    if (!this.currentScopeHasFinalize()) return false;
+    if (!this.finalize.isActive()) return false;
     return value.type === "functionCall" && value.functionName !== "llm";
-  }
-
-  /** Lower `return <call>` to a checked temp: interrupts still halt
-   *  through the temp unchanged, an aborted result runs the finalize
-   *  (nothing to bind — the value was headed for the return), and a
-   *  normal value returns exactly as before. */
-  private finalizeReturnLowering(
-    valueNode: TsNode,
-    emit: (value: TsNode) => TsNode,
-  ): TsNode {
-    const scopeType = this.scopes.current().type;
-    const frameVar = scopeType === "block" ? "__bstack" : "__stack";
-    const scopeName = JSON.stringify(this.scopes.currentName());
-    return ts.statements([
-      ts.constDecl("__returnTemp", valueNode),
-      ts.if(
-        ts.raw("isAborted(__returnTemp)"),
-        ts.statements([
-          ts.raw(
-            `runner.halt(await __returnTemp.carryThrough(${frameVar}, ${scopeName}).withFinalize(__finalize, ${scopeName}))`,
-          ),
-          ts.return(),
-        ]),
-      ),
-      emit(ts.id("__returnTemp")),
-    ]);
   }
 
   private processAssignment(node: Assignment): TsNode {
@@ -3499,7 +3404,7 @@ export class TypeScriptBuilder {
     ) {
       const frameVar = scopeType === "block" ? "__bstack" : "__stack";
       const scopeName = JSON.stringify(this.scopes.currentName());
-      if (this.currentScopeHasFinalize()) {
+      if (this.finalize.isActive()) {
         const bind =
           opts?.bindOnAborted === true
             ? [ts.raw(`${expr} = __abortedCallee.partialValueOrNull()`)]
@@ -3509,10 +3414,7 @@ export class TypeScriptBuilder {
           ts.statements([
             ts.raw(`const __abortedCallee = ${expr}`),
             ...bind,
-            ts.raw(
-              `runner.halt(await __abortedCallee.carryThrough(${frameVar}, ${scopeName}).withFinalize(__finalize, ${scopeName}))`,
-            ),
-            ts.return(),
+            ...this.finalize.stopScope("__abortedCallee"),
           ]),
         );
       }

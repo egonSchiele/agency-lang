@@ -69,6 +69,7 @@ export * from "./types/parallelBlock.js";
 export * from "./types/markDestructiveRan.js";
 export * from "./types/forLoop.js";
 export * from "./types/handleBlock.js";
+export * from "./types/finalizeBlock.js";
 export * from "./types/keyword.js";
 export * from "./types/debuggerStatement.js";
 export * from "./types/blockArgument.js";

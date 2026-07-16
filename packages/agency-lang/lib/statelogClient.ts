@@ -33,7 +33,7 @@ export type SpanType =
   // One abort's unwind, from the first catch rung that touches a saveDraft
   // partial to the guard that converts the abort into a value. The
   // per-level abortSalvage events nest inside it. Opened lazily — a trip
-  // through undrafted code opens no span. See lib/runtime/carriedDraft.ts.
+  // through undrafted code opens no span. See lib/runtime/abortedResult.ts.
   | "abortUnwind"
   // Embedding-vector requests. Distinct from `llmCall` so cost
   // roll-ups in the viewer don't conflate chat-completion cost with

@@ -200,6 +200,12 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
           opts,
         );
       }
+      // Not this guard's trip: an outer guard's trip, or a non-guard
+      // abort (Esc, kill, race loss). Pass the value through — `try`
+      // must never swallow those. The caller's post-call check keeps it
+      // travelling: defs and blocks stop with their own drafts, and a
+      // node rebuilds the exception, so a kill still terminates the run
+      // through the graph engine exactly as before.
       return value as any;
     }
     if (resultValueSchema.safeParse(value).success) return value;

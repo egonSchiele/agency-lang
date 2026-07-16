@@ -3313,12 +3313,17 @@ export class TypeScriptBuilder {
 
   /** The aborted-result half of the post-call guard. Function and block
    * scopes halt with their own AbortedResult (carryThrough applies the
-   * salvage rule); every other scope rebuilds the exception, because
-   * nothing above compiled code consumes aborted values. */
+   * salvage rule); handler bodies and every other scope rebuild the
+   * exception — handlers run outside the runner-step machinery (there is
+   * no runner to halt), and nothing above compiled code consumes aborted
+   * values. */
   private assignmentAbortedGuard(varRef: TsNode): TsNode {
     const scopeType = this.scopes.current().type;
     const expr = this.str(varRef);
-    if (scopeType === "function" || scopeType === "block") {
+    if (
+      !this.insideHandlerBody &&
+      (scopeType === "function" || scopeType === "block")
+    ) {
       const frameVar = scopeType === "block" ? "__bstack" : "__stack";
       const scopeName = JSON.stringify(this.scopes.currentName());
       return ts.if(

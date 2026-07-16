@@ -263,18 +263,37 @@ function checkSaveDraftCall(
   ctx: TypeCheckerContext,
 ): void {
   if (call.functionName !== "saveDraft") return;
-  // A user-defined function named saveDraft is an ordinary function. Its
-  // arguments check against its own signature (checkSingleFunctionCall),
-  // not against the enclosing scope's return type.
+  // Only the stdlib saveDraft carries the draft contract. Stand down when
+  // the name resolves to anything the user wrote: a local def or node, or
+  // an import whose origin is not the stdlib thread module. Those are
+  // ordinary functions and their arguments check against their own
+  // signatures. An UNRESOLVED name keeps the check: unresolved imports
+  // already raise their own diagnostics, and in fail-open resolution the
+  // only saveDraft people call is the stdlib one.
   if (ctx.functionDefs["saveDraft"] || ctx.nodeDefs["saveDraft"]) return;
+  const imported = ctx.importedFunctions["saveDraft"];
+  if (imported && !isStdlibThreadOrigin(imported.originFile)) return;
   if (!info.returnType) return; // no declared/inferred return type in scope
   if (call.arguments.length !== 1) return;
   const first = call.arguments[0];
+  // A splat's runtime expansion is unknowable here: the argument node
+  // holds an ARRAY whose elements become the call's arguments, so
+  // checking the splat expression against the scalar return type would
+  // be a false error. The generic call checks still cover the splat.
   if (first.type === "splat") return;
   // `saveDraft(value: x)` names the parameter but carries the same draft;
   // check the value it wraps so the named form cannot bypass the rule.
   const arg = first.type === "namedArgument" ? first.value : first;
   checkType(arg, info.returnType, info.scope, "the saveDraft() draft value", ctx);
+}
+
+/** True when an import's origin file is the stdlib thread module (or the
+ *  origin is unknown, which is the fail-open resolution path). Keeps
+ *  checkSaveDraftCall pinned to the real builtin even if import
+ *  resolution grows to populate importedFunctions in more cases. */
+function isStdlibThreadOrigin(originFile: string | undefined): boolean {
+  if (!originFile) return true;
+  return /[\\/]stdlib[\\/]thread\.agency$/.test(originFile);
 }
 
 export function isInsideHandler(ancestors: WalkAncestor[]): boolean {

@@ -7,6 +7,7 @@ import {
   HandlerRecursionError,
   RestoreSignal,
 } from "./errors.js";
+import { isAborted } from "./abortedResult.js";
 import { applyOverrides } from "./rewind.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
@@ -238,6 +239,16 @@ async function runHandlerChain(
           result = await ctx.handlers[i](interruptObj);
         } finally {
           ctx.exitToolCall();
+        }
+        // A handler that is a compiled def returns an AbortedResult when
+        // an abort stops it mid-run (compiled frames convert aborts to
+        // values). The handler chain is runtime machinery — the exception
+        // domain — so the abort resumes its exception life here, exactly
+        // as a throwing handler behaved before the value transport. Without
+        // this, the aborted value would hit the invalid-shape error below
+        // and the abort's cause would be swallowed.
+        if (isAborted(result)) {
+          throw result.toError();
         }
         // Pre-bind the interrupt summary once so all handlerDecision /
         // interruptResolved events from this dispatch carry the same

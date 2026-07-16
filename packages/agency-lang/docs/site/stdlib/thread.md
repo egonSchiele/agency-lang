@@ -83,7 +83,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L289))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L290))
 
 ### ThreadInfo
 
@@ -99,7 +99,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L294))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L295))
 
 ## Functions
 
@@ -376,7 +376,8 @@ Record a best-so-far value for the current function or guarded block. If an
   enclosing `guard(...)` trips before this scope returns, the guard yields the
   last saved draft instead of a failure — an "anytime" result you can always
   fall back to. Call it repeatedly as your result improves; the last value
-  wins. With no enclosing guard it is a harmless no-op.
+  wins. With no enclosing guard it is a harmless no-op. Calling it at module
+  top level is an error: there is no enclosing scope to save a draft for.
 
   The value is type-checked against the enclosing scope's return type — a
   function/node body, or a `guard` block (whose return type is inferred from its
@@ -423,7 +424,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L366))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L367))
 
 ### currentThreadId
 
@@ -438,7 +439,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L419))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L420))
 
 ### getThread
 
@@ -470,4 +471,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L429))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L430))

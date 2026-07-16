@@ -94,3 +94,44 @@ describe("saveDraft check — review-round hardening", () => {
     expect(errors).toHaveLength(0);
   });
 });
+
+describe("saveDraft check — import-origin gating", () => {
+  function checkWithImport(source: string, originFile: string) {
+    const parsed = parseAgency(source);
+    if (!parsed.success) {
+      throw new Error(`parse failed: ${parsed.message}`);
+    }
+    const info = buildCompilationUnit(parsed.result, undefined, undefined, source);
+    info.importedFunctions["saveDraft"] = {
+      parameters: [
+        { name: "value", typeHint: { type: "primitiveType", value: "any" } },
+      ] as any,
+      returnType: null,
+      originFile,
+    };
+    const result = typeCheck(parsed.result, {}, info);
+    return result.errors
+      .filter((e) => (e.severity ?? "error") === "error")
+      .map((e) => e.message);
+  }
+
+  const source = `
+    def f(): string {
+      saveDraft(42)
+      return "x"
+    }
+  `;
+
+  it("stands down for a saveDraft imported from a USER module", () => {
+    const errors = checkWithImport(source, "/Users/someone/project/mine.agency");
+    expect(errors).toHaveLength(0);
+  });
+
+  it("still fires for the stdlib thread module's saveDraft", () => {
+    const errors = checkWithImport(
+      source,
+      "/Users/someone/agency-lang/stdlib/thread.agency",
+    );
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});

@@ -361,14 +361,17 @@ function startInvoke<T>(
     .then((value) => {
       // An aborted branch fulfills with an AbortedResult (its compiled
       // frames convert aborts to values). At the fork boundary that value
-      // becomes a rejection again, for two reasons. First, isolation: the
-      // branch's partial stays in the branch (atForkBoundary drops it) —
-      // which branch fails first is a race, and one branch's value has
-      // the wrong shape for the fork. Second, every join path (all /
-      // sequential / race, first-run and resume) already handles branch
-      // rejections; converting here means none of them need to know
-      // aborted values exist, and an aborted value can never be cached
-      // as a branch result.
+      // becomes a rejection again. Isolation is one reason: the branch's
+      // partial stays in the branch (atForkBoundary drops it) — which
+      // branch fails first is a race, and one branch's value has the
+      // wrong shape for the fork. The other reason is the join protocol:
+      // inside runBatch a branch failure IS a rejection (allSettled
+      // status, the race's first-rejection seal, sequential's try/catch,
+      // result caching). Converting at this single entry point keeps the
+      // joins on one representation instead of teaching every path a
+      // third settled state — compiled code speaks values, the join
+      // machinery speaks settled promises, and this .then is the adapter
+      // between them. It also makes caching an aborted value impossible.
       if (isAborted(value)) {
         throw value.atForkBoundary().toError();
       }

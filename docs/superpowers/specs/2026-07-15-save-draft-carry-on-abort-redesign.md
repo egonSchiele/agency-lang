@@ -222,7 +222,7 @@ So the log answers, for any trip: which drafts existed, which hop dropped which 
 - Node level is the ceiling: a node that receives an aborted value rebuilds the exception (`toError`), so the graph engine, the CLI entry, REPL handling, and root budgets (#550) see aborts exactly as before. Root-budget trips never become values.
 - The `savedDraft` slot on the frame joins `State.toJSON`/`fromJSON` so it survives interrupt/resume. AbortedResults themselves never serialize: they propagate to a guard or a node within one turn.
 - Aborts do not cross the subprocess IPC boundary as live objects, so a child process's drafts die with the child. Same as #551; unchanged.
-- Known shared envelope with interrupts: an aborted value flowing through a binOp operand (`g() + 1`) or into a non-`__call` JS interop path degrades the same way an Interrupt[] would today. Both systems share the fix whenever one lands.
+- Known shared envelope with interrupts: an aborted value flowing through a binOp operand (`g() + 1`), wrapped in a container literal in argument position (`f([g()])`), or into a non-`__call` JS interop path degrades the same way an Interrupt[] would today. The abort signal keeps firing, so the callee's next leaf op re-trips; the partial is lost but no wrongly-typed salvage can reach a guard, because the container-wrapped value never surfaces as the call's own result. Both systems share the fix whenever one lands.
 
 ## Deferred, with homes
 

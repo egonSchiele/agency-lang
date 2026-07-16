@@ -10,8 +10,13 @@ import { type AbortedResult, isAborted } from "./abortedResult.js";
 
 /** Find an aborted result among a call's arguments (`f(g())` where g was
  *  aborted). Checked at the call boundary itself so the rule holds for
- *  every call shape — nested arguments, method chains, named args —
- *  without the compiler having to enumerate them. */
+ *  every DIRECT argument position — nested call expressions, method
+ *  chains, named args — without the compiler having to enumerate them.
+ *  Deliberate boundary: an aborted result wrapped in a container literal
+ *  (`f([g()])`) is not visible here and rides the same gap an
+ *  Interrupt[] does today; the abort signal is still firing, so the
+ *  callee's next leaf op re-trips. Both systems share the fix whenever
+ *  one lands. */
 function findAbortedArg(descriptor: CallType): AbortedResult | undefined {
   const positional =
     descriptor.type === "positional"

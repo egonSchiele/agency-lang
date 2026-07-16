@@ -2,26 +2,28 @@ import type { AgencyNode } from "../types.js";
 import type { FinalizeBlock } from "../types/finalizeBlock.js";
 import type { ReturnStatement } from "../types/returnStatement.js";
 import { walkNodes, type WalkAncestor } from "../utils/node.js";
+import { bodySlots } from "../utils/bodySlots.js";
 import { diagnostic } from "./diagnostics.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import { isInScope } from "./checker.js";
 
-/** Ancestor types that make a finalize "nested in control flow" — a
- *  finalize is a declaration, so it may only sit at the top level of a
- *  function body or a trailing `as { }` block body. */
-const CONTROL_FLOW_ANCESTORS = [
-  "ifElse",
-  "forLoop",
-  "whileLoop",
-  "matchBlock",
-  "handleBlock",
-  "parallelBlock",
-  "seqBlock",
-  "withModifier",
-  "staticStatement",
-  "finalizeBlock",
-];
+/** User-facing phrase for each statement construct that can wrap a
+ *  finalize, used in the AG6033 message. A body-bearing node type with no
+ *  entry here gets the generic phrase — never its internal type name. */
+const CONSTRUCT_PHRASES: Record<string, string> = {
+  ifElse: "an `if` statement",
+  forLoop: "a `for` loop",
+  whileLoop: "a `while` loop",
+  matchBlock: "a `match` arm",
+  handleBlock: "a `handle` block",
+  parallelBlock: "a `parallel` block",
+  seqBlock: "a `seq` block",
+  withModifier: "a `with` statement",
+  staticStatement: "a `static` statement",
+  finalizeBlock: "another `finalize` block",
+  messageThread: "a `thread` block",
+};
 
 /**
  * The finalize-specific checker rules (the return-TYPE rule needs no code
@@ -55,7 +57,7 @@ export function checkFinalizeBlocks(
     for (const { node, ancestors, scopes: walkScopes } of walkNodes(info.body)) {
       if (!isInScope(walkScopes, info)) continue;
       if (node.type === "finalizeBlock") {
-        const nesting = controlFlowAncestor(ancestors);
+        const nesting = nestingConstruct(ancestors);
         if (nesting !== undefined) {
           ctx.errors.push(
             diagnostic("finalizeNotTopLevel", { construct: nesting }, node.loc ?? null),
@@ -99,15 +101,24 @@ export function checkFinalizeBlocks(
   }
 }
 
-/** The innermost control-flow ancestor BELOW the container boundary, or
- *  undefined when the finalize sits directly in a scope or block body.
- *  Scanning stops at a blockArgument: a finalize at the top of a block is
- *  legal no matter what surrounds the block. */
-function controlFlowAncestor(ancestors: WalkAncestor[]): string | undefined {
+/** The construct phrase for the innermost statement wrapping the
+ *  finalize, or undefined when the finalize sits directly in a scope or
+ *  block body. Scanning stops at a blockArgument: a finalize at the top
+ *  of a block is legal no matter what surrounds the block. Any other
+ *  ancestor that carries a statement body counts as nesting. bodySlots is
+ *  the source of truth for "carries a statement body", so a new
+ *  body-bearing node type is rejected here by default instead of slipping
+ *  through a hand-kept list (messageThread once did). */
+function nestingConstruct(ancestors: WalkAncestor[]): string | undefined {
   for (let i = ancestors.length - 1; i >= 0; i--) {
     const a = ancestors[i];
     if (a.type === "blockArgument") return undefined;
-    if (CONTROL_FLOW_ANCESTORS.includes(a.type)) return a.type;
+    // Scope roots are boundaries, not nesting; their bodies are walked as
+    // their own ScopeInfo.
+    if (a.type === "function" || a.type === "graphNode") return undefined;
+    if (bodySlots(a as AgencyNode).length > 0) {
+      return CONSTRUCT_PHRASES[a.type] ?? "a nested block";
+    }
   }
   return undefined;
 }

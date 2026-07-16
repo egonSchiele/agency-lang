@@ -83,6 +83,40 @@ describe("finalize checker — rule 2: one per scope, top level only", () => {
     ).toContain("AG6033");
   });
 
+  it("rejects a finalize nested in a thread block (AG6033)", () => {
+    // messageThread was missing from the old hand-kept ancestor list; the
+    // check now derives "wraps statements" from bodySlots, so every
+    // body-bearing construct rejects by default.
+    expect(
+      codes(`
+      def f(): string {
+        thread {
+          finalize {
+            return "a"
+          }
+        }
+        return "x"
+      }
+    `),
+    ).toContain("AG6033");
+  });
+
+  it("names the construct with its keyword, not the AST type name", () => {
+    const errors = check(`
+      def f(): string {
+        if (true) {
+          finalize {
+            return "a"
+          }
+        }
+        return "x"
+      }
+    `);
+    const ag6033 = errors.find((e) => e.code === "AG6033");
+    expect(ag6033?.message).toContain("an `if` statement");
+    expect(ag6033?.message).not.toContain("ifElse");
+  });
+
   it("accepts a finalize that is not the last statement", () => {
     const errors = check(`
       def f(): string {

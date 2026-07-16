@@ -174,6 +174,16 @@ export async function runHttp<T>(fn: () => Promise<T>, url: string): Promise<T> 
       }
       throw new AgencyCancelledError(`fetch ${url} cancelled`, cause);
     }
+    // Network-level failure (undici surfaces a bare "fetch failed" TypeError):
+    // the environment likely can't reach the host. Turn it into an actionable
+    // message so the model stops retrying the same unreachable URL.
+    if (e instanceof TypeError && String(e.message).includes("fetch failed")) {
+      throw new Error(
+        `Could not reach ${url} (network error). This environment may not allow ` +
+          `outbound web requests. Do NOT keep retrying this URL — use a different ` +
+          `tool (e.g. web_search) or answer from your own knowledge.`,
+      );
+    }
     throw e;
   }
 }

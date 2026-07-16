@@ -35,6 +35,7 @@ import {
   gitRestore,
  } from "std::git"
 import { setAgentCwd, getAgentCwd } from "std::index"
+import { getSlowModel, getSlowProvider } from "../shared.agency"
 import { remember, recall, setMemoryId } from "std::memory"
 import { exec, ls, glob, grep, bash } from "std::shell"
 import { skillsDir, docsSkill } from "std::skills"
@@ -216,6 +217,14 @@ when in conflict.
     Correct logic written to the wrong path — or the right data in the
     wrong format — still fails. Do a final pass over the original ask and
     confirm you hit each point before you stop.
+15. **When an exact check decides success, don't settle for the first
+    answer that passes your own check.** For tasks graded by a precise
+    test (a numeric tolerance, an exact match, hidden tests), list the
+    judgment calls you made to reach your answer. If a choice could have
+    gone another way and still fit the task, treat it as an assumption and
+    confirm your answer still passes under the alternatives. A solution
+    that is only correct under the one reading you happened to pick is how
+    plausible work fails a hidden grader.
 
 ## Agency syntax — common mistakes to never make
 
@@ -504,10 +513,17 @@ export def codeAgent(userMsg: string) {
     // agent (acquire domain expertise, then solve) instead of plannerAgent, to
     // see how front-loaded expertise performs. `escalate` (the mid-flight tool)
     // still uses plannerAgent.
+    //
+    // The expert consult runs once per task and sets the whole direction, so it
+    // gets the slow/strong model (the oracle pattern). The solve loop stays on
+    // the ambient model. Benchmarks that pin every slot to one model are
+    // unaffected: getSlowModel() resolves to that same pinned model.
     return expertAgent(
       userMsg,
       maxCost: ESCALATE_MAX_COST,
       maxTime: ESCALATE_MAX_TIME,
+      expertModel: getSlowModel(),
+      expertProvider: getSlowProvider(),
     )
   }
   const tools = [...codeTools]

@@ -4,12 +4,28 @@ const WIKI_HEADERS = {
   Accept: "application/json",
 };
 
+/** Fetch a Wikipedia URL, turning a network-level failure (a sandbox with no
+ *  outbound web access, or Wikipedia being unreachable) into an actionable
+ *  message. Otherwise callers surface a bare "fetch failed" TypeError, which
+ *  the model cannot act on and just retries indefinitely. */
+async function wikiFetch(url: string): Promise<Response> {
+  try {
+    return await fetch(url, { headers: WIKI_HEADERS });
+  } catch (err) {
+    throw new Error(
+      `Could not reach Wikipedia (network error: ${(err as Error).message}). ` +
+        `This environment may not allow outbound web requests. Do NOT keep retrying ` +
+        `Wikipedia — use a different tool (e.g. web_search) or answer from your own knowledge.`,
+    );
+  }
+}
+
 export async function _search(
   query: string,
   limit: number = 5,
 ): Promise<{ title: string; description: string; excerpt: string }[]> {
   const url = `https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(query)}&limit=${limit}`;
-  const response = await fetch(url, { headers: WIKI_HEADERS });
+  const response = await wikiFetch(url);
   if (!response.ok) {
     throw new Error(
       `Wikipedia search failed for "${query}": ${response.status} ${response.statusText}`,
@@ -33,7 +49,7 @@ export async function _summary(title: string): Promise<{
 }> {
   const encoded = encodeURIComponent(title.replace(/ /g, "_"));
   const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`;
-  const response = await fetch(url, { headers: WIKI_HEADERS });
+  const response = await wikiFetch(url);
   if (!response.ok) {
     throw new Error(
       `Wikipedia summary failed for "${title}": ${response.status} ${response.statusText}`,
@@ -52,7 +68,7 @@ export async function _article(
   title: string,
 ): Promise<{ title: string; text: string; url: string }> {
   const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=true&titles=${encodeURIComponent(title)}&format=json`;
-  const response = await fetch(url, { headers: WIKI_HEADERS });
+  const response = await wikiFetch(url);
   if (!response.ok) {
     throw new Error(
       `Wikipedia article failed for "${title}": ${response.status} ${response.statusText}`,

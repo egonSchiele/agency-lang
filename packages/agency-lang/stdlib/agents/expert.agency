@@ -59,6 +59,7 @@ Return the domain-specific knowledge it needs to get the task right:
 - domain: "agency-lang".
 - rules: the Agency conventions, syntax rules, and gotchas that apply to this task — the things a non-expert gets wrong. Be concrete and cite the guide.
 - checklist: concrete acceptance criteria the finished code must satisfy (compiles/typechecks, uses the right construct, handles failures, etc). For EACH item, state HOW to verify it — the exact command to run (e.g. `agency typecheck <file>`) or the exact construct to look for. Prefer items checkable by running a command.
+- ambiguity: if the task allows more than one valid reading, say so, and make the checklist require the work to satisfy the criteria under every reasonable reading, not just the first one.
 
 The bundled docs (docSkill / cliSkill / diagnosticsSkill) are authoritative — consult them rather than guessing. If the task needs no special Agency knowledge, return empty rules and checklist."""
 
@@ -68,8 +69,9 @@ Identify the technical domain, then return the knowledge it needs:
 - domain: a short name for the field (e.g. "molecular biology / primer design", "ELF binaries").
 - rules: the key conventions, constraints, and facts that apply — especially the ones a non-expert gets wrong. Be concrete: exact numeric ranges, formats, encodings, common pitfalls.
 - checklist: concrete acceptance criteria the finished artifact MUST satisfy. For EACH item, state HOW to verify it — the exact command/tool/flags AND the exact input it applies to (which file, which sub-sequence, which bytes). When the task names a ground-truth tool, use it verbatim with its exact flags. Prefer items that can be checked by running a command over ones checked by eye. Be surgical about scope (e.g. "compute Tm on ONLY the annealing portion, not the whole primer").
+- ambiguity: if a step allows more than one valid reading — an unclear boundary, an unstated convention, a value the task never pins down — call it out explicitly. When it affects a criterion, require the work to satisfy that criterion under EVERY reasonable reading, not just the first one. A checklist that silently assumes one reading is how a plausible-looking solution fails a hidden test.
 
-Use the wikipedia and fetch tools to confirm specifics when unsure. If the task has no special domain constraints, return empty rules and checklist."""
+Prefer the web_search tool to confirm specifics when unsure (wikipedia/fetch may be unavailable in sandboxed environments — if one fails, switch tools rather than retrying it). If the task has no special domain constraints, return empty rules and checklist."""
 
 // Simple binary classifier. Biased toward "general": only route to the Agency
 // specialist when the task is clearly about the Agency language itself.
@@ -90,34 +92,53 @@ def classifyDomain(question: string): string {
   return kind.domain
 }
 
-export def agencyExpert(question: string): ExpertGuidance {
+export def agencyExpert(question: string, expertModel: string = "", expertProvider: string = ""): ExpertGuidance {
   """Agency-language specialist: returns rules + a checklist grounded in the
-  bundled docs. @param question - the task to advise on."""
+  bundled docs. @param question - the task to advise on.
+  @param expertModel - optional model override for the consult (empty = ambient).
+  @param expertProvider - optional provider for expertModel (empty = auto-resolve)."""
   let guidance: ExpertGuidance = { domain: "agency-lang", rules: [], checklist: [] }
   thread(label: "agencyExpert", session: "expert-agency") {
     systemMessage(agencySys)
-    const g: ExpertGuidance = llm("Task:\n${question}", { tools: agencyTools })
-    guidance = g
+    // The declared type on `g` drives structured output; branch so an empty
+    // model override never overwrites the client's default model with "".
+    if (expertModel == "") {
+      const g: ExpertGuidance = llm("Task:\n${question}", { tools: agencyTools })
+      guidance = g
+    } else {
+      const g: ExpertGuidance = llm("Task:\n${question}", { tools: agencyTools, model: expertModel, provider: expertProvider })
+      guidance = g
+    }
   }
   return guidance
 }
 
-export def domainExpert(question: string): ExpertGuidance {
+export def domainExpert(question: string, expertModel: string = "", expertProvider: string = ""): ExpertGuidance {
   """General-knowledge specialist: returns rules + a checklist, using web /
-  Wikipedia lookups. @param question - the task to advise on."""
+  Wikipedia lookups. @param question - the task to advise on.
+  @param expertModel - optional model override for the consult (empty = ambient).
+  @param expertProvider - optional provider for expertModel (empty = auto-resolve)."""
   let guidance: ExpertGuidance = { domain: "", rules: [], checklist: [] }
   thread(label: "domainExpert", session: "expert-domain") {
     systemMessage(domainSys)
-    const g: ExpertGuidance = llm("Task:\n${question}", { tools: domainTools })
-    guidance = g
+    // Provider-hosted web search runs server-side (on the model provider), so
+    // it works even in a sandboxed/network-restricted environment where the
+    // client-side wikipedia/fetch tools cannot reach the internet.
+    if (expertModel == "") {
+      const g: ExpertGuidance = llm("Task:\n${question}", { tools: domainTools, hostedTools: ["web_search"] })
+      guidance = g
+    } else {
+      const g: ExpertGuidance = llm("Task:\n${question}", { tools: domainTools, hostedTools: ["web_search"], model: expertModel, provider: expertProvider })
+      guidance = g
+    }
   }
   return guidance
 }
 
-export def consultExpert(question: string): ExpertGuidance {
+export def consultExpert(question: string, expertModel: string = "", expertProvider: string = ""): ExpertGuidance {
   """Route to the Agency-language or general-domain specialist automatically and
   return its guidance. @param question - the task to advise on."""
-  return if classifyDomain(question) == "agency" then agencyExpert(question) else domainExpert(question)
+  return if classifyDomain(question) == "agency" then agencyExpert(question, expertModel, expertProvider) else domainExpert(question, expertModel, expertProvider)
 }
 
 static const emptyGuidance: ExpertGuidance = { domain: "", rules: [], checklist: [] }
@@ -126,8 +147,8 @@ static const emptyGuidance: ExpertGuidance = { domain: "", rules: [], checklist:
 // structured guidance, so the structured output fails validation — yields empty
 // guidance, so the coding agent still runs exactly as it would without a
 // consult. Guidance can only help, never block.
-def consultOrEmpty(task: string): ExpertGuidance {
-  return match (try consultExpert(task)) {
+def consultOrEmpty(task: string, expertModel: string = "", expertProvider: string = ""): ExpertGuidance {
+  return match (try consultExpert(task, expertModel, expertProvider)) {
     success(g) => g
     failure(_) => emptyGuidance
   }
@@ -145,7 +166,7 @@ def renderGuidance(g: ExpertGuidance): string {
   return "Domain expertise for this task (${g.domain}):\n\nKey rules and conventions:\n${rules}\n\nAcceptance checklist — your finished work MUST satisfy every item:\n${checks}"
 }
 
-export def expertAgent(task: string, context: string = "", maxCost: number = $20.00, maxTime: number = 15m): string {
+export def expertAgent(task: string, context: string = "", maxCost: number = $20.00, maxTime: number = 15m, expertModel: string = "", expertProvider: string = ""): string {
   """
   Expert-guided coding agent. Consults a domain expert for the task's rules and
   acceptance criteria, then solves the task with that guidance in hand. A
@@ -156,9 +177,13 @@ export def expertAgent(task: string, context: string = "", maxCost: number = $20
   @param context - optional extra material passed through to the solver.
   @param maxCost - hard spend cap for the whole run (default $20).
   @param maxTime - hard wall-clock cap for the whole run (default 15 minutes).
+  @param expertModel - optional model for the expert consult only, not the
+    solver (empty = the ambient model). Lets a caller put the one-shot expert
+    consult on a stronger model while the solve loop stays on the default.
+  @param expertProvider - optional provider for expertModel (empty = auto-resolve).
   """
   const captured = guard(cost: maxCost, time: maxTime) as {
-    const guidance = consultOrEmpty(task)
+    const guidance = consultOrEmpty(task, expertModel, expertProvider)
     let solverContext = renderGuidance(guidance)
     if (context != "") {
       solverContext = if solverContext == "" then context else "${solverContext}\n\n${context}"

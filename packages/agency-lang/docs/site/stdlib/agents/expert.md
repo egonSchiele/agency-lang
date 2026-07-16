@@ -46,45 +46,65 @@ export type ExpertGuidance = {
 ### agencyExpert
 
 ```ts
-agencyExpert(question: string): ExpertGuidance
+agencyExpert(
+  question: string,
+  expertModel: string = "",
+  expertProvider: string = "",
+): ExpertGuidance
 ```
 
 Agency-language specialist: returns rules + a checklist grounded in the
   bundled docs. @param question - the task to advise on.
+  @param expertModel - optional model override for the consult (empty = ambient).
+  @param expertProvider - optional provider for expertModel (empty = auto-resolve).
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | question | `string` |  |
+| expertModel | `string` | "" |
+| expertProvider | `string` | "" |
 
 **Returns:** [ExpertGuidance](#expertguidance)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L95))
 
 ### domainExpert
 
 ```ts
-domainExpert(question: string): ExpertGuidance
+domainExpert(
+  question: string,
+  expertModel: string = "",
+  expertProvider: string = "",
+): ExpertGuidance
 ```
 
 General-knowledge specialist: returns rules + a checklist, using web /
   Wikipedia lookups. @param question - the task to advise on.
+  @param expertModel - optional model override for the consult (empty = ambient).
+  @param expertProvider - optional provider for expertModel (empty = auto-resolve).
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | question | `string` |  |
+| expertModel | `string` | "" |
+| expertProvider | `string` | "" |
 
 **Returns:** [ExpertGuidance](#expertguidance)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L116))
 
 ### consultExpert
 
 ```ts
-consultExpert(question: string): ExpertGuidance
+consultExpert(
+  question: string,
+  expertModel: string = "",
+  expertProvider: string = "",
+): ExpertGuidance
 ```
 
 Route to the Agency-language or general-domain specialist automatically and
@@ -95,10 +115,12 @@ Route to the Agency-language or general-domain specialist automatically and
 | Name | Type | Default |
 |---|---|---|
 | question | `string` |  |
+| expertModel | `string` | "" |
+| expertProvider | `string` | "" |
 
 **Returns:** [ExpertGuidance](#expertguidance)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L138))
 
 ### expertAgent
 
@@ -108,6 +130,8 @@ expertAgent(
   context: string = "",
   maxCost: number = $20.00,
   maxTime: number = 15m,
+  expertModel: string = "",
+  expertProvider: string = "",
 ): string
 ```
 
@@ -120,6 +144,10 @@ Expert-guided coding agent. Consults a domain expert for the task's rules and
   @param context - optional extra material passed through to the solver.
   @param maxCost - hard spend cap for the whole run (default $20).
   @param maxTime - hard wall-clock cap for the whole run (default 15 minutes).
+  @param expertModel - optional model for the expert consult only, not the
+    solver (empty = the ambient model). Lets a caller put the one-shot expert
+    consult on a stronger model while the solve loop stays on the default.
+  @param expertProvider - optional provider for expertModel (empty = auto-resolve).
 
 **Parameters:**
 
@@ -129,7 +157,9 @@ Expert-guided coding agent. Consults a domain expert for the task's rules and
 | context | `string` | "" |
 | maxCost | `number` | $20.00 |
 | maxTime | `number` | 15m |
+| expertModel | `string` | "" |
+| expertProvider | `string` | "" |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L169))

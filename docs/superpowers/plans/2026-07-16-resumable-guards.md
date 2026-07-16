@@ -859,10 +859,15 @@ site 1's headline that not a cent can leak. So both raising sites are:
 ```ts
 let g: Guard | null;
 while ((g = stack.detectTrippedGuard()) !== null) {
-  await raiseGuardTrip(stack, g, dimensionOf(g)); // returns = this one settled
+  await raiseGuardTrip(stack, g, g.dimension);
 }
 // only now: send the request / book the charge
 ```
+
+(`dimension` is a new readonly property on the `Guard` interface —
+`"cost" | "time"`, the same discriminator `GuardJSON` already carries as
+`kind`. A `dimensionOf(g)` helper would need `instanceof` or a JSON
+round-trip, both forbidden by the interface contract at guard.ts:20-59.)
 
 The post-charge site needs the same loop for the same reason: one charge
 can push an inner guard and its enclosing outer over together, and each is
@@ -890,7 +895,10 @@ export async function raiseGuardTrip(
   stack: StateStack,
   tripped: Guard,                   // the member that crossed its limit
   dimension: "cost" | "time",
-): Promise<void> {                  // returns = approved; throws = rejected
+): Promise<void> {
+  // returns = this question is settled (approved, or someone else's answer
+  // landed while we were parked) — the caller MUST re-detect, never treat
+  // a return as consent to proceed; throws = rejected.
   const scope = GuardScope.resolve(stack, tripped.scopeIds)!;
   if (scope.containsRootBudget()) {
     throw tripped.buildExceededError(stack);      // hard ceiling

@@ -370,3 +370,56 @@ that regen means the lowering drifted.
   construct is their natural home later, but none ship here.
 - Deprecating the legacy `as` acceptance. It costs one `optional()` in
   the parser; revisit only if it confuses anyone.
+
+---
+
+## As executed (2026-07-17, appended per plan Task 8)
+
+Every observable contract in Parts 3–6 shipped as specified. Eight
+implementation-level deviations and discoveries, for the reviewer and
+the future reader:
+
+1. **The checker sees the DESUGARED shape, not the guardBlock node.**
+   The TypeChecker desugars in its constructor (and the preprocessor
+   desugars for the compile path — idempotent). This replaced the
+   planned per-rule guardBlock cases: block-return exclusion, finalize
+   attachment, flow narrowing, and the whole effect machinery apply to
+   the legacy shape they have always handled, with a single synthesizer
+   case (`_guard` call with a block → `Result<T>` from the block's
+   returns, the try-expression precedent) restoring the construct's
+   typing precision. The failure side stays `any` like `try` — the
+   `isFailure`/`error.type` narrowing users rely on is field-based.
+2. **The desugar mutates IN PLACE.** The compilation unit captures
+   def-node references before the constructor runs; the first (copying)
+   implementation left `ctx.functionDefs` pointing at stale guardBlock
+   bodies — half the pipeline desugared, half not.
+3. **The impl is `_guard`, single underscore.** The builder emits
+   `__`-prefixed names as DIRECT TS calls (no `__call` dispatch —
+   `generateFunctionCallExpression`), which broke at runtime.
+4. **The effect is seeded at the symbol, not taken from the raises
+   clause.** A `raises` clause is an allowlist, not a source; effects
+   come from interrupt statements, and `_guard`'s trips are raised by
+   TS runtime machinery the walk cannot see. `TS_SIDE_EFFECT_SEEDS` in
+   `lib/symbolTable.ts` pins `_guard → std::guard` at symbol build; the
+   def keeps `raises <std::guard>` as enforced documentation.
+5. **Pattern lowering learned the node.** Guard bodies at VALUE
+   positions (assignment/return values) are not body slots, so the
+   parse-time lowering never descended into them — a `return match(...)`
+   inside a guarded block reached codegen raw and produced invalid
+   JavaScript. Statement position rides the bodySlots recursion;
+   value positions are handled at their owner cases.
+6. **Draft typing inside guard blocks is PARITY, not the spec's
+   sharper claim.** The legacy syntax never type-checked `saveDraft`
+   against the BLOCK's return either (block bodies share the enclosing
+   scope's ScopeInfo). Pinned by test as deliberate; strengthening it
+   is future work on block-scope infrastructure.
+7. **The malformed-head fall-through extends decision 9.** A head that
+   is not the exact `cost`/`time`/`label` named-arg shape falls through
+   to the ordinary grammar (then fails as an unresolved `guard` name)
+   rather than erroring as a construct — the position-sensitive rule
+   applied consistently.
+8. **The AG3009 warning renders `guard`, not `_guard`**, and the
+   predicted corpus warning churn arrived as scheduled: bare node-body
+   guards now warn; handler-wrapped ones stay silent. The equivalence
+   goldens and their normalizer were deleted after the zero-churn
+   `make fixtures` gate took over the invariant.

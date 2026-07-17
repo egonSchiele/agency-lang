@@ -233,6 +233,8 @@ await agency.withHandler(
 
 Install a `CostGuard` / `TimeGuard` on the active branch's stack for the duration of `fn`. The guards are charged automatically by every `agency.llm` and `llm(...)` call in scope and throw `GuardExceededError` on trip.
 
+These install the exact same runtime guards the Agency `guard(...) { }` construct does, and their trips are just as resumable. One difference: they are invisible to the static `raises` analysis. The construct marks its containing function as raising `std::guard`; a guard installed from TypeScript cannot, the same way any interrupt raised from TypeScript is invisible to `raises`. The runtime is the backstop, as everywhere at the TS boundary.
+
 ```ts
 await agency.withCostGuard(0.05, async () => {
   await agency.llm("Be brief: " + question);

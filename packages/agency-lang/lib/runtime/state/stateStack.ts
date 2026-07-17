@@ -654,6 +654,52 @@ export class StateStack {
     );
   }
 
+  /** Non-consuming probe for the runner's step-boundary raise: the
+   *  innermost unsuspended, non-root guard with a live trip to ask
+   *  about (Guard.raisableTripAtStep — in practice time guards only;
+   *  cost belongs to the PromptRunner gates). Unlike detectTrippedGuard
+   *  this never calls check() (which consumes TimeGuard's one-shot
+   *  latch); the raise machinery itself produces the error via the
+   *  consuming walk once it commits. */
+  firstRaisableTrip(): Guard | null {
+    return (
+      [...this.guards]
+        .reverse()
+        .find(
+          (g) =>
+            !g.isRootBudget &&
+            !this.suspendedGuardIds.includes(g.guardId) &&
+            g.raisableTripAtStep(),
+        ) ?? null
+    );
+  }
+
+  /** Settle the guards in `ids`: the boundary that owned them
+   *  (_runGuarded) has produced its result, so their trips are moot for
+   *  the one remaining step before _popGuard removes them. suspend()
+   *  is exactly the needed off-switch — it pauses the clock, cancels
+   *  the armed timer, and makes raisableTripAtStep and check() decline.
+   *  CostGuard.suspend() is a deliberate no-op, which is also correct:
+   *  cost guards are never step-raisable, and a SHARED cost guard must
+   *  keep metering sibling branches. */
+  settleGuards(ids: string[]): void {
+    this.guards
+      .filter((g) => ids.includes(g.guardId))
+      .forEach((g) => g.suspend());
+    this.rebuildAbortSignal();
+  }
+
+  /** The consuming sibling of firstRaisableTrip: check() exactly the
+   *  guard the probe admits. The runner's raise path uses this instead
+   *  of detectTrippedGuard so a step-boundary conversation stays scoped
+   *  to step-raisable trips — a cost guard left over budget by a
+   *  rejected gate question must not be re-asked from a step. check()
+   *  cannot refuse here (the probe already screened every refusal), so
+   *  the null-coalesce is belt and braces. */
+  detectStepRaisableTrip(): GuardExceededError | null {
+    return this.firstRaisableTrip()?.check(this) ?? null;
+  }
+
   detectTrippedGuard(): GuardExceededError | null {
     for (let i = this.guards.length - 1; i >= 0; i--) {
       if (this.suspendedGuardIds.includes(this.guards[i].guardId)) continue;
@@ -711,6 +757,9 @@ export class StateStack {
     for (const g of hidden) {
       if (!previous.includes(g.guardId)) g.suspend();
     }
+    // Suspended guards leave the composite (armedSignal → undefined), so
+    // a deliberation over a TRIPPED guard runs on a live stack.
+    this.rebuildAbortSignal();
     return previous;
   }
 
@@ -722,6 +771,7 @@ export class StateStack {
     for (const g of this.guards) {
       if (removed.includes(g.guardId)) g.unsuspend();
     }
+    this.rebuildAbortSignal();
   }
 
   /**

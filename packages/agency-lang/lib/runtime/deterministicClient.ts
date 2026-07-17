@@ -14,6 +14,14 @@ import { DETERMINISTIC_IMAGE_COST } from "../constants.js";
 
 export type ReturnMock = {
   return: any;
+  /** Milliseconds this mock "generates" before returning, honoring the
+   *  request's abort signal like a real provider: if the signal fires
+   *  mid-delay, the mock rejects with the signal's reason (or a plain
+   *  abort Error), which is exactly how a cancelled in-flight request
+   *  surfaces. Lets fixtures exercise mid-request cancellation — e.g. a
+   *  time guard tripping while a request is out — deterministically:
+   *  the only timing requirement is limit << delayMs. */
+  delayMs?: number;
 };
 
 export type ToolCallMock = {
@@ -65,6 +73,26 @@ const SYNTHETIC_COST = {
   totalCost: 0.000002,
   currency: "USD",
 };
+
+/** Sleep that a request abort interrupts, rejecting with the signal's
+ *  reason — the same observable behavior as a cancelled provider call. */
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new Error("Request was aborted."));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new Error("Request was aborted."));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 type MockQueue = {
   mocks: LLMMock[];
@@ -121,7 +149,7 @@ export class DeterministicClient implements LLMClient {
     );
   }
 
-  async text(_config: PromptConfig): Promise<Result<PromptResult>> {
+  async text(config: PromptConfig): Promise<Result<PromptResult>> {
     const { scope, queue } = this.resolveQueue();
     // NOTE: increment-then-check is intentional. callIndex tracks the
     // 1-based index of the *current* call so error messages say
@@ -139,6 +167,9 @@ export class DeterministicClient implements LLMClient {
     const callIndex = queue.callIndex;
 
     if ("return" in mock) {
+      if (mock.delayMs) {
+        await abortableDelay(mock.delayMs, config.abortSignal);
+      }
       const output =
         typeof mock.return === "string"
           ? mock.return

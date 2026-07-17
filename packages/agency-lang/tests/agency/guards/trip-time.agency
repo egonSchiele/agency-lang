@@ -1,0 +1,111 @@
+// Time trips raised resumably (resumable-guards PR 3). Wall-clock
+// fixtures are allowed here per the plan's test discipline — this
+// behavior is irreducibly about time — but every margin is huge: limits
+// are tens of milliseconds against delays of tens of SECONDS, and the
+// step-boundary detection reads elapsed working time directly
+// (overBudgetAndArmed), not the timer, so timer starvation in tight
+// await loops cannot flake it.
+import { guard } from "std::thread"
+
+const log = []
+
+def spin(rounds: number): string {
+  let i = 0
+  while (i < rounds) {
+    i = i + 1
+  }
+  return "spun"
+}
+
+// 1. A time trip DETECTED AT A STEP BOUNDARY mid-computation: the
+// handler grants more time and the loop simply continues to completion.
+node stepBoundaryApproved() {
+  handle {
+    const r = guard(time: 5ms) as {
+      const s = spin(300000)
+      return "done:${s}"
+    }
+    if (isFailure(r)) { return "unexpected-failure" }
+    // The log entry proves a trip actually fired and was granted —
+    // without it, a loop that finishes under budget would pass this
+    // test without exercising anything.
+    return "${r.value}|${log[0]}"
+  } with (i) {
+    if (i.effect == "std::guard") {
+      log.push("granted:${i.data.dimension}")
+      return approve({ maxTime: 600000 })
+    }
+    return pass()
+  }
+}
+
+// 2. Same detection, rejected: the salvage pipeline runs and the guard
+// returns the saved draft.
+node stepBoundaryRejected() {
+  handle {
+    const r = guard(time: 5ms) as {
+      saveDraft("partial-spin")
+      const s = spin(300000)
+      return "done:${s}"
+    }
+    if (isFailure(r)) { return "no-salvage" }
+    return "salvaged:${r.value}"
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+
+// 3. A time trip cancelling an IN-FLIGHT request (the mock "generates"
+// for 60 seconds; the 100ms budget cancels it): the handler grants more
+// time and the request is RE-ISSUED from the same thread state — the
+// second mock answers it.
+node midRequestApproved() {
+  handle {
+    const r = guard(time: 100ms) as {
+      const a = llm("Reply with: pong")
+      return "done:${a}"
+    }
+    if (isFailure(r)) { return "unexpected-failure" }
+    return r.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => approve({ maxTime: 600000 })
+      _ => pass()
+    }
+  }
+}
+
+// 4. In-flight cancellation, rejected: salvage.
+node midRequestRejected() {
+  handle {
+    const r = guard(time: 100ms) as {
+      saveDraft("before-request")
+      const a = llm("Reply with: pong")
+      return "done:${a}"
+    }
+    if (isFailure(r)) { return "no-salvage" }
+    return "salvaged:${r.value}"
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+
+// 5. THE PR 3 HEADLINE: a step-boundary time trip with NO in-program
+// handler surfaces across a real checkpoint; the harness grants more
+// time with a valued approve; the resumed run re-detects the restored
+// over-budget guard, applies the recorded answer, and the work
+// completes.
+node checkpointApproved() {
+  const r = guard(time: 5ms) as {
+    const s = spin(300000)
+    return "done:${s}"
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return r.value
+}

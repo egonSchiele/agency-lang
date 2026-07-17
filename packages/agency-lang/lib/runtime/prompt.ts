@@ -30,7 +30,7 @@ import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
-import { raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
+import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
 import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -647,6 +647,25 @@ async function _runPrompt({
     // composed signal returns the SAME branded object the producer set), so
     // the `delivered` de-dup flag stays shared across the two trip paths.
     const cause = readCause(err) ?? readCause(ctx.getAbortSignal(stateStack));
+    // A guard-trip cancellation of an in-flight request is RESUMABLE
+    // (resumable-guards PR 3): when the trip belongs to a non-root guard
+    // on THIS stack, terminate the promptStart pair as a normal
+    // cancellation and hand control to the request-step's retry wrapper,
+    // which runs a gate step to raise the trip as an interrupt. On
+    // approve the wrapper re-issues the request from the current thread
+    // state — the cancelled generation is honestly gone. Root-budget
+    // trips and foreign-stack causes keep the hard path below.
+    if (cause?.kind === "guardTrip") {
+      const trippedGuard = (stateStack ?? ctx.stateStack).guards.find(
+        (g) => g.guardId === (cause as { guardId?: string }).guardId,
+      );
+      if (trippedGuard && !trippedGuard.isRootBudget) {
+        ctx.statelogClient.promptCancelled({
+          threadId: __threads()?.activeId() ?? null,
+        });
+        throw new GuardTripRetry(trippedGuard.guardId);
+      }
+    }
     if (cause || ctx.isCancelled(stateStack) || isAbortError(err)) {
       // Terminate the promptStart pair: a cancelled call (race loser,
       // Esc, timeout abort) is a NORMAL outcome, not a request failure —
@@ -1077,11 +1096,50 @@ export async function runPrompt(args: {
   // apply the recorded answer), while the llm-call bodies are not
   // (they push messages). See lib/runtime/guardTripInterrupt.ts.
   const guardGate = () => raiseGuardTripsUntilClear(ctx, stateStack);
+
+  // A REQUEST step wrapped in the time-trip retry loop (resumable-guards
+  // PR 3). When the timer kills the in-flight request, _runPrompt's
+  // cancellation classifier throws GuardTripRetry; the loop raises the
+  // trip at a gate step (idempotent — approve applies in-process or
+  // across a checkpoint) and re-issues the request from the current
+  // thread state. The pre-body PROBE is what makes resume sound: a
+  // restored over-budget guard is detected and its recorded answer
+  // applied BEFORE the request body re-runs, so the replay never
+  // re-issues into the throwing pre-call backstop. Request bodies must
+  // be re-issue-safe: no un-compensated thread pushes (the prompt push
+  // lives in its own step; injected recall facts are removed in a
+  // finally).
+  const requestStepWithTripRetry = async (
+    key: string,
+    body: () => Promise<void>,
+  ): Promise<void> => {
+    for (let attempt = 0; ; attempt++) {
+      if (stateStack.firstRaisableTrip() !== null) {
+        await pr.step(`${key}.retryGate.${attempt}`, guardGate);
+        continue; // re-probe: each budget is owed its own question
+      }
+      try {
+        await pr.step(key, body);
+        return;
+      } catch (e) {
+        if (!(e instanceof GuardTripRetry)) throw e;
+        // Loop: the probe above raises it at the next gate step.
+      }
+    }
+  };
   try {
     await pr.step("guardGate.initial", guardGate);
+    // The prompt push is its OWN idempotent step so the request step
+    // below is re-issue-safe: an in-process trip retry (or a resumed
+    // replay) re-runs the request body without duplicating the user
+    // message.
+    await pr.step("pushPrompt", async () => {
+      messages.push(smoltalk.userMessage(prompt), callLabel);
+      self.messagesJSON = snapshotThread();
+    });
     // Initial LLM call wrapped in pr.step so it's idempotent on resume
     // (re-entries after a later tool-batch bailout skip this step).
-    await pr.step("initialLlmCall", async () => {
+    await requestStepWithTripRetry("initialLlmCall", async () => {
       let injectedFactsContent: string | null = null;
       const recallManager = ctx.getActiveMemoryManager();
       if (memoryOption && recallManager) {
@@ -1102,33 +1160,38 @@ export async function runPrompt(args: {
           );
         }
       }
-      messages.push(smoltalk.userMessage(prompt), callLabel);
       // The llmCall span is already open (before the loop). On error,
-      // the outer `finally` closes it.
-      const result = await _runPrompt({
-        ctx,
-        messages,
-        tools: tools || [],
-        prompt,
-        responseFormat,
-        clientConfig,
-        stateStack,
-        retryPolicy,
-        callLabel,
-      });
-      messages = result.messages;
-      toolCalls = result.toolCalls;
-      if (injectedFactsContent !== null) {
-        const all = messages.getMessages();
-        for (let i = all.length - 1; i >= 0; i--) {
-          if (
-            all[i].role === "system" &&
-            all[i].content === injectedFactsContent
-          ) {
-            // removeAt, not setMessages: this edits ONE message out of the
-            // thread, so it must not reset the labels of all the others.
-            messages.removeAt(i);
-            break;
+      // the outer `finally` closes it. The injected-facts removal is a
+      // finally so a GuardTripRetry unwind cannot leave the recall
+      // message in the thread and duplicate it on re-issue.
+      try {
+        const result = await _runPrompt({
+          ctx,
+          messages,
+          tools: tools || [],
+          prompt,
+          responseFormat,
+          clientConfig,
+          stateStack,
+          retryPolicy,
+          callLabel,
+        });
+        messages = result.messages;
+        toolCalls = result.toolCalls;
+      } finally {
+        if (injectedFactsContent !== null) {
+          const all = messages.getMessages();
+          for (let i = all.length - 1; i >= 0; i--) {
+            if (
+              all[i].role === "system" &&
+              all[i].content === injectedFactsContent
+            ) {
+              // removeAt, not setMessages: this edits ONE message out of
+              // the thread, so it must not reset the labels of all the
+              // others.
+              messages.removeAt(i);
+              break;
+            }
           }
         }
       }
@@ -1699,7 +1762,7 @@ export async function runPrompt(args: {
         // span stays open across rounds (one span per llm() call), so we
         // do NOT close/reopen it here — this round's promptCompletion
         // nests under the same span as the first round's.
-        await pr.step(`round.${round}.nextLlmCall`, async () => {
+        await requestStepWithTripRetry(`round.${round}.nextLlmCall`, async () => {
           const nextResult = await _runPrompt({
             ctx,
             messages,
@@ -1794,7 +1857,7 @@ export async function runPrompt(args: {
         self.messagesJSON = snapshotThread();
       });
       await pr.step(`validation.${validationAttempt}.guardGate`, guardGate);
-      await pr.step(`validation.${validationAttempt}.llmCall`, async () => {
+      await requestStepWithTripRetry(`validation.${validationAttempt}.llmCall`, async () => {
         const nextResult = await _runPrompt({
           ctx,
           messages,

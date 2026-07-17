@@ -1,5 +1,5 @@
 import type { StateStack } from "./state/stateStack.js";
-import { AgencyAbort, AgencyCancelledError, makeAbortCause } from "./errors.js";
+import { AgencyAbort, AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 
 /** Monotonic source of stable per-guard ids. Threaded into the
  *  `guardTrip` AbortCause a TimeGuard emits so boundaries can identify
@@ -120,6 +120,24 @@ export type Guard = {
    *  dimension in this state would re-trip forever and is a runtime
    *  error attributed to the answering handler. */
   overBudgetAndArmed(): boolean;
+  /** True when this guard's trip was already DELIVERED through the
+   *  leaf path (an in-flight op rejected with the cause and __tryCall
+   *  converted it to a Failure the user saw). A delivered trip is
+   *  handled — the step-boundary raise must not turn it into a second
+   *  question, and shouldSkip already lets cleanup steps run past it. */
+  deliveredTrip(): boolean;
+  /** True when this guard has a live, unhandled trip the runner's
+   *  step-boundary raise should ask about right now. Stack-level
+   *  suspension is the stack's business (firstRaisableTrip consults
+   *  suspendedGuardIds); everything the guard itself knows — armed,
+   *  over budget, not yet consumed by a check() walk, not yet
+   *  delivered to a boundary — lives here. CostGuard always declines:
+   *  cost only ripens at paid actions, and every paid action already
+   *  sits behind a PromptRunner guard gate. Raising cost at arbitrary
+   *  step boundaries would re-ask questions the gates settled and,
+   *  worse, deliver a reject at a step OUTSIDE the owning guard
+   *  boundary, where nothing converts it to a Failure. */
+  raisableTripAtStep(): boolean;
   /** An open trip question for this guard, while one is being decided.
    *  LIVE-ONLY (never serialized) and meaningful only for guards shared
    *  across branches (cost): a sibling branch detecting the same guard
@@ -288,6 +306,14 @@ export class CostGuard implements Guard {
 
   armedSignal(): AbortSignal | undefined {
     return undefined; // no abort plumbing — cost is checked at sync points
+  }
+
+  deliveredTrip(): boolean {
+    return false; // cost trips are never leaf-delivered (no signal)
+  }
+
+  raisableTripAtStep(): boolean {
+    return false; // see the Guard interface: cost belongs to the gates
   }
 
   install(_stack: StateStack): void {
@@ -558,12 +584,35 @@ export class TimeGuard implements Guard {
 
   armedSignal(): AbortSignal | undefined {
     if (this.disarmed) return undefined;
+    // While SUSPENDED (a handler is deliberating), this guard's signal —
+    // aborted or not — leaves the composite: the deliberation must run
+    // on a live stack even though the guard is tripped, and the
+    // suspension brackets rebuild the composite on entry/exit.
+    if (this.suspended) return undefined;
     // A fired controller whose trip has been ANSWERED (approve reset the
     // latches) is dead plumbing awaiting its re-mint at the next resume;
     // it must not poison the fresh composite. While the trip is LIVE
     // (tripped, unanswered) the aborted signal is the truth.
     if (this.controller?.signal.aborted && !this.tripped) return undefined;
     return this.controller?.signal;
+  }
+
+  deliveredTrip(): boolean {
+    if (!this.controller?.signal.aborted) return false;
+    const cause = readCause(this.controller.signal);
+    return cause?.kind === "guardTrip" && !!(cause as { delivered?: boolean }).delivered;
+  }
+
+  raisableTripAtStep(): boolean {
+    // Mirrors check()'s refusals (suspended / disarmed / consumed)
+    // WITHOUT consuming the latch, plus the delivered exclusion. The
+    // `consumed` term is what stops a REJECTED step-boundary trip from
+    // being asked again at every following step: check() flipped it
+    // when it produced the error the reject delivered, and only an
+    // approve (extendBudget) resets it.
+    if (this.suspended || this.disarmed || this.consumed) return false;
+    if (this.deliveredTrip()) return false;
+    return this.tripped || this.currentElapsed() >= this.timeLimit;
   }
 
   pause(): void {
@@ -613,7 +662,15 @@ export class TimeGuard implements Guard {
 
   check(_stack: StateStack): GuardExceededError | null {
     if (this.suspended || this.disarmed) return null;
-    if (!this.tripped || this.consumed) return null;
+    if (this.consumed) return null;
+    // The timer is an eager NOTIFIER (it cancels in-flight leaf ops);
+    // the truth is elapsed working time versus the limit. A tight
+    // Agency loop is an unbroken microtask chain that starves the
+    // setTimeout macrotask, so `tripped` may still be false while the
+    // budget is long gone — check the clock directly, or busy loops
+    // escape time guards entirely (they used to). The latch is kept for
+    // the signal-driven paths.
+    if (!this.tripped && this.currentElapsed() < this.timeLimit) return null;
     // currentElapsed() charges any in-flight window delta so `spent`
     // reflects the true elapsed time at the moment of the trip. Without
     // this, checking inside an active window (the common case — abort

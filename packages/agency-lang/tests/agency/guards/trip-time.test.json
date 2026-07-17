@@ -1,0 +1,90 @@
+{
+  "tests": [
+    {
+      "nodeName": "stepBoundaryApproved",
+      "input": "",
+      "expectedOutput": "\"done:spun|granted:time\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "description": "A time trip detected at a step boundary mid-loop: the handler grants more time and the loop runs to completion."
+    },
+    {
+      "nodeName": "stepBoundaryRejected",
+      "input": "",
+      "expectedOutput": "\"salvaged:partial-spin\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "description": "The same detection, rejected: the carry-on-abort pipeline salvages the saved draft."
+    },
+    {
+      "nodeName": "midRequestApproved",
+      "input": "",
+      "expectedOutput": "\"done:pong\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "never-delivered",
+          "delayMs": 60000
+        },
+        {
+          "return": "pong"
+        }
+      ],
+      "description": "A time trip cancels the in-flight request (mock generating for 60s against a 100ms budget); the handler grants more time and the request is re-issued \u2014 the second mock answers."
+    },
+    {
+      "nodeName": "midRequestRejected",
+      "input": "",
+      "expectedOutput": "\"salvaged:before-request\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "never-delivered",
+          "delayMs": 60000
+        }
+      ],
+      "description": "In-flight cancellation, rejected: the draft saved before the request is salvaged."
+    },
+    {
+      "nodeName": "checkpointApproved",
+      "input": "",
+      "expectedOutput": "\"done:spun\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "resolvedValue": {
+            "maxTime": 600000
+          }
+        }
+      ],
+      "description": "PR 3 headline: a step-boundary time trip surfaces across a real checkpoint; the harness grants time with a valued approve; the resumed run re-detects the restored over-budget guard, applies the answer, and completes."
+    }
+  ]
+}

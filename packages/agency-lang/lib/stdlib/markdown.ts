@@ -382,3 +382,261 @@ export function _renderMarkdownForCli(blocks: unknown): string {
     .filter((s) => s.length > 0)
     .join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// HTML rendering
+//
+// Unlike the CLI renderer above, this one treats the AST as untrusted. The
+// Markdown it renders is typically written by a model, which may in turn have
+// been influenced by a page it read. So text is escaped, URL schemes are
+// restricted, and raw HTML nodes are dropped rather than passed through.
+// ---------------------------------------------------------------------------
+
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+/** Escape text for HTML. Takes `unknown` rather than `string`: the AST is
+ *  untrusted, so a field annotated `string` may hold anything at runtime.
+ *  Coercing is safe because the escape happens afterwards. */
+function escapeHtml(s: unknown): string {
+  const str = typeof s === "string" ? s : s == null ? "" : String(s);
+  return str.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+}
+
+// Schemes that cannot execute when a renderer resolves them. Anything else,
+// including javascript: and data:, is dropped.
+const SAFE_URL_SCHEME_RE = /^(https?|mailto|tel):/i;
+const HAS_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+
+/** Return a URL safe to place in an href/src, or "" if it is not.
+ *
+ *  Control characters are stripped *before* the scheme test, so a URL like
+ *  `java\nscript:` cannot re-form into a live scheme after passing the check. */
+function sanitizeHtmlUrl(url: unknown): string {
+  if (typeof url !== "string") return "";
+  const trimmed = url.replace(URL_CONTROL_RE, "").trim();
+  if (trimmed.length === 0) return "";
+  // Protocol-relative (`//host/path`) has no scheme, but it is not relative:
+  // a renderer resolves it against the current protocol and fetches from the
+  // remote host. In a note that is a tracking pixel, so treat it as remote.
+  if (trimmed.startsWith("//")) return "";
+  if (!HAS_SCHEME_RE.test(trimmed)) return trimmed; // genuinely relative
+  if (SAFE_URL_SCHEME_RE.test(trimmed)) return trimmed;
+  return "";
+}
+
+// The complete set of alignments the AST may carry. Anything else is junk.
+const TABLE_ALIGNMENTS = ["left", "right", "center"];
+
+function renderInlineHtml(nodes: unknown[]): string {
+  return nodes.map(renderInlineNodeHtml).join("");
+}
+
+function renderInlineNodeHtml(n: unknown): string {
+  if (typeof n === "string") return escapeHtml(n);
+  if (n == null || typeof n !== "object") return "";
+  const node = n as Node;
+  const content = Array.isArray(node.content) ? (node.content as unknown[]) : [];
+  switch (node.type) {
+    case "inline-text":
+      return escapeHtml((node.content as string) ?? "");
+    case "inline-soft-break":
+      return "\n";
+    case "inline-hard-break":
+      return "<br>";
+    case "inline-bold":
+      return `<strong>${renderInlineHtml(content)}</strong>`;
+    case "inline-italic":
+      return `<em>${renderInlineHtml(content)}</em>`;
+    case "inline-bold-italic":
+      return `<strong><em>${renderInlineHtml(content)}</em></strong>`;
+    case "inline-strike":
+      return `<del>${renderInlineHtml(content)}</del>`;
+    case "inline-code":
+      return `<code>${escapeHtml((node.content as string) ?? "")}</code>`;
+    case "inline-link": {
+      const href = sanitizeHtmlUrl((node.url as string) ?? "");
+      const text = renderInlineHtml(content);
+      // A link whose scheme was rejected still shows its text, just unlinked.
+      if (href.length === 0) return text;
+      const title = typeof node.title === "string"
+        ? ` title="${escapeHtml(node.title)}"`
+        : "";
+      return `<a href="${escapeHtml(href)}"${title}>${text || escapeHtml(href)}</a>`;
+    }
+    case "image": {
+      const src = sanitizeHtmlUrl((node.url as string) ?? "");
+      const alt = escapeHtml((node.alt as string) ?? "");
+      if (src.length === 0) return alt;
+      const title = typeof node.title === "string"
+        ? ` title="${escapeHtml(node.title)}"`
+        : "";
+      return `<img src="${escapeHtml(src)}" alt="${alt}"${title}>`;
+    }
+    case "inline-ref-link":
+      // Reference resolution did not find a definition, so there is no URL.
+      return escapeHtml((node.text as string) ?? "");
+    case "inline-ref-image":
+      return escapeHtml((node.alt as string) ?? "");
+    case "inline-footnote-ref":
+      return `<sup>${escapeHtml(String(node.id ?? ""))}</sup>`;
+    case "inline-html":
+      // Dropped on purpose. See the note at the top of this section.
+      return "";
+    default:
+      return "";
+  }
+}
+
+function renderBlockHtml(b: unknown): string {
+  if (b == null || typeof b !== "object") return "";
+  const node = b as Node;
+  switch (node.type) {
+    case "paragraph":
+      return `<p>${renderInlineHtml((node.content as unknown[]) ?? [])}</p>`;
+
+    case "heading": {
+      // Coerce before clamping: `level` is annotated number but may be
+      // anything, and Math.min of a non-number yields NaN, giving `<hNaN>`.
+      const raw = Number(node.level ?? 1);
+      const lvl = Number.isInteger(raw) ? Math.max(1, Math.min(6, raw)) : 1;
+      return `<h${lvl}>${renderInlineHtml((node.content as unknown[]) ?? [])}</h${lvl}>`;
+    }
+
+    case "code-block": {
+      const lang = node.language ?? "";
+      const raw = node.content == null ? "" : String(node.content);
+      const body = escapeHtml(raw.replace(/\n+$/, ""));
+      const cls = lang ? ` class="language-${escapeHtml(lang)}"` : "";
+      return `<pre><code${cls}>${body}</code></pre>`;
+    }
+
+    case "block-quote": {
+      const children = (node.content as unknown[]) ?? [];
+      const allInline = children.every(
+        (c) =>
+          typeof c === "string" ||
+          (c != null && typeof c === "object" &&
+            isInlineType((c as Node).type)),
+      );
+      const inner = allInline
+        ? `<p>${renderInlineHtml(children)}</p>`
+        : children.map(renderBlockHtml).join("");
+      return `<blockquote>${inner}</blockquote>`;
+    }
+
+    case "list": {
+      const ordered = !!node.ordered;
+      const items = ((node.items as unknown[]) ?? [])
+        .map(renderListItemHtml)
+        .join("");
+      if (!ordered) return `<ul>${items}</ul>`;
+      // `start` lands inside an attribute, so it must be a number rather than
+      // merely annotated as one. Coercing fails closed on anything else.
+      const start = Number(node.start ?? 1);
+      const startAttr = Number.isInteger(start) && start !== 1
+        ? ` start="${start}"`
+        : "";
+      return `<ol${startAttr}>${items}</ol>`;
+    }
+
+    case "horizontal-rule":
+      return "<hr>";
+
+    case "table":
+      return renderTableHtml(node);
+
+    case "link-definition":
+      // Definitions have no visible representation, same as the CLI renderer.
+      return "";
+
+    case "footnote-definition":
+      return `<p id="fn-${escapeHtml(String(node.id ?? ""))}">` +
+        `<sup>${escapeHtml(String(node.id ?? ""))}</sup> ` +
+        `${escapeHtml((node.content as string) ?? "")}</p>`;
+
+    case "html-block":
+      // Dropped on purpose. See the note at the top of this section.
+      return "";
+
+    case "frontmatter":
+      // Frontmatter is document metadata, not content. Conventional
+      // Markdown-to-HTML renderers omit it, and so do we.
+      return "";
+
+    default:
+      return "";
+  }
+}
+
+function renderListItemHtml(raw: unknown): string {
+  if (raw == null || typeof raw !== "object") return "";
+  const item = raw as Node;
+  const blocks = (item.content as unknown[]) ?? [];
+
+  // A single paragraph is the common case; unwrap it so list items read as
+  // `<li>text</li>` rather than `<li><p>text</p></li>`.
+  const first = blocks[0];
+  const firstIsParagraph = first != null && typeof first === "object" &&
+    (first as Node).type === "paragraph";
+  const inner = firstIsParagraph
+    ? renderInlineHtml(((first as Node).content as unknown[]) ?? []) +
+      blocks.slice(1).map(renderBlockHtml).join("")
+    : blocks.map(renderBlockHtml).join("");
+
+  if (typeof item.checked === "boolean") {
+    const checked = item.checked ? " checked" : "";
+    return `<li><input type="checkbox"${checked} disabled> ${inner}</li>`;
+  }
+  return `<li>${inner}</li>`;
+}
+
+function renderTableHtml(node: Node): string {
+  const headers = (node.headers as string[]) ?? [];
+  const rows = (node.rows as string[][]) ?? [];
+  const aligns = (node.alignments as (string | null)[]) ?? [];
+
+  // The alignment lands inside a style attribute, and it is the one field that
+  // would otherwise skip escapeHtml. The value space is closed, so an allowlist
+  // beats escaping: it fails closed on anything unexpected instead of
+  // faithfully rendering it.
+  const alignAttr = (i: number): string => {
+    const a = aligns[i];
+    return typeof a === "string" && TABLE_ALIGNMENTS.includes(a)
+      ? ` style="text-align:${a}"`
+      : "";
+  };
+
+  const head = headers
+    .map((h, i) => `<th${alignAttr(i)}>${escapeHtml(h ?? "")}</th>`)
+    .join("");
+  const body = rows
+    .map((r) =>
+      "<tr>" +
+      r.map((c, i) => `<td${alignAttr(i)}>${escapeHtml(c ?? "")}</td>`).join("") +
+      "</tr>"
+    )
+    .join("");
+
+  return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+/** Render a Markdown AST (array of block nodes) to an HTML string.
+ *
+ *  Text content is HTML-escaped, and URLs are restricted to http, https,
+ *  mailto, tel, and relative paths. Raw HTML in the source (`html-block` and
+ *  `inline-html` nodes) is dropped rather than passed through, because the
+ *  Markdown handed to this renderer is often model-authored. Frontmatter is
+ *  omitted as metadata. */
+export function _renderMarkdownForHtml(blocks: unknown): string {
+  if (!Array.isArray(blocks)) return "";
+  return (blocks as unknown[])
+    .map(renderBlockHtml)
+    .filter((s) => s.length > 0)
+    .join("\n");
+}

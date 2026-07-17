@@ -8,9 +8,11 @@
 //
 // Wall-clock margins (allowed here per the plan's test discipline —
 // this behavior is irreducibly about time): limits are tens of
-// milliseconds, spin(3000000) is 10x the iterations that trip-time
-// already banks on exceeding 5ms, and grants are ten MINUTES, so no
-// margin is ever close.
+// milliseconds, grants are ten MINUTES, and spin(300000) runs every
+// iteration through the runner's step machinery, so it takes SECONDS
+// of working time — two orders of magnitude past the 30ms limits, yet
+// small enough to finish well inside the harness's per-test timeout on
+// a slow CI runner (3000000 did not: it timed out at 2 minutes).
 import { guard } from "std::thread"
 
 const log = []
@@ -37,7 +39,7 @@ node grantFollowsBudget() {
     const r = guard(time: 30ms, label: "budget") as {
       fork([1, 2]) as n {
         if (n == 1) {
-          const s = spin(3000000)
+          const s = spin(300000)
         }
       }
       return "done"
@@ -70,7 +72,7 @@ node enclosingUntouched() {
       const inner = guard(time: 5ms, label: "inner") as {
         fork([1, 2]) as n {
           if (n == 1) {
-            const s = spin(3000000)
+            const s = spin(300000)
           }
         }
         return "inner-done"

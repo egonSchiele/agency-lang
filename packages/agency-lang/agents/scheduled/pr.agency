@@ -1,0 +1,155 @@
+import { exec } from "std::shell"
+import { mkdir } from "std::fs"
+import { exit } from "std::system"
+
+/** @module
+  Shared helpers for the scheduled maintenance agents in this directory.
+
+  These agents run non-interactively on GitHub Actions (see the generated
+  `.github/workflows/*.yml`), so every effectful call is discharged with
+  `with approve`. Safety does NOT come from in-agent prompting — it comes from
+  the workflow: least-privilege `GITHUB_TOKEN` (`contents: write` +
+  `pull-requests: write`, nothing else), triggers that take no attacker-
+  controlled input (`schedule` + `workflow_dispatch` only), and the fact that
+  every change lands as a pull request a human reviews before merge.
+
+  Failures are loud on purpose. `run()` aborts the whole process with a
+  non-zero exit code the moment any shell command fails, so a broken run shows
+  up as a red workflow instead of a green one that quietly did nothing. This is
+  the opposite of the silent-fallback anti-pattern in
+  `docs/dev/anti-patterns.md`.
+*/
+
+/**
+  Run a shell command and abort loudly if it fails.
+
+  `std::shell`'s `exec` does NOT throw on a non-zero exit — it resolves with
+  `{stdout, stderr, exitCode}`. Left unchecked, a failed `git push` or
+  `gh pr create` would let the agent march on and report success. So every git
+  and gh call goes through here: on a non-zero exit we print the command and
+  its stderr, then `exit(1)` to fail the workflow. Only use this for commands
+  whose non-zero exit genuinely means failure (not, say, `git diff --quiet`,
+  whose exit code is a signal, not an error).
+*/
+def run(command: string, args: string[], cwd: string) {
+  const result = exec(command, args, cwd: cwd) with approve
+  if (result.exitCode != 0) {
+    const joined = args.join(" ")
+    print("Command failed (exit ${result.exitCode}): ${command} ${joined}")
+    print(result.stderr)
+    exit(1) with approve
+  }
+  return result
+}
+
+/** Absolute path to the git repo root of the checkout. */
+export def repoRoot(): string {
+  """Return the absolute path to the root of the checked-out git repository."""
+  const rootResult = run("git", ["rev-parse", "--show-toplevel"], "")
+  return rootResult.stdout.trim()
+}
+
+/** Absolute path to the agency-lang package inside the checkout. */
+export def pkgDir(): string {
+  """Return the absolute path to `packages/agency-lang` inside the checkout."""
+  return "${repoRoot()}/packages/agency-lang"
+}
+
+/** A UTC timestamp suffix suitable for branch names, e.g. `20260713-141500`. */
+export def stamp(): string {
+  """Return a UTC timestamp like `20260713-141500` for use in branch names."""
+  const stampResult = run("date", ["-u", "+%Y%m%d-%H%M%S"], "")
+  return stampResult.stdout.trim()
+}
+
+/**
+  True when an open PR already exists whose branch starts with `branchPrefix`.
+
+  The agents name their branches `<prefix><timestamp>`, so this lets a run see
+  that a previous run's PR is still unmerged and skip its work rather than pile
+  a second identical PR on top. Checked early, before any LLM call, so a
+  still-open PR also saves the API spend.
+*/
+export def openPrExists(root: string, branchPrefix: string): boolean {
+  """
+  Return true if an open pull request already has a head branch starting with branchPrefix.
+
+  @param root - Absolute path to the repo root
+  @param branchPrefix - Branch-name prefix the agent uses for its PRs
+  """
+  const listResult = run("gh", ["pr", "list", "--state", "open", "--json", "headRefName", "--jq", ".[].headRefName"], root)
+  const branches = listResult.stdout.trim().split("\n")
+  for (branch in branches) {
+    if (branch.startsWith(branchPrefix)) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Create a directory (and parents), aborting loudly on failure. */
+export def ensureDir(dir: string) {
+  """Create `dir` and any missing parents, aborting the run if it cannot be created."""
+  const mkdirResult = mkdir(dir) with approve
+  if (mkdirResult is failure(err)) {
+    print("Failed to create directory ${dir}: ${err}")
+    exit(1) with approve
+  }
+}
+
+/**
+  Create a branch, commit the given files, push, and open a PR against `main`.
+  Returns the PR URL, or an empty string when there was nothing to commit (an
+  identical report/config already on main) — callers must treat "" as "no PR".
+
+  Only the files in `paths` are staged (never `git add -A`) so a stray build
+  artifact the runner may have produced can never leak into the PR. Every git
+  and gh step is checked via `run()`, so any real failure fails the workflow.
+*/
+export def openPr(
+  root: string,
+  branch: string,
+  paths: string[],
+  commitMsg: string,
+  title: string,
+  body: string,
+): string {
+  """
+  Commit specific files on a new branch and open a PR to main; returns the PR URL, or "" if nothing changed.
+
+  @param root - Absolute path to the repo root
+  @param branch - Name of the branch to create and push
+  @param paths - Repo-root-relative paths to stage and commit
+  @param commitMsg - Commit message
+  @param title - Pull request title
+  @param body - Pull request body (markdown)
+  """
+  run("git", ["-C", root, "config", "user.name", "agency-scheduler[bot]"], "")
+  run("git", ["-C", root, "config", "user.email", "agency-scheduler@users.noreply.github.com"], "")
+  run("git", ["-C", root, "checkout", "-b", branch], "")
+
+  const addArgs = ["-C", root, "add"]
+  for (path in paths) {
+    addArgs.push(path)
+  }
+  run("git", addArgs, "")
+
+  // `git diff --cached --quiet` exits 0 when the index is empty and 1 when
+  // there are staged changes. A non-zero exit here is EXPECTED, not a failure,
+  // so it must NOT go through run(). An empty index means the generated output
+  // matches main already — skip cleanly rather than opening an empty PR.
+  const staged = exec("git", ["-C", root, "diff", "--cached", "--quiet"], cwd: "") with approve
+  if (staged.exitCode == 0) {
+    print("No changes to commit; nothing to open a PR for.")
+    return ""
+  }
+
+  run("git", ["-C", root, "commit", "-m", commitMsg], "")
+  run("git", ["-C", root, "push", "-u", "origin", branch], "")
+  const pr = run(
+    "gh",
+    ["pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body],
+    root,
+  )
+  return pr.stdout.trim()
+}

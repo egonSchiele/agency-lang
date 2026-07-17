@@ -14,37 +14,46 @@ function firstDeclValue(src: string): any {
 }
 
 describe("guardBlockParser", () => {
-  it("parses each head shape with fields and argOrder from source order", () => {
+  it("carries the head as a verbatim call-style argument list, source order preserved", () => {
     const g1: GuardBlock = firstDeclValue(
       "node main() { const r = guard(cost: $1) { return 1 }\n return r }",
     );
     expect(g1.type).toBe("guardBlock");
-    expect(g1.cost).not.toBeNull();
-    expect(g1.time).toBeNull();
-    expect(g1.label).toBeNull();
-    expect(g1.argOrder).toEqual(["cost"]);
+    expect(g1.arguments.map((a: any) => a.name)).toEqual(["cost"]);
 
     const g2: GuardBlock = firstDeclValue(
       "node main() { const r = guard(time: 5m, cost: $1) { return 1 }\n return r }",
     );
-    expect(g2.argOrder).toEqual(["time", "cost"]);
-    expect(g2.time).not.toBeNull();
-    expect(g2.cost).not.toBeNull();
+    expect(g2.arguments.map((a: any) => a.name)).toEqual(["time", "cost"]);
 
     const g3: GuardBlock = firstDeclValue(
-      'node main() { const r = guard(label: "x") { return 1 }\n return r }',
-    );
-    expect(g3.label).not.toBeNull();
-    expect(g3.argOrder).toEqual(["label"]);
-
-    const g4: GuardBlock = firstDeclValue(
       "node main() { const r = guard() { return 1 }\n return r }",
     );
-    expect(g4.cost).toBeNull();
-    expect(g4.time).toBeNull();
-    expect(g4.label).toBeNull();
-    expect(g4.argOrder).toEqual([]);
-    expect(g4.body).toHaveLength(1);
+    expect(g3.arguments).toEqual([]);
+    expect(g3.body).toHaveLength(1);
+  });
+
+  it("does not validate the head — unknown, duplicate, and positional args parse and are forwarded", () => {
+    // Validation is the checker's job, against _guard's signature after
+    // desugaring — the same diagnostics a bad call always got. The
+    // parser just carries the list.
+    const unknown: GuardBlock = firstDeclValue(
+      "node main() { const r = guard(budget: $1) { return 1 }\n return r }",
+    );
+    expect(unknown.type).toBe("guardBlock");
+    expect((unknown.arguments[0] as any).name).toBe("budget");
+
+    const positional: GuardBlock = firstDeclValue(
+      "node main() { const r = guard($1) { return 1 }\n return r }",
+    );
+    expect(positional.type).toBe("guardBlock");
+    expect(positional.arguments).toHaveLength(1);
+
+    const dup: GuardBlock = firstDeclValue(
+      "node main() { const r = guard(cost: $1, cost: $2) { return 1 }\n return r }",
+    );
+    expect(dup.type).toBe("guardBlock");
+    expect(dup.arguments).toHaveLength(2);
   });
 
   it("parses in return position", () => {
@@ -108,23 +117,5 @@ describe("guardBlockParser", () => {
     const main: any = r.result.nodes.find((n: any) => n.type === "graphNode");
     const decl = main.body.find((s: any) => s.type === "assignment");
     expect(decl.value.type).not.toBe("guardBlock");
-  });
-
-  it("does not claim malformed heads — positional, unknown, or duplicate args fall through", () => {
-    // The position-sensitive rule applied consistently: only the exact
-    // well-formed shape is claimed. A malformed head falls through to
-    // the ordinary grammar, where `guard` is an unresolved name and
-    // the EXISTING resolution diagnostics take over downstream.
-    for (const head of ["$1", "budget: $1", "cost: $1, cost: $2"]) {
-      const r = parseAgency(
-        `node main() { const r = guard(${head}) { return 1 }\n return r }`,
-        {},
-        false,
-      );
-      if (!r.success) continue; // a parse failure is fine too
-      const main: any = r.result.nodes.find((n: any) => n.type === "graphNode");
-      const decl = main.body.find((s: any) => s.type === "assignment");
-      expect(decl.value.type).not.toBe("guardBlock");
-    }
   });
 });

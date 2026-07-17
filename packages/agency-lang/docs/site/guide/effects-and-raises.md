@@ -82,22 +82,6 @@ def f() raises <> {
 | *(omitted)* | Raises anything |
 
 
-## Guards
-
-A `guard(...) { }` block can raise `std::guard` — that is how a budget trip asks for more budget (see [Guards](/guide/guards)). The construct itself is the source: a function that contains a guard, or calls anything that does, raises `std::guard`, and a `raises` clause on such a function must list it.
-
-```ts
-def research(topic: string): string raises <std::guard> {
-  const r = guard(cost: $0.50) {
-    return llm("research: " + topic)
-  }
-  if (isFailure(r)) { return "over budget" }
-  return r.value
-}
-```
-
-One deliberate subtlety: `raises` bounds the interrupts that can escape a function to a handler that could act on them. A trip under a guard installed by your *caller* can still travel through your function on its way out — that is pass-through, not raising, and no handler you could register would be eligible to see it (a handler inside a guard never adjudicates that guard's trip). So only functions that contain guards carry the effect, and the annotation stays quiet everywhere else.
-
 ## Handlers
 
 Handlers don't exempt effects. Even if your interrupt is handled by a handler, you still need to add it to the effect set.

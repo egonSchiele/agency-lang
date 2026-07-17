@@ -25,12 +25,19 @@ describe("desugarGuardsInBody", () => {
     expect(call.block.body).toHaveLength(1);
   });
 
-  it("omits absent head args and keeps source order for present ones", () => {
+  it("forwards the head verbatim in source order — including args _guard will reject", () => {
     const body = desugarGuardsInBody(
       mainBody("node main() { const r = guard(time: 5m, cost: $1) { return 1 }\n return r }"),
     );
     const call: any = (body.find((s: any) => s.type === "assignment") as any).value;
     expect(call.arguments.map((a: any) => a.name)).toEqual(["time", "cost"]);
+
+    const bad = desugarGuardsInBody(
+      mainBody("node main() { const r = guard(budget: $1) { return 1 }\n return r }"),
+    );
+    const badCall: any = (bad.find((s: any) => s.type === "assignment") as any).value;
+    expect(badCall.functionName).toBe("_guard");
+    expect(badCall.arguments.map((a: any) => a.name)).toEqual(["budget"]);
   });
 
   it("desugars nested guards, children first", () => {

@@ -553,7 +553,7 @@ export def _guard(
   time: number | null = null,
   label: string | null = null,
   block: () -> any = null,
-): Result {
+): Result raises <std::guard> {
   """
   Internal: the lowering target of the `guard(...) { }` construct — use
   the construct, not this function. Runs `block` under the given cost

@@ -52,20 +52,14 @@ function desugarNode(node: AgencyNode): AgencyNode {
 }
 
 function desugarGuardBlock(g: GuardBlock): AgencyNode {
-  const fields = { cost: g.cost, time: g.time, label: g.label };
-  // Absent args are OMITTED from the call — the impl's defaults supply
-  // null, exactly as when users wrote the call themselves.
-  const args = g.argOrder
-    .filter((name) => fields[name] !== null)
-    .map((name) => ({
-      type: "namedArgument" as const,
-      name,
-      value: fields[name]!,
-    }));
+  // The head arguments forward VERBATIM. Named, positional, unknown,
+  // duplicated — all of it lands on the `_guard` call and gets exactly
+  // the validation and diagnostics the legacy call syntax got from the
+  // same signature. The desugar validates nothing.
   return {
     type: "functionCall",
     functionName: "_guard",
-    arguments: args,
+    arguments: g.arguments,
     block: {
       type: "blockArgument",
       inline: false,

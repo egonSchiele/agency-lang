@@ -470,15 +470,28 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
  *  machinery marks every function containing a guard construct. Keyed
  *  by name: a user def shadowing `_guard` would inherit the seed, an
  *  accepted overapproximation for an underscore-internal name. */
-const TS_SIDE_EFFECT_SEEDS: Record<string, string[]> = {
-  _guard: ["std::guard"],
-};
+const TS_SIDE_EFFECT_SEEDS: Record<string, string[]> = Object.assign(
+  // Null prototype + own-property read below: the index is a
+  // user-controlled symbol name, and a def named `__proto__` (or any
+  // Object.prototype member) must not resolve through the prototype
+  // chain to a non-array.
+  Object.create(null),
+  {
+    _guard: ["std::guard"],
+  },
+);
 
 function collectDirectInterruptEffects(
   name: string,
   body: AgencyNode[],
 ): InterruptEffect[] {
-  const effects: string[] = [...(TS_SIDE_EFFECT_SEEDS[name] ?? [])];
+  const seeded = Object.prototype.hasOwnProperty.call(
+    TS_SIDE_EFFECT_SEEDS,
+    name,
+  )
+    ? TS_SIDE_EFFECT_SEEDS[name]
+    : [];
+  const effects: string[] = [...seeded];
   for (const { node } of walkNodes(body)) {
     if (node.type === "interruptStatement" && !effects.includes(node.effect)) {
       effects.push(node.effect);

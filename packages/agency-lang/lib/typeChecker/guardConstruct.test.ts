@@ -55,6 +55,22 @@ node main() { return f() }`,
     expect(errs).toHaveLength(0);
   });
 
+  it("unknown head args error via the existing call diagnostics, naming 'guard'", () => {
+    // The parser carries the head verbatim (owner review round); the
+    // desugared _guard call's signature does the validation with the
+    // SAME diagnostic a bad call always got.
+    const errs = typecheckSource(
+      `node main() {
+  const r = guard(budget: $1) { return 1 }
+  return "x"
+}`,
+    );
+    const unknown = errs.filter((e) => /Unknown named argument/.test(e.message));
+    expect(unknown.length).toBeGreaterThan(0);
+    expect(unknown[0].message).toContain("'guard'");
+    expect(unknown[0].message).not.toContain("_guard");
+  });
+
   it("checks head argument types against the impl signature", () => {
     const errs = typecheckSource(
       `node main() {
@@ -132,6 +148,14 @@ node main() { return f() }`;
 }
 node main() { return f() }`;
     expect(exceeds(src).length).toBeGreaterThan(0);
+  });
+
+  it("a user def named _guard is a reserved-name error (shadowing would bypass metering)", () => {
+    const errs = typecheckSource(
+      `def _guard(x: number): number { return x }
+node main() { return _guard(1) }`,
+    );
+    expect(errs.some((e) => /reserved/i.test(e.message))).toBe(true);
   });
 
   it("a bare guard in a node body warns (unhandled-interrupt warning)", () => {

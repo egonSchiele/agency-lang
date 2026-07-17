@@ -1677,19 +1677,19 @@ export class AgencyGenerator {
     return this.indentStr(`finalize {\n${bodyCodeStr}${this.indentStr("}")}`);
   }
 
-  /** Canonical form: head args in SOURCE order (argOrder), parens
+  /** Canonical form: the head prints through the same argument
+   *  renderer function calls use (source order for free), parens
    *  always present, never a legacy `as` — printing old syntax through
    *  the generator IS the `as`-removal migration. */
   protected processGuardBlock(node: GuardBlock): string {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    const fields = { cost: node.cost, time: node.time, label: node.label };
-    const params = node.argOrder
-      .filter((name) => fields[name] !== null)
-      .map((name) => `${name}: ${this.processNode(fields[name]!).trim()}`);
+    const argsStr = this.renderArgList(
+      node.arguments as FunctionCall["arguments"],
+    );
     return this.indentStr(
-      `guard(${params.join(", ")}) {\n${bodyCodeStr}${this.indentStr("}")}`,
+      `guard${argsStr} {\n${bodyCodeStr}${this.indentStr("}")}`,
     );
   }
 

@@ -304,6 +304,14 @@ function isStdlibSaveDraftOrigin(originFile: string | undefined): boolean {
   return /[\\/]stdlib[\\/]index\.agency$/.test(originFile);
 }
 
+
+/** User-facing spelling for a callee in diagnostics. The guard
+ *  construct desugars to `_guard` before checking (guardDesugar.ts);
+ *  users wrote `guard`, so messages should too. */
+function displayFunctionName(name: string): string {
+  return name === "_guard" ? "guard" : name;
+}
+
 export function isInsideHandler(ancestors: WalkAncestor[]): boolean {
   return ancestors.some((a) => {
     if (a.type === "handleBlock") return true;
@@ -403,7 +411,7 @@ function checkCallAgainstBuiltinSig(
         ctx.errors.push(
           diagnostic(
             "namedArgsOnlyAgencyFunctions",
-            { fn: call.functionName },
+            { fn: displayFunctionName(call.functionName) },
             call.loc ?? null,
           ),
         );
@@ -412,7 +420,7 @@ function checkCallAgainstBuiltinSig(
           diagnostic(
             "namedArgNotAccepted",
             {
-              fn: call.functionName,
+              fn: displayFunctionName(call.functionName),
               name: a.name,
               allowed: allowedNames.join(", "),
             },
@@ -428,7 +436,7 @@ function checkCallAgainstBuiltinSig(
       ctx.errors.push(
         diagnostic(
           "duplicateNamedArg",
-          { name: a.name, fn: call.functionName },
+          { name: a.name, fn: displayFunctionName(call.functionName) },
           call.loc ?? null,
         ),
       );
@@ -446,7 +454,7 @@ function checkCallAgainstBuiltinSig(
             "namedArgTypeMismatch",
             {
               name: a.name,
-              fn: call.functionName,
+              fn: displayFunctionName(call.functionName),
               expected: formatTypeHint(expected),
               actual: formatTypeHint(actual),
             },
@@ -461,7 +469,7 @@ function checkCallAgainstBuiltinSig(
     ctx.errors.push(
       diagnostic(
         "blockArgNotAccepted",
-        { fn: call.functionName },
+        { fn: displayFunctionName(call.functionName) },
         call.block.loc ?? call.loc ?? null,
       ),
     );
@@ -584,7 +592,7 @@ function checkBlockArgShape(
   ctx.errors.push(
     diagnostic(
       "blockArgNotAccepted",
-      { fn: call.functionName },
+      { fn: displayFunctionName(call.functionName) },
       call.block.loc ?? call.loc ?? null,
     ),
   );
@@ -628,7 +636,7 @@ function checkNamedArgStructure(
       pushErr(
         diagnostic(
           "splatAfterNamedArg",
-          { fn: call.functionName },
+          { fn: displayFunctionName(call.functionName) },
           call.loc ?? null,
         ),
       );
@@ -638,7 +646,7 @@ function checkNamedArgStructure(
       pushErr(
         diagnostic(
           "positionalAfterNamedArg",
-          { fn: call.functionName },
+          { fn: displayFunctionName(call.functionName) },
           call.loc ?? null,
         ),
       );
@@ -660,7 +668,7 @@ function checkNamedArgStructure(
       pushErr(
         diagnostic(
           "duplicateNamedArg",
-          { name: arg.name, fn: call.functionName },
+          { name: arg.name, fn: displayFunctionName(call.functionName) },
           call.loc ?? null,
         ),
       );
@@ -672,7 +680,7 @@ function checkNamedArgStructure(
       pushErr(
         diagnostic(
           "unknownNamedArg",
-          { name: arg.name, fn: call.functionName },
+          { name: arg.name, fn: displayFunctionName(call.functionName) },
           call.loc ?? null,
         ),
       );
@@ -680,7 +688,7 @@ function checkNamedArgStructure(
       pushErr(
         diagnostic(
           "namedArgConflictsPositional",
-          { name: arg.name, position: paramIdx + 1, fn: call.functionName },
+          { name: arg.name, position: paramIdx + 1, fn: displayFunctionName(call.functionName) },
           call.loc ?? null,
         ),
       );
@@ -706,7 +714,7 @@ function checkNamedArgStructure(
         pushErr(
           diagnostic(
             "positionalFeedsNamedVariadic",
-            { param: variadicParam.name, fn: call.functionName },
+            { param: variadicParam.name, fn: displayFunctionName(call.functionName) },
             call.loc ?? null,
           ),
         );
@@ -736,7 +744,7 @@ function checkArity(
   // Count it so `f() as x { }` doesn't look like a 0-arg call.
   const argCount = call.arguments.length + (call.block ? 1 : 0);
   if (argCount >= minArgs && argCount <= maxArgs) return true;
-  const arity = { fn: call.functionName, count: argCount };
+  const arity = { fn: displayFunctionName(call.functionName), count: argCount };
   const arityLoc = call.loc ?? null;
   if (maxArgs === Infinity) {
     ctx.errors.push(
@@ -816,7 +824,7 @@ function checkArgsAgainstParams(
           {
             actual: formatTypeHint(argType),
             expected: formatTypeHint(paramType),
-            fn: call.functionName,
+            fn: displayFunctionName(call.functionName),
           },
           call.loc ?? null,
         ),
@@ -853,7 +861,7 @@ function checkSplatAgainstRemainingParams(
     ctx.errors.push(
       diagnostic(
         "splatMustBeArray",
-        { actual: splatStr, fn: call.functionName },
+        { actual: splatStr, fn: displayFunctionName(call.functionName) },
         call.loc ?? null,
       ),
     );
@@ -875,7 +883,7 @@ function checkSplatAgainstRemainingParams(
     ctx.errors.push(
       diagnostic(
         "splatElementNotAssignable",
-        { actual: elementStr, expected: paramStr, fn: call.functionName },
+        { actual: elementStr, expected: paramStr, fn: displayFunctionName(call.functionName) },
         call.loc ?? null,
       ),
     );

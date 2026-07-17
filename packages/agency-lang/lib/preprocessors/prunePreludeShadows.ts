@@ -20,6 +20,15 @@ import type { AgencyProgram } from "../types.js";
  * are touched; the TS builder derives both the emitted import and its
  * `__registerTool(...)` call from these specifiers, so pruning removes both.
  */
+/** Prelude names a user shadow must NEVER displace. `_guard` is the
+ *  guard construct's desugar target (guardDesugar.ts): pruning it
+ *  would silently rebind every `guard(...) { }` in the file to the
+ *  user's `_guard` — a bypass of budget metering, which is safety
+ *  infrastructure. Keeping the import makes a user `_guard` a
+ *  duplicate-binding error instead: fail closed. The typechecker also
+ *  reserves the name (RESERVED_FUNCTION_NAMES) for a clear message. */
+const UNPRUNABLE_PRELUDE_NAMES = new Set<string>(["_guard"]);
+
 export function prunePreludeShadows(program: AgencyProgram): void {
   const shadowed = new Set<string>();
   for (const node of program.nodes) {
@@ -32,6 +41,9 @@ export function prunePreludeShadows(program: AgencyProgram): void {
       // re-assignment (`x = 1`), which is not a new binding.
       shadowed.add(node.variableName);
     }
+  }
+  for (const name of UNPRUNABLE_PRELUDE_NAMES) {
+    shadowed.delete(name);
   }
   if (shadowed.size === 0) return;
 

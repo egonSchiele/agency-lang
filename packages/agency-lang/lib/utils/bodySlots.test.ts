@@ -6,10 +6,7 @@ describe("bodySlots — guardBlock", () => {
     const body = [{ type: "returnStatement", value: null }];
     const node = {
       type: "guardBlock",
-      cost: null,
-      time: null,
-      label: null,
-      argOrder: [],
+      arguments: [],
       body,
     } as any;
     const slots = bodySlots(node);

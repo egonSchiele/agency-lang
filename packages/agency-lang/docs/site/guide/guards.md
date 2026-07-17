@@ -7,10 +7,6 @@ description: Documents the `guard` function for capping the cost and/or compute 
 
 Guards let you limit the **cost** and/or **compute time** of a block of work.
 
-`guard` is part of the language — no import needed. (It used to be a stdlib function: if you have older code, delete the `import { guard } from "std::thread"` line, and run `agency fmt` to drop the old `as` between the arguments and the block. The old `as` form still parses, so nothing breaks in the meantime.)
-
-Because it is a language construct, the typechecker knows two things it could not know before: the result is a `Result<T>` typed from what your block returns, and any function containing a guard raises `std::guard` — so a function with a `raises` clause that uses a guard must list `std::guard` in it.
-
 ```ts
 node main() {
   const result = guard(cost: $0.2) {

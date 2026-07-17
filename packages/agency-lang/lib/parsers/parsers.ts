@@ -4208,65 +4208,18 @@ const functionRefHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
 // (spec: docs/superpowers/specs/2026-07-17-guard-keyword-design.md)
 // =============================================================================
 
-/** The head: the parenthesized cost/time/label list. Reuses the
- *  canonical NamedArgument parser so users get identical syntax and
- *  error messages to function calls, then validates the allowlist —
- *  the `_threadNamedArgsParser` pattern. */
-type GuardHead = {
-  cost: Expression | null;
-  time: Expression | null;
-  label: Expression | null;
-  argOrder: ("cost" | "time" | "label")[];
-};
-const _guardHeadParser: Parser<GuardHead> = (
-  input: string,
-): ParserResult<GuardHead> => {
-  const inner: Parser<any> = seqC(
-    char("("),
-    optionalSpacesOrNewline,
-    capture(sepBy(commaWithNewline, namedArgumentParser), "arguments"),
-    optional(comma),
-    optionalSpacesOrNewline,
-    char(")"),
-  );
-  const r = inner(input);
-  if (!r.success) return r as ParserResult<GuardHead>;
-  const args: NamedArgument[] = r.result.arguments;
-  const allowed = ["cost", "time", "label"];
-  const seen: Record<string, Expression> = {};
-  const argOrder: ("cost" | "time" | "label")[] = [];
-  for (const arg of args) {
-    if (!allowed.includes(arg.name)) {
-      return failure(
-        `Unknown guard argument: ${arg.name}. Allowed: cost, time, label`,
-        input,
-      );
-    }
-    if (seen[arg.name]) {
-      return failure(`Duplicate guard argument: ${arg.name}`, input);
-    }
-    seen[arg.name] = arg.value as Expression;
-    argOrder.push(arg.name as "cost" | "time" | "label");
-  }
-  return success(
-    {
-      cost: seen.cost ?? null,
-      time: seen.time ?? null,
-      label: seen.label ?? null,
-      argOrder,
-    },
-    r.rest,
-  );
-};
-
 /** `guard(cost: $1, time: 5m, label: "x") { body }`, expression- and
- *  statement-position. The reservation is POSITION-SENSITIVE (spec
- *  decision 9): everything up to and including `{` is backtrackable,
- *  so `guard(1)` (a call to a user function named guard) and
- *  `import { guard }` lines fall through to the ordinary grammar —
- *  only the full `guard(...) {` shape is claimed. A legacy `as`
- *  between the head and the block is accepted and DISCARDED (the
- *  formatter is the migration: `agency fmt` strips it). */
+ *  statement-position. The head is the SAME argument list a function
+ *  call parses (argumentListParser), carried verbatim on the node —
+ *  the desugar forwards it into the `_guard` call and the existing
+ *  call checks validate it against `_guard`'s signature. The
+ *  reservation is POSITION-SENSITIVE (spec decision 9): everything up
+ *  to and including `{` is backtrackable, so `guard(1)` (a call to a
+ *  user function named guard, no trailing block) and `import { guard }`
+ *  lines fall through to the ordinary grammar — only the full
+ *  `guard(...) {` shape is claimed. A legacy `as` between the head and
+ *  the block is accepted and DISCARDED (the formatter is the
+ *  migration: `agency fmt` strips it). */
 export const guardBlockParser: Parser<GuardBlock> = label(
   "a guard block",
   withLoc(
@@ -4277,7 +4230,7 @@ export const guardBlockParser: Parser<GuardBlock> = label(
         // handleBlockParser rule).
         not(varNameChar),
         optionalSpaces,
-        capture(_guardHeadParser, "head"),
+        captureCaptures(argumentListParser),
         optionalSpaces,
         // Legacy `as`: accepted and discarded — it leaves no trace.
         optional(seqC(str("as"), not(varNameChar), optionalSpaces)),
@@ -4294,14 +4247,10 @@ export const guardBlockParser: Parser<GuardBlock> = label(
         char("}"),
       )(pre.rest);
       if (!bodyR.success) return bodyR as ParserResult<GuardBlock>;
-      const head = (pre.result as any).head as GuardHead;
       return success(
         {
           type: "guardBlock",
-          cost: head.cost,
-          time: head.time,
-          label: head.label,
-          argOrder: head.argOrder,
+          arguments: (pre.result as any).arguments,
           body: (bodyR.result as any).body,
         } as GuardBlock,
         bodyR.rest,

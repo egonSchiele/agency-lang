@@ -139,12 +139,17 @@ export class AbortedResult {
    *  signal is still firing, so a callee inside the finalize can be
    *  stopped). */
   async withFinalize(
-    finalize: () => Promise<unknown>,
+    finalize: (draft: unknown) => Promise<unknown>,
     scopeName: string,
   ): Promise<AbortedResult> {
     let value: unknown;
     try {
-      value = await finalize();
+      // The partial this instance holds IS the scope's own saved draft
+      // (carryThrough/fromError copied the frame slot before any stop
+      // site called us) — yielded to a `finalize as draft` binder. Read
+      // before the finalize runs; on throw the same value is the
+      // fallback because the catch returns `this`.
+      value = await finalize(this.partialValueOrNull());
     } catch (finalizeError) {
       this.logFinalizeFailure(scopeName, finalizeError);
       return this;

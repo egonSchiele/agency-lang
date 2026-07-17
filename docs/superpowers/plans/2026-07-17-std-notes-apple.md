@@ -1,0 +1,1783 @@
+# std::notes/apple Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Add a `std::notes/apple` stdlib module letting Agency agents create, append to, read, search, list, and delete Apple Notes, gated by interrupts and scopable by folder and account.
+
+**Architecture:** An Agency module (`stdlib/notes/apple.agency`) holds the types, effects, interrupt gates, and markdown-to-HTML conversion. A TypeScript helper (`lib/stdlib/appleNotes.ts`) does nothing but talk to Notes.app: it builds AppleScript with data passed as `argv`, runs it through `osascript`, maps errors, and parses results. All of the safety reasoning lives in the `.agency` file where a reader can see it; the `.ts` file is a driver.
+
+**Tech Stack:** TypeScript, `child_process.execFile`, AppleScript via `osascript`, vitest, Agency stdlib conventions.
+
+**Design spec:** `/Users/adityabhargava/agency-lang/docs/superpowers/specs/2026-07-16-std-notes-apple-notes-design.md`
+
+Read the spec before starting. This plan implements it and does not re-argue it. Where a step looks arbitrary, the spec section is cited and explains why.
+
+---
+
+## Global Constraints
+
+These apply to every task. They are not style preferences; most of them are findings that cost a live spike to establish.
+
+- **macOS only.** Every entry point checks `process.platform !== "darwin"` and throws immediately. Precedent: `lib/stdlib/imessage.ts:21`.
+- **Never interpolate data into AppleScript source.** Titles, bodies, queries, and folder names are model-authored and may have been influenced by a page the model read. Pass them as `argv`. Spec §3.6.
+- **No `-` separator before argv.** `osascript -e SCRIPT a b`, NOT `osascript -e SCRIPT - a b`. The `-` is passed through as `item 1 of argv` and shifts every real argument. Verified on macOS 14.7.4. Spec §3.6.
+- **Never chain a property read through `container`.** `name of container of n` errors `-1728` on every note. Use `set c to container of n` then `name of c`. Spec §9.2.
+- **Search `plaintext`, never `body`.** `body` is HTML, so searching it matches markup: a user searching `div` would match every note they own. Spec §9.3.
+- **Unit tests only. No integration tests.** Owner decision. A test that reaches real Notes.app can destroy real notes when someone runs the suite locally. No tests in `tests/agency/` for this module — those execute the real stdlib and would shell to `osascript` for real. Spec §8.
+- **Every script wraps its body in `with timeout of 30 seconds`.** Otherwise it inherits AppleScript's 120-second default. Spec §6.1.
+- **Timeout constant:** `NOTES_TIMEOUT_SECONDS = 30`, module-level, in `appleNotes.ts`.
+- **Field delimiter for multi-field returns:** `ASCII character 1` (``). Not tab — note titles can legally contain tabs.
+
+---
+
+## File Structure
+
+| File | Responsibility |
+|---|---|
+| `packages/agency-lang/lib/stdlib/appleNotes.ts` | Create. Talks to Notes.app. Script construction, `osascript` invocation, error mapping, result parsing. No policy, no gating. |
+| `packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts` | Create. Unit tests, `execFile` mocked. |
+| `packages/agency-lang/stdlib/notes/apple.agency` | Create. Types, effects, interrupt gates, markdown conversion, docstrings. |
+| `packages/agency-lang/stdlib/capabilities.agency` | Modify. Add `NotesRead`, `NotesWrite`, `Notes` effect sets. |
+| `packages/agency-lang/docs/site/guide/apple-notes.md` | Create. Guide page, incl. the Obsidian `std::fs` answer (spec §3.1). |
+
+No registry to update: `agency doc stdlib` recurses, and `stdlib/messaging/` proves nested modules are auto-discovered. Nested `.agency` imports flat `.ts` unchanged (`stdlib/messaging/sms.agency:1`).
+
+---
+
+## Known limitation to record, not solve
+
+**Nested folders.** Notes folders can contain folders. This module addresses folders by name in one account and derives a note's account by walking `container` upward. Deeply nested folders with duplicate names are not addressable. Out of scope; the spec's §10 already scopes folders to name-addressing. Do not add nesting support in this plan.
+
+---
+
+## Task 1: The script runner and error mapping
+
+Everything else calls this. It is the only place `osascript` is invoked.
+
+**Files:**
+- Create: `packages/agency-lang/lib/stdlib/appleNotes.ts`
+- Test: `packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces:
+  - `runNotesScript(script: string, args: string[]): Promise<string>` — internal, not exported from the module's public surface but exported for tests.
+  - `NOTES_TIMEOUT_SECONDS: number`
+  - `withTimeout(body: string): string` — wraps an AppleScript body in a timeout block.
+  - `FIELD_DELIM: string`
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts`:
+
+```ts
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+vi.mock("child_process", () => ({
+  execFile: vi.fn(
+    (
+      _cmd: string,
+      _args: string[],
+      cb: (err: Error | null, result: { stdout: string; stderr: string }) => void,
+    ) => {
+      cb(null, { stdout: "", stderr: "" });
+    },
+  ),
+}));
+
+import { execFile } from "child_process";
+import { runNotesScript, withTimeout, FIELD_DELIM } from "../appleNotes.js";
+
+type MockFn = ReturnType<typeof vi.fn>;
+
+/** Make the mocked execFile fail with the given stderr, as osascript does. */
+function mockFailure(stderr: string): void {
+  (execFile as unknown as MockFn).mockImplementationOnce(
+    (_c: string, _a: string[], cb: (e: unknown) => void) => {
+      cb({ stderr, code: 1 });
+    },
+  );
+}
+
+/** Make the mocked execFile succeed with the given stdout. */
+function mockStdout(stdout: string): void {
+  (execFile as unknown as MockFn).mockImplementationOnce(
+    (
+      _c: string,
+      _a: string[],
+      cb: (e: null, r: { stdout: string; stderr: string }) => void,
+    ) => {
+      cb(null, { stdout, stderr: "" });
+    },
+  );
+}
+
+describe("runNotesScript", () => {
+  const originalPlatform = process.platform;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("rejects immediately on a non-darwin platform", async () => {
+    Object.defineProperty(process, "platform", { value: "linux", writable: true });
+    await expect(runNotesScript("script", [])).rejects.toThrow(
+      "Apple Notes is only available on macOS",
+    );
+    expect(execFile).not.toHaveBeenCalled();
+  });
+
+  it("passes args straight through to argv with NO '-' separator", async () => {
+    mockStdout("ok");
+    await runNotesScript("SCRIPT", ["alpha", "beta"]);
+    const [cmd, args] = (execFile as unknown as MockFn).mock.calls[0];
+    expect(cmd).toBe("osascript");
+    // The `-` is NOT a separator: osascript passes it through as argv item 1
+    // and shifts every real argument. Spec section 3.6.
+    expect(args).toEqual(["-e", "SCRIPT", "alpha", "beta"]);
+  });
+
+  it("keeps a hostile title inert in argv rather than in the script", async () => {
+    mockStdout("ok");
+    const hostile = '"; do shell script "rm -rf ~"; "';
+    await runNotesScript("SCRIPT", [hostile]);
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    expect(args[1]).toBe("SCRIPT");
+    expect(args[2]).toBe(hostile);
+    expect(args[1]).not.toContain("do shell script");
+  });
+
+  it("maps -1743 to a clear not-authorized error", async () => {
+    mockFailure("execution error: Not authorized to send Apple events to Notes. (-1743)");
+    await expect(runNotesScript("s", [])).rejects.toThrow(/Not authorized to control Notes/);
+    await expect(runNotesScript("s", [])).rejects.toThrow(/Privacy & Security/);
+  });
+
+  it("maps -1712 to a hedged timeout error", async () => {
+    mockFailure("execution error: Notes got an error: AppleEvent timed out. (-1712)");
+    // -1712 cannot distinguish "consent dialog unanswered" from "Notes wedged",
+    // so the message must hedge. Spec section 2.8.
+    await expect(runNotesScript("s", [])).rejects.toThrow(/usually means/);
+  });
+
+  it("surfaces an unrecognised stderr rather than swallowing it", async () => {
+    mockFailure("execution error: something else entirely (-9999)");
+    await expect(runNotesScript("s", [])).rejects.toThrow(/something else entirely/);
+  });
+
+  it("trims stdout", async () => {
+    mockStdout("  value  \n");
+    await expect(runNotesScript("s", [])).resolves.toBe("value");
+  });
+});
+
+describe("withTimeout", () => {
+  it("wraps the body so the 120s AppleScript default is not inherited", () => {
+    const out = withTimeout("tell application \"Notes\"\nend tell");
+    expect(out).toContain("with timeout of 30 seconds");
+    expect(out).toContain("end timeout");
+    expect(out).toContain("on run argv");
+    expect(out).toContain("end run");
+  });
+});
+
+describe("FIELD_DELIM", () => {
+  it("is a control character, because titles can contain tabs", () => {
+    expect(FIELD_DELIM).toBe("");
+    expect(FIELD_DELIM).not.toBe("\t");
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests and verify they fail**
+
+Run:
+```bash
+cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
+```
+Expected: FAIL — `Failed to resolve import "../appleNotes.js"`.
+
+- [ ] **Step 3: Write the implementation**
+
+Create `packages/agency-lang/lib/stdlib/appleNotes.ts`:
+
+```ts
+import { execFile } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
+
+/** Our own bound on the wait. Without it, AppleScript's 120-second default
+ *  applies, which is indistinguishable from a hang for an agent tool call.
+ *  A spike confirmed `with timeout` does shorten the TCC consent wait. */
+export const NOTES_TIMEOUT_SECONDS = 30;
+
+/** Separator for multi-field script returns. Not a tab: note titles can
+ *  legally contain tabs, and a title with one would corrupt the parse. */
+export const FIELD_DELIM = "";
+
+/** Wrap an AppleScript body in the argv handler and our own timeout. */
+export function withTimeout(body: string): string {
+  return `on run argv
+  with timeout of ${NOTES_TIMEOUT_SECONDS} seconds
+${body}
+  end timeout
+end run`;
+}
+
+/** Run an AppleScript against Notes, passing data as argv.
+ *
+ *  Data NEVER goes into the script source. Titles and bodies are
+ *  model-authored, and the model may have been influenced by a page it read,
+ *  so interpolating them would be an injection path. argv values are not
+ *  parsed as AppleScript. */
+export async function runNotesScript(script: string, args: string[]): Promise<string> {
+  if (process.platform !== "darwin") {
+    throw new Error("Apple Notes is only available on macOS.");
+  }
+
+  try {
+    // No "-" before args: osascript passes it through as argv item 1 and
+    // shifts every real argument by one.
+    const { stdout } = await execFileAsync("osascript", ["-e", script, ...args]);
+    return stdout.trim();
+  } catch (error: unknown) {
+    const err = error as { stderr?: string; code?: number };
+    const stderr = err.stderr?.trim() ?? "";
+
+    // -1743 is unambiguous: no grant, or it was denied, and no dialog pending.
+    if (stderr.includes("-1743")) {
+      throw new Error(
+        "Not authorized to control Notes. Grant permission in " +
+          "System Settings → Privacy & Security → Automation.",
+      );
+    }
+
+    // -1712 is ambiguous: it covers an unanswered consent dialog, a busy
+    // Notes, and a wedged Notes. The message hedges on purpose — claiming
+    // otherwise sends people to fix a permission that was never the problem.
+    if (stderr.includes("-1712")) {
+      throw new Error(
+        `Notes did not respond within ${NOTES_TIMEOUT_SECONDS}s. This usually ` +
+          "means macOS automation permission was not granted. Check " +
+          "System Settings → Privacy & Security → Automation.",
+      );
+    }
+
+    throw new Error(`Notes command failed: ${stderr || `exit code ${err.code ?? "unknown"}`}`);
+  }
+}
+```
+
+- [ ] **Step 4: Run the tests and verify they pass**
+
+Run:
+```bash
+cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
+```
+Expected: PASS, 9 tests.
+
+- [ ] **Step 5: Prove the injection test is load-bearing**
+
+Temporarily break the argv contract by interpolating instead:
+
+```ts
+// in runNotesScript, temporarily:
+const { stdout } = await execFileAsync("osascript", ["-e", script + args.join(" ")]);
+```
+
+Run the tests. Expected: the "keeps a hostile title inert" and "passes args straight through" tests FAIL. Then revert.
+
+This matters because a green suite proves nothing on its own — the review of #562 found five real bugs under a fully green suite.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/agency-lang/lib/stdlib/appleNotes.ts packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts
+git commit -m "Add the Apple Notes script runner and error mapping
+
+Data goes to osascript as argv, never interpolated into script source:
+titles and bodies are model-authored. No '-' separator, which would land
+as argv item 1 and shift every real argument.
+
+Maps both permission errors. -1743 is unambiguous so its message is
+direct; -1712 covers an unanswered dialog, a busy Notes, and a wedged
+Notes, so it hedges."
+```
+
+---
+
+## Task 2: The pre-flight lookup and the locked-note guard
+
+The security core. Everything that touches an existing note goes through this.
+
+**Files:**
+- Modify: `packages/agency-lang/lib/stdlib/appleNotes.ts`
+- Test: `packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts`
+
+**Interfaces:**
+- Consumes: `runNotesScript`, `withTimeout`, `FIELD_DELIM` from Task 1.
+- Produces:
+  - `type NotePreflight = { id: string; title: string; folder: string; account: string; locked: boolean }`
+  - `_preflightNote(id: string): Promise<NotePreflight>`
+  - `assertNotLocked(p: NotePreflight): void`
+
+**Why this exists (spec §5.3):** the interrupt payload must carry `folder`, `title`, and `account`, because those are what policy globs match on. So we must read them before raising the interrupt, which means this one query is not itself gated. That is acceptable, but the reasoning is narrow and belongs in the source: **an id is unguessable.** It is an opaque `x-coredata://` URI that cannot be enumerated or constructed, so whoever holds one already learned it somewhere, and this lookup discloses only the title and folder they could already name. Do not write "unreachable without a gate" — that claim is false (ids are stable and survive checkpoints) and it would license adding a fourth property to this query.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts`:
+
+```ts
+import { _preflightNote, assertNotLocked } from "../appleNotes.js";
+
+describe("_preflightNote", () => {
+  const originalPlatform = process.platform;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("never chains a property read through container", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    await _preflightNote("x-coredata://note/1");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const script = args[1];
+    // `name of container of n` errors -1728 on EVERY note, locked or not.
+    // Spec section 9.2. This test exists so a "tidying" refactor cannot
+    // silently reintroduce the chained form.
+    expect(script).not.toContain("name of container of n");
+    expect(script).toContain("set c to container of n");
+  });
+
+  it("reads only title, folder, account and the locked flag — never the body", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    await _preflightNote("x-coredata://note/1");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const script = args[1];
+    // This query is not interrupt-gated, so it must never touch content.
+    expect(script).not.toContain("body of");
+    expect(script).not.toContain("plaintext of");
+  });
+
+  it("passes the id as argv, not in the script", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    await _preflightNote("x-coredata://note/1");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    expect(args[2]).toBe("x-coredata://note/1");
+    expect(args[1]).not.toContain("x-coredata://note/1");
+  });
+
+  it("parses the delimited fields", async () => {
+    mockStdout(["Q3 Planning", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    const p = await _preflightNote("x-coredata://note/1");
+    expect(p).toEqual({
+      id: "x-coredata://note/1",
+      title: "Q3 Planning",
+      folder: "Work",
+      account: "iCloud",
+      locked: false,
+    });
+  });
+
+  it("parses a title containing a tab, which the delimiter must survive", async () => {
+    mockStdout(["a\tb", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    const p = await _preflightNote("x-coredata://note/1");
+    expect(p.title).toBe("a\tb");
+    expect(p.folder).toBe("Work");
+  });
+
+  it("reads the locked flag as true", async () => {
+    mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
+    const p = await _preflightNote("x-coredata://note/1");
+    expect(p.locked).toBe(true);
+  });
+
+  it("fails on a malformed reply rather than guessing", async () => {
+    mockStdout("only one field");
+    await expect(_preflightNote("x-coredata://note/1")).rejects.toThrow(/unexpected reply/i);
+  });
+});
+
+describe("assertNotLocked", () => {
+  const base = {
+    id: "x-coredata://note/1",
+    title: "Q3 Planning",
+    folder: "Work",
+    account: "iCloud",
+  };
+
+  it("passes an unlocked note through", () => {
+    expect(() => assertNotLocked({ ...base, locked: false })).not.toThrow();
+  });
+
+  // THIS IS DATA-LOSS PREVENTION, NOT A NICE ERROR MESSAGE.
+  // A locked note's body reads as an EMPTY STRING rather than erroring, so an
+  // append that skipped this guard would run `set body of n to "" & newText`
+  // and replace the note's contents with the appended text. Spec section 2.7.
+  // If this test is failing, do not delete it. The guard is why locked notes
+  // survive.
+  it("refuses a locked note and names it", () => {
+    expect(() => assertNotLocked({ ...base, locked: true })).toThrow(/Q3 Planning/);
+    expect(() => assertNotLocked({ ...base, locked: true })).toThrow(/locked/i);
+    expect(() => assertNotLocked({ ...base, locked: true })).toThrow(/Unlock it in Notes\.app/);
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests and verify they fail**
+
+Run:
+```bash
+cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
+```
+Expected: FAIL — `_preflightNote` is not exported.
+
+- [ ] **Step 3: Write the implementation**
+
+Append to `packages/agency-lang/lib/stdlib/appleNotes.ts`:
+
+```ts
+/** A note's metadata, read before the interrupt so the payload can carry it. */
+export type NotePreflight = {
+  id: string;
+  title: string;
+  folder: string;
+  account: string;
+  locked: boolean;
+};
+
+// `set c to container of n` is split on purpose. `name of container of n` in one
+// expression errors -1712... no: -1728, on EVERY note, locked or unlocked. The
+// property is fine; chaining a read through it is not. Spec section 9.2.
+//
+// The account is the folder's container. Deeply nested folders are out of
+// scope (see the plan's "Known limitation"), so one hop up is enough.
+const PREFLIGHT_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv)
+      set c to container of n
+      set a to container of c
+      set d to (ASCII character 1)
+      return (name of n) & d & (name of c) & d & (name of a) & d & ¬
+             ((password protected of n) as text)
+    end tell`);
+
+/** Read a note's metadata: title, folder, account, locked flag.
+ *
+ *  This query is NOT interrupt-gated, because the interrupt payload needs its
+ *  results in order to exist. That is acceptable for a narrow reason worth
+ *  keeping precise: a note id is unguessable. It is an opaque x-coredata://
+ *  URI that cannot be enumerated or constructed, so anyone holding one already
+ *  learned it somewhere, and this discloses only the title and folder that
+ *  whoever handed them the id could already name.
+ *
+ *  It is NOT true that an id can only come from a gated call — ids are stable
+ *  and can arrive from a user message, a file, or a restored checkpoint. Do not
+ *  widen this query on the strength of that weaker claim. It reads three
+ *  properties and no content, and it should stay that way. */
+export async function _preflightNote(id: string): Promise<NotePreflight> {
+  const raw = await runNotesScript(PREFLIGHT_SCRIPT, [id]);
+  const parts = raw.split(FIELD_DELIM);
+  if (parts.length !== 4) {
+    throw new Error(`Notes returned an unexpected reply for note ${id}.`);
+  }
+  return {
+    id,
+    title: parts[0],
+    folder: parts[1],
+    account: parts[2],
+    locked: parts[3].trim() === "true",
+  };
+}
+
+/** Refuse a locked note.
+ *
+ *  This is DATA-LOSS PREVENTION, not a friendlier error. A locked note's body
+ *  reads as an empty string rather than erroring, so an append that skipped
+ *  this guard would run `set body of n to "" & newText` and replace the note's
+ *  contents with the appended text. Spec section 2.7.
+ *
+ *  Never skip this, never reorder it after a body read, and never remove it as
+ *  apparently-dead code. */
+export function assertNotLocked(p: NotePreflight): void {
+  if (p.locked) {
+    throw new Error(`Note "${p.title}" is locked. Unlock it in Notes.app and retry.`);
+  }
+}
+```
+
+- [ ] **Step 4: Run the tests and verify they pass**
+
+Run:
+```bash
+cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
+```
+Expected: PASS, 17 tests.
+
+- [ ] **Step 5: Fix the comment typo introduced above**
+
+The comment above `PREFLIGHT_SCRIPT` says "-1712... no: -1728". Clean it to read:
+
+```ts
+// `set c to container of n` is split on purpose. `name of container of n` in one
+// expression errors -1728 on EVERY note, locked or unlocked. The property is
+// fine; chaining a read through it is not. Spec section 9.2.
+```
+
+Run the tests again to confirm still PASS, 17 tests.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/agency-lang/lib/stdlib/appleNotes.ts packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts
+git commit -m "Add the Notes pre-flight lookup and the locked-note guard
+
+The pre-flight reads title, folder, account and the locked flag, and no
+content. It is not interrupt-gated because the payload needs its results
+to exist; that is acceptable because an id is unguessable, not because
+ids only come from gated calls.
+
+The container access is split. Chaining a read through container errors
+-1728 on every note.
+
+The locked guard is data-loss prevention: a locked note's body reads as
+an empty string, so an append past this guard would replace the note's
+contents with the appended text."
+```
+
+---
+
+## Task 3: The read operations
+
+**Files:**
+- Modify: `packages/agency-lang/lib/stdlib/appleNotes.ts`
+- Test: `packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts`
+
+**Interfaces:**
+- Consumes: `runNotesScript`, `withTimeout`, `FIELD_DELIM`, `_preflightNote`, `assertNotLocked`.
+- Produces:
+  - `type NoteMeta = { id: string; title: string; folder: string; account: string; modified: string; passwordProtected: boolean }`
+  - `type NoteContentTs = { id: string; title: string; folder: string; account: string; body: string; modified: string }`
+  - `type FolderMeta = { id: string; name: string; noteCount: number }`
+  - `_readNote(id: string, folder?: string): Promise<NoteContentTs>`
+  - `_listNotes(folder?: string): Promise<NoteMeta[]>`
+  - `_searchNotes(query: string, folder?: string): Promise<NoteMeta[]>`
+  - `_listFolders(): Promise<FolderMeta[]>`
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to the test file:
+
+```ts
+import { _readNote, _listNotes, _searchNotes, _listFolders } from "../appleNotes.js";
+
+describe("_readNote", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("returns plaintext, not HTML", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM)); // preflight
+    mockStdout(["plain body text", "2026-07-17"].join(FIELD_DELIM)); // read
+    const n = await _readNote("x-coredata://note/1");
+    expect(n.body).toBe("plain body text");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    // body is HTML and would waste tokens and read badly. Spec section 2.4.
+    expect(args[1]).toContain("plaintext of");
+    expect(args[1]).not.toContain("body of");
+  });
+
+  it("refuses a locked note before reading anything", async () => {
+    mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
+    await expect(_readNote("x-coredata://note/1")).rejects.toThrow(/locked/i);
+    // Only the preflight ran. No content read was attempted.
+    expect((execFile as unknown as MockFn).mock.calls.length).toBe(1);
+  });
+
+  it("fails closed when the folder assertion does not match", async () => {
+    mockStdout(["Q3", "Personal", "iCloud", "false"].join(FIELD_DELIM));
+    await expect(_readNote("x-coredata://note/1", "Work")).rejects.toThrow(/Work/);
+    await expect(_readNote("x-coredata://note/1", "Work")).rejects.toThrow(/Personal/);
+  });
+
+  it("passes the assertion when the folder matches", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout(["body", "2026-07-17"].join(FIELD_DELIM));
+    await expect(_readNote("x-coredata://note/1", "Work")).resolves.toMatchObject({
+      folder: "Work",
+    });
+  });
+});
+
+describe("_searchNotes", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("searches plaintext, never body", async () => {
+    mockStdout("");
+    await _searchNotes("budget");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    // body is HTML: searching it matches markup, so `div` would match every
+    // note the user owns. Spec section 9.3.
+    expect(args[1]).toContain("plaintext contains");
+    expect(args[1]).not.toContain("body contains");
+  });
+
+  it("passes the query as argv, not in the script", async () => {
+    mockStdout("");
+    await _searchNotes('"; do shell script "x"; "');
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    expect(args[1]).not.toContain("do shell script");
+    expect(args[2]).toBe('"; do shell script "x"; "');
+  });
+
+  it("returns an empty array for no matches rather than throwing", async () => {
+    mockStdout("");
+    await expect(_searchNotes("nothing")).resolves.toEqual([]);
+  });
+
+  it("parses multiple rows", async () => {
+    const row1 = ["id1", "One", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM);
+    const row2 = ["id2", "Two", "Work", "iCloud", "2026-07-16", "false"].join(FIELD_DELIM);
+    mockStdout(`${row1}\n${row2}`);
+    const notes = await _searchNotes("x");
+    expect(notes).toHaveLength(2);
+    expect(notes[0].title).toBe("One");
+    expect(notes[1].id).toBe("id2");
+  });
+
+  it("never returns a body", async () => {
+    const row = ["id1", "One", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM);
+    mockStdout(row);
+    const notes = await _searchNotes("x");
+    expect(notes[0]).not.toHaveProperty("body");
+  });
+});
+
+describe("_listFolders", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("returns folders with their note counts", async () => {
+    const row1 = ["fid1", "Work", "12"].join(FIELD_DELIM);
+    const row2 = ["fid2", "Recently Deleted", "3"].join(FIELD_DELIM);
+    mockStdout(`${row1}\n${row2}`);
+    const folders = await _listFolders();
+    expect(folders).toEqual([
+      { id: "fid1", name: "Work", noteCount: 12 },
+      // "Recently Deleted" is a real folder and is returned. deleteNote moves
+      // notes into it. Spec section 9.2.
+      { id: "fid2", name: "Recently Deleted", noteCount: 3 },
+    ]);
+  });
+
+  it("returns an empty array rather than throwing when there are none", async () => {
+    mockStdout("");
+    await expect(_listFolders()).resolves.toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests and verify they fail**
+
+Run:
+```bash
+cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
+```
+Expected: FAIL — `_readNote` is not exported.
+
+- [ ] **Step 3: Write the implementation**
+
+Append to `packages/agency-lang/lib/stdlib/appleNotes.ts`:
+
+```ts
+/** Note metadata. Deliberately carries no body. */
+export type NoteMeta = {
+  id: string;
+  title: string;
+  folder: string;
+  account: string;
+  modified: string;
+  passwordProtected: boolean;
+};
+
+/** A note including its content, as plaintext. */
+export type NoteContentTs = {
+  id: string;
+  title: string;
+  folder: string;
+  account: string;
+  body: string;
+  modified: string;
+};
+
+/** A folder. `noteCount` is derived, not a property. */
+export type FolderMeta = {
+  id: string;
+  name: string;
+  noteCount: number;
+};
+
+/** Assert a note is in the folder the caller named. Fails closed.
+ *
+ *  This is the read-path assertion. The write path uses a scoped lookup
+ *  instead, which is stronger — see _appendToNote. */
+function assertFolder(p: NotePreflight, folder?: string): void {
+  if (folder != null && p.folder !== folder) {
+    throw new Error(
+      `Note "${p.title}" is in folder "${p.folder}", not "${folder}". Refusing.`,
+    );
+  }
+}
+
+// Reads `plaintext`, never `body`. body is HTML: it would waste tokens and read
+// badly for a model. Spec section 2.4.
+const READ_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv)
+      set d to (ASCII character 1)
+      return (plaintext of n) & d & ((modification date of n) as text)
+    end tell`);
+
+export async function _readNote(id: string, folder?: string): Promise<NoteContentTs> {
+  const p = await _preflightNote(id);
+  assertFolder(p, folder);
+  assertNotLocked(p);
+
+  const raw = await runNotesScript(READ_SCRIPT, [id]);
+  const parts = raw.split(FIELD_DELIM);
+  if (parts.length !== 2) {
+    throw new Error(`Notes returned an unexpected reply for note ${id}.`);
+  }
+  return {
+    id,
+    title: p.title,
+    folder: p.folder,
+    account: p.account,
+    body: parts[0],
+    modified: parts[1],
+  };
+}
+
+/** Parse the delimited note rows a list/search script returns. */
+function parseNoteRows(raw: string): NoteMeta[] {
+  if (raw.length === 0) return [];
+  return raw.split("\n").filter((l) => l.length > 0).map((line) => {
+    const f = line.split(FIELD_DELIM);
+    if (f.length !== 6) {
+      throw new Error("Notes returned an unexpected row while listing notes.");
+    }
+    return {
+      id: f[0],
+      title: f[1],
+      folder: f[2],
+      account: f[3],
+      modified: f[4],
+      passwordProtected: f[5].trim() === "true",
+    };
+  });
+}
+
+// The container access is split here too. Spec section 9.2.
+const NOTE_ROW = `set c to container of n
+        set a to container of c
+        set out to out & (id of n) & d & (name of n) & d & (name of c) & d & ¬
+                  (name of a) & d & ((modification date of n) as text) & d & ¬
+                  ((password protected of n) as text) & linefeed`;
+
+const LIST_ALL_SCRIPT = withTimeout(`    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with n in notes
+        ${NOTE_ROW}
+      end repeat
+      return out
+    end tell`);
+
+const LIST_IN_FOLDER_SCRIPT = withTimeout(`    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with n in (notes of folder (item 1 of argv))
+        ${NOTE_ROW}
+      end repeat
+      return out
+    end tell`);
+
+export async function _listNotes(folder?: string): Promise<NoteMeta[]> {
+  const raw = folder == null
+    ? await runNotesScript(LIST_ALL_SCRIPT, [])
+    : await runNotesScript(LIST_IN_FOLDER_SCRIPT, [folder]);
+  return parseNoteRows(raw);
+}
+
+// `plaintext contains`, never `body contains`. body is HTML, so searching it
+// matches markup: a user searching "div" would match every note they own.
+// Spec section 9.3.
+const SEARCH_ALL_SCRIPT = withTimeout(`    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with n in (notes whose plaintext contains (item 1 of argv))
+        ${NOTE_ROW}
+      end repeat
+      return out
+    end tell`);
+
+const SEARCH_IN_FOLDER_SCRIPT = withTimeout(`    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with n in (notes of folder (item 2 of argv) whose plaintext contains (item 1 of argv))
+        ${NOTE_ROW}
+      end repeat
+      return out
+    end tell`);
+
+export async function _searchNotes(query: string, folder?: string): Promise<NoteMeta[]> {
+  const raw = folder == null
+    ? await runNotesScript(SEARCH_ALL_SCRIPT, [query])
+    : await runNotesScript(SEARCH_IN_FOLDER_SCRIPT, [query, folder]);
+  return parseNoteRows(raw);
+}
+
+// noteCount is derived with `count of notes`, because folder has no such
+// property. That is a query per folder, so listFolders pays for it.
+const LIST_FOLDERS_SCRIPT = withTimeout(`    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with f in folders
+        set out to out & (id of f) & d & (name of f) & d & ¬
+                  ((count of notes of f) as text) & linefeed
+      end repeat
+      return out
+    end tell`);
+
+export async function _listFolders(): Promise<FolderMeta[]> {
+  const raw = await runNotesScript(LIST_FOLDERS_SCRIPT, []);
+  if (raw.length === 0) return [];
+  return raw.split("\n").filter((l) => l.length > 0).map((line) => {
+    const f = line.split(FIELD_DELIM);
+    if (f.length !== 3) {
+      throw new Error("Notes returned an unexpected row while listing folders.");
+    }
+    return { id: f[0], name: f[1], noteCount: Number(f[2]) };
+  });
+}
+```
+
+- [ ] **Step 4: Run the tests and verify they pass**
+
+Run:
+```bash
+cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
+```
+Expected: PASS, 29 tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/agency-lang/lib/stdlib/appleNotes.ts packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts
+git commit -m "Add the Notes read operations
+
+readNote returns plaintext, not body: body is HTML and would waste
+tokens. searchNotes filters on plaintext for the same reason, plus a
+sharper one — searching HTML matches markup, so a query for 'div' would
+match every note the user owns.
+
+List and search return metadata only. No body crosses that boundary, and
+a test pins it."
+```
+
+---
+
+## Task 4: The write operations
+
+**Files:**
+- Modify: `packages/agency-lang/lib/stdlib/appleNotes.ts`
+- Test: `packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts`
+
+**Interfaces:**
+- Consumes: everything from Tasks 1–3.
+- Produces:
+  - `_folderExists(folder: string): Promise<boolean>`
+  - `_createNote(title: string, html: string, folder: string): Promise<NoteMeta>`
+  - `_appendToNote(id: string, html: string, folder?: string): Promise<NoteMeta>`
+  - `_deleteNote(id: string, folder?: string): Promise<null>`
+
+**The assertion in the write path is different from the read path, on purpose (spec §6.4).** The read path reads the container and compares. The write path instead addresses the note *through* the folder: `note id X of folder Y`. If the note is not in Y, the lookup fails. This collapses the check and the access into one operation, so they cannot drift apart across the human approval that sits between the pre-flight and the write. Verified to fail closed on the wrong folder.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to the test file:
+
+```ts
+import { _folderExists, _createNote, _appendToNote, _deleteNote } from "../appleNotes.js";
+
+describe("_createNote", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("passes title, html and folder as argv, never in the script", async () => {
+    mockStdout(["nid", "T", "Agency Notes", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _createNote('"; do shell script "x"; "', "<p>b</p>", "Agency Notes");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    expect(args[1]).not.toContain("do shell script");
+    expect(args[2]).toBe('"; do shell script "x"; "');
+    expect(args[3]).toBe("<p>b</p>");
+    expect(args[4]).toBe("Agency Notes");
+  });
+
+  it("creates the folder if it is missing", async () => {
+    mockStdout(["nid", "T", "Agency Notes", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _createNote("T", "<p>b</p>", "Agency Notes");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    // "Agency Notes" will not exist on a fresh machine. Spec section 9.4.
+    expect(args[1]).toContain("make new folder");
+  });
+
+  it("returns the new note's metadata including its id", async () => {
+    mockStdout(["nid", "T", "Agency Notes", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    const n = await _createNote("T", "<p>b</p>", "Agency Notes");
+    // Returning the id means create-then-append needs no search.
+    expect(n.id).toBe("nid");
+    expect(n.title).toBe("T");
+  });
+});
+
+describe("_appendToNote", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  // See spec section 2.7. A locked note's body reads as "", so this append
+  // would REPLACE the note's contents. Do not delete this test.
+  it("refuses a locked note and never issues a write", async () => {
+    mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
+    await expect(_appendToNote("x-coredata://note/1", "<p>x</p>")).rejects.toThrow(/locked/i);
+    expect((execFile as unknown as MockFn).mock.calls.length).toBe(1);
+  });
+
+  it("re-checks the locked flag inside the write script", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _appendToNote("x-coredata://note/1", "<p>x</p>");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    // The pre-flight check is separated from the write by a human approval,
+    // so it is check-then-act. The write script re-checks. Spec section 6.4.
+    expect(args[1]).toContain("password protected");
+  });
+
+  it("uses a scoped lookup as the assertion when a folder is given", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _appendToNote("x-coredata://note/1", "<p>x</p>", "Work");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    // The scoped lookup IS the assertion: it fails if the note is not in the
+    // folder, so the check cannot drift from the access. Spec section 6.4.
+    expect(args[1]).toContain("of folder (item 3 of argv)");
+  });
+
+  it("uses an unscoped lookup when no folder is given", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _appendToNote("x-coredata://note/1", "<p>x</p>");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    expect(args[1]).not.toContain("of folder (item 3 of argv)");
+  });
+
+  it("appends rather than replacing", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _appendToNote("x-coredata://note/1", "<p>x</p>");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    expect(args[1]).toContain("(body of n) &");
+  });
+});
+
+describe("_deleteNote", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("refuses a locked note", async () => {
+    mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
+    await expect(_deleteNote("x-coredata://note/1")).rejects.toThrow(/locked/i);
+    expect((execFile as unknown as MockFn).mock.calls.length).toBe(1);
+  });
+
+  it("deletes an unlocked note", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout("");
+    await expect(_deleteNote("x-coredata://note/1")).resolves.toBeNull();
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    expect(args[1]).toContain("delete n");
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests and verify they fail**
+
+Run:
+```bash
+cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
+```
+Expected: FAIL — `_createNote` is not exported.
+
+- [ ] **Step 3: Write the implementation**
+
+Append to `packages/agency-lang/lib/stdlib/appleNotes.ts`:
+
+```ts
+const FOLDER_EXISTS_SCRIPT = withTimeout(`    tell application "Notes"
+      return (exists folder (item 1 of argv)) as text
+    end tell`);
+
+export async function _folderExists(folder: string): Promise<boolean> {
+  const raw = await runNotesScript(FOLDER_EXISTS_SCRIPT, [folder]);
+  return raw.trim() === "true";
+}
+
+// "Agency Notes" is our own default and will not exist on a fresh machine, so
+// create it on demand. Spec section 9.4. The interrupt payload carries
+// folderCreated so a human or policy sees the folder being made.
+const CREATE_SCRIPT = withTimeout(`    tell application "Notes"
+      if not (exists folder (item 3 of argv)) then
+        make new folder with properties {name:(item 3 of argv)}
+      end if
+      set f to folder (item 3 of argv)
+      set n to make new note at f with properties {name:(item 1 of argv), body:(item 2 of argv)}
+      set c to container of n
+      set a to container of c
+      set d to (ASCII character 1)
+      return (id of n) & d & (name of n) & d & (name of c) & d & (name of a) & d & ¬
+             ((modification date of n) as text) & d & ((password protected of n) as text)
+    end tell`);
+
+/** Create a note. `html` is HTML, already rendered — this layer does not know
+ *  about markdown. The Agency module does the conversion. */
+export async function _createNote(
+  title: string,
+  html: string,
+  folder: string,
+): Promise<NoteMeta> {
+  const raw = await runNotesScript(CREATE_SCRIPT, [title, html, folder]);
+  const rows = parseNoteRows(raw);
+  if (rows.length !== 1) {
+    throw new Error("Notes returned an unexpected reply while creating a note.");
+  }
+  return rows[0];
+}
+
+// Two shapes: scoped and unscoped. The scoped one addresses the note THROUGH
+// the folder, so the lookup failing IS the assertion failing. That is stronger
+// than read-then-compare, because the reference that gets mutated is the same
+// one that had to resolve inside the asserted folder — the check cannot drift
+// from the access across the human approval that precedes this. Spec 6.4.
+const APPEND_BODY = `      if (password protected of n) then error "note is locked"
+      set body of n to (body of n) & (item 2 of argv)
+      set c to container of n
+      set a to container of c
+      set d to (ASCII character 1)
+      return (id of n) & d & (name of n) & d & (name of c) & d & (name of a) & d & ¬
+             ((modification date of n) as text) & d & ((password protected of n) as text)`;
+
+const APPEND_SCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv) of folder (item 3 of argv)
+${APPEND_BODY}
+    end tell`);
+
+const APPEND_UNSCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv)
+${APPEND_BODY}
+    end tell`);
+
+/** Append to a note. `html` is HTML, already rendered.
+ *
+ *  The locked check happens twice on purpose: once in the pre-flight so the
+ *  error is raised before the interrupt, and once inside the write script
+ *  because a human approval sits between them and the note can be locked in
+ *  that window. Spec section 2.7 explains why a missed check destroys data. */
+export async function _appendToNote(
+  id: string,
+  html: string,
+  folder?: string,
+): Promise<NoteMeta> {
+  const p = await _preflightNote(id);
+  assertFolder(p, folder);
+  assertNotLocked(p);
+
+  const raw = folder == null
+    ? await runNotesScript(APPEND_UNSCOPED_SCRIPT, [id, html])
+    : await runNotesScript(APPEND_SCOPED_SCRIPT, [id, html, folder]);
+
+  const rows = parseNoteRows(raw);
+  if (rows.length !== 1) {
+    throw new Error(`Notes returned an unexpected reply while appending to note ${id}.`);
+  }
+  return rows[0];
+}
+
+const DELETE_SCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv) of folder (item 2 of argv)
+      if (password protected of n) then error "note is locked"
+      delete n
+    end tell`);
+
+const DELETE_UNSCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv)
+      if (password protected of n) then error "note is locked"
+      delete n
+    end tell`);
+
+/** Delete a note. It moves to Recently Deleted, where it stays ~30 days. */
+export async function _deleteNote(id: string, folder?: string): Promise<null> {
+  const p = await _preflightNote(id);
+  assertFolder(p, folder);
+  assertNotLocked(p);
+
+  if (folder == null) {
+    await runNotesScript(DELETE_UNSCOPED_SCRIPT, [id]);
+  } else {
+    await runNotesScript(DELETE_SCOPED_SCRIPT, [id, folder]);
+  }
+  return null;
+}
+```
+
+- [ ] **Step 4: Run the tests and verify they pass**
+
+Run:
+```bash
+cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
+```
+Expected: PASS, 40 tests.
+
+- [ ] **Step 5: Prove the locked guard is load-bearing**
+
+Temporarily delete the `assertNotLocked(p);` line from `_appendToNote`. Run the tests.
+Expected: "refuses a locked note and never issues a write" FAILS. Restore the line.
+
+This guard is the only thing preventing a locked note from being destroyed. If a future refactor removes it, this test must be what stops the build.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/agency-lang/lib/stdlib/appleNotes.ts packages/agency-lang/lib/stdlib/__tests__/appleNotes.test.ts
+git commit -m "Add the Notes write operations
+
+The write path asserts the folder by addressing the note THROUGH it
+(note id X of folder Y) rather than reading the container and comparing.
+The lookup failing is the assertion failing, so the check cannot drift
+from the access across the human approval that precedes the write.
+
+The locked check runs twice: in the pre-flight so the error precedes the
+interrupt, and inside the write script because the note can be locked
+during the approval. A missed check replaces the note's contents."
+```
+
+---
+
+## Task 5: The Agency module
+
+**Files:**
+- Create: `packages/agency-lang/stdlib/notes/apple.agency`
+- Modify: `packages/agency-lang/stdlib/capabilities.agency`
+
+**Interfaces:**
+- Consumes: every `_`-prefixed function from Tasks 1–4, plus `parse` and `renderForHtml` from `std::markdown`.
+- Produces: the public `std::notes/apple` surface.
+
+**Syntax rules (from CLAUDE.md — verify against `docs/site/guide/basic-syntax.md` if unsure):** functions are `def` with braces; `if` needs parens and braces; variables need `let`/`const`. Do not write Python-style colons.
+
+- [ ] **Step 1: Write the module**
+
+Create `packages/agency-lang/stdlib/notes/apple.agency`:
+
+```ts
+import {
+  _createNote,
+  _appendToNote,
+  _readNote,
+  _searchNotes,
+  _listNotes,
+  _listFolders,
+  _deleteNote,
+  _folderExists,
+} from "agency-lang/stdlib-lib/appleNotes.js"
+import { parse, renderForHtml } from "std::markdown"
+
+/** @module
+  Create, read, search, and edit notes in the macOS Notes app. macOS only, and
+  the first call asks for Automation permission.
+
+  ```ts
+  import { createNote } from "std::notes/apple"
+
+  node main() {
+    const result = createNote("Findings", "## Summary\n\n- one\n- two")
+    print(result)
+  }
+  ```
+
+  Notes are addressed by their opaque `id`, not by title, because two notes in
+  the same folder may share a title. Get ids from `listNotes` or `searchNotes`.
+
+  Every function takes an optional `folder`, which constrains rather than
+  addresses: if you pass it, the call fails unless the note is in that folder.
+  Combined with partial application, that confines an agent to one folder in a
+  way the model cannot see or route around:
+
+  ```ts
+  const inbox = createNote.partial(folder: "Agency Inbox").rename("addToInbox")
+  llm("Log your findings", { tools: [inbox] })
+  ```
+*/
+
+/** A folder in Notes. `noteCount` is derived, not stored. */
+export type Folder = {
+  id: string
+  name: string
+  noteCount: number
+}
+
+/** A note's metadata. Deliberately contains no body. */
+export type Note = {
+  id: string
+  title: string
+  folder: string
+  account: string
+  modified: string
+  passwordProtected: boolean
+}
+
+/** A note including its content, as plaintext. */
+export type NoteContent = {
+  id: string
+  title: string
+  folder: string
+  account: string
+  body: string
+  modified: string
+}
+
+effect std::notes::create { account: string, folder: string, title: string, folderCreated: boolean }
+effect std::notes::append { account: string, folder: string, title: string, id: string }
+effect std::notes::read   { account: string, folder: string, title: string, id: string }
+effect std::notes::search { account: string, folder: string, query: string }
+effect std::notes::list   { account: string, folder: string }
+effect std::notes::delete { account: string, folder: string, title: string, id: string }
+
+/** Convert markdown to the HTML that Notes requires on write. */
+def toHtml(body: string): Result<string> {
+  const parsed = parse(body)
+  if (!parsed.success) {
+    return failure("Could not parse the note body as Markdown: ${parsed.error}")
+  }
+  return success(renderForHtml(parsed.blocks))
+}
+
+export def createNote(title: string, body: string, folder: string = "Agency Notes"): Result<Note> raises <std::notes::create> {
+  """
+  Create a note in the Notes app and return it, including its new id.
+
+  @param title - The note's title
+  @param body - The note's content, as Markdown
+  @param folder - The folder to create it in. Created if it does not exist.
+  """
+  const html = toHtml(body)
+  if (isFailure(html)) {
+    return html
+  }
+
+  const exists = try _folderExists(folder)
+  if (isFailure(exists)) {
+    return exists
+  }
+
+  return interrupt std::notes::create("Create a note in the Notes app?", {
+    account: "",
+    folder: folder,
+    title: title,
+    folderCreated: !exists
+  })
+
+  destructive {
+    return try _createNote(title, html.value, folder)
+  }
+}
+
+export def appendToNote(id: string, body: string, folder?: string): Result<Note> raises <std::notes::append> {
+  """
+  Append Markdown to an existing note. Get the id from listNotes or searchNotes.
+
+  @param id - The note's id
+  @param body - The content to append, as Markdown
+  @param folder - If given, the call fails unless the note is in this folder
+  """
+  const html = toHtml(body)
+  if (isFailure(html)) {
+    return html
+  }
+
+  return interrupt std::notes::append("Append to a note in the Notes app?", {
+    account: "",
+    folder: if folder == null then "" else folder,
+    title: "",
+    id: id
+  })
+
+  destructive {
+    return try _appendToNote(id, html.value, folder)
+  }
+}
+
+export idempotent def readNote(id: string, folder?: string): Result<NoteContent> raises <std::notes::read> {
+  """
+  Read a note's contents as plain text. Get the id from listNotes or searchNotes.
+
+  @param id - The note's id
+  @param folder - If given, the call fails unless the note is in this folder
+  """
+  return interrupt std::notes::read("Read a note from the Notes app?", {
+    account: "",
+    folder: if folder == null then "" else folder,
+    title: "",
+    id: id
+  })
+
+  return try _readNote(id, folder)
+}
+
+export idempotent def searchNotes(query: string, folder?: string): Result<Note[]> raises <std::notes::search> {
+  """
+  Search notes by their text and return matching notes' metadata, without their
+  contents.
+
+  @param query - The text to search for
+  @param folder - If given, only search this folder
+  """
+  return interrupt std::notes::search("Search the notes in the Notes app?", {
+    account: "",
+    folder: if folder == null then "" else folder,
+    query: query
+  })
+
+  return try _searchNotes(query, folder)
+}
+
+export idempotent def listNotes(folder?: string): Result<Note[]> raises <std::notes::list> {
+  """
+  List notes' metadata, without their contents.
+
+  @param folder - If given, only list this folder
+  """
+  return interrupt std::notes::list("List the notes in the Notes app?", {
+    account: "",
+    folder: if folder == null then "" else folder
+  })
+
+  return try _listNotes(folder)
+}
+
+export idempotent def listFolders(): Result<Folder[]> raises <std::notes::list> {
+  """
+  List the folders in the Notes app, with a count of the notes in each.
+  """
+  return interrupt std::notes::list("List the folders in the Notes app?", {
+    account: "",
+    folder: ""
+  })
+
+  return try _listFolders()
+}
+
+export def deleteNote(id: string, folder?: string): Result<null> raises <std::notes::delete> {
+  """
+  Delete a note. It moves to the Recently Deleted folder, where it stays for
+  about 30 days.
+
+  @param id - The note's id
+  @param folder - If given, the call fails unless the note is in this folder
+  """
+  return interrupt std::notes::delete("Delete a note from the Notes app?", {
+    account: "",
+    folder: if folder == null then "" else folder,
+    title: "",
+    id: id
+  })
+
+  destructive {
+    return try _deleteNote(id, folder)
+  }
+}
+```
+
+- [ ] **Step 2: Verify it parses**
+
+Run:
+```bash
+cd packages/agency-lang && pnpm run ast stdlib/notes/apple.agency > /dev/null && echo PARSES
+```
+Expected: `PARSES`.
+
+If it fails, check `docs/site/guide/basic-syntax.md`. Known parser gotchas from the memory file: `!(...)` on a paren-expression fails to parse, and `thread` is a keyword. If `if ... then ... else` as an argument value fails, hoist it to a `const` first — `if` expressions are only allowed as a `const`/`let` value or a `return`.
+
+- [ ] **Step 3: Add the capability sets**
+
+Modify `packages/agency-lang/stdlib/capabilities.agency`, appending after the `Memory` set:
+
+```ts
+/** Read-only Notes access: reading, searching, and listing. */
+export effectSet NotesRead = <std::notes::read, std::notes::search, std::notes::list>
+
+/** Notes mutation: creating, appending, and deleting. */
+export effectSet NotesWrite = <std::notes::create, std::notes::append, std::notes::delete>
+
+/** All Notes access, reads and writes. */
+export effectSet Notes = <NotesRead, NotesWrite>
+```
+
+- [ ] **Step 4: Build**
+
+Run:
+```bash
+cd packages/agency-lang && make
+```
+Expected: exit 0. `make` is required for any stdlib change.
+
+- [ ] **Step 5: Verify the tool schema narrows under partial application**
+
+Create `/tmp/notes-check.agency` in the repo (NOT in /tmp — Agency needs node_modules):
+
+```ts
+import { createNote } from "std::notes/apple"
+
+node main() {
+  const inbox = createNote.partial(folder: "Agency Inbox").rename("addToInbox")
+  print("partial applied ok")
+}
+```
+
+Run:
+```bash
+cd packages/agency-lang && cp /tmp/notes-check.agency ./notes-check.agency && pnpm run agency notes-check.agency; rm -f notes-check.agency
+```
+Expected: `partial applied ok`. This exercises compilation and PFA without touching Notes.app.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/agency-lang/stdlib/notes/apple.agency packages/agency-lang/stdlib/capabilities.agency packages/agency-lang/docs/site/stdlib/
+git commit -m "Add the std::notes/apple module and its capability sets
+
+Per-operation effects rather than one blanket std::notes, so a policy can
+approve reads and reject deletes. Payloads carry account, folder and
+title because those are what policy globs match on.
+
+Notes are addressed by id, since duplicate titles are legal. The optional
+folder argument constrains rather than addresses, so partial application
+confines an agent to one folder in a way the model cannot see."
+```
+
+---
+
+## Task 6: Documentation
+
+**Files:**
+- Create: `packages/agency-lang/docs/site/guide/apple-notes.md`
+
+The stdlib reference page is generated from the module's doc comments by `agency doc`, so it needs no hand-editing. This task adds the guide page, which the spec (§3.1) says is also where Obsidian users get their answer.
+
+- [ ] **Step 1: Write the guide page**
+
+Create `packages/agency-lang/docs/site/guide/apple-notes.md`:
+
+```markdown
+---
+name: Apple Notes
+description: Create, read, search, and edit notes in the macOS Notes app from Agency, and how to confine an agent to one folder.
+---
+
+# Apple Notes
+
+`std::notes/apple` lets an agent work with the macOS Notes app.
+
+```ts
+import { createNote } from "std::notes/apple"
+
+node main() {
+  const result = createNote("Findings", "## Summary\n\n- one\n- two")
+  print(result)
+}
+```
+
+macOS only. The first call asks for Automation permission, and macOS will show
+a dialog. If nobody answers it, the call fails after 30 seconds.
+
+## Notes are addressed by id
+
+Two notes in the same folder can share a title, so a title is not an address.
+Every read and edit takes the note's `id`, which you get from `listNotes` or
+`searchNotes`:
+
+```ts
+import { searchNotes, appendToNote } from "std::notes/apple"
+
+node main() {
+  const found = searchNotes("Q3 planning")
+  if (found is success(notes)) {
+    appendToNote(notes[0].id, "\n## Update\n\nShipped.")
+  }
+}
+```
+
+`createNote` returns the note it made, so create-then-append needs no search.
+
+## Bodies are Markdown going in, plain text coming out
+
+`createNote` and `appendToNote` take Markdown, which is converted to the HTML
+Notes stores. `readNote` returns plain text, not HTML, because HTML would waste
+tokens and read badly for a model.
+
+That makes a read-then-write round trip lossy: reading strips the formatting,
+and writing it back would flatten the note. Use `appendToNote` rather than
+reading, editing, and writing yourself.
+
+## Confining an agent to one folder
+
+Every function takes an optional `folder`. It constrains rather than addresses:
+if you pass it, the call fails unless the note is in that folder.
+
+Combined with [partial application](/guide/partial-application), that confines
+an agent in a way the model cannot see or route around, because the locked
+parameter is stripped from the tool's schema:
+
+```ts
+import { createNote, listNotes, readNote } from "std::notes/apple"
+
+node main() {
+  const reader = readNote.partial(folder: "Work").rename("readWorkNote")
+  const lister = listNotes.partial(folder: "Work").rename("listWorkNotes")
+  llm("Summarise my Work notes", { tools: [lister, reader] })
+}
+```
+
+The model may pass any id it likes. Anything outside Work fails closed.
+
+## Deciding with a policy
+
+Each operation raises its own [effect](/guide/effects), so a
+[policy](/guide/policies) can approve reads and reject deletes:
+
+```json
+{
+  "std::notes::read": [
+    { "match": { "folder": "Work" }, "action": "approve" },
+    { "action": "reject" }
+  ],
+  "std::notes::delete": [{ "action": "reject" }]
+}
+```
+
+Or constrain a whole node with the capability sets:
+
+```ts
+import { NotesRead } from "std::capabilities"
+
+// may read notes; may not write them
+node summarise() raises <NotesRead> {
+  // ...
+}
+```
+
+## Locked notes
+
+A note locked with a password cannot be read or edited, and this module will not
+try. AppleScript exposes no way to unlock a note, and the workarounds are worse
+than the problem. Calls against a locked note fail with a message naming it:
+
+```
+Note "Q3 Planning" is locked. Unlock it in Notes.app and retry.
+```
+
+## Deleting is recoverable
+
+`deleteNote` moves a note to Recently Deleted, where it stays for about 30 days.
+`listFolders` returns that folder like any other.
+
+## Other note apps
+
+**Obsidian needs no module.** An Obsidian vault is a directory of Markdown
+files, so [`std::fs`](/stdlib/fs) already does everything:
+
+```ts
+import { read, write } from "std::fs"
+
+const VAULT = "/Users/me/vault"
+
+node main() {
+  const existing = read("notes.md", VAULT)
+  if (existing is success(text)) {
+    write(filename: "notes.md", dir: VAULT, content: text + "\n\nAppended.")
+  }
+}
+```
+
+Because those are ordinary file operations, they raise `std::read` and
+`std::write`, so the same handlers, policies, and partial application work.
+
+**Bear** is not supported. It has an `x-callback-url` API, but a command-line
+process cannot receive the callback, so a create call could not return the id of
+the note it made.
+```
+
+- [ ] **Step 2: Build so the guide is staged into the stdlib**
+
+Run:
+```bash
+cd packages/agency-lang && make
+```
+Expected: exit 0. `make` copies `docs/site/guide` into `stdlib/docs/guide` for `std::skills::docsSkill`.
+
+- [ ] **Step 3: Verify the generated stdlib reference page exists**
+
+Run:
+```bash
+cd packages/agency-lang && ls docs/site/stdlib/notes/ && grep -c "createNote" docs/site/stdlib/notes/apple.md
+```
+Expected: `apple.md` listed, and a non-zero count. `agency doc` recurses, so no registry needed.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add packages/agency-lang/docs/site/guide/apple-notes.md packages/agency-lang/stdlib/docs/ packages/agency-lang/docs/site/stdlib/
+git commit -m "Document std::notes/apple
+
+Adds the guide page. The stdlib reference page is generated from the
+module's doc comments.
+
+The guide also answers the Obsidian question, since a vault is Markdown
+files on disk and std::fs already covers it — which is why there is no
+std::notes/obsidian."
+```
+
+---
+
+## Task 7: Full verification
+
+**Files:** none. This task runs checks and fixes what they surface.
+
+- [ ] **Step 1: Run the full local check**
+
+Run:
+```bash
+cd packages/agency-lang && make && npx tsc --noEmit -p tsconfig.json && pnpm run lint:structure && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts lib/stdlib/__tests__/markdown.test.ts 2>&1 | tail -20
+```
+Expected: all exit 0; appleNotes 40 tests pass, markdown 46 tests pass.
+
+Save the output to a file rather than rerunning — the suites here are slow:
+```bash
+... 2>&1 | tee /tmp/notes-verify.txt
+```
+
+- [ ] **Step 2: Audit the diff against the anti-patterns doc**
+
+Read `docs/dev/anti-patterns.md` and `docs/dev/coding-standards.md`, then re-read your own diff against them. Look specifically for: free functions that should be methods, cross-object field-reaching, and imperative code where declarative would read better. This is a required step, not a suggestion.
+
+- [ ] **Step 3: Confirm no test can reach real Notes.app**
+
+Run:
+```bash
+cd packages/agency-lang && grep -rn "osascript" lib/stdlib/__tests__/appleNotes.test.ts | grep -v "toBe\|toEqual\|expect" || echo "NONE — good"
+ls tests/agency/notes* 2>/dev/null && echo "PROBLEM: agency tests for notes exist" || echo "NONE — good"
+```
+Expected: both report good. Every test mocks `execFile`; nothing shells out. A test that reached Notes.app could destroy real notes when someone runs the suite locally.
+
+- [ ] **Step 4: Commit any fixes**
+
+```bash
+git add -A
+git commit -m "Fix issues surfaced by the verification pass"
+```
+
+---
+
+## Self-Review
+
+Checked against the spec:
+
+| Spec section | Task |
+|---|---|
+| §3.6 argv, no `-` separator | 1 (tested) |
+| §2.8 both error codes | 1 (tested) |
+| §6.1 `with timeout` | 1 |
+| §5.3 pre-flight, split container | 2 (tested) |
+| §2.7 locked = data loss | 2, 4 (tested, mutation-verified) |
+| §2.4 read plaintext, write HTML | 3, 5 (tested) |
+| §9.3 search plaintext not body | 3 (tested) |
+| §6.4 scoped-lookup assertion | 4 (tested) |
+| §9.4 create folder on demand | 4, 5 (tested) |
+| §4.2 signatures, typed Results, `raises` | 5 |
+| §5.1 six effects, payloads incl. `account` | 5 |
+| §5.2 three capability sets | 5 |
+| §5.4 `idempotent` on reads | 5 |
+| §3.1 Obsidian answer | 6 |
+| §8 unit tests only | 7 (verified) |
+
+**Review findings from spec §12, applied:**
+
+| # | Where |
+|---|---|
+| 2 | Task 5 — `search` payload has `folder` and `account` |
+| 4 | Task 4 — scoped lookup, plus locked re-check in the write script |
+| 5 | Task 5 — `raises` on all seven |
+| 6 | Task 5 — `idempotent` on reads, per `git.agency` |
+| 8 | Task 5 — `Result<Note>`, `Result<Note[]>`, `Result<NoteContent>` |
+| 9 | Task 2 — the "unguessable id" argument in the docstring, not "unreachable" |
+
+**Two findings from §12 are NOT yet handled, and are the highest-risk gaps in this plan:**
+
+- **Finding 7 (fail-open risk).** Optional parameters widen to `T | null`, so a payload's `folder` is `null` when omitted. What a policy glob does when matched against `null` is unverified. If `{"match": {"folder": "Work"}}` silently fails to match and falls through to a later approve rule, that is a fail-open on `listNotes()` with no arguments — the call with the widest reach. This plan works around it by passing `""` instead of `null` in the payloads, which is a guess, not a fix. **Before merging: verify what `checkPolicy` does with an empty string and with null, then write a test in `lib/stdlib/__tests__/` pinning it.** If `""` matches a `"Work"` glob, the workaround is worse than the bug.
+- **Finding 11b.** Whether `renderForHtml` should drop raw HTML silently or emit a diagnostic. Currently silent. Not blocking.
+
+**Known gap:** `account` is threaded through the types and payloads but the Agency layer passes `""` for it, because the TS layer derives the account from the note rather than accepting one. The `account` *argument* from spec §4.2 is not implemented. This plan delivers account as an output field, not as an input filter. That is a deliberate scope cut for a first version, and it means folder scoping is still advisory on a multi-account machine — the exact thing spec §3.4 argued had to be fixed. **The owner has one account (§9.4), so this is latent rather than live, but it must be either implemented or explicitly deferred in the spec before this ships.** Do not let it merge silently.

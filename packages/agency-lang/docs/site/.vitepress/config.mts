@@ -146,6 +146,7 @@ export default defineConfig({
           text: "09. Advanced",
           items: [
             { text: "Callbacks", link: "/guide/callbacks" },
+            { text: "Partial Results", link: "/guide/partial-results" },
             {
               text: "Agency Packages",
               link: "/guide/agency-packages",

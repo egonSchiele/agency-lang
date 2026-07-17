@@ -1,8 +1,13 @@
-import { diff } from "std::syntax"
-const file1 = read("testfile") with approve
-const file2 = read("testfile2") with approve
+def add(a: number, b: number): number {
+  saveDraft(a + b + 100)
+  sleep(2s)
+  return a + b
+}
 
 node main() {
-  const res = diff(file1, file2, color: true)
+  const res = guard(time: 1s) {
+    const x = add(1, 2)
+    return 2
+  }
   print(res)
 }

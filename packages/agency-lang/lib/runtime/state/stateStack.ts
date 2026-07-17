@@ -377,7 +377,56 @@ export class StateStack {
   // signal fires; runtime checks (ctx.isCancelled, smoltalk's HTTP signal)
   // observe it and stop work in the affected branch only.
   // NOT serialized — purely a live execution concept.
-  abortSignal?: AbortSignal;
+  /** The branch's cancellation signal, DERIVED: the base signal (set by
+   *  non-guard machinery — a fork/race branch's composed parent+controller
+   *  signal, Esc handling, tests) composed with every armed guard's own
+   *  signal. Guards no longer mutate this field; they expose
+   *  `armedSignal()` and the stack composes on demand.
+   *
+   *  Why derived instead of accumulated: the old design had each TimeGuard
+   *  save `previousSignal` and overwrite the field with
+   *  `AbortSignal.any([previous, mine])` — order-dependent mutable state
+   *  whose re-arm (needed when a trip is APPROVED) meant restore-then-
+   *  recompose in exactly the right order, rebuilding every composition
+   *  layered above the tripped guard. Deriving deletes the whole problem:
+   *  re-arm is "the guard is armed again; rebuild".
+   *
+   *  Freshness is structural, not a vigilance rule: an operation captures
+   *  the signal when it starts, and an operation holding a PRE-rebuild
+   *  composite was, by definition, in flight when the trip fired — which
+   *  makes it exactly the operation the trip cancelled. New work reads
+   *  the getter and sees the live composite. */
+  get abortSignal(): AbortSignal | undefined {
+    return this.composedAbortSignal ?? this.baseAbortSignal;
+  }
+
+  set abortSignal(signal: AbortSignal | undefined) {
+    this.baseAbortSignal = signal;
+    this.rebuildAbortSignal();
+  }
+
+  private baseAbortSignal?: AbortSignal;
+  private composedAbortSignal?: AbortSignal;
+
+  /** Recompose from the base plus every armed guard. Called by the
+   *  setter, by pushGuard/popGuard, by TimeGuard when it (re)mints its
+   *  controller, and by GuardScope.extend after an approve re-arms a
+   *  tripped guard. Mints a NEW composite each time (an aborted
+   *  AbortSignal cannot be un-aborted). */
+  rebuildAbortSignal(): void {
+    const armed = this.guards
+      .map((g) => g.armedSignal())
+      .filter((s): s is AbortSignal => s !== undefined);
+    if (armed.length === 0) {
+      this.composedAbortSignal = undefined;
+      return;
+    }
+    const sources = this.baseAbortSignal
+      ? [this.baseAbortSignal, ...armed]
+      : armed;
+    this.composedAbortSignal =
+      sources.length === 1 ? sources[0] : AbortSignal.any(sources);
+  }
 
   // Per-branch cumulative LLM cost (USD) and tokens. Seeded from the parent
   // stack's value when this stack is created as a fork/race branch; otherwise
@@ -544,13 +593,20 @@ export class StateStack {
   }
 
   pushGuard(guard: Guard): void {
-    guard.install(this);
+    // Push BEFORE install: the derived abort signal composes from
+    // `this.guards`, so the guard must be in the array when install's
+    // controller mint triggers the rebuild.
     this.guards.push(guard);
+    guard.install(this);
+    this.rebuildAbortSignal();
   }
 
   popGuard(): Guard | undefined {
     const guard = this.guards.pop();
     if (guard) guard.uninstall(this);
+    // Recomposing WITHOUT the popped guard is what the old design's
+    // previousSignal-restore achieved, minus the ordering hazards.
+    this.rebuildAbortSignal();
     return guard;
   }
 

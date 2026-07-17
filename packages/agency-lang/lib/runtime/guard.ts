@@ -135,6 +135,15 @@ export type Guard = {
   spentAmount(): number;
   /** User-facing name from guard(label:). */
   readonly label?: string;
+  /** This guard's own cancellation signal, when it is armed. The stack
+   *  DERIVES its composed abortSignal from these (rebuildAbortSignal) —
+   *  guards never mutate stack.abortSignal directly. Undefined for
+   *  guards with no abort plumbing (cost), disarmed guards, and a
+   *  fired-then-approved guard whose dead controller awaits its re-mint
+   *  (an aborted controller must not poison the fresh composite). A
+   *  TRIPPED-and-unanswered guard still returns its (aborted) signal:
+   *  the trip is live and the composite must reflect it. */
+  armedSignal(): AbortSignal | undefined;
   install(stack: StateStack): void;
   uninstall(stack: StateStack): void;
   pause(): void;
@@ -276,6 +285,10 @@ export class CostGuard implements Guard {
     public costLimit: number,
     public readonly label?: string,
   ) {}
+
+  armedSignal(): AbortSignal | undefined {
+    return undefined; // no abort plumbing — cost is checked at sync points
+  }
 
   install(_stack: StateStack): void {
     /* nothing — no abort controller, no signal composition */
@@ -483,9 +496,6 @@ export class TimeGuard implements Guard {
   private windowStart: number | undefined = undefined;
   /** AbortController whose .abort() fires when the timer expires. */
   private controller: AbortController | undefined = undefined;
-  /** The `stack.abortSignal` that existed before install — restored
-   *  by uninstall so the outer abort plumbing comes back unchanged. */
-  private previousSignal: AbortSignal | undefined = undefined;
   /** Node setTimeout handle for the in-process timer. */
   private timerHandle: ReturnType<typeof setTimeout> | undefined = undefined;
   /** Set when the abort signal fires. Read by check() to convert the
@@ -528,26 +538,32 @@ export class TimeGuard implements Guard {
   ) {}
 
   install(stack: StateStack): void {
-    this.installAbortPlumbing(stack);
+    this.ensureFreshController(stack);
     this.startWindow();
   }
 
-  uninstall(stack: StateStack): void {
+  uninstall(_stack: StateStack): void {
     // Pop-race fix: clear timer FIRST so a late-fire can't trip the
-    // outer scope. Then restore the signal so the outer abort
-    // plumbing is back in place before the next sync point. Even if
-    // setTimeout's callback is already queued, abortController is
-    // about to be released and stack.abortSignal no longer references
-    // our composed signal.
+    // outer scope. Dropping the controller is all the signal cleanup
+    // needed — the stack derives its composite from armed guards, and
+    // popGuard rebuilds without this one.
     this.cancelTimer();
     if (this.state === "running") {
       this.elapsedMs += performance.now() - this.windowStart!;
       this.windowStart = undefined;
       this.state = "paused";
     }
-    stack.abortSignal = this.previousSignal;
-    this.previousSignal = undefined;
     this.controller = undefined;
+  }
+
+  armedSignal(): AbortSignal | undefined {
+    if (this.disarmed) return undefined;
+    // A fired controller whose trip has been ANSWERED (approve reset the
+    // latches) is dead plumbing awaiting its re-mint at the next resume;
+    // it must not poison the fresh composite. While the trip is LIVE
+    // (tripped, unanswered) the aborted signal is the truth.
+    if (this.controller?.signal.aborted && !this.tripped) return undefined;
+    return this.controller?.signal;
   }
 
   pause(): void {
@@ -567,9 +583,14 @@ export class TimeGuard implements Guard {
     // unsuspend() re-enables resumption.
     if (this.suspended) return;
     if (this.state === "running") return;
-    // After deserialization, controller is undefined — re-establish
-    // plumbing. (toJSON only serializes elapsedMs + timeLimit.)
-    if (!this.controller) this.installAbortPlumbing(stack);
+    // Re-establish plumbing when it is missing (after deserialization —
+    // toJSON only serializes elapsedMs + timeLimit) or DEAD (the
+    // controller fired, the trip was approved, and the latches were
+    // reset: an aborted controller cannot be reused, so re-arm mints a
+    // fresh one and the stack recomposes).
+    if (!this.controller || (this.controller.signal.aborted && !this.tripped)) {
+      this.ensureFreshController(stack);
+    }
     this.startWindow();
   }
 
@@ -730,15 +751,15 @@ export class TimeGuard implements Guard {
     return g;
   }
 
-  private installAbortPlumbing(stack: StateStack): void {
+  /** Mint this guard's own controller and let the stack recompose. The
+   *  guard never touches stack.abortSignal itself — the stack derives
+   *  the composite from armedSignal() across its guards. */
+  private ensureFreshController(stack: StateStack): void {
     this.controller = new AbortController();
-    this.previousSignal = stack.abortSignal;
-    stack.abortSignal = stack.abortSignal
-      ? AbortSignal.any([stack.abortSignal, this.controller.signal])
-      : this.controller.signal;
     this.controller.signal.addEventListener("abort", () => {
       this.tripped = true;
     });
+    stack.rebuildAbortSignal();
   }
 
   private startWindow(): void {

@@ -18,7 +18,10 @@ import type { StateStack } from "./state/stateStack.js";
  * raise site, in the process and branch that own the guard).
  */
 export class GuardScope {
-  private constructor(private readonly members: Guard[]) {}
+  private constructor(
+    private readonly members: Guard[],
+    private readonly stack: StateStack,
+  ) {}
 
   /** The scope a tripped guard belongs to, resolved on `stack`. Members
    *  are matched innermost-first by id. A guard with an empty scopeIds
@@ -34,7 +37,7 @@ export class GuardScope {
         members.push(g);
       }
     });
-    return members.length > 0 ? new GuardScope(members) : null;
+    return members.length > 0 ? new GuardScope(members, stack) : null;
   }
 
   memberFor(dimension: "cost" | "time"): Guard | null {
@@ -100,6 +103,11 @@ export class GuardScope {
       }
       member.disarm();
     }
+    // An approve that re-armed a fired TimeGuard leaves a dead
+    // controller in the composite; recompose so the branch's signal
+    // reflects the granted budget (the fresh controller itself arrives
+    // at the next resume — armedSignal() excludes the dead one).
+    this.stack.rebuildAbortSignal();
     const trippedMember = this.memberFor(tripped);
     if (trippedMember && trippedMember.overBudgetAndArmed()) {
       throw new GuardApproveError(

@@ -143,11 +143,11 @@ describe("serialization and cloning of the new guard fields", () => {
     const g = new TimeGuard(60000);
     g.scopeIds = ["a", "b"];
     g.isRootBudget = true;
-    g.install(parent);
+    parent.pushGuard(g);
     const clone = g.cloneForBranch(parent, new StateStack())!;
     expect(clone.scopeIds).toEqual(["a", "b"]);
     expect(clone.isRootBudget).toBe(true);
-    g.uninstall(parent);
+    parent.popGuard();
   });
 });
 
@@ -161,7 +161,7 @@ describe("TimeGuard.extendBudget", () => {
     vi.useFakeTimers();
     const stack = new StateStack();
     const g = new TimeGuard(500);
-    g.install(stack);
+    stack.pushGuard(g);
     vi.advanceTimersByTime(300);           // 300 of 500 elapsed (timer time)
     g.extendBudget(1000);                  // limit now 1500, timer re-armed
     vi.advanceTimersByTime(300);           // past the OLD 500 deadline
@@ -170,7 +170,7 @@ describe("TimeGuard.extendBudget", () => {
     vi.advanceTimersByTime(1500);          // past the NEW deadline
     expect(g.isTripped()).toBe(true);      // still meters at the new limit
     expect(g.check(stack)).not.toBeNull();
-    g.uninstall(stack);
+    stack.popGuard();
     vi.useRealTimers();
   });
 
@@ -178,7 +178,7 @@ describe("TimeGuard.extendBudget", () => {
     vi.useFakeTimers();
     const stack = new StateStack();
     const g = new TimeGuard(500);
-    g.install(stack);
+    stack.pushGuard(g);
     vi.advanceTimersByTime(500);           // trips
     expect(g.check(stack)).not.toBeNull(); // consumes
     expect(g.check(stack)).toBeNull();     // consumed latch holds
@@ -187,7 +187,7 @@ describe("TimeGuard.extendBudget", () => {
     // state (full re-trip of an already-aborted controller is PR 3).
     expect(g.isTripped()).toBe(false);
     expect(g.overBudgetAndArmed()).toBe(false);
-    g.uninstall(stack);
+    stack.popGuard();
     vi.useRealTimers();
   });
 });
@@ -197,19 +197,70 @@ describe("disarmed TimeGuard clones (PR 2 review round 1)", () => {
     vi.useFakeTimers();
     const parent = new StateStack();
     const g = new TimeGuard(500);
-    g.install(parent);
+    parent.pushGuard(g);
     g.disarm();
     const branch = new StateStack();
     const clone = g.cloneForBranch(parent, branch)!;
     // The branch installs its clone exactly as runBatch's rehydrate
     // path would; a disarmed clone must not arm a timer that would
     // fire the branch's abort signal despite the explicit disarm.
-    clone.install(branch);
+    branch.pushGuard(clone);
     vi.advanceTimersByTime(5000);
     expect(branch.abortSignal?.aborted ?? false).toBe(false);
     expect(clone.isTripped()).toBe(false);
-    clone.uninstall(branch);
-    g.uninstall(parent);
+    branch.popGuard();
+    parent.popGuard();
     vi.useRealTimers();
+  });
+});
+
+describe("derived abort signal (PR 3 Task 3.1)", () => {
+  it("re-arm after an approve rebuilds the composite; the inner guard still enforces (the rev-1 nested-recomposition pin)", () => {
+    vi.useFakeTimers();
+    const stack = new StateStack();
+    const outer = new TimeGuard(500);
+    const inner = new TimeGuard(10_000);
+    stack.pushGuard(outer);
+    stack.pushGuard(inner);
+
+    vi.advanceTimersByTime(500);                 // outer fires
+    expect(stack.abortSignal!.aborted).toBe(true);
+    expect(outer.isTripped()).toBe(true);
+
+    // What GuardScope.extend does on approve: reset the latches, then
+    // rebuild. The dead controller must not poison the new composite.
+    outer.extendBudget(10_000);
+    stack.rebuildAbortSignal();
+    expect(stack.abortSignal!.aborted).toBe(false);
+
+    // beforeStep's resume re-mints the outer's controller (dead one,
+    // trip answered) and recomposes — still live.
+    outer.resume(stack);
+    inner.resume(stack);
+    expect(stack.abortSignal!.aborted).toBe(false);
+
+    // The INNER guard still enforces afterward — nothing above the
+    // re-armed guard needed rebuilding by hand, because there is no
+    // accumulated chain anymore.
+    vi.advanceTimersByTime(10_000);              // inner fires
+    expect(stack.abortSignal!.aborted).toBe(true);
+    expect(inner.isTripped()).toBe(true);
+
+    stack.popGuard();
+    stack.popGuard();
+    vi.useRealTimers();
+  });
+
+  it("a base signal set by non-guard machinery survives guard pushes, pops, and rebuilds", () => {
+    const stack = new StateStack();
+    const branchController = new AbortController();
+    stack.abortSignal = branchController.signal;    // the runBatch pattern
+    const g = new TimeGuard(60_000);
+    stack.pushGuard(g);
+    expect(stack.abortSignal!.aborted).toBe(false);
+    branchController.abort();                        // race-loser cancel
+    expect(stack.abortSignal!.aborted).toBe(true);   // base propagates
+    stack.popGuard();
+    expect(stack.abortSignal!.aborted).toBe(true);   // base remains after pop
   });
 });

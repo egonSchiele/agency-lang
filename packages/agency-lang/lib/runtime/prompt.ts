@@ -1105,6 +1105,28 @@ export async function runPrompt(args: {
   // (they push messages). See lib/runtime/guardTripInterrupt.ts.
   const guardGate = () => raiseGuardTripsUntilClear(ctx, stateStack);
 
+  // The delivery half of approve({message}) (resumable-guards PR 4):
+  // drain the branch's queued reviewer feedback into the thread, in an
+  // idempotent step of its own right before a request step. Everything
+  // queued drains as ONE user message, entries newline-joined oldest
+  // first — providers like Anthropic want user/assistant alternation,
+  // so one drain must not emit a run of consecutive user messages.
+  // The label lists each contributing guard once, in the same order.
+  // Labels are observability-only (#557) — the model sees an ordinary
+  // user message, which is the point: guard feedback steers the model
+  // exactly like a user would.
+  const drainGuardFeedback = async () => {
+    const feedback = stateStack.takeGuardFeedback();
+    if (feedback.length === 0) return;
+    const text = feedback.map((f) => f.text).join("\n");
+    const label = feedback
+      .map((f) => f.label)
+      .filter((l, i, all) => all.indexOf(l) === i)
+      .join(",");
+    messages.push(smoltalk.userMessage(text), label);
+    self.messagesJSON = snapshotThread();
+  };
+
   // A REQUEST step wrapped in the time-trip retry loop (resumable-guards
   // PR 3). When the timer kills the in-flight request, _runPrompt's
   // cancellation classifier throws GuardTripRetry; the loop raises the
@@ -1125,6 +1147,12 @@ export async function runPrompt(args: {
     while (true) {
       if (stateStack.firstRaisableTrip() !== null) {
         await pr.step(`${key}.retryGate.${gateAttempt}`, guardGate);
+        // An approve at THIS gate may have queued feedback; it belongs
+        // in the re-issued request, so drain before the body re-runs.
+        await pr.step(
+          `${key}.retryFeedback.${gateAttempt}`,
+          drainGuardFeedback,
+        );
         gateAttempt += 1;
         continue; // re-probe: each budget is owed its own question
       }
@@ -1139,6 +1167,10 @@ export async function runPrompt(args: {
   };
   try {
     await pr.step("guardGate.initial", guardGate);
+    // Feedback queued before this llm() call — by the initial gate just
+    // above, or by an earlier step-boundary approve anywhere on this
+    // branch — lands ahead of the new prompt: it reviews PAST work.
+    await pr.step("guardFeedback.initial", drainGuardFeedback);
     // The prompt push is its OWN idempotent step so the request step
     // below is re-issue-safe: an in-process trip retry (or a resumed
     // replay) re-runs the request body without duplicating the user
@@ -1766,6 +1798,7 @@ export async function runPrompt(args: {
         // post-charge throw site); raise it before the next request goes
         // out, so nothing more is spent while the question is open.
         await pr.step(`round.${round}.guardGate`, guardGate);
+        await pr.step(`round.${round}.guardFeedback`, drainGuardFeedback);
         // Next LLM call wrapped in pr.step for resume idempotency. Once
         // marked done, resume re-entries skip the LLM call. The llmCall
         // span stays open across rounds (one span per llm() call), so we
@@ -1866,6 +1899,10 @@ export async function runPrompt(args: {
         self.messagesJSON = snapshotThread();
       });
       await pr.step(`validation.${validationAttempt}.guardGate`, guardGate);
+      await pr.step(
+        `validation.${validationAttempt}.guardFeedback`,
+        drainGuardFeedback,
+      );
       await requestStepWithTripRetry(`validation.${validationAttempt}.llmCall`, async () => {
         const nextResult = await _runPrompt({
           ctx,

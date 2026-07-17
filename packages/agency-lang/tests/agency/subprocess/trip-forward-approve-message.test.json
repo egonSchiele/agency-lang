@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A guard trip inside the child forwards over the interrupt IPC; the parent approves with budget and a message; the child extends and injects the message into its own thread before its next request.",
+      "input": "",
+      "expectedOutput": "\"delivered:user\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "one" },
+        { "return": "two" }
+      ]
+    }
+  ]
+}

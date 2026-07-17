@@ -8,7 +8,14 @@ import { guard } from "std::thread"
 // returns its normal value, and the parent receives both. Without guardId
 // matching, branch 2's boundary could convert branch 1's trip. Exercises
 // guardTrip separation across concurrent branches in one fixture.
+// The handler is race insurance, not part of the pinned behavior: on a
+// slow runner the setup walk can eat the whole tight budget, so the
+// trip is DETECTED at a step boundary and raised as a resumable
+// interrupt instead of aborting the in-flight sleep. Rejecting it
+// delivers the same GuardExceededError from the step, and the output
+// is identical on both paths. On a fast run the handler never fires.
 node main() {
+  handle {
   const results = fork([1, 2]) as n {
     if (n == 1) {
       const a = guard(time: 20ms) as {
@@ -30,4 +37,10 @@ node main() {
     return "B:${b.value}"
   }
   return "${results[0]}|${results[1]}"
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
 }

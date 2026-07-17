@@ -11,7 +11,14 @@ import { guard } from "std::thread"
 // "outer:timeoutFailure". Previously (Increment 1, before guardId
 // matching) the inner mis-attributed the outer's trip to itself,
 // returning "inner:timeoutFailure:20".
+// The handler is race insurance, not part of the pinned behavior: on a
+// slow runner the setup walk can eat the whole tight budget, so the
+// trip is DETECTED at a step boundary and raised as a resumable
+// interrupt instead of aborting the in-flight sleep. Rejecting it
+// delivers the same GuardExceededError from the step, and the output
+// is identical on both paths. On a fast run the handler never fires.
 node main() {
+  handle {
   const outer = guard(time: 20ms) as {
     const inner = guard(time: 5s) as {
       sleep(150ms)
@@ -26,4 +33,10 @@ node main() {
     return "outer:${outer.error.type}"
   }
   return outer.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
 }

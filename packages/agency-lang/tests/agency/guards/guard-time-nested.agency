@@ -5,7 +5,14 @@ import { guard } from "std::thread"
 // catches the inner's Failure without itself tripping. Verifies that
 // inner trips don't leak into the outer scope (uninstall properly
 // restores the outer's abort plumbing).
+// The handler is race insurance, not part of the pinned behavior: on a
+// slow runner the setup walk can eat the whole tight budget, so the
+// trip is DETECTED at a step boundary and raised as a resumable
+// interrupt instead of aborting the in-flight sleep. Rejecting it
+// delivers the same GuardExceededError from the step, and the output
+// is identical on both paths. On a fast run the handler never fires.
 node main() {
+  handle {
   const outer = guard(time: 5s) as {
     const inner = guard(time: 20ms) as {
       sleep(150ms)
@@ -21,4 +28,10 @@ node main() {
     return "outer tripped (unexpected)"
   }
   return outer.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
 }

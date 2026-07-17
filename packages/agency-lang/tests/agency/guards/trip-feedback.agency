@@ -1,0 +1,32 @@
+// approve({message}) across a REAL checkpoint (resumable guards PR 4).
+// No in-program handler: the cost trip surfaces to the harness, which
+// answers with a valued approve CARRYING A MESSAGE. The resumed run
+// re-detects the trip, applies the recorded answer — which queues the
+// message on the branch (stack.other, so the queue itself survives
+// serialization) — and injects it as a user message before the second
+// request. The assertion reads the thread back after the guard: the
+// feedback text must be present, user-role, and sit AFTER the first
+// exchange and BEFORE the second prompt. Labels are pinned separately
+// by the agency-js guard-feedback test (they are not part of
+// ThreadMessage).
+import { guard, getThread, currentThreadId } from "std::thread"
+
+node checkpointMessage() {
+  const r = guard(cost: $0.000001, label: "budget") as {
+    const a = llm("Reply with: one")
+    const b = llm("Reply with: two")
+    return b
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  const t = getThread(currentThreadId(), 0, 50)
+  if (isFailure(t)) { return "thread-read-failed" }
+  let position = 0
+  let verdict = "missing"
+  for (m in t.value) {
+    if (m.content == "spend less on this") {
+      verdict = "delivered:${m.role}:at-${position}"
+    }
+    position = position + 1
+  }
+  return "${verdict}|total:${position}"
+}

@@ -689,6 +689,34 @@ export class StateStack {
     this.rebuildAbortSignal();
   }
 
+  /** Reviewer feedback from `approve({message})`, waiting for this
+   *  branch's next model request (resumable-guards PR 4). The queue
+   *  lives in `other` so it is branch-local (each fork branch has its
+   *  own StateStack) and serialized (an approve applied just before a
+   *  checkpoint must not lose its message). runPrompt drains it into
+   *  the thread as labeled user-role messages right before each
+   *  request; a message queued outside any LLM loop simply waits for
+   *  the branch's next `llm()` call. Feedback queued in a fork branch
+   *  that makes no further request dies with the branch at the join —
+   *  the same lifetime as the branch's reply-attachment queue. */
+  queueGuardFeedback(text: string, label: string): void {
+    const queue = (this.other.__guardFeedback ??= []) as Array<{
+      text: string;
+      label: string;
+    }>;
+    queue.push({ text, label });
+  }
+
+  /** Remove and return every queued feedback entry, oldest first. */
+  takeGuardFeedback(): Array<{ text: string; label: string }> {
+    const queue = this.other.__guardFeedback as
+      | Array<{ text: string; label: string }>
+      | undefined;
+    if (!queue || queue.length === 0) return [];
+    delete this.other.__guardFeedback;
+    return queue;
+  }
+
   /** The consuming sibling of firstRaisableTrip: check() exactly the
    *  guard the probe admits. The runner's raise path uses this instead
    *  of detectTrippedGuard so a step-boundary conversation stays scoped

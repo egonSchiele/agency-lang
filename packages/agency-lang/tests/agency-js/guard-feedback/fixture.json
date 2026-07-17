@@ -1,0 +1,45 @@
+{
+  "returnValue": "answer",
+  "requests": [
+    [
+      {
+        "role": "user",
+        "content": "wrap up the loop",
+        "label": "guard:clock"
+      },
+      {
+        "role": "user",
+        "content": "first",
+        "label": null
+      }
+    ],
+    [
+      {
+        "role": "user",
+        "content": "wrap up the loop",
+        "label": "guard:clock"
+      },
+      {
+        "role": "user",
+        "content": "first",
+        "label": null
+      },
+      {
+        "role": "assistant",
+        "content": "answer",
+        "label": null
+      },
+      {
+        "role": "user",
+        "content": "inner: one more call\nouter: budget doubled",
+        "label": "guard:inner,guard:outer"
+      },
+      {
+        "role": "user",
+        "content": "second",
+        "label": null
+      }
+    ]
+  ],
+  "labelReachedProvider": false
+}

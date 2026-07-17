@@ -9,7 +9,15 @@ import { guard } from "std::thread"
 // measurement (at least half the budget) rather than a 0/sentinel
 // value; see the comment on the assertion below for why the bound is
 // deliberately loose.
+// The handler is race insurance, not part of the pinned behavior: on a
+// slow runner the walk from pushGuard to the sleep can eat the whole
+// 20ms budget, so the trip is DETECTED at a step boundary and raised
+// as a resumable interrupt instead of aborting the in-flight sleep.
+// Rejecting it delivers the same GuardExceededError from the step, and
+// the output is identical on both paths. On a fast run the handler
+// never fires.
 node main() {
+  handle {
   const result = guard(time: 20ms) as {
     sleep(150ms)
     sleep(1ms)
@@ -27,4 +35,10 @@ node main() {
     return "tripped:${result.error.type}:${result.error.maxTime}:${result.error.actualTime >= result.error.maxTime / 2}"
   }
   return result.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
 }

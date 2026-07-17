@@ -26,6 +26,7 @@ node main() {
 
 Things to note:
 - You don't have access to all the variables inside the guard, only to the return value.
+- Running out of budget does not fail the block right away. The guard first asks whether the work should get more budget — see [When a guard trips](#when-a-guard-trips). The failure arm runs when that question is answered no.
 - `result` is a `Result` type. On success, it has the return value. On failure, it has this data:
 
 ```ts
@@ -59,11 +60,103 @@ if (isFailure(result)) {
 
 These use [unit literals](/guide/basic-syntax.html#unit-literals).
 
-The cost check fires before and after every LLM call.
+The cost check fires before every LLM call, so a run that is over budget never sends another request.
 
- The time check fires at the next runner step boundary after the timer expires.
+The time check fires at step boundaries, even inside a tight loop that never awaits. When the timer expires it also cancels any in-flight HTTP request.
 
 Cost guards and time guards also apply to subprocesses created using `std::agency.run`.
+
+## When a guard trips
+
+A trip does not immediately fail the block. It pauses the work and raises an [interrupt](/guide/handlers) with effect `std::guard`, asking: this work ran out of budget — should it get more?
+
+- If the answer is **approve**, the budget grows and the work continues where it paused.
+- If the answer is **reject**, the guard stops the block and returns a failure. This is the failure shown above, and `saveDraft` / `finalize` salvage still applies.
+- If nothing in your program answers, the question goes to the user, like any other unhandled interrupt. On the CLI that means a prompt, or whatever `--policy` / `--approve` / `--reject` say. In a subprocess it forwards to the parent.
+
+This means a bare `guard(...)` with no handler no longer fails silently. If you want the old behavior — trip means fail, never ask — reject the question yourself:
+
+```ts
+node main() {
+  handle {
+    const result = guard(cost: $0.20) as {
+      return summarize(inbox)
+    }
+    return result
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+```
+
+Or run with `agency run --reject std::guard`.
+
+### Handling trips in code
+
+A handler sees the trip like any interrupt. `i.effect` is `"std::guard"`, and `i.data` describes the trip:
+
+| Field | Meaning |
+|---|---|
+| `dimension` | `"cost"` or `"time"` — which budget tripped |
+| `limit` | the tripped dimension's current limit (dollars or milliseconds) |
+| `spent` | what the work has used so far, in the same unit |
+| `label` | the guard's `label:`, or null |
+| `maxCost`, `maxTime` | the guard's per-dimension limits, null for a dimension it does not meter |
+| `draftValue` | a preview of the innermost saved draft, or null |
+
+`approve` takes a payload naming what to grant. Grants are **additive**: each value is extra budget on top of the current limit, not a new total.
+
+```ts
+handle {
+  const result = guard(label: "research", cost: $0.50, time: 2m) as {
+    return research(topic)
+  }
+  return result
+} with (i) {
+  if (i.effect == "std::guard") {
+    if (i.data.spent < 2.0) {
+      // Half a dollar more, and another minute.
+      return approve({ maxCost: 0.50, maxTime: 60000 })
+    }
+    return reject()
+  }
+  return pass()
+}
+```
+
+Things to note:
+
+- Name one dimension or both. A dimension you leave out keeps metering with whatever allowance it has left.
+- An approval must actually help. If the tripped dimension is still over its limit after your grant, that is a runtime error — the guard would just trip again immediately.
+- To stop metering a dimension instead of extending it, disarm it explicitly: `approve({ disarm: ["cost"] })`.
+- A negative grant clamps to zero, with a warning. Use `disarm` when you mean "stop metering"; a computed grant that goes negative must not silently remove a budget.
+- `pass()` means "not my question": the rest of the handler chain, and finally the user, decide. Use it for effects your handler does not recognize.
+- If several handlers approve, their grants merge additively.
+
+Deliberation is free. While your handler decides, the tripped guard's clock is paused, and your handler's own `llm()` calls are not billed to the guard it is judging. The handler's work is metered by the guards that enclosed its **registration site** — so register the handler *outside* the guard. A handler registered inside the guarded block is part of the metered work and never sees that guard's trips.
+
+### What approve does, by situation
+
+Where the trip caught the work decides what "continue" means. All of it is automatic:
+
+- **Between steps** (a loop, plain code): the work continues in place.
+- **Inside a tool call**: the tool finishes on resume and its result reaches the model normally.
+- **Mid LLM request**: the trip already cancelled the request, and the cancelled generation is gone. After approval the request is sent again from the same conversation state, and the retry is billed like any request.
+
+### Trips in forks
+
+Budgets and forks compose:
+
+- A cost budget shared by several branches asks **once**. While one branch's question is open, sibling branches that hit the same limit wait for the answer instead of asking again.
+- A granted time budget follows the work through the join. If a branch trips, gets five more minutes, and finishes, those five minutes widen the parent's budget too — the parent does not trip just because its branch was legitimately granted more time.
+- Grants never cross budgets. Approving an inner guard's trip does not widen an outer guard; if the extra work pushes the outer guard over its own limit, it trips separately, with its own label.
+
+### Root budgets
+
+The operator's `--max-cost` and `--max-time` limits never ask. They are the ceiling: a root budget trip stops the run, and no handler can approve past it.
 
 ## Timeout
 
@@ -87,7 +180,7 @@ When the time guard fires, any in-flight HTTP requests are cancelled and an abor
 
 ## Partial results with saveDraft
 
-A tripped guard normally throws the block's work away. `saveDraft` lets you keep a best-so-far value instead. Call it as your result improves; if the guard trips, the guard returns the last saved draft as a **success** instead of a failure.
+A rejected trip normally throws the block's work away. `saveDraft` lets you keep a best-so-far value instead. Call it as your result improves; if the guard trips and the trip is rejected, the guard returns the last saved draft as a **success** instead of a failure.
 
 ```ts
 node main() {

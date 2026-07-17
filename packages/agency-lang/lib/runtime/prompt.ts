@@ -1121,9 +1121,11 @@ export async function runPrompt(args: {
     key: string,
     body: () => Promise<void>,
   ): Promise<void> => {
-    for (let attempt = 0; ; attempt++) {
+    let gateAttempt = 0;
+    while (true) {
       if (stateStack.firstRaisableTrip() !== null) {
-        await pr.step(`${key}.retryGate.${attempt}`, guardGate);
+        await pr.step(`${key}.retryGate.${gateAttempt}`, guardGate);
+        gateAttempt += 1;
         continue; // re-probe: each budget is owed its own question
       }
       try {
@@ -1188,18 +1190,17 @@ export async function runPrompt(args: {
         toolCalls = result.toolCalls;
       } finally {
         if (injectedFactsContent !== null) {
-          const all = messages.getMessages();
-          for (let i = all.length - 1; i >= 0; i--) {
-            if (
-              all[i].role === "system" &&
-              all[i].content === injectedFactsContent
-            ) {
-              // removeAt, not setMessages: this edits ONE message out of
-              // the thread, so it must not reset the labels of all the
-              // others.
-              messages.removeAt(i);
-              break;
-            }
+          const injectedIndex = messages
+            .getMessages()
+            .findLastIndex(
+              (m) =>
+                m.role === "system" && m.content === injectedFactsContent,
+            );
+          if (injectedIndex !== -1) {
+            // removeAt, not setMessages: this edits ONE message out of
+            // the thread, so it must not reset the labels of all the
+            // others.
+            messages.removeAt(injectedIndex);
           }
         }
       }

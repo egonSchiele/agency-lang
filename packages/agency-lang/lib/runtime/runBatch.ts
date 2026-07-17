@@ -277,21 +277,21 @@ function chargeAndResumeParentTimeGuards(
   branchStacks: StateStack[],
   mode: "sum" | "max",
 ): void {
-  for (const pg of parentStack.guards) {
-    if (!(pg instanceof TimeGuard)) continue;
-    let acc = 0;
-    let grant = 0;
-    for (const bs of branchStacks) {
-      for (const bg of bs.guards) {
-        if (bg === pg || !(bg instanceof TimeGuard)) continue;
-        if (bg.guardId !== pg.guardId) continue;
-        const t = bg.snapshotElapsed();
+  for (const parentGuard of parentStack.guards) {
+    if (!(parentGuard instanceof TimeGuard)) continue;
+    let chargedMs = 0;
+    let grantedMs = 0;
+    for (const branchStack of branchStacks) {
+      for (const branchGuard of branchStack.guards) {
+        if (branchGuard === parentGuard || !(branchGuard instanceof TimeGuard)) continue;
+        if (branchGuard.guardId !== parentGuard.guardId) continue;
+        const branchElapsedMs = branchGuard.snapshotElapsed();
         if (mode === "sum") {
-          acc += t;
-          grant += bg.grantedTotal();
-        } else if (t >= acc) {
-          acc = t;
-          grant = bg.grantedTotal();
+          chargedMs += branchElapsedMs;
+          grantedMs += branchGuard.grantedTotal();
+        } else if (branchElapsedMs >= chargedMs) {
+          chargedMs = branchElapsedMs;
+          grantedMs = branchGuard.grantedTotal();
         }
       }
     }
@@ -299,11 +299,11 @@ function chargeAndResumeParentTimeGuards(
     // actually billed, and extendBudget(0) would still reset the
     // tripped/consumed latches, re-arming a trip the parent already
     // delivered.
-    if (acc > 0) {
-      if (grant > 0) pg.extendBudget(grant);
-      pg.addElapsed(acc);
+    if (chargedMs > 0) {
+      if (grantedMs > 0) parentGuard.extendBudget(grantedMs);
+      parentGuard.addElapsed(chargedMs);
     }
-    pg.resume(parentStack);
+    parentGuard.resume(parentStack);
   }
 }
 

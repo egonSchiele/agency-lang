@@ -662,15 +662,15 @@ export class StateStack {
    *  latch); the raise machinery itself produces the error via the
    *  consuming walk once it commits. */
   firstRaisableTrip(): Guard | null {
+    // findLast = innermost first, with no per-step array copy (this
+    // probe runs at every step boundary).
     return (
-      [...this.guards]
-        .reverse()
-        .find(
-          (g) =>
-            !g.isRootBudget &&
-            !this.suspendedGuardIds.includes(g.guardId) &&
-            g.raisableTripAtStep(),
-        ) ?? null
+      this.guards.findLast(
+        (g) =>
+          !g.isRootBudget &&
+          !this.suspendedGuardIds.includes(g.guardId) &&
+          g.raisableTripAtStep(),
+      ) ?? null
     );
   }
 

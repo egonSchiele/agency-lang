@@ -1,7 +1,7 @@
 # std::notes/apple — Apple Notes integration for the Agency standard library
 
 Date: 2026-07-16
-Status: Design approved. Spike complete, all open questions resolved. Ready for an implementation plan.
+Status: Implemented. The module shipped from the 2026-07-17 implementation plan, with the two v1 limits recorded in Section 10.
 Scope: One new stdlib module, one new function in an existing stdlib module, one addition to the capability sets
 
 ---
@@ -1211,7 +1211,11 @@ behaviour rather than something this module introduces.
 **The `account` argument.** Section 4.2 gives every function an optional
 `account`, and Section 3.4 argued it is what makes folder scoping a real
 guarantee rather than an advisory one. v1 delivers `account` as an **output**
-field on `Note` and in every payload, but not as an input filter. So folder
+field on `Note`, and as a payload field that is populated from the pre-flight
+on `appendToNote`, `readNote`, and `deleteNote` — but empty on `createNote`,
+`searchNotes`, and `listNotes`, where no pre-flight runs. It is not an input
+filter anywhere. An empty string matches no policy glob, not even `"*"`, so an
+`account` match never applies to those three calls. So folder
 scoping stays advisory on a multi-account machine.
 
 The owner has exactly one account (Section 9.4), so this is latent rather than

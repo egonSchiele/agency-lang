@@ -1,0 +1,12 @@
+    tell application "Notes"
+      if not (exists folder (item 3 of argv)) then
+        make new folder with properties {name:(item 3 of argv)}
+      end if
+      set f to folder (item 3 of argv)
+      set n to make new note at f with properties {name:(item 1 of argv), body:(item 2 of argv)}
+      set c to container of n
+{{{accountWalk}}}
+      set d to (ASCII character 1)
+      return (id of n) & d & (name of n) & d & (name of c) & d & (name of a) & d & ¬
+             ((modification date of n) as text) & d & ((password protected of n) as text)
+    end tell

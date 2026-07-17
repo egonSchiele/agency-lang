@@ -69,12 +69,21 @@ Two consequences:
    `"*"`. So `{"match": {"folder": "*"}, "action": "approve"}` does not approve a
    `listNotes()` with no folder; it falls through to the next rule. The fail-open
    finding #7 feared cannot occur.
-2. **`null` would crash the policy check**, not fail open, because picomatch
-   throws on a non-string.
+2. **`null` FAILS OPEN through the real matcher.** The table above measured
+   raw picomatch, which throws on null. But the real evaluator
+   (`matchesRule` in `lib/runtime/policy.ts`) coerces non-strings with
+   `String(value)` first, so a null folder becomes the string `"null"`, and a
+   `"*"` glob matches it. A null payload field would let a catch-all folder
+   rule approve a call the empty string correctly refuses. The PR review
+   caught that the original test pinned raw picomatch rather than the real
+   code path; testing through `checkPolicyExplicit` surfaced this.
 
 So passing `""` is load-bearing rather than a stylistic default. Never let a
-`null` reach a payload field a policy can match on. Task 5 pins consequence 1
-with a test.
+`null` reach a payload field a policy can match on. Through the real matcher
+that is not a crash, it is an approval. Task 5 pins both consequences with
+tests through the real evaluator. One caveat the tests also pin: `""`
+protects against folder-glob rules, not against a rule with no `match` key
+at all, which approves every interrupt of its effect.
 
 ---
 

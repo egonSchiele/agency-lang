@@ -232,7 +232,14 @@ type GuardJSONBase = {
 
 export type GuardJSON =
   | (GuardJSONBase & { kind: "cost"; costLimit: number; spent: number })
-  | (GuardJSONBase & { kind: "time"; timeLimit: number; elapsedMs: number });
+  | (GuardJSONBase & {
+      kind: "time";
+      timeLimit: number;
+      elapsedMs: number;
+      /** Optional: absent in checkpoints written before the join rule
+       *  (decision 15); fromJSON reads absence as zero. */
+      grantedMs?: number;
+    });
 
 /**
  * Cost guard. Trips when its own `spent` counter exceeds `costLimit`.
@@ -542,6 +549,17 @@ export class TimeGuard implements Guard {
    *  propagates to the user) must revive a guard that meters. */
   private suspended: boolean = false;
 
+  /** Total budget granted to THIS object by approvals (extendBudget),
+   *  in ms. The runBatch join rule (resumable-guards decision 15, "the
+   *  grant follows the budget") reads it off the CHARGED branch clone:
+   *  when a branch's working time advances the parent's clock, the
+   *  grants that funded that time widen the parent's limit by the same
+   *  amount, so a legitimately approved branch cannot trip the parent
+   *  at the join. Serialized (a granted clone must keep its grant
+   *  across a checkpoint) but NOT copied by cloneForBranch — it means
+   *  "granted during this branch", and starts at zero in every child. */
+  private grantedMs: number = 0;
+
   /** Stable id threaded into the emitted `guardTrip` cause. Not `readonly`
    *  so `fromJSON` can restore the serialized id across interrupt/resume
    *  (see GuardJSON — the id must outlive a checkpoint or ownedGuardIds
@@ -691,7 +709,9 @@ export class TimeGuard implements Guard {
   }
 
   extendBudget(deltaMs: number): void {
-    this.timeLimit += clampGrant(deltaMs, this);
+    const grant = clampGrant(deltaMs, this);
+    this.timeLimit += grant;
+    this.grantedMs += grant;
     // Reset BOTH latches — they are two fields with different jobs, and
     // missing either is wrong in a different direction. `tripped` is set
     // by the abort listener; leaving it set would re-trip at the next
@@ -749,6 +769,12 @@ export class TimeGuard implements Guard {
     return this.currentElapsed();
   }
 
+  /** Public read of grantedMs for the runBatch join rule — see the
+   *  field's docstring. */
+  grantedTotal(): number {
+    return this.grantedMs;
+  }
+
   /** Advance the accumulator without a running window. runBatch calls
    *  this on the PARENT guard at a fork's final value join, with the
    *  max of the branch clones' working time — the parallel region's
@@ -776,6 +802,10 @@ export class TimeGuard implements Guard {
     // field added to toJSON alone silently misses branches (rev-3 plan
     // review). scopeIds is how a branch trip finds its scope siblings;
     // root/disarmed state must follow the budget into the branch.
+    // grantedMs is deliberately NOT copied: it means "granted during
+    // this branch" and starts at zero in every child (the parent's own
+    // past grants are already inside timeLimit, which `remaining` was
+    // computed from).
     clone.scopeIds = this.scopeIds;
     clone.isRootBudget = this.isRootBudget;
     clone.disarmed = this.disarmed;
@@ -789,6 +819,7 @@ export class TimeGuard implements Guard {
       kind: "time",
       timeLimit: this.timeLimit,
       elapsedMs: this.currentElapsed(),
+      grantedMs: this.grantedMs,
       guardId: this.guardId,
     };
     if (this.label !== undefined) {
@@ -798,9 +829,13 @@ export class TimeGuard implements Guard {
     return json;
   }
 
-  static fromJSON(j: { timeLimit: number; elapsedMs: number; guardId?: string; label?: string } & SharedGuardJSONFields): TimeGuard {
+  static fromJSON(j: { timeLimit: number; elapsedMs: number; grantedMs?: number; guardId?: string; label?: string } & SharedGuardJSONFields): TimeGuard {
     const g = new TimeGuard(j.timeLimit, j.label);
     g.elapsedMs = j.elapsedMs;
+    // Optional with a zero default: checkpoints written before the join
+    // rule existed have no grantedMs, and "no recorded grants" is the
+    // correct reading of them.
+    g.grantedMs = j.grantedMs ?? 0;
     // Restore the serialized id so ownedGuardIds matching survives resume.
     if (j.guardId !== undefined) g.guardId = j.guardId;
     readSharedGuardJSON(j, g);

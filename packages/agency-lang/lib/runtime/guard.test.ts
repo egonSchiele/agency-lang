@@ -319,6 +319,47 @@ describe("TimeGuard", () => {
     expect(g.snapshotElapsed()).toBe(2_000);
   });
 
+  it("extendBudget records the grant total for the join rule", () => {
+    const g = new TimeGuard(1_000);
+    expect(g.grantedTotal()).toBe(0);
+    g.extendBudget(5_000);
+    g.extendBudget(2_000);
+    expect(g.grantedTotal()).toBe(7_000);
+    expect(g.timeLimit).toBe(8_000);
+    // A negative grant clamps to zero everywhere — the recorded grant
+    // must match what the limit actually gained.
+    g.extendBudget(-500);
+    expect(g.grantedTotal()).toBe(7_000);
+    expect(g.timeLimit).toBe(8_000);
+  });
+
+  it("grantedMs survives serialization; absent in old checkpoints reads as 0", () => {
+    const g = new TimeGuard(1_000);
+    g.extendBudget(5_000);
+    const restored = guardFromJSON(g.toJSON()) as TimeGuard;
+    expect(restored.grantedTotal()).toBe(5_000);
+    // Checkpoints written before the join rule have no grantedMs field.
+    const legacy = guardFromJSON({
+      kind: "time",
+      timeLimit: 1_000,
+      elapsedMs: 400,
+    }) as TimeGuard;
+    expect(legacy.grantedTotal()).toBe(0);
+  });
+
+  it("cloneForBranch does NOT copy grantedMs — a grant means 'granted during this branch'", () => {
+    // The parent's own past grants are already inside timeLimit, which
+    // the clone's remaining budget was computed from; copying them
+    // would double-apply the grant at the join.
+    const g = new TimeGuard(1_000);
+    g.extendBudget(5_000);
+    const clone = g.cloneForBranch(
+      new StateStack(),
+      new StateStack(),
+    ) as TimeGuard;
+    expect(clone.grantedTotal()).toBe(0);
+  });
+
   it("check() charges in-flight window so spent reflects elapsed time", () => {
     // Without inFlight-charging, a tripped guard whose check is called
     // mid-window would report spent=0 because no pause has happened.

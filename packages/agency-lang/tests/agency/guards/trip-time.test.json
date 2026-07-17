@@ -85,6 +85,29 @@
         }
       ],
       "description": "PR 3 headline: a step-boundary time trip surfaces across a real checkpoint; the harness grants time with a valued approve; the resumed run re-detects the restored over-budget guard, applies the answer, and completes."
+    },
+    {
+      "nodeName": "toolBodyApproved",
+      "input": "",
+      "expectedOutput": "\"done:tool-reported:spun\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCall": {
+            "name": "slowTool",
+            "args": {}
+          }
+        },
+        {
+          "return": "tool-reported:spun"
+        }
+      ],
+      "description": "Taxonomy case (b): the trip fires inside an executing TOOL; the raise happens at the tool's own step boundary, the handler grants time, the tool completes on resume, and its result reaches the thread — no dangling tool_use."
     }
   ]
 }

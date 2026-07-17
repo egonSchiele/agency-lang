@@ -544,6 +544,31 @@ function emitPromptStart({
   });
 }
 
+/** A guard-trip cancellation of an in-flight request is RESUMABLE
+ *  (resumable-guards PR 3): when the trip belongs to a non-root guard on
+ *  THIS stack, terminate the promptStart pair as a normal cancellation
+ *  and throw GuardTripRetry to hand control to the request-step's retry
+ *  wrapper, which runs a gate step to raise the trip as an interrupt. On
+ *  approve the wrapper re-issues the request from the current thread
+ *  state — the cancelled generation is honestly gone. Root-budget trips
+ *  and foreign-stack causes return without throwing and keep
+ *  _runPrompt's hard cancellation path. */
+function throwRetryForResumableTrip(
+  cause: { kind?: string; guardId?: string } | undefined,
+  ctx: RuntimeContext<GraphState>,
+  stateStack: StateStack | undefined,
+): void {
+  if (cause?.kind !== "guardTrip") return;
+  const trippedGuard = (stateStack ?? ctx.stateStack).guards.find(
+    (g) => g.guardId === cause.guardId,
+  );
+  if (!trippedGuard || trippedGuard.isRootBudget) return;
+  ctx.statelogClient.promptCancelled({
+    threadId: __threads()?.activeId() ?? null,
+  });
+  throw new GuardTripRetry(trippedGuard.guardId);
+}
+
 async function _runPrompt({
   ctx,
   messages,
@@ -647,25 +672,8 @@ async function _runPrompt({
     // composed signal returns the SAME branded object the producer set), so
     // the `delivered` de-dup flag stays shared across the two trip paths.
     const cause = readCause(err) ?? readCause(ctx.getAbortSignal(stateStack));
-    // A guard-trip cancellation of an in-flight request is RESUMABLE
-    // (resumable-guards PR 3): when the trip belongs to a non-root guard
-    // on THIS stack, terminate the promptStart pair as a normal
-    // cancellation and hand control to the request-step's retry wrapper,
-    // which runs a gate step to raise the trip as an interrupt. On
-    // approve the wrapper re-issues the request from the current thread
-    // state — the cancelled generation is honestly gone. Root-budget
-    // trips and foreign-stack causes keep the hard path below.
-    if (cause?.kind === "guardTrip") {
-      const trippedGuard = (stateStack ?? ctx.stateStack).guards.find(
-        (g) => g.guardId === (cause as { guardId?: string }).guardId,
-      );
-      if (trippedGuard && !trippedGuard.isRootBudget) {
-        ctx.statelogClient.promptCancelled({
-          threadId: __threads()?.activeId() ?? null,
-        });
-        throw new GuardTripRetry(trippedGuard.guardId);
-      }
-    }
+    // Resumable trip? Throws GuardTripRetry and never returns.
+    throwRetryForResumableTrip(cause, ctx, stateStack);
     if (cause || ctx.isCancelled(stateStack) || isAbortError(err)) {
       // Terminate the promptStart pair: a cancelled call (race loser,
       // Esc, timeout abort) is a NORMAL outcome, not a request failure —

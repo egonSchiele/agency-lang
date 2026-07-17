@@ -351,10 +351,12 @@ export class Runner {
 
   /** Step-boundary guard-trip raise (resumable-guards PR 3). The fast
    *  path is one sync array scan; the raise machinery only engages when
-   *  an unsuspended, non-root guard is over budget and armed. Skipped
-   *  entirely inside tool-call atomicity windows for the same reason
-   *  the debugger hook is (a handler deliberating mid-tool would
-   *  interleave with the tool's own step stream). */
+   *  an unsuspended, non-root guard is over budget and armed. NOT
+   *  skipped inside tool-call windows (unlike the debugger hook): a
+   *  trip mid-tool rides the same in-tool interrupt path as an input()
+   *  inside a tool, and on approve the tool continues where it paused
+   *  and its result reaches the thread normally — there is never a
+   *  dangling tool_use, because the tool call completes on resume. */
   private async maybeRaiseGuardTrip(id: number): Promise<boolean> {
     if (!this.stack) return false;
     if (this.stack.firstRaisableTrip() === null) return false;

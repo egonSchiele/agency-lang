@@ -257,7 +257,21 @@ function pauseBranchTimeGuards(branchStack: StateStack): void {
  * every VALUE or THROW exit of a batch region; interrupted exits leave
  * the parent paused instead (the parent halts, and the single charge
  * happens at the eventual final join, so pause/resume cycles never
- * double-charge). */
+ * double-charge).
+ *
+ * The join rule (resumable-guards decision 15, "the grant follows the
+ * budget"): the parent's limit is first extended by the grants of the
+ * SAME branches whose time it is charged with — the charged branch in
+ * "max" mode, every branch in "sum" mode. Time and grant must come
+ * from the same branch: taking the max grant across branches instead
+ * would let a short branch with a big grant widen the parent for time
+ * nobody spent. Applied BEFORE addElapsed so an approved branch's
+ * extra time cannot momentarily trip the parent at the join. Because
+ * the extension goes through extendBudget, it records into the
+ * parent's own grantedMs, so a grant deep in nested forks propagates
+ * up one join at a time. Decision 16 holds by construction: only
+ * clones sharing this guard's id are read, so a grant never crosses
+ * into a different (enclosing) budget. */
 function chargeAndResumeParentTimeGuards(
   parentStack: StateStack,
   branchStacks: StateStack[],
@@ -266,15 +280,29 @@ function chargeAndResumeParentTimeGuards(
   for (const pg of parentStack.guards) {
     if (!(pg instanceof TimeGuard)) continue;
     let acc = 0;
+    let grant = 0;
     for (const bs of branchStacks) {
       for (const bg of bs.guards) {
         if (bg === pg || !(bg instanceof TimeGuard)) continue;
         if (bg.guardId !== pg.guardId) continue;
         const t = bg.snapshotElapsed();
-        acc = mode === "sum" ? acc + t : Math.max(acc, t);
+        if (mode === "sum") {
+          acc += t;
+          grant += bg.grantedTotal();
+        } else if (t >= acc) {
+          acc = t;
+          grant = bg.grantedTotal();
+        }
       }
     }
-    if (acc > 0) pg.addElapsed(acc);
+    // Both gated on a real charge: a grant only follows time that is
+    // actually billed, and extendBudget(0) would still reset the
+    // tripped/consumed latches, re-arming a trip the parent already
+    // delivered.
+    if (acc > 0) {
+      if (grant > 0) pg.extendBudget(grant);
+      pg.addElapsed(acc);
+    }
     pg.resume(parentStack);
   }
 }

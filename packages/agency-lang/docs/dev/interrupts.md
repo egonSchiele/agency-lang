@@ -419,3 +419,63 @@ instead of throwing. The pieces, and where they live:
 - **Rejecting** delivers the original `GuardExceededError` at the gate;
   everything downstream — `AbortedResult`, the level rule, `finalize`,
   the guard boundary's conversion — is untouched.
+
+## Time trips (resumable guards, PR 3)
+
+Time budgets burn between paid actions, so the gates alone cannot catch
+them. PR 3 adds two raise surfaces and the join rule:
+
+- **The derived abort signal:** `stack.abortSignal` is now an accessor.
+  The setter stores the BASE signal (user cancel, race loser);
+  `rebuildAbortSignal()` composes base + every installed guard's
+  `armedSignal()` via `AbortSignal.any`. Push, pop, suspension
+  brackets, and `GuardScope.extend` all recompose — re-arming an
+  approved guard is a rebuild, not a save/restore chain (the old
+  `previousSignal` field is gone).
+- **Step-boundary raise:** `Runner.step` AND `Runner.hook` (loop bodies
+  compile to hook) probe `stack.firstRaisableTrip()` before
+  `shouldSkip`'s consuming walk, and call `raiseGuardTripsAtStep`
+  (`lib/runtime/guardTripInterrupt.ts`) when it fires: approve applies
+  and the step body runs; reject throws exactly what shouldSkip would
+  have thrown; unanswered checkpoints AT THIS STEP and halts —
+  replay-safe because the resumed boundary re-detects and applies the
+  recorded answer before the body runs. The probe is
+  `Guard.raisableTripAtStep()`: cost guards always decline (cost only
+  ripens at paid actions, which sit behind the gates; raising it at
+  arbitrary steps would re-ask settled questions and deliver a reject
+  outside the owning boundary), and time guards decline once suspended,
+  consumed, or leaf-delivered. The raise also fires inside tool bodies
+  (taxonomy case b): it rides the same in-tool interrupt path as an
+  input() inside a tool, so on approve the tool continues where it
+  paused and its result reaches the thread — never a dangling
+  tool_use.
+- **`TimeGuard.check()` reads the clock**, not just the timer latch: a
+  tight Agency loop is an unbroken microtask chain that starves the
+  setTimeout macrotask, so busy loops used to escape time guards
+  entirely. The timer stays as the eager notifier that cancels
+  in-flight leaf ops.
+- **Mid-request cancellation is resumable:** when a non-root time trip
+  aborts an in-flight LLM request, `_runPrompt` recognizes the
+  `guardTrip` cause and throws `GuardTripRetry`;
+  `requestStepWithTripRetry` catches it, runs a gate
+  (`<key>.retryGate.N`), and re-issues the request from the same thread
+  state. The prompt push is its own idempotent `pushPrompt` step so
+  re-issue never duplicates the user message.
+- **Settling at the block boundary:** when `_runGuarded` exits, the
+  Result is guard()'s answer; `stack.settleGuards(ids)` suspends the
+  owned guards for the one remaining step before `_popGuard`. Without
+  it, a clock crossing its limit after the work concluded would raise a
+  question about nothing, and a late timer fire could flip a computed
+  success into a failure.
+- **The join rule (decision 15, "the grant follows the budget"):**
+  `TimeGuard.extendBudget` records its clamped grant in a serialized
+  `grantedMs`; `cloneForBranch` deliberately does NOT copy it (it means
+  "granted during this branch"). At a batch join,
+  `chargeAndResumeParentTimeGuards` extends the parent by the grant of
+  the SAME branches whose time it charges — the charged branch in "max"
+  mode, every branch in "sum" mode — before `addElapsed`, so an
+  approved branch cannot trip the parent at the join. The extension
+  goes through `extendBudget`, so it records into the parent's own
+  `grantedMs` and propagates up nested joins one at a time. Grants
+  never cross budgets (decision 16): only clones sharing the parent's
+  guardId are read.

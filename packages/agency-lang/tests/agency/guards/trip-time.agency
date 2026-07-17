@@ -109,3 +109,30 @@ node checkpointApproved() {
   if (isFailure(r)) { return "unexpected-failure" }
   return r.value
 }
+
+def slowTool(): string {
+  """Does slow work and reports when done."""
+  return spin(300000)
+}
+
+// 6. Taxonomy case (b): the trip fires while a TOOL is executing. The
+// raise happens at the tool code's own step boundary; on approve the
+// tool CONTINUES where it paused, finishes, and its result reaches the
+// thread normally — the second mock consumes that result and answers.
+// There is never a dangling tool_use, because the tool call completes
+// on resume.
+node toolBodyApproved() {
+  handle {
+    const r = guard(time: 5ms) as {
+      const a = llm("Use slowTool, then report its result.", { tools: [slowTool] })
+      return "done:${a}"
+    }
+    if (isFailure(r)) { return "unexpected-failure" }
+    return r.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => approve({ maxTime: 600000 })
+      _ => pass()
+    }
+  }
+}

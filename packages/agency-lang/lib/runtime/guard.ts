@@ -1,5 +1,5 @@
 import type { StateStack } from "./state/stateStack.js";
-import { AgencyAbort, AgencyCancelledError, makeAbortCause } from "./errors.js";
+import { AgencyAbort, AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 
 /** Monotonic source of stable per-guard ids. Threaded into the
  *  `guardTrip` AbortCause a TimeGuard emits so boundaries can identify
@@ -120,6 +120,24 @@ export type Guard = {
    *  dimension in this state would re-trip forever and is a runtime
    *  error attributed to the answering handler. */
   overBudgetAndArmed(): boolean;
+  /** True when this guard's trip was already DELIVERED through the
+   *  leaf path (an in-flight op rejected with the cause and __tryCall
+   *  converted it to a Failure the user saw). A delivered trip is
+   *  handled — the step-boundary raise must not turn it into a second
+   *  question, and shouldSkip already lets cleanup steps run past it. */
+  deliveredTrip(): boolean;
+  /** True when this guard has a live, unhandled trip the runner's
+   *  step-boundary raise should ask about right now. Stack-level
+   *  suspension is the stack's business (firstRaisableTrip consults
+   *  suspendedGuardIds); everything the guard itself knows — armed,
+   *  over budget, not yet consumed by a check() walk, not yet
+   *  delivered to a boundary — lives here. CostGuard always declines:
+   *  cost only ripens at paid actions, and every paid action already
+   *  sits behind a PromptRunner guard gate. Raising cost at arbitrary
+   *  step boundaries would re-ask questions the gates settled and,
+   *  worse, deliver a reject at a step OUTSIDE the owning guard
+   *  boundary, where nothing converts it to a Failure. */
+  raisableTripAtStep(): boolean;
   /** An open trip question for this guard, while one is being decided.
    *  LIVE-ONLY (never serialized) and meaningful only for guards shared
    *  across branches (cost): a sibling branch detecting the same guard
@@ -135,6 +153,15 @@ export type Guard = {
   spentAmount(): number;
   /** User-facing name from guard(label:). */
   readonly label?: string;
+  /** This guard's own cancellation signal, when it is armed. The stack
+   *  DERIVES its composed abortSignal from these (rebuildAbortSignal) —
+   *  guards never mutate stack.abortSignal directly. Undefined for
+   *  guards with no abort plumbing (cost), disarmed guards, and a
+   *  fired-then-approved guard whose dead controller awaits its re-mint
+   *  (an aborted controller must not poison the fresh composite). A
+   *  TRIPPED-and-unanswered guard still returns its (aborted) signal:
+   *  the trip is live and the composite must reflect it. */
+  armedSignal(): AbortSignal | undefined;
   install(stack: StateStack): void;
   uninstall(stack: StateStack): void;
   pause(): void;
@@ -205,7 +232,14 @@ type GuardJSONBase = {
 
 export type GuardJSON =
   | (GuardJSONBase & { kind: "cost"; costLimit: number; spent: number })
-  | (GuardJSONBase & { kind: "time"; timeLimit: number; elapsedMs: number });
+  | (GuardJSONBase & {
+      kind: "time";
+      timeLimit: number;
+      elapsedMs: number;
+      /** Optional: absent in checkpoints written before the join rule
+       *  (decision 15); fromJSON reads absence as zero. */
+      grantedMs?: number;
+    });
 
 /**
  * Cost guard. Trips when its own `spent` counter exceeds `costLimit`.
@@ -276,6 +310,18 @@ export class CostGuard implements Guard {
     public costLimit: number,
     public readonly label?: string,
   ) {}
+
+  armedSignal(): AbortSignal | undefined {
+    return undefined; // no abort plumbing — cost is checked at sync points
+  }
+
+  deliveredTrip(): boolean {
+    return false; // cost trips are never leaf-delivered (no signal)
+  }
+
+  raisableTripAtStep(): boolean {
+    return false; // see the Guard interface: cost belongs to the gates
+  }
 
   install(_stack: StateStack): void {
     /* nothing — no abort controller, no signal composition */
@@ -483,9 +529,6 @@ export class TimeGuard implements Guard {
   private windowStart: number | undefined = undefined;
   /** AbortController whose .abort() fires when the timer expires. */
   private controller: AbortController | undefined = undefined;
-  /** The `stack.abortSignal` that existed before install — restored
-   *  by uninstall so the outer abort plumbing comes back unchanged. */
-  private previousSignal: AbortSignal | undefined = undefined;
   /** Node setTimeout handle for the in-process timer. */
   private timerHandle: ReturnType<typeof setTimeout> | undefined = undefined;
   /** Set when the abort signal fires. Read by check() to convert the
@@ -505,6 +548,17 @@ export class TimeGuard implements Guard {
    *  in toJSON — a snapshot taken mid-suspension (a handler that
    *  propagates to the user) must revive a guard that meters. */
   private suspended: boolean = false;
+
+  /** Total budget granted to THIS object by approvals (extendBudget),
+   *  in ms. The runBatch join rule (resumable-guards decision 15, "the
+   *  grant follows the budget") reads it off the CHARGED branch clone:
+   *  when a branch's working time advances the parent's clock, the
+   *  grants that funded that time widen the parent's limit by the same
+   *  amount, so a legitimately approved branch cannot trip the parent
+   *  at the join. Serialized (a granted clone must keep its grant
+   *  across a checkpoint) but NOT copied by cloneForBranch — it means
+   *  "granted during this branch", and starts at zero in every child. */
+  private grantedMs: number = 0;
 
   /** Stable id threaded into the emitted `guardTrip` cause. Not `readonly`
    *  so `fromJSON` can restore the serialized id across interrupt/resume
@@ -528,26 +582,55 @@ export class TimeGuard implements Guard {
   ) {}
 
   install(stack: StateStack): void {
-    this.installAbortPlumbing(stack);
+    this.ensureFreshController(stack);
     this.startWindow();
   }
 
-  uninstall(stack: StateStack): void {
+  uninstall(_stack: StateStack): void {
     // Pop-race fix: clear timer FIRST so a late-fire can't trip the
-    // outer scope. Then restore the signal so the outer abort
-    // plumbing is back in place before the next sync point. Even if
-    // setTimeout's callback is already queued, abortController is
-    // about to be released and stack.abortSignal no longer references
-    // our composed signal.
+    // outer scope. Dropping the controller is all the signal cleanup
+    // needed — the stack derives its composite from armed guards, and
+    // popGuard rebuilds without this one.
     this.cancelTimer();
     if (this.state === "running") {
       this.elapsedMs += performance.now() - this.windowStart!;
       this.windowStart = undefined;
       this.state = "paused";
     }
-    stack.abortSignal = this.previousSignal;
-    this.previousSignal = undefined;
     this.controller = undefined;
+  }
+
+  armedSignal(): AbortSignal | undefined {
+    if (this.disarmed) return undefined;
+    // While SUSPENDED (a handler is deliberating), this guard's signal —
+    // aborted or not — leaves the composite: the deliberation must run
+    // on a live stack even though the guard is tripped, and the
+    // suspension brackets rebuild the composite on entry/exit.
+    if (this.suspended) return undefined;
+    // A fired controller whose trip has been ANSWERED (approve reset the
+    // latches) is dead plumbing awaiting its re-mint at the next resume;
+    // it must not poison the fresh composite. While the trip is LIVE
+    // (tripped, unanswered) the aborted signal is the truth.
+    if (this.controller?.signal.aborted && !this.tripped) return undefined;
+    return this.controller?.signal;
+  }
+
+  deliveredTrip(): boolean {
+    if (!this.controller?.signal.aborted) return false;
+    const cause = readCause(this.controller.signal);
+    return cause?.kind === "guardTrip" && !!(cause as { delivered?: boolean }).delivered;
+  }
+
+  raisableTripAtStep(): boolean {
+    // Mirrors check()'s refusals (suspended / disarmed / consumed)
+    // WITHOUT consuming the latch, plus the delivered exclusion. The
+    // `consumed` term is what stops a REJECTED step-boundary trip from
+    // being asked again at every following step: check() flipped it
+    // when it produced the error the reject delivered, and only an
+    // approve (extendBudget) resets it.
+    if (this.suspended || this.disarmed || this.consumed) return false;
+    if (this.deliveredTrip()) return false;
+    return this.tripped || this.currentElapsed() >= this.timeLimit;
   }
 
   pause(): void {
@@ -567,9 +650,14 @@ export class TimeGuard implements Guard {
     // unsuspend() re-enables resumption.
     if (this.suspended) return;
     if (this.state === "running") return;
-    // After deserialization, controller is undefined — re-establish
-    // plumbing. (toJSON only serializes elapsedMs + timeLimit.)
-    if (!this.controller) this.installAbortPlumbing(stack);
+    // Re-establish plumbing when it is missing (after deserialization —
+    // toJSON only serializes elapsedMs + timeLimit) or DEAD (the
+    // controller fired, the trip was approved, and the latches were
+    // reset: an aborted controller cannot be reused, so re-arm mints a
+    // fresh one and the stack recomposes).
+    if (!this.controller || (this.controller.signal.aborted && !this.tripped)) {
+      this.ensureFreshController(stack);
+    }
     this.startWindow();
   }
 
@@ -592,7 +680,15 @@ export class TimeGuard implements Guard {
 
   check(_stack: StateStack): GuardExceededError | null {
     if (this.suspended || this.disarmed) return null;
-    if (!this.tripped || this.consumed) return null;
+    if (this.consumed) return null;
+    // The timer is an eager NOTIFIER (it cancels in-flight leaf ops);
+    // the truth is elapsed working time versus the limit. A tight
+    // Agency loop is an unbroken microtask chain that starves the
+    // setTimeout macrotask, so `tripped` may still be false while the
+    // budget is long gone — check the clock directly, or busy loops
+    // escape time guards entirely (they used to). The latch is kept for
+    // the signal-driven paths.
+    if (!this.tripped && this.currentElapsed() < this.timeLimit) return null;
     // currentElapsed() charges any in-flight window delta so `spent`
     // reflects the true elapsed time at the moment of the trip. Without
     // this, checking inside an active window (the common case — abort
@@ -613,7 +709,9 @@ export class TimeGuard implements Guard {
   }
 
   extendBudget(deltaMs: number): void {
-    this.timeLimit += clampGrant(deltaMs, this);
+    const grant = clampGrant(deltaMs, this);
+    this.timeLimit += grant;
+    this.grantedMs += grant;
     // Reset BOTH latches — they are two fields with different jobs, and
     // missing either is wrong in a different direction. `tripped` is set
     // by the abort listener; leaving it set would re-trip at the next
@@ -671,6 +769,12 @@ export class TimeGuard implements Guard {
     return this.currentElapsed();
   }
 
+  /** Public read of grantedMs for the runBatch join rule — see the
+   *  field's docstring. */
+  grantedTotal(): number {
+    return this.grantedMs;
+  }
+
   /** Advance the accumulator without a running window. runBatch calls
    *  this on the PARENT guard at a fork's final value join, with the
    *  max of the branch clones' working time — the parallel region's
@@ -698,6 +802,10 @@ export class TimeGuard implements Guard {
     // field added to toJSON alone silently misses branches (rev-3 plan
     // review). scopeIds is how a branch trip finds its scope siblings;
     // root/disarmed state must follow the budget into the branch.
+    // grantedMs is deliberately NOT copied: it means "granted during
+    // this branch" and starts at zero in every child (the parent's own
+    // past grants are already inside timeLimit, which `remaining` was
+    // computed from).
     clone.scopeIds = this.scopeIds;
     clone.isRootBudget = this.isRootBudget;
     clone.disarmed = this.disarmed;
@@ -711,6 +819,7 @@ export class TimeGuard implements Guard {
       kind: "time",
       timeLimit: this.timeLimit,
       elapsedMs: this.currentElapsed(),
+      grantedMs: this.grantedMs,
       guardId: this.guardId,
     };
     if (this.label !== undefined) {
@@ -720,9 +829,13 @@ export class TimeGuard implements Guard {
     return json;
   }
 
-  static fromJSON(j: { timeLimit: number; elapsedMs: number; guardId?: string; label?: string } & SharedGuardJSONFields): TimeGuard {
+  static fromJSON(j: { timeLimit: number; elapsedMs: number; grantedMs?: number; guardId?: string; label?: string } & SharedGuardJSONFields): TimeGuard {
     const g = new TimeGuard(j.timeLimit, j.label);
     g.elapsedMs = j.elapsedMs;
+    // Optional with a zero default: checkpoints written before the join
+    // rule existed have no grantedMs, and "no recorded grants" is the
+    // correct reading of them.
+    g.grantedMs = j.grantedMs ?? 0;
     // Restore the serialized id so ownedGuardIds matching survives resume.
     if (j.guardId !== undefined) g.guardId = j.guardId;
     readSharedGuardJSON(j, g);
@@ -730,15 +843,15 @@ export class TimeGuard implements Guard {
     return g;
   }
 
-  private installAbortPlumbing(stack: StateStack): void {
+  /** Mint this guard's own controller and let the stack recompose. The
+   *  guard never touches stack.abortSignal itself — the stack derives
+   *  the composite from armedSignal() across its guards. */
+  private ensureFreshController(stack: StateStack): void {
     this.controller = new AbortController();
-    this.previousSignal = stack.abortSignal;
-    stack.abortSignal = stack.abortSignal
-      ? AbortSignal.any([stack.abortSignal, this.controller.signal])
-      : this.controller.signal;
     this.controller.signal.addEventListener("abort", () => {
       this.tripped = true;
     });
+    stack.rebuildAbortSignal();
   }
 
   private startWindow(): void {

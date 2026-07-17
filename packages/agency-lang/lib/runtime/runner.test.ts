@@ -5,7 +5,7 @@ import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { getRuntimeContext, runInTestContext } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
-import { GuardExceededError, TimeGuard } from "./guard.js";
+import { TimeGuard } from "./guard.js";
 import { readCause } from "./errors.js";
 
 function makeFrame(): State {
@@ -31,12 +31,26 @@ describe("Runner.shouldSkip — guard-trip delivery de-dup", () => {
     return stack;
   }
 
-  it("throws GuardExceededError for an UNdelivered trip (the no-leaf runner path)", async () => {
+  it("raises a std::guard interrupt for an UNdelivered trip and halts before the step body", async () => {
+    // PR 3: an undelivered trip detected at a step boundary no longer
+    // throws GuardExceededError. The runner's raise point asks the
+    // question instead: with no handler and no recorded answer, it
+    // checkpoints, halts with the Interrupt[] batch, and the step body
+    // never runs.
     const stack = trippedGuardStack();
     const runner = new Runner(makeMockCtx(), makeFrame(), { stack });
-    await expect(
-      runner.step(0, async () => {}),
-    ).rejects.toBeInstanceOf(GuardExceededError);
+    let ran = false;
+    await runner.step(0, async () => {
+      ran = true;
+    });
+    expect(ran).toBe(false);
+    expect(runner.halted).toBe(true);
+    const batch = runner.haltResult;
+    expect(Array.isArray(batch)).toBe(true);
+    expect(batch).toHaveLength(1);
+    expect(batch[0].effect).toBe("std::guard");
+    expect(batch[0].data.dimension).toBe("time");
+    expect(batch[0].checkpointId).toBeDefined();
   });
 
   it("does NOT re-throw a trip already DELIVERED via the leaf path — lets cleanup run", async () => {

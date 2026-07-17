@@ -394,19 +394,36 @@ export async function _runGuarded(
   block: unknown,
 ): Promise<ResultValue> {
   const { ctx, stack } = getRuntimeContext();
-  // Invoke the block through __call (NOT a plain block()) so it runs through
-  // the same Agency call machinery the codegen `try block()` used — that is
-  // what lets a guard trip inside the block surface as an AgencyAbort with its
-  // guardTrip cause instead of a generic error. `stack.lastFrame()` is
-  // guard()'s own frame here (a TS call pushes no agency frame), so `.args`
-  // matches what the codegen `try block()` captured via `__stack.args`.
-  return __tryCall(
-    () => __call(block, { type: "positional", args: [] }),
-    {
-      ownedGuardIds: ids,
-      checkpoint: ctx.getResultCheckpoint(),
-      functionName: "guard",
-      args: stack.lastFrame()?.args,
-    },
-  );
+  try {
+    // Invoke the block through __call (NOT a plain block()) so it runs through
+    // the same Agency call machinery the codegen `try block()` used — that is
+    // what lets a guard trip inside the block surface as an AgencyAbort with its
+    // guardTrip cause instead of a generic error. `stack.lastFrame()` is
+    // guard()'s own frame here (a TS call pushes no agency frame), so `.args`
+    // matches what the codegen `try block()` captured via `__stack.args`.
+    return await __tryCall(
+      () => __call(block, { type: "positional", args: [] }),
+      {
+        ownedGuardIds: ids,
+        checkpoint: ctx.getResultCheckpoint(),
+        functionName: "guard",
+        args: stack.lastFrame()?.args,
+      },
+    );
+  } finally {
+    // The block has exited and the Result (or a rethrown outer trip) is
+    // this guard()'s answer, whatever it is. Between here and _popGuard
+    // there is exactly one more runner step, and the owned guards must
+    // not be able to trip during it: a clock crossing its limit AFTER
+    // the work concluded would raise a question about nothing (approve
+    // grants time to work that is already done) or, via a late timer
+    // fire, flip a computed success into a failure. Suspending pauses
+    // the clock, cancels the armed timer, and makes both the runner's
+    // step-boundary probe and check() decline; the guards are popped at
+    // the very next step. Suspension is never serialized, so a
+    // checkpoint taken during the _popGuard step resumes unsettled —
+    // the window then reopens for that one replayed step, which can
+    // re-ask; harmless, and not worth a serialized flag.
+    stack.settleGuards(ids);
+  }
 }

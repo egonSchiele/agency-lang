@@ -1,6 +1,7 @@
 import { withThreadEndHooksEvents } from "./threadEndHooksEvents.js";
 import { nanoid } from "nanoid";
 import { __globals, agencyStore } from "./asyncContext.js";
+import { raiseGuardTripsAtStep } from "./guardTripInterrupt.js";
 import { debugStep } from "./debugger.js";
 import { RestoreSignal, readCause } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
@@ -348,6 +349,32 @@ export class Runner {
     );
   }
 
+  /** Step-boundary guard-trip raise (resumable-guards PR 3). The fast
+   *  path is one sync array scan; the raise machinery only engages when
+   *  an unsuspended, non-root guard is over budget and armed. NOT
+   *  skipped inside tool-call windows (unlike the debugger hook): a
+   *  trip mid-tool rides the same in-tool interrupt path as an input()
+   *  inside a tool, and on approve the tool continues where it paused
+   *  and its result reaches the thread normally — there is never a
+   *  dangling tool_use, because the tool call completes on resume. */
+  private async maybeRaiseGuardTrip(id: number): Promise<boolean> {
+    if (!this.stack) return false;
+    if (this.stack.firstRaisableTrip() === null) return false;
+    const rt = agencyStore.getStore();
+    return raiseGuardTripsAtStep({
+      ctx: this.ctx,
+      stack: this.stack,
+      location: {
+        moduleId: this.moduleId,
+        scopeName: this.scopeName,
+        stepPath: this.stepPath(id),
+      },
+      isNodeContext: this.isNodeContext,
+      threads: rt?.threads,
+      halt: (payload: unknown) => this.halt(payload),
+    });
+  }
+
   // ── Debug hook ──
 
   /**
@@ -469,6 +496,15 @@ export class Runner {
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     this.beforeStep();
+    // Guard-trip raise BEFORE shouldSkip: shouldSkip's guard walk both
+    // CONSUMES a time trip's one-shot check latch and THROWS it — the
+    // non-resumable path. Raising here first turns a detectable trip
+    // into a question; approve re-arms and the step proceeds, reject
+    // throws exactly what shouldSkip would have thrown, and an
+    // unanswered trip halts with a checkpoint at THIS step — which is
+    // replay-safe by construction, because on resume the same boundary
+    // re-raises and applies the recorded answer before the body runs.
+    if (await this.maybeRaiseGuardTrip(id)) return;
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 
@@ -514,6 +550,10 @@ export class Runner {
    */
   async hook(id: number, bodyFn: () => Promise<void>): Promise<void> {
     this.beforeStep();
+    // Same raise point as step() — hook is the step-equivalent that
+    // loop-body statements and function-start hooks execute through, so
+    // a time trip during a tight loop is detected here.
+    if (await this.maybeRaiseGuardTrip(id)) return;
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 

@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "nodeName": "grantFollowsBudget",
+      "input": "",
+      "expectedOutput": "\"done|parent-grants:0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "description": "Decision 15: a branch clone trips, the handler grants ten minutes, and the join extends the parent by the charged branch's grant before charging its time — no second question fires on the parent (parent-grants stays 0)."
+    },
+    {
+      "nodeName": "enclosingUntouched",
+      "input": "",
+      "expectedOutput": "\"encl-tripped:encl\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "description": "Decision 16: the inner guard's grant does not widen the enclosing budget — the enclosing clone trips at its own limit with its own label, and the failure is attributed to it."
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+// The runBatch join rule (resumable-guards decision 15): "the grant
+// follows the budget". When a fork branch's time clone trips and a
+// handler grants more time, the join extends the PARENT guard by the
+// charged branch's grant before charging its working time — so a
+// legitimately approved branch cannot trip the parent at the join.
+// Decision 16: the grant stays inside its own budget; an ENCLOSING
+// guard still trips at its own limit, attributed to its own label.
+//
+// Wall-clock margins (allowed here per the plan's test discipline —
+// this behavior is irreducibly about time): limits are tens of
+// milliseconds, grants are ten MINUTES, and spin(300000) runs every
+// iteration through the runner's step machinery, so it takes SECONDS
+// of working time — one to two orders of magnitude past every limit
+// here, yet small enough to finish well inside the harness's per-test
+// timeout on a slow CI runner (3000000 did not: it timed out at 2
+// minutes).
+import { guard } from "std::thread"
+
+const log = []
+
+def spin(rounds: number): string {
+  let i = 0
+  while (i < rounds) {
+    i = i + 1
+  }
+  return "spun"
+}
+
+// 1. Grant follows the budget across the join. The branch's clone trips
+// mid-spin; the handler (running ON THE BRANCH) grants ten minutes; the
+// branch finishes and the join charges its full working time to the
+// parent — which the same grant has already widened, so nothing trips
+// after the join. The assertion is `parent-grants:0`: the branch's
+// handler invocation mutated a BRANCH-CLONED copy of `log` that the
+// join discards (same semantics trip-fork.sharedDedupe documents), so
+// any surviving entry could only come from a handler run on the PARENT
+// after the join — exactly what a missing join extension would cause.
+// The budget is 100ms: big enough that the PARENT cannot trip during
+// fork setup on a slow CI runner (a parent-side trip would run the
+// handler on the parent and make parent-grants read 1), small enough
+// that the branch clone always trips inside the multi-second spin.
+node grantFollowsBudget() {
+  handle {
+    const r = guard(time: 100ms, label: "budget") as {
+      fork([1, 2]) as n {
+        if (n == 1) {
+          const s = spin(300000)
+        }
+      }
+      return "done"
+    }
+    if (isFailure(r)) { return "unexpected-failure:${r.error.label}" }
+    return "${r.value}|parent-grants:${log.length}"
+  } with (i) {
+    if (i.effect == "std::guard") {
+      log.push("granted:${i.data.dimension}")
+      return approve({ maxTime: 600000 })
+    }
+    return pass()
+  }
+}
+
+// 2. Decision 16: grants never cross budgets. The branch runs under
+// clones of BOTH guards. The inner clone (5ms) trips first and is
+// granted ten minutes; the ENCLOSING clone (~30ms remaining) then trips
+// at its own limit anyway — the inner grant bought it nothing — and the
+// handler's reject unwinds the branch with the enclosing guard's error.
+// The inner guard boundary does not own that guardId, so it re-throws
+// past it, and the enclosing boundary converts: the failure carries the
+// ENCLOSING label. (At a join the same isolation holds by construction —
+// chargeAndResumeParentTimeGuards only reads clones sharing the
+// parent's guardId — so this in-branch flavor is the deterministic way
+// to pin the rule.)
+node enclosingUntouched() {
+  handle {
+    const r = guard(time: 30ms, label: "encl") as {
+      const inner = guard(time: 5ms, label: "inner") as {
+        fork([1, 2]) as n {
+          if (n == 1) {
+            const s = spin(300000)
+          }
+        }
+        return "inner-done"
+      }
+      if (isFailure(inner)) { return "inner-failed:${inner.error.label}" }
+      return inner.value
+    }
+    if (isFailure(r)) { return "encl-tripped:${r.error.label}" }
+    return "BUG:grant-crossed-budgets:${r.value}"
+  } with (i) {
+    if (i.effect == "std::guard") {
+      if (i.data.label == "inner") {
+        return approve({ maxTime: 600000 })
+      }
+      return reject()
+    }
+    return pass()
+  }
+}

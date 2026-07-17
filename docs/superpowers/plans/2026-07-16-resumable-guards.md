@@ -1311,6 +1311,77 @@ if the extra granted time pushes it over, it trips with its own label.
 
 ---
 
+# Part 6b: PR 3 — as executed (deviations and discoveries)
+
+Recorded after execution, for PR 4's benefit and the reviewer's.
+
+1. **`TimeGuard.check()` is now clock-based.** The plan assumed the
+   timer's `tripped` latch was the detection truth. It is not: a tight
+   Agency loop is an unbroken microtask chain that starves the
+   setTimeout macrotask, so busy loops escaped time guards ENTIRELY
+   (pre-existing, not a PR 3 regression). check() now compares elapsed
+   working time against the limit directly; the timer stays as the
+   eager notifier that cancels in-flight leaf ops.
+2. **The raise point lives in `Runner.hook` as well as `Runner.step`.**
+   Loop-body statements compile to `runner.hook`, not `runner.step` —
+   without the hook-side raise, the busy-loop fixtures never detected
+   anything. Discovered by inspecting generated code.
+3. **Cost guards are excluded from the step-boundary raise**
+   (`Guard.raisableTripAtStep()`, cost → false). The first full sweep
+   failed 43 fixtures because the runner raise point re-asked cost
+   questions the PromptRunner gates had already settled — and delivered
+   their rejects at steps OUTSIDE the owning guard boundary, where
+   nothing converts them. Cost only ripens at paid actions, and every
+   paid action already sits behind a gate; the runner surface is for
+   time, which burns between sync points. The raise loop uses a
+   step-scoped detector (`stack.detectStepRaisableTrip()`) for the same
+   reason.
+4. **Guards settle when `_runGuarded` exits** (`stack.settleGuards`,
+   implemented as suspend + signal rebuild). Between the block's exit
+   and `_popGuard` there is exactly one runner step, and a clock
+   crossing its limit there raised a question about work that had
+   already concluded — approve would grant time to nothing, and a late
+   timer fire could flip a computed success into a failure (an old
+   race, now closed). Suspension is not serialized, so a checkpoint
+   taken during the `_popGuard` step reopens the window for that one
+   replayed step; harmless, not worth a serialized flag.
+5. **The raise fires inside tool bodies as planned (case b)** — no
+   tool-window exemption. It rides the same in-tool interrupt path as
+   an `input()` inside a tool; the `toolBodyApproved` fixture pins
+   approve → tool completes on resume → result reaches the thread.
+6. **Mid-request re-issue is a step-level wrapper, not an
+   in-`_runPrompt` loop.** `_runPrompt` classifies the cancellation by
+   its `guardTrip` cause and throws a control error
+   (`GuardTripRetry`); `requestStepWithTripRetry` wraps the request
+   steps, catches it, runs a gate step (`<key>.retryGate.N`), and
+   re-issues. The prompt push was hoisted into its own idempotent
+   `pushPrompt` step so a re-issue (or a resumed replay) never
+   duplicates the user message; the injected-recall-facts removal moved
+   into a `finally` for the same reason. The wrapper also probes before
+   the body, which is what makes a RESTORED over-budget guard raise
+   before the request re-runs.
+7. **The deterministic mock gained an abortable `delayMs`** so the
+   mid-request fixtures are real: the mock "generates" for 60 seconds
+   against a 100ms budget, the trip's abort cancels it through the same
+   signal path a provider request uses, and it rejects with
+   `signal.reason` so the cause classification is exercised.
+8. **The join rule applies grants only alongside a real charge.** As
+   planned otherwise; but `extendBudget(grant)` is gated on `acc > 0`
+   (and `grant > 0`) — extendBudget(0) would still reset the
+   tripped/consumed latches and re-arm a trip the parent had already
+   delivered, and a grant must not follow time that is not billed.
+9. **In-flight `sleep()` cancellation keeps the leaf path.** A timer
+   fire mid-sleep still delivers through `__tryCall`'s cause conversion
+   (`delivered` flag), not the runner raise —
+   `Guard.raisableTripAtStep()` excludes delivered trips, which is what
+   keeps the two paths from double-asking. The old
+   guard-time-* fixtures pass unmodified because of this.
+10. **The subprocess child-trip → parent-approve e2e (PR 2 note 7) did
+    not ride along.** The IPC telemetry site is unchanged and
+    child-side raises still forward over the existing interrupt IPC;
+    the dedicated e2e now rides with PR 4, which touches the message
+    channel anyway.
+
 # Part 7: PR 4 — the feedback channel
 
 Small by design; everything it needs exists by now.

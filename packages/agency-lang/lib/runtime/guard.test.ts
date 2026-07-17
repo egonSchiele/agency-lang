@@ -53,7 +53,7 @@ describe("CostGuard", () => {
   it("tracks its own spent counter via charge()", () => {
     const stack = new StateStack();
     const g = new CostGuard(2.0);
-    g.install(stack);
+    stack.pushGuard(g);
     expect(g.check(stack)).toBeNull();
     g.charge(1.9);
     expect(g.check(stack)).toBeNull(); // 1.9 ≤ 2.0
@@ -70,7 +70,7 @@ describe("CostGuard", () => {
     // produces at a sync point must identify WHICH guard tripped.
     const stack = new StateStack();
     const g = new CostGuard(2.0);
-    g.install(stack);
+    stack.pushGuard(g);
     g.charge(3);
     const err = g.check(stack)!;
     expect(typeof g.guardId).toBe("string");
@@ -86,7 +86,7 @@ describe("CostGuard", () => {
     const stack = new StateStack();
     stack.localCost = 999;
     const g = new CostGuard(1.0);
-    g.install(stack);
+    stack.pushGuard(g);
     expect(g.check(stack)).toBeNull(); // localCost ignored
     g.charge(2);
     expect(g.check(stack)!.spent).toBeCloseTo(2, 5);
@@ -95,7 +95,7 @@ describe("CostGuard", () => {
   it("cloneForBranch returns the same instance (shared reference)", () => {
     const parent = new StateStack();
     const g = new CostGuard(5);
-    g.install(parent);
+    parent.pushGuard(g);
     const child = new StateStack();
     const cloned = g.cloneForBranch(parent, child);
     expect(cloned).toBe(g); // same JS object — not a clone
@@ -143,7 +143,7 @@ describe("TimeGuard", () => {
   it("install composes its AbortController into stack.abortSignal", () => {
     const stack = new StateStack();
     const g = new TimeGuard(1000);
-    g.install(stack);
+    stack.pushGuard(g);
     expect(stack.abortSignal).toBeDefined();
     expect(stack.abortSignal!.aborted).toBe(false);
   });
@@ -151,8 +151,8 @@ describe("TimeGuard", () => {
   it("uninstall restores the previous abort signal", () => {
     const stack = new StateStack();
     const g = new TimeGuard(1000);
-    g.install(stack);
-    g.uninstall(stack);
+    stack.pushGuard(g);
+    stack.popGuard();
     expect(stack.abortSignal).toBeUndefined();
   });
 
@@ -161,7 +161,7 @@ describe("TimeGuard", () => {
     const outerCtl = new AbortController();
     stack.abortSignal = outerCtl.signal;
     const g = new TimeGuard(1000);
-    g.install(stack);
+    stack.pushGuard(g);
     const composed = stack.abortSignal!;
     expect(composed).not.toBe(outerCtl.signal); // composed signal
     outerCtl.abort();
@@ -171,7 +171,7 @@ describe("TimeGuard", () => {
   it("trips after timeLimit ms and check() returns the error", () => {
     const stack = new StateStack();
     const g = new TimeGuard(500);
-    g.install(stack);
+    stack.pushGuard(g);
     expect(g.check(stack)).toBeNull();
     vi.advanceTimersByTime(500);
     expect(stack.abortSignal!.aborted).toBe(true);
@@ -188,7 +188,7 @@ describe("TimeGuard", () => {
     // fails ownedGuardIds.includes, and escapes its own guard. Do not remove.
     const stack = new StateStack();
     const g = new TimeGuard(500);
-    g.install(stack);
+    stack.pushGuard(g);
     vi.advanceTimersByTime(500);
     const err = g.check(stack)!;
     expect(readCause(err)?.kind).toBe("guardTrip");
@@ -198,7 +198,7 @@ describe("TimeGuard", () => {
   it("aborts with a structured guardTrip cause on its signal reason", () => {
     const stack = new StateStack();
     const g = new TimeGuard(500);
-    g.install(stack);
+    stack.pushGuard(g);
     vi.advanceTimersByTime(500);
     const cause = readCause(stack.abortSignal);
     expect(cause).toMatchObject({
@@ -216,7 +216,7 @@ describe("TimeGuard", () => {
   it("pause is idempotent — multiple calls charge elapsedMs once", () => {
     const stack = new StateStack();
     const g = new TimeGuard(1000);
-    g.install(stack);
+    stack.pushGuard(g);
     vi.advanceTimersByTime(200);
     g.pause();
     g.pause();
@@ -228,7 +228,7 @@ describe("TimeGuard", () => {
   it("resume is idempotent — multiple calls arm timer once", () => {
     const stack = new StateStack();
     const g = new TimeGuard(1000);
-    g.install(stack);
+    stack.pushGuard(g);
     vi.advanceTimersByTime(200);
     g.pause();
     g.resume(stack);
@@ -241,7 +241,7 @@ describe("TimeGuard", () => {
   it("pause/resume cycle preserves remaining budget", () => {
     const stack = new StateStack();
     const g = new TimeGuard(1000);
-    g.install(stack);
+    stack.pushGuard(g);
     vi.advanceTimersByTime(300);
     g.pause();
     // Time passes while paused — does NOT count.
@@ -256,7 +256,7 @@ describe("TimeGuard", () => {
   it("toJSON during a live window charges the in-flight delta", () => {
     const stack = new StateStack();
     const g = new TimeGuard(1000);
-    g.install(stack);
+    stack.pushGuard(g);
     vi.advanceTimersByTime(123);
     const json = g.toJSON() as { kind: "time"; elapsedMs: number };
     expect(json.elapsedMs).toBeCloseTo(123, 0);
@@ -270,8 +270,12 @@ describe("TimeGuard", () => {
     };
     const restored = guardFromJSON(json) as TimeGuard;
     expect(restored).toBeInstanceOf(TimeGuard);
-    // Resume should re-arm with 600ms remaining.
+    // Resume should re-arm with 600ms remaining. Mirror the real restore
+    // path: fromJSON puts guards straight into stack.guards (no install),
+    // and the first runner step's resume() arms them — the derived
+    // composite only sees guards that are on the stack.
     const stack = new StateStack();
+    stack.guards.push(restored);
     restored.resume(stack);
     vi.advanceTimersByTime(599);
     expect(stack.abortSignal!.aborted).toBe(false);
@@ -315,6 +319,47 @@ describe("TimeGuard", () => {
     expect(g.snapshotElapsed()).toBe(2_000);
   });
 
+  it("extendBudget records the grant total for the join rule", () => {
+    const g = new TimeGuard(1_000);
+    expect(g.grantedTotal()).toBe(0);
+    g.extendBudget(5_000);
+    g.extendBudget(2_000);
+    expect(g.grantedTotal()).toBe(7_000);
+    expect(g.timeLimit).toBe(8_000);
+    // A negative grant clamps to zero everywhere — the recorded grant
+    // must match what the limit actually gained.
+    g.extendBudget(-500);
+    expect(g.grantedTotal()).toBe(7_000);
+    expect(g.timeLimit).toBe(8_000);
+  });
+
+  it("grantedMs survives serialization; absent in old checkpoints reads as 0", () => {
+    const g = new TimeGuard(1_000);
+    g.extendBudget(5_000);
+    const restored = guardFromJSON(g.toJSON()) as TimeGuard;
+    expect(restored.grantedTotal()).toBe(5_000);
+    // Checkpoints written before the join rule have no grantedMs field.
+    const legacy = guardFromJSON({
+      kind: "time",
+      timeLimit: 1_000,
+      elapsedMs: 400,
+    }) as TimeGuard;
+    expect(legacy.grantedTotal()).toBe(0);
+  });
+
+  it("cloneForBranch does NOT copy grantedMs — a grant means 'granted during this branch'", () => {
+    // The parent's own past grants are already inside timeLimit, which
+    // the clone's remaining budget was computed from; copying them
+    // would double-apply the grant at the join.
+    const g = new TimeGuard(1_000);
+    g.extendBudget(5_000);
+    const clone = g.cloneForBranch(
+      new StateStack(),
+      new StateStack(),
+    ) as TimeGuard;
+    expect(clone.grantedTotal()).toBe(0);
+  });
+
   it("check() charges in-flight window so spent reflects elapsed time", () => {
     // Without inFlight-charging, a tripped guard whose check is called
     // mid-window would report spent=0 because no pause has happened.
@@ -322,7 +367,7 @@ describe("TimeGuard", () => {
     // instead of elapsedMs + inFlight would slip past `>= 100`.
     const stack = new StateStack();
     const g = new TimeGuard(100);
-    g.install(stack);
+    stack.pushGuard(g);
     vi.advanceTimersByTime(250);
     const err = g.check(stack)!;
     expect(err.spent).toBeGreaterThan(200);
@@ -335,7 +380,7 @@ describe("TimeGuard", () => {
     // still-aborted signal without consumption.
     const stack = new StateStack();
     const g = new TimeGuard(100);
-    g.install(stack);
+    stack.pushGuard(g);
     vi.advanceTimersByTime(150);
     expect(g.check(stack)).toBeInstanceOf(GuardExceededError);
     expect(g.check(stack)).toBeNull();
@@ -348,7 +393,7 @@ describe("TimeGuard", () => {
     // cleanup steps) from a race-loser branch cancel.
     const stack = new StateStack();
     const g = new TimeGuard(100);
-    g.install(stack);
+    stack.pushGuard(g);
     expect(g.isTripped()).toBe(false);
     vi.advanceTimersByTime(150);
     expect(g.isTripped()).toBe(true);
@@ -367,7 +412,7 @@ describe("CostGuard.isTripped", () => {
   it("always returns false — cost guards don't mutate abortSignal", () => {
     const stack = new StateStack();
     const g = new CostGuard(1);
-    g.install(stack);
+    stack.pushGuard(g);
     expect(g.isTripped()).toBe(false);
     g.charge(100); // way over limit
     expect(g.check(stack)).toBeInstanceOf(GuardExceededError);
@@ -454,7 +499,7 @@ describe("suspension", () => {
   it("a suspended TimeGuard ignores beforeStep-style resume() calls", () => {
     const g = new TimeGuard(60000);
     const stack = new StateStack();
-    g.install(stack);
+    stack.pushGuard(g);
     g.suspend();
     // Runner.beforeStep resumes every guard at every step entry — a
     // handler body executes steps, so this MUST stay a no-op while
@@ -466,7 +511,7 @@ describe("suspension", () => {
     g.unsuspend();
     g.resume(stack);
     expect((g as any).state).toBe("running");
-    g.uninstall(stack);
+    stack.popGuard();
   });
 
   it("a suspended TimeGuard's check() reports nothing even when tripped", () => {

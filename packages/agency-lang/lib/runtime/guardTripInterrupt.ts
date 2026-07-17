@@ -11,6 +11,7 @@ import {
   type InterruptResponse,
 } from "./interrupts.js";
 import renderGuardTripMessage from "../templates/runtime/guardTripMessage.js";
+import type { SourceLocationOpts } from "./state/checkpointStore.js";
 
 /**
  * Cost-guard trips as interrupts (resumable-guards PR 2).
@@ -41,9 +42,10 @@ import renderGuardTripMessage from "../templates/runtime/guardTripMessage.js";
 export async function raiseGuardTripsUntilClear(
   ctx: RuntimeContext<any>,
   stack: StateStack,
+  detect: () => GuardExceededError | null = () => stack.detectTrippedGuard(),
 ): Promise<Interrupt[] | void> {
   let err: GuardExceededError | null;
-  while ((err = stack.detectTrippedGuard()) !== null) {
+  while ((err = detect()) !== null) {
     const tripped = innermostGuardById(stack, err.guardId);
     if (!tripped || tripped.isRootBudget) {
       // Root budgets never ask permission — the operator's ceiling keeps
@@ -242,4 +244,72 @@ function makePendingTrip(): { settled: Promise<void>; settle: () => void } {
     settle = resolve;
   });
   return { settled, settle };
+}
+
+
+/** Control-flow signal thrown by _runPrompt's cancellation classifier
+ *  when an in-flight request died to a NON-ROOT guard trip on this
+ *  stack: the surrounding request-step wrapper in runPrompt catches it,
+ *  runs a retry gate (which raises the trip resumably), and — on
+ *  approve — re-issues the request from the current thread state. The
+ *  cancelled generation is honestly gone; the retry is a fresh request.
+ *  Never escapes runPrompt. */
+export class GuardTripRetry extends Error {
+  constructor(public readonly guardId: string) {
+    super("GuardTripRetry");
+    this.name = "GuardTripRetry";
+  }
+}
+
+/** The RUNNER surface for the same question the prompt gates ask: called
+ *  at step entry (before shouldSkip's consuming walk) when
+ *  `stack.firstRaisableTrip()` found an over-budget armed guard —
+ *  PR 3's time trips, which unlike cost trips become detectable at
+ *  arbitrary step boundaries. Approve applies and execution continues
+ *  into the step; reject throws the trip (identical unwind to the old
+ *  shouldSkip throw); unanswered checkpoints at THIS step and halts the
+ *  runner (the agency.interrupt dance — the caller returns without
+ *  running the step body, and Runner.step's halt handling does the
+ *  rest). Returns true iff the runner halted. */
+export async function raiseGuardTripsAtStep(args: {
+  ctx: RuntimeContext<any>;
+  stack: StateStack;
+  location: SourceLocationOpts;
+  isNodeContext: boolean;
+  threads: unknown;
+  halt: (payload: unknown) => void;
+}): Promise<boolean> {
+  const { ctx, stack } = args;
+  // Step-scoped detection: converse only about trips the step probe
+  // admits (time guards with a live, unhandled trip). The gates' full
+  // detectTrippedGuard walk would also check() cost guards here — and a
+  // cost guard left over budget by a REJECTED gate question would be
+  // re-asked at every following step, delivering its reject outside the
+  // owning guard boundary.
+  const outcome = await raiseGuardTripsUntilClear(ctx, stack, () =>
+    stack.detectStepRaisableTrip(),
+  );
+  if (outcome === undefined) return false; // clear — run the step
+  // Unanswered: surface through the runner. The interrupt id is already
+  // persisted in stack.other (raiseOneTrip did it); stamp the checkpoint
+  // at this step so the resumed replay re-enters HERE, re-detects, and
+  // applies the recorded answer before the step body ever runs — which
+  // is what makes this raise point replay-safe by construction.
+  const checkpointId = ctx.checkpoints.create(stack, ctx, args.location);
+  const checkpoint = ctx.checkpoints.get(checkpointId);
+  outcome.forEach((intr) => {
+    intr.checkpointId = checkpointId;
+    intr.checkpoint = checkpoint;
+  });
+  ctx.statelogClient.checkpointCreated({
+    checkpointId,
+    reason: "interrupt",
+    sourceLocation: args.location,
+  });
+  args.halt(
+    args.isNodeContext
+      ? { messages: args.threads, data: outcome }
+      : outcome,
+  );
+  return true;
 }

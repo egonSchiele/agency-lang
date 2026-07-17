@@ -1,0 +1,23 @@
+// The binder yields the scope's OWN saved draft; the finalize returns
+// it with a suffix — the two salvage tools composing (partials
+// ergonomics spec, Part 3).
+def work(): string {
+  saveDraft("the-draft")
+  const reply = llm("Reply with: pong")
+  return reply
+
+  finalize as draft {
+    if (draft != null) {
+      return draft + "+suffix"
+    }
+    return "no-draft"
+  }
+}
+
+node main() {
+  const result = guard(cost: 0.000001) {
+    return work()
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

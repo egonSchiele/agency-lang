@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"the-draft+suffix\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "finalize as draft yields the scope's saved draft; the finalize returns it with a suffix.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

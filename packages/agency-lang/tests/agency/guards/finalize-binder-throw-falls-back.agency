@@ -1,0 +1,20 @@
+// A throwing finalize falls back to the SAME draft the binder was
+// bound to: read-before-run, same value both ways.
+def work(): string {
+  saveDraft("the-draft")
+  const reply = llm("Reply with: pong")
+  return reply
+
+  finalize as draft {
+    const broken: any = null
+    return broken.field
+  }
+}
+
+node main() {
+  const result = guard(cost: 0.000001) {
+    return work()
+  }
+  if (isFailure(result)) { return "unexpected-failure" }
+  return result.value
+}

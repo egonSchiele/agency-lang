@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"was-null\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "With nothing saved, the finalize binder is null at abort time.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

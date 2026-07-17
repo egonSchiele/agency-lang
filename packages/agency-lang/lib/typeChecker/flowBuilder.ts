@@ -380,9 +380,17 @@ export function buildFlowGraph(
       for (const name of env.scope.declaredNames()) {
         const ref: Reference = { variable: name, chain: [] };
         const declared = typeAt(ref, start, env);
+        // Flatten a union-typed local before re-uniting: uniteTypes
+        // dedupes but does not flatten, and presence narrowing only
+        // drops TOP-LEVEL null members — `(T | null) | null` would
+        // keep its inner null through an `if (x != null)` guard.
+        const members =
+          !isAnyType(declared) && (declared as VariableType).type === "unionType"
+            ? (declared as { types: VariableType[] }).types
+            : [declared];
         widened[referenceKey(ref)] = isAnyType(declared)
           ? declared
-          : uniteTypes([declared, NULL_T], env.typeAliases);
+          : uniteTypes([...members, NULL_T], env.typeAliases);
       }
       buildFlowGraph(node.body, { kind: "loop", prev: start, widened }, env);
       return flow;

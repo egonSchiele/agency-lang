@@ -438,6 +438,14 @@ def f(): string {
 }
 \`\`\``,
 
+  finalizeBinderCollision: `A finalize body runs in the same variable scope as the function or block it belongs to. The \`as\` binder adds one extra name: the scope's saved draft. If that name already belongs to a parameter or local, references inside the finalize could not tell the two apart, and the draft would silently win or lose depending on compilation details.
+
+**How to fix:** rename the binder. Any name not already used in the scope works: \`finalize as draft { ... }\`.`,
+
+  finalizeBinderArity: `The \`as\` clause on a finalize binds what the abort yields to the block, and the abort yields exactly one thing: the scope's saved draft (or null when nothing was saved). There is no second value to bind, so a parameter list has no meaning here. The shared block-argument grammar is why the parser accepts the list at all.
+
+**How to fix:** keep one binder: \`finalize as draft { ... }\`. Everything else the finalize needs is already in scope as ordinary locals.`,
+
   // ---- AG7: static init, config, and imports ----
   exportRequiresStaticConst: `Only \`static const\` declarations can be exported from a module. A plain \`const\`, \`let\`, or other declaration is per-run state and is not part of a module's public surface.
 

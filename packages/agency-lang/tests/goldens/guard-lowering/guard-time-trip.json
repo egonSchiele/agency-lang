@@ -1,0 +1,701 @@
+{
+  "type": "agencyProgram",
+  "nodes": [
+    {
+      "type": "importStatement",
+      "importedNames": [
+        {
+          "type": "namedImport",
+          "importedNames": [
+            "print",
+            "printJSON",
+            "input",
+            "sleep",
+            "saveDraft",
+            "read",
+            "write",
+            "writeBinary",
+            "readBinary",
+            "range",
+            "callback",
+            "map",
+            "filter",
+            "exclude",
+            "find",
+            "findIndex",
+            "reduce",
+            "flatMap",
+            "every",
+            "some",
+            "count",
+            "sortBy",
+            "unique",
+            "groupBy"
+          ],
+          "aliases": {}
+        }
+      ],
+      "modulePath": "std::index",
+      "isAgencyImport": true
+    },
+    {
+      "type": "importStatement",
+      "importedNames": [
+        {
+          "type": "namedImport",
+          "importedNames": [
+            "guard"
+          ],
+          "aliases": {}
+        }
+      ],
+      "modulePath": "std::thread",
+      "isAgencyImport": true
+    },
+    {
+      "type": "comment",
+      "content": " A tiny time budget (20ms) wrapping a sleep that overruns it. The"
+    },
+    {
+      "type": "comment",
+      "content": " timer fires while the JS-bodied sleep is in flight; sleep is"
+    },
+    {
+      "type": "comment",
+      "content": " abortable, so it wakes promptly on the guard's abort signal. The"
+    },
+    {
+      "type": "comment",
+      "content": " next runner step boundary then throws GuardExceededError(\"time\","
+    },
+    {
+      "type": "comment",
+      "content": " ...). The stdlib guard's `try` converts it to a Failure with type"
+    },
+    {
+      "type": "comment",
+      "content": " \"timeoutFailure\". We assert actualTime is a real elapsed"
+    },
+    {
+      "type": "comment",
+      "content": " measurement (at least half the budget) rather than a 0/sentinel"
+    },
+    {
+      "type": "comment",
+      "content": " value; see the comment on the assertion below for why the bound is"
+    },
+    {
+      "type": "comment",
+      "content": " deliberately loose."
+    },
+    {
+      "type": "comment",
+      "content": " The handler is race insurance, not part of the pinned behavior: on a"
+    },
+    {
+      "type": "comment",
+      "content": " slow runner the walk from pushGuard to the sleep can eat the whole"
+    },
+    {
+      "type": "comment",
+      "content": " 20ms budget, so the trip is DETECTED at a step boundary and raised"
+    },
+    {
+      "type": "comment",
+      "content": " as a resumable interrupt instead of aborting the in-flight sleep."
+    },
+    {
+      "type": "comment",
+      "content": " Rejecting it delivers the same GuardExceededError from the step, and"
+    },
+    {
+      "type": "comment",
+      "content": " the output is identical on both paths. On a fast run the handler"
+    },
+    {
+      "type": "comment",
+      "content": " never fires."
+    },
+    {
+      "type": "graphNode",
+      "nodeName": "main",
+      "parameters": [],
+      "returnType": null,
+      "body": [
+        {
+          "type": "handleBlock",
+          "body": [
+            {
+              "type": "assignment",
+              "declKind": "const",
+              "variableName": "result",
+              "value": {
+                "type": "functionCall",
+                "functionName": "guard",
+                "arguments": [
+                  {
+                    "type": "namedArgument",
+                    "name": "time",
+                    "value": {
+                      "type": "unitLiteral",
+                      "dimension": "time",
+                      "value": "20",
+                      "unit": "ms",
+                      "canonicalValue": 20
+                    }
+                  }
+                ],
+                "block": {
+                  "type": "blockArgument",
+                  "inline": false,
+                  "params": [],
+                  "body": [
+                    {
+                      "type": "functionCall",
+                      "functionName": "sleep",
+                      "arguments": [
+                        {
+                          "type": "unitLiteral",
+                          "dimension": "time",
+                          "value": "150",
+                          "unit": "ms",
+                          "canonicalValue": 150
+                        }
+                      ],
+                      "loc": {
+                        "line": 21,
+                        "col": 4,
+                        "start": 1329,
+                        "end": 1346
+                      },
+                      "scope": "imported"
+                    },
+                    {
+                      "type": "functionCall",
+                      "functionName": "sleep",
+                      "arguments": [
+                        {
+                          "type": "unitLiteral",
+                          "dimension": "time",
+                          "value": "1",
+                          "unit": "ms",
+                          "canonicalValue": 1
+                        }
+                      ],
+                      "loc": {
+                        "line": 22,
+                        "col": 4,
+                        "start": 1346,
+                        "end": 1361
+                      },
+                      "scope": "imported"
+                    },
+                    {
+                      "type": "returnStatement",
+                      "value": {
+                        "type": "string",
+                        "segments": [
+                          {
+                            "type": "text",
+                            "value": "did not trip"
+                          }
+                        ],
+                        "delimiter": "\""
+                      },
+                      "loc": {
+                        "line": 23,
+                        "col": 4,
+                        "start": 1361,
+                        "end": 1385
+                      }
+                    }
+                  ]
+                },
+                "loc": {
+                  "line": 20,
+                  "col": 17,
+                  "start": 1302,
+                  "end": 1389
+                },
+                "scope": "imported"
+              },
+              "loc": {
+                "line": 20,
+                "col": 2,
+                "start": 1287,
+                "end": 1389
+              },
+              "scope": "local"
+            },
+            {
+              "type": "ifElse",
+              "condition": {
+                "type": "functionCall",
+                "functionName": "isFailure",
+                "arguments": [
+                  {
+                    "type": "variableName",
+                    "value": "result",
+                    "loc": {
+                      "line": 25,
+                      "col": 16,
+                      "start": 1403,
+                      "end": 1409
+                    },
+                    "scope": "local"
+                  }
+                ],
+                "loc": {
+                  "line": 25,
+                  "col": 6,
+                  "start": 1393,
+                  "end": 1410
+                },
+                "scope": "imported"
+              },
+              "thenBody": [
+                {
+                  "type": "comment",
+                  "content": " actualTime is measured with performance.now(), while the guard's"
+                },
+                {
+                  "type": "comment",
+                  "content": " timer fires off libuv's coarser millisecond clock, and loaded CI"
+                },
+                {
+                  "type": "comment",
+                  "content": " runners add scheduling latency on top — the two readings can"
+                },
+                {
+                  "type": "comment",
+                  "content": " disagree by MORE than the 2ms this test used to allow (issue"
+                },
+                {
+                  "type": "comment",
+                  "content": " #467: it flaked at exactly that boundary). The property worth"
+                },
+                {
+                  "type": "comment",
+                  "content": " asserting is that actualTime is a real measurement rather than a"
+                },
+                {
+                  "type": "comment",
+                  "content": " 0/sentinel value, so require it to reach half the budget: immune"
+                },
+                {
+                  "type": "comment",
+                  "content": " to any plausible clock skew, still catches a broken measurement."
+                },
+                {
+                  "type": "returnStatement",
+                  "value": {
+                    "type": "string",
+                    "segments": [
+                      {
+                        "type": "text",
+                        "value": "tripped:"
+                      },
+                      {
+                        "type": "interpolation",
+                        "expression": {
+                          "type": "valueAccess",
+                          "base": {
+                            "type": "variableName",
+                            "value": "result",
+                            "scope": "local"
+                          },
+                          "chain": [
+                            {
+                              "kind": "property",
+                              "name": "error"
+                            },
+                            {
+                              "kind": "property",
+                              "name": "type"
+                            }
+                          ],
+                          "loc": {
+                            "line": 34,
+                            "col": 22,
+                            "start": 2001,
+                            "end": 2018
+                          }
+                        },
+                        "loc": {
+                          "line": 34,
+                          "col": 20,
+                          "start": 1999,
+                          "end": 2019
+                        }
+                      },
+                      {
+                        "type": "text",
+                        "value": ":"
+                      },
+                      {
+                        "type": "interpolation",
+                        "expression": {
+                          "type": "valueAccess",
+                          "base": {
+                            "type": "variableName",
+                            "value": "result",
+                            "scope": "local"
+                          },
+                          "chain": [
+                            {
+                              "kind": "property",
+                              "name": "error"
+                            },
+                            {
+                              "kind": "property",
+                              "name": "maxTime"
+                            }
+                          ],
+                          "loc": {
+                            "line": 34,
+                            "col": 43,
+                            "start": 2022,
+                            "end": 2042
+                          }
+                        },
+                        "loc": {
+                          "line": 34,
+                          "col": 41,
+                          "start": 2020,
+                          "end": 2043
+                        }
+                      },
+                      {
+                        "type": "text",
+                        "value": ":"
+                      },
+                      {
+                        "type": "interpolation",
+                        "expression": {
+                          "type": "binOpExpression",
+                          "operator": ">=",
+                          "left": {
+                            "type": "valueAccess",
+                            "base": {
+                              "type": "variableName",
+                              "value": "result",
+                              "scope": "local"
+                            },
+                            "chain": [
+                              {
+                                "kind": "property",
+                                "name": "error"
+                              },
+                              {
+                                "kind": "property",
+                                "name": "actualTime"
+                              }
+                            ],
+                            "loc": {
+                              "line": 34,
+                              "col": 67,
+                              "start": 2046,
+                              "end": 2069
+                            }
+                          },
+                          "right": {
+                            "type": "binOpExpression",
+                            "operator": "/",
+                            "left": {
+                              "type": "valueAccess",
+                              "base": {
+                                "type": "variableName",
+                                "value": "result",
+                                "scope": "local"
+                              },
+                              "chain": [
+                                {
+                                  "kind": "property",
+                                  "name": "error"
+                                },
+                                {
+                                  "kind": "property",
+                                  "name": "maxTime"
+                                }
+                              ],
+                              "loc": {
+                                "line": 34,
+                                "col": 94,
+                                "start": 2073,
+                                "end": 2093
+                              }
+                            },
+                            "right": {
+                              "type": "number",
+                              "value": "2"
+                            }
+                          }
+                        },
+                        "loc": {
+                          "line": 34,
+                          "col": 65,
+                          "start": 2044,
+                          "end": 2098
+                        }
+                      }
+                    ],
+                    "delimiter": "\""
+                  },
+                  "loc": {
+                    "line": 34,
+                    "col": 4,
+                    "start": 1983,
+                    "end": 2102
+                  }
+                }
+              ],
+              "loc": {
+                "line": 25,
+                "col": 2,
+                "start": 1389,
+                "end": 2106
+              }
+            },
+            {
+              "type": "returnStatement",
+              "value": {
+                "type": "valueAccess",
+                "base": {
+                  "type": "variableName",
+                  "value": "result",
+                  "scope": "local"
+                },
+                "chain": [
+                  {
+                    "kind": "property",
+                    "name": "value"
+                  }
+                ],
+                "loc": {
+                  "line": 36,
+                  "col": 9,
+                  "start": 2113,
+                  "end": 2125
+                }
+              },
+              "loc": {
+                "line": 36,
+                "col": 2,
+                "start": 2106,
+                "end": 2128
+              }
+            }
+          ],
+          "handler": {
+            "kind": "inline",
+            "param": {
+              "type": "functionParameter",
+              "name": "i"
+            },
+            "body": [
+              {
+                "type": "matchBlock",
+                "expression": {
+                  "type": "valueAccess",
+                  "base": {
+                    "type": "variableName",
+                    "value": "i",
+                    "scope": "imported"
+                  },
+                  "chain": [
+                    {
+                      "kind": "property",
+                      "name": "effect"
+                    }
+                  ],
+                  "loc": {
+                    "line": 38,
+                    "col": 17,
+                    "start": 2158,
+                    "end": 2166
+                  }
+                },
+                "cases": [
+                  {
+                    "type": "matchBlockCase",
+                    "caseValue": {
+                      "type": "string",
+                      "segments": [
+                        {
+                          "type": "text",
+                          "value": "std::guard"
+                        }
+                      ],
+                      "delimiter": "\""
+                    },
+                    "body": [
+                      {
+                        "type": "assignment",
+                        "variableName": "__armval_2",
+                        "declKind": "const",
+                        "value": {
+                          "type": "functionCall",
+                          "functionName": "reject",
+                          "arguments": [],
+                          "loc": {
+                            "line": 39,
+                            "col": 22,
+                            "start": 2192,
+                            "end": 2207
+                          },
+                          "scope": "imported"
+                        },
+                        "loc": {
+                          "line": 39,
+                          "col": 22,
+                          "start": 2192,
+                          "end": 2207
+                        },
+                        "matchArmValueTemp": true,
+                        "scope": "local"
+                      },
+                      {
+                        "type": "matchYield",
+                        "matchId": 1,
+                        "value": {
+                          "type": "variableName",
+                          "value": "__armval_2",
+                          "loc": {
+                            "line": 39,
+                            "col": 22,
+                            "start": 2192,
+                            "end": 2207
+                          },
+                          "scope": "local"
+                        },
+                        "typeSource": {
+                          "type": "functionCall",
+                          "functionName": "reject",
+                          "arguments": [],
+                          "loc": {
+                            "line": 39,
+                            "col": 22,
+                            "start": 2192,
+                            "end": 2207
+                          }
+                        },
+                        "loc": {
+                          "line": 39,
+                          "col": 22,
+                          "start": 2192,
+                          "end": 2207
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "type": "matchBlockCase",
+                    "caseValue": "_",
+                    "body": [
+                      {
+                        "type": "assignment",
+                        "variableName": "__armval_3",
+                        "declKind": "const",
+                        "value": {
+                          "type": "functionCall",
+                          "functionName": "pass",
+                          "arguments": [],
+                          "loc": {
+                            "line": 40,
+                            "col": 11,
+                            "start": 2212,
+                            "end": 2223
+                          },
+                          "scope": "imported"
+                        },
+                        "loc": {
+                          "line": 40,
+                          "col": 11,
+                          "start": 2212,
+                          "end": 2223
+                        },
+                        "matchArmValueTemp": true,
+                        "scope": "local"
+                      },
+                      {
+                        "type": "matchYield",
+                        "matchId": 1,
+                        "value": {
+                          "type": "variableName",
+                          "value": "__armval_3",
+                          "loc": {
+                            "line": 40,
+                            "col": 11,
+                            "start": 2212,
+                            "end": 2223
+                          },
+                          "scope": "local"
+                        },
+                        "typeSource": {
+                          "type": "functionCall",
+                          "functionName": "pass",
+                          "arguments": [],
+                          "loc": {
+                            "line": 40,
+                            "col": 11,
+                            "start": 2212,
+                            "end": 2223
+                          }
+                        },
+                        "loc": {
+                          "line": 40,
+                          "col": 11,
+                          "start": 2212,
+                          "end": 2223
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "loc": {
+                  "line": 38,
+                  "col": 11,
+                  "start": 2152,
+                  "end": 2224
+                },
+                "matchExprId": 1
+              },
+              {
+                "type": "returnStatement",
+                "value": {
+                  "type": "variableName",
+                  "value": "__matchval_1",
+                  "loc": {
+                    "line": 38,
+                    "col": 4,
+                    "start": 2145,
+                    "end": 2227
+                  },
+                  "scope": "imported"
+                },
+                "loc": {
+                  "line": 38,
+                  "col": 4,
+                  "start": 2145,
+                  "end": 2227
+                }
+              }
+            ]
+          },
+          "loc": {
+            "line": 19,
+            "col": 2,
+            "start": 1276,
+            "end": 2229
+          }
+        }
+      ],
+      "loc": {
+        "line": 18,
+        "col": 0,
+        "start": 1260,
+        "end": 2230
+      }
+    }
+  ]
+}

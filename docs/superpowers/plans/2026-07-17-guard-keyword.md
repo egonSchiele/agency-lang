@@ -210,7 +210,26 @@ next to the `finalizeBlock` case.
 - [ ] **Step 4: tests pass** — rerun Step 2's command; also
   `npx tsc --noEmit`.
 
-- [ ] **Step 5: commit** — `feat: guardBlock AST node + body slot`.
+- [ ] **Step 5: capture the legacy-lowering goldens (plan review
+  finding 2 — do this NOW, while the old parse still exists)**
+
+Task 2 claims `guard(...) as {`, after which nothing can re-derive what
+the OLD syntax compiled to. Capture it first:
+
+```bash
+mkdir -p tests/goldens/guard-lowering
+for f in tests/agency/guards/guard-cost-no-trip \
+         tests/agency/guards/guard-time-trip \
+         tests/agency/guards/trip-time; do
+  pnpm run preprocess "$f.agency" > "tests/goldens/guard-lowering/$(basename $f).json"
+done
+git add tests/goldens/guard-lowering
+```
+
+These are scaffolding for Task 4 Step 6's real equivalence diff; Task 8
+deletes them once the fixture-churn gate has taken over the invariant.
+
+- [ ] **Step 6: commit** — `feat: guardBlock AST node + body slot + legacy lowering goldens`.
 
 ---
 
@@ -337,8 +356,10 @@ through: tarsec failure before consuming commits nothing.
 
   **Watch out:** `trip-time.agency` and friends parse guard through the
   construct now. Until Task 4's desugar exists, compilation of guard
-  files is BROKEN in the middle of this plan. That is expected;
-  fixtures rejoin at Task 4 Step 6.
+  files is BROKEN in the middle of this plan. That is expected: the
+  branch is red for the Task 2 and Task 3 commits — fine on a feature
+  branch, do not "fix" it — and do NOT run `make fixtures` in that
+  window (it would churn or fail). Fixtures rejoin at Task 4 Step 6.
 
 - [ ] **Step 7: commit** — `feat: parse the guard construct`.
 
@@ -442,30 +463,62 @@ the emitted call matches what users write today.
   callback lifting (the block must exist as a `blockArgument` when
   `liftCallbacks` runs so it becomes a normal `__block_N`).
 
-- [ ] **Step 5: stdlib rename + prelude**
+- [ ] **Step 5: move the impl to the prelude (plan review finding 1 —
+  the saveDraft shape, NOT a re-export)**
 
-- `stdlib/thread.agency:219`: `export def guard(` → `export def __guard(`.
-  Keep the docstring (the guide inherits its content in Task 8).
-- `stdlib/index.agency`: re-export `__guard` the way other prelude
-  names are re-exported (mind the re-export-TDZ gotcha documented in
-  the prelude work — follow an existing re-export's exact form).
-- `make` (stdlib changed).
+Three edits, and the middle one is the actual mechanism:
 
-- [ ] **Step 6: the equivalence test — this is the plan's acceptance
-  gate in miniature**
+- **Move the four-line def** out of `stdlib/thread.agency:219` and into
+  `stdlib/index.agency` as `def __guard(cost, time, label, block)` —
+  same body (`_pushGuard` / `_runGuarded` / `_popGuard` / return),
+  exported. Import the three TS helpers in `index.agency` exactly the
+  way it already imports `_saveDraft` (copy that import line's form;
+  `index.agency` is non-templated, which is what makes this legal).
+  The `guard` def leaves `thread.agency` entirely — its docstring
+  content moves to the guide in Task 8.
+- **Add `__guard` to the literal prelude import list** at line 1 of
+  `lib/templates/backends/agency/template.mustache` (the
+  `import { print, printJSON, … } from "std::index"` literal). That
+  list IS the auto-import mechanism; re-exporting from `index.agency`
+  alone auto-imports it into exactly zero modules. Run
+  `pnpm run templates` after editing the mustache file.
+- **Why not rename-in-place in `thread.agency`:** `thread.agency` is
+  TEMPLATED, so it receives the prelude import — a `__guard` re-export
+  in `index.agency` sourced from `thread.agency` is a
+  `thread` ↔ `index` module cycle, the exact thing
+  `isNonTemplatedStdlib` (`lib/importPaths.ts:104`) exists to prevent.
+- `make` (stdlib + templates changed).
 
-`pnpm run preprocess` both of these and diff the resulting AST JSON:
+- [ ] **Step 6: the equivalence test against the Task 1 goldens — this
+  is the plan's acceptance gate in miniature**
 
+Diff the NEW pipeline's output against the legacy goldens captured in
+Task 1 Step 5 (comparing the legacy-`as` arm to the braces arm would
+prove nothing — both go through the same desugar; the goldens are the
+only surviving record of what the OLD parse compiled to):
+
+```bash
+for f in guard-cost-no-trip guard-time-trip trip-time; do
+  pnpm run preprocess tests/agency/guards/$f.agency > /tmp/scratch-$f-new.json
+  # Normalize the two KNOWN, intended differences before diffing:
+  #   1. loc fields (positions shift with the syntax)
+  #   2. the callee: `guard` (imported) → `__guard` (prelude), and the
+  #      dropped `import { guard }` line's residue
+  # Everything else must be byte-identical — especially __block_N
+  # names, step-relevant structure, and argument shapes.
+  diff <(normalize tests/goldens/guard-lowering/$f.json) \
+       <(normalize /tmp/scratch-$f-new.json)
+done
 ```
-node a() { const r = guard(cost: $1) as { return 1 } ... }   // via legacy-as arm
-node b() { const r = guard(cost: $1) { return 1 } ... }
-```
 
-The two preprocessed trees must be IDENTICAL apart from `loc` fields.
+(The fixtures' sources must be migrated — `as` dropped, import line
+removed — for this run; that edit is these three files' real migration,
+landing early. Write `normalize` as a ten-line jq/node script in
+`tests/goldens/guard-lowering/normalize.mjs`; it dies with the goldens
+in Task 8.)
+
 Then compile-and-run one real fixture end to end:
-`pnpm run agency test tests/agency/guards/guard-cost-no-trip.test.json`
-(after mechanically deleting its `import { guard }` line — that file's
-migration lands properly in Task 7; here it is just the smoke test).
+`pnpm run agency test tests/agency/guards/guard-cost-no-trip.test.json`.
 
 - [ ] **Step 7: run the desugar tests + preprocessor suites**
   `npx vitest run lib/preprocessors > /tmp/scratch-preproc.log`
@@ -583,15 +636,20 @@ land in the same registry. One test each proves it.
 - [ ] **Step 1: mechanical sweep**
 
 ```bash
-grep -rln 'import { guard }' stdlib/ tests/ | tee /tmp/scratch-migrate.txt
-# For each: delete the guard import (keep other named imports on the
-# line!), then run the formatter to strip `as`:
+# Sweep by MODULE, not by the exact import string — a literal
+# 'import { guard }' misses every multi-name line like
+# `import { guard, getThread } from "std::thread"` (plan review
+# finding 3), and those files would otherwise surface as mystery
+# failures in Step 5:
+grep -rln 'from "std::thread"' stdlib/ tests/ | tee /tmp/scratch-migrate.txt
+# For each hit: if the import list names `guard`, remove exactly that
+# name (keep the others; delete the line only when guard was alone),
+# then run the formatter to strip `as`:
 pnpm run fmt <file>   # writes canonical construct syntax
 ```
 
-Files importing `{ guard, getThread }` etc. keep the other names —
-hand-check every multi-name import line. `std::agents`
-(`stdlib/agents/*.agency`) is the largest stdlib consumer.
+`std::agents` (`stdlib/agents/*.agency`) is the largest stdlib
+consumer.
 
 - [ ] **Step 2: stdlib raises clauses**
 
@@ -659,7 +717,10 @@ All green before proceeding.
 - [ ] **Step 1: make the doc edits.** Keep the guards-guide examples
   compiling: parse-check every updated snippet with a scratch file +
   `pnpm run ast` (the CLAUDE.md snippet discipline).
-- [ ] **Step 2: full validation once more** (same commands as Task 7
+- [ ] **Step 2: delete the scaffolding** —
+  `git rm -r tests/goldens/guard-lowering` (the Task 1 goldens and
+  `normalize.mjs`; the fixture-churn gate now owns the invariant).
+- [ ] **Step 2b: full validation once more** (same commands as Task 7
   Step 5) plus `npx tsc --noEmit`.
 - [ ] **Step 3: anti-pattern audit** of the whole diff against
   `docs/dev/anti-patterns.md` (methods over free functions,
@@ -673,11 +734,31 @@ All green before proceeding.
 
 ---
 
-# Review round 1 (folded before execution)
+# Review rounds (folded before execution)
 
-An independent spec review
-(`docs/superpowers/specs/2026-07-17-guard-keyword-design-REVIEW.md`)
-landed four findings; the spec was amended (decisions 8 and 9, the
+## Plan review (`2026-07-17-guard-keyword-REVIEW.md`)
+
+1. **BLOCKER — the prelude plan had a cycle under it:** rename-in-place
+   in `thread.agency` + re-export via `index.agency` is a
+   `thread` ↔ `index` module cycle, because `thread.agency` is
+   TEMPLATED and receives the prelude. Fixed: the def MOVES into
+   `index.agency` (the saveDraft shape) and `__guard` joins the literal
+   prelude list in `template.mustache` — the step that was missing
+   entirely. Task 4 Step 5 rewritten; spec Part 5 amended.
+2. **The equivalence test was comparing the desugar to itself** (both
+   arms of the new parser). Fixed: Task 1 Step 5 captures legacy-parse
+   goldens BEFORE Task 2 destroys the old parse; Task 4 Step 6 diffs
+   against them with the two intended differences normalized.
+3. **The migration grep missed multi-name imports** (`import { guard,
+   getThread }` does not contain the literal `import { guard }`).
+   Fixed: sweep by `from "std::thread"` and inspect hits.
+4. **`argOrder` retrofit** — already fixed in the prior commit (the
+   review predates it): the field lives in Task 1's type, Task 2
+   populates it, Task 3 just prints.
+
+## Spec review (`specs/2026-07-17-guard-keyword-design-REVIEW.md`)
+
+Four findings; the spec was amended (decisions 8 and 9, the
 stated soundness property, the named reachability mechanism) and this
 plan absorbed them:
 

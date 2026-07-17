@@ -261,11 +261,11 @@ covers this case generically; this spec does not attempt it.
 ## Part 5: Codegen and lowering
 
 **The construct compiles to exactly what today's syntax already
-compiles to.** The stdlib `guard` def is renamed to the internal
-`__guard` (still exported — see the reachability bullet below) and
-becomes the construct's lowering target; the emitted call — impl
-reference plus `cost` / `time` / `label` plus the block closure — keeps
-the shape the old parse produced.
+compiles to.** The stdlib `guard` def becomes the internal `__guard`,
+living in `index.agency` on the prelude list (see the reachability
+bullet below), and is the construct's lowering target; the emitted
+call — impl reference plus `cost` / `time` / `label` plus the block
+closure — keeps the shape the old parse produced.
 
 Why lowering to the same call is load-bearing, not laziness: the guard
 function's own frame and step structure carry everything the
@@ -286,15 +286,24 @@ Concretely:
   lifting, so the body goes through the EXISTING `__block_N` lifting
   and the builder never sees the construct. This implements the "same
   emitted call" invariant more directly than a hand-rolled TSIR module.
-- **Impl reachability, named concretely (review finding 3):** the
-  stdlib def renames `guard` → `__guard` and STAYS exported from
-  `std::thread` (the prelude imports exports — de-exporting would fight
-  it); `stdlib/index.agency` re-exports it into the auto-import prelude
-  (the saveDraft move from #553 is the precedent, including its
-  re-export-TDZ gotcha; `index.agency` is non-templated). The
-  underscore prefix marks it internal; verify the doc generator skips
-  underscore-prefixed exports, and if it does not, its docstring says
-  "internal — use the guard construct".
+- **Impl reachability, named concretely (spec review finding 3, then
+  corrected by the plan review):** the four-line def MOVES into
+  `stdlib/index.agency` as `__guard`, and the name is added to the
+  literal prelude import list injected into every templated module
+  (`lib/templates/backends/agency/template.mustache` line 1 — that
+  list IS the auto-import mechanism). This is the exact saveDraft
+  shape: defined in `index.agency`, calling the TS helpers
+  (`_pushGuard` / `_runGuarded` / `_popGuard`) the way saveDraft calls
+  `_saveDraft`. It must NOT stay in `thread.agency` with a re-export
+  through `index.agency`: `thread.agency` is templated and receives
+  the prelude, so that arrangement is a `thread` ↔ `index` module
+  cycle — the very thing `index.agency`'s non-templated exemption
+  (`isNonTemplatedStdlib`, `lib/importPaths.ts:104`) exists to avoid.
+  The `guard` def leaves `thread.agency` entirely; its docstring
+  content moves to the guide. The underscore prefix marks the impl
+  internal; verify the doc generator skips underscore-prefixed
+  exports, and if it does not, its docstring says "internal — use the
+  guard construct".
 - The AgencyGenerator prints the construct with the head arguments in
   their source order and no `as`, so `fmt` round-trips and `writeAST`
   stays canonical.
@@ -316,8 +325,9 @@ that regen means the lowering drifted.
   `import { guard }` line when AG4010 points at it.
 - **Stdlib:** every stdlib use of `guard` migrates to the construct
   (`std::agents` is the largest); annotated stdlib `raises` clauses
-  gain `std::guard` where required; the stdlib def becomes the internal
-  `__guard` (renamed, still exported, prelude-re-exported — Part 5).
+  gain `std::guard` where required; the def moves to `index.agency` as
+  the internal `__guard` on the prelude list (Part 5), and leaves
+  `thread.agency` entirely.
 - **Test corpus:** all fixtures using `guard` get the formatter pass
   plus import-line removal, then `make fixtures`.
 

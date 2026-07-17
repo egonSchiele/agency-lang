@@ -150,3 +150,209 @@ export function assertNotLocked(p: NotePreflight): void {
     throw new Error(`Note "${p.title}" is locked. Unlock it in Notes.app and retry.`);
   }
 }
+
+/** Note metadata. Deliberately carries no body. */
+export type NoteMeta = {
+  id: string;
+  title: string;
+  folder: string;
+  account: string;
+  modified: string;
+  passwordProtected: boolean;
+};
+
+/** A note including its content, as plaintext. */
+export type NoteContentTs = {
+  id: string;
+  title: string;
+  folder: string;
+  account: string;
+  body: string;
+  modified: string;
+};
+
+/** A folder. `noteCount` is derived, not a property. */
+export type FolderMeta = {
+  id: string;
+  name: string;
+  noteCount: number;
+};
+
+/** Assert a note is in the folder the caller named. Fails closed.
+ *
+ *  This compare is the fail-fast check with the readable error message. It is
+ *  NOT the authoritative assertion: on both the read and write paths the
+ *  actual access addresses the note THROUGH the folder (`note id X of folder
+ *  Y`), so the lookup failing is the assertion failing, and the check cannot
+ *  drift from the access across the human approval that sits between the
+ *  pre-flight and the access. */
+function assertFolder(p: NotePreflight, folder?: string): void {
+  if (folder != null && p.folder !== folder) {
+    throw new Error(
+      `Note "${p.title}" is in folder "${p.folder}", not "${folder}". Refusing.`,
+    );
+  }
+}
+
+// Reads `plaintext`, never `body`. body is HTML: it would waste tokens and read
+// badly for a model. Spec section 2.4.
+//
+// Two shapes, like the write path (spec section 6.4): when the caller asserted
+// a folder, the read addresses the note THROUGH it, so a note that moved
+// folders during the human approval fails to resolve instead of being read.
+// An unscoped read would leave open on the read path the exact window the
+// write path closes — and reading is the operation folder confinement was
+// invented for.
+const READ_UNSCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv)
+      set d to (ASCII character 1)
+      return (plaintext of n) & d & ((modification date of n) as text)
+    end tell`);
+
+const READ_SCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv) of folder (item 2 of argv)
+      set d to (ASCII character 1)
+      return (plaintext of n) & d & ((modification date of n) as text)
+    end tell`);
+
+export async function _readNote(id: string, folder?: string): Promise<NoteContentTs> {
+  const p = await _preflightNote(id);
+  assertFolder(p, folder);
+  assertNotLocked(p);
+
+  const raw = folder == null
+    ? await runNotesScript(READ_UNSCOPED_SCRIPT, [id])
+    : await runNotesScript(READ_SCOPED_SCRIPT, [id, folder]);
+  const parts = raw.split(FIELD_DELIM);
+  if (parts.length !== 2) {
+    throw new Error(`Notes returned an unexpected reply for note ${id}.`);
+  }
+  return {
+    id,
+    title: p.title,
+    folder: p.folder,
+    account: p.account,
+    body: parts[0],
+    modified: parts[1],
+  };
+}
+
+/** Parse the delimited note rows a list/search script returns. */
+function parseNoteRows(raw: string): NoteMeta[] {
+  if (raw.length === 0) return [];
+  return raw.split("\n").filter((l) => l.length > 0).map((line) => {
+    const f = line.split(FIELD_DELIM);
+    if (f.length !== 6) {
+      throw new Error("Notes returned an unexpected row while listing notes.");
+    }
+    return {
+      id: f[0],
+      title: f[1],
+      folder: f[2],
+      account: f[3],
+      modified: f[4],
+      passwordProtected: f[5].trim() === "true",
+    };
+  });
+}
+
+// The container access is split here too (spec 9.2), and the account is walked
+// rather than assumed to be one hop up.
+const NOTE_ROW = `set c to container of n
+${ACCOUNT_WALK}
+        set out to out & (id of n) & d & (name of n) & d & (name of c) & d & ¬
+                  (name of a) & d & ((modification date of n) as text) & d & ¬
+                  ((password protected of n) as text) & linefeed`;
+
+const LIST_ALL_SCRIPT = withTimeout(`    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with n in notes
+        ${NOTE_ROW}
+      end repeat
+      return out
+    end tell`);
+
+const LIST_IN_FOLDER_SCRIPT = withTimeout(`    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with n in (notes of folder (item 1 of argv))
+        ${NOTE_ROW}
+      end repeat
+      return out
+    end tell`);
+
+export async function _listNotes(folder?: string): Promise<NoteMeta[]> {
+  const raw = folder == null
+    ? await runNotesScript(LIST_ALL_SCRIPT, [])
+    : await runNotesScript(LIST_IN_FOLDER_SCRIPT, [folder]);
+  return parseNoteRows(raw);
+}
+
+// `plaintext contains`, never `body contains`. body is HTML, so searching it
+// matches markup: a user searching "div" would match every note they own.
+// Spec section 9.3.
+const SEARCH_ALL_SCRIPT = withTimeout(`    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with n in (notes whose plaintext contains (item 1 of argv))
+        ${NOTE_ROW}
+      end repeat
+      return out
+    end tell`);
+
+const SEARCH_IN_FOLDER_SCRIPT = withTimeout(`    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with n in (notes of folder (item 2 of argv) whose plaintext contains (item 1 of argv))
+        ${NOTE_ROW}
+      end repeat
+      return out
+    end tell`);
+
+export async function _searchNotes(query: string, folder?: string): Promise<NoteMeta[]> {
+  const raw = folder == null
+    ? await runNotesScript(SEARCH_ALL_SCRIPT, [query])
+    : await runNotesScript(SEARCH_IN_FOLDER_SCRIPT, [query, folder]);
+  return parseNoteRows(raw);
+}
+
+// TOP-LEVEL FOLDERS ONLY, on purpose.
+//
+// A bare `repeat with f in folders` FLATTENS the hierarchy: on a machine with
+// an "Archived" folder containing "2010s", "2017" and "2019", it returns all
+// four side by side with nothing marking the difference. Reporting "2017" as a
+// peer of "Recently Deleted" is simply false, and an agent would act on it.
+//
+// So filter to folders whose container is an account. That is honest and
+// limited rather than flat and wrong. Nested folders stay reachable by bare
+// name (`folder "2017"` does resolve), ambiguously — which is Notes' own
+// behaviour, not something we introduce. Path support is out of scope for v1;
+// see the plan's "Two v1 limits".
+//
+// noteCount is derived with `count of notes`, because folder has no such
+// property. That is a query per folder, so listFolders pays for it.
+const LIST_FOLDERS_SCRIPT = withTimeout(`    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with f in folders
+        set c to container of f
+        if (class of c) is account then
+          set out to out & (id of f) & d & (name of f) & d & ¬
+                    ((count of notes of f) as text) & linefeed
+        end if
+      end repeat
+      return out
+    end tell`);
+
+export async function _listFolders(): Promise<FolderMeta[]> {
+  const raw = await runNotesScript(LIST_FOLDERS_SCRIPT, []);
+  if (raw.length === 0) return [];
+  return raw.split("\n").filter((l) => l.length > 0).map((line) => {
+    const f = line.split(FIELD_DELIM);
+    if (f.length !== 3) {
+      throw new Error("Notes returned an unexpected row while listing folders.");
+    }
+    return { id: f[0], name: f[1], noteCount: Number(f[2]) };
+  });
+}

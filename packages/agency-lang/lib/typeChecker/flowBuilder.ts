@@ -1,5 +1,5 @@
 import { ANY_T } from "./primitives.js";
-import type { AgencyNode, Expression } from "../types.js";
+import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { AccessChainElement } from "../types/access.js";
 import { Scope, type ScopeType } from "./scope.js";
 import { expressionChildren, walkNodes } from "../utils/node.js";

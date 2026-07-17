@@ -96,7 +96,7 @@ import {
 } from "./typescriptGenerator/validationDescriptor.js";
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
-import { isFunctionTyped, paramAcceptsFailure } from "../typeChecker/utils.js";
+import { isAnyType, isFunctionTyped, paramAcceptsFailure } from "../typeChecker/utils.js";
 import { rejectValueParamCycle } from "./valueParamCycle.js";
 
 import { $, ts } from "../ir/builders.js";
@@ -3644,6 +3644,19 @@ export class TypeScriptBuilder {
         .done();
     }
     runPromptEntries.clientConfig = clientConfig;
+    // Partials ergonomics (spec Part 2): thread the enclosing def's
+    // declared return type so a saveDraft tool in this call's tools
+    // array gets an honest value schema. Emitted only when the call has
+    // arguments beyond the prompt — a bare llm("...") can never carry
+    // tools, and skipping it keeps those call sites byte-identical.
+    // An `any` return is skipped at the TYPE level (isAnyType), so the
+    // runtime falls back to the string schema.
+    if (argsAfterPrompt.length > 0) {
+      const declaredReturn = this.scopes.enclosingDeclaredReturnType();
+      if (declaredReturn !== undefined && !isAnyType(declaredReturn)) {
+        runPromptEntries.draftSchema = ts.raw(this.zodSchemaFor(declaredReturn));
+      }
+    }
     runPromptEntries.maxToolCallRounds = ts.num(
       this.agencyConfig.maxToolCallRounds || 10,
     );

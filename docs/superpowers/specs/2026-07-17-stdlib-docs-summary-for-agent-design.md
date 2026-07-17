@@ -119,13 +119,11 @@ Here is the lucky part. The generator already parses each module's
 top-of-file doc comment — the `/** @module ... */` block — into
 `program.docComment`, and renders it as the page body
 (`lib/cli/doc.ts:178`). And 63 of the 64 stdlib modules already have one.
-Better still, these comments almost always **open with a plain one-line
-statement of what the module is for**, before any code example:
+Better still, these comments almost always **open with plain prose stating
+what the module is for**, before any code example:
 
 - `std::http` → "Fetch URLs from Agency code. Returns the response as
-  text, JSON, or Markdown."
-- `std::date` → "Builds timezone-aware ISO 8601 date strings, the format
-  that APIs like Google Calendar expect."
+  text, JSON, or Markdown. Aborting tears down the in-flight request."
 - `std::math` → "Small deterministic arithmetic helpers: round, add,
   subtract, multiply, and a divide that returns a Result so you can
   handle division by zero."
@@ -133,8 +131,13 @@ statement of what the module is for**, before any code example:
   values, and entries, and transform them with `mapValues`, `mapEntries`,
   and `filterEntries`."
 
-That opening line is a ready-made summary. The generator is already
-holding it. It just isn't putting it into the front matter.
+That opening prose is a ready-made summary. The generator is already
+holding it; it just isn't putting it into the front matter. Note the
+length varies: some openings are a single crisp sentence, but others run
+two to four sentences (`std::date`'s is ~230 characters). The extraction
+rule below takes the whole opening paragraph, so the longer ones will be
+capped and truncated — see the note under Part A on when a `@summary`
+override is worth adding.
 
 ---
 
@@ -203,9 +206,14 @@ generated front matter, alongside the existing `name:`.
 its leading prose:
 
 1. Start at the first non-blank line of the comment body.
-2. Stop at the first blank line **or** the first code fence (a line
-   beginning with ` ``` `), whichever comes first. This discards the code
-   examples that usually follow the summary.
+2. Stop at the first blank line **or** the first code fence, whichever
+   comes first. This discards the code examples that usually follow the
+   summary. **Detect the fence after trimming each line's leading
+   whitespace** — `@module` bodies are indented, so the fence renders as
+   `  ```ts`, not a line that literally begins with ` ``` ` (verified in
+   the generated `http.md`). A `startsWith("```")` check on the raw line
+   misses it; today a blank line happens to precede every fence and masks
+   the bug, but that is incidental — trim first.
 3. Collapse all internal whitespace and newlines to single spaces, and
    trim.
 4. If the result is longer than a cap (proposed: **200 characters**),
@@ -244,18 +252,48 @@ description: "Fetch URLs from Agency code. Returns the response as text, JSON, o
 needs to split on `. `, which trips on abbreviations ("e.g.", "i.e.") and
 would occasionally cut a summary in half. The first-paragraph rule has
 unambiguous delimiters (blank line / code fence) and no natural-language
-parsing. It can run two or three sentences long, but that is acceptable
-for a tool-listing description, and the length cap plus the Part B
-override handle anything that reads badly.
+parsing. It can run two to four sentences long; the length cap keeps it
+bounded, and the Part B override handles anything that reads badly. Expect
+the initial regeneration to leave several long summaries truncated at the
+cap (`std::date` is the clearest case) — a first-pass sweep adding
+`@summary` overrides to the longest handful is worthwhile before shipping,
+not deferred indefinitely.
 
-**Escaping.** The description text goes into a YAML-ish `description:
-"..."` value and is later parsed back out by the front-matter reader.
-Double quotes and backslashes in the text must be escaped so the value
-stays well-formed. The existing `name:` emission already strips a small
-set of characters (`lib/cli/doc.ts:169`); the description needs
-equivalent care. The exact quoting is an implementation detail for the
-plan, but it must round-trip: what `agency doc` writes, the front-matter
-parser in `std::markdown` must read back unchanged.
+**Emitting the value: quoted, with `"` and `\` stripped — not bare, not
+escaped.** This is subtle because the generated front matter has *two*
+consumers with different YAML rules, and they pull in opposite directions:
+
+- The **agent** reads it through `std::markdown`'s `frontmatter`, which is
+  tarsec's parser. Tarsec's quoted-value path is `map(quotedString,
+  stripQuotes)`, and `stripQuotes` is `s.slice(1, -1)` — it removes the
+  outer quotes and **unescapes nothing**. So an *escaped* value like
+  `description: "...e.g. \"America/New_York\"..."` reaches the agent with
+  literal backslashes. Escaping is therefore wrong.
+- The **docs site** reads it through VitePress (`docs/site/.vitepress/`),
+  whose gray-matter/js-yaml is a *strict* YAML parser. A **bare** value is
+  rejected when it contains `: ` (colon-space), which many stdlib
+  summaries do (`std::math` → "…helpers: round, add…"; `std::object` →
+  "…objects: read their keys…"). So bare emission would break the docs
+  build.
+
+The value that satisfies both: a **double-quoted** scalar whose content
+has had `"` and `\` **removed** (mirroring exactly what `name` already
+does at `lib/cli/doc.ts:169`, `title.replace(/["\\\n]/g, "")`). Quoting
+makes colon-space, `#`, `[`, and apostrophes safe for strict YAML;
+removing (not escaping) `"`/`\` means tarsec's `stripQuotes` returns clean
+text with no stray backslashes. `std::date`'s `e.g. "America/New_York"`
+becomes `e.g. America/New_York` in the emitted value — lossy on the inner
+quotes, but readable and correct in both parsers. Replacing `"` with `'`
+instead of deleting it is an acceptable nicety; deleting matches the
+existing `name` precedent. The acceptance test is a genuine round-trip:
+run a value containing `"` and `: ` through `agency doc`, then read it
+back with `std::markdown`'s `frontmatter`, and assert the string matches
+what was intended with no backslashes.
+
+**Files with no `@module` comment.** One stdlib module (`std::mcp`) lacks
+a `@module` comment today. When there is no comment, emit no
+`description:` field (exactly today's behavior) — do not emit an empty
+one. The agent falls back to the module name, no worse off than now.
 
 **Files with no `@module` comment.** One stdlib module lacks a `@module`
 comment today. When there is no comment, emit no `description:` field
@@ -320,20 +358,25 @@ that staging so `stdlib/docs/stdlib/` exists in both dev and npm installs.
 would list only the 35 top-level modules and **silently drop the other
 29** — worse than useless, because it looks complete.
 
-The stdlib doc tool must glob recursively (`**/*.{md,markdown}`) so all 64
-modules appear, each with its subdirectory-qualified `location` (e.g.
-`ui/table.md`) that `read` can resolve. The plan should choose the
-least-invasive way to get recursion for this one case without changing
-the behavior of existing `skillsDir(..., "flat")` callers — options
-include a recursive-flat variant or a dedicated glob for the docs path.
-Whichever is chosen, the acceptance check is concrete: the generated tool
-description must list all 64 modules, including the nested ones.
+The stdlib doc tool must glob recursively so all 64 modules appear, each
+with its subdirectory-qualified `location` (e.g. `ui/table.md`) that
+`read` can resolve. The pattern `**/*.{md,markdown}` is confirmed to do
+this: run against `_glob`, `*.{md,markdown}` matches 35 (top-level only)
+while `**/*.{md,markdown}` matches all 64 — tarsec's glob does *not* hit
+the classic "`**/` excludes top-level files" trap, and `_glob`'s
+`walkDir` already recurses the whole tree, so the only change is the
+pattern's regex. The plan should choose the least-invasive way to route
+this recursive pattern to the stdlib docs case without changing the
+behavior of existing `skillsDir(..., "flat")` callers — options include a
+recursive-flat variant or a dedicated glob for the docs path. The
+acceptance check is concrete: the generated tool description must list all
+64 modules, including the nested ones.
 
 **4. Register the tool in the subagents.** Add `docsSkill("stdlib")` to
 the tool lists of the subagents that answer standard-library questions —
 **code**, **research**, and **explorer** — and add a one-line note to each
 of their system prompts describing it, mirroring how `docSkill` /
-`cliSkill` are introduced today (e.g. `code.agency:99`). The oracle is
+`cliSkill` are introduced today (e.g. `code.agency:100`). The oracle is
 out of scope for now; it can be added later if it proves useful.
 
 ---
@@ -343,12 +386,17 @@ out of scope for now; it can be added later if it proves useful.
 - **Part A/B, unit level.** Table-driven tests over the extraction rule:
   a comment with a code fence stops at the fence; a multi-paragraph
   comment stops at the first blank line; a `@summary` line overrides and
-  is stripped from the body; a comment longer than the cap truncates on a
-  word boundary; a file with no `@module` emits no `description:`; quotes
-  and backslashes round-trip through the front-matter parser.
+  is stripped from the body; an indented code fence (`  ```ts`) is still
+  detected as a fence; a comment longer than the cap truncates on a word
+  boundary; a file with no `@module` emits no `description:`. A dedicated
+  round-trip test: emit a value containing `"` and `: `, then read it back
+  with `std::markdown`'s `frontmatter` and assert the string is clean (no
+  stray backslashes, quotes handled as the strip rule specifies).
 - **Part A/B, integration.** Run `agency doc` over `stdlib/` and assert a
-  spot-check set (`http`, `date`, `math`, a nested one like `ui/table`)
-  each gain a sensible `description:`.
+  spot-check set (`http`, `date`, `math`, `object`, a nested one like
+  `ui/table`) each gain a sensible `description:`, and that VitePress's
+  YAML parser accepts the generated front matter (the colon-space cases
+  `math` / `object` are the ones a bare value would have broken).
 - **Part C.** Build the tool via `docsSkill("stdlib")` and assert its
   description lists all 64 modules (the nested-glob regression), each with
   a non-empty `<description>`. Confirm the code/research/explorer

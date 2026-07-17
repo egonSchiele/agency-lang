@@ -164,7 +164,63 @@ The corrected behaviour is what Section 6.1 designs against.
 `lib/stdlib/imessage.ts` has this same latent problem today and handles neither
 half of it.
 
-### 2.7 There is no way to unlock a locked note
+### 2.7 A locked note's body reads as empty, and that is dangerous
+
+This came from the live spike (Section 9.2). It is the most important safety
+finding in the document.
+
+Reading `body` of a locked note does not fail. Notes returns an **empty string**:
+
+```
+--- body (EXPECTED TO FAIL or return empty) ---
+                                                  <- blank. No error, no content.
+```
+
+Now recall what append does (Section 6.4). It reads the body, concatenates, and
+writes it back. On a locked note that becomes:
+
+```applescript
+set body of n to "" & "the new text"
+```
+
+That **replaces the note's contents with the appended text**. The user's locked
+note is destroyed, silently, by an operation named "append".
+
+The `password protected` flag is readable, so the guard in Section 6.3 catches
+this. But the framing matters, and the original draft got it wrong. That guard is
+not a nicety that produces a friendlier error. It is the only thing standing
+between a locked note and silent data loss. It must never be skipped, never
+reordered to after the read, and never removed as apparently-dead code. Section
+8.2 requires a test whose whole job is to fail if someone does.
+
+We do not know whether `set body` on a locked note would actually succeed. It may
+error harmlessly. The design must not depend on finding out.
+
+### 2.8 There are two permission errors, and one of them is clear
+
+Section 2.6 said `-1712` is the only signal and cannot distinguish causes. That
+is incomplete. A second error exists:
+
+```
+execution error: Not authorized to send Apple events to Notes. (-1743)
+```
+
+They mean different things:
+
+| Code | Meaning |
+|---|---|
+| `-1743` | Not authorized. No grant, or it was denied. No dialog is pending. |
+| `-1712` | AppleEvent timed out. Usually a consent dialog is on screen, unanswered. |
+
+`-1743` is unambiguous and should be mapped as a clean permission error. `-1712`
+stays ambiguous and keeps its hedged wording. Section 6.1 maps both.
+
+Worth knowing: **TCC grants are per calling application.** A grant given to
+Terminal does not extend to any other process. That is how `-1743` appears on a
+machine where Notes automation already works fine for the user, and it is why
+Section 9.2 could not be settled without the owner present.
+
+### 2.9 There is no way to unlock a locked note
 
 The word "password" appears exactly once in the entire sdef, at line 137, as the
 read-only `password protected` boolean. There is no unlock command, no password
@@ -213,6 +269,19 @@ one. Bear deserves its own design conversation, not a footnote in this one.
 **Apple Notes is the one with no escape hatch.** There is no file to write and no
 alternative interface. It is also the one with a clean precedent to copy. So it
 is the one worth building.
+
+### 3.1a Status of this document
+
+**Revised 2026-07-16** after an external review and a live spike against real
+Notes.app. The revision folded in eleven review findings and four measured
+answers. Two things the original asserted turned out to be wrong, and both are
+corrected in place rather than quietly dropped:
+
+- The `osascript` argv example in Section 3.6 was off by one. Verified wrong.
+- Section 2.6 claimed `-1712` was the only permission signal. See Section 2.8.
+
+One blocker remains open, in Section 9.2. It must be settled before the Notes
+module is implemented.
 
 ### 3.2 Full CRUD, including reading note bodies
 
@@ -344,11 +413,38 @@ const SCRIPT = `on run argv
   ...
 end run`
 
-await execFileAsync("osascript", ["-e", SCRIPT, "-", title, body])
+await execFileAsync("osascript", ["-e", SCRIPT, title, body])
 ```
 
 `argv` values are never parsed as AppleScript. This removes the vulnerability
 class instead of escaping around it.
+
+**Do not put a `-` before the arguments.** An earlier draft of this spec did.
+`osascript` does not treat `-` as a separator; it passes it straight through as
+`item 1 of argv`, shifting every real argument by one. Verified on macOS 14.7.4:
+
+```
+$ osascript -e 'on run argv
+  return argv
+end run' - "hello" "world"
+-, hello, world          # the `-` is argv item 1
+
+$ osascript -e 'on run argv
+  return argv
+end run' "hello" "world"
+hello, world             # correct
+```
+
+The security claim itself is verified, not assumed. Passing this section's own
+injection payload as an argument returns it inert, with no evaluation and no
+shell-out:
+
+```
+$ osascript -e 'on run argv
+  return item 1 of argv
+end run' '"; do shell script "echo pwned"; "'
+"; do shell script "echo pwned"; "
+```
 
 The `imessage.ts` instance is filed separately as issue #561 rather than fixed
 here, to keep this work scoped and that fix reviewable on its own.
@@ -424,6 +520,7 @@ export type Note = {
   id: string
   title: string
   folder: string
+  account: string
   modified: string
   passwordProtected: boolean
 }
@@ -433,6 +530,7 @@ export type NoteContent = {
   id: string
   title: string
   folder: string
+  account: string
   body: string
   modified: string
 }
@@ -446,31 +544,54 @@ answerable by looking at the signature.
 ### 4.2 Functions
 
 ```ts
-createNote(title: string, body: string, folder: string = "Notes"): Result
-// -> success(Note) with the new id, so create-then-append needs no search.
+createNote(title: string, body: string, folder: string = "Agency Notes",
+           account?: string): Result<Note> raises <std::notes::create>
 
-appendToNote(id: string, body: string, folder?: string): Result
-// -> success(Note). body is markdown. folder asserts, see 3.4.
+appendToNote(id: string, body: string, folder?: string,
+             account?: string): Result<Note> raises <std::notes::append>
 
-readNote(id: string, folder?: string): Result
-// -> success(NoteContent). body is plaintext, see 2.4.
+readNote(id: string, folder?: string,
+         account?: string): Result<NoteContent> raises <std::notes::read>
 
-searchNotes(query: string, folder?: string): Result
-// -> success(Note[]). Metadata only. folder scopes the search.
+searchNotes(query: string, folder?: string,
+            account?: string): Result<Note[]> raises <std::notes::search>
 
-listNotes(folder?: string): Result
-// -> success(Note[]). Metadata only.
+listNotes(folder?: string,
+          account?: string): Result<Note[]> raises <std::notes::list>
 
-listFolders(): Result
-// -> success(Folder[])
+listFolders(account?: string): Result<Folder[]> raises <std::notes::list>
 
-deleteNote(id: string, folder?: string): Result
-// -> success(null). Moves to Recently Deleted, see 6.5.
+deleteNote(id: string, folder?: string,
+           account?: string): Result<null> raises <std::notes::delete>
 ```
 
-`body` on `createNote` and `appendToNote` is markdown. `body` on `NoteContent` is
-plaintext. That is confusing enough to be worth a docstring on each, and it is a
-direct consequence of Section 2.4 rather than a choice we made.
+Four things about these signatures are deliberate, and three of them came from
+review findings.
+
+**Typed results, not bare `Result`.** Section 4.1 argues the `Note` /
+`NoteContent` split makes "does this call expose note contents" answerable from
+the signature. A bare `Result` with the real type in a comment does not deliver
+that, because a comment is not a signature. `stdlib/agency.agency` already uses
+`Result<TypeCheckReport>` and friends, so this is the house style.
+
+**`raises` on every signature.** `stdlib/capabilities.agency`'s own module doc
+says individual functions should declare the specific effect they raise, and
+`stdlib/git.agency` follows it (`export idempotent def gitStatus(...): GitStatus
+raises <std::git::status>`). `imessage.agency` does not, which is where the
+original omission came from. `git.agency` is the newer and better precedent.
+
+**`account` is optional and defaults to the default account.** See Section 3.4.
+It exists so folder scoping is a real guarantee rather than an advisory one.
+
+**`folder` defaults to `"Agency Notes"`, and may not exist yet.** Chosen by the
+owner so a user can see at a glance which notes an agent made, and rename the
+folder if they want. Unlike Apple's `"Notes"`, it will not exist on a fresh
+machine, so `createNote` creates it on demand. Section 9.4.
+
+**A naming trap worth a docstring on each function:** `body` on `createNote` and
+`appendToNote` is **markdown**, but `body` on `NoteContent` is **plaintext**.
+That falls out of Section 2.4 rather than being a choice, and it will confuse
+someone.
 
 ---
 
@@ -481,24 +602,26 @@ Three layers, all of them existing language features. Nothing new is invented.
 ### 5.1 Effects
 
 ```ts
-effect std::notes::create { folder: string, title: string }
-effect std::notes::append { folder: string, title: string, id: string }
-effect std::notes::read   { folder: string, title: string, id: string }
-effect std::notes::search { query: string }
-effect std::notes::list   { folder: string }
-effect std::notes::delete { folder: string, title: string, id: string }
+effect std::notes::create { account: string, folder: string, title: string,
+                            folderCreated: boolean }
+effect std::notes::append { account: string, folder: string, title: string, id: string }
+effect std::notes::read   { account: string, folder: string, title: string, id: string }
+effect std::notes::search { account: string, folder: string, query: string }
+effect std::notes::list   { account: string, folder: string }
+effect std::notes::delete { account: string, folder: string, title: string, id: string }
 ```
 
 Per-operation effects rather than one blanket `std::notes`, so that a policy can
 approve reads and reject deletes. A single effect would make the whole mechanism
 useless here.
 
-Payloads carry `folder` and `title` because those are what policies glob against:
+Payloads carry `account`, `folder`, and `title` because those are what policies
+glob against:
 
 ```json
 {
   "std::notes::read": [
-    { "match": { "folder": "Work" }, "action": "approve" },
+    { "match": { "account": "iCloud", "folder": "Work" }, "action": "approve" },
     { "action": "reject" }
   ],
   "std::notes::delete": [{ "action": "reject" }]
@@ -507,6 +630,28 @@ Payloads carry `folder` and `title` because those are what policies glob against
 
 Payload design is safety design. A payload that omitted `folder` would make
 folder-scoped policies impossible to write.
+
+**The original spec broke its own rule in the line directly above that sentence.**
+`std::notes::search` was declared as `{ query: string }` with no `folder`, while
+Section 4.2 gave the function a `folder` argument and called it a scope. So
+`searchNotes` was scopable by PFA but not by policy, and it is the one read that
+fans out across the corpus. A user writing the policy above would reasonably think
+they had confined reads to Work, and `searchNotes` would have slipped past every
+folder rule they could express. Caught in review. All six payloads have been
+re-checked against their signatures, not just that one.
+
+`folderCreated` on `std::notes::create` exists because the `"Agency Notes"` default
+may not exist yet, so `createNote` can make a folder as a side effect. That is a
+write, and a write should be visible to whoever is approving the call rather than
+hidden inside another operation. Section 9.4.
+
+**One thing to verify during implementation, not to assume.** Optional parameters
+widen to `T | null` (`lib/parsers/function.test.ts:3618`), so a payload's `folder`
+is `null` when the caller omits it. What a policy glob does when matched against
+`null` is unknown. If `{"match": {"folder": "Work"}}` silently fails to match a
+null folder and falls through to a later approve rule, that is a fail-open on
+`listNotes()` with no arguments, which is the call with the widest reach. Check the
+matcher, state the answer, and test it.
 
 ### 5.2 Capability sets
 
@@ -530,26 +675,42 @@ To put `folder` and `title` into the `std::notes::read` payload, we must know
 them before raising the interrupt. So there is a metadata query that is itself
 not gated.
 
-That query reads two properties and nothing else:
+That query reads three properties and nothing else:
 
 ```applescript
-tell application "Notes"
-  set n to note id (item 1 of argv)
-  return (name of n) & tab & (name of container of n) & tab & (password protected of n)
-end tell
+on run argv
+  tell application "Notes"
+    set n to note id (item 1 of argv)
+    return (name of n) & tab & (name of container of n) & tab & ¬
+           ((password protected of n) as text)
+  end tell
+end run
 ```
 
 `body` and `plaintext` are never touched. The unguarded step learns a title, a
 folder name, and a locked flag. It never learns a single byte of note content.
 
-The reason this is acceptable is not that titles are unimportant. It is that the
-step is unreachable without already having passed a gate. The only ways to obtain
-a note id are `listNotes` and `searchNotes`, and both raise interrupts. So an
-agent holding an id has already been approved for a call that showed it that
-title. The lookup cannot enumerate anything and cannot reveal anything the caller
-was not already shown.
+The reason this is acceptable is **not** that the step is unreachable without a
+gate. An earlier draft claimed exactly that, saying "the only ways to obtain a
+note id are `listNotes` and `searchNotes`, and both raise interrupts". Review
+showed that is too strong. Ids are stable (Section 2.2), so they outlive the call
+that produced them. An id can reach a caller from the user's own message, from a
+note in a file, from a previous run's transcript, or from a restored checkpoint,
+none of which raise a Notes interrupt in this run.
 
-This should be documented in the module source, not left implicit.
+The argument that actually survives is narrower. **An id is unguessable.** It is
+an opaque `x-coredata://` URI that cannot be enumerated or constructed. So anyone
+holding one already learned it somewhere, and the lookup discloses only the title
+and folder that whoever handed them the id could already name. The step reveals
+nothing new to a caller who has an id, and a caller without one cannot invoke it.
+
+That distinction matters because Section 5.3's reasoning is meant to go in the
+module source, where it will be read by the next person deciding whether to add a
+third property to this query. "Unreachable without a gate" would license adding
+anything. "Discloses only what the id-holder already knows" does not.
+
+**This entire section is contingent on Section 9.2.** The pre-flight reads
+`name of container`, and the spike could not confirm that works.
 
 ### 5.4 Retry markers
 
@@ -561,8 +722,15 @@ Following the split that `clipboard.agency` demonstrates:
   removes it.
 - `readNote`, `searchNotes`, `listNotes`, `listFolders`: marked `idempotent`, and
   they raise an interrupt but have **no** destructive region. Reads are safe to
-  re-run but still need permission. This is exactly what `paste()` does, and for
-  the same reason.
+  re-run but still need permission.
+
+The original spec cited `paste()` in `clipboard.agency` for both halves of that.
+Only one half was right. `paste()` does demonstrate "interrupt but no destructive
+region", but it carries no `idempotent` marker at all, so it cannot be the
+precedent for marking reads. Use `stdlib/git.agency`, which marks all nine of its
+read functions (`export idempotent def gitStatus`, `gitLog`, `gitDiff`,
+`gitBlame`, and so on), or `stdlib/index.agency`, which marks `read` and
+`readBinary`.
 
 ### 5.5 What PFA buys
 
@@ -579,7 +747,7 @@ surface rather than half of it.
 
 ## 6. Error handling
 
-### 6.1 The two-minute timeout and the opaque -1712
+### 6.1 The two permission errors
 
 Every script is wrapped so that we choose the bound instead of inheriting
 AppleScript's 120-second default:
@@ -590,17 +758,27 @@ with timeout of 30 seconds
 end timeout
 ```
 
-Thirty seconds is a starting value, not a researched one. It should be a
-module-level constant so it is trivially changeable.
+The spike confirmed this works: with no grant in place, `with timeout of 10
+seconds` stopped at about 10 seconds rather than 120 (Section 9.5). Thirty
+seconds is a starting value, not a researched one. It should be a module-level
+constant.
 
-`-1712` maps to a failure that names the most likely cause without asserting it,
-because Section 2.6 established that the code genuinely cannot distinguish causes:
+Two error codes get mapped, and they say different things (Section 2.8).
+
+`-1743` is unambiguous, so its message is too:
+
+> Not authorized to control Notes. Grant permission in System Settings →
+> Privacy & Security → Automation.
+
+`-1712` is ambiguous, so its message hedges:
 
 > Notes did not respond within 30s. This usually means macOS automation
 > permission was not granted. Check System Settings → Privacy & Security →
 > Automation.
 
-The phrasing is deliberately "usually means" rather than "means".
+The "usually means" is deliberate. That code also covers a busy or wedged Notes,
+and we cannot tell which from the exit status. Claiming otherwise would send
+someone to fix a permission that was never the problem.
 
 ### 6.2 Platform check
 
@@ -612,25 +790,64 @@ if (process.platform !== "darwin") {
 }
 ```
 
-### 6.3 Locked notes
+### 6.3 Locked notes fail closed, and this prevents data loss
 
 The pre-flight lookup returns the `password protected` flag. If it is true,
 `readNote`, `appendToNote`, and `deleteNote` fail closed with the message from
 Section 3.7. We never attempt to unlock.
 
-### 6.4 Append is one script, not two
+**Read Section 2.7 before touching this.** A locked note's body reads as an empty
+string rather than erroring, so an append that skipped this guard would replace
+the note's contents with the appended text. This check is not about producing a
+nice error. It is the only thing preventing silent destruction of a locked note.
+
+### 6.4 Append is one script, but the assertion still needs re-checking
 
 Read, concatenate, and write all happen inside a single `osascript` invocation,
-so there is no gap between processes where another writer could land:
+so there is no gap between processes where another writer could land.
+
+The original spec stopped there, and review caught that it contradicted Section
+5.3. The pre-flight lookup is a *separate, earlier* `osascript` invocation, and
+Sections 3.4 and 6.3 hang the folder assertion and the locked check on its
+results. So the real sequence is:
+
+1. `osascript` #1: read name, container, password-protected.
+2. Assert the folder matches. Check the locked flag. Raise the interrupt.
+3. **A human approves. This can take arbitrarily long.**
+4. `osascript` #2: read-modify-write the body.
+
+The gap Section 6.4 claimed does not exist is the gap between steps 1 and 4, and
+it spans a human approval. In that window the note can move to another folder or
+be locked. So the assertion was check-then-act, and Section 6.6's unconditional
+"assertion does not match → fail closed" was not something the design delivered.
+
+The fix is cheap and it uses data already in argv. Re-assert inside the write
+script, in the same `tell` block as the mutation:
 
 ```applescript
-set n to note id (item 1 of argv)
-set body of n to (body of n) & (item 2 of argv)
+on run argv
+  tell application "Notes"
+    set n to note id (item 1 of argv)
+    if (name of container of n) is not (item 3 of argv) then
+      error "folder mismatch"
+    end if
+    if (password protected of n) then error "note is locked"
+    set body of n to (body of n) & (item 2 of argv)
+  end tell
+end run
 ```
 
-This narrows the race. It does not eliminate it. Notes offers no transaction, so
-a user typing into the note at that exact moment can still lose a keystroke. The
-honest claim is "meaningfully safer than two round trips", not "atomic".
+Now the pre-flight exists only to build the interrupt payload, which is what
+Section 5.3 says it is for, and the assertion is a guarantee rather than a
+best-effort. The locked re-check belongs here too, for the same reason and with
+much higher stakes (Section 2.7).
+
+This still does not make append atomic. Notes offers no transaction, so a user
+typing into the note at that exact moment can lose a keystroke. The honest claim
+is "meaningfully safer than two round trips", not "atomic".
+
+Note this interacts with Section 9.2. If the container cannot be read, this
+script cannot assert on it either.
 
 ### 6.5 deleteNote is recoverable
 
@@ -643,11 +860,12 @@ more final than what happens.
 | Condition | Result |
 |---|---|
 | Not macOS | Immediate failure, clear message |
-| Automation permission not granted | Blocks up to the timeout, then `-1712` mapped to a permission hint |
-| Note is locked | Fail closed, tell the user to unlock in Notes.app |
-| `folder` assertion does not match | Fail closed |
+| Automation permission denied or absent | `-1743` mapped to a clear "not authorized" failure |
+| Consent dialog on screen, unanswered | Blocks up to the timeout, then `-1712` mapped to a hedged permission hint |
+| Note is locked | Fail closed. Re-checked in the write script. Section 2.7 |
+| `folder` / `account` assertion does not match | Fail closed. Re-checked in the write script. Section 6.4 |
 | Note id does not exist | Failure naming the id |
-| Folder does not exist on create | Failure naming the folder |
+| Folder does not exist on create | Created, with `folderCreated: true` in the payload. Section 9.4 |
 
 ---
 
@@ -685,15 +903,45 @@ Two rules that matter:
 The second rule is a real behavioural difference from `renderForCli`, and it will
 surprise someone eventually. It needs a docstring and a test.
 
+A third rule, added after implementation: **URL schemes are restricted.** Only
+`http`, `https`, `mailto`, `tel`, and relative paths survive. Anything else,
+notably `javascript:` and `data:`, is dropped and the link renders as plain text.
+An LLM writing `[click](javascript:...)` into a note is the same untrusted-input
+problem Section 3.6 addresses, one layer up.
+
+Frontmatter is omitted, matching what conventional Markdown-to-HTML renderers do
+with document metadata.
+
+**Status: implemented.** `_renderMarkdownForHtml` in `lib/stdlib/markdown.ts`,
+exported as `renderForHtml` from `stdlib/markdown.agency`, with 34 unit tests in
+`lib/stdlib/__tests__/markdown.test.ts`. The three security properties above were
+mutation-tested: neutering the URL sanitiser fails 4 tests, passing raw HTML
+through fails 2, and removing escaping fails 5. Section 9.1's answer means the
+renderer needs no leading `<h1>`, so it is genuinely independent of the Notes
+module, exactly as Section 11 hoped.
+
 ---
 
 ## 8. Testing
 
-### 8.1 What we cannot test
+**Unit tests only. No integration tests.** Decided by the owner, for a concrete
+reason: a test that reaches the real Notes.app can damage real notes when someone
+runs the suite locally. There is no safe way to write an automated test that
+mutates a live personal database, so we do not write one.
 
-Real Notes.app cannot be touched in CI. CI has no TCC grant, and Section 2.6
-established precisely what that costs: a two-minute block and an opaque failure.
-Any test that reaches the real app would be a two-minute flake.
+This is not merely a CI constraint, though it is that too. CI has no TCC grant, so
+any test reaching the real app would also be a two-minute flake (Section 2.6).
+
+### 8.1 What this rules out
+
+- No tests in `tests/agency/` that call `createNote`, `appendToNote`, or any
+  other function in this module. Those execute the real stdlib, which shells to
+  `osascript`, which touches the user's real notes. An earlier draft of this spec
+  proposed exactly that. It was wrong.
+- No live verification step in the work breakdown.
+
+The four questions that genuinely need the real app are handled by a one-off
+manual spike (Section 9), not by anything committed or automated.
 
 ### 8.2 appleNotes.ts unit tests
 
@@ -707,104 +955,154 @@ Cases:
   the script source.
 - **The injection test.** A title of `"; do shell script "rm -rf ~"; "` must
   appear as an inert argv entry. This is the most important test in the module.
-- `-1712` maps to the permission-hint failure.
-- Locked note fails closed and never issues a body read.
+- `-1743` maps to a clear "not authorized" failure.
+- `-1712` maps to the hedged permission-hint failure.
+- **The locked-note test.** A note whose `password protected` reads `true` must
+  fail closed, and `appendToNote` must never issue a body write for it. Per
+  Section 2.7 this is data-loss prevention, not cosmetics. This test exists so
+  that deleting the guard fails the build.
 - `folder` assertion mismatch fails closed.
 - Non-darwin fails immediately.
 - Unknown id produces a failure naming the id.
 
-### 8.3 renderForHtml unit tests
+### 8.3 renderForHtml unit tests — done
 
-Pure function, no mocks. The cheapest and highest-value tests here. In
-`lib/stdlib/__tests__/markdown.test.ts` alongside the existing renderer tests:
-headings at each level, nested emphasis, code blocks with and without a language,
-both list kinds, links, block quotes, HTML-escaping of text content, and
-`html-block` being dropped.
+Pure function, no mocks. 34 tests in `lib/stdlib/__tests__/markdown.test.ts`,
+covering headings at each level, nested emphasis, code blocks with and without a
+language, both list kinds, task-list checkboxes, links, images, block quotes,
+tables with alignment, HTML-escaping of text and of table cells, raw HTML being
+dropped, unsafe URL schemes being dropped, frontmatter being omitted, and junk
+input being skipped rather than throwing.
 
-### 8.4 Agency-level tests
-
-In `tests/agency/`. These need no LLM calls, per the project's testing guidance:
-
-- Each function raises its interrupt with the correct effect and payload.
-- Rejecting the interrupt halts before any write.
-- `.partial(folder:)` narrows the tool schema so `folder` is absent from it.
-- The folder assertion rejects a mismatched note.
-
-### 8.5 Live verification
-
-Manual and opt-in, never in CI. This has to happen at least once against a real
-Notes.app before the module ships, because a dictionary is documentation and
-documentation is sometimes wrong. Section 9 is the list of things that can only
-be settled this way.
+The file did not exist before this work, so `renderForCli` had no tests either.
+It still has none; adding them is out of scope here but worth filing.
 
 ---
 
-## 9. Open questions requiring a live spike
+## 9. The live spike, and what it measured
 
-These are unresolved. They should be settled by a spike before implementation
-rather than designed around, because guessing wrong on either means rewriting a
-code path.
+A one-off manual spike ran against real Notes.app on macOS 14.7.4. It was not a
+test and nothing about it is committed. Every note it created went into a
+throwaway folder called "Agency Spike", which it then deleted.
 
-### 9.1 Does setting `name` actually set the title?
+Three of the four questions are answered. One turned into a blocker.
 
-The sdef says `name` is read/write. Widely repeated folklore says Notes derives a
-note's title from the first line of the `body` and ignores `name`. Both cannot be
-true.
+### 9.1 Does setting `name` set the title? **Yes. Resolved.**
 
-This decides whether `createNote` sets `name` directly or has to prepend an
-`<h1>` to the rendered body. It changes the create path and it changes what
-`renderForHtml` output has to look like at the top.
+The folklore is wrong. Creating a note with `name` and the body's first line set
+to different values, then reading `name` back:
 
-Spike: create a note with `name` and `body` set to different values, then read
-back `name`.
+```
+name property reads back as: TITLE_FROM_NAME
+```
 
-### 9.2 Are `name` and `container` readable on a locked note?
+So `createNote` sets `name` directly, and `renderForHtml` needs no leading
+`<h1>`. This also confirms the renderer is genuinely independent of the Notes
+module, which is why it could be built first.
 
-Section 5.3's pre-flight assumes it can read a locked note's title and folder in
-order to report them. If Notes errors on any property access to a locked note,
-that assumption breaks.
+### 9.2 Is a locked note's metadata readable? **Partly. This is the blocker.**
 
-This decides whether locked notes show up in `listNotes` as visible-but-unreadable
-or are invisible entirely, which decides what the Section 6.3 error message can
-even say.
+Mixed, and the mix is the problem:
 
-Spike: lock a note, then read `name`, `container`, and `password protected`.
+| Property | Result |
+|---|---|
+| `name` | `lockme` — readable |
+| `password protected` | `true` — readable |
+| `body` | **empty string, no error** — see Section 2.7 |
+| `container` | **error -1728, "Can't get name of container of note..."** |
 
-### 9.3 What does `searchNotes` map onto?
+The good half: `name` and `password protected` both read fine, so we can always
+detect a locked note and name it in an error. Locked notes are
+visible-but-unreadable, not invisible.
 
-AppleScript `whose` clauses can filter on properties. Whether a body text search
-is expressible as a `whose` clause, and whether it is fast enough on a large
-corpus, is unverified. The fallback is fetching metadata and filtering in
-TypeScript, which would mean `searchNotes` cannot search body text at all without
-reading every body, which would defeat the read gate entirely.
+The blocker: **`name of container` errored, and the spike cannot say why.** The
+probe was designed badly. It never read `name of container` on an *unlocked*
+note, so two very different explanations both fit:
 
-This is the highest-risk unknown in the design. If `whose` cannot search bodies,
-`searchNotes` either becomes title-only or it has to be cut.
+1. Locked notes hide their container. A narrow problem, affecting only the
+   locked path, which already fails closed.
+2. `name of container of note X of folder Y` does not work on any note. If so,
+   **Section 5.3's pre-flight lookup is broken**, and with it the folder
+   assertion in Section 3.4, the `folder` field in every payload in Section 5.1,
+   and the account resolution in Section 3.4's repair. That is most of the
+   scoping story.
 
-### 9.4 Is `"Notes"` a safe default folder?
+Until this is settled, no part of the Notes module that depends on the pre-flight
+should be implemented.
 
-Section 4.2 gives `createNote` a default of `folder: string = "Notes"`. That is an
-assumption and it has two problems.
+Settling it needs one read-only command against an unlocked note:
 
-Folder names are user-visible strings, and macOS localises them. On a French
-system the default folder is likely "Notes" still, but this is unverified, and any
-localisation at all makes a hardcoded English default wrong. Separately, folders
-live under accounts (iCloud, "On My Mac"), and a user with both may have two
-folders named "Notes". Addressing by bare name does not say which.
+```bash
+osascript -e 'tell application "Notes"
+  return name of container of note "TITLE_FROM_NAME" of folder "Agency Spike"
+end tell'
+```
 
-Options, in order of preference:
+Returns `Agency Spike` → explanation 1, narrow fix. Errors with `-1728` →
+explanation 2, and Section 5.3 needs rework before the plan is written.
 
-- Resolve the true default folder at runtime rather than hardcoding a name, if
-  AppleScript exposes a way to ask for it.
-- Make `folder` required, so the caller always states it. Slightly worse
-  ergonomics, no wrong guesses.
-- Keep the `"Notes"` default and document that it is English-default-account only.
+It has to be run from a terminal the user has granted Notes automation to. A
+different process gets `-1743` regardless of the answer (Section 2.8), which is
+why this could not be resolved without the owner present.
 
-Spike: check whether the default folder is reachable without naming it, and what
-happens when two accounts both have a "Notes" folder.
+### 9.3 Can `whose` search note bodies? **Yes, both ways. Resolved.**
 
-This interacts with Section 10's decision to keep accounts out of scope. If the
-two-accounts case is common, that exclusion may not survive.
+The highest-risk unknown landed on the good side. A note with a marker in its
+body but never in its title:
+
+```
+test A: notes whose body contains the marker       -> matches: 1
+test B: notes whose plaintext contains the marker  -> matches: 1
+test C: notes whose name contains "searchtarget"   -> matches: 1  (control)
+```
+
+`searchNotes` is viable and can search content, so it survives intact.
+
+**Design decision that falls out of this:** search `plaintext`, not `body`. Both
+work, but `body` is HTML, so searching it matches markup. A user searching for
+`div` or `style` would match every note they own. `plaintext` has no markup and
+matches what a person means.
+
+### 9.4 Is the default folder safe? **Resolved, and the question changed.**
+
+The owner chose **"Agency Notes"** as the default folder rather than `"Notes"`,
+so that a user can see at a glance which notes an agent created, and rename the
+folder if they like.
+
+This dissolves the localisation problem, since the name is now ours rather than
+Apple's. It introduces a new requirement: **"Agency Notes" will not exist on a
+fresh machine, so `createNote` has to create it on demand.** That is a write, and
+it should be visible. Rather than invent a separate `createFolder` effect, the
+`std::notes::create` payload gains `folderCreated: boolean`, so a policy or a
+human can see a folder being made.
+
+The spike also confirmed a cleaner way to find the real default, if we ever want
+it:
+
+```
+account: iCloud | default folder: Notes
+```
+
+`default folder of account` works, so the default is queryable rather than
+guessable.
+
+On the owner's machine there is exactly **one** account. So the multi-account
+ambiguity of Section 3.4 cannot occur there today. The `account` argument is
+still in the design, because the owner asked for it and because it is correct for
+other people, but it is insurance rather than a fix for a live problem.
+
+### 9.5 Does `with timeout` bound the consent wait? **Yes. Resolved.**
+
+Added to this section on the reviewer's argument that Section 6.1 depended on an
+unverified assumption, which was correct.
+
+Owner-reported: with no grant in place, `with timeout of 10 seconds` stopped at
+about 10 seconds rather than running to AppleScript's 120-second default. Section
+6.1 stands as written.
+
+Consistency check on that report: at the time it ran the grant did not yet exist,
+so an instant return was impossible, and a 10-second stop can only mean the
+timeout bounded it.
 
 ---
 
@@ -814,10 +1112,13 @@ two-accounts case is common, that exclusion may not survive.
 - **Unlocking password-protected notes.** Section 3.7. Explicitly rejected, not
   deferred.
 - **Attachments.** The sdef exposes an `attachment` class. Not in this design.
-- **Accounts.** Folders are addressed by name in the default account. Multi-account
-  addressing is not in this design.
 - **Fixing imessage.ts.** Filed as issue #561.
 - **Moving notes between folders.** Not requested.
+- **Tests that touch real Notes.app.** Section 8.
+
+Accounts **were** on this list. They are now in scope, per Section 3.4 and the
+owner's decision. Section 9.4 predicted the exclusion would not survive, and it
+did not.
 
 ---
 
@@ -825,16 +1126,51 @@ two-accounts case is common, that exclusion may not survive.
 
 Rough shape for the implementation plan, which is a separate document.
 
-1. Live spike to settle Section 9. Blocks everything else.
-2. `renderForHtml` in `std::markdown`, plus its tests. Independent of the spike,
-   so it can go first or in parallel.
-3. `lib/stdlib/appleNotes.ts`: argv-based script construction, error mapping,
-   pre-flight lookup, plus unit tests.
+**Done.**
+
+1. Live spike, Section 9. Three of four questions answered. 9.2 is still open and
+   still blocks the Notes module.
+2. `renderForHtml` in `std::markdown`, plus 34 unit tests. Section 9.1's answer
+   confirmed this is independent of the Notes module, so it went first.
+
+**Blocked on Section 9.2.** Everything below depends on the pre-flight lookup,
+which is exactly what 9.2 puts in doubt.
+
+3. `lib/stdlib/appleNotes.ts`: argv-based script construction, error mapping for
+   `-1743` and `-1712`, pre-flight lookup, the locked-note guard, plus unit tests.
 4. `stdlib/notes/apple.agency`: types, effects, functions, docstrings.
 5. `stdlib/capabilities.agency`: the three effect sets.
-6. Agency-level tests in `tests/agency/`.
-7. Docs. Module doc comments generate the stdlib reference page via `agency doc`,
+
+**Not blocked.**
+
+6. Docs. Module doc comments generate the stdlib reference page via `agency doc`,
    so they are written in the source rather than hand-edited. A guide page
    showing the Obsidian `std::fs` pattern is worth including here, since Section
    3.1 makes it the answer for Obsidian users.
-8. Manual live verification against real Notes.app.
+
+---
+
+## 12. Outstanding review findings
+
+An external review raised eleven findings. These are folded in above:
+
+| # | Finding | Where |
+|---|---|---|
+| 1 | argv example off by one. Verified wrong. | 3.6, fixed |
+| 3 | Folder name is not an address | 3.4, account argument |
+| 10 | Missing `with timeout` spike | 9.5, resolved |
+| 11 | 9.1 blocks the renderer; 9.3 fallback is a cut | 9.1 and 9.3, both resolved |
+
+These remain to be applied when the module itself is written, and are recorded
+here so they are not lost:
+
+| # | Finding | Action |
+|---|---|---|
+| 2 | `std::notes::search` payload omits `folder`, contradicting Section 5.1's own rule | Add `folder` and `account`. Re-check all six payloads against their signatures. |
+| 4 | The folder assertion is check-then-act. The gap between the pre-flight and the write spans a human approval, so the note can move or be locked in between. | Re-assert inside the write script, in the same `tell` block as the mutation. |
+| 5 | No signature declares `raises`, though Section 5.2 adds effect sets whose only purpose is `raises` clauses. `git.agency` is the precedent, not `imessage.agency`. | Add `raises <std::notes::read>` etc. to all seven. |
+| 6 | Section 5.4 cites `paste()` as `idempotent`. It has no marker. The "interrupt but no destructive region" half of the citation is right; the other half is not. | Cite `git.agency` or `index.agency`, which do mark their reads. |
+| 7 | Optional parameters widen to `T \| null`, so a payload's `folder` is `null` when omitted. Unknown what a policy glob does when matched against `null`. A silent non-match that falls through to a later approve rule would fail open on `listNotes()`, the call with the widest reach. | Verify the matcher's behaviour, state it, and test it. |
+| 8 | Signatures return bare `Result`, with the real type in a comment. That discards the `Note` vs `NoteContent` split Section 4.1 argues for, since a comment is not a signature. | Use `Result<NoteContent>`, `Result<Note[]>`, `Result<Folder[]>`. `agency.agency` is the precedent. |
+| 9 | Section 5.3's "the only ways to obtain an id are gated" is too strong. Ids are stable, so they outlive the call that produced them and can arrive from a user message, a file, or a restored checkpoint. | Reframe: an id is unguessable, so whoever holds one already learned it somewhere, and the lookup discloses only what they could already name. That claim survives. |
+| 11b | Section 7 assumes dropping raw HTML silently. | Decide silent versus a diagnostic. Currently silent. |

@@ -2,6 +2,7 @@ import {
   _parseMarkdown,
   _walkMarkdown,
   _renderMarkdownForCli,
+  _renderMarkdownForHtml,
  } from "agency-lang/stdlib-lib/markdown.js"
 
 /** @module
@@ -294,4 +295,29 @@ export def renderForCli(blocks: any[]): string {
   @param blocks - The array of block nodes to render
   """
   return _renderMarkdownForCli(blocks)
+}
+
+/** Unlike [renderForCli](#renderforcli), this renderer treats the AST as
+    untrusted, because the Markdown it renders is often written by a model.
+    Text is escaped, URLs are restricted to `http`, `https`, `mailto`, `tel`,
+    and relative paths, and raw HTML in the source is dropped rather than
+    passed through. Frontmatter is omitted, since it is metadata rather than
+    content.
+
+    ```ts
+    import { parse, renderForHtml } from "std::markdown"
+
+    const result = parse("## Findings\n\n- one\n- two")
+    const html = renderForHtml(result.blocks)
+    // <h2>Findings</h2>
+    // <ul><li>one</li><li>two</li></ul>
+    ``` */
+export def renderForHtml(blocks: any[]): string {
+  """
+  Render a Markdown AST to an HTML string. Text content is escaped, unsafe URL
+  schemes are dropped, and raw HTML in the source is not passed through.
+
+  @param blocks - The array of block nodes to render
+  """
+  return _renderMarkdownForHtml(blocks)
 }

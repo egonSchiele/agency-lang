@@ -93,7 +93,7 @@ async function raiseOneTrip(
     const recorded = ctx.getInterruptResponse(persistedId);
     if (recorded) {
       delete stack.other[key];
-      applyVerdict(recorded, scope, tripped, err);
+      applyVerdict(recorded, scope, tripped, err, stack);
       return undefined;
     }
     // The question is already OPEN (persisted, no answer yet — e.g. a
@@ -143,7 +143,7 @@ async function raiseOneTrip(
         },
       );
       if (isApproved(verdict) || isRejected(verdict)) {
-        applyVerdict(verdict, scope, tripped, err);
+        applyVerdict(verdict, scope, tripped, err, stack);
         return undefined;
       }
       // Unanswered: persist the id so the resumed gate finds the answer,
@@ -172,18 +172,29 @@ function applyVerdict(
   scope: GuardScope,
   tripped: Guard,
   err: GuardExceededError,
+  stack: StateStack,
 ): void {
   if (isApproved(verdict)) {
+    const payload = ((verdict as { value?: unknown }).value ?? {}) as Parameters<
+      GuardScope["extend"]
+    >[0];
     // GuardScope.extend enforces the whole answer contract: additive
     // grants, negative clamps, disarm, root refusal, and the useless-
     // approval error (leaves the tripped dimension over budget and
     // armed → would re-trip forever).
-    scope.extend(
-      ((verdict as { value?: unknown }).value ?? {}) as Parameters<
-        GuardScope["extend"]
-      >[0],
-      tripped.dimension,
-    );
+    scope.extend(payload, tripped.dimension);
+    // approve({message}) is the feedback channel (PR 4): the merged
+    // message (effectMerge newline-joins multiple handlers') queues on
+    // the raising branch and rides into the thread as a labeled
+    // user-role message before the branch's next model request. Queued
+    // AFTER extend so a defective answer (GuardApproveError) never
+    // leaves its message behind.
+    if (payload.message !== undefined && payload.message !== "") {
+      stack.queueGuardFeedback(
+        payload.message,
+        `guard:${tripped.label ?? tripped.dimension}`,
+      );
+    }
     return;
   }
   // Rejected: the trip stands. Deliver the ORIGINAL error; from here the

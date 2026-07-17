@@ -467,6 +467,38 @@ them. PR 3 adds two raise surfaces and the join rule:
   it, a clock crossing its limit after the work concluded would raise a
   question about nothing, and a late timer fire could flip a computed
   success into a failure.
+## The feedback channel (resumable guards, PR 4)
+
+`approve({message})` delivers reviewer feedback to the model. Two
+halves:
+
+- **Queueing:** `applyVerdict` (guardTripInterrupt.ts) pushes the
+  merged message (effectMerge newline-joins multiple handlers') onto
+  the raising branch's `stack.other.__guardFeedback` via
+  `StateStack.queueGuardFeedback` — branch-local (each fork branch has
+  its own stack) and serialized (an approve applied just before a
+  checkpoint keeps its message). The entry carries its label,
+  `guard:<label>` (the guard's `label:`, falling back to the
+  dimension). Queued after `scope.extend` so a defective answer
+  (GuardApproveError) never leaves a message behind. Feedback queued in
+  a fork branch that makes no further request dies with the branch at
+  the join — same lifetime as the branch's reply-attachment queue.
+- **Draining:** `runPrompt` drains the queue in an idempotent step of
+  its own right before each request step — `guardFeedback.initial`,
+  `round.N.guardFeedback`, `validation.N.guardFeedback`, and
+  `<key>.retryFeedback.N` inside the trip-retry wrapper (a mid-request
+  approve's message belongs in the re-issued request). One user-role
+  thread message per queued approval, oldest first, pushed with its
+  label via `MessageThread.push(message, label)` (#557) — labels are
+  observability-only and never reach the provider. A message queued
+  outside any LLM loop (a step-boundary approve in plain code) waits
+  and lands at the branch's next `llm()` call's initial drain.
+
+Cross-process: the approve payload rides the interrupt IPC verbatim, so
+a PARENT's `approve({message})` for a CHILD's forwarded trip queues and
+injects inside the child
+(tests/agency/subprocess/trip-forward-approve-message).
+
 - **The join rule (decision 15, "the grant follows the budget"):**
   `TimeGuard.extendBudget` records its clamped grant in a serialized
   `grantedMs`; `cloneForBranch` deliberately does NOT copy it (it means

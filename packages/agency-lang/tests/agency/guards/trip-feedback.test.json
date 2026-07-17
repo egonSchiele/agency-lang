@@ -1,0 +1,33 @@
+{
+  "tests": [
+    {
+      "nodeName": "checkpointMessage",
+      "input": "",
+      "expectedOutput": "\"delivered:user:at-2|total:5\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "one"
+        },
+        {
+          "return": "two"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "resolve",
+          "resolvedValue": {
+            "maxCost": 0.0001,
+            "message": "spend less on this"
+          }
+        }
+      ],
+      "description": "A harness approve carrying a message crosses a real checkpoint: the resumed run queues it from the recorded answer and injects it as a user message between the first exchange and the second prompt (thread order: prompt, reply, feedback, prompt, reply)."
+    }
+  ]
+}

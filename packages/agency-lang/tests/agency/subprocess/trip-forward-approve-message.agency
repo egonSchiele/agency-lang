@@ -1,0 +1,52 @@
+import { compile, run } from "std::agency"
+
+// The child-trip e2e deferred from resumable-guards PRs 2/3, plus the
+// PR 4 message. The guard and its trip live INSIDE the child: the
+// child has no handler, so the std::guard interrupt forwards over the
+// interrupt IPC to the parent; the PARENT handler approves with more
+// budget and a feedback message; the answer crosses back; the child
+// applies it — extends the budget, queues the message — and injects
+// the message into its OWN thread before its second request. The child
+// self-asserts delivery (role included) and the parent relays its
+// verdict.
+node main() {
+  const source = """
+import { guard, getThread, currentThreadId } from "std::thread"
+node main() {
+  const r = guard(cost: $0.000001, label: "child-budget") as {
+    const a = llm("Reply with: one")
+    const b = llm("Reply with: two")
+    return b
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  const t = getThread(currentThreadId(), 0, 50)
+  if (isFailure(t)) { return "thread-read-failed" }
+  let verdict = "missing"
+  for (m in t.value) {
+    if (m.content == "child: wrap it up") {
+      verdict = "delivered:" + m.role
+    }
+  }
+  return verdict
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(compiled: compileResult.value, node: "main")
+    if (isFailure(result)) {
+      return "run failed:${result.error.type}"
+    }
+    return result.value.data
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+    if (e.effect == "std::guard") {
+      return approve({ maxCost: 0.0001, message: "child: wrap it up" })
+    }
+    return pass()
+  }
+}

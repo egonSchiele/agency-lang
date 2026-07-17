@@ -136,6 +136,21 @@ Things to note:
 - `pass()` means "not my question": the rest of the handler chain, and finally the user, decide. Use it for effects your handler does not recognize.
 - If several handlers approve, their grants merge additively.
 
+### Sending feedback with the grant
+
+An approval can carry a message for the model:
+
+```ts
+return approve({ maxCost: 0.50, message: "You are over budget because you keep re-reading files. Summarize what you have and finish." })
+```
+
+The message lands in the conversation as a user message, right before the work's next model request. If the trip happened outside an LLM call — say, mid-loop — the message waits and arrives with the next `llm()` call. This is what makes guards a review point, not just a meter: the handler grants more budget *and* steers how it gets spent.
+
+Two details:
+
+- If several handlers approve with messages, the messages are joined into one, inner handler first.
+- In thread dumps and statelog, injected feedback wears the label `guard:<label>` (the guard's `label:`, or its dimension when unlabeled), so you can tell reviewer feedback from real user messages. The model just sees a user message.
+
 Deliberation is free. While your handler decides, the tripped guard's clock is paused, and your handler's own `llm()` calls are not billed to the guard it is judging. The handler's work is metered by the guards that enclosed its **registration site** — so register the handler *outside* the guard. A handler registered inside the guarded block is part of the metered work and never sees that guard's trips.
 
 ### What approve does, by situation

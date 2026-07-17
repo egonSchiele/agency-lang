@@ -1,0 +1,53 @@
+import { guard } from "std::thread"
+
+// The approve({message}) feedback channel (resumable guards PR 4).
+// Three approvals, three messages, two delivery paths:
+//
+//   1. "clock" trips at a step boundary INSIDE plain code (no llm in
+//      sight). Its message waits on the branch queue and lands before
+//      the branch's NEXT llm() call — the first request.
+//   2. "inner" and "outer" trip together at the gate after the first
+//      call's charge (nested cost guards, one charge over both
+//      limits). The gate asks innermost-first, so their two messages
+//      queue in that order and BOTH land before the second request.
+//
+// test.js asserts placement, order, user role, and the guard:<label>
+// labels from the statelog promptCompletion payloads.
+
+def spin(rounds: number): string {
+  let i = 0
+  while (i < rounds) {
+    i = i + 1
+  }
+  return "spun"
+}
+
+node main() {
+  handle {
+    const warm = guard(time: 100ms, label: "clock") as {
+      const s = spin(300000)
+      return s
+    }
+    if (isFailure(warm)) { return "clock-failed" }
+    const spend = guard(cost: $0.0000015, label: "outer") as {
+      const inner = guard(cost: $0.000001, label: "inner") as {
+        const a = llm("first")
+        const b = llm("second")
+        return b
+      }
+      if (isFailure(inner)) { return "inner-failed" }
+      return inner.value
+    }
+    if (isFailure(spend)) { return "spend-failed" }
+    return spend.value
+  } with (i) {
+    if (i.effect == "std::guard") {
+      return match(i.data.label) {
+        "clock" => approve({ maxTime: 600000, message: "wrap up the loop" })
+        "inner" => approve({ maxCost: 0.0001, message: "inner: one more call" })
+        _ => approve({ maxCost: 0.0001, message: "outer: budget doubled" })
+      }
+    }
+    return pass()
+  }
+}

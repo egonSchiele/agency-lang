@@ -1402,6 +1402,42 @@ Small by design; everything it needs exists by now.
 
 ---
 
+# Part 7b: PR 4 — as executed (deviations and discoveries)
+
+1. **The queue is its own thing, not the reply-attachments queue.**
+   The plan said "the exact reply-attachments pattern"; what shipped
+   shares the SHAPE (branch-local collect on `stack.other`, drain in an
+   idempotent step before the request) but not the plumbing — reply
+   attachments harvest per-tool into `self.runnerState` because they
+   belong to one llm() call, while guard feedback belongs to the BRANCH
+   (it must survive from a step-boundary approve in plain code to a
+   later llm() call). `StateStack.queueGuardFeedback` /
+   `takeGuardFeedback` on `stack.other.__guardFeedback`, serialized.
+2. **Four drain points, not one.** "Before the next model request"
+   turned out to be four step positions: `guardFeedback.initial`,
+   `round.N.guardFeedback`, `validation.N.guardFeedback`, and
+   `<key>.retryFeedback.N` inside the trip-retry wrapper — the last
+   because a MID-REQUEST approve's message belongs in the re-issued
+   request, which never passes the other three. No drain at
+   `guardGate.final`: no request follows; the queue waits, serialized,
+   for the next llm().
+3. **One thread message per approval, not per merged chain.** Multiple
+   handlers approving one trip still merge to one message (effectMerge
+   newline-join); but two TRIPS answered before one request (nested
+   guards at one gate) inject as two messages, in ask order —
+   innermost first. The fixture pins this.
+4. **The label falls back to the dimension** (`guard:time`) when the
+   guard is unlabeled — `guard:<label>` as planned otherwise.
+5. **Feedback queued in a fork branch that makes no further request
+   dies with the branch at the join** — accepted, same lifetime as the
+   branch's reply-attachment queue; documented in interrupts.md.
+6. **The deferred subprocess e2e (PR 2 note 7, PR 3 note 10) landed
+   here** and needed ZERO new IPC plumbing: the approve payload rides
+   the interrupt IPC verbatim, so the parent's `approve({message})` for
+   a child's forwarded trip queues and injects inside the child
+   (tests/agency/subprocess/trip-forward-approve-message, asserted from
+   the child's own thread).
+
 # Part 8: Estimates and sequencing
 
 | PR | Contents | Estimate |

@@ -1,10 +1,13 @@
 # Spec: partials ergonomics — `saveDraft` as a tool, and `finalize as draft`
 
-**Status:** brainstormed with the owner 2026-07-17; decisions settled;
-awaiting owner review of this spec. Builds on the partial-results
-machinery (saveDraft #553, finalize #556, resumable guards #558–#566)
-and the guard construct (#574). Examples use the construct syntax, so
-this ships after #574.
+**Status:** brainstormed with the owner 2026-07-17; decisions settled.
+Review round 1 folded same day (findings in
+`2026-07-17-partials-ergonomics-design-REVIEW.md`: the interception
+frame is the TOP frame, not `callerFrame()`; the interception point is
+pinned to the ordered tool-call iteration; the schema-vs-slot type gap
+is stated). Builds on the partial-results machinery (saveDraft #553,
+finalize #556, resumable guards #558–#566) and the guard construct
+(#574). Examples use the construct syntax, so this ships after #574.
 
 **Scope:** two independent features, one theme — partials become
 first-class citizens of the agent loop. The model can save them, and
@@ -103,11 +106,26 @@ ordinary tool.
 When the model calls the intercepted tool, the loop does NOT invoke
 the AgencyFunction. It:
 
-1. Files the draft on the loop's own scope:
-   `stateStack.setSavedDraft(value)` with the stack `runPrompt` is
-   executing under. That is the same branch-local stack the owner's
-   drafts already use, which is what makes the concurrency story
-   "state isolation, nothing to decide".
+1. Files the draft on the TOP frame of the stack `runPrompt` is
+   executing under — and the top frame, not `callerFrame()`, is the
+   load-bearing word (spec review finding 1). The existing
+   `setSavedDraft` writes one frame BELOW the top, which is correct
+   for its only caller today: `saveDraft(x)` in Agency code goes
+   through the stdlib `saveDraft` def, whose own frame sits on top, so
+   one-below lands on the caller. The tool loop has no such frame.
+   `llm()` compiles to a direct `runPrompt()` call that pushes
+   nothing, and interception invokes nothing, so while the loop runs,
+   the top frame IS the scope that owns the `llm()` call — often a
+   guard block's closure frame, exactly the slot `_runGuarded`
+   salvages. Filing via `setSavedDraft` here would put the draft one
+   scope too high and the guard would salvage an empty slot.
+   Implementation: a sibling method on `StateStack` that writes
+   `lastFrame().savedDraft`, keeping `setSavedDraft`'s global-context
+   guard (unreachable from a real tool loop, but the method should
+   refuse like its sibling rather than trusting every caller). The
+   saveDraft series was a string of off-by-one-frame bugs; this spec
+   names the frame so the plan cannot reintroduce one by calling "the
+   existing method".
 2. Returns an acknowledgment as the tool result, e.g.
    `Draft saved (214 characters).` The model gets confirmation; the
    result rides the normal tool-result machinery, so resume
@@ -115,6 +133,16 @@ the AgencyFunction. It:
    serialized in the restored frame — drafts survive checkpoints).
 3. Emits the standard toolCall statelog events, so the trace shows
    when and what the model saved.
+
+**Where in the loop, and why the ordering guarantee holds (finding
+2):** interception happens during the loop's ORDERED iteration over
+the round's tool calls, before anything dispatches into the concurrent
+tool pool. A recognized `saveDraft` call is handled inline at its
+position — write, ack, record — and never becomes a concurrent
+branch. Ordering therefore holds by construction: two saves in one
+round apply in call-list order because the writes happen in call-list
+order, not in scheduler-completion order. Real tools in the same round
+dispatch exactly as today.
 
 ### The schema
 
@@ -132,6 +160,16 @@ required parameter:
   types are not available to codegen (the typechecker and the builder
   are separate passes), and a string draft is the honest default for
   agent loops.
+- **Honesty about the schema's key (finding 3):** the schema is keyed
+  to the enclosing FUNCTION's declared type, while the draft files on
+  the scope that owns the `llm()` call — often a guard block whose
+  inferred type can differ. When they disagree, the schema is a
+  best-effort hint, not a contract; v1 has no runtime validation
+  either way. Tighten this when inferred types reach codegen.
+- **A plan obligation, not a given:** "the builder statically knows
+  the enclosing def" must be verified against the builder's
+  current-scope tracking at `llm()` call sites before the schema
+  threading is designed. The whole schema feature hangs on it.
 - **Description:** states the contract the type system cannot check
   here: "Save your best-so-far answer as a draft. If the budget runs
   out, the last saved draft is returned instead of a failure. The

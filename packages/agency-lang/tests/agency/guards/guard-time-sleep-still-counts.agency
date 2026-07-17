@@ -2,7 +2,14 @@ import { guard } from "std::thread"
 
 // sleep is NOT exempt: it is the program deliberately spending time,
 // not waiting on a human. A sleep that overruns the budget still trips.
+// The handler is race insurance, not part of the pinned behavior: on a
+// slow runner the setup walk can eat the whole tight budget, so the
+// trip is DETECTED at a step boundary and raised as a resumable
+// interrupt instead of aborting the in-flight sleep. Rejecting it
+// delivers the same GuardExceededError from the step, and the output
+// is identical on both paths. On a fast run the handler never fires.
 node main() {
+  handle {
   const result = guard(time: 20ms) as {
     sleep(150ms)
     sleep(1ms)
@@ -12,4 +19,10 @@ node main() {
     return "tripped:${result.error.type}"
   }
   return result.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
 }

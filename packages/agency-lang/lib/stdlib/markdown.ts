@@ -400,24 +400,38 @@ const HTML_ESCAPES: Record<string, string> = {
   "'": "&#39;",
 };
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+/** Escape text for HTML. Takes `unknown` rather than `string`: the AST is
+ *  untrusted, so a field annotated `string` may hold anything at runtime.
+ *  Coercing is safe because the escape happens afterwards. */
+function escapeHtml(s: unknown): string {
+  const str = typeof s === "string" ? s : s == null ? "" : String(s);
+  return str.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 }
 
 // Schemes that cannot execute when a renderer resolves them. Anything else,
-// including javascript: and data:, is dropped. Relative URLs have no scheme
-// and are allowed.
+// including javascript: and data:, is dropped.
 const SAFE_URL_SCHEME_RE = /^(https?|mailto|tel):/i;
 const HAS_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
-/** Return a URL safe to place in an href/src, or "" if it is not. */
-function sanitizeHtmlUrl(url: string): string {
+/** Return a URL safe to place in an href/src, or "" if it is not.
+ *
+ *  Control characters are stripped *before* the scheme test, so a URL like
+ *  `java\nscript:` cannot re-form into a live scheme after passing the check. */
+function sanitizeHtmlUrl(url: unknown): string {
+  if (typeof url !== "string") return "";
   const trimmed = url.replace(URL_CONTROL_RE, "").trim();
   if (trimmed.length === 0) return "";
-  if (!HAS_SCHEME_RE.test(trimmed)) return trimmed; // relative
+  // Protocol-relative (`//host/path`) has no scheme, but it is not relative:
+  // a renderer resolves it against the current protocol and fetches from the
+  // remote host. In a note that is a tracking pixel, so treat it as remote.
+  if (trimmed.startsWith("//")) return "";
+  if (!HAS_SCHEME_RE.test(trimmed)) return trimmed; // genuinely relative
   if (SAFE_URL_SCHEME_RE.test(trimmed)) return trimmed;
   return "";
 }
+
+// The complete set of alignments the AST may carry. Anything else is junk.
+const TABLE_ALIGNMENTS = ["left", "right", "center"];
 
 function renderInlineHtml(nodes: unknown[]): string {
   return nodes.map(renderInlineNodeHtml).join("");
@@ -487,13 +501,17 @@ function renderBlockHtml(b: unknown): string {
       return `<p>${renderInlineHtml((node.content as unknown[]) ?? [])}</p>`;
 
     case "heading": {
-      const lvl = Math.max(1, Math.min(6, (node.level as number) ?? 1));
+      // Coerce before clamping: `level` is annotated number but may be
+      // anything, and Math.min of a non-number yields NaN, giving `<hNaN>`.
+      const raw = Number(node.level ?? 1);
+      const lvl = Number.isInteger(raw) ? Math.max(1, Math.min(6, raw)) : 1;
       return `<h${lvl}>${renderInlineHtml((node.content as unknown[]) ?? [])}</h${lvl}>`;
     }
 
     case "code-block": {
-      const lang = (node.language as string | null) ?? "";
-      const body = escapeHtml(((node.content as string) ?? "").replace(/\n+$/, ""));
+      const lang = node.language ?? "";
+      const raw = node.content == null ? "" : String(node.content);
+      const body = escapeHtml(raw.replace(/\n+$/, ""));
       const cls = lang ? ` class="language-${escapeHtml(lang)}"` : "";
       return `<pre><code${cls}>${body}</code></pre>`;
     }
@@ -514,12 +532,16 @@ function renderBlockHtml(b: unknown): string {
 
     case "list": {
       const ordered = !!node.ordered;
-      const start = (node.start as number) ?? 1;
       const items = ((node.items as unknown[]) ?? [])
         .map(renderListItemHtml)
         .join("");
       if (!ordered) return `<ul>${items}</ul>`;
-      const startAttr = start !== 1 ? ` start="${start}"` : "";
+      // `start` lands inside an attribute, so it must be a number rather than
+      // merely annotated as one. Coercing fails closed on anything else.
+      const start = Number(node.start ?? 1);
+      const startAttr = Number.isInteger(start) && start !== 1
+        ? ` start="${start}"`
+        : "";
       return `<ol${startAttr}>${items}</ol>`;
     }
 
@@ -579,9 +601,15 @@ function renderTableHtml(node: Node): string {
   const rows = (node.rows as string[][]) ?? [];
   const aligns = (node.alignments as (string | null)[]) ?? [];
 
+  // The alignment lands inside a style attribute, and it is the one field that
+  // would otherwise skip escapeHtml. The value space is closed, so an allowlist
+  // beats escaping: it fails closed on anything unexpected instead of
+  // faithfully rendering it.
   const alignAttr = (i: number): string => {
     const a = aligns[i];
-    return a ? ` style="text-align:${a}"` : "";
+    return typeof a === "string" && TABLE_ALIGNMENTS.includes(a)
+      ? ` style="text-align:${a}"`
+      : "";
   };
 
   const head = headers

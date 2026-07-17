@@ -88,8 +88,31 @@ describe("_renderMarkdownForHtml", () => {
       expect(md2html("[m](mailto:a@b.com)")).toContain('href="mailto:a@b.com"');
     });
 
-    it("keeps relative links", () => {
+    it("keeps path-relative links", () => {
       expect(md2html("[r](/docs/x.html)")).toContain('href="/docs/x.html"');
+    });
+
+    // A protocol-relative URL has no scheme, so it looks relative to a naive
+    // check, but it is not: a renderer resolves it against the current protocol
+    // and fetches from the remote host. In a note that is a tracking pixel.
+    it("drops a protocol-relative link", () => {
+      const html = md2html("[x](//evil.example.com/x)");
+      expect(html).not.toContain("evil.example.com");
+      expect(html).not.toContain("<a ");
+      expect(html).toContain("x");
+    });
+
+    it("drops a protocol-relative image", () => {
+      const html = md2html("![x](//evil.example.com/track.gif)");
+      expect(html).not.toContain("evil.example.com");
+      expect(html).not.toContain("<img");
+    });
+
+    it("drops a scheme reformed by a control character", () => {
+      // Control chars are stripped before the scheme test, so this must not
+      // slip through as a schemeless "relative" URL and re-form later.
+      const html = md2html("[x](java\nscript:alert(1))");
+      expect(html).not.toContain("<a ");
     });
 
     it("drops a javascript: link but keeps its text", () => {
@@ -176,6 +199,100 @@ describe("_renderMarkdownForHtml", () => {
       const html = md2html("---\ntitle: x\n---\n\nbody");
       expect(html).not.toContain("title");
       expect(html).toContain("<p>body</p>");
+    });
+  });
+
+  // The parser never emits these shapes, so `parse |> renderForHtml` is safe
+  // without them. They matter because the renderer's stated contract is that
+  // the AST is untrusted: the Agency signature is `renderForHtml(blocks: any[])`,
+  // and `walk` is a documented API in this same module for transforming an AST.
+  // `parse -> walk -> renderForHtml` is an intended pipeline, and a walk block
+  // acting on model-influenced content can set any field to any value.
+  describe("malicious ASTs", () => {
+    it("does not let table alignment escape its attribute", () => {
+      const html = _renderMarkdownForHtml([{
+        type: "table",
+        headers: ["a"],
+        rows: [["1"]],
+        alignments: ['left" onmouseover="alert(1)'],
+      }]);
+      expect(html).not.toContain("onmouseover");
+      expect(html).toContain("<th>a</th>");
+    });
+
+    it("keeps the known alignments while rejecting the rest", () => {
+      const html = _renderMarkdownForHtml([{
+        type: "table",
+        headers: ["a", "b"],
+        rows: [],
+        alignments: ["center", "bogus"],
+      }]);
+      expect(html).toContain('<th style="text-align:center">a</th>');
+      expect(html).toContain("<th>b</th>");
+    });
+
+    it("does not let an ordered list's start escape its attribute", () => {
+      const html = _renderMarkdownForHtml([{
+        type: "list",
+        ordered: true,
+        start: '2"><script>alert(1)</script><ol x="',
+        items: [{ content: [{ type: "paragraph", content: [{ type: "inline-text", content: "hi" }] }] }],
+      }]);
+      expect(html).not.toContain("<script");
+      expect(html).not.toContain("alert(1)");
+      expect(html).toBe("<ol><li>hi</li></ol>");
+    });
+
+    it("does not let a heading level escape its tag", () => {
+      const html = _renderMarkdownForHtml([{
+        type: "heading",
+        level: '1 onload="alert(1)"',
+        content: [{ type: "inline-text", content: "x" }],
+      }]);
+      expect(html).not.toContain("onload");
+      expect(html).toBe("<h1>x</h1>");
+    });
+
+    it("clamps an out-of-range heading level", () => {
+      expect(_renderMarkdownForHtml([{ type: "heading", level: 99, content: [] }]))
+        .toBe("<h6></h6>");
+      expect(_renderMarkdownForHtml([{ type: "heading", level: -5, content: [] }]))
+        .toBe("<h1></h1>");
+    });
+
+    it("does not throw on non-string text content", () => {
+      // The renderer's contract is to skip junk, not to throw.
+      expect(() =>
+        _renderMarkdownForHtml([{
+          type: "paragraph",
+          content: [{ type: "inline-text", content: 42 }],
+        }])
+      ).not.toThrow();
+    });
+
+    it("does not throw on a non-string code block body", () => {
+      expect(() =>
+        _renderMarkdownForHtml([{ type: "code-block", content: 42, language: null }])
+      ).not.toThrow();
+    });
+
+    it("does not throw on a non-string url", () => {
+      expect(() =>
+        _renderMarkdownForHtml([{
+          type: "paragraph",
+          content: [{ type: "inline-link", url: 42, content: [] }],
+        }])
+      ).not.toThrow();
+    });
+
+    it("escapes a coerced non-string body rather than emitting it raw", () => {
+      const html = _renderMarkdownForHtml([{
+        type: "code-block",
+        content: { toString: () => "<script>alert(1)</script>" },
+        language: null,
+      }]);
+      expect(html).not.toContain("<script>");
+      expect(html).toContain("&lt;script&gt;");
     });
   });
 

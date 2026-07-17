@@ -17,6 +17,7 @@ import type {
   ForLoop,
   FunctionCall,
   FinalizeBlock,
+  GuardBlock,
   FunctionDefinition,
   HandleBlock,
   IfElse,
@@ -108,6 +109,14 @@ class PatternLowerer {
         const fb = node as FinalizeBlock;
         return [{ ...fb, body: this.lowerBody(fb.body) }];
       }
+      case "guardBlock": {
+        // Statement-position guard construct: lower its body like any
+        // block. Value-position guards (assignment / return values) are
+        // handled at their owner cases — a value is not a body slot, so
+        // the default mapBodies recursion cannot reach them.
+        const gb = node as GuardBlock;
+        return [{ ...gb, body: this.lowerBody(gb.body) }];
+      }
       case "handleBlock": {
         // Descend both the guarded body and the inline handler body. Non-inline
         // handlers have no body to descend.
@@ -121,6 +130,19 @@ class PatternLowerer {
       }
       case "returnStatement": {
         const ret = node as ReturnStatement;
+        // A guard construct as the return value: lower its BODY (the
+        // value itself is not an expression the region machinery
+        // knows). Without this, a `return match(...)` inside the
+        // guarded block never lowers and reaches codegen raw.
+        if ((ret.value as AgencyNode | undefined)?.type === "guardBlock") {
+          const gb = ret.value as unknown as GuardBlock;
+          return [
+            {
+              ...(ret as object),
+              value: { ...gb, body: this.lowerBody(gb.body) },
+            } as unknown as AgencyNode,
+          ];
+        }
         // Expression-position `match`/`if`: `return match(E) { ... }` or
         // `return if c then a else b`. Hoist the region and return the temp it
         // produces. Allowed inside handler bodies too: the builder compiles the
@@ -241,6 +263,18 @@ class PatternLowerer {
   // -------------------------------------------------------------------------
 
   private lowerAssignment(node: Assignment): AgencyNode[] {
+    // A guard construct as the assignment value: lower its BODY (see
+    // the returnStatement case — values are not body slots, so the
+    // default recursion cannot reach them).
+    if ((node.value as AgencyNode | undefined)?.type === "guardBlock") {
+      const gb = node.value as unknown as GuardBlock;
+      return [
+        {
+          ...(node as object),
+          value: { ...gb, body: this.lowerBody(gb.body) },
+        } as unknown as AgencyNode,
+      ];
+    }
     // Expression-position `match`/`if`: `const x = match(E) { ... }` or
     // `const x = if c then a else b`. Hoist the region above and rewrite the
     // value to the temp the region produces. Handler bodies ARE allowed: the

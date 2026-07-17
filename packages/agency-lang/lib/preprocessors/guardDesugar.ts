@@ -11,37 +11,44 @@ import { bodySlots } from "@/utils/bodySlots.js";
  * same `__block_N` lifting, the call gets the same frame and step
  * structure, and the runtime is untouched.
  *
- * Runs inside TypescriptPreprocessor, after parallel desugaring (so
- * guards that parallel moved into fork block arguments are still
- * found) and before anything that lifts or compiles blocks. The walk
- * is bodySlots-driven with one extension: `guardBlock` only occurs as
- * a statement, an assignment value, or a return value (the parser's
- * three registration points), so `value` fields are followed in
- * addition to registered body slots.
+ * MUTATES IN PLACE, deliberately. The TypeChecker desugars in its
+ * constructor, but the CompilationUnit built beforehand already holds
+ * references to the same def/node objects (ctx.functionDefs etc.), and
+ * a copying rewrite would leave those references pointing at stale
+ * guardBlock bodies — half the pipeline desugared, half not. Mutating
+ * the body arrays and value fields in place keeps every capture
+ * consistent. Idempotent: a second run finds no guardBlock nodes.
+ *
+ * The walk is bodySlots-driven with one extension: `guardBlock` only
+ * occurs as a statement, an assignment value, or a return value (the
+ * parser's three registration points), so `value` fields are followed
+ * in addition to registered body slots.
  */
 export function desugarGuardsInBody(body: AgencyNode[]): AgencyNode[] {
-  return body.map(desugarNode);
+  body.forEach((node, i) => {
+    body[i] = desugarNode(node);
+  });
+  return body;
 }
 
 function desugarNode(node: AgencyNode): AgencyNode {
   if (node.type === "guardBlock") {
     return desugarGuardBlock(node as GuardBlock);
   }
-  // Explicit annotation: the guardBlock early-return narrows `node`,
-  // and an inferred `current` would reject slot.write's full
-  // AgencyNode return type.
-  let current: AgencyNode = node;
-  for (const slot of bodySlots(current)) {
-    current = slot.write(current, desugarGuardsInBody(slot.body));
+  // slot.body is the node's actual array; recursing mutates it in
+  // place, so no slot.write copies are made.
+  for (const slot of bodySlots(node)) {
+    desugarGuardsInBody(slot.body);
   }
-  const value = (current as { value?: unknown }).value;
+  const holder = node as { value?: unknown };
+  const value = holder.value;
   if (value && typeof value === "object" && "type" in (value as object)) {
     const rewritten = desugarNode(value as AgencyNode);
     if (rewritten !== value) {
-      current = { ...current, value: rewritten } as AgencyNode;
+      holder.value = rewritten;
     }
   }
-  return current;
+  return node;
 }
 
 function desugarGuardBlock(g: GuardBlock): AgencyNode {

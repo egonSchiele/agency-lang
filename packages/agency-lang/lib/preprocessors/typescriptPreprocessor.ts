@@ -319,11 +319,17 @@ export class TypescriptPreprocessor {
   preprocess(): AgencyProgram {
     this.attachDocComments();
     this.program.nodes = collectTags(this.program.nodes);
-    this.desugarParallelBlocks();
-    // Guard constructs lower to the legacy __guard call AFTER parallel
-    // desugaring (so guards moved into fork block arguments are found)
-    // and before anything lifts or compiles blocks. See guardDesugar.ts.
+    // Guard constructs lower to the legacy _guard call FIRST: every
+    // later pass (match-expr lowering, parallel desugar, callback
+    // lifting) walks bodies through its own traversal, and none of
+    // them know the guardBlock node — a match expression inside a
+    // guard body would silently skip its lowering and emit invalid
+    // `return if (...)` output. After this line the construct no
+    // longer exists and every pass sees the shape it has always seen.
+    // (Idempotent: the TypeChecker constructor may have desugared this
+    // program already.) See guardDesugar.ts.
     this.program.nodes = desugarGuardsInBody(this.program.nodes);
+    this.desugarParallelBlocks();
     if (Object.keys(this.functionDefinitions).length === 0) {
       this.getFunctionDefinitions();
     }

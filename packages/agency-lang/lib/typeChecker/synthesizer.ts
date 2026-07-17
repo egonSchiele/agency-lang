@@ -29,6 +29,7 @@ import {
 } from "./primitiveMembers.js";
 import type { BuiltinSignature } from "./types.js";
 import { walkNodes } from "../utils/node.js";
+import { unionTypes } from "./inference.js";
 import { uniqBy } from "../utils.js";
 import type { BlockArgument } from "../types/blockArgument.js";
 import { NULL_T, VOID_T } from "./primitives.js";
@@ -571,11 +572,56 @@ function synthPipeRhs(
   return rhsType;
 }
 
+/** `Result<T>` for a guarded block: `T` joins the block's own returns
+ *  (returns inside nested functions/blocks excluded, the inference.ts
+ *  rule). No returns → the block yields void; any `any` → `any`. The
+ *  failure side stays `any`, the `try`-expression precedent — the
+ *  err-side narrowing users rely on (`isFailure`, `error.type`) is
+ *  field-based, not type-based. */
+function synthGuardCall(
+  expr: AgencyNode & { type: "functionCall" },
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType {
+  const block = (expr as unknown as { block: { body: AgencyNode[] } }).block;
+  const returnTypes: VariableType[] = [];
+  for (const { node, ancestors } of walkNodes(block.body)) {
+    if (node.type !== "returnStatement" || !node.value) continue;
+    const nested = ancestors.some(
+      (a) =>
+        a.type === "function" ||
+        a.type === "graphNode" ||
+        a.type === "blockArgument",
+    );
+    if (!nested) returnTypes.push(synthType(node.value, scope, ctx));
+  }
+  let successType: VariableType;
+  if (returnTypes.length === 0) {
+    successType = { type: "primitiveType", value: "void" };
+  } else if (returnTypes.some((t) => isAnyType(t))) {
+    successType = ANY_T;
+  } else {
+    successType = unionTypes(returnTypes);
+  }
+  return { type: "resultType", successType, failureType: ANY_T };
+}
+
 function synthFunctionCall(
   expr: AgencyNode & { type: "functionCall" },
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType {
+  // The guard construct's Result<T> precision. By synth time the
+  // construct has desugared to a `_guard(...)` call carrying its block
+  // (see guardDesugar.ts + the TypeChecker constructor), and _guard's
+  // own annotation is the generic `Result` — so parameterize it here
+  // from the BLOCK's returns, the way an unannotated def body infers.
+  // Keyed on the desugared shape (name + block), which user code only
+  // produces via the construct; a direct `_guard` call with a block
+  // gets the same, correct, typing.
+  if (expr.functionName === "_guard" && (expr as { block?: unknown }).block) {
+    return synthGuardCall(expr, scope, ctx);
+  }
   // Result constructors: parameterize ResultType from the argument so callers
   // get `Result<T, any>` (success) or `Result<any, T>` (failure). The names
   // are reserved at the typechecker level (see RESERVED_FUNCTION_NAMES in

@@ -196,10 +196,9 @@ describe("finalize checker — rule 5: defs and blocks only (AG6035)", () => {
 
   it("accepts a finalize inside a guard block", () => {
     const errors = check(`
-      import { guard } from "std::thread"
-
+      
       node main() {
-        const r = guard(cost: 1.0) as {
+        const r = guard(cost: 1.0) {
           finalize {
             return "partial"
           }

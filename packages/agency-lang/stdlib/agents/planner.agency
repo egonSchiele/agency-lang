@@ -148,7 +148,7 @@ def planStep(task: string, planText: string, state: PlanState): PlanState raises
   }
 }
 
-export def plannerAgent(task: string, context: string = "", plan: string = "", maxCost: number = $100.00, maxTime: number = 60m): string raises <std::agents::planApprove> {
+export def plannerAgent(task: string, context: string = "", plan: string = "", maxCost: number = $100.00, maxTime: number = 60m): string raises <std::agents::planApprove, std::guard> {
   """
   Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
   task, show the plan/source/effects for approval, run it in a sandboxed

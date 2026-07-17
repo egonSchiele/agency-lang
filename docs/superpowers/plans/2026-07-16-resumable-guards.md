@@ -1160,6 +1160,51 @@ CHANGELOG, `docs/dev/interrupts.md` (the new machinery).
 
 ---
 
+# Part 5b: PR 2 — as executed (deviations and discoveries)
+
+Recorded after execution, for PR 3's benefit and the reviewer's.
+
+1. **The raise lives at PromptRunner gate steps, not at the in-_runPrompt
+   check sites.** Raising from inside a non-idempotent llm-call step body
+   breaks replay: the body re-pushes its user message on resume. The
+   gates (`guardGate.initial`, `round.N.guardGate`, validation gates,
+   `guardGate.final`) are idempotent steps of their own, and
+   PromptRunner.step's existing bailout machinery provides the message
+   snapshot + checkpoint the plan's raise dance would have had to
+   duplicate. The in-_runPrompt pre-call check stays as a throwing
+   backstop; the post-charge check is REMOVED (its trips raise at the
+   next gate; nothing paid runs in between — tool-internal paid work is
+   gated by the tool's own runPrompt).
+2. **addCost keeps throwing in v1** (taxonomy site 3 moves next to
+   site 4): same replay hazard as raising inside _runPrompt, from
+   arbitrary TS-helper contexts. `guard(cost:)` around a paid TS helper
+   trips non-resumably — documented, revisit with PR 3's machinery.
+3. **std::agents guards are NOT auto-reject wrapped** (deviation from
+   Task 2.5's migration rule, for owner sign-off): an inner reject
+   short-circuits ahead of user handlers, which would permanently lock
+   std::agents users out of approving trips — the flagship reviewer
+   pattern. run(maxCost:) needed no wrapper at all: its trips fire at
+   the exempted IPC site and its limit_exceeded contract is unchanged.
+4. **Fixture migration went through the harness, not in-program
+   wrappers:** `{"action": "reject"}` entries in test.json — outputs
+   byte-identical, and every migrated fixture now exercises the full
+   propagate → checkpoint → reject → resume → salvage pipeline.
+5. **New boundary fix:** an Interrupt[] reaching a call ARGUMENT passes
+   through __call/__callMethod as the call's own result (mirror of
+   findAbortedArg). Guard trips are the first runtime-only interrupt
+   source, so `f(g())` with a trip inside g was the first way a batch
+   could hit an argument slot.
+6. **Pre-existing bug found, filed as #559:** resume corrupts frames
+   when the interrupt was raised inside a compound call (FIFO frame
+   adoption vs replayed completed sibling calls). Affects tool
+   interrupts on main today. The one affected fixture case rejects
+   in-program with a pointer.
+7. **Subprocess trip e2e deferred:** the IPC site is unchanged
+   (still throws) and child-side raises forward over the EXISTING
+   interrupt IPC; a dedicated child-trip → parent-approve e2e rides
+   with PR 3, where re-arm makes the approve path meaningful for the
+   remaining dimension.
+
 # Part 6: PR 3 — the abort signal, then time trips
 
 ## Task 3.1: derive the composed abort signal

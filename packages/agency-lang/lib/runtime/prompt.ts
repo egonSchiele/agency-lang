@@ -1058,20 +1058,19 @@ export async function runPrompt(args: {
   // which skips completed steps — still re-opens the span that the tool
   // loop expects to be active.
   currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
+  // Guard-trip gate: settle every pending cost trip in an idempotent
+  // step of its own, before/after the request steps. The gate loops
+  // until the stack is clear (approving an inner guard can leave an
+  // outer one over ITS limit, and each budget is owed its own
+  // question); an unanswered trip returns Interrupt[] and
+  // PromptRunner.step's machinery (message snapshot, checkpoint,
+  // PromptBailout) surfaces it. Living OUTSIDE the llm-call steps is
+  // what makes resume sound: the gate body is idempotent (re-detect,
+  // apply the recorded answer), while the llm-call bodies are not
+  // (they push messages). See lib/runtime/guardTripInterrupt.ts.
+  const guardGate = () => raiseGuardTripsUntilClear(ctx, stateStack);
   try {
-    // Guard-trip gate: settle every pending cost trip BEFORE the request
-    // step, in an idempotent step of its own. The gate loops until the
-    // stack is clear (approving an inner guard can leave an outer one
-    // over ITS limit, and each budget is owed its own question); an
-    // unanswered trip returns Interrupt[] and PromptRunner.step's
-    // machinery (message snapshot, checkpoint, PromptBailout) surfaces
-    // it. Living OUTSIDE the llm-call step is what makes resume sound:
-    // the gate body is idempotent (re-detect, apply the recorded
-    // answer), while the llm-call bodies are not (they push messages).
-    // See lib/runtime/guardTripInterrupt.ts.
-    await pr.step("guardGate.initial", () =>
-      raiseGuardTripsUntilClear(ctx, stateStack),
-    );
+    await pr.step("guardGate.initial", guardGate);
     // Initial LLM call wrapped in pr.step so it's idempotent on resume
     // (re-entries after a later tool-batch bailout skip this step).
     await pr.step("initialLlmCall", async () => {
@@ -1683,14 +1682,10 @@ export async function runPrompt(args: {
           });
         }
 
-        // Guard-trip gate for this round: the PREVIOUS round's charge may
-        // have crossed a limit (the old post-charge throw site), and this
-        // is where that trip is raised resumably — before the next
-        // request goes out, so nothing more is spent while the question
-        // is open. See the guardGate.initial comment.
-        await pr.step(`round.${round}.guardGate`, () =>
-          raiseGuardTripsUntilClear(ctx, stateStack),
-        );
+        // The PREVIOUS round's charge may have crossed a limit (the old
+        // post-charge throw site); raise it before the next request goes
+        // out, so nothing more is spent while the question is open.
+        await pr.step(`round.${round}.guardGate`, guardGate);
         // Next LLM call wrapped in pr.step for resume idempotency. Once
         // marked done, resume re-entries skip the LLM call. The llmCall
         // span stays open across rounds (one span per llm() call), so we
@@ -1723,9 +1718,7 @@ export async function runPrompt(args: {
       // crossed a limit, and there is no next round to raise it at. See
       // guardGate.initial.
       if (!responseFormat) {
-        await pr.step("guardGate.final", () =>
-          raiseGuardTripsUntilClear(ctx, stateStack),
-        );
+        await pr.step("guardGate.final", guardGate);
         break;
       }
 
@@ -1749,18 +1742,13 @@ export async function runPrompt(args: {
       );
 
       if (decision.kind === "accept") {
-        // Final guard-trip gate for the schema path: the last request's
-        // charge may have crossed a limit, and this call has no next
-        // round to raise it at. See guardGate.initial.
-        await pr.step("guardGate.final", () =>
-          raiseGuardTripsUntilClear(ctx, stateStack),
-        );
+        // The last request's charge may have crossed a limit, and this
+        // call has no next round to raise it at.
+        await pr.step("guardGate.final", guardGate);
         return decision.value;
       }
       if (decision.kind === "surfaceFailure") {
-        await pr.step("guardGate.final", () =>
-          raiseGuardTripsUntilClear(ctx, stateStack),
-        );
+        await pr.step("guardGate.final", guardGate);
         // Strict contract (issue #494): schema-constrained output either
         // validates or comes back as a failure Result, never raw content.
         // Loud in the statelog too, so a rotting integration is visible
@@ -1797,9 +1785,7 @@ export async function runPrompt(args: {
         messages.push(smoltalk.userMessage(decision.feedback));
         self.messagesJSON = snapshotThread();
       });
-      await pr.step(`validation.${validationAttempt}.guardGate`, () =>
-        raiseGuardTripsUntilClear(ctx, stateStack),
-      );
+      await pr.step(`validation.${validationAttempt}.guardGate`, guardGate);
       await pr.step(`validation.${validationAttempt}.llmCall`, async () => {
         const nextResult = await _runPrompt({
           ctx,

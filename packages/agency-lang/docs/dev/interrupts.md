@@ -372,3 +372,50 @@ each load-bearing:
   the clock paused across `Runner.beforeStep`'s resume-all.
 - Nothing about suspension serializes. A handler that propagates gets
   checkpointed mid-suspension; the resumed run's guards must meter.
+
+## Guard trips as interrupts (resumable guards, PR 2)
+
+A cost-guard trip raises an ordinary interrupt (effect `std::guard`)
+instead of throwing. The pieces, and where they live:
+
+- **Detection and raising:** `runPrompt` runs an idempotent guard-gate
+  step (`pr.step("guardGate.*")`) before every request step and once
+  before returning. The gate loops on `stack.detectTrippedGuard()` and
+  calls `raiseGuardTrip` per trip (`lib/runtime/guardTripInterrupt.ts`).
+  It loops because one answered question does not clear the gate:
+  approving an inner guard can leave an outer one over its own limit,
+  and each budget is owed its own question. The gate lives at the
+  pr.step level — NOT inside `_runPrompt` — because a raise inside a
+  non-idempotent llm-call step body breaks replay (the body would
+  re-push its user message on resume). The old in-`_runPrompt` pre-call
+  check remains as a throwing backstop; the post-charge check is gone
+  (its trips raise at the next gate, and nothing paid runs in between).
+- **The scope:** `GuardScope` (`lib/runtime/guardScope.ts`) is the
+  runtime name for what one Agency `guard(...)` call pushed — up to two
+  runtime guards, two ids. The interrupt carries `scopeIds`; approve
+  resolves the scope ON THE RAISING BRANCH'S STACK and applies the
+  merged payload via `scope.extend` (additive; negative grants clamp to
+  zero with a warning; `disarm` is explicit; a root-budget scope
+  refuses; an answer leaving the tripped dimension over budget and
+  armed is a runtime error — it would re-trip forever).
+- **Resume idempotency:** the trip's persisted interrupt id lives in
+  `stack.other` under a key DERIVED from guard state
+  (`__guardTrip_<scopeIds>#<dimension>@<limit>`) — stable across
+  replays of one trip, necessarily fresh for the next (an approve
+  strictly raises the limit; disarm ends the dimension). Never count
+  events for such keys: replay skips completed work.
+- **Fork dedupe (cost only, by construction):** the shared `CostGuard`
+  object carries a live `pendingTrip` record. A sibling branch that
+  detects the same guard over budget parks on it, then re-detects.
+  Set before the first await (mutual exclusion), settled in the
+  `finally` on every exit (a missed settle would hang the fork join).
+  Time clones are per-branch objects — nothing to dedupe.
+- **What still throws:** root budgets (`isRootBudget`, serialized),
+  the parent-side subprocess telemetry site (`ipc.ts` — an IPC message
+  callback has no runner to raise from; documented v1 limit), and
+  `addCost` (raising from arbitrary TS-helper contexts inside
+  non-idempotent step bodies has the same replay hazard as raising
+  inside `_runPrompt`).
+- **Rejecting** delivers the original `GuardExceededError` at the gate;
+  everything downstream — `AbortedResult`, the level rule, `finalize`,
+  the guard boundary's conversion — is untouched.

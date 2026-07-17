@@ -45,8 +45,8 @@ Part A — finalize binder:
 
 | File | Change |
 |---|---|
-| `lib/types/finalizeBlock.ts` | `binder: string \| null` field |
-| `lib/parsers/parsers.ts` | `finalizeBlockParser` accepts `()` and `as <name>` |
+| `lib/types/finalizeBlock.ts` | `params: FunctionParameter[]` field (same shape as `BlockArgument.params`) |
+| `lib/parsers/parsers.ts` | `finalizeBlockParser` accepts `()` and delegates the binder to the existing `asParser` |
 | `lib/parsers/finalizeBinder.test.ts` | NEW — parser tests |
 | `lib/backends/agencyGenerator.ts` | formatter prints the binder |
 | `lib/backends/agencyGenerator.test.ts` | formatter tests (existing file) |
@@ -82,8 +82,8 @@ Part B — saveDraft as a tool:
 - Test: `lib/parsers/finalizeBinder.test.ts` (new), `lib/backends/agencyGenerator.test.ts` (append)
 
 **Interfaces:**
-- Consumes: nothing from other tasks.
-- Produces: `FinalizeBlock.binder: string | null` — every later task reads this field. All four head forms parse: `finalize {`, `finalize() {`, `finalize as draft {`, `finalize() as draft {`. The formatter prints canonically without parens.
+- Consumes: the EXISTING `asParser` (`lib/parsers/parsers.ts:3148`) and `FunctionParameter` — the same binder grammar and param type `fork(...) as item { }` blocks use. Do not hand-roll the `as` clause.
+- Produces: `FinalizeBlock.params: FunctionParameter[]` — every later task reads this field; the binder is `params[0]`, and `params` is `[]` for the binder-less form. All four head forms parse: `finalize {`, `finalize() {`, `finalize as draft {`, `finalize() as draft {`. Because `asParser` also accepts `as (a, b)` and `as draft: Report`, those PARSE here; Task 2's checker constrains them (one binder max; an explicit type hint is honored). The formatter prints canonically without parens.
 
 - [ ] **Step 1: Write the failing parser tests**
 
@@ -101,31 +101,43 @@ function parseFinalize(src: string) {
   return r.result;
 }
 
-describe("finalizeBlockParser — binder head forms", () => {
-  it("parses the bare form with binder null", () => {
+describe("finalizeBlockParser — binder head forms (via the shared asParser)", () => {
+  it("parses the bare form with empty params", () => {
     const node = parseFinalize("finalize {\n  return 1\n}");
     expect(node.type).toBe("finalizeBlock");
-    expect(node.binder).toBe(null);
+    expect(node.params).toEqual([]);
   });
 
-  it("parses empty parens with binder null", () => {
+  it("parses empty parens with empty params", () => {
     const node = parseFinalize("finalize() {\n  return 1\n}");
-    expect(node.binder).toBe(null);
+    expect(node.params).toEqual([]);
   });
 
-  it("parses `as name` and captures the binder", () => {
+  it("parses `as name` into params[0]", () => {
     const node = parseFinalize("finalize as draft {\n  return draft\n}");
-    expect(node.binder).toBe("draft");
+    expect(node.params).toHaveLength(1);
+    expect(node.params[0].name).toBe("draft");
   });
 
   it("parses `() as name`", () => {
     const node = parseFinalize("finalize() as best {\n  return best\n}");
-    expect(node.binder).toBe("best");
+    expect(node.params[0].name).toBe("best");
   });
 
   it("binder name is the user's choice", () => {
     const node = parseFinalize("finalize as partialSoFar {\n  return partialSoFar\n}");
-    expect(node.binder).toBe("partialSoFar");
+    expect(node.params[0].name).toBe("partialSoFar");
+  });
+
+  it("a typed binder parses (the shared grammar allows it; the checker rules on it)", () => {
+    const node = parseFinalize("finalize as draft: string {\n  return draft\n}");
+    expect(node.params[0].name).toBe("draft");
+    expect(node.params[0].typeHint).toBeDefined();
+  });
+
+  it("multiple binders parse (rejected later by AG6038, not here)", () => {
+    const node = parseFinalize("finalize as (a, b) {\n  return a\n}");
+    expect(node.params).toHaveLength(2);
   });
 
   it("does not swallow an identifier like finalizer(...)", () => {
@@ -133,9 +145,13 @@ describe("finalizeBlockParser — binder head forms", () => {
     expect(r.success).toBe(false);
   });
 
-  it("`as` with no name is a parse failure, not a silent bare form", () => {
-    const r = finalizeBlockParser("finalize as {\n  return 1\n}");
-    expect(r.success).toBe(false);
+  it("`as` with no name parses as the binder-less form (the shared grammar's no-param rule)", () => {
+    // blockParamsParser treats `as {` as "as, then zero params" — the
+    // documented no-param block form (`fork() as { }`). Reusing the
+    // grammar means finalize inherits it; the formatter canonicalizes
+    // the stray `as` away, exactly like guard's legacy-as migration.
+    const node = parseFinalize("finalize as {\n  return 1\n}");
+    expect(node.params).toEqual([]);
   });
 
   it("parses inside a full function body", () => {
@@ -152,66 +168,59 @@ describe("finalizeBlockParser — binder head forms", () => {
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `pnpm test:run lib/parsers/finalizeBinder.test.ts 2>&1 | tee "$TMPDIR/finalize-parser.log"`
-Expected: FAIL — the binder tests fail because `binder` is `undefined` and `as` forms do not parse. (The bare-form tests may already pass.)
+Expected: FAIL — `params` is `undefined` on the current node and the `as` forms do not parse. (The bare-form tests may already pass except for the `params` assertion.)
 
 - [ ] **Step 3: Add the field to the AST type**
 
 In `lib/types/finalizeBlock.ts`:
 
 ```ts
+import type { FunctionParameter } from "../types.js";
+
 export type FinalizeBlock = BaseNode & {
   type: "finalizeBlock";
-  /** `finalize as <name>` binder: the scope's saved draft is yielded to
-   *  the body under this name, or null for the binder-less form. */
-  binder: string | null;
+  /** `finalize as <name>` binder, parsed by the same asParser blocks
+   *  use — so this is the SAME field shape as BlockArgument.params.
+   *  params[0] is the binder the scope's saved draft is yielded to;
+   *  [] is the binder-less form. The grammar also admits multiple
+   *  params and type hints; AG6038 (arity) and the binder-typing pass
+   *  rule on those, not the parser. */
+  params: FunctionParameter[];
   body: AgencyNode[];
 };
 ```
 
-Then run `pnpm exec tsc --noEmit 2>&1 | tee "$TMPDIR/tsc-binder.log"` and fix every construction site the compiler flags by adding `binder: null` (the parser rewrite in Step 4 covers the main one; any test or preprocessor that builds a literal `finalizeBlock` node needs the explicit field).
+(Adjust the `FunctionParameter` import path to wherever `BlockArgument` imports it from.) Then run `pnpm exec tsc --noEmit 2>&1 | tee "$TMPDIR/tsc-binder.log"` and fix every construction site the compiler flags by adding `params: []` (the parser rewrite in Step 4 covers the main one; any test or preprocessor that builds a literal `finalizeBlock` node needs the explicit field).
 
 - [ ] **Step 4: Rewrite the parser**
 
-Replace the existing `finalizeBlockParser` in `lib/parsers/parsers.ts` (keep its position and registration; it is already in the statement parser list). Model on `guardBlockParser`'s function style — head parse, then commit at `{`:
+Replace the existing `finalizeBlockParser` in `lib/parsers/parsers.ts` (keep its position and registration; it is already in the statement parser list). The binder clause is NOT hand-rolled: it is the existing `asParser` (`parsers.ts:3148`), the same combinator block arguments use, which yields `FunctionParameter[]` and `[]` when the clause is absent. Model the commit-at-`{` shape on `guardBlockParser`:
 
 ```ts
 /** `finalize { ... }` — keyword block. Four head forms parse:
  *  `finalize {`, `finalize() {`, `finalize as name {`,
- *  `finalize() as name {`. The optional `as <name>` yields the scope's
- *  saved draft to the body (partials-ergonomics spec Part 3). Mirrors
- *  handleBlockParser's keyword handling: the word-boundary check keeps
- *  an identifier like `finalizer(...)` parsing as a call. */
+ *  `finalize() as name {`. The binder clause is the SAME asParser
+ *  block arguments use, so the grammar (and its edge cases — `as {`
+ *  means no params, parens and type hints are admitted) is shared,
+ *  not duplicated; arity and typing are checker rules (AG6038, the
+ *  binder-typing pass). Mirrors handleBlockParser's keyword handling:
+ *  the word-boundary check keeps an identifier like `finalizer(...)`
+ *  parsing as a call. */
 export const finalizeBlockParser: Parser<FinalizeBlock> = withLoc(memo(
   "finalizeBlockParser",
   (input: string): ParserResult<FinalizeBlock> => {
-    const head = seqC(
+    const pre = seqC(
       str("finalize"),
       not(varNameChar),
       optionalSpaces,
       // Optional empty parens: `finalize() { ... }`.
       optional(seqC(char("("), optionalSpaces, char(")"))),
       optionalSpaces,
-    )(input);
-    if (!head.success) return head as ParserResult<FinalizeBlock>;
-
-    // Optional binder: `as <name>`. Parsed separately from the head so
-    // the capture is easy to read out; on failure we fall through to
-    // the binder-less form and let `char("{")` decide.
-    let binder: string | null = null;
-    let rest = head.rest;
-    const asR = seqC(
-      str("as"),
-      spaces,
-      capture(many1WithJoin(varNameChar), "binder"),
+      capture(asParser, "params"),
       optionalSpaces,
-    )(rest);
-    if (asR.success) {
-      binder = (asR.result as any).binder;
-      rest = asR.rest;
-    }
-
-    const open = char("{")(rest);
-    if (!open.success) return open as ParserResult<FinalizeBlock>;
+      char("{"),
+    )(input);
+    if (!pre.success) return pre as ParserResult<FinalizeBlock>;
     // Past the `{` we commit: a malformed body is an error here.
     const bodyR = parseError(
       "expected `}` to close finalize block body",
@@ -219,12 +228,12 @@ export const finalizeBlockParser: Parser<FinalizeBlock> = withLoc(memo(
       capture(lazy(() => bodyParser), "body"),
       optionalSpacesOrNewline,
       char("}"),
-    )(open.rest);
+    )(pre.rest);
     if (!bodyR.success) return bodyR as ParserResult<FinalizeBlock>;
     return success(
       {
         type: "finalizeBlock",
-        binder,
+        params: (pre.result as any).params,
         body: (bodyR.result as any).body,
       } as FinalizeBlock,
       bodyR.rest,
@@ -232,8 +241,6 @@ export const finalizeBlockParser: Parser<FinalizeBlock> = withLoc(memo(
   },
 ));
 ```
-
-Note the failure mode this shape gives for free: `finalize as { ... }` — the `as` attempt fails (no identifier), we fall through with `rest` still pointing at `as {`, and `char("{")` fails on `a`. That is the desired parse failure from the tests.
 
 - [ ] **Step 5: Run the parser tests**
 
@@ -260,22 +267,38 @@ describe("AgencyGenerator — finalize binder", () => {
     );
     expect(out).toContain("finalize {");
   });
+
+  it("canonicalizes a stray `as` with no binder away (fmt IS the migration, like guard)", () => {
+    const out = gen(
+      "def f(): string {\n  return \"x\"\n  finalize as {\n    return \"y\"\n  }\n}\nnode main() { return f() }\n",
+    );
+    expect(out).toContain("finalize {");
+    expect(out).not.toContain("finalize as {");
+  });
 });
 ```
 
 - [ ] **Step 7: Implement the formatter change**
 
-In `lib/backends/agencyGenerator.ts` (`processFinalizeBlock`, line ~1673):
+In `lib/backends/agencyGenerator.ts` (`processFinalizeBlock`, line ~1673), reuse the existing `renderParams` (line ~628 — it already prints names, type hints, and multi-param lists correctly):
 
 ```ts
 protected processFinalizeBlock(node: FinalizeBlock): string {
   this.increaseIndent();
   const bodyCodeStr = this.renderBody(node.body);
   this.decreaseIndent();
-  const head = node.binder !== null ? `finalize as ${node.binder}` : "finalize";
-  return this.indentStr(`${head} {\n${bodyCodeStr}${this.indentStr("}")}`);
+  const rendered = this.renderParams(node.params);
+  const asClause =
+    rendered.length === 0
+      ? ""
+      : rendered.length === 1
+        ? ` as ${rendered[0]}`
+        : ` as (${rendered.join(", ")})`;
+  return this.indentStr(`finalize${asClause} {\n${bodyCodeStr}${this.indentStr("}")}`);
 }
 ```
+
+(If `renderParams` is private and inaccessible from this method's position, follow how the block-argument printing at line ~1112 renders its `as` clause instead — same file, same pattern.)
 
 - [ ] **Step 8: Run formatter tests and the neighboring suites**
 
@@ -293,7 +316,7 @@ git commit -F /tmp/claude/commitmsg.txt
 
 ---
 
-### Task 2: Checker — declare the binder as `T | null`, reject collisions (AG6037)
+### Task 2: Checker — declare the binder as `T | null`, reject collisions (AG6037) and multi-binders (AG6038)
 
 **Files:**
 - Create: `lib/typeChecker/finalizeBinder.ts`
@@ -301,8 +324,8 @@ git commit -F /tmp/claude/commitmsg.txt
 - Test: `lib/typeChecker/finalizeBinder.test.ts` (new)
 
 **Interfaces:**
-- Consumes: `FinalizeBlock.binder` from Task 1.
-- Produces: `declareFinalizeBinders(scopes: ScopeInfo[], ctx: TypeCheckerContext): void`, diagnostic key `finalizeBinderCollision` (AG6037). The binder is visible to `checkScopes` typed `T | null`, where `T` is the scope's DECLARED return type, `any` when undeclared.
+- Consumes: `FinalizeBlock.params: FunctionParameter[]` from Task 1 (binder = `params[0]`; `params[0].typeHint` may be set).
+- Produces: `declareFinalizeBinders(scopes: ScopeInfo[], ctx: TypeCheckerContext): void`, diagnostic keys `finalizeBinderCollision` (AG6037) and `finalizeBinderArity` (AG6038). The binder is visible to `checkScopes` typed `T | null`, where `T` is the explicit type hint when written (`finalize as d: Report` — "explicit annotation wins", the handler-param rule), else the scope's DECLARED return type, else `any`.
 
 Background for this task: why a collision is an ERROR and not a shadow. The finalize body compiles in the enclosing scope, and the binder becomes a bare closure parameter (Task 3). A reference to a name the preprocessor knows as a local compiles to `__stack.locals.<name>` — so if the binder reused a local's name, every reference in the finalize body would silently read the LOCAL, never the draft. The type checker is the only place that can see this coming.
 
@@ -415,6 +438,38 @@ node main() { return f() }`,
     );
     expect(errs.filter((e) => e.code === "AG6037")).toHaveLength(0);
   });
+
+  it("two binders is AG6038 (finalize yields one value)", () => {
+    const errs = typecheckSource(
+      `def f(): string {
+  return "x"
+  finalize as (a, b) {
+    return "y"
+  }
+}
+node main() { return f() }`,
+    );
+    expect(errs.some((e) => e.code === "AG6038")).toBe(true);
+  });
+
+  it("an explicit type hint wins over the scope's return type", () => {
+    // def returns string; the binder is annotated number, so using it
+    // as a string (after the null guard) must error.
+    const errs = typecheckSource(
+      `def f(): string {
+  return "x"
+  finalize as d: number {
+    if (d != null) {
+      const s: string = d
+      return "y"
+    }
+    return "y"
+  }
+}
+node main() { return f() }`,
+    ).filter((e) => /not assignable/i.test(e.message));
+    expect(errs.length).toBeGreaterThan(0);
+  });
 });
 ```
 
@@ -438,12 +493,29 @@ finalizeBinderCollision: {
 },
 ```
 
+And after it:
+
+```ts
+finalizeBinderArity: {
+  code: "AG6038",
+  severity: "error",
+  message:
+    "finalize yields a single value — the scope's saved draft. Use one binder: finalize as {name} {{ ... }}.",
+},
+```
+
+(Check how existing messages escape braces / interpolate before copying the `{name}` placeholder — mirror a neighboring entry exactly.)
+
 In `lib/typeChecker/diagnosticExplanations.ts`, alongside the other finalize entries:
 
 ```ts
 finalizeBinderCollision: `A finalize body runs in the same variable scope as the function or block it belongs to. The \`as\` binder adds one extra name: the scope's saved draft. If that name already belongs to a parameter or local, references inside the finalize could not tell the two apart, and the draft would silently win or lose depending on compilation details.
 
 **How to fix:** rename the binder. Any name not already used in the scope works: \`finalize as draft { ... }\`.`,
+
+finalizeBinderArity: `The \`as\` clause on a finalize binds what the abort yields to the block, and the abort yields exactly one thing: the scope's saved draft (or null when nothing was saved). There is no second value to bind, so a parameter list has no meaning here. The shared block-argument grammar is why the parser accepts the list at all.
+
+**How to fix:** keep one binder: \`finalize as draft { ... }\`. Everything else the finalize needs is already in scope as ordinary locals.`,
 ```
 
 - [ ] **Step 4: Write the pass**
@@ -459,14 +531,20 @@ import { isInScope } from "./checker.js";
 import { diagnostic } from "./diagnostics.js";
 import { ANY_T, NULL_T } from "./primitives.js";
 
-/** The binder's type: the scope's DECLARED return type unioned with
- *  null (the slot is empty until the first saveDraft). No declared
- *  return type means `any` — inferred return types are out of scope
- *  for v1, the same rule the saveDraft tool schema follows (spec
- *  Part 5). */
-function binderType(returnType: VariableType | undefined): VariableType {
-  if (returnType === undefined) return ANY_T;
-  return { type: "unionType", types: [returnType, NULL_T] };
+/** The binder's type: T | null, where T is the explicit annotation
+ *  when written (`finalize as d: Report` — explicit annotation wins,
+ *  the handler-param rule), else the scope's DECLARED return type
+ *  (the slot is empty until the first saveDraft, hence the null arm).
+ *  Neither present means `any` — inferred return types are out of
+ *  scope for v1, the same rule the saveDraft tool schema follows
+ *  (spec Part 5). */
+function binderType(
+  typeHint: VariableType | undefined,
+  returnType: VariableType | undefined,
+): VariableType {
+  const t = typeHint ?? returnType;
+  if (t === undefined) return ANY_T;
+  return { type: "unionType", types: [t, NULL_T] };
 }
 
 /**
@@ -494,18 +572,32 @@ export function declareFinalizeBinders(
         if (!isInScope(nodeScopes, info)) continue;
         if (node.type !== "finalizeBlock") continue;
         const fin = node as FinalizeBlock;
-        if (fin.binder === null) continue;
-        if (info.scope.has(fin.binder)) {
+        if (fin.params.length === 0) continue;
+        if (fin.params.length > 1) {
           ctx.errors.push(
             diagnostic(
-              "finalizeBinderCollision",
-              { name: fin.binder },
+              "finalizeBinderArity",
+              { name: fin.params[0].name },
               fin.loc ?? null,
             ),
           );
           continue;
         }
-        info.scope.declare(fin.binder, binderType(info.returnType));
+        const binder = fin.params[0];
+        if (info.scope.has(binder.name)) {
+          ctx.errors.push(
+            diagnostic(
+              "finalizeBinderCollision",
+              { name: binder.name },
+              fin.loc ?? null,
+            ),
+          );
+          continue;
+        }
+        info.scope.declare(
+          binder.name,
+          binderType(binder.typeHint, info.returnType),
+        );
       }
     });
   }
@@ -533,7 +625,7 @@ Expected: PASS, including the pre-existing finalize/saveDraft suites.
 
 ```bash
 git branch --show-current   # must NOT be main
-printf 'feat: type the finalize binder as T | null, reject collisions (AG6037)\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>\n' > /tmp/claude/commitmsg.txt
+printf 'feat: type the finalize binder as T | null, reject collisions and multi-binders\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>\n' > /tmp/claude/commitmsg.txt
 git add lib/typeChecker/finalizeBinder.ts lib/typeChecker/finalizeBinder.test.ts lib/typeChecker/diagnostics.ts lib/typeChecker/diagnosticExplanations.ts lib/typeChecker/index.ts
 git commit -F /tmp/claude/commitmsg.txt
 ```
@@ -548,7 +640,7 @@ git commit -F /tmp/claude/commitmsg.txt
 - Test: `lib/backends/finalizeBinderCodegen.test.ts` (new)
 
 **Interfaces:**
-- Consumes: `FinalizeBlock.binder` (Task 1).
+- Consumes: `FinalizeBlock.params` (Task 1; the binder is `params[0]`, and Task 2 guarantees at most one param survives checking).
 - Produces: `withFinalize(finalize: (draft: unknown) => Promise<unknown>, scopeName: string)`; generated closures `const __finalize = async (<binder>: any): Promise<any> => { ... }` when a binder exists, byte-identical output when not.
 
 The design in one paragraph: `withFinalize` already holds the scope's own draft — `carryThrough(frame, scope)` and `fromError(error, frame, scope)` both copy `frame.savedDraft` into `this.partial` before any stop site calls `.withFinalize(...)`. So the runtime change is one line: call `finalize(this.partialValueOrNull())`. The throw-fallback path returns `this`, which carries the SAME partial — so "the draft is read before the finalize runs, and the same value is the fallback" (spec Part 3) holds by construction, with zero changes to `stopScope`, `abortReturn`, or `interceptedReturn`. Existing binder-less closures are `async () => ...`; passing them an argument they ignore is a no-op, and TypeScript accepts a zero-param function where a one-param function type is expected, so nothing else moves.
@@ -605,8 +697,10 @@ private closure(finalize: FinalizeBlock, scopeName: string): TsNode {
   // The binder is a plain closure parameter (never a frame local): it
   // was never declared via let/const, so body references print as the
   // bare identifier — the same mechanism inline handler params use.
-  // AG6037 guarantees the name cannot collide with a real local.
-  const param = finalize.binder !== null ? `${finalize.binder}: any` : "";
+  // AG6037 guarantees the name cannot collide with a real local, and
+  // AG6038 guarantees at most one param reaches codegen.
+  const binder = finalize.params[0];
+  const param = binder !== undefined ? `${binder.name}: any` : "";
   return ts.raw(
     `const __finalize = async (${param}): Promise<any> => {\n` +
       `  const runner = new Runner(__ctx, ${frameVar}, { state: ${frameVar}, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(scopeName + "#finalize")} });\n` +
@@ -1453,4 +1547,5 @@ The body should name the two features, link the spec, call out the fixture churn
 
 - **Spec coverage:** Part 2 surface + recognition + interception + schema + interactions → Tasks 5–7; Part 3 all four head forms, binder semantics, typing, mechanics → Tasks 1–4; Part 4 test list → Tasks 4 and 7 map one-to-one (draft-round resume is `savedraft-tool-resume`; the schema unit tests are Task 5 Step 1 plus Task 6 Step 1). Part 5 exclusions respected: no runtime validation, no auto-injection, declared types only.
 - **Known deviations from spec text, on purpose:** (1) The spec's review-round-1 fold said interception writes the TOP frame via a new StateStack method; that was corrected in the spec on 2026-07-17 after verifying `runPrompt` pushes its own frame — the plan uses the existing `setSavedDraft` and pins the math with the basic fixture. (2) The binder types from the DECLARED return only (`any` fallback); the spec's "declared or inferred" is narrowed to match Part 5's inferred-types exclusion. (3) `finalize() as draft` formatter-canonicalizes to `finalize as draft` — spec-stated. 
-- **Type consistency:** `binder: string | null` (Task 1) is read by Tasks 2, 3; `draftSchema` (Task 5 emit) is read by Task 6 as `args.draftSchema`; `isSaveDraftTool` / `buildSaveDraftToolDefinition` / `draftCharCount` names match between Task 6's module and its prompt.ts call sites.
+- **Type consistency:** `params: FunctionParameter[]` (Task 1, parsed by the shared `asParser`) is read by Task 2 (`params[0]`, AG6038 for more) and Task 3 (`finalize.params[0].name`); `draftSchema` (Task 5 emit) is read by Task 6 as `args.draftSchema`; `isSaveDraftTool` / `buildSaveDraftToolDefinition` / `draftCharCount` names match between Task 6's module and its prompt.ts call sites.
+- **Reuse decision (owner review round 1):** the binder clause reuses `asParser`/`blockParamsParser`/`FunctionParameter` — the grammar and type block arguments already own — instead of a hand-rolled `as <name>` parse. Consequences inherited from the shared grammar and ruled on downstream: `finalize as { }` parses as binder-less (the documented no-param form; formatter canonicalizes it away), multi-param lists parse and are rejected by AG6038, and a typed binder (`as d: Report`) parses with the annotation winning over the scope's return type (the handler-param rule). NOT reused: the whole-node `functionCall`+`BlockArgument` pipeline — finalize is a declaration, not a call (FinalizeCodegen strips it from the statement stream; AG6032/6033 and the flow builder key on the node type; there is no callee to receive a block), so wrapping the body would add indirection without behavior.

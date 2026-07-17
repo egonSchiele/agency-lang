@@ -258,13 +258,27 @@ possibly-null name, with a real type instead of a repurposed local.
 
 ### Mechanics (pointers, not code)
 
-- **Parser:** `finalizeBlockParser` (`lib/parsers/parsers.ts`) gains
-  an optional empty-parens group and an optional `as <name>` binder
-  between the keyword and the brace, with the word-boundary care the
-  keyword already has.
-- **AST:** `FinalizeBlock` gains `binder: string | null`. The
-  formatter prints it; `bodySlots` is unchanged (the binder is not a
-  body).
+- **Parser (owner review round 1: reuse, not hand-rolling):** the
+  binder clause is the EXISTING `asParser` /`blockParamsParser`
+  (`lib/parsers/parsers.ts:3148`) — the same grammar that gives
+  `fork([1, 2]) as item { }` its binder. `finalizeBlockParser` gains
+  an optional empty-parens group and then delegates the `as` clause
+  to `asParser`, keeping the word-boundary care the keyword already
+  has. Inherited edge cases from the shared grammar, ruled on by the
+  checker rather than re-parsed: `finalize as { }` parses as the
+  binder-less form (the documented no-param shape; the formatter
+  canonicalizes the stray `as` away, like guard's legacy-as
+  migration); `as (a, b)` parses and is rejected (one draft, one
+  binder — AG6038); `as draft: Report` parses with the annotation
+  winning over the scope's return type (the handler-param rule).
+- **AST:** `FinalizeBlock` gains `params: FunctionParameter[]` — the
+  same field shape `BlockArgument` uses; the binder is `params[0]`,
+  `[]` is binder-less. The formatter prints it through the shared
+  param renderer; `bodySlots` is unchanged (the binder is not a
+  body). NOT reused: the whole-node `functionCall`+`BlockArgument`
+  pipeline — a finalize is a declaration, not a call (codegen strips
+  it from the statement stream; nothing invokes it), so wrapping the
+  body in a `BlockArgument` would add indirection without behavior.
 - **Checker:** declare the binder in the finalize scope as
   `T | null`. The existing finalize checks (no interrupts, one per
   scope, return-position call restriction) are untouched.

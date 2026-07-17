@@ -1,0 +1,360 @@
+import {
+  _createNote,
+  _appendToNote,
+  _readNote,
+  _searchNotes,
+  _listNotes,
+  _listFolders,
+  _deleteNote,
+  _folderExists,
+  _preflightNote,
+} from "agency-lang/stdlib-lib/appleNotes.js"
+import { parse, renderForHtml } from "std::markdown"
+
+/** @module
+  Create, read, search, and edit notes in the macOS Notes app. macOS only.
+  The first call asks for Automation permission with a system dialog. If
+  nobody answers the dialog, the call fails after 30 seconds.
+
+  ```ts
+  import { createNote } from "std::notes/apple"
+
+  node main() {
+    const result = createNote("Findings", "## Summary\n\n- one\n- two")
+    print(result)
+  }
+  ```
+
+  ## Notes are addressed by id
+
+  Two notes in the same folder can share a title, so a title is not an
+  address. Every read and edit takes the note's `id`, which comes from
+  `listNotes` or `searchNotes`:
+
+  ```ts
+  import { searchNotes, appendToNote } from "std::notes/apple"
+
+  node main() {
+    const found = searchNotes("Q3 planning")
+    if (found is success(notes)) {
+      appendToNote(notes[0].id, "\n## Update\n\nShipped.")
+    }
+  }
+  ```
+
+  `createNote` returns the note it made, including its id, so
+  create-then-append needs no search.
+
+  ## Bodies are Markdown going in, plain text coming out
+
+  `createNote` and `appendToNote` take Markdown and convert it to the HTML
+  that Notes stores. `readNote` returns plain text. That makes a
+  read-then-write round trip lossy: reading strips the formatting, and
+  writing the text back would flatten the note. Use `appendToNote` instead
+  of reading, editing, and rewriting a note yourself.
+
+  ## Confining an agent to one folder
+
+  Every function takes an optional `folder`. It constrains rather than
+  addresses: if you pass it, the call fails unless the note is in that
+  folder. Combined with partial application, that confines an agent in a way
+  the model cannot see or route around, because the locked parameter is
+  stripped from the tool's schema:
+
+  ```ts
+  import { listNotes, readNote } from "std::notes/apple"
+
+  node main() {
+    const reader = readNote.partial(folder: "Work").rename("readWorkNote")
+    const lister = listNotes.partial(folder: "Work").rename("listWorkNotes")
+    llm("Summarise my Work notes", { tools: [lister, reader] })
+  }
+  ```
+
+  The model may pass any id it likes. Anything outside Work fails closed.
+
+  ## Deciding with a policy
+
+  Each operation raises its own effect, so a policy can approve reads and
+  reject deletes:
+
+  ```json
+  {
+    "std::notes::read": [
+      { "match": { "folder": "Work" }, "action": "approve" },
+      { "action": "reject" }
+    ],
+    "std::notes::delete": [{ "action": "reject" }]
+  }
+  ```
+
+  `readNote`, `appendToNote`, and `deleteNote` look the note up before
+  raising their interrupt, so the payload carries the note's real `title`,
+  `folder`, and `account` even when the call passed only an id. The rule
+  above therefore matches a bare `readNote(id)` for a note that lives in
+  Work.
+
+  One v1 limit: only those three calls populate `account`. `createNote`,
+  `searchNotes`, and `listNotes` send it as an empty string, and an empty
+  string matches no glob. A rule that matches on `account` never applies to
+  them, so match on `folder` instead.
+
+  The `NotesRead`, `NotesWrite`, and `Notes` sets in `std::capabilities`
+  cover the same split for constraining a whole node.
+
+  ## Locked notes
+
+  A note locked with a password cannot be read or edited, and this module
+  will not try. Calls against a locked note fail before their interrupt is
+  raised, with a message naming the note.
+
+  ## Deleting is recoverable
+
+  `deleteNote` moves a note to Recently Deleted, where it stays for about
+  30 days. `listFolders` returns that folder like any other.
+
+  ## Other note apps
+
+  Obsidian needs no module. A vault is a directory of Markdown files, so
+  `std::fs` already covers it, and the same handlers, policies, and partial
+  application apply. Bear is not supported: its `x-callback-url` API cannot
+  deliver a callback to a command-line process, so a create call could not
+  return the new note's id.
+*/
+
+/** A folder in Notes. `noteCount` is derived, not stored. */
+export type Folder = {
+  id: string
+  name: string
+  noteCount: number
+}
+
+/** A note's metadata. Deliberately contains no body. */
+export type Note = {
+  id: string
+  title: string
+  folder: string
+  account: string
+  modified: string
+  passwordProtected: boolean
+}
+
+/** A note including its content, as plaintext. */
+export type NoteContent = {
+  id: string
+  title: string
+  folder: string
+  account: string
+  body: string
+  modified: string
+}
+
+effect std::notes::create { account: string, folder: string, title: string, folderCreated: boolean }
+effect std::notes::append { account: string, folder: string, title: string, id: string }
+effect std::notes::read   { account: string, folder: string, title: string, id: string }
+effect std::notes::search { account: string, folder: string, query: string }
+effect std::notes::list   { account: string, folder: string }
+effect std::notes::delete { account: string, folder: string, title: string, id: string }
+
+/** Convert markdown to the HTML that Notes requires on write. */
+def toHtml(body: string): Result<string> {
+  const parsed = parse(body)
+  if (!parsed.success) {
+    return failure("Could not parse the note body as Markdown: ${parsed.error}")
+  }
+  return success(renderForHtml(parsed.blocks))
+}
+
+/** What the pre-flight lookup returns. Re-declared natively because record
+    types imported from TypeScript are opaque to the typechecker. */
+type Preflight = {
+  id: string
+  title: string
+  folder: string
+  account: string
+  locked: boolean
+}
+
+/** Look the note up before raising the interrupt, so the payload can carry its
+    real title, folder, and account. Those are the fields a policy glob matches
+    on and a human reads before approving. Without this, the payload would hold
+    an opaque id and empty strings, and no policy could ever match an append,
+    read, or delete.
+
+    This helper also refuses locked notes and folder mismatches, so both errors
+    precede the interrupt and a human never approves a call that is guaranteed
+    to fail. It keeps the payload honest too: the folder shown to the approver
+    is always the note's real folder. The TypeScript layer re-checks the folder
+    and the locked flag after the approval, because the note can change during
+    the approval window. Those re-checks are the belt and braces; this check is
+    what makes the error precede the interrupt. */
+def preflight(id: string, folder: string | null): Result<Preflight> {
+  const meta = try _preflightNote(id)
+  if (isFailure(meta)) {
+    return meta
+  }
+  if (folder != null && meta.value.folder != folder) {
+    return failure("Note ${meta.value.title} is in folder ${meta.value.folder}, not ${folder}. Refusing.")
+  }
+  if (meta.value.locked) {
+    return failure("Note ${meta.value.title} is locked. Unlock it in Notes.app and retry.")
+  }
+  return meta
+}
+
+export def createNote(title: string, body: string, folder: string = "Agency Notes"): Result<Note> raises <std::notes::create> {
+  """
+  Create a note in the Notes app and return it, including its new id.
+
+  @param title - The note's title
+  @param body - The note's content, as Markdown
+  @param folder - The folder to create it in. Created if it does not exist.
+  """
+  const html = toHtml(body)
+  if (isFailure(html)) {
+    return html
+  }
+
+  const exists = try _folderExists(folder)
+  if (isFailure(exists)) {
+    return exists
+  }
+
+  // exists is the Result from `try`, so negate the VALUE. `!exists` would
+  // negate the always-truthy success object and folderCreated would silently
+  // always read false.
+  return interrupt std::notes::create("Create a note in the Notes app?", {
+    account: "",
+    folder: folder,
+    title: title,
+    folderCreated: !exists.value
+  })
+
+  destructive {
+    return try _createNote(title, html.value, folder)
+  }
+}
+
+export def appendToNote(id: string, body: string, folder?: string): Result<Note> raises <std::notes::append> {
+  """
+  Append Markdown to an existing note. Get the id from listNotes or searchNotes.
+
+  @param id - The note's id
+  @param body - The content to append, as Markdown
+  @param folder - If given, the call fails unless the note is in this folder
+  """
+  const html = toHtml(body)
+  if (isFailure(html)) {
+    return html
+  }
+
+  const meta = preflight(id, folder)
+  if (isFailure(meta)) {
+    return meta
+  }
+
+  return interrupt std::notes::append("Append to a note in the Notes app?", {
+    account: meta.value.account,
+    folder: meta.value.folder,
+    title: meta.value.title,
+    id: id
+  })
+
+  destructive {
+    return try _appendToNote(id, html.value, folder)
+  }
+}
+
+export idempotent def readNote(id: string, folder?: string): Result<NoteContent> raises <std::notes::read> {
+  """
+  Read a note's contents as plain text. Get the id from listNotes or searchNotes.
+
+  @param id - The note's id
+  @param folder - If given, the call fails unless the note is in this folder
+  """
+  const meta = preflight(id, folder)
+  if (isFailure(meta)) {
+    return meta
+  }
+
+  return interrupt std::notes::read("Read a note from the Notes app?", {
+    account: meta.value.account,
+    folder: meta.value.folder,
+    title: meta.value.title,
+    id: id
+  })
+
+  return try _readNote(id, folder)
+}
+
+export idempotent def searchNotes(query: string, folder?: string): Result<Note[]> raises <std::notes::search> {
+  """
+  Search notes by their text and return matching notes' metadata, without their
+  contents.
+
+  @param query - The text to search for
+  @param folder - If given, only search this folder
+  """
+  const payloadFolder = if folder == null then "" else folder
+
+  return interrupt std::notes::search("Search the notes in the Notes app?", {
+    account: "",
+    folder: payloadFolder,
+    query: query
+  })
+
+  return try _searchNotes(query, folder)
+}
+
+export idempotent def listNotes(folder?: string): Result<Note[]> raises <std::notes::list> {
+  """
+  List notes' metadata, without their contents.
+
+  @param folder - If given, only list this folder
+  """
+  const payloadFolder = if folder == null then "" else folder
+
+  return interrupt std::notes::list("List the notes in the Notes app?", {
+    account: "",
+    folder: payloadFolder
+  })
+
+  return try _listNotes(folder)
+}
+
+export idempotent def listFolders(): Result<Folder[]> raises <std::notes::list> {
+  """
+  List the folders in the Notes app, with a count of the notes in each.
+  """
+  return interrupt std::notes::list("List the folders in the Notes app?", {
+    account: "",
+    folder: ""
+  })
+
+  return try _listFolders()
+}
+
+export def deleteNote(id: string, folder?: string): Result<null> raises <std::notes::delete> {
+  """
+  Delete a note. It moves to the Recently Deleted folder, where it stays for
+  about 30 days.
+
+  @param id - The note's id
+  @param folder - If given, the call fails unless the note is in this folder
+  """
+  const meta = preflight(id, folder)
+  if (isFailure(meta)) {
+    return meta
+  }
+
+  return interrupt std::notes::delete("Delete a note from the Notes app?", {
+    account: meta.value.account,
+    folder: meta.value.folder,
+    title: meta.value.title,
+    id: id
+  })
+
+  destructive {
+    return try _deleteNote(id, folder)
+  }
+}

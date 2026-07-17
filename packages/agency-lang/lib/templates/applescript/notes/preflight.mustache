@@ -1,0 +1,8 @@
+    tell application "Notes"
+      set n to note id (item 1 of argv)
+      set c to container of n
+{{{accountWalk}}}
+      set d to (ASCII character 1)
+      return (name of n) & d & (name of c) & d & (name of a) & d & ¬
+             ((password protected of n) as text)
+    end tell

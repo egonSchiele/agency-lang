@@ -1,7 +1,7 @@
 # std::notes/apple — Apple Notes integration for the Agency standard library
 
 Date: 2026-07-16
-Status: Design, awaiting owner review
+Status: Implemented. The module shipped from the 2026-07-17 implementation plan, with the two v1 limits recorded in Section 10.
 Scope: One new stdlib module, one new function in an existing stdlib module, one addition to the capability sets
 
 ---
@@ -84,9 +84,9 @@ This table is copied from the sdef, not from memory:
 
 | Property | Type | Access | Notes |
 |---|---|---|---|
-| `name` | text | read/write | The title. See the open question in Section 9.1. |
+| `name` | text | read/write | The title. Setting it works; Section 9.1. |
 | `id` | text | read-only | An opaque `x-coredata://...` string. Stable. |
-| `container` | folder | read-only | The folder the note is in. |
+| `container` | folder | read-only | The folder. **Must be read in two steps**; Section 9.2. |
 | `body` | text | **read/write** | HTML. The only writable content field. |
 | `plaintext` | text | read-only | The note's text without markup. |
 | `creation date` | date | read-only | |
@@ -280,8 +280,10 @@ corrected in place rather than quietly dropped:
 - The `osascript` argv example in Section 3.6 was off by one. Verified wrong.
 - Section 2.6 claimed `-1712` was the only permission signal. See Section 2.8.
 
-One blocker remains open, in Section 9.2. It must be settled before the Notes
-module is implemented.
+Section 9.2 was a blocker and is now resolved: a note's `container` is readable,
+but only if the access is split rather than chained. It took four probes, and
+every failure was a probe bug rather than a finding. The mechanics are in 9.2
+because the same mistake is easy to repeat.
 
 ### 3.2 Full CRUD, including reading note bodies
 
@@ -583,6 +585,11 @@ original omission came from. `git.agency` is the newer and better precedent.
 **`account` is optional and defaults to the default account.** See Section 3.4.
 It exists so folder scoping is a real guarantee rather than an advisory one.
 
+> **Deferred out of v1.** The implementation plan does not build the `account`
+> argument. `account` ships as an output field only, so folder scoping stays
+> advisory on a multi-account machine. Section 10 records why. The signatures
+> below are the intended shape, not what v1 delivers.
+
 **`folder` defaults to `"Agency Notes"`, and may not exist yet.** Chosen by the
 owner so a user can see at a glance which notes an agent made, and rename the
 folder if they want. Unlike Apple's `"Notes"`, it will not exist on a fresh
@@ -681,11 +688,16 @@ That query reads three properties and nothing else:
 on run argv
   tell application "Notes"
     set n to note id (item 1 of argv)
-    return (name of n) & tab & (name of container of n) & tab & ¬
+    set c to container of n          -- must be split; see Section 9.2
+    return (name of n) & tab & (name of c) & tab & ¬
            ((password protected of n) as text)
   end tell
 end run
 ```
+
+The split on `container` is load-bearing, not style. `name of container of n` in
+one expression errors `-1728` on every note, locked or not. Section 9.2 has the
+measurements.
 
 `body` and `plaintext` are never touched. The unguarded step learns a title, a
 folder name, and a locked flag. It never learns a single byte of note content.
@@ -709,8 +721,8 @@ module source, where it will be read by the next person deciding whether to add 
 third property to this query. "Unreachable without a gate" would license adding
 anything. "Discloses only what the id-holder already knows" does not.
 
-**This entire section is contingent on Section 9.2.** The pre-flight reads
-`name of container`, and the spike could not confirm that works.
+Section 9.2 confirmed this lookup works, provided the `container` access is
+split rather than chained.
 
 ### 5.4 Retry markers
 
@@ -822,32 +834,39 @@ be locked. So the assertion was check-then-act, and Section 6.6's unconditional
 "assertion does not match → fail closed" was not something the design delivered.
 
 The fix is cheap and it uses data already in argv. Re-assert inside the write
-script, in the same `tell` block as the mutation:
+script, in the same `tell` block as the mutation.
+
+Section 9.2 found a better way to spell that assertion than the obvious one.
+Rather than reading the note's container and comparing it to the asserted
+folder, **address the note through the folder**:
 
 ```applescript
 on run argv
   tell application "Notes"
-    set n to note id (item 1 of argv)
-    if (name of container of n) is not (item 3 of argv) then
-      error "folder mismatch"
-    end if
+    -- Scoped lookup IS the assertion: this fails if the note is not in
+    -- the asserted folder. Verified to fail closed on the wrong folder.
+    set n to note id (item 1 of argv) of folder (item 3 of argv)
     if (password protected of n) then error "note is locked"
     set body of n to (body of n) & (item 2 of argv)
   end tell
 end run
 ```
 
-Now the pre-flight exists only to build the interrupt payload, which is what
-Section 5.3 says it is for, and the assertion is a guarantee rather than a
-best-effort. The locked re-check belongs here too, for the same reason and with
-much higher stakes (Section 2.7).
+This is better than read-then-compare, and not only shorter. A scoped lookup
+cannot drift from its own check: the reference that gets mutated is the same one
+that had to resolve inside the asserted folder. Read-then-compare has two steps
+and therefore a window between them, which is the whole problem this section is
+fixing. The check and the access are now a single operation.
+
+When the caller asserted no folder, the lookup is unscoped (`note id X`) and
+there is nothing to check, which is correct.
+
+The locked re-check belongs here too, for the same reason and with much higher
+stakes (Section 2.7).
 
 This still does not make append atomic. Notes offers no transaction, so a user
 typing into the note at that exact moment can lose a keystroke. The honest claim
 is "meaningfully safer than two round trips", not "atomic".
-
-Note this interacts with Section 9.2. If the container cannot be read, this
-script cannot assert on it either.
 
 ### 6.5 deleteNote is recoverable
 
@@ -985,7 +1004,9 @@ A one-off manual spike ran against real Notes.app on macOS 14.7.4. It was not a
 test and nothing about it is committed. Every note it created went into a
 throwaway folder called "Agency Spike", which it then deleted.
 
-Three of the four questions are answered. One turned into a blocker.
+All four questions are answered. Nothing is blocked. Section 9.2 took four
+probes, and every one of those failures was a bug in the probe rather than a
+finding about Notes.
 
 ### 9.1 Does setting `name` set the title? **Yes. Resolved.**
 
@@ -1000,50 +1021,100 @@ So `createNote` sets `name` directly, and `renderForHtml` needs no leading
 `<h1>`. This also confirms the renderer is genuinely independent of the Notes
 module, which is why it could be built first.
 
-### 9.2 Is a locked note's metadata readable? **Partly. This is the blocker.**
+### 9.2 Is a note's container readable? **Yes, if you do not chain. Resolved.**
 
-Mixed, and the mix is the problem:
+This one took four probes and cost the most, so the mechanics are worth writing
+down properly. Every probe failure was a probe bug. Notes behaved consistently
+the whole way through.
 
-| Property | Result |
+**The finding: reference chaining is the problem, not the property.**
+
+| Form | Result |
 |---|---|
-| `name` | `lockme` — readable |
-| `password protected` | `true` — readable |
-| `body` | **empty string, no error** — see Section 2.7 |
-| `container` | **error -1728, "Can't get name of container of note..."** |
+| `name of container of n` | error `-1728` |
+| `id of container of n` | error `-1728` |
+| `set c to container of n` then `name of c` | **`Agency Spike`** |
 
-The good half: `name` and `password protected` both read fine, so we can always
-detect a locked note and name it in an error. Locked notes are
-visible-but-unreadable, not invisible.
+`container of n` resolves correctly every time. Reading a property *through* it in
+a single expression is what fails. Coercing it directly proves the resolution is
+fine, because the coercion error leaks the object it resolved to:
 
-The blocker: **`name of container` errored, and the spike cannot say why.** The
-probe was designed badly. It never read `name of container` on an *unlocked*
-note, so two very different explanations both fit:
-
-1. Locked notes hide their container. A narrow problem, affecting only the
-   locked path, which already fails closed.
-2. `name of container of note X of folder Y` does not work on any note. If so,
-   **Section 5.3's pre-flight lookup is broken**, and with it the folder
-   assertion in Section 3.4, the `folder` field in every payload in Section 5.1,
-   and the account resolution in Section 3.4's repair. That is most of the
-   scoping story.
-
-Until this is settled, no part of the Notes module that depends on the pre-flight
-should be implemented.
-
-Settling it needs one read-only command against an unlocked note:
-
-```bash
-osascript -e 'tell application "Notes"
-  return name of container of note "TITLE_FROM_NAME" of folder "Agency Spike"
-end tell'
+```
+3: container of n coerced to text
+   error: Can't make «class cfol» id "x-coredata://.../ICFolder/p594"
+          of application "Notes" into type text. (-1700)
 ```
 
-Returns `Agency Spike` → explanation 1, narrow fix. Errors with `-1728` →
-explanation 2, and Section 5.3 needs rework before the plan is written.
+`ICFolder/p594` is Agency Spike, confirmed against a folder-id listing. So the
+container was there all along.
 
-It has to be run from a terminal the user has granted Notes automation to. A
-different process gets `-1743` regardless of the answer (Section 2.8), which is
-why this could not be resolved without the owner present.
+**So the pre-flight survives.** It must split the access:
+
+```applescript
+on run argv
+  tell application "Notes"
+    set n to note id (item 1 of argv)
+    set c to container of n          -- split. `name of container of n` fails.
+    return (name of n) & tab & (name of c) & tab & ¬
+           ((password protected of n) as text)
+  end tell
+end run
+```
+
+This is not locked-specific. `container` behaves identically on locked and
+unlocked notes; both fail when chained and both work when split. Section 9.2's
+original framing, that this might be a locked-note quirk, was wrong in an
+uninteresting way: it was never about locking at all.
+
+**Two other approaches also work, and one of them is better for the assertion.**
+
+The probe tested them because a broken `container` looked likely at the time.
+Both came back positive, and one earns a place in the design anyway:
+
+```
+4: note id X of folder Y            -> resolved: searchtarget
+5: same, but the WRONG folder       -> good: did not resolve
+6: find the folder by iterating     -> found in: Agency Spike
+```
+
+Test 4 and 5 together are the **inverted assertion**. The original design asks a
+note which folder it is in and compares that to what the caller asserted. But the
+assertion never needed the answer to that question. It only needs "is this note
+in the folder I was told?", and `note id X of folder Y` answers exactly that,
+failing closed on the wrong folder.
+
+That is strictly better than read-then-compare, and Section 6.4 adopts it,
+because it collapses the check and the access into one lookup. A scoped lookup
+cannot drift from its own check the way read-then-compare can across a human
+approval. It resolves review finding #4 as a side effect rather than by adding a
+second guard.
+
+So the design uses both:
+
+- **`container of n`, split**, in the pre-flight, so the interrupt payload can
+  carry `folder` even when the caller asserted nothing. Policy globs need this.
+- **`note id X of folder Y`**, in the write script, as the assertion itself.
+
+Test 6 (scan every folder for the id) is the fallback if `container` ever breaks
+outright. Not used, recorded because it works.
+
+**Why this took four probes**, since the pattern is worth not repeating:
+
+1. Probe 1 used a chained by-name reference **and** ran against a folder that
+   might not exist. `-1728` covers "no such object", so the result could not
+   distinguish a broken container from a deleted folder.
+2. Probe 2 accumulated results into one AppleScript string and returned it at the
+   end. Most of the output vanished.
+3. Probe 3 fixed the output by echoing one `osascript` call per test, but its
+   "step-by-step" case still read `name of container of n`. It split the note
+   lookup and left the container access chained, so it tested the broken form
+   while claiming to test the fixed one.
+4. Probe 4 finally split the container access, and answered in one run.
+
+The lesson is narrow and mechanical: **when a probe and the design disagree about
+shape, the probe is testing something else.** Probe 3's label said "set n then
+container of n" and its code said `name of container of n`. Reading the label
+rather than the code cost two rounds.
 
 ### 9.3 Can `whose` search note bodies? **Yes, both ways. Resolved.**
 
@@ -1116,9 +1187,49 @@ timeout bounded it.
 - **Moving notes between folders.** Not requested.
 - **Tests that touch real Notes.app.** Section 8.
 
-Accounts **were** on this list. They are now in scope, per Section 3.4 and the
-owner's decision. Section 9.4 predicted the exclusion would not survive, and it
-did not.
+### Deferred out of v1 after the spike, with reasons
+
+Both of these were in scope when this spec was written. A later probe measured
+what they actually cost, and the implementation plan defers them. They are
+recorded here so the spec stops promising what v1 does not build.
+
+**Nested folder paths.** Notes folders nest, and the owner's account has them:
+`Archived` contains `2010s`, `2017`, `2019`. Three measured facts:
+
+- A bare `repeat with f in folders` **flattens** the hierarchy, returning
+  `Archived` and its children side by side with nothing marking the difference.
+- `folder "2017"` **resolves** from the top level, so name addressing is
+  ambiguous rather than broken.
+- `/` **is legal** in a folder name (verified by creating one), so a path
+  separator needs escaping. Paths are a real design job, not a string join.
+
+v1 therefore has `listFolders` return **top-level folders only**, filtered by
+`class of c is account`. That is honest and limited rather than flat and wrong.
+Nested folders remain reachable by bare name, ambiguously, which is Notes' own
+behaviour rather than something this module introduces.
+
+**The `account` argument.** Section 4.2 gives every function an optional
+`account`, and Section 3.4 argued it is what makes folder scoping a real
+guarantee rather than an advisory one. v1 delivers `account` as an **output**
+field on `Note`, and as a payload field that is populated from the pre-flight
+on `appendToNote`, `readNote`, and `deleteNote` — but empty on `createNote`,
+`searchNotes`, and `listNotes`, where no pre-flight runs. It is not an input
+filter anywhere. An empty string matches no policy glob, not even `"*"`, so an
+`account` match never applies to those three calls. So folder
+scoping stays advisory on a multi-account machine.
+
+The owner has exactly one account (Section 9.4), so this is latent rather than
+live. It is a scope cut, and Section 3.2's argument — that exposing every note
+body is defensible *because* containment is real — is weaker by exactly this
+much until it lands. That should be said plainly rather than discovered later.
+
+**The account derivation bug is NOT deferred; it is fixed in v1.** Distinct from
+the missing argument. Deriving a note's account with one hop up from its folder
+is wrong for any nested folder: `container of folder "2017"` is `Archived`, not
+`iCloud`. Left alone, every note under `Archived` would carry `"Archived"` in its
+`account` payload field, and a policy matching `{"account": "iCloud"}` would
+silently stop matching. The fix is a bounded upward walk, verified to reach
+`iCloud` from `Archived/2017` in 2 hops.
 
 ---
 
@@ -1128,25 +1239,27 @@ Rough shape for the implementation plan, which is a separate document.
 
 **Done.**
 
-1. Live spike, Section 9. Three of four questions answered. 9.2 is still open and
-   still blocks the Notes module.
-2. `renderForHtml` in `std::markdown`, plus 34 unit tests. Section 9.1's answer
-   confirmed this is independent of the Notes module, so it went first.
+1. Live spike, Section 9. All four questions answered. Nothing is blocked.
+2. `renderForHtml` in `std::markdown`, plus 46 unit tests. Merged in #562.
+   Section 9.1's answer confirmed this is independent of the Notes module, so it
+   went first.
 
-**Blocked on Section 9.2.** Everything below depends on the pre-flight lookup,
-which is exactly what 9.2 puts in doubt.
+**Ready to implement.**
 
-3. `lib/stdlib/appleNotes.ts`: argv-based script construction, error mapping for
-   `-1743` and `-1712`, pre-flight lookup, the locked-note guard, plus unit tests.
-4. `stdlib/notes/apple.agency`: types, effects, functions, docstrings.
+3. `lib/stdlib/appleNotes.ts`: argv-based script construction (no `-` separator,
+   Section 3.6), error mapping for `-1743` and `-1712`, the pre-flight lookup
+   with a split `container` access, the locked-note guard, the scoped-lookup
+   assertion, plus unit tests.
+4. `stdlib/notes/apple.agency`: types, effects, functions, docstrings, `raises`
+   clauses, typed `Result<T>` returns.
 5. `stdlib/capabilities.agency`: the three effect sets.
-
-**Not blocked.**
-
 6. Docs. Module doc comments generate the stdlib reference page via `agency doc`,
    so they are written in the source rather than hand-edited. A guide page
    showing the Obsidian `std::fs` pattern is worth including here, since Section
    3.1 makes it the answer for Obsidian users.
+
+Section 12 lists eight review findings that apply during step 3 and step 4. They
+are not optional cleanups; two of them are fail-open bugs.
 
 ---
 

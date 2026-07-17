@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Motivating example for the shared-guard design: outer guard wraps
 // a fork. Each branch individually stays under the limit, but their
@@ -22,7 +21,7 @@ import { guard } from "std::thread"
 // trip's `actualCost` being the shared total at trip time, not a
 // per-branch number.
 node main() {
-  const result = guard(cost: 0.000003) as {
+  const result = guard(cost: 0.000003) {
     fork([1, 2, 3]) as n {
       const r = llm("branch ${n}")
       return r

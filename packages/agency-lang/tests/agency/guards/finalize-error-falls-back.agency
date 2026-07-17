@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // The finalize divides by reading a missing property — it throws. The
 // trip is never masked: the guard salvages the DRAFT the scope saved,
@@ -15,7 +14,7 @@ def work(): string {
 }
 
 node main() {
-  const result = guard(cost: 0.000001) as {
+  const result = guard(cost: 0.000001) {
     return work()
   }
   if (isFailure(result)) { return "unexpected-failure" }

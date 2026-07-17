@@ -10,7 +10,6 @@
 // llm() spend MUST count against that guard. Sized so the handler's
 // charge is the difference between tripping and fitting: body spends 2
 // calls, handler adds a 3rd, limit is 2.25 calls' worth.
-import { guard } from "std::thread"
 
 def work() {
   const a = llm("Reply with: work")
@@ -22,7 +21,7 @@ def work() {
 node main() {
   const results = []
   for (i in [1, 2]) {
-    const r = guard(cost: 0.0000045) as {
+    const r = guard(cost: 0.0000045) {
       handle {
         return work()
       } with (data) {

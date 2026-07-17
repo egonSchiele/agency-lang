@@ -1,5 +1,4 @@
 import { compile, run } from "std::agency"
-import { guard } from "std::thread"
 
 // The grandchild spends; only the ROOT holds a guard. The mid-tier has no
 // guards of its own and must relay the grandchild's telemetry upward (its
@@ -40,7 +39,7 @@ node main(grandSource: string) {
     return "compile failed"
   }
   handle {
-    const result = guard(cost: 0.000003) as {
+    const result = guard(cost: 0.000003) {
       return run(
         compiled: compileResult.value,
         node: "main",

@@ -7,7 +7,6 @@
 // Shape: the outer guard encloses the handler's registration, the inner
 // guard does not. The handler's own llm() must charge the outer guard
 // and must NOT charge the inner one.
-import { guard } from "std::thread"
 
 def work() {
   const r1 = llm("Reply with: one")
@@ -22,10 +21,10 @@ node main() {
   // 3.25 calls' worth. Body spends r1 + handler + r2 = 3 calls, so the
   // one extra call below trips it — but only because the HANDLER's call
   // counted. Without the handler charge the total would be 3 and fit.
-  const outer = guard(cost: 0.0000065) as {
+  const outer = guard(cost: 0.0000065) {
     handle {
       // 2.25 calls' worth: r1 + r2 fit; r1 + handler + r2 would not.
-      const inner = guard(cost: 0.0000045) as {
+      const inner = guard(cost: 0.0000045) {
         return work()
       }
       if (isFailure(inner)) {

@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // A NON-guard abort (race loss) stops a finalize-bearing def. The
 // finalize may compute, but nothing converts a race loss into a

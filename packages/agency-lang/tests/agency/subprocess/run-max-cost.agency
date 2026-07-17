@@ -1,5 +1,4 @@
 import { compile, run, runFile } from "std::agency"
-import { guard } from "std::thread"
 
 // The child makes 3 mocked llm() calls at 0.000002 each. maxCost caps at
 // 0.000003: the second call trips the under-the-hood guard, and run()
@@ -65,7 +64,7 @@ node nested() {
     return "compile failed"
   }
   handle {
-    const outer = guard(cost: 10.0) as {
+    const outer = guard(cost: 10.0) {
       return run(compiled: compileResult.value, node: "main", maxCost: 0.000003)
     }
     if (isFailure(outer)) {

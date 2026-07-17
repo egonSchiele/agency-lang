@@ -1,7 +1,6 @@
-import { guard } from "std::thread"
 
 node main() {
-  const result = guard(cost: 0.000001) as {
+  const result = guard(cost: 0.000001) {
     const reply = llm("Reply with: pong")
     return reply
   }

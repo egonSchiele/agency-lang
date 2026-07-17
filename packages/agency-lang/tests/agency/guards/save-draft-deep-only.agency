@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Only the DEEP level saves, and code() consumes verify() via an
 // ASSIGNMENT (`const x = ...` — not return position), so the level rule
@@ -19,7 +18,7 @@ def code(): string {
 }
 
 node main() {
-  const result = guard(cost: 0.000001) as {
+  const result = guard(cost: 0.000001) {
     return code()
   }
   if (isFailure(result)) { return "failed-as-designed" }

@@ -1,12 +1,11 @@
-import { guard } from "std::thread"
 
 node main() {
-  const r1 = guard(cost: 0.000001) as {
+  const r1 = guard(cost: 0.000001) {
     saveDraft("g1-draft")
     const a = llm("Reply with: pong")
     return a
   }
-  const r2 = guard(cost: 0.000001) as {
+  const r2 = guard(cost: 0.000001) {
     const b = llm("Reply with: pong")
     return b
   }

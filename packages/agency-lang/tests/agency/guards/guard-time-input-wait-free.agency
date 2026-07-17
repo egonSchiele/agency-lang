@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 import test { _installSlowInput } from "std::thread"
 
 // A 500ms time budget wrapping an input() whose (simulated) human takes
@@ -10,7 +9,7 @@ import test { _installSlowInput } from "std::thread"
 // relation the assertion needs is input_time > budget > compute_time.
 node main() {
   _installSlowInput(2000, "hello")
-  const result = guard(time: 500ms) as {
+  const result = guard(time: 500ms) {
     const answer = input("your name? ")
     return "got:${answer}"
   }

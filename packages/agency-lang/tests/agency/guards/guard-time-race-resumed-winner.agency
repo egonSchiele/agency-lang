@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Race whose winner INTERRUPTS under a time budget: the interrupted
 // branch settles first (an interrupt is a settle), losers drop, the
@@ -17,7 +16,7 @@ def confirmBranch(item: number): string {
 }
 
 node main() {
-  const result = guard(time: 5s) as {
+  const result = guard(time: 5s) {
     const winner = race([1, 2]) as item {
       return confirmBranch(item)
     }

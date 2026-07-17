@@ -1,7 +1,6 @@
-import { guard } from "std::thread"
 
 def branch(tag: string): string {
-  const r = guard(cost: 0.000001) as {
+  const r = guard(cost: 0.000001) {
     saveDraft(tag)
     const reply = llm("Reply with: pong")
     return reply

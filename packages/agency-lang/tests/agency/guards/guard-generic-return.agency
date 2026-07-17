@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Block returns an array of numbers (not a string). Verifies the
 // typechecker's generic inference: `guard<T>(...)` should pick up
@@ -8,7 +7,7 @@ import { guard } from "std::thread"
 // If generic inference broke, `r.value[0] + r.value[1]` would either
 // fail at typecheck or compile down to NaN arithmetic.
 node main() {
-  const r = guard(cost: 10.0) as {
+  const r = guard(cost: 10.0) {
     return [10, 20, 30]
   }
   if (isFailure(r)) {

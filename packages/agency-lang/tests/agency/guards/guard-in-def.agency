@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Guard inside a `def` function (bare failure shape) instead of a
 // `node` (envelope failure shape). The function-body auto-wrap in
@@ -6,7 +5,7 @@ import { guard } from "std::thread"
 // GuardExceededError so the surrounding `guard` function's `try`
 // can convert it to a structured GuardFailureData.
 def doGuardedWork(): Result<string, GuardFailureData> {
-  return guard(cost: 0.000001) as {
+  return guard(cost: 0.000001) {
     const r = llm("Reply with: pong")
     return r
   }

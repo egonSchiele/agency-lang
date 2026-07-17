@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // A guard's trip must propagate across a FUNCTION-call boundary, not just
 // within a single node body. The outer guard (20ms) wraps a call to `inner`,
@@ -22,7 +21,7 @@ def inner(): string {
 // is identical on both paths. On a fast run the handler never fires.
 node main() {
   handle {
-  const result = guard(time: 20ms) as {
+  const result = guard(time: 20ms) {
     return inner()
   }
   if (isFailure(result)) {

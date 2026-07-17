@@ -1,5 +1,4 @@
 import { compile, run } from "std::agency"
-import { guard } from "std::thread"
 
 // The discriminating case for the rejected ship-guards-into-child design:
 // each child alone (2 calls x 0.000002 = 0.000004) is under the 0.000005
@@ -20,7 +19,7 @@ node main(tag: string) {
   }
   const compiled = compileResult.value
   handle {
-    const result = guard(cost: 0.000005) as {
+    const result = guard(cost: 0.000005) {
       const results = fork(["a", "b"]) as item {
         return run(compiled: compiled, node: "main", args: { tag: item })
       }

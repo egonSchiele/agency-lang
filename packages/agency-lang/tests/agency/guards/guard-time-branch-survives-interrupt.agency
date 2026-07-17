@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // A time budget around a fork whose branches take an interrupt and
 // resume. The branch clones pause across the halt (interrupts never
@@ -13,7 +12,7 @@ def confirmBranch(item: number): string {
 }
 
 node main() {
-  const result = guard(time: 5s) as {
+  const result = guard(time: 5s) {
     fork([1, 2]) as n {
       const r = confirmBranch(n)
     }

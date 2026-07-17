@@ -1,5 +1,4 @@
 import { boom } from "./tools.js"
-import { guard } from "std::thread"
 
 // A plain thrown error must NEVER salvage a draft. The catch rung stamps
 // only AgencyAbort; a regular exception takes the convert-to-failure path
@@ -12,7 +11,7 @@ def work(): string {
 }
 
 node main() {
-  const result = guard(cost: 1.0) as {
+  const result = guard(cost: 1.0) {
     return work()
   }
   if (isFailure(result)) { return "failed-as-expected" }

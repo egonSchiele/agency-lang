@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // The trip fires INSIDE a fork branch. The branch's frames stamp their
 // drafts onto the branch's abort, but runBatch clears the carried draft
@@ -13,7 +12,7 @@ def branchWork(tag: string): string {
 }
 
 node main() {
-  const result = guard(time: 600ms) as {
+  const result = guard(time: 600ms) {
     const tags = fork(["a"]) as t {
       return branchWork(t)
     }

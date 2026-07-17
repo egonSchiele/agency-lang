@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Shared cost guard must survive a serialized checkpoint cycle.
 // All 3 fork branches interrupt BEFORE the shared OUTER's spend
@@ -40,7 +39,7 @@ def confirmBranch(item: number): string {
 }
 
 node main() {
-  const result = guard(cost: 0.000008) as {
+  const result = guard(cost: 0.000008) {
     fork([1, 2, 3]) as n {
       return confirmBranch(n)
     }

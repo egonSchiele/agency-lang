@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Interrupt, resume, then a TIME trip (the abort-signal delivery path,
 // distinct from a cost trip's post-call check). The finalize runs with
@@ -19,7 +18,7 @@ def work(): string {
 }
 
 node main() {
-  const result = guard(time: 600ms) as {
+  const result = guard(time: 600ms) {
     return work()
   }
   if (isFailure(result)) { return "unexpected" }

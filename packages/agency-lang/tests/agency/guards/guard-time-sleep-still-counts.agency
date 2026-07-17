@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // sleep is NOT exempt: it is the program deliberately spending time,
 // not waiting on a human. A sleep that overruns the budget still trips.
@@ -10,7 +9,7 @@ import { guard } from "std::thread"
 // is identical on both paths. On a fast run the handler never fires.
 node main() {
   handle {
-  const result = guard(time: 20ms) as {
+  const result = guard(time: 20ms) {
     sleep(150ms)
     sleep(1ms)
     return "did not trip"

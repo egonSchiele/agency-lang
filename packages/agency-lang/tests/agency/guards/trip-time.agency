@@ -40,10 +40,15 @@ node stepBoundaryApproved() {
 }
 
 // 2. Same detection, rejected: the salvage pipeline runs and the guard
-// returns the saved draft.
+// returns the saved draft. The budget is 100ms, not 5ms: the trip must
+// not fire before the saveDraft step runs, and on a slow CI runner the
+// walk from pushGuard to the block's first step can eat more than 5ms
+// (the probe raises at step ENTRY, so a too-early trip rejects with no
+// draft filed — observed on CI as "no-salvage"). Approve-path nodes
+// keep 5ms; for them an early trip is answered and the work continues.
 node stepBoundaryRejected() {
   handle {
-    const r = guard(time: 5ms) as {
+    const r = guard(time: 100ms) as {
       saveDraft("partial-spin")
       const s = spin(300000)
       return "done:${s}"

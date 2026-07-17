@@ -4287,27 +4287,48 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(memo(
   ),
 ));
 
-/** `finalize { ... }` — keyword block, no binder and no `with` clause.
- *  Mirrors handleBlockParser's keyword handling: the word-boundary check
- *  keeps an identifier like `finalizer(...)` parsing as a call. */
+/** `finalize { ... }` — keyword block. Four head forms parse:
+ *  `finalize {`, `finalize() {`, `finalize as name {`,
+ *  `finalize() as name {`. The binder clause is the SAME asParser
+ *  block arguments use, so the grammar (and its edge cases — `as {`
+ *  means no params, parens and type hints are admitted) is shared,
+ *  not duplicated; arity and typing are checker rules (AG6038, the
+ *  binder-typing pass). Mirrors handleBlockParser's keyword handling:
+ *  the word-boundary check keeps an identifier like `finalizer(...)`
+ *  parsing as a call. */
 export const finalizeBlockParser: Parser<FinalizeBlock> = withLoc(memo(
   "finalizeBlockParser",
-  seqC(
-    set("type", "finalizeBlock"),
-    str("finalize"),
-    not(varNameChar),
-    optionalSpaces,
-    captureCaptures(
-      parseError(
-        "expected `{` to open finalize block body",
-        char("{"),
-        optionalSpacesOrNewline,
-        capture(bodyParser, "body"),
-        optionalSpacesOrNewline,
-        char("}"),
-      ),
-    ),
-  ),
+  (input: string): ParserResult<FinalizeBlock> => {
+    const pre = seqC(
+      str("finalize"),
+      not(varNameChar),
+      optionalSpaces,
+      // Optional empty parens: `finalize() { ... }`.
+      optional(seqC(char("("), optionalSpaces, char(")"))),
+      optionalSpaces,
+      capture(asParser, "params"),
+      optionalSpaces,
+      char("{"),
+    )(input);
+    if (!pre.success) return pre as ParserResult<FinalizeBlock>;
+    // Past the `{` we commit: a malformed body is an error here.
+    const bodyR = parseError(
+      "expected `}` to close finalize block body",
+      optionalSpacesOrNewline,
+      capture(lazy(() => bodyParser), "body"),
+      optionalSpacesOrNewline,
+      char("}"),
+    )(pre.rest);
+    if (!bodyR.success) return bodyR as ParserResult<FinalizeBlock>;
+    return success(
+      {
+        type: "finalizeBlock",
+        params: (pre.result as any).params,
+        body: (bodyR.result as any).body,
+      } as FinalizeBlock,
+      bodyR.rest,
+    );
+  },
 ));
 
 export const withModifierParser: Parser<WithModifier> = withLoc((input: string) => {

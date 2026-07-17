@@ -144,6 +144,7 @@ import { DefaultCase, MatchBlock, MatchBlockCase } from "../types/matchBlock.js"
 import { MessageThread } from "@/types/messageThread.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { FinalizeBlock } from "@/types/finalizeBlock.js";
+import { GuardBlock } from "@/types/guardBlock.js";
 import { WithModifier } from "@/types/withModifier.js";
 import { StaticStatement } from "@/types/staticStatement.js";
 import {
@@ -2908,7 +2909,7 @@ export const returnStatementParser: Parser<ReturnStatement> = label("a return st
     captureCaptures(
       seqC(
         optionalSpaces,
-        capture(or(lazy(() => matchBlockExprParser), lazy(() => ifExpressionParser), exprParser), "value"),
+        capture(or(lazy(() => guardBlockParser), lazy(() => matchBlockExprParser), lazy(() => ifExpressionParser), exprParser), "value"),
       ),
     ),
   ),
@@ -3643,7 +3644,7 @@ const _destructuringAssignmentParser: Parser<Assignment> = (input: string) => {
     optionalSpaces,
     char("="),
     optionalSpaces,
-    capture(or(lazy(() => messageThreadParser), exprParser), "value"),
+    capture(or(lazy(() => guardBlockParser), lazy(() => messageThreadParser), exprParser), "value"),
     optionalSemicolon,
     optionalSpacesOrNewline,
   );
@@ -3695,7 +3696,7 @@ const _assignmentParserInner: Parser<Assignment> = (input: string) => {
       optionalSpaces,
       char("="),
       optionalSpaces,
-      capture(or(lazy(() => messageThreadParser), lazy(() => matchBlockExprParser), lazy(() => ifExpressionParser), exprParser), "value"),
+      capture(or(lazy(() => guardBlockParser), lazy(() => messageThreadParser), lazy(() => matchBlockExprParser), lazy(() => ifExpressionParser), exprParser), "value"),
       optionalSemicolon,
       optionalSpacesOrNewline,
     ),
@@ -3991,6 +3992,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   matchBlockParser,
   lazy(() => ifParser),
   lazy(() => messageThreadParser),
+  lazy(() => guardBlockParser),
   lazy(() => handleBlockParser),
   lazy(() => finalizeBlockParser),
   debuggerParser,
@@ -4200,6 +4202,113 @@ const functionRefHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
   );
   return parser(input);
 };
+
+// =============================================================================
+// guardBlock — the `guard(head) { body }` construct
+// (spec: docs/superpowers/specs/2026-07-17-guard-keyword-design.md)
+// =============================================================================
+
+/** The head: the parenthesized cost/time/label list. Reuses the
+ *  canonical NamedArgument parser so users get identical syntax and
+ *  error messages to function calls, then validates the allowlist —
+ *  the `_threadNamedArgsParser` pattern. */
+type GuardHead = {
+  cost: Expression | null;
+  time: Expression | null;
+  label: Expression | null;
+  argOrder: ("cost" | "time" | "label")[];
+};
+const _guardHeadParser: Parser<GuardHead> = (
+  input: string,
+): ParserResult<GuardHead> => {
+  const inner: Parser<any> = seqC(
+    char("("),
+    optionalSpacesOrNewline,
+    capture(sepBy(commaWithNewline, namedArgumentParser), "arguments"),
+    optional(comma),
+    optionalSpacesOrNewline,
+    char(")"),
+  );
+  const r = inner(input);
+  if (!r.success) return r as ParserResult<GuardHead>;
+  const args: NamedArgument[] = r.result.arguments;
+  const allowed = ["cost", "time", "label"];
+  const seen: Record<string, Expression> = {};
+  const argOrder: ("cost" | "time" | "label")[] = [];
+  for (const arg of args) {
+    if (!allowed.includes(arg.name)) {
+      return failure(
+        `Unknown guard argument: ${arg.name}. Allowed: cost, time, label`,
+        input,
+      );
+    }
+    if (seen[arg.name]) {
+      return failure(`Duplicate guard argument: ${arg.name}`, input);
+    }
+    seen[arg.name] = arg.value as Expression;
+    argOrder.push(arg.name as "cost" | "time" | "label");
+  }
+  return success(
+    {
+      cost: seen.cost ?? null,
+      time: seen.time ?? null,
+      label: seen.label ?? null,
+      argOrder,
+    },
+    r.rest,
+  );
+};
+
+/** `guard(cost: $1, time: 5m, label: "x") { body }`, expression- and
+ *  statement-position. The reservation is POSITION-SENSITIVE (spec
+ *  decision 9): everything up to and including `{` is backtrackable,
+ *  so `guard(1)` (a call to a user function named guard) and
+ *  `import { guard }` lines fall through to the ordinary grammar —
+ *  only the full `guard(...) {` shape is claimed. A legacy `as`
+ *  between the head and the block is accepted and DISCARDED (the
+ *  formatter is the migration: `agency fmt` strips it). */
+export const guardBlockParser: Parser<GuardBlock> = label(
+  "a guard block",
+  withLoc(
+    memo("guardBlockParser", (input: string): ParserResult<GuardBlock> => {
+      const pre = seqC(
+        str("guard"),
+        // Word boundary: `guardrails(...)` must not match (the
+        // handleBlockParser rule).
+        not(varNameChar),
+        optionalSpaces,
+        capture(_guardHeadParser, "head"),
+        optionalSpaces,
+        // Legacy `as`: accepted and discarded — it leaves no trace.
+        optional(seqC(str("as"), not(varNameChar), optionalSpaces)),
+        char("{"),
+      )(input);
+      if (!pre.success) return pre as ParserResult<GuardBlock>;
+      // Past the `{` we commit: a malformed body is an error here, not
+      // a reason to backtrack into the call grammar.
+      const bodyR = parseError(
+        "expected guard block body followed by `}`",
+        optionalSpacesOrNewline,
+        capture(lazy(() => bodyParser), "body"),
+        optionalSpacesOrNewline,
+        char("}"),
+      )(pre.rest);
+      if (!bodyR.success) return bodyR as ParserResult<GuardBlock>;
+      const head = (pre.result as any).head as GuardHead;
+      return success(
+        {
+          type: "guardBlock",
+          cost: head.cost,
+          time: head.time,
+          label: head.label,
+          argOrder: head.argOrder,
+          body: (bodyR.result as any).body,
+        } as GuardBlock,
+        bodyR.rest,
+      );
+    }),
+  ),
+);
 
 export const handleBlockParser: Parser<HandleBlock> = withLoc(memo(
   "handleBlockParser",

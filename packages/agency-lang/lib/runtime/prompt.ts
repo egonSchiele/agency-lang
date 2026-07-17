@@ -1106,18 +1106,24 @@ export async function runPrompt(args: {
   const guardGate = () => raiseGuardTripsUntilClear(ctx, stateStack);
 
   // The delivery half of approve({message}) (resumable-guards PR 4):
-  // drain the branch's queued reviewer feedback into the thread as
-  // user-role messages, in an idempotent step of its own right before
-  // a request step. One thread message per queued approval, oldest
-  // first. The `guard:<label>` labels are observability-only (#557) —
-  // the model sees ordinary user messages, which is the point: guard
-  // feedback steers the model exactly like a user would.
+  // drain the branch's queued reviewer feedback into the thread, in an
+  // idempotent step of its own right before a request step. Everything
+  // queued drains as ONE user message, entries newline-joined oldest
+  // first — providers like Anthropic want user/assistant alternation,
+  // so one drain must not emit a run of consecutive user messages.
+  // The label lists each contributing guard once, in the same order.
+  // Labels are observability-only (#557) — the model sees an ordinary
+  // user message, which is the point: guard feedback steers the model
+  // exactly like a user would.
   const drainGuardFeedback = async () => {
     const feedback = stateStack.takeGuardFeedback();
     if (feedback.length === 0) return;
-    feedback.forEach((f) =>
-      messages.push(smoltalk.userMessage(f.text), f.label),
-    );
+    const text = feedback.map((f) => f.text).join("\n");
+    const label = feedback
+      .map((f) => f.label)
+      .filter((l, i, all) => all.indexOf(l) === i)
+      .join(",");
+    messages.push(smoltalk.userMessage(text), label);
     self.messagesJSON = snapshotThread();
   };
 

@@ -487,9 +487,13 @@ halves:
   its own right before each request step — `guardFeedback.initial`,
   `round.N.guardFeedback`, `validation.N.guardFeedback`, and
   `<key>.retryFeedback.N` inside the trip-retry wrapper (a mid-request
-  approve's message belongs in the re-issued request). One user-role
-  thread message per queued approval, oldest first, pushed with its
-  label via `MessageThread.push(message, label)` (#557) — labels are
+  approve's message belongs in the re-issued request). Everything
+  queued drains as ONE user-role thread message, entries
+  newline-joined oldest first — providers like Anthropic want
+  user/assistant alternation, so a drain must not emit a run of
+  consecutive user messages. The label lists each contributing guard
+  once (`guard:a,guard:b`), pushed via
+  `MessageThread.push(message, label)` (#557) — labels are
   observability-only and never reach the provider. A message queued
   outside any LLM loop (a step-boundary approve in plain code) waits
   and lands at the branch's next `llm()` call's initial drain.
@@ -498,6 +502,15 @@ Cross-process: the approve payload rides the interrupt IPC verbatim, so
 a PARENT's `approve({message})` for a CHILD's forwarded trip queues and
 injects inside the child
 (tests/agency/subprocess/trip-forward-approve-message).
+
+A note for the future: `message` is a payload key the runtime
+INTERPRETS — it has channel semantics the way `maxCost` has grant
+semantics — but nothing declares that. Today a key of an approve
+payload either does something magical (guardTripInterrupt.ts applies
+it) or silently nothing. When approve payloads become typed per effect
+(#555), how each key gets USED should be declared alongside its shape,
+so a payload's behavior is inspectable instead of buried in the
+runtime.
 
 - **The join rule (decision 15, "the grant follows the budget"):**
   `TimeGuard.extendBudget` records its clamped grant in a serialized

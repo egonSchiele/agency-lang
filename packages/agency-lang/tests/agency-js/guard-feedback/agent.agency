@@ -8,11 +8,13 @@ import { guard } from "std::thread"
 //      the branch's NEXT llm() call — the first request.
 //   2. "inner" and "outer" trip together at the gate after the first
 //      call's charge (nested cost guards, one charge over both
-//      limits). The gate asks innermost-first, so their two messages
-//      queue in that order and BOTH land before the second request.
+//      limits). The gate asks innermost-first, so their messages queue
+//      in that order and land before the second request as ONE
+//      newline-joined user message (providers want user/assistant
+//      alternation), labeled with both guards.
 //
-// test.js asserts placement, order, user role, and the guard:<label>
-// labels from the statelog promptCompletion payloads.
+// test.js asserts placement, join order, user role, and the
+// guard:<label> labels from the statelog promptCompletion payloads.
 
 def spin(rounds: number): string {
   let i = 0

@@ -148,8 +148,8 @@ The message lands in the conversation as a user message, right before the work's
 
 Two details:
 
-- If several handlers approve with messages, the messages are joined into one, inner handler first.
-- In thread dumps and statelog, injected feedback wears the label `guard:<label>` (the guard's `label:`, or its dimension when unlabeled), so you can tell reviewer feedback from real user messages. The model just sees a user message.
+- Messages combine instead of piling up. Several handlers approving one trip join their messages into one, inner handler first. And everything delivered at the same point — say, two nested guards both approved before one request — arrives as a single user message, newline-joined in ask order. Providers that require strict user/assistant alternation never see a run of user messages.
+- In thread dumps and statelog, injected feedback wears the label `guard:<label>` (the guard's `label:`, or its dimension when unlabeled), so you can tell reviewer feedback from real user messages. A combined message lists each contributing guard. The model just sees a user message.
 
 Deliberation is free. While your handler decides, the tripped guard's clock is paused, and your handler's own `llm()` calls are not billed to the guard it is judging. The handler's work is metered by the guards that enclosed its **registration site** — so register the handler *outside* the guard. A handler registered inside the guarded block is part of the metered work and never sees that guard's trips.
 

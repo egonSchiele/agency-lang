@@ -31,13 +31,8 @@
       },
       {
         "role": "user",
-        "content": "inner: one more call",
-        "label": "guard:inner"
-      },
-      {
-        "role": "user",
-        "content": "outer: budget doubled",
-        "label": "guard:outer"
+        "content": "inner: one more call\nouter: budget doubled",
+        "label": "guard:inner,guard:outer"
       },
       {
         "role": "user",

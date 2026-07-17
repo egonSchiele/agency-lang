@@ -1421,11 +1421,15 @@ Small by design; everything it needs exists by now.
    request, which never passes the other three. No drain at
    `guardGate.final`: no request follows; the queue waits, serialized,
    for the next llm().
-3. **One thread message per approval, not per merged chain.** Multiple
-   handlers approving one trip still merge to one message (effectMerge
-   newline-join); but two TRIPS answered before one request (nested
-   guards at one gate) inject as two messages, in ask order —
-   innermost first. The fixture pins this.
+3. **One thread message per DRAIN, not per approval** (review round 1,
+   owner). Multiple handlers approving one trip merge to one message
+   (effectMerge newline-join), and everything queued at one drain
+   point — two trips answered before one request — ALSO joins into a
+   single user message, newline-joined in ask order, its label listing
+   each contributing guard (`guard:inner,guard:outer`). First cut
+   injected one message per approval; providers like Anthropic want
+   user/assistant alternation, so a drain must not emit a run of
+   consecutive user messages. The fixture pins the joined shape.
 4. **The label falls back to the dimension** (`guard:time`) when the
    guard is unlabeled — `guard:<label>` as planned otherwise.
 5. **Feedback queued in a fork branch that makes no further request

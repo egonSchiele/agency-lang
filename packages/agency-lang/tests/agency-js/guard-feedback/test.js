@@ -12,9 +12,11 @@ import { readFileSync, writeFileSync, unlinkSync } from "fs";
 //   - request 1 carries the "clock" message BEFORE the "first" prompt:
 //     feedback queued outside any LLM loop waits for the branch's next
 //     llm() call, and reviews past work so it precedes the new prompt.
-//   - request 2 carries "inner" then "outer" IN ORDER (the gate asks
-//     innermost-first), after round 1's exchange and before "second".
-//   - every injected message is user-role and wears its guard:<label>.
+//   - request 2 carries "inner" and "outer" as ONE newline-joined user
+//     message (a drain must not emit consecutive user messages), in
+//     ask order (the gate asks innermost-first), after round 1's
+//     exchange and before "second" — labeled with BOTH guards.
+//   - every injected message is user-role and wears its guard label.
 //   - no `label` key ever reaches the provider config.
 
 const USAGE = { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 };

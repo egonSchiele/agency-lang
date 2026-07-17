@@ -189,10 +189,23 @@ function applyVerdict(
     // user-role message before the branch's next model request. Queued
     // AFTER extend so a defective answer (GuardApproveError) never
     // leaves its message behind.
-    if (payload.message !== undefined && payload.message !== "") {
+    //
+    // NOTE: this is the runtime INTERPRETING one field of the approve
+    // payload — `message` has channel semantics the way `maxCost` has
+    // grant semantics, but nothing declares that; a payload key either
+    // does something magical here or nothing at all. When approve
+    // payloads become typed per effect (#555), how a payload gets USED
+    // should be declared alongside its shape.
+    //
+    // The typeof guard is the trust boundary: payloads arrive from
+    // untyped JS handlers and from IPC, and a non-string `message`
+    // must not reach the serialized queue or userMessage().
+    if (typeof payload.message === "string" && payload.message !== "") {
+      // Truthy label check, not `??`: an empty-string label means
+      // unlabeled everywhere else, and must not produce `guard:`.
       stack.queueGuardFeedback(
         payload.message,
-        `guard:${tripped.label ?? tripped.dimension}`,
+        `guard:${tripped.label ? tripped.label : tripped.dimension}`,
       );
     }
     return;

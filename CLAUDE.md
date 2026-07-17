@@ -84,6 +84,18 @@ Please note that you cannot write and run agency files in the `/tmp` directory o
 ## Guidance on writing commit messages and PR descriptions
 If you try to write commit messages with apostrophes right on the command line, you will get an error. I'm telling you this now because you do this every time. Same with PR descriptions. Instead you need to write the commit message or PR description in a file, and then pass that in to the git command.
 
+## Creating worktrees
+Always create work trees inside the agency-lang directory. Never create work trees directly in home directory.
+
+## General writing tips
+When talking to me, or writing documentation or comments, please follow these general writing tips: packages/agency-lang/docs/dev/general-writing-tips.md
+
+Specifically, make sure you are writing readable prose, not using jargon, and explaining things with examples where possible.
+
+## Anti-patterns
+Make sure the code you write does not have any of these anti-patterns:
+packages/agency-lang/docs/dev/anti-patterns.md
+
 ## Deeper docs
 
 Read these before starting work:

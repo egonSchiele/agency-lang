@@ -338,3 +338,30 @@ Please never use this pattern.
         ...(traceFile ? { traceFile } : {}),
 }
 ```
+
+### Not using safeDelete when deleting files
+
+**Why:** Using `safeDelete` ensures that you don't accidentally delete important files or directories. It adds a layer of safety to file deletion operations.
+
+**Bad:**
+```ts
+import { unlinkSync } from "fs";
+unlinkSync(filePath);
+```
+
+**Good:**
+```ts
+import { safeDelete } from "@/utils.js";
+safeDelete(filePath);
+```
+
+### Writing tests where failures are catastrophic
+
+**Bad:**
+
+```ts
+// test that the deleteDir function refuses to delete the home directory
+deleteDir("~/")
+```
+
+Here is a test for a `deleteDir` function that is supposed to refuse to delete the home directory. Suppose the test fails. What will happen? **The function would delete the home directory**. Never write tests where if the test were to fail, something catastrophic could happen.

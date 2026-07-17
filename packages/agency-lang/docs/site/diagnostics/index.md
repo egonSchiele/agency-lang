@@ -124,6 +124,8 @@ or suppress one on the next line with `// @tc-ignore AG####`.
 | [AG6034](tools.md#ag6034) | saveDraft() has no effect inside a finalize block. The value the finalize returns is already the partial result. Return the value instead. |
 | [AG6035](tools.md#ag6035) | A finalize block cannot go in a node body. Nothing above a node consumes a partial result yet. Put the finalize in a function or a guard block instead. |
 | [AG6036](tools.md#ag6036) | This scope has a finalize block, so a return expression cannot bury a call inside a bigger expression. If the call were stopped, the expression would consume its partial result before the finalize could run. Assign the call to a local first, then return the local. |
+| [AG6037](tools.md#ag6037) | finalize binder '&#123;name&#125;' collides with a variable that already exists in this scope. Pick a fresh name. The finalize body reads the scope's locals directly, so a colliding binder would silently shadow the local. |
+| [AG6038](tools.md#ag6038) | finalize yields a single value — the scope's saved draft. Use one binder: finalize as &#123;name&#125; &#123; ... &#125;. |
 
 ## Static init, config, and imports
 

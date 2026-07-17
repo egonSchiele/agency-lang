@@ -2,10 +2,14 @@
 
 **Status:** brainstormed with the owner 2026-07-17; decisions settled.
 Review round 1 folded same day (findings in
-`2026-07-17-partials-ergonomics-design-REVIEW.md`: the interception
-frame is the TOP frame, not `callerFrame()`; the interception point is
-pinned to the ordered tool-call iteration; the schema-vs-slot type gap
-is stated). Builds on the partial-results machinery (saveDraft #553,
+`2026-07-17-partials-ergonomics-design-REVIEW.md`); the interception
+point is pinned to the ordered tool-call iteration and the
+schema-vs-slot type gap is stated. **Planning correction, same day:**
+the review's finding 1 (interception must write the TOP frame, not
+`callerFrame()`) was checked against the runtime and is factually
+wrong — `runPrompt` pushes its own frame on entry, so the existing
+`setSavedDraft` already targets the owning scope. Part 2 below carries
+the corrected analysis. Builds on the partial-results machinery (saveDraft #553,
 finalize #556, resumable guards #558–#566) and the guard construct
 (#574). Examples use the construct syntax, so this ships after #574.
 
@@ -106,26 +110,25 @@ ordinary tool.
 When the model calls the intercepted tool, the loop does NOT invoke
 the AgencyFunction. It:
 
-1. Files the draft on the TOP frame of the stack `runPrompt` is
-   executing under — and the top frame, not `callerFrame()`, is the
-   load-bearing word (spec review finding 1). The existing
-   `setSavedDraft` writes one frame BELOW the top, which is correct
-   for its only caller today: `saveDraft(x)` in Agency code goes
-   through the stdlib `saveDraft` def, whose own frame sits on top, so
-   one-below lands on the caller. The tool loop has no such frame.
-   `llm()` compiles to a direct `runPrompt()` call that pushes
-   nothing, and interception invokes nothing, so while the loop runs,
-   the top frame IS the scope that owns the `llm()` call — often a
-   guard block's closure frame, exactly the slot `_runGuarded`
-   salvages. Filing via `setSavedDraft` here would put the draft one
-   scope too high and the guard would salvage an empty slot.
-   Implementation: a sibling method on `StateStack` that writes
-   `lastFrame().savedDraft`, keeping `setSavedDraft`'s global-context
-   guard (unreachable from a real tool loop, but the method should
-   refuse like its sibling rather than trusting every caller). The
-   saveDraft series was a string of off-by-one-frame bugs; this spec
-   names the frame so the plan cannot reintroduce one by calling "the
-   existing method".
+1. Files the draft on the scope that owns the `llm()` call, via the
+   EXISTING `stateStack.setSavedDraft(value)`. This corrects review
+   finding 1, which claimed `runPrompt` pushes no frame and therefore
+   `setSavedDraft`'s one-below-top write would land one scope too
+   high. The claim is wrong: `runPrompt` pushes its own frame on entry
+   (`setupFunction()` at `lib/runtime/prompt.ts:870` calls
+   `stateStack.getNewState()`, which pushes — the comment there reads
+   "runPrompt participates like any other function"). `llm()` does
+   compile to a direct `runPrompt()` call with no wrapper, but
+   runPrompt itself supplies the frame. So during the tool loop the
+   stack is `[…, owner, runPrompt]` — the same shape as the def path's
+   `[…, owner, saveDraft-def]` — and `callerFrame()` lands on the
+   owner in both. Often that owner is a guard block's closure frame,
+   exactly the slot `_runGuarded` salvages. No new StateStack method
+   is needed, and `setSavedDraft`'s global-context guard comes along
+   for free. The saveDraft series was a string of off-by-one-frame
+   bugs, so the plan must pin the frame math with a fixture: a draft
+   saved through the TOOL inside a guard block is salvaged by that
+   guard.
 2. Returns an acknowledgment as the tool result, e.g.
    `Draft saved (214 characters).` The model gets confirmation; the
    result rides the normal tool-result machinery, so resume

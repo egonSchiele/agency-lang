@@ -103,14 +103,14 @@ type Preflight = {
     the locked flag after the approval — that re-check is the safety guard;
     this one exists for payload truth and a fail-fast error. */
 def preflight(id: string, folder: string | null): Result<Preflight> {
-  const p = try _preflightNote(id)
-  if (isFailure(p)) {
-    return p
+  const meta = try _preflightNote(id)
+  if (isFailure(meta)) {
+    return meta
   }
-  if (folder != null && p.value.folder != folder) {
-    return failure("Note ${p.value.title} is in folder ${p.value.folder}, not ${folder}. Refusing.")
+  if (folder != null && meta.value.folder != folder) {
+    return failure("Note ${meta.value.title} is in folder ${meta.value.folder}, not ${folder}. Refusing.")
   }
-  return p
+  return meta
 }
 
 export def createNote(title: string, body: string, folder: string = "Agency Notes"): Result<Note> raises <std::notes::create> {
@@ -159,15 +159,15 @@ export def appendToNote(id: string, body: string, folder?: string): Result<Note>
     return html
   }
 
-  const p = preflight(id, folder)
-  if (isFailure(p)) {
-    return p
+  const meta = preflight(id, folder)
+  if (isFailure(meta)) {
+    return meta
   }
 
   return interrupt std::notes::append("Append to a note in the Notes app?", {
-    account: p.value.account,
-    folder: p.value.folder,
-    title: p.value.title,
+    account: meta.value.account,
+    folder: meta.value.folder,
+    title: meta.value.title,
     id: id
   })
 
@@ -183,15 +183,15 @@ export idempotent def readNote(id: string, folder?: string): Result<NoteContent>
   @param id - The note's id
   @param folder - If given, the call fails unless the note is in this folder
   """
-  const p = preflight(id, folder)
-  if (isFailure(p)) {
-    return p
+  const meta = preflight(id, folder)
+  if (isFailure(meta)) {
+    return meta
   }
 
   return interrupt std::notes::read("Read a note from the Notes app?", {
-    account: p.value.account,
-    folder: p.value.folder,
-    title: p.value.title,
+    account: meta.value.account,
+    folder: meta.value.folder,
+    title: meta.value.title,
     id: id
   })
 
@@ -253,15 +253,15 @@ export def deleteNote(id: string, folder?: string): Result<null> raises <std::no
   @param id - The note's id
   @param folder - If given, the call fails unless the note is in this folder
   """
-  const p = preflight(id, folder)
-  if (isFailure(p)) {
-    return p
+  const meta = preflight(id, folder)
+  if (isFailure(meta)) {
+    return meta
   }
 
   return interrupt std::notes::delete("Delete a note from the Notes app?", {
-    account: p.value.account,
-    folder: p.value.folder,
-    title: p.value.title,
+    account: meta.value.account,
+    folder: meta.value.folder,
+    title: meta.value.title,
     id: id
   })
 

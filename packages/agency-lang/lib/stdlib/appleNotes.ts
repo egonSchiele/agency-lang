@@ -145,9 +145,9 @@ export async function _preflightNote(id: string): Promise<NotePreflight> {
  *
  *  Never skip this, never reorder it after a body read, and never remove it as
  *  apparently-dead code. */
-export function assertNotLocked(p: NotePreflight): void {
-  if (p.locked) {
-    throw new Error(`Note "${p.title}" is locked. Unlock it in Notes.app and retry.`);
+export function assertNotLocked(meta: NotePreflight): void {
+  if (meta.locked) {
+    throw new Error(`Note "${meta.title}" is locked. Unlock it in Notes.app and retry.`);
   }
 }
 
@@ -186,10 +186,10 @@ export type FolderMeta = {
  *  Y`), so the lookup failing is the assertion failing, and the check cannot
  *  drift from the access across the human approval that sits between the
  *  pre-flight and the access. */
-function assertFolder(p: NotePreflight, folder?: string): void {
-  if (folder != null && p.folder !== folder) {
+function assertFolder(meta: NotePreflight, folder?: string): void {
+  if (folder != null && meta.folder !== folder) {
     throw new Error(
-      `Note "${p.title}" is in folder "${p.folder}", not "${folder}". Refusing.`,
+      `Note "${meta.title}" is in folder "${meta.folder}", not "${folder}". Refusing.`,
     );
   }
 }
@@ -216,9 +216,9 @@ const READ_SCOPED_SCRIPT = withTimeout(`    tell application "Notes"
     end tell`);
 
 export async function _readNote(id: string, folder?: string): Promise<NoteContentTs> {
-  const p = await _preflightNote(id);
-  assertFolder(p, folder);
-  assertNotLocked(p);
+  const meta = await _preflightNote(id);
+  assertFolder(meta, folder);
+  assertNotLocked(meta);
 
   const raw = folder == null
     ? await runNotesScript(READ_UNSCOPED_SCRIPT, [id])
@@ -229,9 +229,9 @@ export async function _readNote(id: string, folder?: string): Promise<NoteConten
   }
   return {
     id,
-    title: p.title,
-    folder: p.folder,
-    account: p.account,
+    title: meta.title,
+    folder: meta.folder,
+    account: meta.account,
     body: parts[0],
     modified: parts[1],
   };
@@ -239,19 +239,19 @@ export async function _readNote(id: string, folder?: string): Promise<NoteConten
 
 /** Parse the delimited note rows a list/search script returns. */
 function parseNoteRows(raw: string): NoteMeta[] {
-  if (raw.length === 0) return [];
-  return raw.split("\n").filter((l) => l.length > 0).map((line) => {
-    const f = line.split(FIELD_DELIM);
-    if (f.length !== 6) {
+  const rows = raw.split("\n").filter((line) => line.length > 0);
+  return rows.map((line) => {
+    const fields = line.split(FIELD_DELIM);
+    if (fields.length !== 6) {
       throw new Error("Notes returned an unexpected row while listing notes.");
     }
     return {
-      id: f[0],
-      title: f[1],
-      folder: f[2],
-      account: f[3],
-      modified: f[4],
-      passwordProtected: f[5].trim() === "true",
+      id: fields[0],
+      title: fields[1],
+      folder: fields[2],
+      account: fields[3],
+      modified: fields[4],
+      passwordProtected: fields[5].trim() === "true",
     };
   });
 }
@@ -347,13 +347,13 @@ const LIST_FOLDERS_SCRIPT = withTimeout(`    tell application "Notes"
 
 export async function _listFolders(): Promise<FolderMeta[]> {
   const raw = await runNotesScript(LIST_FOLDERS_SCRIPT, []);
-  if (raw.length === 0) return [];
-  return raw.split("\n").filter((l) => l.length > 0).map((line) => {
-    const f = line.split(FIELD_DELIM);
-    if (f.length !== 3) {
+  const rows = raw.split("\n").filter((line) => line.length > 0);
+  return rows.map((line) => {
+    const fields = line.split(FIELD_DELIM);
+    if (fields.length !== 3) {
       throw new Error("Notes returned an unexpected row while listing folders.");
     }
-    return { id: f[0], name: f[1], noteCount: Number(f[2]) };
+    return { id: fields[0], name: fields[1], noteCount: Number(fields[2]) };
   });
 }
 
@@ -431,9 +431,9 @@ export async function _appendToNote(
   html: string,
   folder?: string,
 ): Promise<NoteMeta> {
-  const p = await _preflightNote(id);
-  assertFolder(p, folder);
-  assertNotLocked(p);
+  const meta = await _preflightNote(id);
+  assertFolder(meta, folder);
+  assertNotLocked(meta);
 
   const raw = folder == null
     ? await runNotesScript(APPEND_UNSCOPED_SCRIPT, [id, html])
@@ -460,9 +460,9 @@ const DELETE_UNSCOPED_SCRIPT = withTimeout(`    tell application "Notes"
 
 /** Delete a note. It moves to Recently Deleted, where it stays ~30 days. */
 export async function _deleteNote(id: string, folder?: string): Promise<null> {
-  const p = await _preflightNote(id);
-  assertFolder(p, folder);
-  assertNotLocked(p);
+  const meta = await _preflightNote(id);
+  assertFolder(meta, folder);
+  assertNotLocked(meta);
 
   if (folder == null) {
     await runNotesScript(DELETE_UNSCOPED_SCRIPT, [id]);

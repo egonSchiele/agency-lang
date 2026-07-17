@@ -53,18 +53,21 @@ function mockStdout(stdout: string): void {
   );
 }
 
+// Every describe below needs the same two things: fresh mocks and a darwin
+// platform (runNotesScript refuses to run anywhere else). One test overrides
+// the platform to linux for itself; afterEach restores the real one.
+const originalPlatform = process.platform;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+});
+
+afterEach(() => {
+  Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+});
+
 describe("runNotesScript", () => {
-  const originalPlatform = process.platform;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-  });
-
-  afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
-  });
-
   it("rejects immediately on a non-darwin platform", async () => {
     Object.defineProperty(process, "platform", { value: "linux", writable: true });
     await expect(runNotesScript("script", [])).rejects.toThrow(
@@ -140,17 +143,6 @@ describe("FIELD_DELIM", () => {
 });
 
 describe("_preflightNote", () => {
-  const originalPlatform = process.platform;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-  });
-
-  afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
-  });
-
   it("never chains a property read through container", async () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
     await _preflightNote("x-coredata://note/1");
@@ -205,8 +197,8 @@ describe("_preflightNote", () => {
 
   it("parses the delimited fields", async () => {
     mockStdout(["Q3 Planning", "Work", "iCloud", "false"].join(FIELD_DELIM));
-    const p = await _preflightNote("x-coredata://note/1");
-    expect(p).toEqual({
+    const meta = await _preflightNote("x-coredata://note/1");
+    expect(meta).toEqual({
       id: "x-coredata://note/1",
       title: "Q3 Planning",
       folder: "Work",
@@ -217,15 +209,15 @@ describe("_preflightNote", () => {
 
   it("parses a title containing a tab, which the delimiter must survive", async () => {
     mockStdout(["a\tb", "Work", "iCloud", "false"].join(FIELD_DELIM));
-    const p = await _preflightNote("x-coredata://note/1");
-    expect(p.title).toBe("a\tb");
-    expect(p.folder).toBe("Work");
+    const meta = await _preflightNote("x-coredata://note/1");
+    expect(meta.title).toBe("a\tb");
+    expect(meta.folder).toBe("Work");
   });
 
   it("reads the locked flag as true", async () => {
     mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
-    const p = await _preflightNote("x-coredata://note/1");
-    expect(p.locked).toBe(true);
+    const meta = await _preflightNote("x-coredata://note/1");
+    expect(meta.locked).toBe(true);
   });
 
   it("fails on a malformed reply rather than guessing", async () => {
@@ -260,15 +252,6 @@ describe("assertNotLocked", () => {
 });
 
 describe("_readNote", () => {
-  const originalPlatform = process.platform;
-  beforeEach(() => {
-    vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-  });
-  afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
-  });
-
   it("returns plaintext, not HTML", async () => {
     mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM)); // preflight
     mockStdout(["plain body text", "2026-07-17"].join(FIELD_DELIM)); // read
@@ -318,15 +301,6 @@ describe("_readNote", () => {
 });
 
 describe("_listNotes", () => {
-  const originalPlatform = process.platform;
-  beforeEach(() => {
-    vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-  });
-  afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
-  });
-
   it("lists all notes when no folder is given", async () => {
     const row = ["id1", "One", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM);
     mockStdout(row);
@@ -352,15 +326,6 @@ describe("_listNotes", () => {
 });
 
 describe("_searchNotes", () => {
-  const originalPlatform = process.platform;
-  beforeEach(() => {
-    vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-  });
-  afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
-  });
-
   it("searches plaintext, never body", async () => {
     mockStdout("");
     await _searchNotes("budget");
@@ -403,15 +368,6 @@ describe("_searchNotes", () => {
 });
 
 describe("_listFolders", () => {
-  const originalPlatform = process.platform;
-  beforeEach(() => {
-    vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-  });
-  afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
-  });
-
   it("returns folders with their note counts", async () => {
     const row1 = ["fid1", "Work", "12"].join(FIELD_DELIM);
     const row2 = ["fid2", "Recently Deleted", "3"].join(FIELD_DELIM);
@@ -444,15 +400,6 @@ describe("_listFolders", () => {
 });
 
 describe("_folderExists", () => {
-  const originalPlatform = process.platform;
-  beforeEach(() => {
-    vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-  });
-  afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
-  });
-
   it("passes the folder as argv and parses a true reply", async () => {
     mockStdout("true");
     await expect(_folderExists("Agency Notes")).resolves.toBe(true);
@@ -468,15 +415,6 @@ describe("_folderExists", () => {
 });
 
 describe("_createNote", () => {
-  const originalPlatform = process.platform;
-  beforeEach(() => {
-    vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-  });
-  afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
-  });
-
   it("passes title, html and folder as argv, never in the script", async () => {
     mockStdout(["nid", "T", "Agency Notes", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
     await _createNote('"; do shell script "x"; "', "<p>b</p>", "Agency Notes");
@@ -505,15 +443,6 @@ describe("_createNote", () => {
 });
 
 describe("_appendToNote", () => {
-  const originalPlatform = process.platform;
-  beforeEach(() => {
-    vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-  });
-  afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
-  });
-
   // See spec section 2.7. A locked note's body reads as "", so this append
   // would REPLACE the note's contents. Do not delete this test.
   it("refuses a locked note and never issues a write", async () => {
@@ -560,15 +489,6 @@ describe("_appendToNote", () => {
 });
 
 describe("_deleteNote", () => {
-  const originalPlatform = process.platform;
-  beforeEach(() => {
-    vi.clearAllMocks();
-    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
-  });
-  afterEach(() => {
-    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
-  });
-
   it("refuses a locked note", async () => {
     mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
     await expect(_deleteNote("x-coredata://note/1")).rejects.toThrow(/locked/i);

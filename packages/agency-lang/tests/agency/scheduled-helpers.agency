@@ -1,0 +1,44 @@
+// Pure-logic tests for the scheduled stdlib-docs-links agent's helpers.
+// No LLM calls: stripFences and extractLinks are deterministic string
+// functions, so each node self-checks and returns "ok" on success.
+import { stripFences, extractLinks } from "../../agents/scheduled/stdlib-docs-links.agency"
+
+node stripPlain() {
+  const got = stripFences("hello world")
+  if (got == "hello world") { return "ok" }
+  return "bad:${got}"
+}
+
+node stripFencedWithLang() {
+  const got = stripFences("```ts\nA\nB\n```")
+  if (got == "A\nB") { return "ok" }
+  return "bad:${got}"
+}
+
+node stripFencedNoLang() {
+  const got = stripFences("```\nA\n```")
+  if (got == "A") { return "ok" }
+  return "bad:${got}"
+}
+
+node stripLoneFence() {
+  // Only one line, so the `lines.length >= 2` guard means the input is
+  // returned unchanged (trimmed).
+  const got = stripFences("```")
+  if (got == "```") { return "ok" }
+  return "bad:${got}"
+}
+
+node extractTwoLinks() {
+  const cfg = "  { text: \"git\", link: \"/stdlib/git\" },\n  { text: \"tag\", link: \"/stdlib/tag\" }"
+  const links = extractLinks(cfg)
+  const joined = links.join("|")
+  if (joined == "/stdlib/git|/stdlib/tag") { return "ok" }
+  return "bad:${joined}"
+}
+
+node extractNoLinks() {
+  const links = extractLinks("no links here\njust text")
+  if (links.length == 0) { return "ok" }
+  return "bad:${links.length}"
+}

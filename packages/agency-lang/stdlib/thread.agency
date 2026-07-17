@@ -33,9 +33,6 @@ import {
   _getCost,
   _getTokens,
   _getModelCosts,
-  _pushGuard,
-  _popGuard,
-  _runGuarded,
  } from "agency-lang/stdlib-lib/thread.js"
 
 import { _installSlowInputImpl } from "agency-lang/stdlib-lib/builtins.js"
@@ -189,75 +186,6 @@ export type GuardFailureData = {
   actualCost: number | null;
   maxTime: number | null;
   actualTime: number | null
-}
-
-// Block has `= null` so the parser accepts trailing optional params.
-// The block is ALWAYS supplied via `guard(...) as { ... }` trailing-
-// block syntax. The default is only there to satisfy the parser's
-// requirement that defaults trail.
-/**
- * Time semantics are compute-time: the clock only ticks while a Runner is
- * actively executing inside the guarded scope. Time spent paused on an
- * interrupt (e.g. waiting for user input) does not count. On resume the
- * timer is re-armed with the remaining budget.
- *
- * Nested guards are independent. An inner trip does not trip an outer
- * guard. Across fork/race branches, cost guards are SHARED (every branch
- * charges the same counter in real time), while time guards are cloned
- * per branch: each branch gets the parent's remaining budget as its own
- * countdown, a branch's input-wait pauses only its own clock, and the
- * parent's clock advances by the longest branch's working time at the
- * join. `thread`/`subthread` isolate message history but not cost or
- * abort plumbing, so a guard sees every LLM call inside them.
- *
- * Limitations: a tool whose body is a JS function (not Agency code) cannot
- * be aborted mid-execution. It runs to completion in the background, and
- * its result is discarded. Memory-layer LLM calls currently bypass cost
- * guards. Cost from inside a fork only propagates to an outer cost guard at
- * fork completion, not mid-flight.
- */
-export def guard(
-  cost: number | null = null,
-  time: number | null = null,
-  label: string | null = null,
-  block: () -> any = null,
-): Result {
-  """
-  Run a block under a cost limit, a time limit, or both, aborting the
-  block as soon as either limit is exceeded. A null or negative value
-  disables that limit, so callers with an optional cap can always pass
-  something; with both limits disabled the block just runs.
-
-  Returns a `Result`. On success it holds the block's return value. On a
-  trip it holds a failure whose `error.type` is either "guardFailure"
-  (cost exceeded, read `error.maxCost` and `error.actualCost`) or
-  "timeoutFailure" (compute time exceeded, read `error.maxTime` and
-  `error.actualTime`, in milliseconds).
-
-  @param cost - Maximum cost in dollars (e.g. $2.00 or 2.00). null or negative = no cost limit.
-  @param time - Maximum compute time in milliseconds (e.g. 30s, 5m, or a raw number). null, zero, or negative = no time limit.
-  @param label - Optional name for this guard. On a trip it appears in the failure (`error.label`) and in error messages, so code with several guards can tell which one fired.
-  @param block - The work to run under the guard.
-
-  Example:
-
-  ```ts
-  const result = guard(cost: $2.0, time: 30s) as {
-    const a = llm("step 1")
-    const b = llm("step 2")
-    return a + b
-  }
-  if (isFailure(result)) {
-    print("Guard tripped: " + result.error.type)
-  } else {
-    print(result.value)
-  }
-  ```
-  """
-  const ids = _pushGuard(cost, time, label)
-  const result = _runGuarded(ids, block)
-  _popGuard(ids)
-  return result
 }
 
 /** Test-only seam (import test { _installSlowInput }): install an input()

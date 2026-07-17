@@ -16,7 +16,7 @@ import {
   _sleep,
  } from "agency-lang/stdlib-lib/builtins.js"
 import { _resolve } from "agency-lang/stdlib-lib/path.js"
-import { _saveDraft } from "agency-lang/stdlib-lib/thread.js"
+import { _saveDraft, _pushGuard, _runGuarded, _popGuard } from "agency-lang/stdlib-lib/thread.js"
 import {
   syntaxHighlight as _syntaxHighlight,
  } from "agency-lang/stdlib-lib/syntax.js"
@@ -523,4 +523,44 @@ export def callback(name: string, fn: any) {
   @param fn - A function that receives the event data
   """
   _callback(name, fn)
+}
+
+// Block has `= null` so the parser accepts trailing optional params;
+// the desugared construct call always supplies it.
+/**
+ * Time semantics are compute-time: the clock only ticks while a Runner is
+ * actively executing inside the guarded scope. Time spent paused on an
+ * interrupt (e.g. waiting for user input) does not count. On resume the
+ * timer is re-armed with the remaining budget.
+ *
+ * Nested guards are independent. An inner trip does not trip an outer
+ * guard. Across fork/race branches, cost guards are SHARED (every branch
+ * charges the same counter in real time), while time guards are cloned
+ * per branch: each branch gets the parent's remaining budget as its own
+ * countdown, a branch's input-wait pauses only its own clock, and the
+ * parent's clock advances by the longest branch's working time at the
+ * join. `thread`/`subthread` isolate message history but not cost or
+ * abort plumbing, so a guard sees every LLM call inside them.
+ *
+ * Limitations: a tool whose body is a JS function (not Agency code) cannot
+ * be aborted mid-execution. It runs to completion in the background, and
+ * its result is discarded. Memory-layer LLM calls currently bypass cost
+ * guards. Cost from inside a fork only propagates to an outer cost guard at
+ * fork completion, not mid-flight.
+ */
+export def _guard(
+  cost: number | null = null,
+  time: number | null = null,
+  label: string | null = null,
+  block: () -> any = null,
+): Result {
+  """
+  Internal: the lowering target of the `guard(...) { }` construct — use
+  the construct, not this function. Runs `block` under the given cost
+  and/or time limits and returns a `Result` (see the guards guide).
+  """
+  const ids = _pushGuard(cost, time, label)
+  const result = _runGuarded(ids, block)
+  _popGuard(ids)
+  return result
 }

@@ -14,7 +14,7 @@ import {
   _subprocessDepth,
  } from "agency-lang/stdlib-lib/agency.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
-import { guard, systemMessage } from "std::thread"
+import { systemMessage } from "std::thread"
 import { docsSkill } from "std::skills"
 import { ls, glob, grep, exec } from "std::shell"
 
@@ -164,7 +164,7 @@ export def run(
   // frames revive correctly across a nested subprocess pause.
   const NO_COST_CAP = -1.0
   const cap = if maxCost != null then maxCost else NO_COST_CAP
-  const guarded = guard(cost: cap) as {
+  const guarded = guard(cost: cap) {
     return try _run(
       compiled,
       node,

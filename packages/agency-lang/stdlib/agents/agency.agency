@@ -4,7 +4,6 @@
   writeAgency and runCode.
 */
 import { writeAgency, runCode, feedbackHasErrors, renderFeedback, Feedback, WriteFailure } from "std::agency"
-import { guard } from "std::thread"
 
 // One attempt's judgment: is the run's result acceptable, and if not, why.
 type AttemptOutcome = {
@@ -63,7 +62,7 @@ export def agencyCodingAgent(task: string, context: string = "", maxAttempts: nu
   @param maxCost - Hard spend cap for the whole run (default $50).
   @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
   """
-  const captured = guard(cost: maxCost, time: maxTime) as {
+  const captured = guard(cost: maxCost, time: maxTime) {
     let result: Result<string, WriteFailure> = writeAgency(task, context)
     let attemptsLeft = maxAttempts - 1
     let done = false

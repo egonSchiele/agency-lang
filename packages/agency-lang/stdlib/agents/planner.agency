@@ -7,7 +7,6 @@
 import { writeAgency, runCode, getEffects, verify, feedbackHasErrors, renderFeedback, EffectsByExport } from "std::agency"
 import { codingAgent } from "std::agents/coding"
 import { withContext, unwrapGuard } from "std::agents/shared"
-import { guard } from "std::thread"
 import { getAgentCwd } from "std::index"
 
 /** Raised before a generated plan-agent runs, so the plan, source, and
@@ -163,7 +162,7 @@ export def plannerAgent(task: string, context: string = "", plan: string = "", m
   @param maxCost - hard spend cap for the whole tree (default $100).
   @param maxTime - hard wall-clock cap (default 60 minutes).
   """
-  const captured = guard(cost: maxCost, time: maxTime) as {
+  const captured = guard(cost: maxCost, time: maxTime) {
     const planText = if plan == "" then llm("Analyse this task and outline the steps:\n${withContext(task, context)}") else plan
     let state: PlanState = { summary: "", done: false, extra: withContext(task, context) }
     let attemptsLeft = PLANNER_MAX_ATTEMPTS

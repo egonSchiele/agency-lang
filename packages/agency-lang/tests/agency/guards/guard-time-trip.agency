@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // A tiny time budget (20ms) wrapping a sleep that overruns it. The
 // timer fires while the JS-bodied sleep is in flight; sleep is
@@ -18,7 +17,7 @@ import { guard } from "std::thread"
 // never fires.
 node main() {
   handle {
-  const result = guard(time: 20ms) as {
+  const result = guard(time: 20ms) {
     sleep(150ms)
     sleep(1ms)
     return "did not trip"

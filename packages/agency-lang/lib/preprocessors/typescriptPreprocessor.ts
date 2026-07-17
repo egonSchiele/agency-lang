@@ -31,6 +31,7 @@ import {
   type WalkAncestor,
 } from "@/utils/node.js";
 import { desugarParallelInBody } from "./parallelDesugar.js";
+import { desugarGuardsInBody } from "./guardDesugar.js";
 import { injectSchemaArgsInProgram } from "./injectSchemaArgs.js";
 import { prunePreludeShadows } from "./prunePreludeShadows.js";
 
@@ -319,6 +320,10 @@ export class TypescriptPreprocessor {
     this.attachDocComments();
     this.program.nodes = collectTags(this.program.nodes);
     this.desugarParallelBlocks();
+    // Guard constructs lower to the legacy __guard call AFTER parallel
+    // desugaring (so guards moved into fork block arguments are found)
+    // and before anything lifts or compiles blocks. See guardDesugar.ts.
+    this.program.nodes = desugarGuardsInBody(this.program.nodes);
     if (Object.keys(this.functionDefinitions).length === 0) {
       this.getFunctionDefinitions();
     }

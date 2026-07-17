@@ -26,6 +26,7 @@ These apply to every task. They are not style preferences; most of them are find
 - **Unit tests only. No integration tests.** Owner decision. A test that reaches real Notes.app can destroy real notes when someone runs the suite locally. No tests in `tests/agency/` for this module — those execute the real stdlib and would shell to `osascript` for real. Spec §8.
 - **Every script wraps its body in `with timeout of 30 seconds`.** Otherwise it inherits AppleScript's 120-second default. Spec §6.1.
 - **Timeout constant:** `NOTES_TIMEOUT_SECONDS = 30`, module-level, in `appleNotes.ts`.
+- **Payload fields are always strings, never null.** An omitted optional `folder` reaches the payload as `""`. Measured, not stylistic — see "Why empty strings, not null" below.
 - **Field delimiter for multi-field returns:** `ASCII character 1` (``). Not tab — note titles can legally contain tabs.
 
 ---
@@ -44,9 +45,91 @@ No registry to update: `agency doc stdlib` recurses, and `stdlib/messaging/` pro
 
 ---
 
-## Known limitation to record, not solve
+## Why empty strings, not null, in payloads
 
-**Nested folders.** Notes folders can contain folders. This module addresses folders by name in one account and derives a note's account by walking `container` upward. Deeply nested folders with duplicate names are not addressable. Out of scope; the spec's §10 already scopes folders to name-addressing. Do not add nesting support in this plan.
+Review finding #7 worried that an omitted `folder` reaching a policy as `null`
+could fail open. It cannot — but not for the reason the finding guessed, so the
+measurement is recorded here rather than left to a future reader to redo.
+
+`stdlib/policy.agency:72`: a rule passes only if *every key in `match` is present
+in the interrupt's `data` and its value matches the glob*. Patterns are picomatch
+globs. Measured:
+
+| Pattern | Value | Result |
+|---|---|---|
+| `"Work"` | `""` | `false` |
+| `"*"` | `""` | **`false`** |
+| `"**"` | `""` | `false` |
+| `"*"` | `"Work"` | `true` |
+| `"Work"` | `null` | **THROWS** — `Expected input to be a string` |
+
+Two consequences:
+
+1. **`""` is safe.** An empty folder matches *nothing*, not even a catch-all
+   `"*"`. So `{"match": {"folder": "*"}, "action": "approve"}` does not approve a
+   `listNotes()` with no folder; it falls through to the next rule. The fail-open
+   finding #7 feared cannot occur.
+2. **`null` would crash the policy check**, not fail open, because picomatch
+   throws on a non-string.
+
+So passing `""` is load-bearing rather than a stylistic default. Never let a
+`null` reach a payload field a policy can match on. Task 5 pins consequence 1
+with a test.
+
+---
+
+## Two v1 limits, measured and deliberate
+
+Both are recorded here so the code and the spec agree. Neither is a guess; a
+live probe settled each.
+
+### Nested folders are not addressable by path
+
+Notes folders nest, and the owner's account has them: `Archived` contains
+`2010s`, `2017`, and `2019`.
+
+Three measured facts shape what v1 does:
+
+1. **`folders` flattens.** A bare `repeat with f in folders` returns 14 folders
+   on the owner's machine, with `Archived` and its three children side by side
+   and nothing marking the difference. So a naive `listFolders` reports `2017`
+   as a peer of `Recently Deleted`, which is false.
+2. **A nested folder resolves by bare name.** `folder "2017"` resolves from the
+   top level. So name addressing is *ambiguous* rather than broken: two folders
+   sharing a name in different parents resolve arbitrarily.
+3. **`/` is legal in a folder name.** Verified by creating one. So `/` cannot be
+   a path separator without escaping, and paths are a real design job rather
+   than a string join.
+
+**v1 therefore returns only top-level folders from `listFolders`** (Task 3),
+using the `class of c is account` test. That is honest and limited rather than
+flat and wrong. Nested folders remain reachable by bare name, ambiguously, which
+is the pre-existing Notes behaviour rather than something we invent.
+
+Do not add path support in this plan.
+
+### The `account` argument is not implemented
+
+Spec §4.2 gives every function an optional `account`. This plan delivers
+`account` as an **output** field on `Note` and in every payload, but not as an
+input filter. So folder scoping stays advisory on a multi-account machine, which
+is what spec §3.4 argued had to be fixed.
+
+The owner has exactly one account (§9.4), so this is latent rather than live.
+It must be recorded in the spec as a v1 limit, not left as a promise the code
+does not keep.
+
+### But the account BUG is fixed here
+
+Distinct from the missing argument, and not optional. Deriving the account with
+one hop up from the note's folder is **wrong for any nested folder**:
+`container of folder "2017"` is `Archived`, not `iCloud`. Measured. Left alone,
+every note under `Archived` would carry `"Archived"` in its `account` payload
+field, and a policy matching `{"account": "iCloud"}` would silently stop
+matching.
+
+Task 2 fixes it with a bounded upward walk, verified to reach `iCloud` from
+`Archived/2017` in 2 hops.
 
 ---
 
@@ -323,6 +406,7 @@ The security core. Everything that touches an existing note goes through this.
 **Interfaces:**
 - Consumes: `runNotesScript`, `withTimeout`, `FIELD_DELIM` from Task 1.
 - Produces:
+  - `ACCOUNT_WALK: string` — an AppleScript snippet, reused by Tasks 3 and 4.
   - `type NotePreflight = { id: string; title: string; folder: string; account: string; locked: boolean }`
   - `_preflightNote(id: string): Promise<NotePreflight>`
   - `assertNotLocked(p: NotePreflight): void`
@@ -358,6 +442,28 @@ describe("_preflightNote", () => {
     // silently reintroduce the chained form.
     expect(script).not.toContain("name of container of n");
     expect(script).toContain("set c to container of n");
+  });
+
+  it("walks up to the account rather than assuming one hop", async () => {
+    mockStdout(["Q3", "2017", "iCloud", "false"].join(FIELD_DELIM));
+    await _preflightNote("x-coredata://note/1");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    const script = args[1];
+    // A folder's container is its PARENT FOLDER when nested, not the account.
+    // Measured: `container of folder "2017"` is "Archived", not "iCloud". One
+    // hop would put a folder name in the account field, and a policy matching
+    // {"account": "iCloud"} would silently stop matching.
+    expect(script).toContain("class of a) is account");
+    expect(script).toContain("set a to container of a");
+  });
+
+  it("fails closed if the account walk does not reach an account", async () => {
+    mockStdout(["Q3", "2017", "iCloud", "false"].join(FIELD_DELIM));
+    await _preflightNote("x-coredata://note/1");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    // The walk is bounded. If it never lands on an account, error rather than
+    // returning a folder name as the account.
+    expect(args[1]).toContain("Could not resolve the account");
   });
 
   it("reads only title, folder, account and the locked flag — never the body", async () => {
@@ -457,16 +563,34 @@ export type NotePreflight = {
   locked: boolean;
 };
 
+/** Walk from a folder (`c`) up to its account, leaving it in `a`.
+ *
+ *  A folder's container is its PARENT FOLDER when nested, not the account.
+ *  Measured: `container of folder "2017"` is `Archived`, not `iCloud`. One hop
+ *  up is wrong for any nested folder, and wrong silently — the account field
+ *  would hold a folder name and every {"account": "iCloud"} policy would quietly
+ *  stop matching.
+ *
+ *  Bounded, and fails closed rather than returning a folder as an account.
+ *  Verified to reach iCloud from Archived/2017 in 2 hops. */
+export const ACCOUNT_WALK = `      set a to container of c
+      set acctFound to false
+      repeat 10 times
+        if (class of a) is account then
+          set acctFound to true
+          exit repeat
+        end if
+        set a to container of a
+      end repeat
+      if not acctFound then error "Could not resolve the account for this note."`;
+
 // `set c to container of n` is split on purpose. `name of container of n` in one
-// expression errors -1712... no: -1728, on EVERY note, locked or unlocked. The
-// property is fine; chaining a read through it is not. Spec section 9.2.
-//
-// The account is the folder's container. Deeply nested folders are out of
-// scope (see the plan's "Known limitation"), so one hop up is enough.
+// expression errors -1728 on EVERY note, locked or unlocked. The property is
+// fine; chaining a read through it is not. Spec section 9.2.
 const PREFLIGHT_SCRIPT = withTimeout(`    tell application "Notes"
       set n to note id (item 1 of argv)
       set c to container of n
-      set a to container of c
+${ACCOUNT_WALK}
       set d to (ASCII character 1)
       return (name of n) & d & (name of c) & d & (name of a) & d & ¬
              ((password protected of n) as text)
@@ -522,19 +646,22 @@ Run:
 ```bash
 cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
 ```
-Expected: PASS, 17 tests.
+Expected: PASS, 19 tests.
 
-- [ ] **Step 5: Fix the comment typo introduced above**
+- [ ] **Step 5: Prove the locked guard is load-bearing**
 
-The comment above `PREFLIGHT_SCRIPT` says "-1712... no: -1728". Clean it to read:
+Temporarily change `assertNotLocked` to a no-op:
 
 ```ts
-// `set c to container of n` is split on purpose. `name of container of n` in one
-// expression errors -1728 on EVERY note, locked or unlocked. The property is
-// fine; chaining a read through it is not. Spec section 9.2.
+export function assertNotLocked(_p: NotePreflight): void {
+  return;
+}
 ```
 
-Run the tests again to confirm still PASS, 17 tests.
+Run the tests. Expected: "refuses a locked note and names it" FAILS. Restore.
+
+This guard is the only thing standing between a locked note and destruction
+(spec §2.7). If a refactor deletes it, that test must be what stops the build.
 
 - [ ] **Step 6: Commit**
 
@@ -698,6 +825,18 @@ describe("_listFolders", () => {
     ]);
   });
 
+  it("asks Notes for top-level folders only", async () => {
+    mockStdout("");
+    await _listFolders();
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    // A bare `repeat with f in folders` flattens the hierarchy: it returns
+    // "Archived" and its children "2010s"/"2017"/"2019" side by side with
+    // nothing marking the difference, so "2017" reads as a peer of "Recently
+    // Deleted". That is false, and an agent would act on it. Filtering to
+    // folders whose container is an account is honest and limited instead.
+    expect(args[1]).toContain("(class of c) is account");
+  });
+
   it("returns an empty array rather than throwing when there are none", async () => {
     mockStdout("");
     await expect(_listFolders()).resolves.toEqual([]);
@@ -804,9 +943,10 @@ function parseNoteRows(raw: string): NoteMeta[] {
   });
 }
 
-// The container access is split here too. Spec section 9.2.
+// The container access is split here too (spec 9.2), and the account is walked
+// rather than assumed to be one hop up.
 const NOTE_ROW = `set c to container of n
-        set a to container of c
+${ACCOUNT_WALK}
         set out to out & (id of n) & d & (name of n) & d & (name of c) & d & ¬
                   (name of a) & d & ((modification date of n) as text) & d & ¬
                   ((password protected of n) as text) & linefeed`;
@@ -864,14 +1004,30 @@ export async function _searchNotes(query: string, folder?: string): Promise<Note
   return parseNoteRows(raw);
 }
 
+// TOP-LEVEL FOLDERS ONLY, on purpose.
+//
+// A bare `repeat with f in folders` FLATTENS the hierarchy: on a machine with
+// an "Archived" folder containing "2010s", "2017" and "2019", it returns all
+// four side by side with nothing marking the difference. Reporting "2017" as a
+// peer of "Recently Deleted" is simply false, and an agent would act on it.
+//
+// So filter to folders whose container is an account. That is honest and
+// limited rather than flat and wrong. Nested folders stay reachable by bare
+// name (`folder "2017"` does resolve), ambiguously — which is Notes' own
+// behaviour, not something we introduce. Path support is out of scope for v1;
+// see the plan's "Two v1 limits".
+//
 // noteCount is derived with `count of notes`, because folder has no such
 // property. That is a query per folder, so listFolders pays for it.
 const LIST_FOLDERS_SCRIPT = withTimeout(`    tell application "Notes"
       set d to (ASCII character 1)
       set out to ""
       repeat with f in folders
-        set out to out & (id of f) & d & (name of f) & d & ¬
-                  ((count of notes of f) as text) & linefeed
+        set c to container of f
+        if (class of c) is account then
+          set out to out & (id of f) & d & (name of f) & d & ¬
+                    ((count of notes of f) as text) & linefeed
+        end if
       end repeat
       return out
     end tell`);
@@ -1087,7 +1243,7 @@ const CREATE_SCRIPT = withTimeout(`    tell application "Notes"
       set f to folder (item 3 of argv)
       set n to make new note at f with properties {name:(item 1 of argv), body:(item 2 of argv)}
       set c to container of n
-      set a to container of c
+${ACCOUNT_WALK}
       set d to (ASCII character 1)
       return (id of n) & d & (name of n) & d & (name of c) & d & (name of a) & d & ¬
              ((modification date of n) as text) & d & ((password protected of n) as text)
@@ -1116,7 +1272,7 @@ export async function _createNote(
 const APPEND_BODY = `      if (password protected of n) then error "note is locked"
       set body of n to (body of n) & (item 2 of argv)
       set c to container of n
-      set a to container of c
+${ACCOUNT_WALK}
       set d to (ASCII character 1)
       return (id of n) & d & (name of n) & d & (name of c) & d & (name of a) & d & ¬
              ((modification date of n) as text) & d & ((password protected of n) as text)`;
@@ -1452,6 +1608,48 @@ export def deleteNote(id: string, folder?: string): Result<null> raises <std::no
 }
 ```
 
+- [ ] **Step 1b: Pin the empty-string payload behaviour with a test**
+
+Create `packages/agency-lang/lib/stdlib/__tests__/notesPolicy.test.ts`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import picomatch from "picomatch";
+
+// std::notes/apple passes "" for an omitted optional `folder`, never null.
+// This test exists so nobody "tidies" that into null, and so the reasoning
+// survives: an empty folder must match NOTHING, so a catch-all {"folder": "*"}
+// approve rule cannot approve a listNotes() with no folder.
+describe("policy globs against an omitted folder", () => {
+  it("an empty folder does not match a specific glob", () => {
+    expect(picomatch.isMatch("", "Work")).toBe(false);
+  });
+
+  it("an empty folder does not match a catch-all glob", () => {
+    // The load-bearing one. If this ever becomes true, listNotes() with no
+    // folder — the widest-reaching call in the module — starts matching any
+    // {"folder": "*"} approve rule, and the payload design needs rethinking.
+    expect(picomatch.isMatch("", "*")).toBe(false);
+    expect(picomatch.isMatch("", "**")).toBe(false);
+  });
+
+  it("a real folder still matches", () => {
+    expect(picomatch.isMatch("Work", "*")).toBe(true);
+    expect(picomatch.isMatch("Work", "Work")).toBe(true);
+  });
+
+  it("null throws, which is why payloads never carry it", () => {
+    expect(() => picomatch.isMatch(null as unknown as string, "Work")).toThrow();
+  });
+});
+```
+
+Run:
+```bash
+cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/notesPolicy.test.ts
+```
+Expected: PASS, 4 tests.
+
 - [ ] **Step 2: Verify it parses**
 
 Run:
@@ -1775,9 +1973,15 @@ Checked against the spec:
 | 8 | Task 5 — `Result<Note>`, `Result<Note[]>`, `Result<NoteContent>` |
 | 9 | Task 2 — the "unguessable id" argument in the docstring, not "unreachable" |
 
-**Two findings from §12 are NOT yet handled, and are the highest-risk gaps in this plan:**
+| 7 | Resolved by measurement, not worked around. See "Why empty strings, not null". `""` matches nothing including `"*"`, so the feared fail-open cannot occur; `null` would throw. Task 5 step 1b pins it. |
 
-- **Finding 7 (fail-open risk).** Optional parameters widen to `T | null`, so a payload's `folder` is `null` when omitted. What a policy glob does when matched against `null` is unverified. If `{"match": {"folder": "Work"}}` silently fails to match and falls through to a later approve rule, that is a fail-open on `listNotes()` with no arguments — the call with the widest reach. This plan works around it by passing `""` instead of `null` in the payloads, which is a guess, not a fix. **Before merging: verify what `checkPolicy` does with an empty string and with null, then write a test in `lib/stdlib/__tests__/` pinning it.** If `""` matches a `"Work"` glob, the workaround is worse than the bug.
-- **Finding 11b.** Whether `renderForHtml` should drop raw HTML silently or emit a diagnostic. Currently silent. Not blocking.
+**One finding from §12 remains open, and is not blocking:**
 
-**Known gap:** `account` is threaded through the types and payloads but the Agency layer passes `""` for it, because the TS layer derives the account from the note rather than accepting one. The `account` *argument* from spec §4.2 is not implemented. This plan delivers account as an output field, not as an input filter. That is a deliberate scope cut for a first version, and it means folder scoping is still advisory on a multi-account machine — the exact thing spec §3.4 argued had to be fixed. **The owner has one account (§9.4), so this is latent rather than live, but it must be either implemented or explicitly deferred in the spec before this ships.** Do not let it merge silently.
+- **Finding 11b.** Whether `renderForHtml` should drop raw HTML silently or emit a diagnostic. Currently silent.
+
+**Two deliberate v1 limits**, both measured, both documented above under "Two v1 limits":
+
+- **Nested folder paths are unsupported.** `listFolders` returns top-level folders only, which is honest rather than the flat-and-wrong alternative. Nested folders stay reachable by bare name, ambiguously — Notes' own behaviour.
+- **The `account` argument is not implemented.** `account` is an output field, not an input filter, so folder scoping stays advisory on a multi-account machine. The owner has one account, so this is latent. **Both limits must be written into the spec before this merges, so the spec stops promising what the code does not build.**
+
+**The account BUG, as distinct from the missing argument, is fixed** in Task 2's `ACCOUNT_WALK`. One hop up from a note's folder lands on `Archived`, not `iCloud`, for anything nested. That was wrong and silently so.

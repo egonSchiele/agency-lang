@@ -585,6 +585,11 @@ original omission came from. `git.agency` is the newer and better precedent.
 **`account` is optional and defaults to the default account.** See Section 3.4.
 It exists so folder scoping is a real guarantee rather than an advisory one.
 
+> **Deferred out of v1.** The implementation plan does not build the `account`
+> argument. `account` ships as an output field only, so folder scoping stays
+> advisory on a multi-account machine. Section 10 records why. The signatures
+> below are the intended shape, not what v1 delivers.
+
 **`folder` defaults to `"Agency Notes"`, and may not exist yet.** Chosen by the
 owner so a user can see at a glance which notes an agent made, and rename the
 folder if they want. Unlike Apple's `"Notes"`, it will not exist on a fresh
@@ -1182,9 +1187,45 @@ timeout bounded it.
 - **Moving notes between folders.** Not requested.
 - **Tests that touch real Notes.app.** Section 8.
 
-Accounts **were** on this list. They are now in scope, per Section 3.4 and the
-owner's decision. Section 9.4 predicted the exclusion would not survive, and it
-did not.
+### Deferred out of v1 after the spike, with reasons
+
+Both of these were in scope when this spec was written. A later probe measured
+what they actually cost, and the implementation plan defers them. They are
+recorded here so the spec stops promising what v1 does not build.
+
+**Nested folder paths.** Notes folders nest, and the owner's account has them:
+`Archived` contains `2010s`, `2017`, `2019`. Three measured facts:
+
+- A bare `repeat with f in folders` **flattens** the hierarchy, returning
+  `Archived` and its children side by side with nothing marking the difference.
+- `folder "2017"` **resolves** from the top level, so name addressing is
+  ambiguous rather than broken.
+- `/` **is legal** in a folder name (verified by creating one), so a path
+  separator needs escaping. Paths are a real design job, not a string join.
+
+v1 therefore has `listFolders` return **top-level folders only**, filtered by
+`class of c is account`. That is honest and limited rather than flat and wrong.
+Nested folders remain reachable by bare name, ambiguously, which is Notes' own
+behaviour rather than something this module introduces.
+
+**The `account` argument.** Section 4.2 gives every function an optional
+`account`, and Section 3.4 argued it is what makes folder scoping a real
+guarantee rather than an advisory one. v1 delivers `account` as an **output**
+field on `Note` and in every payload, but not as an input filter. So folder
+scoping stays advisory on a multi-account machine.
+
+The owner has exactly one account (Section 9.4), so this is latent rather than
+live. It is a scope cut, and Section 3.2's argument — that exposing every note
+body is defensible *because* containment is real — is weaker by exactly this
+much until it lands. That should be said plainly rather than discovered later.
+
+**The account derivation bug is NOT deferred; it is fixed in v1.** Distinct from
+the missing argument. Deriving a note's account with one hop up from its folder
+is wrong for any nested folder: `container of folder "2017"` is `Archived`, not
+`iCloud`. Left alone, every note under `Archived` would carry `"Archived"` in its
+`account` payload field, and a policy matching `{"account": "iCloud"}` would
+silently stop matching. The fix is a bounded upward walk, verified to reach
+`iCloud` from `Archived/2017` in 2 hops.
 
 ---
 

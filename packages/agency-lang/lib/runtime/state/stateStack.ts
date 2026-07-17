@@ -585,6 +585,19 @@ export class StateStack {
    *  instead of throwing so callers keep their own throw semantics.
    *  This is also the detection sibling the resumable-guards plan's
    *  PR 2 raise sites need. */
+  /** Side-effect-free probe: is any unsuspended guard over budget and
+   *  armed right now? Unlike detectTrippedGuard, this never calls
+   *  check() — TimeGuard's check consumes its one-shot trip latch, so
+   *  probing through it would eat a real trip. Used to gate optional
+   *  paid work (memory hooks) in the window between a crossing charge
+   *  and the next guard gate. */
+  anyGuardOverBudget(): boolean {
+    return this.guards.some(
+      (g) =>
+        !this.suspendedGuardIds.includes(g.guardId) && g.overBudgetAndArmed(),
+    );
+  }
+
   detectTrippedGuard(): GuardExceededError | null {
     for (let i = this.guards.length - 1; i >= 0; i--) {
       if (this.suspendedGuardIds.includes(this.guards[i].guardId)) continue;

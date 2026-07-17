@@ -3,12 +3,14 @@ import { GuardScope } from "./guardScope.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { RuntimeContext } from "./state/context.js";
 import {
+  interrupt,
   interruptWithHandlers,
   isApproved,
   isRejected,
   type Interrupt,
   type InterruptResponse,
 } from "./interrupts.js";
+import renderGuardTripMessage from "../templates/runtime/guardTripMessage.js";
 
 /**
  * Cost-guard trips as interrupts (resumable-guards PR 2).
@@ -92,6 +94,22 @@ async function raiseOneTrip(
       applyVerdict(recorded, scope, tripped, err);
       return undefined;
     }
+    // The question is already OPEN (persisted, no answer yet — e.g. a
+    // resume triggered by answering a DIFFERENT interrupt in the same
+    // batch replays this gate). Re-surface the SAME interrupt id rather
+    // than re-running the chain and minting a fresh one: a fresh id
+    // would orphan the pending answer and ask the user twice.
+    const snapshot = scope.snapshot(tripped.dimension);
+    return [
+      interrupt({
+        effect: "std::guard",
+        message: buildTripMessage(snapshot),
+        data: { ...snapshot, draftValue: draftPreview(stack) },
+        origin: "std::guard",
+        runId: ctx.getRunId(),
+        interruptId: persistedId,
+      }),
+    ];
   }
 
   // Mark the question open BEFORE the first await (an async body runs
@@ -191,12 +209,13 @@ function buildTripMessage(s: {
   limit: number;
   spent: number;
 }): string {
-  const name = s.label ? `Guard "${s.label}"` : "A guard";
-  const unit =
-    s.dimension === "cost"
-      ? `$${s.spent.toFixed(6)} spent (limit $${s.limit})`
-      : `${Math.round(s.spent)}ms elapsed (limit ${s.limit}ms)`;
-  return `${name} exceeded its ${s.dimension} budget: ${unit}. Approve more budget, or reject to stop this work and salvage its draft.`;
+  const cost = s.dimension === "cost";
+  return renderGuardTripMessage({
+    name: s.label ? `Guard "${s.label}"` : "A guard",
+    dimension: s.dimension,
+    spentText: cost ? `$${s.spent.toFixed(6)} spent` : `${Math.round(s.spent)}ms elapsed`,
+    limitText: cost ? `$${s.limit}` : `${s.limit}ms`,
+  });
 }
 
 /** Best-so-far preview for the handler: the innermost saved draft on the
@@ -204,19 +223,17 @@ function buildTripMessage(s: {
  *  unwind (level rule + finalize) if the trip is rejected; finalizes are
  *  one-shot and must not run speculatively for a maybe-approved trip. */
 function draftPreview(stack: StateStack): unknown {
-  for (let i = stack.stack.length - 1; i >= 0; i--) {
-    const draft = stack.stack[i]?.savedDraft;
-    if (draft !== undefined) return draft.value;
-  }
-  return null;
+  const innermostDraft = [...stack.stack]
+    .reverse()
+    .find((frame) => frame?.savedDraft !== undefined);
+  return innermostDraft?.savedDraft?.value ?? null;
 }
 
 function innermostGuardById(stack: StateStack, guardId: string | undefined): Guard | null {
   if (!guardId) return null;
-  for (let i = stack.guards.length - 1; i >= 0; i--) {
-    if (stack.guards[i].guardId === guardId) return stack.guards[i];
-  }
-  return null;
+  return (
+    [...stack.guards].reverse().find((g) => g.guardId === guardId) ?? null
+  );
 }
 
 function makePendingTrip(): { settled: Promise<void>; settle: () => void } {

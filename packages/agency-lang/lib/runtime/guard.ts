@@ -636,8 +636,9 @@ export class TimeGuard implements Guard {
 
   disarm(): void {
     this.disarmed = true;
-    // A disarmed dimension never trips: kill the armed timer so a
-    // late fire cannot abort the branch.
+    // A disarmed dimension never trips: kill the armed timer so a late
+    // fire cannot abort the branch (startWindow also refuses to arm a
+    // new one while disarmed).
     this.cancelTimer();
   }
 
@@ -741,6 +742,12 @@ export class TimeGuard implements Guard {
   }
 
   private startWindow(): void {
+    // A disarmed guard must never arm its abort timer: check() already
+    // reports nothing, but a live timer would still fire the branch's
+    // abort signal and cancel work the user explicitly un-metered. This
+    // gate covers every arming path at once — install, resume, and a
+    // cloneForBranch'd disarmed guard being installed on its branch.
+    if (this.disarmed) return;
     const remaining = this.timeLimit - this.elapsedMs;
     const delay = remaining > 0 ? remaining : 0;
     this.timerHandle = setTimeout(() => {

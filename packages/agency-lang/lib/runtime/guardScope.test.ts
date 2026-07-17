@@ -191,3 +191,25 @@ describe("TimeGuard.extendBudget", () => {
     vi.useRealTimers();
   });
 });
+
+describe("disarmed TimeGuard clones (PR 2 review round 1)", () => {
+  it("a disarmed clone never arms its abort timer on the branch", () => {
+    vi.useFakeTimers();
+    const parent = new StateStack();
+    const g = new TimeGuard(500);
+    g.install(parent);
+    g.disarm();
+    const branch = new StateStack();
+    const clone = g.cloneForBranch(parent, branch)!;
+    // The branch installs its clone exactly as runBatch's rehydrate
+    // path would; a disarmed clone must not arm a timer that would
+    // fire the branch's abort signal despite the explicit disarm.
+    clone.install(branch);
+    vi.advanceTimersByTime(5000);
+    expect(branch.abortSignal?.aborted ?? false).toBe(false);
+    expect(clone.isTripped()).toBe(false);
+    clone.uninstall(branch);
+    g.uninstall(parent);
+    vi.useRealTimers();
+  });
+});

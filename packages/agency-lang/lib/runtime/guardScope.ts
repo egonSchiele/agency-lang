@@ -29,12 +29,11 @@ export class GuardScope {
   static resolve(stack: StateStack, tripped: Guard): GuardScope | null {
     const ids = tripped.scopeIds.length > 0 ? tripped.scopeIds : [tripped.guardId];
     const members: Guard[] = [];
-    for (let i = stack.guards.length - 1; i >= 0; i--) {
-      const g = stack.guards[i];
+    [...stack.guards].reverse().forEach((g) => {
       if (ids.includes(g.guardId) && !members.includes(g)) {
         members.push(g);
       }
-    }
+    });
     return members.length > 0 ? new GuardScope(members) : null;
   }
 

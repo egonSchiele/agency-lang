@@ -736,12 +736,20 @@ async function _runPrompt({
   // above still throws as a backstop against spend that slipped in
   // between a guard gate and this request (e.g. memory-recall charges).
 
-  // Memory layer: auto-extraction and compaction run unconditionally
-  // whenever a MemoryManager is attached (resolved decision #6).
+  // Memory layer: auto-extraction and compaction run whenever a
+  // MemoryManager is attached (resolved decision #6) — UNLESS a guard is
+  // already over budget. The hooks can spend (LLM text + embeddings via
+  // addCost), and the trip from this call's charge has not been raised
+  // yet (that happens at the next guard gate); running paid supervisory
+  // work in that window would either spend past the budget or turn the
+  // resumable trip into addCost's non-resumable throw. Skipping is safe:
+  // the hooks are best-effort and run again on the next healthy turn.
   // Tool-call results have not been pushed yet, so we operate on the
   // current message slice. Compaction is a best-effort hint — failures
   // never break the LLM call.
-  const memoryManager = ctx.getActiveMemoryManager();
+  const memoryManager = targetStack.anyGuardOverBudget()
+    ? null
+    : ctx.getActiveMemoryManager();
   if (memoryManager) {
     try {
       const original = messages.getMessages();

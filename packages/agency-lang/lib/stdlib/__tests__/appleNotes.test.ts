@@ -23,6 +23,10 @@ import {
   _listNotes,
   _searchNotes,
   _listFolders,
+  _folderExists,
+  _createNote,
+  _appendToNote,
+  _deleteNote,
 } from "../appleNotes.js";
 
 type MockFn = ReturnType<typeof vi.fn>;
@@ -436,5 +440,146 @@ describe("_listFolders", () => {
   it("returns an empty array rather than throwing when there are none", async () => {
     mockStdout("");
     await expect(_listFolders()).resolves.toEqual([]);
+  });
+});
+
+describe("_folderExists", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("passes the folder as argv and parses a true reply", async () => {
+    mockStdout("true");
+    await expect(_folderExists("Agency Notes")).resolves.toBe(true);
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    expect(args[1]).toContain("exists folder (item 1 of argv)");
+    expect(args[2]).toBe("Agency Notes");
+  });
+
+  it("parses a false reply", async () => {
+    mockStdout("false");
+    await expect(_folderExists("No Such Folder")).resolves.toBe(false);
+  });
+});
+
+describe("_createNote", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("passes title, html and folder as argv, never in the script", async () => {
+    mockStdout(["nid", "T", "Agency Notes", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _createNote('"; do shell script "x"; "', "<p>b</p>", "Agency Notes");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    expect(args[1]).not.toContain("do shell script");
+    expect(args[2]).toBe('"; do shell script "x"; "');
+    expect(args[3]).toBe("<p>b</p>");
+    expect(args[4]).toBe("Agency Notes");
+  });
+
+  it("creates the folder if it is missing", async () => {
+    mockStdout(["nid", "T", "Agency Notes", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _createNote("T", "<p>b</p>", "Agency Notes");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    // "Agency Notes" will not exist on a fresh machine. Spec section 9.4.
+    expect(args[1]).toContain("make new folder");
+  });
+
+  it("returns the new note's metadata including its id", async () => {
+    mockStdout(["nid", "T", "Agency Notes", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    const n = await _createNote("T", "<p>b</p>", "Agency Notes");
+    // Returning the id means create-then-append needs no search.
+    expect(n.id).toBe("nid");
+    expect(n.title).toBe("T");
+  });
+});
+
+describe("_appendToNote", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  // See spec section 2.7. A locked note's body reads as "", so this append
+  // would REPLACE the note's contents. Do not delete this test.
+  it("refuses a locked note and never issues a write", async () => {
+    mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
+    await expect(_appendToNote("x-coredata://note/1", "<p>x</p>")).rejects.toThrow(/locked/i);
+    expect((execFile as unknown as MockFn).mock.calls.length).toBe(1);
+  });
+
+  it("re-checks the locked flag inside the write script", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _appendToNote("x-coredata://note/1", "<p>x</p>");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    // The pre-flight check is separated from the write by a human approval,
+    // so it is check-then-act. The write script re-checks. Spec section 6.4.
+    expect(args[1]).toContain("password protected");
+  });
+
+  it("uses a scoped lookup as the assertion when a folder is given", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _appendToNote("x-coredata://note/1", "<p>x</p>", "Work");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    // The scoped lookup IS the assertion: it fails if the note is not in the
+    // folder, so the check cannot drift from the access. Spec section 6.4.
+    expect(args[1]).toContain("of folder (item 3 of argv)");
+  });
+
+  it("uses an unscoped lookup when no folder is given", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _appendToNote("x-coredata://note/1", "<p>x</p>");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    expect(args[1]).not.toContain("of folder (item 3 of argv)");
+  });
+
+  it("appends rather than replacing", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout(["nid", "Q3", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM));
+    await _appendToNote("x-coredata://note/1", "<p>x</p>");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    expect(args[1]).toContain("(body of n) &");
+  });
+});
+
+describe("_deleteNote", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("refuses a locked note", async () => {
+    mockStdout(["Secret", "Work", "iCloud", "true"].join(FIELD_DELIM));
+    await expect(_deleteNote("x-coredata://note/1")).rejects.toThrow(/locked/i);
+    expect((execFile as unknown as MockFn).mock.calls.length).toBe(1);
+  });
+
+  it("deletes an unlocked note", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout("");
+    await expect(_deleteNote("x-coredata://note/1")).resolves.toBeNull();
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    expect(args[1]).toContain("delete n");
   });
 });

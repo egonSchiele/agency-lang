@@ -356,3 +356,118 @@ export async function _listFolders(): Promise<FolderMeta[]> {
     return { id: f[0], name: f[1], noteCount: Number(f[2]) };
   });
 }
+
+const FOLDER_EXISTS_SCRIPT = withTimeout(`    tell application "Notes"
+      return (exists folder (item 1 of argv)) as text
+    end tell`);
+
+export async function _folderExists(folder: string): Promise<boolean> {
+  const raw = await runNotesScript(FOLDER_EXISTS_SCRIPT, [folder]);
+  return raw.trim() === "true";
+}
+
+// "Agency Notes" is our own default and will not exist on a fresh machine, so
+// create it on demand. Spec section 9.4. The interrupt payload carries
+// folderCreated so a human or policy sees the folder being made.
+const CREATE_SCRIPT = withTimeout(`    tell application "Notes"
+      if not (exists folder (item 3 of argv)) then
+        make new folder with properties {name:(item 3 of argv)}
+      end if
+      set f to folder (item 3 of argv)
+      set n to make new note at f with properties {name:(item 1 of argv), body:(item 2 of argv)}
+      set c to container of n
+${ACCOUNT_WALK}
+      set d to (ASCII character 1)
+      return (id of n) & d & (name of n) & d & (name of c) & d & (name of a) & d & ¬
+             ((modification date of n) as text) & d & ((password protected of n) as text)
+    end tell`);
+
+/** Create a note. `html` is HTML, already rendered — this layer does not know
+ *  about markdown. The Agency module does the conversion. */
+export async function _createNote(
+  title: string,
+  html: string,
+  folder: string,
+): Promise<NoteMeta> {
+  const raw = await runNotesScript(CREATE_SCRIPT, [title, html, folder]);
+  const rows = parseNoteRows(raw);
+  if (rows.length !== 1) {
+    throw new Error("Notes returned an unexpected reply while creating a note.");
+  }
+  return rows[0];
+}
+
+// Two shapes: scoped and unscoped. The scoped one addresses the note THROUGH
+// the folder, so the lookup failing IS the assertion failing. That is stronger
+// than read-then-compare, because the reference that gets mutated is the same
+// one that had to resolve inside the asserted folder — the check cannot drift
+// from the access across the human approval that precedes this. Spec 6.4.
+const APPEND_BODY = `      if (password protected of n) then error "note is locked"
+      set body of n to (body of n) & (item 2 of argv)
+      set c to container of n
+${ACCOUNT_WALK}
+      set d to (ASCII character 1)
+      return (id of n) & d & (name of n) & d & (name of c) & d & (name of a) & d & ¬
+             ((modification date of n) as text) & d & ((password protected of n) as text)`;
+
+const APPEND_SCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv) of folder (item 3 of argv)
+${APPEND_BODY}
+    end tell`);
+
+const APPEND_UNSCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv)
+${APPEND_BODY}
+    end tell`);
+
+/** Append to a note. `html` is HTML, already rendered.
+ *
+ *  The locked check happens twice on purpose: once in the pre-flight so the
+ *  error is raised before the interrupt, and once inside the write script
+ *  because a human approval sits between them and the note can be locked in
+ *  that window. Spec section 2.7 explains why a missed check destroys data. */
+export async function _appendToNote(
+  id: string,
+  html: string,
+  folder?: string,
+): Promise<NoteMeta> {
+  const p = await _preflightNote(id);
+  assertFolder(p, folder);
+  assertNotLocked(p);
+
+  const raw = folder == null
+    ? await runNotesScript(APPEND_UNSCOPED_SCRIPT, [id, html])
+    : await runNotesScript(APPEND_SCOPED_SCRIPT, [id, html, folder]);
+
+  const rows = parseNoteRows(raw);
+  if (rows.length !== 1) {
+    throw new Error(`Notes returned an unexpected reply while appending to note ${id}.`);
+  }
+  return rows[0];
+}
+
+const DELETE_SCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv) of folder (item 2 of argv)
+      if (password protected of n) then error "note is locked"
+      delete n
+    end tell`);
+
+const DELETE_UNSCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv)
+      if (password protected of n) then error "note is locked"
+      delete n
+    end tell`);
+
+/** Delete a note. It moves to Recently Deleted, where it stays ~30 days. */
+export async function _deleteNote(id: string, folder?: string): Promise<null> {
+  const p = await _preflightNote(id);
+  assertFolder(p, folder);
+  assertNotLocked(p);
+
+  if (folder == null) {
+    await runNotesScript(DELETE_UNSCOPED_SCRIPT, [id]);
+  } else {
+    await runNotesScript(DELETE_SCOPED_SCRIPT, [id, folder]);
+  }
+  return null;
+}

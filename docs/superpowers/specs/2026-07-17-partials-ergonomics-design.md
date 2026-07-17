@@ -134,8 +134,32 @@ the AgencyFunction. It:
    result rides the normal tool-result machinery, so resume
    idempotency comes for free (a completed round's draft is already
    serialized in the restored frame — drafts survive checkpoints).
+   **Malformed calls get helpful feedback (owner review round 2):**
+   the interception validates the argument against the synthesized
+   schema. A value that violates the schema is SAVED ANYWAY, and the
+   ack carries a specific warning ("Draft saved (N characters).
+   Warning: the value does not match this function's declared return
+   type (…). The draft was kept…") — the schema is a best-effort hint
+   (see "The schema" below), and refusing a save on a possibly-wrong
+   hint would throw away real work; the warning teaches the model
+   instead. Only a call with NO `value` argument refuses:
+   `Error: saveDraft requires a "value" argument. Nothing was saved.`
 3. Emits the standard toolCall statelog events, so the trace shows
    when and what the model saved.
+
+**Architecture (owner review round 2): the "intrinsic tool" pattern.**
+saveDraft is the first tool the loop handles itself instead of
+dispatching, and it will not be the last (attachment
+listing/viewing and future run-control tools fit the same shape).
+The implementation names the pattern: an `IntrinsicTool` is one
+object declaring `matches` (identity), `buildDefinition` (what the
+provider sees), and `handle` (what a call does; returns the
+tool-result text). A closed, in-runtime registry lists them; the
+loop owns all generic bookkeeping (ordered pass, resume idempotency,
+statelog span + events, callbacks, the result message), so a new
+intrinsic is one self-contained module. Deliberately NOT a
+user-facing extension point: intrinsics manipulate run state, which
+is exactly what user tools must never do.
 
 **Where in the loop, and why the ordering guarantee holds (finding
 2):** interception happens during the loop's ORDERED iteration over
@@ -201,10 +225,13 @@ array actually contains the intercepted function.
 
 - No automatic injection. `saveDraft` is a tool only when the user
   passes it. Guards do not silently add tools to model calls.
-- No runtime type validation of the draft against the return type.
-  The schema and description communicate the contract; a model that
-  violates it produces an ill-typed salvage, the same trust level as
-  every other tool argument. Documented in the guide.
+- No SALVAGE-TIME type validation of the draft against the return
+  type — an ill-typed draft still salvages, the same trust level as
+  every other tool argument. (Refined in owner review round 2: the
+  TOOL boundary does validate, as feedback rather than enforcement —
+  a mismatched save is kept and warned about in the ack; only a
+  missing `value` refuses. See "What interception does".) Documented
+  in the guide.
 
 ---
 
@@ -309,6 +336,13 @@ possibly-null name, with a real type instead of a repurposed local.
   schema from a declared string return, schema from a declared object
   return, string fallback for an undeclared return, and the
   description text.
+- Unit + fixture: the validation acks — missing `value` refuses and
+  saves nothing; a schema-mismatched value saves anyway with the
+  warning ack, and the guard salvages it.
+- Runtime: a recording-client test pins the schema-threading seam —
+  the tool definition the PROVIDER receives uses the threaded
+  draftSchema, not the string fallback (the fixtures alone cannot
+  catch a silent fallback).
 - Resume: a checkpoint after a draft-saving round restores the draft
   (existing serialization; pin it from the tool path).
 

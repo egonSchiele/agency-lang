@@ -55,7 +55,8 @@ Part A — finalize binder:
 | `lib/typeChecker/diagnostics.ts`, `diagnosticExplanations.ts` | AG6037 |
 | `lib/typeChecker/index.ts` | wire the pass |
 | `lib/runtime/abortedResult.ts` | `withFinalize` passes the draft |
-| `lib/backends/typescriptBuilder/finalizeCodegen.ts` | closure gains the binder param |
+| `lib/templates/backends/typescriptGenerator/finalizeClosure.mustache` | NEW — the closure emission as a typestache template |
+| `lib/backends/typescriptBuilder/finalizeCodegen.ts` | closure gains the binder param, emission moves to the template |
 | `lib/backends/finalizeBinderCodegen.test.ts` | NEW — codegen tests |
 | `tests/agency/guards/finalize-binder-*.agency/.test.json` | NEW — 3 fixtures |
 
@@ -66,10 +67,11 @@ Part B — saveDraft as a tool:
 | `lib/backends/typescriptBuilder/scopeManager.ts` | `enclosingDeclaredReturnType()` |
 | `lib/backends/typescriptBuilder.ts` | `processLlmCall` emits `draftSchema` |
 | `lib/backends/draftSchemaCodegen.test.ts` | NEW — codegen tests |
-| `lib/runtime/saveDraftTool.ts` | NEW — recognition + synthesized tool definition |
+| `lib/runtime/intrinsicTools.ts` | NEW — the intrinsic-tool registry (the extensibility seam) |
+| `lib/runtime/saveDraftTool.ts` | NEW — the saveDraft intrinsic: recognition, definition, handler with validation |
 | `lib/runtime/saveDraftTool.test.ts` | NEW — unit tests |
-| `lib/runtime/prompt.ts` | ordered interception pass; `draftSchema` arg; tool-def substitution |
-| `tests/agency/guards/savedraft-tool-*.agency/.test.json` | NEW — 5 fixtures |
+| `lib/runtime/prompt.ts` | ordered interception pass over the registry; `draftSchema` arg; tool-def substitution |
+| `tests/agency/guards/savedraft-tool-*.agency/.test.json` | NEW — 6 fixtures |
 
 ---
 
@@ -636,6 +638,7 @@ git commit -F /tmp/claude/commitmsg.txt
 
 **Files:**
 - Modify: `lib/runtime/abortedResult.ts:141` (`withFinalize`)
+- Create: `lib/templates/backends/typescriptGenerator/finalizeClosure.mustache`
 - Modify: `lib/backends/typescriptBuilder/finalizeCodegen.ts:156` (`closure`)
 - Test: `lib/backends/finalizeBinderCodegen.test.ts` (new)
 
@@ -685,30 +688,45 @@ describe("finalize binder codegen", () => {
 Run: `pnpm test:run lib/backends/finalizeBinderCodegen.test.ts 2>&1 | tee "$TMPDIR/finalize-codegen.log"`
 Expected: FAIL on the first test (`async ()` emitted, no param).
 
-- [ ] **Step 3: Implement the codegen change**
+- [ ] **Step 3: Implement the codegen change — as a typestache template, not a raw string**
 
-In `lib/backends/typescriptBuilder/finalizeCodegen.ts`, `closure()`:
+The closure emission is a multi-line codegen string, and those belong in `lib/templates/` (owner rule; see `blockSetup.mustache` for the pattern this copies). Create `lib/templates/backends/typescriptGenerator/finalizeClosure.mustache`:
+
+```mustache
+const __finalize = async ({{{binderParam}}}): Promise<any> => {
+  const runner = new Runner(__ctx, {{{frameVar}}}, { state: {{{frameVar}}}, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}} });
+{{{body}}}
+  return runner.halted ? runner.haltResult : undefined;
+};
+```
+
+Run `pnpm run templates` to compile it (only ever edit the `.mustache`, never the generated `.ts`).
+
+In `lib/backends/typescriptBuilder/finalizeCodegen.ts`, import it the way `typescriptBuilder.ts:38` imports `blockSetup` (`import * as renderFinalizeClosure from "../../templates/backends/typescriptGenerator/finalizeClosure.js";`) and rewrite `closure()`:
 
 ```ts
 private closure(finalize: FinalizeBlock, scopeName: string): TsNode {
   const parts = this.compileBody(finalize.body, FinalizeCodegen.STEP_BASE);
   const bodyStr = parts.map((n) => printTs(n, 1)).join("\n");
-  const frameVar = this.frameVar();
   // The binder is a plain closure parameter (never a frame local): it
   // was never declared via let/const, so body references print as the
   // bare identifier — the same mechanism inline handler params use.
   // AG6037 guarantees the name cannot collide with a real local, and
   // AG6038 guarantees at most one param reaches codegen.
   const binder = finalize.params[0];
-  const param = binder !== undefined ? `${binder.name}: any` : "";
   return ts.raw(
-    `const __finalize = async (${param}): Promise<any> => {\n` +
-      `  const runner = new Runner(__ctx, ${frameVar}, { state: ${frameVar}, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(scopeName + "#finalize")} });\n` +
-      bodyStr +
-      `\n  return runner.halted ? runner.haltResult : undefined;\n};`,
+    renderFinalizeClosure.default({
+      binderParam: binder !== undefined ? `${binder.name}: any` : "",
+      frameVar: this.frameVar(),
+      moduleId: JSON.stringify(this.moduleId),
+      scopeName: JSON.stringify(scopeName + "#finalize"),
+      body: bodyStr,
+    }).trimEnd(),
   );
 }
 ```
+
+The template's output must be BYTE-IDENTICAL to the old raw string for binder-less programs — that is what Step 5's zero-churn check enforces. Watch the two usual template traps: a trailing newline from the file's last line (hence the `trimEnd()`; drop it if the template renders flush) and the newline between the runner line and `{{{body}}}`. If the first `make fixtures` diff shows whitespace-only churn, fix the TEMPLATE until the diff is empty; do not regenerate the fixtures around it.
 
 - [ ] **Step 4: Implement the runtime change**
 
@@ -756,7 +774,7 @@ Expected: `git status` shows NO modified fixture `.js` files (the binder-less cl
 ```bash
 git branch --show-current   # must NOT be main
 printf 'feat: yield the saved draft to the finalize closure (finalize as draft)\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>\n' > /tmp/claude/commitmsg.txt
-git add lib/runtime/abortedResult.ts lib/backends/typescriptBuilder/finalizeCodegen.ts lib/backends/finalizeBinderCodegen.test.ts
+git add lib/runtime/abortedResult.ts lib/backends/typescriptBuilder/finalizeCodegen.ts lib/backends/finalizeBinderCodegen.test.ts lib/templates/
 git commit -F /tmp/claude/commitmsg.txt
 ```
 
@@ -975,27 +993,26 @@ In `lib/backends/typescriptBuilder/scopeManager.ts`, after `returnType()`:
  * type, so the enclosing def's declared type is the best-effort hint.
  */
 enclosingDeclaredReturnType(): VariableType | undefined {
-  for (let i = this.stack.length - 1; i >= 0; i--) {
-    const scope = this.stack[i];
-    if (scope.type === "function") {
-      const funcDef = this.compilationUnit.functionDefinitions[scope.functionName];
-      return funcDef?.returnType ?? undefined;
-    }
-    if (scope.type === "node") {
-      const graphNode = this.compilationUnit.graphNodes.find(
-        (n) => n.nodeName === scope.nodeName,
-      );
-      return graphNode?.returnType ?? undefined;
-    }
-    if (scope.type === "global") {
-      return undefined;
-    }
+  // Innermost-first: the nearest non-block scope answers.
+  const owner = [...this.stack]
+    .reverse()
+    .find((scope) => scope.type !== "block");
+  if (owner === undefined) return undefined;
+  switch (owner.type) {
+    case "function":
+      return this.compilationUnit.functionDefinitions[owner.functionName]
+        ?.returnType ?? undefined;
+    case "node":
+      return this.compilationUnit.graphNodes.find(
+        (n) => n.nodeName === owner.nodeName,
+      )?.returnType ?? undefined;
+    default:
+      return undefined; // global scope
   }
-  return undefined;
 }
 ```
 
-(Check the private field name for the scope stack in that class — the loop must read whatever `push()` writes to.)
+(Check the private field name for the scope stack in that class — the walk must read whatever `push()` writes to. No C-style index loop: reverse-copy + `find` reads as "nearest non-block scope".)
 
 - [ ] **Step 4: Emit `draftSchema` in `processLlmCall`**
 
@@ -1007,18 +1024,18 @@ In `lib/backends/typescriptBuilder.ts`, right after `runPromptEntries.clientConf
 // array gets an honest value schema. Emitted only when the call has
 // arguments beyond the prompt — a bare llm("...") can never carry
 // tools, and skipping it keeps those call sites byte-identical.
+// An `any` return is skipped at the TYPE level (isAnyType), so the
+// runtime falls back to the string schema — never sniff the
+// renderer's output string to detect it.
 if (argsAfterPrompt.length > 0) {
   const declaredReturn = this.scopes.enclosingDeclaredReturnType();
-  if (declaredReturn !== undefined) {
-    const draftZod = this.zodSchemaFor(declaredReturn);
-    if (draftZod !== "z.any()") {
-      runPromptEntries.draftSchema = ts.raw(draftZod);
-    }
+  if (declaredReturn !== undefined && !isAnyType(declaredReturn)) {
+    runPromptEntries.draftSchema = ts.raw(this.zodSchemaFor(declaredReturn));
   }
 }
 ```
 
-Before relying on the `"z.any()"` guard string, verify what `zodSchemaFor` actually renders for an `any` declared type (compile a one-liner or check `mapTypeToValidationSchema`); adjust the comparison to the real string.
+`isAnyType` is exported from `lib/typeChecker/utils.ts:50` — import it rather than re-deriving the check.
 
 - [ ] **Step 5: Run the tests, then check fixture churn**
 
@@ -1042,16 +1059,18 @@ git commit -F /tmp/claude/commitmsg.txt
 
 ---
 
-### Task 6: Runtime — recognize and intercept the saveDraft tool
+### Task 6: Runtime — the intrinsic-tool registry, with saveDraft as its first entry
 
 **Files:**
-- Create: `lib/runtime/saveDraftTool.ts`
+- Create: `lib/runtime/intrinsicTools.ts` (the pattern), `lib/runtime/saveDraftTool.ts` (the first entry)
 - Modify: `lib/runtime/prompt.ts` (three spots: the `args` type at ~line 830, the tool-list build at ~line 915, the tool-round loop at ~line 1499)
-- Test: `lib/runtime/saveDraftTool.test.ts` (new)
+- Test: `lib/runtime/saveDraftTool.test.ts`, `lib/runtime/intrinsicToolSchema.test.ts` (both new)
 
 **Interfaces:**
 - Consumes: `args.draftSchema` (Task 5's generated output).
-- Produces: `isSaveDraftTool(fn: AgencyFunction): boolean`, `buildSaveDraftToolDefinition(draftSchema: unknown): ToolDefinition`, `draftCharCount(value: unknown): number`, `SAVE_DRAFT_TOOL_DESCRIPTION: string` — and the interception behavior Task 7's fixtures test.
+- Produces: the `IntrinsicTool` type and `findIntrinsic(fn: AgencyFunction): IntrinsicTool | undefined` from `intrinsicTools.ts`; `saveDraftIntrinsic: IntrinsicTool` and `draftCharCount(value: unknown): number` from `saveDraftTool.ts` — and the interception behavior Task 7's fixtures test.
+
+**The architecture (owner review round 2).** saveDraft is the first tool the loop handles ITSELF instead of dispatching — and it will not be the last (attachment listing/viewing tools need thread access, and future run-control tools fit the same shape). So the pattern gets a seam: an `IntrinsicTool` is one object declaring its three responsibilities — WHO it is (`matches`), WHAT the provider sees (`buildDefinition`), and WHAT a call does (`handle`, returning the tool-result text). A module-level array is the registry. The LOOP owns everything generic — the ordered pass, resume idempotency (`pr.step`), statelog events, callback hooks, and the result-message push — so an intrinsic's `handle` is a pure-ish state transition and every future intrinsic inherits the bookkeeping for free. Deliberately NOT extensible by users: intrinsics manipulate run state (frames, drafts), which is exactly what user tools must not do; the registry is closed, in-runtime, and additions are code review events.
 
 - [ ] **Step 1: Write the failing unit tests**
 
@@ -1061,12 +1080,8 @@ Create `lib/runtime/saveDraftTool.test.ts`:
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import { AgencyFunction } from "./agencyFunction.js";
-import {
-  isSaveDraftTool,
-  buildSaveDraftToolDefinition,
-  draftCharCount,
-  SAVE_DRAFT_TOOL_DESCRIPTION,
-} from "./saveDraftTool.js";
+import { findIntrinsic } from "./intrinsicTools.js";
+import { saveDraftIntrinsic, draftCharCount } from "./saveDraftTool.js";
 
 function fakeFn(name: string, module: string): AgencyFunction {
   return new AgencyFunction({
@@ -1080,25 +1095,39 @@ function fakeFn(name: string, module: string): AgencyFunction {
   });
 }
 
-describe("saveDraft tool recognition", () => {
-  it("recognizes the stdlib pair (name + module)", () => {
-    expect(isSaveDraftTool(fakeFn("saveDraft", "stdlib/index.agency"))).toBe(true);
+/** A stack stub that records draft writes — handle() only ever calls
+ *  setSavedDraft, and the real frame math is fixture-tested. */
+function stubStack() {
+  const saved: unknown[] = [];
+  return {
+    saved,
+    stack: { setSavedDraft: (v: unknown) => saved.push(v) } as any,
+  };
+}
+
+function call(args: Record<string, unknown> | undefined) {
+  return { id: "t1", name: "saveDraft", arguments: args as any };
+}
+
+describe("saveDraft intrinsic — recognition", () => {
+  it("the registry finds the stdlib pair (name + module)", () => {
+    expect(findIntrinsic(fakeFn("saveDraft", "stdlib/index.agency"))).toBe(saveDraftIntrinsic);
   });
 
   it("a user function named saveDraft is NOT recognized", () => {
-    expect(isSaveDraftTool(fakeFn("saveDraft", "my/module.agency"))).toBe(false);
+    expect(findIntrinsic(fakeFn("saveDraft", "my/module.agency"))).toBeUndefined();
   });
 
   it("a stdlib function with another name is NOT recognized", () => {
-    expect(isSaveDraftTool(fakeFn("finalize", "stdlib/index.agency"))).toBe(false);
+    expect(findIntrinsic(fakeFn("finalize", "stdlib/index.agency"))).toBeUndefined();
   });
 });
 
-describe("synthesized tool definition", () => {
+describe("saveDraft intrinsic — synthesized definition", () => {
   it("declares exactly one required value param from the threaded schema", () => {
-    const def = buildSaveDraftToolDefinition(z.number());
+    const def = saveDraftIntrinsic.buildDefinition({ draftSchema: z.number() });
     expect(def.name).toBe("saveDraft");
-    expect(def.description).toBe(SAVE_DRAFT_TOOL_DESCRIPTION);
+    expect(def.description).toMatch(/best-so-far/);
     const schema = def.schema as z.ZodObject<any>;
     expect(Object.keys(schema.shape)).toEqual(["value"]);
     expect(schema.shape.value.safeParse(3).success).toBe(true);
@@ -1106,10 +1135,50 @@ describe("synthesized tool definition", () => {
   });
 
   it("falls back to string when no schema was threaded", () => {
-    const def = buildSaveDraftToolDefinition(undefined);
+    const def = saveDraftIntrinsic.buildDefinition({ draftSchema: undefined });
     const schema = def.schema as z.ZodObject<any>;
     expect(schema.shape.value.safeParse("x").success).toBe(true);
     expect(schema.shape.value.safeParse(3).success).toBe(false);
+  });
+});
+
+describe("saveDraft intrinsic — handle (validation semantics)", () => {
+  it("a matching value saves and acks with the char count", () => {
+    const { saved, stack } = stubStack();
+    const ack = saveDraftIntrinsic.handle({
+      toolCall: call({ value: "hello" }),
+      stateStack: stack,
+      draftSchema: z.string(),
+    });
+    expect(saved).toEqual(["hello"]);
+    expect(ack).toBe("Draft saved (5 characters).");
+  });
+
+  it("a missing value is an error and saves NOTHING", () => {
+    const { saved, stack } = stubStack();
+    const ack = saveDraftIntrinsic.handle({
+      toolCall: call({}),
+      stateStack: stack,
+      draftSchema: z.string(),
+    });
+    expect(saved).toEqual([]);
+    expect(ack).toMatch(/requires a "value" argument/);
+  });
+
+  it("a schema-mismatched value SAVES ANYWAY and acks with a helpful warning", () => {
+    // The schema is a best-effort hint keyed to the declared function
+    // type; the actual slot (a guard block) can legitimately differ.
+    // Refusing the save could throw away real work on a wrong hint, so
+    // the draft is kept and the warning teaches the model.
+    const { saved, stack } = stubStack();
+    const ack = saveDraftIntrinsic.handle({
+      toolCall: call({ value: 42 }),
+      stateStack: stack,
+      draftSchema: z.string(),
+    });
+    expect(saved).toEqual([42]);
+    expect(ack).toMatch(/^Draft saved \(\d+ characters\)\. Warning:/);
+    expect(ack).toMatch(/does not match/);
   });
 });
 
@@ -1120,7 +1189,7 @@ describe("draftCharCount", () => {
   it("counts structured drafts by their JSON length", () => {
     expect(draftCharCount({ a: 1 })).toBe(JSON.stringify({ a: 1 }).length);
   });
-  it("handles unstringifiable values without throwing", () => {
+  it("returns 0 for values JSON cannot represent", () => {
     expect(draftCharCount(undefined)).toBe(0);
   });
 });
@@ -1133,11 +1202,58 @@ describe("draftCharCount", () => {
 Run: `pnpm test:run lib/runtime/saveDraftTool.test.ts 2>&1 | tee "$TMPDIR/savedraft-unit.log"`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 3: Write `lib/runtime/saveDraftTool.ts`**
+- [ ] **Step 3: Write the registry and the saveDraft intrinsic**
+
+Create `lib/runtime/intrinsicTools.ts` — the pattern, kept deliberately small:
+
+```ts
+import type { AgencyFunction, ToolDefinition } from "./agencyFunction.js";
+import type { StateStack } from "./state/stateStack.js";
+import { saveDraftIntrinsic } from "./saveDraftTool.js";
+
+/** What one intrinsic call sees. Deliberately narrow: an intrinsic
+ *  manipulates the RUN (frames, drafts), not the outside world, so it
+ *  gets the call, the stack, and the threaded schema — nothing else.
+ *  Widen this type only when a new intrinsic genuinely needs more. */
+export type IntrinsicCall = {
+  toolCall: { id: string; name: string; arguments: Record<string, unknown> };
+  stateStack: StateStack;
+  /** Zod schema threaded by the llm() codegen (saveDraft's value
+   *  type); undefined when the call site had none. */
+  draftSchema: unknown;
+};
+
+/** A tool the tool loop handles ITSELF, inline in the ordered pass,
+ *  instead of dispatching into the concurrent pool. The loop owns all
+ *  the generic bookkeeping — resume idempotency, statelog events,
+ *  callbacks, the tool-result message — so `handle` is just the
+ *  semantics and must be fast, synchronous, and interrupt-free.
+ *  The registry is CLOSED: intrinsics touch run state, which is
+ *  exactly what user tools must never do, so additions are code
+ *  changes here, not a user-facing extension point. */
+export type IntrinsicTool = {
+  /** Identity check against a tools-array entry (name+module pair,
+   *  never object identity — the prelude auto-import means modules
+   *  hold their own wrapper objects). */
+  matches: (fn: AgencyFunction) => boolean;
+  /** The provider-facing definition, replacing the def's own. */
+  buildDefinition: (ctx: { draftSchema: unknown }) => ToolDefinition;
+  /** Handle one call; the return value is the tool-result text. */
+  handle: (call: IntrinsicCall) => string;
+};
+
+const INTRINSIC_TOOLS: IntrinsicTool[] = [saveDraftIntrinsic];
+
+export function findIntrinsic(fn: AgencyFunction): IntrinsicTool | undefined {
+  return INTRINSIC_TOOLS.find((t) => t.matches(fn));
+}
+```
+
+Create `lib/runtime/saveDraftTool.ts` — the first entry:
 
 ```ts
 import { z } from "zod";
-import type { AgencyFunction, ToolDefinition } from "./agencyFunction.js";
+import type { IntrinsicTool } from "./intrinsicTools.js";
 
 /** The stdlib module id every compiled stdlib export carries. No user
  *  module can carry it, so name+module is identity in practice — the
@@ -1145,37 +1261,11 @@ import type { AgencyFunction, ToolDefinition } from "./agencyFunction.js";
  *  dependency cycle (partials-ergonomics spec Part 2). */
 const STDLIB_INDEX_MODULE = "stdlib/index.agency";
 
-/** True when a tools-array entry IS the stdlib saveDraft. Aliases
- *  (`const s = saveDraft`) keep both fields, so they recognize; a
- *  user's own def named saveDraft carries its own module id, so it
- *  runs as an ordinary tool. A `.rename()`d stdlib saveDraft changes
- *  the name and is NOT recognized — it falls through to the def path,
- *  whose draft files on the tool branch and is discarded (documented
- *  limitation). */
-export function isSaveDraftTool(fn: AgencyFunction): boolean {
-  return fn.name === "saveDraft" && fn.module === STDLIB_INDEX_MODULE;
-}
-
 /** The contract the type system cannot check, stated to the model. */
-export const SAVE_DRAFT_TOOL_DESCRIPTION =
+const DESCRIPTION =
   "Save your best-so-far answer as a draft. If the budget runs out, the " +
   "last saved draft is returned instead of a failure. The value must " +
   "match this function's return type.";
-
-/** The provider-facing definition for an intercepted saveDraft: one
- *  required `value` param typed by the schema the llm() codegen
- *  threaded from the enclosing def's declared return type, string
- *  when nothing was threaded. */
-export function buildSaveDraftToolDefinition(
-  draftSchema: unknown,
-): ToolDefinition {
-  const valueSchema = (draftSchema as z.ZodTypeAny) ?? z.string();
-  return {
-    name: "saveDraft",
-    description: SAVE_DRAFT_TOOL_DESCRIPTION,
-    schema: z.object({ value: valueSchema }),
-  };
-}
 
 /** Character count for the acknowledgment message. */
 export function draftCharCount(value: unknown): number {
@@ -1183,6 +1273,48 @@ export function draftCharCount(value: unknown): number {
   const text = JSON.stringify(value);
   return text === undefined ? 0 : text.length;
 }
+
+/** `saveDraft` passed as a tool. Aliases (`const s = saveDraft`) keep
+ *  both identity fields, so they recognize; a user's own def named
+ *  saveDraft carries its own module id, so it runs as an ordinary
+ *  tool. A `.rename()`d stdlib saveDraft changes the name and is NOT
+ *  recognized — it falls through to the def path, whose draft files
+ *  on the tool branch and is discarded (documented limitation). */
+export const saveDraftIntrinsic: IntrinsicTool = {
+  matches: (fn) =>
+    fn.name === "saveDraft" && fn.module === STDLIB_INDEX_MODULE,
+
+  buildDefinition: ({ draftSchema }) => ({
+    name: "saveDraft",
+    description: DESCRIPTION,
+    schema: z.object({ value: (draftSchema as z.ZodTypeAny) ?? z.string() }),
+  }),
+
+  handle: ({ toolCall, stateStack, draftSchema }) => {
+    const callArgs = toolCall.arguments ?? {};
+    // Own-property check: the args object comes from the model.
+    if (!Object.prototype.hasOwnProperty.call(callArgs, "value")) {
+      return 'Error: saveDraft requires a "value" argument. Nothing was saved.';
+    }
+    const value = callArgs.value;
+    // Save FIRST, validate second. The schema is a best-effort hint
+    // keyed to the declared function type, and the actual slot (often
+    // a guard block) can legitimately differ — refusing the save on a
+    // possibly-wrong hint would throw away real work. The warning
+    // teaches the model without costing it the draft.
+    stateStack.setSavedDraft(value);
+    const saved = `Draft saved (${draftCharCount(value)} characters).`;
+    const valueSchema = (draftSchema as z.ZodTypeAny) ?? z.string();
+    const parsed = valueSchema.safeParse(value);
+    if (parsed.success) return saved;
+    const issue = parsed.error.issues[0];
+    return (
+      `${saved} Warning: the value does not match this function's ` +
+      `declared return type (${issue?.message ?? "type mismatch"}). ` +
+      `The draft was kept, but match the declared type on your next save.`
+    );
+  },
+};
 ```
 
 Run: `pnpm test:run lib/runtime/saveDraftTool.test.ts` — expected PASS.
@@ -1200,91 +1332,106 @@ In `lib/runtime/prompt.ts`:
   draftSchema?: unknown;
 ```
 
-(b) At the tool-list build (~line 915), substitute the synthesized definition:
+(b) At the tool-list build (~line 915), substitute the synthesized definition through the registry:
 
 ```ts
 let tools = exposedFunctions
   .filter((fn) => fn.toolDefinition)
   .map((fn) =>
-    isSaveDraftTool(fn)
-      ? buildSaveDraftToolDefinition(args.draftSchema)
-      : fn.toolDefinition!,
+    findIntrinsic(fn)?.buildDefinition({ draftSchema: args.draftSchema }) ??
+    fn.toolDefinition!,
   );
 ```
 
-Import `isSaveDraftTool`, `buildSaveDraftToolDefinition`, `draftCharCount` from `./saveDraftTool.js` at the top of the file.
+Import `findIntrinsic` from `./intrinsicTools.js` at the top of the file — prompt.ts never names saveDraft; it only knows the registry.
 
 - [ ] **Step 5: Add the ordered interception pass**
 
-In the tool round loop (~line 1499), between `const round = self.toolCallRound;` and the `pr.parallel` call, add the pass, and change `pr.parallel` to consume the filtered list:
+In the tool round loop (~line 1499), between `const round = self.toolCallRound;` and the `pr.parallel` call. First partition the round ONCE, declaratively — no push-and-continue mutation threading through the loop:
 
 ```ts
-// Ordered interception (partials-ergonomics spec Part 2): a
-// recognized saveDraft call never enters the concurrent pool. It is
-// handled inline at its position in the call list, so two saves in
-// one round apply in call-list order BY CONSTRUCTION — the writes
-// happen here, in list order, not in scheduler-completion order.
-// The draft files on the scope that owns this llm() call: the stack
-// is [..., owner, runPrompt] (setupFunction pushed our frame), so
-// setSavedDraft's callerFrame() write lands on the owner — the same
-// frame shape as the stdlib saveDraft def path.
-const dispatchCalls: smoltalk.ToolCallJSON[] = [];
-for (let callIndex = 0; callIndex < toolCalls.length; callIndex++) {
-  const toolCall = toolCalls[callIndex];
+// Partition the round: intrinsic calls (handled inline, in order)
+// vs. everything else (dispatched concurrently as today). One
+// partition, computed up front — the rest of the iteration reads
+// these two lists and never re-derives them.
+const intrinsicOf = (toolCall: smoltalk.ToolCallJSON) => {
   const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
-  if (!handler || !isSaveDraftTool(handler)) {
-    dispatchCalls.push(toolCall);
-    continue;
-  }
+  return handler ? findIntrinsic(handler) : undefined;
+};
+const intrinsicCalls = toolCalls
+  .map((toolCall, callIndex) => ({ toolCall, callIndex, intrinsic: intrinsicOf(toolCall) }))
+  .filter((entry) => entry.intrinsic !== undefined);
+const dispatchCalls = toolCalls.filter((toolCall) => intrinsicOf(toolCall) === undefined);
+```
+
+Then the ordered pass. `for...of` — NOT `forEach`, whose async callbacks would all fire without awaiting and un-order the writes, and not a C-style index loop either (the partition already carries `callIndex`):
+
+```ts
+// Ordered interception (partials-ergonomics spec Part 2): intrinsic
+// calls are handled inline at their position in the call list, so two
+// saves in one round apply in call-list order BY CONSTRUCTION — the
+// writes happen here, in list order, not in scheduler-completion
+// order. The draft files on the scope that owns this llm() call: the
+// stack is [..., owner, runPrompt] (setupFunction pushed our frame),
+// so setSavedDraft's callerFrame() write lands on the owner — the
+// same frame shape as the stdlib saveDraft def path.
+for (const { toolCall, callIndex, intrinsic } of intrinsicCalls) {
   const callSlug = `${callIndex}_${toolCall.id}`;
-  await pr.step(`round.${round}.tool.${callSlug}.saveDraft`, async () => {
+  await pr.step(`round.${round}.tool.${callSlug}.intrinsic`, async () => {
     const callArgs = toolCall.arguments ?? {};
-    // Own-property check: the args object comes from the model.
-    const hasValue = Object.prototype.hasOwnProperty.call(callArgs, "value");
-    let ack: string;
-    if (hasValue) {
-      stateStack.setSavedDraft(callArgs.value);
-      ack = `Draft saved (${draftCharCount(callArgs.value)} characters).`;
-    } else {
-      ack = `Error: saveDraft requires a "value" argument. Nothing was saved.`;
+    // The lifecycle mirrors the real dispatch path's events
+    // (toolCallStart → hooks → toolCall) inside one toolExecution
+    // span, so span-pairing consumers see intrinsic calls too.
+    // Deliberate differences from the real path: one pr.step instead
+    // of per-phase branch steps (there is no branch), and timeTaken 0
+    // (an inline state write has no meaningful duration).
+    const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
+    try {
+      ctx.statelogClient.toolCallStart({
+        toolName: toolCall.name,
+        args: callArgs,
+        model: JSON.stringify(clientConfig.model),
+        threadId: __threads()?.activeId() ?? null,
+      });
+      await invokeCallbacks({
+        ctx,
+        name: "onToolCallStart",
+        data: { toolName: toolCall.name, args: callArgs },
+        stateStack,
+      });
+      const ack = intrinsic!.handle({
+        toolCall,
+        stateStack,
+        draftSchema: args.draftSchema,
+      });
+      await invokeCallbacks({
+        ctx,
+        name: "onToolCallEnd",
+        data: { toolName: toolCall.name, result: ack, timeTaken: 0 },
+        stateStack,
+      });
+      ctx.statelogClient.toolCall({
+        toolName: toolCall.name,
+        args: callArgs,
+        output: ack,
+        model: JSON.stringify(clientConfig.model),
+        timeTaken: 0,
+        threadId: __threads()?.activeId() ?? null,
+      });
+      messages.push(
+        smoltalk.toolMessage(ack, {
+          tool_call_id: toolCall.id,
+          name: toolCall.name,
+        }),
+      );
+    } finally {
+      ctx.statelogClient.endSpan(toolSpanId);
     }
-    ctx.statelogClient.toolCallStart({
-      toolName: handler.name,
-      args: callArgs,
-      model: JSON.stringify(clientConfig.model),
-      threadId: __threads()?.activeId() ?? null,
-    });
-    await invokeCallbacks({
-      ctx,
-      name: "onToolCallStart",
-      data: { toolName: handler.name, args: callArgs },
-      stateStack,
-    });
-    await invokeCallbacks({
-      ctx,
-      name: "onToolCallEnd",
-      data: { toolName: handler.name, result: ack, timeTaken: 0 },
-      stateStack,
-    });
-    ctx.statelogClient.toolCall({
-      toolName: handler.name,
-      args: callArgs,
-      output: ack,
-      model: JSON.stringify(clientConfig.model),
-      timeTaken: 0,
-      threadId: __threads()?.activeId() ?? null,
-    });
-    messages.push(
-      smoltalk.toolMessage(ack, {
-        tool_call_id: toolCall.id,
-        name: toolCall.name,
-      }),
-    );
   });
 }
 ```
 
-Then change the `pr.parallel` call to iterate `dispatchCalls` instead of `toolCalls`, guarded for the all-intercepted round:
+Then change the `pr.parallel` call to iterate `dispatchCalls` instead of `toolCalls`, guarded for the all-intrinsic round:
 
 ```ts
 if (dispatchCalls.length > 0) {
@@ -1294,25 +1441,60 @@ if (dispatchCalls.length > 0) {
     ...
 ```
 
-Audit the rest of the `while` iteration for reads of `toolCalls` that should now read `dispatchCalls` (the interrupt check on `parallelResult` and the removed-tools filter after it); the `self.pendingToolCalls` bookkeeping keeps the FULL `toolCalls` list — on resume the interception pass re-runs and its `pr.step` guards skip the completed writes, which is exactly the idempotency the real tools get from their branch steps.
+Audit the rest of the `while` iteration for reads of `toolCalls` that should now read `dispatchCalls` (the interrupt check on `parallelResult` and the removed-tools filter after it); the `self.pendingToolCalls` bookkeeping keeps the FULL `toolCalls` list — on resume the partition recomputes identically and the ordered pass's `pr.step` guards skip the completed writes, which is exactly the idempotency the real tools get from their branch steps.
 
-Three deliberate behaviors, each matching the spec, worth comments in code review: interception ignores the `maxToolCallRounds` limit (a draft write is free and salvage is the point); interception ignores `removedTools` (saveDraft cannot error its way onto that list); the ack messages push before the concurrent tools' results, which is harmless because providers pair results by `tool_call_id` (and by name+position on Gemini, where names differ) — the same guarantee the existing completion-order pushes rely on.
+Three deliberate behaviors, each matching the spec, worth comments in code review: interception ignores the `maxToolCallRounds` limit (a draft write is free and salvage is the point); interception ignores `removedTools` (an intrinsic cannot error its way onto that list); the ack messages push before the concurrent tools’ results, which is harmless because providers pair results by `tool_call_id` (and by name+position on Gemini, where names differ) — the same guarantee the existing completion-order pushes rely on.
 
-- [ ] **Step 6: Typecheck and run the runtime suites**
+- [ ] **Step 6: Pin the schema-threading seam with a RecordingClient test**
+
+This seam — `args.draftSchema` → registry substitution → the tool list the PROVIDER receives — is the one place a silent failure hides: if the key drifts or the substitution misses, every fixture still passes because the runtime falls back to `z.string()`, and structured-draft typing is silently gone. Neither Task 5 (string-matches the generated source) nor the fixtures (all run the fallback) cover it, so cover it directly. Create `lib/runtime/intrinsicToolSchema.test.ts`, modeled on `lib/runtime/promptLabels.test.ts` (copy its `makeCtx` / `inFrame` / `RecordingClient` harness — the client records every `PromptConfig` handed to the provider):
+
+```ts
+describe("saveDraft tool definition reaching the provider", () => {
+  it("the provider-bound schema uses the threaded draftSchema, not the fallback", async () => {
+    const client = new RecordingClient();
+    // Build a tools array containing an AgencyFunction with the stdlib
+    // identity pair, call runPrompt with clientConfig.tools plus
+    // draftSchema: z.number(), and let the mock return immediately.
+    await runSaveDraftPrompt(client, z.number());
+    const sent = client.configs[0] as any;
+    const saveDraftDef = sent.tools.find((t: any) => t.name === "saveDraft");
+    expect(saveDraftDef).toBeDefined();
+    // The value slot must be the THREADED schema: a number passes, a
+    // string fails. With the fallback this assertion inverts — which
+    // is exactly the silent failure this test exists to catch.
+    expect(saveDraftDef.schema.shape.value.safeParse(3).success).toBe(true);
+    expect(saveDraftDef.schema.shape.value.safeParse("x").success).toBe(false);
+  });
+
+  it("without draftSchema the provider-bound value schema is the string fallback", async () => {
+    const client = new RecordingClient();
+    await runSaveDraftPrompt(client, undefined);
+    const sent = client.configs[0] as any;
+    const saveDraftDef = sent.tools.find((t: any) => t.name === "saveDraft");
+    expect(saveDraftDef.schema.shape.value.safeParse("x").success).toBe(true);
+    expect(saveDraftDef.schema.shape.value.safeParse(3).success).toBe(false);
+  });
+});
+```
+
+Write the `runSaveDraftPrompt` helper against the real `runPrompt` signature the way `promptLabels.test.ts` calls it (ctx + frame + `clientConfig: { tools: [stdlibShapedSaveDraft] }` + `draftSchema`), constructing the AgencyFunction with `name: "saveDraft", module: "stdlib/index.agency"`. If the provider-bound tool entry is not the raw ToolDefinition (smoltalk may wrap or convert it), adapt the assertions to wherever the zod schema actually lands in the recorded config — the point is asserting the THREADED schema is what left runPrompt.
+
+- [ ] **Step 7: Typecheck and run the runtime suites**
 
 ```bash
 pnpm exec tsc --noEmit 2>&1 | tee "$TMPDIR/tsc-prompt.log"
-pnpm test:run lib/runtime/saveDraftTool.test.ts lib/runtime/deterministicClient.test.ts 2>&1 | tee "$TMPDIR/savedraft-runtime.log"
+pnpm test:run lib/runtime/saveDraftTool.test.ts lib/runtime/intrinsicToolSchema.test.ts lib/runtime/promptLabels.test.ts lib/runtime/deterministicClient.test.ts 2>&1 | tee "$TMPDIR/savedraft-runtime.log"
 ```
 
 Expected: clean typecheck, tests PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git branch --show-current   # must NOT be main
-printf 'feat: intercept the stdlib saveDraft tool in the llm tool loop\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>\n' > /tmp/claude/commitmsg.txt
-git add lib/runtime/saveDraftTool.ts lib/runtime/saveDraftTool.test.ts lib/runtime/prompt.ts
+printf 'feat: intrinsic-tool registry; intercept the stdlib saveDraft tool in the llm tool loop\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>\n' > /tmp/claude/commitmsg.txt
+git add lib/runtime/intrinsicTools.ts lib/runtime/saveDraftTool.ts lib/runtime/saveDraftTool.test.ts lib/runtime/intrinsicToolSchema.test.ts lib/runtime/prompt.ts
 git commit -F /tmp/claude/commitmsg.txt
 ```
 
@@ -1325,11 +1507,14 @@ git commit -F /tmp/claude/commitmsg.txt
 - Create: `tests/agency/guards/savedraft-tool-alias-and-user.agency` + `.test.json`
 - Create: `tests/agency/guards/savedraft-tool-order.agency` + `.test.json`
 - Create: `tests/agency/guards/savedraft-tool-missing-value.agency` + `.test.json`
+- Create: `tests/agency/guards/savedraft-tool-mismatch-still-saves.agency` + `.test.json`
 - Create: `tests/agency/guards/savedraft-tool-resume.agency` + `.test.json`
 
 **Interfaces:**
 - Consumes: Tasks 5 + 6.
 - Produces: end-to-end proof of every spec Part 4 saveDraft-tool behavior, including the frame-math pin (draft saved by the TOOL inside a guard block is salvaged by THAT guard).
+
+**Determinism note (owner review round 2).** Every fixture in this plan is deterministic by construction: cost guards only (the deterministic client's synthetic per-call cost is fixed, so a `guard(cost: 0.000001)` trips at the same step every run), no time guards, no `sleep`/`spin`, no wall-clock anywhere. The resume fixture's interrupt sequence is also deterministic — interrupts serialize in arrival order and the cost gate fires at a fixed step. If any fixture turns out to need real elapsed time, STOP and flag it rather than tuning budgets; that is the flake class that burned #563/#566.
 
 - [ ] **Step 1: The basic fixture — model saves, guard trips, reject returns the model's draft**
 
@@ -1439,6 +1624,26 @@ node main() {
 
 Mocks: `[{ "toolCalls": [{ "name": "saveDraft" }] }, { "return": "done" }]` (no args — the deterministic client defaults them to `{}`). Expect `"\"done\""`, NO `interruptHandlers` (nothing trips; declaring a handler would make the harness assert an interrupt that never fires). The fixture proves the malformed call gets the error ack and the loop continues to the next round.
 
+- [ ] **Step 4b: Mismatch fixture — a schema-violating draft is still saved**
+
+`tests/agency/guards/savedraft-tool-mismatch-still-saves.agency` — same shape as the basic fixture (a node, so the schema is the `z.string()` fallback), but the mock saves a NUMBER:
+
+```
+// The model saves a value that violates the tool schema (a number
+// against the string fallback). The intrinsic warns in the ack but
+// keeps the draft — the schema is a best-effort hint, and salvage
+// must not lose work over it. Reject proves the draft survived.
+node main() {
+  const result = guard(cost: 0.000001) {
+    return llm("work", tools: [saveDraft])
+  }
+  if (isFailure(result)) { return "no-draft" }
+  return result.value
+}
+```
+
+Mocks: `[{ "toolCalls": [{ "name": "saveDraft", "args": { "value": 42 } }] }, { "return": "never" }]`, reject handler, expect `"42"` (the guard salvages the mismatched draft).
+
 - [ ] **Step 5: Resume fixture — a draft from a completed round survives an interrupt**
 
 `tests/agency/guards/savedraft-tool-resume.agency`:
@@ -1495,7 +1700,7 @@ The saveDraft interception runs in the ORDERED pass before `ask` dispatches, so 
 
 ```bash
 make 2>&1 | tail -3
-for f in savedraft-tool-basic savedraft-tool-alias savedraft-tool-usershadow savedraft-tool-order savedraft-tool-missing-value savedraft-tool-resume; do
+for f in savedraft-tool-basic savedraft-tool-alias savedraft-tool-usershadow savedraft-tool-order savedraft-tool-missing-value savedraft-tool-mismatch-still-saves savedraft-tool-resume; do
   pnpm run agency test tests/agency/guards/$f.agency 2>&1 | tee "$TMPDIR/fx-$f.log"
 done
 make fixtures 2>&1 | tail -3
@@ -1548,4 +1753,5 @@ The body should name the two features, link the spec, call out the fixture churn
 - **Spec coverage:** Part 2 surface + recognition + interception + schema + interactions → Tasks 5–7; Part 3 all four head forms, binder semantics, typing, mechanics → Tasks 1–4; Part 4 test list → Tasks 4 and 7 map one-to-one (draft-round resume is `savedraft-tool-resume`; the schema unit tests are Task 5 Step 1 plus Task 6 Step 1). Part 5 exclusions respected: no runtime validation, no auto-injection, declared types only.
 - **Known deviations from spec text, on purpose:** (1) The spec's review-round-1 fold said interception writes the TOP frame via a new StateStack method; that was corrected in the spec on 2026-07-17 after verifying `runPrompt` pushes its own frame — the plan uses the existing `setSavedDraft` and pins the math with the basic fixture. (2) The binder types from the DECLARED return only (`any` fallback); the spec's "declared or inferred" is narrowed to match Part 5's inferred-types exclusion. (3) `finalize() as draft` formatter-canonicalizes to `finalize as draft` — spec-stated. 
 - **Type consistency:** `params: FunctionParameter[]` (Task 1, parsed by the shared `asParser`) is read by Task 2 (`params[0]`, AG6038 for more) and Task 3 (`finalize.params[0].name`); `draftSchema` (Task 5 emit) is read by Task 6 as `args.draftSchema`; `isSaveDraftTool` / `buildSaveDraftToolDefinition` / `draftCharCount` names match between Task 6's module and its prompt.ts call sites.
+- **Round 2 decisions (owner comments):** (1) The finalize closure emission moved from a raw `ts.raw` string to `finalizeClosure.mustache` — long codegen strings belong in `lib/templates/`; the zero-churn check enforces byte-identity. (2) The interception is shaped as an `IntrinsicTool` registry (`lib/runtime/intrinsicTools.ts`): saveDraft is the first tool the loop handles itself, and attachment/run-control tools are plausible next entries, so the pattern gets a seam — one object per intrinsic (matches / buildDefinition / handle), the loop owning all generic bookkeeping, the registry closed to users (intrinsics touch run state, exactly what user tools must not do). (3) Schema-violating saves: the intrinsic validates with the synthesized zod schema; a mismatch SAVES ANYWAY and acks with a specific warning (the schema is a best-effort hint — refusing on a possibly-wrong hint would lose real work); only a missing `value` refuses. Pinned by unit tests and the mismatch fixture. (4) No C-style loops in new code: reverse-copy+`find` for the scope walk, one declarative partition plus `for...of` for the ordered pass (NOT `forEach` — async callbacks there would not be awaited in order). (5) All fixtures are cost-guard deterministic; no time-based tests exist, by design. (6) From the parallel plan review: the schema-threading seam gets a RecordingClient test (Task 6 Step 6 — the fixtures alone all run the z.string() fallback and would stay green through a silent substitution failure), the any-type skip is `isAnyType` at the type level rather than sniffing the rendered string, and the intrinsic lifecycle emits inside a `toolExecution` span with its deliberate divergences from the real dispatch path stated in a comment.
 - **Reuse decision (owner review round 1):** the binder clause reuses `asParser`/`blockParamsParser`/`FunctionParameter` — the grammar and type block arguments already own — instead of a hand-rolled `as <name>` parse. Consequences inherited from the shared grammar and ruled on downstream: `finalize as { }` parses as binder-less (the documented no-param form; formatter canonicalizes it away), multi-param lists parse and are rejected by AG6038, and a typed binder (`as d: Report`) parses with the annotation winning over the scope's return type (the handler-param rule). NOT reused: the whole-node `functionCall`+`BlockArgument` pipeline — finalize is a declaration, not a call (FinalizeCodegen strips it from the statement stream; AG6032/6033 and the flow builder key on the node type; there is no callee to receive a block), so wrapping the body would add indirection without behavior.

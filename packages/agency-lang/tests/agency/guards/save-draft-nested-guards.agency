@@ -1,8 +1,7 @@
-import { guard } from "std::thread"
 
 node main() {
-  const outer = guard(cost: 0.000003) as {
-    const inner = guard(cost: 0.000001) as {
+  const outer = guard(cost: 0.000003) {
+    const inner = guard(cost: 0.000001) {
       saveDraft("inner-draft")
       const a = llm("Reply with: pong")
       return a

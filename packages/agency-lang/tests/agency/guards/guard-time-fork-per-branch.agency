@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 import test { _installSlowInput } from "std::thread"
 
 // Per-branch time budgets: one branch waits on a (simulated) human for
@@ -10,7 +9,7 @@ import test { _installSlowInput } from "std::thread"
 // both branches — this fixture is the PR 1 limitation, reversed.
 node main() {
   _installSlowInput(2000, "hi")
-  const result = guard(time: 800ms) as {
+  const result = guard(time: 800ms) {
     fork([1, 2]) as n {
       if (n == 1) {
         const answer = input("branch one asks: ")

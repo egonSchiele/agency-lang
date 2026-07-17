@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // The trip escapes through `return verify()`. Plain pass-through would
 // deliver verify's OWN partial ("v-partial") — the finalize must
@@ -19,7 +18,7 @@ def code(): string {
 }
 
 node main() {
-  const result = guard(cost: 0.000001) as {
+  const result = guard(cost: 0.000001) {
     return code()
   }
   if (isFailure(result)) { return "unexpected" }

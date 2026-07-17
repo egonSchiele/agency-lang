@@ -5,7 +5,7 @@
 */
 import { bash, ls, glob, grep } from "std::shell"
 import { edit } from "std::fs"
-import { systemMessage, guard } from "std::thread"
+import { systemMessage } from "std::thread"
 import { verify, feedbackHasErrors, renderFeedback } from "std::agency"
 import { withContext, unwrapGuard } from "std::agents/shared"
 
@@ -43,7 +43,7 @@ export def codingAgent(task: string, context: string = "", criteria: string[] = 
   @param maxCost - Hard spend cap for the whole run (default $50).
   @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
   """
-  const captured = guard(cost: maxCost, time: maxTime) as {
+  const captured = guard(cost: maxCost, time: maxTime) {
     let reply = ""
     let msg = withContext(task, context)
     thread(label: "codingAgent") {

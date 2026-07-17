@@ -420,6 +420,19 @@ instead of throwing. The pieces, and where they live:
   everything downstream — `AbortedResult`, the level rule, `finalize`,
   the guard boundary's conversion — is untouched.
 
+## The guard construct (guard keyword)
+
+`guard(...) { }` is a language construct that desugars, in the
+preprocessor AND at the TypeChecker entry, to the exact
+`functionCall` + `blockArgument` shape the old stdlib-function syntax
+parsed to — calling `_guard` (stdlib/index.agency, on the auto-import
+prelude). Nothing at this layer changed: the same gates, raise
+surfaces, trip keys, and frames run under the construct. `_guard`'s
+`std::guard` effect is seeded at its symbol
+(`TS_SIDE_EFFECT_SEEDS`, lib/symbolTable.ts) because its trips are
+raised by this runtime machinery, invisible to the interrupt-statement
+walk. See docs/superpowers/specs/2026-07-17-guard-keyword-design.md.
+
 ## Time trips (resumable guards, PR 3)
 
 Time budgets burn between paid actions, so the gates alone cannot catch

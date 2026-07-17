@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Race under a time budget: the fast branch wins well inside the
 // budget, the slow loser is aborted mid-sleep. The join charges the
@@ -15,7 +14,7 @@ def branchWork(item: number): string {
 }
 
 node main() {
-  const result = guard(time: 800ms) as {
+  const result = guard(time: 800ms) {
     const winner = race([1, 2]) as item {
       return branchWork(item)
     }

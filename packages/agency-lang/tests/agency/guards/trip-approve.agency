@@ -2,14 +2,13 @@
 // Every mocked llm() call costs 0.000002; budgets below are sized so
 // each assertion is a spend into a gap — the output changes if a grant
 // lands wrong in either direction.
-import { guard } from "std::thread"
 
 const log = []
 
 // 1. A handler grants more budget and the block simply continues.
 node inlineApprove() {
   handle {
-    const r = guard(cost: 0.000001) as {
+    const r = guard(cost: 0.000001) {
       const a = llm("Reply with: one")
       const b = llm("Reply with: two")
       return "done:${b}"
@@ -29,7 +28,7 @@ node inlineApprove() {
 // one-guardId model the plan review killed).
 node bothDimensions() {
   handle {
-    const r = guard(cost: 0.000001, time: 60s) as {
+    const r = guard(cost: 0.000001, time: 60s) {
       const a = llm("Reply with: one")
       const b = llm("Reply with: two")
       return "done"
@@ -47,7 +46,7 @@ node bothDimensions() {
 // 3. Explicit disarm stops cost metering entirely.
 node disarmCost() {
   handle {
-    const r = guard(cost: 0.000001) as {
+    const r = guard(cost: 0.000001) {
       const a = llm("Reply with: one")
       const b = llm("Reply with: two")
       const c = llm("Reply with: three")
@@ -67,7 +66,7 @@ node disarmCost() {
 // dimension — is a runtime error, not a livelock.
 node uselessApproval() {
   handle {
-    const r = guard(cost: 0.000001) as {
+    const r = guard(cost: 0.000001) {
       const a = llm("Reply with: one")
       return a
     }
@@ -86,7 +85,7 @@ node uselessApproval() {
 // way. Metering is never silently removed.
 node negativeGrant() {
   handle {
-    const r = guard(cost: 0.000001) as {
+    const r = guard(cost: 0.000001) {
       const a = llm("Reply with: one")
       return a
     }
@@ -108,7 +107,7 @@ node negativeGrant() {
 node doubleApprove() {
   handle {
     handle {
-      const r = guard(cost: 0.000001) as {
+      const r = guard(cost: 0.000001) {
         const a = llm("Reply with: a")
         const b = llm("Reply with: b")
         const c = llm("Reply with: c")

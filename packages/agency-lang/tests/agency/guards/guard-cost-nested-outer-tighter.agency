@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Cost analogue of guard-time-nested-outer-tighter. The OUTER cost guard has
 // a tighter budget ($0.000001) than the INNER ($1.0). One LLM call charges
@@ -9,8 +8,8 @@ import { guard } from "std::thread"
 // This is the cost half of the Increment-2 guardId-routing fix (the spec
 // originally only called out the time case).
 node main() {
-  const outer = guard(cost: 0.000001) as {
-    const inner = guard(cost: 1.0) as {
+  const outer = guard(cost: 0.000001) {
+    const inner = guard(cost: 1.0) {
       const r = llm("ping")
       return r
     }

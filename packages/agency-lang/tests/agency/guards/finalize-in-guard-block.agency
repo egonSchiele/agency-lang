@@ -1,9 +1,8 @@
-import { guard } from "std::thread"
 
 // A finalize directly inside the guard block: its return is the salvage.
 node main() {
   let progress = "started"
-  const result = guard(cost: 0.000001) as {
+  const result = guard(cost: 0.000001) {
     const reply = llm("Reply with: pong")
     return reply
 

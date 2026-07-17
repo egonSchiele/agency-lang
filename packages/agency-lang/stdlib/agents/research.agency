@@ -5,7 +5,7 @@
 import { search as webSearch } from "std::web/search"
 import { fetch, fetchMarkdown } from "std::http"
 import { search as wikiSearch } from "std::wikipedia"
-import { systemMessage, guard } from "std::thread"
+import { systemMessage } from "std::thread"
 import { Feedback, feedbackHasErrors, renderFeedback } from "std::agency"
 import { env } from "std::system"
 import { withContext, unwrapGuard } from "std::agents/shared"
@@ -39,7 +39,7 @@ export def researchAgent(task: string, context: string = "", maxAttempts: number
   @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
   """
   const researchTools = buildResearchTools()
-  const captured = guard(cost: maxCost, time: maxTime) as {
+  const captured = guard(cost: maxCost, time: maxTime) {
     let answer = ""
     let msg = withContext(task, context)
     thread(label: "researchAgent") {

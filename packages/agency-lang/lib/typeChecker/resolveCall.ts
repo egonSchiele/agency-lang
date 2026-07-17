@@ -42,6 +42,11 @@ const anyArray = { type: "arrayType", elementType: ANY_T } as const;
  *        debugger       → DebuggerStatement
  */
 export const RESERVED_FUNCTION_NAMES = new Set<string>([
+  // The guard construct's desugar target: a user def named `_guard`
+  // would be what every `guard(...) { }` in the file binds to —
+  // budget metering is safety infrastructure, so the name is reserved
+  // (and prunePreludeShadows refuses to prune it).
+  "_guard",
   // Category 1 — parsed as `functionCall`, also in BUILTIN_FUNCTION_TYPES.
   "success",
   "failure",

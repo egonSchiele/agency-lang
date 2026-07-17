@@ -18,7 +18,7 @@
 import { map } from "std::array"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { docsSkill } from "std::skills"
-import { guard, systemMessage } from "std::thread"
+import { systemMessage } from "std::thread"
 import {
   search as wikipediaSearch,
   summary as wikipediaSummary,
@@ -182,7 +182,7 @@ export def expertAgent(task: string, context: string = "", maxCost: number = $20
     consult on a stronger model while the solve loop stays on the default.
   @param expertProvider - optional provider for expertModel (empty = auto-resolve).
   """
-  const captured = guard(cost: maxCost, time: maxTime) as {
+  const captured = guard(cost: maxCost, time: maxTime) {
     const guidance = consultOrEmpty(task, expertModel, expertProvider)
     let solverContext = renderGuidance(guidance)
     if (context != "") {

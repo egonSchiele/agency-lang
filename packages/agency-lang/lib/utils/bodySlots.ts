@@ -23,6 +23,7 @@ import type { ForLoop } from "../types/forLoop.js";
 import type { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import type { HandleBlock } from "../types/handleBlock.js";
 import type { FinalizeBlock } from "../types/finalizeBlock.js";
+import type { GuardBlock } from "../types/guardBlock.js";
 import type { ParallelBlock, SeqBlock } from "../types/parallelBlock.js";
 import type { BlockArgument } from "../types/blockArgument.js";
 import type { FunctionCall } from "../types/function.js";
@@ -138,6 +139,18 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
       // enclosing scope's locals, so every walker and rewriter must
       // descend into it as part of that scope.
       const n = node as FinalizeBlock;
+      return [
+        {
+          body: n.body,
+          write: (owner, body) => ({ ...owner, body }) as AgencyNode,
+        },
+      ];
+    }
+    case "guardBlock": {
+      // The guarded block. Distinct-scope statements (the body compiles
+      // to a lifted closure after desugaring), but walkers and
+      // rewriters must descend into it like any other body.
+      const n = node as GuardBlock;
       return [
         {
           body: n.body,

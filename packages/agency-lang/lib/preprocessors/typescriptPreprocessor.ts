@@ -31,6 +31,7 @@ import {
   type WalkAncestor,
 } from "@/utils/node.js";
 import { desugarParallelInBody } from "./parallelDesugar.js";
+import { desugarGuardsInBody } from "./guardDesugar.js";
 import { injectSchemaArgsInProgram } from "./injectSchemaArgs.js";
 import { prunePreludeShadows } from "./prunePreludeShadows.js";
 
@@ -318,6 +319,16 @@ export class TypescriptPreprocessor {
   preprocess(): AgencyProgram {
     this.attachDocComments();
     this.program.nodes = collectTags(this.program.nodes);
+    // Guard constructs lower to the legacy _guard call before the
+    // LATER passes here — parallel desugar and callback lifting — so
+    // those see the call+blockArgument shape they have always seen.
+    // (Match-expr lowering is NOT one of them: `lowerPatterns` runs at
+    // parse time, before SymbolTable.build, and meets the construct
+    // directly — which is why patternLowering.ts has its own guardBlock
+    // handling, including at assignment/return VALUE positions.)
+    // Idempotent: the TypeChecker constructor may have desugared this
+    // program already. See guardDesugar.ts.
+    this.program.nodes = desugarGuardsInBody(this.program.nodes);
     this.desugarParallelBlocks();
     if (Object.keys(this.functionDefinitions).length === 0) {
       this.getFunctionDefinitions();

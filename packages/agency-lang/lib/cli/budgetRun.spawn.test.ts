@@ -33,10 +33,9 @@ const SLEEPER = `node main() {
 // must NOT absorb the root budget's trip — the trip propagates to the
 // compiled entry and exits 3. If the boundary wrongly converted it, the
 // program would print GUARD_ABSORBED and exit 0.
-const GUARDED_SLEEPER = `import { guard } from "std::thread"
-
+const GUARDED_SLEEPER = `
 node main() {
-  const inner = guard(time: 60s) as {
+  const inner = guard(time: 60s) {
     sleep(2s)
     return "inner done"
   }

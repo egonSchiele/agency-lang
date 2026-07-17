@@ -1,6 +1,6 @@
 import { compile, run } from "std::agency"
 
-// #513 regression, user-level variant: a hand-written guard(...) as { } wraps
+// #513 regression, user-level variant: a hand-written guard(...) { } wraps
 // the middle hop's run(). The serialized middle stack holds the user block's
 // FunctionRef. This is the case that proves ANY block-taking function is
 // pause-safe across process boundaries, not just run(maxCost:).
@@ -14,14 +14,13 @@ node main() {
 """
   const childSource = """
 import { compile, run } from "std::agency"
-import { guard } from "std::thread"
 node main(grandSource: string) {
   const c = compile(grandSource)
   if (isFailure(c)) {
     return "inner compile failed"
   }
   handle {
-    const guarded = guard(cost: 1.0) as {
+    const guarded = guard(cost: 1.0) {
       const result = run(compiled: c.value, node: "main")
       if (isSuccess(result)) {
         return result.value.data

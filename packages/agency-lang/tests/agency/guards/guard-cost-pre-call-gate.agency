@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Pre-call gate: when an LLM call is about to be issued, prompt.ts
 // walks the guard stack (innermost first) and refuses the call if
@@ -40,7 +39,7 @@ import { guard } from "std::thread"
 // independent signal: if 5+ calls are issued, DeterministicClient
 // throws and the test fails before any string assertion.
 def doInner(n: number): string {
-  let r = guard(cost: 0.000003) as {
+  let r = guard(cost: 0.000003) {
     const a = llm("a ${n}")
     return llm("b ${n}")
   }
@@ -51,7 +50,7 @@ def doInner(n: number): string {
 }
 
 node main() {
-  const outer = guard(cost: 0.000005) as {
+  const outer = guard(cost: 0.000005) {
     let results = fork([1, 2]) as n {
       return doInner(n)
     }

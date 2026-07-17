@@ -2,7 +2,7 @@
 // -> cost accrues to the branch and a tiny guard trips -> the base64 composes
 // into a multimodal llm() call. No real API is used.
 import { generateImage } from "std::image"
-import { image, getCost, guard } from "std::thread"
+import { image, getCost } from "std::thread"
 
 node main() {
   const r = generateImage("a red bicycle")
@@ -22,7 +22,7 @@ node main() {
   const spent = getCost()
 
   // Second generation under a tiny budget -> should trip.
-  const guarded = guard(cost: $0.01) as {
+  const guarded = guard(cost: $0.01) {
     generateImage("another one")
     return "did-not-trip"
   }

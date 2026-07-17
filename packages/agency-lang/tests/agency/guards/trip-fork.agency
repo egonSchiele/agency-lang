@@ -1,5 +1,4 @@
 // Trips under fork and race. Mocked llm() cost = 0.000002.
-import { guard } from "std::thread"
 
 const log = []
 
@@ -16,7 +15,7 @@ const log = []
 // "grant-once" counter would silently reset at the join.
 node sharedDedupe() {
   handle {
-    const r = guard(cost: 0.000001) as {
+    const r = guard(cost: 0.000001) {
       fork([1, 2, 3]) as n {
         const x = llm("branch ${n}")
       }
@@ -40,7 +39,7 @@ node sharedDedupe() {
 // 2. A race loser holding budget spend does not hang or resurface: the
 // winner returns, the loser is cancelled, the guard settles normally.
 node raceLoserClean() {
-  const r = guard(cost: 0.01) as {
+  const r = guard(cost: 0.01) {
     const winner = race([1, 2]) as n {
       if (n == 1) {
         return "fast"

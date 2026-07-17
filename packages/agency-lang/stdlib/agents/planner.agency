@@ -7,7 +7,6 @@
 import { writeAgency, runCode, getEffects, verify, feedbackHasErrors, renderFeedback, EffectsByExport } from "std::agency"
 import { codingAgent } from "std::agents/coding"
 import { withContext, unwrapGuard } from "std::agents/shared"
-import { guard } from "std::thread"
 import { getAgentCwd } from "std::index"
 
 /** Raised before a generated plan-agent runs, so the plan, source, and
@@ -149,7 +148,7 @@ def planStep(task: string, planText: string, state: PlanState): PlanState raises
   }
 }
 
-export def plannerAgent(task: string, context: string = "", plan: string = "", maxCost: number = $100.00, maxTime: number = 60m): string raises <std::agents::planApprove> {
+export def plannerAgent(task: string, context: string = "", plan: string = "", maxCost: number = $100.00, maxTime: number = 60m): string raises <std::agents::planApprove, std::guard> {
   """
   Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
   task, show the plan/source/effects for approval, run it in a sandboxed
@@ -163,7 +162,7 @@ export def plannerAgent(task: string, context: string = "", plan: string = "", m
   @param maxCost - hard spend cap for the whole tree (default $100).
   @param maxTime - hard wall-clock cap (default 60 minutes).
   """
-  const captured = guard(cost: maxCost, time: maxTime) as {
+  const captured = guard(cost: maxCost, time: maxTime) {
     const planText = if plan == "" then llm("Analyse this task and outline the steps:\n${withContext(task, context)}") else plan
     let state: PlanState = { summary: "", done: false, extra: withContext(task, context) }
     let attemptsLeft = PLANNER_MAX_ATTEMPTS

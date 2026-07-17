@@ -1,14 +1,13 @@
-import { guard } from "std::thread"
 
 // guard(label:) names the guard. On a trip the label reaches user code
 // on the failure (error.label) so a scope with several guards can tell
 // which one fired. Unlabeled guards keep a null label.
 node main() {
-  const labeled = guard(label: "research-budget", cost: 0.000001) as {
+  const labeled = guard(label: "research-budget", cost: 0.000001) {
     const a = llm("Reply with: pong")
     return a
   }
-  const unlabeled = guard(cost: 0.000001) as {
+  const unlabeled = guard(cost: 0.000001) {
     const b = llm("Reply with: pong")
     return b
   }

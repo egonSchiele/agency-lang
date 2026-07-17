@@ -8,8 +8,6 @@ description: Documents the `guard` function for capping the cost and/or compute 
 Guards let you limit the **cost** and/or **compute time** of a block of work.
 
 ```ts
-import { guard } from "std::thread"
-
 node main() {
   const result = guard(cost: $0.2) {
     const category = llm("classify this email: I love you")
@@ -50,7 +48,7 @@ type GuardFailureData = {
 You can also name a guard with `label:`. The label comes back on the failure (`error.label`) and in error messages, so code with several guards can tell which one fired:
 
 ```ts
-const result = guard(label: "research", cost: $0.50) as {
+const result = guard(label: "research", cost: $0.50) {
   return research(topic)
 }
 if (isFailure(result)) {
@@ -79,7 +77,7 @@ This means a bare `guard(...)` with no handler no longer fails silently. If you 
 ```ts
 node main() {
   handle {
-    const result = guard(cost: $0.20) as {
+    const result = guard(cost: $0.20) {
       return summarize(inbox)
     }
     return result
@@ -111,7 +109,7 @@ A handler sees the trip like any interrupt. `i.effect` is `"std::guard"`, and `i
 
 ```ts
 handle {
-  const result = guard(label: "research", cost: $0.50, time: 2m) as {
+  const result = guard(label: "research", cost: $0.50, time: 2m) {
     return research(topic)
   }
   return result
@@ -176,7 +174,7 @@ The operator's `--max-cost` and `--max-time` limits never ask. They are the ceil
 ## Timeout
 
 ```ts
-const result = guard(time: 30s) as {
+const result = guard(time: 30s) {
   return planAndExecute()
 }
 if (isFailure(result)) {
@@ -199,7 +197,7 @@ A rejected trip normally throws the block's work away. `saveDraft` lets you keep
 
 ```ts
 node main() {
-  const result = guard(time: 5m) as {
+  const result = guard(time: 5m) {
     let report = ""
     for (topic in topics) {
       report = report + research(topic)
@@ -259,8 +257,8 @@ Things to note:
 Guards are scoped — an inner trip does **not** trip an outer guard:
 
 ```ts
-const outer = guard(cost: $10.0) as {
-  const inner = guard(cost: $0.001) as {
+const outer = guard(cost: $10.0) {
+  const inner = guard(cost: $0.001) {
     return llm("expensive job")
   }
   if (isFailure(inner)) {
@@ -275,10 +273,10 @@ They work with `fork` and other [concurrency primitives](/guide/concurrency) too
 
 ```ts
 // shared across every branch below
-guard(cost: $5.0) as {
+guard(cost: $5.0) {
   fork(jobs) as job {
     // per-branch sub-budget, isolated
-    guard(cost: $0.50) as {
+    guard(cost: $0.50) {
       return processOneJob(job)
     }
   }

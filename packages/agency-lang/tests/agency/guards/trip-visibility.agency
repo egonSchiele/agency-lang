@@ -1,5 +1,4 @@
 // Trip visibility and precedence rules. Mocked llm() cost = 0.000002.
-import { guard } from "std::thread"
 
 const log = []
 
@@ -8,7 +7,7 @@ const log = []
 // rejects). If eligibility broke, the inner handler would approve and
 // the block would finish — a different output.
 node insideGuardBlind() {
-  const r = guard(cost: 0.000001) as {
+  const r = guard(cost: 0.000001) {
     handle {
       const a = llm("Reply with: one")
       return a
@@ -29,7 +28,7 @@ node insideGuardBlind() {
 node propagateDiscards() {
   handle {
     handle {
-      const r = guard(cost: 0.000001) as {
+      const r = guard(cost: 0.000001) {
         const a = llm("Reply with: one")
         return a
       }
@@ -54,7 +53,7 @@ node propagateDiscards() {
 // pipeline: the guard converts the trip to success(draft).
 node draftPreview() {
   handle {
-    const r = guard(cost: 0.000001) as {
+    const r = guard(cost: 0.000001) {
       saveDraft("the-draft")
       const a = llm("Reply with: one")
       return a
@@ -77,8 +76,8 @@ node draftPreview() {
 // one entry.
 node grantsNeverCross() {
   handle {
-    const outer = guard(label: "outer", cost: 0.000003) as {
-      const inner = guard(label: "inner", cost: 0.000001) as {
+    const outer = guard(label: "outer", cost: 0.000003) {
+      const inner = guard(label: "inner", cost: 0.000001) {
         const a = llm("Reply with: one")
         const b = llm("Reply with: two")
         return "inner-done"

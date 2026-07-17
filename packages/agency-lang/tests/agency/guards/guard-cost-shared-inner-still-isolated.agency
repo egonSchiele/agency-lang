@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Inner guards pushed AFTER a fork opens stay branch-local.
 // The OUTER guard is shared across all branches via the
@@ -24,7 +23,7 @@ import { guard } from "std::thread"
 // guards array, branch 2's inner trip would compose into the
 // parent's abortSignal and cascade to siblings.
 def branchWork(item: number, callCount: number): string {
-  const inner = guard(cost: 0.000003) as {
+  const inner = guard(cost: 0.000003) {
     let i = 0
     while (i < callCount) {
       const r = llm("branch ${item} call ${i}")
@@ -39,7 +38,7 @@ def branchWork(item: number, callCount: number): string {
 }
 
 node main() {
-  const outer = guard(cost: 0.001) as {
+  const outer = guard(cost: 0.001) {
     let results = fork([1, 2, 3]) as n {
       if (n == 2) {
         return branchWork(n, 2)

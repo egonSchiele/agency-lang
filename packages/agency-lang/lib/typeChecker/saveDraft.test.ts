@@ -19,8 +19,7 @@ function check(source: string, config: Partial<AgencyConfig> = {}) {
 describe("saveDraft argument type-check", () => {
   it("accepts a draft assignable to the enclosing return type", () => {
     const errors = check(`
-      import { guard } from "std::thread"
-      def f(): string {
+            def f(): string {
         saveDraft("ok")
         return "x"
       }
@@ -30,8 +29,7 @@ describe("saveDraft argument type-check", () => {
 
   it("rejects a draft not assignable to the enclosing return type", () => {
     const errors = check(`
-      import { guard } from "std::thread"
-      def f(): string {
+            def f(): string {
         saveDraft(42)
         return "x"
       }
@@ -44,9 +42,8 @@ describe("saveDraft argument type-check", () => {
     // so a matching draft is fine and a mismatched one is flagged — the check is
     // NOT limited to top-level def/node bodies.
     const ok = check(`
-      import { guard } from "std::thread"
-      def f(): string {
-        const r = guard(cost: 1.0) as {
+            def f(): string {
+        const r = guard(cost: 1.0) {
           saveDraft("ok")
           return "x"
         }
@@ -56,9 +53,8 @@ describe("saveDraft argument type-check", () => {
     expect(ok).toHaveLength(0);
 
     const bad = check(`
-      import { guard } from "std::thread"
-      def f(): string {
-        const r = guard(cost: 1.0) as {
+            def f(): string {
+        const r = guard(cost: 1.0) {
           saveDraft(42)
           return "x"
         }
@@ -72,8 +68,7 @@ describe("saveDraft argument type-check", () => {
 describe("saveDraft check — review-round hardening", () => {
   it("rejects a mismatched draft passed as a NAMED argument", () => {
     const errors = check(`
-      import { guard } from "std::thread"
-      def f(): string {
+            def f(): string {
         saveDraft(value: 42)
         return "x"
       }

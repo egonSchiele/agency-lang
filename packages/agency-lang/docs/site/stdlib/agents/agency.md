@@ -47,4 +47,4 @@ Writes an Agency program for the task, runs it, and judges its result against
 
 **Returns:** `Result<string, WriteFailure>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency.agency#L52))

@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // A finalize-bearing def trips INSIDE a fork branch under an outer
 // guard. The branch's finalized partial is dropped at the fork boundary
@@ -14,7 +13,7 @@ def branchWork(tag: string): string {
 }
 
 node main() {
-  const result = guard(time: 600ms) as {
+  const result = guard(time: 600ms) {
     const tags = fork(["a"]) as t {
       return branchWork(t)
     }

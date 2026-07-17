@@ -409,7 +409,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
           exported: !!node.exported,
-          interruptEffects: collectDirectInterruptEffects(node.body),
+          interruptEffects: collectDirectInterruptEffects(node.nodeName, node.body),
         };
         break;
       case "function":
@@ -422,7 +422,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           parameters: node.parameters,
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
-          interruptEffects: collectDirectInterruptEffects(node.body),
+          interruptEffects: collectDirectInterruptEffects(node.functionName, node.body),
         };
         break;
       case "typeAlias":
@@ -461,8 +461,37 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
   return symbols;
 }
 
-function collectDirectInterruptEffects(body: AgencyNode[]): InterruptEffect[] {
-  const effects: string[] = [];
+/** Effects raised by a stdlib impl on the TS SIDE, invisible to the
+ *  interrupt-statement walk below. `_guard` (the guard construct's
+ *  lowering target, stdlib/index.agency) raises `std::guard` trips
+ *  from the runtime (lib/runtime/guardTripInterrupt.ts), so its effect
+ *  is seeded at the symbol — every import path, including the
+ *  auto-injected prelude, then carries it, and the existing transitive
+ *  machinery marks every function containing a guard construct. Keyed
+ *  by name: a user def shadowing `_guard` would inherit the seed, an
+ *  accepted overapproximation for an underscore-internal name. */
+const TS_SIDE_EFFECT_SEEDS: Record<string, string[]> = Object.assign(
+  // Null prototype + own-property read below: the index is a
+  // user-controlled symbol name, and a def named `__proto__` (or any
+  // Object.prototype member) must not resolve through the prototype
+  // chain to a non-array.
+  Object.create(null),
+  {
+    _guard: ["std::guard"],
+  },
+);
+
+function collectDirectInterruptEffects(
+  name: string,
+  body: AgencyNode[],
+): InterruptEffect[] {
+  const seeded = Object.prototype.hasOwnProperty.call(
+    TS_SIDE_EFFECT_SEEDS,
+    name,
+  )
+    ? TS_SIDE_EFFECT_SEEDS[name]
+    : [];
+  const effects: string[] = [...seeded];
   for (const { node } of walkNodes(body)) {
     if (node.type === "interruptStatement" && !effects.includes(node.effect)) {
       effects.push(node.effect);

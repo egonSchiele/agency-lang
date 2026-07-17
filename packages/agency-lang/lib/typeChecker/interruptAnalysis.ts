@@ -398,10 +398,15 @@ export function checkUnhandledInterruptWarnings(
       if (!kinds || kinds.length === 0) continue;
       if (isInsideHandler(ancestors)) continue;
       const kindList = kinds.map((ik) => ik.effect).join(", ");
+      // The guard construct desugars to a `_guard` call before this
+      // walk (guardDesugar.ts); users wrote `guard(...) { }`, so the
+      // warning names the construct, not the internal impl.
+      const displayName =
+        node.functionName === "_guard" ? "guard" : node.functionName;
       ctx.errors.push(
         diagnostic(
           "unhandledInterrupts",
-          { fn: node.functionName, effects: kindList },
+          { fn: displayName, effects: kindList },
           node.loc ?? null,
         ),
       );

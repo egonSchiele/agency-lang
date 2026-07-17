@@ -28,6 +28,7 @@ import { validateTypeReferences } from "./validate.js";
 import { applySuppressions, parseSuppressions } from "./suppression.js";
 import { inferReturnTypes } from "./inference.js";
 import { buildScopes } from "./scopes.js";
+import { desugarGuardsInBody } from "../preprocessors/guardDesugar.js";
 import { buildFlowGraphs } from "./flowBuilder.js";
 import { checkScopes } from "./checker.js";
 import { isAssignable as _isAssignable } from "./assignability.js";
@@ -96,6 +97,17 @@ export class TypeChecker {
     config: AgencyConfig = {},
     info?: CompilationUnit,
   ) {
+    // Guard constructs desugar to the legacy `_guard(...)` call +
+    // block-argument shape BEFORE any checking, so every existing rule
+    // — block return exclusion, saveDraft draft typing, finalize
+    // attachment, flow narrowing, and the whole effect machinery
+    // (_guard declares `raises <std::guard>`) — applies to the
+    // construct with no guard-specific cases. The compile pipeline
+    // desugars again in TypescriptPreprocessor; the pass is idempotent
+    // (no guardBlock nodes remain after the first run). The
+    // synthesizer's `_guard` case restores the construct's Result<T>
+    // precision on top of this shape.
+    program.nodes = desugarGuardsInBody(program.nodes) as typeof program.nodes;
     this.program = program;
     this.config = config;
     const resolved = info ?? buildCompilationUnit(program);

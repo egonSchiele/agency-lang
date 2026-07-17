@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // A plain `try` around an abortable leaf, sitting INSIDE a guard, must NOT
 // swallow the guard's trip. The guard's 20ms timer fires while the inner
@@ -17,7 +16,7 @@ import { guard } from "std::thread"
 // is identical on both paths. On a fast run the handler never fires.
 node main() {
   handle {
-  const result = guard(time: 20ms) as {
+  const result = guard(time: 20ms) {
     const inner = try sleep(150ms)
     if (isFailure(inner)) {
       return "inner-try swallowed the trip"

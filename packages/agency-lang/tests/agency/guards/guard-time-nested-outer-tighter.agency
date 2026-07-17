@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Outer time budget (20ms) is TIGHTER than the inner (5s). The OUTER's
 // timer fires while the inner block's `sleep` is in flight, so the
@@ -19,8 +18,8 @@ import { guard } from "std::thread"
 // is identical on both paths. On a fast run the handler never fires.
 node main() {
   handle {
-  const outer = guard(time: 20ms) as {
-    const inner = guard(time: 5s) as {
+  const outer = guard(time: 20ms) {
+    const inner = guard(time: 5s) {
       sleep(150ms)
       return "inner did not trip"
     }

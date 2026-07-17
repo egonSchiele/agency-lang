@@ -5,7 +5,6 @@
 // step-boundary detection reads elapsed working time directly
 // (overBudgetAndArmed), not the timer, so timer starvation in tight
 // await loops cannot flake it.
-import { guard } from "std::thread"
 
 const log = []
 
@@ -21,7 +20,7 @@ def spin(rounds: number): string {
 // handler grants more time and the loop simply continues to completion.
 node stepBoundaryApproved() {
   handle {
-    const r = guard(time: 5ms) as {
+    const r = guard(time: 5ms) {
       const s = spin(300000)
       return "done:${s}"
     }
@@ -48,7 +47,7 @@ node stepBoundaryApproved() {
 // keep 5ms; for them an early trip is answered and the work continues.
 node stepBoundaryRejected() {
   handle {
-    const r = guard(time: 100ms) as {
+    const r = guard(time: 100ms) {
       saveDraft("partial-spin")
       const s = spin(300000)
       return "done:${s}"
@@ -69,7 +68,7 @@ node stepBoundaryRejected() {
 // second mock answers it.
 node midRequestApproved() {
   handle {
-    const r = guard(time: 100ms) as {
+    const r = guard(time: 100ms) {
       const a = llm("Reply with: pong")
       return "done:${a}"
     }
@@ -86,7 +85,7 @@ node midRequestApproved() {
 // 4. In-flight cancellation, rejected: salvage.
 node midRequestRejected() {
   handle {
-    const r = guard(time: 100ms) as {
+    const r = guard(time: 100ms) {
       saveDraft("before-request")
       const a = llm("Reply with: pong")
       return "done:${a}"
@@ -107,7 +106,7 @@ node midRequestRejected() {
 // over-budget guard, applies the recorded answer, and the work
 // completes.
 node checkpointApproved() {
-  const r = guard(time: 5ms) as {
+  const r = guard(time: 5ms) {
     const s = spin(300000)
     return "done:${s}"
   }
@@ -128,7 +127,7 @@ def slowTool(): string {
 // on resume.
 node toolBodyApproved() {
   handle {
-    const r = guard(time: 5ms) as {
+    const r = guard(time: 5ms) {
       const a = llm("Use slowTool, then report its result.", { tools: [slowTool] })
       return "done:${a}"
     }

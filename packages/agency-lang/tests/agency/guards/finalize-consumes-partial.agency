@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // THE load-bearing fixture — the spec's walked example, values verbatim:
 // verify saves "v-partial" and trips; code's statement-site check binds
@@ -23,7 +22,7 @@ def code(): string {
 }
 
 node main() {
-  const result = guard(cost: 0.000001) as {
+  const result = guard(cost: 0.000001) {
     return code()
   }
   if (isFailure(result)) { return "unexpected" }

@@ -11,10 +11,9 @@
 // This exercises what no in-program fixture can: inline handlers answer
 // before any halt, so only this path serializes and restores a mutated
 // guard and replays the raise site against a recorded answer.
-import { guard } from "std::thread"
 
 node main() {
-  const r = guard(cost: 0.000001) as {
+  const r = guard(cost: 0.000001) {
     const a = llm("Reply with: one")
     const b = llm("Reply with: two")
     const c = llm("Reply with: three")

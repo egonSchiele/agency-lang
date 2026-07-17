@@ -421,6 +421,10 @@ function generateFunctionSection(
   if (fns.length === 0) return null;
   const _parts = fns.map((fn) => {
     if (!fn.exported) return null; // skip non-exported functions
+    // Underscore-prefixed exports are internal plumbing (e.g. `_guard`,
+    // the guard construct's lowering target) — exported for the
+    // compiler's sake, not the user's. Their story belongs in docs/dev.
+    if (fn.functionName.startsWith("_")) return null;
     const sig = generator.signatureOf(fn);
     return section(
       heading(3, fn.functionName),

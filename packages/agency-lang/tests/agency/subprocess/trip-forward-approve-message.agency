@@ -11,9 +11,9 @@ import { compile, run } from "std::agency"
 // verdict.
 node main() {
   const source = """
-import { guard, getThread, currentThreadId } from "std::thread"
+import { getThread, currentThreadId } from "std::thread"
 node main() {
-  const r = guard(cost: $0.000001, label: "child-budget") as {
+  const r = guard(cost: $0.000001, label: "child-budget") {
     const a = llm("Reply with: one")
     const b = llm("Reply with: two")
     return b

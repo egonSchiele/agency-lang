@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // The approve({message}) feedback channel (resumable guards PR 4).
 // Three approvals, three messages, two delivery paths:
@@ -26,13 +25,13 @@ def spin(rounds: number): string {
 
 node main() {
   handle {
-    const warm = guard(time: 100ms, label: "clock") as {
+    const warm = guard(time: 100ms, label: "clock") {
       const s = spin(300000)
       return s
     }
     if (isFailure(warm)) { return "clock-failed" }
-    const spend = guard(cost: $0.0000015, label: "outer") as {
-      const inner = guard(cost: $0.000001, label: "inner") as {
+    const spend = guard(cost: $0.0000015, label: "outer") {
+      const inner = guard(cost: $0.000001, label: "inner") {
         const a = llm("first")
         const b = llm("second")
         return b

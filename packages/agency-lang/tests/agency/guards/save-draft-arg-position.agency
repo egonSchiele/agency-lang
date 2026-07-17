@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // The cross-type hole from the PR-review repro: a call in ARGUMENT
 // position aborts. leaf's partial is string-typed; the guard block is
@@ -19,7 +18,7 @@ def f(x: string): number {
 
 node argPositionDrops() {
   const arr = [leaf]
-  const r = guard(time: 600ms) as {
+  const r = guard(time: 600ms) {
     return f(arr[0]())
   }
   if (isFailure(r)) { return "failed-no-cross-type-salvage" }
@@ -40,7 +39,7 @@ def f2(x: string): string {
 }
 
 node outerCallSalvages() {
-  const r = guard(time: 600ms) as {
+  const r = guard(time: 600ms) {
     return f2(g())
   }
   if (isFailure(r)) { return "unexpected-failure" }

@@ -31,6 +31,7 @@ import { MarkDestructiveRan } from "./types/markDestructiveRan.js";
 import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
 import { FinalizeBlock } from "./types/finalizeBlock.js";
+import { GuardBlock } from "./types/guardBlock.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
 import { WithModifier } from "./types/withModifier.js";
 import { StaticStatement } from "./types/staticStatement.js";
@@ -70,6 +71,7 @@ export * from "./types/markDestructiveRan.js";
 export * from "./types/forLoop.js";
 export * from "./types/handleBlock.js";
 export * from "./types/finalizeBlock.js";
+export * from "./types/guardBlock.js";
 export * from "./types/keyword.js";
 export * from "./types/debuggerStatement.js";
 export * from "./types/blockArgument.js";
@@ -331,6 +333,7 @@ export type AgencyNode =
   | AwaitPending
   | HandleBlock
   | FinalizeBlock
+  | GuardBlock
   | WithModifier
   | StaticStatement
   | DebuggerStatement

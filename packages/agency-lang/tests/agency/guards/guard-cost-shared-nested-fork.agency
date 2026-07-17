@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Nested fork — verifies inheritance walks more than one level deep.
 // OUTER guard is at depth 0. A first fork creates depth-1 branches;
@@ -37,7 +36,7 @@ def doInnerFork(d1: number): string[] {
 }
 
 node main() {
-  const outer = guard(cost: 0.000005) as {
+  const outer = guard(cost: 0.000005) {
     let outerResults = fork([1, 2]) as d1 {
       return doInnerFork(d1)
     }

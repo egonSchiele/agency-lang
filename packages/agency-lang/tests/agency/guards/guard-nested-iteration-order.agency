@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Both guards' limits are below SYNTHETIC_COST (0.000002), so the
 // single LLM call inside the inner guard trips BOTH at once. The
@@ -14,8 +13,8 @@ import { guard } from "std::thread"
 // The outer guard's body catches the inner Failure and returns a
 // string that exposes inner.maxCost, which the test asserts.
 node main() {
-  const outer = guard(cost: 0.0000001) as {
-    const inner = guard(cost: 0.0000005) as {
+  const outer = guard(cost: 0.0000001) {
+    const inner = guard(cost: 0.0000005) {
       const r = llm("hi")
       return r
     }

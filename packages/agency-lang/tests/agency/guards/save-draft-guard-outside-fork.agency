@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 def branch(tag: string): string {
   saveDraft(tag)          // on the BRANCH's own stack — parent guard can't see it
@@ -6,7 +5,7 @@ def branch(tag: string): string {
 }
 
 node main() {
-  const result = guard(cost: 0.000001) as {
+  const result = guard(cost: 0.000001) {
     const tags = fork(["a", "b"]) as t {
       return branch(t)
     }

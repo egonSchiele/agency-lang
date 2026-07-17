@@ -1,5 +1,4 @@
 import { compile, run } from "std::agency"
-import { guard } from "std::thread"
 
 // The child makes 3 mocked llm() calls at 0.000002 each. The parent guard
 // caps at 0.000003: the second call's telemetry pushes spent to 0.000004,
@@ -19,7 +18,7 @@ node main() {
     return "compile failed"
   }
   handle {
-    const result = guard(cost: 0.000003) as {
+    const result = guard(cost: 0.000003) {
       return run(compiled: compileResult.value, node: "main")
     }
     if (isFailure(result)) {

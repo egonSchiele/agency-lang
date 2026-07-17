@@ -28,7 +28,7 @@ effect std::agents::planApprove {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L14))
 
 ## Functions
 
@@ -50,7 +50,7 @@ Build the writeAgency instruction: emit a program whose `node main` composes
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L40))
 
 ### renderEffects
 
@@ -69,7 +69,7 @@ Human-readable capability envelope for the approval prompt, or an honest
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L68))
 
 ### runApproved
 
@@ -93,7 +93,7 @@ runApproved(
 
 **Returns:** [PlanState](#planstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L133))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L132))
 
 ### plannerAgent
 
@@ -104,7 +104,7 @@ plannerAgent(
   plan: string = "",
   maxCost: number = $100.00,
   maxTime: number = 60m,
-): string raises <std::agents::planApprove>
+): string raises <std::agents::planApprove, std::guard>
 ```
 
 Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
@@ -131,4 +131,4 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L151))

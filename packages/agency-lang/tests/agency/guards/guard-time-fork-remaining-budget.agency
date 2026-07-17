@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Clones inherit the parent's REMAINING budget, not a fresh one: the
 // parent burns ~450ms of a 600ms budget before forking, so the branch
@@ -14,7 +13,7 @@ import { guard } from "std::thread"
 // under the full budget — checked loosely via type only here, with
 // the precise inheritance math pinned by the unit tests.
 node main() {
-  const result = guard(time: 600ms) as {
+  const result = guard(time: 600ms) {
     sleep(450ms)
     fork([1]) as n {
       sleep(1s)

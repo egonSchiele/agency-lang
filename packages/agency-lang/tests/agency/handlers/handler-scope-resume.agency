@@ -11,7 +11,6 @@
 // This also exercises the registration memo across a real restore: the
 // resumed run replays the handle registration and must reconstruct the
 // same scoping.
-import { guard } from "std::thread"
 
 def work() {
   const a = llm("Reply with: one")
@@ -22,7 +21,7 @@ def work() {
 
 node main() {
   handle {
-    const r = guard(cost: 0.0000025) as {
+    const r = guard(cost: 0.0000025) {
       return work()
     }
     if (isFailure(r)) {

@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Fork inside a guard. Each branch spends SYNTHETIC_COST = 0.000002.
 // With the shared-guard model (cloneForBranch returns `this`), the
@@ -15,7 +14,7 @@ import { guard } from "std::thread"
 // shared guards there's no V1 deferral — the trip fires the moment
 // any branch's charge pushes the shared counter over.
 node main() {
-  const result = guard(cost: 0.000001) as {
+  const result = guard(cost: 0.000001) {
     fork([1, 2, 3]) as n {
       const r = llm("branch ${n}")
     }

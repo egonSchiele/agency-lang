@@ -1,4 +1,3 @@
-import { guard } from "std::thread"
 
 // Nested time guards. The inner guard has a tight budget (20ms) and
 // trips on the long sleep; the outer has a generous budget (5s) and
@@ -13,8 +12,8 @@ import { guard } from "std::thread"
 // is identical on both paths. On a fast run the handler never fires.
 node main() {
   handle {
-  const outer = guard(time: 5s) as {
-    const inner = guard(time: 20ms) as {
+  const outer = guard(time: 5s) {
+    const inner = guard(time: 20ms) {
       sleep(150ms)
       sleep(1ms)
       return "inner ran"

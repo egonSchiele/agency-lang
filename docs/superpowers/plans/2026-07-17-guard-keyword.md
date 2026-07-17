@@ -139,10 +139,20 @@ builder never does.
 
 **Interfaces:**
 - Produces: `type GuardBlock = { type: "guardBlock"; cost: Expression | null;
-  time: Expression | null; label: Expression | null; legacyAs: boolean;
-  body: AgencyNode[]; loc?: Loc }`. Every later task consumes this
-  exact shape. `legacyAs` records that the source had `as` (parsed,
-  ignored) so the formatter test can assert it is dropped on print.
+  time: Expression | null; label: Expression | null;
+  argOrder: ("cost" | "time" | "label")[]; body: AgencyNode[];
+  loc?: Loc }`. Every later task consumes this exact shape. `argOrder`
+  records the source order of the named arguments so the formatter can
+  print them as written. A legacy `as` in the source is parsed and
+  simply discarded — nothing downstream needs to know it was there
+  (the formatter test asserts on printed OUTPUT, not on a node field).
+
+Terminology used throughout this plan: the **head** is everything
+between the `guard` keyword and the block — the parenthesized
+`cost:` / `time:` / `label:` list in `guard(cost: $1, time: 5m) { ... }`.
+Head arguments are ordinary named arguments; the word only
+distinguishes them from the block, since the construct is not a
+function call.
 
 - [ ] **Step 1: write the failing bodySlots test**
 
@@ -156,7 +166,7 @@ it("guardBlock exposes its body slot", () => {
     cost: null,
     time: null,
     label: null,
-    legacyAs: false,
+    argOrder: [],
     body: [{ type: "returnStatement", value: null }],
   } as any;
   expect(bodySlots(node).map((s) => s.body)).toEqual([node.body]);
@@ -185,9 +195,9 @@ export type GuardBlock = {
   cost: Expression | null;
   time: Expression | null;
   label: Expression | null;
-  /** True when the source used the legacy `guard(head) as { }` form.
-   *  Parsed and ignored; the formatter never prints it. */
-  legacyAs: boolean;
+  /** Source order of the named arguments, for source-faithful
+   *  formatting. */
+  argOrder: ("cost" | "time" | "label")[];
   body: AgencyNode[];
   loc?: { line: number; col: number };
 };
@@ -234,12 +244,12 @@ const HEAD_CASES = [
 
 1. Each head case inside `node main() { const r = ... }` produces a
    `guardBlock` node as the declaration value, with the named args
-   mapped to the right fields and `legacyAs: false`.
+   mapped to the right fields and `argOrder` reflecting source order.
 2. Return position: `node main() { return guard(cost: $1) { return 1 } }`.
 3. Statement position: bare `guard(time: 5ms) { doWork() }` inside a
    node body parses as an expression statement holding a `guardBlock`.
-4. Legacy `as`: `guard(cost: $1) as { return 1 }` parses identically
-   with `legacyAs: true`.
+4. Legacy `as`: `guard(cost: $1) as { return 1 }` parses to a node
+   deep-equal to the `as`-less form (the `as` leaves no trace).
 5. Word boundary: `guardrails(x)` parses as a plain `functionCall`.
 6. No block → not claimed: `const g = guard(1)` (a call to a
    user-defined `guard` function) still parses as a `functionCall` —
@@ -292,8 +302,8 @@ export const guardBlockParser: Parser<GuardBlock> = label(
     optionalSpaces,
     char(")"),
     optionalSpaces,
-    // legacy `as`, accepted and recorded
-    capture(optional(map(seqC(str("as"), spaces), () => true)), "legacyAs"),
+    // legacy `as`: accepted and DISCARDED — it leaves no trace on the node
+    optional(seqC(str("as"), spaces)),
     optionalSpaces,
     char("{"),                    // ← the commit point: no `{`, no claim
     captureCaptures(parseError(
@@ -307,9 +317,9 @@ export const guardBlockParser: Parser<GuardBlock> = label(
 );
 ```
 
-Post-map `_args`/`legacyAs` into the node fields (null / false
-defaults). The `char("{")` placement is what makes case 6 fall through:
-tarsec failure before consuming commits nothing.
+Post-map `_args` into the node fields (null defaults; `argOrder` from
+the parse order). The `char("{")` placement is what makes case 6 fall
+through: tarsec failure before consuming commits nothing.
 
 - [ ] **Step 5: register it**
 
@@ -323,7 +333,7 @@ tarsec failure before consuming commits nothing.
   Also sanity-parse a real file:
   `pnpm run ast tests/agency/guards/trip-time.agency > /dev/null` (old
   syntax must still parse — it is now claimed by the construct via the
-  legacy-`as` arm, which is fine: same fields, `legacyAs: true`).
+  legacy-`as` arm, producing the same node the new syntax would).
 
   **Watch out:** `trip-time.agency` and friends parse guard through the
   construct now. Until Task 4's desugar exists, compilation of guard
@@ -361,13 +371,11 @@ it("prints guard canonically and drops legacy as", () => {
 
 - [ ] **Step 2: run, watch fail.**
 
-- [ ] **Step 3: implement the print case** — source-ordered args is the
-  parsed field order? No: the node stores three fixed fields. To keep
-  source order, have Task 2's post-map ALSO record
-  `argOrder: ("cost"|"time"|"label")[]` on the node (add the field to
-  the Task 1 type now — one line), and print in that order. Skip absent
-  args. Body prints through the same block-printing helper
-  `handleBlock` uses.
+- [ ] **Step 3: implement the print case** — print the named arguments
+  in `argOrder` (the node's record of source order — the three typed
+  fields alone cannot express it), skipping absent ones. Body prints
+  through the same block-printing helper `handleBlock` uses. Never
+  print `as`.
 
 - [ ] **Step 4: pass + fmt smoke** — run the test; then
   `pnpm run fmt tests/agency/guards/guard-time-trip.agency | head -30`

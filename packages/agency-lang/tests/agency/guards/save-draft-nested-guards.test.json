@@ -4,10 +4,29 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"true\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "pong" }, { "return": "pong" }],
-      "description": "Inner guard salvages and sweeps its region; the outer trip must not read the swept inner draft."
+      "llmMocks": [
+        {
+          "return": "pong"
+        },
+        {
+          "return": "pong"
+        }
+      ],
+      "description": "Inner guard salvages and sweeps its region; the outer trip must not read the swept inner draft.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        },
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

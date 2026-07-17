@@ -4,10 +4,23 @@
       "nodeName": "main",
       "input": "",
       "expectedOutput": "\"run7/report/v1\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "pong" }],
-      "description": "A finalize reads a module global, a param, and the bound partial — frame and non-frame variable kinds all resolve."
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ],
+      "description": "A finalize reads a module global, a param, and the bound partial \u2014 frame and non-frame variable kinds all resolve.",
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ]
     }
   ]
 }

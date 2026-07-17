@@ -1,0 +1,99 @@
+// Trip visibility and precedence rules. Mocked llm() cost = 0.000002.
+import { guard } from "std::thread"
+
+const log = []
+
+// 1. A handler registered INSIDE the guard cannot adjudicate that
+// guard's own trip: the trip skips it and surfaces (the harness
+// rejects). If eligibility broke, the inner handler would approve and
+// the block would finish — a different output.
+node insideGuardBlind() {
+  const r = guard(cost: 0.000001) as {
+    handle {
+      const a = llm("Reply with: one")
+      return a
+    } with (i) {
+      return match(i.effect) {
+        "std::guard" => approve({ maxCost: 1.0 })
+        _ => pass()
+      }
+    }
+  }
+  if (isFailure(r)) { return "surfaced-past-inside-handler" }
+  return "BUG:inside-handler-adjudicated:${r.value}"
+}
+
+// 2. Propagate discards accumulated approvals: the inner handler
+// approves, the outer propagates, the user (harness) rejects — the
+// grant evaporates and the salvage pipeline runs.
+node propagateDiscards() {
+  handle {
+    handle {
+      const r = guard(cost: 0.000001) as {
+        const a = llm("Reply with: one")
+        return a
+      }
+      if (isFailure(r)) { return "rejected-by-user" }
+      return "BUG:approval-survived-propagate:${r.value}"
+    } with (i) {
+      return match(i.effect) {
+        "std::guard" => approve({ maxCost: 1.0 })
+        _ => pass()
+      }
+    }
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => propagate()
+      _ => pass()
+    }
+  }
+}
+
+// 3. The interrupt data carries the scope's savedDraft as a PREVIEW,
+// and a reject still salvages it authoritatively through the normal
+// pipeline: the guard converts the trip to success(draft).
+node draftPreview() {
+  handle {
+    const r = guard(cost: 0.000001) as {
+      saveDraft("the-draft")
+      const a = llm("Reply with: one")
+      return a
+    }
+    if (isFailure(r)) { return "no-salvage" }
+    return "${log[0]}|salvaged:${r.value}"
+  } with (i) {
+    if (i.effect == "std::guard") {
+      log.push("preview:${i.data.draftValue}")
+      return reject()
+    }
+    return pass()
+  }
+}
+
+// 4. Grants never cross budgets: approving the INNER guard's trip does
+// not widen the OUTER guard. The granted spend pushes the outer over
+// its own limit, and the outer trips separately, under its own label.
+// If grants crossed, the outer would never trip and the log would have
+// one entry.
+node grantsNeverCross() {
+  handle {
+    const outer = guard(label: "outer", cost: 0.000003) as {
+      const inner = guard(label: "inner", cost: 0.000001) as {
+        const a = llm("Reply with: one")
+        const b = llm("Reply with: two")
+        return "inner-done"
+      }
+      if (isFailure(inner)) { return "unexpected-inner-failure" }
+      return inner.value
+    }
+    if (isFailure(outer)) { return "unexpected-outer-failure" }
+    log.push(outer.value)
+  } with (i) {
+    if (i.effect == "std::guard") {
+      log.push("trip:${i.data.label}")
+      return approve({ maxCost: 0.01 })
+    }
+    return pass()
+  }
+  return log
+}

@@ -301,6 +301,14 @@ function pushGuardImpl(
     stack.pushGuard(g);
     ids.push(g.guardId);
   }
+  // Stamp every member with the whole scope: one Agency-level guard()
+  // call IS this id array (a cost+time guard is two runtime objects),
+  // and either member must be able to find its sibling — the trip
+  // interrupt carries the scope, and approve resolves it by these ids.
+  // Serialized with each guard; TimeGuard.cloneForBranch hand-copies it.
+  for (const g of stack.guards) {
+    if (ids.includes(g.guardId)) g.scopeIds = ids;
+  }
   return ids;
 }
 

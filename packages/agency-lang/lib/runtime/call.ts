@@ -6,6 +6,7 @@ import {
   describeFailureCallTarget,
 } from "./failurePropagation.js";
 import { isFailure } from "./result.js";
+import { hasInterrupts } from "./interrupts.js";
 import { type AbortedResult, isAborted } from "./abortedResult.js";
 
 /** Find an aborted result among a call's arguments (`f(g())` where g was
@@ -17,6 +18,32 @@ import { type AbortedResult, isAborted } from "./abortedResult.js";
  *  Interrupt[] does today; the abort signal is still firing, so the
  *  callee's next leaf op re-trips. Both systems share the fix whenever
  *  one lands. */
+/** An Interrupt[] must never enter another call as an argument either —
+ *  same boundary as findAbortedArg, same shape. Before guard trips, an
+ *  interrupting call in argument position was impossible: the checker
+ *  hoists statically-visible interrupting calls to statement position.
+ *  A guard trip is the first RUNTIME-ONLY interrupt source, so `f(g())`
+ *  where g trips inside is the first way an Interrupt[] can reach an
+ *  argument slot — without this check it would flow into the callee as
+ *  a value ("[object Object]"). Pass it through as the call's own
+ *  result so the caller's post-call interrupt guard halts and the
+ *  batch surfaces normally. */
+function findInterruptArg(descriptor: CallType): unknown | undefined {
+  const positional =
+    descriptor.type === "positional"
+      ? descriptor.args
+      : descriptor.positionalArgs;
+  for (const arg of positional) {
+    if (hasInterrupts(arg)) return arg;
+  }
+  if (descriptor.type === "named") {
+    for (const value of Object.values(descriptor.namedArgs)) {
+      if (hasInterrupts(value)) return value;
+    }
+  }
+  return undefined;
+}
+
 function findAbortedArg(descriptor: CallType): AbortedResult | undefined {
   const positional =
     descriptor.type === "positional"
@@ -65,6 +92,10 @@ export async function __call(
   if (abortedArg !== undefined) {
     return abortedArg.droppedAtArgPosition();
   }
+  const interruptArg = findInterruptArg(descriptor);
+  if (interruptArg !== undefined) {
+    return interruptArg;
+  }
   if (AgencyFunction.isAgencyFunction(target)) {
     return target.invoke(descriptor);
   }
@@ -109,8 +140,13 @@ export async function __callMethod(
     return undefined;
   }
 
-  // Same argument rule as __call: an aborted result never enters a method
-  // call; the abort continues without its partial.
+  // Same argument rules as __call: an aborted result never enters a
+  // method call (the abort continues without its partial), and an
+  // Interrupt[] passes through as the call's own result.
+  const interruptArg = findInterruptArg(descriptor);
+  if (interruptArg !== undefined) {
+    return interruptArg;
+  }
   const abortedArg = findAbortedArg(descriptor);
   if (abortedArg !== undefined) {
     return abortedArg.droppedAtArgPosition();

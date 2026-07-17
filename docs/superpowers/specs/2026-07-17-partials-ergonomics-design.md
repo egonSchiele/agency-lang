@@ -1,0 +1,283 @@
+# Spec: partials ergonomics — `saveDraft` as a tool, and `finalize as draft`
+
+**Status:** brainstormed with the owner 2026-07-17; decisions settled;
+awaiting owner review of this spec. Builds on the partial-results
+machinery (saveDraft #553, finalize #556, resumable guards #558–#566)
+and the guard construct (#574). Examples use the construct syntax, so
+this ships after #574.
+
+**Scope:** two independent features, one theme — partials become
+first-class citizens of the agent loop. The model can save them, and
+the finalize can read them.
+
+---
+
+## Part 1: Background
+
+### What exists today
+
+`saveDraft(value)` records a best-so-far value on the calling scope's
+frame. When a guard trip is rejected, the guard returns the last saved
+draft as a success instead of a failure. A `finalize` block computes
+the salvage value instead: it runs when the scope aborts, sees the
+scope's locals, and its return wins over the saved draft, with the
+draft as fallback if the finalize throws (`AbortedResult.withFinalize`,
+`lib/runtime/abortedResult.ts:141`).
+
+Two gaps motivated this spec:
+
+1. **The model cannot save drafts.** In an agent loop, the model is
+   the one doing the work, but only the surrounding Agency code can
+   call `saveDraft`. Passing `saveDraft` in `tools:` today would
+   register it as an ordinary tool — and file the draft on the tool
+   invocation's own frame, which dies when the tool call ends.
+   Parallel tool calls run in branch stacks that are collected at the
+   end of the round, so the draft would never reach the scope whose
+   return value it approximates.
+2. **The finalize cannot see the draft.** The saved draft lives in a
+   frame slot, not a local, so a finalize that wants to return "the
+   draft, plus a note" has no way to read it. In hindsight this is a
+   strange gap: the two salvage tools cannot compose.
+
+### Decisions from the brainstorm (owner, 2026-07-17)
+
+1. **Tool-loop interception**, not frame-walking, for the saveDraft
+   tool. The loop knows which scope owns it; a walk from the tool's
+   branch stack back to the owner is fragile under every future
+   concurrency change.
+2. **Concurrency is a non-issue by state isolation.** Each `llm()`
+   call runs on its own branch stack, so each call's drafts file on
+   its own branch. Within one round, parallel saveDraft tool calls
+   apply in tool-call order, the same order tool results append.
+3. **The tool's JSON schema must say what the contract is**: exactly
+   one parameter, whose type is the return type of the enclosing
+   function or scope.
+4. **The finalize binder uses `as`, not parameter syntax.**
+   `finalize (draft) { }` looks like a call. The draft is a value
+   YIELDED to the block, and Agency already has syntax for that:
+   `fork([1, 2]) as n { }`. So: `finalize as draft { }` and
+   `finalize() as draft { }` are both accepted, with a user-chosen
+   binder name. This is also consistent with AG4006's rule that block
+   keywords take no `as` when there is nothing to bind — a finalize
+   with a yielded draft HAS something to bind.
+
+---
+
+## Part 2: `saveDraft` as a tool
+
+### Surface
+
+```ts
+def researchAgent(topic: string): string {
+  const r = guard(cost: $0.50) {
+    return llm("Research " + topic + ". Save a draft as you complete each section.", {
+      tools: [search, saveDraft]
+    })
+  }
+  if (isSuccess(r)) { return r.value }
+  return "no result"
+}
+```
+
+The model sees a `saveDraft` tool. Each call replaces the draft, last
+save wins. If the guard trips mid-request and the trip is rejected,
+the salvage pipeline runs as always — and now the draft is whatever
+the model most recently saved. The trip question's `draftValue`
+preview shows it too, so a handler judging "more budget or keep what
+we have?" sees the model's own best-so-far.
+
+### Recognition: identity, not name
+
+The tool loop intercepts when an entry in the tools array IS the
+stdlib `saveDraft` function. Recognition checks the AgencyFunction's
+`name` and `module` fields (`"saveDraft"` from
+`"stdlib/index.agency"`) — the runtime cannot import the stdlib
+singleton directly without a dependency cycle, and no user module can
+carry that module id, so the field pair is identity in practice.
+Aliasing works for free: `const s = saveDraft; tools: [s]` still
+intercepts, and a user's own function named `saveDraft` is an
+ordinary tool.
+
+### What interception does
+
+When the model calls the intercepted tool, the loop does NOT invoke
+the AgencyFunction. It:
+
+1. Files the draft on the loop's own scope:
+   `stateStack.setSavedDraft(value)` with the stack `runPrompt` is
+   executing under. That is the same branch-local stack the owner's
+   drafts already use, which is what makes the concurrency story
+   "state isolation, nothing to decide".
+2. Returns an acknowledgment as the tool result, e.g.
+   `Draft saved (214 characters).` The model gets confirmation; the
+   result rides the normal tool-result machinery, so resume
+   idempotency comes for free (a completed round's draft is already
+   serialized in the restored frame — drafts survive checkpoints).
+3. Emits the standard toolCall statelog events, so the trace shows
+   when and what the model saved.
+
+### The schema
+
+The tool definition sent to the provider declares exactly one
+required parameter:
+
+- **Name:** `value`.
+- **Type:** the JSON schema of the enclosing function or node's
+  DECLARED return type, built with the same type-to-schema bridge
+  `schema(Type)` uses. `def researchAgent(...): string` produces
+  `{ "type": "string" }`; a structured return type produces its
+  object schema.
+- **Fallback:** when the enclosing scope has no declared return type,
+  or the type is `any`, the schema falls back to `string`. Inferred
+  types are not available to codegen (the typechecker and the builder
+  are separate passes), and a string draft is the honest default for
+  agent loops.
+- **Description:** states the contract the type system cannot check
+  here: "Save your best-so-far answer as a draft. If the budget runs
+  out, the last saved draft is returned instead of a failure. The
+  value must match this function's return type."
+
+Codegen threads the enclosing scope's return-type schema into the
+`llm()` call site (the builder statically knows the enclosing def).
+The loop only builds the saveDraft tool definition when the tools
+array actually contains the intercepted function.
+
+### Interactions worth pinning
+
+- **Feedback channel:** `approve({message: "save a draft before each
+  new topic"})` teaches the model to checkpoint. No new machinery —
+  the message lands as a user message before the next request.
+- **Mid-request trips:** a time trip that cancels the in-flight
+  request keeps every draft saved in completed rounds. The cancelled
+  generation is gone; its unsaved progress is gone with it. That is
+  the feature's pitch in one line: teach the model to save, and
+  cancellation stops being total loss.
+- **The level rule is unchanged.** The draft files on the scope that
+  owns the `llm()` call. Where that scope's partial travels — call
+  boundaries, forks, joins — follows the existing rules.
+
+### What this does NOT do
+
+- No automatic injection. `saveDraft` is a tool only when the user
+  passes it. Guards do not silently add tools to model calls.
+- No runtime type validation of the draft against the return type.
+  The schema and description communicate the contract; a model that
+  violates it produces an ill-typed salvage, the same trust level as
+  every other tool argument. Documented in the guide.
+
+---
+
+## Part 3: `finalize as draft`
+
+### Surface
+
+```ts
+def research(topic: string): string {
+  const outline = draftOutline(topic)
+  const full = expand(outline)
+  return full
+
+  finalize as draft {
+    if (draft != null) {
+      return draft + "\n\n[Stopped early: may be incomplete]"
+    }
+    if (outline != null) {
+      return "OUTLINE ONLY: " + outline
+    }
+    return "nothing yet"
+  }
+}
+```
+
+All four head forms parse: `finalize { }`, `finalize() { }`,
+`finalize as draft { }`, `finalize() as draft { }`. The binder name is
+the user's choice. The formatter prints the canonical form without
+parens: `finalize { }` or `finalize as draft { }`.
+
+### Semantics
+
+- The binder is the SCOPE'S OWN saved draft at the moment the abort
+  reaches the finalize, or null when nothing was saved. It is not some
+  callee's draft: the finalize belongs to the scope, so it sees the
+  scope's slot. A callee's salvage arrives through ordinary locals,
+  as today.
+- Everything else is unchanged. The finalize still runs only on
+  abort, still wins over the draft, and the draft is still the
+  fallback when the finalize throws. The binder makes the choice
+  explicit instead of implicit: a finalize that wants the draft
+  returns it.
+
+### Typing
+
+The binder declares in the finalize's scope with type `T | null`,
+where `T` is the scope's declared or inferred return type. This fits
+the existing finalize rule that every captured local reads as
+possibly-null, so the checker treatment is uniform: one more
+possibly-null name, with a real type instead of a repurposed local.
+
+### Mechanics (pointers, not code)
+
+- **Parser:** `finalizeBlockParser` (`lib/parsers/parsers.ts`) gains
+  an optional empty-parens group and an optional `as <name>` binder
+  between the keyword and the brace, with the word-boundary care the
+  keyword already has.
+- **AST:** `FinalizeBlock` gains `binder: string | null`. The
+  formatter prints it; `bodySlots` is unchanged (the binder is not a
+  body).
+- **Checker:** declare the binder in the finalize scope as
+  `T | null`. The existing finalize checks (no interrupts, one per
+  scope, return-position call restriction) are untouched.
+- **Codegen:** the finalize closure gains one parameter; the abort
+  path passes the frame's saved draft. `AbortedResult.withFinalize`'s
+  `finalize` argument becomes `(draft: unknown) => Promise<unknown>`,
+  and its caller reads the slot off the frame it already holds. The
+  salvage order does not move: the draft is read BEFORE the finalize
+  runs and passed in; if the finalize throws, the same value is the
+  fallback.
+
+---
+
+## Part 4: Testing
+
+**saveDraft tool:**
+
+- Fixture: a mocked llm call whose mock issues a `saveDraft` tool
+  call, then trips the guard on the next round; reject; the guard
+  returns the model's draft as a success. The mock's second entry
+  never runs.
+- Fixture: alias (`const s = saveDraft`) intercepts identically; a
+  user-defined function named `saveDraft` in `tools:` runs as an
+  ordinary tool and files nothing.
+- Fixture: two parallel tool calls saving in one round apply in
+  tool-call order; the later one wins.
+- Unit: the synthesized tool definition — one required `value` param,
+  schema from a declared string return, schema from a declared object
+  return, string fallback for an undeclared return, and the
+  description text.
+- Resume: a checkpoint after a draft-saving round restores the draft
+  (existing serialization; pin it from the tool path).
+
+**finalize binder:**
+
+- Parser: all four head forms; binder name freedom; formatter
+  round-trip prints canonically.
+- Checker: binder typed `T | null` (assigning it to `T` unguarded is
+  the existing possibly-null error); binder name shadows nothing
+  outside the finalize.
+- Fixtures: finalize returns the bound draft (salvage equals the
+  draft plus a suffix); binder is null when nothing was saved;
+  finalize-throws falls back to the same draft that was bound.
+
+---
+
+## Part 5: Out of scope, recorded so they stay decisions
+
+- Runtime validation of model-saved drafts against the return type.
+- Auto-adding `saveDraft` to guarded llm calls.
+- Return-type schemas from INFERRED types (needs a typechecker-to-
+  codegen handoff that does not exist; declared types only).
+- A binder for the trip handler's `draftValue` (it already exists in
+  `i.data`).
+- Sizing: the finalize binder is roughly a day. The saveDraft tool is
+  one to two days, mostly the schema threading. They make one tidy PR
+  or two small ones, after #574 lands.

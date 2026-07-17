@@ -1,0 +1,8 @@
+    tell application "Notes"
+      set d to (ASCII character 1)
+      set out to ""
+      repeat with n in (notes of folder (item 1 of argv))
+        {{{noteRow}}}
+      end repeat
+      return out
+    end tell

@@ -12,8 +12,9 @@ import {
 import { parse, renderForHtml } from "std::markdown"
 
 /** @module
-  Create, read, search, and edit notes in the macOS Notes app. macOS only, and
-  the first call asks for Automation permission.
+  Create, read, search, and edit notes in the macOS Notes app. macOS only.
+  The first call asks for Automation permission with a system dialog. If
+  nobody answers the dialog, the call fails after 30 seconds.
 
   ```ts
   import { createNote } from "std::notes/apple"
@@ -24,18 +25,101 @@ import { parse, renderForHtml } from "std::markdown"
   }
   ```
 
-  Notes are addressed by their opaque `id`, not by title, because two notes in
-  the same folder may share a title. Get ids from `listNotes` or `searchNotes`.
+  ## Notes are addressed by id
 
-  Every function takes an optional `folder`, which constrains rather than
-  addresses: if you pass it, the call fails unless the note is in that folder.
-  Combined with partial application, that confines an agent to one folder in a
-  way the model cannot see or route around:
+  Two notes in the same folder can share a title, so a title is not an
+  address. Every read and edit takes the note's `id`, which comes from
+  `listNotes` or `searchNotes`:
 
   ```ts
-  const inbox = createNote.partial(folder: "Agency Inbox").rename("addToInbox")
-  llm("Log your findings", { tools: [inbox] })
+  import { searchNotes, appendToNote } from "std::notes/apple"
+
+  node main() {
+    const found = searchNotes("Q3 planning")
+    if (found is success(notes)) {
+      appendToNote(notes[0].id, "\n## Update\n\nShipped.")
+    }
+  }
   ```
+
+  `createNote` returns the note it made, including its id, so
+  create-then-append needs no search.
+
+  ## Bodies are Markdown going in, plain text coming out
+
+  `createNote` and `appendToNote` take Markdown and convert it to the HTML
+  that Notes stores. `readNote` returns plain text. That makes a
+  read-then-write round trip lossy: reading strips the formatting, and
+  writing the text back would flatten the note. Use `appendToNote` instead
+  of reading, editing, and rewriting a note yourself.
+
+  ## Confining an agent to one folder
+
+  Every function takes an optional `folder`. It constrains rather than
+  addresses: if you pass it, the call fails unless the note is in that
+  folder. Combined with partial application, that confines an agent in a way
+  the model cannot see or route around, because the locked parameter is
+  stripped from the tool's schema:
+
+  ```ts
+  import { listNotes, readNote } from "std::notes/apple"
+
+  node main() {
+    const reader = readNote.partial(folder: "Work").rename("readWorkNote")
+    const lister = listNotes.partial(folder: "Work").rename("listWorkNotes")
+    llm("Summarise my Work notes", { tools: [lister, reader] })
+  }
+  ```
+
+  The model may pass any id it likes. Anything outside Work fails closed.
+
+  ## Deciding with a policy
+
+  Each operation raises its own effect, so a policy can approve reads and
+  reject deletes:
+
+  ```json
+  {
+    "std::notes::read": [
+      { "match": { "folder": "Work" }, "action": "approve" },
+      { "action": "reject" }
+    ],
+    "std::notes::delete": [{ "action": "reject" }]
+  }
+  ```
+
+  `readNote`, `appendToNote`, and `deleteNote` look the note up before
+  raising their interrupt, so the payload carries the note's real `title`,
+  `folder`, and `account` even when the call passed only an id. The rule
+  above therefore matches a bare `readNote(id)` for a note that lives in
+  Work.
+
+  One v1 limit: only those three calls populate `account`. `createNote`,
+  `searchNotes`, and `listNotes` send it as an empty string, and an empty
+  string matches no glob. A rule that matches on `account` never applies to
+  them, so match on `folder` instead.
+
+  The `NotesRead`, `NotesWrite`, and `Notes` sets in `std::capabilities`
+  cover the same split for constraining a whole node.
+
+  ## Locked notes
+
+  A note locked with a password cannot be read or edited, and this module
+  will not try. Calls against a locked note fail before their interrupt is
+  raised, with a message naming the note.
+
+  ## Deleting is recoverable
+
+  `deleteNote` moves a note to Recently Deleted, where it stays for about
+  30 days. `listFolders` returns that folder like any other.
+
+  ## Other note apps
+
+  Obsidian needs no module. A vault is a directory of Markdown files, so
+  `std::fs` already covers it, and the same handlers, policies, and partial
+  application apply. Bear is not supported: its `x-callback-url` API cannot
+  deliver a callback to a command-line process, so a create call could not
+  return the new note's id.
 */
 
 /** A folder in Notes. `noteCount` is derived, not stored. */
@@ -92,16 +176,18 @@ type Preflight = {
 }
 
 /** Look the note up before raising the interrupt, so the payload can carry its
-    real title, folder, and account — the fields a policy glob matches on and a
-    human reads before approving. Without this, the payload would hold an opaque
-    id and empty strings, and no policy could ever match an append, read, or
-    delete.
+    real title, folder, and account. Those are the fields a policy glob matches
+    on and a human reads before approving. Without this, the payload would hold
+    an opaque id and empty strings, and no policy could ever match an append,
+    read, or delete.
 
-    Refusing a folder-assertion mismatch here, before the interrupt, keeps the
-    payload honest: the folder shown to the approver is always the note's real
-    folder. The TypeScript layer re-asserts the folder (by scoped lookup) and
-    the locked flag after the approval — that re-check is the safety guard;
-    this one exists for payload truth and a fail-fast error. */
+    This helper also refuses locked notes and folder mismatches, so both errors
+    precede the interrupt and a human never approves a call that is guaranteed
+    to fail. It keeps the payload honest too: the folder shown to the approver
+    is always the note's real folder. The TypeScript layer re-checks the folder
+    and the locked flag after the approval, because the note can change during
+    the approval window. Those re-checks are the belt and braces; this check is
+    what makes the error precede the interrupt. */
 def preflight(id: string, folder: string | null): Result<Preflight> {
   const meta = try _preflightNote(id)
   if (isFailure(meta)) {
@@ -109,6 +195,9 @@ def preflight(id: string, folder: string | null): Result<Preflight> {
   }
   if (folder != null && meta.value.folder != folder) {
     return failure("Note ${meta.value.title} is in folder ${meta.value.folder}, not ${folder}. Refusing.")
+  }
+  if (meta.value.locked) {
+    return failure("Note ${meta.value.title} is locked. Unlock it in Notes.app and retry.")
   }
   return meta
 }

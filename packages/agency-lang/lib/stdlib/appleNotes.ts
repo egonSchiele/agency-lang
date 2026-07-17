@@ -1,5 +1,23 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
+import renderWithTimeout from "../templates/applescript/notes/withTimeout.js";
+import renderAccountWalk from "../templates/applescript/notes/accountWalk.js";
+import renderPreflight from "../templates/applescript/notes/preflight.js";
+import renderReadUnscoped from "../templates/applescript/notes/readUnscoped.js";
+import renderReadScoped from "../templates/applescript/notes/readScoped.js";
+import renderNoteRow from "../templates/applescript/notes/noteRow.js";
+import renderListAll from "../templates/applescript/notes/listAll.js";
+import renderListInFolder from "../templates/applescript/notes/listInFolder.js";
+import renderSearchAll from "../templates/applescript/notes/searchAll.js";
+import renderSearchInFolder from "../templates/applescript/notes/searchInFolder.js";
+import renderListFolders from "../templates/applescript/notes/listFolders.js";
+import renderFolderExists from "../templates/applescript/notes/folderExists.js";
+import renderCreate from "../templates/applescript/notes/create.js";
+import renderAppendBody from "../templates/applescript/notes/appendBody.js";
+import renderAppendScoped from "../templates/applescript/notes/appendScoped.js";
+import renderAppendUnscoped from "../templates/applescript/notes/appendUnscoped.js";
+import renderDeleteScoped from "../templates/applescript/notes/deleteScoped.js";
+import renderDeleteUnscoped from "../templates/applescript/notes/deleteUnscoped.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -14,13 +32,13 @@ export const NOTES_TIMEOUT_SECONDS = 30;
  *  every editor and survives copy-paste unreliably. */
 export const FIELD_DELIM = "\u0001";
 
-/** Wrap an AppleScript body in the argv handler and our own timeout. */
+/** Wrap an AppleScript body in the argv handler and our own timeout.
+ *
+ *  The AppleScript sources live as typestache templates in
+ *  lib/templates/applescript/notes/. Edit the .mustache files and run
+ *  `pnpm run templates`; never edit the generated .ts files. */
 export function withTimeout(body: string): string {
-  return `on run argv
-  with timeout of ${NOTES_TIMEOUT_SECONDS} seconds
-${body}
-  end timeout
-end run`;
+  return renderWithTimeout({ timeoutSeconds: NOTES_TIMEOUT_SECONDS, body });
 }
 
 /** Run an AppleScript against Notes, passing data as argv.
@@ -38,7 +56,10 @@ export async function runNotesScript(script: string, args: string[]): Promise<st
     // No "-" before args: osascript passes it through as argv item 1 and
     // shifts every real argument by one.
     const { stdout } = await execFileAsync("osascript", ["-e", script, ...args]);
-    return stdout.trim();
+    // trimEnd, not trim: osascript appends a trailing newline, but leading
+    // whitespace is meaningful in note plaintext (indented code, for one) and
+    // the plaintext is the first field of a read reply. Same as keyring.ts.
+    return stdout.trimEnd();
   } catch (error: unknown) {
     const err = error as { stderr?: string; code?: number };
     const stderr = err.stderr?.trim() ?? "";
@@ -85,28 +106,13 @@ export type NotePreflight = {
  *
  *  Bounded, and fails closed rather than returning a folder as an account.
  *  Verified to reach iCloud from Archived/2017 in 2 hops. */
-export const ACCOUNT_WALK = `      set a to container of c
-      set acctFound to false
-      repeat 10 times
-        if (class of a) is account then
-          set acctFound to true
-          exit repeat
-        end if
-        set a to container of a
-      end repeat
-      if not acctFound then error "Could not resolve the account for this note."`;
+export const ACCOUNT_WALK = renderAccountWalk({});
 
-// `set c to container of n` is split on purpose. `name of container of n` in one
-// expression errors -1728 on EVERY note, locked or unlocked. The property is
-// fine; chaining a read through it is not. Spec section 9.2.
-const PREFLIGHT_SCRIPT = withTimeout(`    tell application "Notes"
-      set n to note id (item 1 of argv)
-      set c to container of n
-${ACCOUNT_WALK}
-      set d to (ASCII character 1)
-      return (name of n) & d & (name of c) & d & (name of a) & d & ¬
-             ((password protected of n) as text)
-    end tell`);
+// The preflight template splits `set c to container of n` on purpose.
+// `name of container of n` in one expression errors -1728 on EVERY note,
+// locked or unlocked. The property is fine; chaining a read through it is
+// not. Spec section 9.2.
+const PREFLIGHT_SCRIPT = withTimeout(renderPreflight({ accountWalk: ACCOUNT_WALK }));
 
 /** Read a note's metadata: title, folder, account, locked flag.
  *
@@ -203,17 +209,8 @@ function assertFolder(meta: NotePreflight, folder?: string): void {
 // An unscoped read would leave open on the read path the exact window the
 // write path closes — and reading is the operation folder confinement was
 // invented for.
-const READ_UNSCOPED_SCRIPT = withTimeout(`    tell application "Notes"
-      set n to note id (item 1 of argv)
-      set d to (ASCII character 1)
-      return (plaintext of n) & d & ((modification date of n) as text)
-    end tell`);
-
-const READ_SCOPED_SCRIPT = withTimeout(`    tell application "Notes"
-      set n to note id (item 1 of argv) of folder (item 2 of argv)
-      set d to (ASCII character 1)
-      return (plaintext of n) & d & ((modification date of n) as text)
-    end tell`);
+const READ_UNSCOPED_SCRIPT = withTimeout(renderReadUnscoped({}));
+const READ_SCOPED_SCRIPT = withTimeout(renderReadScoped({}));
 
 export async function _readNote(id: string, folder?: string): Promise<NoteContentTs> {
   const meta = await _preflightNote(id);
@@ -258,29 +255,10 @@ function parseNoteRows(raw: string): NoteMeta[] {
 
 // The container access is split here too (spec 9.2), and the account is walked
 // rather than assumed to be one hop up.
-const NOTE_ROW = `set c to container of n
-${ACCOUNT_WALK}
-        set out to out & (id of n) & d & (name of n) & d & (name of c) & d & ¬
-                  (name of a) & d & ((modification date of n) as text) & d & ¬
-                  ((password protected of n) as text) & linefeed`;
+const NOTE_ROW = renderNoteRow({ accountWalk: ACCOUNT_WALK });
 
-const LIST_ALL_SCRIPT = withTimeout(`    tell application "Notes"
-      set d to (ASCII character 1)
-      set out to ""
-      repeat with n in notes
-        ${NOTE_ROW}
-      end repeat
-      return out
-    end tell`);
-
-const LIST_IN_FOLDER_SCRIPT = withTimeout(`    tell application "Notes"
-      set d to (ASCII character 1)
-      set out to ""
-      repeat with n in (notes of folder (item 1 of argv))
-        ${NOTE_ROW}
-      end repeat
-      return out
-    end tell`);
+const LIST_ALL_SCRIPT = withTimeout(renderListAll({ noteRow: NOTE_ROW }));
+const LIST_IN_FOLDER_SCRIPT = withTimeout(renderListInFolder({ noteRow: NOTE_ROW }));
 
 export async function _listNotes(folder?: string): Promise<NoteMeta[]> {
   const raw = folder == null
@@ -292,23 +270,8 @@ export async function _listNotes(folder?: string): Promise<NoteMeta[]> {
 // `plaintext contains`, never `body contains`. body is HTML, so searching it
 // matches markup: a user searching "div" would match every note they own.
 // Spec section 9.3.
-const SEARCH_ALL_SCRIPT = withTimeout(`    tell application "Notes"
-      set d to (ASCII character 1)
-      set out to ""
-      repeat with n in (notes whose plaintext contains (item 1 of argv))
-        ${NOTE_ROW}
-      end repeat
-      return out
-    end tell`);
-
-const SEARCH_IN_FOLDER_SCRIPT = withTimeout(`    tell application "Notes"
-      set d to (ASCII character 1)
-      set out to ""
-      repeat with n in (notes of folder (item 2 of argv) whose plaintext contains (item 1 of argv))
-        ${NOTE_ROW}
-      end repeat
-      return out
-    end tell`);
+const SEARCH_ALL_SCRIPT = withTimeout(renderSearchAll({ noteRow: NOTE_ROW }));
+const SEARCH_IN_FOLDER_SCRIPT = withTimeout(renderSearchInFolder({ noteRow: NOTE_ROW }));
 
 export async function _searchNotes(query: string, folder?: string): Promise<NoteMeta[]> {
   const raw = folder == null
@@ -332,18 +295,7 @@ export async function _searchNotes(query: string, folder?: string): Promise<Note
 //
 // noteCount is derived with `count of notes`, because folder has no such
 // property. That is a query per folder, so listFolders pays for it.
-const LIST_FOLDERS_SCRIPT = withTimeout(`    tell application "Notes"
-      set d to (ASCII character 1)
-      set out to ""
-      repeat with f in folders
-        set c to container of f
-        if (class of c) is account then
-          set out to out & (id of f) & d & (name of f) & d & ¬
-                    ((count of notes of f) as text) & linefeed
-        end if
-      end repeat
-      return out
-    end tell`);
+const LIST_FOLDERS_SCRIPT = withTimeout(renderListFolders({}));
 
 export async function _listFolders(): Promise<FolderMeta[]> {
   const raw = await runNotesScript(LIST_FOLDERS_SCRIPT, []);
@@ -353,13 +305,15 @@ export async function _listFolders(): Promise<FolderMeta[]> {
     if (fields.length !== 3) {
       throw new Error("Notes returned an unexpected row while listing folders.");
     }
-    return { id: fields[0], name: fields[1], noteCount: Number(fields[2]) };
+    const noteCount = Number(fields[2]);
+    if (!Number.isFinite(noteCount)) {
+      throw new Error("Notes returned a non-numeric note count while listing folders.");
+    }
+    return { id: fields[0], name: fields[1], noteCount };
   });
 }
 
-const FOLDER_EXISTS_SCRIPT = withTimeout(`    tell application "Notes"
-      return (exists folder (item 1 of argv)) as text
-    end tell`);
+const FOLDER_EXISTS_SCRIPT = withTimeout(renderFolderExists({}));
 
 export async function _folderExists(folder: string): Promise<boolean> {
   const raw = await runNotesScript(FOLDER_EXISTS_SCRIPT, [folder]);
@@ -369,18 +323,7 @@ export async function _folderExists(folder: string): Promise<boolean> {
 // "Agency Notes" is our own default and will not exist on a fresh machine, so
 // create it on demand. Spec section 9.4. The interrupt payload carries
 // folderCreated so a human or policy sees the folder being made.
-const CREATE_SCRIPT = withTimeout(`    tell application "Notes"
-      if not (exists folder (item 3 of argv)) then
-        make new folder with properties {name:(item 3 of argv)}
-      end if
-      set f to folder (item 3 of argv)
-      set n to make new note at f with properties {name:(item 1 of argv), body:(item 2 of argv)}
-      set c to container of n
-${ACCOUNT_WALK}
-      set d to (ASCII character 1)
-      return (id of n) & d & (name of n) & d & (name of c) & d & (name of a) & d & ¬
-             ((modification date of n) as text) & d & ((password protected of n) as text)
-    end tell`);
+const CREATE_SCRIPT = withTimeout(renderCreate({ accountWalk: ACCOUNT_WALK }));
 
 /** Create a note. `html` is HTML, already rendered — this layer does not know
  *  about markdown. The Agency module does the conversion. */
@@ -402,30 +345,22 @@ export async function _createNote(
 // than read-then-compare, because the reference that gets mutated is the same
 // one that had to resolve inside the asserted folder — the check cannot drift
 // from the access across the human approval that precedes this. Spec 6.4.
-const APPEND_BODY = `      if (password protected of n) then error "note is locked"
-      set body of n to (body of n) & (item 2 of argv)
-      set c to container of n
-${ACCOUNT_WALK}
-      set d to (ASCII character 1)
-      return (id of n) & d & (name of n) & d & (name of c) & d & (name of a) & d & ¬
-             ((modification date of n) as text) & d & ((password protected of n) as text)`;
+const APPEND_BODY = renderAppendBody({ accountWalk: ACCOUNT_WALK });
 
-const APPEND_SCOPED_SCRIPT = withTimeout(`    tell application "Notes"
-      set n to note id (item 1 of argv) of folder (item 3 of argv)
-${APPEND_BODY}
-    end tell`);
-
-const APPEND_UNSCOPED_SCRIPT = withTimeout(`    tell application "Notes"
-      set n to note id (item 1 of argv)
-${APPEND_BODY}
-    end tell`);
+const APPEND_SCOPED_SCRIPT = withTimeout(renderAppendScoped({ appendBody: APPEND_BODY }));
+const APPEND_UNSCOPED_SCRIPT = withTimeout(renderAppendUnscoped({ appendBody: APPEND_BODY }));
 
 /** Append to a note. `html` is HTML, already rendered.
  *
- *  The locked check happens twice on purpose: once in the pre-flight so the
- *  error is raised before the interrupt, and once inside the write script
- *  because a human approval sits between them and the note can be locked in
- *  that window. Spec section 2.7 explains why a missed check destroys data. */
+ *  The Agency layer already refused locked notes before its interrupt was
+ *  approved. This layer still re-runs the pre-flight, and the write script
+ *  checks `password protected` once more, because a human approval sits
+ *  between that first check and this call, and the note can be locked in that
+ *  window. Spec section 2.7 explains why a missed check destroys data.
+ *
+ *  The interrupt payload the approver saw reflects the pre-approval
+ *  pre-flight. This second pre-flight is the authoritative one for the
+ *  write. */
 export async function _appendToNote(
   id: string,
   html: string,
@@ -446,17 +381,8 @@ export async function _appendToNote(
   return rows[0];
 }
 
-const DELETE_SCOPED_SCRIPT = withTimeout(`    tell application "Notes"
-      set n to note id (item 1 of argv) of folder (item 2 of argv)
-      if (password protected of n) then error "note is locked"
-      delete n
-    end tell`);
-
-const DELETE_UNSCOPED_SCRIPT = withTimeout(`    tell application "Notes"
-      set n to note id (item 1 of argv)
-      if (password protected of n) then error "note is locked"
-      delete n
-    end tell`);
+const DELETE_SCOPED_SCRIPT = withTimeout(renderDeleteScoped({}));
+const DELETE_UNSCOPED_SCRIPT = withTimeout(renderDeleteUnscoped({}));
 
 /** Delete a note. It moves to Recently Deleted, where it stays ~30 days. */
 export async function _deleteNote(id: string, folder?: string): Promise<null> {

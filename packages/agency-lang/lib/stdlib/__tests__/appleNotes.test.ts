@@ -119,9 +119,9 @@ describe("runNotesScript", () => {
     await expect(runNotesScript("s", [])).rejects.toThrow(/something else entirely/);
   });
 
-  it("trims stdout", async () => {
+  it("trims only trailing whitespace, because leading whitespace is meaningful in plaintext", async () => {
     mockStdout("  value  \n");
-    await expect(runNotesScript("s", [])).resolves.toBe("value");
+    await expect(runNotesScript("s", [])).resolves.toBe("  value");
   });
 });
 
@@ -396,6 +396,11 @@ describe("_listFolders", () => {
   it("returns an empty array rather than throwing when there are none", async () => {
     mockStdout("");
     await expect(_listFolders()).resolves.toEqual([]);
+  });
+
+  it("fails closed on a non-numeric note count rather than reporting NaN", async () => {
+    mockStdout(["fid1", "Work", "twelve"].join(FIELD_DELIM));
+    await expect(_listFolders()).rejects.toThrow(/non-numeric note count/);
   });
 });
 

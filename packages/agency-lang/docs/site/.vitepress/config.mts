@@ -330,6 +330,13 @@ export default defineConfig({
                 { text: "messaging/sms", link: "/stdlib/messaging/sms" },
               ],
             },
+            {
+              text: "notes",
+              collapsed: false,
+              items: [
+                { text: "notes/apple", link: "/stdlib/notes/apple" },
+              ],
+            },
             { text: "object", link: "/stdlib/object" },
             { text: "path", link: "/stdlib/path" },
             { text: "policy", link: "/stdlib/policy" },

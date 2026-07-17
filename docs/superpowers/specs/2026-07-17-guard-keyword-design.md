@@ -1,7 +1,11 @@
 # Spec: `guard` as a language-level construct
 
 **Status:** brainstormed with the owner 2026-07-17; all open decisions
-settled. Supersedes the idea doc
+settled. Review round 1 folded same day (findings in
+`2026-07-17-guard-keyword-design-REVIEW.md`: the soundness property is
+now stated rather than implied, the unhandled-interrupt warning learns
+the construct, the impl-reachability mechanism is named, and the
+keyword reservation is position-sensitive). Supersedes the idea doc
 (`docs/superpowers/specs/2026-07-16-guard-keyword-idea.md`), which keeps
 the fuller origin story and the file-pointer inventory.
 
@@ -54,16 +58,30 @@ that lexically contains one may raise `std::guard`; normal transitive
 effect propagation through callers does the rest. Functions with no
 guard anywhere beneath their call tree carry nothing.
 
-This attribution is sound, not just convenient, because of the
-registration-site eligibility rule from #558: a handler registered
-inside a guard's dynamic extent can never adjudicate that guard's trip.
-So every possible observer of a `std::guard` interrupt — every eligible
-handler, out to the user endpoint — sits in the transitive caller chain
-of the function containing the construct. That is exactly the chain the
-effect analysis marks. The trip physically firing three calls deeper,
-inside some helper's llm gate, is unobservable from anywhere that
-helper's own `raises` clause governs. The budget-scoping rule and the
-effect-attribution rule are the same rule.
+This attribution is sound because of the registration-site eligibility
+rule from #558: a handler registered inside a guard's dynamic extent
+can never adjudicate that guard's trip. The property the attribution
+preserves — stated precisely, because review round 1 showed the loose
+version has a counterexample — is:
+
+> A function's `raises` clause bounds the interrupts that can ESCAPE it
+> to a handler that could act on them. It does not bound pass-through:
+> an interrupt raised under a guard installed by a caller travels
+> through un-annotated frames, and that is deliberate, because no
+> handler those frames could register is eligible to see it.
+
+Under that property, the marked chain (the construct's containing
+function and its transitive callers) covers every escape. The
+counterexample the loose version admits: `ctx.handlers` is
+context-wide, so a handler registered in fork branch A is eligible for
+sibling branch B's branch-local trip (A's captured `liveGuardIds`
+cannot contain B's guard) while sitting in no caller chain of B's
+construct. Re-derived under the stated property, it is not a
+counterexample: both branches are lexically inside the fork's
+containing function, which the analysis marks (the construct is inside
+it, directly or through a marked callee) — the sibling handler is an
+observer INSIDE the marked function, not an un-marked escape. The
+budget-scoping rule and the effect-attribution rule are the same rule.
 
 The hard cases all hold: time trips are attributed to the construct
 regardless of where the clock catches the branch; a tool defined
@@ -105,12 +123,16 @@ All settled with the owner on 2026-07-17:
    list `std::guard`. Enforced by the existing `checkFunctionTypeRaises`
    pass and its existing diagnostic. Same for `raises` on function
    types. No auto-admit, no warning tier.
-5. **No handler discharge — because discharge does not exist.** All
-   handlers up the chain fire; a handle block never consumes an
-   interrupt the way try/catch consumes an exception. This is existing
-   language semantics, and the guard effect follows it: wrapping a
-   guard in a rejecting handler does not remove `std::guard` from the
-   containing function's effects.
+5. **No handler discharge for `raises` — because effect discharge does
+   not exist.** All handlers up the chain fire; a handle block never
+   consumes an interrupt the way try/catch consumes an exception, and
+   the `raises` machinery has no subtraction. Wrapping a guard in a
+   rejecting handler does not remove `std::guard` from the containing
+   function's effects. One distinction, per review: the
+   unhandled-interrupt WARNING (`isInsideHandler` in
+   `interruptAnalysis.ts`) is a different system and DOES go quiet
+   inside a handle block — the construct follows that existing warning
+   behavior too (see decision 8).
 6. **`withCostGuard` / `withTimeGuard` stay, unchanged.** They already
    run on the identical runtime (`stack.pushGuard(new CostGuard(...))`)
    and their trips are fully resumable. Their static invisibility is
@@ -119,6 +141,26 @@ All settled with the owner on 2026-07-17:
    not a guard-specific exception. Documented, not deprecated.
 7. **No cross-version checkpoint compatibility obligations** for the
    internalized impl (owner: backwards compat not needed).
+8. **The unhandled-interrupt warning learns the construct** (review
+   finding 2). `checkUnhandledInterruptWarnings` keys on `functionCall`
+   nodes, so without a fix a BARE `guard { }` in a node body would go
+   silent while calling a def containing one warns — inverted, and
+   exactly the case the resumable-guards breaking change made
+   warn-worthy (an unhandled trip goes to the user). The walker gains a
+   `guardBlock` case using the same existing warning code and the same
+   `isInsideHandler` discharge. Consequence, owned rather than
+   discovered: bare node-body guards across the corpus start warning;
+   handler-wrapped ones (most fixtures, post race-proofing) stay
+   silent. Warnings do not fail fixtures.
+9. **Keyword reservation is position-sensitive** (review finding 4,
+   resolving the decision-3 / Part-3 contradiction in decision 3's
+   favor). The construct parser only commits on the full shape —
+   `guard` + word boundary + `(...)` + optional `as` + `{` — and fails
+   through to the ordinary grammar otherwise. So
+   `import { guard } from "std::thread"` PARSES and fails at import
+   resolution with the existing diagnostic (the migration story
+   stands), and `const guard = 5` still parses (identifier position is
+   untouched). Only the `guard(...) {` shape is claimed.
 
 ---
 
@@ -156,8 +198,16 @@ const r = guard(cost: $0.50, time: 5m, label: "research") {
   `{ cost, time, label: Expression | null, body: Statement[], loc }` —
   registered in `bodySlots` (walkers and the AG6033-style nesting
   checks then see it for free). The formatter round-trips it.
-- **What breaks:** variables named `guard` stop parsing (accepted;
-  expected rare), and the stdlib import line dies via AG4010 as above.
+- **What breaks:** only the `guard(...) {` shape is claimed (decision
+  9): the import line parses and dies at resolution with the existing
+  unresolved-import diagnostic, `const guard = 5` still parses, and a
+  user function named `guard` only conflicts when called with a
+  trailing block. Strictly less breakage than a globally reserved word.
+- **Parser risk note (review):** a block-shaped primary adjacent to the
+  precedence-climbing binop parser is the grammar area with known sharp
+  edges (`!(...)` on paren-exprs, `.concat()` on array literals).
+  Budget real time for the expression-position integration and test it
+  against those neighborhoods.
 
 ---
 
@@ -211,8 +261,9 @@ covers this case generically; this spec does not attempt it.
 ## Part 5: Codegen and lowering
 
 **The construct compiles to exactly what today's syntax already
-compiles to.** The stdlib `guard` def loses its `export` and becomes
-the construct's internal lowering target; the emitted call — impl
+compiles to.** The stdlib `guard` def is renamed to the internal
+`__guard` (still exported — see the reachability bullet below) and
+becomes the construct's lowering target; the emitted call — impl
 reference plus `cost` / `time` / `label` plus the block closure — keeps
 the shape the old parse produced.
 
@@ -229,13 +280,21 @@ changes, emitted call does not.
 
 Concretely:
 
-- A small `guardBlock` codegen module in the TSIR pipeline (the
-  `finalizeCodegen.ts` extraction pattern from #556): compile the head
-  expressions, compile the body through the EXISTING block-argument
-  path — same `__block_N` lifting and registration, deliberately
-  unchanged — and emit the call to the internal impl.
-- The impl is reachable with no user import via the existing stdlib
-  auto-import prelude mechanism.
+- A preprocessor desugar pass (`lib/preprocessors/guardDesugar.ts`, the
+  `parallelDesugar` precedent) rewrites the `guardBlock` node into the
+  legacy `functionCall` + `blockArgument` shape before callback
+  lifting, so the body goes through the EXISTING `__block_N` lifting
+  and the builder never sees the construct. This implements the "same
+  emitted call" invariant more directly than a hand-rolled TSIR module.
+- **Impl reachability, named concretely (review finding 3):** the
+  stdlib def renames `guard` → `__guard` and STAYS exported from
+  `std::thread` (the prelude imports exports — de-exporting would fight
+  it); `stdlib/index.agency` re-exports it into the auto-import prelude
+  (the saveDraft move from #553 is the precedent, including its
+  re-export-TDZ gotcha; `index.agency` is non-templated). The
+  underscore prefix marks it internal; verify the doc generator skips
+  underscore-prefixed exports, and if it does not, its docstring says
+  "internal — use the guard construct".
 - The AgencyGenerator prints the construct with the head arguments in
   their source order and no `as`, so `fmt` round-trips and `writeAST`
   stays canonical.
@@ -257,7 +316,8 @@ that regen means the lowering drifted.
   `import { guard }` line when AG4010 points at it.
 - **Stdlib:** every stdlib use of `guard` migrates to the construct
   (`std::agents` is the largest); annotated stdlib `raises` clauses
-  gain `std::guard` where required; the stdlib def is de-exported.
+  gain `std::guard` where required; the stdlib def becomes the internal
+  `__guard` (renamed, still exported, prelude-re-exported — Part 5).
 - **Test corpus:** all fixtures using `guard` get the formatter pass
   plus import-line removal, then `make fixtures`.
 

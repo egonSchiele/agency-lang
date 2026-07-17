@@ -373,17 +373,44 @@ node main() { return f() }`,
     expect(errs).toHaveLength(0);
   });
 
-  it("an undeclared return type leaves the binder as any (no errors)", () => {
+  it("an undeclared return type leaves the binder as any (no errors AT ALL)", () => {
+    // UNFILTERED on purpose (plan review T1): the bug this guards
+    // against — the pass failing to declare `d` — surfaces as an
+    // "undefined variable" error, which a binder/null/assignable
+    // message filter would silently drop. Zero errors total is the
+    // only assertion that fails in that direction. The unguarded
+    // `const s: string = d` doubles as the any-permissiveness probe:
+    // legal for `any`, an error for `T | null`.
     const errs = typecheckSource(
       `def f() {
   return "x"
   finalize as d {
-    return d
+    const s: string = d
+    return s
   }
 }
 node main() { return f() }`,
-    ).filter((e) => /binder|null|not assignable/i.test(e.message));
+    );
     expect(errs).toHaveLength(0);
+  });
+
+  it("a binder named like a MODULE-level const is allowed (collision check is scope-local)", () => {
+    // The miscompile AG6037 prevents is a same-frame local resolving
+    // to __stack.locals.<name>. A module global compiles differently
+    // (not a frame local), so it is NOT a hazard, and a parent-walking
+    // `has` would false-positive here (plan review finding 3 / M2).
+    const errs = typecheckSource(
+      `const banner = "b"
+def f(): string {
+  return "x"
+  finalize as banner {
+    if (banner != null) { return banner }
+    return "y"
+  }
+}
+node main() { return f() }`,
+    );
+    expect(errs.filter((e) => e.code === "AG6037")).toHaveLength(0);
   });
 
   it("a binder colliding with a local is AG6037", () => {
@@ -608,6 +635,8 @@ export function declareFinalizeBinders(
 
 Verify the `walkNodes` result shape (`{ node, scopes }`) and `isInScope` import against `handlerParamTyping.ts:109-110` — copy exactly what that file does; it is the working precedent. If `ScopeInfo` has no `returnType` field, find where `checkScopes` reads it (`checker.ts:177`) and use the same source.
 
+One requirement on the collision check (plan review finding 3): it must be SCOPE-LOCAL. Read `Scope.has` in `lib/typeChecker/scope.ts` before using it — if it walks parent scopes, use (or add) a local-only variant. The hazard AG6037 prevents is a binder resolving to `__stack.locals.<name>` — a same-frame local or param. A name matching a MODULE global is not a hazard (globals compile through `__globals()`, not the frame), and a parent-walking check would wrongly reject it; the module-const test above pins this direction.
+
 - [ ] **Step 5: Wire it in**
 
 In `lib/typeChecker/index.ts`, import the pass and call it right after `refineInlineHandlerParams` (line ~309):
@@ -754,6 +783,47 @@ async withFinalize(
 
 (Only the signature, the call, and the comment change; the rest of the method body stays as it is.)
 
+- [ ] **Step 4b: Unit-test the runtime half in isolation (plan review M5)**
+
+The fixture proves the whole pipe; this pins the one-line runtime change so a regression fails at the unit level. Append to `lib/runtime/abortedResult.test.ts`, following that file's existing construction helpers for an `AbortedResult` carrying a partial:
+
+```ts
+describe("withFinalize passes the draft (finalize as draft)", () => {
+  it("the finalize receives the partial this instance holds", async () => {
+    const aborted = /* construct an AbortedResult whose partial is { value: "the-draft" }, using this file's existing helpers (carryThrough/fromError against a frame with savedDraft set) */;
+    let received: unknown = "not-called";
+    await aborted.withFinalize(async (draft) => {
+      received = draft;
+      return "finalized";
+    }, "scope");
+    expect(received).toBe("the-draft");
+  });
+
+  it("no partial yields null, matching the binder's null case", async () => {
+    const aborted = /* same construction, frame with NO savedDraft */;
+    let received: unknown = "not-called";
+    await aborted.withFinalize(async (draft) => {
+      received = draft;
+      return "finalized";
+    }, "scope");
+    expect(received).toBe(null);
+  });
+
+  it("a throwing finalize still returns `this` — the same draft is the fallback", async () => {
+    const aborted = /* partial = { value: "the-draft" } */;
+    const result = await aborted.withFinalize(async () => {
+      throw new Error("boom");
+    }, "scope");
+    expect(result).toBe(aborted);
+    expect(result.partialValueOrNull()).toBe("the-draft");
+  });
+});
+```
+
+Replace the construction comments with this test file's real idiom — `abortedResult.test.ts` already builds instances with and without partials; copy its setup rather than inventing one.
+
+Run: `pnpm test:run lib/runtime/abortedResult.test.ts 2>&1 | tee "$TMPDIR/withfinalize-unit.log"` — expected PASS.
+
 - [ ] **Step 5: Run codegen tests + prove byte-stability**
 
 Run: `pnpm test:run lib/backends/finalizeBinderCodegen.test.ts 2>&1 | tee "$TMPDIR/finalize-codegen2.log"`
@@ -774,7 +844,7 @@ Expected: `git status` shows NO modified fixture `.js` files (the binder-less cl
 ```bash
 git branch --show-current   # must NOT be main
 printf 'feat: yield the saved draft to the finalize closure (finalize as draft)\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>\n' > /tmp/claude/commitmsg.txt
-git add lib/runtime/abortedResult.ts lib/backends/typescriptBuilder/finalizeCodegen.ts lib/backends/finalizeBinderCodegen.test.ts lib/templates/
+git add lib/runtime/abortedResult.ts lib/runtime/abortedResult.test.ts lib/backends/typescriptBuilder/finalizeCodegen.ts lib/backends/finalizeBinderCodegen.test.ts lib/templates/
 git commit -F /tmp/claude/commitmsg.txt
 ```
 
@@ -1189,7 +1259,10 @@ describe("draftCharCount", () => {
   it("counts structured drafts by their JSON length", () => {
     expect(draftCharCount({ a: 1 })).toBe(JSON.stringify({ a: 1 }).length);
   });
-  it("returns 0 for values JSON cannot represent", () => {
+  it("returns 0 for undefined (JSON.stringify yields undefined there)", () => {
+    // Deliberately narrow (plan review M4): a CIRCULAR value would make
+    // JSON.stringify throw, uncaught — but tool args are JSON-origin,
+    // so circularity cannot occur; the name claims only what is tested.
     expect(draftCharCount(undefined)).toBe(0);
   });
 });
@@ -1443,22 +1516,19 @@ if (dispatchCalls.length > 0) {
 
 Audit the rest of the `while` iteration for reads of `toolCalls` that should now read `dispatchCalls` (the interrupt check on `parallelResult` and the removed-tools filter after it); the `self.pendingToolCalls` bookkeeping keeps the FULL `toolCalls` list — on resume the partition recomputes identically and the ordered pass's `pr.step` guards skip the completed writes, which is exactly the idempotency the real tools get from their branch steps.
 
+One resume subtlety to leave as a comment, not "fix" (plan review finding 2): the ack message survives resume through a different mechanism than the write. `pr.step` snapshots `messagesJSON` only on the INTERRUPT path, and a completed step returns before its body on resume, so the ack is never re-pushed — but it does not need to be. The ack was pushed to the LIVE thread, and whichever later checkpoint actually serializes (a sibling tool's interrupt bailout, the guard gate) calls `snapshotMessages()` against that live thread, ack included. Do NOT add a snapshot call in the intrinsic step; it would be redundant. The real safety net for a lost ack is that real providers reject a dangling `tool_use` with no result — the deterministic client does not validate pairing, which is why no fixture can pin this and the comment has to.
+
 Three deliberate behaviors, each matching the spec, worth comments in code review: interception ignores the `maxToolCallRounds` limit (a draft write is free and salvage is the point); interception ignores `removedTools` (an intrinsic cannot error its way onto that list); the ack messages push before the concurrent tools’ results, which is harmless because providers pair results by `tool_call_id` (and by name+position on Gemini, where names differ) — the same guarantee the existing completion-order pushes rely on.
 
-- [ ] **Step 6: Pin the schema-threading seam with a RecordingClient test**
+- [ ] **Step 6: Pin the observable surface — the provider schema, the ack, and the statelog events**
 
-This seam — `args.draftSchema` → registry substitution → the tool list the PROVIDER receives — is the one place a silent failure hides: if the key drifts or the substitution misses, every fixture still passes because the runtime falls back to `z.string()`, and structured-draft typing is silently gone. Neither Task 5 (string-matches the generated source) nor the fixtures (all run the fallback) cover it, so cover it directly. Create `lib/runtime/intrinsicToolSchema.test.ts`, modeled on `lib/runtime/promptLabels.test.ts` (copy its `makeCtx` / `inFrame` / `RecordingClient` harness — the client records every `PromptConfig` handed to the provider):
+The fixtures prove the feature only through the salvaged draft — an indirect, downstream signal. The three things the spec actually promises at the surface are untested by them (plan review findings 1/M1/M3): the tool definition the PROVIDER receives (every fixture runs the `z.string()` fallback, so a silent substitution failure stays green), the ack tool message the MODEL receives, and the statelog events the TRACE receives. Cover all three in one runtime test file. Create `lib/runtime/intrinsicToolSchema.test.ts`, modeled on `lib/runtime/promptLabels.test.ts` (copy its `makeCtx` / `inFrame` harness), with two additions to that harness: the client's FIRST response returns a saveDraft tool call and its second returns a plain answer (a two-entry script instead of `toolCalls: []`), and `ctx.statelogClient` is replaced with a recorder stub that appends every `toolCallStart(...)` / `toolCall(...)` payload to an array (stub the other methods it touches as no-ops, following how the harness already fakes statelog config).
 
 ```ts
-describe("saveDraft tool definition reaching the provider", () => {
+describe("saveDraft intrinsic — the observable surface", () => {
   it("the provider-bound schema uses the threaded draftSchema, not the fallback", async () => {
-    const client = new RecordingClient();
-    // Build a tools array containing an AgencyFunction with the stdlib
-    // identity pair, call runPrompt with clientConfig.tools plus
-    // draftSchema: z.number(), and let the mock return immediately.
-    await runSaveDraftPrompt(client, z.number());
-    const sent = client.configs[0] as any;
-    const saveDraftDef = sent.tools.find((t: any) => t.name === "saveDraft");
+    const { providerConfigs } = await runSaveDraftPrompt({ draftSchema: z.number(), save: 3 });
+    const saveDraftDef = (providerConfigs[0] as any).tools.find((t: any) => t.name === "saveDraft");
     expect(saveDraftDef).toBeDefined();
     // The value slot must be the THREADED schema: a number passes, a
     // string fails. With the fallback this assertion inverts — which
@@ -1467,18 +1537,46 @@ describe("saveDraft tool definition reaching the provider", () => {
     expect(saveDraftDef.schema.shape.value.safeParse("x").success).toBe(false);
   });
 
+  it("a structured draftSchema reaches the provider too (object, not just primitive)", async () => {
+    const reportSchema = z.object({ title: z.string() });
+    const { providerConfigs } = await runSaveDraftPrompt({
+      draftSchema: reportSchema,
+      save: { title: "t" },
+    });
+    const saveDraftDef = (providerConfigs[0] as any).tools.find((t: any) => t.name === "saveDraft");
+    expect(saveDraftDef.schema.shape.value.safeParse({ title: "t" }).success).toBe(true);
+    expect(saveDraftDef.schema.shape.value.safeParse("flat string").success).toBe(false);
+  });
+
   it("without draftSchema the provider-bound value schema is the string fallback", async () => {
-    const client = new RecordingClient();
-    await runSaveDraftPrompt(client, undefined);
-    const sent = client.configs[0] as any;
-    const saveDraftDef = sent.tools.find((t: any) => t.name === "saveDraft");
+    const { providerConfigs } = await runSaveDraftPrompt({ draftSchema: undefined, save: "x" });
+    const saveDraftDef = (providerConfigs[0] as any).tools.find((t: any) => t.name === "saveDraft");
     expect(saveDraftDef.schema.shape.value.safeParse("x").success).toBe(true);
     expect(saveDraftDef.schema.shape.value.safeParse(3).success).toBe(false);
+  });
+
+  it("the model receives the ack as a paired tool message", async () => {
+    const { messages } = await runSaveDraftPrompt({ draftSchema: undefined, save: "hello" });
+    const toolMsg = messages.find((m: any) => m.role === "tool");
+    expect(toolMsg).toBeDefined();
+    expect((toolMsg as any).content).toBe("Draft saved (5 characters).");
+    // Pairing: the result must carry the SAME id the tool call was
+    // issued with, or real providers reject the round.
+    expect((toolMsg as any).tool_call_id).toBe("mock-tool-0");
+  });
+
+  it("the trace receives toolCallStart and toolCall events for the intrinsic", async () => {
+    const { statelogEvents } = await runSaveDraftPrompt({ draftSchema: undefined, save: "hello" });
+    const start = statelogEvents.find((e) => e.kind === "toolCallStart");
+    const end = statelogEvents.find((e) => e.kind === "toolCall");
+    expect(start?.payload.toolName).toBe("saveDraft");
+    expect(start?.payload.args).toEqual({ value: "hello" });
+    expect(end?.payload.output).toBe("Draft saved (5 characters).");
   });
 });
 ```
 
-Write the `runSaveDraftPrompt` helper against the real `runPrompt` signature the way `promptLabels.test.ts` calls it (ctx + frame + `clientConfig: { tools: [stdlibShapedSaveDraft] }` + `draftSchema`), constructing the AgencyFunction with `name: "saveDraft", module: "stdlib/index.agency"`. If the provider-bound tool entry is not the raw ToolDefinition (smoltalk may wrap or convert it), adapt the assertions to wherever the zod schema actually lands in the recorded config — the point is asserting the THREADED schema is what left runPrompt.
+Write the `runSaveDraftPrompt` helper against the real `runPrompt` signature the way `promptLabels.test.ts` calls it (ctx + frame + `clientConfig: { tools: [stdlibShapedSaveDraft] }` + `draftSchema`), constructing the AgencyFunction with `name: "saveDraft", module: "stdlib/index.agency"` and returning `{ providerConfigs, messages, statelogEvents }` (the recorded provider configs, the thread's messages after the run, and the statelog recorder's array). Use the tool-call id the scripted client issued (`"mock-tool-0"` above — match whatever your script sets). If the provider-bound tool entry is not the raw ToolDefinition (smoltalk may wrap or convert it), adapt the schema assertions to wherever the zod schema actually lands in the recorded config; if the thread's message shape differs (roles, content field), adapt to the real `smoltalk.toolMessage` shape — the POINTS are: threaded schema left runPrompt, ack text + `tool_call_id` pairing in the thread, events in the trace.
 
 - [ ] **Step 7: Typecheck and run the runtime suites**
 
@@ -1684,7 +1782,7 @@ node main() {
         ] },
         { "return": "never-reached" }
       ],
-      "description": "A tool-saved draft survives the checkpoint/resume caused by a sibling interrupting tool in the same round.",
+      "description": "A tool-saved DRAFT survives the checkpoint/resume caused by a sibling interrupting tool in the same round. Deliberately narrow (plan review T3): this pins frame serialization only — ack/thread integrity across resume is covered by the runtime surface tests, because the deterministic client does not validate tool_use/result pairing and could not fail on a lost ack.",
       "interruptHandlers": [
         { "action": "resolve", "resolvedValue": "yes" },
         { "action": "reject" }
@@ -1744,7 +1842,12 @@ Write the PR body to a file (end with the Claude Code attribution line), then:
 gh pr create --title "Partials ergonomics: saveDraft as a tool, finalize as draft" --body-file /tmp/claude/prbody.txt
 ```
 
-The body should name the two features, link the spec, call out the fixture churn from Task 5 as intentional, and list doc follow-ups for the owner (the owner-authored `docs/site/guide/partial-results.md` needs a section on both features; do not edit it yourself).
+The body should name the two features, link the spec, call out the fixture churn from Task 5 as intentional, and list doc follow-ups for the owner (the owner-authored `docs/site/guide/partial-results.md` needs a section on both features; do not edit it yourself). Include a **known limitations** list — these are decisions, and untracked decisions get relitigated as bugs:
+
+- A `.rename()`d stdlib saveDraft is not recognized as intrinsic; it runs as an ordinary tool whose draft files on the tool branch and is discarded.
+- Gemini pairs tool results by name+position rather than `tool_call_id`, so intrinsic acks pushing before dispatched results can misalign when a real tool precedes saveDraft in the call list or a round contains two same-named calls. Real-provider-only, same class as the #566 finding; deterministic tests cannot catch it.
+- The saveDraft schema keys on the enclosing FUNCTION's declared type while the draft files on the owning scope (often a guard block); when they differ the schema is a best-effort hint (spec finding 3).
+- Time-based partials tests stay out until #575 (injectable TimeGuard clock) lands.
 
 ---
 
@@ -1754,4 +1857,5 @@ The body should name the two features, link the spec, call out the fixture churn
 - **Known deviations from spec text, on purpose:** (1) The spec's review-round-1 fold said interception writes the TOP frame via a new StateStack method; that was corrected in the spec on 2026-07-17 after verifying `runPrompt` pushes its own frame — the plan uses the existing `setSavedDraft` and pins the math with the basic fixture. (2) The binder types from the DECLARED return only (`any` fallback); the spec's "declared or inferred" is narrowed to match Part 5's inferred-types exclusion. (3) `finalize() as draft` formatter-canonicalizes to `finalize as draft` — spec-stated. 
 - **Type consistency:** `params: FunctionParameter[]` (Task 1, parsed by the shared `asParser`) is read by Task 2 (`params[0]`, AG6038 for more) and Task 3 (`finalize.params[0].name`); `draftSchema` (Task 5 emit) is read by Task 6 as `args.draftSchema`; `isSaveDraftTool` / `buildSaveDraftToolDefinition` / `draftCharCount` names match between Task 6's module and its prompt.ts call sites.
 - **Round 2 decisions (owner comments):** (1) The finalize closure emission moved from a raw `ts.raw` string to `finalizeClosure.mustache` — long codegen strings belong in `lib/templates/`; the zero-churn check enforces byte-identity. (2) The interception is shaped as an `IntrinsicTool` registry (`lib/runtime/intrinsicTools.ts`): saveDraft is the first tool the loop handles itself, and attachment/run-control tools are plausible next entries, so the pattern gets a seam — one object per intrinsic (matches / buildDefinition / handle), the loop owning all generic bookkeeping, the registry closed to users (intrinsics touch run state, exactly what user tools must not do). (3) Schema-violating saves: the intrinsic validates with the synthesized zod schema; a mismatch SAVES ANYWAY and acks with a specific warning (the schema is a best-effort hint — refusing on a possibly-wrong hint would lose real work); only a missing `value` refuses. Pinned by unit tests and the mismatch fixture. (4) No C-style loops in new code: reverse-copy+`find` for the scope walk, one declarative partition plus `for...of` for the ordered pass (NOT `forEach` — async callbacks there would not be awaited in order). (5) All fixtures are cost-guard deterministic; no time-based tests exist, by design. (6) From the parallel plan review: the schema-threading seam gets a RecordingClient test (Task 6 Step 6 — the fixtures alone all run the z.string() fallback and would stay green through a silent substitution failure), the any-type skip is `isAnyType` at the type level rather than sniffing the rendered string, and the intrinsic lifecycle emits inside a `toolExecution` span with its deliberate divergences from the real dispatch path stated in a comment.
+- **Round 3 (plan review, `...-partials-ergonomics-REVIEW.md`):** T1 — the undeclared-return binder test asserts UNFILTERED zero errors (the filtered form could not fail on an undeclared binder, whose symptom is an undefined-variable message the filter dropped). M2/finding 3 — AG6037's check pinned scope-local with a module-const-named-binder test (a global is not a frame local, so it is not the miscompile hazard). M1/M3 — Step 6 grew from a schema-seam test into the full observable surface: provider schema (primitive AND object), the ack message with `tool_call_id` pairing, and the statelog events, all via the recording harness (no fixture can see any of these; the deterministic client does not validate pairing). M5 — `withFinalize` unit tests (receives the draft, null case, throw returns `this`). Finding 2 — the ack-survives-resume mechanism is now a stated comment (live thread + next `snapshotMessages()`; do not add a redundant snapshot). M4 — `draftCharCount`'s test name narrowed to what it tests. T3 — the resume fixture's description states it pins frame serialization only. Finding 5 — Gemini ordering and renamed-saveDraft joined the PR's known-limitations list, plus the schema-hint gap and the #575 clock-seam dependency for future time-based tests.
 - **Reuse decision (owner review round 1):** the binder clause reuses `asParser`/`blockParamsParser`/`FunctionParameter` — the grammar and type block arguments already own — instead of a hand-rolled `as <name>` parse. Consequences inherited from the shared grammar and ruled on downstream: `finalize as { }` parses as binder-less (the documented no-param form; formatter canonicalizes it away), multi-param lists parse and are rejected by AG6038, and a typed binder (`as d: Report`) parses with the annotation winning over the scope's return type (the handler-param rule). NOT reused: the whole-node `functionCall`+`BlockArgument` pipeline — finalize is a declaration, not a call (FinalizeCodegen strips it from the statement stream; AG6032/6033 and the flow builder key on the node type; there is no callee to receive a block), so wrapping the body would add indirection without behavior.

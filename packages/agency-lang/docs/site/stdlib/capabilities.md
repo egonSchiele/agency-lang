@@ -157,3 +157,36 @@ export effectSet Memory = <std::memory::recall, std::memory::remember, std::memo
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L64))
+
+### NotesRead
+
+Read-only Notes access: reading, searching, and listing.
+
+```ts
+/** Read-only Notes access: reading, searching, and listing. */
+export effectSet NotesRead = <std::notes::read, std::notes::search, std::notes::list>
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L67))
+
+### NotesWrite
+
+Notes mutation: creating, appending, and deleting.
+
+```ts
+/** Notes mutation: creating, appending, and deleting. */
+export effectSet NotesWrite = <std::notes::create, std::notes::append, std::notes::delete>
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L70))
+
+### Notes
+
+All Notes access, reads and writes.
+
+```ts
+/** All Notes access, reads and writes. */
+export effectSet Notes = <NotesRead, NotesWrite>
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L73))

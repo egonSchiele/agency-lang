@@ -62,3 +62,12 @@ export effectSet Calendar = <std::listEvents, std::createEvent, std::updateEvent
 
 /** Agent long-term memory: recall, remember, forget, and enable/disable. */
 export effectSet Memory = <std::memory::recall, std::memory::remember, std::memory::forget, std::memory::enableMemory, std::memory::disableMemory>
+
+/** Read-only Notes access: reading, searching, and listing. */
+export effectSet NotesRead = <std::notes::read, std::notes::search, std::notes::list>
+
+/** Notes mutation: creating, appending, and deleting. */
+export effectSet NotesWrite = <std::notes::create, std::notes::append, std::notes::delete>
+
+/** All Notes access, reads and writes. */
+export effectSet Notes = <NotesRead, NotesWrite>

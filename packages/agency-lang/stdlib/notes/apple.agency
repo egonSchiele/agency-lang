@@ -1,0 +1,271 @@
+import {
+  _createNote,
+  _appendToNote,
+  _readNote,
+  _searchNotes,
+  _listNotes,
+  _listFolders,
+  _deleteNote,
+  _folderExists,
+  _preflightNote,
+} from "agency-lang/stdlib-lib/appleNotes.js"
+import { parse, renderForHtml } from "std::markdown"
+
+/** @module
+  Create, read, search, and edit notes in the macOS Notes app. macOS only, and
+  the first call asks for Automation permission.
+
+  ```ts
+  import { createNote } from "std::notes/apple"
+
+  node main() {
+    const result = createNote("Findings", "## Summary\n\n- one\n- two")
+    print(result)
+  }
+  ```
+
+  Notes are addressed by their opaque `id`, not by title, because two notes in
+  the same folder may share a title. Get ids from `listNotes` or `searchNotes`.
+
+  Every function takes an optional `folder`, which constrains rather than
+  addresses: if you pass it, the call fails unless the note is in that folder.
+  Combined with partial application, that confines an agent to one folder in a
+  way the model cannot see or route around:
+
+  ```ts
+  const inbox = createNote.partial(folder: "Agency Inbox").rename("addToInbox")
+  llm("Log your findings", { tools: [inbox] })
+  ```
+*/
+
+/** A folder in Notes. `noteCount` is derived, not stored. */
+export type Folder = {
+  id: string
+  name: string
+  noteCount: number
+}
+
+/** A note's metadata. Deliberately contains no body. */
+export type Note = {
+  id: string
+  title: string
+  folder: string
+  account: string
+  modified: string
+  passwordProtected: boolean
+}
+
+/** A note including its content, as plaintext. */
+export type NoteContent = {
+  id: string
+  title: string
+  folder: string
+  account: string
+  body: string
+  modified: string
+}
+
+effect std::notes::create { account: string, folder: string, title: string, folderCreated: boolean }
+effect std::notes::append { account: string, folder: string, title: string, id: string }
+effect std::notes::read   { account: string, folder: string, title: string, id: string }
+effect std::notes::search { account: string, folder: string, query: string }
+effect std::notes::list   { account: string, folder: string }
+effect std::notes::delete { account: string, folder: string, title: string, id: string }
+
+/** Convert markdown to the HTML that Notes requires on write. */
+def toHtml(body: string): Result<string> {
+  const parsed = parse(body)
+  if (!parsed.success) {
+    return failure("Could not parse the note body as Markdown: ${parsed.error}")
+  }
+  return success(renderForHtml(parsed.blocks))
+}
+
+/** What the pre-flight lookup returns. Re-declared natively because record
+    types imported from TypeScript are opaque to the typechecker. */
+type Preflight = {
+  id: string
+  title: string
+  folder: string
+  account: string
+  locked: boolean
+}
+
+/** Look the note up before raising the interrupt, so the payload can carry its
+    real title, folder, and account — the fields a policy glob matches on and a
+    human reads before approving. Without this, the payload would hold an opaque
+    id and empty strings, and no policy could ever match an append, read, or
+    delete.
+
+    Refusing a folder-assertion mismatch here, before the interrupt, keeps the
+    payload honest: the folder shown to the approver is always the note's real
+    folder. The TypeScript layer re-asserts the folder (by scoped lookup) and
+    the locked flag after the approval — that re-check is the safety guard;
+    this one exists for payload truth and a fail-fast error. */
+def preflight(id: string, folder: string | null): Result<Preflight> {
+  const p = try _preflightNote(id)
+  if (isFailure(p)) {
+    return p
+  }
+  if (folder != null && p.value.folder != folder) {
+    return failure("Note ${p.value.title} is in folder ${p.value.folder}, not ${folder}. Refusing.")
+  }
+  return p
+}
+
+export def createNote(title: string, body: string, folder: string = "Agency Notes"): Result<Note> raises <std::notes::create> {
+  """
+  Create a note in the Notes app and return it, including its new id.
+
+  @param title - The note's title
+  @param body - The note's content, as Markdown
+  @param folder - The folder to create it in. Created if it does not exist.
+  """
+  const html = toHtml(body)
+  if (isFailure(html)) {
+    return html
+  }
+
+  const exists = try _folderExists(folder)
+  if (isFailure(exists)) {
+    return exists
+  }
+
+  // exists is the Result from `try`, so negate the VALUE. `!exists` would
+  // negate the always-truthy success object and folderCreated would silently
+  // always read false.
+  return interrupt std::notes::create("Create a note in the Notes app?", {
+    account: "",
+    folder: folder,
+    title: title,
+    folderCreated: !exists.value
+  })
+
+  destructive {
+    return try _createNote(title, html.value, folder)
+  }
+}
+
+export def appendToNote(id: string, body: string, folder?: string): Result<Note> raises <std::notes::append> {
+  """
+  Append Markdown to an existing note. Get the id from listNotes or searchNotes.
+
+  @param id - The note's id
+  @param body - The content to append, as Markdown
+  @param folder - If given, the call fails unless the note is in this folder
+  """
+  const html = toHtml(body)
+  if (isFailure(html)) {
+    return html
+  }
+
+  const p = preflight(id, folder)
+  if (isFailure(p)) {
+    return p
+  }
+
+  return interrupt std::notes::append("Append to a note in the Notes app?", {
+    account: p.value.account,
+    folder: p.value.folder,
+    title: p.value.title,
+    id: id
+  })
+
+  destructive {
+    return try _appendToNote(id, html.value, folder)
+  }
+}
+
+export idempotent def readNote(id: string, folder?: string): Result<NoteContent> raises <std::notes::read> {
+  """
+  Read a note's contents as plain text. Get the id from listNotes or searchNotes.
+
+  @param id - The note's id
+  @param folder - If given, the call fails unless the note is in this folder
+  """
+  const p = preflight(id, folder)
+  if (isFailure(p)) {
+    return p
+  }
+
+  return interrupt std::notes::read("Read a note from the Notes app?", {
+    account: p.value.account,
+    folder: p.value.folder,
+    title: p.value.title,
+    id: id
+  })
+
+  return try _readNote(id, folder)
+}
+
+export idempotent def searchNotes(query: string, folder?: string): Result<Note[]> raises <std::notes::search> {
+  """
+  Search notes by their text and return matching notes' metadata, without their
+  contents.
+
+  @param query - The text to search for
+  @param folder - If given, only search this folder
+  """
+  const payloadFolder = if folder == null then "" else folder
+
+  return interrupt std::notes::search("Search the notes in the Notes app?", {
+    account: "",
+    folder: payloadFolder,
+    query: query
+  })
+
+  return try _searchNotes(query, folder)
+}
+
+export idempotent def listNotes(folder?: string): Result<Note[]> raises <std::notes::list> {
+  """
+  List notes' metadata, without their contents.
+
+  @param folder - If given, only list this folder
+  """
+  const payloadFolder = if folder == null then "" else folder
+
+  return interrupt std::notes::list("List the notes in the Notes app?", {
+    account: "",
+    folder: payloadFolder
+  })
+
+  return try _listNotes(folder)
+}
+
+export idempotent def listFolders(): Result<Folder[]> raises <std::notes::list> {
+  """
+  List the folders in the Notes app, with a count of the notes in each.
+  """
+  return interrupt std::notes::list("List the folders in the Notes app?", {
+    account: "",
+    folder: ""
+  })
+
+  return try _listFolders()
+}
+
+export def deleteNote(id: string, folder?: string): Result<null> raises <std::notes::delete> {
+  """
+  Delete a note. It moves to the Recently Deleted folder, where it stays for
+  about 30 days.
+
+  @param id - The note's id
+  @param folder - If given, the call fails unless the note is in this folder
+  """
+  const p = preflight(id, folder)
+  if (isFailure(p)) {
+    return p
+  }
+
+  return interrupt std::notes::delete("Delete a note from the Notes app?", {
+    account: p.value.account,
+    folder: p.value.folder,
+    title: p.value.title,
+    id: id
+  })
+
+  destructive {
+    return try _deleteNote(id, folder)
+  }
+}

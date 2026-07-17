@@ -64,6 +64,7 @@ import { expressionToString } from "@/utils/node.js";
 import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
 import { FinalizeBlock } from "@/types/finalizeBlock.js";
+import { GuardBlock } from "@/types/guardBlock.js";
 import { Tag } from "@/types/tag.js";
 import { NewExpression } from "@/types/newExpression.js";
 import {
@@ -499,6 +500,8 @@ export class AgencyGenerator {
         return this.processHandleBlock(node);
       case "finalizeBlock":
         return this.processFinalizeBlock(node);
+      case "guardBlock":
+        return this.processGuardBlock(node);
       case "withModifier":
         return `${this.processNode(node.statement)} with ${node.handlerName}`;
       case "staticStatement":
@@ -1672,6 +1675,22 @@ export class AgencyGenerator {
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
     return this.indentStr(`finalize {\n${bodyCodeStr}${this.indentStr("}")}`);
+  }
+
+  /** Canonical form: head args in SOURCE order (argOrder), parens
+   *  always present, never a legacy `as` — printing old syntax through
+   *  the generator IS the `as`-removal migration. */
+  protected processGuardBlock(node: GuardBlock): string {
+    this.increaseIndent();
+    const bodyCodeStr = this.renderBody(node.body);
+    this.decreaseIndent();
+    const fields = { cost: node.cost, time: node.time, label: node.label };
+    const params = node.argOrder
+      .filter((name) => fields[name] !== null)
+      .map((name) => `${name}: ${this.processNode(fields[name]!).trim()}`);
+    return this.indentStr(
+      `guard(${params.join(", ")}) {\n${bodyCodeStr}${this.indentStr("}")}`,
+    );
   }
 
   protected processSkill(node: Skill): string {

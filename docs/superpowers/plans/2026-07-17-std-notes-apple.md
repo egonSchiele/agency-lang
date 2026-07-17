@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, `child_process.execFile`, AppleScript via `osascript`, vitest, Agency stdlib conventions.
 
-**Design spec:** `/Users/adityabhargava/agency-lang/docs/superpowers/specs/2026-07-16-std-notes-apple-notes-design.md`
+**Design spec:** `/Users/adityabhargava/agency-notes-92/docs/superpowers/specs/2026-07-16-std-notes-apple-notes-design.md` (the copy in this worktree, so Task 6's spec edits land on the branch)
 
 Read the spec before starting. This plan implements it and does not re-argue it. Where a step looks arbitrary, the spec section is cited and explains why.
 
@@ -27,7 +27,7 @@ These apply to every task. They are not style preferences; most of them are find
 - **Every script wraps its body in `with timeout of 30 seconds`.** Otherwise it inherits AppleScript's 120-second default. Spec §6.1.
 - **Timeout constant:** `NOTES_TIMEOUT_SECONDS = 30`, module-level, in `appleNotes.ts`.
 - **Payload fields are always strings, never null.** An omitted optional `folder` reaches the payload as `""`. Measured, not stylistic — see "Why empty strings, not null" below.
-- **Field delimiter for multi-field returns:** `ASCII character 1` (``). Not tab — note titles can legally contain tabs.
+- **Field delimiter for multi-field returns:** `ASCII character 1`, written in TS source as the `\u0001` escape — never as a raw byte, which is invisible in an editor and survives copy-paste unreliably. Not tab — note titles can legally contain tabs.
 
 ---
 
@@ -236,6 +236,11 @@ describe("runNotesScript", () => {
   });
 
   it("maps -1743 to a clear not-authorized error", async () => {
+    // Two awaited calls below, and mockFailure queues with
+    // mockImplementationOnce — so queue it twice. vi.clearAllMocks() does NOT
+    // clear the factory's default success implementation, so a second call
+    // with nothing queued would RESOLVE and the assertion would fail.
+    mockFailure("execution error: Not authorized to send Apple events to Notes. (-1743)");
     mockFailure("execution error: Not authorized to send Apple events to Notes. (-1743)");
     await expect(runNotesScript("s", [])).rejects.toThrow(/Not authorized to control Notes/);
     await expect(runNotesScript("s", [])).rejects.toThrow(/Privacy & Security/);
@@ -271,7 +276,7 @@ describe("withTimeout", () => {
 
 describe("FIELD_DELIM", () => {
   it("is a control character, because titles can contain tabs", () => {
-    expect(FIELD_DELIM).toBe("");
+    expect(FIELD_DELIM).toBe("\u0001");
     expect(FIELD_DELIM).not.toBe("\t");
   });
 });
@@ -301,8 +306,10 @@ const execFileAsync = promisify(execFile);
 export const NOTES_TIMEOUT_SECONDS = 30;
 
 /** Separator for multi-field script returns. Not a tab: note titles can
- *  legally contain tabs, and a title with one would corrupt the parse. */
-export const FIELD_DELIM = "";
+ *  legally contain tabs, and a title with one would corrupt the parse.
+ *  Written as an escape, never a raw byte: a raw U+0001 is invisible in
+ *  every editor and survives copy-paste unreliably. */
+export const FIELD_DELIM = "\u0001";
 
 /** Wrap an AppleScript body in the argv handler and our own timeout. */
 export function withTimeout(body: string): string {
@@ -412,6 +419,8 @@ The security core. Everything that touches an existing note goes through this.
   - `assertNotLocked(p: NotePreflight): void`
 
 **Why this exists (spec §5.3):** the interrupt payload must carry `folder`, `title`, and `account`, because those are what policy globs match on. So we must read them before raising the interrupt, which means this one query is not itself gated. That is acceptable, but the reasoning is narrow and belongs in the source: **an id is unguessable.** It is an opaque `x-coredata://` URI that cannot be enumerated or constructed, so whoever holds one already learned it somewhere, and this lookup discloses only the title and folder they could already name. Do not write "unreachable without a gate" — that claim is false (ids are stable and survive checkpoints) and it would license adding a fourth property to this query.
+
+The consumer of this query is Task 5's `preflight` helper, which calls it before raising each append/read/delete interrupt and builds the payload from its result. If that call is ever removed, this query loses its reason to exist ungated — the two must stay together.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -646,7 +655,7 @@ Run:
 ```bash
 cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
 ```
-Expected: PASS, 19 tests.
+Expected: PASS, 20 tests.
 
 - [ ] **Step 5: Prove the locked guard is load-bearing**
 
@@ -737,6 +746,10 @@ describe("_readNote", () => {
   });
 
   it("fails closed when the folder assertion does not match", async () => {
+    // Two calls, so queue the preflight reply twice — the mock is queue-once,
+    // and the second call would otherwise read the factory default ("") and
+    // fail on parsing instead of on the folder.
+    mockStdout(["Q3", "Personal", "iCloud", "false"].join(FIELD_DELIM));
     mockStdout(["Q3", "Personal", "iCloud", "false"].join(FIELD_DELIM));
     await expect(_readNote("x-coredata://note/1", "Work")).rejects.toThrow(/Work/);
     await expect(_readNote("x-coredata://note/1", "Work")).rejects.toThrow(/Personal/);
@@ -748,6 +761,51 @@ describe("_readNote", () => {
     await expect(_readNote("x-coredata://note/1", "Work")).resolves.toMatchObject({
       folder: "Work",
     });
+  });
+
+  it("uses a scoped lookup for the read when a folder is given", async () => {
+    mockStdout(["Q3", "Work", "iCloud", "false"].join(FIELD_DELIM));
+    mockStdout(["body", "2026-07-17"].join(FIELD_DELIM));
+    await _readNote("x-coredata://note/1", "Work");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[1];
+    // Same treatment as the write path (spec section 6.4): a note that moved
+    // folders during the approval fails to resolve instead of being read.
+    expect(args[1]).toContain("of folder (item 2 of argv)");
+    expect(args[3]).toBe("Work");
+  });
+});
+
+describe("_listNotes", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("lists all notes when no folder is given", async () => {
+    const row = ["id1", "One", "Work", "iCloud", "2026-07-17", "false"].join(FIELD_DELIM);
+    mockStdout(row);
+    const notes = await _listNotes();
+    expect(notes).toHaveLength(1);
+    expect(notes[0].title).toBe("One");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    expect(args[1]).not.toContain("of folder");
+  });
+
+  it("scopes to the folder when one is given, passed as argv", async () => {
+    mockStdout("");
+    await _listNotes("Work");
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    expect(args[1]).toContain("notes of folder (item 1 of argv)");
+    expect(args[2]).toBe("Work");
+  });
+
+  it("returns an empty array rather than throwing when there are none", async () => {
+    mockStdout("");
+    await expect(_listNotes()).resolves.toEqual([]);
   });
 });
 
@@ -886,8 +944,12 @@ export type FolderMeta = {
 
 /** Assert a note is in the folder the caller named. Fails closed.
  *
- *  This is the read-path assertion. The write path uses a scoped lookup
- *  instead, which is stronger — see _appendToNote. */
+ *  This compare is the fail-fast check with the readable error message. It is
+ *  NOT the authoritative assertion: on both the read and write paths the
+ *  actual access addresses the note THROUGH the folder (`note id X of folder
+ *  Y`), so the lookup failing is the assertion failing, and the check cannot
+ *  drift from the access across the human approval that sits between the
+ *  pre-flight and the access. */
 function assertFolder(p: NotePreflight, folder?: string): void {
   if (folder != null && p.folder !== folder) {
     throw new Error(
@@ -898,8 +960,21 @@ function assertFolder(p: NotePreflight, folder?: string): void {
 
 // Reads `plaintext`, never `body`. body is HTML: it would waste tokens and read
 // badly for a model. Spec section 2.4.
-const READ_SCRIPT = withTimeout(`    tell application "Notes"
+//
+// Two shapes, like the write path (spec section 6.4): when the caller asserted
+// a folder, the read addresses the note THROUGH it, so a note that moved
+// folders during the human approval fails to resolve instead of being read.
+// An unscoped read would leave open on the read path the exact window the
+// write path closes — and reading is the operation folder confinement was
+// invented for.
+const READ_UNSCOPED_SCRIPT = withTimeout(`    tell application "Notes"
       set n to note id (item 1 of argv)
+      set d to (ASCII character 1)
+      return (plaintext of n) & d & ((modification date of n) as text)
+    end tell`);
+
+const READ_SCOPED_SCRIPT = withTimeout(`    tell application "Notes"
+      set n to note id (item 1 of argv) of folder (item 2 of argv)
       set d to (ASCII character 1)
       return (plaintext of n) & d & ((modification date of n) as text)
     end tell`);
@@ -909,7 +984,9 @@ export async function _readNote(id: string, folder?: string): Promise<NoteConten
   assertFolder(p, folder);
   assertNotLocked(p);
 
-  const raw = await runNotesScript(READ_SCRIPT, [id]);
+  const raw = folder == null
+    ? await runNotesScript(READ_UNSCOPED_SCRIPT, [id])
+    : await runNotesScript(READ_SCOPED_SCRIPT, [id, folder]);
   const parts = raw.split(FIELD_DELIM);
   if (parts.length !== 2) {
     throw new Error(`Notes returned an unexpected reply for note ${id}.`);
@@ -1051,7 +1128,7 @@ Run:
 ```bash
 cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
 ```
-Expected: PASS, 29 tests.
+Expected: PASS, 36 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -1092,6 +1169,30 @@ Append to the test file:
 
 ```ts
 import { _folderExists, _createNote, _appendToNote, _deleteNote } from "../appleNotes.js";
+
+describe("_folderExists", () => {
+  const originalPlatform = process.platform;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(process, "platform", { value: "darwin", writable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
+  });
+
+  it("passes the folder as argv and parses a true reply", async () => {
+    mockStdout("true");
+    await expect(_folderExists("Agency Notes")).resolves.toBe(true);
+    const [, args] = (execFile as unknown as MockFn).mock.calls[0];
+    expect(args[1]).toContain("exists folder (item 1 of argv)");
+    expect(args[2]).toBe("Agency Notes");
+  });
+
+  it("parses a false reply", async () => {
+    mockStdout("false");
+    await expect(_folderExists("No Such Folder")).resolves.toBe(false);
+  });
+});
 
 describe("_createNote", () => {
   const originalPlatform = process.platform;
@@ -1346,7 +1447,7 @@ Run:
 ```bash
 cd packages/agency-lang && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts
 ```
-Expected: PASS, 40 tests.
+Expected: PASS, 48 tests.
 
 - [ ] **Step 5: Prove the locked guard is load-bearing**
 
@@ -1383,6 +1484,23 @@ during the approval. A missed check replaces the note's contents."
 - Consumes: every `_`-prefixed function from Tasks 1–4, plus `parse` and `renderForHtml` from `std::markdown`.
 - Produces: the public `std::notes/apple` surface.
 
+**The append/read/delete payloads are built from the pre-flight.** This is the
+whole point of Task 2's ungated `_preflightNote` query, so it must not be
+dropped in a refactor: the caller hands these functions an opaque
+`x-coredata://` id and nothing else, so without a pre-flight the interrupt
+payload could only carry that id and empty strings. A human approving a delete
+would see nothing identifying the note, and a policy like
+`{"match": {"folder": "Work"}, "action": "approve"}` could never match, because
+the payload's `folder` would be `""` — which matches no glob, not even `"*"`
+(see "Why empty strings, not null"). So `appendToNote`, `readNote`, and
+`deleteNote` each call the `preflight` helper below before raising their
+interrupt, and the payload carries the note's real `title`, `folder`, and
+`account`. The helper also refuses a folder-assertion mismatch *before* the
+interrupt, which keeps the payload honest: the folder a human approves is the
+note's real folder, never an asserted folder the note is not actually in. The
+TypeScript layer re-asserts the folder and the locked flag after approval; the
+helper is for payload truth and fail-fast, not the safety guard.
+
 **Syntax rules (from CLAUDE.md — verify against `docs/site/guide/basic-syntax.md` if unsure):** functions are `def` with braces; `if` needs parens and braces; variables need `let`/`const`. Do not write Python-style colons.
 
 - [ ] **Step 1: Write the module**
@@ -1399,6 +1517,7 @@ import {
   _listFolders,
   _deleteNote,
   _folderExists,
+  _preflightNote,
 } from "agency-lang/stdlib-lib/appleNotes.js"
 import { parse, renderForHtml } from "std::markdown"
 
@@ -1472,6 +1591,38 @@ def toHtml(body: string): Result<string> {
   return success(renderForHtml(parsed.blocks))
 }
 
+/** What the pre-flight lookup returns. Re-declared natively because record
+    types imported from TypeScript are opaque to the typechecker. */
+type Preflight = {
+  id: string
+  title: string
+  folder: string
+  account: string
+  locked: boolean
+}
+
+/** Look the note up before raising the interrupt, so the payload can carry its
+    real title, folder, and account — the fields a policy glob matches on and a
+    human reads before approving. Without this, the payload would hold an opaque
+    id and empty strings, and no policy could ever match an append, read, or
+    delete.
+
+    Refusing a folder-assertion mismatch here, before the interrupt, keeps the
+    payload honest: the folder shown to the approver is always the note's real
+    folder. The TypeScript layer re-asserts the folder (by scoped lookup on
+    writes) and the locked flag after the approval — that re-check is the
+    safety guard; this one exists for payload truth and a fail-fast error. */
+def preflight(id: string, folder: string | null): Result<Preflight> {
+  const p = try _preflightNote(id)
+  if (isFailure(p)) {
+    return p
+  }
+  if (folder != null && p.value.folder != folder) {
+    return failure("Note ${p.value.title} is in folder ${p.value.folder}, not ${folder}. Refusing.")
+  }
+  return p
+}
+
 export def createNote(title: string, body: string, folder: string = "Agency Notes"): Result<Note> raises <std::notes::create> {
   """
   Create a note in the Notes app and return it, including its new id.
@@ -1490,11 +1641,15 @@ export def createNote(title: string, body: string, folder: string = "Agency Note
     return exists
   }
 
+  // exists is the Result from `try`, so negate the VALUE. `!exists` would
+  // negate the always-truthy success object and folderCreated would silently
+  // always read false. Precedent for .value after an isFailure guard:
+  // stdlib/agency.agency (compileResult.value).
   return interrupt std::notes::create("Create a note in the Notes app?", {
     account: "",
     folder: folder,
     title: title,
-    folderCreated: !exists
+    folderCreated: !exists.value
   })
 
   destructive {
@@ -1515,10 +1670,15 @@ export def appendToNote(id: string, body: string, folder?: string): Result<Note>
     return html
   }
 
+  const p = preflight(id, folder)
+  if (isFailure(p)) {
+    return p
+  }
+
   return interrupt std::notes::append("Append to a note in the Notes app?", {
-    account: "",
-    folder: if folder == null then "" else folder,
-    title: "",
+    account: p.value.account,
+    folder: p.value.folder,
+    title: p.value.title,
     id: id
   })
 
@@ -1534,10 +1694,15 @@ export idempotent def readNote(id: string, folder?: string): Result<NoteContent>
   @param id - The note's id
   @param folder - If given, the call fails unless the note is in this folder
   """
+  const p = preflight(id, folder)
+  if (isFailure(p)) {
+    return p
+  }
+
   return interrupt std::notes::read("Read a note from the Notes app?", {
-    account: "",
-    folder: if folder == null then "" else folder,
-    title: "",
+    account: p.value.account,
+    folder: p.value.folder,
+    title: p.value.title,
     id: id
   })
 
@@ -1552,9 +1717,11 @@ export idempotent def searchNotes(query: string, folder?: string): Result<Note[]
   @param query - The text to search for
   @param folder - If given, only search this folder
   """
+  const payloadFolder = if folder == null then "" else folder
+
   return interrupt std::notes::search("Search the notes in the Notes app?", {
     account: "",
-    folder: if folder == null then "" else folder,
+    folder: payloadFolder,
     query: query
   })
 
@@ -1567,9 +1734,11 @@ export idempotent def listNotes(folder?: string): Result<Note[]> raises <std::no
 
   @param folder - If given, only list this folder
   """
+  const payloadFolder = if folder == null then "" else folder
+
   return interrupt std::notes::list("List the notes in the Notes app?", {
     account: "",
-    folder: if folder == null then "" else folder
+    folder: payloadFolder
   })
 
   return try _listNotes(folder)
@@ -1595,10 +1764,15 @@ export def deleteNote(id: string, folder?: string): Result<null> raises <std::no
   @param id - The note's id
   @param folder - If given, the call fails unless the note is in this folder
   """
+  const p = preflight(id, folder)
+  if (isFailure(p)) {
+    return p
+  }
+
   return interrupt std::notes::delete("Delete a note from the Notes app?", {
-    account: "",
-    folder: if folder == null then "" else folder,
-    title: "",
+    account: p.value.account,
+    folder: p.value.folder,
+    title: p.value.title,
     id: id
   })
 
@@ -1658,7 +1832,7 @@ cd packages/agency-lang && pnpm run ast stdlib/notes/apple.agency > /dev/null &&
 ```
 Expected: `PARSES`.
 
-If it fails, check `docs/site/guide/basic-syntax.md`. Known parser gotchas from the memory file: `!(...)` on a paren-expression fails to parse, and `thread` is a keyword. If `if ... then ... else` as an argument value fails, hoist it to a `const` first — `if` expressions are only allowed as a `const`/`let` value or a `return`.
+If it fails, check `docs/site/guide/basic-syntax.md`. Known parser gotchas from the memory file: `!(...)` on a paren-expression fails to parse, and `thread` is a keyword. Every `if ... then ... else` expression in the module is already hoisted to a `const` (`payloadFolder`) rather than written inline in an object literal, because `if` expressions are only reliably allowed as a `const`/`let` value or a `return` — do not inline them back while tidying.
 
 - [ ] **Step 3: Add the capability sets**
 
@@ -1685,7 +1859,7 @@ Expected: exit 0. `make` is required for any stdlib change.
 
 - [ ] **Step 5: Verify the tool schema narrows under partial application**
 
-Create `/tmp/notes-check.agency` in the repo (NOT in /tmp — Agency needs node_modules):
+Create `notes-check.agency` directly in `packages/agency-lang/` (not in /tmp — Agency files only run where node_modules is available):
 
 ```ts
 import { createNote } from "std::notes/apple"
@@ -1698,7 +1872,7 @@ node main() {
 
 Run:
 ```bash
-cd packages/agency-lang && cp /tmp/notes-check.agency ./notes-check.agency && pnpm run agency notes-check.agency; rm -f notes-check.agency
+cd packages/agency-lang && pnpm run agency notes-check.agency; rm -f notes-check.agency
 ```
 Expected: `partial applied ok`. This exercises compilation and PFA without touching Notes.app.
 
@@ -1710,7 +1884,10 @@ git commit -m "Add the std::notes/apple module and its capability sets
 
 Per-operation effects rather than one blanket std::notes, so a policy can
 approve reads and reject deletes. Payloads carry account, folder and
-title because those are what policy globs match on.
+title because those are what policy globs match on. For append, read and
+delete the payload is built from the ungated pre-flight lookup, so the
+approver sees the note's real title and folder rather than an opaque id,
+and a folder-scoped policy can match a call that passed only an id.
 
 Notes are addressed by id, since duplicate titles are legal. The optional
 folder argument constrains rather than addresses, so partial application
@@ -1817,6 +1994,16 @@ Each operation raises its own [effect](/guide/effects), so a
 }
 ```
 
+`readNote`, `appendToNote`, and `deleteNote` look the note up before raising
+their interrupt, so the payload carries the note's real `title`, `folder`, and
+`account` even when the call passed only an id. The rule above therefore
+matches a bare `readNote(id)` for a note that lives in Work.
+
+One v1 limit: only those three calls populate `account`. `createNote`,
+`searchNotes`, and `listNotes` send it as an empty string, and an empty string
+matches no glob — not even `"*"` — so a rule that matches on `account` never
+applies to them. Match on `folder` instead.
+
 Or constrain a whole node with the capability sets:
 
 ```ts
@@ -1869,7 +2056,22 @@ process cannot receive the callback, so a create call could not return the id of
 the note it made.
 ```
 
-- [ ] **Step 2: Build so the guide is staged into the stdlib**
+- [ ] **Step 2: Write the two v1 limits into the spec**
+
+Edit `/Users/adityabhargava/agency-notes-92/docs/superpowers/specs/2026-07-16-std-notes-apple-notes-design.md`:
+
+1. Add a "v1 limits" note recording both deliberate limits from this plan's
+   "Two v1 limits" section: nested folder paths are unsupported (`listFolders`
+   returns top-level folders only), and `account` is an output field, not an
+   input filter. The spec currently promises an `account` argument (§4.2); it
+   must stop promising what the code does not build.
+2. The spec header still says "awaiting owner review" — that is stale (the
+   review happened and its findings are folded in). Fix it while in the file.
+
+This step exists because a spec that overpromises is how the next person
+reintroduces the gap. It must land in the same PR as the module.
+
+- [ ] **Step 3: Build so the guide is staged into the stdlib**
 
 Run:
 ```bash
@@ -1877,7 +2079,7 @@ cd packages/agency-lang && make
 ```
 Expected: exit 0. `make` copies `docs/site/guide` into `stdlib/docs/guide` for `std::skills::docsSkill`.
 
-- [ ] **Step 3: Verify the generated stdlib reference page exists**
+- [ ] **Step 4: Verify the generated stdlib reference page exists**
 
 Run:
 ```bash
@@ -1885,10 +2087,10 @@ cd packages/agency-lang && ls docs/site/stdlib/notes/ && grep -c "createNote" do
 ```
 Expected: `apple.md` listed, and a non-zero count. `agency doc` recurses, so no registry needed.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add packages/agency-lang/docs/site/guide/apple-notes.md packages/agency-lang/stdlib/docs/ packages/agency-lang/docs/site/stdlib/
+git add packages/agency-lang/docs/site/guide/apple-notes.md packages/agency-lang/stdlib/docs/ packages/agency-lang/docs/site/stdlib/ docs/superpowers/specs/2026-07-16-std-notes-apple-notes-design.md
 git commit -m "Document std::notes/apple
 
 Adds the guide page. The stdlib reference page is generated from the
@@ -1911,7 +2113,7 @@ Run:
 ```bash
 cd packages/agency-lang && make && npx tsc --noEmit -p tsconfig.json && pnpm run lint:structure && npx vitest run lib/stdlib/__tests__/appleNotes.test.ts lib/stdlib/__tests__/markdown.test.ts 2>&1 | tail -20
 ```
-Expected: all exit 0; appleNotes 40 tests pass, markdown 46 tests pass.
+Expected: all exit 0; appleNotes 48 tests pass, and the markdown suite passes (verify the count empirically — do not chase a number written here).
 
 Save the output to a file rather than rerunning — the suites here are slow:
 ```bash
@@ -1949,7 +2151,7 @@ Checked against the spec:
 | §3.6 argv, no `-` separator | 1 (tested) |
 | §2.8 both error codes | 1 (tested) |
 | §6.1 `with timeout` | 1 |
-| §5.3 pre-flight, split container | 2 (tested) |
+| §5.3 pre-flight, split container, payloads built from it | 2, 5 (tested) |
 | §2.7 locked = data loss | 2, 4 (tested, mutation-verified) |
 | §2.4 read plaintext, write HTML | 3, 5 (tested) |
 | §9.3 search plaintext not body | 3 (tested) |
@@ -1982,6 +2184,67 @@ Checked against the spec:
 **Two deliberate v1 limits**, both measured, both documented above under "Two v1 limits":
 
 - **Nested folder paths are unsupported.** `listFolders` returns top-level folders only, which is honest rather than the flat-and-wrong alternative. Nested folders stay reachable by bare name, ambiguously — Notes' own behaviour.
-- **The `account` argument is not implemented.** `account` is an output field, not an input filter, so folder scoping stays advisory on a multi-account machine. The owner has one account, so this is latent. **Both limits must be written into the spec before this merges, so the spec stops promising what the code does not build.**
+- **The `account` argument is not implemented.** `account` is an output field, not an input filter, so folder scoping stays advisory on a multi-account machine. The owner has one account, so this is latent. Task 6 Step 2 writes both limits into the spec, so the spec stops promising what the code does not build.
 
 **The account BUG, as distinct from the missing argument, is fixed** in Task 2's `ACCOUNT_WALK`. One hop up from a note's folder lands on `Archived`, not `iCloud`, for anything nested. That was wrong and silently so.
+
+---
+
+## Plan review round 1 (2026-07-17), findings applied
+
+An external review of this plan checked its claims against the codebase. What
+it verified as correct: the `return interrupt` + `destructive` idiom
+(`stdlib/messaging/imessage.agency:33-43`), the double-return read idiom
+(`gitStatus`, `stdlib/git.agency:154-155`), the `effectSet` syntax, the
+`"agency-lang/stdlib-lib/*.js"` import path, the `ParseResult` shape
+(`stdlib/markdown.agency:223-228`), optional `?` params (confirmed via
+`pnpm run ast`), and the picomatch measurements (re-run: `isMatch("", "*")` is
+`false`, `null` throws). Six findings needed fixes, all folded in above:
+
+1. **The append/read/delete interrupt payloads were hollow** — `title: ""` and
+   `account: ""` hardcoded, `_preflightNote` never called before the interrupt.
+   That defeated spec §5.3 and Task 2's own rationale: a human approving a
+   delete saw only an opaque id, and a folder policy could never match a call
+   that passed only an id. Fixed in Task 5 with the `preflight` helper, which
+   also refuses a folder-assertion mismatch before the interrupt so the payload
+   folder is always the note's real folder.
+2. **`folderCreated: !exists` negated the Result object, not the boolean** —
+   always-truthy success object, so the flag would silently always read false.
+   Fixed to `!exists.value`.
+3. **Two tests queued one mock but made two calls** (the -1743 test and
+   `_readNote`'s folder-assertion test). `vi.clearAllMocks()` does not clear
+   the factory default, so the second call resolved and the assertion failed.
+   Fixed by queueing per call.
+4. **`_listNotes` and `_folderExists` had no tests**, and the expected test
+   counts in Tasks 2–4 were wrong. Tests added; counts now 20 / 35 / 47.
+5. **The spec edit the self-review demanded had no step.** Now Task 6 Step 2.
+6. **Inline `if ... then ... else` in object literals** was a known parse risk
+   used five times. The pre-flight fix removed three; the rest are hoisted to
+   `const payloadFolder`. Also fixed the self-contradictory /tmp wording in
+   Task 5 Step 5, and documented in the guide that an `account` match never
+   applies to the calls that send `account` as `""`.
+
+## Plan review round 2 (2026-07-17), findings applied
+
+A second, independent review (`2026-07-17-std-notes-apple-REVIEW.md`, written
+against the pre-round-1 plan) verified its two blockers — inline
+`if/then/else` does not parse, and `!exists` is always false — both already
+fixed in round 1. Two of its further findings were adopted:
+
+1. **The read path kept the TOCTOU the write path closes** (its Finding 3).
+   `_readNote` asserted the folder by compare, then read with an unscoped
+   `note id X` — so a note that moved folders during the human approval was
+   still read. Reading is the operation folder confinement was invented for,
+   and the guide's "anything outside Work fails closed" claim has to be true
+   for reads too. Fixed: `_readNote` now has scoped and unscoped script shapes
+   like `_appendToNote`, with a test. `assertFolder` stays as the fail-fast
+   readable error; its comment now says the scoped lookup is the authoritative
+   assertion on both paths. Counts now 36 / 48.
+2. **`FIELD_DELIM` was a raw invisible control byte in source** (its Finding
+   5). If the byte is mangled in transit, the test's own expected value
+   mangles with it and still passes. Both are now the `\u0001` escape.
+
+Its Finding 4 (thread the real account through payloads that pre-flight) was
+already covered by round 1's payload fix. Its remaining notes — `listFolders`
+sharing `std::notes::list` with `listNotes`, and `renderForHtml`'s silent
+raw-HTML drop (spec finding 11b) — stay open as accepted v1 decisions.

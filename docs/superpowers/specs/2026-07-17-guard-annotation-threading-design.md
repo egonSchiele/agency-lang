@@ -291,3 +291,26 @@ unchanged everywhere (decision 1 / #582).
   which will consume this spec's stamp when it lands.
 - llm.md's limitation note update — owner-authored file (note the
   responseFormat half of that note now stays true until #582).
+
+---
+
+## As executed (2026-07-18, `guard-annotation-threading` branch)
+
+Execution matched the reviewed plan with three notes:
+
+1. **`bodySlots` also marks the standalone `blockArgument` case.** The
+   plan named three retargeting slots (functionCall block, inline
+   handler, finalize). Execution also set `retargetsReturn` on the
+   standalone `blockArgument` case's slot — if a walk ever descends
+   into a block-as-expression body, its returns retarget too. (The
+   desugar walk cannot currently reach a guard there — the walk does
+   not descend into call arguments, a pre-existing #574 property —
+   so this is defensive marking at the source of truth, not reachable
+   behavior.)
+2. **The structured fixture's generated code was inspected directly:**
+   `draftSchema: z.object({ "title": z.string() ... })` appears in the
+   compiled fixture JS, confirming the non-fallback path end to end
+   beyond the salvage outcome.
+3. **Byte-stability held exactly:** zero tracked-file churn after
+   `make fixtures`; the #578 fixtures (all unannotated) pass
+   unchanged; full unit suite 8594 green.

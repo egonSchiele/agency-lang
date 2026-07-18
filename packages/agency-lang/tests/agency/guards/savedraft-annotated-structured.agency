@@ -1,0 +1,16 @@
+// An annotated guard threads a STRUCTURED saveDraft schema — the
+// first e2e through the non-fallback path. Note what this pins and
+// what it cannot: the deterministic client ignores schemas and the
+// intrinsic keeps mismatched saves, so the OUTCOME here would be the
+// same under the string fallback; the codegen tests own the
+// distinguishing assertions. This fixture proves the threaded object
+// schema flows codegen -> draftSchema -> provider without breaking
+// the round-trip, and that a structured draft salvages intact.
+node main() {
+  const r: Result<{ title: string }> = guard(cost: 0.000001) {
+    const report: { title: string } = llm("work", tools: [saveDraft])
+    return report
+  }
+  if (isFailure(r)) { return "no-draft" }
+  return r.value.title
+}

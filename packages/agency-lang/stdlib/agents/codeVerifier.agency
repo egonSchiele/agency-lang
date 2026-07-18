@@ -24,7 +24,7 @@ Never say the artifact "appears" or "should" satisfy something. Run it, measure 
 /**
 Verifies code written to disk against a task description and optional criteria. Returns a list of feedback items.
 */
-def verifierAgent(task: string, criteria: string[] = []): Feedback[] {
+def codeVerifierAgent(task: string, criteria: string[] = []): Feedback[] {
   thread {
     systemMessage(verifySysPrompt)
     const criteriaString = map(criteria, \c -> `- ${c}`).join("\n")

@@ -13,8 +13,9 @@ import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js"
 import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
+import { visualWidth, wrapText } from "./layout/ansi.js";
 import { isFailure } from "../runtime/result.js";
-import { isAbortError, makeAbortCause } from "../runtime/errors.js";
+import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";
 import type { AbortCause } from "../runtime/errors.js";
 import { normalizeModelUsage } from "../runtime/utils.js";
 // ---------------------------------------------------------------------------
@@ -188,7 +189,528 @@ function recordHistoryEntry(history: string[], entry: string, command: string): 
 const USER_INPUT_COLOR = styles.cyan
 const COLOR_RESET = RESET;
 const DIM = styles.dim;
-const CLEAR_LINE = "\r\x1b[K";
+const HIDE_CURSOR = "\x1b[?25l";
+const SHOW_CURSOR = "\x1b[?25h";
+const SYNC_BEGIN = "\x1b[?2026h"; // DEC synchronized-update begin
+const SYNC_END = "\x1b[?2026l";   // DEC synchronized-update end
+const CLEAR_DOWN = "\x1b[0J";     // clear from cursor to end of screen
+const MIN_FOOTER_WIDTH = 20;
+
+// ---------------------------------------------------------------------------
+// Bottom-region coordinator.
+//
+// Generalizes the "Thinking" spinner's single-line stdout monkeypatch (see
+// `startSpinner`, which is folded onto this) into a footer of any number of
+// lines pinned to the bottom of the terminal. While a region is installed,
+// every OTHER write to process.stdout is redrawn ABOVE the footer as one
+// atomic frame: erase the footer, emit the outside text into scrollback,
+// redraw the footer beneath it. The "what" (which bytes to emit) lives in
+// the pure `buildFrame`; the "how" (patching stdout, tracking rows) lives in
+// the `installBottomRegion` shell.
+// ---------------------------------------------------------------------------
+
+/** Cursor moves that erase a footer of `rows` physical rows, leaving the
+ *  cursor at column 0 of where the footer's first row began. Empty when
+ *  there is no footer yet. */
+function eraseRows(rows: number): string {
+  if (rows === 0) {
+    return "";
+  }
+  const moveUp = rows > 1 ? `\x1b[${rows - 1}A` : "";
+  return `${moveUp}\r${CLEAR_DOWN}`;
+}
+
+type FrameCursor = "hide" | "show" | "keep";
+
+type FrameSpec = {
+  above: string | null;
+  footerLines: string[];
+  prevRows: number;
+  columns: number;
+  cursor: FrameCursor;
+};
+
+type FrameResult = { seq: string; rows: number };
+
+function cursorSequence(cursor: FrameCursor): string {
+  if (cursor === "hide") {
+    return HIDE_CURSOR;
+  }
+  if (cursor === "show") {
+    return SHOW_CURSOR;
+  }
+  return "";
+}
+
+function withTrailingNewline(text: string): string {
+  if (text.endsWith("\n")) {
+    return text;
+  }
+  return `${text}\n`;
+}
+
+/** Build ONE atomic terminal frame: erase the previous footer, optionally
+ *  emit `above` into scrollback, then redraw the footer wrapped to width.
+ *  Pure — the exact bytes and the new physical-row count are a function of
+ *  the inputs, so the anti-flicker guarantees are unit-testable. */
+function buildFrame(spec: FrameSpec): FrameResult {
+  const width = Math.max(MIN_FOOTER_WIDTH, spec.columns - 1);
+  const physical = spec.footerLines.flatMap((line) => wrapText(line, width));
+  const above = spec.above === null ? "" : withTrailingNewline(spec.above);
+  const seq =
+    SYNC_BEGIN +
+    eraseRows(spec.prevRows) +
+    above +
+    physical.join("\n") +
+    cursorSequence(spec.cursor) +
+    SYNC_END;
+  return { seq, rows: physical.length };
+}
+
+export type BottomRegion = { refresh: () => void; teardown: () => void };
+
+type RegionOptions = { hideCursor: boolean };
+
+const NOOP_REGION: BottomRegion = { refresh: () => { }, teardown: () => { } };
+
+// At most one bottom region owns process.stdout.write at a time. Folding the
+// spinner onto this coordinator makes single-ownership structural rather
+// than an ordering discipline.
+let activeRegion: BottomRegion | null = null;
+
+// Crash-safety: if the process exits while a region still hides the cursor,
+// restore it. Registered once.
+let cursorRestoreRegistered = false;
+function registerCursorRestore(): void {
+  if (cursorRestoreRegistered) {
+    return;
+  }
+  cursorRestoreRegistered = true;
+  process.once("exit", () => {
+    if (activeRegion) {
+      process.stdout.write(SHOW_CURSOR);
+    }
+  });
+}
+
+/** Decode a stdout chunk to text so it can be embedded in a frame. Handles
+ *  the shapes `process.stdout.write` accepts: a string, a Buffer, or a raw
+ *  Uint8Array. `String(uint8array)` would give comma-joined bytes, so both
+ *  binary shapes are decoded with the caller's encoding (default utf8). */
+function chunkToText(chunk: unknown, encoding?: BufferEncoding): string {
+  if (typeof chunk === "string") {
+    return chunk;
+  }
+  if (Buffer.isBuffer(chunk)) {
+    return chunk.toString(encoding ?? "utf8");
+  }
+  if (chunk instanceof Uint8Array) {
+    return Buffer.from(chunk).toString(encoding ?? "utf8");
+  }
+  return String(chunk);
+}
+
+/** Pin `render()`'s lines to the bottom of the terminal. While installed,
+ *  every other write to process.stdout is redrawn ABOVE the footer as one
+ *  atomic frame (via `buildFrame`). No-op on non-TTY. `hideCursor` scopes
+ *  cursor-hiding to callers that draw their own caret (the interrupt
+ *  widget); the spinner leaves the cursor alone. */
+export function installBottomRegion(
+  render: () => string[],
+  useTTY: boolean,
+  options: RegionOptions = { hideCursor: false },
+): BottomRegion {
+  if (!useTTY) {
+    return NOOP_REGION;
+  }
+  if (activeRegion) {
+    activeRegion.teardown();
+  }
+  registerCursorRestore();
+
+  const stdoutAny = process.stdout as unknown as {
+    write: (chunk: any, ...rest: any[]) => any;
+  };
+  const realWrite = stdoutAny.write.bind(process.stdout);
+  let rows = 0;
+  let firstPaint = true;
+
+  // `cb` is the caller's `write(..., cb)` completion callback, threaded to
+  // the frame's realWrite so it fires when the frame (which carries the
+  // caller's text) is flushed. The returned backpressure boolean reflects
+  // the FRAME write, not the original chunk write.
+  const paint = (above: string | null, cb?: (error?: Error | null) => void): boolean => {
+    const hideNow = options.hideCursor && firstPaint;
+    const frame = buildFrame({
+      above,
+      footerLines: render(),
+      prevRows: rows,
+      columns: process.stdout.columns || 80,
+      cursor: hideNow ? "hide" : "keep",
+    });
+    firstPaint = false;
+    rows = frame.rows;
+    return realWrite(frame.seq, cb);
+  };
+
+  paint(null);
+  // Preserve the `write(chunk, encoding?, cb?)` contract: decode with the
+  // caller's encoding and forward the completion callback (dropping it
+  // would hang callers that await it). Note: a partial-line write (no
+  // trailing newline, or a `\r`-based progress bar) becomes its own line
+  // under the footer — full-line tool traces are all that stream here.
+  stdoutAny.write = (chunk: any, ...rest: any[]): boolean => {
+    const encoding = typeof rest[0] === "string" ? (rest[0] as BufferEncoding) : undefined;
+    const cb = rest.find((arg) => typeof arg === "function") as
+      | ((error?: Error | null) => void)
+      | undefined;
+    return paint(chunkToText(chunk, encoding), cb);
+  };
+
+  // Repaint on resize so a mid-prompt window change doesn't leave the next
+  // frame erasing a stale row count (rows were measured at the old width).
+  const onResize = (): void => { paint(null); };
+  process.stdout.on("resize", onResize);
+
+  const region: BottomRegion = {
+    refresh: () => { paint(null); },
+    teardown: () => {
+      process.stdout.off("resize", onResize);
+      stdoutAny.write = realWrite;
+      const frame = buildFrame({
+        above: null,
+        footerLines: [],
+        prevRows: rows,
+        columns: process.stdout.columns || 80,
+        cursor: options.hideCursor ? "show" : "keep",
+      });
+      realWrite(frame.seq);
+      rows = 0;
+      if (activeRegion === region) {
+        activeRegion = null;
+      }
+    },
+  };
+  activeRegion = region;
+  return region;
+}
+
+// ---------------------------------------------------------------------------
+// Sticky interrupt prompt — pure core.
+//
+// The approval prompt shown mid-turn in line mode. Rendered as the bottom
+// region so concurrent tool traces stream above it. Input is "type your
+// answer, then Enter" (a bare `a` cannot disambiguate `a` from `aa`/`ap`,
+// and a free-text reason can start with any letter). All decisions live in
+// the pure `reduceInterrupt` state machine; the shell (`stickyInterruptPrompt`,
+// added later) only wires keys to it and acts on the outcome.
+// ---------------------------------------------------------------------------
+
+type InterruptAction =
+  | "submit"
+  | "cancel"
+  | "exit"
+  | "backspace"
+  | { append: string }
+  | null;
+
+type KeyMeta = { name?: string; ctrl?: boolean; meta?: boolean };
+
+/** Map a readline keypress to an interrupt-widget action. DELIBERATELY
+ *  DIVERGES from classifyPasteKey: Ctrl+C is a hard "exit" (an approval
+ *  prompt must quit, never soft-cancel-and-continue), Escape is a soft
+ *  "cancel", and Enter is "submit" (there is no Ctrl+D submit). */
+function classifyInterruptKey(sequence: unknown, key: KeyMeta | undefined): InterruptAction {
+  const name = key?.name;
+  if (key?.ctrl && name === "c") {
+    return "exit";
+  }
+  if (name === "escape") {
+    return "cancel";
+  }
+  if (name === "return" || name === "enter") {
+    return "submit";
+  }
+  if (name === "backspace") {
+    return "backspace";
+  }
+  const printable = typeof sequence === "string" && sequence.length > 0 && !key?.ctrl && !key?.meta;
+  if (printable) {
+    return { append: sequence as string };
+  }
+  return null;
+}
+
+type InterruptState = { buffer: string; notice: string };
+
+type InterruptOutcome =
+  | { kind: "pending" }
+  | { kind: "resolve"; value: string }
+  | { kind: "cancel" }
+  | { kind: "exit" };
+
+type InterruptConfig = { validKeys: string[]; allowFreeText: boolean; allowCancel: boolean };
+
+type InterruptStep = { state: InterruptState; outcome: InterruptOutcome };
+
+const INITIAL_INTERRUPT_STATE: InterruptState = { buffer: "", notice: "" };
+const INVALID_NOTICE = "not a valid option";
+
+/** Interpret a committed buffer: an exact key match resolves; a non-empty
+ *  buffer with free text allowed resolves as a reason; empty re-prompts
+ *  silently (must-answer); invalid-without-free-text re-prompts with a
+ *  notice. */
+function submitInterrupt(state: InterruptState, config: InterruptConfig): InterruptStep {
+  const answer = state.buffer.trim();
+  if (config.validKeys.includes(answer)) {
+    return { state, outcome: { kind: "resolve", value: answer } };
+  }
+  if (config.allowFreeText && answer !== "") {
+    return { state, outcome: { kind: "resolve", value: answer } };
+  }
+  const notice = answer === "" ? "" : INVALID_NOTICE;
+  return { state: { buffer: state.buffer, notice }, outcome: { kind: "pending" } };
+}
+
+/** Pure state machine for the sticky interrupt prompt: given the current
+ *  state and a key action, return the next state and an outcome. The
+ *  imperative shell acts on the outcome; every decision lives here. */
+function reduceInterrupt(
+  state: InterruptState,
+  action: InterruptAction,
+  config: InterruptConfig,
+): InterruptStep {
+  if (action === "exit") {
+    return { state, outcome: { kind: "exit" } };
+  }
+  if (action === "cancel") {
+    if (config.allowCancel) {
+      return { state, outcome: { kind: "cancel" } };
+    }
+    return { state, outcome: { kind: "pending" } };
+  }
+  if (action === "backspace") {
+    return { state: { buffer: state.buffer.slice(0, -1), notice: "" }, outcome: { kind: "pending" } };
+  }
+  if (action === "submit") {
+    return submitInterrupt(state, config);
+  }
+  if (action !== null && typeof action === "object") {
+    const cleaned = action.append.replace(/[\r\n]/g, "");
+    return { state: { buffer: state.buffer + cleaned, notice: "" }, outcome: { kind: "pending" } };
+  }
+  return { state, outcome: { kind: "pending" } };
+}
+
+/** Greedily pack `key=label` tokens into lines no wider than `width`
+ *  visible columns, joined by two spaces. A token wider than `width` gets
+ *  its own line (buildFrame wraps it at render time). */
+function packOptions(items: { key: string; label: string }[], width: number): string[] {
+  const lines: string[] = [];
+  let current = "";
+  items.forEach((item) => {
+    const token = `${item.key}=${item.label}`;
+    if (current === "") {
+      current = token;
+      return;
+    }
+    const fits = visualWidth(current) + 2 + visualWidth(token) <= width;
+    if (fits) {
+      current = `${current}  ${token}`;
+      return;
+    }
+    lines.push(current);
+    current = token;
+  });
+  if (current !== "") {
+    lines.push(current);
+  }
+  return lines;
+}
+
+const INTERRUPT_BODY_MAX_LINES = 6;
+const INTERRUPT_CARET = "▏";
+
+type InterruptFooterInput = {
+  title: string;
+  body: string;
+  items: { key: string; label: string }[];
+  allowFreeText: boolean;
+  state: InterruptState;
+  columns: number;
+};
+
+/** Body lines for the footer, capped to INTERRUPT_BODY_MAX_LINES *physical*
+ *  rows. Wrapping happens here (to `width - 1`, leaving room for the 1-col
+ *  indent) so the cap bounds real screen rows — buildFrame re-wraps at
+ *  `width`, but each line is already within it, so that is a no-op. Capping
+ *  raw `\n` lines instead would let one very long line re-expand past the
+ *  cap and blow out the pinned region. */
+function bodyLines(body: string, width: number): string[] {
+  if (body === "") {
+    return [];
+  }
+  const wrapped = wrapText(body, Math.max(1, width - 1));
+  const shown = wrapped.slice(0, INTERRUPT_BODY_MAX_LINES).map((line) => ` ${DIM}${line}${COLOR_RESET}`);
+  if (wrapped.length > INTERRUPT_BODY_MAX_LINES) {
+    shown.push(` ${DIM}…${COLOR_RESET}`);
+  }
+  return shown;
+}
+
+/** Render the sticky approval prompt as footer lines. Pure. The real
+ *  cursor is hidden by the widget, so the input line ends with a caret
+ *  glyph. buildFrame wraps each line to width. */
+function renderInterruptFooter(input: InterruptFooterInput): string[] {
+  const width = Math.max(MIN_FOOTER_WIDTH, input.columns - 1);
+  const lines: string[] = [`${DIM}${"─".repeat(width)}${COLOR_RESET}`];
+  if (input.title !== "") {
+    lines.push(` ${input.title}`);
+  }
+  bodyLines(input.body, width).forEach((line) => lines.push(line));
+  packOptions(input.items, width - 1).forEach((row) => lines.push(` ${row}`));
+  if (input.allowFreeText) {
+    lines.push(` ${DIM}or type a reason · Enter to submit${COLOR_RESET}`);
+  }
+  if (input.state.notice !== "") {
+    lines.push(` ${color.yellow(input.state.notice)}`);
+  }
+  lines.push(` > ${input.state.buffer}${INTERRUPT_CARET}`);
+  return lines;
+}
+
+// ---------------------------------------------------------------------------
+// Sticky interrupt prompt — imperative shell + bridge.
+// ---------------------------------------------------------------------------
+
+type InterruptOpts = {
+  title: string;
+  body: string;
+  items: { key: string; label: string }[];
+  allowFreeText: boolean;
+  allowCancel: boolean;
+};
+
+/** Stop the "Thinking" spinner if the REPL has one running (which also
+ *  frees the stdout patch before the widget installs its own region). */
+function stopSpinnerIfRunning(): void {
+  const stop = (globalThis as any).__agencyStopSpinner;
+  if (typeof stop === "function") {
+    stop();
+  }
+}
+
+/** Assert raw mode so `_ttyWrite` receives keystrokes (see readMultiline
+ *  for why). Returns a restore fn. No-op off a TTY. */
+function assertRawMode(): () => void {
+  const stdin = process.stdin as NodeJS.ReadStream & { setRawMode?: (mode: boolean) => void };
+  if (!stdin.isTTY || !stdin.setRawMode) {
+    return () => { };
+  }
+  const wasRaw = !!stdin.isRaw;
+  stdin.setRawMode(true);
+  return () => {
+    if (stdin.setRawMode && stdin.isRaw !== wasRaw) {
+      stdin.setRawMode(wasRaw);
+    }
+  };
+}
+
+/** The line-mode approval prompt. Renders `opts` as a pinned bottom footer
+ *  and reads a typed line terminated by Enter. All decisions come from
+ *  reduceInterrupt; this shell only wires keys → reducer → outcome and does
+ *  the I/O. Resolves with the option key or a free-text reason; rejects
+ *  with AgencyCancelledError on Escape (when allowCancel); exits 130 on
+ *  Ctrl+C. Reuses the outer REPL's readline via `_ttyWrite` — no second
+ *  readline, so none of _runPrompt's paused/raw restoration dance applies. */
+function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Promise<string> {
+  stopSpinnerIfRunning();
+  const restoreRaw = assertRawMode();
+  const config: InterruptConfig = {
+    validKeys: opts.items.map((item) => item.key),
+    allowFreeText: opts.allowFreeText,
+    allowCancel: opts.allowCancel,
+  };
+  let state = INITIAL_INTERRUPT_STATE;
+
+  const region = installBottomRegion(
+    () => renderInterruptFooter({
+      title: opts.title,
+      body: opts.body,
+      items: opts.items,
+      allowFreeText: opts.allowFreeText,
+      state,
+      columns: process.stdout.columns || 80,
+    }),
+    process.stdout.isTTY === true,
+    { hideCursor: true },
+  );
+
+  const rlAny = rl as unknown as { _ttyWrite: (sequence: unknown, key: unknown) => void };
+  const originalTtyWrite = rlAny._ttyWrite;
+
+  return new Promise<string>((resolve, reject) => {
+    const settle = (finish: () => void): void => {
+      rlAny._ttyWrite = originalTtyWrite;
+      region.teardown();
+      restoreRaw();
+      finish();
+    };
+    rlAny._ttyWrite = (sequence: unknown, key: unknown): void => {
+      const action = classifyInterruptKey(sequence, key as KeyMeta | undefined);
+      const step = reduceInterrupt(state, action, config);
+      state = step.state;
+      const outcome = step.outcome;
+      if (outcome.kind === "exit") {
+        settle(() => { });
+        process.exit(130);
+        return;
+      }
+      if (outcome.kind === "cancel") {
+        settle(() => reject(new AgencyCancelledError("cancelled by user")));
+        return;
+      }
+      if (outcome.kind === "resolve") {
+        settle(() => resolve(outcome.value));
+        return;
+      }
+      region.refresh();
+    };
+  });
+}
+
+/** Bridge for std::ui/cli's interruptChoice. Delegates to the sticky widget
+ *  wired to the running line-mode REPL. The Agency side gates on
+ *  _stickyInterruptAvailable first, so a missing hook is a programming
+ *  error. */
+export async function _interruptChoice(
+  title: string,
+  body: string,
+  items: { key: string; label: string }[],
+  allowFreeText: boolean,
+  allowCancel: boolean,
+): Promise<string> {
+  const hook = (globalThis as any).__agencyInterruptPrompt;
+  if (typeof hook !== "function") {
+    throw new Error("_interruptChoice: no active line-mode REPL");
+  }
+  return hook({ title, body, items, allowFreeText, allowCancel });
+}
+
+/** True when a line-mode REPL is running AND both ends are real terminals,
+ *  so the pinned prompt can actually draw and read keystrokes. The hook is
+ *  installed unconditionally by `_runLineRepl`, so without the TTY checks a
+ *  non-TTY REPL would route here, draw nothing (installBottomRegion no-ops),
+ *  and hang awaiting keystrokes that never reach `_ttyWrite`. Requiring both
+ *  TTYs sends those runs to `chooseOption`'s non-TTY fallback instead
+ *  (mirrors the `/paste` guard). */
+export function _stickyInterruptAvailable(): boolean {
+  return (
+    typeof (globalThis as any).__agencyInterruptPrompt === "function" &&
+    process.stdout.isTTY === true &&
+    process.stdin.isTTY === true
+  );
+}
 
 const SPINNERS = {
   "line": {
@@ -313,62 +835,31 @@ const SPINNER_FRAMES = SPINNERS.line.frames;
 const SPINNER_INTERVAL_MS = SPINNERS.line.interval;
 
 /**
- * Start a single-line "Thinking Ns" spinner. Returns a stop function
- * that clears the spinner row and restores `process.stdout.write`.
- *
- * While the spinner is active, every external write to stdout
- * (`console.log`, `process.stdout.write`, etc.) is wrapped to emit
- * a `\r\x1b[K` clear-line first, then the original content. The
- * spinner redraws on the next interval tick. This is the
- * "unconditional clear-on-write" approach the spec endorses for WL4
- * — ~15 lines, handles every tool that logs without needing each
- * tool to coordinate with the spinner.
- *
- * No-op on non-TTY: returns an immediate stop function so piped
- * runs don't get spinner frames in their logs.
+ * Start a single-line "Thinking Ns" spinner as a one-line bottom region.
+ * Returns a stop function that removes the region. The spinner is now a
+ * client of `installBottomRegion`: outside writes (tool traces) redraw
+ * above it automatically, and there is exactly one owner of the bottom of
+ * the screen. It does NOT hide the cursor (default RegionOptions). No-op
+ * on non-TTY: returns an immediate stop function so piped runs don't get
+ * spinner frames in their logs.
  */
 function startSpinner(useTTY: boolean): () => void {
-  if (!useTTY) return () => { };
+  if (!useTTY) {
+    return () => { };
+  }
   const startedAt = Date.now();
-  let stopped = false;
-  // Capture the *real* write before patching so the spinner itself
-  // can draw without recursing through the patched version.
-  const stdoutAny = process.stdout as unknown as {
-    write: (chunk: any, ...rest: any[]) => any;
-  };
-  const realWrite = stdoutAny.write.bind(process.stdout);
-
-  const render = (): void => {
-    if (stopped) return;
+  const render = (): string[] => {
     const elapsedMs = Date.now() - startedAt;
     const elapsedSec = Math.floor(elapsedMs / 1000);
-    const idx = Math.floor(elapsedMs / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length;
-    const frame = SPINNER_FRAMES[idx];
-    realWrite(`\r${DIM}${frame} Thinking ${elapsedSec}s${COLOR_RESET}\x1b[K`);
+    const frameIndex =
+      Math.floor(elapsedMs / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length;
+    return [`${DIM}${SPINNER_FRAMES[frameIndex]} Thinking ${elapsedSec}s${COLOR_RESET}`];
   };
-  render();
-  const id = setInterval(render, SPINNER_INTERVAL_MS);
-
-  // Patch stdout so any external write clears the spinner row first.
-  // The patched function uses `realWrite`, never `stdoutAny.write`,
-  // so there's no recursion. Preserves the original return value so
-  // backpressure semantics (the boolean Writable.write returns) stay
-  // correct.
-  stdoutAny.write = function patchedWrite(
-    this: unknown,
-    chunk: any,
-    ...rest: any[]
-  ): any {
-    realWrite(CLEAR_LINE);
-    return realWrite(chunk, ...rest);
-  };
-
+  const region = installBottomRegion(render, useTTY);
+  const timer = setInterval(() => region.refresh(), SPINNER_INTERVAL_MS);
   return (): void => {
-    if (stopped) return;
-    stopped = true;
-    clearInterval(id);
-    stdoutAny.write = realWrite;
-    realWrite(CLEAR_LINE);
+    clearInterval(timer);
+    region.teardown();
   };
 }
 
@@ -754,6 +1245,48 @@ async function printFooter(
   process.stdout.write(`${DIM}─── ${text} ───${COLOR_RESET}\n`);
 }
 
+/** Install the process-global hooks the line-mode REPL exposes while it
+ *  runs, each bound to this session's `readline`, and return a restore fn
+ *  that puts back whatever was there before. Encapsulated so `_runLineRepl`
+ *  stays focused on the loop rather than hook bookkeeping.
+ *
+ *  - `__agencyStopSpinner` — pause the "Thinking" timer while a line-mode
+ *    prompt bridge (select / autocomplete / prompt / confirm) has the user;
+ *    they bypass `inputOverride` (no readline) but must still stop it.
+ *  - `__agencyClearHistory` — wipe this session's live recall (`rl.history`,
+ *    a Node object owned by the running readline) plus the collapsed-paste
+ *    expansions. The persisted file is cleared separately by `_clearHistory`.
+ *  - `__agencyInterruptPrompt` — the sticky interrupt prompt exposed to
+ *    std::policy (interruptChoice → _interruptChoice), reusing THIS readline. */
+function installReplGlobals(
+  rl: readline.Interface,
+  expansions: Record<string, string>,
+  stopActiveSpinner: () => void,
+): () => void {
+  const globalObj = globalThis as any;
+  const prevStopSpinner = globalObj.__agencyStopSpinner;
+  const prevClearHistory = globalObj.__agencyClearHistory;
+  const prevInterruptPrompt = globalObj.__agencyInterruptPrompt;
+
+  globalObj.__agencyStopSpinner = stopActiveSpinner;
+  globalObj.__agencyClearHistory = () => {
+    const history = (rl as unknown as { history?: string[] }).history;
+    if (history) {
+      history.length = 0;
+    }
+    for (const key of Object.keys(expansions)) {
+      delete expansions[key];
+    }
+  };
+  globalObj.__agencyInterruptPrompt = (opts: InterruptOpts) => stickyInterruptPrompt(rl, opts);
+
+  return () => {
+    globalObj.__agencyStopSpinner = prevStopSpinner;
+    globalObj.__agencyClearHistory = prevClearHistory;
+    globalObj.__agencyInterruptPrompt = prevInterruptPrompt;
+  };
+}
+
 export async function _runLineRepl(
   status: unknown,
   onSubmit: unknown,
@@ -833,33 +1366,10 @@ export async function _runLineRepl(
     });
   };
 
-  // Register a global "stop spinner" hook for the line-mode prompt
-  // bridges in `lib/stdlib/ui.ts` (select / autocomplete / prompt /
-  // confirm). They bypass `__agencyInputOverride` (they don't use
-  // readline) but still need to pause the "Thinking" timer while the
-  // user is being asked something — otherwise the timer keeps ticking
-  // over an open policy interrupt menu. Same lifecycle as
-  // `__agencyInputOverride`: install on entry, restore on exit.
-  const stopSpinnerKey = "__agencyStopSpinner";
-  const prevStopSpinner = (globalThis as any)[stopSpinnerKey];
-  (globalThis as any)[stopSpinnerKey] = stopActiveSpinner;
-
-  // Register a "clear history" hook so a command handler (e.g. the agent's
-  // `/clear-history`) can wipe this session's *live* recall. The hook only
-  // touches `rl.history` — a Node object owned by this running readline, which
-  // can't live anywhere but TS. The persisted *file* is cleared separately by
-  // `_clearHistory`, using a path Agency holds as a module global (so the file
-  // identity lives in the execution model, not in this closure). Same
-  // install/restore lifecycle as the hooks above.
-  const clearHistoryKey = "__agencyClearHistory";
-  const prevClearHistory = (globalThis as any)[clearHistoryKey];
-  (globalThis as any)[clearHistoryKey] = () => {
-    const h = (rl as unknown as { history?: string[] }).history;
-    if (h) h.length = 0;
-    // Drop the collapsed-paste expansions too, so a cleared history can't
-    // resurrect a paste's full text on the next recall.
-    for (const k of Object.keys(expansions)) delete expansions[k];
-  };
+  // Install the process-global hooks this REPL exposes while it runs
+  // (spinner-stop, clear-history, sticky interrupt prompt), each bound to
+  // this session's readline. Restored on exit via the returned fn.
+  const restoreReplGlobals = installReplGlobals(rl, expansions, stopActiveSpinner);
 
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal. The
@@ -1025,8 +1535,7 @@ export async function _runLineRepl(
   } finally {
     teardownSlashTrigger();
     replCtx.inputOverride = prevOverride;
-    (globalThis as any)[stopSpinnerKey] = prevStopSpinner;
-    (globalThis as any)[clearHistoryKey] = prevClearHistory;
+    restoreReplGlobals();
     // Persist whatever entries readline accumulated. `rl.history` is
     // newest-first and already contains the history we loaded at startup
     // PLUS everything added this session (including any `/paste` buffer we
@@ -1254,6 +1763,15 @@ export const _internal = {
   recordPasteEntry,
   repairSlashHistory,
   summarizeMultiline,
+  eraseRows,
+  buildFrame,
+  startSpinner,
+  classifyInterruptKey,
+  reduceInterrupt,
+  INITIAL_INTERRUPT_STATE,
+  packOptions,
+  renderInterruptFooter,
+  stickyInterruptPrompt,
 };
 
 export function _clearScreen(): void {

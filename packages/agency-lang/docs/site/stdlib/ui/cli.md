@@ -70,7 +70,7 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L66))
 
 ### clearScreen
 
@@ -78,7 +78,7 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
 clearScreen()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L102))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L106))
 
 ### clearHistory
 
@@ -90,7 +90,7 @@ Clear the input history of the currently running `repl()` session: both
   its in-session up-arrow recall and the `historyFile` that session was started
   with. A no-op when called outside an interactive `repl()`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L110))
 
 ### hline
 
@@ -107,4 +107,43 @@ hline(char: string = "─", width: number = null): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L121))
+
+### interruptChoice
+
+```ts
+interruptChoice(
+  title: string,
+  body: string,
+  items: any[],
+  allowFreeText: boolean = false,
+  allowCancel: boolean = false,
+): string
+```
+
+Approval prompt for line mode: renders a sticky footer pinned to the
+  bottom of the terminal so concurrent tool-call output streams above it
+  instead of burying the prompt. Type an option key or a rejection reason,
+  then press Enter. Falls back to `chooseOption` when no line-mode REPL is
+  active (the TUI, a non-TTY, or a headless run), so every non-line-mode
+  path keeps its current behavior.
+
+  @param title - Prompt heading (the interrupt message).
+  @param body - Multi-line context shown under the title (or "").
+  @param items - The {key, label} choices.
+  @param allowFreeText - Accept a free-form rejection reason.
+  @param allowCancel - When true, Escape cancels the whole request.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| title | `string` |  |
+| body | `string` |  |
+| items | `any[]` |  |
+| allowFreeText | `boolean` | false |
+| allowCancel | `boolean` | false |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L126))

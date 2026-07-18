@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { _internal, _clearHistory, type PasteState } from "./cli.js";
+import { _internal, _clearHistory, installBottomRegion, _stickyInterruptAvailable, type PasteState } from "./cli.js";
 
 const {
   EMPTY_PASTE,
@@ -21,7 +21,27 @@ const {
   recordPasteEntry,
   repairSlashHistory,
   summarizeMultiline,
+  eraseRows,
+  buildFrame,
 } = _internal;
+
+/** Replace process.stdout.write with a capturing sink and force isTTY on.
+ *  installBottomRegion binds this sink as its realWrite, so every frame is
+ *  captured. Returns the buffer and a restore fn. */
+function captureStdout(): { captured: string[]; restore: () => void } {
+  const captured: string[] = [];
+  const originalWrite = process.stdout.write;
+  const originalIsTTY = (process.stdout as any).isTTY;
+  (process.stdout as any).write = (chunk: any) => { captured.push(String(chunk)); return true; };
+  (process.stdout as any).isTTY = true;
+  return {
+    captured,
+    restore: () => {
+      (process.stdout as any).write = originalWrite;
+      (process.stdout as any).isTTY = originalIsTTY;
+    },
+  };
+}
 
 /** Build a snapshot shaped like `readTokenSnapshot`'s return value from
  *  a `{model: [tokens, cost]}` shorthand. */
@@ -451,5 +471,304 @@ describe("_clearHistory", () => {
     expect(loadHistory(file, 100).entries).toEqual(["c", "b", "a"]);
     _clearHistory(file);
     expect(loadHistory(file, 100).entries).toEqual([]);
+  });
+});
+
+describe("eraseRows", () => {
+  it("returns nothing when there is no footer yet", () => {
+    expect(eraseRows(0)).toBe("");
+  });
+  it("clears a single row with CR + clear-down, no cursor move", () => {
+    expect(eraseRows(1)).toBe("\r\x1b[0J");
+  });
+  it("moves up rows-1 before clearing for a multi-row footer", () => {
+    expect(eraseRows(3)).toBe("\x1b[2A\r\x1b[0J");
+  });
+});
+
+describe("buildFrame", () => {
+  it("first frame of a 1-row footer: sync brackets + footer, no erase", () => {
+    const result = buildFrame({ above: null, footerLines: ["FOOTER"], prevRows: 0, columns: 80, cursor: "keep" });
+    expect(result.rows).toBe(1);
+    expect(result.seq).toBe("\x1b[?2026h" + "FOOTER" + "\x1b[?2026l");
+  });
+  it("erases the previous footer, then emits `above`, then redraws", () => {
+    const result = buildFrame({ above: "trace\n", footerLines: ["A", "B"], prevRows: 3, columns: 80, cursor: "keep" });
+    expect(result.seq).toBe("\x1b[?2026h" + "\x1b[2A\r\x1b[0J" + "trace\n" + "A\nB" + "\x1b[?2026l");
+    expect(result.rows).toBe(2);
+  });
+  it("appends a newline to `above` when missing so the footer starts fresh", () => {
+    const result = buildFrame({ above: "x", footerLines: ["F"], prevRows: 1, columns: 80, cursor: "keep" });
+    expect(result.seq).toContain("x\n");
+  });
+  it("emits hide/show cursor when asked", () => {
+    expect(buildFrame({ above: null, footerLines: ["F"], prevRows: 0, columns: 80, cursor: "hide" }).seq).toContain("\x1b[?25l");
+    expect(buildFrame({ above: null, footerLines: [], prevRows: 1, columns: 80, cursor: "show" }).seq).toContain("\x1b[?25h");
+  });
+  it("counts wrapped rows for an over-wide footer line", () => {
+    const wide = "w".repeat(50);
+    expect(buildFrame({ above: null, footerLines: [wide], prevRows: 0, columns: 20, cursor: "keep" }).rows).toBeGreaterThan(1);
+  });
+});
+
+describe("installBottomRegion", () => {
+  it("no-ops on non-TTY (passes writes straight through)", () => {
+    const cap = captureStdout();
+    const region = installBottomRegion(() => ["footer"], false);
+    process.stdout.write("hello");
+    region.teardown();
+    cap.restore();
+    expect(cap.captured).toEqual(["hello"]);
+  });
+  it("redraws the footer above an outside write", () => {
+    const cap = captureStdout();
+    const region = installBottomRegion(() => ["FOOTER"], true);
+    cap.captured.length = 0; // drop the initial paint
+    process.stdout.write("trace line\n");
+    region.teardown();
+    cap.restore();
+    const text = cap.captured.join("");
+    expect(text).toContain("trace line\n");
+    expect(text.indexOf("trace line")).toBeLessThan(text.lastIndexOf("FOOTER"));
+  });
+});
+
+describe("startSpinner coexists with outside writes", () => {
+  it("redraws the Thinking line after an outside write", () => {
+    const cap = captureStdout();
+    const stop = _internal.startSpinner(true);
+    cap.captured.length = 0;
+    process.stdout.write("tool output\n");
+    stop();
+    cap.restore();
+    const text = cap.captured.join("");
+    expect(text).toContain("tool output\n");
+    expect(text.indexOf("tool output")).toBeLessThan(text.lastIndexOf("Thinking"));
+  });
+});
+
+describe("classifyInterruptKey", () => {
+  const classify = (sequence: any, key: any) => _internal.classifyInterruptKey(sequence, key);
+  it("Ctrl+C is a hard exit (diverges from paste-mode soft cancel)", () => {
+    expect(classify(null, { name: "c", ctrl: true })).toBe("exit");
+  });
+  it("Escape is a soft cancel", () => {
+    expect(classify(null, { name: "escape" })).toBe("cancel");
+  });
+  it("Enter submits", () => {
+    expect(classify(null, { name: "return" })).toBe("submit");
+    expect(classify(null, { name: "enter" })).toBe("submit");
+  });
+  it("Backspace deletes", () => {
+    expect(classify(null, { name: "backspace" })).toBe("backspace");
+  });
+  it("a printable char appends; chords and arrows are ignored", () => {
+    expect(classify("a", { name: "a" })).toEqual({ append: "a" });
+    expect(classify(null, { name: "up" })).toBeNull();
+    expect(classify("x", { name: "x", meta: true })).toBeNull();
+  });
+});
+
+describe("reduceInterrupt", () => {
+  const config = { validKeys: ["a", "r", "aa", "ap", "rr"], allowFreeText: true, allowCancel: true };
+  const from = (buffer: string) => ({ buffer, notice: "" });
+  const reduce = _internal.reduceInterrupt;
+
+  it("exit action yields an exit outcome", () => {
+    expect(reduce(from(""), "exit", config).outcome).toEqual({ kind: "exit" });
+  });
+  it("Escape cancels when allowCancel, pends otherwise", () => {
+    expect(reduce(from(""), "cancel", config).outcome).toEqual({ kind: "cancel" });
+    expect(reduce(from(""), "cancel", { ...config, allowCancel: false }).outcome).toEqual({ kind: "pending" });
+  });
+  it("appends a printable char and clears the notice", () => {
+    const step = reduce({ buffer: "a", notice: "x" }, { append: "a" }, config);
+    expect(step.state).toEqual({ buffer: "aa", notice: "" });
+    expect(step.outcome).toEqual({ kind: "pending" });
+  });
+  it("strips embedded newlines from an appended chunk (single-line reason)", () => {
+    expect(reduce(from("a"), { append: "b\nc" }, config).state.buffer).toBe("abc");
+  });
+  it("backspace deletes the last char and clears the notice", () => {
+    expect(reduce({ buffer: "aa", notice: "x" }, "backspace", config).state).toEqual({ buffer: "a", notice: "" });
+  });
+  it("submit resolves an exact key — 'a' does NOT early-resolve before 'aa'", () => {
+    expect(reduce(from("aa"), "submit", config).outcome).toEqual({ kind: "resolve", value: "aa" });
+    expect(reduce(from("a"), "submit", config).outcome).toEqual({ kind: "resolve", value: "a" });
+  });
+  it("submit returns a free-text reason even when it starts with an option letter", () => {
+    expect(reduce(from("actually no"), "submit", config).outcome).toEqual({ kind: "resolve", value: "actually no" });
+  });
+  it("submit on empty pends with no notice (must-answer)", () => {
+    const step = reduce(from(""), "submit", config);
+    expect(step.outcome).toEqual({ kind: "pending" });
+    expect(step.state.notice).toBe("");
+  });
+  it("submit on invalid input without free text pends with a notice", () => {
+    const step = reduce(from("zzz"), "submit", { ...config, allowFreeText: false });
+    expect(step.outcome).toEqual({ kind: "pending" });
+    expect(step.state.notice).toBe("not a valid option");
+  });
+  it("an ignored key pends without changing state", () => {
+    expect(reduce(from("a"), null, config)).toEqual({ state: { buffer: "a", notice: "" }, outcome: { kind: "pending" } });
+  });
+});
+
+describe("packOptions", () => {
+  it("packs short tokens onto one line", () => {
+    expect(_internal.packOptions([{ key: "a", label: "ok" }, { key: "r", label: "no" }], 40)).toEqual(["a=ok  r=no"]);
+  });
+  it("wraps when the next token would overflow", () => {
+    expect(_internal.packOptions([{ key: "a", label: "approve" }, { key: "r", label: "reject" }], 10)).toEqual(["a=approve", "r=reject"]);
+  });
+});
+
+describe("renderInterruptFooter", () => {
+  const items = [
+    { key: "a", label: "approve once" },
+    { key: "r", label: "reject once" },
+    { key: "rr", label: "reject always" },
+  ];
+  const base = {
+    title: "bash: rm -rf build/ — approve?",
+    body: "",
+    items,
+    allowFreeText: true,
+    state: { buffer: "aa", notice: "" },
+    columns: 80,
+  };
+  it("shows divider, title, options, hint, and the input line with a caret", () => {
+    const lines = _internal.renderInterruptFooter(base);
+    const joined = lines.join("\n");
+    expect(joined).toContain("bash: rm -rf build/ — approve?");
+    expect(joined).toContain("a=approve once");
+    expect(joined).toContain("rr=reject always");
+    expect(joined).toContain("Enter to submit");
+    expect(lines[lines.length - 1]).toContain("> aa");
+    expect(lines[lines.length - 1]).toContain("▏");
+  });
+  it("caps a long body to 6 lines with an ellipsis", () => {
+    const body = Array.from({ length: 20 }, (_unused, index) => `line${index}`).join("\n");
+    const lines = _internal.renderInterruptFooter({ ...base, body });
+    expect(lines.filter((line) => /line\d/.test(line)).length).toBe(6);
+    expect(lines.some((line) => line.includes("…"))).toBe(true);
+  });
+  it("shows a notice when present", () => {
+    const lines = _internal.renderInterruptFooter({ ...base, state: { buffer: "z", notice: "not a valid option" } });
+    expect(lines.join("\n")).toContain("not a valid option");
+  });
+});
+
+describe("stickyInterruptPrompt (integration)", () => {
+  it("resolves 'aa' typed then Enter, with a trace streamed above", async () => {
+    const cap = captureStdout();
+    (process.stdin as any).isTTY = false; // skip real raw-mode toggling
+    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => { } };
+    const pending = _internal.stickyInterruptPrompt(fakeRl, {
+      title: "approve?", body: "", allowFreeText: true, allowCancel: true,
+      items: [{ key: "a", label: "approve once" }, { key: "aa", label: "approve always" }],
+    });
+    process.stdout.write("⏺ read(\"x\")\n"); // concurrent branch output
+    fakeRl._ttyWrite("a", { name: "a" });
+    fakeRl._ttyWrite("a", { name: "a" });
+    fakeRl._ttyWrite(null, { name: "return" });
+    const answer = await pending;
+    cap.restore();
+    expect(answer).toBe("aa");
+    expect(cap.captured.join("")).toContain("⏺ read(\"x\")\n");
+  });
+
+  it("Escape rejects with AgencyCancelledError", async () => {
+    const cap = captureStdout();
+    (process.stdin as any).isTTY = false;
+    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => { } };
+    const pending = _internal.stickyInterruptPrompt(fakeRl, {
+      title: "t", body: "", allowFreeText: true, allowCancel: true,
+      items: [{ key: "a", label: "ok" }],
+    });
+    fakeRl._ttyWrite(null, { name: "escape" });
+    await expect(pending).rejects.toThrow(/cancelled/i);
+    cap.restore();
+  });
+});
+
+describe("installBottomRegion — write contract + resize (PR review fixes)", () => {
+  it("forwards the write callback and decodes Buffers/Uint8Arrays", () => {
+    const captured: string[] = [];
+    const origWrite = process.stdout.write;
+    const origTTY = (process.stdout as any).isTTY;
+    (process.stdout as any).isTTY = true;
+    // Sink that honors the completion callback like the real stream.
+    (process.stdout as any).write = (chunk: any, ...rest: any[]) => {
+      captured.push(String(chunk));
+      const cb = rest.find((arg: any) => typeof arg === "function");
+      if (cb) cb();
+      return true;
+    };
+    const region = installBottomRegion(() => ["F"], true);
+    let bufCbCalled = false;
+    (process.stdout as any).write(Buffer.from("hi\n"), () => { bufCbCalled = true; });
+    (process.stdout as any).write(new TextEncoder().encode("bye\n"));
+    region.teardown();
+    (process.stdout as any).write = origWrite;
+    (process.stdout as any).isTTY = origTTY;
+    const text = captured.join("");
+    expect(bufCbCalled).toBe(true);          // callback forwarded
+    expect(text).toContain("hi\n");          // Buffer decoded, not "<Buffer ...>"
+    expect(text).toContain("bye\n");         // Uint8Array decoded, not "98,121,..."
+  });
+
+  it("repaints the footer on terminal resize", () => {
+    const cap = captureStdout();
+    const region = installBottomRegion(() => ["FOOTER"], true);
+    cap.captured.length = 0;
+    process.stdout.emit("resize");
+    region.teardown();
+    cap.restore();
+    expect(cap.captured.join("")).toContain("FOOTER"); // a repaint happened
+  });
+});
+
+describe("_stickyInterruptAvailable requires the hook AND both TTYs", () => {
+  it("returns true only with the hook and both ends a TTY", () => {
+    const globalObj = globalThis as any;
+    const prevHook = globalObj.__agencyInterruptPrompt;
+    const prevOut = (process.stdout as any).isTTY;
+    const prevIn = (process.stdin as any).isTTY;
+    try {
+      globalObj.__agencyInterruptPrompt = () => Promise.resolve("a");
+      (process.stdout as any).isTTY = true;
+      (process.stdin as any).isTTY = true;
+      expect(_stickyInterruptAvailable()).toBe(true);
+      (process.stdin as any).isTTY = false;
+      expect(_stickyInterruptAvailable()).toBe(false); // non-TTY stdin → fallback
+      (process.stdin as any).isTTY = true;
+      (process.stdout as any).isTTY = false;
+      expect(_stickyInterruptAvailable()).toBe(false); // non-TTY stdout → fallback
+      (process.stdout as any).isTTY = true;
+      globalObj.__agencyInterruptPrompt = undefined;
+      expect(_stickyInterruptAvailable()).toBe(false); // no REPL hook
+    } finally {
+      globalObj.__agencyInterruptPrompt = prevHook;
+      (process.stdout as any).isTTY = prevOut;
+      (process.stdin as any).isTTY = prevIn;
+    }
+  });
+});
+
+describe("renderInterruptFooter body cap is by physical rows", () => {
+  it("bounds a single very long body line to the row cap + ellipsis", () => {
+    const lines = _internal.renderInterruptFooter({
+      title: "t",
+      body: "x".repeat(500),
+      items: [{ key: "a", label: "ok" }],
+      allowFreeText: true,
+      state: { buffer: "", notice: "" },
+      columns: 40,
+    });
+    // Body rows are the dim-x lines; capped at 6 physical rows + one "…".
+    const bodyRowCount = lines.filter((line) => line.includes("x")).length;
+    expect(bodyRowCount).toBeLessThanOrEqual(6);
+    expect(lines.some((line) => line.includes("…"))).toBe(true);
   });
 });

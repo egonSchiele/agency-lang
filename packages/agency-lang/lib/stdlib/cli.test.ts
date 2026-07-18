@@ -532,3 +532,17 @@ describe("installBottomRegion", () => {
     expect(text.indexOf("trace line")).toBeLessThan(text.lastIndexOf("FOOTER"));
   });
 });
+
+describe("startSpinner coexists with outside writes", () => {
+  it("redraws the Thinking line after an outside write", () => {
+    const cap = captureStdout();
+    const stop = _internal.startSpinner(true);
+    cap.captured.length = 0;
+    process.stdout.write("tool output\n");
+    stop();
+    cap.restore();
+    const text = cap.captured.join("");
+    expect(text).toContain("tool output\n");
+    expect(text.indexOf("tool output")).toBeLessThan(text.lastIndexOf("Thinking"));
+  });
+});

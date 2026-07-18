@@ -189,8 +189,6 @@ function recordHistoryEntry(history: string[], entry: string, command: string): 
 const USER_INPUT_COLOR = styles.cyan
 const COLOR_RESET = RESET;
 const DIM = styles.dim;
-const CLEAR_LINE = "\r\x1b[K";
-
 const HIDE_CURSOR = "\x1b[?25l";
 const SHOW_CURSOR = "\x1b[?25h";
 const SYNC_BEGIN = "\x1b[?2026h"; // DEC synchronized-update begin
@@ -489,62 +487,31 @@ const SPINNER_FRAMES = SPINNERS.line.frames;
 const SPINNER_INTERVAL_MS = SPINNERS.line.interval;
 
 /**
- * Start a single-line "Thinking Ns" spinner. Returns a stop function
- * that clears the spinner row and restores `process.stdout.write`.
- *
- * While the spinner is active, every external write to stdout
- * (`console.log`, `process.stdout.write`, etc.) is wrapped to emit
- * a `\r\x1b[K` clear-line first, then the original content. The
- * spinner redraws on the next interval tick. This is the
- * "unconditional clear-on-write" approach the spec endorses for WL4
- * — ~15 lines, handles every tool that logs without needing each
- * tool to coordinate with the spinner.
- *
- * No-op on non-TTY: returns an immediate stop function so piped
- * runs don't get spinner frames in their logs.
+ * Start a single-line "Thinking Ns" spinner as a one-line bottom region.
+ * Returns a stop function that removes the region. The spinner is now a
+ * client of `installBottomRegion`: outside writes (tool traces) redraw
+ * above it automatically, and there is exactly one owner of the bottom of
+ * the screen. It does NOT hide the cursor (default RegionOptions). No-op
+ * on non-TTY: returns an immediate stop function so piped runs don't get
+ * spinner frames in their logs.
  */
 function startSpinner(useTTY: boolean): () => void {
-  if (!useTTY) return () => { };
+  if (!useTTY) {
+    return () => { };
+  }
   const startedAt = Date.now();
-  let stopped = false;
-  // Capture the *real* write before patching so the spinner itself
-  // can draw without recursing through the patched version.
-  const stdoutAny = process.stdout as unknown as {
-    write: (chunk: any, ...rest: any[]) => any;
-  };
-  const realWrite = stdoutAny.write.bind(process.stdout);
-
-  const render = (): void => {
-    if (stopped) return;
+  const render = (): string[] => {
     const elapsedMs = Date.now() - startedAt;
     const elapsedSec = Math.floor(elapsedMs / 1000);
-    const idx = Math.floor(elapsedMs / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length;
-    const frame = SPINNER_FRAMES[idx];
-    realWrite(`\r${DIM}${frame} Thinking ${elapsedSec}s${COLOR_RESET}\x1b[K`);
+    const frameIndex =
+      Math.floor(elapsedMs / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length;
+    return [`${DIM}${SPINNER_FRAMES[frameIndex]} Thinking ${elapsedSec}s${COLOR_RESET}`];
   };
-  render();
-  const id = setInterval(render, SPINNER_INTERVAL_MS);
-
-  // Patch stdout so any external write clears the spinner row first.
-  // The patched function uses `realWrite`, never `stdoutAny.write`,
-  // so there's no recursion. Preserves the original return value so
-  // backpressure semantics (the boolean Writable.write returns) stay
-  // correct.
-  stdoutAny.write = function patchedWrite(
-    this: unknown,
-    chunk: any,
-    ...rest: any[]
-  ): any {
-    realWrite(CLEAR_LINE);
-    return realWrite(chunk, ...rest);
-  };
-
+  const region = installBottomRegion(render, useTTY);
+  const timer = setInterval(() => region.refresh(), SPINNER_INTERVAL_MS);
   return (): void => {
-    if (stopped) return;
-    stopped = true;
-    clearInterval(id);
-    stdoutAny.write = realWrite;
-    realWrite(CLEAR_LINE);
+    clearInterval(timer);
+    region.teardown();
   };
 }
 
@@ -1432,6 +1399,7 @@ export const _internal = {
   summarizeMultiline,
   eraseRows,
   buildFrame,
+  startSpinner,
 };
 
 export function _clearScreen(): void {

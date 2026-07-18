@@ -1,0 +1,100 @@
+/** @module
+  @summary Reviews Agency source code: parse findings, typecheck findings, and
+  an optional LLM judgment of whether the code accomplishes a task.
+
+  Review reads; it never runs the code. To execute a program and judge its
+  actual result, use agencyVerifierAgent instead.
+*/
+import { TypeCheckReport, typecheck, parseAST } from "std::agency"
+import { Feedback, mergeFeedback } from "std::agents/lib/feedback"
+import { llmOptions } from "std::agents/lib/shared"
+import { systemMessage, threadIsNew } from "std::thread"
+
+static const systemPrompt = """You review Agency-language code. Return a list of feedback items. Set error=true only if the code does not accomplish the task. Keep feedback brief and concrete."""
+
+/** Convert a typecheck report into findings: one error item per error, one
+  advisory item per warning. */
+export def reportFeedback(report: TypeCheckReport): Feedback[] {
+  const feedback: Feedback[] = []
+  for (error in report.errors) {
+    feedback.push({ error: true, feedback: "Error: ${error.message}" })
+  }
+  for (warning in report.warnings) {
+    feedback.push({ error: false, feedback: "Warning: ${warning.message}" })
+  }
+  return feedback
+}
+
+def parseFeedback(source: string): Result<Feedback[]> {
+  const result = parseAST(source)
+  if (result is failure(err)) {
+    return success([{ error: true, feedback: "Parse error: ${err}" }])
+  }
+  return success([])
+}
+
+def typecheckFeedback(source: string): Result<Feedback[]> {
+  const result = typecheck(source)
+  if (result is failure(err)) {
+    return success([{ error: true, feedback: "Typecheck failed: ${err}" }])
+  }
+  return success(reportFeedback(result.value))
+}
+
+def judgeAgainstTask(
+  source: string,
+  task: string,
+  model: string,
+  provider: string,
+): Result<Feedback[]> {
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
+  }
+  const judged: Feedback[] = llm("The code was written for this task:\n<task>\n${task}\n</task>\n\n<code>\n${source}\n</code>\n\nReturn a list of feedback items.", llmOptions(model, provider))
+  return success(judged)
+}
+
+export def agencyReviewAgent(
+  source: string,
+  task: string = "",
+  context: string = "",
+  maxCost: number = $10.00,
+  maxTime: number = 10m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+): Result<Feedback[]> {
+  """
+  Review Agency source code and return findings. Always includes parse and
+  typecheck findings. When a task is given, an LLM also judges whether the
+  code accomplishes it.
+
+  @param source - Agency source code to review
+  @param task - What the code should do, or "" for static checks only
+  @param context - Extra material for the judgment, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  """
+  let feedback: Result<Feedback[]> = success([])
+  feedback = mergeFeedback(feedback, parseFeedback(source))
+  feedback = mergeFeedback(feedback, typecheckFeedback(source))
+  if (task == "") {
+    return feedback
+  }
+  const captured = guard(cost: maxCost, time: maxTime) {
+    let judged: Result<Feedback[]> = success([])
+    thread(label: "agencyReviewAgent", session: session) {
+      judged = judgeAgainstTask(source, task, model, provider)
+    }
+    return mergeFeedback(feedback, judged)
+  }
+  return match(captured) {
+    success(merged) => merged
+    // The static findings are already computed and free: never discard them.
+    // One advisory item records that the LLM judgment was cut short.
+    failure(e) => mergeFeedback(feedback, success([{ error: false, feedback: "LLM judgment cut short: ${e.type} cap reached." }]))
+  }
+}

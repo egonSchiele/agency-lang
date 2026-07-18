@@ -1772,7 +1772,14 @@ export class TypeScriptBuilder {
 
     const blockName = this.steps.nextBlockName();
     const parentScopeName = this.scopes.currentName();
-    this.scopes.push({ type: "block", blockName });
+    // The stamped yield (annotated guards, #580) rides along; the other
+    // two block push sites (processBlockAsExpression, the fork
+    // lowering) never carry a guard's block argument and stay bare.
+    this.scopes.push({
+      type: "block",
+      blockName,
+      declaredYieldType: block.declaredYieldType,
+    });
     this._sourceMapBuilder.enterScope(this.moduleId, blockName);
     const compiledFinalize = this.finalize.compileScope({
       body: block.body,

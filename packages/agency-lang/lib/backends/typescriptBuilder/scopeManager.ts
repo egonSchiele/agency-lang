@@ -151,25 +151,32 @@ export class ScopeManager {
   }
 
   /**
-   * Declared return type of the nearest ENCLOSING function or node,
-   * walking outward past block scopes. Unlike `returnType()`, which
-   * answers for the CURRENT scope (and answers `undefined` for blocks),
-   * this is the saveDraft tool's schema key (partials-ergonomics spec
-   * Part 2): a guard block owns the draft slot but carries no declared
-   * type, so the enclosing def's declared type is the best-effort hint.
+   * Declared return type of the nearest enclosing scope that has an
+   * ANSWER: a guard block whose result the user annotated `Result<T>`
+   * (its stamped yield, #580), else — walking outward past unstamped
+   * blocks — the nearest function or node's declared return. Unlike
+   * `returnType()`, which answers for the CURRENT scope (and answers
+   * `undefined` for blocks), this is the saveDraft tool's schema key
+   * (partials-ergonomics spec Part 2): the block owning the draft
+   * slot answers exactly when the user named its type.
    */
   enclosingDeclaredReturnType(): VariableType | undefined {
-    // Innermost-first: the nearest non-block scope answers. The Scope
-    // union names more kinds (imported/static/local), but the builder
-    // only ever PUSHES function, node, and block onto this stack, over
-    // the root global — the same invariant `returnType()`'s throwing
-    // default relies on — so the walk always lands on one of those
-    // three, and the default arm below covers only `global`.
+    // Innermost-first, first answer wins. The Scope union names more
+    // kinds (imported/static/local), but the builder only ever PUSHES
+    // function, node, and block onto this stack, over the root global
+    // — the same invariant `returnType()`'s throwing default relies
+    // on — so the walk always lands on one of those three, and the
+    // default arm below covers only `global`.
     const owner = [...this.stack]
       .reverse()
-      .find((scope) => scope.type !== "block");
+      .find(
+        (scope) =>
+          scope.type !== "block" || scope.declaredYieldType !== undefined,
+      );
     if (owner === undefined) return undefined;
     switch (owner.type) {
+      case "block":
+        return owner.declaredYieldType;
       case "function":
         return (
           this.compilationUnit.functionDefinitions[owner.functionName]

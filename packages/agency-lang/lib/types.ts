@@ -176,6 +176,10 @@ each call will get its own copy of `globalVar`.
 export type BlockScope = {
   type: "block";
   blockName: string;
+  /** The block's declared yield type, copied from the stamped
+   *  BlockArgument (#580) when the builder pushes this scope. Set only
+   *  for guard blocks whose result the user annotated `Result<T>`. */
+  declaredYieldType?: VariableType;
 };
 
 export type Scope =

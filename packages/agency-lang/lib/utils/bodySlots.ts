@@ -38,8 +38,15 @@ export type BodySlot = {
    *  `static ...`): a rewrite must map the one statement to exactly one. */
   single?: boolean;
   /** Extra ancestor between the owner and the body during walks — the
-   *  functionCall's inline `block:` argument. */
+   *  functionCall's `block:` argument (inline or not). */
   blockAncestor?: BlockArgument;
+  /** True when a `return` inside this slot's body yields to the slot's
+   *  own closure rather than the enclosing def: block arguments (the
+   *  __block_N lifting), inline handler bodies (their own arrow), and
+   *  finalize bodies (the __finalize closure). guardDesugar's return-
+   *  target rule keys on this — a new return-retargeting construct
+   *  must set it here or that feature silently mis-stamps. */
+  retargetsReturn?: boolean;
   /** Fresh copy of `owner` with this slot's statements replaced. Takes the
    *  CURRENT owner (not the node bodySlots was called on) so a fold over
    *  several slots composes: each write builds on the previous one. */
@@ -126,6 +133,7 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
       if (n.handler.kind === "inline") {
         slots.push({
           body: n.handler.body,
+          retargetsReturn: true,
           write: (owner, body) => {
             const o = owner as HandleBlock;
             return { ...o, handler: { ...o.handler, body } } as AgencyNode;
@@ -137,11 +145,14 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
     case "finalizeBlock": {
       // Same-scope statements (like an if body): the finalize reads the
       // enclosing scope's locals, so every walker and rewriter must
-      // descend into it as part of that scope.
+      // descend into it as part of that scope — though a `return`
+      // inside yields to the `__finalize` closure, not the enclosing
+      // def, hence `retargetsReturn`.
       const n = node as FinalizeBlock;
       return [
         {
           body: n.body,
+          retargetsReturn: true,
           write: (owner, body) => ({ ...owner, body }) as AgencyNode,
         },
       ];
@@ -149,11 +160,19 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
     case "guardBlock": {
       // The guarded block. Distinct-scope statements (the body compiles
       // to a lifted closure after desugaring), but walkers and
-      // rewriters must descend into it like any other body.
+      // rewriters must descend into it like any other body. Marked
+      // retargetsReturn like its post-desugar twin (blockArgument):
+      // guardDesugar currently bypasses this slot (desugarNode
+      // special-cases guardBlock and walks the body itself, with the
+      // stamp as the target), so the flag is inert there — but anyone
+      // merging that special case into the generic slot walk gets the
+      // reset by construction instead of silently inheriting the
+      // def's return target into guard bodies.
       const n = node as GuardBlock;
       return [
         {
           body: n.body,
+          retargetsReturn: true,
           write: (owner, body) => ({ ...owner, body }) as AgencyNode,
         },
       ];
@@ -167,8 +186,16 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
       return [];
     case "messageThread":
       return [bodyField(node as MessageThread)];
-    case "blockArgument":
-      return [bodyField(node as unknown as BlockArgument)];
+    case "blockArgument": {
+      const n = node as unknown as BlockArgument;
+      return [
+        {
+          body: n.body,
+          retargetsReturn: true,
+          write: (owner, body) => ({ ...owner, body }) as AgencyNode,
+        },
+      ];
+    }
     case "functionCall": {
       const n = node as FunctionCall;
       if (!n.block) {
@@ -179,6 +206,7 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
         {
           body: block.body,
           blockAncestor: block,
+          retargetsReturn: true,
           write: (owner, body) => {
             const o = owner as FunctionCall;
             if (!o.block) {

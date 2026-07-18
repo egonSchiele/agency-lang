@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"t\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "saveDraft", "args": { "value": { "title": "t" } } }] },
+        { "return": "never-reached" }
+      ],
+      "description": "A structured draft saved against an annotated Result<{title}> guard salvages intact; exercises the threaded (non-fallback) schema path end to end.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

@@ -26,7 +26,14 @@ export type CreateServeHandlerOptions = {
   interruptEffectsByName?: Record<string, InterruptEffect[]>;
   /** Cache-bust token (mtime or content hash). Appended to the import URL so a
    *  re-written module at the same path loads new code instead of Node's
-   *  cached module. */
+   *  cached module.
+   *
+   *  WARNING: Node's ESM loader retains every distinct module URL in its
+   *  registry for the process lifetime with no eviction API, so each new
+   *  `version` permanently adds a module (and its module-scoped state) to
+   *  memory. A long-running host that re-serves many re-uploaded versions grows
+   *  unboundedly; a consumer must bound this (e.g. process recycling, or a
+   *  child-process execution model). */
   version: string;
   /** Server-side logger for error detail. Defaults to an info logger. */
   logger?: Logger;
@@ -54,6 +61,20 @@ export async function createServeHandler(
   // eslint-disable-next-line no-restricted-syntax -- compiled module URL is only known at runtime
   const mod = await import(moduleUrl);
   const moduleExports = mod as Record<string, unknown>;
+
+  // Public boundary check: fail fast with a clear message if the target is not
+  // a compiled Agency serve module. `hasInterrupts` is called unguarded on the
+  // /node path and `respondToInterrupts` on /resume, so a non-Agency or stale
+  // bundle missing them would otherwise surface as a confusing runtime error.
+  if (
+    typeof moduleExports.hasInterrupts !== "function" ||
+    typeof moduleExports.respondToInterrupts !== "function"
+  ) {
+    throw new Error(
+      `createServeHandler: ${compiledPath} is not a compiled Agency serve module ` +
+        `(missing hasInterrupts/respondToInterrupts exports).`,
+    );
+  }
 
   const toolRegistry =
     (moduleExports.__toolRegistry as Record<string, AgencyFunction>) ?? {};

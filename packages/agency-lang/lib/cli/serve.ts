@@ -40,6 +40,10 @@ function compileForServe(file: string, options: { quiet?: boolean } = {}): Compi
     throw new Error(`Compilation failed for ${file}`);
   }
 
+  // collectServeMetadata builds its own SymbolTable and runs its own type-check
+  // pass (a second one beyond compile()'s) so the helper stays self-contained
+  // and reusable by non-CLI hosts. The extra pass is CLI-startup cost only, not
+  // per-request, so it is a deliberate simplicity-over-sharing tradeoff.
   const { moduleId, exportedNodeNames, interruptEffectsByName, errors } =
     collectServeMetadata({ filePath: file, config });
 

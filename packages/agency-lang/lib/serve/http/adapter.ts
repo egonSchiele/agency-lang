@@ -128,11 +128,21 @@ export function createHttpHandler(config: HandlerConfig): (
 ) => Promise<RouteResult> {
   const { exports, hasInterrupts, respondToInterrupts, logger } = config;
 
-  const functions = Object.fromEntries(
-    exports.filter((e): e is ExportedFunction => e.kind === "function").map((e) => [e.name, e]),
+  // Null-prototype maps: function/node names come from the request URL, so a
+  // plain object would let a name like `/function/toString` resolve to an
+  // inherited Object.prototype method, bypass the "unknown" 404 check, and
+  // surface as a generic tool failure instead.
+  const functions: Record<string, ExportedFunction> = Object.assign(
+    Object.create(null),
+    Object.fromEntries(
+      exports.filter((e): e is ExportedFunction => e.kind === "function").map((e) => [e.name, e]),
+    ),
   );
-  const nodes = Object.fromEntries(
-    exports.filter((e): e is ExportedNode => e.kind === "node").map((e) => [e.name, e]),
+  const nodes: Record<string, ExportedNode> = Object.assign(
+    Object.create(null),
+    Object.fromEntries(
+      exports.filter((e): e is ExportedNode => e.kind === "node").map((e) => [e.name, e]),
+    ),
   );
 
   return async (method, path, body): Promise<RouteResult> => {

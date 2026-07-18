@@ -13,7 +13,23 @@ import { createServeHandler } from "./createServeHandler.js";
 // version-dependent. This fixture imports nothing, so it needs no node_modules.
 function fixtureSource(version: string): string {
   return `
-export const __toolRegistry = {};
+// One exported function (via __toolRegistry + __invokeFunction) so the
+// factory's /function path — discoverExports + makeInvoker picking up
+// __invokeFunction — is exercised, not only the node path.
+export const __toolRegistry = {
+  add: {
+    name: "add",
+    module: "agent",
+    exported: true,
+    toolDefinition: { name: "add", description: "Add two numbers", schema: null },
+  },
+};
+export function __invokeFunction(fn, namedArgs) {
+  if (fn.name === "add") {
+    return namedArgs.a + namedArgs.b;
+  }
+  throw new Error("unknown function: " + fn.name);
+}
 export const __mainNodeParams = ["message"];
 export const __needsApprovalNodeParams = [];
 export async function main(message) {
@@ -67,6 +83,26 @@ describe("createServeHandler", () => {
     const res = await handler("POST", "/node/main", { message: "hi" });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true, value: { echo: "hi", version: "v1" } });
+  });
+
+  it("lists and invokes an exported function through the factory", async () => {
+    const handler = await createServeHandler(modulePath, baseOptions());
+
+    const list = await handler("GET", "/list", undefined);
+    const listBody = list.body as { functions: { name: string }[] };
+    expect(listBody.functions.map((f) => f.name)).toContain("add");
+
+    const res = await handler("POST", "/function/add", { a: 2, b: 3 });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, value: 5 });
+  });
+
+  it("throws a clear error when the target is not a compiled Agency serve module", async () => {
+    const badPath = path.join(tmpDir, "bad.mjs");
+    fs.writeFileSync(badPath, "export const nothing = 1;\n", "utf-8");
+    await expect(
+      createServeHandler(badPath, { ...baseOptions(), version: "1" }),
+    ).rejects.toThrow(/not a compiled Agency serve module/);
   });
 
   it("returns the interrupts payload, then resumes to the final value", async () => {

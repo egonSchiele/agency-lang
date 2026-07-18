@@ -3,6 +3,8 @@ import {
   _clearScreen,
   _termWidth,
   _clearHistory,
+  _interruptChoice,
+  _stickyInterruptAvailable,
  } from "agency-lang/stdlib-lib/cli.js"
 
 /** @module
@@ -45,6 +47,8 @@ import {
 // null) is exactly the line-mode behavior. So nothing actually
 // needed to be re-exported here for line mode to work.
 export { pushMessage, clearMessages } from "std::ui"
+
+import { chooseOption } from "std::ui"
 
 // The active `repl()` session's history-file path, held as an Agency module
 // global so it lives in the execution model (serialized, module-isolated)
@@ -116,4 +120,31 @@ def termWidth(): number {
 export def hline(char: string = "─", width: number = null): string {
   let _width = width || termWidth()
   return char.repeat(_width)
+}
+
+export def interruptChoice(
+  title: string,
+  body: string,
+  items: any[],
+  allowFreeText: boolean = false,
+  allowCancel: boolean = false,
+): string {
+  """
+  Approval prompt for line mode: renders a sticky footer pinned to the
+  bottom of the terminal so concurrent tool-call output streams above it
+  instead of burying the prompt. Type an option key or a rejection reason,
+  then press Enter. Falls back to `chooseOption` when no line-mode REPL is
+  active (the TUI, a non-TTY, or a headless run), so every non-line-mode
+  path keeps its current behavior.
+
+  @param title - Prompt heading (the interrupt message).
+  @param body - Multi-line context shown under the title (or "").
+  @param items - The {key, label} choices.
+  @param allowFreeText - Accept a free-form rejection reason.
+  @param allowCancel - When true, Escape cancels the whole request.
+  """
+  if (_stickyInterruptAvailable()) {
+    return _interruptChoice(title, body, items, allowFreeText, allowCancel)
+  }
+  return chooseOption(title, body, items, allowFreeText: allowFreeText, allowCancel: allowCancel)
 }

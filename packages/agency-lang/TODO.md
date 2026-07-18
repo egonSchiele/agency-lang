@@ -220,3 +220,12 @@ Seeing this inside a thread block:
 > A finalize block cannot go inside a `thread` block. Declare it at the top level of the function or block body. A finalize is always active, so nesting it in control flow has no meaning.agency
 
 But the var I'm referencing is declared in the thread block.
+---
+
+A `match` expression inside a block that pauses and resumes (a guard trip
+answered with `approve`) evaluates to null. Reading the same Result with
+`isFailure(r)` / `r.value` works, and a `match` on the guard's own Result
+outside the block works. Pinned in
+tests/agency/supervise/nestedGuardResume.agency (matchInsideResumedBlock
+currently expects the buggy `null`; flip it when fixed). Agents that may run
+inside a supervised block therefore avoid `match` on guard Results.

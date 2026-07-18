@@ -1,0 +1,103 @@
+import { supervise, SuperviseDecision } from "std::supervise"
+import { getThread, currentThreadId } from "std::thread"
+
+const checks = []
+
+def spin(rounds: number): string {
+  let i = 0
+  while (i < rounds) {
+    i = i + 1
+  }
+  return "spun"
+}
+
+def alwaysContinue(elapsed: number): SuperviseDecision {
+  checks.push("checked")
+  return { action: "continue", message: "" }
+}
+
+def alwaysStop(elapsed: number): SuperviseDecision {
+  return { action: "stop", message: "off the rails" }
+}
+
+// The block trips at least once, the check says continue, the block finishes.
+node continueLetsBlockFinish(): string {
+  const r = supervise(every: 5ms, maxTime: 600000, check: alwaysContinue) {
+    const s = spin(300000)
+    return "done:${s}"
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return "${r.value}|checked:${checks.length > 0}"
+}
+
+// The check says stop: the block is rejected and its draft is salvaged.
+// The interval is 100ms, not 5ms, so the trip cannot fire before saveDraft.
+node stopSalvagesDraft(): string {
+  const r = supervise(every: 100ms, maxTime: 600000, check: alwaysStop) {
+    saveDraft("partial")
+    const s = spin(300000)
+    return "done:${s}"
+  }
+  if (isFailure(r)) { return "stopped-no-salvage" }
+  return "salvaged:${r.value}"
+}
+
+// An inner guard with its own handler is not supervise's business: its trip
+// must reach ITS handler, and supervise's check must not fire for it.
+node innerGuardTripPassesThrough(): string {
+  const before = checks.length
+  const r = supervise(every: 600000, maxTime: 6000000, check: alwaysContinue) {
+    handle {
+      const inner = guard(time: 5ms, label: "mine") {
+        const s = spin(300000)
+        return "inner:${s}"
+      }
+      if (isFailure(inner)) { return "inner-failed" }
+      return inner.value
+    } with (i) {
+      if (i.effect == "std::guard" && i.data.label == "mine") {
+        return approve({ maxTime: 600000 })
+      }
+      return pass()
+    }
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return "${r.value}|checksDuring:${checks.length - before}"
+}
+
+// maxTime smaller than the interval is rejected up front.
+node maxTimeBelowIntervalFails(): boolean {
+  const r = supervise(every: 10m, maxTime: 5m, check: alwaysContinue) {
+    return "never runs"
+  }
+  return isFailure(r)
+}
+
+// A redirect injects its message into the paused thread, so the block's
+// next request sees it. The block reads its own thread and reports whether
+// the message landed, mirroring the delivery assertion in
+// tests/agency/subprocess/trip-forward-approve-message.agency.
+def redirectOnce(elapsed: number): SuperviseDecision {
+  checks.push("redirected")
+  return { action: "redirect", message: "course-correct: use the other approach" }
+}
+
+node redirectDeliversMessage(): string {
+  const r = supervise(every: 100ms, maxTime: 600000, check: redirectOnce) {
+    // The first mock stalls for 60s, so the 100ms interval trips DURING the
+    // request. Approving re-issues it, and the queued redirect message
+    // drains into the thread right before that retry.
+    const first = llm("Reply with: one")
+    const t = getThread(currentThreadId(), 0, 50)
+    if (isFailure(t)) { return "thread-read-failed" }
+    let verdict = "missing"
+    for (m in t.value) {
+      if (m.content == "course-correct: use the other approach") {
+        verdict = "delivered:${m.role}"
+      }
+    }
+    return verdict
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return r.value
+}

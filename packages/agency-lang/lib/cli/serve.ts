@@ -3,10 +3,8 @@ import path from "path";
 import process from "process";
 import { fileURLToPath, pathToFileURL } from "url";
 import { compile, loadConfig } from "./commands.js";
-import { SymbolTable } from "../symbolTable.js";
-import { parseAgency } from "../parser.js";
-import { buildCompilationUnit } from "../compilationUnit.js";
-import { typeCheck, formatErrors } from "../typeChecker/index.js";
+import { formatErrors } from "../typeChecker/index.js";
+import { collectServeMetadata } from "../serve/metadata.js";
 import { discoverExports } from "../serve/discovery.js";
 import { createMcpHandler, startStdioServer, mcpToolSummaryLines } from "../serve/mcp/adapter.js";
 import type { McpConfig } from "../serve/mcp/adapter.js";
@@ -37,38 +35,28 @@ type CompileResult = {
 
 function compileForServe(file: string, options: { quiet?: boolean } = {}): CompileResult {
   const config = loadConfig();
-  const absoluteFile = path.resolve(file);
-  const symbolTable = SymbolTable.build(absoluteFile, config);
-
-  const outputPath = compile(config, file, undefined, { symbolTable, quiet: options.quiet });
+  const outputPath = compile(config, file, undefined, { quiet: options.quiet });
   if (!outputPath) {
     throw new Error(`Compilation failed for ${file}`);
   }
 
-  const fileSymbols = symbolTable.getFile(absoluteFile);
-  const exportedNodeNames = Object.values(fileSymbols ?? {})
-    .filter((sym) => sym.kind === "node" && sym.exported)
-    .map((sym) => sym.name);
+  // collectServeMetadata builds its own SymbolTable and runs its own type-check
+  // pass (a second one beyond compile()'s) so the helper stays self-contained
+  // and reusable by non-CLI hosts. The extra pass is CLI-startup cost only, not
+  // per-request, so it is a deliberate simplicity-over-sharing tradeoff.
+  const { moduleId, exportedNodeNames, interruptEffectsByName, errors } =
+    collectServeMetadata({ filePath: file, config });
 
-  // Run type checker to get transitive interrupt effects and report errors
-  const source = fs.readFileSync(absoluteFile, "utf-8");
-  const parseResult = parseAgency(source, config);
-  const interruptEffectsByName: Record<string, InterruptEffect[]> = {};
-  if (parseResult.success) {
-    const info = buildCompilationUnit(parseResult.result, symbolTable, absoluteFile, source);
-    const result = typeCheck(parseResult.result, config, info);
-    const typeErrors = result.errors.filter((e) => e.severity !== "warning");
-    const warnings = result.errors.filter((e) => e.severity === "warning");
-    if (typeErrors.length > 0) {
-      console.error(formatErrors(typeErrors));
-    }
-    if (warnings.length > 0) {
-      console.error(formatErrors(warnings));
-    }
-    Object.assign(interruptEffectsByName, result.interruptEffectsByFunction);
+  // Report type-check diagnostics gathered while collecting metadata.
+  const typeErrors = errors.filter((e) => e.severity !== "warning");
+  const warnings = errors.filter((e) => e.severity === "warning");
+  if (typeErrors.length > 0) {
+    console.error(formatErrors(typeErrors));
+  }
+  if (warnings.length > 0) {
+    console.error(formatErrors(warnings));
   }
 
-  const moduleId = path.relative(process.cwd(), absoluteFile);
   return { outputPath, moduleId, exportedNodeNames, interruptEffectsByName };
 }
 

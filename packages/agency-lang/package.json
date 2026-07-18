@@ -75,6 +75,11 @@
       "import": "./dist/lib/optimize/public.js",
       "require": "./dist/lib/optimize/public.js"
     },
+    "./serve": {
+      "types": "./dist/lib/serve/public.d.ts",
+      "import": "./dist/lib/serve/public.js",
+      "require": "./dist/lib/serve/public.js"
+    },
     "./stdlib-lib/*": "./dist/lib/stdlib/*",
     "./stdlib/*": "./stdlib/*"
   },

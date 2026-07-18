@@ -58,7 +58,6 @@ function makeHandler() {
   const { exports } = makeExports();
   return createHttpHandler({
     exports,
-    port: 3545,
     logger: createLogger("error"),
     hasInterrupts: () => false,
     respondToInterrupts: async () => ({ data: "resumed" }),
@@ -122,6 +121,14 @@ describe("HTTP adapter", () => {
     expect(body.nodes[0].interruptEffects).toEqual([]);
   });
 
+  it("POST /function/<inherited-prototype-name> is a 404, not a tool failure", async () => {
+    // "toString" is not an exported function; a plain-object lookup table would
+    // resolve it to Object.prototype.toString and bypass the 404. See the
+    // null-prototype maps in createHttpHandler.
+    const result = await handler("POST", "/function/toString", {});
+    expect(result.status).toBe(404);
+  });
+
   it("GET /list reports destructive/idempotent markers as booleans", async () => {
     const registry: Record<string, AgencyFunction> = {};
     const mk = (name: string, markers?: { destructive?: boolean; idempotent?: boolean }) =>
@@ -154,7 +161,6 @@ describe("HTTP adapter", () => {
     }));
     const h = createHttpHandler({
       exports,
-      port: 3545,
       logger: createLogger("error"),
       hasInterrupts: () => false,
       respondToInterrupts: async () => ({ data: "resumed" }),
@@ -239,7 +245,6 @@ describe("HTTP adapter", () => {
           invoke: (namedArgs) => deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
         },
       ],
-      port: 3545,
       logger: createLogger("error"),
       hasInterrupts: () => false,
       respondToInterrupts: async () => ({ data: "ok" }),

@@ -10,8 +10,14 @@ import {
   makeGuardedRequestListener,
 } from "./security.js";
 
-export type HttpConfig = {
+export type HandlerConfig = {
   exports: ExportedItem[];
+  logger: Logger;
+  hasInterrupts: (data: unknown) => boolean;
+  respondToInterrupts: (interrupts: unknown[], responses: unknown[]) => Promise<unknown>;
+};
+
+export type HttpConfig = HandlerConfig & {
   port: number;
   apiKey?: string;
   /** Interface to bind to. Default "127.0.0.1" (loopback only). */
@@ -24,12 +30,9 @@ export type HttpConfig = {
    * array to lock the server down to specific hostnames.
    */
   allowedHosts?: string[];
-  logger: Logger;
-  hasInterrupts: (data: unknown) => boolean;
-  respondToInterrupts: (interrupts: unknown[], responses: unknown[]) => Promise<unknown>;
 };
 
-type RouteResult = {
+export type RouteResult = {
   status: number;
   body: unknown;
 };
@@ -118,18 +121,28 @@ async function resumeInterrupts(
 const FUNCTION_ROUTE = /^\/function\/([^/]+)$/;
 const NODE_ROUTE = /^\/node\/([^/]+)$/;
 
-export function createHttpHandler(config: HttpConfig): (
+export function createHttpHandler(config: HandlerConfig): (
   method: string,
   path: string,
   body: unknown,
 ) => Promise<RouteResult> {
   const { exports, hasInterrupts, respondToInterrupts, logger } = config;
 
-  const functions = Object.fromEntries(
-    exports.filter((e): e is ExportedFunction => e.kind === "function").map((e) => [e.name, e]),
+  // Null-prototype maps: function/node names come from the request URL, so a
+  // plain object would let a name like `/function/toString` resolve to an
+  // inherited Object.prototype method, bypass the "unknown" 404 check, and
+  // surface as a generic tool failure instead.
+  const functions: Record<string, ExportedFunction> = Object.assign(
+    Object.create(null),
+    Object.fromEntries(
+      exports.filter((e): e is ExportedFunction => e.kind === "function").map((e) => [e.name, e]),
+    ),
   );
-  const nodes = Object.fromEntries(
-    exports.filter((e): e is ExportedNode => e.kind === "node").map((e) => [e.name, e]),
+  const nodes: Record<string, ExportedNode> = Object.assign(
+    Object.create(null),
+    Object.fromEntries(
+      exports.filter((e): e is ExportedNode => e.kind === "node").map((e) => [e.name, e]),
+    ),
   );
 
   return async (method, path, body): Promise<RouteResult> => {

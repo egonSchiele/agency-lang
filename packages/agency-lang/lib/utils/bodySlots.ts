@@ -38,8 +38,15 @@ export type BodySlot = {
    *  `static ...`): a rewrite must map the one statement to exactly one. */
   single?: boolean;
   /** Extra ancestor between the owner and the body during walks — the
-   *  functionCall's inline `block:` argument. */
+   *  functionCall's `block:` argument (inline or not). */
   blockAncestor?: BlockArgument;
+  /** True when a `return` inside this slot's body yields to the slot's
+   *  own closure rather than the enclosing def: block arguments (the
+   *  __block_N lifting), inline handler bodies (their own arrow), and
+   *  finalize bodies (the __finalize closure). guardDesugar's return-
+   *  target rule keys on this — a new return-retargeting construct
+   *  must set it here or that feature silently mis-stamps. */
+  retargetsReturn?: boolean;
   /** Fresh copy of `owner` with this slot's statements replaced. Takes the
    *  CURRENT owner (not the node bodySlots was called on) so a fold over
    *  several slots composes: each write builds on the previous one. */
@@ -126,6 +133,7 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
       if (n.handler.kind === "inline") {
         slots.push({
           body: n.handler.body,
+          retargetsReturn: true,
           write: (owner, body) => {
             const o = owner as HandleBlock;
             return { ...o, handler: { ...o.handler, body } } as AgencyNode;
@@ -142,6 +150,7 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
       return [
         {
           body: n.body,
+          retargetsReturn: true,
           write: (owner, body) => ({ ...owner, body }) as AgencyNode,
         },
       ];
@@ -167,8 +176,16 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
       return [];
     case "messageThread":
       return [bodyField(node as MessageThread)];
-    case "blockArgument":
-      return [bodyField(node as unknown as BlockArgument)];
+    case "blockArgument": {
+      const n = node as unknown as BlockArgument;
+      return [
+        {
+          body: n.body,
+          retargetsReturn: true,
+          write: (owner, body) => ({ ...owner, body }) as AgencyNode,
+        },
+      ];
+    }
     case "functionCall": {
       const n = node as FunctionCall;
       if (!n.block) {
@@ -179,6 +196,7 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
         {
           body: block.body,
           blockAncestor: block,
+          retargetsReturn: true,
           write: (owner, body) => {
             const o = owner as FunctionCall;
             if (!o.block) {

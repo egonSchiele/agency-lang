@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "runFailureIsAFinding",
+      "description": "a program that cannot run yields an error finding",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "judgeFindingsFlowThrough",
+      "description": "the judge's error findings surface",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": [{ "error": true, "feedback": "The program returns one, not two." }] }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+import { agencyVerifierAgent } from "std::agents/agency/verifier"
+import { feedbackHasErrors } from "std::agents/lib/feedback"
+
+// Unrunnable source -> one error finding, no LLM call.
+node runFailureIsAFinding(): boolean {
+  const findings = agencyVerifierAgent("node main() {{{", "any task")
+  return feedbackHasErrors(findings)
+}
+
+// Runnable source -> the mocked judge's findings flow through. `with
+// approve` answers runCode's std::run subprocess-approval interrupt.
+node judgeFindingsFlowThrough(): boolean {
+  const findings = agencyVerifierAgent("export node main() { return 1 }", "return the number two") with approve
+  return feedbackHasErrors(findings)
+}

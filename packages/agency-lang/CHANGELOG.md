@@ -1,3 +1,26 @@
+## Jul 17 2026 — v0.9.0
+
+### Language / Typechecker
+- **`guard` is now a language construct** and raises `<std::guard>`.
+- functions and scopes can return a partial result using **`saveDraft` / `finalize` blocks**
+- **`destructive` marker** for retry-safety, with new `destructive { }` regions.
+- Stricter imports — unresolved Agency imports error and export-visibility is enforced.
+
+### Standard Library
+- **`std::notes/apple`** — Apple Notes support.
+- **`std::agents` worker library** — `codingAgent`, `researchAgent`, `agencyCodingAgent`, and an `expert` agent, plus lifted `verify`.
+
+### Runtime
+- **Resumable guards** — cost and time guard trips raise resumable interrupts you can approve, reject, or `pass()`, with approval merging, and a way to pass feedback back to the LLM.
+- **Per-branch time budgets** + waiting on an `input()` no longer counts against the time budget.
+- **Message debug labels** for `llm()` and the message builders.
+- Fixed block refs breaking across subprocess resume (#513).
+
+### CLI
+- Control max time and cost on `agency run` and `agency agent` with `--max-cost` / `--max-time`.
+- Renamed `--log-file` to `--log`.
+- Agent fixes — one-shot policy handler routing, and the review agent now reviews the Agency files it changed instead of parsing chat.
+
 ## Jul 12 2026 — v0.8.0
 
 ### Language / Typechecker

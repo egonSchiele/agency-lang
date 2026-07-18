@@ -262,6 +262,43 @@ export default defineConfig({
               ],
             },
             { text: "agent", link: "/stdlib/agent" },
+            {
+              text: "agents",
+              collapsed: false,
+              items: [
+                { text: "agents/coding", link: "/stdlib/agents/coding" },
+                { text: "agents/expert", link: "/stdlib/agents/expert" },
+                { text: "agents/planner", link: "/stdlib/agents/planner" },
+                { text: "agents/researcher", link: "/stdlib/agents/researcher" },
+                { text: "agents/review", link: "/stdlib/agents/review" },
+                { text: "agents/verifier", link: "/stdlib/agents/verifier" },
+                {
+                  text: "agents/agency/coding",
+                  link: "/stdlib/agents/agency/coding",
+                },
+                {
+                  text: "agents/agency/expert",
+                  link: "/stdlib/agents/agency/expert",
+                },
+                {
+                  text: "agents/agency/review",
+                  link: "/stdlib/agents/agency/review",
+                },
+                {
+                  text: "agents/agency/verifier",
+                  link: "/stdlib/agents/agency/verifier",
+                },
+                {
+                  text: "agents/lib/expertGuidance",
+                  link: "/stdlib/agents/lib/expertGuidance",
+                },
+                {
+                  text: "agents/lib/feedback",
+                  link: "/stdlib/agents/lib/feedback",
+                },
+                { text: "agents/lib/shared", link: "/stdlib/agents/lib/shared" },
+              ],
+            },
             { text: "args", link: "/stdlib/args" },
             { text: "array", link: "/stdlib/array" },
             {
@@ -346,6 +383,7 @@ export default defineConfig({
             { text: "speech", link: "/stdlib/speech" },
             { text: "statelog", link: "/stdlib/statelog" },
             { text: "strategy", link: "/stdlib/strategy" },
+            { text: "supervise", link: "/stdlib/supervise" },
             { text: "syntax", link: "/stdlib/syntax" },
             { text: "system", link: "/stdlib/system" },
             { text: "thread", link: "/stdlib/thread" },

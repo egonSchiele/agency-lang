@@ -24,7 +24,7 @@ How an existing file is handled on write:
 export type WriteMode = "overwrite" | "append" | "create-only"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L50))
 
 ## Effects
 
@@ -37,7 +37,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L34))
 
 ### std::write
 
@@ -48,7 +48,7 @@ effect std::write {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L38))
 
 ### std::readImage
 
@@ -59,7 +59,7 @@ effect std::readImage {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L42))
 
 ## Functions
 
@@ -79,7 +79,7 @@ Print a message to the console.
 |---|---|---|
 | messages | `any[]` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L52))
 
 ### setAgentCwd
 
@@ -104,7 +104,7 @@ Set the agent working directory. Path-taking tools (read, write, edit,
 |---|---|---|
 | dir | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L81))
 
 ### getAgentCwd
 
@@ -116,7 +116,7 @@ Return the agent working directory, or an empty string if none is set.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L90))
 
 ### applyAgentCwd
 
@@ -135,7 +135,7 @@ relative paths against the agent working directory.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L100))
 
 ### printJSON
 
@@ -155,7 +155,7 @@ Print an object as formatted JSON to the console.
 | obj | `any` |  |
 | highlight | `boolean` | false |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L108))
 
 ### input
 
@@ -178,7 +178,7 @@ prompt, which surfaces as an AgencyCancelledError.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L125))
 
 ### sleep
 
@@ -199,7 +199,7 @@ A long sleep wakes immediately on Ctrl-C, race-loser, or time-guard abort.
 |---|---|---|
 | ms | `number` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L136))
 
 ### saveDraft
 
@@ -226,7 +226,7 @@ Record a best-so-far value for the current function or guarded block. If an
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L145))
 
 ### read
 
@@ -262,7 +262,7 @@ Read the contents of a file and return it as a string.
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L158))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L163))
 
 ### write
 
@@ -298,7 +298,7 @@ Write content to a file.
 
 **Throws:** `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L191))
 
 ### writeBinary
 
@@ -335,7 +335,7 @@ Write base64-encoded binary data to a file: images, audio, video, PDFs, or any
 
 **Throws:** `std::writeBinary`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L216))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L221))
 
 ### readBinary
 
@@ -366,7 +366,7 @@ Read a file and return its contents as a Base64-encoded string. Works for any
 
 **Throws:** `std::readBinary`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L246))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L251))
 
 ### range
 
@@ -389,7 +389,7 @@ Generate an array of numbers. With one argument, counts from 0 to start-1;
 
 **Returns:** `number[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L269))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L274))
 
 ### map
 
@@ -411,7 +411,7 @@ Map a function over an array, returning a new array of results.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L290))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L295))
 
 ### filter
 
@@ -433,7 +433,7 @@ Return a new array containing only the elements for which the function returns t
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L304))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L309))
 
 ### exclude
 
@@ -455,7 +455,7 @@ Return a new array excluding elements for which the function returns true.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L320))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L325))
 
 ### find
 
@@ -477,7 +477,7 @@ Return the first element for which the function returns true, or null if none ma
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L336))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L341))
 
 ### findIndex
 
@@ -499,7 +499,7 @@ Return the index of the first element for which the function returns true, or -1
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L351))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L356))
 
 ### reduce
 
@@ -523,7 +523,7 @@ Reduce an array to a single value by applying a function to an accumulator and e
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L366))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L371))
 
 ### flatMap
 
@@ -545,7 +545,27 @@ Map a function over an array and flatten the results by one level.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L381))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L386))
+
+### flatten
+
+```ts
+flatten(arr: any[]): any[]
+```
+
+Flatten an array of arrays by one level.
+
+  @param arr - The array to flatten
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| arr | `any[]` |  |
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L403))
 
 ### every
 
@@ -567,7 +587,7 @@ Return true if the function returns true for every element in the array.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L398))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L418))
 
 ### some
 
@@ -589,7 +609,7 @@ Return true if the function returns true for at least one element in the array.
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L413))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L433))
 
 ### count
 
@@ -611,7 +631,7 @@ Count the number of elements in the array for which the function returns true.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L428))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L448))
 
 ### sortBy
 
@@ -633,7 +653,7 @@ Return a new array sorted by the values returned by the function, in ascending o
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L444))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L464))
 
 ### unique
 
@@ -655,7 +675,7 @@ Return a new array with duplicate elements removed, using the function to determ
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L471))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L491))
 
 ### groupBy
 
@@ -677,7 +697,7 @@ Group elements of an array by the value returned by the function. Returns an obj
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L496))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L516))
 
 ### callback
 
@@ -699,4 +719,4 @@ Register a callback for a lifecycle event. A callback registered inside a
 | name | `string` |  |
 | fn | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L516))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L536))

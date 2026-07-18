@@ -72,7 +72,7 @@ export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
   @param feedback - The feedback wrapped in a Result
   """
   if (feedback is success(val)) {
-    return some(val, \f -> f.error)
+    return some(val, \item -> item.error)
   }
   // If the feedback itself is a failure, we can treat that as an error state.
   return true
@@ -81,8 +81,8 @@ export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
 /** Pass a successful feedback list through unchanged; map any failure to no
   findings. Use this to make a checker fail open: a checker that could not run
   reports nothing rather than a blocking error. */
-export def failOpenFeedback(r: Result<Feedback[]>): Result<Feedback[]> {
-  return match(r) {
+export def failOpenFeedback(feedback: Result<Feedback[]>): Result<Feedback[]> {
+  return match(feedback) {
     success(items) => success(items)
     failure(_) => success([])
   }

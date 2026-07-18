@@ -1,13 +1,23 @@
 ---
 name: "coding"
-description: "General-purpose coding agent: writes, edits, and runs code to complete a task, then verifies the produced artifact against the task's own success criteria."
+description: "Writes, edits, and runs code to complete a task on disk. One"
 ---
 
 # coding
 
-General-purpose coding agent: writes, edits, and runs code to complete a
-  task, then verifies the produced artifact against the task's own success
-  criteria.
+honest pass: it works until it believes the task is done, then returns a
+  summary.
+
+  The real output is filesystem side effects; the returned string is a
+  summary. This agent does not verify its own work against the task. To add
+  verify-and-fix, compose it with verifierAgent, or run it under supervise
+  (std::supervise) for mid-run course correction:
+
+    supervise(every: 5m, maxTime: 30m, check: myCheck) {
+      return codingAgent(task, maxTime: 30m)
+    }
+
+  For an Agency-specific coding agent, use std::agents/agency/coding.
 
 ## Functions
 
@@ -17,27 +27,24 @@ General-purpose coding agent: writes, edits, and runs code to complete a
 codingAgent(
   task: string,
   context: string = "",
-  criteria: string[] = [],
-  maxAttempts: number = 3,
   maxCost: number = $50.00,
   maxTime: number = 30m,
-  checkpoint: number = 5m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
 ): Result<string>
 ```
 
-General-purpose coding agent. Writes and runs code to complete a task and
-  verifies the result against the task's success criteria. Returns a short
+Write, edit, and run code to complete a task on disk. Returns a short
   summary; the real output is filesystem side effects.
 
-  @param task - What to build or fix.
-  @param context - Optional extra material (data, examples, constraints).
-  @param criteria - Optional authoritative acceptance criteria (e.g. an expert
-    checklist) passed through to `verify` so the strict review checks those
-    exact items, not just its own re-derivation.
-  @param maxAttempts - Max verify-and-fix attempts before returning (default 3).
-  @param maxCost - Hard spend cap for the whole run (default $50).
-  @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
-  @param checkpoint - How often to verify progress and redirect if needed (default 5 minutes). The verify agent will run on every checkpoint to verify the work of the coding agent.
+  @param task - What to accomplish
+  @param context - Extra material folded into the prompt, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
 
 **Parameters:**
 
@@ -45,12 +52,12 @@ General-purpose coding agent. Writes and runs code to complete a task and
 |---|---|---|
 | task | `string` |  |
 | context | `string` | "" |
-| criteria | `string[]` | [] |
-| maxAttempts | `number` | 3 |
 | maxCost | `number` | $50.00 |
 | maxTime | `number` | 30m |
-| checkpoint | `number` | 5m |
+| model | `string` | "" |
+| provider | `string` | "" |
+| session | `string` | "" |
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L55))

@@ -11,6 +11,10 @@ import { llmOptions } from "std::agents/lib/shared"
 import { ls, glob, grep, exec } from "std::shell"
 import { systemMessage, threadIsNew } from "std::thread"
 
+// One judge per criterion, four at a time: enough concurrency to keep the
+// verification quick without flooding the provider with parallel requests.
+static const POOL_SIZE = 4
+
 static const tools: any[] = [
   read.partial(useAgentCwd: true),
   ls.partial(useAgentCwd: true),
@@ -60,7 +64,7 @@ export def verifierAgent(
       if (threadIsNew()) {
         systemMessage(systemPrompt)
       }
-      const criteriaString = map(criteria, \c -> `- ${c}`).join("\n")
+      const criteriaString = map(criteria, \criterion -> `- ${criterion}`).join("\n")
       const authoritativeCriteria = """
       Here is some example criteria that has already been provided for this task. Use it as a reference, but do not assume it is complete. Don't duplicate any of these, come up with new criteria.
       <criteria>
@@ -80,7 +84,7 @@ export def verifierAgent(
 
       const allCriteria = criteria.concat(generatedCriteria)
 
-      results = concurrencyPool(size: 4, items: allCriteria) as criterion {
+      results = concurrencyPool(size: POOL_SIZE, items: allCriteria) as criterion {
         const prompt = """
       Given this task:
       <task>${task}</task>

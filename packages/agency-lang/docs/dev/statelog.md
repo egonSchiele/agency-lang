@@ -2,98 +2,195 @@
 
 ## Overview
 
-Statelog is an observability and tracing system for Agency programs. The `StatelogClient` (`lib/statelogClient.ts`) captures structured execution events — graph topology, node lifecycle, LLM calls, tool executions, and edge transitions — and sends them to a remote Statelog server for monitoring and debugging.
+Statelog is Agency's observability and tracing system. The `StatelogClient`
+(`lib/statelogClient.ts`) captures structured execution events — graph
+topology, node/hook lifecycle, LLM and tool calls, embeddings, image
+generation, interrupts, checkpoints, forks/races, threads, subprocesses,
+memory operations, saveDraft salvage, structured errors/warnings, and eval
+markers — stamps each with a span context, and fans them out to one or more
+sinks.
+
+The current wire format is **`STATELOG_FORMAT_VERSION = 1`**.
 
 ## Configuration
 
-Statelog is configured via `AgencyConfig.log`:
+Statelog is configured via `AgencyConfig.log` (a `StatelogConfig`), except for
+the top-level `observability` master switch:
 
 ```json
 {
+  "observability": true,
   "log": {
     "host": "https://agency-lang.com",
     "projectId": "my-project",
     "apiKey": "...",
-    "debugMode": false
+    "debugMode": false,
+    "logFile": "./statelog.log",
+    "requestTimeoutMs": 1500
   }
 }
 ```
 
-- **`host`** — Statelog server URL. Can also be set to `"stdout"` to output JSON logs to the console instead of making HTTP requests. If not set, all logging methods are no-ops.
-- **`projectId`** — groups logs by project in the Statelog dashboard.
-- **`apiKey`** — authentication token. Can also be set via the `STATELOG_API_KEY` environment variable.
-- **`debugMode`** — when true, logs debug info to the console.
+- **`observability`** — master switch, a **top-level** `AgencyConfig` field (NOT
+  inside `log`). When falsy (the default), the entire client is a no-op: no
+  events, no network, no file writes, and the span helpers short-circuit.
+  Everything below only happens when this is `true`.
+- **`host`** — remote Statelog server URL, or the literal `"stdout"` to print
+  JSON events to the console. If unset (and no `logFile`), `post()` returns early.
+- **`projectId`** — groups events by project in the dashboard.
+- **`apiKey`** — bearer token for the remote sink. Also read from the
+  `STATELOG_API_KEY` env var by `getStatelogClient`. A configured remote host
+  with no key keeps local sinks working but skips the HTTP POST.
+- **`logFile`** — append every event as one JSON line to this path (local dev
+  and tests). Compatible with `host`/`stdout` — all configured sinks receive
+  every event.
+- **`debugMode`** — extra console diagnostics.
+- **`requestTimeoutMs`** — per-request timeout for the remote POST (default
+  1500ms) so a slow/unreachable host can't wedge end-of-run cleanup.
 
-A `traceId` is auto-generated per execution via `nanoid()`, ensuring all events from a single graph run appear together in the dashboard.
+A `traceId` is auto-generated per execution via `nanoid()` so every event from
+one run shares it.
 
-## What gets logged
+## The envelope
 
-### Graph structure
-At the start of execution, the full graph topology is logged: all node IDs, all edges (with conditional flag), and the start node.
+Every event is serialized by `post()` into this envelope:
 
-### Node lifecycle
-- **`enterNode(nodeId, data)`** — when execution enters a graph node
-- **`exitNode(nodeId, data, timeTaken)`** — when execution leaves, with elapsed time in ms
+```json
+{
+  "format_version": 1,
+  "trace_id": "...",
+  "project_id": "...",
+  "span_id": "... | null",
+  "parent_span_id": "... | null",
+  "data": { "type": "...", "timestamp": "<ISO>", "...": "event fields" }
+}
+```
 
-### Hooks
-- **`beforeHook(nodeId, startData, endData, timeTaken)`** — before-node hook execution
-- **`afterHook(nodeId, startData, endData, timeTaken)`** — after-node hook execution
+`span_id`/`parent_span_id` come from the active span stack (see below).
+`timestamp` is injected into `data` at post time.
 
-### LLM calls
-- **`promptStart(model, threadId, messageCount, toolCount, hasResponseFormat, maxTokens, label)`** — fired immediately before an LLM request is dispatched. Small payload: the request shape, not its content. Pairs with a terminator by span + order (the nth start in an llmCall span pairs with the nth terminator: a `promptCompletion`, an `error` with errorType `llmError`, or a `promptCancelled`). An unpaired start means the call never finished — the signature of a hung or killed-mid-call run, and the live in-flight indicator in follow mode. `label` is the call's `llm(label: "...")` debug tag, or `null`.
-- **`promptCompletion(messages, completion, model, timeTaken, tools, responseFormat)`** — logs the full message history, model response, model name, tools provided, and response format. Each entry of `messages` carries a `label` key when that message has a debug label; unlabeled messages have no `label` key at all, so logs for programs that never label stay byte-identical.
+## Sinks
 
-### Message debug labels
+`post()` writes to every configured sink independently:
 
-`llm()`, `userMessage()`, `assistantMessage()`, and `systemMessage()` all take an optional `label`. It exists so a log reader can tell, say, a verifier's injected message from a real user turn. Labels are **observability-only and never sent to the provider** — `runPrompt` strips `label` off `clientConfig` before the config reaches smoltalk (the same way it strips the retry fields), and `lib/runtime/promptLabels.test.ts` fails if that strip is removed.
+- **File** — synchronous `appendFileSync`, one JSON object per line. Synchronous
+  so a test can read the file immediately after an awaited event.
+- **stdout** — `host: "stdout"` prints the envelope with `console.log`.
+- **Remote** — `POST {host}/api/logs` with `Authorization: Bearer <apiKey>`,
+  bounded by `AbortSignal.timeout(requestTimeoutMs)`. Requires an apiKey.
 
-They surface in two places:
+Remote sends are **fire-and-forget**: the fetch is not awaited (telemetry never
+blocks execution) but is tracked in an `inFlight` set. Call `flush()` at
+end-of-run to drain in-flight POSTs before the process exits.
 
-- `promptStart.label` — the label of the `llm()` call itself.
-- `promptCompletion.messages[i].label` — the label of each message in the request payload.
+## Redaction
 
-One `llm(label: "x")` call tags more than one message by design: its prompt, plus the assistant message of every tool-loop round. Note `promptCompletion` logs the *request*, so the assistant reply of that same round appears in the next round's dump, not its own.
+`post()` is the single redaction chokepoint. Redaction is a `JSON.stringify`
+replacer (`makeRedactReplacer`, `lib/runtime/redactForStatelog.ts`) applied to
+the **`data` payload only**, so it can never blank out envelope infra fields
+(`format_version`, `trace_id`, span ids). The pass is skipped entirely when the
+caller's `GlobalStore.hasAnyTags()` is false — the common case is byte-identical
+to no redaction. Events posted outside an AsyncLocalStorage frame (e.g.
+`agentEnd`, resume-path finalization) fall back to the execution's top-level
+store via `setFallbackGlobals`. Prompt/embed/image previews are capped at
+`PROMPT_PREVIEW_MAX = 200` chars; embedding vectors and generated image bytes
+are never logged.
 
-Storage lives on `MessageThread` (see `docs/dev/threads.md`); a thread rewrite via `setMessages` (summarization, repair) drops labels.
-- **`promptCancelled(threadId)`** — terminator for a promptStart whose call was cancelled: a race loser's abort, Esc-cancel, or a timeout. Deliberately not an error event — a cancel is a normal outcome, and without this terminator every healthy `race()` would leave its losers' starts unpaired.
+## Span model
 
-### Thread-end hooks
-- **`threadEndHooksStart(threadId, eagerSummarize, messageCount)`** / **`threadEndHooksEnd(threadId, timeTaken)`** — bracket `Runner.thread`'s onThreadEnd hook invocation, inside a `threadEndHooks` span. Hook-initiated LLM calls (the eager thread summarizer) nest under that span, so the log answers WHY a call ran. The end event posts from a finally, so a throwing hook is still bracketed.
+The client maintains a span stack to give every event a place in a
+parent/child tree.
 
-### Tool execution
-- **`toolCall(toolName, args, output, model, timeTaken)`** — logs each tool invocation with its arguments, output, and timing
+- `startSpan(type)` / `endSpan(spanId)` push/pop the active stack and return/
+  consume a span id. `endSpan` tolerates a missing inner `endSpan` by dropping
+  everything above the matched span.
+- `snapshotStack()` / `runInBranchContext(parentStack, fn)` — concurrent
+  fork/race branches each get a private, AsyncLocalStorage-backed stack seeded
+  from the parent, so their spans never interleave with siblings or the parent.
+- `adoptExternalParentSpan(spanId)` — a subprocess adopts the parent process's
+  `subprocessRun` span as a synthetic, never-emitted root so its spans chain
+  under the parent's tree.
 
-### Edge transitions
-- **`followEdge(fromNodeId, toNodeId, isConditionalEdge, data)`** — logs when the graph follows an edge, noting whether it was a conditional edge
+`SpanType`: `agentRun`, `nodeExecution`, `llmCall`, `toolExecution`,
+`threadEndHooks`, `forkAll`, `race`, `handlerChain`, `abortUnwind`,
+`embedding`, `memoryRemember`, `memoryRecall`, `memoryForget`,
+`memoryCompaction`, `subprocessRun`.
 
-### Abort salvage (saveDraft)
-- **`abortSalvage({action, scopeName, spanId, functionArgs, partial})`** — one event per hop where an abort's travel touches a saveDraft partial: `carried` (a frame attached its draft), `erased` (a frame dropped a callee's partial by having none of its own), `droppedAtArgPosition` / `clearedAtFork` (a partial discarded at a boundary), and `delivered` (the guard salvaged it). Emitted from inside `AbortedResult`'s methods (`lib/runtime/abortedResult.ts`), never by callers. The hops nest in an `abortUnwind` span, opened lazily by the first hop that touches a partial — an abort through undrafted code emits nothing. `spanId` is carried explicitly in the event because an abort can cross span contexts (out of a fork branch), where current-span attribution alone would split the trail. `functionArgs`/`partial` are previews truncated at 500 chars. See `docs/dev/saveDraft.md`.
+> A span only becomes visible to a log viewer once an event is posted carrying
+> its `span_id`. Umbrella spans (memory ops, subprocess, abort unwind) therefore
+> post a small marker event right after `startSpan` so the span materializes in
+> the tree.
 
-### Other
-- **`debug(message, data)`** — generic debug logging
-- **`diff(itemA, itemB, message)`** — logs a comparison between two items
+## Event catalog
+
+Run lifecycle: `runMetadata`, `agentStart`, `agentEnd` (`agentEnd` posts its
+remote send with `noWait`).
+
+Graph & nodes: `graph`, `enterNode`, `exitNode`, `beforeHook`, `afterHook`,
+`followEdge`.
+
+LLM: `promptStart` (request shape, before dispatch) → terminated by exactly one
+of `promptCompletion` (full redacted messages + completion + usage/cost),
+an `error` with `errorType: "llmError"`, or `promptCancelled` (race loser /
+Esc / timeout — deliberately not an error). Pairing is by span + order: the
+nth start in an `llmCall` span pairs with the nth terminator; an unpaired start
+is a hung/killed-mid-call run.
+
+Tools: `toolCallStart` → `toolCall` (share the `toolExecution` span; OTEL
+start+end mergeable).
+
+Embeddings & images: `embedCompletion`, `imageGeneration`.
+
+Memory: `memoryRemember`, `memoryRecall`, `memoryForget`, `memoryCompaction`.
+
+Interrupts: `interruptThrown`, `handlerDecision`, `interruptResolved`.
+
+Checkpoints: `checkpointCreated`, `checkpointRestored`.
+
+Fork/race: `forkStart`, `forkBranchEnd`, `forkEnd`.
+
+Threads: `threadCreated`, `threadResumed`, `threadEndHooksStart`,
+`threadEndHooksEnd`, `threadEndHookError`.
+
+Subprocess: `subprocessStarted`, `subprocessEnd`.
+
+Salvage: `abortSalvage` — records how a `saveDraft` partial is handled as an
+abort unwinds (`action`: `carried | erased | delivered | clearedAtFork |
+droppedAtArgPosition`), nested inside an `abortUnwind` span.
+
+Diagnostics: `error` (`errorType`: `toolError | llmError | runtimeError |
+validationError | limitExceeded | structuredOutput`), `warn` (`warnType:
+"failurePropagation"`; its variable payload lives under `data` so redaction
+scopes it), `debug`, `diff`.
+
+Eval: `evalValueRecorded`, `evalOutputRecorded` (emitted by the `std::statelog`
+stdlib wrappers — `stdlib/statelog.agency` + `lib/stdlib/statelog.ts`).
 
 ## Integration points
 
-### RuntimeContext
-Each `RuntimeContext` (`lib/runtime/state/context.ts`) holds a single `StatelogClient` instance. This ensures all events during one execution share the same `traceId`. When `createExecutionContext()` creates a child context, it gets a fresh `StatelogClient` with a new `traceId`.
+- **RuntimeContext** (`lib/runtime/state/context.ts`) — holds one
+  `StatelogClient` per execution; child contexts get a fresh client + traceId,
+  and wire `setFallbackGlobals`.
+- **SimpleMachine** (`lib/simplemachine/graph.ts`) — graph topology, node
+  entry/exit, hook timing, edge transitions.
+- **Runtime prompt** (`lib/runtime/prompt.ts`) — LLM `promptStart`/
+  `promptCompletion` and tool `toolCallStart`/`toolCall`.
+- **Log viewer** (`lib/logsViewer/`) — reconstructs the span tree from event
+  lines (`tree.ts`, `render.ts`, `follow.ts`, `summary.ts`, `search.ts`).
+- **Eval** (`lib/eval/statelogParser.ts`) — parses eval markers out of a trace.
+- **CLI** — `lib/cli/upload.ts` (`upload()`), `lib/cli/remoteRun.ts`
+  (`remoteRun()`).
 
-### SimpleMachine
-The graph execution engine (`lib/simplemachine/graph.ts`) calls statelog methods at each phase of execution: graph structure logging, node entry/exit, hook timing, and edge transitions.
+## Factory
 
-### Runtime prompt
-`lib/runtime/prompt.ts` logs LLM calls via `promptCompletion()` after each `smoltalk.text()` call, and tool executions via `toolCall()`.
-
-### CLI commands
-- **`lib/cli/upload.ts`** — uses `statelogClient.upload()` to send Agency source files to the Statelog server
-- **`lib/cli/remoteRun.ts`** — uses `statelogClient.remoteRun()` to execute Agency programs remotely on the Statelog server
-
-## Factory function
-
-`getStatelogClient(config)` creates a `StatelogClient` from a `StatelogConfig` object. Used in CLI commands to create instances from `AgencyConfig.log`.
+`getStatelogClient(config)` builds a `StatelogClient`, defaulting `apiKey` from
+`STATELOG_API_KEY`. Used by CLI commands to construct clients from
+`AgencyConfig.log`.
 
 ## Key behaviors
 
-- **Graceful no-op**: if `host` is not set, all logging methods return immediately without error. This means Statelog is entirely opt-in.
-- **Stdout mode**: setting `host: "stdout"` prints JSON logs to the console, useful for local debugging.
-- **Non-blocking**: log calls are fire-and-forget HTTP posts; they don't block graph execution.
+- **Opt-in / graceful no-op** — disabled unless `observability` is true; with no
+  host and no logFile, `post()` returns immediately.
+- **Non-blocking** — remote posts are detached; `flush()` drains them at exit.
+- **Format versioning** — bump `STATELOG_FORMAT_VERSION` when the wire format
+  changes in a way a viewer must notice; viewers should reject a higher version.

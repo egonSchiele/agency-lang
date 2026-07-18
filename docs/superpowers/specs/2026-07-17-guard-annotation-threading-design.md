@@ -85,14 +85,43 @@ the eventual subsumer of this spec, recorded in Part 4.
 
 The chosen mechanism is pure data flow — the type rides the AST node:
 
-1. **`guardDesugar` stamps.** The desugar pass already walks every
-   position a guard can appear in, and it sees the surrounding
-   context the builder later cannot: when the guard sits in
-   `assignment.value` it reads the assignment's `typeHint`; when it
-   sits in `return.value` it knows the enclosing def's declared
-   return type (threaded down its walk as a parameter). If that
-   context type is a `resultType`, the pass stamps its `successType`
-   onto the `BlockArgument` it creates for the block body.
+1. **`guardDesugar` stamps.** An honesty note first (owner review
+   round 2): the desugar does NOT currently see any surrounding
+   context. Its walk (`desugarNode`) follows registered body slots
+   and a generic `holder.value` field with no parent-awareness and
+   threads nothing downward. Making it context-aware is real
+   structural work this spec is adding, and the plan owns it:
+
+   - **A walk context parameter.** `desugarGuardsInBody` /
+     `desugarNode` gain a context argument carrying one value: the
+     **current return target** — the type a `return` statement at
+     this point in the tree yields to.
+   - **Def-return capture on body entry.** When the walk enters a
+     `function` or `graphNode` body, the context's return target
+     becomes that def's declared `returnType` (or absent when
+     undeclared).
+   - **Parent-awareness at the value-follow.** The generic
+     `holder.value` follow splits by holder: an `assignment` holder
+     stamps its guard from the assignment's own `typeHint`; a
+     `returnStatement` holder stamps from the context's current
+     return target. Other holders stamp nothing.
+
+   **The return target resets at every block body** — this is the
+   round-2 gap fix. A `return` inside a block argument yields to the
+   BLOCK, not to the def, so when the walk enters any block body the
+   target resets to that block's own yield type: the stamp the block
+   just received, if it is a guard block that got one, and absent
+   otherwise. Without this reset, a return-position guard inside a
+   fork branch (or any block) would mis-stamp with the def's return
+   type — a type that has nothing to do with the block it actually
+   yields to. With it, stamping composes: in
+   `const r: Result<Result<string>> = guard(...) { return guard(...)
+   { ... } }` the outer stamp (`Result<string>`) becomes the return
+   target inside the outer block, so the inner guard stamps `string`.
+
+   In every stamping position, the rule is the same: if the source
+   type is a `resultType`, stamp its `successType` onto the
+   `BlockArgument` the desugar creates; otherwise stamp nothing.
 2. **`BlockArgument` gains the field.**
    `declaredYieldType?: VariableType` — optional, absent everywhere
    except stamped guard blocks. (The stamp is on the BLOCK ARGUMENT

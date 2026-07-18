@@ -540,7 +540,7 @@ export const DIAGNOSTICS = {
     code: "AG6038",
     severity: "error",
     message:
-      "finalize yields a single value — the scope's saved draft. Use one binder: finalize as {name} { ... }.",
+      "finalize yields a single value — the scope's saved draft. Use one binder: finalize as {name} {{ ... }}.",
   },
   staticReassignedAtTopLevel: {
     code: "AG7004",

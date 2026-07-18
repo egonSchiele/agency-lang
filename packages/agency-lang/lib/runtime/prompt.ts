@@ -30,7 +30,11 @@ import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
-import { findIntrinsic } from "./intrinsicTools.js";
+import {
+  findIntrinsic,
+  partitionIntrinsicCalls,
+  runIntrinsicCall,
+} from "./intrinsicTools.js";
 import type { RunBatchResult } from "./runBatch.js";
 import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
 import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js";
@@ -1521,98 +1525,39 @@ export async function runPrompt(args: {
         // `round` value, so completedSteps keys match.
         const round = self.toolCallRound;
 
-        // Partition the round: intrinsic calls (handled inline, in
-        // order) vs. everything else (dispatched concurrently as
-        // today). One partition, computed up front — the rest of the
-        // iteration reads these two lists and never re-derives them.
-        const intrinsicOf = (toolCall: smoltalk.ToolCallJSON) => {
-          const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
-          return handler ? findIntrinsic(handler) : undefined;
-        };
-        const intrinsicCalls = toolCalls
-          .map((toolCall, callIndex) => ({
-            toolCall,
-            callIndex,
-            intrinsic: intrinsicOf(toolCall),
-          }))
-          .filter((entry) => entry.intrinsic !== undefined);
-        const dispatchCalls = toolCalls.filter(
-          (toolCall) => intrinsicOf(toolCall) === undefined,
+        // Partition the round once: intrinsic calls handle inline (in
+        // order, below); everything else dispatches concurrently.
+        const { intrinsicCalls, dispatchCalls } = partitionIntrinsicCalls(
+          toolCalls,
+          toolFunctions,
         );
 
         // Ordered interception (partials-ergonomics spec Part 2):
-        // intrinsic calls are handled inline at their position in the
-        // call list, so two saves in one round apply in call-list
-        // order BY CONSTRUCTION — the writes happen here, in list
-        // order, not in scheduler-completion order. (`for...of`, not
-        // `forEach`: async forEach callbacks are not awaited in order.)
-        // The draft files on the scope that owns this llm() call: the
-        // stack is [..., owner, runPrompt] (setupFunction pushed our
-        // frame), so setSavedDraft's callerFrame() write lands on the
-        // owner — the same frame shape as the stdlib saveDraft def
-        // path. Intrinsics deliberately ignore maxToolCallRounds (a
-        // draft write is free and salvage is the point) and
-        // removedTools (an intrinsic cannot error onto that list).
-        // The ack pushes to the LIVE thread; pr.step does not snapshot
-        // messages on normal completion, and does not need to — the
-        // next interrupt-path checkpoint's snapshotMessages() reads
-        // the live thread the ack is already in. Do NOT add a
-        // redundant snapshot here. (A lost ack would surface as a
+        // intrinsic calls run inline at their call-list position, so
+        // two saves in one round apply in list order BY CONSTRUCTION
+        // (`for...of`, not `forEach` — async forEach callbacks are not
+        // awaited in order). The stack here is [..., owner, runPrompt]
+        // (setupFunction pushed our frame), so setSavedDraft's
+        // callerFrame() write lands on the owner, same as the def
+        // path. Intrinsics deliberately ignore maxToolCallRounds and
+        // removedTools. The ack rides the LIVE thread; the next
+        // interrupt-path checkpoint's snapshotMessages() captures it —
+        // do NOT add a redundant snapshot here. (A lost ack would be a
         // dangling tool_use, which real providers reject.)
         for (const { toolCall, callIndex, intrinsic } of intrinsicCalls) {
           const callSlug = `${callIndex}_${toolCall.id}`;
-          await pr.step(`round.${round}.tool.${callSlug}.intrinsic`, async () => {
-            const callArgs = toolCall.arguments ?? {};
-            // The lifecycle mirrors the real dispatch path's events
-            // (toolCallStart → hooks → toolCall) inside one
-            // toolExecution span, so span-pairing consumers see
-            // intrinsic calls too. Deliberate differences from the
-            // real path: one pr.step instead of per-phase branch steps
-            // (there is no branch), and timeTaken 0 (an inline state
-            // write has no meaningful duration).
-            const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
-            try {
-              ctx.statelogClient.toolCallStart({
-                toolName: toolCall.name,
-                args: callArgs,
-                model: JSON.stringify(clientConfig.model),
-                threadId: __threads()?.activeId() ?? null,
-              });
-              await invokeCallbacks({
-                ctx,
-                name: "onToolCallStart",
-                data: { toolName: toolCall.name, args: callArgs },
-                stateStack,
-              });
-              const ack = intrinsic!.handle({
-                toolCall,
-                stateStack,
-                draftSchema: args.draftSchema,
-              });
-              await invokeCallbacks({
-                ctx,
-                name: "onToolCallEnd",
-                data: { toolName: toolCall.name, result: ack, timeTaken: 0 },
-                stateStack,
-              });
-              ctx.statelogClient.toolCall({
-                toolName: toolCall.name,
-                args: callArgs,
-                output: ack,
-                model: JSON.stringify(clientConfig.model),
-                timeTaken: 0,
-                threadId: __threads()?.activeId() ?? null,
-              });
-              messages.push(
-                smoltalk.toolMessage(ack, {
-                  tool_call_id: toolCall.id,
-                  name: toolCall.name,
-                }),
-              );
-            } finally {
-              ctx.statelogClient.endSpan(toolSpanId);
-            }
-          });
+          await pr.step(`round.${round}.tool.${callSlug}.intrinsic`, () =>
+            runIntrinsicCall({
+              intrinsic,
+              toolCall,
+              stateStack,
+              draftSchema: args.draftSchema,
+              statelogClient: ctx.statelogClient,
+              ctx,
+              model: clientConfig.model,
+              messages,
+            }),
+          );
         }
 
         // Tool calls in one round run concurrently via pr.parallel. Each

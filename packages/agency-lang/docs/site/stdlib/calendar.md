@@ -1,5 +1,6 @@
 ---
 name: "calendar"
+description: "Read and write Google Calendar events from Agency code."
 ---
 
 # calendar

@@ -1,5 +1,6 @@
 ---
 name: "image"
+description: "Generate images from a text prompt (or edit input images) using a hosted provider, returning base64 you can persist."
 ---
 
 # image
@@ -64,4 +65,4 @@ Generate an image from a text prompt using a hosted provider, optionally
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L19))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L21))

@@ -33,6 +33,6 @@ export function _readSkill(filepath: string): string {
  * the makefile), and stdlib resolves in both dev and npm installs via
  * getStdlibDir, so one copy serves compiled and source runs.
  */
-export function _docsDir(section: "guide" | "cli" | "diagnostics"): string {
+export function _docsDir(section: "guide" | "cli" | "diagnostics" | "stdlib"): string {
   return path.join(getStdlibDir(), "docs", section);
 }

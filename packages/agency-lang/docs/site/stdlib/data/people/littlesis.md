@@ -1,5 +1,6 @@
 ---
 name: "littlesis"
+description: "LittleSis — people, organizations, and the ties between them"
 ---
 
 # littlesis

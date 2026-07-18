@@ -1,5 +1,6 @@
 ---
 name: "browser"
+description: "Run browser automation tasks described in plain language via the Browser Use cloud API."
 ---
 
 # browser

@@ -6,6 +6,7 @@ import {
  } from "agency-lang/stdlib-lib/cli.js"
 
 /** @module
+  @summary A line-mode REPL for CLI agents, driven by Node's readline instead of the alt-screen TUI engine in std::ui.
   A line-mode REPL for CLI agents, driven by Node's `readline` instead of
   the alt-screen TUI engine in `std::ui`. It gives up the pinned status
   line, live spinner, and in-app scrolling. In exchange, every prompt

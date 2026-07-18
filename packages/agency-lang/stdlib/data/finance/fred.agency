@@ -2,6 +2,7 @@ import { fetchJSON } from "std::http"
 import { env } from "std::system"
 
 /** @module
+  @summary FRED — U.S. macroeconomic time-series
   ## FRED — U.S. macroeconomic time-series
 
   Fetch U.S. economic data from the Federal Reserve Bank of St. Louis

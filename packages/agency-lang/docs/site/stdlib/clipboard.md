@@ -1,5 +1,6 @@
 ---
 name: "clipboard"
+description: "Read and write the system clipboard."
 ---
 
 # clipboard

@@ -1,5 +1,6 @@
 ---
 name: "capabilities"
+description: "Standard **capability** effect sets — named groups of the interrupt effects the standard library raises, for use in `raises` clauses."
 ---
 
 # capabilities

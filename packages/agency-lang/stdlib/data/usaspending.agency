@@ -2,6 +2,7 @@ import { fetchJSON, HttpMethod } from "std::http"
 import { keys } from "std::object"
 
 /** @module
+  @summary USASpending — U.S. federal awards
   ## USASpending — U.S. federal awards
 
   Query [USASpending](https://api.usaspending.gov), the U.S. Treasury's award-level spending API:

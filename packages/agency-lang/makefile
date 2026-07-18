@@ -30,10 +30,11 @@ endef
 # copies must be idempotent.
 define stage-stdlib-docs
 	mkdir -p stdlib/docs
-	rm -rf stdlib/docs/guide stdlib/docs/cli stdlib/docs/diagnostics
+	rm -rf stdlib/docs/guide stdlib/docs/cli stdlib/docs/diagnostics stdlib/docs/stdlib
 	cp -r docs/site/guide stdlib/docs/guide
 	cp -r docs/site/cli stdlib/docs/cli
 	cp -r docs/site/diagnostics stdlib/docs/diagnostics
+	cp -r docs/site/stdlib stdlib/docs/stdlib
 endef
 
 all:

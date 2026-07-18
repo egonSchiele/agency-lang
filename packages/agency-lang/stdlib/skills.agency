@@ -15,6 +15,7 @@ import { _glob } from "agency-lang/stdlib-lib/shell.js"
 import { _docsDir } from "agency-lang/stdlib-lib/skills.js"
 
 /** @module
+  @summary Give an LLM access to a directory of skills, and support Claude-Code-style slash commands.
   Give an LLM access to a directory of skills, and support Claude-Code-style
   slash commands. `skillsDir` builds a tool that lets the model read skill
   files on demand. `commandsDir` and `expandSlash` load prompt-template
@@ -184,10 +185,13 @@ def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
 effect std::skills::skillsDir { dir: string, layout: "flat" | "standard" }
 effect std::skills::commandsDir { dir: string }
 
-def buildSkillsTool(dir: string, layout: "flat" | "standard", name: string = "") {
+def buildSkillsTool(dir: string, layout: "flat" | "standard", name: string = "", recursive: boolean = false) {
   let pattern = "*/SKILL.md"
   if (layout == "flat") {
     pattern = "*.{md,markdown}"
+    if (recursive) {
+      pattern = "**/*.{md,markdown}"
+    }
   }
   let lines: string[] = []
   const pathsResult = try _glob(pattern, dir, 500, [])
@@ -236,23 +240,24 @@ export def skillsDir(dir: string, layout: "flat" | "standard" = "standard", name
   return buildSkillsTool(dir, layout, name)
 }
 
-export def docsSkill(section: "guide" | "cli" | "diagnostics") {
+export def docsSkill(section: "guide" | "cli" | "diagnostics" | "stdlib") {
   """
   Build a docs tool for an LLM over the packaged Agency documentation.
   "guide" serves the language guide (syntax, types, control flow);
   "cli" serves the CLI reference; "diagnostics" serves the type-checker
-  diagnostic codes (AG####) with explanations and fixes. The returned tool
-  lists every page in its description and lets the model read any one on
-  demand.
+  diagnostic codes (AG####) with explanations and fixes; "stdlib" serves
+  the standard-library reference, one page per std:: module. The returned
+  tool lists every page in its description and lets the model read any one
+  on demand.
 
-  @param section - Which documentation set to serve: "guide", "cli", or "diagnostics".
+  @param section - Which documentation set to serve: "guide", "cli", "diagnostics", or "stdlib".
   """
   // No approval interrupt for the startup scan: these docs ship inside
   // the agency package, so scanning them carries the same trust as
   // running the stdlib itself. The returned tool is read.partial, so
   // every read the LLM later performs still raises std::read and goes
   // through handlers/policies exactly like any other read tool.
-  return buildSkillsTool(_docsDir(section), "flat")
+  return buildSkillsTool(_docsDir(section), "flat", "", true)
 }
 
 // ============================================================

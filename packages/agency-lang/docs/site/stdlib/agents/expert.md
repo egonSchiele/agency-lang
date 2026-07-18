@@ -1,5 +1,6 @@
 ---
 name: "expert"
+description: "Expert-guided coding agent."
 ---
 
 # expert

@@ -1,5 +1,6 @@
 ---
 name: "speech"
+description: "Speak text aloud, record from the microphone, and transcribe audio to text."
 ---
 
 # speech

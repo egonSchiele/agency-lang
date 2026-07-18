@@ -71,6 +71,7 @@ static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with a
 static const docSkill = docsSkill("guide")
 static const cliSkill = docsSkill("cli")
 static const diagnosticsSkill = docsSkill("diagnostics")
+static const stdlibSkill = docsSkill("stdlib")
 
 export def agencyCli(args: string[]): any {
   """
@@ -103,6 +104,10 @@ call the bundled docs tools — they are authoritative for Agency:
   * `diagnosticsSkill` — type-checker diagnostic codes (AG####) with
                  explanations and fixes; consult it when `typecheck` reports
                  an error code you want to understand or resolve
+  * `stdlibSkill` — the standard-library reference (`std::http`,
+                 `std::thread`, `std::date`, …); each module lists a
+                 one-line summary. Use it to discover which `std::`
+                 module does what before importing.
 Pick whichever matches the question rather than guessing.
 
 **Stay focused on the current task.** Most follow-ups ("can you make it
@@ -398,6 +403,7 @@ export static const codeTools: any[] = [
   docSkill,
   cliSkill,
   diagnosticsSkill,
+  stdlibSkill,
   todoWrite,
   todoList,
   oracleAgent,

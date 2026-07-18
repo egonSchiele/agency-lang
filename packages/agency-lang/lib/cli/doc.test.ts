@@ -1,9 +1,137 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { generateDoc } from "./doc.js";
+import {
+  generateDoc,
+  extractSummaryOverride,
+  firstParagraph,
+  firstSentence,
+  sanitizeDescription,
+  moduleDescription,
+} from "./doc.js";
+import type { AgencyMultiLineComment } from "@/types.js";
 import * as fs from "fs";
 import * as path from "path";
 
 const tmpDir = path.join(process.env.TMPDIR || "/tmp", "agency-doc-test");
+
+function moduleComment(content: string): AgencyMultiLineComment {
+  return {
+    type: "multiLineComment",
+    content,
+    isDoc: true,
+    isModuleDoc: true,
+  } as AgencyMultiLineComment;
+}
+
+describe("firstParagraph", () => {
+  it("takes the leading prose and stops at a blank line", () => {
+    expect(firstParagraph("\n  One. Two.\n\n  Later.")).toBe("One. Two.");
+  });
+
+  it("stops at an indented code fence (trims before the check)", () => {
+    expect(firstParagraph("\n  First line.\n  ```ts\n  code\n  ```\n")).toBe(
+      "First line.",
+    );
+  });
+
+  it("collapses internal whitespace and newlines to single spaces", () => {
+    expect(firstParagraph("\n  a\n  b   c\n")).toBe("a b c");
+  });
+
+  it("returns empty string when there is no prose", () => {
+    expect(firstParagraph("\n\n")).toBe("");
+  });
+});
+
+describe("extractSummaryOverride", () => {
+  it("pulls a leading @summary line and removes it from the body", () => {
+    const { override, body } = extractSummaryOverride(
+      "\n  @summary Short thing.\n  Long body prose.\n",
+    );
+    expect(override).toBe("Short thing.");
+    expect(body).not.toContain("@summary");
+    expect(body).toContain("Long body prose.");
+  });
+
+  it("returns null override and unchanged body when there is no @summary", () => {
+    const { override, body } = extractSummaryOverride("\n  Just prose.\n");
+    expect(override).toBeNull();
+    expect(body).toBe("\n  Just prose.\n");
+  });
+
+  it("treats a bare @summary with no text as no override", () => {
+    const { override } = extractSummaryOverride("\n  @summary\n  Body.\n");
+    expect(override).toBeNull();
+  });
+
+  it("does not treat @summaryfoo (no boundary) as an override", () => {
+    const { override, body } = extractSummaryOverride(
+      "\n  @summaryfoo bar\n  Body.\n",
+    );
+    expect(override).toBeNull();
+    expect(body).toContain("@summaryfoo bar");
+  });
+});
+
+describe("firstSentence", () => {
+  it("takes text up to the first sentence terminator", () => {
+    expect(firstSentence("Fetch URLs. Returns text, JSON, or Markdown.")).toBe(
+      "Fetch URLs.",
+    );
+  });
+
+  it("returns the whole string when there is no terminator", () => {
+    expect(firstSentence("Wikidata — the open knowledge graph")).toBe(
+      "Wikidata — the open knowledge graph",
+    );
+  });
+
+  it("keeps a one-sentence string with an internal colon intact", () => {
+    expect(firstSentence("Helpers: round, add, and subtract.")).toBe(
+      "Helpers: round, add, and subtract.",
+    );
+  });
+});
+
+describe("sanitizeDescription", () => {
+  it("removes double quotes and backslashes", () => {
+    expect(sanitizeDescription('e.g. "America/New_York" path\\x')).toBe(
+      "e.g. America/New_York pathx",
+    );
+  });
+
+  it("strips a leading Markdown heading marker", () => {
+    expect(sanitizeDescription("## Wikidata — the open knowledge graph")).toBe(
+      "Wikidata — the open knowledge graph",
+    );
+  });
+
+  it("does not cap long text", () => {
+    const long = "word ".repeat(60).trim(); // ~299 chars
+    const out = sanitizeDescription(long);
+    expect(out).toBe(long);
+    expect(out).not.toContain("…");
+  });
+});
+
+describe("moduleDescription", () => {
+  it("derives the first sentence when there is no @summary", () => {
+    expect(
+      moduleDescription(
+        moduleComment("\n  Fetch URLs. Returns text.\n\n  ```ts\n  x\n  ```"),
+      ),
+    ).toBe("Fetch URLs.");
+  });
+
+  it("prefers an explicit @summary override", () => {
+    expect(
+      moduleDescription(moduleComment("\n  @summary Short.\n  Long prose.")),
+    ).toBe("Short.");
+  });
+
+  it("returns null when the comment is missing", () => {
+    expect(moduleDescription(undefined)).toBeNull();
+  });
+});
 
 beforeEach(() => {
   fs.mkdirSync(tmpDir, { recursive: true });
@@ -613,5 +741,72 @@ node main() { print("hi") }
     // comment is re-emitted there too, matching the type-alias renderer).
     expect(output).toMatch(/```ts[\s\S]*?effect std::read\s*\{/);
     expect(output).toMatch(/dir: string/);
+  });
+
+  it("emits the first sentence of the @module comment as the description", () => {
+    const inputDir = path.join(tmpDir, "input-desc");
+    const outputDir = path.join(tmpDir, "output-desc");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "m.agency"),
+      "/** @module\n" +
+        "  Fetch URLs from Agency code. Returns text, JSON, or Markdown.\n\n" +
+        "  ```ts\n  import { fetch } from \"std::http\"\n  ```\n*/\n" +
+        "export def f(): string { return \"\" }\n",
+    );
+    generateDoc({}, path.join(inputDir, "m.agency"), outputDir);
+    const out = fs.readFileSync(path.join(outputDir, "m.md"), "utf-8");
+    expect(out).toContain(
+      'description: "Fetch URLs from Agency code."',
+    );
+  });
+
+  it("removes quotes but keeps colon-space safe (valid for both YAML parsers)", () => {
+    const inputDir = path.join(tmpDir, "input-quote");
+    const outputDir = path.join(tmpDir, "output-quote");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "q.agency"),
+      "/** @module\n" +
+        "  Builds strings like \"America/New_York\" for callers: timezones and dates.\n*/\n" +
+        "export def f(): string { return \"\" }\n",
+    );
+    generateDoc({}, path.join(inputDir, "q.agency"), outputDir);
+    const out = fs.readFileSync(path.join(outputDir, "q.md"), "utf-8");
+    expect(out).toContain(
+      'description: "Builds strings like America/New_York for callers: timezones and dates."',
+    );
+    expect(out).not.toContain('\\"');
+  });
+
+  it("uses @summary as the description and strips it from the body", () => {
+    const inputDir = path.join(tmpDir, "input-sum");
+    const outputDir = path.join(tmpDir, "output-sum");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "s.agency"),
+      "/** @module\n" +
+        "  @summary Read and write the clipboard.\n" +
+        "  The clipboard module exposes copy and paste.\n*/\n" +
+        "export def f(): string { return \"\" }\n",
+    );
+    generateDoc({}, path.join(inputDir, "s.agency"), outputDir);
+    const out = fs.readFileSync(path.join(outputDir, "s.md"), "utf-8");
+    expect(out).toContain('description: "Read and write the clipboard."');
+    expect(out).toContain("The clipboard module exposes copy and paste.");
+    expect(out).not.toContain("@summary");
+  });
+
+  it("emits no description when there is no @module comment", () => {
+    const inputDir = path.join(tmpDir, "input-nomod");
+    const outputDir = path.join(tmpDir, "output-nomod");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "n.agency"),
+      "export def f(): string { return \"\" }\n",
+    );
+    generateDoc({}, path.join(inputDir, "n.agency"), outputDir);
+    const out = fs.readFileSync(path.join(outputDir, "n.md"), "utf-8");
+    expect(out).not.toContain("description:");
   });
 });

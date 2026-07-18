@@ -29,6 +29,7 @@ import {
 
 
 /** @module
+  @summary Builds interactive terminal UIs for CLI agents from composable builders, driven by a render loop.
   Builds interactive terminal UIs for CLI agents. Assemble a screen from
   builders like `column`, `row`, `box`, `text`, and `textInput`, then drive
   the render loop with `runLoop`. For chat-style agents, `repl()` is a

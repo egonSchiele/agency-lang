@@ -1,5 +1,6 @@
 ---
 name: "eval"
+description: "Helpers for running and judging eval suites from Agency code."
 ---
 
 # eval

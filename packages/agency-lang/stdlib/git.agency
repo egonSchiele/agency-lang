@@ -10,6 +10,7 @@ import {
  } from "agency-lang/stdlib-lib/git.js"
 
 /** @module
+  @summary Typed, safe git tools for agents: each tool builds its own git command, so the model never supplies a raw flag.
   Typed, safe git tools for agents. Each tool builds its own git command
   internally, so the model never supplies a raw flag. Read tools (status, log,
   diff, ...) raise effects an agent policy can auto-approve. Write tools (add,

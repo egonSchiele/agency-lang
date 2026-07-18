@@ -8,6 +8,7 @@ import {
 } from "agency-lang/stdlib-lib/statelog.js"
 
 /** @module
+  @summary Record and read back eval data from the statelog, marking an agent's input and response for later analysis.
   Record and read back eval data from the statelog. Call `evalValue` and
   `evalOutput` inside an agent to mark its user-facing input and response,
   then read them from a saved trace with `evalValues`, `evalOutputs`,

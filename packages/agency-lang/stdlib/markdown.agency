@@ -6,6 +6,7 @@ import {
  } from "agency-lang/stdlib-lib/markdown.js"
 
 /** @module
+  @summary Parse Markdown text into a structured AST you can walk, and render Markdown for the terminal or HTML.
   Parse Markdown text into a structured AST you can walk. The returned `blocks`
   array holds block-level nodes like `Paragraph`, `Heading`, `CodeBlock`, `List`,
   `Table`, and `BlockQuote`. Each is tagged with a `type` field to switch on.

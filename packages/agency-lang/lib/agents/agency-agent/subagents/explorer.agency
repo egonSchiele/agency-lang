@@ -24,6 +24,7 @@ import { getSlowModel, getSlowProvider } from "../shared.agency"
 static const docSkill = docsSkill("guide")
 static const cliSkill = docsSkill("cli")
 static const diagnosticsSkill = docsSkill("diagnostics")
+static const stdlibSkill = docsSkill("stdlib")
 
 export static const explorerSysPrompt = """
 You are the **explorer** — a read-only researcher called by other
@@ -51,6 +52,9 @@ and produce structured overviews. Typical questions you answer:
   `ls` the relevant directories and **list every file that could
   be relevant**. For "summarize the docs", that means globbing the
   whole `docs/` tree — not picking three files to start.
+- **Use the standard-library reference.** For any question about what
+  `std::` modules exist or what they do, call `stdlibSkill` — it lists
+  every module with a one-line summary, then lets you read any page.
 - **Read in parallel batches.** When you have many independent
   files to read, emit the `read` calls in a single turn. The
   runtime executes them concurrently when they arrive together;
@@ -110,6 +114,7 @@ export static const explorerTools: any[] = [
   docSkill,
   cliSkill,
   diagnosticsSkill,
+  stdlibSkill,
 ]
 
 // only add system message the first time

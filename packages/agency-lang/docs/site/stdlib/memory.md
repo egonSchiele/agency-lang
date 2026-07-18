@@ -1,5 +1,6 @@
 ---
 name: "memory"
+description: "Give an agent long-term memory: remember extracts and saves facts to a knowledge graph, and recall retrieves them later."
 ---
 
 # memory
@@ -37,7 +38,7 @@ export type MemoryConfig = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L63))
 
 ## Effects
 
@@ -49,7 +50,7 @@ effect std::memory::enableMemory {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L71))
 
 ### std::memory::disableMemory
 
@@ -57,7 +58,7 @@ effect std::memory::enableMemory {
 effect std::memory::disableMemory {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L72))
 
 ### std::memory::remember
 
@@ -67,7 +68,7 @@ effect std::memory::remember {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L73))
 
 ### std::memory::recall
 
@@ -77,7 +78,7 @@ effect std::memory::recall {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L74))
 
 ### std::memory::forget
 
@@ -87,7 +88,7 @@ effect std::memory::forget {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L75))
 
 ## Functions
 
@@ -107,7 +108,7 @@ Useful for branching in user code (`if (isMemoryActive()) { ... }`)
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L80))
 
 ### setMemoryId
 
@@ -134,7 +135,7 @@ The id is independent of which memory configuration is active. It
 |---|---|---|
 | id | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L94))
 
 ### getMemoryId
 
@@ -149,7 +150,7 @@ Return the current memory scope id, or "default" if it was never set
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L106))
 
 ### enableMemory
 
@@ -186,7 +187,7 @@ Storage is shared process-wide by absolute directory, so calls
 
 **Throws:** `std::memory::enableMemory`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L130))
 
 ### disableMemory
 
@@ -206,7 +207,7 @@ Removes whatever memory configuration is on top, including a bottom
 
 **Throws:** `std::memory::disableMemory`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L151))
 
 ### memory
 
@@ -236,7 +237,7 @@ Run `block` with `config` as the active memory configuration, then
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L161))
 
 ### remember
 
@@ -257,7 +258,7 @@ Extract structured facts (entities, observations, and relations) from
 
 **Throws:** `std::memory::remember`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L183))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L184))
 
 ### recall
 
@@ -284,7 +285,7 @@ Retrieve relevant facts from the knowledge graph as a formatted
 
 **Throws:** `std::memory::recall`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L213))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L214))
 
 ### forget
 
@@ -306,4 +307,4 @@ Soft-delete facts matching the query from the knowledge graph. Data is
 
 **Throws:** `std::memory::forget`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L231))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/memory.agency#L232))

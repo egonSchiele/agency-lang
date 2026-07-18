@@ -1,5 +1,6 @@
 ---
 name: "sms"
+description: "Send SMS text messages from Agency code via Twilio."
 ---
 
 # sms

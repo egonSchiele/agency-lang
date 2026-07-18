@@ -1679,12 +1679,12 @@ export class AgencyGenerator {
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
     const rendered = this.renderParams(node.params);
-    const asClause =
-      rendered.length === 0
-        ? ""
-        : rendered.length === 1
-          ? ` as ${rendered[0]}`
-          : ` as (${rendered.join(", ")})`;
+    let asClause = "";
+    if (rendered.length === 1) {
+      asClause = ` as ${rendered[0]}`;
+    } else if (rendered.length > 1) {
+      asClause = ` as (${rendered.join(", ")})`;
+    }
     return this.indentStr(
       `finalize${asClause} {\n${bodyCodeStr}${this.indentStr("}")}`,
     );

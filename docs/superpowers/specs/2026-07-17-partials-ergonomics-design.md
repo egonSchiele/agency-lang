@@ -370,3 +370,42 @@ possibly-null name, with a real type instead of a repurposed local.
 - Sizing: the finalize binder is roughly a day. The saveDraft tool is
   one to two days, mostly the schema threading. They make one tidy PR
   or two small ones, after #574 lands.
+
+---
+
+## As executed (2026-07-17, `partials-ergonomics` branch)
+
+Deviations and discoveries from execution, so the spec stays honest:
+
+1. **A pre-existing flow-widening bug surfaced and was fixed.** The
+   finalize flow rule widens every scope local to `T | null`, but
+   `uniteTypes` dedupes without flattening, so a local whose declared
+   type was ALREADY a union widened to the nested `(T | null) | null` —
+   and presence narrowing only drops top-level null members, so
+   `if (x != null)` could not narrow it back. The binder (itself typed
+   `T | null`) hit this immediately. Fixed at the widening site
+   (`flowBuilder.ts`): union members flatten before re-uniting. This
+   also fixes narrowing for ordinary union-typed locals inside any
+   finalize body.
+2. **The binder collision check is `lookupInFunction`, not `has`.**
+   `Scope.has` walks into the module scope; `lookupInFunction` stops at
+   the function boundary, which is exactly the scope-local rule the
+   plan review asked for. A binder named like a module-level const is
+   allowed (pinned by test).
+3. **The aliased-return schema renders as the hoisted schema const.**
+   `def f(): Report` threads `draftSchema: Report` (the alias's zod
+   const), not an inline `z.object(...)`. Same schema at runtime;
+   the codegen test asserts the reference plus the const.
+4. **The resume fixture uses a `writeBinary`-based interrupting tool
+   with an in-program handler.** `input()` inside a tool is not
+   answerable in the test harness (verified pre-existing on the
+   unmodified build — both harness-level `resolve` and an in-program
+   `approve("yes")` hang), so the fixture follows attach-to-reply's
+   mid-round precedent instead.
+5. **The interception plumbing lives in `intrinsicTools.ts`, not
+   prompt.ts.** `partitionIntrinsicCalls` + `runIntrinsicCall` keep
+   the loop declarative (and prompt.ts under the max-lines rule); the
+   loop owns only the `pr.step` resume idempotency.
+6. **Fixture `.js` outputs are gitignored.** Only `.agency` +
+   `.test.json` are committed; the plan's "regenerate checked-in
+   fixture JS" steps reduce to running `make fixtures` locally.

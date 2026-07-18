@@ -293,9 +293,19 @@ function registerCursorRestore(): void {
   });
 }
 
-function chunkToText(chunk: unknown): string {
+/** Decode a stdout chunk to text so it can be embedded in a frame. Handles
+ *  the shapes `process.stdout.write` accepts: a string, a Buffer, or a raw
+ *  Uint8Array. `String(uint8array)` would give comma-joined bytes, so both
+ *  binary shapes are decoded with the caller's encoding (default utf8). */
+function chunkToText(chunk: unknown, encoding?: BufferEncoding): string {
   if (typeof chunk === "string") {
     return chunk;
+  }
+  if (Buffer.isBuffer(chunk)) {
+    return chunk.toString(encoding ?? "utf8");
+  }
+  if (chunk instanceof Uint8Array) {
+    return Buffer.from(chunk).toString(encoding ?? "utf8");
   }
   return String(chunk);
 }
@@ -325,7 +335,11 @@ export function installBottomRegion(
   let rows = 0;
   let firstPaint = true;
 
-  const paint = (above: string | null): boolean => {
+  // `cb` is the caller's `write(..., cb)` completion callback, threaded to
+  // the frame's realWrite so it fires when the frame (which carries the
+  // caller's text) is flushed. The returned backpressure boolean reflects
+  // the FRAME write, not the original chunk write.
+  const paint = (above: string | null, cb?: (error?: Error | null) => void): boolean => {
     const hideNow = options.hideCursor && firstPaint;
     const frame = buildFrame({
       above,
@@ -336,15 +350,32 @@ export function installBottomRegion(
     });
     firstPaint = false;
     rows = frame.rows;
-    return realWrite(frame.seq);
+    return realWrite(frame.seq, cb);
   };
 
   paint(null);
-  stdoutAny.write = (chunk: any): boolean => paint(chunkToText(chunk));
+  // Preserve the `write(chunk, encoding?, cb?)` contract: decode with the
+  // caller's encoding and forward the completion callback (dropping it
+  // would hang callers that await it). Note: a partial-line write (no
+  // trailing newline, or a `\r`-based progress bar) becomes its own line
+  // under the footer — full-line tool traces are all that stream here.
+  stdoutAny.write = (chunk: any, ...rest: any[]): boolean => {
+    const encoding = typeof rest[0] === "string" ? (rest[0] as BufferEncoding) : undefined;
+    const cb = rest.find((arg) => typeof arg === "function") as
+      | ((error?: Error | null) => void)
+      | undefined;
+    return paint(chunkToText(chunk, encoding), cb);
+  };
+
+  // Repaint on resize so a mid-prompt window change doesn't leave the next
+  // frame erasing a stale row count (rows were measured at the old width).
+  const onResize = (): void => { paint(null); };
+  process.stdout.on("resize", onResize);
 
   const region: BottomRegion = {
     refresh: () => { paint(null); },
     teardown: () => {
+      process.stdout.off("resize", onResize);
       stdoutAny.write = realWrite;
       const frame = buildFrame({
         above: null,
@@ -509,13 +540,19 @@ type InterruptFooterInput = {
   columns: number;
 };
 
-function bodyLines(body: string): string[] {
+/** Body lines for the footer, capped to INTERRUPT_BODY_MAX_LINES *physical*
+ *  rows. Wrapping happens here (to `width - 1`, leaving room for the 1-col
+ *  indent) so the cap bounds real screen rows — buildFrame re-wraps at
+ *  `width`, but each line is already within it, so that is a no-op. Capping
+ *  raw `\n` lines instead would let one very long line re-expand past the
+ *  cap and blow out the pinned region. */
+function bodyLines(body: string, width: number): string[] {
   if (body === "") {
     return [];
   }
-  const raw = body.split("\n");
-  const shown = raw.slice(0, INTERRUPT_BODY_MAX_LINES).map((line) => ` ${DIM}${line}${COLOR_RESET}`);
-  if (raw.length > INTERRUPT_BODY_MAX_LINES) {
+  const wrapped = wrapText(body, Math.max(1, width - 1));
+  const shown = wrapped.slice(0, INTERRUPT_BODY_MAX_LINES).map((line) => ` ${DIM}${line}${COLOR_RESET}`);
+  if (wrapped.length > INTERRUPT_BODY_MAX_LINES) {
     shown.push(` ${DIM}…${COLOR_RESET}`);
   }
   return shown;
@@ -530,7 +567,7 @@ function renderInterruptFooter(input: InterruptFooterInput): string[] {
   if (input.title !== "") {
     lines.push(` ${input.title}`);
   }
-  bodyLines(input.body).forEach((line) => lines.push(line));
+  bodyLines(input.body, width).forEach((line) => lines.push(line));
   packOptions(input.items, width - 1).forEach((row) => lines.push(` ${row}`));
   if (input.allowFreeText) {
     lines.push(` ${DIM}or type a reason · Enter to submit${COLOR_RESET}`);
@@ -660,9 +697,19 @@ export async function _interruptChoice(
   return hook({ title, body, items, allowFreeText, allowCancel });
 }
 
-/** True when a line-mode REPL is running and can host a pinned prompt. */
+/** True when a line-mode REPL is running AND both ends are real terminals,
+ *  so the pinned prompt can actually draw and read keystrokes. The hook is
+ *  installed unconditionally by `_runLineRepl`, so without the TTY checks a
+ *  non-TTY REPL would route here, draw nothing (installBottomRegion no-ops),
+ *  and hang awaiting keystrokes that never reach `_ttyWrite`. Requiring both
+ *  TTYs sends those runs to `chooseOption`'s non-TTY fallback instead
+ *  (mirrors the `/paste` guard). */
 export function _stickyInterruptAvailable(): boolean {
-  return typeof (globalThis as any).__agencyInterruptPrompt === "function";
+  return (
+    typeof (globalThis as any).__agencyInterruptPrompt === "function" &&
+    process.stdout.isTTY === true &&
+    process.stdin.isTTY === true
+  );
 }
 
 const SPINNERS = {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { _internal, _clearHistory, installBottomRegion, type PasteState } from "./cli.js";
+import { _internal, _clearHistory, installBottomRegion, _stickyInterruptAvailable, type PasteState } from "./cli.js";
 
 const {
   EMPTY_PASTE,
@@ -689,5 +689,86 @@ describe("stickyInterruptPrompt (integration)", () => {
     fakeRl._ttyWrite(null, { name: "escape" });
     await expect(pending).rejects.toThrow(/cancelled/i);
     cap.restore();
+  });
+});
+
+describe("installBottomRegion — write contract + resize (PR review fixes)", () => {
+  it("forwards the write callback and decodes Buffers/Uint8Arrays", () => {
+    const captured: string[] = [];
+    const origWrite = process.stdout.write;
+    const origTTY = (process.stdout as any).isTTY;
+    (process.stdout as any).isTTY = true;
+    // Sink that honors the completion callback like the real stream.
+    (process.stdout as any).write = (chunk: any, ...rest: any[]) => {
+      captured.push(String(chunk));
+      const cb = rest.find((arg: any) => typeof arg === "function");
+      if (cb) cb();
+      return true;
+    };
+    const region = installBottomRegion(() => ["F"], true);
+    let bufCbCalled = false;
+    (process.stdout as any).write(Buffer.from("hi\n"), () => { bufCbCalled = true; });
+    (process.stdout as any).write(new TextEncoder().encode("bye\n"));
+    region.teardown();
+    (process.stdout as any).write = origWrite;
+    (process.stdout as any).isTTY = origTTY;
+    const text = captured.join("");
+    expect(bufCbCalled).toBe(true);          // callback forwarded
+    expect(text).toContain("hi\n");          // Buffer decoded, not "<Buffer ...>"
+    expect(text).toContain("bye\n");         // Uint8Array decoded, not "98,121,..."
+  });
+
+  it("repaints the footer on terminal resize", () => {
+    const cap = captureStdout();
+    const region = installBottomRegion(() => ["FOOTER"], true);
+    cap.captured.length = 0;
+    process.stdout.emit("resize");
+    region.teardown();
+    cap.restore();
+    expect(cap.captured.join("")).toContain("FOOTER"); // a repaint happened
+  });
+});
+
+describe("_stickyInterruptAvailable requires the hook AND both TTYs", () => {
+  it("returns true only with the hook and both ends a TTY", () => {
+    const globalObj = globalThis as any;
+    const prevHook = globalObj.__agencyInterruptPrompt;
+    const prevOut = (process.stdout as any).isTTY;
+    const prevIn = (process.stdin as any).isTTY;
+    try {
+      globalObj.__agencyInterruptPrompt = () => Promise.resolve("a");
+      (process.stdout as any).isTTY = true;
+      (process.stdin as any).isTTY = true;
+      expect(_stickyInterruptAvailable()).toBe(true);
+      (process.stdin as any).isTTY = false;
+      expect(_stickyInterruptAvailable()).toBe(false); // non-TTY stdin → fallback
+      (process.stdin as any).isTTY = true;
+      (process.stdout as any).isTTY = false;
+      expect(_stickyInterruptAvailable()).toBe(false); // non-TTY stdout → fallback
+      (process.stdout as any).isTTY = true;
+      globalObj.__agencyInterruptPrompt = undefined;
+      expect(_stickyInterruptAvailable()).toBe(false); // no REPL hook
+    } finally {
+      globalObj.__agencyInterruptPrompt = prevHook;
+      (process.stdout as any).isTTY = prevOut;
+      (process.stdin as any).isTTY = prevIn;
+    }
+  });
+});
+
+describe("renderInterruptFooter body cap is by physical rows", () => {
+  it("bounds a single very long body line to the row cap + ellipsis", () => {
+    const lines = _internal.renderInterruptFooter({
+      title: "t",
+      body: "x".repeat(500),
+      items: [{ key: "a", label: "ok" }],
+      allowFreeText: true,
+      state: { buffer: "", notice: "" },
+      columns: 40,
+    });
+    // Body rows are the dim-x lines; capped at 6 physical rows + one "…".
+    const bodyRowCount = lines.filter((line) => line.includes("x")).length;
+    expect(bodyRowCount).toBeLessThanOrEqual(6);
+    expect(lines.some((line) => line.includes("…"))).toBe(true);
   });
 });

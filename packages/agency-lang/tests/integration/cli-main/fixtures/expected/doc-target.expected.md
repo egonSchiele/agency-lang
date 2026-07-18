@@ -1,5 +1,6 @@
 ---
 name: "doc-target"
+description: "Helpers used by CLI integration tests."
 ---
 
 # doc-target

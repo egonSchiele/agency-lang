@@ -58,7 +58,6 @@ function makeHandler() {
   const { exports } = makeExports();
   return createHttpHandler({
     exports,
-    port: 3545,
     logger: createLogger("error"),
     hasInterrupts: () => false,
     respondToInterrupts: async () => ({ data: "resumed" }),
@@ -154,7 +153,6 @@ describe("HTTP adapter", () => {
     }));
     const h = createHttpHandler({
       exports,
-      port: 3545,
       logger: createLogger("error"),
       hasInterrupts: () => false,
       respondToInterrupts: async () => ({ data: "resumed" }),
@@ -239,7 +237,6 @@ describe("HTTP adapter", () => {
           invoke: (namedArgs) => deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
         },
       ],
-      port: 3545,
       logger: createLogger("error"),
       hasInterrupts: () => false,
       respondToInterrupts: async () => ({ data: "ok" }),

@@ -10,8 +10,14 @@ import {
   makeGuardedRequestListener,
 } from "./security.js";
 
-export type HttpConfig = {
+export type HandlerConfig = {
   exports: ExportedItem[];
+  logger: Logger;
+  hasInterrupts: (data: unknown) => boolean;
+  respondToInterrupts: (interrupts: unknown[], responses: unknown[]) => Promise<unknown>;
+};
+
+export type HttpConfig = HandlerConfig & {
   port: number;
   apiKey?: string;
   /** Interface to bind to. Default "127.0.0.1" (loopback only). */
@@ -24,12 +30,9 @@ export type HttpConfig = {
    * array to lock the server down to specific hostnames.
    */
   allowedHosts?: string[];
-  logger: Logger;
-  hasInterrupts: (data: unknown) => boolean;
-  respondToInterrupts: (interrupts: unknown[], responses: unknown[]) => Promise<unknown>;
 };
 
-type RouteResult = {
+export type RouteResult = {
   status: number;
   body: unknown;
 };
@@ -118,7 +121,7 @@ async function resumeInterrupts(
 const FUNCTION_ROUTE = /^\/function\/([^/]+)$/;
 const NODE_ROUTE = /^\/node\/([^/]+)$/;
 
-export function createHttpHandler(config: HttpConfig): (
+export function createHttpHandler(config: HandlerConfig): (
   method: string,
   path: string,
   body: unknown,

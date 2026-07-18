@@ -145,7 +145,9 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
     case "finalizeBlock": {
       // Same-scope statements (like an if body): the finalize reads the
       // enclosing scope's locals, so every walker and rewriter must
-      // descend into it as part of that scope.
+      // descend into it as part of that scope — though a `return`
+      // inside yields to the `__finalize` closure, not the enclosing
+      // def, hence `retargetsReturn`.
       const n = node as FinalizeBlock;
       return [
         {
@@ -158,11 +160,19 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
     case "guardBlock": {
       // The guarded block. Distinct-scope statements (the body compiles
       // to a lifted closure after desugaring), but walkers and
-      // rewriters must descend into it like any other body.
+      // rewriters must descend into it like any other body. Marked
+      // retargetsReturn like its post-desugar twin (blockArgument):
+      // guardDesugar currently bypasses this slot (desugarNode
+      // special-cases guardBlock and walks the body itself, with the
+      // stamp as the target), so the flag is inert there — but anyone
+      // merging that special case into the generic slot walk gets the
+      // reset by construction instead of silently inheriting the
+      // def's return target into guard bodies.
       const n = node as GuardBlock;
       return [
         {
           body: n.body,
+          retargetsReturn: true,
           write: (owner, body) => ({ ...owner, body }) as AgencyNode,
         },
       ];

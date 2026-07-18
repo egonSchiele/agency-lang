@@ -1,0 +1,95 @@
+/** @module
+  @summary Consults a domain expert for a task: returns the rules and
+  acceptance checklist a solver needs to get the task right.
+
+  A weak model often fails a task because it is missing a domain convention,
+  not because it cannot reason. This agent returns that missing expertise as
+  ExpertGuidance. It only consults; to solve with the guidance, compose:
+
+    const guidance = guidanceOrEmpty(expertAgent(task))
+    codingAgent(task, context: renderGuidance(guidance))
+    verifierAgent(task, criteria: guidance.checklist)
+
+  For tasks about the Agency language itself, use agencyExpertAgent, which
+  grounds its guidance in the bundled docs instead of the web.
+*/
+import { ExpertGuidance, emptyGuidance } from "std::agents/lib/expertGuidance"
+import { llmOptions, withContext } from "std::agents/lib/shared"
+import { fetch, fetchJSON, fetchMarkdown } from "std::http"
+import { systemMessage, threadIsNew } from "std::thread"
+import {
+  search as wikipediaSearch,
+  summary as wikipediaSummary,
+  article as wikipediaArticle,
+ } from "std::wikipedia"
+
+static const tools: any[] = [
+  wikipediaSearch,
+  wikipediaSummary,
+  wikipediaArticle,
+  fetch,
+  fetchJSON,
+  fetchMarkdown,
+]
+
+static const systemPrompt = """You are a domain expert advising a weaker coding agent that is about to attempt the task below and tends to miss domain-specific conventions.
+
+Identify the technical domain, then return the knowledge it needs:
+- domain: a short name for the field (e.g. "molecular biology", "ELF binaries").
+- rules: the key conventions, constraints, and facts that apply — especially the ones a non-expert gets wrong. Be concrete: exact numeric ranges, formats, encodings, common pitfalls.
+- checklist: concrete acceptance criteria the finished artifact MUST satisfy. For EACH item, state HOW to verify it — the exact command/tool/flags AND the exact input it applies to (which file, which sub-sequence, which bytes). When the task names a ground-truth tool, use it verbatim with its exact flags. Prefer items that can be checked by running a command over ones checked by eye. Be surgical about scope (e.g. "compute Tm on ONLY the annealing portion, not the whole primer").
+- ambiguity: if a step allows more than one valid reading — an unclear boundary, an unstated convention, a value the task never pins down — call it out explicitly. When it affects a criterion, require the work to satisfy that criterion under EVERY reasonable reading, not just the first one. A checklist that silently assumes one reading is how a plausible-looking solution fails a hidden test.
+
+Use the web_search tool to confirm specifics when unsure. If the task has no special domain constraints, return empty rules and checklist."""
+
+def consult(
+  task: string,
+  context: string,
+  model: string,
+  provider: string,
+): ExpertGuidance {
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
+  }
+  // Provider-hosted web search runs server-side, so it works even in a
+  // sandboxed environment where the client-side wikipedia/fetch tools cannot
+  // reach the internet.
+  const guidance: ExpertGuidance = llm("Task:\n${withContext(task, context)}", llmOptions(model, provider, tools: tools, hostedTools: ["web_search"]))
+  return guidance
+}
+
+export def expertAgent(
+  task: string,
+  context: string = "",
+  maxCost: number = $10.00,
+  maxTime: number = 10m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+): Result<ExpertGuidance> {
+  """
+  Consult a domain expert: identify the task's technical domain and return
+  the rules and acceptance checklist a solver needs to get it right.
+
+  @param task - The task to advise on
+  @param context - Extra material, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  """
+  const captured = guard(cost: maxCost, time: maxTime) {
+    let guidance: ExpertGuidance = emptyGuidance
+    thread(label: "expertAgent", session: session) {
+      guidance = consult(task, context, model, provider)
+    }
+    return guidance
+  }
+  return match(captured) {
+    success(guidance) => success(guidance)
+    // A consult that never completed has nothing partial worth returning;
+    // guidanceOrEmpty at the call site fails open.
+    failure(e) => failure("expertAgent stopped: ${e.type} cap reached")
+  }
+}

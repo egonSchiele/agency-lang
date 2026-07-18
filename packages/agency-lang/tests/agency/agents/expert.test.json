@@ -1,0 +1,38 @@
+{
+  "tests": [
+    {
+      "nodeName": "generalConsultRoundTrips",
+      "description": "the general expert returns guidance that renders",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "domain": "molecular biology",
+            "rules": ["annealing arm 15-45 nt"],
+            "checklist": ["Tm within 5C"]
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "agencyConsultRoundTrips",
+      "description": "the Agency expert returns a checklist",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "domain": "agency-lang",
+            "rules": [],
+            "checklist": ["compiles with agency typecheck"]
+          }
+        }
+      ]
+    }
+  ]
+}

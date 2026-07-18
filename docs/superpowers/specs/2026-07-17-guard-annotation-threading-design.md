@@ -155,6 +155,26 @@ tools: [saveDraft]) }`:
 
 ### Failure modes considered
 
+- **The annotation and the block's return types differ (owner review
+  round 1).** The stamp never looks at the block's returns, and no
+  widening is computed — the annotation is the single source, taken
+  verbatim. That is sufficient because only two cases exist. In a
+  well-typed program the returns are NARROWER than the annotation
+  (`return "done"` under `Result<string>`; `return "a"` under
+  `Result<string | number>`): the user already did the widening by
+  writing the annotation, and the declared contract is exactly the
+  right schema for the model — wider than any one incidental return.
+  If the returns are INCOMPATIBLE with the annotation
+  (`return 42` under `Result<string>`), the checker already errors on
+  that assignment — `synthGuardCall` types the guard as
+  `Result<union of block returns>`, and assignability against the
+  declared `Result<T>` fails — so the stamp is wrong only in a
+  program that is already red, and even then the schema is advisory
+  (a mismatched save is kept with a warning ack; #578's validation
+  stance). Computing a union at desugar time is not possible anyway:
+  the desugar has no synthesizer and no alias table. The division of
+  labor is deliberate — the desugar CARRIES the user's words, the
+  checker JUDGES them.
 - **Annotation is not a `resultType`** (user wrote something else, or
   the checker is already erroring): no stamp, today's behavior. The
   desugar never validates — the checker owns diagnosing a bad

@@ -30,6 +30,8 @@ import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/promptRunner.md for the control-flow abstraction used here.
 import { PromptBailout, PromptRunner } from "./promptRunner.js";
+import { findIntrinsic } from "./intrinsicTools.js";
+import type { RunBatchResult } from "./runBatch.js";
 import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
 import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
@@ -850,6 +852,11 @@ export async function runPrompt(args: {
    *  by-reference trick `removedTools` uses. Absent for direct TS callers
    *  (e.g. `agency.llm`), so the mark is a no-op there. */
   destructiveSink?: { __destructiveRan?: boolean };
+  /** Zod schema for the saveDraft tool's `value` param, threaded by the
+   *  llm() codegen from the enclosing def's declared return type.
+   *  Consulted only when the tools array contains the stdlib saveDraft
+   *  (see intrinsicTools.ts). */
+  draftSchema?: unknown;
   checkpointInfo?: SourceLocationOpts;
 }): Promise<any> {
   const {
@@ -912,9 +919,17 @@ export async function runPrompt(args: {
   for (const fn of exposedFunctions) {
     fn.validateForLLM();
   }
+  // An intrinsic tool (currently only the stdlib saveDraft) gets a
+  // SYNTHESIZED definition — its value schema comes from the schema
+  // the llm() codegen threaded from the enclosing def's declared
+  // return type, not from the def's own signature.
   let tools = exposedFunctions
     .filter((fn) => fn.toolDefinition)
-    .map((fn) => fn.toolDefinition!);
+    .map(
+      (fn) =>
+        findIntrinsic(fn)?.buildDefinition({ draftSchema: args.draftSchema }) ??
+        fn.toolDefinition!,
+    );
   // Pre-flight: reject duplicate tool names before they reach the provider,
   // where they surface as an opaque 400 with no request payload in the
   // statelog. See assertUniqueToolNames.
@@ -1506,6 +1521,100 @@ export async function runPrompt(args: {
         // `round` value, so completedSteps keys match.
         const round = self.toolCallRound;
 
+        // Partition the round: intrinsic calls (handled inline, in
+        // order) vs. everything else (dispatched concurrently as
+        // today). One partition, computed up front — the rest of the
+        // iteration reads these two lists and never re-derives them.
+        const intrinsicOf = (toolCall: smoltalk.ToolCallJSON) => {
+          const handler = toolFunctions.find((fn) => fn.name === toolCall.name);
+          return handler ? findIntrinsic(handler) : undefined;
+        };
+        const intrinsicCalls = toolCalls
+          .map((toolCall, callIndex) => ({
+            toolCall,
+            callIndex,
+            intrinsic: intrinsicOf(toolCall),
+          }))
+          .filter((entry) => entry.intrinsic !== undefined);
+        const dispatchCalls = toolCalls.filter(
+          (toolCall) => intrinsicOf(toolCall) === undefined,
+        );
+
+        // Ordered interception (partials-ergonomics spec Part 2):
+        // intrinsic calls are handled inline at their position in the
+        // call list, so two saves in one round apply in call-list
+        // order BY CONSTRUCTION — the writes happen here, in list
+        // order, not in scheduler-completion order. (`for...of`, not
+        // `forEach`: async forEach callbacks are not awaited in order.)
+        // The draft files on the scope that owns this llm() call: the
+        // stack is [..., owner, runPrompt] (setupFunction pushed our
+        // frame), so setSavedDraft's callerFrame() write lands on the
+        // owner — the same frame shape as the stdlib saveDraft def
+        // path. Intrinsics deliberately ignore maxToolCallRounds (a
+        // draft write is free and salvage is the point) and
+        // removedTools (an intrinsic cannot error onto that list).
+        // The ack pushes to the LIVE thread; pr.step does not snapshot
+        // messages on normal completion, and does not need to — the
+        // next interrupt-path checkpoint's snapshotMessages() reads
+        // the live thread the ack is already in. Do NOT add a
+        // redundant snapshot here. (A lost ack would surface as a
+        // dangling tool_use, which real providers reject.)
+        for (const { toolCall, callIndex, intrinsic } of intrinsicCalls) {
+          const callSlug = `${callIndex}_${toolCall.id}`;
+          await pr.step(`round.${round}.tool.${callSlug}.intrinsic`, async () => {
+            const callArgs = toolCall.arguments ?? {};
+            // The lifecycle mirrors the real dispatch path's events
+            // (toolCallStart → hooks → toolCall) inside one
+            // toolExecution span, so span-pairing consumers see
+            // intrinsic calls too. Deliberate differences from the
+            // real path: one pr.step instead of per-phase branch steps
+            // (there is no branch), and timeTaken 0 (an inline state
+            // write has no meaningful duration).
+            const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
+            try {
+              ctx.statelogClient.toolCallStart({
+                toolName: toolCall.name,
+                args: callArgs,
+                model: JSON.stringify(clientConfig.model),
+                threadId: __threads()?.activeId() ?? null,
+              });
+              await invokeCallbacks({
+                ctx,
+                name: "onToolCallStart",
+                data: { toolName: toolCall.name, args: callArgs },
+                stateStack,
+              });
+              const ack = intrinsic!.handle({
+                toolCall,
+                stateStack,
+                draftSchema: args.draftSchema,
+              });
+              await invokeCallbacks({
+                ctx,
+                name: "onToolCallEnd",
+                data: { toolName: toolCall.name, result: ack, timeTaken: 0 },
+                stateStack,
+              });
+              ctx.statelogClient.toolCall({
+                toolName: toolCall.name,
+                args: callArgs,
+                output: ack,
+                model: JSON.stringify(clientConfig.model),
+                timeTaken: 0,
+                threadId: __threads()?.activeId() ?? null,
+              });
+              messages.push(
+                smoltalk.toolMessage(ack, {
+                  tool_call_id: toolCall.id,
+                  name: toolCall.name,
+                }),
+              );
+            } finally {
+              ctx.statelogClient.endSpan(toolSpanId);
+            }
+          });
+        }
+
         // Tool calls in one round run concurrently via pr.parallel. Each
         // tool gets its own BranchRunner. If any branch's `step` returns
         // interrupts, sibling branches still run to completion; pr.parallel
@@ -1516,9 +1625,15 @@ export async function runPrompt(args: {
         // semantics across branches (strategy B in the plan): same-round
         // removal is best-effort and removals always take effect from the
         // NEXT round (the .filter() after this parallel call).
-        const parallelResult = await pr.parallel(
+        // An all-intrinsic round has nothing to dispatch: short-circuit
+        // to an empty values result instead of running runBatch over
+        // zero children.
+        const parallelResult: RunBatchResult<void> =
+          dispatchCalls.length === 0
+            ? { kind: "values", values: [] }
+            : await pr.parallel(
           `round.${round}.tools`,
-          toolCalls,
+          dispatchCalls,
           // keyFor: MUST match the branchKey the body uses below
           // (`stack.getOrCreateBranch(branchKey)`) so runBatch and the body
           // operate on the same branch. Keyed by the tool call's POSITION in

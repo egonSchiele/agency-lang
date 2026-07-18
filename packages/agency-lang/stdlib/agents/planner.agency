@@ -5,7 +5,15 @@
   it, show the plan, source, and capability envelope for approval, run it in a
   handler-sandboxed subprocess, verify, and fall back to codingAgent on failure.
 */
-import { writeAgency, runCode, getEffects, verify, feedbackHasErrors, renderFeedback, EffectsByExport } from "std::agency"
+import {
+  writeAgency,
+  runCode,
+  getEffects,
+  verify,
+  feedbackHasErrors,
+  renderFeedback,
+  EffectsByExport,
+ } from "std::agency"
 import { codingAgent } from "std::agents/coding"
 import { withContext, unwrapGuard } from "std::agents/shared"
 import { getAgentCwd } from "std::index"
@@ -67,7 +75,7 @@ def renderEffectLines(byExport: Record<string, string[]>): string {
 /** Human-readable capability envelope for the approval prompt, or an honest
   note when the effects could not be computed. */
 export def renderEffects(effects: Result<EffectsByExport>): string {
-  return match (effects) {
+  return match(effects) {
     failure(_) => "(capabilities could not be computed)"
     success(byExport) => renderEffectLines(byExport)
   }
@@ -78,11 +86,16 @@ export def renderEffects(effects: Result<EffectsByExport>): string {
   (approve-all in the benchmark sandbox). REJECT halts execution and returns a
   failure (see docs/site/guide/interrupts.md), so callers `try` this and read a
   failure as "not approved". */
-def requestApproval(plan: string, source: string, effects: string) raises <std::agents::planApprove> {
-  interrupt std::agents::planApprove(
-    "Approve this plan before running it?",
-    { plan: plan, source: source, effects: effects },
-  )
+def requestApproval(
+  plan: string,
+  source: string,
+  effects: string,
+) raises <std::agents::planApprove> {
+  interrupt std::agents::planApprove("Approve this plan before running it?", {
+    plan: plan,
+    source: source,
+    effects: effects
+  })
 }
 
 // ---- The flow. State is threaded through plain helpers so no binder-`match`
@@ -97,19 +110,35 @@ type PlanState = {
 }
 
 def rejectedState(state: PlanState): PlanState {
-  return { summary: "Plan rejected; nothing was run.", done: true, extra: state.extra }
+  return {
+    summary: "Plan rejected; nothing was run.",
+    done: true,
+    extra: state.extra
+  }
 }
 
 def completedState(state: PlanState): PlanState {
-  return { summary: "Plan completed and verified.", done: true, extra: state.extra }
+  return {
+    summary: "Plan completed and verified.",
+    done: true,
+    extra: state.extra
+  }
 }
 
 def regenState(state: PlanState, gaps: string): PlanState {
-  return { summary: state.summary, done: false, extra: "${state.extra}\n\nA prior attempt had problems; fix them:\n${gaps}" }
+  return {
+    summary: state.summary,
+    done: false,
+    extra: "${state.extra}\n\nA prior attempt had problems; fix them:\n${gaps}"
+  }
 }
 
 def fallbackState(task: string, state: PlanState): PlanState {
-  return { summary: codingAgent(task), done: true, extra: state.extra }
+  return {
+    summary: codingAgent(task),
+    done: true,
+    extra: state.extra
+  }
 }
 
 def judgeAfterRun(task: string, state: PlanState): PlanState {
@@ -122,7 +151,7 @@ def afterRun(task: string, src: string, state: PlanState): PlanState {
   // Run the generated agent in the agent's working directory so its file writes
   // land where the caller expects (runCode's subprocess otherwise inherits the
   // package dir, not the caller's cwd).
-  return match (runCode(src, cwd: getAgentCwd())) {
+  return match(runCode(src, cwd: getAgentCwd())) {
     failure(err) => regenState(state, "The generated agent failed to run: ${err}")
     success(_) => judgeAfterRun(task, state)
   }
@@ -130,26 +159,41 @@ def afterRun(task: string, src: string, state: PlanState): PlanState {
 
 // Reject halts+fails, so the gate is try-wrapped: a failure means the run was
 // not approved and nothing ran.
-export def runApproved(task: string, plan: string, src: string, state: PlanState): PlanState raises <std::agents::planApprove> {
+export def runApproved(
+  task: string,
+  plan: string,
+  src: string,
+  state: PlanState,
+): PlanState raises <std::agents::planApprove> {
   const eff = getEffects(src)
   // Show the plan alongside the generated source and capability envelope, so the
   // approval prompt reflects what the user is actually approving.
   const gate = try requestApproval(plan, src, renderEffects(eff))
-  return match (gate) {
+  return match(gate) {
     failure(_) => rejectedState(state)
     success(_) => afterRun(task, src, state)
   }
 }
 
-def planStep(task: string, planText: string, state: PlanState): PlanState raises <std::agents::planApprove> {
+def planStep(
+  task: string,
+  planText: string,
+  state: PlanState,
+): PlanState raises <std::agents::planApprove> {
   const gen = writeAgency(planCodePrompt(task, planText), state.extra)
-  return match (gen) {
+  return match(gen) {
     failure(_) => fallbackState(task, state)
     success(src) => runApproved(task, planText, src, state)
   }
 }
 
-export def plannerAgent(task: string, context: string = "", plan: string = "", maxCost: number = $100.00, maxTime: number = 60m): string raises <std::agents::planApprove, std::guard> {
+export def plannerAgent(
+  task: string,
+  context: string = "",
+  plan: string = "",
+  maxCost: number = $100.00,
+  maxTime: number = 60m,
+): string raises <std::agents::planApprove, std::guard> {
   """
   Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
   task, show the plan/source/effects for approval, run it in a sandboxed
@@ -164,11 +208,18 @@ export def plannerAgent(task: string, context: string = "", plan: string = "", m
   @param maxTime - hard wall-clock cap (default 60 minutes).
   """
   const captured = guard(cost: maxCost, time: maxTime) {
-    const planText = if plan == "" then llm("Analyse this task and outline the steps:\n${withContext(task, context)}") else plan
-    let state: PlanState = { summary: "", done: false, extra: withContext(task, context) }
+    const planText = if plan == "" then llm(
+      "Analyse this task and outline the steps:\n${withContext(task, context)}",
+    ) else plan
+    let state: PlanState = {
+      summary: "",
+      done: false,
+      extra: withContext(task, context)
+    }
     let attemptsLeft = PLANNER_MAX_ATTEMPTS
     while (!state.done && attemptsLeft > 0) {
       state = planStep(task, planText, state)
+      saveDraft(state.summary)
       attemptsLeft = attemptsLeft - 1
     }
     return state.summary

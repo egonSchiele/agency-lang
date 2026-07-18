@@ -3,11 +3,11 @@
   task, then verifies the produced artifact against the task's own success
   criteria.
 */
-import { bash, ls, glob, grep } from "std::shell"
-import { edit } from "std::fs"
-import { systemMessage } from "std::thread"
 import { verify, feedbackHasErrors, renderFeedback } from "std::agency"
 import { withContext, unwrapGuard } from "std::agents/shared"
+import { edit } from "std::fs"
+import { bash, ls, glob, grep } from "std::shell"
+import { systemMessage } from "std::thread"
 
 static const codingTools: any[] = [
   read.partial(useAgentCwd: true),
@@ -28,7 +28,17 @@ static const codingSysPrompt = """You are an expert software engineer. Solve the
 
 static const finalizeReminder = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
 
-export def codingAgent(task: string, context: string = "", criteria: string[] = [], maxAttempts: number = 3, maxCost: number = $50.00, maxTime: number = 30m): string {
+let first = true
+
+export def codingAgent(
+  task: string,
+  context: string = "",
+  criteria: string[] = [],
+  maxAttempts: number = 3,
+  maxCost: number = $50.00,
+  maxTime: number = 30m,
+  checkpoint: number = 5m,
+): Result<string> {
   """
   General-purpose coding agent. Writes and runs code to complete a task and
   verifies the result against the task's success criteria. Returns a short
@@ -42,26 +52,94 @@ export def codingAgent(task: string, context: string = "", criteria: string[] = 
   @param maxAttempts - Max verify-and-fix attempts before returning (default 3).
   @param maxCost - Hard spend cap for the whole run (default $50).
   @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
+  @param checkpoint - How often to verify progress and redirect if needed (default 5 minutes). The verify agent will run on every checkpoint to verify the work of the coding agent.
   """
-  const captured = guard(cost: maxCost, time: maxTime) {
-    let reply = ""
-    let msg = withContext(task, context)
-    thread(label: "codingAgent") {
-      systemMessage(codingSysPrompt)
-      let done = false
-      let attemptsLeft = maxAttempts
-      while (!done && attemptsLeft > 0) {
-        reply = llm("${msg}\n\n${finalizeReminder}", { tools: codingTools })
-        const fb = verify(task, criteria)
-        if (feedbackHasErrors(fb)) {
-          msg = "Not done yet. A strict review found:\n\n${renderFeedback(fb)}\n\nFix each problem exactly."
+
+  if (maxAttempts <= 0) {
+    return failure("maxAttempts must be greater than 0")
+  }
+
+  if (maxTime < checkpoint) {
+    return failure(
+      "maxTime is less than the checkpoint, so the checkpoint will never be reached",
+    )
+  }
+
+  // i.e. time till the guard fires next
+  let remainingTime = if checkpoint == 0 then maxTime else checkpoint
+
+  // total time spent so far
+  let totalTime = 0m
+
+  handle {
+    const captured = guard(cost: maxCost, time: remainingTime) {
+      let reply = ""
+      let msg = withContext(task, context)
+      thread(label: "codingAgent") {
+        if (first) {
+          systemMessage(codingSysPrompt)
+          first = false
+        }
+        let done = false
+        let attemptsLeft = maxAttempts
+        while (!done && attemptsLeft > 0) {
+          reply = llm(
+            "${msg}\n\n${finalizeReminder}",
+            {
+            tools: codingTools
+          },
+          )
+          saveDraft(reply)
           attemptsLeft = attemptsLeft - 1
-        } else {
-          done = true
+          const feedback = verify(task, criteria)
+          if (feedbackHasErrors(feedback)) {
+            msg = """
+            Not done yet. A strict review found:
+
+            ${renderFeedback(feedback)}
+
+            Fix each problem exactly.
+            """
+          } else {
+            done = true
+          }
         }
       }
+      return reply
     }
-    return reply
+    return captured
+  } with (intr) {
+    if (intr.effect != "std::guard") {
+      return pass()
+    }
+    return match(intr.data.dimension) {
+      "cost" => reject("maxCost reached")
+      "time" => {
+        totalTime = totalTime + remainingTime
+        if (totalTime >= maxTime) {
+          return reject("maxTime reached")
+        }
+        const feedback = verify(task, criteria)
+        const message = if feedbackHasErrors(feedback) then renderVerifierFeedback(feedback) else "Good work so far. Keep going."
+        remainingTime = Math.min(checkpoint, maxTime - totalTime)
+        return approve(
+          {
+          maxTime: remainingTime,
+          message: message
+        },
+        )
+      }
+      _ => return failure("unknown guard dimension: ${intr.data.dimension}")
+    }
   }
-  return unwrapGuard(captured, "Coding")
+}
+
+def renderVerifierFeedback(feedback: any): string {
+  return """
+            Not done yet. A strict review found:
+
+            ${renderFeedback(feedback)}
+
+            Fix each problem exactly.
+            """
 }

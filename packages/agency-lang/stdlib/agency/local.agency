@@ -14,6 +14,7 @@ import {
  } from "agency-lang/stdlib-lib/localModels.js"
 
 /** @module
+  @summary Manage and run local GGUF models: download by short name or Hugging Face URI, alias them, and register the local provider.
   Manage and run local GGUF models. Download models by curated short name or
   Hugging Face URI, alias them, list or remove downloads, and register the local
   provider so `llm()` calls can use them. Requires the smoltalk-llama-cpp

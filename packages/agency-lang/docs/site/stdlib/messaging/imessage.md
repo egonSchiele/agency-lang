@@ -1,5 +1,6 @@
 ---
 name: "imessage"
+description: "Send an iMessage from Agency code via the macOS Messages app."
 ---
 
 # imessage

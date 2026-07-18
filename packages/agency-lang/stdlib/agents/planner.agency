@@ -1,4 +1,5 @@
 /** @module
+  @summary The plan-as-code meta-agent: given a task, generates an Agency program that composes worker agents and tools to solve it.
   plannerAgent: the plan-as-code meta-agent. Given a task, generate an Agency
   program (an agent-as-plan) that composes the worker agents and tools to solve
   it, show the plan, source, and capability envelope for approval, run it in a

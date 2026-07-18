@@ -1,5 +1,6 @@
 ---
 name: "args"
+description: "Parse command-line flags."
 ---
 
 # args

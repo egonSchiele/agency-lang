@@ -1,5 +1,6 @@
 ---
 name: "concurrency"
+description: "Concurrency primitives for coordinating work inside one Agency run."
 ---
 
 # concurrency

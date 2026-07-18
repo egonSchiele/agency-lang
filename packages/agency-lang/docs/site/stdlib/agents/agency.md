@@ -1,5 +1,6 @@
 ---
 name: "agency"
+description: "Agency-coding agent: writes an Agency program for a task, runs it, and verifies the program's actual result satisfies the task."
 ---
 
 # agency

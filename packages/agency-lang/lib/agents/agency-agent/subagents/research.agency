@@ -32,6 +32,7 @@ import { withWebSearch } from "../lib/search.agency"
 static const docSkill = docsSkill("guide")
 static const cliSkill = docsSkill("cli")
 static const diagnosticsSkill = docsSkill("diagnostics")
+static const stdlibSkill = docsSkill("stdlib")
 
 export static const researchSysPrompt = """
 You are the **research specialist** of a multi-thread Agency-language
@@ -55,6 +56,8 @@ When you need information:
                         `agency compile`, ...)
     * `diagnosticsSkill` — type-checker diagnostic codes (AG####)
                         with explanations and fixes
+    * `stdlibSkill`   — standard-library reference (`std::http`,
+                        `std::thread`, …), one summary per module
   Pick whichever matches the question rather than guessing.
 
 - For **general knowledge**, prefer the lighter tools first:
@@ -115,6 +118,7 @@ export static const researchTools: any[] = [
   docSkill,
   cliSkill,
   diagnosticsSkill,
+  stdlibSkill,
   wikipediaSearch.rename("wikipedia_search"),
   wikipediaSummary.rename("wikipedia_summary"),
   wikipediaArticle.rename("wikipedia_article"),

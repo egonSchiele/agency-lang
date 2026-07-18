@@ -2,6 +2,7 @@ import { fetchJSON } from "std::http"
 import { env } from "std::system"
 
 /** @module
+  @summary SEC EDGAR — U.S. company filings
   ## SEC EDGAR — U.S. company filings
 
   Look up official filings for a U.S.-listed company from the SEC's

@@ -1,5 +1,6 @@
 ---
 name: "table"
+description: "Draws tables for terminal output; table(...) returns a layout node you render with std::ui/layout."
 ---
 
 # table
@@ -53,7 +54,7 @@ Draws tables for terminal output. `table(...)` returns a layout node whose
 export type Cell = string | LayoutNode
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L43))
 
 ### CellRow
 
@@ -61,7 +62,7 @@ export type Cell = string | LayoutNode
 export type CellRow = Cell[]
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L48))
 
 ### ColumnSpec
 
@@ -97,7 +98,7 @@ export type ColumnSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L62))
 
 ### TableBuilder
 
@@ -120,7 +121,7 @@ export type TableBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L74))
 
 ## Functions
 
@@ -190,4 +191,4 @@ Build a bordered table as a layout node. Pass the data form: `header`,
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L117))

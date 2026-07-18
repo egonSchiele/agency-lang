@@ -23,6 +23,7 @@ import {
 
 
 /** @module
+  @summary Decide whether to approve or reject the interrupts an agent raises, without prompting the user every time.
   Decide whether to approve or reject the interrupts an agent raises,
   without prompting the user every time. A `Policy` is an ordered list of
   glob-pattern rules per interrupt effect, evaluated first-match-wins.

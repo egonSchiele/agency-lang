@@ -1,5 +1,6 @@
 ---
 name: "strategy"
+description: "Run a block several times and combine the results."
 ---
 
 # strategy

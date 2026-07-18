@@ -1,5 +1,6 @@
 ---
 name: "llm"
+description: "Choose which model and options your `llm()` calls use at runtime."
 ---
 
 # llm

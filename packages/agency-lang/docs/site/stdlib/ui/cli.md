@@ -1,5 +1,6 @@
 ---
 name: "cli"
+description: "A line-mode REPL for CLI agents, driven by Node's readline instead of the alt-screen TUI engine in std::ui."
 ---
 
 # cli
@@ -69,7 +70,7 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L66))
 
 ### clearScreen
 
@@ -77,7 +78,7 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
 clearScreen()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L106))
 
 ### clearHistory
 
@@ -89,7 +90,7 @@ Clear the input history of the currently running `repl()` session: both
   its in-session up-arrow recall and the `historyFile` that session was started
   with. A no-op when called outside an interactive `repl()`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L109))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L110))
 
 ### hline
 
@@ -106,7 +107,7 @@ hline(char: string = "─", width: number = null): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L121))
 
 ### interruptChoice
 
@@ -145,4 +146,4 @@ Approval prompt for line mode: renders a sticky footer pinned to the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L126))

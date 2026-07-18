@@ -1,5 +1,6 @@
 ---
 name: "wikipedia"
+description: "Search Wikipedia and read article summaries or full text from Agency code."
 ---
 
 # wikipedia

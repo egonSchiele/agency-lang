@@ -1,5 +1,6 @@
 ---
 name: "coding"
+description: "General-purpose coding agent: writes, edits, and runs code to complete a task, then verifies the produced artifact against the task's own success criteria."
 ---
 
 # coding

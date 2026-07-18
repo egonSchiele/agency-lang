@@ -1,5 +1,6 @@
 ---
 name: "array"
+description: "Re-exports the array helpers (map, filter, reduce, and friends), which now live in std::index and are auto-imported."
 ---
 
 # array

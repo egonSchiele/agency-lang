@@ -1,5 +1,6 @@
 ---
 name: "index"
+description: "The always-available prelude: printing, input, file I/O, and the array helpers."
 ---
 
 # index

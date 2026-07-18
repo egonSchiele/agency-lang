@@ -1,5 +1,6 @@
 ---
 name: "system"
+description: "Talk to the host OS: read command-line args and environment variables, find the current directory, show notifications, take screenshots, open URLs, and read from stdin."
 ---
 
 # system

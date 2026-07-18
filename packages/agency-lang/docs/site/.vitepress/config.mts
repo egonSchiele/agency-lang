@@ -264,7 +264,7 @@ export default defineConfig({
             { text: "agent", link: "/stdlib/agent" },
             {
               text: "agents",
-              collapsed: false,
+              collapsed: true,
               items: [
                 { text: "agents/coding", link: "/stdlib/agents/coding" },
                 { text: "agents/expert", link: "/stdlib/agents/expert" },
@@ -303,7 +303,7 @@ export default defineConfig({
             { text: "array", link: "/stdlib/array" },
             {
               text: "auth",
-              collapsed: false,
+              collapsed: true,
               items: [
                 { text: "auth/keyring", link: "/stdlib/auth/keyring" },
                 { text: "auth/oauth", link: "/stdlib/auth/oauth" },
@@ -315,7 +315,7 @@ export default defineConfig({
             { text: "concurrency", link: "/stdlib/concurrency" },
             {
               text: "data",
-              collapsed: false,
+              collapsed: true,
               items: [
                 { text: "data/finance/gdelt", link: "/stdlib/data/finance/gdelt" },
                 { text: "data/finance/fred", link: "/stdlib/data/finance/fred" },
@@ -358,7 +358,7 @@ export default defineConfig({
             { text: "memory", link: "/stdlib/memory" },
             {
               text: "messaging",
-              collapsed: false,
+              collapsed: true,
               items: [
                 { text: "messaging/email", link: "/stdlib/messaging/email" },
                 {
@@ -370,7 +370,7 @@ export default defineConfig({
             },
             {
               text: "notes",
-              collapsed: false,
+              collapsed: true,
               items: [
                 { text: "notes/apple", link: "/stdlib/notes/apple" },
               ],
@@ -389,7 +389,7 @@ export default defineConfig({
             { text: "thread", link: "/stdlib/thread" },
             {
               text: "ui",
-              collapsed: false,
+              collapsed: true,
               items: [
                 { text: "ui (interactive)", link: "/stdlib/ui" },
                 { text: "ui/chart", link: "/stdlib/ui/chart" },
@@ -402,7 +402,7 @@ export default defineConfig({
             { text: "weather", link: "/stdlib/weather" },
             {
               text: "web",
-              collapsed: false,
+              collapsed: true,
               items: [
                 { text: "web/browser", link: "/stdlib/web/browser" },
                 { text: "web/search", link: "/stdlib/web/search" },

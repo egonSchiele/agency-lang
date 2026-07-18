@@ -1,0 +1,21 @@
+// No saveDraft anywhere: the binder is null at abort time, and the
+// finalize's null arm is what the guard salvages.
+def work(): string {
+  const reply = llm("Reply with: pong")
+  return reply
+
+  finalize as draft {
+    if (draft == null) {
+      return "was-null"
+    }
+    return "had-value"
+  }
+}
+
+node main() {
+  const result = guard(cost: 0.000001) {
+    return work()
+  }
+  if (isFailure(result)) { return "unexpected" }
+  return result.value
+}

@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"model-draft\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCalls": [
+            { "name": "saveDraft", "args": { "value": "model-draft" } },
+            { "name": "writeNote" }
+          ]
+        },
+        { "return": "never-reached" }
+      ],
+      "description": "A tool-saved DRAFT survives the mid-round interrupt/resume caused by a sibling interrupting tool. Deliberately narrow (plan review T3): this pins frame serialization only — ack/thread integrity is covered by the runtime surface tests, because the deterministic client does not validate tool_use/result pairing and could not fail on a lost ack."
+    }
+  ]
+}

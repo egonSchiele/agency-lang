@@ -1670,11 +1670,24 @@ export class AgencyGenerator {
     );
   }
 
+  /** Canonical form: no parens, and the binder prints through the same
+   *  param renderer blocks use. A stray `as` with no binder (the shared
+   *  grammar's no-param form) canonicalizes away — printing IS the
+   *  migration, like guard's legacy `as`. */
   protected processFinalizeBlock(node: FinalizeBlock): string {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    return this.indentStr(`finalize {\n${bodyCodeStr}${this.indentStr("}")}`);
+    const rendered = this.renderParams(node.params);
+    let asClause = "";
+    if (rendered.length === 1) {
+      asClause = ` as ${rendered[0]}`;
+    } else if (rendered.length > 1) {
+      asClause = ` as (${rendered.join(", ")})`;
+    }
+    return this.indentStr(
+      `finalize${asClause} {\n${bodyCodeStr}${this.indentStr("}")}`,
+    );
   }
 
   /** Canonical form: the head prints through the same argument

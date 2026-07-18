@@ -1,0 +1,14 @@
+// A user def NAMED saveDraft is an ordinary tool: it runs (its module
+// id is this file, not the stdlib), and it files no draft — so reject
+// leaves the guard with nothing to salvage.
+def saveDraft(value: string): string {
+  return "user-tool-ran"
+}
+
+node main() {
+  const result = guard(cost: 0.000001) {
+    return llm("work", tools: [saveDraft])
+  }
+  if (isFailure(result)) { return "no-draft" }
+  return result.value
+}

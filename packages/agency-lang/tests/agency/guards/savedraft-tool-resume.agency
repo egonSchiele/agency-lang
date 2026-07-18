@@ -1,0 +1,26 @@
+// Round 1 saves a draft AND runs a tool that interrupts mid-round
+// (writeBinary raises std::writeBinary — the same interrupting-tool
+// shape attach-to-reply's mid-round fixture uses; input() inside a
+// tool is not answerable in this harness). The in-program handler
+// approves the write, the round resumes, and the draft — serialized
+// with the frame across the two-trip path — is still there when the
+// guard trips and the handler rejects it.
+def writeNote(): string {
+  writeBinary("sdtr-note.txt", "aGk=", "/tmp")
+  return "note written"
+}
+
+node main() {
+  handle {
+  const result = guard(cost: 0.000001) {
+    return llm("work", tools: [saveDraft, writeNote])
+  }
+  if (isFailure(result)) { return "no-draft" }
+  return result.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => approve()
+    }
+  }
+}

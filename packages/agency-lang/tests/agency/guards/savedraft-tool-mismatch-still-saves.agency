@@ -1,0 +1,11 @@
+// The model saves a value that violates the tool schema (a number
+// against the string fallback). The intrinsic warns in the ack but
+// keeps the draft — the schema is a best-effort hint, and salvage
+// must not lose work over it. Reject proves the draft survived.
+node main() {
+  const result = guard(cost: 0.000001) {
+    return llm("work", tools: [saveDraft])
+  }
+  if (isFailure(result)) { return "no-draft" }
+  return result.value
+}

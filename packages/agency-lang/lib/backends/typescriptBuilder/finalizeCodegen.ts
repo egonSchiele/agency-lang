@@ -4,6 +4,8 @@ import type { TsNode } from "../../ir/tsIR.js";
 import type { AgencyNode } from "../../types.js";
 import type { FinalizeBlock } from "../../types/finalizeBlock.js";
 import type { ScopeManager } from "./scopeManager.js";
+import * as renderFinalizeClosure from "../../templates/backends/typescriptGenerator/finalizeClosure.js";
+import { formatTypeHintTs } from "../../utils/formatType.js";
 
 /** Everything a scope's compilation needs from its (possible) finalize
  *  block. Produced by FinalizeCodegen.compileScope for every function and
@@ -156,12 +158,34 @@ export class FinalizeCodegen {
   private closure(finalize: FinalizeBlock, scopeName: string): TsNode {
     const parts = this.compileBody(finalize.body, FinalizeCodegen.STEP_BASE);
     const bodyStr = parts.map((n) => printTs(n, 1)).join("\n");
-    const frameVar = this.frameVar();
+    // The binder is a plain closure parameter (never a frame local): it
+    // was never declared via let/const, so body references print as the
+    // bare identifier — the same mechanism inline handler params use.
+    // AG6037 guarantees the name cannot collide with a real local, and
+    // AG6038 guarantees at most one param reaches codegen. The TS
+    // annotation follows the inline-handler-param convention: the
+    // user's explicit annotation when written (plus the null arm the
+    // empty slot implies), `any` otherwise. It is documentation only —
+    // generated TS is transpiled, not type-checked; the enforced
+    // typing is the checker's `T | null` on the Agency side.
+    const binder = finalize.params[0];
+    let binderParam = "";
+    if (binder !== undefined) {
+      const tsType = binder.typeHint
+        ? `${formatTypeHintTs(binder.typeHint)} | null`
+        : "any";
+      binderParam = `${binder.name}: ${tsType}`;
+    }
     return ts.raw(
-      `const __finalize = async (): Promise<any> => {\n` +
-        `  const runner = new Runner(__ctx, ${frameVar}, { state: ${frameVar}, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(scopeName + "#finalize")} });\n` +
-        bodyStr +
-        `\n  return runner.halted ? runner.haltResult : undefined;\n};`,
+      renderFinalizeClosure
+        .default({
+          binderParam,
+          frameVar: this.frameVar(),
+          moduleId: JSON.stringify(this.moduleId),
+          scopeName: JSON.stringify(scopeName + "#finalize"),
+          body: bodyStr,
+        })
+        .trimEnd(),
     );
   }
 

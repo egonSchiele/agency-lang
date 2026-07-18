@@ -530,6 +530,18 @@ export const DIAGNOSTICS = {
     message:
       "This scope has a finalize block, so a return expression cannot bury a call inside a bigger expression. If the call were stopped, the expression would consume its partial result before the finalize could run. Assign the call to a local first, then return the local.",
   },
+  finalizeBinderCollision: {
+    code: "AG6037",
+    severity: "error",
+    message:
+      "finalize binder '{name}' collides with a variable that already exists in this scope. Pick a fresh name. The finalize body reads the scope's locals directly, so a colliding binder would silently shadow the local.",
+  },
+  finalizeBinderArity: {
+    code: "AG6038",
+    severity: "error",
+    message:
+      "finalize yields a single value — the scope's saved draft. Use one binder: finalize as {name} {{ ... }}.",
+  },
   staticReassignedAtTopLevel: {
     code: "AG7004",
     severity: "error",

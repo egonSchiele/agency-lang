@@ -287,6 +287,49 @@ describe("AbortedResult.partialValueOrNull", () => {
   });
 });
 
+describe("withFinalize passes the draft (finalize as draft)", () => {
+  it("the finalize receives the partial this instance holds", async () => {
+    const aborted = AbortedResult.fromError(
+      abortError(),
+      frameWithDraft("the-draft"),
+      "code",
+    );
+    let received: unknown = "not-called";
+    await aborted.withFinalize(async (draft) => {
+      received = draft;
+      return "finalized";
+    }, "code");
+    expect(received).toBe("the-draft");
+  });
+
+  it("no partial yields null, matching the binder's null case", async () => {
+    const aborted = AbortedResult.fromError(abortError(), new State(), "code");
+    let received: unknown = "not-called";
+    await aborted.withFinalize(async (draft) => {
+      received = draft;
+      return "finalized";
+    }, "code");
+    expect(received).toBe(null);
+  });
+
+  it("a throwing finalize still returns `this` — the same draft is the fallback", async () => {
+    const { result } = withStubStatelog(async () => {
+      const aborted = AbortedResult.fromError(
+        abortError(),
+        frameWithDraft("the-draft"),
+        "code",
+      );
+      const finalized = await aborted.withFinalize(async () => {
+        throw new Error("boom");
+      }, "code");
+      return { aborted, finalized };
+    });
+    const { aborted, finalized } = await result;
+    expect(finalized).toBe(aborted);
+    expect(finalized.partialValueOrNull()).toBe("the-draft");
+  });
+});
+
 describe("AbortedResult.withFinalize", () => {
   it("replaces the partial with the finalize's return, cause by identity", async () => {
     const cause = tripCause();

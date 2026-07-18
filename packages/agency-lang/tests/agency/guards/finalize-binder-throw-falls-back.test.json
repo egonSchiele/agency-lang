@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"the-draft\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "A throwing finalize falls back to the same draft its binder was bound to.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

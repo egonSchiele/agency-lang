@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "42",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "saveDraft", "args": { "value": 42 } }] },
+        { "return": "never-reached" }
+      ],
+      "description": "A schema-violating draft is saved anyway (warning ack); the guard salvages it.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

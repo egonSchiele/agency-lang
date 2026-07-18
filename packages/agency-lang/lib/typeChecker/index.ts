@@ -48,6 +48,7 @@ import { computeMatchExprTypes } from "./matchExprTypes.js";
 import { checkDefiniteReturns } from "./definiteReturns.js";
 import { checkConflictingMarkers } from "./conflictingMarkers.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
+import { declareFinalizeBinders } from "./finalizeBinder.js";
 import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { isNonTemplatedStdlib } from "../importPaths.js";
@@ -307,6 +308,10 @@ export class TypeChecker {
     // discriminated union carrying that effect's declared payload as `data`.
     // MUST run before checkScopes so `e.data` usage sites narrow correctly.
     refineInlineHandlerParams(scopes, interruptEffectsByFunction, ctx, effectRegistry);
+
+    // Declare `finalize as <name>` binders (typed T | null) before the flow
+    // build, for the same reason as the handler-param retype above.
+    declareFinalizeBinders(scopes, ctx);
 
     // Build the flow graph AFTER the param retype so the oracle is seeded with
     // the refined `e` from the start. (Ordering kept for oracle-seeding

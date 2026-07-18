@@ -1,0 +1,10 @@
+// A saveDraft call with no value argument gets the error ack, saves
+// nothing, and the loop continues to the next round — no crash, no
+// trip (the budget is generous on purpose).
+node main() {
+  const result = guard(cost: $1) {
+    return llm("work", tools: [saveDraft])
+  }
+  if (isFailure(result)) { return "failed" }
+  return result.value
+}

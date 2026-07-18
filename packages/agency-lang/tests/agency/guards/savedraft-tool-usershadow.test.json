@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"no-draft\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "saveDraft", "args": { "value": "ignored" } }] },
+        { "return": "never-reached" }
+      ],
+      "description": "A user-defined function named saveDraft runs as an ordinary tool and files nothing; reject salvages nothing.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

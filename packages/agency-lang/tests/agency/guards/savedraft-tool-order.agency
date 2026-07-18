@@ -1,0 +1,10 @@
+// Two saves in one round apply in CALL-LIST order (the ordered
+// interception pass), not scheduler-completion order: the later one
+// wins.
+node main() {
+  const result = guard(cost: 0.000001) {
+    return llm("work", tools: [saveDraft])
+  }
+  if (isFailure(result)) { return "no-draft" }
+  return result.value
+}

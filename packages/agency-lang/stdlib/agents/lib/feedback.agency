@@ -1,0 +1,78 @@
+/** Exports the Feedback type, along with a variety of utility functions for working with it.
+The Feedback type is used by a variety of agents to give feedback on work.
+ */
+
+export type Feedback = {
+  error: boolean;
+  feedback: string
+}
+
+export def mergeFeedback(
+  a: Result<Feedback[]>,
+  b: Result<Feedback[]>,
+): Result<Feedback[]> {
+  """
+  Merge two feedback Results by concatenating their success arrays or
+  returning the first failure.
+
+  @param a - First feedback Result
+  @param b - Second feedback Result
+  """
+
+  if (a is success(aVal)) {
+    if (b is success(bVal)) {
+      return success([...aVal, ...bVal])
+    } else {
+      return b
+    }
+  } else {
+    return a
+  }
+}
+
+export def flattenFeedback(feedback: Result<Feedback[]>[]): Result<Feedback[]> {
+  """
+  Flatten an array of feedback Results into a single Result.
+
+  @param feedback - An array of feedback Results
+  """
+  let merged: Result<Feedback[]> = success([])
+  for (f in feedback) {
+    merged = mergeFeedback(merged, f)
+  }
+  return merged
+}
+
+def feedbackToString(f: Feedback): string {
+  if (f.error) {
+    return `Error: ${f.feedback}`
+  } else {
+    return `Feedback: ${f.feedback}`
+  }
+}
+
+export def renderFeedback(feedback: Result<Feedback[]>): string {
+  """
+  Render a feedback Result as human-readable text, one line per finding.
+
+  @param feedback - The Result review() returned
+  """
+  if (feedback is success(val)) {
+    return map(val, feedbackToString).join("\n\n")
+  }
+  return feedback.error
+}
+
+export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
+  """
+  True when any finding is an error, or when the feedback Result itself
+  is a failure.
+
+  @param feedback - The feedback wrapped in a Result
+  """
+  if (feedback is success(val)) {
+    return some(val, \f -> f.error)
+  }
+  // If the feedback itself is a failure, we can treat that as an error state.
+  return true
+}

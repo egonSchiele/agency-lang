@@ -213,3 +213,10 @@ This doesn't narrow correctly:
 ---
 
 agency formatter is not preserving the question mark on optional params to functions
+
+---
+
+Seeing this inside a thread block:
+> A finalize block cannot go inside a `thread` block. Declare it at the top level of the function or block body. A finalize is always active, so nesting it in control flow has no meaning.agency
+
+But the var I'm referencing is declared in the thread block.

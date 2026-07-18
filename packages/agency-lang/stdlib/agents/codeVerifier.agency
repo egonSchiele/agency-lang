@@ -21,34 +21,46 @@ Method:
 
 Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers."""
 
+let _first = true
+
 /**
 Verifies code written to disk against a task description and optional criteria. Returns a list of feedback items.
 */
-def codeVerifierAgent(task: string, criteria: string[] = []): Feedback[] {
-  thread {
-    systemMessage(verifySysPrompt)
-    const criteriaString = map(criteria, \c -> `- ${c}`).join("\n")
-    const authoritativeCriteria = """
+def codeVerifierAgent(
+  task: string,
+  criteria: string[] = [],
+  maxCost: number = $20.00,
+  maxTime: number = 15m,
+): Result<Feedback[]> {
+  const result = guard(cost: maxCost, time: maxTime) {
+    const results: Feedback[][] = []
+    thread {
+      if (_first) {
+        systemMessage(verifySysPrompt)
+        _first = false
+      }
+      const criteriaString = map(criteria, \c -> `- ${c}`).join("\n")
+      const authoritativeCriteria = """
       Here is some example criteria that has already been provided for this task. Use it as a reference, but do not assume it is complete. Don't duplicate any of these, come up with new criteria.
       <criteria>
       ${criteriaString}
       </criteria>
     """
-    const criteriaBlock = if criteria.length == 0 then "" else authoritativeCriteria
+      const criteriaBlock = if criteria.length == 0 then "" else authoritativeCriteria
 
-    const generateCriteriaPrompt = """
+      const generateCriteriaPrompt = """
     Given this task, come up with measurable criteria for success.
     <task>${task}</task>
 
     ${criteriaBlock}
     """
 
-    const generatedCriteria: string[] = llm(generateCriteriaPrompt)
+      const generatedCriteria: string[] = llm(generateCriteriaPrompt)
 
-    const allCriteria = criteria.concat(generatedCriteria)
+      const allCriteria = criteria.concat(generatedCriteria)
 
-    const results: Feedback[][] = concurrencyPool(size: 4, items: allCriteria) as criterion {
-      const prompt = """
+      results = concurrencyPool(size: 4, items: allCriteria) as criterion {
+        const prompt = """
       Given this task:
       <task>${task}</task>
 
@@ -60,10 +72,15 @@ def codeVerifierAgent(task: string, criteria: string[] = []): Feedback[] {
       A criterion you did not actually compute counts as a failure.
       """
 
-      const items: Feedback[] = llm(prompt, tools: verifyTools)
-      return items
-    }
+        const items: Feedback[] = llm(prompt, tools: verifyTools)
+        return items
+      }
 
-    return flatten(results)
+      return flatten(results)
+    }
+    finalize {
+      return flatten(results)
+    }
   }
+  return result
 }

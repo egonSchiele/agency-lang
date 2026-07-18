@@ -1,0 +1,34 @@
+import { withContext, llmOptions } from "std::agents/lib/shared"
+import { renderGuidance, guidanceOrEmpty } from "std::agents/lib/expertGuidance"
+import { failOpenFeedback, feedbackHasErrors } from "std::agents/lib/feedback"
+
+node contextFolding(): boolean {
+  return withContext("do X", "") == "do X" && withContext("do X", "c") == "do X\n\n<context>\nc\n</context>"
+}
+
+node llmOptionsEmptyModelUntouched(): boolean {
+  const options = llmOptions("", "openai")
+  return options.model == null && options.hostedTools == null
+}
+
+node llmOptionsSetsModelAndProvider(): boolean {
+  const options = llmOptions("gpt-x", "openai", hostedTools: ["web_search"])
+  return options.model == "gpt-x" && options.provider == "openai" && options.hostedTools.length == 1
+}
+
+node emptyGuidanceRendersEmpty(): boolean {
+  const guidance = guidanceOrEmpty(failure("boom"))
+  return renderGuidance(guidance) == ""
+}
+
+node failOpen(): boolean {
+  return !feedbackHasErrors(failOpenFeedback(failure("checker died")))
+}
+
+// PROBE: llm() must accept a computed options object, not just a literal.
+// Every agent in this refactor passes llmOptions(...) here. If this node
+// fails, the llmOptions design falls back to inline two-branch literals.
+node llmAcceptsComputedOptions(): boolean {
+  const reply: string = llm("Reply with: pong", llmOptions("", ""))
+  return reply == "pong"
+}

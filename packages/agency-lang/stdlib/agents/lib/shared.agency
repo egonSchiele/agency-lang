@@ -1,0 +1,43 @@
+/** @module
+  @summary Helpers every std::agents worker uses: context folding and model
+  overrides.
+*/
+
+export def withContext(task: string, context: string): string {
+  """
+  Fold optional context material into a task prompt. Returns the task
+  unchanged when no context is given.
+
+  @param task - The task text
+  @param context - Extra material, or "" for none
+  """
+  return if context == "" then task else "${task}\n\n<context>\n${context}\n</context>"
+}
+
+export def llmOptions(
+  model: string,
+  provider: string,
+  tools: any[] = [],
+  hostedTools: string[] = [],
+): any {
+  """
+  Build an llm options object with an optional model override. Returns a
+  fresh object every call and never mutates its arguments. The model and
+  provider fields are only set when a model is named, so an empty override
+  never clobbers the default model.
+
+  @param model - Model name, or "" for the ambient model
+  @param provider - Provider for the model, or "" to auto-resolve
+  @param tools - Tools to offer the LLM
+  @param hostedTools - Provider-hosted tools to enable
+  """
+  const options: any = { tools: tools }
+  if (hostedTools.length > 0) {
+    options.hostedTools = hostedTools
+  }
+  if (model != "") {
+    options.model = model
+    options.provider = provider
+  }
+  return options
+}

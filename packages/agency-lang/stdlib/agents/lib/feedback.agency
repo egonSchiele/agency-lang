@@ -1,6 +1,7 @@
-/** Exports the Feedback type, along with a variety of utility functions for working with it.
-The Feedback type is used by a variety of agents to give feedback on work.
- */
+/** @module
+  @summary The Feedback type the agents use to report findings, with helpers
+  to merge, flatten, render, and inspect feedback lists.
+*/
 
 export type Feedback = {
   error: boolean;
@@ -75,4 +76,14 @@ export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
   }
   // If the feedback itself is a failure, we can treat that as an error state.
   return true
+}
+
+/** Pass a successful feedback list through unchanged; map any failure to no
+  findings. Use this to make a checker fail open: a checker that could not run
+  reports nothing rather than a blocking error. */
+export def failOpenFeedback(r: Result<Feedback[]>): Result<Feedback[]> {
+  return match(r) {
+    success(items) => success(items)
+    failure(_) => success([])
+  }
 }

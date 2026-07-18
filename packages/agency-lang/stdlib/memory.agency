@@ -23,6 +23,7 @@ import {
  } from "agency-lang/stdlib-lib/memory.js"
 
 /** @module
+@summary Give an agent long-term memory: remember extracts and saves facts to a knowledge graph, and recall retrieves them later.
 Give an agent long-term memory. `remember` extracts facts from text
 and saves them to a knowledge graph, and `recall` retrieves the
 relevant ones later. Memory is off until you turn it on with

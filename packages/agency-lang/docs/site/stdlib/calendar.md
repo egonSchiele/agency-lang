@@ -1,6 +1,6 @@
 ---
 name: "calendar"
-description: "Read and write Google Calendar events from Agency code. Authorizes once via Google OAuth, then lists, creates, updates, and deletes events."
+description: "Read and write Google Calendar events from Agency code."
 ---
 
 # calendar

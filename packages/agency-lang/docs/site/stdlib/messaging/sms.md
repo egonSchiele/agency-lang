@@ -1,6 +1,6 @@
 ---
 name: "sms"
-description: "Send SMS text messages from Agency code via Twilio. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` (e.g. +15550001234), or pass them directly."
+description: "Send SMS text messages from Agency code via Twilio."
 ---
 
 # sms

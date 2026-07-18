@@ -1,6 +1,6 @@
 ---
 name: "layout"
-description: "Build terminal output as a tree of boxes, rows, and columns, then render it to a styled string you can print. Handy for splash screens, summary panels, and side-by-side columns."
+description: "Build terminal output as a tree of boxes, rows, and columns, then render it to a styled string you can print."
 ---
 
 # layout

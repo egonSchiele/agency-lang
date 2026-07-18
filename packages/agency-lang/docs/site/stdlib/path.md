@@ -1,6 +1,6 @@
 ---
 name: "path"
-description: "Pure helpers for building and taking apart file paths: join, resolve, basename, dirname, extname, relative, and isAbsolute. None of these touch the filesystem."
+description: "Pure helpers for building and taking apart file paths: join, resolve, basename, dirname, extname, relative, and isAbsolute."
 ---
 
 # path

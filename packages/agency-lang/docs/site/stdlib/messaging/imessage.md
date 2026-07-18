@@ -1,6 +1,6 @@
 ---
 name: "imessage"
-description: "Send an iMessage from Agency code via the macOS Messages app. Works on macOS only, with Messages.app signed in to iMessage. No API key required."
+description: "Send an iMessage from Agency code via the macOS Messages app."
 ---
 
 # imessage

@@ -1,6 +1,6 @@
 ---
 name: "skills"
-description: "Give an LLM access to a directory of skills, and support Claude-Code-style slash commands. `skillsDir` builds a tool that lets the model read skill files on demand. `commandsDir` and `expandSlash` load prompt-template commands and expand a user's `/command` into its body."
+description: "Give an LLM access to a directory of skills, and support Claude-Code-style slash commands."
 ---
 
 # skills
@@ -59,7 +59,7 @@ effect std::skills::skillsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L185))
 
 ### std::skills::commandsDir
 
@@ -69,7 +69,7 @@ effect std::skills::commandsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L186))
 
 ## Functions
 
@@ -99,7 +99,7 @@ Build a skills tool for an LLM over a directory of skills.
 
 **Throws:** `std::skills::skillsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L226))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L227))
 
 ### docsSkill
 
@@ -123,7 +123,7 @@ Build a docs tool for an LLM over the packaged Agency documentation.
 |---|---|---|
 | section | `"guide" \| "cli" \| "diagnostics" \| "stdlib"` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L242))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L243))
 
 ### commandsDir
 
@@ -177,7 +177,7 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L329))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L330))
 
 ### expandSlash
 
@@ -216,4 +216,4 @@ Expand a /command in `msg` into its command body. Returns the rendered
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L386))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L387))

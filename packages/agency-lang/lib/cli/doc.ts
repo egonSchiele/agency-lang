@@ -313,6 +313,11 @@ export function firstParagraph(body: string): string {
   return paragraph.join(" ").replace(/\s+/g, " ").trim();
 }
 
+export function firstSentence(text: string): string {
+  const match = text.match(/^.*?[.!?](?=\s|$)/);
+  return match ? match[0] : text;
+}
+
 export function sanitizeDescription(raw: string): string {
   return raw
     .replace(/["\\]/g, "")
@@ -326,7 +331,7 @@ export function moduleDescription(
 ): string | null {
   if (!comment) return null;
   const { override, body } = extractSummaryOverride(comment.content);
-  const raw = override ?? firstParagraph(body);
+  const raw = override ?? firstSentence(firstParagraph(body));
   if (!raw) return null;
   const value = sanitizeDescription(raw);
   return value === "" ? null : value;

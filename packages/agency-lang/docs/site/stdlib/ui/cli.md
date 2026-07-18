@@ -1,6 +1,6 @@
 ---
 name: "cli"
-description: "A line-mode REPL for CLI agents, driven by Node's `readline` instead of the alt-screen TUI engine in `std::ui`. It gives up the pinned status line, live spinner, and in-app scrolling. In exchange, every prompt and reply is a plain line in the terminal's scrollback, so you get native search, copy/paste, link clicks, line editing, and history for free. It shares `std::ui`'s `repl` call signature, so switching modes is a one-line import change:"
+description: "A line-mode REPL for CLI agents, driven by Node's readline instead of the alt-screen TUI engine in std::ui."
 ---
 
 # cli
@@ -70,7 +70,7 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
 | historyMax | `number` | 1000 |
 | paletteCommands | `any` | null |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L62))
 
 ### clearScreen
 
@@ -78,7 +78,7 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
 clearScreen()
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L102))
 
 ### clearHistory
 
@@ -90,7 +90,7 @@ Clear the input history of the currently running `repl()` session: both
   its in-session up-arrow recall and the `historyFile` that session was started
   with. A no-op when called outside an interactive `repl()`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L106))
 
 ### hline
 
@@ -107,4 +107,4 @@ hline(char: string = "─", width: number = null): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L117))

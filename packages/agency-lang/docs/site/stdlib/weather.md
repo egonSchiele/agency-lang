@@ -1,6 +1,6 @@
 ---
 name: "weather"
-description: "Look up current weather for a city or zip code, and convert between Celsius and Fahrenheit. No API key required."
+description: "Look up current weather for a city or zip code, and convert between Celsius and Fahrenheit."
 ---
 
 # weather

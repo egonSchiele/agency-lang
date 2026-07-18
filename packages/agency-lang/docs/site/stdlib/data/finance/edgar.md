@@ -50,7 +50,7 @@ export type Filing = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L36))
 
 ## Effects
 
@@ -62,7 +62,7 @@ effect std::edgar {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L33))
 
 ## Functions
 
@@ -96,7 +96,7 @@ List recent SEC filings for a company by its CIK (Central Index Key). Returns fi
 
 **Throws:** `std::edgar`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L132))
 
 ### edgarFilings
 
@@ -130,4 +130,4 @@ List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AA
 
 **Throws:** `std::edgar`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L150))

@@ -1,6 +1,6 @@
 ---
 name: "planner"
-description: "plannerAgent: the plan-as-code meta-agent. Given a task, generate an Agency program (an agent-as-plan) that composes the worker agents and tools to solve it, show the plan, source, and capability envelope for approval, run it in a handler-sandboxed subprocess, verify, and fall back to codingAgent on failure."
+description: "The plan-as-code meta-agent: given a task, generates an Agency program that composes worker agents and tools to solve it."
 ---
 
 # planner
@@ -29,7 +29,7 @@ effect std::agents::planApprove {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L14))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L15))
 
 ## Functions
 
@@ -51,7 +51,7 @@ Build the writeAgency instruction: emit a program whose `node main` composes
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L41))
 
 ### renderEffects
 
@@ -70,7 +70,7 @@ Human-readable capability envelope for the approval prompt, or an honest
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L69))
 
 ### runApproved
 
@@ -94,7 +94,7 @@ runApproved(
 
 **Returns:** [PlanState](#planstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L133))
 
 ### plannerAgent
 
@@ -132,4 +132,4 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L151))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L152))

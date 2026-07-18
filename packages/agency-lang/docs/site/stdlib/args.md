@@ -1,6 +1,6 @@
 ---
 name: "args"
-description: "Parse command-line flags. Features: - required flags - default values - mutually-exclusive groups - auto-generated `--help` / `--version` - number coercion"
+description: "Parse command-line flags."
 ---
 
 # args

@@ -1,6 +1,6 @@
 ---
 name: "search"
-description: "Search the web from Agency code, backed by the Brave Search API (https://brave.com/search/api/). Use `tavilySearch` for AI-optimized results."
+description: "Search the web from Agency code, backed by the Brave Search API (https://brave.com/search/api/)."
 ---
 
 # search

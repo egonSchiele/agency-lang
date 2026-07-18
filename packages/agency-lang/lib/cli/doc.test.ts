@@ -3,6 +3,7 @@ import {
   generateDoc,
   extractSummaryOverride,
   firstParagraph,
+  firstSentence,
   sanitizeDescription,
   moduleDescription,
 } from "./doc.js";
@@ -71,6 +72,26 @@ describe("extractSummaryOverride", () => {
   });
 });
 
+describe("firstSentence", () => {
+  it("takes text up to the first sentence terminator", () => {
+    expect(firstSentence("Fetch URLs. Returns text, JSON, or Markdown.")).toBe(
+      "Fetch URLs.",
+    );
+  });
+
+  it("returns the whole string when there is no terminator", () => {
+    expect(firstSentence("Wikidata — the open knowledge graph")).toBe(
+      "Wikidata — the open knowledge graph",
+    );
+  });
+
+  it("keeps a one-sentence string with an internal colon intact", () => {
+    expect(firstSentence("Helpers: round, add, and subtract.")).toBe(
+      "Helpers: round, add, and subtract.",
+    );
+  });
+});
+
 describe("sanitizeDescription", () => {
   it("removes double quotes and backslashes", () => {
     expect(sanitizeDescription('e.g. "America/New_York" path\\x')).toBe(
@@ -93,12 +114,12 @@ describe("sanitizeDescription", () => {
 });
 
 describe("moduleDescription", () => {
-  it("derives from the first paragraph when there is no @summary", () => {
+  it("derives the first sentence when there is no @summary", () => {
     expect(
       moduleDescription(
         moduleComment("\n  Fetch URLs. Returns text.\n\n  ```ts\n  x\n  ```"),
       ),
-    ).toBe("Fetch URLs. Returns text.");
+    ).toBe("Fetch URLs.");
   });
 
   it("prefers an explicit @summary override", () => {
@@ -722,7 +743,7 @@ node main() { print("hi") }
     expect(output).toMatch(/dir: string/);
   });
 
-  it("emits a description derived from the @module comment", () => {
+  it("emits the first sentence of the @module comment as the description", () => {
     const inputDir = path.join(tmpDir, "input-desc");
     const outputDir = path.join(tmpDir, "output-desc");
     fs.mkdirSync(inputDir, { recursive: true });
@@ -736,7 +757,7 @@ node main() { print("hi") }
     generateDoc({}, path.join(inputDir, "m.agency"), outputDir);
     const out = fs.readFileSync(path.join(outputDir, "m.md"), "utf-8");
     expect(out).toContain(
-      'description: "Fetch URLs from Agency code. Returns text, JSON, or Markdown."',
+      'description: "Fetch URLs from Agency code."',
     );
   });
 
@@ -747,13 +768,13 @@ node main() { print("hi") }
     fs.writeFileSync(
       path.join(inputDir, "q.agency"),
       "/** @module\n" +
-        "  Helpers: builds strings, e.g. \"America/New_York\" values.\n*/\n" +
+        "  Builds strings like \"America/New_York\" for callers: timezones and dates.\n*/\n" +
         "export def f(): string { return \"\" }\n",
     );
     generateDoc({}, path.join(inputDir, "q.agency"), outputDir);
     const out = fs.readFileSync(path.join(outputDir, "q.md"), "utf-8");
     expect(out).toContain(
-      'description: "Helpers: builds strings, e.g. America/New_York values."',
+      'description: "Builds strings like America/New_York for callers: timezones and dates."',
     );
     expect(out).not.toContain('\\"');
   });

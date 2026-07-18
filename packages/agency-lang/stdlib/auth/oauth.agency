@@ -2,6 +2,7 @@ import { _isAuthorized, _revokeAuth, _authorize, _getAccessToken } from "agency-
 import { fetchJSON } from "std::http"
 
 /** @module
+  @summary Run the OAuth 2.0 authorization flow and manage the resulting tokens, so your agent can call APIs on the user's behalf.
   Run the OAuth 2.0 authorization flow and manage the resulting tokens, so your
   agent can call APIs on the user's behalf. Register an app with the provider to
   get a client ID and secret. Then authorize once and fetch fresh access tokens

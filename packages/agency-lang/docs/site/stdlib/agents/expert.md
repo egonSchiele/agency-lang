@@ -133,6 +133,9 @@ expertAgent(
   maxTime: number = 15m,
   expertModel: string = "",
   expertProvider: string = "",
+  expertBudget: number = 3m,
+  expertCost: number = $5.00,
+  checkpoint: number = 5m,
 ): string
 ```
 
@@ -149,6 +152,11 @@ Expert-guided coding agent. Consults a domain expert for the task's rules and
     solver (empty = the ambient model). Lets a caller put the one-shot expert
     consult on a stronger model while the solve loop stays on the default.
   @param expertProvider - optional provider for expertModel (empty = auto-resolve).
+  @param expertBudget - max time for the upfront consult (default 3m). On
+    overrun the consult fails open to empty guidance.
+  @param expertCost - spend cap for the consult (default $5).
+  @param checkpoint - interval at which the solver verifies its disk output and
+    is redirected or stopped (default 5m). Passed through to codingAgent.
 
 **Parameters:**
 
@@ -160,7 +168,10 @@ Expert-guided coding agent. Consults a domain expert for the task's rules and
 | maxTime | `number` | 15m |
 | expertModel | `string` | "" |
 | expertProvider | `string` | "" |
+| expertBudget | `number` | 3m |
+| expertCost | `number` | $5.00 |
+| checkpoint | `number` | 5m |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L185))

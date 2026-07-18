@@ -21,6 +21,7 @@ codingAgent(
   maxAttempts: number = 3,
   maxCost: number = $50.00,
   maxTime: number = 30m,
+  checkpoint: number = 0,
 ): string
 ```
 
@@ -36,6 +37,9 @@ General-purpose coding agent. Writes and runs code to complete a task and
   @param maxAttempts - Max verify-and-fix attempts before returning (default 3).
   @param maxCost - Hard spend cap for the whole run (default $50).
   @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
+  @param checkpoint - If > 0, verify the disk output at this interval and either
+    redirect the agent (when it is making progress) or stop it (when it is
+    thrashing or out of time). 0 keeps the plain single-guard behavior.
 
 **Parameters:**
 
@@ -47,7 +51,8 @@ General-purpose coding agent. Writes and runs code to complete a task and
 | maxAttempts | `number` | 3 |
 | maxCost | `number` | $50.00 |
 | maxTime | `number` | 30m |
+| checkpoint | `number` | 0 |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/coding.agency#L32))

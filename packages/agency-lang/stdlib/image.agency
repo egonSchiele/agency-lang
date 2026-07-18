@@ -1,8 +1,6 @@
 import { _generateImage } from "agency-lang/stdlib-lib/image.js"
 
-/** @module
-  @summary Generate images from a text prompt (or edit input images) using a hosted provider, returning base64 you can persist.
-  Generate images from a text prompt (or edit input images) using a
+/** @module Generate images from a text prompt (or edit input images) using a
 hosted provider (OpenAI, Google, or an open-source model via LiteLLM / Together).
 Returns base64 you can persist with `writeBinary()` or send onward with
 `std::thread`'s `image(...)`.

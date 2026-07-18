@@ -12,7 +12,6 @@ import {
 import { parse, renderForHtml } from "std::markdown"
 
 /** @module
-  @summary Create, read, search, and edit notes in the macOS Notes app. macOS only; the first call asks for Automation permission.
   Create, read, search, and edit notes in the macOS Notes app. macOS only.
   The first call asks for Automation permission with a system dialog. If
   nobody answers the dialog, the call fails after 30 seconds.

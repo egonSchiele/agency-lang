@@ -3,7 +3,6 @@ import { bash, glob, ls, grep } from "std::shell"
 import { applyAgentCwd } from "std::index"
 
 /** @module
-  @summary Tools for editing files and managing directories: apply text edits and patches, and create, copy, move, or remove files.
   Tools for editing files and managing directories: apply text edits and
   patches, and create, copy, move, or remove files. Every operation raises an
   approval interrupt before it touches the disk, so nothing is written until a

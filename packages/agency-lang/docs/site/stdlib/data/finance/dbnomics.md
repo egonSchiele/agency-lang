@@ -1,6 +1,6 @@
 ---
 name: "dbnomics"
-description: "## DBnomics — world macroeconomic time-series"
+description: "DBnomics — world macroeconomic time-series"
 ---
 
 # dbnomics

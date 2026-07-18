@@ -1,6 +1,6 @@
 ---
 name: "oauth"
-description: "Run the OAuth 2.0 authorization flow and manage the resulting tokens, so your agent can call APIs on the user's behalf."
+description: "Run the OAuth 2.0 authorization flow and manage the resulting tokens, so your agent can call APIs on the user's behalf. Register an app with the provider to get a client ID and secret. Then authorize once and fetch fresh access tokens as needed."
 ---
 
 # oauth
@@ -49,7 +49,7 @@ effect std::authorize {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L38))
 
 ### std::getAccessToken
 
@@ -59,7 +59,7 @@ effect std::getAccessToken {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L39))
 
 ### std::revokeAuth
 
@@ -69,7 +69,7 @@ effect std::revokeAuth {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L40))
 
 ## Functions
 
@@ -116,7 +116,7 @@ Start an OAuth 2.0 authorization flow. Opens the user's browser for consent, cap
 
 **Throws:** `std::authorize`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L42))
 
 ### getAccessToken
 
@@ -138,7 +138,7 @@ Get a valid OAuth access token for a previously authorized provider. Refreshes t
 
 **Throws:** `std::getAccessToken`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L72))
 
 ### isAuthorized
 
@@ -158,7 +158,7 @@ Check whether OAuth tokens are stored for a provider. Returns true if tokens exi
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L85))
 
 ### revokeAuth
 
@@ -180,4 +180,4 @@ Delete stored OAuth tokens for a provider. Re-authorization is required before t
 
 **Throws:** `std::revokeAuth`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/auth/oauth.agency#L94))

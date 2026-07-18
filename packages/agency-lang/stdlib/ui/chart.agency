@@ -1,7 +1,6 @@
 import { LayoutNode, Width } from "std::ui/layout"
 
 /** @module
-  @summary Draws horizontal bar charts for terminal output; barChart(...) returns a layout node you render with std::ui/layout.
   Draws horizontal bar charts for terminal output. `barChart(...)` returns a
   layout node. Render it with `render` from `std::ui/layout`, so a chart
   nests inside `box` / `row` / `column`. Pass the series and categories

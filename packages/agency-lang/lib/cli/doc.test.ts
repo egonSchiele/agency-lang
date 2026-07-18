@@ -61,6 +61,14 @@ describe("extractSummaryOverride", () => {
     const { override } = extractSummaryOverride("\n  @summary\n  Body.\n");
     expect(override).toBeNull();
   });
+
+  it("does not treat @summaryfoo (no boundary) as an override", () => {
+    const { override, body } = extractSummaryOverride(
+      "\n  @summaryfoo bar\n  Body.\n",
+    );
+    expect(override).toBeNull();
+    expect(body).toContain("@summaryfoo bar");
+  });
 });
 
 describe("sanitizeDescription", () => {
@@ -70,12 +78,17 @@ describe("sanitizeDescription", () => {
     );
   });
 
-  it("caps at 200 chars on a word boundary and appends an ellipsis", () => {
+  it("strips a leading Markdown heading marker", () => {
+    expect(sanitizeDescription("## Wikidata — the open knowledge graph")).toBe(
+      "Wikidata — the open knowledge graph",
+    );
+  });
+
+  it("does not cap long text", () => {
     const long = "word ".repeat(60).trim(); // ~299 chars
     const out = sanitizeDescription(long);
-    expect(out.length).toBeLessThanOrEqual(201);
-    expect(out.endsWith("…")).toBe(true);
-    expect(out).not.toContain("wor…"); // no mid-word cut
+    expect(out).toBe(long);
+    expect(out).not.toContain("…");
   });
 });
 

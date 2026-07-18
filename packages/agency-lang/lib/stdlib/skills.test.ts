@@ -80,4 +80,15 @@ describe("stdlib docs recursive glob", () => {
     expect(recursive).toContain("ui/table.md"); // nested
     expect(recursive).toContain("array.md"); // top-level still present
   });
+
+  it("is a no-op for the flat sections (guide has no nested pages)", async () => {
+    // docsSkill now always globs recursively. guide/cli/diagnostics have no
+    // nested docs, so recursion must list exactly the same pages as the flat
+    // pattern — a regression here would silently drop pages from those tools.
+    const guideDocs = path.resolve(__dirname, "../../docs/site/guide");
+    const flat = await _glob("*.{md,markdown}", guideDocs, 500, []);
+    const recursive = await _glob("**/*.{md,markdown}", guideDocs, 500, []);
+    expect(recursive.length).toBeGreaterThan(0);
+    expect(recursive.sort()).toEqual(flat.sort());
+  });
 });

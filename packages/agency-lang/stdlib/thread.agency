@@ -1,5 +1,4 @@
 /** @module
-@summary Read and share LLM conversation history across a run: inspect the current thread's messages, cost, and tokens, and reach into other threads.
 Read and share LLM conversation history across a run. Inspect the
 current thread's messages, cost, and token usage, and reach into
 other threads. `listThreads()` lists every thread in the run, active

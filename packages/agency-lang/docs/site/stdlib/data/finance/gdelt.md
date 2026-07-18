@@ -1,6 +1,6 @@
 ---
 name: "gdelt"
-description: "## GDELT — worldwide news coverage"
+description: "GDELT — worldwide news coverage"
 ---
 
 # gdelt

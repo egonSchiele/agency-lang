@@ -1,7 +1,6 @@
 import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative, _min, _max, _minLength, _maxLength, _matches } from "agency-lang/stdlib-lib/validators.js"
 
 /** @module
-  @summary Validators and format helpers for constrained types, for use with @validate(...) and @jsonSchema(...).
   Validators and format helpers for constrained types. Pair a validator with
   `@validate(...)` to check values at runtime, spread the pre-baked
   `@jsonSchema(...)` format fragments into your own schemas, or reach for the

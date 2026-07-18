@@ -19,7 +19,6 @@ import { docsSkill } from "std::skills"
 import { ls, glob, grep, exec } from "std::shell"
 
 /** @module
-  @summary Tools for compiling, type-checking, running, formatting, and inspecting Agency programs from Agency code.
   Tools for compiling, type-checking, running, formatting, and inspecting
   Agency programs from Agency code. Compile and run source in a sandboxed
   subprocess, type-check or format it, and walk its AST to find imports,

@@ -1,6 +1,6 @@
 ---
 name: "chart"
-description: "Draws horizontal bar charts for terminal output; barChart(...) returns a layout node you render with std::ui/layout."
+description: "Draws horizontal bar charts for terminal output. `barChart(...)` returns a layout node. Render it with `render` from `std::ui/layout`, so a chart nests inside `box` / `row` / `column`. Pass the series and categories directly (data form, JSON-friendly and LLM-callable) or build them up in a trailing block. Each series gets a distinct color and fill symbol when you omit them, so charts stay readable even with color disabled. Negative values draw left of a zero baseline. Stacked bars must be uniform-sign."
 ---
 
 # chart
@@ -55,7 +55,7 @@ export type BarKey = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L41))
 
 ### Bar
 
@@ -69,7 +69,7 @@ export type Bar = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L48))
 
 ### BarMode
 
@@ -77,7 +77,7 @@ export type Bar = {
 export type BarMode = "stacked" | "grouped"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L53))
 
 ### ChartBuilder
 
@@ -91,7 +91,7 @@ export type ChartBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L56))
 
 ## Functions
 
@@ -144,4 +144,4 @@ Build a horizontal bar chart as a layout node. Pass the data form:
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/chart.agency#L85))

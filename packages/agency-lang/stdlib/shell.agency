@@ -14,7 +14,6 @@ import {
 
 
 /** @module
-  @summary Run commands and inspect the filesystem: exec and bash run programs (with approval); ls, grep, glob, stat, exists, which are read-only.
   Run commands and inspect the filesystem. `exec` and `bash` run programs and
   raise an approval interrupt before doing so. `ls`, `grep`, `glob`, `stat`,
   `exists`, and `which` are read-only helpers that return results directly.

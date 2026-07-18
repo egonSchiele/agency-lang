@@ -1,6 +1,6 @@
 ---
 name: "table"
-description: "Draws tables for terminal output; table(...) returns a layout node you render with std::ui/layout."
+description: "Draws tables for terminal output. `table(...)` returns a layout node whose columns line up across header, body, and footer. Render it with `render` from `std::ui/layout`, so a table nests inside `box` / `row` / `column`. Pass the rows directly (data form, JSON-friendly and LLM-callable) or build them up in a trailing block."
 ---
 
 # table
@@ -54,7 +54,7 @@ Draws tables for terminal output. `table(...)` returns a layout node whose
 export type Cell = string | LayoutNode
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L42))
 
 ### CellRow
 
@@ -62,7 +62,7 @@ export type Cell = string | LayoutNode
 export type CellRow = Cell[]
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L47))
 
 ### ColumnSpec
 
@@ -98,7 +98,7 @@ export type ColumnSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L61))
 
 ### TableBuilder
 
@@ -121,7 +121,7 @@ export type TableBuilder = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L73))
 
 ## Functions
 
@@ -191,4 +191,4 @@ Build a bordered table as a layout node. Pass the data form: `header`,
 
 **Returns:** [LayoutNode](layout.md#layoutnode)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/table.agency#L116))

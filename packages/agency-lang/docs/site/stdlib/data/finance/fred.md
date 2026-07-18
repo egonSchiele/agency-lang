@@ -1,6 +1,6 @@
 ---
 name: "fred"
-description: "## FRED — U.S. macroeconomic time-series"
+description: "FRED — U.S. macroeconomic time-series"
 ---
 
 # fred

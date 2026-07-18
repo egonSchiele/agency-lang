@@ -1,5 +1,4 @@
 /** @module
-@summary Helpers for building user-facing agents: ask the user a question through an interrupt, and manage a todo list.
 Helpers for building user-facing agents. This module offers two
 independent tools:
 - `question` asks the user something through an interrupt the host UI

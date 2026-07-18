@@ -1,7 +1,6 @@
 import { _sendWithResend, _sendWithSendGrid, _sendWithMailgun } from "agency-lang/stdlib-lib/email.js"
 
 /** @module
-  @summary Send email from Agency code through Resend, SendGrid, or Mailgun, each reading its own API key from the environment.
   Send email from Agency code through Resend, SendGrid, or Mailgun. Each
   provider reads its own API key from the environment: `RESEND_API_KEY`,
   `SENDGRID_API_KEY`, or `MAILGUN_API_KEY` plus `MAILGUN_DOMAIN` (and optional

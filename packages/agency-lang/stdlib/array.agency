@@ -1,5 +1,4 @@
 /** @module
-@summary Re-exports the array helpers (map, filter, reduce, and friends), which now live in std::index and are auto-imported.
 Re-exports the array helpers (`map`, `filter`, `reduce`, and friends) so
 that `import { map, filter, ... } from "std::array"` keeps working. These
 helpers now live in `std::index` and are auto-imported into every

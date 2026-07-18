@@ -1,7 +1,6 @@
 import { _now, _today, _tomorrow, _add, _addMinutes, _addHours, _addDays, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth } from "agency-lang/stdlib-lib/date.js"
 
 /** @module
-@summary Builds timezone-aware ISO 8601 date strings, the format that APIs like Google Calendar expect.
 Builds timezone-aware ISO 8601 date strings, the format that APIs like Google
 Calendar expect. Every function returns a string, not a Date object. Most
 accept an optional IANA `timezone` (e.g. "America/New_York"). Omit it to

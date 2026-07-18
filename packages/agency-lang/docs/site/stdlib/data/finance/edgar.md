@@ -1,6 +1,6 @@
 ---
 name: "edgar"
-description: "## SEC EDGAR — U.S. company filings"
+description: "SEC EDGAR — U.S. company filings"
 ---
 
 # edgar

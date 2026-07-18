@@ -546,3 +546,115 @@ describe("startSpinner coexists with outside writes", () => {
     expect(text.indexOf("tool output")).toBeLessThan(text.lastIndexOf("Thinking"));
   });
 });
+
+describe("classifyInterruptKey", () => {
+  const classify = (sequence: any, key: any) => _internal.classifyInterruptKey(sequence, key);
+  it("Ctrl+C is a hard exit (diverges from paste-mode soft cancel)", () => {
+    expect(classify(null, { name: "c", ctrl: true })).toBe("exit");
+  });
+  it("Escape is a soft cancel", () => {
+    expect(classify(null, { name: "escape" })).toBe("cancel");
+  });
+  it("Enter submits", () => {
+    expect(classify(null, { name: "return" })).toBe("submit");
+    expect(classify(null, { name: "enter" })).toBe("submit");
+  });
+  it("Backspace deletes", () => {
+    expect(classify(null, { name: "backspace" })).toBe("backspace");
+  });
+  it("a printable char appends; chords and arrows are ignored", () => {
+    expect(classify("a", { name: "a" })).toEqual({ append: "a" });
+    expect(classify(null, { name: "up" })).toBeNull();
+    expect(classify("x", { name: "x", meta: true })).toBeNull();
+  });
+});
+
+describe("reduceInterrupt", () => {
+  const config = { validKeys: ["a", "r", "aa", "ap", "rr"], allowFreeText: true, allowCancel: true };
+  const from = (buffer: string) => ({ buffer, notice: "" });
+  const reduce = _internal.reduceInterrupt;
+
+  it("exit action yields an exit outcome", () => {
+    expect(reduce(from(""), "exit", config).outcome).toEqual({ kind: "exit" });
+  });
+  it("Escape cancels when allowCancel, pends otherwise", () => {
+    expect(reduce(from(""), "cancel", config).outcome).toEqual({ kind: "cancel" });
+    expect(reduce(from(""), "cancel", { ...config, allowCancel: false }).outcome).toEqual({ kind: "pending" });
+  });
+  it("appends a printable char and clears the notice", () => {
+    const step = reduce({ buffer: "a", notice: "x" }, { append: "a" }, config);
+    expect(step.state).toEqual({ buffer: "aa", notice: "" });
+    expect(step.outcome).toEqual({ kind: "pending" });
+  });
+  it("strips embedded newlines from an appended chunk (single-line reason)", () => {
+    expect(reduce(from("a"), { append: "b\nc" }, config).state.buffer).toBe("abc");
+  });
+  it("backspace deletes the last char and clears the notice", () => {
+    expect(reduce({ buffer: "aa", notice: "x" }, "backspace", config).state).toEqual({ buffer: "a", notice: "" });
+  });
+  it("submit resolves an exact key — 'a' does NOT early-resolve before 'aa'", () => {
+    expect(reduce(from("aa"), "submit", config).outcome).toEqual({ kind: "resolve", value: "aa" });
+    expect(reduce(from("a"), "submit", config).outcome).toEqual({ kind: "resolve", value: "a" });
+  });
+  it("submit returns a free-text reason even when it starts with an option letter", () => {
+    expect(reduce(from("actually no"), "submit", config).outcome).toEqual({ kind: "resolve", value: "actually no" });
+  });
+  it("submit on empty pends with no notice (must-answer)", () => {
+    const step = reduce(from(""), "submit", config);
+    expect(step.outcome).toEqual({ kind: "pending" });
+    expect(step.state.notice).toBe("");
+  });
+  it("submit on invalid input without free text pends with a notice", () => {
+    const step = reduce(from("zzz"), "submit", { ...config, allowFreeText: false });
+    expect(step.outcome).toEqual({ kind: "pending" });
+    expect(step.state.notice).toBe("not a valid option");
+  });
+  it("an ignored key pends without changing state", () => {
+    expect(reduce(from("a"), null, config)).toEqual({ state: { buffer: "a", notice: "" }, outcome: { kind: "pending" } });
+  });
+});
+
+describe("packOptions", () => {
+  it("packs short tokens onto one line", () => {
+    expect(_internal.packOptions([{ key: "a", label: "ok" }, { key: "r", label: "no" }], 40)).toEqual(["a=ok  r=no"]);
+  });
+  it("wraps when the next token would overflow", () => {
+    expect(_internal.packOptions([{ key: "a", label: "approve" }, { key: "r", label: "reject" }], 10)).toEqual(["a=approve", "r=reject"]);
+  });
+});
+
+describe("renderInterruptFooter", () => {
+  const items = [
+    { key: "a", label: "approve once" },
+    { key: "r", label: "reject once" },
+    { key: "rr", label: "reject always" },
+  ];
+  const base = {
+    title: "bash: rm -rf build/ — approve?",
+    body: "",
+    items,
+    allowFreeText: true,
+    state: { buffer: "aa", notice: "" },
+    columns: 80,
+  };
+  it("shows divider, title, options, hint, and the input line with a caret", () => {
+    const lines = _internal.renderInterruptFooter(base);
+    const joined = lines.join("\n");
+    expect(joined).toContain("bash: rm -rf build/ — approve?");
+    expect(joined).toContain("a=approve once");
+    expect(joined).toContain("rr=reject always");
+    expect(joined).toContain("Enter to submit");
+    expect(lines[lines.length - 1]).toContain("> aa");
+    expect(lines[lines.length - 1]).toContain("▏");
+  });
+  it("caps a long body to 6 lines with an ellipsis", () => {
+    const body = Array.from({ length: 20 }, (_unused, index) => `line${index}`).join("\n");
+    const lines = _internal.renderInterruptFooter({ ...base, body });
+    expect(lines.filter((line) => /line\d/.test(line)).length).toBe(6);
+    expect(lines.some((line) => line.includes("…"))).toBe(true);
+  });
+  it("shows a notice when present", () => {
+    const lines = _internal.renderInterruptFooter({ ...base, state: { buffer: "z", notice: "not a valid option" } });
+    expect(lines.join("\n")).toContain("not a valid option");
+  });
+});

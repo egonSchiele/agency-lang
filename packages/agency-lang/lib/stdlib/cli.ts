@@ -364,6 +364,184 @@ export function installBottomRegion(
   return region;
 }
 
+// ---------------------------------------------------------------------------
+// Sticky interrupt prompt — pure core.
+//
+// The approval prompt shown mid-turn in line mode. Rendered as the bottom
+// region so concurrent tool traces stream above it. Input is "type your
+// answer, then Enter" (a bare `a` cannot disambiguate `a` from `aa`/`ap`,
+// and a free-text reason can start with any letter). All decisions live in
+// the pure `reduceInterrupt` state machine; the shell (`stickyInterruptPrompt`,
+// added later) only wires keys to it and acts on the outcome.
+// ---------------------------------------------------------------------------
+
+type InterruptAction =
+  | "submit"
+  | "cancel"
+  | "exit"
+  | "backspace"
+  | { append: string }
+  | null;
+
+type KeyMeta = { name?: string; ctrl?: boolean; meta?: boolean };
+
+/** Map a readline keypress to an interrupt-widget action. DELIBERATELY
+ *  DIVERGES from classifyPasteKey: Ctrl+C is a hard "exit" (an approval
+ *  prompt must quit, never soft-cancel-and-continue), Escape is a soft
+ *  "cancel", and Enter is "submit" (there is no Ctrl+D submit). */
+function classifyInterruptKey(sequence: unknown, key: KeyMeta | undefined): InterruptAction {
+  const name = key?.name;
+  if (key?.ctrl && name === "c") {
+    return "exit";
+  }
+  if (name === "escape") {
+    return "cancel";
+  }
+  if (name === "return" || name === "enter") {
+    return "submit";
+  }
+  if (name === "backspace") {
+    return "backspace";
+  }
+  const printable = typeof sequence === "string" && sequence.length > 0 && !key?.ctrl && !key?.meta;
+  if (printable) {
+    return { append: sequence as string };
+  }
+  return null;
+}
+
+type InterruptState = { buffer: string; notice: string };
+
+type InterruptOutcome =
+  | { kind: "pending" }
+  | { kind: "resolve"; value: string }
+  | { kind: "cancel" }
+  | { kind: "exit" };
+
+type InterruptConfig = { validKeys: string[]; allowFreeText: boolean; allowCancel: boolean };
+
+type InterruptStep = { state: InterruptState; outcome: InterruptOutcome };
+
+const INITIAL_INTERRUPT_STATE: InterruptState = { buffer: "", notice: "" };
+const INVALID_NOTICE = "not a valid option";
+
+/** Interpret a committed buffer: an exact key match resolves; a non-empty
+ *  buffer with free text allowed resolves as a reason; empty re-prompts
+ *  silently (must-answer); invalid-without-free-text re-prompts with a
+ *  notice. */
+function submitInterrupt(state: InterruptState, config: InterruptConfig): InterruptStep {
+  const answer = state.buffer.trim();
+  if (config.validKeys.includes(answer)) {
+    return { state, outcome: { kind: "resolve", value: answer } };
+  }
+  if (config.allowFreeText && answer !== "") {
+    return { state, outcome: { kind: "resolve", value: answer } };
+  }
+  const notice = answer === "" ? "" : INVALID_NOTICE;
+  return { state: { buffer: state.buffer, notice }, outcome: { kind: "pending" } };
+}
+
+/** Pure state machine for the sticky interrupt prompt: given the current
+ *  state and a key action, return the next state and an outcome. The
+ *  imperative shell acts on the outcome; every decision lives here. */
+function reduceInterrupt(
+  state: InterruptState,
+  action: InterruptAction,
+  config: InterruptConfig,
+): InterruptStep {
+  if (action === "exit") {
+    return { state, outcome: { kind: "exit" } };
+  }
+  if (action === "cancel") {
+    if (config.allowCancel) {
+      return { state, outcome: { kind: "cancel" } };
+    }
+    return { state, outcome: { kind: "pending" } };
+  }
+  if (action === "backspace") {
+    return { state: { buffer: state.buffer.slice(0, -1), notice: "" }, outcome: { kind: "pending" } };
+  }
+  if (action === "submit") {
+    return submitInterrupt(state, config);
+  }
+  if (action !== null && typeof action === "object") {
+    const cleaned = action.append.replace(/[\r\n]/g, "");
+    return { state: { buffer: state.buffer + cleaned, notice: "" }, outcome: { kind: "pending" } };
+  }
+  return { state, outcome: { kind: "pending" } };
+}
+
+/** Greedily pack `key=label` tokens into lines no wider than `width`
+ *  visible columns, joined by two spaces. A token wider than `width` gets
+ *  its own line (buildFrame wraps it at render time). */
+function packOptions(items: { key: string; label: string }[], width: number): string[] {
+  const lines: string[] = [];
+  let current = "";
+  items.forEach((item) => {
+    const token = `${item.key}=${item.label}`;
+    if (current === "") {
+      current = token;
+      return;
+    }
+    const fits = visualWidth(current) + 2 + visualWidth(token) <= width;
+    if (fits) {
+      current = `${current}  ${token}`;
+      return;
+    }
+    lines.push(current);
+    current = token;
+  });
+  if (current !== "") {
+    lines.push(current);
+  }
+  return lines;
+}
+
+const INTERRUPT_BODY_MAX_LINES = 6;
+const INTERRUPT_CARET = "▏";
+
+type InterruptFooterInput = {
+  title: string;
+  body: string;
+  items: { key: string; label: string }[];
+  allowFreeText: boolean;
+  state: InterruptState;
+  columns: number;
+};
+
+function bodyLines(body: string): string[] {
+  if (body === "") {
+    return [];
+  }
+  const raw = body.split("\n");
+  const shown = raw.slice(0, INTERRUPT_BODY_MAX_LINES).map((line) => ` ${DIM}${line}${COLOR_RESET}`);
+  if (raw.length > INTERRUPT_BODY_MAX_LINES) {
+    shown.push(` ${DIM}…${COLOR_RESET}`);
+  }
+  return shown;
+}
+
+/** Render the sticky approval prompt as footer lines. Pure. The real
+ *  cursor is hidden by the widget, so the input line ends with a caret
+ *  glyph. buildFrame wraps each line to width. */
+function renderInterruptFooter(input: InterruptFooterInput): string[] {
+  const width = Math.max(MIN_FOOTER_WIDTH, input.columns - 1);
+  const lines: string[] = [`${DIM}${"─".repeat(width)}${COLOR_RESET}`];
+  if (input.title !== "") {
+    lines.push(` ${input.title}`);
+  }
+  bodyLines(input.body).forEach((line) => lines.push(line));
+  packOptions(input.items, width - 1).forEach((row) => lines.push(` ${row}`));
+  if (input.allowFreeText) {
+    lines.push(` ${DIM}or type a reason · Enter to submit${COLOR_RESET}`);
+  }
+  if (input.state.notice !== "") {
+    lines.push(` ${color.yellow(input.state.notice)}`);
+  }
+  lines.push(` > ${input.state.buffer}${INTERRUPT_CARET}`);
+  return lines;
+}
+
 const SPINNERS = {
   "line": {
     "interval": 130,
@@ -1400,6 +1578,11 @@ export const _internal = {
   eraseRows,
   buildFrame,
   startSpinner,
+  classifyInterruptKey,
+  reduceInterrupt,
+  INITIAL_INTERRUPT_STATE,
+  packOptions,
+  renderInterruptFooter,
 };
 
 export function _clearScreen(): void {

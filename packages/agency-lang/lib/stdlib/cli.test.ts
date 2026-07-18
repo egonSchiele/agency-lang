@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { _internal, _clearHistory, type PasteState } from "./cli.js";
+import { _internal, _clearHistory, installBottomRegion, type PasteState } from "./cli.js";
 
 const {
   EMPTY_PASTE,
@@ -21,7 +21,27 @@ const {
   recordPasteEntry,
   repairSlashHistory,
   summarizeMultiline,
+  eraseRows,
+  buildFrame,
 } = _internal;
+
+/** Replace process.stdout.write with a capturing sink and force isTTY on.
+ *  installBottomRegion binds this sink as its realWrite, so every frame is
+ *  captured. Returns the buffer and a restore fn. */
+function captureStdout(): { captured: string[]; restore: () => void } {
+  const captured: string[] = [];
+  const originalWrite = process.stdout.write;
+  const originalIsTTY = (process.stdout as any).isTTY;
+  (process.stdout as any).write = (chunk: any) => { captured.push(String(chunk)); return true; };
+  (process.stdout as any).isTTY = true;
+  return {
+    captured,
+    restore: () => {
+      (process.stdout as any).write = originalWrite;
+      (process.stdout as any).isTTY = originalIsTTY;
+    },
+  };
+}
 
 /** Build a snapshot shaped like `readTokenSnapshot`'s return value from
  *  a `{model: [tokens, cost]}` shorthand. */
@@ -451,5 +471,64 @@ describe("_clearHistory", () => {
     expect(loadHistory(file, 100).entries).toEqual(["c", "b", "a"]);
     _clearHistory(file);
     expect(loadHistory(file, 100).entries).toEqual([]);
+  });
+});
+
+describe("eraseRows", () => {
+  it("returns nothing when there is no footer yet", () => {
+    expect(eraseRows(0)).toBe("");
+  });
+  it("clears a single row with CR + clear-down, no cursor move", () => {
+    expect(eraseRows(1)).toBe("\r\x1b[0J");
+  });
+  it("moves up rows-1 before clearing for a multi-row footer", () => {
+    expect(eraseRows(3)).toBe("\x1b[2A\r\x1b[0J");
+  });
+});
+
+describe("buildFrame", () => {
+  it("first frame of a 1-row footer: sync brackets + footer, no erase", () => {
+    const result = buildFrame({ above: null, footerLines: ["FOOTER"], prevRows: 0, columns: 80, cursor: "keep" });
+    expect(result.rows).toBe(1);
+    expect(result.seq).toBe("\x1b[?2026h" + "FOOTER" + "\x1b[?2026l");
+  });
+  it("erases the previous footer, then emits `above`, then redraws", () => {
+    const result = buildFrame({ above: "trace\n", footerLines: ["A", "B"], prevRows: 3, columns: 80, cursor: "keep" });
+    expect(result.seq).toBe("\x1b[?2026h" + "\x1b[2A\r\x1b[0J" + "trace\n" + "A\nB" + "\x1b[?2026l");
+    expect(result.rows).toBe(2);
+  });
+  it("appends a newline to `above` when missing so the footer starts fresh", () => {
+    const result = buildFrame({ above: "x", footerLines: ["F"], prevRows: 1, columns: 80, cursor: "keep" });
+    expect(result.seq).toContain("x\n");
+  });
+  it("emits hide/show cursor when asked", () => {
+    expect(buildFrame({ above: null, footerLines: ["F"], prevRows: 0, columns: 80, cursor: "hide" }).seq).toContain("\x1b[?25l");
+    expect(buildFrame({ above: null, footerLines: [], prevRows: 1, columns: 80, cursor: "show" }).seq).toContain("\x1b[?25h");
+  });
+  it("counts wrapped rows for an over-wide footer line", () => {
+    const wide = "w".repeat(50);
+    expect(buildFrame({ above: null, footerLines: [wide], prevRows: 0, columns: 20, cursor: "keep" }).rows).toBeGreaterThan(1);
+  });
+});
+
+describe("installBottomRegion", () => {
+  it("no-ops on non-TTY (passes writes straight through)", () => {
+    const cap = captureStdout();
+    const region = installBottomRegion(() => ["footer"], false);
+    process.stdout.write("hello");
+    region.teardown();
+    cap.restore();
+    expect(cap.captured).toEqual(["hello"]);
+  });
+  it("redraws the footer above an outside write", () => {
+    const cap = captureStdout();
+    const region = installBottomRegion(() => ["FOOTER"], true);
+    cap.captured.length = 0; // drop the initial paint
+    process.stdout.write("trace line\n");
+    region.teardown();
+    cap.restore();
+    const text = cap.captured.join("");
+    expect(text).toContain("trace line\n");
+    expect(text.indexOf("trace line")).toBeLessThan(text.lastIndexOf("FOOTER"));
   });
 });

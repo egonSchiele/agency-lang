@@ -13,6 +13,7 @@ import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js"
 import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
+import { visualWidth, wrapText } from "./layout/ansi.js";
 import { isFailure } from "../runtime/result.js";
 import { isAbortError, makeAbortCause } from "../runtime/errors.js";
 import type { AbortCause } from "../runtime/errors.js";
@@ -189,6 +190,181 @@ const USER_INPUT_COLOR = styles.cyan
 const COLOR_RESET = RESET;
 const DIM = styles.dim;
 const CLEAR_LINE = "\r\x1b[K";
+
+const HIDE_CURSOR = "\x1b[?25l";
+const SHOW_CURSOR = "\x1b[?25h";
+const SYNC_BEGIN = "\x1b[?2026h"; // DEC synchronized-update begin
+const SYNC_END = "\x1b[?2026l";   // DEC synchronized-update end
+const CLEAR_DOWN = "\x1b[0J";     // clear from cursor to end of screen
+const MIN_FOOTER_WIDTH = 20;
+
+// ---------------------------------------------------------------------------
+// Bottom-region coordinator.
+//
+// Generalizes the "Thinking" spinner's single-line stdout monkeypatch (see
+// `startSpinner`, which is folded onto this) into a footer of any number of
+// lines pinned to the bottom of the terminal. While a region is installed,
+// every OTHER write to process.stdout is redrawn ABOVE the footer as one
+// atomic frame: erase the footer, emit the outside text into scrollback,
+// redraw the footer beneath it. The "what" (which bytes to emit) lives in
+// the pure `buildFrame`; the "how" (patching stdout, tracking rows) lives in
+// the `installBottomRegion` shell.
+// ---------------------------------------------------------------------------
+
+/** Cursor moves that erase a footer of `rows` physical rows, leaving the
+ *  cursor at column 0 of where the footer's first row began. Empty when
+ *  there is no footer yet. */
+function eraseRows(rows: number): string {
+  if (rows === 0) {
+    return "";
+  }
+  const moveUp = rows > 1 ? `\x1b[${rows - 1}A` : "";
+  return `${moveUp}\r${CLEAR_DOWN}`;
+}
+
+type FrameCursor = "hide" | "show" | "keep";
+
+type FrameSpec = {
+  above: string | null;
+  footerLines: string[];
+  prevRows: number;
+  columns: number;
+  cursor: FrameCursor;
+};
+
+type FrameResult = { seq: string; rows: number };
+
+function cursorSequence(cursor: FrameCursor): string {
+  if (cursor === "hide") {
+    return HIDE_CURSOR;
+  }
+  if (cursor === "show") {
+    return SHOW_CURSOR;
+  }
+  return "";
+}
+
+function withTrailingNewline(text: string): string {
+  if (text.endsWith("\n")) {
+    return text;
+  }
+  return `${text}\n`;
+}
+
+/** Build ONE atomic terminal frame: erase the previous footer, optionally
+ *  emit `above` into scrollback, then redraw the footer wrapped to width.
+ *  Pure — the exact bytes and the new physical-row count are a function of
+ *  the inputs, so the anti-flicker guarantees are unit-testable. */
+function buildFrame(spec: FrameSpec): FrameResult {
+  const width = Math.max(MIN_FOOTER_WIDTH, spec.columns - 1);
+  const physical = spec.footerLines.flatMap((line) => wrapText(line, width));
+  const above = spec.above === null ? "" : withTrailingNewline(spec.above);
+  const seq =
+    SYNC_BEGIN +
+    eraseRows(spec.prevRows) +
+    above +
+    physical.join("\n") +
+    cursorSequence(spec.cursor) +
+    SYNC_END;
+  return { seq, rows: physical.length };
+}
+
+export type BottomRegion = { refresh: () => void; teardown: () => void };
+
+type RegionOptions = { hideCursor: boolean };
+
+const NOOP_REGION: BottomRegion = { refresh: () => { }, teardown: () => { } };
+
+// At most one bottom region owns process.stdout.write at a time. Folding the
+// spinner onto this coordinator makes single-ownership structural rather
+// than an ordering discipline.
+let activeRegion: BottomRegion | null = null;
+
+// Crash-safety: if the process exits while a region still hides the cursor,
+// restore it. Registered once.
+let cursorRestoreRegistered = false;
+function registerCursorRestore(): void {
+  if (cursorRestoreRegistered) {
+    return;
+  }
+  cursorRestoreRegistered = true;
+  process.once("exit", () => {
+    if (activeRegion) {
+      process.stdout.write(SHOW_CURSOR);
+    }
+  });
+}
+
+function chunkToText(chunk: unknown): string {
+  if (typeof chunk === "string") {
+    return chunk;
+  }
+  return String(chunk);
+}
+
+/** Pin `render()`'s lines to the bottom of the terminal. While installed,
+ *  every other write to process.stdout is redrawn ABOVE the footer as one
+ *  atomic frame (via `buildFrame`). No-op on non-TTY. `hideCursor` scopes
+ *  cursor-hiding to callers that draw their own caret (the interrupt
+ *  widget); the spinner leaves the cursor alone. */
+export function installBottomRegion(
+  render: () => string[],
+  useTTY: boolean,
+  options: RegionOptions = { hideCursor: false },
+): BottomRegion {
+  if (!useTTY) {
+    return NOOP_REGION;
+  }
+  if (activeRegion) {
+    activeRegion.teardown();
+  }
+  registerCursorRestore();
+
+  const stdoutAny = process.stdout as unknown as {
+    write: (chunk: any, ...rest: any[]) => any;
+  };
+  const realWrite = stdoutAny.write.bind(process.stdout);
+  let rows = 0;
+  let firstPaint = true;
+
+  const paint = (above: string | null): boolean => {
+    const hideNow = options.hideCursor && firstPaint;
+    const frame = buildFrame({
+      above,
+      footerLines: render(),
+      prevRows: rows,
+      columns: process.stdout.columns || 80,
+      cursor: hideNow ? "hide" : "keep",
+    });
+    firstPaint = false;
+    rows = frame.rows;
+    return realWrite(frame.seq);
+  };
+
+  paint(null);
+  stdoutAny.write = (chunk: any): boolean => paint(chunkToText(chunk));
+
+  const region: BottomRegion = {
+    refresh: () => { paint(null); },
+    teardown: () => {
+      stdoutAny.write = realWrite;
+      const frame = buildFrame({
+        above: null,
+        footerLines: [],
+        prevRows: rows,
+        columns: process.stdout.columns || 80,
+        cursor: options.hideCursor ? "show" : "keep",
+      });
+      realWrite(frame.seq);
+      rows = 0;
+      if (activeRegion === region) {
+        activeRegion = null;
+      }
+    },
+  };
+  activeRegion = region;
+  return region;
+}
 
 const SPINNERS = {
   "line": {
@@ -1254,6 +1430,8 @@ export const _internal = {
   recordPasteEntry,
   repairSlashHistory,
   summarizeMultiline,
+  eraseRows,
+  buildFrame,
 };
 
 export function _clearScreen(): void {

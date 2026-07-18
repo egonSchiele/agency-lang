@@ -1,5 +1,6 @@
 ---
 name: "tag"
+description: "Attach arbitrary tags to values and read them back anywhere in your program."
 ---
 
 # tag

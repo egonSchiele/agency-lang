@@ -1,5 +1,6 @@
 ---
 name: "keyring"
+description: "Store and retrieve secrets in the operating system's keyring, so API keys and tokens never touch plaintext files."
 ---
 
 # keyring

@@ -1,5 +1,6 @@
 ---
 name: "hackernews"
+description: "## Hacker News — front page, items, users, and search"
 ---
 
 # hackernews

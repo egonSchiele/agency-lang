@@ -1,5 +1,6 @@
 ---
 name: "wikidata"
+description: "## Wikidata — the open knowledge graph"
 ---
 
 # wikidata

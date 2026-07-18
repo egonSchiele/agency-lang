@@ -1,5 +1,6 @@
 ---
 name: "syntax"
+description: "Syntax-highlight code, detect its language, and render colored diffs and patches for the terminal or the web."
 ---
 
 # syntax

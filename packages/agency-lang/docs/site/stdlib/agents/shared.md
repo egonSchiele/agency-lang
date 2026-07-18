@@ -1,5 +1,6 @@
 ---
 name: "shared"
+description: "Shared helpers for the `std::agents` worker agents."
 ---
 
 # shared

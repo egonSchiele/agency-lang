@@ -1,5 +1,6 @@
 ---
 name: "math"
+description: "Small deterministic arithmetic helpers: round, add, subtract, multiply, and a divide that returns a Result so you can handle division by zero."
 ---
 
 # math

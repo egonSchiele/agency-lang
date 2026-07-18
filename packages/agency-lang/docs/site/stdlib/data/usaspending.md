@@ -1,5 +1,6 @@
 ---
 name: "usaspending"
+description: "## USASpending — U.S. federal awards"
 ---
 
 # usaspending

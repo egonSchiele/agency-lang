@@ -1,5 +1,6 @@
 ---
 name: "skills"
+description: "Give an LLM access to a directory of skills, and support Claude-Code-style slash commands."
 ---
 
 # skills
@@ -58,7 +59,7 @@ effect std::skills::skillsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L185))
 
 ### std::skills::commandsDir
 
@@ -68,7 +69,7 @@ effect std::skills::commandsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L186))
 
 ## Functions
 
@@ -98,30 +99,31 @@ Build a skills tool for an LLM over a directory of skills.
 
 **Throws:** `std::skills::skillsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L227))
 
 ### docsSkill
 
 ```ts
-docsSkill(section: "guide" | "cli" | "diagnostics")
+docsSkill(section: "guide" | "cli" | "diagnostics" | "stdlib")
 ```
 
 Build a docs tool for an LLM over the packaged Agency documentation.
   "guide" serves the language guide (syntax, types, control flow);
   "cli" serves the CLI reference; "diagnostics" serves the type-checker
-  diagnostic codes (AG####) with explanations and fixes. The returned tool
-  lists every page in its description and lets the model read any one on
-  demand.
+  diagnostic codes (AG####) with explanations and fixes; "stdlib" serves
+  the standard-library reference, one page per std:: module. The returned
+  tool lists every page in its description and lets the model read any one
+  on demand.
 
-  @param section - Which documentation set to serve: "guide", "cli", or "diagnostics".
+  @param section - Which documentation set to serve: "guide", "cli", "diagnostics", or "stdlib".
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| section | `"guide" \| "cli" \| "diagnostics"` |  |
+| section | `"guide" \| "cli" \| "diagnostics" \| "stdlib"` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L239))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L243))
 
 ### commandsDir
 
@@ -175,7 +177,7 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L325))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L330))
 
 ### expandSlash
 
@@ -214,4 +216,4 @@ Expand a /command in `msg` into its command body. Returns the rendered
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L382))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L387))

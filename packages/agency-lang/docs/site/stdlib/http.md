@@ -1,5 +1,6 @@
 ---
 name: "http"
+description: "Fetch URLs from Agency code. Returns the response as text, JSON, or Markdown. Aborting tears down the in-flight request."
 ---
 
 # http

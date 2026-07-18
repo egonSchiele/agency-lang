@@ -1,5 +1,6 @@
 ---
 name: "research"
+description: "Research agent: gathers from web and Wikipedia sources and synthesizes a cited, grounded answer."
 ---
 
 # research

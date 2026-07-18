@@ -1,5 +1,6 @@
 ---
 name: "object"
+description: "Helpers for working with objects: read their keys, values, and entries, and transform them with `mapValues`, `mapEntries`, and `filterEntries`."
 ---
 
 # object

@@ -1,5 +1,6 @@
 ---
 name: "yc"
+description: "## Y Combinator — the YC company directory"
 ---
 
 # yc

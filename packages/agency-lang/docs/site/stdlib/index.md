@@ -1,5 +1,6 @@
 ---
 name: "index"
+description: "The always-available prelude: printing, input, file I/O, and the array helpers. Every `.agency` file auto-imports these, so you can call them without an import."
 ---
 
 # index

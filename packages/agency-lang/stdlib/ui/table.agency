@@ -1,6 +1,7 @@
 import { LayoutNode, Width, Alignment, BorderStyle } from "std::ui/layout"
 
 /** @module
+  @summary Draws tables for terminal output; table(...) returns a layout node you render with std::ui/layout.
   Draws tables for terminal output. `table(...)` returns a layout node whose
   columns line up across header, body, and footer. Render it with `render`
   from `std::ui/layout`, so a table nests inside `box` / `row` / `column`.

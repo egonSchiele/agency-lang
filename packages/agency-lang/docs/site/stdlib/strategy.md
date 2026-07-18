@@ -1,5 +1,6 @@
 ---
 name: "strategy"
+description: "Run a block several times and combine the results. `sample` collects every result, `consensus` takes the majority vote, and `retry` / `retryWithFeedback` re-run a block until one result passes a test."
 ---
 
 # strategy

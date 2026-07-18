@@ -1,5 +1,6 @@
 ---
 name: "concurrency"
+description: "Concurrency primitives for coordinating work inside one Agency run. Use `withLock` to guard a shared resource so branches take turns instead of clobbering each other."
 ---
 
 # concurrency

@@ -1245,6 +1245,48 @@ async function printFooter(
   process.stdout.write(`${DIM}─── ${text} ───${COLOR_RESET}\n`);
 }
 
+/** Install the process-global hooks the line-mode REPL exposes while it
+ *  runs, each bound to this session's `readline`, and return a restore fn
+ *  that puts back whatever was there before. Encapsulated so `_runLineRepl`
+ *  stays focused on the loop rather than hook bookkeeping.
+ *
+ *  - `__agencyStopSpinner` — pause the "Thinking" timer while a line-mode
+ *    prompt bridge (select / autocomplete / prompt / confirm) has the user;
+ *    they bypass `inputOverride` (no readline) but must still stop it.
+ *  - `__agencyClearHistory` — wipe this session's live recall (`rl.history`,
+ *    a Node object owned by the running readline) plus the collapsed-paste
+ *    expansions. The persisted file is cleared separately by `_clearHistory`.
+ *  - `__agencyInterruptPrompt` — the sticky interrupt prompt exposed to
+ *    std::policy (interruptChoice → _interruptChoice), reusing THIS readline. */
+function installReplGlobals(
+  rl: readline.Interface,
+  expansions: Record<string, string>,
+  stopActiveSpinner: () => void,
+): () => void {
+  const globalObj = globalThis as any;
+  const prevStopSpinner = globalObj.__agencyStopSpinner;
+  const prevClearHistory = globalObj.__agencyClearHistory;
+  const prevInterruptPrompt = globalObj.__agencyInterruptPrompt;
+
+  globalObj.__agencyStopSpinner = stopActiveSpinner;
+  globalObj.__agencyClearHistory = () => {
+    const history = (rl as unknown as { history?: string[] }).history;
+    if (history) {
+      history.length = 0;
+    }
+    for (const key of Object.keys(expansions)) {
+      delete expansions[key];
+    }
+  };
+  globalObj.__agencyInterruptPrompt = (opts: InterruptOpts) => stickyInterruptPrompt(rl, opts);
+
+  return () => {
+    globalObj.__agencyStopSpinner = prevStopSpinner;
+    globalObj.__agencyClearHistory = prevClearHistory;
+    globalObj.__agencyInterruptPrompt = prevInterruptPrompt;
+  };
+}
+
 export async function _runLineRepl(
   status: unknown,
   onSubmit: unknown,
@@ -1324,40 +1366,10 @@ export async function _runLineRepl(
     });
   };
 
-  // Register a global "stop spinner" hook for the line-mode prompt
-  // bridges in `lib/stdlib/ui.ts` (select / autocomplete / prompt /
-  // confirm). They bypass `__agencyInputOverride` (they don't use
-  // readline) but still need to pause the "Thinking" timer while the
-  // user is being asked something — otherwise the timer keeps ticking
-  // over an open policy interrupt menu. Same lifecycle as
-  // `__agencyInputOverride`: install on entry, restore on exit.
-  const stopSpinnerKey = "__agencyStopSpinner";
-  const prevStopSpinner = (globalThis as any)[stopSpinnerKey];
-  (globalThis as any)[stopSpinnerKey] = stopActiveSpinner;
-
-  // Register a "clear history" hook so a command handler (e.g. the agent's
-  // `/clear-history`) can wipe this session's *live* recall. The hook only
-  // touches `rl.history` — a Node object owned by this running readline, which
-  // can't live anywhere but TS. The persisted *file* is cleared separately by
-  // `_clearHistory`, using a path Agency holds as a module global (so the file
-  // identity lives in the execution model, not in this closure). Same
-  // install/restore lifecycle as the hooks above.
-  const clearHistoryKey = "__agencyClearHistory";
-  const prevClearHistory = (globalThis as any)[clearHistoryKey];
-  (globalThis as any)[clearHistoryKey] = () => {
-    const h = (rl as unknown as { history?: string[] }).history;
-    if (h) h.length = 0;
-    // Drop the collapsed-paste expansions too, so a cleared history can't
-    // resurrect a paste's full text on the next recall.
-    for (const k of Object.keys(expansions)) delete expansions[k];
-  };
-
-  // Expose the sticky interrupt prompt to std::policy (via std::ui/cli's
-  // interruptChoice → _interruptChoice). Bound to THIS readline so the
-  // widget reuses it; restored on exit like the hooks above.
-  const interruptPromptKey = "__agencyInterruptPrompt";
-  const prevInterruptPrompt = (globalThis as any)[interruptPromptKey];
-  (globalThis as any)[interruptPromptKey] = (opts: InterruptOpts) => stickyInterruptPrompt(rl, opts);
+  // Install the process-global hooks this REPL exposes while it runs
+  // (spinner-stop, clear-history, sticky interrupt prompt), each bound to
+  // this session's readline. Restored on exit via the returned fn.
+  const restoreReplGlobals = installReplGlobals(rl, expansions, stopActiveSpinner);
 
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal. The
@@ -1523,9 +1535,7 @@ export async function _runLineRepl(
   } finally {
     teardownSlashTrigger();
     replCtx.inputOverride = prevOverride;
-    (globalThis as any)[stopSpinnerKey] = prevStopSpinner;
-    (globalThis as any)[interruptPromptKey] = prevInterruptPrompt;
-    (globalThis as any)[clearHistoryKey] = prevClearHistory;
+    restoreReplGlobals();
     // Persist whatever entries readline accumulated. `rl.history` is
     // newest-first and already contains the history we loaded at startup
     // PLUS everything added this session (including any `/paste` buffer we

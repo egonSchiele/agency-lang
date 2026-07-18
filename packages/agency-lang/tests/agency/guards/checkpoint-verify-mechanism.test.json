@@ -1,0 +1,31 @@
+{
+  "tests": [
+    {
+      "nodeName": "checkpointHandlerReadsBodyState",
+      "input": "",
+      "expectedOutput": "\"ok:body-done|saw=gap-A\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "description": "The checkpoint handler reads the body's lastGaps write (saw=gap-A) at the trip, approve re-arms, and the loop finishes (body-done). The read survives trip → approve → resume."
+    },
+    {
+      "nodeName": "checkpointRejectKeepsDraft",
+      "input": "",
+      "expectedOutput": "\"kept:best-so-far\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "description": "A checkpoint reject returns the saved draft."
+    },
+    {
+      "nodeName": "guardFailureFallsBackToDefault",
+      "input": "",
+      "expectedOutput": "\"empty-fallback\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [],
+      "description": "A guard with no saved draft trips and nobody grants → failure → match returns the fallback. This is consultOrEmpty's fail-open composition."
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+// Validates the exact guard/handler composition codingAgent uses:
+//   - the handler reads a `let` the guarded body updated (spike item 2)
+//   - a labelled inner "verify" guard trips and routes to its own reject,
+//     NOT the checkpoint handler (spike item 4)
+//   - approve re-arms the checkpoint (loop runs to completion)
+//   - reject on the checkpoint returns the saved draft (spike item 3)
+// LLM-free: pure time guards + spin, with huge margins (ms limits vs seconds
+// of spin), so timer starvation cannot flake it.
+
+def spin(rounds: number): string {
+  let i = 0
+  while (i < rounds) {
+    i = i + 1
+  }
+  return "spun"
+}
+
+// The checkpoint handler reads a `let` the guarded body updated, and that read
+// survives the trip → approve → resume cycle. This is what codingAgent's
+// no-progress detection depends on (the handler reads `lastGaps`, which the body
+// sets from the most recent verify).
+node checkpointHandlerReadsBodyState(): string {
+  let lastGaps = ""
+  let sawGaps = "none"
+  handle {
+    const captured = guard(time: 100ms, label: "checkpoint") {
+      lastGaps = "gap-A"
+      // Overrun the checkpoint → trips → handler reads lastGaps and grants.
+      const s2 = spin(300000)
+      return "body-done"
+    }
+    if (isFailure(captured)) { return "rejected|saw=${sawGaps}" }
+    return "ok:${captured.value}|saw=${sawGaps}"
+  } with (i) {
+    if (i.effect == "std::guard" && i.data.label == "checkpoint") {
+      sawGaps = lastGaps
+      return approve({ maxTime: 600000, message: "keep going" })
+    }
+    return pass()
+  }
+}
+
+// A checkpoint reject returns the saved draft, not a bare failure.
+node checkpointRejectKeepsDraft(): string {
+  handle {
+    const captured = guard(time: 100ms, label: "checkpoint") {
+      saveDraft("best-so-far")
+      const s = spin(300000)
+      return "full-result"
+    }
+    if (isFailure(captured)) { return "no-draft" }
+    return "kept:${captured.value}"
+  } with (i) {
+    if (i.effect == "std::guard" && i.data.label == "checkpoint") {
+      return reject()
+    }
+    return pass()
+  }
+}
+
+// The exact fail-open composition consultOrEmpty (Task 3) uses: a guard with NO
+// saved draft trips, nobody grants (handler passes, mirroring the auto-approve
+// pass on std::guard), so the guard rejects → failure → match returns the
+// fallback default.
+node guardFailureFallsBackToDefault(): string {
+  let out = ""
+  handle {
+    const captured = guard(time: 20ms, label: "consult") {
+      const s = spin(300000)
+      return "real-guidance"
+    }
+    out = match (captured) {
+      success(v) => v
+      failure(_) => "empty-fallback"
+    }
+  } with (i) {
+    if (i.effect == "std::guard") { return reject() }
+    return pass()
+  }
+  return out
+}

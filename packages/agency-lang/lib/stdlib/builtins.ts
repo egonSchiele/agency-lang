@@ -258,15 +258,21 @@ export async function _readBinary(dir: string, filename: string): Promise<string
   return data.toString("base64");
 }
 
+/** argv item 1 is the message, item 2 is the title. See `_notify`. */
+const NOTIFY_SCRIPT = `on run argv
+  display notification (item 1 of argv) with title (item 2 of argv)
+end run`;
+
 export async function _notify(title: string, message: string): Promise<boolean> {
   const platform = await detectPlatform();
   if (platform === "macos") {
-    // Escape for AppleScript string literals (backslashes and double quotes).
-    // We use execFileAsync with an args array to bypass the shell entirely,
-    // which eliminates all shell injection concerns.
-    const escapeAS = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    const script = `display notification "${escapeAS(message)}" with title "${escapeAS(title)}"`;
-    await execFileAsync("osascript", ["-e", script]);
+    // The title and message arrive as argv rather than being spliced into the
+    // script source, so AppleScript never parses them as code. `notify` is
+    // reachable from model-authored text, and escaping only holds for as long
+    // as the escape function keeps up with every AppleScript metacharacter.
+    // No "-" before the arguments: osascript would pass it through as argv
+    // item 1 and shift every real argument by one.
+    await execFileAsync("osascript", ["-e", NOTIFY_SCRIPT, message, title]);
   } else if (platform === "linux") {
     await execFileAsync("notify-send", [title, message]);
   } else if (platform === "wsl") {

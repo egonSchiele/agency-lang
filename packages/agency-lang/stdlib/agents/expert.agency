@@ -86,10 +86,13 @@ export def expertAgent(
     }
     return guidance
   }
-  return match(captured) {
-    success(guidance) => success(guidance)
+  // isFailure, not match: agents can run inside a supervise block, and a
+  // match expression inside a block that pauses and resumes evaluates to
+  // null. See tests/agency/supervise/nestedGuardResume.agency.
+  if (isFailure(captured)) {
     // A consult that never completed has nothing partial worth returning;
     // guidanceOrEmpty at the call site fails open.
-    failure(e) => failure("expertAgent stopped: ${e.type} cap reached")
+    return failure("expertAgent stopped: ${captured.error.type} cap reached")
   }
+  return success(captured.value)
 }

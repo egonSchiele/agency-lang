@@ -202,12 +202,15 @@ export def agencyCodingAgent(
     }
     return outcome
   }
-  return match(captured) {
-    // A rejected trip with a saved draft arrives success-shaped carrying the
-    // draft, which has the same WriteOutcome shape as a normal return — so
-    // this arm covers both.
-    success(outcome) => outcomeToResult(outcome)
+  // isFailure, not match: agents can run inside a supervise block, and a
+  // match expression inside a block that pauses and resumes evaluates to
+  // null. See tests/agency/supervise/nestedGuardResume.agency.
+  if (isFailure(captured)) {
     // No draft was ever saved: the trip happened before the first attempt.
-    failure(e) => failure({ source: "", problems: ["agencyCodingAgent stopped before generating: ${e.type} cap reached"] })
+    return failure({ source: "", problems: ["agencyCodingAgent stopped before generating: ${captured.error.type} cap reached"] })
   }
+  // A rejected trip with a saved draft arrives success-shaped carrying the
+  // draft, which has the same WriteOutcome shape as a normal return, so
+  // this covers both.
+  return outcomeToResult(captured.value)
 }

@@ -1,0 +1,8 @@
+import { codingAgent } from "std::agents/coding"
+
+// One honest pass: the reply comes back as a success Result.
+node singlePassReturnsSummary(): string {
+  const result = codingAgent("write hello.txt")
+  if (isFailure(result)) { return "failed" }
+  return result.value
+}

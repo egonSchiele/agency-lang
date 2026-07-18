@@ -1,0 +1,9 @@
+import { researcherAgent } from "std::agents/researcher"
+
+// The grounding loop retries on review error findings, then returns the
+// revised answer once the review comes back clean.
+node retriesUntilGrounded(): string {
+  const result = researcherAgent("what is the boiling point of water")
+  if (isFailure(result)) { return "failed" }
+  return result.value
+}

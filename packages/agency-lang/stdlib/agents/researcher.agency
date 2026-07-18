@@ -1,64 +1,114 @@
 /** @module
-  Research agent: gathers from web and Wikipedia sources and synthesizes a
-  cited, grounded answer.
-*/
-import { search as webSearch } from "std::web/search"
-import { fetch, fetchMarkdown } from "std::http"
-import { search as wikiSearch } from "std::wikipedia"
-import { systemMessage } from "std::thread"
-import { Feedback, feedbackHasErrors, renderFeedback } from "std::agency"
-import { env } from "std::system"
-import { withContext, unwrapGuard } from "std::agents/shared"
+  @summary Answers a question from web and Wikipedia sources and synthesizes
+  a cited answer, retrying until every claim is grounded.
 
-static const researchSysPrompt = """You are a research analyst. Answer the task using your source tools.
+  The grounding loop is this agent's own contract: a grounded, cited answer
+  is what it produces. Checking that answer against a wider task is the
+  caller's job, via reviewAgent.
+*/
+import { reviewAgent } from "std::agents/review"
+import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
+import { llmOptions, withContext } from "std::agents/lib/shared"
+import { fetch, fetchMarkdown } from "std::http"
+import { env } from "std::system"
+import { systemMessage, threadIsNew } from "std::thread"
+import { search as webSearch } from "std::web/search"
+import { search as wikiSearch } from "std::wikipedia"
+
+static const systemPrompt = """You are a research analyst. Answer the task using your source tools.
 
 - Ground every factual claim in a source and cite it.
 - If your tools cannot retrieve the needed information, say so plainly. NEVER fabricate sources or facts."""
 
 // Wikipedia and page fetch need no API key. Web search (Brave) does, so it is
-// only offered when BRAVE_API_KEY is set; otherwise the agent falls back to the
-// keyless tools rather than failing on a missing key.
-def buildResearchTools(): any[] {
-  let tools: any[] = [wikiSearch, fetchMarkdown, fetch, read.partial(useAgentCwd: true)]
+// only offered when BRAVE_API_KEY is set; otherwise the agent falls back to
+// the keyless tools rather than failing on a missing key. This is a function,
+// not a static const, because the key is read at call time.
+def buildTools(): any[] {
+  // Both search tools are named `search` by their own modules, and an import
+  // alias renames only the binding, not the tool. Rename them so a provider
+  // never sees two tools with the same name.
+  let tools: any[] = [
+    wikiSearch.rename("wikipedia_search"),
+    fetchMarkdown,
+    fetch,
+    read.partial(useAgentCwd: true),
+  ]
   const braveKey = env("BRAVE_API_KEY")
   if (braveKey != null && braveKey != "") {
-    tools.push(webSearch)
+    tools.push(webSearch.rename("web_search"))
   }
   return tools
 }
 
-export def researchAgent(task: string, context: string = "", maxAttempts: number = 2, maxCost: number = $50.00, maxTime: number = 30m): string {
-  """
-  Research agent: gathers from web and Wikipedia sources and synthesizes a
-  cited answer, checked for grounding and completeness.
+def researchLoop(
+  task: string,
+  context: string,
+  maxAttempts: number,
+  model: string,
+  provider: string,
+): string {
+  const researchTools = buildTools()
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
+  }
+  let answer = ""
+  let msg = withContext(task, context)
+  let done = false
+  let attemptsLeft = maxAttempts
+  while (!done && attemptsLeft > 0) {
+    answer = llm(msg, llmOptions(model, provider, tools: researchTools))
+    saveDraft(answer)
+    // reviewAgent judges the answer text against the task: an ungrounded or
+    // uncited claim is an error finding.
+    const reviewed = reviewAgent(answer, task, context: "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered.")
+    if (feedbackHasErrors(reviewed)) {
+      msg = "Your answer has gaps:\n\n${renderFeedback(reviewed)}\n\nRetrieve more and fix them."
+      attemptsLeft = attemptsLeft - 1
+    } else {
+      done = true
+    }
+  }
+  return answer
+}
 
-  @param task - The research question.
-  @param context - Optional extra material.
-  @param maxAttempts - Max answer-and-fix attempts before returning (default 2).
-  @param maxCost - Hard spend cap for the whole run (default $50).
-  @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
+export def researcherAgent(
+  task: string,
+  context: string = "",
+  maxAttempts: number = 2,
+  maxCost: number = $50.00,
+  maxTime: number = 30m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+): Result<string> {
   """
-  const researchTools = buildResearchTools()
+  Answer a research question from web and Wikipedia sources and return a
+  cited answer, retrying while a review finds ungrounded claims.
+
+  @param task - The research question
+  @param context - Extra material folded into the prompt, or ""
+  @param maxAttempts - Answer-and-fix attempts before returning
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  """
   const captured = guard(cost: maxCost, time: maxTime) {
     let answer = ""
-    let msg = withContext(task, context)
-    thread(label: "researchAgent") {
-      systemMessage(researchSysPrompt)
-      let done = false
-      let attemptsLeft = maxAttempts
-      while (!done && attemptsLeft > 0) {
-        answer = llm(msg, { tools: researchTools })
-        const items: Feedback[] = llm("Judge the answer against the task. For each finding, return a Feedback item: error=true if a claim is ungrounded or uncited or the task is not fully answered (name it), error=false for a well-supported point.\n\nTask: ${task}\n\nAnswer:\n${answer}")
-        const fb = success(items)
-        if (feedbackHasErrors(fb)) {
-          msg = "Your answer has gaps:\n\n${renderFeedback(fb)}\n\nRetrieve more and fix them."
-          attemptsLeft = attemptsLeft - 1
-        } else {
-          done = true
-        }
-      }
+    thread(label: "researcherAgent", session: session) {
+      answer = researchLoop(task, context, maxAttempts, model, provider)
     }
     return answer
   }
-  return unwrapGuard(captured, "Research")
+  // isFailure, not match: agents can run inside a supervise block, and a
+  // match expression inside a block that pauses and resumes evaluates to
+  // null. See tests/agency/supervise/nestedGuardResume.agency.
+  if (isFailure(captured)) {
+    return failure("researcherAgent stopped before answering: ${captured.error.type} cap reached")
+  }
+  // A rejected trip with a saved draft arrives success-shaped carrying the
+  // best answer produced so far.
+  return success(captured.value)
 }

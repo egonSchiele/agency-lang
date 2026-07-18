@@ -236,6 +236,19 @@ export async function _getTokens(): Promise<number> {
   return stack.localTokens;
 }
 
+/** True when the active message thread has no messages yet. Stdlib agents
+ * use this to send their system prompt exactly once per thread: a fresh
+ * thread has no messages, while a resumed session already carries its
+ * prompt. */
+export async function _threadIsNew(): Promise<boolean> {
+  const { threads } = getRuntimeContext();
+  const activeId = threads.activeId();
+  if (activeId === undefined) {
+    return true;
+  }
+  return threads.get(activeId).messages.length === 0;
+}
+
 export type ModelCost = ModelUsage;
 
 /**

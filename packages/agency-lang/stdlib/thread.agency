@@ -34,6 +34,7 @@ import {
   _getCost,
   _getTokens,
   _getModelCosts,
+  _threadIsNew,
  } from "agency-lang/stdlib-lib/thread.js"
 
 import { _installSlowInputImpl } from "agency-lang/stdlib-lib/builtins.js"
@@ -152,6 +153,14 @@ export def getCost(): number {
   current execution branch.
   """
   return _getCost()
+}
+
+export idempotent def threadIsNew(): boolean {
+  """
+  True when the current message thread has no messages yet. Use it inside a
+  thread block to send a system prompt only on the first entry.
+  """
+  return _threadIsNew()
 }
 
 export def getTokens(): number {

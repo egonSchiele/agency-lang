@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "namedSessionResumption",
+      "description": "a named session is new on first open, resumed on the second",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "emptySessionIsNoSession",
+      "description": "session empty-string opens a fresh isolated thread every time",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

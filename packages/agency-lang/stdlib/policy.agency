@@ -3,7 +3,8 @@ import { keys } from "std::object"
 import { dirname, basename } from "std::path"
 import { exists } from "std::shell"
 import { highlight, diff } from "std::syntax"
-import { chooseOption, ChoiceItem } from "std::ui"
+import { ChoiceItem } from "std::ui"
+import { interruptChoice } from "std::ui/cli"
 import { render, text } from "std::ui/layout"
 import { table } from "std::ui/table"
 
@@ -661,7 +662,7 @@ def renderObjAsTable(
 // Renders as a modal over the active repl(); falls back to plain print
 // + input when no REPL is running (e.g. headless agent runs).
 //
-// We pass `allowFreeText: true` to `chooseOption` so the user can
+// We pass `allowFreeText: true` to `interruptChoice` so the user can
 // type a rejection reason instead of picking a key. That single
 // keystroke flow replaces the old two-step "(r), then type reason".
 def askUser(intr: any): AskUserResult {
@@ -708,7 +709,7 @@ def askUser(intr: any): AskUserResult {
   // re-prompting. The "r" option still lets you reject a single action
   // (and optionally tell the agent what to do instead).
   const answer = withLock("std::tty") {
-    return chooseOption(title, body, items, allowFreeText: true, allowCancel: true)
+    return interruptChoice(title, body, items, allowFreeText: true, allowCancel: true)
   }
   return match(answer) {
     "a" => ({

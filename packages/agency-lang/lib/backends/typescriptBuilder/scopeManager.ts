@@ -159,7 +159,12 @@ export class ScopeManager {
    * type, so the enclosing def's declared type is the best-effort hint.
    */
   enclosingDeclaredReturnType(): VariableType | undefined {
-    // Innermost-first: the nearest non-block scope answers.
+    // Innermost-first: the nearest non-block scope answers. The Scope
+    // union names more kinds (imported/static/local), but the builder
+    // only ever PUSHES function, node, and block onto this stack, over
+    // the root global — the same invariant `returnType()`'s throwing
+    // default relies on — so the walk always lands on one of those
+    // three, and the default arm below covers only `global`.
     const owner = [...this.stack]
       .reverse()
       .find((scope) => scope.type !== "block");

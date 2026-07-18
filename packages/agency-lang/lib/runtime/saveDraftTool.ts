@@ -7,17 +7,32 @@ import type { IntrinsicTool } from "./intrinsicTools.js";
  *  dependency cycle (partials-ergonomics spec Part 2). */
 const STDLIB_INDEX_MODULE = "stdlib/index.agency";
 
-/** The contract the type system cannot check, stated to the model. */
+/** What the model reads. Says WHEN to call (each time the answer
+ *  improves), the replacement semantics (last save wins), WHY it is
+ *  worth calling (early stop returns the draft, not a failure), and
+ *  the one mistake to head off: saving a note or a delta instead of
+ *  the complete answer. The value's SHAPE is communicated by the tool
+ *  schema, so the prose does not restate it. */
 const DESCRIPTION =
-  "Save your best-so-far answer as a draft. If the budget runs out, the " +
-  "last saved draft is returned instead of a failure. The value must " +
-  "match this function's return type.";
+  "Save your best-so-far answer as a draft. Call it again whenever " +
+  "your answer improves: each call replaces the previous draft, and " +
+  "the last one wins. If the run is stopped early by a cost or time " +
+  "budget, the last saved draft is returned instead of a failure, so " +
+  "save whenever you complete a meaningful piece of work. Always pass " +
+  "the complete answer as it stands, not a note or a diff.";
 
-/** Character count for the acknowledgment message. */
+/** Character count for the acknowledgment message. Never throws: the
+ *  value normally comes from model tool args (JSON, so circular refs
+ *  and BigInt are unreachable), but this is an exported helper, so it
+ *  honors the claim for arbitrary inputs too. */
 export function draftCharCount(value: unknown): number {
   if (typeof value === "string") return value.length;
-  const text = JSON.stringify(value);
-  return text === undefined ? 0 : text.length;
+  try {
+    const text = JSON.stringify(value);
+    return text === undefined ? 0 : text.length;
+  } catch {
+    return 0;
+  }
 }
 
 /** `saveDraft` passed as a tool. Aliases (`const s = saveDraft`) keep

@@ -118,9 +118,11 @@ describe("draftCharCount", () => {
     expect(draftCharCount({ a: 1 })).toBe(JSON.stringify({ a: 1 }).length);
   });
   it("returns 0 for undefined (JSON.stringify yields undefined there)", () => {
-    // Deliberately narrow (plan review M4): a CIRCULAR value would make
-    // JSON.stringify throw, uncaught — but tool args are JSON-origin,
-    // so circularity cannot occur; the name claims only what is tested.
     expect(draftCharCount(undefined)).toBe(0);
+  });
+  it("returns 0 instead of throwing on a circular value (exported-helper claim)", () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    expect(draftCharCount(circular)).toBe(0);
   });
 });

@@ -34,7 +34,13 @@ export type IntrinsicTool = {
   matches: (fn: AgencyFunction) => boolean;
   /** The provider-facing definition, replacing the def's own. */
   buildDefinition: (ctx: { draftSchema: unknown }) => ToolDefinition;
-  /** Handle one call; the return value is the tool-result text. */
+  /** Handle one call; the return value is the tool-result text.
+   *  Contract note: EVERY call must produce a tool-result message
+   *  (providers reject a tool_use with no result), and for now that
+   *  result is plain text — every intrinsic is a state write plus an
+   *  acknowledgment. If a future intrinsic needs a richer result
+   *  (attachments, structured content), widen this return type then;
+   *  the loop's plumbing is the only consumer. */
   handle: (call: IntrinsicCall) => string;
 };
 
@@ -95,6 +101,11 @@ export async function runIntrinsicCall(opts: {
 }): Promise<void> {
   const { intrinsic, toolCall, stateStack, draftSchema, statelogClient } = opts;
   const callArgs = toolCall.arguments ?? {};
+  // DELIBERATE divergence from the dispatched-tool branch, which opens
+  // with a ctx.isCancelled throw: an intrinsic in a cancelled round
+  // still runs. Saving on the way down is salvage-friendly (the draft
+  // is the value a rejected trip returns), and answering the call
+  // avoids a dangling tool_use. Do not add the cancel check here.
   const toolSpanId = statelogClient.startSpan("toolExecution");
   try {
     statelogClient.toolCallStart({

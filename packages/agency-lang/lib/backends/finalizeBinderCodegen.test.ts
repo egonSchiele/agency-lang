@@ -19,6 +19,15 @@ describe("finalize binder codegen", () => {
     expect(out).not.toContain("__stack.locals.draft");
   });
 
+  it("an annotated binder carries its TS annotation (handler-param convention)", () => {
+    const out = gen(
+      'def f(): string {\n  return "x"\n  finalize as draft: string {\n    return "none"\n  }\n}\nnode main() { return f() }\n',
+    );
+    expect(out).toContain(
+      "const __finalize = async (draft: string | null): Promise<any>",
+    );
+  });
+
   it("binder-less output is byte-identical to the old form", () => {
     const out = gen(
       'def f(): string {\n  return "x"\n  finalize {\n    return "y"\n  }\n}\nnode main() { return f() }\n',

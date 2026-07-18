@@ -5,7 +5,7 @@
 */
 import { bash, ls, glob, grep } from "std::shell"
 import { edit } from "std::fs"
-import { systemMessage } from "std::thread"
+import { systemMessage, GuardFailureData } from "std::thread"
 import { verify, feedbackHasErrors, renderFeedback } from "std::agency"
 import { withContext, unwrapGuard } from "std::agents/shared"
 
@@ -24,11 +24,12 @@ static const codingSysPrompt = """You are an expert software engineer. Solve the
 - The deliverable is a working artifact backed by real tool output, not a description. Actually run and exercise what you build.
 - Match the output contract exactly: the requested filename, path, format, and fields. Follow the task's stated whitespace and trailing-newline requirement precisely, whether it asks for one or forbids one. A near-miss fails.
 - When an exact check decides success (a numeric tolerance, an exact match, or a hidden test), do not stop at the first solution that passes your own check. Write down the judgment calls you made to reach it. If a choice could have gone another way and still fit the task, it is an assumption, not a fact, and your answer may only be correct under your reading of it. Re-check that it still passes under the other readings, and prefer a solution that holds under all of them.
+- Keep a valid, best-effort version of the required output file on disk at all times. The moment you have any plausible answer, write it to the exact required path. When a check finds a problem, fix the file before running another check. Never leave the deliverable unwritten while you analyze — an analyzed but unwritten answer scores zero.
 - NEVER fabricate output you did not actually produce."""
 
 static const finalizeReminder = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
 
-export def codingAgent(task: string, context: string = "", criteria: string[] = [], maxAttempts: number = 3, maxCost: number = $50.00, maxTime: number = 30m): string {
+export def codingAgent(task: string, context: string = "", criteria: string[] = [], maxAttempts: number = 3, maxCost: number = $50.00, maxTime: number = 30m, checkpoint: number = 0): string {
   """
   General-purpose coding agent. Writes and runs code to complete a task and
   verifies the result against the task's success criteria. Returns a short
@@ -42,26 +43,83 @@ export def codingAgent(task: string, context: string = "", criteria: string[] = 
   @param maxAttempts - Max verify-and-fix attempts before returning (default 3).
   @param maxCost - Hard spend cap for the whole run (default $50).
   @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
+  @param checkpoint - If > 0, verify the disk output at this interval and either
+    redirect the agent (when it is making progress) or stop it (when it is
+    thrashing or out of time). 0 keeps the plain single-guard behavior.
   """
-  const captured = guard(cost: maxCost, time: maxTime) {
-    let reply = ""
-    let msg = withContext(task, context)
-    thread(label: "codingAgent") {
-      systemMessage(codingSysPrompt)
-      let done = false
-      let attemptsLeft = maxAttempts
-      while (!done && attemptsLeft > 0) {
-        reply = llm("${msg}\n\n${finalizeReminder}", { tools: codingTools })
-        const fb = verify(task, criteria)
-        if (feedbackHasErrors(fb)) {
-          msg = "Not done yet. A strict review found:\n\n${renderFeedback(fb)}\n\nFix each problem exactly."
-          attemptsLeft = attemptsLeft - 1
-        } else {
-          done = true
+  if (checkpoint <= 0) {
+    const captured = guard(cost: maxCost, time: maxTime) {
+      let reply = ""
+      let msg = withContext(task, context)
+      thread(label: "codingAgent") {
+        systemMessage(codingSysPrompt)
+        let done = false
+        let attemptsLeft = maxAttempts
+        while (!done && attemptsLeft > 0) {
+          reply = llm("${msg}\n\n${finalizeReminder}", { tools: codingTools })
+          const fb = verify(task, criteria)
+          if (feedbackHasErrors(fb)) {
+            msg = "Not done yet. A strict review found:\n\n${renderFeedback(fb)}\n\nFix each problem exactly."
+            attemptsLeft = attemptsLeft - 1
+          } else {
+            done = true
+          }
         }
       }
+      return reply
     }
-    return reply
+    return unwrapGuard(captured, "Coding")
   }
-  return unwrapGuard(captured, "Coding")
+
+  // checkpoint > 0: a re-arming checkpoint guard fires mid-tool-loop and an
+  // interrupt-free handler reads the body's latest verify result, then either
+  // extends with a "commit the fix now" message or stops. verify runs directly
+  // in the body (not a nested guard) so its result survives the trip -> approve
+  // -> resume cycle; the checkpoint interval bounds it. Overall time is the
+  // handler's `spent >= maxTime` graceful stop.
+  let reply = ""
+  let msg = withContext(task, context)
+  let lastGaps = ""          // gap text from the body's most recent verify
+  let handlerSeenGaps = ""   // what the handler compared against last checkpoint
+  let noProgress = 0
+  let outcome: Result<string, GuardFailureData> = success("")
+
+  handle {
+    outcome = guard(cost: maxCost, time: checkpoint, label: "checkpoint") {
+      thread(label: "codingAgent") {
+        systemMessage(codingSysPrompt)
+        let done = false
+        let attemptsLeft = maxAttempts
+        while (!done && attemptsLeft > 0) {
+          reply = llm("${msg}\n\n${finalizeReminder}", { tools: codingTools })
+          saveDraft(reply)
+          const fb = verify(task, criteria)
+          if (feedbackHasErrors(fb)) {
+            lastGaps = renderFeedback(fb)
+            msg = "Not done yet. A strict review of the files on disk found:\n\n${lastGaps}\n\nFix each problem on disk."
+            attemptsLeft = attemptsLeft - 1
+          } else {
+            done = true
+          }
+        }
+      }
+      return reply
+    }
+  } with (i) {
+    if (i.effect == "std::guard" && i.data.label == "checkpoint") {
+      if (i.data.dimension == "time" && i.data.spent < maxTime) {
+        if (lastGaps == "" || lastGaps == handlerSeenGaps) {
+          noProgress = noProgress + 1
+          if (noProgress >= 2) { return reject() }
+        } else {
+          noProgress = 0
+        }
+        handlerSeenGaps = lastGaps
+        return approve({ maxTime: checkpoint, message: "You are over the checkpoint budget. Stop analyzing and writing new scripts. Make the concrete fix to the required output file on disk now, then finish. Latest known gaps:\n${lastGaps}" })
+      }
+      return reject()
+    }
+    return pass()
+  }
+  return unwrapGuard(outcome, "Coding")
 }

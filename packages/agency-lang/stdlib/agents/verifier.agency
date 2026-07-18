@@ -1,0 +1,69 @@
+import { Feedback, flattenFeedback } from "std::agents/feedback"
+import { concurrencyPool } from "std::concurrency"
+import { systemMessage } from "std::thread"
+
+static const verifyTools: any[] = [
+  read.partial(useAgentCwd: true),
+  ls.partial(useAgentCwd: true),
+  glob.partial(useAgentCwd: true),
+  grep.partial(useAgentCwd: true),
+  exec.partial(useAgentCwd: true),
+]
+
+static const verifySysPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, COMPUTE, and report.
+
+The grading tests are hidden and NOT in this environment, so you must reconstruct and ACTUALLY RUN every check the task states — never eyeball the artifact.
+
+Method:
+1. Enumerate EVERY explicit success criterion in the task. Two kinds: the output contract (exact file path and name, format, JSON keys, field types, units, signed-vs-unsigned, the stated whitespace / trailing-newline requirement) AND every quantitative rule (lengths, ranges, counts, thresholds, temperatures, GC content, percentages, etc.).
+2. For EACH criterion, use the `exec` tool to COMPUTE the artifact's actual value and compare it to the requirement. If the task names a specific tool or command to compute a value (e.g. a CLI with exact flags), install if needed and run THAT tool — it is the ground truth; do not approximate it with your own estimate.
+3. A criterion you did NOT computationally verify is itself a gap — report it as one. A near-miss on any numeric constraint is an error: report the actual computed value vs. the requirement (e.g. "Tm difference 6.5°C, limit 5°C").
+
+Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers."""
+
+/**
+Verifies code written to disk against a task description and optional criteria. Returns a list of feedback items.
+*/
+def verifierAgent(task: string, criteria: string[] = []): Feedback[] {
+  thread {
+    systemMessage(verifySysPrompt)
+    const criteriaString = map(criteria, \c -> `- ${c}`).join("\n")
+    const authoritativeCriteria = """
+      Here is some example criteria that has already been provided for this task. Use it as a reference, but do not assume it is complete. Don't duplicate any of these, come up with new criteria.
+      <criteria>
+      ${criteriaString}
+      </criteria>
+    """
+    const criteriaBlock = if criteria.length == 0 then "" else authoritativeCriteria
+
+    const generateCriteriaPrompt = """
+    Given this task, come up with measurable criteria for success.
+    <task>${task}</task>
+
+    ${criteriaBlock}
+    """
+
+    const generatedCriteria: string[] = llm(generateCriteriaPrompt)
+
+    const allCriteria = criteria.concat(generatedCriteria)
+
+    const results: Feedback[][] = concurrencyPool(size: 4, items: allCriteria) as criterion {
+      const prompt = """
+      Given this task:
+      <task>${task}</task>
+
+      Judge it against this criterion:
+      <criterion>${criterion}</criterion>
+
+      Verify, don't assume. Use your tools to see what code has been produced, and compare it to the criterion.
+      Report a concrete pass/fail. If the criterion involves a number, compute that number.
+      A criterion you did not actually compute counts as a failure.
+      """
+
+      const items: Feedback[] = llm(prompt, tools: verifyTools)
+      return items
+    }
+
+    return flatten(results)
+  }
+}

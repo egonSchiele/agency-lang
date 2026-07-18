@@ -155,10 +155,16 @@ type TriageResult = {
   plan: string[]
 }
 
-static const triagePrompt = """Classify this coding task. If it is a single, straightforward change, set path to "simple" and leave plan empty. If it is multi-part or needs decomposition, set path to "complex" and outline the plan in 2 to 4 short bullets."""
-
 def triage(task: string): TriageResult {
-  const result: TriageResult = llm("${triagePrompt}\n\nTask:\n${task}")
+  const prompt = """
+Classify this coding task. If it is a single, straightforward change, set path to "simple" and leave plan empty. If it is multi-part or needs decomposition, set path to "complex" and outline the plan in 2 to 4 short bullets.
+
+<task>
+${task}
+</task>
+"""
+
+  const result: TriageResult = llm(prompt)
   return result
 }
 

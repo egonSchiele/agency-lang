@@ -2,6 +2,8 @@
   General-purpose coding agent: writes, edits, and runs code to complete a
   task, then verifies the produced artifact against the task's own success
   criteria.
+
+  For an Agency-specific coding agent, check out `std::agency`.
 */
 import { verify, feedbackHasErrors, renderFeedback } from "std::agency"
 import { withContext, unwrapGuard } from "std::agents/shared"

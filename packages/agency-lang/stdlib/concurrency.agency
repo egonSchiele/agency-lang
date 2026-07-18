@@ -48,3 +48,27 @@ export def withLock(
   """
   return _withLock(name, timeoutMs, warnAfterMs, block)
 }
+
+export def concurrencyPool(
+  size: number,
+  items: any[],
+  block: (item: any) -> any,
+): any[] {
+  """
+  Run a block in parallel across a bounded pool of workers.
+
+  @param size - Number of concurrent workers to run
+  @param items - The items to process
+  @param block - The work to run in each worker
+  """
+  const clonedItems = map(items, \(item, i) -> [item, i])
+  const results: any[] = map(clonedItems, \_ -> null)
+  fork(range(size), shared: true) as branch {
+    while (clonedItems.length > 0) {
+      const [item, i] = clonedItems.pop()
+      const result = block(item)
+      results[i] = result
+    }
+  }
+  return results
+}

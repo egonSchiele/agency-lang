@@ -1,0 +1,190 @@
+import { TypeCheckReport, typecheck } from "std::agency"
+
+/** Exports the Feedback type, along with a variety of utility functions for working with it.
+The Feedback type is used by a variety of agents to give feedback on work.
+ */
+
+export type Feedback = {
+  error: boolean;
+  feedback: string
+}
+
+export def mergeFeedback(
+  a: Result<Feedback[]>,
+  b: Result<Feedback[]>,
+): Result<Feedback[]> {
+  """
+  Merge two feedback Results by concatenating their success arrays or
+  returning the first failure.
+
+  @param a - First feedback Result
+  @param b - Second feedback Result
+  """
+
+  if (a is success(aVal)) {
+    if (b is success(bVal)) {
+      return success([...aVal, ...bVal])
+    } else {
+      return b
+    }
+  } else {
+    return a
+  }
+}
+
+export def flattenFeedback(feedback: Result<Feedback[]>[]): Result<Feedback[]> {
+  """
+  Flatten an array of feedback Results into a single Result.
+
+  @param feedback - An array of feedback Results
+  """
+  let merged: Result<Feedback[]> = success([])
+  for (f in feedback) {
+    merged = mergeFeedback(merged, f)
+  }
+  return merged
+}
+
+def parseFeedback(source: string): Result<Feedback[]> {
+  """
+  Use this to give feedback on whether the source code is syntactically valid.
+  """
+  const result = try _parseAST(source)
+  if (result is failure(err)) {
+    return success([{
+      error: true,
+      feedback: "Parse error: ${err}"
+    }])
+  }
+  return success([])
+}
+
+// Report -> findings, separated from typecheckFeedback so writeAgency
+// can format an already-computed report without re-checking.
+def reportFeedback(report: TypeCheckReport): Feedback[] {
+  const feedback: Feedback[] = []
+  for (error in report.errors) {
+    feedback.push({
+      error: true,
+      feedback: "Error: ${error.message}"
+    })
+  }
+  for (warning in report.warnings) {
+    feedback.push(
+      {
+      error: false,
+      feedback: "Warning: ${warning.message}"
+    },
+    )
+  }
+  return feedback
+}
+
+def typecheckFeedback(source: string): Result<Feedback[]> {
+  """
+  Use this to give feedback on whether the source code is type-correct.
+  """
+  const result = typecheck(source)
+  if (result is failure(err)) {
+    return success(
+      [{
+      error: true,
+      feedback: "Typecheck failed: ${err}"
+    }],
+    )
+  }
+  return success(reportFeedback(result.value))
+}
+
+/** Basic LLM-as-a-judge feedback. Given a task + some source code,
+does the code accomplish the task? */
+def llmFeedback(source: string, task: string): Result<Feedback[]> {
+  """
+  Use this to give feedback on whether the source code accomplishes the task.
+  """
+
+  const prompt = """You are reviewing Agency-language code.
+The code was written for this task:
+<task>
+${task}
+</task>
+
+<code>
+${source}
+</code>
+
+Return a list of feedback items. Set error=true only if the code does
+not accomplish the task. Keep feedback brief and concrete."""
+
+  thread(label: "std::agents/feedback/llmFeedback") {
+    const items: Feedback[] = llm(prompt)
+    return success(items)
+  }
+}
+
+/**
+Specifically for getting feedback on Agency source code.
+Runs all the other feedback functions and merges their results.
+If the task is provided, also runs llmFeedback.
+*/
+export def agencyFeedback(
+  source: string,
+  task: string | null = "",
+): Result<Feedback[]> {
+  """
+  Review Agency source code.
+
+  @param source - Agency source code as a string
+  @param task - Optional description of what the code should do
+  """
+  let feedback: Result<Feedback[]> = success([])
+  feedback = mergeFeedback(feedback, parseFeedback(source))
+  feedback = mergeFeedback(feedback, typecheckFeedback(source))
+  if (task != "" && task != null) {
+    feedback = mergeFeedback(feedback, llmFeedback(source, task))
+  }
+  if (feedback is success(items)) {
+    if (items.length == 0) {
+      const noErrors = {
+        error: false,
+        feedback: "Code is valid with no errors or warnings."
+      }
+      return success([noErrors])
+    }
+  }
+  return feedback
+}
+
+def feedbackToString(f: Feedback): string {
+  if (f.error) {
+    return `Error: ${f.feedback}`
+  } else {
+    return `Feedback: ${f.feedback}`
+  }
+}
+
+export def renderFeedback(feedback: Result<Feedback[]>): string {
+  """
+  Render a feedback Result as human-readable text, one line per finding.
+
+  @param feedback - The Result review() returned
+  """
+  if (feedback is success(val)) {
+    return map(val, feedbackToString).join("\n\n")
+  }
+  return feedback.error
+}
+
+export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
+  """
+  True when any finding is an error, or when the feedback Result itself
+  is a failure.
+
+  @param feedback - The feedback wrapped in a Result
+  """
+  if (feedback is success(val)) {
+    return some(val, \f -> f.error)
+  }
+  // If the feedback itself is a failure, we can treat that as an error state.
+  return true
+}

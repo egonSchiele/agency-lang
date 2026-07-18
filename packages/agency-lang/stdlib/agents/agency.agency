@@ -3,7 +3,14 @@
   verifies the program's actual result satisfies the task. Built on
   writeAgency and runCode.
 */
-import { writeAgency, runCode, feedbackHasErrors, renderFeedback, Feedback, WriteFailure } from "std::agency"
+import {
+  writeAgency,
+  runCode,
+  feedbackHasErrors,
+  renderFeedback,
+  Feedback,
+  WriteFailure,
+ } from "std::agency"
 
 // One attempt's judgment: is the run's result acceptable, and if not, why.
 type AttemptOutcome = {
@@ -14,11 +21,17 @@ type AttemptOutcome = {
 static const judgeResultPrompt = """Does this program's result satisfy the task? For each finding, return a Feedback item: set error=true when it fails the task (name the specific problem), error=false for a satisfied point."""
 
 def stopOutcome(): AttemptOutcome {
-  return { done: true, feedback: "" }
+  return {
+    done: true,
+    feedback: ""
+  }
 }
 
 def failedToRun(err: any): AttemptOutcome {
-  return { done: false, feedback: "The program failed to run: ${err}" }
+  return {
+    done: false,
+    feedback: "The program failed to run: ${err}"
+  }
 }
 
 // Judge the program's ACTUAL result against the task. Its deliverable is the
@@ -29,12 +42,15 @@ def outcomeFromJudge(task: string, data: any): AttemptOutcome {
   const fb = success(items)
   const failed = feedbackHasErrors(fb)
   const detail = if failed then renderFeedback(fb) else ""
-  return { done: !failed, feedback: detail }
+  return {
+    done: !failed,
+    feedback: detail
+  }
 }
 
 def judgeRun(task: string, src: string): AttemptOutcome {
   const ran = runCode(src)
-  return match (ran) {
+  return match(ran) {
     failure(err) => failedToRun(err)
     success(data) => outcomeFromJudge(task, data)
   }
@@ -42,14 +58,24 @@ def judgeRun(task: string, src: string): AttemptOutcome {
 
 // Judge the current generation. A failed generation (writeAgency gave up)
 // cannot be run, so stop and return it as-is.
-def judgeState(task: string, result: Result<string, WriteFailure>): AttemptOutcome {
-  return match (result) {
+def judgeState(
+  task: string,
+  result: Result<string, WriteFailure>,
+): AttemptOutcome {
+  return match(result) {
     failure(_) => stopOutcome()
     success(src) => judgeRun(task, src)
   }
 }
 
-export def agencyCodingAgent(task: string, context: string = "", maxAttempts: number = 3, maxCost: number = $50.00, maxTime: number = 30m): Result<string, WriteFailure> {
+/** Coding agent specifically for writing Agency code. */
+export def agencyCodingAgent(
+  task: string,
+  context: string = "",
+  maxAttempts: number = 3,
+  maxCost: number = $50.00,
+  maxTime: number = 30m,
+): Result<string, WriteFailure> {
   """
   Writes an Agency program for the task, runs it, and judges its result against
   the task. On success returns source that compiles, typechecks, and passed the
@@ -81,8 +107,13 @@ export def agencyCodingAgent(task: string, context: string = "", maxAttempts: nu
     }
     return result
   }
-  return match (captured) {
+  return match(captured) {
     success(r) => r
-    failure(e) => failure({ source: "budget exceeded: ${e.type}", errors: [] })
+    failure(e) => failure(
+      {
+      source: "budget exceeded: ${e.type}",
+      errors: []
+    },
+    )
   }
 }

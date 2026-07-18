@@ -186,3 +186,30 @@ import {
  ---
 
  agent should not be allowed to use node imports like `process` 
+
+ ---
+
+ This causes a type error:
+
+```ts
+  /** Pure routing decision, testable without the classifier: "planner" or "direct". */
+export def routeFor(decision: TriageResult): "planner" | "direct" {
+  return if decision.path == "complex" then "planner" else "direct"
+}
+```
+
+----
+
+This doesn't narrow correctly:
+
+```ts
+  match([isSuccess(a), isSuccess(b)]) {
+    [true, true] => success([...a.value, ...b.value])
+    [false, _] => a
+    [_, false] => b
+  }
+```
+
+---
+
+agency formatter is not preserving the question mark on optional params to functions

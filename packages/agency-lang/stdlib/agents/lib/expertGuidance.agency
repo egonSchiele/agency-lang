@@ -1,1 +1,27 @@
+/** What an expert consult returns.
+- `rules` are for the solver to read;
+- `checklist` are concrete, checkable acceptance criteria.
+Empty rules and checklist means "nothing domain-specific here". */
+export type ExpertGuidance = {
+  domain: string;
+  rules: string[];
+  checklist: string[]
+}
 
+export static const emptyGuidance: ExpertGuidance = {
+  domain: "",
+  rules: [],
+  checklist: []
+}
+
+// Fold expert guidance into a context block the coding agent reads before it
+// starts. An empty consult (no rules, no checklist) yields an empty string, so
+// the coding agent runs exactly as it would without a consult.
+export def renderGuidance(g: ExpertGuidance): string {
+  if (g.rules.length == 0 && g.checklist.length == 0) {
+    return ""
+  }
+  const rules = map(g.rules, \r -> "- ${r}").join("\n")
+  const checks = map(g.checklist, \c -> "- ${c}").join("\n")
+  return "Domain expertise for this task (${g.domain}):\n\nKey rules and conventions:\n${rules}\n\nAcceptance checklist — your finished work MUST satisfy every item:\n${checks}"
+}

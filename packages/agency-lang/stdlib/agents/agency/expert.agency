@@ -22,15 +22,6 @@ import {
   article as wikipediaArticle,
  } from "std::wikipedia"
 
-/** What an expert consult returns. `rules` are for the solver to read;
-  `checklist` are concrete, checkable acceptance criteria. Empty rules AND
-  checklist means "nothing domain-specific here". */
-export type ExpertGuidance = {
-  domain: string;
-  rules: string[];
-  checklist: string[]
-}
-
 // Bundled Agency docs, served via std::skills (no startup approval — they
 // ship with the stdlib). `static` caches the tool across calls.
 static const docSkill = docsSkill("guide")
@@ -49,26 +40,7 @@ Return the domain-specific knowledge it needs to get the task right:
 
 The bundled docs (docSkill / cliSkill / diagnosticsSkill) are authoritative — consult them rather than guessing. If the task needs no special Agency knowledge, return empty rules and checklist."""
 
-type DomainKind = {
-  domain: string
-}
-
-static const classifySys = """Classify the task below. Answer with domain = "agency" if it is about writing or debugging code in the Agency programming language itself (its syntax, types, stdlib, or CLI), or domain = "general" for any other technical domain. When unsure, answer "general"."""
-
-def classifyDomain(question: string): string {
-  let kind: DomainKind = {
-    domain: "general"
-  }
-  thread(label: "classifyDomain", session: "expert-classify") {
-    systemMessage(classifySys)
-    // Type annotation on the declaration is what drives structured output.
-    const k: DomainKind = llm("Task:\n${question}")
-    kind = k
-  }
-  return kind.domain
-}
-
-export def agencyExpert(
+export def agencyExpertAgent(
   question: string,
   expertModel: string = "",
   expertProvider: string = "",
@@ -106,97 +78,6 @@ export def agencyExpert(
     }
   }
   return guidance
-}
-
-export def domainExpert(
-  question: string,
-  expertModel: string = "",
-  expertProvider: string = "",
-): ExpertGuidance {
-  """
-  General-knowledge specialist: returns rules + a checklist, using web /
-    Wikipedia lookups. @param question - the task to advise on.
-    @param expertModel - optional model override for the consult (empty = ambient).
-    @param expertProvider - optional provider for expertModel (empty = auto-resolve).
-  """
-  let guidance: ExpertGuidance = {
-    domain: "",
-    rules: [],
-    checklist: []
-  }
-  thread(label: "domainExpert", session: "expert-domain") {
-    systemMessage(domainSys)
-    // Provider-hosted web search runs server-side (on the model provider), so
-    // it works even in a sandboxed/network-restricted environment where the
-    // client-side wikipedia/fetch tools cannot reach the internet.
-    if (expertModel == "") {
-      const g: ExpertGuidance = llm(
-        "Task:\n${question}",
-        {
-        tools: domainTools,
-        hostedTools: ["web_search"]
-      },
-      )
-      guidance = g
-    } else {
-      const g: ExpertGuidance = llm(
-        "Task:\n${question}",
-        {
-        tools: domainTools,
-        hostedTools: ["web_search"],
-        model: expertModel,
-        provider: expertProvider
-      },
-      )
-      guidance = g
-    }
-  }
-  return guidance
-}
-
-export def consultExpert(
-  question: string,
-  expertModel: string = "",
-  expertProvider: string = "",
-): ExpertGuidance {
-  """
-  Route to the Agency-language or general-domain specialist automatically and
-    return its guidance. @param question - the task to advise on.
-  """
-  return if classifyDomain(question) == "agency" then agencyExpert(question, expertModel, expertProvider) else domainExpert(question, expertModel, expertProvider)
-}
-
-static const emptyGuidance: ExpertGuidance = {
-  domain: "",
-  rules: [],
-  checklist: []
-}
-
-// Fail-open: a consult that errors — e.g. the model returns prose instead of
-// structured guidance, so the structured output fails validation — yields empty
-// guidance, so the coding agent still runs exactly as it would without a
-// consult. Guidance can only help, never block.
-def consultOrEmpty(
-  task: string,
-  expertModel: string = "",
-  expertProvider: string = "",
-): ExpertGuidance {
-  return match(try consultExpert(task, expertModel, expertProvider)) {
-    success(g) => g
-    failure(_) => emptyGuidance
-  }
-}
-
-// Fold expert guidance into a context block the coding agent reads before it
-// starts. An empty consult (no rules, no checklist) yields an empty string, so
-// the coding agent runs exactly as it would without a consult.
-def renderGuidance(g: ExpertGuidance): string {
-  if (g.rules.length == 0 && g.checklist.length == 0) {
-    return ""
-  }
-  const rules = map(g.rules, \r -> "- ${r}").join("\n")
-  const checks = map(g.checklist, \c -> "- ${c}").join("\n")
-  return "Domain expertise for this task (${g.domain}):\n\nKey rules and conventions:\n${rules}\n\nAcceptance checklist — your finished work MUST satisfy every item:\n${checks}"
 }
 
 export def expertAgent(

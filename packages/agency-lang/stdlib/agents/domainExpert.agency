@@ -22,15 +22,6 @@ import {
   article as wikipediaArticle,
  } from "std::wikipedia"
 
-/** What an expert consult returns. `rules` are for the solver to read;
-  `checklist` are concrete, checkable acceptance criteria. Empty rules AND
-  checklist means "nothing domain-specific here". */
-export type ExpertGuidance = {
-  domain: string;
-  rules: string[];
-  checklist: string[]
-}
-
 // Bundled Agency docs, served via std::skills (no startup approval — they
 // ship with the stdlib). `static` caches the tool across calls.
 static const docSkill = docsSkill("guide")

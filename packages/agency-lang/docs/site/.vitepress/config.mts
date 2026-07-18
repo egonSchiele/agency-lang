@@ -296,6 +296,7 @@ export default defineConfig({
                   text: "agents/lib/feedback",
                   link: "/stdlib/agents/lib/feedback",
                 },
+                { text: "agents/lib/search", link: "/stdlib/agents/lib/search" },
                 { text: "agents/lib/shared", link: "/stdlib/agents/lib/shared" },
               ],
             },

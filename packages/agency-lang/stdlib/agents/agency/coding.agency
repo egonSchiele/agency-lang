@@ -12,6 +12,7 @@ import { agencyReviewAgent } from "std::agents/agency/review"
 import { renderFeedback, feedbackHasErrors } from "std::agents/lib/feedback"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { docsSkill } from "std::skills"
+import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
 
 /** A failed generation: the last source attempted, with the problems found
@@ -130,6 +131,52 @@ def outcomeToResult(outcome: WriteOutcome): Result<string, WriteFailure> {
   return failure({ source: outcome.source, problems: outcome.problems })
 }
 
+// Judge one generated program. The critique it returns becomes the repair
+// instruction the next attempt receives, so what the checker found and what
+// the writer is told to fix can never drift apart.
+def checkSource(source: string): Critique {
+  const reviewed = agencyReviewAgent(source: source)
+  if (feedbackHasErrors(reviewed)) {
+    const findings = renderFeedback(reviewed)
+    return {
+      accepted: false,
+      feedback: "That code has problems:\n${withSyntaxHint(findings)}\nReturn a corrected complete program.",
+    }
+  }
+  const compiled = compile(source)
+  if (compiled is failure(compileErr)) {
+    return {
+      accepted: false,
+      feedback: "That code failed to compile:\n${withSyntaxHint("${compileErr}")}\nReturn a corrected complete program.",
+    }
+  }
+  if (!hasMainNode(source)) {
+    return {
+      accepted: false,
+      feedback: "The program compiles but has no `node main`. Every program MUST have a node named `main` as its entry point. Add one and return the complete program.",
+    }
+  }
+  return { accepted: true, feedback: "" }
+}
+
+// The critique doubles as the record of what was wrong with the attempt, so
+// an exhausted run reports it alongside the source it belongs to. Each
+// attempt is checked once here, and `revise` reads the verdict back out.
+def outcomeFor(source: string): WriteOutcome {
+  const critique = checkSource(source)
+  if (critique.accepted) {
+    return { valid: true, source: source, problems: [] }
+  }
+  return { valid: false, source: source, problems: [critique.feedback] }
+}
+
+def critiqueOf(outcome: WriteOutcome): Critique {
+  if (outcome.valid) {
+    return { accepted: true, feedback: "" }
+  }
+  return { accepted: false, feedback: outcome.problems[0] }
+}
+
 def generateLoop(
   task: string,
   context: string,
@@ -137,41 +184,28 @@ def generateLoop(
   model: string,
   provider: string,
 ): WriteOutcome {
-  let outcome: WriteOutcome = { valid: false, source: "", problems: ["generation never ran"] }
   if (threadIsNew()) {
     systemMessage(systemPrompt)
   }
-  let prompt = "Write an Agency program for this task:\n<task>\n${withContext(task: task, context: context)}\n</task>"
-  let attempt = 0
-  let done = false
-  while (attempt < maxAttempts && !done) {
-    attempt = attempt + 1
+  const opening = "Write an Agency program for this task:\n<task>\n${withContext(task: task, context: context)}\n</task>"
+  return revise(
+    maxAttempts: maxAttempts,
+    check: critiqueOf,
+  ) as critique {
+    // if/else, not a ternary: a ternary inside a block evaluates to null.
+    // See tests/agency/agents/blockProbe.agency.
+    let prompt = critique
+    if (critique == "") {
+      prompt = opening
+    }
     const generated: GeneratedCode = llm(
       prompt,
       llmOptions(model: model, provider: provider, tools: tools),
     )
-    const source = generated.code
-    const reviewed = agencyReviewAgent(source: source)
-    if (feedbackHasErrors(reviewed)) {
-      const findings = renderFeedback(reviewed)
-      outcome = { valid: false, source: source, problems: [findings] }
-      prompt = "That code has problems:\n${withSyntaxHint(findings)}\nReturn a corrected complete program."
-    } else {
-      const compiled = compile(source)
-      if (compiled is failure(compileErr)) {
-        outcome = { valid: false, source: source, problems: ["Compile error: ${compileErr}"] }
-        prompt = "That code failed to compile:\n${withSyntaxHint("${compileErr}")}\nReturn a corrected complete program."
-      } else if (!hasMainNode(source)) {
-        outcome = { valid: false, source: source, problems: ["The program has no node main entry point."] }
-        prompt = "The program compiles but has no `node main`. Every program MUST have a node named `main` as its entry point. Add one and return the complete program."
-      } else {
-        outcome = { valid: true, source: source, problems: [] }
-        done = true
-      }
-    }
+    const outcome = outcomeFor(source: generated.code)
     saveDraft(outcome)
+    return outcome
   }
-  return outcome
 }
 
 export def agencyCodingAgent(

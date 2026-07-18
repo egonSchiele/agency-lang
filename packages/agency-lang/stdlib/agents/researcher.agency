@@ -8,11 +8,11 @@
 */
 import { reviewAgent } from "std::agents/review"
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
+import { searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { fetch, fetchMarkdown } from "std::http"
-import { env } from "std::system"
+import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
-import { search as webSearch } from "std::web/search"
 import { search as wikiSearch } from "std::wikipedia"
 
 static const systemPrompt = """You are a research analyst. Answer the task using your source tools.
@@ -20,25 +20,48 @@ static const systemPrompt = """You are a research analyst. Answer the task using
 - Ground every factual claim in a source and cite it.
 - If your tools cannot retrieve the needed information, say so plainly. NEVER fabricate sources or facts."""
 
-// Wikipedia and page fetch need no API key. Web search (Brave) does, so it is
-// only offered when BRAVE_API_KEY is set; otherwise the agent falls back to
-// the keyless tools rather than failing on a missing key. This is a function,
-// not a static const, because the key is read at call time.
+// Wikipedia and page fetch need no API key, so they are always offered.
+// Web search needs one, so searchTools() contributes whichever providers the
+// user has a key for, and none when they have none. This is a function, not
+// a static const, because the keys are read at call time.
+//
+// The wikipedia tool is renamed because an import alias renames only the
+// binding: without this its tool name stays `search` and collides with a
+// search provider.
 def buildTools(): any[] {
-  // Both search tools are named `search` by their own modules, and an import
-  // alias renames only the binding, not the tool. Rename them so a provider
-  // never sees two tools with the same name.
-  let tools: any[] = [
+  const baseTools: any[] = [
     wikiSearch.rename("wikipedia_search"),
     fetchMarkdown,
     fetch,
     read.partial(useAgentCwd: true),
   ]
-  const braveKey = env("BRAVE_API_KEY")
-  if (braveKey != null && braveKey != "") {
-    tools.push(webSearch.rename("web_search"))
+  return baseTools.concat(searchTools())
+}
+
+static const groundingInstruction = "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered."
+
+// reviewAgent judges the answer text against the task. An ungrounded or
+// uncited claim is an error finding, which becomes the critique the next
+// attempt has to address.
+def checkGrounding(task: string, answer: any): Critique {
+  const reviewed = reviewAgent(
+    work: "${answer}",
+    task: task,
+    context: groundingInstruction,
+  )
+  if (!feedbackHasErrors(reviewed)) {
+    return { accepted: true, feedback: "" }
   }
-  return tools
+  return {
+    accepted: false,
+    feedback: """
+Your answer has gaps:
+
+${renderFeedback(reviewed)}
+
+Retrieve more and fix them.
+""",
+  }
 }
 
 def researchLoop(
@@ -52,28 +75,27 @@ def researchLoop(
   if (threadIsNew()) {
     systemMessage(systemPrompt)
   }
-  let answer = ""
-  let msg = withContext(task: task, context: context)
-  let done = false
-  let attemptsLeft = maxAttempts
-  while (!done && attemptsLeft > 0) {
-    answer = llm(msg, llmOptions(model: model, provider: provider, tools: researchTools))
-    saveDraft(answer)
-    // reviewAgent judges the answer text against the task: an ungrounded or
-    // uncited claim is an error finding.
-    const reviewed = reviewAgent(
-      work: answer,
-      task: task,
-      context: "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered.",
-    )
-    if (feedbackHasErrors(reviewed)) {
-      msg = "Your answer has gaps:\n\n${renderFeedback(reviewed)}\n\nRetrieve more and fix them."
-      attemptsLeft = attemptsLeft - 1
-    } else {
-      done = true
+  const question = withContext(task: task, context: context)
+  return revise(
+    maxAttempts: maxAttempts,
+    check: checkGrounding.partial(task: task),
+  ) as critique {
+    // The thread carries the conversation, so a later attempt sends only the
+    // critique rather than repeating the question.
+    //
+    // if/else, not a ternary: a ternary inside a block evaluates to null.
+    // See tests/agency/agents/blockProbe.agency.
+    let msg = critique
+    if (critique == "") {
+      msg = question
     }
+    const answer = llm(
+      msg,
+      llmOptions(model: model, provider: provider, tools: researchTools),
+    )
+    saveDraft(answer)
+    return answer
   }
-  return answer
 }
 
 export def researcherAgent(

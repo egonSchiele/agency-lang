@@ -229,3 +229,10 @@ outside the block works. Pinned in
 tests/agency/supervise/nestedGuardResume.agency (matchInsideResumedBlock
 currently expects the buggy `null`; flip it when fixed). Agents that may run
 inside a supervised block therefore avoid `match` on guard Results.
+
+---
+
+A ternary (`if c then a else b`) inside a block body evaluates to null: the
+ternary's match value is written to the enclosing frame and read from the
+block frame. An if/else statement in the same position works. Pinned in
+tests/agency/agents/blockProbe.agency and filed as #591. Same family as #590.

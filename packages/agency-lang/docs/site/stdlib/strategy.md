@@ -21,6 +21,26 @@ node main() {
 }
 ```
 
+## Types
+
+### Critique
+
+What a `revise` check decides about one attempt: whether to accept it,
+  and if not, the critique the next attempt should address. `feedback` is
+  ignored when `accepted` is true.
+
+```ts
+/** What a `revise` check decides about one attempt: whether to accept it,
+  and if not, the critique the next attempt should address. `feedback` is
+  ignored when `accepted` is true. */
+export type Critique = {
+  accepted: boolean;
+  feedback: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L96))
+
 ## Functions
 
 ### sample
@@ -119,6 +139,37 @@ Run a block up to n times. Each attempt receives the previous result and the att
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L69))
 
+### revise
+
+```ts
+revise(
+  maxAttempts: number,
+  check: (any) -> Critique,
+  block: (string) -> any,
+): any
+```
+
+Run a block until its result is accepted, up to maxAttempts times. Each
+  rejected attempt passes its critique to the next one, which receives it as
+  its argument (an empty string on the first attempt). Returns the first
+  accepted result, or the last result when every attempt is rejected.
+
+  @param maxAttempts - Maximum number of attempts
+  @param check - Judges a result and returns the critique to address next
+  @param block - The work, receiving the previous critique
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| maxAttempts | `number` |  |
+| check | `(any) => Critique` |  |
+| block | `(string) => any` |  |
+
+**Returns:** `any`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L101))
+
 ### firstValid
 
 ```ts
@@ -141,4 +192,4 @@ Run a block for each variant in parallel, then return the first result that pass
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/strategy.agency#L133))

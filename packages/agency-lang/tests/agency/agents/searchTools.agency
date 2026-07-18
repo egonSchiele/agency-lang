@@ -1,0 +1,14 @@
+import { searchTools, searchProviderNames } from "std::agents/lib/search"
+
+// Which keys a developer has set varies, so this pins the invariants that
+// hold either way rather than a specific provider list: every name comes
+// from the catalog, and each available provider contributes exactly one
+// tool. An agent with no keys gets an empty array, never a failure.
+node namesComeFromTheCatalog(): boolean {
+  const known = ["Tavily", "Brave"]
+  return every(searchProviderNames(), \name -> known.includes(name))
+}
+
+node oneToolPerAvailableProvider(): boolean {
+  return searchTools().length == searchProviderNames().length
+}

@@ -167,7 +167,12 @@ function generateDocForFile(
 
   const title = path.basename(filePath).replace(/\.agency$/, "");
   const safeName = title.replace(/["\\\n]/g, "");
-  const frontmatter = `---\nname: "${safeName}"\n---`;
+  const fmLines = [`name: "${safeName}"`];
+  const description = moduleDescription(program.docComment);
+  if (description) {
+    fmLines.push(`description: "${description}"`);
+  }
+  const frontmatter = `---\n${fmLines.join("\n")}\n---`;
   const sections: string[] = [frontmatter, heading(1, title)];
 
   // Page-level "View source" link
@@ -176,7 +181,8 @@ function generateDocForFile(
   }
 
   if (program.docComment) {
-    sections.push(formatDocComment(program.docComment));
+    const { body } = extractSummaryOverride(program.docComment.content);
+    sections.push(body.trim());
   }
 
   const typeSection = generateTypeSection(typeAliases, ctx);
@@ -274,6 +280,62 @@ function generateParamTable(
 
 function formatDocComment(comment: AgencyMultiLineComment): string {
   return comment.content.trim();
+}
+
+const DESCRIPTION_CAP = 200;
+
+export function extractSummaryOverride(content: string): {
+  override: string | null;
+  body: string;
+} {
+  const lines = content.split("\n");
+  const firstIdx = lines.findIndex((l) => l.trim() !== "");
+  if (firstIdx === -1) return { override: null, body: content };
+  const first = lines[firstIdx].trim();
+  if (first.startsWith("@summary")) {
+    const text = first.slice("@summary".length).trim();
+    const rest = lines.slice(0, firstIdx).concat(lines.slice(firstIdx + 1));
+    return {
+      override: text === "" ? null : text,
+      body: rest.join("\n"),
+    };
+  }
+  return { override: null, body: content };
+}
+
+export function firstParagraph(body: string): string {
+  const out: string[] = [];
+  let started = false;
+  for (const line of body.split("\n")) {
+    const trimmed = line.trim();
+    if (!started) {
+      if (trimmed === "") continue;
+      started = true;
+    }
+    if (trimmed === "" || trimmed.startsWith("```")) break;
+    out.push(trimmed);
+  }
+  return out.join(" ").replace(/\s+/g, " ").trim();
+}
+
+export function sanitizeDescription(raw: string): string {
+  const cleaned = raw.replace(/["\\]/g, "").replace(/\s+/g, " ").trim();
+  if (cleaned.length <= DESCRIPTION_CAP) return cleaned;
+  const slice = cleaned.slice(0, DESCRIPTION_CAP);
+  const lastSpace = slice.lastIndexOf(" ");
+  const truncated = lastSpace > 0 ? slice.slice(0, lastSpace) : slice;
+  return truncated + "…";
+}
+
+export function moduleDescription(
+  comment: AgencyMultiLineComment | undefined,
+): string | null {
+  if (!comment) return null;
+  const { override, body } = extractSummaryOverride(comment.content);
+  const raw = override ?? firstParagraph(body);
+  if (!raw) return null;
+  const value = sanitizeDescription(raw);
+  return value === "" ? null : value;
 }
 
 function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {

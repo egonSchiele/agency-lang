@@ -4,6 +4,25 @@ import { checkRecipients } from "./messaging.js";
 
 const execFileAsync = promisify(execFile);
 
+/** The recipient and the message body arrive as argv, never spliced into this
+ *  source. That matters here more than usual: `sendIMessage` is handed to an
+ *  LLM as a tool, so the body is model-authored text that may echo a web page,
+ *  an email, or a file the agent read. AppleScript does not parse argv values
+ *  as code, so a body like `" & (do shell script "...") & "` is just a string.
+ *
+ *  Escaping the data into the source would also work only for as long as the
+ *  escape function keeps up with every AppleScript metacharacter. Passing
+ *  arguments removes the question instead of answering it repeatedly. */
+const SEND_SCRIPT = `on run argv
+  set recipientId to item 1 of argv
+  set messageBody to item 2 of argv
+  tell application "Messages"
+    set targetService to 1st account whose service type = iMessage
+    set targetBuddy to participant recipientId of targetService
+    send messageBody to targetBuddy
+  end tell
+end run`;
+
 export type IMessageResult = {
   sent: boolean;
 };
@@ -37,36 +56,17 @@ export async function _sendIMessage(
   );
   if (recipientError) throw new Error(recipientError);
 
-  const script = `
-    tell application "Messages"
-      set targetService to 1st account whose service type = iMessage
-      set targetBuddy to participant "${escapeAppleScriptString(to)}" of targetService
-      send "${escapeAppleScriptString(message)}" to targetBuddy
-    end tell
-  `;
-
   try {
-    await execFileAsync("osascript", ["-e", script]);
+    // No "-" before the arguments: osascript passes a bare "-" through as
+    // argv item 1 and shifts every real argument by one. Same as appleNotes.ts.
+    await execFileAsync("osascript", ["-e", SEND_SCRIPT, to, message]);
     return { sent: true };
   } catch (error: unknown) {
-    // Avoid leaking script contents (which contain recipient/message) into error messages.
-    // execFile errors include stderr which has the actionable info.
+    // Report stderr only, which carries the actionable detail. The raw error
+    // also carries the full argv, and that now includes the recipient and the
+    // message body, which should not end up in a thrown message.
     const err = error as { stderr?: string; code?: number };
     const detail = err.stderr?.trim() || `exit code ${err.code ?? "unknown"}`;
     throw new Error(`Failed to send iMessage: ${detail}`);
   }
-}
-
-function escapeAppleScriptString(str: string): string {
-  // Escape backslashes, double quotes, and replace characters that would
-  // terminate an AppleScript string literal or inject new statements.
-  return str
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\r\n/g, "\\n")
-    .replace(/\r/g, "\\n")
-    .replace(/\n/g, "\\n")
-    .replace(/\t/g, "\\t")
-    .replace(/\u2028/g, "\\n")
-    .replace(/\u2029/g, "\\n");
 }

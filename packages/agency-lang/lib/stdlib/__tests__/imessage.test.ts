@@ -9,6 +9,12 @@ vi.mock("child_process", () => ({
 
 import { execFile } from "child_process";
 
+/** The args array osascript was called with on the first (only) invocation. */
+function osascriptArgs(): string[] {
+  const calls = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls;
+  return calls[0][1];
+}
+
 describe("_sendIMessage", () => {
   const originalPlatform = process.platform;
 
@@ -21,58 +27,57 @@ describe("_sendIMessage", () => {
     Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
   });
 
-  it("calls osascript with AppleScript", async () => {
+  it("passes recipient and message as argv, not as script source", async () => {
     const result = await _sendIMessage("+15551234567", "Hello!");
 
     expect(result).toEqual({ sent: true });
+    // Shape: ["-e", <script>, <recipient>, <message>]. No "-" separator:
+    // osascript passes a bare "-" through as argv item 1 and shifts the rest.
     expect(execFile).toHaveBeenCalledWith(
       "osascript",
-      ["-e", expect.stringContaining("+15551234567")],
-      expect.any(Function)
+      ["-e", expect.any(String), "+15551234567", "Hello!"],
+      expect.any(Function),
     );
   });
 
-  it("includes message in script", async () => {
+  it("keeps the script constant — no caller data is spliced into it", async () => {
     await _sendIMessage("+15551234567", "Test message");
+    const script = osascriptArgs()[1];
 
-    const [, args] = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(args[1]).toContain("Test message");
+    expect(script).not.toContain("+15551234567");
+    expect(script).not.toContain("Test message");
   });
 
-  it("escapes double quotes in recipient and message", async () => {
-    await _sendIMessage('user"@test.com', 'say "hello"');
+  // The reason this function is worth hardening: `sendIMessage` is handed to an
+  // LLM as a tool, so `message` is model-authored and may echo a web page, an
+  // email, or a file the agent read. These payloads must land as inert data.
+  const hostile = [
+    ['a quote-and-concat break-out', '" & (do shell script "touch /tmp/pwned") & "'],
+    ['a statement injection', 'hi\nend tell\ndo shell script "touch /tmp/pwned"\ntell application "Messages"'],
+    ['an escaped-quote break-out', 'hi\\" & (do shell script "touch /tmp/pwned") & \\"'],
+    ['a tab and backslash payload', 'col1\tcol2\\path\\to\\file'],
+  ] as const;
 
-    const [, args] = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    const script = args[1];
-    expect(script).toContain('user\\"@test.com');
-    expect(script).toContain('say \\"hello\\"');
-  });
+  for (const [description, payload] of hostile) {
+    it(`treats ${description} as data, not code`, async () => {
+      await _sendIMessage("+15551234567", payload);
+      const args = osascriptArgs();
 
-  it("escapes backslashes", async () => {
-    await _sendIMessage("+15551234567", "path\\to\\file");
+      // Verbatim in argv...
+      expect(args[3]).toBe(payload);
+      // ...and absent from the script osascript actually parses.
+      expect(args[1]).not.toContain("do shell script");
+      expect(args[1]).not.toContain(payload);
+    });
+  }
 
-    const [, args] = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    const script = args[1];
-    expect(script).toContain("path\\\\to\\\\file");
-  });
+  it("treats a hostile recipient as data, not code", async () => {
+    const payload = '" of targetService\ndo shell script "touch /tmp/pwned"\nset x to participant "';
+    await _sendIMessage(payload, "Hi");
+    const args = osascriptArgs();
 
-  it("escapes newlines to prevent AppleScript injection", async () => {
-    await _sendIMessage("+15551234567", "line1\nline2\rline3\r\nline4");
-
-    const [, args] = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    const script = args[1];
-    // All line breaks should be escaped as \n, not literal newlines in the AppleScript string
-    expect(script).toContain("line1\\nline2\\nline3\\nline4");
-    // Should not contain unescaped newlines within the send command's string literal
-    expect(script.match(/send "[^"]*\n[^"]*"/)).toBeNull();
-  });
-
-  it("escapes tabs", async () => {
-    await _sendIMessage("+15551234567", "col1\tcol2");
-
-    const [, args] = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
-    const script = args[1];
-    expect(script).toContain("col1\\tcol2");
+    expect(args[2]).toBe(payload);
+    expect(args[1]).not.toContain("do shell script");
   });
 
   it("throws on non-macOS platforms", async () => {
@@ -93,7 +98,7 @@ describe("_sendIMessage", () => {
     );
   });
 
-  it("throws with stderr info when osascript fails, without leaking script contents", async () => {
+  it("throws with stderr info when osascript fails, without leaking the message", async () => {
     (execFile as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       (_cmd: string, _args: string[], cb: (err: unknown) => void) => {
         cb({ stderr: "execution error: Messages got an error", code: 1 });

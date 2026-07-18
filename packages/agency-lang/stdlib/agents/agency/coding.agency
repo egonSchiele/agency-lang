@@ -141,14 +141,17 @@ def generateLoop(
   if (threadIsNew()) {
     systemMessage(systemPrompt)
   }
-  let prompt = "Write an Agency program for this task:\n<task>\n${withContext(task, context)}\n</task>"
+  let prompt = "Write an Agency program for this task:\n<task>\n${withContext(task: task, context: context)}\n</task>"
   let attempt = 0
   let done = false
   while (attempt < maxAttempts && !done) {
     attempt = attempt + 1
-    const generated: GeneratedCode = llm(prompt, llmOptions(model, provider, tools: tools))
+    const generated: GeneratedCode = llm(
+      prompt,
+      llmOptions(model: model, provider: provider, tools: tools),
+    )
     const source = generated.code
-    const reviewed = agencyReviewAgent(source)
+    const reviewed = agencyReviewAgent(source: source)
     if (feedbackHasErrors(reviewed)) {
       const findings = renderFeedback(reviewed)
       outcome = { valid: false, source: source, problems: [findings] }
@@ -202,15 +205,20 @@ export def agencyCodingAgent(
     }
     return outcome
   }
-  // isFailure, not match: agents can run inside a supervise block, and a
-  // match expression inside a block that pauses and resumes evaluates to
-  // null. See tests/agency/supervise/nestedGuardResume.agency.
+  // The guard Result cannot pass straight through here: this agent reports
+  // failures as a WriteFailure carrying the last source. isFailure, not
+  // match, because a match inside a resumed block evaluates to null (see
+  // tests/agency/supervise/nestedGuardResume.agency), and the whole error is
+  // interpolated rather than a .type field that only guard trips carry.
   if (isFailure(captured)) {
-    // No draft was ever saved: the trip happened before the first attempt.
-    return failure({ source: "", problems: ["agencyCodingAgent stopped before generating: ${captured.error.type} cap reached"] })
+    // Nothing was ever drafted: the run stopped before the first attempt.
+    return failure({
+      source: "",
+      problems: ["agencyCodingAgent stopped before generating: ${captured.error}"],
+    })
   }
   // A rejected trip with a saved draft arrives success-shaped carrying the
   // draft, which has the same WriteOutcome shape as a normal return, so
   // this covers both.
-  return outcomeToResult(captured.value)
+  return outcomeToResult(outcome: captured.value)
 }

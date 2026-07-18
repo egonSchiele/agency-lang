@@ -134,7 +134,7 @@ def regenState(state: PlanState, gaps: string): PlanState {
 }
 
 def fallbackState(task: string, state: PlanState): PlanState {
-  const attempt = codingAgent(task)
+  const attempt = codingAgent(task: task)
   const summary = if isFailure(attempt) then "Fallback coding agent failed: ${attempt.error}" else attempt.value
   return {
     summary: summary,
@@ -144,7 +144,7 @@ def fallbackState(task: string, state: PlanState): PlanState {
 }
 
 def judgeAfterRun(task: string, state: PlanState): PlanState {
-  const fb = verifierAgent(task)
+  const fb = verifierAgent(task: task)
   return if feedbackHasErrors(fb) then regenState(state, renderFeedback(fb)) else completedState(state)
 }
 
@@ -182,7 +182,10 @@ def planStep(
   planText: string,
   state: PlanState,
 ): PlanState raises <std::agents::planApprove> {
-  const gen = agencyCodingAgent(planCodePrompt(task, planText), context: state.extra)
+  const gen = agencyCodingAgent(
+    task: planCodePrompt(task, planText),
+    context: state.extra,
+  )
   return match(gen) {
     failure(_) => fallbackState(task, state)
     success(src) => runApproved(task, planText, src, state)
@@ -213,33 +216,28 @@ export def plannerAgent(
   @param model - model override for the planning step only, or "" for the ambient model.
   @param provider - provider for the model override.
   """
+  // The guard Result is the return value: a success carries the summary (or,
+  // when a trip was rejected, the last saved draft), and a failure carries
+  // whatever actually went wrong.
   const captured = guard(cost: maxCost, time: maxTime) {
     // The override applies to the planning step only. Each worker agent the
     // generated plan calls resolves its own model.
     const planText = if plan == "" then llm(
-      "Analyse this task and outline the steps:\n${withContext(task, context)}",
-      llmOptions(model, provider),
+      "Analyse this task and outline the steps:\n${withContext(task: task, context: context)}",
+      llmOptions(model: model, provider: provider),
     ) else plan
     let state: PlanState = {
       summary: "",
       done: false,
-      extra: withContext(task, context)
+      extra: withContext(task: task, context: context)
     }
     let attemptsLeft = PLANNER_MAX_ATTEMPTS
     while (!state.done && attemptsLeft > 0) {
-      state = planStep(task, planText, state)
+      state = planStep(task: task, planText: planText, state: state)
       saveDraft(state.summary)
       attemptsLeft = attemptsLeft - 1
     }
     return state.summary
   }
-  // isFailure, not match: agents can run inside a supervise block, and a
-  // match expression inside a block that pauses and resumes evaluates to
-  // null. See tests/agency/supervise/nestedGuardResume.agency.
-  if (isFailure(captured)) {
-    return failure("plannerAgent stopped before completing: ${captured.error.type} cap reached")
-  }
-  // A rejected trip with a saved draft arrives success-shaped carrying the
-  // last summary produced.
-  return success(captured.value)
+  return captured
 }

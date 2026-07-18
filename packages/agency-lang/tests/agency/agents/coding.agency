@@ -1,8 +1,13 @@
 import { codingAgent } from "std::agents/coding"
 
 // One honest pass: the reply comes back as a success Result.
+//
+// The trip-and-salvage path is not pinned here. codingAgent returns its
+// guard Result unchanged, so that behavior belongs to guard itself and is
+// covered by tests/agency/supervise/supervise.agency (stopSalvagesDraft)
+// and tests/agency/guards/trip-time.agency.
 node singlePassReturnsSummary(): string {
-  const result = codingAgent("write hello.txt")
+  const result = codingAgent(task: "write hello.txt")
   if (isFailure(result)) { return "failed" }
   return result.value
 }

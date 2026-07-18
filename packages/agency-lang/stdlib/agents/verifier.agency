@@ -6,7 +6,7 @@
   text without touching the file system, use reviewAgent instead.
 */
 import { concurrencyPool } from "std::concurrency"
-import { Feedback } from "std::agents/lib/feedback"
+import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
 import { ls, glob, grep, exec } from "std::shell"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -80,7 +80,10 @@ export def verifierAgent(
     ${criteriaBlock}
     """
 
-      const generatedCriteria: string[] = llm(generateCriteriaPrompt, llmOptions(model, provider))
+      const generatedCriteria: string[] = llm(
+        generateCriteriaPrompt,
+        llmOptions(model: model, provider: provider),
+      )
 
       const allCriteria = criteria.concat(generatedCriteria)
 
@@ -97,7 +100,10 @@ export def verifierAgent(
       A criterion you did not actually compute counts as a failure.
       """
 
-        const items: Feedback[] = llm(prompt, llmOptions(model, provider, tools: tools))
+        const items: Feedback[] = llm(
+          prompt,
+          llmOptions(model: model, provider: provider, tools: tools),
+        )
         return items
       }
 
@@ -110,13 +116,8 @@ export def verifierAgent(
       return flatten(results)
     }
   }
-  // isFailure, not match: agents can run inside a supervise block, and a
-  // match expression inside a block that pauses and resumes evaluates to
-  // null. See tests/agency/supervise/nestedGuardResume.agency.
-  if (isFailure(captured)) {
-    // Callers can always read findings: a verifier that was cut short
-    // reports that as an advisory item, not a blocking failure.
-    return success([{ error: false, feedback: "Verification stopped early: ${captured.error.type} cap reached." }])
-  }
-  return success(captured.value)
+  // Fail open: the finalize block already salvages whatever findings
+  // completed, so a failure here means verification produced nothing at all.
+  // Report that as no findings rather than a blocking error.
+  return failOpenFeedback(captured)
 }

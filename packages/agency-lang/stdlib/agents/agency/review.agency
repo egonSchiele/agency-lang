@@ -6,7 +6,7 @@
   actual result, use agencyVerifierAgent instead.
 */
 import { TypeCheckReport, typecheck, parseAST } from "std::agency"
-import { Feedback, mergeFeedback } from "std::agents/lib/feedback"
+import { Feedback, mergeFeedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
 import { systemMessage, threadIsNew } from "std::thread"
 
@@ -46,12 +46,24 @@ def judgeAgainstTask(
   task: string,
   model: string,
   provider: string,
-): Result<Feedback[]> {
+): Feedback[] {
   if (threadIsNew()) {
     systemMessage(systemPrompt)
   }
-  const judged: Feedback[] = llm("The code was written for this task:\n<task>\n${task}\n</task>\n\n<code>\n${source}\n</code>\n\nReturn a list of feedback items.", llmOptions(model, provider))
-  return success(judged)
+  const prompt = """
+The code was written for this task:
+<task>
+${task}
+</task>
+
+<code>
+${source}
+</code>
+
+Return a list of feedback items.
+"""
+  const judged: Feedback[] = llm(prompt, llmOptions(model: model, provider: provider))
+  return judged
 }
 
 export def agencyReviewAgent(
@@ -85,19 +97,19 @@ export def agencyReviewAgent(
     return feedback
   }
   const captured = guard(cost: maxCost, time: maxTime) {
-    let judged: Result<Feedback[]> = success([])
+    let judged: Feedback[] = []
     thread(label: "agencyReviewAgent", session: session) {
-      judged = judgeAgainstTask(source, task, model, provider)
+      judged = judgeAgainstTask(
+        source: source,
+        task: task,
+        model: model,
+        provider: provider,
+      )
     }
-    return mergeFeedback(feedback, judged)
+    return judged
   }
-  // isFailure, not match: agents can run inside a supervise block, and a
-  // match expression inside a block that pauses and resumes evaluates to
-  // null. See tests/agency/supervise/nestedGuardResume.agency.
-  if (isFailure(captured)) {
-    // The static findings are already computed and free: never discard
-    // them. One advisory item records that the judgment was cut short.
-    return mergeFeedback(feedback, success([{ error: false, feedback: "LLM judgment cut short: ${captured.error.type} cap reached." }]))
-  }
-  return captured.value
+  // The parse and typecheck findings are already computed and free, so a
+  // judgment that could not finish returns them alone rather than losing
+  // them. failOpenFeedback turns any failure into no extra findings.
+  return mergeFeedback(feedback, failOpenFeedback(captured))
 }

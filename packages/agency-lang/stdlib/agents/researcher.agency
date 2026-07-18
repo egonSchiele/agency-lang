@@ -53,15 +53,19 @@ def researchLoop(
     systemMessage(systemPrompt)
   }
   let answer = ""
-  let msg = withContext(task, context)
+  let msg = withContext(task: task, context: context)
   let done = false
   let attemptsLeft = maxAttempts
   while (!done && attemptsLeft > 0) {
-    answer = llm(msg, llmOptions(model, provider, tools: researchTools))
+    answer = llm(msg, llmOptions(model: model, provider: provider, tools: researchTools))
     saveDraft(answer)
     // reviewAgent judges the answer text against the task: an ungrounded or
     // uncited claim is an error finding.
-    const reviewed = reviewAgent(answer, task, context: "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered.")
+    const reviewed = reviewAgent(
+      work: answer,
+      task: task,
+      context: "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered.",
+    )
     if (feedbackHasErrors(reviewed)) {
       msg = "Your answer has gaps:\n\n${renderFeedback(reviewed)}\n\nRetrieve more and fix them."
       attemptsLeft = attemptsLeft - 1
@@ -95,20 +99,20 @@ export def researcherAgent(
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
   """
-  const captured = guard(cost: maxCost, time: maxTime) {
+  // The guard Result is the return value: a success carries the answer (or,
+  // when a trip was rejected, the best draft so far), and a failure carries
+  // whatever actually went wrong.
+  return guard(cost: maxCost, time: maxTime) {
     let answer = ""
     thread(label: "researcherAgent", session: session) {
-      answer = researchLoop(task, context, maxAttempts, model, provider)
+      answer = researchLoop(
+        task: task,
+        context: context,
+        maxAttempts: maxAttempts,
+        model: model,
+        provider: provider,
+      )
     }
     return answer
   }
-  // isFailure, not match: agents can run inside a supervise block, and a
-  // match expression inside a block that pauses and resumes evaluates to
-  // null. See tests/agency/supervise/nestedGuardResume.agency.
-  if (isFailure(captured)) {
-    return failure("researcherAgent stopped before answering: ${captured.error.type} cap reached")
-  }
-  // A rejected trip with a saved draft arrives success-shaped carrying the
-  // best answer produced so far.
-  return success(captured.value)
 }

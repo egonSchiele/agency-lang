@@ -6,7 +6,7 @@
   measuring it, use verifierAgent instead. For Agency source specifically,
   agencyReviewAgent adds parse and typecheck findings.
 */
-import { Feedback } from "std::agents/lib/feedback"
+import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { systemMessage, threadIsNew } from "std::thread"
 
@@ -22,7 +22,14 @@ def judgeWork(
   if (threadIsNew()) {
     systemMessage(systemPrompt)
   }
-  const items: Feedback[] = llm("Task:\n${withContext(task, context)}\n\nWork product:\n${work}", llmOptions(model, provider))
+  const prompt = """
+Task:
+${withContext(task: task, context: context)}
+
+Work product:
+${work}
+"""
+  const items: Feedback[] = llm(prompt, llmOptions(model: model, provider: provider))
   return items
 }
 
@@ -52,15 +59,17 @@ export def reviewAgent(
   const captured = guard(cost: maxCost, time: maxTime) {
     let items: Feedback[] = []
     thread(label: "reviewAgent", session: session) {
-      items = judgeWork(work, task, context, model, provider)
+      items = judgeWork(
+        work: work,
+        task: task,
+        context: context,
+        model: model,
+        provider: provider,
+      )
     }
-    return success(items)
+    return items
   }
-  // isFailure, not match: agents can run inside a supervise block, and a
-  // match expression inside a block that pauses and resumes evaluates to
-  // null. See tests/agency/supervise/nestedGuardResume.agency.
-  if (isFailure(captured)) {
-    return success([{ error: false, feedback: "Review stopped early: ${captured.error.type} cap reached." }])
-  }
-  return captured.value
+  // Fail open: a review that could not finish reports no findings rather
+  // than a blocking error, whatever stopped it.
+  return failOpenFeedback(captured)
 }

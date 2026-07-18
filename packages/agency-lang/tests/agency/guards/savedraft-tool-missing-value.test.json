@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"done\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "saveDraft" }] },
+        { "return": "done" }
+      ],
+      "description": "A saveDraft call with no value gets the error ack; nothing saved; the loop continues."
+    }
+  ]
+}

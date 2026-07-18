@@ -1,0 +1,12 @@
+// The model saves a draft through the saveDraft TOOL; the guard trips
+// on the next round; reject; the guard returns the model's own draft.
+// This fixture is also the frame-math pin from the spec correction:
+// the draft files on the guard block's frame (setSavedDraft's
+// callerFrame() from inside runPrompt), and THAT guard salvages it.
+node main() {
+  const result = guard(cost: 0.000001) {
+    return llm("Research the topic. Save drafts as you go.", tools: [saveDraft])
+  }
+  if (isFailure(result)) { return "no-draft" }
+  return result.value
+}

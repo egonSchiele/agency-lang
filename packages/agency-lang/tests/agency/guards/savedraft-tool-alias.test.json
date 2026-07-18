@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"model-draft\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "saveDraft", "args": { "value": "model-draft" } }] },
+        { "return": "never-reached" }
+      ],
+      "description": "An aliased saveDraft (const s = saveDraft) intercepts identically.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

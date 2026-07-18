@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"model-draft\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "saveDraft", "args": { "value": "model-draft" } }] },
+        { "return": "never-reached" }
+      ],
+      "description": "A draft saved through the saveDraft tool is salvaged by the enclosing guard on reject. The second mock never runs.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

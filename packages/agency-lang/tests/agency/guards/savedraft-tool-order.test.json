@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"second\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCalls": [
+            { "name": "saveDraft", "args": { "value": "first" } },
+            { "name": "saveDraft", "args": { "value": "second" } }
+          ]
+        },
+        { "return": "never-reached" }
+      ],
+      "description": "Two parallel saveDraft calls in one round apply in tool-call order; the later one wins.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+// An alias intercepts identically: recognition is by the
+// AgencyFunction's name+module fields, not the variable name.
+node main() {
+  const s = saveDraft
+  const result = guard(cost: 0.000001) {
+    return llm("work", tools: [s])
+  }
+  if (isFailure(result)) { return "no-draft" }
+  return result.value
+}

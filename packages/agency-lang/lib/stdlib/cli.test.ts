@@ -658,3 +658,36 @@ describe("renderInterruptFooter", () => {
     expect(lines.join("\n")).toContain("not a valid option");
   });
 });
+
+describe("stickyInterruptPrompt (integration)", () => {
+  it("resolves 'aa' typed then Enter, with a trace streamed above", async () => {
+    const cap = captureStdout();
+    (process.stdin as any).isTTY = false; // skip real raw-mode toggling
+    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => { } };
+    const pending = _internal.stickyInterruptPrompt(fakeRl, {
+      title: "approve?", body: "", allowFreeText: true, allowCancel: true,
+      items: [{ key: "a", label: "approve once" }, { key: "aa", label: "approve always" }],
+    });
+    process.stdout.write("⏺ read(\"x\")\n"); // concurrent branch output
+    fakeRl._ttyWrite("a", { name: "a" });
+    fakeRl._ttyWrite("a", { name: "a" });
+    fakeRl._ttyWrite(null, { name: "return" });
+    const answer = await pending;
+    cap.restore();
+    expect(answer).toBe("aa");
+    expect(cap.captured.join("")).toContain("⏺ read(\"x\")\n");
+  });
+
+  it("Escape rejects with AgencyCancelledError", async () => {
+    const cap = captureStdout();
+    (process.stdin as any).isTTY = false;
+    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => { } };
+    const pending = _internal.stickyInterruptPrompt(fakeRl, {
+      title: "t", body: "", allowFreeText: true, allowCancel: true,
+      items: [{ key: "a", label: "ok" }],
+    });
+    fakeRl._ttyWrite(null, { name: "escape" });
+    await expect(pending).rejects.toThrow(/cancelled/i);
+    cap.restore();
+  });
+});

@@ -15,7 +15,7 @@ import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
 import { visualWidth, wrapText } from "./layout/ansi.js";
 import { isFailure } from "../runtime/result.js";
-import { isAbortError, makeAbortCause } from "../runtime/errors.js";
+import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";
 import type { AbortCause } from "../runtime/errors.js";
 import { normalizeModelUsage } from "../runtime/utils.js";
 // ---------------------------------------------------------------------------
@@ -540,6 +540,129 @@ function renderInterruptFooter(input: InterruptFooterInput): string[] {
   }
   lines.push(` > ${input.state.buffer}${INTERRUPT_CARET}`);
   return lines;
+}
+
+// ---------------------------------------------------------------------------
+// Sticky interrupt prompt — imperative shell + bridge.
+// ---------------------------------------------------------------------------
+
+type InterruptOpts = {
+  title: string;
+  body: string;
+  items: { key: string; label: string }[];
+  allowFreeText: boolean;
+  allowCancel: boolean;
+};
+
+/** Stop the "Thinking" spinner if the REPL has one running (which also
+ *  frees the stdout patch before the widget installs its own region). */
+function stopSpinnerIfRunning(): void {
+  const stop = (globalThis as any).__agencyStopSpinner;
+  if (typeof stop === "function") {
+    stop();
+  }
+}
+
+/** Assert raw mode so `_ttyWrite` receives keystrokes (see readMultiline
+ *  for why). Returns a restore fn. No-op off a TTY. */
+function assertRawMode(): () => void {
+  const stdin = process.stdin as NodeJS.ReadStream & { setRawMode?: (mode: boolean) => void };
+  if (!stdin.isTTY || !stdin.setRawMode) {
+    return () => { };
+  }
+  const wasRaw = !!stdin.isRaw;
+  stdin.setRawMode(true);
+  return () => {
+    if (stdin.setRawMode && stdin.isRaw !== wasRaw) {
+      stdin.setRawMode(wasRaw);
+    }
+  };
+}
+
+/** The line-mode approval prompt. Renders `opts` as a pinned bottom footer
+ *  and reads a typed line terminated by Enter. All decisions come from
+ *  reduceInterrupt; this shell only wires keys → reducer → outcome and does
+ *  the I/O. Resolves with the option key or a free-text reason; rejects
+ *  with AgencyCancelledError on Escape (when allowCancel); exits 130 on
+ *  Ctrl+C. Reuses the outer REPL's readline via `_ttyWrite` — no second
+ *  readline, so none of _runPrompt's paused/raw restoration dance applies. */
+function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Promise<string> {
+  stopSpinnerIfRunning();
+  const restoreRaw = assertRawMode();
+  const config: InterruptConfig = {
+    validKeys: opts.items.map((item) => item.key),
+    allowFreeText: opts.allowFreeText,
+    allowCancel: opts.allowCancel,
+  };
+  let state = INITIAL_INTERRUPT_STATE;
+
+  const region = installBottomRegion(
+    () => renderInterruptFooter({
+      title: opts.title,
+      body: opts.body,
+      items: opts.items,
+      allowFreeText: opts.allowFreeText,
+      state,
+      columns: process.stdout.columns || 80,
+    }),
+    process.stdout.isTTY === true,
+    { hideCursor: true },
+  );
+
+  const rlAny = rl as unknown as { _ttyWrite: (sequence: unknown, key: unknown) => void };
+  const originalTtyWrite = rlAny._ttyWrite;
+
+  return new Promise<string>((resolve, reject) => {
+    const settle = (finish: () => void): void => {
+      rlAny._ttyWrite = originalTtyWrite;
+      region.teardown();
+      restoreRaw();
+      finish();
+    };
+    rlAny._ttyWrite = (sequence: unknown, key: unknown): void => {
+      const action = classifyInterruptKey(sequence, key as KeyMeta | undefined);
+      const step = reduceInterrupt(state, action, config);
+      state = step.state;
+      const outcome = step.outcome;
+      if (outcome.kind === "exit") {
+        settle(() => { });
+        process.exit(130);
+        return;
+      }
+      if (outcome.kind === "cancel") {
+        settle(() => reject(new AgencyCancelledError("cancelled by user")));
+        return;
+      }
+      if (outcome.kind === "resolve") {
+        settle(() => resolve(outcome.value));
+        return;
+      }
+      region.refresh();
+    };
+  });
+}
+
+/** Bridge for std::ui/cli's interruptChoice. Delegates to the sticky widget
+ *  wired to the running line-mode REPL. The Agency side gates on
+ *  _stickyInterruptAvailable first, so a missing hook is a programming
+ *  error. */
+export async function _interruptChoice(
+  title: string,
+  body: string,
+  items: { key: string; label: string }[],
+  allowFreeText: boolean,
+  allowCancel: boolean,
+): Promise<string> {
+  const hook = (globalThis as any).__agencyInterruptPrompt;
+  if (typeof hook !== "function") {
+    throw new Error("_interruptChoice: no active line-mode REPL");
+  }
+  return hook({ title, body, items, allowFreeText, allowCancel });
+}
+
+/** True when a line-mode REPL is running and can host a pinned prompt. */
+export function _stickyInterruptAvailable(): boolean {
+  return typeof (globalThis as any).__agencyInterruptPrompt === "function";
 }
 
 const SPINNERS = {
@@ -1182,6 +1305,13 @@ export async function _runLineRepl(
     for (const k of Object.keys(expansions)) delete expansions[k];
   };
 
+  // Expose the sticky interrupt prompt to std::policy (via std::ui/cli's
+  // interruptChoice → _interruptChoice). Bound to THIS readline so the
+  // widget reuses it; restored on exit like the hooks above.
+  const interruptPromptKey = "__agencyInterruptPrompt";
+  const prevInterruptPrompt = (globalThis as any)[interruptPromptKey];
+  (globalThis as any)[interruptPromptKey] = (opts: InterruptOpts) => stickyInterruptPrompt(rl, opts);
+
   // `/` at an empty prompt synthesizes Enter so the bare-`/` branch
   // in the loop body fires immediately and opens the palette modal. The
   // trigger records where history stood the instant `/` was pressed, so the
@@ -1347,6 +1477,7 @@ export async function _runLineRepl(
     teardownSlashTrigger();
     replCtx.inputOverride = prevOverride;
     (globalThis as any)[stopSpinnerKey] = prevStopSpinner;
+    (globalThis as any)[interruptPromptKey] = prevInterruptPrompt;
     (globalThis as any)[clearHistoryKey] = prevClearHistory;
     // Persist whatever entries readline accumulated. `rl.history` is
     // newest-first and already contains the history we loaded at startup
@@ -1583,6 +1714,7 @@ export const _internal = {
   INITIAL_INTERRUPT_STATE,
   packOptions,
   renderInterruptFooter,
+  stickyInterruptPrompt,
 };
 
 export function _clearScreen(): void {

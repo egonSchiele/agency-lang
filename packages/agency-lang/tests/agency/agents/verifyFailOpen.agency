@@ -1,4 +1,4 @@
-import { failOpenFeedback, feedbackHasErrors, Feedback } from "std::agency"
+import { failOpenFeedback, feedbackHasErrors, Feedback } from "std::agents/lib/feedback"
 
 node passesSuccessThrough(): boolean {
   const items: Feedback[] = [{ error: true, feedback: "x" }]

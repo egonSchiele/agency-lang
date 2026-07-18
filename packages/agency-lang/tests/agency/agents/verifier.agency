@@ -1,0 +1,9 @@
+import { verifierAgent } from "std::agents/verifier"
+import { feedbackHasErrors } from "std::agents/lib/feedback"
+
+// One generated criterion, one judge: the judge's error finding surfaces
+// through the pool and the flatten.
+node findingsAggregateAcrossCriteria(): boolean {
+  const findings = verifierAgent("produce out.txt with the number 42")
+  return feedbackHasErrors(findings)
+}

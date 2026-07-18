@@ -1,8 +1,17 @@
-import { Feedback, flattenFeedback } from "std::agents/feedback"
-import { concurrencyPool } from "std::concurrency"
-import { systemMessage } from "std::thread"
+/** @module
+  @summary Verifies completed work on disk against a task: derives measurable
+  criteria and computes each one with tools.
 
-static const verifyTools: any[] = [
+  The verifier runs; review reads. To judge a work product handed to you as
+  text without touching the file system, use reviewAgent instead.
+*/
+import { concurrencyPool } from "std::concurrency"
+import { Feedback } from "std::agents/lib/feedback"
+import { llmOptions } from "std::agents/lib/shared"
+import { ls, glob, grep, exec } from "std::shell"
+import { systemMessage, threadIsNew } from "std::thread"
+
+static const tools: any[] = [
   read.partial(useAgentCwd: true),
   ls.partial(useAgentCwd: true),
   glob.partial(useAgentCwd: true),
@@ -10,7 +19,7 @@ static const verifyTools: any[] = [
   exec.partial(useAgentCwd: true),
 ]
 
-static const verifySysPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, COMPUTE, and report.
+static const systemPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, COMPUTE, and report.
 
 The grading tests are hidden and NOT in this environment, so you must reconstruct and ACTUALLY RUN every check the task states — never eyeball the artifact.
 
@@ -21,23 +30,35 @@ Method:
 
 Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers."""
 
-let _first = true
-
-/**
-Verifies code written to disk against a task description and optional criteria. Returns a list of feedback items.
-*/
-def codeVerifierAgent(
+export def verifierAgent(
   task: string,
   criteria: string[] = [],
+  context: string = "",
   maxCost: number = $20.00,
   maxTime: number = 15m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
 ): Result<Feedback[]> {
-  const result = guard(cost: maxCost, time: maxTime) {
-    const results: Feedback[][] = []
-    thread {
-      if (_first) {
-        systemMessage(verifySysPrompt)
-        _first = false
+  """
+  Verify work on disk against a task: derive measurable success criteria,
+  compute each one with tools, and return one pass/fail finding per
+  criterion.
+
+  @param task - The task the work must satisfy
+  @param criteria - Known acceptance criteria to check, extended with derived ones
+  @param context - Extra material for the judgment, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  """
+  const captured = guard(cost: maxCost, time: maxTime) {
+    let results: Feedback[][] = []
+    thread(label: "verifierAgent", session: session) {
+      if (threadIsNew()) {
+        systemMessage(systemPrompt)
       }
       const criteriaString = map(criteria, \c -> `- ${c}`).join("\n")
       const authoritativeCriteria = """
@@ -55,7 +76,7 @@ def codeVerifierAgent(
     ${criteriaBlock}
     """
 
-      const generatedCriteria: string[] = llm(generateCriteriaPrompt)
+      const generatedCriteria: string[] = llm(generateCriteriaPrompt, llmOptions(model, provider))
 
       const allCriteria = criteria.concat(generatedCriteria)
 
@@ -72,15 +93,23 @@ def codeVerifierAgent(
       A criterion you did not actually compute counts as a failure.
       """
 
-        const items: Feedback[] = llm(prompt, tools: verifyTools)
+        const items: Feedback[] = llm(prompt, llmOptions(model, provider, tools: tools))
         return items
       }
 
       return flatten(results)
     }
+    // Salvage: a guard trip mid-pool still returns the findings that
+    // completed. finalize is the salvage mechanism here (a saveDraft would
+    // need the function's full Result shape as its draft).
     finalize {
       return flatten(results)
     }
   }
-  return result
+  return match(captured) {
+    success(findings) => success(findings)
+    // Callers can always read findings: a verifier that was cut short reports
+    // that as an advisory item, not a blocking failure (fail open).
+    failure(e) => success([{ error: false, feedback: "Verification stopped early: ${e.type} cap reached." }])
+  }
 }

@@ -72,7 +72,6 @@ describe("serve http invokes exported functions inside a runtime frame", () => {
 
     handler = createHttpHandler({
       exports,
-      port: 0,
       logger: createLogger("error"),
       hasInterrupts: mod.hasInterrupts as (data: unknown) => boolean,
       respondToInterrupts: mod.respondToInterrupts as (

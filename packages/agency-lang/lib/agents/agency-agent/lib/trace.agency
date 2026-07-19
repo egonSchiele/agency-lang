@@ -19,10 +19,6 @@ let VERBOSE: boolean = false
 // Whether the agent is running in interactive (TTY) mode.
 let _isInteractive: boolean = true
 
-// The `--policy` argument (a built-in name or a policy-file path),
-// or "" when absent
-let _policyArg: string = ""
-
 // Live tool-call tracing. Always shown in the interactive REPL, but in
 // one-shot mode it's suppressed unless the user opts in
 // with `--verbose` / `--debug` (AGENT_DEBUG). A function, not a static

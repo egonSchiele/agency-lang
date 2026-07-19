@@ -1,0 +1,7 @@
+{
+  "tests": [
+    { "nodeName": "readsTheNameAfterTheCommand", "description": "a name after /model is read from the command", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "baresCommandHasNoSpec", "description": "a bare /model carries no spec", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "trimsSurroundingSpace", "description": "surrounding space is trimmed", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

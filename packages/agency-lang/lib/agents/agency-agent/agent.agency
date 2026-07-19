@@ -138,6 +138,10 @@ import { reviewAgent } from "./subagents/review.agency"
 //import { clearMessages, pushMessage, repl } from "std::ui"
 
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
+// The `--policy` argument (a built-in name or a policy-file path), or "" when
+// absent. CLI-owned: main() sets it, setupSession() reads it.
+let _policyArg: string = ""
+
 import {
   dispatchAgent,
   setGroundingContext,

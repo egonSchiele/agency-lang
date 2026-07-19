@@ -143,6 +143,7 @@ import { reviewAgent } from "../subagents/review.agency"
 //import { clearMessages, pushMessage, repl } from "std::ui"
 
 import { dispatchAgent } from "./coordinator.agency"
+import { parseModelSpec } from "./utils.agency"
 
 let _session: Session = {
   pin: "",
@@ -195,11 +196,8 @@ def costSlashCommand(): boolean {
   return true
 }
 
-def modelSlashCommand(): boolean {
-  let spec = ""
-  if (trimmed != "/model") {
-    spec = trimmed.substring(7).trim()
-  }
+def modelSlashCommand(command: string): boolean {
+  let spec = parseModelSpec(command)
   if (spec == "") {
     pushMessage("Current models:")
     const current = getResolvedSlots()
@@ -328,12 +326,12 @@ def _runTurn(msg: string): boolean {
     "/mcp" => mcpSlashCommand()
     "/search" => searchSlashCommand()
     "/cost" => costSlashCommand()
-    "/model" => modelSlashCommand()
+    "/model" => modelSlashCommand(trimmed)
     "/models" => modelsSlashCommand(trimmed)
     "/local" => localSlashCommand()
     _ => {
       if (trimmed.startsWith("/model ")) {
-        return modelSlashCommand()
+        return modelSlashCommand(trimmed)
       }
       if (trimmed.startsWith("/models ")) {
         return modelsSlashCommand(trimmed)

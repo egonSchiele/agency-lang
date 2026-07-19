@@ -4,12 +4,27 @@
       "nodeName": "unsatisfied",
       "input": "",
       "expectedOutput": "\"false|- /app/regex.txt was not created\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": {
-        "stdlib/agency.agency": [
-          { "return": "The file /app/regex.txt does not exist; not complete." },
-          { "return": [{ "error": true, "feedback": "/app/regex.txt was not created" }] }
+        "stdlib/agents/verifier.agency": [
+          {
+            "return": [
+              "/app/regex.txt exists and contains a regex"
+            ]
+          },
+          {
+            "return": [
+              {
+                "error": true,
+                "feedback": "/app/regex.txt was not created"
+              }
+            ]
+          }
         ]
       }
     },
@@ -17,12 +32,27 @@
       "nodeName": "satisfied",
       "input": "",
       "expectedOutput": "\"true|0\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": {
-        "stdlib/agency.agency": [
-          { "return": "Ran the regex against the sample; it matches. Complete." },
-          { "return": [{ "error": false, "feedback": "regex matches the sample" }] }
+        "stdlib/agents/verifier.agency": [
+          {
+            "return": [
+              "/app/regex.txt exists and contains a regex"
+            ]
+          },
+          {
+            "return": [
+              {
+                "error": false,
+                "feedback": "regex matches the sample"
+              }
+            ]
+          }
         ]
       }
     },
@@ -30,7 +60,11 @@
       "nodeName": "unwrapSuccess",
       "input": "",
       "expectedOutput": "\"false|1\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": []
     },
@@ -38,7 +72,11 @@
       "nodeName": "unwrapFailure",
       "input": "",
       "expectedOutput": "\"true|- verification could not run: verifier boom\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
       "llmMocks": []
     }

@@ -1,7 +1,12 @@
 import { verify, renderGaps, unwrapVerdict, Verdict } from "../../lib/agents/agency-agent/subagents/verify.agency"
 
-// verify() end-to-end with scoped LLM mocks (no real API/tools — the
-// mocked phase-1 response has no tool calls, so the tool loop ends).
+// verify() end-to-end with scoped LLM mocks (no real API or tools, since the
+// mocked responses carry no tool calls, so the tool loop ends).
+//
+// The mock scope key is the module where llm() EXECUTES, not where the call
+// is written. Verification lives in std::agents/verifier now, so mocks keyed
+// to the old std::agency location silently match nothing and the verifier
+// reports no findings at all.
 node unsatisfied() {
   const v = verify("Write a regex to /app/regex.txt")
   return "${v.satisfied}|${renderGaps(v.gaps)}"

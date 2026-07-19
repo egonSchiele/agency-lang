@@ -101,3 +101,39 @@ node redirectDeliversMessage(): string {
   if (isFailure(r)) { return "unexpected-failure" }
   return r.value
 }
+
+// A block that overshoots its limit by more than the next interval, which is
+// what happens whenever a step runs long, and happens constantly on a loaded
+// machine. approve({maxTime}) grants a DELTA on the tripped budget, and the
+// runtime refuses an approval that leaves the budget still exceeded, so the
+// grant has to cover the overshoot before it adds the interval. Granting a
+// bare interval fails with GuardApproveError and takes the whole supervised
+// run with it.
+//
+// This shipped as an intermittent CI failure that never reproduced locally
+// until the machine was loaded. The tiny interval against a long block makes
+// the overshoot certain instead of load-dependent.
+let slowChecks = 0
+
+def slowCheck(elapsed: number): SuperviseDecision {
+  checks.push("checked")
+  slowChecks = slowChecks + 1
+  // Only the first one is slow. One is enough to push the block well past
+  // the limit it tripped on, and spinning on every trip would make the test
+  // take minutes.
+  if (slowChecks == 1) {
+    spin(3000000)
+  }
+  return { action: "continue", message: "" }
+}
+
+node overshootIsCoveredByTheGrant(): string {
+  const r = supervise(every: 1ms, maxTime: 600000, check: slowCheck) {
+    const s = spin(3000000)
+    return "done:${s}"
+  }
+  if (isFailure(r)) {
+    return "failed:${r.error}"
+  }
+  return r.value
+}

@@ -45,10 +45,8 @@ export def supervise(
   if (maxTime < every) {
     return failure("supervise: maxTime is less than the check interval, so no checkpoint would ever be reached")
   }
-  let elapsed = 0m
-  let interval = every
   handle {
-    const captured = guard(time: interval, label: "std::supervise") {
+    const captured = guard(time: every, label: "std::supervise") {
       return block()
     }
     return captured
@@ -56,19 +54,34 @@ export def supervise(
     // Only answer trips from OUR guard. The block's own guards (an agent's
     // cost and time caps) raise the same std::guard effect; without this
     // label gate we would answer an inner trip, extend the wrong guard, and
-    // corrupt our own elapsed-time accounting.
+    // corrupt our own accounting.
     if (intr.effect != "std::guard" || intr.data.label != "std::supervise") {
       return pass()
     }
-    elapsed = elapsed + interval
-    if (elapsed >= maxTime) {
+    // The working time the block has actually consumed. Counting intervals
+    // instead would drift, because a block routinely overshoots its limit
+    // before the trip is answered.
+    const spent = intr.data.spent
+    if (spent >= maxTime) {
       return reject("supervise: maxTime reached")
     }
-    const decision = check(elapsed)
-    interval = Math.min(every, maxTime - elapsed)
+    const decision = check(spent)
+    // The grant is a DELTA added to the tripped budget, and the runtime
+    // refuses an approval that leaves the budget still exceeded. By the time
+    // a trip is answered the block has usually run past the old limit, and on
+    // a loaded machine it can run far past it, so the grant covers that
+    // overshoot before it adds the next interval. Granting a bare interval
+    // fails exactly when the machine is busy, which is the worst time to
+    // discover it.
+    const overshoot = spent - intr.data.limit
+    let nextInterval = every
+    if (maxTime - spent < every) {
+      nextInterval = maxTime - spent
+    }
+    const grant = overshoot + nextInterval
     return match(decision.action) {
-      "continue" => approve({ maxTime: interval })
-      "redirect" => approve({ maxTime: interval, message: decision.message })
+      "continue" => approve({ maxTime: grant })
+      "redirect" => approve({ maxTime: grant, message: decision.message })
       "stop" => reject(decision.message)
     }
   }

@@ -1,6 +1,6 @@
 {
   "name": "@agency-lang/whisper-local",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Local Whisper transcription for Agency using vendored whisper.cpp",
   "type": "module",
   "agency": "./index.agency",
@@ -32,19 +32,22 @@
     "test:run": "vitest run"
   },
   "peerDependencies": {
-    "agency-lang": "workspace:*"
+    "agency-lang": ">=0.9.0"
   },
   "dependencies": {
     "cmake-js": "^7.3.0",
     "node-addon-api": "^8.0.0"
   },
   "devDependencies": {
+    "agency-lang": "workspace:*",
     "@types/node": "^25.0.6",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"
   },
   "author": "Aditya Bhargava",
   "license": "ISC",
-  "bugs": { "url": "https://github.com/egonSchiele/agency-lang/issues" },
+  "bugs": {
+    "url": "https://github.com/egonSchiele/agency-lang/issues"
+  },
   "homepage": "https://github.com/egonSchiele/agency-lang"
 }

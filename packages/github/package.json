@@ -1,6 +1,6 @@
 {
   "name": "@agency-lang/github",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "GitHub integration for Agency",
   "type": "module",
   "agency": "./index.agency",
@@ -30,12 +30,13 @@
     "test:agency": "agency tests/agency"
   },
   "peerDependencies": {
-    "agency-lang": "workspace:*"
+    "agency-lang": ">=0.9.0"
   },
   "dependencies": {
     "@octokit/rest": "^21.0.0"
   },
   "devDependencies": {
+    "agency-lang": "workspace:*",
     "@types/node": "^25.0.0",
     "nock": "^14.0.15",
     "typescript": "^5.0.0",

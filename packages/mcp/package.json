@@ -1,6 +1,6 @@
 {
   "name": "@agency-lang/mcp",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "MCP (Model Context Protocol) support for the Agency language",
   "type": "module",
   "agency": "./index.agency",
@@ -39,10 +39,11 @@
     "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "peerDependencies": {
-    "agency-lang": "workspace:*",
+    "agency-lang": ">=0.9.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "agency-lang": "workspace:*",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"
   }

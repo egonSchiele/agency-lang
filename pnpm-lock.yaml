@@ -105,9 +105,6 @@ importers:
 
   packages/email:
     dependencies:
-      agency-lang:
-        specifier: workspace:*
-        version: link:../agency-lang
       nodemailer:
         specifier: ^7.0.0
         version: 7.0.13
@@ -118,6 +115,9 @@ importers:
       '@types/nodemailer':
         specifier: ^6.4.0
         version: 6.4.23
+      agency-lang:
+        specifier: workspace:*
+        version: link:../agency-lang
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
@@ -142,13 +142,13 @@ importers:
       '@octokit/rest':
         specifier: ^21.0.0
         version: 21.1.1
-      agency-lang:
-        specifier: workspace:*
-        version: link:../agency-lang
     devDependencies:
       '@types/node':
         specifier: ^25.0.0
         version: 25.0.6
+      agency-lang:
+        specifier: workspace:*
+        version: link:../agency-lang
       nock:
         specifier: ^14.0.15
         version: 14.0.15
@@ -164,13 +164,13 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.3.6)
-      agency-lang:
-        specifier: workspace:*
-        version: link:../agency-lang
       zod:
         specifier: ^4.0.0
         version: 4.3.6
     devDependencies:
+      agency-lang:
+        specifier: workspace:*
+        version: link:../agency-lang
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
@@ -183,9 +183,6 @@ importers:
       '@mozilla/readability':
         specifier: ^0.5.0
         version: 0.5.0
-      agency-lang:
-        specifier: workspace:*
-        version: link:../agency-lang
       linkedom:
         specifier: ^0.18.0
         version: 0.18.12
@@ -193,6 +190,9 @@ importers:
       '@types/node':
         specifier: ^25.0.0
         version: 25.0.6
+      agency-lang:
+        specifier: workspace:*
+        version: link:../agency-lang
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
@@ -205,9 +205,6 @@ importers:
 
   packages/whisper-local:
     dependencies:
-      agency-lang:
-        specifier: workspace:*
-        version: link:../agency-lang
       cmake-js:
         specifier: ^7.3.0
         version: 7.4.0
@@ -218,6 +215,9 @@ importers:
       '@types/node':
         specifier: ^25.0.6
         version: 25.0.6
+      agency-lang:
+        specifier: workspace:*
+        version: link:../agency-lang
       typescript:
         specifier: ^5.0.0
         version: 5.9.3

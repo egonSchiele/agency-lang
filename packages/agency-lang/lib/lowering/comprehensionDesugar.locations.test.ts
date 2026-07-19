@@ -7,7 +7,9 @@ describe("comprehensionDesugar source locations", () => {
   it("stamps the comprehension location onto every synthesized node", () => {
     const src = "node main() {\n  const r = [f(x) for x in xs if p(x)]\n}";
     const result = parseAgency(src, {}, true, false);
-    if (!(result as any).success) throw new Error("parse failed");
+    if (!(result as any).success) {
+      throw new Error("parse failed");
+    }
     const nodes = (result as any).result.nodes;
     const main = nodes.find((n: any) => n.type === "graphNode");
 
@@ -45,7 +47,9 @@ describe("comprehensionDesugar source locations", () => {
     // not a source string - parse (with lowering, as the real pipeline
     // does) and then check.
     const parsed = parseAgency(src);
-    if (!(parsed as any).success) throw new Error("parse failed");
+    if (!(parsed as any).success) {
+      throw new Error("parse failed");
+    }
     const { errors } = typeCheck((parsed as any).result);
     expect(errors.length).toBeGreaterThan(0);
 

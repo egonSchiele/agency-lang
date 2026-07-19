@@ -114,11 +114,13 @@ function paramNameFor(node: Comprehension): string {
 /** `__comprehensionItem[n]` - recovers one binder from a pair.
  *  NumberLiteral carries its value as a STRING (lib/types/literals.ts,
  *  and parallelDesugar's numLit helper). */
-function pairIndex(n: number): Expression {
+function pairIndex(position: number): Expression {
   return {
     type: "valueAccess",
     base: varRef(PARAM),
-    chain: [{ kind: "index", index: { type: "number", value: String(n) } }],
+    chain: [
+      { kind: "index", index: { type: "number", value: String(position) } },
+    ],
   } as unknown as Expression;
 }
 

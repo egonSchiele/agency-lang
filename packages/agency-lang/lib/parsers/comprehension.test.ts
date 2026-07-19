@@ -12,10 +12,14 @@ function parseExpr(src: string) {
     true,
     false,
   );
-  if (!result.success) throw new Error("parse failed");
+  if (!result.success) {
+    throw new Error("parse failed");
+  }
   const nodes = result.result.nodes as any[];
   const main = nodes.find((n) => n.type === "graphNode");
-  if (!main) throw new Error("no node definition found");
+  if (!main) {
+    throw new Error("no node definition found");
+  }
   return main.body[0].value;
 }
 

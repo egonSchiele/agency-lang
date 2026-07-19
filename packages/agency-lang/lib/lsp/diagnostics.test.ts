@@ -83,6 +83,46 @@ describe("runDiagnostics — stdlib auto-import parity with CLI", () => {
   });
 });
 
+describe("runDiagnostics — every prelude name resolves", () => {
+  // Regression: the LSP used to keep its own hand-copied list of the names
+  // the CLI parser template auto-imports. The copy drifted — `_guard`,
+  // `saveDraft`, and `flatten` were added to the template but never to the
+  // LSP's list — so a file using the `guard` construct lit up with a phantom
+  // "Function '_guard' is not defined" in the editor while
+  // `agency typecheck` on the same file reported nothing. Both paths now
+  // render the same PRELUDE_NAMES, so this asserts the drifted names in
+  // particular resolve through the LSP.
+  it("reports no undefined-name errors for guard, saveDraft, or flatten", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-prelude-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        "node main() {",
+        "  const captured = guard(cost: 1.0) {",
+        "    saveDraft([1, 2])",
+        "    return [1, 2]",
+        "  }",
+        "  const flat = flatten([[1], [2]])",
+        "  return flat",
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { diagnostics } = runDiagnostics(doc, mainFile, {}, symbolTable);
+
+      const undefinedNames = diagnostics.filter((d) =>
+        /is not defined/.test(d.message),
+      );
+      expect(undefinedNames.map((d) => d.message)).toEqual([]);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("runDiagnostics — test-only imports", () => {
   // The LSP is an analysis-only path: it must honor `import test` so
   // migrated test files keep full editor support instead of dying on a

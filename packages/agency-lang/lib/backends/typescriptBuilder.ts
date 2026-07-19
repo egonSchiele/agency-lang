@@ -539,6 +539,22 @@ export class TypeScriptBuilder {
     args: (Expression | SplatExpression)[],
   ): TsNode[] {
     return args.map((arg) => {
+      // `fork`/`race` carrying a block is a CALL, not a function
+      // reference, and its lowering lives in processForkCall (reached
+      // via processNode -> processFunctionCall). The "functionArg"
+      // path below treats a functionCall argument as a reference and
+      // emits `__call(fork, ...)`, where `fork` is an undefined
+      // identifier - the ReferenceError this guard prevents. The
+      // presence of a block is the same discriminator
+      // processFunctionCall keys on, so a bare `map(xs, double)`
+      // reference is unaffected.
+      if (
+        arg.type === "functionCall" &&
+        (arg.functionName === "fork" || arg.functionName === "race") &&
+        arg.block
+      ) {
+        return this.processCallArg(arg);
+      }
       if (arg.type === "functionCall") {
         this.functionsUsed.add(arg.functionName);
         return this.generateFunctionCallExpression(
@@ -2790,24 +2806,14 @@ export class TypeScriptBuilder {
       return ts.obj(descriptor);
     }
 
-    const argNodes: TsNode[] = [];
-    for (const arg of args) {
-      if (arg.type === "functionCall") {
-        this.functionsUsed.add(arg.functionName);
-        argNodes.push(
-          this.generateFunctionCallExpression(
-            arg as FunctionCall,
-            "functionArg",
-          ),
-        );
-      } else {
-        argNodes.push(this.processCallArg(arg));
-      }
-    }
-
-    if (node.block) {
-      argNodes.push(this.processBlockArgument(node));
-    }
+    // No named args and no block on this call (the branch above handled
+    // those), so every argument is positional. processResolvedArgs is the
+    // one place that decides reference-vs-call for functionCall arguments;
+    // this loop used to be a hand-copy of it and drifted (the fork/race
+    // guard landed in one and not the other).
+    const argNodes = this.processResolvedArgs(
+      args as (Expression | SplatExpression)[],
+    );
 
     return ts.obj({
       type: ts.str("positional"),

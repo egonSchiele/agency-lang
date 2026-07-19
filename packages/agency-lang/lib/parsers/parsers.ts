@@ -1303,9 +1303,14 @@ type InterleavedEntry<T> = ItemEntry<T> | TriviaEntry;
 // so `partitionTrivia` can distinguish it — no manual result unwrapping.
 // `multiLineCommentParser` does NOT eat its trailing newline, which the
 // trailing `optionalSpacesOrNewline` handles so `many(...)` keeps progressing.
+/** One comment/blank-line unit, shared between triviaEntry (which
+ *  captures it) and literalDelimiter's trailing-position lookahead
+ *  (which only scans past it). */
+const literalTrivia = or(blankLineParser, commentParser, multiLineCommentParser);
+
 const triviaEntry: Parser<TriviaEntry> = seqC(
   set("kind", "trivia"),
-  capture(or(blankLineParser, commentParser, multiLineCommentParser), "node"),
+  capture(literalTrivia, "node"),
   optionalSpacesOrNewline,
 ) as Parser<TriviaEntry>;
 
@@ -2148,14 +2153,30 @@ export const splatParser: Parser<SplatExpression> = seqC(
   capture(lazy(() => exprParser), "value"),
 );
 
-// The delimiter between literal items: whitespace/newlines may sit on either
-// side of the separating comma (matching the old `commaWithNewline`), and the
-// comma itself is optional so a trailing comma before `}`/`]` is allowed.
-const literalDelimiter = seqR(
-  optionalSpacesOrNewline,
-  optional(char(",")),
-  optionalSpacesOrNewline,
-);
+// The delimiter after each literal item: a comma is REQUIRED between
+// items (whitespace/newlines may surround it, matching the old
+// `commaWithNewline`). The alternative branch is a LOOKAHEAD accepting
+// only trailing position - optional comments/blank lines followed by
+// the closing bracket - which covers the final item, trailing commas
+// (a comma whose next item never arrives), and trailing comments
+// without a comma, while rejecting whitespace-separated items. The
+// 2026-07-04 rewrite made the comma optional EVERYWHERE, so any
+// whitespace separated items and `[x for x in]` parsed as a four-item
+// array of variable names (#602).
+const literalDelimiter = (closer: string) =>
+  seqR(
+    optionalSpacesOrNewline,
+    or(
+      char(","),
+      peek(
+        seqR(
+          many(seqR(literalTrivia, optionalSpacesOrNewline)),
+          char(closer),
+        ),
+      ),
+    ),
+    optionalSpacesOrNewline,
+  );
 
 export const agencyArrayParser: Parser<AgencyArray> = trace(
   "agencyArrayParser",
@@ -2167,7 +2188,7 @@ export const agencyArrayParser: Parser<AgencyArray> = trace(
         many(
           or(
             triviaEntry,
-            itemEntry(or(splatParser, lazy(() => exprParser)), literalDelimiter),
+            itemEntry(or(splatParser, lazy(() => exprParser)), literalDelimiter("]")),
           ),
         ),
         "entries",
@@ -2237,7 +2258,7 @@ export const agencyObjectParser: Parser<AgencyObject> = map(
       many(
         or(
           triviaEntry,
-          itemEntry(or(splatParser, agencyObjectKVParser), literalDelimiter),
+          itemEntry(or(splatParser, agencyObjectKVParser), literalDelimiter("}")),
         ),
       ),
       "entries",
@@ -4706,29 +4727,64 @@ export const comprehensionParser: Parser<Comprehension> = label(
         optionalSpacesOrNewline,
         str("for"),
         spaces,
-        ...iterationBinderFragment,
-        optionalSpacesOrNewline,
-        str("in"),
-        spaces,
-        capture(
-          lazy(() => exprParser),
-          "iterable",
+        // COMMIT POINT (#602). Once `[ expr for ` has matched, nothing
+        // but a comprehension attempt can be on the wire - arrays,
+        // strings containing the word for, and format-style identifiers
+        // all diverge earlier (pinned in comprehension.test.ts). So
+        // from here failures are hard, targeted parseError throws
+        // instead of a silent backtrack into the array parser, which
+        // used to swallow half-typed comprehensions.
+        captureCaptures(
+          parseError(
+            "expected a binder name or pattern after `for` in this list comprehension",
+            ...iterationBinderFragment,
+          ),
+        ),
+        captureCaptures(
+          parseError(
+            "expected `in` after the list comprehension binder",
+            optionalSpacesOrNewline,
+            str("in"),
+          ),
+        ),
+        // the required whitespace after `in` lives with the iterable,
+        // so `[x for x in]` reports a missing iterable rather than
+        // blaming the `in` it already has
+        captureCaptures(
+          parseError(
+            "expected an iterable expression after `in` in this list comprehension",
+            spaces,
+            capture(
+              lazy(() => exprParser),
+              "iterable",
+            ),
+          ),
         ),
         optional(
           captureCaptures(
             seqC(
               optionalSpacesOrNewline,
               str("if"),
-              spaces,
-              capture(
-                lazy(() => exprParser),
-                "condition",
+              // committed once `if` matched: a filter keyword with no
+              // condition is a broken comprehension, not an array
+              captureCaptures(
+                parseError(
+                  "expected a filter condition after `if` in this list comprehension",
+                  spaces,
+                  capture(
+                    lazy(() => exprParser),
+                    "condition",
+                  ),
+                ),
               ),
             ),
           ),
         ),
-        optionalSpacesOrNewline,
-        char("]"),
+        parseError(
+          "expected `]` to close this list comprehension",
+          optionalSpacesOrNewline,
+          char("]"),
+        ),
         ),
         // Convert the raw prefix keyword into mode/shared by table
         // lookup - one branch, the sequential case being a table row

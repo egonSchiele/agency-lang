@@ -33,6 +33,21 @@ function parseFails(src: string): boolean {
   return !result.success;
 }
 
+/** True when the source fails to parse AND the failure message matches -
+ *  the targeted-diagnostic contract from #602. */
+function parseFailsWith(src: string, re: RegExp): boolean {
+  const result = parseAgency(
+    `node main() {\n  const x = ${src}\n}`,
+    {},
+    true,
+    false,
+  );
+  if (result.success) {
+    return false;
+  }
+  return re.test((result as { message?: string }).message ?? "");
+}
+
 describe("comprehensionParser", () => {
   it("parses a plain comprehension", () => {
     const node = parseExpr("[f(x) for x in xs]");
@@ -202,21 +217,39 @@ describe("comprehensionParser", () => {
     expect(parseExpr("[format, other]").type).toBe("agencyArray");
   });
 
-  // Half-typed comprehensions are now a thing users and agents will
-  // produce constantly. They do NOT error: the array parser accepts
-  // whitespace-separated items and `in` is a binary operator, so these
-  // have always parsed as arrays of variable names (probed - this is
-  // pre-existing behavior, not something this feature introduced). Pin
-  // that they at least never become half-baked comprehension nodes, so
-  // a later improvement shows up as a diff. A real diagnostic at the
-  // comprehension is tracked as issue #602.
-  it.each([["[x for x in]"], ["[for x in xs]"], ["[x for in xs]"]])(
-    "parses the malformed comprehension %s as an array, not a comprehension",
-    (src) => {
-      expect(parseFails(src)).toBe(false);
-      expect(parseExpr(src).type).toBe("agencyArray");
-    },
-  );
+  // Half-typed comprehensions now ERROR at the comprehension (#602).
+  // Two mechanisms combine: literal items require commas between them
+  // again (the 2026-07-04 comma-optional regression is fixed, so these
+  // can no longer fall back to whitespace-separated arrays of variable
+  // names), and the comprehension parser COMMITS once `[ expr for ` has
+  // matched, turning later failures into targeted messages instead of
+  // a silent backtrack.
+  it("reports a missing iterable", () => {
+    expect(parseFailsWith("[x for x in]", /iterable/)).toBe(true);
+  });
+
+  it("reports a missing in keyword", () => {
+    // the binder greedily reads the word `in` as its name, so the
+    // commit fires at the missing `in` position (over `xs`)
+    expect(parseFailsWith("[x for in xs]", /expected `in`/)).toBe(true);
+  });
+
+  it("reports a missing filter condition", () => {
+    expect(parseFailsWith("[x for x in xs if]", /condition/)).toBe(true);
+  });
+
+  it("reports an unclosed comprehension", () => {
+    expect(parseFailsWith("[x for x in xs", /close/)).toBe(true);
+  });
+
+  it("rejects a missing body expression, via the array comma rule", () => {
+    // `[for x in xs]` parses `for` as the body expression, so the
+    // comprehension never reaches its commit point (the keyword is
+    // consumed as a name and ` x` is not `for `). It fails as an
+    // array missing its commas instead - a generic error, but at the
+    // right position
+    expect(parseFails("[for x in xs]")).toBe(true);
+  });
 
   // tarsec's `spaces` matches newlines too, so a comprehension broken
   // across lines parses fine. Pinned deliberately: the guide can promise

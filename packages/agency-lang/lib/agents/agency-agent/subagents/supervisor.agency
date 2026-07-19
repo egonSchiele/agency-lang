@@ -62,9 +62,15 @@ export def applyThrashRule(
 ): SuperviseDecision {
   const previous = history[history.length - 1]
   if (verdict.assessment == "stalled" && previous != null && previous.assessment == "stalled") {
+    // The reviewer may have left message empty (it only has to fill it for
+    // redirect and stop), so the stop reason cannot lean on it being there.
+    let observation = ""
+    if (verdict.message != "") {
+      observation = " Last observation: ${verdict.message}"
+    }
     return {
       action: "stop",
-      message: "Stopped by the supervisor: two checks in a row found no progress. Last observation: ${verdict.message}"
+      message: "Stopped by the supervisor: two checks in a row found no progress.${observation}"
     }
   }
   return {
@@ -78,17 +84,27 @@ export def applyThrashRule(
   no workspace evidence, and the reviewer is told so rather than the check
   crashing the run. */
 def workspaceEvidence(): { text: string; filesChanged: number } {
-  const noEvidence = {
-    text: "(no git repository — no workspace evidence available; judge from the check history alone)",
+  // Two distinct ways to end up without evidence: the directory is not a
+  // repo, or git itself failed (an error, or policy rejecting the read).
+  // The reviewer is told which, so it never reasons from "there is no
+  // repo" when there is one.
+  const gitFailed = {
+    text: "(git could not be read — no workspace evidence available; judge from the check history alone)",
     filesChanged: 0
   }
   const isRepo = try gitIsRepo()
-  if (isFailure(isRepo) || !isRepo.value) {
-    return noEvidence
+  if (isFailure(isRepo)) {
+    return gitFailed
+  }
+  if (!isRepo.value) {
+    return {
+      text: "(no git repository — no workspace evidence available; judge from the check history alone)",
+      filesChanged: 0
+    }
   }
   const status = try gitStatus()
   if (isFailure(status)) {
-    return noEvidence
+    return gitFailed
   }
   const lines = []
   for (entry in status.value.entries) {

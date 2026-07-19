@@ -22,6 +22,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "emptyObservationStopMessage",
+      "description": "a forced stop with an empty reviewer message has no dangling suffix",
+      "input": "",
+      "expectedOutput": "\"Stopped by the supervisor: two checks in a row found no progress.\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "progressPassesThrough",
       "description": "a progressing verdict passes through untouched",
       "input": "",

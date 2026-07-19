@@ -319,6 +319,17 @@ export def _pairsOf(src: any): any[] {
   return _pairsOfImpl(src)
 }
 
+export def mapWithIndex(arr: any[], func: (any, any) -> any): any[] {
+  """
+  Apply a function to each item of an array along with its index, and
+  return a new array of the results.
+
+  @param arr - The array to map over
+  @param func - Called with the item and its zero-based index
+  """
+  return map(_pairsOf(arr)) as pair { return func(pair[0], pair[1]) }
+}
+
 export def filter(arr: any[], func: (any) -> any): any[] {
   """
   Return a new array containing only the elements for which the function returns true.

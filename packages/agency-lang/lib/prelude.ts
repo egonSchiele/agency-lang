@@ -38,6 +38,7 @@ export const PRELUDE_NAMES: readonly string[] = [
   "callback",
   // Array helpers (moved from std::array into std::index).
   "map",
+  "mapWithIndex",
   "filter",
   "exclude",
   "find",

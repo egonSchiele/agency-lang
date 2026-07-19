@@ -90,6 +90,46 @@ export def retryWithFeedback(
   return prev
 }
 
+/** What a `revise` check decides about one attempt: whether to accept it,
+  and if not, the critique the next attempt should address. `feedback` is
+  ignored when `accepted` is true. */
+export type Critique = {
+  accepted: boolean;
+  feedback: string
+}
+
+export def revise(
+  maxAttempts: number,
+  check: (any) -> Critique,
+  block: (string) -> any,
+): any {
+  """
+  Run a block until its result is accepted, up to maxAttempts times. Each
+  rejected attempt passes its critique to the next one, which receives it as
+  its argument (an empty string on the first attempt). Returns the first
+  accepted result, or the last result when every attempt is rejected.
+
+  @param maxAttempts - Maximum number of attempts
+  @param check - Judges a result and returns the critique to address next
+  @param block - The work, receiving the previous critique
+  """
+  let result = null
+  let feedback = ""
+  let attempt = 0
+  while (attempt < maxAttempts) {
+    attempt = attempt + 1
+    result = block(feedback)
+    const critique = check(result)
+    if (critique.accepted) {
+      return result
+    }
+    feedback = critique.feedback
+  }
+  // Every attempt was rejected. The last one is still the best available
+  // answer, and it is more useful to the caller than nothing.
+  return result
+}
+
 export def firstValid(
   variants: any[],
   test: (any) -> boolean,

@@ -1,127 +1,24 @@
 ---
 name: "expert"
-description: "Expert-guided coding agent."
+description: "Consults a domain expert for a task: returns the rules and"
 ---
 
 # expert
 
-Expert-guided coding agent.
+acceptance checklist a solver needs to get the task right.
 
-  A weak model often fails a task not because it can't reason, but because it
-  is missing a domain convention (e.g. "an overlap-extension primer's annealing
-  arm must be 15-45 nt", "ELF memory addresses come from `p_vaddr`, not a
-  hardcoded 0x400000"). This agent first ACQUIRES that expertise — routing to an
-  Agency-language specialist (bundled docs) or a general-knowledge specialist
-  (web / Wikipedia) — then hands the task plus a concrete rules-and-checklist to
-  the coding agent to actually solve.
+  A weak model often fails a task because it is missing a domain convention,
+  not because it cannot reason. This agent returns that missing expertise as
+  ExpertGuidance. It only consults; to solve with the guidance, compose:
 
-  This is a temporary experiment: it is wired in as a drop-in for `plannerAgent`
-  on the code agent's "complex" triage branch, to see whether front-loading
-  domain expertise lifts a weak model. It implements the `consultExpert` design
-  in docs/superpowers/specs/2026-07-13-consult-expert-subagent-design.md, minus
-  the verify-side integration (that comes with the full change).
+    const guidance = guidanceOrEmpty(expertAgent(task))
+    codingAgent(task, context: renderGuidance(guidance))
+    verifierAgent(task, criteria: guidance.checklist)
 
-## Types
-
-### ExpertGuidance
-
-What an expert consult returns. `rules` are for the solver to read;
-  `checklist` are concrete, checkable acceptance criteria. Empty rules AND
-  checklist means "nothing domain-specific here".
-
-```ts
-/** What an expert consult returns. `rules` are for the solver to read;
-  `checklist` are concrete, checkable acceptance criteria. Empty rules AND
-  checklist means "nothing domain-specific here". */
-export type ExpertGuidance = {
-  domain: string;
-  rules: string[];
-  checklist: string[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L34))
+  For tasks about the Agency language itself, use agencyExpertAgent, which
+  grounds its guidance in the bundled docs instead of the web.
 
 ## Functions
-
-### agencyExpert
-
-```ts
-agencyExpert(
-  question: string,
-  expertModel: string = "",
-  expertProvider: string = "",
-): ExpertGuidance
-```
-
-Agency-language specialist: returns rules + a checklist grounded in the
-  bundled docs. @param question - the task to advise on.
-  @param expertModel - optional model override for the consult (empty = ambient).
-  @param expertProvider - optional provider for expertModel (empty = auto-resolve).
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| question | `string` |  |
-| expertModel | `string` | "" |
-| expertProvider | `string` | "" |
-
-**Returns:** [ExpertGuidance](#expertguidance)
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L95))
-
-### domainExpert
-
-```ts
-domainExpert(
-  question: string,
-  expertModel: string = "",
-  expertProvider: string = "",
-): ExpertGuidance
-```
-
-General-knowledge specialist: returns rules + a checklist, using web /
-  Wikipedia lookups. @param question - the task to advise on.
-  @param expertModel - optional model override for the consult (empty = ambient).
-  @param expertProvider - optional provider for expertModel (empty = auto-resolve).
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| question | `string` |  |
-| expertModel | `string` | "" |
-| expertProvider | `string` | "" |
-
-**Returns:** [ExpertGuidance](#expertguidance)
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L116))
-
-### consultExpert
-
-```ts
-consultExpert(
-  question: string,
-  expertModel: string = "",
-  expertProvider: string = "",
-): ExpertGuidance
-```
-
-Route to the Agency-language or general-domain specialist automatically and
-  return its guidance. @param question - the task to advise on.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| question | `string` |  |
-| expertModel | `string` | "" |
-| expertProvider | `string` | "" |
-
-**Returns:** [ExpertGuidance](#expertguidance)
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L138))
 
 ### expertAgent
 
@@ -129,26 +26,24 @@ Route to the Agency-language or general-domain specialist automatically and
 expertAgent(
   task: string,
   context: string = "",
-  maxCost: number = $20.00,
-  maxTime: number = 15m,
-  expertModel: string = "",
-  expertProvider: string = "",
-): string
+  maxCost: number = $10.00,
+  maxTime: number = 10m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+): Result<ExpertGuidance>
 ```
 
-Expert-guided coding agent. Consults a domain expert for the task's rules and
-  acceptance criteria, then solves the task with that guidance in hand. A
-  drop-in for plannerAgent: takes a task, returns a summary string; the real
-  output is filesystem side effects.
+Consult a domain expert: identify the task's technical domain and return
+  the rules and acceptance checklist a solver needs to get it right.
 
-  @param task - what to accomplish.
-  @param context - optional extra material passed through to the solver.
-  @param maxCost - hard spend cap for the whole run (default $20).
-  @param maxTime - hard wall-clock cap for the whole run (default 15 minutes).
-  @param expertModel - optional model for the expert consult only, not the
-    solver (empty = the ambient model). Lets a caller put the one-shot expert
-    consult on a stronger model while the solve loop stays on the default.
-  @param expertProvider - optional provider for expertModel (empty = auto-resolve).
+  @param task - The task to advise on
+  @param context - Extra material, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
 
 **Parameters:**
 
@@ -156,11 +51,12 @@ Expert-guided coding agent. Consults a domain expert for the task's rules and
 |---|---|---|
 | task | `string` |  |
 | context | `string` | "" |
-| maxCost | `number` | $20.00 |
-| maxTime | `number` | 15m |
-| expertModel | `string` | "" |
-| expertProvider | `string` | "" |
+| maxCost | `number` | $10.00 |
+| maxTime | `number` | 10m |
+| model | `string` | "" |
+| provider | `string` | "" |
+| session | `string` | "" |
 
-**Returns:** `string`
+**Returns:** `Result<ExpertGuidance>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L69))

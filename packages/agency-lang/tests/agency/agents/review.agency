@@ -1,0 +1,8 @@
+import { reviewAgent } from "std::agents/review"
+import { feedbackHasErrors } from "std::agents/lib/feedback"
+
+// The mocked judge's error finding flows through to the caller.
+node errorFindingSurfaces(): boolean {
+  const findings = reviewAgent("the answer is 3", "compute 1+1")
+  return feedbackHasErrors(findings)
+}

@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "retriesUntilGrounded",
+      "description": "an ungrounded answer is retried and the revised answer returned",
+      "input": "",
+      "expectedOutput": "\"answer v2 with citation\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": "answer v1" },
+        { "return": [{ "error": true, "feedback": "no citation" }] },
+        { "return": "answer v2 with citation" },
+        { "return": [] }
+      ]
+    }
+  ]
+}

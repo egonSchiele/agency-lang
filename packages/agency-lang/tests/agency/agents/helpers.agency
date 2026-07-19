@@ -1,5 +1,7 @@
-import { withContext } from "std::agents/shared"
-import { review, renderFeedback, syntaxHintFor } from "std::agency"
+import { withContext } from "std::agents/lib/shared"
+import { renderFeedback } from "std::agents/lib/feedback"
+import { agencyReviewAgent } from "std::agents/agency/review"
+import { syntaxHintFor } from "std::agents/agency/coding"
 
 node contextEmpty(): boolean {
   return withContext("do X", "") == "do X"
@@ -13,11 +15,11 @@ node contextFilled(): boolean {
 // and assert the point-of-need hint actually fires on it, not just on a
 // hand-written string that happens to match the regex.
 node hintFiresOnRealForDiagnostic(): boolean {
-  const fb = review("node main() { for (let i = 0; i < 3; i = i + 1) { print(i) } }")
+  const fb = agencyReviewAgent("node main() { for (let i = 0; i < 3; i = i + 1) { print(i) } }")
   return syntaxHintFor(renderFeedback(fb)) != ""
 }
 
 node hintEmptyOnValidProgram(): boolean {
-  const fb = review("node main(): number { return 5 }")
+  const fb = agencyReviewAgent("node main(): number { return 5 }")
   return syntaxHintFor(renderFeedback(fb)) == ""
 }

@@ -1,0 +1,47 @@
+// Characterizes what works inside a block body, which the agents rely on
+// when they pass work to helpers like std::strategy revise.
+//
+// FINDING (2026-07-18): a ternary (`if c then a else b`) inside a block
+// evaluates to null. The codegen stores the ternary's value on the parent
+// frame while the block reads from its own, so the read misses. An if/else
+// statement in the same position works. Closures over enclosing locals work.
+def runBlock(block: (string) -> any): any {
+  return block("arg")
+}
+
+// Closures over an enclosing local work.
+node closureOverLocal(): string {
+  const outer = "outer-value"
+  return runBlock() as arg {
+    return "${arg}|${outer}"
+  }
+}
+
+// KNOWN BUG, pinned so a fix flips these two: a ternary inside a block
+// evaluates to null, whether or not it touches an enclosing local.
+node ternaryOnBlockArg(): string {
+  return runBlock() as arg {
+    const picked = if arg == "" then "empty" else "nonempty"
+    return picked
+  }
+}
+
+node ternaryOverLocal(): string {
+  const outer = "outer-value"
+  return runBlock() as arg {
+    const picked = if arg == "" then outer else arg
+    return picked
+  }
+}
+
+// The if/else workaround the agents use instead.
+node ifElseInBlockWorks(): string {
+  const outer = "outer-value"
+  return runBlock() as arg {
+    let picked = arg
+    if (arg == "") {
+      picked = outer
+    }
+    return picked
+  }
+}

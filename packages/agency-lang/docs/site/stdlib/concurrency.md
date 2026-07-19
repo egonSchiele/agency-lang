@@ -68,3 +68,27 @@ Caller notes:
 **Returns:** `any`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/concurrency.agency#L32))
+
+### concurrencyPool
+
+```ts
+concurrencyPool(size: number, items: any[], block: (item: any) -> any): any[]
+```
+
+Run a block in parallel across a bounded pool of workers.
+
+  @param size - Number of concurrent workers to run
+  @param items - The items to process
+  @param block - The work to run in each worker
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| size | `number` |  |
+| items | `any[]` |  |
+| block | `(item: any) => any` |  |
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/concurrency.agency#L52))

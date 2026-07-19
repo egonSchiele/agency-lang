@@ -1,26 +1,21 @@
 /** @module
-  Expert-guided coding agent.
+  @summary Consults an Agency-language specialist for a task: returns the
+  syntax rules and acceptance checklist a solver needs, grounded in the
+  bundled docs.
 
-  A weak model often fails a task not because it can't reason, but because it
-  is missing a domain convention (e.g. "an overlap-extension primer's annealing
-  arm must be 15-45 nt", "ELF memory addresses come from `p_vaddr`, not a
-  hardcoded 0x400000"). This agent first ACQUIRES that expertise — routing to an
-  Agency-language specialist (bundled docs) or a general-knowledge specialist
-  (web / Wikipedia) — then hands the task plus a concrete rules-and-checklist to
-  the coding agent to actually solve.
+  It only consults; to solve with the guidance, compose:
+
+    const guidance = guidanceOrEmpty(agencyExpertAgent(task))
+    agencyCodingAgent(task, context: renderGuidance(guidance))
+
+  For any other technical domain, use expertAgent, which consults the web
+  instead of the bundled docs.
 */
 import { typecheck } from "std::agency"
-import { codingAgent } from "std::agents/coding"
-import { unwrapGuard } from "std::agents/shared"
-import { map } from "std::array"
-import { fetch, fetchJSON, fetchMarkdown } from "std::http"
+import { ExpertGuidance, emptyGuidance } from "std::agents/lib/expertGuidance"
+import { llmOptions, withContext } from "std::agents/lib/shared"
 import { docsSkill } from "std::skills"
-import { systemMessage } from "std::thread"
-import {
-  search as wikipediaSearch,
-  summary as wikipediaSummary,
-  article as wikipediaArticle,
- } from "std::wikipedia"
+import { systemMessage, threadIsNew } from "std::thread"
 
 // Bundled Agency docs, served via std::skills (no startup approval — they
 // ship with the stdlib). `static` caches the tool across calls.
@@ -28,9 +23,9 @@ static const docSkill = docsSkill("guide")
 static const cliSkill = docsSkill("cli")
 static const diagnosticsSkill = docsSkill("diagnostics")
 
-static const agencyTools: any[] = [docSkill, cliSkill, diagnosticsSkill, typecheck]
+static const tools: any[] = [docSkill, cliSkill, diagnosticsSkill, typecheck]
 
-static const agencySys = """You are an expert in the Agency programming language, advising a weaker coding agent that is about to attempt the task below.
+static const systemPrompt = """You are an expert in the Agency programming language, advising a weaker coding agent that is about to attempt the task below.
 
 Return the domain-specific knowledge it needs to get the task right:
 - domain: "agency-lang".
@@ -40,85 +35,51 @@ Return the domain-specific knowledge it needs to get the task right:
 
 The bundled docs (docSkill / cliSkill / diagnosticsSkill) are authoritative — consult them rather than guessing. If the task needs no special Agency knowledge, return empty rules and checklist."""
 
-export def agencyExpertAgent(
-  question: string,
-  expertModel: string = "",
-  expertProvider: string = "",
+def consult(
+  task: string,
+  context: string,
+  model: string,
+  provider: string,
 ): ExpertGuidance {
-  """
-  Agency-language specialist: returns rules + a checklist grounded in the
-    bundled docs. @param question - the task to advise on.
-    @param expertModel - optional model override for the consult (empty = ambient).
-    @param expertProvider - optional provider for expertModel (empty = auto-resolve).
-  """
-  let guidance: ExpertGuidance = {
-    domain: "agency-lang",
-    rules: [],
-    checklist: []
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
   }
-  thread(label: "agencyExpert", session: "expert-agency") {
-    systemMessage(agencySys)
-    // The declared type on `g` drives structured output; branch so an empty
-    // model override never overwrites the client's default model with "".
-    if (expertModel == "") {
-      const g: ExpertGuidance = llm("Task:\n${question}", {
-        tools: agencyTools
-      })
-      guidance = g
-    } else {
-      const g: ExpertGuidance = llm(
-        "Task:\n${question}",
-        {
-        tools: agencyTools,
-        model: expertModel,
-        provider: expertProvider
-      },
-      )
-      guidance = g
-    }
-  }
+  const guidance: ExpertGuidance = llm(
+    "Task:\n${withContext(task: task, context: context)}",
+    llmOptions(model: model, provider: provider, tools: tools),
+  )
   return guidance
 }
 
-export def expertAgent(
+export def agencyExpertAgent(
   task: string,
   context: string = "",
-  maxCost: number = $20.00,
-  maxTime: number = 15m,
-  expertModel: string = "",
-  expertProvider: string = "",
-): string {
+  maxCost: number = $10.00,
+  maxTime: number = 10m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+): Result<ExpertGuidance> {
   """
-  Expert-guided coding agent. Consults a domain expert for the task's rules and
-  acceptance criteria, then solves the task with that guidance in hand. A
-  drop-in for plannerAgent: takes a task, returns a summary string; the real
-  output is filesystem side effects.
+  Consult an Agency-language specialist: return the syntax rules and
+  acceptance checklist a solver needs, grounded in the bundled docs.
 
-  @param task - what to accomplish.
-  @param context - optional extra material passed through to the solver.
-  @param maxCost - hard spend cap for the whole run (default $20).
-  @param maxTime - hard wall-clock cap for the whole run (default 15 minutes).
-  @param expertModel - optional model for the expert consult only, not the
-    solver (empty = the ambient model). Lets a caller put the one-shot expert
-    consult on a stronger model while the solve loop stays on the default.
-  @param expertProvider - optional provider for expertModel (empty = auto-resolve).
+  @param task - The task to advise on
+  @param context - Extra material, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
   """
-  const captured = guard(cost: maxCost, time: maxTime) {
-    const guidance = consultOrEmpty(task, expertModel, expertProvider)
-    let solverContext = renderGuidance(guidance)
-    if (context != "") {
-      solverContext = if solverContext == "" then context else "${solverContext}\n\n${context}"
+  // The guard Result is the return value: its failure carries whatever
+  // actually went wrong, whether that is a tripped budget or a failure from
+  // inside the block. guidanceOrEmpty at the call site fails open either way.
+  return guard(cost: maxCost, time: maxTime) {
+    let guidance: ExpertGuidance = emptyGuidance
+    thread(label: "agencyExpertAgent", session: session) {
+      guidance = consult(task: task, context: context, model: model, provider: provider)
     }
-    // Pass the expert checklist to the solver's verify step too (not just its
-    // system context), so the SAME authoritative criteria drive both building
-    // and checking — no independent blind spot between solve and verify.
-    return codingAgent(
-      task,
-      context: solverContext,
-      criteria: guidance.checklist,
-      maxCost: maxCost,
-      maxTime: maxTime,
-    )
+    return guidance
   }
-  return unwrapGuard(captured, "Expert")
 }

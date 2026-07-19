@@ -1,0 +1,29 @@
+import { threadIsNew, systemMessage } from "std::thread"
+
+// A named session is new on first open, resumed on the second.
+node namedSessionResumption(): boolean {
+  let first = false
+  let second = false
+  thread(label: "probe1", session: "probe-sess") {
+    first = threadIsNew()
+    systemMessage("sys")
+  }
+  thread(label: "probe2", session: "probe-sess") {
+    second = threadIsNew()
+  }
+  return first && !second
+}
+
+// Empty session means NO session: two blocks with session "" do not share.
+node emptySessionIsNoSession(): boolean {
+  let first = false
+  let second = false
+  thread(label: "e1", session: "") {
+    first = threadIsNew()
+    systemMessage("sys")
+  }
+  thread(label: "e2", session: "") {
+    second = threadIsNew()
+  }
+  return first && second
+}

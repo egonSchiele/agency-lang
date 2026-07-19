@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "preservesOrderAndResults",
+      "description": "pool returns every result in item order",
+      "input": "",
+      "expectedOutput": "[\"x:a\",\"x:b\",\"x:c\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "moreWorkersThanItems",
+      "description": "extra idle workers are harmless",
+      "input": "",
+      "expectedOutput": "[\"x:only\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

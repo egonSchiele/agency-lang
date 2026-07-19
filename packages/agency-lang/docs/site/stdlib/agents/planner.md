@@ -29,7 +29,7 @@ effect std::agents::planApprove {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L15))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L18))
 
 ## Functions
 
@@ -39,7 +39,7 @@ effect std::agents::planApprove {
 planCodePrompt(task: string, planText: string): string
 ```
 
-Build the writeAgency instruction: emit a program whose `node main` composes
+Build the code-generation instruction: emit a program whose `node main` composes
   the building blocks to carry out `planText` for `task`.
 
 **Parameters:**
@@ -51,7 +51,7 @@ Build the writeAgency instruction: emit a program whose `node main` composes
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L49))
 
 ### renderEffects
 
@@ -70,7 +70,7 @@ Human-readable capability envelope for the approval prompt, or an honest
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L77))
 
 ### runApproved
 
@@ -94,7 +94,7 @@ runApproved(
 
 **Returns:** [PlanState](#planstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L133))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L164))
 
 ### plannerAgent
 
@@ -105,7 +105,9 @@ plannerAgent(
   plan: string = "",
   maxCost: number = $100.00,
   maxTime: number = 60m,
-): string raises <std::agents::planApprove, std::guard>
+  model: string = "",
+  provider: string = "",
+): Result<string> raises <std::agents::planApprove, std::guard>
 ```
 
 Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
@@ -119,6 +121,8 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
   @param plan - optional seed plan; when non-empty the analysis step is skipped.
   @param maxCost - hard spend cap for the whole tree (default $100).
   @param maxTime - hard wall-clock cap (default 60 minutes).
+  @param model - model override for the planning step only, or "" for the ambient model.
+  @param provider - provider for the model override.
 
 **Parameters:**
 
@@ -129,7 +133,9 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 | plan | `string` | "" |
 | maxCost | `number` | $100.00 |
 | maxTime | `number` | 60m |
+| model | `string` | "" |
+| provider | `string` | "" |
 
-**Returns:** `string`
+**Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L195))

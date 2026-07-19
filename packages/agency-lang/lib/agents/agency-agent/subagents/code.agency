@@ -12,7 +12,11 @@ import { typecheck, parseAST } from "std::agency"
  * cwd at startup.
  */
 import { todoWrite, todoList } from "std::agent"
+import { codingAgent } from "std::agents/coding"
 import { expertAgent } from "std::agents/expert"
+import { verifierAgent } from "std::agents/verifier"
+import { guidanceOrEmpty, renderGuidance } from "std::agents/lib/expertGuidance"
+import { feedbackHasErrors as guidanceFeedbackHasErrors, renderFeedback as guidanceRenderFeedback } from "std::agents/lib/feedback"
 import { plannerAgent } from "std::agents/planner"
 import { edit } from "std::fs"
 import {
@@ -76,7 +80,18 @@ export def agencyCli(args: string[]): any {
   return exec("agency", args, useAgentCwd: true)
 }
 
-export static const codeSysPrompt = read("../prompts/code.md") with approve
+/** Read a bundled prompt file, or "" when it cannot be read. The prompts
+  ship with the agent, so a missing one means a packaging problem, not a
+  runtime condition worth failing the turn over. */
+def promptFile(filename: string): string {
+  const contents = read(filename) with approve
+  if (isFailure(contents)) {
+    return ""
+  }
+  return contents.value
+}
+
+export static const codeSysPrompt = promptFile("../prompts/code.md")
 
 // The file-system / shell tools are partially applied with
 // `useAgentCwd: true` so that, as agent tools, they resolve relative
@@ -134,7 +149,7 @@ and do NOT decline a task as "needs research / out of scope": search for
 what you need and keep going."""
 
 // Appended in one-shot / autonomous mode (`agency agent -p`)
-static const ONE_SHOT_NOTE = read("../prompts/oneShot.md") with approve
+static const ONE_SHOT_NOTE = promptFile("../prompts/oneShot.md")
 
 // Set by `agent.agency` (`setCodeOneShot`) before the first dispatch when the
 // run is non-interactive. Gates `ONE_SHOT_NOTE`.
@@ -184,13 +199,17 @@ def escalate(task: string, reason: string, plan: string): string {
   @param reason - why this task needs a multi-step plan.
   @param plan - your outline of the steps.
   """
-  return plannerAgent(
+  const planned = plannerAgent(
     task,
     context: reason,
     plan: plan,
     maxCost: ESCALATE_MAX_COST,
     maxTime: ESCALATE_MAX_TIME,
   )
+  if (isFailure(planned)) {
+    return "Planner stopped: ${planned.error}"
+  }
+  return planned.value
 }
 
 export def codeAgent(userMsg: string) {
@@ -207,22 +226,57 @@ export def codeAgent(userMsg: string) {
   // runs it) instead of the direct loop. Simple tasks fall through.
   const decision = triage(userMsg)
   if (routeFor(decision) == "planner") {
-    // TEMPORARY EXPERIMENT: route "complex" tasks to the expert-guided coding
-    // agent (acquire domain expertise, then solve) instead of plannerAgent, to
-    // see how front-loaded expertise performs. `escalate` (the mid-flight tool)
+    // Complex tasks acquire domain expertise first, then solve with it, then
+    // verify against the expert checklist. `escalate` (the mid-flight tool)
     // still uses plannerAgent.
     //
     // The expert consult runs once per task and sets the whole direction, so it
     // gets the slow/strong model (the oracle pattern). The solve loop stays on
     // the ambient model. Benchmarks that pin every slot to one model are
     // unaffected: getSlowModel() resolves to that same pinned model.
-    return expertAgent(
+    const consult = expertAgent(
       userMsg,
       maxCost: ESCALATE_MAX_COST,
-      maxTime: ESCALATE_MAX_TIME,
-      expertModel: getSlowModel(),
-      expertProvider: getSlowProvider(),
+      maxTime: 5m,
+      model: getSlowModel(),
+      provider: getSlowProvider(),
     )
+    const guidance = guidanceOrEmpty(consult)
+    const solved = codingAgent(
+      userMsg,
+      context: renderGuidance(guidance),
+      maxCost: ESCALATE_MAX_COST,
+      maxTime: ESCALATE_MAX_TIME,
+    )
+    let summary = if isFailure(solved) then "Coding agent stopped: ${solved.error}" else solved.value
+    // The expert checklist is authoritative acceptance criteria: verify the
+    // work against it and give the solver one round to fix what failed.
+    const checked = verifierAgent(
+      userMsg,
+      criteria: guidance.checklist,
+      maxCost: $5.00,
+      maxTime: 5m,
+    )
+    if (guidanceFeedbackHasErrors(checked)) {
+      const fixMsg = """
+${userMsg}
+
+A strict review found these problems:
+
+${guidanceRenderFeedback(checked)}
+
+Fix each problem exactly.
+"""
+      const fixed = codingAgent(
+        fixMsg,
+        maxCost: ESCALATE_MAX_COST,
+        maxTime: ESCALATE_MAX_TIME,
+      )
+      if (!isFailure(fixed)) {
+        summary = fixed.value
+      }
+    }
+    return summary
   }
   const tools = [...codeTools]
   // A "simple" task that turns out to need a plan can still switch mid-flight.

@@ -1,0 +1,258 @@
+/** @module
+  @summary Writes an Agency program for a task and iterates until it parses,
+  typechecks, compiles, and has a node main.
+
+  This agent's contract ends at VALID source. To also check the program's
+  behavior, compose it with agencyVerifierAgent: generate source here, run
+  agencyVerifierAgent on the result, and retry with its findings folded into
+  the task.
+*/
+import { compile } from "std::agency"
+import { agencyReviewAgent } from "std::agents/agency/review"
+import { renderFeedback, feedbackHasErrors } from "std::agents/lib/feedback"
+import { llmOptions, withContext } from "std::agents/lib/shared"
+import { docsSkill } from "std::skills"
+import { Critique, revise } from "std::strategy"
+import { systemMessage, threadIsNew } from "std::thread"
+
+/** A failed generation: the last source attempted, with the problems found
+  in it (review findings, compile errors, or the reason generation stopped). */
+export type WriteFailure = {
+  source: string;
+  problems: string[]
+}
+
+type GeneratedCode = {
+  code: string
+}
+
+// Kept in sync by hand with the syntax rules in the code subagent prompt
+// (lib/agents/agency-agent/subagents/code.agency) — the authoritative
+// source is docs/site/guide/basic-syntax.md, which the model can read
+// through the docs tool.
+static const systemPrompt = """You write code in the Agency language.
+Agency syntax rules you MUST follow:
+- Functions: def name(param: Type): ReturnType { ... }
+- Nodes: node name() { ... } — export the entry node.
+- if / while / for require parentheses AND curly braces: if (x > 5) { ... }
+- The ONLY for loop is for-in over an array: for (item in items) { ... }
+  There is NO C-style for (let i = 0; i < n; i++) loop. To count, use a
+  while loop:
+    let i = 1
+    while (i <= 3) {
+      print(i)
+      i = i + 1
+    }
+- Declare variables with let or const before use.
+- No Python-style colon blocks. Always { ... }.
+
+Here are complete, correct Agency programs. Copy their structure: the imports, the `node main`, and the explicit `return` at the end.
+
+EXAMPLE 1, compute and return a value:
+node main(): number {
+  let total = 0
+  for (x in [1, 2, 3]) {
+    total = total + x
+  }
+  return total
+}
+
+EXAMPLE 2, import a tool and define and call a helper:
+import { bash } from "std::shell"
+def greet(name: string): string {
+  return "Hello, \${name}"
+}
+node main(): string {
+  bash(command: "echo starting")
+  return greet("world")
+}
+
+EXAMPLE 3, get structured output from the model by annotating the result type:
+type Summary = { title: string; points: string[] }
+node main(): Summary {
+  const s: Summary = llm("Summarize the water cycle with a title and three bullet points.")
+  return s
+}
+
+Commonly useful standard library modules:
+- std::shell: bash, exec, ls, grep, glob (run commands, inspect files)
+- std::http: fetch, fetchJSON (call web APIs)
+- std::array: map, filter (transform lists)
+- std::agency: runCode (run Agency code)
+
+If you are unsure about syntax or a standard-library function, read the
+relevant page with the docs tool before writing code.
+Return only the complete program in the code field."""
+
+static const tools: any[] = [docsSkill("guide")]
+
+export def syntaxHintFor(errors: string): string {
+  """
+  Return a specific syntax reminder to inject next to a diagnostic, or ""
+  when no known pattern matches.
+
+  @param errors - The rendered diagnostic text to match against
+  """
+  if (errors =~ re/for loop condition/) {
+    return "Reminder: Agency has no C-style for loop. Count with a while loop, or iterate with for (x in items)."
+  }
+  return ""
+}
+
+/** Prepend the point-of-need syntax hint to a diagnostic block, if one
+  applies. The rule lands better delivered alongside the error than buried in
+  the system prompt. */
+def withSyntaxHint(findings: string): string {
+  const hint = syntaxHintFor(findings)
+  return if hint == "" then findings else "${hint}\n\n${findings}"
+}
+
+/** True when the source declares a `node main` entry point. Missing main is
+  not a typecheck diagnostic, so the loop checks for it directly. */
+def hasMainNode(source: string): boolean {
+  return source =~ re/node\s+main\s*\(/
+}
+
+// The loop's running state as a plain object. saveDraft cannot receive a
+// failure Result (failure propagation blocks failures at TS boundaries), so
+// the loop tracks a plain outcome and only the public boundary converts it
+// to a Result. The guard block returns this same shape, so a salvaged draft
+// and a normal return are indistinguishable to the unwrap.
+type WriteOutcome = {
+  valid: boolean;
+  source: string;
+  problems: string[]
+}
+
+def outcomeToResult(outcome: WriteOutcome): Result<string, WriteFailure> {
+  if (outcome.valid) {
+    return success(outcome.source)
+  }
+  return failure({ source: outcome.source, problems: outcome.problems })
+}
+
+// Judge one generated program. The critique it returns becomes the repair
+// instruction the next attempt receives, so what the checker found and what
+// the writer is told to fix can never drift apart.
+def checkSource(source: string): Critique {
+  const reviewed = agencyReviewAgent(source: source)
+  if (feedbackHasErrors(reviewed)) {
+    const findings = renderFeedback(reviewed)
+    return {
+      accepted: false,
+      feedback: "That code has problems:\n${withSyntaxHint(findings)}\nReturn a corrected complete program.",
+    }
+  }
+  const compiled = compile(source)
+  if (compiled is failure(compileErr)) {
+    return {
+      accepted: false,
+      feedback: "That code failed to compile:\n${withSyntaxHint("${compileErr}")}\nReturn a corrected complete program.",
+    }
+  }
+  if (!hasMainNode(source)) {
+    return {
+      accepted: false,
+      feedback: "The program compiles but has no `node main`. Every program MUST have a node named `main` as its entry point. Add one and return the complete program.",
+    }
+  }
+  return { accepted: true, feedback: "" }
+}
+
+// The critique doubles as the record of what was wrong with the attempt, so
+// an exhausted run reports it alongside the source it belongs to. Each
+// attempt is checked once here, and `revise` reads the verdict back out.
+def outcomeFor(source: string): WriteOutcome {
+  const critique = checkSource(source)
+  if (critique.accepted) {
+    return { valid: true, source: source, problems: [] }
+  }
+  return { valid: false, source: source, problems: [critique.feedback] }
+}
+
+def critiqueOf(outcome: WriteOutcome): Critique {
+  if (outcome.valid) {
+    return { accepted: true, feedback: "" }
+  }
+  return { accepted: false, feedback: outcome.problems[0] }
+}
+
+def generateLoop(
+  task: string,
+  context: string,
+  maxAttempts: number,
+  model: string,
+  provider: string,
+): WriteOutcome {
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
+  }
+  const opening = "Write an Agency program for this task:\n<task>\n${withContext(task: task, context: context)}\n</task>"
+  return revise(
+    maxAttempts: maxAttempts,
+    check: critiqueOf,
+  ) as critique {
+    // if/else, not a ternary: a ternary inside a block evaluates to null.
+    // See tests/agency/agents/blockProbe.agency.
+    let prompt = critique
+    if (critique == "") {
+      prompt = opening
+    }
+    const generated: GeneratedCode = llm(
+      prompt,
+      llmOptions(model: model, provider: provider, tools: tools),
+    )
+    const outcome = outcomeFor(source: generated.code)
+    saveDraft(outcome)
+    return outcome
+  }
+}
+
+export def agencyCodingAgent(
+  task: string,
+  context: string = "",
+  maxAttempts: number = 3,
+  maxCost: number = $20.00,
+  maxTime: number = 15m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+): Result<string, WriteFailure> {
+  """
+  Write an Agency program for the task. Iterates until the source parses,
+  typechecks, compiles, and has a node main, or attempts run out. On failure
+  returns the last attempted source with the problems found in it.
+
+  @param task - What the program should do
+  @param context - Extra material folded into the prompt, or ""
+  @param maxAttempts - Generation attempts before giving up
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  """
+  const captured = guard(cost: maxCost, time: maxTime) {
+    let outcome: WriteOutcome = { valid: false, source: "", problems: ["generation never ran"] }
+    thread(label: "agencyCodingAgent", session: session) {
+      outcome = generateLoop(task, context, maxAttempts, model, provider)
+    }
+    return outcome
+  }
+  // The guard Result cannot pass straight through here: this agent reports
+  // failures as a WriteFailure carrying the last source. isFailure, not
+  // match, because a match inside a resumed block evaluates to null (see
+  // tests/agency/supervise/nestedGuardResume.agency), and the whole error is
+  // interpolated rather than a .type field that only guard trips carry.
+  if (isFailure(captured)) {
+    // Nothing was ever drafted: the run stopped before the first attempt.
+    return failure({
+      source: "",
+      problems: ["agencyCodingAgent stopped before generating: ${captured.error}"],
+    })
+  }
+  // A rejected trip with a saved draft arrives success-shaped carrying the
+  // draft, which has the same WriteOutcome shape as a normal return, so
+  // this covers both.
+  return outcomeToResult(outcome: captured.value)
+}

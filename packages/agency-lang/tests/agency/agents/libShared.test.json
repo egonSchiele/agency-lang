@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "nodeName": "contextFolding",
+      "description": "withContext folds context",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "llmOptionsEmptyModelUntouched",
+      "description": "empty model yields no model/provider fields",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "llmOptionsSetsModelAndProvider",
+      "description": "model override sets model, provider, hostedTools",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "emptyGuidanceRendersEmpty",
+      "description": "failed consult renders empty guidance",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "failOpen",
+      "description": "failOpenFeedback maps failure to no findings",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "llmAcceptsComputedOptions",
+      "description": "llm accepts a computed options object",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }]
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { map, filter } from "std::array"
-import { verify as stdVerify, Feedback } from "std::agency"
+import { verifierAgent } from "std::agents/verifier"
+import { Feedback } from "std::agents/lib/feedback"
 
 /*
  * Verify subagent: a thin adapter over `std::agency::verify` for the code
@@ -44,15 +45,17 @@ def errorGaps(fb: Result<Feedback[]>): string[] {
   }
 }
 
-export def verify(originalUserMsg: string): Verdict {
+export def verify(originalUserMsg: string, criteria: string[] = []): Verdict {
   """
   Fresh-eyes verification of the code agent's work: delegates to
-  `std::agency::verify` (which inspects the working directory and runs the
-  artifact against the task's own success criteria) and converts its findings
-  into a Verdict, one gap per error finding.
+  `verifierAgent` (which inspects the working directory and runs the artifact
+  against the task's own success criteria) and converts its findings into a
+  Verdict, one gap per error finding.
 
   @param originalUserMsg - the original task description to verify against.
+  @param criteria - authoritative acceptance criteria to check, or [] to
+    derive them from the task alone.
   """
-  const gaps = errorGaps(stdVerify(originalUserMsg))
+  const gaps = errorGaps(verifierAgent(originalUserMsg, criteria: criteria))
   return { satisfied: gaps.length == 0, gaps: gaps }
 }

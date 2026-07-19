@@ -1,0 +1,17 @@
+import { concurrencyPool } from "std::concurrency"
+
+// Pins the two bugs fixed in the pool: results must come back through the
+// fork branch return values (locals are not shared into branches), and
+// item indices must be tracked explicitly (map passes no index).
+node preservesOrderAndResults(): any {
+  return concurrencyPool(size: 2, items: ["a", "b", "c"]) as item {
+    return "x:${item}"
+  }
+}
+
+// More workers than items must not crash or drop results.
+node moreWorkersThanItems(): any {
+  return concurrencyPool(size: 4, items: ["only"]) as item {
+    return "x:${item}"
+  }
+}

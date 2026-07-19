@@ -282,14 +282,16 @@ describe("agency.interrupt — frame requirements", () => {
   });
 });
 
-// Regression test for the recursive handler bug debugged in
-// https://ampcode.com/threads/T-019e7a80-0a51-75ce-840e-89b5f595da5c.
-// A handler whose body raises an interrupt triggers a nested
-// runHandlerChain dispatch that visits the same handler again
-// (the chain visits every handler, even after one approves), leading
-// to unbounded recursion. The runtime now bounds nested-dispatch depth
-// at MAX_HANDLER_CHAIN_DEPTH and throws HandlerRecursionError when
-// exceeded, naming the offending interrupt kind in the message.
+// A handler never hears its own raises: the dispatcher skips the
+// executing entry, so a handler body may raise without re-entering
+// itself, and an in-handler raise nothing settles is refused as a
+// rejection (a handler cannot pause to ask the user). These tests pin
+// that rule. The depth guard (MAX_HANDLER_CHAIN_DEPTH) survives only as
+// a backstop: exclusion is per activation, so sibling registrations of
+// the same handler still hear each other, bounded by registration count.
+// (This suite once pinned the opposite behavior — unbounded recursion
+// caught by HandlerRecursionError, debugged in
+// https://ampcode.com/threads/T-019e7a80-0a51-75ce-840e-89b5f595da5c.)
 describe("agency.interrupt — raising inside a handler", () => {
   // A handler never hears its own raises: the executing entry is skipped
   // during dispatch. With no other handler registered, nothing settles the
@@ -369,11 +371,14 @@ describe("agency.interrupt — raising inside a handler", () => {
         return "done";
       }),
     );
-    // The outer kickoff runs both activations; each activation's own raise
-    // is heard by the other side exactly as the chain allows: the deepest
-    // raise (both executing) is refused.
-    expect(heardInner).toBeGreaterThan(0);
-    expect(refusals).toBeGreaterThan(0);
+    // Deterministic flow: the outer kickoff visits both entries; each
+    // activation's raise is heard by the other side exactly once, and
+    // each cross-heard raise re-raises into a dispatch where both
+    // entries are executing, which is refused. Exact counts, because a
+    // broken exclusion inflates them before it crashes — a > 0 assertion
+    // would sleep through that.
+    expect(heardInner).toBe(2);
+    expect(refusals).toBe(2);
   });
 
   it("a refused in-handler raise does not leak state into the next dispatch", async () => {

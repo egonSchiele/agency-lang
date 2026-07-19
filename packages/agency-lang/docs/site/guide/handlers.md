@@ -200,7 +200,7 @@ This is what lets a reviewer inside a handler use tools:
 handle {
   agentDoesWork()
 } with (data) {
-  const verdict = llm("Should I allow this?", tools: [read, grep])
+  const verdict: { ok: boolean } = llm("Should I allow this?", tools: [read, grep])
   if (verdict.ok) {
     return approve()
   }

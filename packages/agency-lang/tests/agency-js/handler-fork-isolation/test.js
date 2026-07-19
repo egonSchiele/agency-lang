@@ -1,9 +1,11 @@
 import { writeFileSync } from "fs";
+import { runForkIsolation } from "./agent.js";
 
-// Capture everything printed before the agency module loads, so the
-// ASKED/READ lines from both fork branches are countable. Prints are the
-// only cross-branch observable: handler counter writes land in the
-// raising branch's isolated state and vanish at the join.
+// Capture everything printed while the fork runs, so the ASKED/READ
+// lines from both branches are countable. Prints are the only
+// cross-branch observable: handler counter writes land in the raising
+// branch's isolated state and vanish at the join. The prints happen at
+// call time, not module init, so a static import is fine.
 const lines = [];
 const originalLog = console.log;
 console.log = (...parts) => {
@@ -11,9 +13,12 @@ console.log = (...parts) => {
   originalLog(...parts);
 };
 
-const { runForkIsolation } = await import("./agent.js");
-const result = await runForkIsolation();
-console.log = originalLog;
+let result;
+try {
+  result = await runForkIsolation();
+} finally {
+  console.log = originalLog;
+}
 
 const count = (needle) => lines.filter((line) => line.includes(needle)).length;
 

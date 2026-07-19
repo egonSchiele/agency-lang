@@ -8,7 +8,11 @@ import { DIAGNOSTIC_EXPLANATIONS } from "@/typeChecker/diagnosticExplanations.js
 type Page = { relPath: string; contents: string };
 
 function codesForCategory(prefix: string) {
+  // Retired diagnostics keep their registry entry (the code stays
+  // reserved and `agency explain` still answers for it) but drop out of
+  // the public docs pages.
   return Object.entries(DIAGNOSTICS)
+    .filter(([, e]) => !("retired" in e))
     .filter(([, e]) => categoryForCode(e.code)?.prefix === prefix)
     .sort(([, a], [, b]) => a.code.localeCompare(b.code));
 }

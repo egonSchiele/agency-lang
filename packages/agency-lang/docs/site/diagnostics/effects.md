@@ -94,16 +94,6 @@ This function may raise interrupts, but it is called from a place that is not in
 
 **How to fix:** wrap the call in a `handle` block for the effects it may raise, or confirm a handler is installed higher up.
 
-<a id="ag3010"></a>
-
-## AG3010 — RETIRED: handler functions may raise interrupts. The dispatcher skips the executing handler for its own raises, so the recursion this diagnostic guarded against cannot happen. Remove any `// @tc-ignore AG3010` suppressions.
-
-*Default severity: error.*
-
-RETIRED. Handler functions may raise interrupts: a handler never hears its own raises (the dispatcher skips the executing handler entry), so the recursion this diagnostic guarded against cannot happen. The raise is decided by the rest of the chain — an outer handler or an explicit `with approve` — and a raise nothing settles is rejected with an explanatory message, because a handler cannot pause to ask the user.
-
-**How to fix:** nothing — code this diagnostic used to flag is now legal. If you suppressed it with `// @tc-ignore AG3010`, remove the suppression. See the handlers guide for the full rules.
-
 <a id="ag3011"></a>
 
 ## AG3011 — `interrupt` is not allowed inside a callback body (callback registered on '&#123;hook&#125;' may raise [&#123;effects&#125;]). Callbacks fire as side effects; their body cannot pause execution to ask the user a question. Move the `interrupt` into the calling node/function instead, or use a runtime guard if you wanted budget enforcement.

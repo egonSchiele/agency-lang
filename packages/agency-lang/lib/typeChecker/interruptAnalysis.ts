@@ -414,58 +414,11 @@ export function checkUnhandledInterruptWarnings(
   }
 }
 
-/**
- * A handler whose body can itself raise an interrupt creates a
- * dispatch-recursion loop: the inner interrupt re-enters the handler
- * chain, which visits every handler (including the one currently
- * running), which raises another interrupt, etc. The runtime now
- * bounds this at `MAX_HANDLER_CHAIN_DEPTH` and throws
- * `HandlerRecursionError`, but catching it at compile time is better.
- *
- * Restructure the code so the handler doesn't call interrupt-raising
- * functions — e.g. hoist a `read("policy.json") with approve` out of
- * the handler and into `node main()` (see `ensurePolicyLoaded` in
- * `lib/agents/agency-agent/agent.agency` for the canonical fix).
- *
- * If the call really is unavoidable, suppress this error with a
- * `// @tc-ignore` comment on the line above the `handle` block.
- */
-export function checkHandlerBodyInterrupts(
-  scopes: ScopeInfo[],
-  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
-  ctx: TypeCheckerContext,
-): void {
-  for (const info of scopes) {
-    ctx.withScope(info.scopeKey, () => {
-      for (const { node } of walkNodes(info.body)) {
-        if (node.type !== "handleBlock") continue;
-        const kinds = collectHandlerOffenderKinds(
-          node,
-          info,
-          interruptEffectsByFunction,
-          ctx,
-        );
-        if (kinds.length === 0) continue;
-        const handlerLabel =
-          node.handler.kind === "functionRef"
-            ? `'${node.handler.functionName}'`
-            : "(inline)";
-        // {handler} is a subject reference — a quoted name or "(inline)".
-        // handlerName rides along as a structured extra when one exists.
-        const params: DiagnosticParams<"handlerBodyRaises"> = {
-          handler: handlerLabel,
-          effects: kinds.join(", "),
-        };
-        if (node.handler.kind === "functionRef") {
-          params.handlerName = node.handler.functionName;
-        }
-        ctx.errors.push(
-          diagnostic("handlerBodyRaises", params, node.loc ?? null),
-        );
-      }
-    });
-  }
-}
+// AG3010 (handlerBodyRaises) lived here until handler self-exclusion
+// landed: the dispatcher now skips the executing handler entry for its
+// own raises, so the recursion the check guarded against cannot happen
+// and raising inside a handler body is legal. The registry entry is
+// retired, not deleted, so the code stays reserved.
 
 /**
  * Every interrupt effect kind an (inline handler / handle) `body` can raise,
@@ -488,24 +441,6 @@ export function collectRaisableEffects(
     }
   }
   return kinds;
-}
-
-/** Collect every interrupt effect a handle block's handler may raise,
- *  transitively. For a `functionRef` handler we read the already-propagated
- *  kinds directly; for an inline handler we delegate to `collectRaisableEffects`
- *  on the handler body — so transitive interrupts via tool calls, function refs
- *  in args, or `goto` targets are caught with no duplicated walker logic. */
-function collectHandlerOffenderKinds(
-  node: { handler: { kind: string; functionName?: string; body?: any[] } },
-  info: ScopeInfo,
-  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
-  ctx: TypeCheckerContext,
-): string[] {
-  if (node.handler.kind === "functionRef") {
-    const ks = interruptEffectsByFunction[node.handler.functionName!] ?? [];
-    return ks.map((k) => k.effect);
-  }
-  return collectRaisableEffects(node.handler.body ?? [], info, interruptEffectsByFunction, ctx);
 }
 
 /** Narrow a call-argument slot (which may be a positional Expression,

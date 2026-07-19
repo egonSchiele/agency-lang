@@ -10,7 +10,6 @@ def doWork(): string {
 
 node main() {
   let result = ""
-  // @tc-ignore AG3010
   handle {
     result = doWork()
   } with (data) {

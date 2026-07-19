@@ -16,7 +16,6 @@ def spin(rounds: number): string {
 }
 
 def inner(): string {
-  // @tc-ignore AG3010
   handle {
     interrupt("please review")
     return "work done"

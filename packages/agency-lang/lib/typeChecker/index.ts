@@ -39,7 +39,6 @@ import {
   buildInterruptCallGraph,
   checkUnhandledInterruptWarnings,
   checkCallbackBodyInterrupts,
-  checkHandlerBodyInterrupts,
 } from "./interruptAnalysis.js";
 import { checkFinalizeBlocks } from "./finalizeChecks.js";
 import { checkAllRaises } from "./functionTypeRaises.js";
@@ -346,10 +345,6 @@ export class TypeChecker {
     // side effects; their body cannot pause execution.
     checkCallbackBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
     checkFinalizeBlocks(scopes, interruptEffectsByFunction, ctx);
-
-    // Reject handlers whose body may itself raise an interrupt — that
-    // re-enters the handler chain and recurses (see HandlerRecursionError).
-    checkHandlerBodyInterrupts(scopes, interruptEffectsByFunction, ctx);
 
     // Verify declared `raises` clauses (on def/node and on function types) are
     // not exceeded by the values' inferred effect sets.

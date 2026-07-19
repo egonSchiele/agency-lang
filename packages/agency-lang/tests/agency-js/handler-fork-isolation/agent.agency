@@ -13,7 +13,6 @@
 // leaked across lineages; a doubled line means a handler was re-entered
 // for its own read.
 node runForkIsolation(): string {
-  // @tc-ignore AG3010
   const results = fork(["A", "B"]) as tag {
     handle {
       interrupt("kickoff-${tag}")

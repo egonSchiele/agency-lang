@@ -18,7 +18,6 @@ def doWork(): string {
 }
 
 def inner(): string {
-  // @tc-ignore AG3010
   handle {
     return doWork()
   } with (data) {

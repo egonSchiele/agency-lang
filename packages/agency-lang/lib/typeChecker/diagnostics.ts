@@ -396,8 +396,9 @@ export const DIAGNOSTICS = {
   handlerBodyRaises: {
     code: "AG3010",
     severity: "error",
+    retired: true,
     message:
-      "Handler {handler} may raise interrupts [{effects}]. That would re-enter the handler chain (the dispatcher visits every handler, even the one currently running) and recurse until `HandlerRecursionError` fires at runtime. Restructure so the handler doesn't call interrupt-raising code (e.g. hoist file I/O out of the handler), or suppress this error with `// @tc-ignore` on the line above the `handle` block.",
+      "RETIRED: handler functions may raise interrupts. The dispatcher skips the executing handler for its own raises, so the recursion this diagnostic guarded against cannot happen. Remove any `// @tc-ignore AG3010` suppressions.",
   },
   interruptInCallback: {
     code: "AG3011",

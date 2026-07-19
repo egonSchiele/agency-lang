@@ -81,7 +81,7 @@ function handlerParamType(
  *
  * Runs each scope under `ctx.withScope(info.scopeKey, …)` so `collectRaisableEffects`
  * → `synthType` resolves scope-local type aliases against the right scope (mirrors
- * `checkHandlerBodyInterrupts`).
+ * the retired AG3010 check once did).
  */
 export function refineInlineHandlerParams(
   scopes: ScopeInfo[],

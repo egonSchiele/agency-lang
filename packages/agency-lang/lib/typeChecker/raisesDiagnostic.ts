@@ -12,8 +12,8 @@ import type { SourceLocation } from "../types/base.js";
  * effect. Also reports a `raises` clause that references a known type alias
  * which is not an effect set.
  *
- * Independent of `checkHandlerBodyInterrupts`: that one flags handler
- * *bodies* that raise; this one compares a declaration to an inferred set.
+ * Compares a declaration to an inferred set; raising inside handler
+ * bodies is legal (the retired AG3010 once flagged it).
  *
  * IMPORTANT: do not suggest "handle it inside the function" as a fix.
  * Under Agency's handler-chain semantics every handler in the stack runs,

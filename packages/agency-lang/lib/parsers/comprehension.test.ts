@@ -38,7 +38,8 @@ describe("comprehensionParser", () => {
     const node = parseExpr("[f(x) for x in xs]");
     expect(node.type).toBe("comprehension");
     expect(node.itemVar).toBe("x");
-    expect(node.parallel).toBe(false);
+    expect(node.mode).toBe("seq");
+    expect(node.shared).toBe(false);
     expect(node.condition).toBeUndefined();
   });
 
@@ -67,13 +68,95 @@ describe("comprehensionParser", () => {
   it("parses the fork form", () => {
     const node = parseExpr("fork [f(x) for x in xs]");
     expect(node.type).toBe("comprehension");
-    expect(node.parallel).toBe(true);
+    expect(node.mode).toBe("fork");
+    expect(node.shared).toBe(false);
   });
 
   it("parses the fork form with a filter", () => {
     const node = parseExpr("fork [f(x) for x in xs if p(x)]");
-    expect(node.parallel).toBe(true);
+    expect(node.mode).toBe("fork");
+    expect(node.shared).toBe(false);
     expect(node.condition).toBeDefined();
+  });
+
+  it("parses the forkShared form", () => {
+    // also the ordering pin: if the or() tried str("fork") before
+    // str("forkShared"), fork would match, die on the S where required
+    // whitespace should be, and this test would fail
+    const node = parseExpr("forkShared [f(x) for x in xs]");
+    expect(node.type).toBe("comprehension");
+    expect(node.mode).toBe("fork");
+    expect(node.shared).toBe(true);
+  });
+
+  it("parses the race form", () => {
+    const node = parseExpr("race [f(x) for x in xs]");
+    expect(node.mode).toBe("race");
+    expect(node.shared).toBe(false);
+  });
+
+  it("parses the raceShared form", () => {
+    const node = parseExpr("raceShared [f(x) for x in xs]");
+    expect(node.mode).toBe("race");
+    expect(node.shared).toBe(true);
+  });
+
+  it("composes a shared prefix with a filter and two binders", () => {
+    const node = parseExpr("forkShared [f(x, i) for x, i in xs if p(x)]");
+    expect(node.mode).toBe("fork");
+    expect(node.shared).toBe(true);
+    expect(node.indexVar).toBe("i");
+    expect(node.condition).toBeDefined();
+  });
+
+  it("parses a multi-line comprehension behind a new prefix", () => {
+    // tarsec spaces cross newlines; the merged suite pins this at every
+    // keyword boundary, and the prefix is a fourth boundary with the
+    // same exposure
+    const node = parseExpr("forkShared [f(x)\n    for x in xs]");
+    expect(node.mode).toBe("fork");
+    expect(node.shared).toBe(true);
+  });
+
+  // Not a prefix without required whitespace after the keyword. Probed
+  // against the pre-change grammar as failing; the new grammar reaches
+  // the same conclusion by a different path (forkShared matches then
+  // dies on the space, fork matches then dies on the S) - this test IS
+  // the re-verification the plan calls for.
+  it("does not treat forkSharedx as a prefix", () => {
+    expect(parseFails("forkSharedx [x for x in xs]")).toBe(true);
+  });
+
+  // forkShared is not reserved. No-space indexing parses as value
+  // access (the comprehension parser needs whitespace after the
+  // keyword, so it never engages); WITH a space it fails to parse -
+  // matching `somearr [0]`, because spaced indexing is not legal
+  // Agency for ANY identifier (probed).
+  it("still parses forkShared[0] as indexing", () => {
+    const node = parseExpr("forkShared[0]");
+    expect(node.type).toBe("valueAccess");
+  });
+
+  it("rejects forkShared [0] the same as any spaced indexing", () => {
+    expect(parseFails("forkShared [0]")).toBe(true);
+    expect(parseFails("somearr [0]")).toBe(true);
+  });
+
+  // race was already a callable (race(items, shared: true) as x { } is
+  // documented in the concurrency guide) and this plan promotes the
+  // word to a prefix keyword. Pin that existing call uses survive: the
+  // prefix rule needs whitespace-then-bracket, so a paren falls through.
+  it("still parses race(xs) as x {} as a function call", () => {
+    const node = parseExpr("race(xs) as x { return x }");
+    expect(node.type).toBe("functionCall");
+    expect(node.functionName).toBe("race");
+    expect(node.block).toBeDefined();
+  });
+
+  it("still rejects race (xs) like any spaced call", () => {
+    // spaced calls are not legal Agency for any identifier (probed
+    // pre-change with the same input); the prefix must not change that
+    expect(parseFails("race (xs) as x { return x }")).toBe(true);
   });
 
   // Bracket-nesting cases: the inner `]` is a plausible place for the

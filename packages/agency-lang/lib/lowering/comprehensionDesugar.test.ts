@@ -24,6 +24,11 @@ function desugarExpr(src: string): any {
   return main.body[0].value;
 }
 
+/** The shared: true named argument of a desugared call, if present. */
+function namedArg(callNode: any): any {
+  return callNode.arguments.find((a: any) => a.type === "namedArgument");
+}
+
 describe("comprehensionDesugar", () => {
   it("lowers a plain comprehension to map with a block", () => {
     const out = desugarExpr("[f(x) for x in xs]");
@@ -132,6 +137,55 @@ describe("comprehensionDesugar", () => {
     const filterBlock = out.arguments[0].block;
     expect(filterBlock.body[0]).not.toBe(out.block.body[0]);
     expect(filterBlock.body[1]).not.toBe(out.block.body[1]);
+  });
+
+  it("lowers forkShared to a fork call carrying shared: true", () => {
+    const out = desugarExpr("forkShared [f(x) for x in xs]");
+    expect(out.functionName).toBe("fork");
+    expect(namedArg(out).name).toBe("shared");
+    // stampLoc fills the synthesized literal's loc too (deliberate), so
+    // match the semantic fields rather than deep-equality
+    expect(namedArg(out).value.type).toBe("boolean");
+    expect(namedArg(out).value.value).toBe(true);
+  });
+
+  it("lowers a plain fork with NO shared argument", () => {
+    const out = desugarExpr("fork [f(x) for x in xs]");
+    expect(namedArg(out)).toBeUndefined();
+  });
+
+  it("lowers race to a call named exactly race", () => {
+    // the builder keys on this name to reach processForkCall
+    const out = desugarExpr("race [f(x) for x in xs]");
+    expect(out.functionName).toBe("race");
+    expect(out.block).toBeDefined();
+  });
+
+  it("lowers raceShared to race plus the shared argument", () => {
+    const out = desugarExpr("raceShared [f(x) for x in xs]");
+    expect(out.functionName).toBe("race");
+    expect(namedArg(out).name).toBe("shared");
+  });
+
+  it("keeps the shared argument outside the filter nesting", () => {
+    // filter runs sequentially BEFORE the fan-out; shared belongs to the
+    // outer concurrent call only
+    const out = desugarExpr("forkShared [f(x) for x in xs if p(x)]");
+    expect(out.functionName).toBe("fork");
+    expect(namedArg(out)).toBeDefined();
+    const filter = out.arguments[0];
+    expect(filter.functionName).toBe("filter");
+    expect(namedArg(filter)).toBeUndefined();
+  });
+
+  it("puts the shared argument beside a _pairsOf-wrapped source", () => {
+    // two binders wrap the source in _pairsOf; an implementation that
+    // appended shared BEFORE wrapping, or assumed arguments[0] is the
+    // raw iterable, passes every other test and fails this one
+    const out = desugarExpr("forkShared [f(x, i) for x, i in xs]");
+    expect(out.functionName).toBe("fork");
+    expect(out.arguments[0].functionName).toBe("_pairsOf");
+    expect(namedArg(out).name).toBe("shared");
   });
 
   it("is idempotent", () => {

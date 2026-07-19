@@ -1,4 +1,9 @@
-import type { AgencyNode, Assignment, Expression } from "../types.js";
+import type {
+  AgencyNode,
+  Assignment,
+  Expression,
+  NamedArgument,
+} from "../types.js";
 import type { BlockArgument } from "../types/blockArgument.js";
 import type { Comprehension } from "../types/comprehension.js";
 import type { FunctionCall } from "../types/function.js";
@@ -91,10 +96,30 @@ function blockArg(body: AgencyNode[], paramName: string): BlockArgument {
 
 function call(
   functionName: string,
-  args: Expression[],
+  args: (Expression | NamedArgument)[],
   block: BlockArgument,
 ): FunctionCall {
   return { type: "functionCall", functionName, arguments: args, block };
+}
+
+/** mode -> the call the comprehension lowers to. Keyed on the type, so
+ *  a new mode is a compile error here rather than a silent fallthrough. */
+const CALL_NAME: Record<Comprehension["mode"], string> = {
+  seq: "map",
+  fork: "fork",
+  race: "race",
+};
+
+/** The `shared: true` named argument, in exactly the shape the parser
+ *  produces for hand-written `fork(xs, shared: true)` and the builder
+ *  pulls off in processForkCall. BooleanLiteral value is a real boolean
+ *  (unlike NumberLiteral, whose value is a string). */
+function sharedArg(): NamedArgument {
+  return {
+    type: "namedArgument",
+    name: "shared",
+    value: { type: "boolean", value: true },
+  };
 }
 
 function returnStmt(value: Expression): AgencyNode {
@@ -251,8 +276,10 @@ function lower(node: Comprehension): FunctionCall {
 
   return stampLoc(
     call(
-      node.parallel ? "fork" : "map",
-      [source],
+      CALL_NAME[node.mode],
+      // named argument AFTER the positional source, matching how a user
+      // writes fork(xs, shared: true)
+      node.shared ? [source, sharedArg()] : [source],
       blockArg(
         [...unpackStatements(node, paramName), returnStmt(node.expression)],
         paramName,

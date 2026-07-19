@@ -15,6 +15,12 @@ describe("agency fmt preserves comprehensions", () => {
     ],
     ["fork [f(x) for x in xs]", "fork [f(x) for x in xs]"],
     ["fork [f(x) for x in xs if p(x)]", "fork [f(x) for x in xs if p(x)]"],
+    ["forkShared [f(x) for x in xs]", "forkShared [f(x) for x in xs]"],
+    ["race [f(x) for x in xs]", "race [f(x) for x in xs]"],
+    [
+      "raceShared [f(x) for x in xs if p(x)]",
+      "raceShared [f(x) for x in xs if p(x)]",
+    ],
   ];
 
   for (const [expr, expected] of cases) {

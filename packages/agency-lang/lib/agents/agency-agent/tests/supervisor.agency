@@ -6,12 +6,16 @@ import {
   applyThrashRule,
   CheckRecord,
   SupervisorVerdict,
+  stringifyDraft,
+  draftDelta,
+  renderDraftSection,
  } from "../subagents/supervisor.agency"
 
 def record(assessment: string): CheckRecord {
   return {
     minutes: 5,
     findings: 1,
+    draftStatus: "changed",
     assessment: assessment,
     action: "continue",
     message: ""
@@ -24,6 +28,55 @@ def stalledVerdict(): SupervisorVerdict {
     action: "redirect",
     message: "same failing test as last time"
   }
+}
+
+// A stalled verdict plus an unchanged draft stops IMMEDIATELY: two
+// independent signals agree, and the draft delta is computed, not judged.
+node stalledWithUnchangedDraftStops(): string {
+  const decision = applyThrashRule(stalledVerdict(), [], true)
+  return decision.action
+}
+
+// An unchanged draft alone does not stop a progressing run — the solver
+// may be mid-step between saves.
+node unchangedDraftAloneIsNotStopped(): string {
+  const verdict: SupervisorVerdict = {
+    assessment: "progressing",
+    action: "continue",
+    message: ""
+  }
+  const decision = applyThrashRule(verdict, [record("stalled")], true)
+  return decision.action
+}
+
+// Draft stringification: null carries no signal, strings pass through,
+// typed drafts compare as JSON.
+node draftStringification(): string {
+  const fromNull = stringifyDraft(null)
+  const fromString = stringifyDraft("half done")
+  const fromObject = stringifyDraft({ step: 2 })
+  return "null:${fromNull.length}|string:${fromString}|object:${fromObject}"
+}
+
+// The delta classification, all four states.
+node draftDeltaStates(): string {
+  const none = draftDelta("", "")
+  const first = draftDelta("a", "")
+  const changed = draftDelta("b", "a")
+  const unchanged = draftDelta("a", "a")
+  return "${none}|${first}|${changed}|${unchanged}"
+}
+
+// The prompt section names the byte-identical case loudly and says so
+// only then.
+node draftSectionFlagsUnchanged(): string {
+  const unchangedBlock = renderDraftSection("half done", "unchanged")
+  const changedBlock = renderDraftSection("half done", "changed")
+  const noneBlock = renderDraftSection("", "none")
+  const unchangedFlagged = unchangedBlock.includes("BYTE-IDENTICAL")
+  const changedNotFlagged = !changedBlock.includes("BYTE-IDENTICAL")
+  const noneHasNoDraftTag = !noneBlock.includes("<draft>")
+  return "${unchangedFlagged}|${changedNotFlagged}|${noneHasNoDraftTag}"
 }
 
 // The first stalled check keeps the reviewer's own action.

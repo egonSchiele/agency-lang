@@ -5,63 +5,154 @@
       "description": "the first stalled check keeps the reviewer's own action",
       "input": "",
       "expectedOutput": "\"redirect\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "secondConsecutiveStallStops",
       "description": "a second consecutive stalled check becomes a stop",
       "input": "",
       "expectedOutput": "\"stop\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "stallAfterProgressIsNotStopped",
       "description": "a stall after a progressing check is not consecutive",
       "input": "",
       "expectedOutput": "\"redirect\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "emptyObservationStopMessage",
       "description": "a forced stop with an empty reviewer message has no dangling suffix",
       "input": "",
       "expectedOutput": "\"Stopped by the supervisor: two checks in a row found no progress.\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "progressPassesThrough",
       "description": "a progressing verdict passes through untouched",
       "input": "",
       "expectedOutput": "\"continue\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "flattenCompletedSolve",
       "description": "a completed successful solve yields its summary",
       "input": "",
       "expectedOutput": "\"wrote the fix\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "flattenFailedSolve",
       "description": "a completed failed solve yields a failure",
       "input": "",
       "expectedOutput": "\"failure:solver gave up\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "flattenSalvagedDraft",
       "description": "a salvaged draft string surfaces as a success",
       "input": "",
       "expectedOutput": "\"The run was stopped early by the supervisor. Its last saved draft:\\n\\nhalf the files are written\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "flattenSuperviseFailure",
       "description": "a supervise failure passes through as a failure",
       "input": "",
       "expectedOutput": "\"failure:supervise: maxTime reached\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "stalledWithUnchangedDraftStops",
+      "description": "a stalled verdict plus an unchanged draft stops immediately",
+      "input": "",
+      "expectedOutput": "\"stop\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unchangedDraftAloneIsNotStopped",
+      "description": "an unchanged draft alone does not stop a progressing run",
+      "input": "",
+      "expectedOutput": "\"continue\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "draftStringification",
+      "description": "null carries no signal, strings pass through, objects compare as JSON",
+      "input": "",
+      "expectedOutput": "\"null:0|string:half done|object:{\\\"step\\\":2}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "draftDeltaStates",
+      "description": "the delta classification covers all four states",
+      "input": "",
+      "expectedOutput": "\"none|first|changed|unchanged\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "draftSectionFlagsUnchanged",
+      "description": "the prompt section flags only the byte-identical case",
+      "input": "",
+      "expectedOutput": "\"true|true|true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

@@ -31,7 +31,7 @@ export type SuperviseDecision = {
 export def supervise(
   every: number,
   maxTime: number,
-  check: (elapsed: number) -> SuperviseDecision,
+  check: (elapsed: number, draft: any) -> SuperviseDecision,
   block: () -> any,
 ): Result<any> {
   """
@@ -39,7 +39,11 @@ export def supervise(
 
   @param every - How often to pause and check
   @param maxTime - Total time budget across all intervals
-  @param check - Called at each pause with elapsed time, and decides whether to continue, redirect, or stop
+  @param check - Called at each pause with elapsed time and the block's most
+    recent saveDraft value (null when none has been saved), and decides
+    whether to continue, redirect, or stop. The draft is the block's own
+    account of its progress: a draft that has not changed between checks is
+    strong evidence the block is stalled.
   @param block - The long-running work
   """
   if (maxTime < every) {
@@ -65,7 +69,10 @@ export def supervise(
     if (spent >= maxTime) {
       return reject("supervise: maxTime reached")
     }
-    const decision = check(spent)
+    // The trip already carries a preview of the innermost saved draft
+    // (guardTripInterrupt attaches it as draftValue), so the check gets
+    // the block's own progress report for free.
+    const decision = check(spent, intr.data.draftValue ?? null)
     // The grant is a DELTA added to the tripped budget, and the runtime
     // refuses an approval that leaves the budget still exceeded. By the time
     // a trip is answered the block has usually run past the old limit, and on

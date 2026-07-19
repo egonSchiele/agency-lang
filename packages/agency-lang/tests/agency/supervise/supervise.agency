@@ -11,12 +11,12 @@ def spin(rounds: number): string {
   return "spun"
 }
 
-def alwaysContinue(elapsed: number): SuperviseDecision {
+def alwaysContinue(elapsed: number, draft: any): SuperviseDecision {
   checks.push("checked")
   return { action: "continue", message: "" }
 }
 
-def alwaysStop(elapsed: number): SuperviseDecision {
+def alwaysStop(elapsed: number, draft: any): SuperviseDecision {
   return { action: "stop", message: "off the rails" }
 }
 
@@ -77,7 +77,7 @@ node maxTimeBelowIntervalFails(): boolean {
 // next request sees it. The block reads its own thread and reports whether
 // the message landed, mirroring the delivery assertion in
 // tests/agency/subprocess/trip-forward-approve-message.agency.
-def redirectOnce(elapsed: number): SuperviseDecision {
+def redirectOnce(elapsed: number, draft: any): SuperviseDecision {
   checks.push("redirected")
   return { action: "redirect", message: "course-correct: use the other approach" }
 }
@@ -115,7 +115,7 @@ node redirectDeliversMessage(): string {
 // the overshoot certain instead of load-dependent.
 let slowChecks = 0
 
-def slowCheck(elapsed: number): SuperviseDecision {
+def slowCheck(elapsed: number, draft: any): SuperviseDecision {
   checks.push("checked")
   slowChecks = slowChecks + 1
   // Only the first one is slow. One is enough to push the block well past
@@ -136,4 +136,25 @@ node overshootIsCoveredByTheGrant(): string {
     return "failed:${r.error}"
   }
   return r.value
+}
+
+// The check receives the block's most recent saveDraft value: the trip
+// carries a preview of the innermost saved draft, and supervise hands it
+// through. The 100ms interval means the trip fires during the spin, well
+// after saveDraft ran.
+const draftsSeen = []
+
+def recordDraft(elapsed: number, draft: any): SuperviseDecision {
+  draftsSeen.push("${draft}")
+  return { action: "continue", message: "" }
+}
+
+node checkSeesDraft(): string {
+  const r = supervise(every: 100ms, maxTime: 600000, check: recordDraft) {
+    saveDraft("partial")
+    const s = spin(3000000)
+    return "done:${s}"
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return "${r.value}|firstDraft:${draftsSeen[0] ?? "none"}"
 }

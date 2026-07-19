@@ -22,10 +22,16 @@ import { verifierAgent } from "std::agents/verifier"
 import { renderFeedback } from "std::agents/lib/feedback"
 import { SuperviseDecision } from "std::supervise"
 
+import { truncate } from "../lib/utils.agency"
+
 // The verifier is a pulse check here, not a final gate: small budgets,
 // because it runs every interval and its findings only steer.
 static const CHECK_MAX_COST = $2.00
 static const CHECK_MAX_TIME = 2m
+
+// Drafts can be long; the reviewer needs the solver's claim of progress,
+// not every detail of it.
+static const MAX_DRAFT_CHARS = 4000
 
 /** What the reviewer LLM returns for one check. `assessment` is its read of
   the evidence; `action`/`message` are what it wants done about it. */
@@ -39,6 +45,7 @@ export type SupervisorVerdict = {
 export type CheckRecord = {
   minutes: number;
   findings: number;
+  draftStatus: string;
   assessment: string;
   action: string;
   message: string
@@ -53,31 +60,84 @@ let _history: CheckRecord[] = []
 // toward a specific alternative instead of a vague "try something else".
 let _alternatives: string = ""
 
+// The solver's draft as of the previous check, stringified for comparison.
+// The draft is the solver's own account of completed progress: a draft
+// that has not changed between checks is the sharpest stall evidence
+// available — a thrashing solver churns the workspace but its "here is
+// what I have finished" statement does not advance.
+let _lastDraft: string = ""
+
 export def resetSupervisor(alternatives: string = "") {
   _history = []
   _alternatives = alternatives
+  _lastDraft = ""
+}
+
+/** A draft as comparable text: "" for none, the string itself, or JSON for
+  a typed draft object. Pure. */
+export def stringifyDraft(draft: any): string {
+  if (draft == null) {
+    return ""
+  }
+  const asString = "${draft}"
+  if (asString == "[object Object]") {
+    return JSON.stringify(draft)
+  }
+  return asString
+}
+
+/** How the current draft relates to the previous check's. "none": nothing
+  saved yet (no signal). "first": the first draft appeared. "changed":
+  progress in the solver's own words. "unchanged": byte-identical across a
+  whole interval. Pure. */
+export def draftDelta(
+  current: string,
+  previous: string,
+): ("none" | "first" | "changed" | "unchanged") {
+  if (current == "") {
+    return "none"
+  }
+  if (previous == "") {
+    return "first"
+  }
+  if (current == previous) {
+    return "unchanged"
+  }
+  return "changed"
 }
 
 export def supervisorHistory(): CheckRecord[] {
   return _history
 }
 
-/** Apply the thrash backstop to the reviewer's verdict: a second consecutive
-  "stalled" assessment becomes a stop no matter what action the reviewer
-  chose. One stalled check is a judgment call; two in a row means redirection
-  is not working and the run is burning budget. Pure, so tests can pin it. */
+/** Apply the thrash backstop to the reviewer's verdict. Two ways to a
+  forced stop, both pure so tests can pin them:
+
+  - The reviewer says "stalled" AND the solver's draft is byte-identical
+    to the previous check: two independent signals agree, stop now. The
+    draft delta is computed, not judged, which keeps this backstop from
+    depending on how charitable the reviewer feels.
+  - Two consecutive "stalled" assessments, draft or no draft: redirection
+    is not working and the run is burning budget. */
 export def applyThrashRule(
   verdict: SupervisorVerdict,
   history: CheckRecord[],
+  draftUnchanged: boolean = false,
 ): SuperviseDecision {
+  // The reviewer may have left message empty (it only has to fill it for
+  // redirect and stop), so the stop reasons cannot lean on it being there.
+  let observation = ""
+  if (verdict.message != "") {
+    observation = " Last observation: ${verdict.message}"
+  }
+  if (verdict.assessment == "stalled" && draftUnchanged) {
+    return {
+      action: "stop",
+      message: "Stopped by the supervisor: the reviewer found no progress and the solver's own draft has not changed since the last check.${observation}"
+    }
+  }
   const previous = history[history.length - 1]
   if (verdict.assessment == "stalled" && previous != null && previous.assessment == "stalled") {
-    // The reviewer may have left message empty (it only has to fill it for
-    // redirect and stop), so the stop reason cannot lean on it being there.
-    let observation = ""
-    if (verdict.message != "") {
-      observation = " Last observation: ${verdict.message}"
-    }
     return {
       action: "stop",
       message: "Stopped by the supervisor: two checks in a row found no progress.${observation}"
@@ -130,10 +190,30 @@ def renderHistory(history: CheckRecord[]): string {
       note = " — ${record.message}"
     }
     lines.push(
-      "- at ${record.minutes}m: ${record.findings} verifier findings, assessment ${record.assessment}, action ${record.action}${note}",
+      "- at ${record.minutes}m: ${record.findings} verifier findings, draft ${record.draftStatus}, assessment ${record.assessment}, action ${record.action}${note}",
     )
   }
   return lines.join("\n")
+}
+
+/** The draft block for the review prompt. Pure, so tests can pin the
+  shape per delta. */
+export def renderDraftSection(draftText: string, delta: string): string {
+  if (delta == "none") {
+    return "(the solver has not saved a draft yet — no self-report to compare)"
+  }
+  let deltaLine = "This is the solver's FIRST saved draft."
+  if (delta == "changed") {
+    deltaLine = "The draft has changed since the last check."
+  }
+  if (delta == "unchanged") {
+    deltaLine = "The draft is BYTE-IDENTICAL to the last check: the solver's own account of finished work has not advanced in a whole interval."
+  }
+  return """${deltaLine}
+
+<draft>
+${truncate(draftText, MAX_DRAFT_CHARS)}
+</draft>"""
 }
 
 /** The alternatives block for the review prompt, or "" when no brainstorm
@@ -156,6 +236,7 @@ def reviewPrompt(
   task: string,
   minutes: number,
   evidence: string,
+  draftSection: string,
   history: string,
 ): string {
   return """
@@ -171,13 +252,16 @@ What an independent verifier just measured in the workspace:
 ${evidence}
 </verifier_findings>
 
+The solver's own most recent progress report (its saved draft):
+${draftSection}
+
 Earlier checks this run:
 <history>
 ${history}
 </history>
 ${renderAlternativesSection(_alternatives)}
 Judge the evidence:
-- assessment: "progressing" when the findings show real movement toward the task since the last check; "stalled" when nothing meaningful has changed, or it keeps redoing the same thing. Mid-run gaps are normal — unstarted criteria are only a bad sign when they were also unstarted last check.
+- assessment: "progressing" when the findings show real movement toward the task since the last check; "stalled" when nothing meaningful has changed, or it keeps redoing the same thing. Mid-run gaps are normal — unstarted criteria are only a bad sign when they were also unstarted last check. An unchanged draft is strong stall evidence: a busy workspace with an unadvanced self-report usually means the solver is redoing work.
 - action "continue": on track. The default — pick it unless the evidence clearly says otherwise.
 - action "redirect": working, but drifting, overbuilding, or looping on a failed approach. Put a short, concrete course correction in `message`, addressed directly to the agent — it is delivered into its conversation as if from the user (e.g. "Stop rewriting the parser; the failing test needs the lexer fixed first").
 - action "stop": continuing is pointless — the approach is destructive, or the task cannot be completed. Put the reason in `message`.
@@ -186,32 +270,39 @@ Set `message` to "" for continue. Never redirect just to say "keep going".
 """
 }
 
-export def progressCheck(task: string, elapsed: number): SuperviseDecision {
+export def progressCheck(task: string, elapsed: number, draft: any): SuperviseDecision {
   """
   The check callback for a supervised solve: send the verifier into the
-  workspace, review its findings and the check history, then continue,
-  redirect, or stop the paused solver. Bind the task first:
-  `progressCheck.partial(task: task)` is the
-  `(elapsed) -> SuperviseDecision` shape std::supervise expects.
+  workspace, compare the solver's draft against the last check's, review
+  everything with the check history, then continue, redirect, or stop the
+  paused solver. Bind the task first: `progressCheck.partial(task: task)`
+  is the `(elapsed, draft) -> SuperviseDecision` shape std::supervise
+  expects.
 
   @param task - The task the supervised solver is working on
   @param elapsed - Working time the solver has consumed so far, in ms
+  @param draft - The solver's most recent saveDraft value, or null
   """
   const minutes = Math.round(elapsed / 60000)
+  const draftText = stringifyDraft(draft)
+  const delta = draftDelta(draftText, _lastDraft)
   const evidence = verifierEvidence(task: task, minutes: minutes)
   const verdict: SupervisorVerdict = llm(
     reviewPrompt(
     task: task,
     minutes: minutes,
     evidence: evidence.text,
+    draftSection: renderDraftSection(draftText, delta),
     history: renderHistory(_history),
   ),
   )
-  const decision = applyThrashRule(verdict, _history)
+  const decision = applyThrashRule(verdict, _history, delta == "unchanged")
+  _lastDraft = draftText
   _history.push(
     {
     minutes: minutes,
     findings: evidence.findings,
+    draftStatus: delta,
     assessment: verdict.assessment,
     action: decision.action,
     message: decision.message

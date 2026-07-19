@@ -1,0 +1,78 @@
+// The brainstorm seams that need no LLM: the judge-choice splitter and
+// the renderings that travel to the solver and the supervisor.
+import {
+  Approach,
+  BrainstormResult,
+  splitChoice,
+  renderChosen,
+  renderAlternatives,
+ } from "../subagents/brainstorm.agency"
+import { renderAlternativesSection } from "../subagents/supervisor.agency"
+
+def approach(name: string): Approach {
+  return {
+    name: name,
+    plan: "do ${name}",
+    risk: "might not work"
+  }
+}
+
+// The judge's pick becomes chosen; the rest become alternatives, in order.
+node splitKeepsOrder(): string {
+  const result = splitChoice(
+    approaches: [approach("simple"), approach("robust"), approach("reuse")],
+    chosenIndex: 1,
+    rationale: "robust wins",
+  )
+  const chosen = result.chosen
+  if (chosen == null) {
+    return "no-choice"
+  }
+  const names = []
+  for (alternative in result.alternatives) {
+    names.push(alternative.name)
+  }
+  return "${chosen.name}|${names.join(",")}|${result.rationale}"
+}
+
+// An out-of-range index means no approach was chosen: everything stays an
+// alternative and the solve proceeds as if no brainstorm ran. The judge's
+// rationale is kept as a debugging breadcrumb — it renders nowhere when
+// nothing was chosen.
+node splitBadIndexFailsOpen(): string {
+  const result = splitChoice(
+    approaches: [approach("simple")],
+    chosenIndex: 5,
+    rationale: "confused judge",
+  )
+  const chosenCount = if result.chosen == null then 0 else 1
+  return "chosen:${chosenCount}|alternatives:${result.alternatives.length}|rationale:${result.rationale}"
+}
+
+// An empty brainstorm renders to nothing everywhere it travels.
+node emptyBrainstormRendersEmpty(): string {
+  const empty: BrainstormResult = {
+    chosen: null,
+    alternatives: [],
+    rationale: ""
+  }
+  const solverBlock = renderChosen(empty)
+  const supervisorBlock = renderAlternativesSection(renderAlternatives(empty))
+  return "solver:${solverBlock.length}|supervisor:${supervisorBlock.length}"
+}
+
+// A real result renders the chosen name for the solver and the set-aside
+// names for the supervisor.
+node renderingsCarryTheNames(): string {
+  const result = splitChoice(
+    approaches: [approach("simple"), approach("robust")],
+    chosenIndex: 0,
+    rationale: "simple wins",
+  )
+  const solverBlock = renderChosen(result)
+  const supervisorBlock = renderAlternativesSection(renderAlternatives(result))
+  const solverHasChosen = solverBlock.includes("simple")
+  const supervisorHasAlternative = supervisorBlock.includes("robust")
+  const supervisorLacksChosen = !supervisorBlock.includes("- simple")
+  return "${solverHasChosen}|${supervisorHasAlternative}|${supervisorLacksChosen}"
+}

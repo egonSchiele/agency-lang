@@ -75,6 +75,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "checkSeesDraft",
+      "description": "the check callback receives the block's most recent saved draft",
+      "input": "",
+      "expectedOutput": "\"done:spun|firstDraft:partial\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

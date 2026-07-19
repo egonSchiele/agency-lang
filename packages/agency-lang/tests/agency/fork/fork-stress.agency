@@ -23,7 +23,10 @@ def quickCheck(item: string): string {
     }
     return "${entry.id}: ${item}"
   }
-  return result
+  // race types as string | null (a race over zero branches is null),
+  // but this source list is statically non-empty, so the null arm
+  // cannot occur - collapse it for the string return
+  return result ?? ""
 }
 
 def confirmDelete(item: string): string {

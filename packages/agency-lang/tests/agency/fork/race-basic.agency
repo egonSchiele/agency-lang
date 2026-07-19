@@ -7,7 +7,8 @@ node main() {
   let result = race(arr) as item {
     return identity(item)
   }
-  if (arr.includes(result)) {
+  // race types as number | null; the null check narrows it for includes
+  if (result != null && arr.includes(result)) {
     return true
   }
   return false

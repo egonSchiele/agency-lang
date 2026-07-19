@@ -4,7 +4,12 @@ def confirm(item: number): number {
 }
 
 node main() {
-  let result = race([10, 20, 30]) as item {
+  // Explicitly any: the checker types a race as number | null, but
+  // first-settled semantics can deliver a Failure (pinning that is
+  // this test's whole point), and reading .value/.error off it needs
+  // the checker out of the way. This is the recorded cost of the
+  // failures-invisible typing decision (fork/race spec, #603).
+  let result: any = race([10, 20, 30]) as item {
     return confirm(item)
   }
   if (isSuccess(result)) {

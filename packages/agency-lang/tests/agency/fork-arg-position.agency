@@ -10,8 +10,10 @@ node main(): string {
   // fork as a function ARGUMENT - this is what currently crashes
   const summed = total(fork([1, 2, 3]) as x { return double(x) })
 
-  // race gets the same fix, and is otherwise untested
-  const first = total([race([5]) as x { return double(x) }])
+  // race gets the same fix, and is otherwise untested. The ?? keeps
+  // race in ARGUMENT POSITION (the coverage this line exists for)
+  // while collapsing the checker's number | null to number
+  const first = total([(race([5]) as x { return double(x) }) ?? 0])
 
   // regression guard: a bare function reference as an argument must
   // still be passed as a reference, not called

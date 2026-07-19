@@ -10,10 +10,9 @@ import { reviewAgent } from "std::agents/review"
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { fetch, fetchMarkdown } from "std::http"
+import { webTools } from "std::agents/lib/toolkits"
 import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
-import { search as wikiSearch } from "std::wikipedia"
 
 static const systemPrompt = """You are a research analyst. Answer the task using your source tools.
 
@@ -28,14 +27,12 @@ static const systemPrompt = """You are a research analyst. Answer the task using
 // The wikipedia tool is renamed because an import alias renames only the
 // binding: without this its tool name stays `search` and collides with a
 // search provider.
-def buildTools(): any[] {
-  const baseTools: any[] = [
-    wikiSearch.rename("wikipedia_search"),
-    fetchMarkdown,
-    fetch,
-    read.partial(useAgentCwd: true),
-  ]
-  return baseTools.concat(searchTools())
+export def buildTools(): any[] {
+  """
+  Return the researcher's tools: the encyclopedia and fetch tools that need
+  no key, plus whichever search providers the environment has a key for.
+  """
+  return [...webTools(), read.partial(useAgentCwd: true), ...searchTools()]
 }
 
 static const groundingInstruction = "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered."

@@ -11,19 +11,18 @@
   For any other technical domain, use expertAgent, which consults the web
   instead of the bundled docs.
 */
-import { typecheck } from "std::agency"
 import { ExpertGuidance, emptyGuidance } from "std::agents/lib/expertGuidance"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { docsSkill } from "std::skills"
+import { agencyDocTools, agencyCodeTools } from "std::agents/lib/toolkits"
 import { systemMessage, threadIsNew } from "std::thread"
 
-// Bundled Agency docs, served via std::skills (no startup approval — they
-// ship with the stdlib). `static` caches the tool across calls.
-static const docSkill = docsSkill("guide")
-static const cliSkill = docsSkill("cli")
-static const diagnosticsSkill = docsSkill("diagnostics")
-
-static const tools: any[] = [docSkill, cliSkill, diagnosticsSkill, typecheck]
+export def buildTools(): any[] {
+  """
+  Return the Agency expert's tools: the bundled language documentation and
+  the source inspectors it cites in its guidance.
+  """
+  return [...agencyDocTools(), ...agencyCodeTools()]
+}
 
 static const systemPrompt = """You are an expert in the Agency programming language, advising a weaker coding agent that is about to attempt the task below.
 
@@ -47,7 +46,7 @@ def consult(
   }
   const guidance: ExpertGuidance = llm(
     "Task:\n${withContext(task: task, context: context)}",
-    llmOptions(model: model, provider: provider, tools: tools.concat(extraTools)),
+    llmOptions(model: model, provider: provider, tools: buildTools().concat(extraTools)),
   )
   return guidance
 }

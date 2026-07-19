@@ -8,20 +8,21 @@
 import { concurrencyPool } from "std::concurrency"
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
-import { ls, glob, grep, exec } from "std::shell"
+import { readOnlyFileTools } from "std::agents/lib/toolkits"
+import { exec } from "std::shell"
 import { systemMessage, threadIsNew } from "std::thread"
 
 // One judge per criterion, four at a time: enough concurrency to keep the
 // verification quick without flooding the provider with parallel requests.
 static const POOL_SIZE = 4
 
-static const tools: any[] = [
-  read.partial(useAgentCwd: true),
-  ls.partial(useAgentCwd: true),
-  glob.partial(useAgentCwd: true),
-  grep.partial(useAgentCwd: true),
-  exec.partial(useAgentCwd: true),
-]
+export def buildTools(): any[] {
+  """
+  Return the verifier's tools. It inspects and measures; it has no write
+  tools, because a verifier that can fix things is no longer a verifier.
+  """
+  return [...readOnlyFileTools(), exec.partial(useAgentCwd: true)]
+}
 
 static const systemPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, COMPUTE, and report.
 
@@ -107,7 +108,7 @@ export def verifierAgent(
           llmOptions(
             model: model,
             provider: provider,
-            tools: tools.concat(extraTools),
+            tools: buildTools().concat(extraTools),
           ),
         )
         return items

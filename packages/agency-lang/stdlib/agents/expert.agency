@@ -15,22 +15,16 @@
 */
 import { ExpertGuidance, emptyGuidance } from "std::agents/lib/expertGuidance"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { fetch, fetchJSON, fetchMarkdown } from "std::http"
+import { webTools } from "std::agents/lib/toolkits"
 import { systemMessage, threadIsNew } from "std::thread"
-import {
-  search as wikipediaSearch,
-  summary as wikipediaSummary,
-  article as wikipediaArticle,
- } from "std::wikipedia"
 
-static const tools: any[] = [
-  wikipediaSearch,
-  wikipediaSummary,
-  wikipediaArticle,
-  fetch,
-  fetchJSON,
-  fetchMarkdown,
-]
+export def buildTools(): any[] {
+  """
+  Return the expert's tools: the web and encyclopedia lookups it uses to
+  confirm domain specifics.
+  """
+  return webTools()
+}
 
 static const systemPrompt = """You are a domain expert advising a weaker coding agent that is about to attempt the task below and tends to miss domain-specific conventions.
 
@@ -60,7 +54,7 @@ def consult(
     llmOptions(
       model: model,
       provider: provider,
-      tools: tools.concat(extraTools),
+      tools: buildTools().concat(extraTools),
       hostedTools: ["web_search"],
     ),
   )

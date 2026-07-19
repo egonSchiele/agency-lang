@@ -14,42 +14,18 @@
 
   For an Agency-specific coding agent, use std::agents/agency/coding.
 */
-import { parseAST, typecheck } from "std::agency"
-import { todoWrite, todoList } from "std::agent"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { edit } from "std::fs"
 import {
-  gitStatus,
-  gitLog,
-  gitDiff,
-  gitShow,
-  gitBranchList,
-  gitRemoteList,
-  gitBlame,
-  gitStashList,
-  gitAdd,
-  gitCommit,
-  gitCheckout,
-  gitSwitch,
-  gitBranchCreate,
-  gitBranchDelete,
-  gitStashPush,
-  gitStashPop,
-  gitRestore,
- } from "std::git"
+  writableFileTools,
+  shellTools,
+  gitTools,
+  agencyCodeTools,
+  memoryTools,
+  agencyDocTools,
+  planningTools,
+ } from "std::agents/lib/toolkits"
 import { setAgentCwd, getAgentCwd } from "std::index"
-import { remember, recall } from "std::memory"
-import { bash, ls, glob, grep, exec } from "std::shell"
-import { docsSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
-
-// Bundled Agency docs, served via std::skills. `static` caches each tool
-// across calls. A general coding task often still lands in an Agency repo,
-// so the language reference travels with the agent.
-static const docSkill = docsSkill("guide")
-static const cliSkill = docsSkill("cli")
-static const diagnosticsSkill = docsSkill("diagnostics")
-static const stdlibSkill = docsSkill("stdlib")
 
 static const systemPrompt = """You are an expert software engineer. Solve the task by writing and running real code with your tools.
 
@@ -63,48 +39,25 @@ static const systemPrompt = """You are an expert software engineer. Solve the ta
 
 static const finalizeReminder = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
 
-static const tools: any[] = [
-  setAgentCwd,
-  getAgentCwd,
-  read.partial(useAgentCwd: true),
-  write.partial(useAgentCwd: true),
-  edit.partial(useAgentCwd: true),
-  ls.partial(useAgentCwd: true),
-  glob.partial(useAgentCwd: true),
-  grep.partial(useAgentCwd: true),
-  bash.partial(useAgentCwd: true),
-  exec.partial(useAgentCwd: true),
-  gitStatus,
-  gitLog,
-  gitDiff,
-  gitShow,
-  gitBranchList,
-  gitRemoteList,
-  gitBlame,
-  gitStashList,
-  gitAdd,
-  gitCommit,
-  gitCheckout,
-  gitSwitch,
-  gitBranchCreate,
-  gitBranchDelete,
-  gitStashPush,
-  gitStashPop,
-  gitRestore,
-  typecheck,
-  parseAST,
-  remember,
-  recall,
-  docSkill,
-  cliSkill,
-  diagnosticsSkill,
-  stdlibSkill,
-  todoWrite,
-  todoList,
-  // The agent saves its own intermediate progress, so an aborted run still
-  // returns the most recent draft rather than nothing.
-  saveDraft,
-]
+// A function, not a static const: Task 4 adds searchTools() here, which
+// reads API keys at call time and must not be snapshotted at module load.
+export def buildTools(): any[] {
+  """
+  Return the coding agent's tools. Exported so a caller can inspect what the
+  agent may do, and so tests can assert it.
+  """
+  return [
+    setAgentCwd,
+    getAgentCwd,
+    ...writableFileTools(),
+    ...shellTools(),
+    ...gitTools(),
+    ...agencyCodeTools(),
+    ...memoryTools(),
+    ...agencyDocTools(),
+    ...planningTools(),
+  ]
+}
 
 def solve(
   task: string,
@@ -126,7 +79,7 @@ ${finalizeReminder}
     llmOptions(
       model: model,
       provider: provider,
-      tools: tools.concat(extraTools),
+      tools: buildTools().concat(extraTools),
       hostedTools: ["web_search"],
     ),
   )

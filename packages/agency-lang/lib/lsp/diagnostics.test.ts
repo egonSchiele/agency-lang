@@ -83,6 +83,119 @@ describe("runDiagnostics — stdlib auto-import parity with CLI", () => {
   });
 });
 
+describe("runDiagnostics — every prelude name resolves", () => {
+  // Regression: the LSP used to keep its own hand-copied list of the names
+  // the CLI parser template auto-imports. The copy drifted — `_guard`,
+  // `saveDraft`, and `flatten` were added to the template but never to the
+  // LSP's list — so a file using the `guard` construct lit up with a phantom
+  // "Function '_guard' is not defined" in the editor while
+  // `agency typecheck` on the same file reported nothing. Both paths now
+  // render the same PRELUDE_NAMES, so this asserts the drifted names in
+  // particular resolve through the LSP.
+  it("reports no undefined-name errors for guard, saveDraft, or flatten", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-prelude-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        "node main() {",
+        "  const captured = guard(cost: 1.0) {",
+        "    saveDraft([1, 2])",
+        "    return [1, 2]",
+        "  }",
+        "  const flat = flatten([[1], [2]])",
+        "  return flat",
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { diagnostics, program } = runDiagnostics(doc, mainFile, {}, symbolTable);
+
+      // Without this, a grammar change that stopped the snippet parsing
+      // would leave zero name-resolution diagnostics and the assertion
+      // below would pass while checking nothing.
+      expect(program).not.toBeNull();
+      const undefinedNames = diagnostics.filter((d) =>
+        /is not defined/.test(d.message),
+      );
+      expect(undefinedNames.map((d) => d.message)).toEqual([]);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("runDiagnostics — shadowing a prelude name", () => {
+  // Agency treats the prelude as overridable: a user's own `def map` wins,
+  // and the compile path realizes that by dropping `map` from the injected
+  // import (prunePreludeShadows). The LSP has to run the same pass or it
+  // still sees the import and warns about a shadow the compiler resolved.
+  it("does not warn when a user def shadows a prelude name", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-shadow-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        "def map(xs: number[]): number[] {",
+        "  return xs",
+        "}",
+        "node main() {",
+        "  return map([1])",
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { diagnostics, program } = runDiagnostics(doc, mainFile, {}, symbolTable);
+
+      expect(program).not.toBeNull();
+      const shadowWarnings = diagnostics.filter((d) => /shadows an imported/.test(d.message));
+      expect(shadowWarnings.map((d) => d.message)).toEqual([]);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // `_guard` is exempt from pruning (UNPRUNABLE_PRELUDE_NAMES): letting a
+  // user `_guard` displace the real one would silently rebind every
+  // `guard(...) { }` in the file and bypass budget metering. The editor
+  // must keep reporting that, not go quiet along with the shadow warnings.
+  it("still reports a user def named _guard", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-guardshadow-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        "def _guard(x: number): number {",
+        "  return x",
+        "}",
+        "node main() {",
+        "  return _guard(1)",
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { diagnostics, program } = runDiagnostics(doc, mainFile, {}, symbolTable);
+
+      expect(program).not.toBeNull();
+      const messages = diagnostics.map((d) => d.message);
+      // The shadow warning must survive the pruning pass for this name
+      // specifically, and the reserved-name error rides alongside it.
+      expect(messages).toContain("'_guard' shadows an imported function.");
+      expect(messages).toContain(
+        "'_guard' is a reserved built-in; cannot be redefined.",
+      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("runDiagnostics — test-only imports", () => {
   // The LSP is an analysis-only path: it must honor `import test` so
   // migrated test files keep full editor support instead of dying on a

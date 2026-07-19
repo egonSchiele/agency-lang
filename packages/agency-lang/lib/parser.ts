@@ -23,6 +23,7 @@ import { AgencyConfig } from "./config.js";
 import { lowerPatterns, PatternLoweringError } from "./lowering/patternLowering.js";
 import { LoweringError } from "./lowering/loweringError.js";
 import render from "./templates/backends/agency/template.js";
+import { preludeImportLine } from "./prelude.js";
 import {
   assignmentParser,
   binOpParser,
@@ -260,7 +261,7 @@ export function parseAgency(
   lower: boolean = true,
 ): ParseAgencyResult {
   if (applyTemplate) {
-    input = render({ body: input });
+    input = render({ preludeImport: preludeImportLine(), body: input });
   }
   // The parser adds locs by subtracting `currentTemplateOffset` from
   // tarsec spans. When the template was applied, spans are shifted by

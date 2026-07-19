@@ -16,21 +16,14 @@ import { buildSemanticIndex, type SemanticIndex } from "./semantics.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
 import { ImportStatement } from "../types/importStatement.js";
 import { resolveAgencyImportPath } from "../importPaths.js";
-
-// Names auto-imported from std::index by the parser template. Kept in sync
-// with lib/templates/backends/agency/template.mustache.
-const STDLIB_AUTO_IMPORTS: string[] = [
-  "print", "printJSON", "input", "sleep", "read", "write",
-  "writeBinary", "readBinary", "range", "callback",
-  // Array helpers (moved from std::array into std::index).
-  "map", "filter", "exclude", "find", "findIndex", "reduce", "flatMap",
-  "every", "some", "count", "sortBy", "unique", "groupBy",
-];
+import { PRELUDE_NAMES } from "../prelude.js";
+import { prunePreludeShadows } from "../preprocessors/prunePreludeShadows.js";
 
 /**
  * Inject a synthetic `import { ... } from "std::index"` so the LSP sees the
- * same auto-imports the CLI parser template prepends — see
- * lib/templates/backends/agency/template.mustache. The synthetic is added
+ * same auto-imports the CLI parser template prepends. Both render the same
+ * PRELUDE_NAMES (lib/prelude.ts) so the editor and the compiler cannot
+ * disagree about what is in scope. The synthetic is added
  * unconditionally (alongside any user `import … from "std::index"`) so a
  * user who imports a *subset* like `import { range } from "std::index"`
  * still gets `print`, `read`, etc. from the auto-imports — matching CLI
@@ -57,7 +50,7 @@ function ensureStdlibImport(
     importedNames: [
       {
         type: "namedImport",
-        importedNames: STDLIB_AUTO_IMPORTS,
+        importedNames: [...PRELUDE_NAMES],
         aliases: {},
       },
     ],
@@ -117,6 +110,12 @@ export function runDiagnostics(
   // undefined here. Synthesize the same import so they resolve through
   // `importedFunctions` like in the CLI flow.
   program = ensureStdlibImport(program, symbolTable, fsPath);
+  // Agency treats the prelude as overridable, and the compile path realizes
+  // that by dropping a shadowed name from the injected import
+  // (typescriptPreprocessor.ts). The LSP has to run the same pass or it
+  // warns about shadows the compiler already resolved. Pure AST mutation,
+  // no codegen dependency, so it is safe on this analysis-only path.
+  prunePreludeShadows(program);
 
   try {
     program = resolveReExports(program, symbolTable, fsPath);

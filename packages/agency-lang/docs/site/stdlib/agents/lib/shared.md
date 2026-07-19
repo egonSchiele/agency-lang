@@ -7,6 +7,16 @@ description: "Helpers every std::agents worker uses: context folding and model"
 
 overrides.
 
+## Types
+
+### ReasoningEffort
+
+```ts
+export type ReasoningEffort = "low" | "medium" | "high"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L17))
+
 ## Functions
 
 ### withContext
@@ -40,7 +50,7 @@ llmOptions(
   provider: string,
   tools: any[] = [],
   hostedTools: string[] = [],
-  reasoningEffort: string = "",
+  reasoningEffort: ReasoningEffort | null = null,
   thinking: boolean = false,
 ): any
 ```
@@ -54,8 +64,8 @@ Build an llm options object with an optional model override. Returns a
   @param provider - Provider for the model, or "" to auto-resolve
   @param tools - Tools to offer the LLM
   @param hostedTools - Provider-hosted tools to enable
-  @param reasoningEffort - "low", "medium", or "high", or "" to leave it to the model
-  @param thinking - Whether to ask the model to think before answering
+  @param reasoningEffort - Reasoning effort to request from the model, or null for none
+  @param thinking - Whether to enable thinking mode, which allows the model to use more time and tokens to reason about its answer
 
 **Parameters:**
 
@@ -65,9 +75,9 @@ Build an llm options object with an optional model override. Returns a
 | provider | `string` |  |
 | tools | `any[]` | [] |
 | hostedTools | `string[]` | [] |
-| reasoningEffort | `string` | "" |
+| reasoningEffort | `ReasoningEffort \| null` | null |
 | thinking | `boolean` | false |
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/shared.agency#L19))

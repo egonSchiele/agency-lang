@@ -1,53 +1,34 @@
 import { agencyReviewAgent } from "std::agents/agency/review"
-import {
-  mergeFeedback,
-  renderFeedback as stdRenderFeedback,
-  feedbackHasErrors as stdFeedbackHasErrors,
- } from "std::agents/lib/feedback"
+import { reviewAgent as generalReviewAgent } from "std::agents/review"
+import { Feedback, mergeFeedback, renderFeedback } from "std::agents/lib/feedback"
 import { setMemoryId } from "std::memory"
 import { gitStatus, gitIsRepo } from "std::git"
 import { filter, map } from "std::array"
 
-// The review core (parse + typecheck findings, optional LLM code-vs-task
-// judgment) lives in std::agents/agency/review now — this subagent
-// only owns the agent-shaped wrapper: extracting snippets from a chat
-// message and reviewing each one. Consumers keep importing the shared
-// surface from this module via the type + thin wrappers below.
-//
-// NOT `export { ... } from "std::agents/lib/feedback"`: re-exporting the Feedback
-// type alongside functions whose tool schemas reference it generates
-// `const Feedback = _reexport_Feedback` AFTER the tool registrations
-// that use it, so importing the compiled module throws "Cannot access
-// Feedback before initialization" (pre-existing codegen ordering bug;
-// same TDZ family as the prelude-wrapped stdlib re-export carve-outs).
-
-/** Structurally identical to std::agency Feedback. */
-export type Feedback = {
-  error: boolean;
-  feedback: string
-}
-
-export def renderFeedback(feedback: Result<Feedback[]>): string {
-  return stdRenderFeedback(feedback)
-}
-
-export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
-  return stdFeedbackHasErrors(feedback)
-}
+// The review itself lives in std::agents/agency/review, so users get the
+// same reviewer. What is left here is the agent-shaped part: pulling code
+// snippets out of a chat message, and reviewing the .agency files the code
+// agent just wrote.
 
 type AgencyCode = {
   code: string
 }
 
-export def reviewAgent(userMsg: string): string {
+export def reviewAgent(userMsg: string, agencyTask: boolean = false): string {
   """
-  This agent can review any code written in the agency language.
-  It can provide feedback on syntax errors, type errors, and best practices.
+  Review code and report what is wrong with it: errors, risks, and things
+  worth changing.
 
-  @param userMsg - a message describing the code to review or the help needed.
+  @param userMsg - the code to review, or a message describing what to review.
+  @param agencyTask - true when the code is Agency code, which routes to the
+    reviewer that parses and typechecks it. Leave it false for every other
+    language, where that reviewer has nothing useful to say.
   """
-  const feedbackResult = review(userMsg)
-  return renderFeedback(feedbackResult)
+  if (!agencyTask) {
+    const general = generalReviewAgent(work: userMsg, task: "Review this code.")
+    return renderFeedback(general)
+  }
+  return renderFeedback(review(userMsg))
 }
 
 export def review(userMsg: string): Result<Feedback[]> {

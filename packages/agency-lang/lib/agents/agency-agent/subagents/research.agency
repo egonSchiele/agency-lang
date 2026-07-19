@@ -1,159 +1,72 @@
 /*
- * Research subagent — handles anything that needs reading: looking
- * up Agency syntax in the bundled docs, searching Wikipedia,
- * fetching URLs, browsing the web, or recalling stored facts.
+ * The reading specialist, as the agency agent's coordinator sees it.
  *
- * Exports `researchAgent` (registered as a coordinator tool in
- * `agent.agency`) plus `researchSysPrompt` / `researchTools`. The
- * bundled-docs Skills live here (not in `shared.agency`) because only
- * the research subagent uses them. `static const` caches the Skill
- * across runs.
+ * This is a router, not an agent. Both destinations are stdlib agents, so a
+ * user gets the same two in their own code:
+ *
+ *   agencyTopic: true   -> agencyResearcherAgent  (the bundled Agency docs)
+ *   agencyTopic: false  -> researcherAgent        (web, Wikipedia, URLs)
+ *
+ * General is the default. A general researcher asked about Agency is merely
+ * less expert, while the Agency researcher asked about anything else has
+ * only Agency documentation to answer from and will answer badly.
+ *
+ * What stays here is the agency agent's own business: the model slot the
+ * user selected, a shared session, the REPL formatting rules, and the memory
+ * and todo tools the agent gives its specialists.
  */
-import { todoWrite, todoList } from "std::agent"
-import { fetch, fetchJSON, fetchMarkdown } from "std::http"
-import { remember, recall, setMemoryId } from "std::memory"
-import { docsSkill } from "std::skills"
+import { agencyResearcherAgent } from "std::agents/agency/researcher"
+import { researcherAgent } from "std::agents/researcher"
+import { memoryTools, planningTools } from "std::agents/lib/toolkits"
+import { setMemoryId } from "std::memory"
 import { highlight } from "std::syntax"
-import { systemMessage } from "std::thread"
-import {
-  search as wikipediaSearch,
-  summary as wikipediaSummary,
-  article as wikipediaArticle,
- } from "std::wikipedia"
 
-import { withWebSearch } from "../lib/search.agency"
-
-
-// Packaged docs served via std::skills docsSkill (no startup approval
-// interrupt — the docs ship with the stdlib). Built once at module
-// load; `static` caches the tool across runs. Guide and CLI reference
-// are separate tools so the LLM can pick the right corpus instead of
-// grepping a giant blob of docs.
-static const docSkill = docsSkill("guide")
-static const cliSkill = docsSkill("cli")
-static const diagnosticsSkill = docsSkill("diagnostics")
-static const stdlibSkill = docsSkill("stdlib")
-
-export static const researchSysPrompt = """
-You are the **research specialist** of a multi-thread Agency-language
-assistant. You answer questions that need reading: Agency-language
-syntax / semantics / built-ins, CLI usage, external docs, Wikipedia
-background, URL contents, and general conversation backed by recall.
-
-You do NOT have file-system write tools (no write, edit, bash, or
-typecheck). If the user asks you to actually write, edit, or run
-code, say so plainly — the coordinator routes those requests to the
-code specialist.
-
-When you need information:
-
-- For **Agency language** questions, call the bundled docs tools
-  first — they're authoritative:
-    * `docSkill`      — language guide (syntax, control flow,
-                        types, error handling, etc.),
-                        built-ins, callbacks, advanced types
-    * `cliSkill`      — CLI reference (`agency run`, `agency test`,
-                        `agency compile`, ...)
-    * `diagnosticsSkill` — type-checker diagnostic codes (AG####)
-                        with explanations and fixes
-    * `stdlibSkill`   — standard-library reference (`std::http`,
-                        `std::thread`, …), one summary per module
-  Pick whichever matches the question rather than guessing.
-
-- For **general knowledge**, prefer the lighter tools first:
-    * `wikipediaSearch` / `wikipediaSummary` / `wikipediaArticle`
-      for background knowledge — fast, no API key required, no
-      user approval needed.
-    * `fetchMarkdown(baseUrl, path)` to grab a known docs page or
-      README and get it as readable Markdown.
-    * `fetchJSON(url)` / `fetch(url)` for any specific URL where
-      you already know the endpoint.
-    * When Wikipedia and fetch don't have it, you can search the
-      web for open-ended questions. Use this as a last resort, not
-      a first reflex.
-  Cite the source URL in your reply whenever you used one of these.
-
-- You have a persistent knowledge graph scoped to research work.
-  Call `recall(query)` to retrieve anything the user told you in a
-  previous session. Call `remember(content)` to persist a fact
-  worth keeping across sessions — user preferences ("prefers
-  brief replies"), recurring topics, decisions made earlier. Don't
-  `remember` transient details. Relevant facts are also
-  auto-injected before each turn, so often you don't need to call
-  `recall` explicitly.
-
-- **For research tasks that span more than two sources**
-  (e.g. "compare how A, B, and C handle X", "summarize these four
-  docs", "find every place the docs mention Y"), call `todoWrite`
-  first to lay out the lookups, and mark each item completed the
-  moment that source is read. Use this frequently — it gives the
-  user visibility into progress and protects against silently
-  dropping a source. Mark items completed one at a time, NEVER
-  batch the completions at the end. Skip the list for single-source
-  questions.
-
-When showing code snippets in your reply, call
-`print(highlight(code))` for any multi-line block — `highlight`
-returns a terminal-colored string and `print` writes it to the
-user's console. Skip this for inline identifiers or one-token
-excerpts.
-
-Keep replies brief. Cite sources. Show, don't lecture.
-
-Respond in Markdown — use `#`/`##` headings, `-` bullets, **bold**,
-_italic_, [links](url), and fenced code blocks (```ts, ```bash,
-```json) for any code or structured output. The REPL renders your
-reply through a Markdown syntax highlighter, so well-marked-up
-replies appear with colored headings, bold/italic styling, link
-underlining, and properly highlighted code fences.
-"""
-
-// The wikipedia tools are imported under aliases (`search as
-// wikipediaSearch`, …), but an import alias only renames the binding — the
-// tool name stays the underlying `search` / `summary` / `article`. Without
-// `.rename()`, `wikipediaSearch` collides with `std::web/search`'s `search` in
-// this same list (both advertise the tool name "search"), which providers
-// reject. Rename them to distinct, self-describing names.
 export static const researchTools: any[] = [
-  docSkill,
-  cliSkill,
-  diagnosticsSkill,
-  stdlibSkill,
-  wikipediaSearch.rename("wikipedia_search"),
-  wikipediaSummary.rename("wikipedia_summary"),
-  wikipediaArticle.rename("wikipedia_article"),
-  fetch,
-  fetchJSON,
-  fetchMarkdown,
-  remember,
-  recall,
+  ...memoryTools(),
+  ...planningTools(),
   highlight.partial(language: "ts"),
   print,
-  todoWrite,
-  todoList,
 ]
 
-// only add system message the first time
-let _first = true
+static const replStyle = """Reply for a terminal REPL that renders Markdown: use headings, bullets, bold, links, and fenced code blocks. Put a blank line between a heading and whatever follows it, or the renderer truncates the rest.
 
-export def researchAgent(userMsg: string) {
-  """
-  This agent can help with all research-related tasks,
-  such as finding information, summarizing documents, or providing context.
-  It can perform web searches, fetch URLs, search Wikipedia, and recall stored facts.
+Show multi-line code with `print(highlight(code))`, which writes a colored block to the user's console. Skip that for a single identifier.
 
-  @param userMsg - a message describing what help is needed.
+For a question spanning more than two sources, call `todoWrite` first and tick each item off as you finish that source.
+
+Keep replies brief. Cite sources. Show, do not lecture."""
+
+export def researchAgent(userMsg: string, agencyTopic: boolean = false): string {
   """
-  thread(label: "research", summarize: true, session: "research") {
-    setMemoryId("research")
-    if (_first) {
-      systemMessage(researchSysPrompt)
-      _first = false
-    }
-    reply = llm(userMsg, withWebSearch({
-      memory: true,
-      tools: researchTools
-    }))
+  Answer a question that needs reading rather than writing: looking something
+  up, summarizing a document, gathering background, or recalling a stored
+  fact.
+
+  @param userMsg - a message describing what needs to be found out.
+  @param agencyTopic - true when the question is about the Agency language
+    itself (its syntax, types, stdlib, or CLI), which routes to the agent
+    that reads the bundled Agency documentation. Leave it false for every
+    other subject, including questions about other languages.
+  """
+  setMemoryId("research")
+  let result: Result<string> = success("")
+  if (agencyTopic) {
+    result = agencyResearcherAgent(
+      question: userMsg,
+      context: replStyle,
+      session: "research",
+      extraTools: researchTools,
+    )
+  } else {
+    result = researcherAgent(
+      task: userMsg,
+      context: replStyle,
+      session: "research",
+      extraTools: researchTools,
+    )
   }
-  return reply
+  if (isFailure(result)) {
+    return "Research did not finish: ${result.error}"
+  }
+  return result.value
 }

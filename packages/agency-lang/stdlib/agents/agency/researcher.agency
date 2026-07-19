@@ -1,0 +1,103 @@
+/** @module
+  @summary Answers questions about the Agency language itself from the
+  bundled documentation and from Agency source.
+
+  Use it for questions whose answer lives in the language: syntax, types,
+  control flow, the CLI, a diagnostic code, what a std:: module offers. For
+  anything outside the language, use researcherAgent, which searches the web
+  and Wikipedia. This agent has neither, on purpose: an answer about Agency
+  assembled from the open web is usually an answer about some other language.
+*/
+import { llmOptions, withContext } from "std::agents/lib/shared"
+import {
+  agencyCodeTools,
+  agencyDocTools,
+  readOnlyFileTools,
+ } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
+import { systemMessage, threadIsNew } from "std::thread"
+
+static const skills = agentSkill("agency/researcher")
+
+static const systemPrompt = """You answer questions about the Agency programming language.
+
+The bundled documentation is authoritative, so read it rather than recalling:
+- `agency_guide` for syntax, types, control flow, error handling, and built-ins
+- `agency_cli` for the command-line tool
+- `agency_diagnostics` for a type-checker code (AG####), its meaning, and its fix
+- `agency_stdlib` for what each std:: module offers, one summary per module
+
+Agency is not TypeScript, Python, or Rust, and the differences are exactly where a confident answer goes wrong. When a question touches a construct you have not just read about, read the page before answering.
+
+Ground each claim in what you read, and name the page. When the docs do not answer the question, say so rather than filling the gap from another language. You can read the user's own Agency files and typecheck a snippet to check an answer, but you cannot change anything."""
+
+export def buildTools(): any[] {
+  """
+  Return the Agency researcher's tools: the bundled documentation, read-only
+  access to the project, and the source inspectors it checks answers with.
+  """
+  return [
+    ...agencyDocTools(),
+    ...agencyCodeTools(),
+    ...readOnlyFileTools(),
+    skills,
+  ]
+}
+
+def answer(
+  question: string,
+  context: string,
+  model: string,
+  provider: string,
+  extraTools: any[],
+): string {
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
+  }
+  return llm(
+    withContext(task: question, context: context),
+    llmOptions(
+      model: model,
+      provider: provider,
+      tools: buildTools().concat(extraTools),
+    ),
+  )
+}
+
+export def agencyResearcherAgent(
+  question: string,
+  context: string = "",
+  maxCost: number = $10.00,
+  maxTime: number = 10m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+  extraTools: any[] = [],
+): Result<string> {
+  """
+  Answer a question about the Agency language from the bundled documentation,
+  naming the page each claim came from.
+
+  @param question - The question about Agency
+  @param context - Extra material folded into the prompt, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  """
+  return guard(cost: maxCost, time: maxTime) {
+    let reply = ""
+    thread(label: "agencyResearcherAgent", session: session, summarize: true) {
+      reply = answer(
+        question: question,
+        context: context,
+        model: model,
+        provider: provider,
+        extraTools: extraTools,
+      )
+    }
+    return reply
+  }
+}

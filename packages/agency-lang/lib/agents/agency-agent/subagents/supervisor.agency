@@ -19,11 +19,7 @@
  * alone rather than the check crashing the run.
  */
 import { verifierAgent } from "std::agents/verifier"
-import {
-  Feedback,
-  feedbackHasErrors,
-  renderFeedback,
- } from "std::agents/lib/feedback"
+import { renderFeedback } from "std::agents/lib/feedback"
 import { SuperviseDecision } from "std::supervise"
 
 // The verifier is a pulse check here, not a final gate: small budgets,
@@ -104,16 +100,14 @@ def verifierEvidence(task: string, minutes: number): { text: string; findings: n
     maxCost: CHECK_MAX_COST,
     maxTime: CHECK_MAX_TIME,
   )
-  if (isFailure(checked)) {
-    return {
-      text: "(the verifier could not run: ${checked.error} — judge from the check history alone)",
-      findings: 0
-    }
-  }
+  // verifierAgent itself fails open (failOpenFeedback maps any failure to
+  // success([])), so empty findings are ambiguous: a clean run and a
+  // verifier that could not run (budget, policy) look the same here. Say
+  // so, rather than reporting "no findings" as if it were a measurement.
   const findings = checked.value.length
   if (findings == 0) {
     return {
-      text: "(the verifier ran and reported no findings)",
+      text: "(the verifier returned no findings — either nothing was measurable yet or it could not run; judge from the check history alone)",
       findings: 0
     }
   }

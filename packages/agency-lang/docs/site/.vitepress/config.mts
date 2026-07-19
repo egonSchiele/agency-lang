@@ -269,6 +269,8 @@ export default defineConfig({
                 { text: "agents/coding", link: "/stdlib/agents/coding" },
                 { text: "agents/data", link: "/stdlib/agents/data" },
                 { text: "agents/expert", link: "/stdlib/agents/expert" },
+                { text: "agents/explorer", link: "/stdlib/agents/explorer" },
+                { text: "agents/oracle", link: "/stdlib/agents/oracle" },
                 { text: "agents/planner", link: "/stdlib/agents/planner" },
                 { text: "agents/researcher", link: "/stdlib/agents/researcher" },
                 { text: "agents/review", link: "/stdlib/agents/review" },

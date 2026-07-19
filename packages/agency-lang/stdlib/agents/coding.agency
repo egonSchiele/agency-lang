@@ -42,10 +42,6 @@ static const systemPrompt = """You are an expert software engineer. Solve the ta
 
 static const finalizeReminder = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
 
-// A function, not a static const: Task 4 adds searchTools() here, which
-// reads API keys at call time and must not be snapshotted at module load.
-// Skills we ship for this agent: markdown the model reads on demand,
-// so teaching it something new costs a file rather than prompt length.
 static const skills = agentSkill("coding")
 
 export def buildTools(): any[] {
@@ -86,11 +82,11 @@ ${finalizeReminder}
   return llm(
     prompt,
     llmOptions(
-      model: model,
-      provider: provider,
-      tools: buildTools().concat(extraTools),
-      hostedTools: hostedSearchTools(model),
-    ),
+    model: model,
+    provider: provider,
+    tools: buildTools().concat(extraTools),
+    hostedTools: hostedSearchTools(model),
+  ),
   )
 }
 
@@ -117,10 +113,7 @@ export def codingAgent(
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
-  // The guard Result is the return value: a success carries the reply (or,
-  // when a trip was rejected, the agent's most recent saveDraft), and a
-  // failure carries whatever actually went wrong, whether that is a tripped
-  // budget or a failure from inside the block.
+
   return guard(cost: maxCost, time: maxTime) {
     let reply = ""
     thread(label: "codingAgent", session: session) {

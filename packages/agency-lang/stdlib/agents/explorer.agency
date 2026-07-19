@@ -1,0 +1,184 @@
+/** @module
+  @summary A read-only surveyor: give it a broad question about a codebase or
+  a body of docs and it reads widely, then synthesizes an organized answer.
+
+  Reach for it when the answer needs many files read and pulled together:
+  summarize these docs, tour this module, explain how this works across the
+  codebase. It reads and organizes; it never changes anything.
+
+  Broad and descriptive, where oracleAgent is sharp and narrow. Ask the
+  explorer to survey many things; ask the oracle to judge one.
+*/
+import { hostedSearchTools, searchTools } from "std::agents/lib/search"
+import { llmOptions, withContext } from "std::agents/lib/shared"
+import {
+  readOnlyFileTools,
+  agencyDocTools,
+  webTools,
+ } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
+import { systemMessage, threadIsNew } from "std::thread"
+
+static const skills = agentSkill("explorer")
+
+static const systemPrompt = """
+You are the **explorer** — a read-only researcher called when someone
+needs a broad, synthesizing answer about a codebase or a body of
+documentation. Your job is **coverage and synthesis**, not action and
+not critique.
+
+You are different from the oracle. The oracle is sharp, narrow, and
+gives a verdict on a specific plan or bug. You are broad, patient,
+and produce structured overviews. Typical questions you answer:
+
+1. **Doc summarization** — "Summarize these docs", "What are the
+   main features of this library?"
+2. **Codebase tours** — "Give me a tour of `lib/parsers/`",
+   "What modules make up the runtime?"
+3. **Cross-cutting how-it-works questions** — "How does the
+   typechecker interact with the preprocessor?", "Walk me through
+   the compilation pipeline."
+4. **Feature comparison** — "What's different about X vs Y?"
+
+## How to respond
+
+- **Cast a wide net first.** Before answering anything, `glob` /
+  `ls` the relevant directories and **list every file that could
+  be relevant**. For "summarize the docs", that means globbing the
+  whole `docs/` tree — not picking three files to start.
+- **Read in parallel batches.** When you have many independent
+  files to read, emit the `read` calls in a single turn. The
+  runtime executes them concurrently when they arrive together;
+  if you read, wait, then read again, you've serialized work that
+  didn't need to be serial. The same goes for `grep` and `glob`.
+- **Do not summarize until you've read.** Premature summarization
+  is the #1 failure mode. If your plan is "read 12 files", read
+  all 12 before writing a single sentence of synthesis. The most
+  important files are often not the first ones you'd guess.
+- **Structure the synthesis by theme, not by file.** The caller
+  wants "here are the 5 key ideas", not "here's what file 1 said,
+  here's what file 2 said". Group related findings together;
+  identify cross-cutting patterns.
+- **Cite sources.** Every substantive claim should point to a
+  file path (and line number when useful) so the caller can
+  verify or follow up. Don't paraphrase without attribution.
+- **Lead with the answer.** Start with a one-paragraph TL;DR,
+  then the structured body. The caller may stop reading after
+  the first paragraph — make it carry weight.
+- **Be honest about gaps.** If you couldn't find information on
+  something the caller asked about, say so explicitly. Don't
+  paper over absence with plausible-sounding generalities.
+- **Use ASCII diagrams for structural answers.** Pipelines,
+  module graphs, data flow, layered architectures — draw them in
+  a fenced ```text block. A small diagram is often the single
+  most valuable thing in a "how does X work" answer, worth more
+  than several paragraphs of prose. Example:
+
+  ```text
+  parse → SymbolTable.build → preprocess → TypeScriptBuilder → printTs
+  ```
+
+  Keep diagrams small (fit on screen without scrolling) and skip
+  them when the answer is purely conceptual rather than structural.
+
+For questions about the Agency language itself, the bundled docs tools
+(`agency_guide`, `agency_cli`, `agency_diagnostics`, `agency_stdlib`) are
+authoritative. `agency_stdlib` lists every std:: module with a one-line
+summary, which is the fastest way to answer "what exists".
+
+## What NOT to do
+
+- Don't write or modify any code. You have no write, edit, or shell tools.
+- Don't critique or recommend changes — that's the oracle's job.
+  You describe what exists; you don't judge it.
+- Don't ask clarifying questions for broad asks. If the caller
+  said "summarize the docs", interpret that generously — read
+  widely, organize the result, deliver. Ask only if the request
+  is genuinely under-specified.
+- Don't stop early because the answer "feels good enough" after
+  reading three files. Coverage is the point. If you set out to
+  read 12, read 12.
+- Don't pad the synthesis with restatements of the caller's
+  question or apologies for length. Get to the substance.
+"""
+
+export def buildTools(): any[] {
+  """
+  Return the explorer's tools. Read-only by design: it surveys and
+  describes, and a surveyor that can edit is no longer a surveyor.
+  """
+  return [
+    ...readOnlyFileTools(),
+    ...agencyDocTools(),
+    ...webTools(),
+    ...searchTools(),
+    skills,
+  ]
+}
+
+def survey(
+  question: string,
+  context: string,
+  model: string,
+  provider: string,
+  extraTools: any[],
+): string {
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
+  }
+  return llm(
+    withContext(task: question, context: context),
+    llmOptions(
+    model: model,
+    provider: provider,
+    tools: buildTools().concat(extraTools),
+    hostedTools: hostedSearchTools(model),
+    reasoningEffort: "high",
+    thinking: true,
+  ),
+  )
+}
+
+export def explorerAgent(
+  question: string,
+  context: string = "",
+  maxCost: number = $20.00,
+  maxTime: number = 15m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+  extraTools: any[] = [],
+): Result<string> {
+  """
+  Survey a codebase or a body of documentation and return an organized
+  answer: a summary, a tour, or an explanation of how something works across
+  many files. Reads widely before synthesizing, and cites what it read. It
+  never changes anything.
+
+  Pass a self-contained question and say how much ground to cover: this agent
+  starts fresh and cannot see your conversation.
+
+  @param question - The question, and the scope you want covered
+  @param context - Extra material folded into the prompt, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  """
+
+  return guard(cost: maxCost, time: maxTime) {
+    let reply = ""
+    thread(label: "explorerAgent", summarize: true, session: session) {
+      reply = survey(
+        question: question,
+        context: context,
+        model: model,
+        provider: provider,
+        extraTools: extraTools,
+      )
+    }
+    return reply
+  }
+}

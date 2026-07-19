@@ -5,19 +5,15 @@
   The verifier runs; review reads. To judge a work product handed to you as
   text without touching the file system, use reviewAgent instead.
 */
-import { concurrencyPool } from "std::concurrency"
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
 import { readOnlyFileTools, shellTools } from "std::agents/lib/toolkits"
+import { concurrencyPool } from "std::concurrency"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
-// One judge per criterion, four at a time: enough concurrency to keep the
-// verification quick without flooding the provider with parallel requests.
 static const POOL_SIZE = 4
 
-// Skills we ship for this agent: markdown the model reads on demand,
-// so teaching it something new costs a file rather than prompt length.
 static const skills = agentSkill("verifier")
 
 export def buildTools(): any[] {
@@ -116,25 +112,20 @@ export def verifierAgent(
         const items: Feedback[] = llm(
           prompt,
           llmOptions(
-            model: model,
-            provider: provider,
-            tools: buildTools().concat(extraTools),
-          ),
+          model: model,
+          provider: provider,
+          tools: buildTools().concat(extraTools),
+        ),
         )
         return items
       }
 
       return flatten(results)
     }
-    // Salvage: a guard trip mid-pool still returns the findings that
-    // completed. finalize is the salvage mechanism here (a saveDraft would
-    // need the function's full Result shape as its draft).
     finalize {
       return flatten(results)
     }
   }
-  // Fail open: the finalize block already salvages whatever findings
-  // completed, so a failure here means verification produced nothing at all.
-  // Report that as no findings rather than a blocking error.
+
   return failOpenFeedback(captured)
 }

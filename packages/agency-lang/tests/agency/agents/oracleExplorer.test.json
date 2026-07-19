@@ -1,0 +1,9 @@
+{
+  "tests": [
+    { "nodeName": "oracleAnswers", "description": "the oracle returns its analysis as a success Result", "input": "", "expectedOutput": "\"the plan is sound, proceed\"", "evaluationCriteria": [{ "type": "exact" }], "useTestLLMProvider": true, "llmMocks": [{ "return": "the plan is sound, proceed" }] },
+    { "nodeName": "explorerAnswers", "description": "the explorer returns its survey as a success Result", "input": "", "expectedOutput": "\"the parsers are combinator-based\"", "evaluationCriteria": [{ "type": "exact" }], "useTestLLMProvider": true, "llmMocks": [{ "return": "the parsers are combinator-based" }] },
+    { "nodeName": "bothAreReadOnly", "description": "neither agent carries a tool that changes anything", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "toolsMatchTheirJobs", "description": "each carries the tools its job needs", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "neitherHasDuplicateToolNames", "description": "no duplicate tool names in either agent", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

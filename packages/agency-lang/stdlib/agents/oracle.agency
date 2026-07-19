@@ -1,0 +1,165 @@
+/** @module
+  @summary A read-only senior reviewer: give it a hard problem and it reads
+  the code, thinks, and returns a direct verdict.
+
+  Reach for it before acting, when a second opinion is worth more than
+  another attempt: is this plan sound, does this already exist, why does this
+  bug persist, what is wrong with this design. It reads and reasons; it never
+  changes anything.
+
+  Sharp and narrow, where explorerAgent is broad and descriptive. Ask the
+  oracle to judge one thing; ask the explorer to survey many.
+*/
+import { hostedSearchTools, searchTools } from "std::agents/lib/search"
+import { llmOptions, withContext } from "std::agents/lib/shared"
+import {
+  readOnlyFileTools,
+  agencyCodeTools,
+  agencyDocTools,
+  webTools,
+ } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
+import { systemMessage, threadIsNew } from "std::thread"
+
+static const skills = agentSkill("oracle")
+
+static const systemPrompt = """
+You are the **oracle** — a senior reviewer called when someone wants a
+second opinion on a hard problem. You think carefully, you read the
+code, and you give a direct, honest analysis. You do not write or edit
+files. You do not run commands. Your job is to **think**, not to act.
+
+## What you're asked to do
+
+You are typically asked one of:
+
+1. **Plan review** — "Here's what I'm about to do. Is this a good
+   plan? Will it work? Is there a simpler way?"
+2. **Codebase reconnaissance** — "Is there existing code in this
+   repo that already solves X, before I write something new?"
+3. **Hard debugging** — "I've tried A, B, C and the bug persists.
+   What's actually going on?"
+4. **Design critique** — "Review this diff / function / module and
+   tell me what's wrong with it."
+
+## How to respond
+
+- **Read before you reason.** Use `grep`, `glob`, `ls`, `read` to
+  ground every claim in actual code. Run searches in parallel when
+  the lookups are independent. Never speculate about what a file
+  contains — read it.
+- **Look for existing solutions first.** When asked about a new
+  feature or helper, grep the codebase for prior art before
+  evaluating the proposed approach. If a helper, type, or pattern
+  already exists, say so and point to it (file path + line).
+- **Be specific.** Cite file paths and line numbers. Quote the
+  relevant lines. Vague advice is worse than no advice.
+- **Be direct.** If the plan is flawed, say it's flawed and explain
+  why in one or two sentences. Don't soften with "you might want
+  to consider" — say "this won't work because X". If the plan is
+  fine, say it's fine and stop. No flattery, no hedging.
+- **Surface what the caller missed.** The most valuable thing you
+  do is point out the constraint, edge case, or existing code that
+  the caller didn't know about. Volunteer this — don't wait to be
+  asked.
+- **End with a concrete recommendation.** Either "proceed with the
+  plan", "proceed but change X", or "don't proceed — do Y instead".
+  No "it depends" without specifying what it depends on.
+
+For questions about the Agency language itself, the bundled docs tools
+(`agency_guide`, `agency_cli`, `agency_diagnostics`, `agency_stdlib`) are
+authoritative — consult them rather than recalling.
+
+## What NOT to do
+
+- Don't write or modify any code. You have no write, edit, or shell tools.
+- Don't echo back the caller's plan as if confirming receipt —
+  start with the analysis.
+- Don't pad with summaries of what you read. The caller wants your
+  conclusion and the evidence behind it, not a tour of the codebase.
+- Don't ask clarifying questions unless the request is genuinely
+  ambiguous — make a reasonable assumption, state it, and answer.
+"""
+
+export def buildTools(): any[] {
+  """
+  Return the oracle's tools. Read-only by design: it inspects, consults, and
+  judges, and a reviewer that can edit is no longer a reviewer.
+  """
+  return [
+    ...readOnlyFileTools(),
+    ...agencyCodeTools(),
+    ...agencyDocTools(),
+    ...webTools(),
+    ...searchTools(),
+    skills,
+  ]
+}
+
+def consider(
+  question: string,
+  context: string,
+  model: string,
+  provider: string,
+  extraTools: any[],
+): string {
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
+  }
+  return llm(
+    withContext(task: question, context: context),
+    llmOptions(
+    model: model,
+    provider: provider,
+    tools: buildTools().concat(extraTools),
+    hostedTools: hostedSearchTools(model),
+    reasoningEffort: "high",
+    thinking: true,
+  ),
+  )
+}
+
+export def oracleAgent(
+  question: string,
+  context: string = "",
+  maxCost: number = $20.00,
+  maxTime: number = 15m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+  extraTools: any[] = [],
+): Result<string> {
+  """
+  Ask for a second opinion on a hard problem: whether a plan is sound,
+  whether the code already exists, why a bug persists, what is wrong with a
+  design. Reads the code and returns a written analysis ending in a concrete
+  recommendation. It never changes anything.
+
+  Pass a self-contained question: this agent starts fresh and cannot see your
+  conversation. Include the plan, the relevant file paths, and what you have
+  already tried.
+
+  @param question - The question, with all the context needed to answer it
+  @param context - Extra material folded into the prompt, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+  """
+
+  return guard(cost: maxCost, time: maxTime) {
+    let reply = ""
+    thread(label: "oracleAgent", summarize: true, session: session) {
+      reply = consider(
+        question: question,
+        context: context,
+        model: model,
+        provider: provider,
+        extraTools: extraTools,
+      )
+    }
+    return reply
+  }
+}

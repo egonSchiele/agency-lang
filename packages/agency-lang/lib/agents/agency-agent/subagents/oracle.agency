@@ -1,87 +1,18 @@
-import { typecheck } from "std::agency"
-import { ls, glob, grep } from "std::shell"
-import { docsSkill } from "std::skills"
-import { systemMessage } from "std::thread"
+/*
+ * The oracle, as the agency agent's coordinator sees it.
+ *
+ * The agent itself lives in std::agents/oracle, so users get the same
+ * reviewer in their own agents. This wrapper supplies the two things that
+ * are the agency agent's business and not the stdlib's: the slow-model slot
+ * the user selected, and a shared session so repeated consults in one run
+ * continue a conversation rather than starting cold.
+ *
+ * The docstring below is what the coordinator reads when deciding whether to
+ * call this, so it is written for routing, not for the agent's own behavior.
+ */
+import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 
-import { withWebSearch } from "../lib/search.agency"
 import { getSlowModel, getSlowProvider } from "../shared.agency"
-
-// Oracle gets a read-only view of the project via the raw read tools.
-// Relative paths resolve against the agent working directory (set by
-// `agent.agency` at startup), so no per-tool anchoring is needed.
-
-static const docSkill = docsSkill("guide")
-static const cliSkill = docsSkill("cli")
-static const diagnosticsSkill = docsSkill("diagnostics")
-
-export static const oracleSysPrompt = """
-You are the **oracle** — a senior reviewer called by other agents
-when they want a second opinion on a hard problem. You think
-carefully, you read the codebase, and you give a direct, honest
-analysis. You do not write or edit files. You do not run commands.
-Your job is to **think**, not to act.
-
-## What you're asked to do
-
-You are typically asked one of:
-
-1. **Plan review** — "Here's what I'm about to do. Is this a good
-   plan? Will it work? Is there a simpler way?"
-2. **Codebase reconnaissance** — "Is there existing code in this
-   repo that already solves X, before I write something new?"
-3. **Hard debugging** — "I've tried A, B, C and the bug persists.
-   What's actually going on?"
-4. **Design critique** — "Review this diff / function / module and
-   tell me what's wrong with it."
-
-## How to respond
-
-- **Read before you reason.** Use `grep`, `glob`, `ls`, `read` to
-  ground every claim in actual code. Run searches in parallel when
-  the lookups are independent. Never speculate about what a file
-  contains — read it.
-- **Look for existing solutions first.** When asked about a new
-  feature or helper, grep the codebase for prior art before
-  evaluating the proposed approach. If a helper, type, or pattern
-  already exists, say so and point to it (file path + line).
-- **Be specific.** Cite file paths and line numbers. Quote the
-  relevant lines. Vague advice is worse than no advice.
-- **Be direct.** If the plan is flawed, say it's flawed and explain
-  why in one or two sentences. Don't soften with "you might want
-  to consider" — say "this won't work because X". If the plan is
-  fine, say it's fine and stop. No flattery, no hedging.
-- **Surface what the caller missed.** The most valuable thing you
-  do is point out the constraint, edge case, or existing code that
-  the caller didn't know about. Volunteer this — don't wait to be
-  asked.
-- **End with a concrete recommendation.** Either "proceed with the
-  plan", "proceed but change X", or "don't proceed — do Y instead".
-  No "it depends" without specifying what it depends on.
-
-## What NOT to do
-
-- Don't write or modify any code. You have no write/edit/bash tools.
-- Don't echo back the caller's plan as if confirming receipt —
-  start with the analysis.
-- Don't pad with summaries of what you read. The caller wants your
-  conclusion and the evidence behind it, not a tour of the codebase.
-- Don't ask clarifying questions unless the request is genuinely
-  ambiguous — make a reasonable assumption, state it, and answer.
-"""
-
-export static const oracleTools: any[] = [
-  read.partial(useAgentCwd: true),
-  ls.partial(useAgentCwd: true),
-  glob.partial(useAgentCwd: true),
-  grep.partial(useAgentCwd: true),
-  typecheck,
-  docSkill,
-  cliSkill,
-  diagnosticsSkill,
-]
-
-// only add system message the first time
-let first = true
 
 export def oracleAgent(userMsg: string): string {
   """
@@ -106,25 +37,14 @@ export def oracleAgent(userMsg: string): string {
   @param userMsg - the question, with all the context the oracle
     needs to answer it
   """
-  thread(label: "oracle", summarize: true, session: "oracle") {
-    if (first) {
-      systemMessage(oracleSysPrompt)
-      first = false
-    }
-    reply = llm(
-      userMsg,
-      withWebSearch(
-      {
-      tools: oracleTools,
-      model: getSlowModel(),
-      provider: getSlowProvider(),
-      reasoningEffort: "high",
-      thinking: {
-        enabled: true
-      }
-    },
-    ),
-    )
+  const result = stdOracleAgent(
+    question: userMsg,
+    model: getSlowModel(),
+    provider: getSlowProvider(),
+    session: "oracle",
+  )
+  if (isFailure(result)) {
+    return "The oracle could not finish: ${result.error}"
   }
-  return reply
+  return result.value
 }

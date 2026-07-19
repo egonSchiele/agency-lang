@@ -24,7 +24,11 @@ import {
 import { hnStories, hnItem, hnUser, hnSearch } from "std::data/tech/hackernews"
 import { ycBatch, ycIndustry, ycTag, ycList, ycMeta } from "std::data/tech/yc"
 import { usaspendingAwards, usaspendingAward } from "std::data/usaspending"
-import { wikidataSearch, wikidataEntity, wikidataQuery } from "std::data/wikidata"
+import {
+  wikidataSearch,
+  wikidataEntity,
+  wikidataQuery,
+ } from "std::data/wikidata"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
@@ -35,8 +39,6 @@ static const systemPrompt = """You answer questions using structured public-data
 - State the units, the period, and any revision or seasonal adjustment the source applies. A number without its units is not an answer.
 - When a source has no data for what was asked, say so plainly. NEVER estimate a number and present it as retrieved."""
 
-// Skills we ship for this agent: markdown the model reads on demand,
-// so teaching it something new costs a file rather than prompt length.
 static const skills = agentSkill("data")
 
 export def buildTools(): any[] {
@@ -88,11 +90,11 @@ def answer(
   return llm(
     withContext(task: task, context: context),
     llmOptions(
-      model: model,
-      provider: provider,
-      tools: buildTools().concat(extraTools),
-      hostedTools: hostedSearchTools(model),
-    ),
+    model: model,
+    provider: provider,
+    tools: buildTools().concat(extraTools),
+    hostedTools: hostedSearchTools(model),
+  ),
   )
 }
 
@@ -119,8 +121,7 @@ export def dataAgent(
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
-  // The guard Result is the return value: a success carries the answer, and a
-  // failure carries whatever actually went wrong.
+
   return guard(cost: maxCost, time: maxTime) {
     let reply = ""
     thread(label: "dataAgent", session: session) {

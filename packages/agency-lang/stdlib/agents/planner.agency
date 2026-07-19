@@ -8,15 +8,13 @@
 import { runCode, getEffects, EffectsByExport } from "std::agency"
 import { agencyCodingAgent } from "std::agents/agency/coding"
 import { codingAgent } from "std::agents/coding"
-import { verifierAgent } from "std::agents/verifier"
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { readOnlyFileTools } from "std::agents/lib/toolkits"
-import { agentSkill } from "std::skills"
+import { verifierAgent } from "std::agents/verifier"
 import { getAgentCwd } from "std::index"
+import { agentSkill } from "std::skills"
 
-// Skills we ship for this agent: markdown the model reads on demand, so
-// teaching it something new costs a file rather than prompt length.
 static const skills = agentSkill("planner")
 
 export def buildTools(): any[] {
@@ -254,10 +252,10 @@ export def plannerAgent(
         planText = llm(
           "Analyse this task and outline the steps:\n${withContext(task: task, context: context)}",
           llmOptions(
-            model: model,
-            provider: provider,
-            tools: buildTools().concat(extraTools),
-          ),
+          model: model,
+          provider: provider,
+          tools: buildTools().concat(extraTools),
+        ),
         )
       }
     }

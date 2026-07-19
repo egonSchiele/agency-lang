@@ -11,29 +11,23 @@
 import { env } from "std::system"
 import { search as braveSearch, tavilySearch } from "std::web/search"
 
-/** One client-side search provider: the environment variable holding its
-  key, and the tool to offer when that key is set. */
 type SearchProvider = {
   name: string;
   envKey: string;
   tool: any
 }
 
-// The catalog, and the only place that knows which providers exist. The
-// tools are renamed so each advertises a distinct, self-describing name: a
-// bare `search` collides with std::wikipedia's `search`, and providers
-// reject duplicate tool names.
 static const providers: SearchProvider[] = [
   {
-    name: "Tavily",
-    envKey: "TAVILY_API_KEY",
-    tool: tavilySearch.rename("web_search_tavily"),
-  },
+  name: "Tavily",
+  envKey: "TAVILY_API_KEY",
+  tool: tavilySearch.rename("web_search_tavily")
+},
   {
-    name: "Brave",
-    envKey: "BRAVE_API_KEY",
-    tool: braveSearch.rename("web_search_brave"),
-  },
+  name: "Brave",
+  envKey: "BRAVE_API_KEY",
+  tool: braveSearch.rename("web_search_brave")
+},
 ]
 
 def hasKey(provider: SearchProvider): boolean {
@@ -50,19 +44,6 @@ export def searchTools(): any[] {
   return map(available, \provider -> provider.tool)
 }
 
-// Hosted search is a capability of the model, not a tool we hold: the
-// provider runs it server-side, so it needs no API key and works where
-// outbound HTTP is blocked. It lives here so the six agents that want web
-// search name it once, the way they get client-side providers from
-// searchTools().
-//
-// Related but deliberately separate: lib/agents/agency-agent/lib/search.agency
-// has withWebSearch, which does the same job for the agency agent. That one is
-// switched by the user through /search and has exactly one backend active, so
-// it can rename whichever provider is live to a single stable "web_search".
-// This one keys off which API keys are present and may offer several providers
-// at once, which is why its tools carry distinct names. If the agent's backend
-// selection ever moves into the stdlib, these should become one table.
 static const HOSTED_WEB_SEARCH = "web_search"
 
 export def hostedSearchTools(model: string = ""): string[] {
@@ -71,21 +52,6 @@ export def hostedSearchTools(model: string = ""): string[] {
 
   @param model - The model that will run the call, or "" for the branch default
   """
-  // Always requested, and not gated on the model, which is a deliberate
-  // limitation rather than an oversight.
-  //
-  // The model catalog keys hosted tools by provider API ("anthropic",
-  // "openai-responses"), not by model, and carries no per-model list. Asking
-  // it about a model name returns nothing for every model, so a gate built on
-  // it would answer "unsupported" universally and silently strip web search
-  // from every agent. Mapping a model to its provider API by hand is the kind
-  // of guess that fails the same way, quietly, the first time a provider adds
-  // or renames an API.
-  //
-  // The cost of asking when a provider cannot deliver falls on that provider's
-  // error, which is visible. The cost of withholding wrongly is an agent that
-  // quietly stops searching, which is not. Until the catalog can answer per
-  // model, the visible failure is the better one.
   return [HOSTED_WEB_SEARCH]
 }
 

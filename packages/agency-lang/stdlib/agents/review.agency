@@ -17,8 +17,6 @@ import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You review a work product against a task. For each finding, return a Feedback item: error=true when the work fails the task on that point (name the specific problem), error=false for a satisfied point. Be brief and concrete. Judge only against the task and context given; do not invent requirements."""
 
-// Skills we ship for this agent: markdown the model reads on demand,
-// so teaching it something new costs a file rather than prompt length.
 static const skills = agentSkill("review")
 
 export def buildTools(): any[] {
@@ -50,11 +48,11 @@ ${work}
   const items: Feedback[] = llm(
     prompt,
     llmOptions(
-      model: model,
-      provider: provider,
-      tools: buildTools().concat(extraTools),
-      hostedTools: hostedSearchTools(model),
-    ),
+    model: model,
+    provider: provider,
+    tools: buildTools().concat(extraTools),
+    hostedTools: hostedSearchTools(model),
+  ),
   )
   return items
 }
@@ -98,7 +96,6 @@ export def reviewAgent(
     }
     return items
   }
-  // Fail open: a review that could not finish reports no findings rather
-  // than a blocking error, whatever stopped it.
+
   return failOpenFeedback(captured)
 }

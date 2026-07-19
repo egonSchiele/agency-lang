@@ -14,11 +14,15 @@ export def withContext(task: string, context: string): string {
   return if context == "" then task else "${task}\n\n<context>\n${context}\n</context>"
 }
 
+export type ReasoningEffort = "low" | "medium" | "high"
+
 export def llmOptions(
   model: string,
   provider: string,
   tools: any[] = [],
   hostedTools: string[] = [],
+  reasoningEffort: ReasoningEffort | null = null,
+  thinking: boolean = false,
 ): any {
   """
   Build an llm options object with an optional model override. Returns a
@@ -30,14 +34,26 @@ export def llmOptions(
   @param provider - Provider for the model, or "" to auto-resolve
   @param tools - Tools to offer the LLM
   @param hostedTools - Provider-hosted tools to enable
+  @param reasoningEffort - Reasoning effort to request from the model, or null for none
+  @param thinking - Whether to enable thinking mode, which allows the model to use more time and tokens to reason about its answer
   """
-  const options: any = { tools: tools }
+  const options: any = {
+    tools: tools
+  }
   if (hostedTools.length > 0) {
     options.hostedTools = hostedTools
   }
   if (model != "") {
     options.model = model
     options.provider = provider
+  }
+  if (reasoningEffort != null) {
+    options.reasoningEffort = reasoningEffort
+  }
+  if (thinking) {
+    options.thinking = {
+      enabled: true
+    }
   }
   return options
 }

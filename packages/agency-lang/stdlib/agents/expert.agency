@@ -20,8 +20,6 @@ import { webTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
-// Skills we ship for this agent: markdown the model reads on demand,
-// so teaching it something new costs a file rather than prompt length.
 static const skills = agentSkill("expert")
 
 export def buildTools(): any[] {
@@ -52,17 +50,15 @@ def consult(
   if (threadIsNew()) {
     systemMessage(systemPrompt)
   }
-  // Provider-hosted web search runs server-side, so it works even in a
-  // sandboxed environment where the client-side wikipedia/fetch tools cannot
-  // reach the internet.
+
   const guidance: ExpertGuidance = llm(
     "Task:\n${withContext(task: task, context: context)}",
     llmOptions(
-      model: model,
-      provider: provider,
-      tools: buildTools().concat(extraTools),
-      hostedTools: hostedSearchTools(model),
-    ),
+    model: model,
+    provider: provider,
+    tools: buildTools().concat(extraTools),
+    hostedTools: hostedSearchTools(model),
+  ),
   )
   return guidance
 }
@@ -90,9 +86,7 @@ export def expertAgent(
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
-  // The guard Result is the return value: its failure carries whatever
-  // actually went wrong, whether that is a tripped budget or a failure from
-  // inside the block. guidanceOrEmpty at the call site fails open either way.
+
   return guard(cost: maxCost, time: maxTime) {
     let guidance: ExpertGuidance = emptyGuidance
     thread(label: "expertAgent", session: session) {

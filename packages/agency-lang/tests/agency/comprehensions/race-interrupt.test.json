@@ -1,0 +1,20 @@
+{
+  "tests": [
+    {
+      "nodeName": "allApproved",
+      "input": "",
+      "description": "interrupts in a race body resume per branch and the fastest approved branch wins",
+      "expectedOutput": "\"6\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "timeoutMs": 30000
+    },
+    {
+      "nodeName": "fastestRejected",
+      "input": "",
+      "description": "race is first-settled: a rejected branch that settles first wins the race with its Failure",
+      "expectedOutput": "\"fail\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "timeoutMs": 30000
+    }
+  ]
+}

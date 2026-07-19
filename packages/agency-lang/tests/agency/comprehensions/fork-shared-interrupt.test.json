@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "interrupts in a forkShared body resume per branch and post-resume shared mutations persist; the rejected branch contributes nothing",
+      "expectedOutput": "\"3|2|fail|6|2\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

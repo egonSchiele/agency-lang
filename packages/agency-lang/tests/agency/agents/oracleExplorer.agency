@@ -1,0 +1,46 @@
+import { oracleAgent, buildTools as oracleTools } from "std::agents/oracle"
+import { explorerAgent, buildTools as explorerTools } from "std::agents/explorer"
+
+def hasTool(tools: any[], name: string): boolean {
+  return some(tools, \tool -> tool.name == name)
+}
+
+node oracleAnswers(): string {
+  const result = oracleAgent(question: "is this plan sound")
+  if (isFailure(result)) { return "failed" }
+  return result.value
+}
+
+node explorerAnswers(): string {
+  const result = explorerAgent(question: "summarize the parsers")
+  if (isFailure(result)) { return "failed" }
+  return result.value
+}
+
+// Both are read-only, which is the property that distinguishes them from
+// the coding agent. A reviewer or surveyor that can edit is neither.
+node bothAreReadOnly(): boolean {
+  const forbidden = ["write", "edit", "bash", "exec"]
+  const oracleClean = every(forbidden, \name -> !hasTool(oracleTools(), name))
+  const explorerClean = every(forbidden, \name -> !hasTool(explorerTools(), name))
+  return oracleClean && explorerClean
+}
+
+// Both read files and consult the bundled docs; the oracle additionally
+// inspects Agency source, which the explorer has no need of.
+node toolsMatchTheirJobs(): boolean {
+  const oracleReads = hasTool(oracleTools(), "read") && hasTool(oracleTools(), "agency_guide")
+  const oracleChecks = hasTool(oracleTools(), "typecheck")
+  const explorerReads = hasTool(explorerTools(), "glob") && hasTool(explorerTools(), "agency_stdlib")
+  return oracleReads && oracleChecks && explorerReads
+}
+
+node neitherHasDuplicateToolNames(): boolean {
+  for (list in [oracleTools(), explorerTools()]) {
+    const names = map(list, \tool -> tool.name)
+    if (unique(names, \name -> name).length != names.length) {
+      return false
+    }
+  }
+  return true
+}

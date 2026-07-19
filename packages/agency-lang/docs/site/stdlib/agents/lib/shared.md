@@ -40,6 +40,8 @@ llmOptions(
   provider: string,
   tools: any[] = [],
   hostedTools: string[] = [],
+  reasoningEffort: string = "",
+  thinking: boolean = false,
 ): any
 ```
 
@@ -52,6 +54,8 @@ Build an llm options object with an optional model override. Returns a
   @param provider - Provider for the model, or "" to auto-resolve
   @param tools - Tools to offer the LLM
   @param hostedTools - Provider-hosted tools to enable
+  @param reasoningEffort - "low", "medium", or "high", or "" to leave it to the model
+  @param thinking - Whether to ask the model to think before answering
 
 **Parameters:**
 
@@ -61,6 +65,8 @@ Build an llm options object with an optional model override. Returns a
 | provider | `string` |  |
 | tools | `any[]` | [] |
 | hostedTools | `string[]` | [] |
+| reasoningEffort | `string` | "" |
+| thinking | `boolean` | false |
 
 **Returns:** `any`
 

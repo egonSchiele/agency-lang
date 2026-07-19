@@ -1,124 +1,18 @@
 /*
- * explorer subagent — a read-only breadth-first researcher.
+ * The explorer, as the agency agent's coordinator sees it.
  *
- * Called by other agents when the user asks a broad, synthesizing
- * question about the codebase or the bundled Agency docs:
- * "summarize the docs", "what are the main features of X", "how
- * does Y work across the codebase", "give me a tour of module Z".
+ * The agent itself lives in std::agents/explorer, so users get the same
+ * surveyor in their own agents. This wrapper supplies the two things that
+ * are the agency agent's business and not the stdlib's: the slow-model slot
+ * the user selected, and a shared session so repeated surveys in one run
+ * continue a conversation rather than starting cold.
  *
- * Explorer's job is COVERAGE, not critique. It reads widely, then
- * synthesizes. Oracle is sharp and narrow; explorer is thorough
- * and broad. Read-only — no write/edit/bash tools.
+ * The docstring below is what the coordinator reads when deciding whether to
+ * call this, so it is written for routing, not for the agent's own behavior.
  */
-import { ls, glob, grep } from "std::shell"
-import { docsSkill } from "std::skills"
-import { systemMessage } from "std::thread"
+import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 
-import { withWebSearch } from "../lib/search.agency"
 import { getSlowModel, getSlowProvider } from "../shared.agency"
-
-// explorer gets a read-only view of the project via the raw read tools.
-// Relative paths resolve against the agent working directory (set by
-// `agent.agency` at startup), so no per-tool anchoring is needed.
-
-static const docSkill = docsSkill("guide")
-static const cliSkill = docsSkill("cli")
-static const diagnosticsSkill = docsSkill("diagnostics")
-static const stdlibSkill = docsSkill("stdlib")
-
-export static const explorerSysPrompt = """
-You are the **explorer** — a read-only researcher called by other
-agents when they need a broad, synthesizing answer about the
-codebase or the bundled Agency docs. Your job is **coverage and
-synthesis**, not action and not critique.
-
-You are different from the oracle. The oracle is sharp, narrow, and
-gives a verdict on a specific plan or bug. You are broad, patient,
-and produce structured overviews. Typical questions you answer:
-
-1. **Doc summarization** — "Summarize the Agency docs", "What are
-   the main features of the language?"
-2. **Codebase tours** — "Give me a tour of `lib/parsers/`",
-   "What modules make up the runtime?"
-3. **Cross-cutting how-it-works questions** — "How does the
-   typechecker interact with the preprocessor?", "Walk me through
-   the compilation pipeline."
-4. **Feature comparison** — "What's different about Agency vs
-   TypeScript?", "How does Agency handle X compared to Y?"
-
-## How to respond
-
-- **Cast a wide net first.** Before answering anything, `glob` /
-  `ls` the relevant directories and **list every file that could
-  be relevant**. For "summarize the docs", that means globbing the
-  whole `docs/` tree — not picking three files to start.
-- **Use the standard-library reference.** For any question about what
-  `std::` modules exist or what they do, call `stdlibSkill` — it lists
-  every module with a one-line summary, then lets you read any page.
-- **Read in parallel batches.** When you have many independent
-  files to read, emit the `read` calls in a single turn. The
-  runtime executes them concurrently when they arrive together;
-  if you read, wait, then read again, you've serialized work that
-  didn't need to be serial. The same goes for `grep` and `glob`.
-- **Do not summarize until you've read.** Premature summarization
-  is the #1 failure mode. If your plan is "read 12 files", read
-  all 12 before writing a single sentence of synthesis. The most
-  important files are often not the first ones you'd guess.
-- **Structure the synthesis by theme, not by file.** The caller
-  wants "here are the 5 key ideas in Agency", not "here's what
-  file 1 said, here's what file 2 said". Group related findings
-  together; identify cross-cutting patterns.
-- **Cite sources.** Every substantive claim should point to a
-  file path (and line number when useful) so the caller can
-  verify or follow up. Don't paraphrase without attribution.
-- **Lead with the answer.** Start with a one-paragraph TL;DR,
-  then the structured body. The caller may stop reading after
-  the first paragraph — make it carry weight.
-- **Be honest about gaps.** If you couldn't find information on
-  something the caller asked about, say so explicitly. Don't
-  paper over absence with plausible-sounding generalities.
-- **Use ASCII diagrams for structural answers.** Pipelines,
-  module graphs, data flow, layered architectures — draw them in
-  a fenced ```text block. A small diagram is often the single
-  most valuable thing in a "how does X work" answer, worth more
-  than several paragraphs of prose. Example:
-
-  ```text
-  parse → SymbolTable.build → preprocess → TypeScriptBuilder → printTs
-  ```
-
-  Keep diagrams small (fit on screen without scrolling) and skip
-  them when the answer is purely conceptual rather than structural.
-
-## What NOT to do
-
-- Don't write or modify any code. You have no write/edit/bash tools.
-- Don't critique or recommend changes — that's the oracle's job.
-  You describe what exists; you don't judge it.
-- Don't ask clarifying questions for broad asks. If the user
-  said "summarize the docs", interpret that generously — read
-  widely, organize the result, deliver. Ask only if the request
-  is genuinely under-specified.
-- Don't stop early because the answer "feels good enough" after
-  reading three files. Coverage is the point. If you set out to
-  read 12, read 12.
-- Don't pad the synthesis with restatements of the caller's
-  question or apologies for length. Get to the substance.
-"""
-
-export static const explorerTools: any[] = [
-  read.partial(useAgentCwd: true),
-  ls.partial(useAgentCwd: true),
-  glob.partial(useAgentCwd: true),
-  grep.partial(useAgentCwd: true),
-  docSkill,
-  cliSkill,
-  diagnosticsSkill,
-  stdlibSkill,
-]
-
-// only add system message the first time
-let first = true
 
 export def explorerAgent(userMsg: string): string {
   """
@@ -148,25 +42,14 @@ export def explorerAgent(userMsg: string): string {
   @param userMsg - the question, with the scope of coverage you
     want covered
   """
-  thread(label: "explorer", summarize: true, session: "explorer") {
-    if (first) {
-      systemMessage(explorerSysPrompt)
-      first = false
-    }
-    reply = llm(
-      userMsg,
-      withWebSearch(
-      {
-      tools: explorerTools,
-      model: getSlowModel(),
-      provider: getSlowProvider(),
-      reasoningEffort: "high",
-      thinking: {
-        enabled: true
-      }
-    },
-    ),
-    )
+  const result = stdExplorerAgent(
+    question: userMsg,
+    model: getSlowModel(),
+    provider: getSlowProvider(),
+    session: "explorer",
+  )
+  if (isFailure(result)) {
+    return "The explorer could not finish: ${result.error}"
   }
-  return reply
+  return result.value
 }

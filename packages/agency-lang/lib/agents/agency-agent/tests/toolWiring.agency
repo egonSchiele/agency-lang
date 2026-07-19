@@ -15,8 +15,11 @@
  */
 import { codeTools } from "../subagents/code.agency"
 import { researchTools } from "../subagents/research.agency"
-import { oracleTools } from "../subagents/oracle.agency"
-import { explorerTools } from "../subagents/explorer.agency"
+// The oracle and the explorer live in the stdlib now, so their tool lists
+// come from there. The check is the same: the agency agent still offers them,
+// so a duplicate name in either list still breaks this agent.
+import { buildTools as oracleTools } from "std::agents/oracle"
+import { buildTools as explorerTools } from "std::agents/explorer"
 
 def pingWith(tools: any[]): string {
   // Reject any interrupt a tool might raise. Under the deterministic
@@ -52,9 +55,9 @@ node researchToolsHaveUniqueNames() {
 }
 
 node oracleToolsHaveUniqueNames() {
-  return pingWith(oracleTools)
+  return pingWith(oracleTools())
 }
 
 node explorerToolsHaveUniqueNames() {
-  return pingWith(explorerTools)
+  return pingWith(explorerTools())
 }

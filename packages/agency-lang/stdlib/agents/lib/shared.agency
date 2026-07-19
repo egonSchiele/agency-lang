@@ -19,6 +19,8 @@ export def llmOptions(
   provider: string,
   tools: any[] = [],
   hostedTools: string[] = [],
+  reasoningEffort: string = "",
+  thinking: boolean = false,
 ): any {
   """
   Build an llm options object with an optional model override. Returns a
@@ -30,6 +32,8 @@ export def llmOptions(
   @param provider - Provider for the model, or "" to auto-resolve
   @param tools - Tools to offer the LLM
   @param hostedTools - Provider-hosted tools to enable
+  @param reasoningEffort - "low", "medium", or "high", or "" to leave it to the model
+  @param thinking - Whether to ask the model to think before answering
   """
   const options: any = { tools: tools }
   if (hostedTools.length > 0) {
@@ -38,6 +42,12 @@ export def llmOptions(
   if (model != "") {
     options.model = model
     options.provider = provider
+  }
+  if (reasoningEffort != "") {
+    options.reasoningEffort = reasoningEffort
+  }
+  if (thinking) {
+    options.thinking = { enabled: true }
   }
   return options
 }

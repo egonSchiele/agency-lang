@@ -1,0 +1,35 @@
+let counter = 0
+
+def bump(x: number): number {
+  counter = counter + 1
+  return x * 2
+}
+
+def total(xs: number[]): number {
+  return reduce(xs, 0, \(acc, x) -> acc + x)
+}
+
+node main(): string {
+  const xs = [1, 2, 3]
+
+  const doubled = fork [bump(x) for x in xs]
+
+  // fork isolates globals per branch and discards them at the join, so
+  // the three increments above are thrown away and counter is still 0.
+  // Probed against the hand-written fork form before pinning. This is
+  // the assertion that proves a real fork, not a Promise.all. It is
+  // guarded by asserting `doubled` too, so it cannot pass by the body
+  // never running at all.
+  const afterFork = counter
+
+  // the same body through the explicit construct, for comparison
+  const viaConstruct = fork(xs) as x { return bump(x) }
+
+  // argument position - what Task 1 unblocks
+  const summed = total(fork [bump(x) for x in xs])
+
+  // filter plus fork
+  const filtered = fork [bump(x) for x in xs if x != 2]
+
+  return "${doubled[0]},${doubled[1]},${doubled[2]}|${afterFork}|${viaConstruct[2]}|${summed}|${filtered[0]},${filtered[1]}"
+}

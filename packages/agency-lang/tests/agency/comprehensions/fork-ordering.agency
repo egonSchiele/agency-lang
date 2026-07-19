@@ -1,0 +1,11 @@
+def slowDouble(x: number): number {
+  // item 1 sleeps longest, item 3 shortest, so completion order is the
+  // REVERSE of source order. Results must still come back by position.
+  sleep((4 - x) * 100)
+  return x * 2
+}
+
+node main(): string {
+  const ordered = fork [slowDouble(x) for x in [1, 2, 3]]
+  return "${ordered[0]},${ordered[1]},${ordered[2]}"
+}

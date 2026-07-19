@@ -1,4 +1,5 @@
 import { _now, _today, _tomorrow, _add, _addMinutes, _addHours, _addDays, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth } from "agency-lang/stdlib-lib/date.js"
+import { _advanceTimeImpl } from "agency-lang/stdlib-lib/builtins.js"
 
 /** @module
 @summary Builds timezone-aware ISO 8601 date strings, the format that APIs like Google Calendar expect.
@@ -31,6 +32,19 @@ export def now(timezone: string = ""): string {
   @param timezone - IANA timezone name like "America/New_York" (defaults to the local timezone)
   """
   return _now(timezone)
+}
+
+/** Test-only seam (import test { _advanceTime }): advance the fake clock so a
+time guard trips without spending real time. Only works under a test case with
+"fakeClock": true; throws otherwise. */
+def _advanceTime(ms: number) {
+  """
+  Test-only: move the fake clock forward `ms` milliseconds, tripping any time
+  guard whose budget is now exceeded.
+
+  @param ms - How many milliseconds of fake time to advance.
+  """
+  _advanceTimeImpl(ms)
 }
 
 /** Get today's date as a YYYY-MM-DD string. */

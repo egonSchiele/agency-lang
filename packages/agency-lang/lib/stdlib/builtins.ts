@@ -9,6 +9,7 @@ import { detectPlatform } from "./utils.js";
 import { resolvePath } from "./resolvePath.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { FakeClock } from "../runtime/clock.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -134,6 +135,27 @@ export function _installSlowInputImpl(delayMs: number, answer: string): void {
   const { ctx } = getRuntimeContext();
   ctx.inputOverride = (_prompt: string) =>
     new Promise<string>((resolve) => setTimeout(() => resolve(answer), delayMs));
+}
+
+/** Test-only: advance the run's fake clock by `ms`, firing any guard timer
+ *  that comes due. Exposed to fixtures as the non-exported `_advanceTime`
+ *  def in `stdlib/date.agency` (test imports only). Throws if the run holds
+ *  the real clock, so a stray call outside a fake-clock test fails loudly
+ *  rather than doing nothing.
+ *
+ *  `advance` lives on FakeClock only, not on the Clock type, so this branches
+ *  on the concrete type. That is a deliberate trade: putting a test-only
+ *  `advance` verb on the production Clock interface would be worse. The
+ *  instanceof is confined to this one test-only helper and never runs on a
+ *  production path. */
+export function _advanceTimeImpl(ms: number): void {
+  const { ctx } = getRuntimeContext();
+  if (!(ctx.clock instanceof FakeClock)) {
+    throw new Error(
+      '_advanceTime() needs a fake clock. Set "fakeClock": true on this test case.',
+    );
+  }
+  ctx.clock.advance(ms);
 }
 
 /** ALS-reading replacement. Same body as `__internal_input`. */

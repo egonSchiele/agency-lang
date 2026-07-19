@@ -17,6 +17,7 @@ import type { ScopeInfo } from "../typeChecker/types.js";
 import { ImportStatement } from "../types/importStatement.js";
 import { resolveAgencyImportPath } from "../importPaths.js";
 import { PRELUDE_NAMES } from "../prelude.js";
+import { prunePreludeShadows } from "../preprocessors/prunePreludeShadows.js";
 
 /**
  * Inject a synthetic `import { ... } from "std::index"` so the LSP sees the
@@ -49,7 +50,7 @@ function ensureStdlibImport(
     importedNames: [
       {
         type: "namedImport",
-        importedNames: PRELUDE_NAMES,
+        importedNames: [...PRELUDE_NAMES],
         aliases: {},
       },
     ],
@@ -109,6 +110,12 @@ export function runDiagnostics(
   // undefined here. Synthesize the same import so they resolve through
   // `importedFunctions` like in the CLI flow.
   program = ensureStdlibImport(program, symbolTable, fsPath);
+  // Agency treats the prelude as overridable, and the compile path realizes
+  // that by dropping a shadowed name from the injected import
+  // (typescriptPreprocessor.ts). The LSP has to run the same pass or it
+  // warns about shadows the compiler already resolved. Pure AST mutation,
+  // no codegen dependency, so it is safe on this analysis-only path.
+  prunePreludeShadows(program);
 
   try {
     program = resolveReExports(program, symbolTable, fsPath);

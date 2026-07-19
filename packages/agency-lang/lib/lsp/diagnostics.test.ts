@@ -111,12 +111,85 @@ describe("runDiagnostics — every prelude name resolves", () => {
 
       const doc = makeDoc(source, `file://${mainFile}`);
       const symbolTable = SymbolTable.build(mainFile, {});
-      const { diagnostics } = runDiagnostics(doc, mainFile, {}, symbolTable);
+      const { diagnostics, program } = runDiagnostics(doc, mainFile, {}, symbolTable);
 
+      // Without this, a grammar change that stopped the snippet parsing
+      // would leave zero name-resolution diagnostics and the assertion
+      // below would pass while checking nothing.
+      expect(program).not.toBeNull();
       const undefinedNames = diagnostics.filter((d) =>
         /is not defined/.test(d.message),
       );
       expect(undefinedNames.map((d) => d.message)).toEqual([]);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("runDiagnostics — shadowing a prelude name", () => {
+  // Agency treats the prelude as overridable: a user's own `def map` wins,
+  // and the compile path realizes that by dropping `map` from the injected
+  // import (prunePreludeShadows). The LSP has to run the same pass or it
+  // still sees the import and warns about a shadow the compiler resolved.
+  it("does not warn when a user def shadows a prelude name", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-shadow-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        "def map(xs: number[]): number[] {",
+        "  return xs",
+        "}",
+        "node main() {",
+        "  return map([1])",
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { diagnostics, program } = runDiagnostics(doc, mainFile, {}, symbolTable);
+
+      expect(program).not.toBeNull();
+      const shadowWarnings = diagnostics.filter((d) => /shadows an imported/.test(d.message));
+      expect(shadowWarnings.map((d) => d.message)).toEqual([]);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // `_guard` is exempt from pruning (UNPRUNABLE_PRELUDE_NAMES): letting a
+  // user `_guard` displace the real one would silently rebind every
+  // `guard(...) { }` in the file and bypass budget metering. The editor
+  // must keep reporting that, not go quiet along with the shadow warnings.
+  it("still reports a user def named _guard", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-guardshadow-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        "def _guard(x: number): number {",
+        "  return x",
+        "}",
+        "node main() {",
+        "  return _guard(1)",
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { diagnostics, program } = runDiagnostics(doc, mainFile, {}, symbolTable);
+
+      expect(program).not.toBeNull();
+      const messages = diagnostics.map((d) => d.message);
+      // The shadow warning must survive the pruning pass for this name
+      // specifically, and the reserved-name error rides alongside it.
+      expect(messages).toContain("'_guard' shadows an imported function.");
+      expect(messages).toContain(
+        "'_guard' is a reserved built-in; cannot be redefined.",
+      );
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

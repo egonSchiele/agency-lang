@@ -22,7 +22,7 @@
  * import must stay on one line. prelude.test.ts enforces both and explains
  * why each matters.
  */
-export const PRELUDE_NAMES: string[] = [
+export const PRELUDE_NAMES: readonly string[] = [
   "print",
   "printJSON",
   "input",

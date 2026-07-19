@@ -35,7 +35,8 @@ static const skills = agentSkill("researcher")
 export def buildTools(): any[] {
   """
   Return the researcher's tools: the encyclopedia and fetch tools that need
-  no key, plus whichever search providers the environment has a key for.
+  no key, a local file read for material the caller points at, and whichever
+  search providers the environment has a key for.
   """
   return [...webTools(), read.partial(useAgentCwd: true), ...searchTools(), skills]
 }

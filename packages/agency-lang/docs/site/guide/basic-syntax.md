@@ -151,6 +151,13 @@ for ({ name, age } in people) {
 
 Other loop constructs, such as map, are part of the [agency standard library](/stdlib/array).
 
+To build a new array from an existing one, a
+[list comprehension](/guide/comprehensions) is usually shorter than a loop:
+
+```ts
+const doubled = [x * 2 for x in numbers]
+```
+
 ## Comments
 
 You can have single-line or multi-line comments.

@@ -139,4 +139,13 @@ describe("comprehensionParser", () => {
     expect(node.type).toBe("comprehension");
     expect(node.itemVar).toBe("x");
   });
+
+  it("parses line breaks before in and if, not just before for", () => {
+    // the before-keyword whitespace must cross newlines at EVERY
+    // boundary - the naive version only worked before `for`, and only
+    // because a call body happens to eat its own trailing newline
+    const node = parseExpr("[f(x)\n    for x\n    in xs\n    if p(x)]");
+    expect(node.type).toBe("comprehension");
+    expect(node.condition).toBeDefined();
+  });
 });

@@ -4668,19 +4668,22 @@ export const comprehensionParser: Parser<Comprehension> = label(
           lazy(() => exprParser),
           "expression",
         ),
-        // `optionalSpaces` BEFORE each keyword, required `spaces` AFTER.
-        // Before must be optional because exprParser eats trailing
+        // `optionalSpacesOrNewline` BEFORE each keyword, required `spaces`
+        // AFTER. Before must be optional because exprParser eats trailing
         // whitespace after a call (`f(x) ` leaves rest `for...`) but not
         // after a bare name (`x ` leaves rest ` for...`) - requiring
-        // whitespace here broke every call-bodied comprehension. After
-        // must be required so `for` stays a whole word: `[format, other]`
-        // fails at str("for") because exprParser greedily consumed the
-        // full identifier `format`, and `forx` fails the required space.
-        optionalSpaces,
+        // whitespace here broke every call-bodied comprehension. It must
+        // cross newlines (optionalSpaces is spaces/tabs only) or a
+        // comprehension could only break lines after a call, never before
+        // `in`/`if`. After must be required so `for` stays a whole word:
+        // `[format, other]` fails at str("for") because exprParser
+        // greedily consumed the full identifier `format`, and `forx`
+        // fails the required space.
+        optionalSpacesOrNewline,
         str("for"),
         spaces,
         ...iterationBinderFragment,
-        optionalSpaces,
+        optionalSpacesOrNewline,
         str("in"),
         spaces,
         capture(
@@ -4690,7 +4693,7 @@ export const comprehensionParser: Parser<Comprehension> = label(
         optional(
           captureCaptures(
             seqC(
-              optionalSpaces,
+              optionalSpacesOrNewline,
               str("if"),
               spaces,
               capture(

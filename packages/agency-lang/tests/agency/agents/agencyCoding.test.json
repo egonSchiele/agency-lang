@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "nodeName": "retriesUntilValid",
+      "description": "generation retries on review findings until source is valid",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "code": "node main() {{{" } },
+        { "return": { "code": "export node main() { return 1 }" } }
+      ]
+    },
+    {
+      "nodeName": "failureCarriesSourceAndProblems",
+      "description": "exhausted attempts return the last source with its problems",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": { "code": "node main() {{{" } },
+        { "return": { "code": "node broken() {" } }
+      ]
+    }
+  ]
+}

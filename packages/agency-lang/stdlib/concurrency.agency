@@ -48,3 +48,55 @@ export def withLock(
   """
   return _withLock(name, timeoutMs, warnAfterMs, block)
 }
+
+export def concurrencyPool(
+  size: number,
+  items: any[],
+  block: (item: any) -> any,
+): any[] {
+  """
+  Run a block in parallel across a bounded pool of workers.
+
+  @param size - Number of concurrent workers to run
+  @param items - The items to process
+  @param block - The work to run in each worker
+  """
+  // fork branches only share module globals (with shared: true), never
+  // function locals, so workers cannot pull from a shared queue or write
+  // into a shared results array. Instead: deal the items round-robin into
+  // one chunk per worker, fork over the chunks, and reassemble by index
+  // from the branch RETURN values — the one channel fork reports through.
+  // Pair each item with its index by hand: std map passes only the item to
+  // its function, never an index.
+  const indexed: any[] = []
+  let index = 0
+  for (item in items) {
+    indexed.push([item, index])
+    index = index + 1
+  }
+  const chunks: any[] = []
+  let worker = 0
+  while (worker < size) {
+    chunks.push([])
+    worker = worker + 1
+  }
+  let position = 0
+  for (pair in indexed) {
+    chunks[position % size].push(pair)
+    position = position + 1
+  }
+  const chunkResults = fork(chunks) as chunk {
+    const chunkOut: any[] = []
+    for (pair in chunk) {
+      chunkOut.push([pair[1], block(pair[0])])
+    }
+    return chunkOut
+  }
+  const results: any[] = map(items, \_ -> null)
+  for (chunkOut in chunkResults) {
+    for (entry in chunkOut) {
+      results[entry[0]] = entry[1]
+    }
+  }
+  return results
+}

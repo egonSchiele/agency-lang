@@ -1,0 +1,20 @@
+import { agencyCodingAgent } from "std::agents/agency/coding"
+
+// First mock returns broken code, second returns a valid program: the loop
+// must consume the review findings and succeed on attempt two.
+node retriesUntilValid(): boolean {
+  const result = agencyCodingAgent("return one", maxAttempts: 3)
+  if (result is success(source)) {
+    return source =~ re/node\s+main/
+  }
+  return false
+}
+
+// All mocks broken: the failure carries the last source AND its problems.
+node failureCarriesSourceAndProblems(): boolean {
+  const result = agencyCodingAgent("return one", maxAttempts: 2)
+  if (result is failure(f)) {
+    return f.source =~ re/node/ && f.problems.length > 0
+  }
+  return false
+}

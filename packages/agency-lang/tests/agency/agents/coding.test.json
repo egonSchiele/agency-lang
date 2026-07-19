@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "nodeName": "singlePassReturnsSummary",
+      "description": "codingAgent returns its reply as a success Result",
+      "input": "",
+      "expectedOutput": "\"did the thing\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "did the thing"
+        }
+      ]
+    }
+  ]
+}

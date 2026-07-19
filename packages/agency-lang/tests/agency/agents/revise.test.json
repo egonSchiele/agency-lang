@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "feedbackReachesNextAttempt", "description": "each rejected attempt passes its critique to the next", "input": "", "expectedOutput": "\"attempt(fix-2)\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "exhaustionReturnsLastResult", "description": "exhausted attempts return the last result", "input": "", "expectedOutput": "\"last(never good enough)\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

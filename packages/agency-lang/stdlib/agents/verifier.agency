@@ -1,0 +1,123 @@
+/** @module
+  @summary Verifies completed work on disk against a task: derives measurable
+  criteria and computes each one with tools.
+
+  The verifier runs; review reads. To judge a work product handed to you as
+  text without touching the file system, use reviewAgent instead.
+*/
+import { concurrencyPool } from "std::concurrency"
+import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
+import { llmOptions } from "std::agents/lib/shared"
+import { ls, glob, grep, exec } from "std::shell"
+import { systemMessage, threadIsNew } from "std::thread"
+
+// One judge per criterion, four at a time: enough concurrency to keep the
+// verification quick without flooding the provider with parallel requests.
+static const POOL_SIZE = 4
+
+static const tools: any[] = [
+  read.partial(useAgentCwd: true),
+  ls.partial(useAgentCwd: true),
+  glob.partial(useAgentCwd: true),
+  grep.partial(useAgentCwd: true),
+  exec.partial(useAgentCwd: true),
+]
+
+static const systemPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, COMPUTE, and report.
+
+The grading tests are hidden and NOT in this environment, so you must reconstruct and ACTUALLY RUN every check the task states — never eyeball the artifact.
+
+Method:
+1. Enumerate EVERY explicit success criterion in the task. Two kinds: the output contract (exact file path and name, format, JSON keys, field types, units, signed-vs-unsigned, the stated whitespace / trailing-newline requirement) AND every quantitative rule (lengths, ranges, counts, thresholds, temperatures, GC content, percentages, etc.).
+2. For EACH criterion, use the `exec` tool to COMPUTE the artifact's actual value and compare it to the requirement. If the task names a specific tool or command to compute a value (e.g. a CLI with exact flags), install if needed and run THAT tool — it is the ground truth; do not approximate it with your own estimate.
+3. A criterion you did NOT computationally verify is itself a gap — report it as one. A near-miss on any numeric constraint is an error: report the actual computed value vs. the requirement (e.g. "Tm difference 6.5°C, limit 5°C").
+
+Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers."""
+
+export def verifierAgent(
+  task: string,
+  criteria: string[] = [],
+  context: string = "",
+  maxCost: number = $20.00,
+  maxTime: number = 15m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+): Result<Feedback[]> {
+  """
+  Verify work on disk against a task: derive measurable success criteria,
+  compute each one with tools, and return one pass/fail finding per
+  criterion.
+
+  @param task - The task the work must satisfy
+  @param criteria - Known acceptance criteria to check, extended with derived ones
+  @param context - Extra material for the judgment, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  """
+  const captured = guard(cost: maxCost, time: maxTime) {
+    let results: Feedback[][] = []
+    thread(label: "verifierAgent", session: session) {
+      if (threadIsNew()) {
+        systemMessage(systemPrompt)
+      }
+      const criteriaString = map(criteria, \criterion -> `- ${criterion}`).join("\n")
+      const authoritativeCriteria = """
+      Here is some example criteria that has already been provided for this task. Use it as a reference, but do not assume it is complete. Don't duplicate any of these, come up with new criteria.
+      <criteria>
+      ${criteriaString}
+      </criteria>
+    """
+      const criteriaBlock = if criteria.length == 0 then "" else authoritativeCriteria
+
+      const generateCriteriaPrompt = """
+    Given this task, come up with measurable criteria for success.
+    <task>${task}</task>
+
+    ${criteriaBlock}
+    """
+
+      const generatedCriteria: string[] = llm(
+        generateCriteriaPrompt,
+        llmOptions(model: model, provider: provider),
+      )
+
+      const allCriteria = criteria.concat(generatedCriteria)
+
+      results = concurrencyPool(size: POOL_SIZE, items: allCriteria) as criterion {
+        const prompt = """
+      Given this task:
+      <task>${task}</task>
+
+      Judge it against this criterion:
+      <criterion>${criterion}</criterion>
+
+      Verify, don't assume. Use your tools to see what code has been produced, and compare it to the criterion.
+      Report a concrete pass/fail. If the criterion involves a number, compute that number.
+      A criterion you did not actually compute counts as a failure.
+      """
+
+        const items: Feedback[] = llm(
+          prompt,
+          llmOptions(model: model, provider: provider, tools: tools),
+        )
+        return items
+      }
+
+      return flatten(results)
+    }
+    // Salvage: a guard trip mid-pool still returns the findings that
+    // completed. finalize is the salvage mechanism here (a saveDraft would
+    // need the function's full Result shape as its draft).
+    finalize {
+      return flatten(results)
+    }
+  }
+  // Fail open: the finalize block already salvages whatever findings
+  // completed, so a failure here means verification produced nothing at all.
+  // Report that as no findings rather than a blocking error.
+  return failOpenFeedback(captured)
+}

@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "findingsAggregateAcrossCriteria",
+      "description": "per-criterion judge findings merge into one list",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": ["out.txt contains 42"] },
+        { "return": [{ "error": true, "feedback": "out.txt contains 41, not 42" }] }
+      ]
+    }
+  ]
+}

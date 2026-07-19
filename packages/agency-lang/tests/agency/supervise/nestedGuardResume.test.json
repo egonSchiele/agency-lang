@@ -1,0 +1,7 @@
+{
+  "tests": [
+    { "nodeName": "matchInsideResumedBlock", "description": "KNOWN BUG: match inside a resumed block yields null", "input": "", "expectedOutput": "null", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "isFailureInsideResumedBlock", "description": "a nested guard Result survives an outer trip and resume", "input": "", "expectedOutput": "\"ok:inner:spun\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "matchOutsideResumedBlock", "description": "match on the guard own Result outside the block is fine", "input": "", "expectedOutput": "\"ok:spun\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

@@ -1,15 +1,71 @@
 /** @module
-  General-purpose coding agent: writes, edits, and runs code to complete a
-  task, then verifies the produced artifact against the task's own success
-  criteria.
-*/
-import { bash, ls, glob, grep } from "std::shell"
-import { edit } from "std::fs"
-import { systemMessage } from "std::thread"
-import { verify, feedbackHasErrors, renderFeedback } from "std::agency"
-import { withContext, unwrapGuard } from "std::agents/shared"
+  @summary Writes, edits, and runs code to complete a task on disk. One
+  honest pass: it works until it believes the task is done, then returns a
+  summary.
 
-static const codingTools: any[] = [
+  The real output is filesystem side effects; the returned string is a
+  summary. This agent does not verify its own work against the task. To add
+  verify-and-fix, compose it with verifierAgent, or run it under supervise
+  (std::supervise) for mid-run course correction:
+
+    supervise(every: 5m, maxTime: 30m, check: myCheck) {
+      return codingAgent(task, maxTime: 30m)
+    }
+
+  For an Agency-specific coding agent, use std::agents/agency/coding.
+*/
+import { parseAST, typecheck } from "std::agency"
+import { todoWrite, todoList } from "std::agent"
+import { llmOptions, withContext } from "std::agents/lib/shared"
+import { edit } from "std::fs"
+import {
+  gitStatus,
+  gitLog,
+  gitDiff,
+  gitShow,
+  gitBranchList,
+  gitRemoteList,
+  gitBlame,
+  gitStashList,
+  gitAdd,
+  gitCommit,
+  gitCheckout,
+  gitSwitch,
+  gitBranchCreate,
+  gitBranchDelete,
+  gitStashPush,
+  gitStashPop,
+  gitRestore,
+ } from "std::git"
+import { setAgentCwd, getAgentCwd } from "std::index"
+import { remember, recall } from "std::memory"
+import { bash, ls, glob, grep, exec } from "std::shell"
+import { docsSkill } from "std::skills"
+import { systemMessage, threadIsNew } from "std::thread"
+
+// Bundled Agency docs, served via std::skills. `static` caches each tool
+// across calls. A general coding task often still lands in an Agency repo,
+// so the language reference travels with the agent.
+static const docSkill = docsSkill("guide")
+static const cliSkill = docsSkill("cli")
+static const diagnosticsSkill = docsSkill("diagnostics")
+static const stdlibSkill = docsSkill("stdlib")
+
+static const systemPrompt = """You are an expert software engineer. Solve the task by writing and running real code with your tools.
+
+- The deliverable is a working artifact backed by real tool output, not a description. Actually run and exercise what you build.
+- Match the output contract exactly: the requested filename, path, format, and fields. Follow the task's stated whitespace and trailing-newline requirement precisely, whether it asks for one or forbids one. A near-miss fails.
+- When an exact check decides success (a numeric tolerance, an exact match, or a hidden test), do not stop at the first solution that passes your own check. Write down the judgment calls you made to reach it. If a choice could have gone another way and still fit the task, it is an assumption, not a fact, and your answer may only be correct under your reading of it. Re-check that it still passes under the other readings, and prefer a solution that holds under all of them.
+- Call `saveDraft` as you go, whenever you finish a meaningful step: the files you have written so far, what you verified, what is left. Your run has a cost and time budget, and if it runs out mid-task the most recent draft is what the caller receives. A run that saved nothing returns nothing.
+- For a task with more than two steps, call `todoWrite` first and mark each item done the moment it is finished.
+- You have web search. Use it when a task needs current or external information rather than guessing or declining.
+- NEVER fabricate output you did not actually produce."""
+
+static const finalizeReminder = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
+
+static const tools: any[] = [
+  setAgentCwd,
+  getAgentCwd,
   read.partial(useAgentCwd: true),
   write.partial(useAgentCwd: true),
   edit.partial(useAgentCwd: true),
@@ -17,51 +73,94 @@ static const codingTools: any[] = [
   glob.partial(useAgentCwd: true),
   grep.partial(useAgentCwd: true),
   bash.partial(useAgentCwd: true),
+  exec.partial(useAgentCwd: true),
+  gitStatus,
+  gitLog,
+  gitDiff,
+  gitShow,
+  gitBranchList,
+  gitRemoteList,
+  gitBlame,
+  gitStashList,
+  gitAdd,
+  gitCommit,
+  gitCheckout,
+  gitSwitch,
+  gitBranchCreate,
+  gitBranchDelete,
+  gitStashPush,
+  gitStashPop,
+  gitRestore,
+  typecheck,
+  parseAST,
+  remember,
+  recall,
+  docSkill,
+  cliSkill,
+  diagnosticsSkill,
+  stdlibSkill,
+  todoWrite,
+  todoList,
+  // The agent saves its own intermediate progress, so an aborted run still
+  // returns the most recent draft rather than nothing.
+  saveDraft,
 ]
 
-static const codingSysPrompt = """You are an expert software engineer. Solve the task by writing and running real code with your tools.
+def solve(
+  task: string,
+  context: string,
+  model: string,
+  provider: string,
+): string {
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
+  }
+  const prompt = """
+${withContext(task: task, context: context)}
 
-- The deliverable is a working artifact backed by real tool output, not a description. Actually run and exercise what you build.
-- Match the output contract exactly: the requested filename, path, format, and fields. Follow the task's stated whitespace and trailing-newline requirement precisely, whether it asks for one or forbids one. A near-miss fails.
-- When an exact check decides success (a numeric tolerance, an exact match, or a hidden test), do not stop at the first solution that passes your own check. Write down the judgment calls you made to reach it. If a choice could have gone another way and still fit the task, it is an assumption, not a fact, and your answer may only be correct under your reading of it. Re-check that it still passes under the other readings, and prefer a solution that holds under all of them.
-- NEVER fabricate output you did not actually produce."""
+${finalizeReminder}
+"""
+  return llm(
+    prompt,
+    llmOptions(
+      model: model,
+      provider: provider,
+      tools: tools,
+      hostedTools: ["web_search"],
+    ),
+  )
+}
 
-static const finalizeReminder = "Before finishing, re-read the task's exact output requirements (filename, format, fields, whitespace, trailing newline) and confirm the artifact on disk matches them exactly."
-
-export def codingAgent(task: string, context: string = "", criteria: string[] = [], maxAttempts: number = 3, maxCost: number = $50.00, maxTime: number = 30m): string {
+export def codingAgent(
+  task: string,
+  context: string = "",
+  maxCost: number = $50.00,
+  maxTime: number = 30m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+): Result<string> {
   """
-  General-purpose coding agent. Writes and runs code to complete a task and
-  verifies the result against the task's success criteria. Returns a short
+  Write, edit, and run code to complete a task on disk. Returns a short
   summary; the real output is filesystem side effects.
 
-  @param task - What to build or fix.
-  @param context - Optional extra material (data, examples, constraints).
-  @param criteria - Optional authoritative acceptance criteria (e.g. an expert
-    checklist) passed through to `verify` so the strict review checks those
-    exact items, not just its own re-derivation.
-  @param maxAttempts - Max verify-and-fix attempts before returning (default 3).
-  @param maxCost - Hard spend cap for the whole run (default $50).
-  @param maxTime - Hard wall-clock cap for the whole run (default 30 minutes).
+  @param task - What to accomplish
+  @param context - Extra material folded into the prompt, or ""
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
   """
-  const captured = guard(cost: maxCost, time: maxTime) {
+  // The guard Result is the return value: a success carries the reply (or,
+  // when a trip was rejected, the agent's most recent saveDraft), and a
+  // failure carries whatever actually went wrong, whether that is a tripped
+  // budget or a failure from inside the block.
+  return guard(cost: maxCost, time: maxTime) {
     let reply = ""
-    let msg = withContext(task, context)
-    thread(label: "codingAgent") {
-      systemMessage(codingSysPrompt)
-      let done = false
-      let attemptsLeft = maxAttempts
-      while (!done && attemptsLeft > 0) {
-        reply = llm("${msg}\n\n${finalizeReminder}", { tools: codingTools })
-        const fb = verify(task, criteria)
-        if (feedbackHasErrors(fb)) {
-          msg = "Not done yet. A strict review found:\n\n${renderFeedback(fb)}\n\nFix each problem exactly."
-          attemptsLeft = attemptsLeft - 1
-        } else {
-          done = true
-        }
-      }
+    thread(label: "codingAgent", session: session) {
+      reply = solve(task: task, context: context, model: model, provider: provider)
     }
     return reply
   }
-  return unwrapGuard(captured, "Coding")
 }

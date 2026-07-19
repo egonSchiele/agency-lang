@@ -1,0 +1,13 @@
+import { expertAgent } from "std::agents/expert"
+import { agencyExpertAgent } from "std::agents/agency/expert"
+import { guidanceOrEmpty, renderGuidance } from "std::agents/lib/expertGuidance"
+
+node generalConsultRoundTrips(): boolean {
+  const guidance = guidanceOrEmpty(expertAgent("design a PCR primer"))
+  return guidance.domain == "molecular biology" && renderGuidance(guidance) != ""
+}
+
+node agencyConsultRoundTrips(): boolean {
+  const guidance = guidanceOrEmpty(agencyExpertAgent("write a retry loop in Agency"))
+  return guidance.checklist.length == 1
+}

@@ -1,0 +1,30 @@
+import { revise, Critique } from "std::strategy"
+
+const seen = []
+
+// Accepts on the third attempt; each rejection hands its critique to the
+// next attempt, which echoes it back so the test can see it arrived.
+def checkThird(result: any): Critique {
+  seen.push(result)
+  if (seen.length >= 3) {
+    return { accepted: true, feedback: "" }
+  }
+  return { accepted: false, feedback: "fix-${seen.length}" }
+}
+
+node feedbackReachesNextAttempt(): string {
+  return revise(maxAttempts: 5, check: checkThird) as feedback {
+    return "attempt(${feedback})"
+  }
+}
+
+def alwaysReject(result: any): Critique {
+  return { accepted: false, feedback: "never good enough" }
+}
+
+// Exhausting the attempts returns the last result, not null.
+node exhaustionReturnsLastResult(): string {
+  return revise(maxAttempts: 2, check: alwaysReject) as feedback {
+    return "last(${feedback})"
+  }
+}

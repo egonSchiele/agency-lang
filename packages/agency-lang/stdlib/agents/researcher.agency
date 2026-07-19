@@ -1,0 +1,140 @@
+/** @module
+  @summary Answers a question from web and Wikipedia sources and synthesizes
+  a cited answer, retrying until every claim is grounded.
+
+  The grounding loop is this agent's own contract: a grounded, cited answer
+  is what it produces. Checking that answer against a wider task is the
+  caller's job, via reviewAgent.
+*/
+import { reviewAgent } from "std::agents/review"
+import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
+import { searchTools } from "std::agents/lib/search"
+import { llmOptions, withContext } from "std::agents/lib/shared"
+import { fetch, fetchMarkdown } from "std::http"
+import { Critique, revise } from "std::strategy"
+import { systemMessage, threadIsNew } from "std::thread"
+import { search as wikiSearch } from "std::wikipedia"
+
+static const systemPrompt = """You are a research analyst. Answer the task using your source tools.
+
+- Ground every factual claim in a source and cite it.
+- If your tools cannot retrieve the needed information, say so plainly. NEVER fabricate sources or facts."""
+
+// Wikipedia and page fetch need no API key, so they are always offered.
+// Web search needs one, so searchTools() contributes whichever providers the
+// user has a key for, and none when they have none. This is a function, not
+// a static const, because the keys are read at call time.
+//
+// The wikipedia tool is renamed because an import alias renames only the
+// binding: without this its tool name stays `search` and collides with a
+// search provider.
+def buildTools(): any[] {
+  const baseTools: any[] = [
+    wikiSearch.rename("wikipedia_search"),
+    fetchMarkdown,
+    fetch,
+    read.partial(useAgentCwd: true),
+  ]
+  return baseTools.concat(searchTools())
+}
+
+static const groundingInstruction = "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered."
+
+// reviewAgent judges the answer text against the task. An ungrounded or
+// uncited claim is an error finding, which becomes the critique the next
+// attempt has to address.
+def checkGrounding(task: string, answer: any): Critique {
+  const reviewed = reviewAgent(
+    work: "${answer}",
+    task: task,
+    context: groundingInstruction,
+  )
+  if (!feedbackHasErrors(reviewed)) {
+    return { accepted: true, feedback: "" }
+  }
+  return {
+    accepted: false,
+    feedback: """
+Your answer has gaps:
+
+${renderFeedback(reviewed)}
+
+Retrieve more and fix them.
+""",
+  }
+}
+
+def researchLoop(
+  task: string,
+  context: string,
+  maxAttempts: number,
+  model: string,
+  provider: string,
+): string {
+  const researchTools = buildTools()
+  if (threadIsNew()) {
+    systemMessage(systemPrompt)
+  }
+  const question = withContext(task: task, context: context)
+  return revise(
+    maxAttempts: maxAttempts,
+    check: checkGrounding.partial(task: task),
+  ) as critique {
+    // The thread carries the conversation, so a later attempt sends only the
+    // critique rather than repeating the question.
+    //
+    // if/else, not a ternary: a ternary inside a block evaluates to null.
+    // See tests/agency/agents/blockProbe.agency.
+    let msg = critique
+    if (critique == "") {
+      msg = question
+    }
+    const answer = llm(
+      msg,
+      llmOptions(model: model, provider: provider, tools: researchTools),
+    )
+    saveDraft(answer)
+    return answer
+  }
+}
+
+export def researcherAgent(
+  task: string,
+  context: string = "",
+  maxAttempts: number = 2,
+  maxCost: number = $50.00,
+  maxTime: number = 30m,
+  model: string = "",
+  provider: string = "",
+  session: string = "",
+): Result<string> {
+  """
+  Answer a research question from web and Wikipedia sources and return a
+  cited answer, retrying while a review finds ungrounded claims.
+
+  @param task - The research question
+  @param context - Extra material folded into the prompt, or ""
+  @param maxAttempts - Answer-and-fix attempts before returning
+  @param maxCost - Hard spend cap
+  @param maxTime - Hard wall-clock cap
+  @param model - Model override, or "" for the ambient model
+  @param provider - Provider for the model override
+  @param session - Session name to share a thread across calls, or "" for isolated
+  """
+  // The guard Result is the return value: a success carries the answer (or,
+  // when a trip was rejected, the best draft so far), and a failure carries
+  // whatever actually went wrong.
+  return guard(cost: maxCost, time: maxTime) {
+    let answer = ""
+    thread(label: "researcherAgent", session: session) {
+      answer = researchLoop(
+        task: task,
+        context: context,
+        maxAttempts: maxAttempts,
+        model: model,
+        provider: provider,
+      )
+    }
+    return answer
+  }
+}

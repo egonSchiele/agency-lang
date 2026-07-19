@@ -694,7 +694,11 @@ export class Runner {
         threads.resumeExisting(rawId);
         tid = rawId;
         isResumption = true;
-      } else if (opts.session !== undefined) {
+      } else if (opts.session !== undefined && opts.session !== "") {
+        // An empty session name means "no session": agents take a
+        // `session: string = ""` parameter and pass it straight through, so
+        // the default must yield a fresh isolated thread, not a real session
+        // literally named "" that every such caller would share.
         const { id: openedId, existed } = threads.openSession(opts.session, createMeta);
         tid = openedId;
         isResumption = existed;

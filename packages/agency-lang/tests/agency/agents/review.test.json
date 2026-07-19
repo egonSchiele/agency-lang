@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "errorFindingSurfaces",
+      "description": "the judge's error finding surfaces through reviewAgent",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "return": [{ "error": true, "feedback": "1+1 is 2, not 3" }] }
+      ]
+    }
+  ]
+}

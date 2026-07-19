@@ -1,0 +1,77 @@
+// Characterizes what survives a guard pause/resume, which is the mechanism
+// supervise is built on.
+//
+// FINDING (2026-07-18): a `match` expression INSIDE a block that gets paused
+// and resumed evaluates to null (matchInsideResumedBlock). Reading the same
+// Result with isFailure/.value works, and a match on the guard's own Result
+// outside the block works. Agents that may run inside a supervised block
+// therefore read guard Results with isFailure, never match. Recorded in
+// TODO.md.
+const log = []
+
+def spin(rounds: number): string {
+  let i = 0
+  while (i < rounds) {
+    i = i + 1
+  }
+  return "spun"
+}
+
+// KNOWN BUG, pinned so a fix flips this test: match inside the resumed
+// block returns null instead of the matched arm.
+node matchInsideResumedBlock(): string {
+  handle {
+    const outer = guard(time: 5ms, label: "a") {
+      const inner = guard(time: 600000, label: "ai") {
+        const s = spin(300000)
+        return "inner:${s}"
+      }
+      return match(inner) {
+        success(v) => "ok:${v}"
+        failure(e) => "inner-failed"
+      }
+    }
+    if (isFailure(outer)) { return "outer-failed" }
+    return outer.value
+  } with (i) {
+    if (i.effect == "std::guard" && i.data.label == "a") { return approve({ maxTime: 600000 }) }
+    return pass()
+  }
+}
+
+// A nested guard's Result DOES survive an outer trip and resume: this is the
+// behavior supervise depends on.
+node isFailureInsideResumedBlock(): string {
+  handle {
+    const outer = guard(time: 5ms, label: "b") {
+      const inner = guard(time: 600000, label: "bi") {
+        const s = spin(300000)
+        return "inner:${s}"
+      }
+      if (isFailure(inner)) { return "inner-failed" }
+      return "ok:${inner.value}"
+    }
+    if (isFailure(outer)) { return "outer-failed" }
+    return outer.value
+  } with (i) {
+    if (i.effect == "std::guard" && i.data.label == "b") { return approve({ maxTime: 600000 }) }
+    return pass()
+  }
+}
+
+// A match on the guard's OWN Result, outside the resumed block, is fine.
+node matchOutsideResumedBlock(): string {
+  handle {
+    const outer = guard(time: 5ms, label: "c") {
+      const s = spin(300000)
+      return "ok:${s}"
+    }
+    return match(outer) {
+      success(v) => v
+      failure(e) => "outer-failed"
+    }
+  } with (i) {
+    if (i.effect == "std::guard" && i.data.label == "c") { return approve({ maxTime: 600000 }) }
+    return pass()
+  }
+}

@@ -16,10 +16,15 @@ import {
   _sleep,
  } from "agency-lang/stdlib-lib/builtins.js"
 import { _resolve } from "agency-lang/stdlib-lib/path.js"
-import { _saveDraft, _pushGuard, _runGuarded, _popGuard } from "agency-lang/stdlib-lib/thread.js"
 import {
   syntaxHighlight as _syntaxHighlight,
  } from "agency-lang/stdlib-lib/syntax.js"
+import {
+  _saveDraft,
+  _pushGuard,
+  _runGuarded,
+  _popGuard,
+ } from "agency-lang/stdlib-lib/thread.js"
 
 // Payload types for the interrupt effects raised by this module.
 // `std::read`/`std::write` are shared file-access effects, also raised by
@@ -389,6 +394,21 @@ export def flatMap(arr: any[], func: (any) -> any): any[] {
   for (item in arr) {
     const mapped = func(item)
     for (sub in mapped) {
+      result.push(sub)
+    }
+  }
+  return result
+}
+
+export def flatten(arr: any[]): any[] {
+  """
+  Flatten an array of arrays by one level.
+
+  @param arr - The array to flatten
+  """
+  const result = []
+  for (item in arr) {
+    for (sub in item) {
       result.push(sub)
     }
   }

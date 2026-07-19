@@ -1,0 +1,69 @@
+{
+  "tests": [
+    {
+      "nodeName": "continueLetsBlockFinish",
+      "description": "continue extends the budget and the block finishes",
+      "input": "",
+      "expectedOutput": "\"done:spun|checked:true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "stopSalvagesDraft",
+      "description": "stop aborts the block and salvages its draft",
+      "input": "",
+      "expectedOutput": "\"salvaged:partial\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "innerGuardTripPassesThrough",
+      "description": "an inner guard trip reaches its own handler, not supervise",
+      "input": "",
+      "expectedOutput": "\"inner:spun|checksDuring:0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "maxTimeBelowIntervalFails",
+      "description": "maxTime below the interval is rejected up front",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "redirectDeliversMessage",
+      "description": "a redirect message is injected into the paused block thread",
+      "input": "",
+      "expectedOutput": "\"delivered:user\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "never-delivered",
+          "delayMs": 60000
+        },
+        {
+          "return": "one"
+        }
+      ]
+    }
+  ]
+}

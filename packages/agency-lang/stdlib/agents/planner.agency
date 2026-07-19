@@ -5,9 +5,12 @@
   it, show the plan, source, and capability envelope for approval, run it in a
   handler-sandboxed subprocess, verify, and fall back to codingAgent on failure.
 */
-import { writeAgency, runCode, getEffects, verify, feedbackHasErrors, renderFeedback, EffectsByExport } from "std::agency"
+import { runCode, getEffects, EffectsByExport } from "std::agency"
+import { agencyCodingAgent } from "std::agents/agency/coding"
 import { codingAgent } from "std::agents/coding"
-import { withContext, unwrapGuard } from "std::agents/shared"
+import { verifierAgent } from "std::agents/verifier"
+import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
+import { llmOptions, withContext } from "std::agents/lib/shared"
 import { getAgentCwd } from "std::index"
 
 /** Raised before a generated plan-agent runs, so the plan, source, and
@@ -22,21 +25,26 @@ effect std::agents::planApprove {
 // sandbox accepts them; `std::agents/planner` is included so a plan can decompose
 // further (recursion bounded by the runtime's subprocess maxDepth).
 static const importableSurface = """You may import and compose these building blocks (all standard library, so they run in the sandbox):
-- import { codingAgent } from "std::agents/coding"      general coding: read/write/edit/run files and shell
-- import { researchAgent } from "std::agents/research"  gather from web and Wikipedia and synthesize
-- import { agencyCodingAgent } from "std::agents/agency" write and run Agency code
-- import { plannerAgent } from "std::agents/planner"    decompose a genuinely complex sub-task into its own planned agent
+- import { codingAgent } from "std::agents/coding"              general coding: read/write/edit/run files and shell; returns Result<string>
+- import { researcherAgent } from "std::agents/researcher"      gather from web and Wikipedia and synthesize; returns Result<string>
+- import { agencyCodingAgent } from "std::agents/agency/coding" write valid Agency code; returns Result<string, WriteFailure>
+- import { verifierAgent } from "std::agents/verifier"          verify finished work on disk against the task
+- import { plannerAgent } from "std::agents/planner"            decompose a genuinely complex sub-task into its own planned agent
 - direct tools from std::shell, std::fs, std::http, and the rest of the standard library
 
 Prefer to DO THE WORK directly: call codingAgent (or researchAgent, or direct tools) to actually create files, run commands, and produce the deliverable. Use plannerAgent ONLY for a sub-task that is itself large and multi-step; never call plannerAgent for a concrete, single-step piece of work, and never just re-plan without doing anything."""
 
-static const planExample = """EXAMPLE, compose a worker in a node main:
+static const planExample = """EXAMPLE, compose a worker in a node main. Worker agents return a Result, so unwrap it:
 import { codingAgent } from "std::agents/coding"
 node main(): string {
-  return codingAgent("clone the repo, install deps, and run the test suite")
+  const result = codingAgent("clone the repo, install deps, and run the test suite")
+  if (isFailure(result)) {
+    return "failed: \${result.error}"
+  }
+  return result.value
 }"""
 
-/** Build the writeAgency instruction: emit a program whose `node main` composes
+/** Build the code-generation instruction: emit a program whose `node main` composes
   the building blocks to carry out `planText` for `task`. */
 export def planCodePrompt(task: string, planText: string): string {
   return """Write a complete Agency program (a node main) that carries out this plan, composing the building blocks below.
@@ -67,7 +75,7 @@ def renderEffectLines(byExport: Record<string, string[]>): string {
 /** Human-readable capability envelope for the approval prompt, or an honest
   note when the effects could not be computed. */
 export def renderEffects(effects: Result<EffectsByExport>): string {
-  return match (effects) {
+  return match(effects) {
     failure(_) => "(capabilities could not be computed)"
     success(byExport) => renderEffectLines(byExport)
   }
@@ -78,11 +86,16 @@ export def renderEffects(effects: Result<EffectsByExport>): string {
   (approve-all in the benchmark sandbox). REJECT halts execution and returns a
   failure (see docs/site/guide/interrupts.md), so callers `try` this and read a
   failure as "not approved". */
-def requestApproval(plan: string, source: string, effects: string) raises <std::agents::planApprove> {
-  interrupt std::agents::planApprove(
-    "Approve this plan before running it?",
-    { plan: plan, source: source, effects: effects },
-  )
+def requestApproval(
+  plan: string,
+  source: string,
+  effects: string,
+) raises <std::agents::planApprove> {
+  interrupt std::agents::planApprove("Approve this plan before running it?", {
+    plan: plan,
+    source: source,
+    effects: effects
+  })
 }
 
 // ---- The flow. State is threaded through plain helpers so no binder-`match`
@@ -97,23 +110,41 @@ type PlanState = {
 }
 
 def rejectedState(state: PlanState): PlanState {
-  return { summary: "Plan rejected; nothing was run.", done: true, extra: state.extra }
+  return {
+    summary: "Plan rejected; nothing was run.",
+    done: true,
+    extra: state.extra
+  }
 }
 
 def completedState(state: PlanState): PlanState {
-  return { summary: "Plan completed and verified.", done: true, extra: state.extra }
+  return {
+    summary: "Plan completed and verified.",
+    done: true,
+    extra: state.extra
+  }
 }
 
 def regenState(state: PlanState, gaps: string): PlanState {
-  return { summary: state.summary, done: false, extra: "${state.extra}\n\nA prior attempt had problems; fix them:\n${gaps}" }
+  return {
+    summary: state.summary,
+    done: false,
+    extra: "${state.extra}\n\nA prior attempt had problems; fix them:\n${gaps}"
+  }
 }
 
 def fallbackState(task: string, state: PlanState): PlanState {
-  return { summary: codingAgent(task), done: true, extra: state.extra }
+  const attempt = codingAgent(task: task)
+  const summary = if isFailure(attempt) then "Fallback coding agent failed: ${attempt.error}" else attempt.value
+  return {
+    summary: summary,
+    done: true,
+    extra: state.extra
+  }
 }
 
 def judgeAfterRun(task: string, state: PlanState): PlanState {
-  const fb = verify(task)
+  const fb = verifierAgent(task: task)
   return if feedbackHasErrors(fb) then regenState(state, renderFeedback(fb)) else completedState(state)
 }
 
@@ -122,7 +153,7 @@ def afterRun(task: string, src: string, state: PlanState): PlanState {
   // Run the generated agent in the agent's working directory so its file writes
   // land where the caller expects (runCode's subprocess otherwise inherits the
   // package dir, not the caller's cwd).
-  return match (runCode(src, cwd: getAgentCwd())) {
+  return match(runCode(src, cwd: getAgentCwd())) {
     failure(err) => regenState(state, "The generated agent failed to run: ${err}")
     success(_) => judgeAfterRun(task, state)
   }
@@ -130,26 +161,46 @@ def afterRun(task: string, src: string, state: PlanState): PlanState {
 
 // Reject halts+fails, so the gate is try-wrapped: a failure means the run was
 // not approved and nothing ran.
-export def runApproved(task: string, plan: string, src: string, state: PlanState): PlanState raises <std::agents::planApprove> {
+export def runApproved(
+  task: string,
+  plan: string,
+  src: string,
+  state: PlanState,
+): PlanState raises <std::agents::planApprove> {
   const eff = getEffects(src)
   // Show the plan alongside the generated source and capability envelope, so the
   // approval prompt reflects what the user is actually approving.
   const gate = try requestApproval(plan, src, renderEffects(eff))
-  return match (gate) {
+  return match(gate) {
     failure(_) => rejectedState(state)
     success(_) => afterRun(task, src, state)
   }
 }
 
-def planStep(task: string, planText: string, state: PlanState): PlanState raises <std::agents::planApprove> {
-  const gen = writeAgency(planCodePrompt(task, planText), state.extra)
-  return match (gen) {
+def planStep(
+  task: string,
+  planText: string,
+  state: PlanState,
+): PlanState raises <std::agents::planApprove> {
+  const gen = agencyCodingAgent(
+    task: planCodePrompt(task, planText),
+    context: state.extra,
+  )
+  return match(gen) {
     failure(_) => fallbackState(task, state)
     success(src) => runApproved(task, planText, src, state)
   }
 }
 
-export def plannerAgent(task: string, context: string = "", plan: string = "", maxCost: number = $100.00, maxTime: number = 60m): string raises <std::agents::planApprove, std::guard> {
+export def plannerAgent(
+  task: string,
+  context: string = "",
+  plan: string = "",
+  maxCost: number = $100.00,
+  maxTime: number = 60m,
+  model: string = "",
+  provider: string = "",
+): Result<string> raises <std::agents::planApprove, std::guard> {
   """
   Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
   task, show the plan/source/effects for approval, run it in a sandboxed
@@ -162,16 +213,31 @@ export def plannerAgent(task: string, context: string = "", plan: string = "", m
   @param plan - optional seed plan; when non-empty the analysis step is skipped.
   @param maxCost - hard spend cap for the whole tree (default $100).
   @param maxTime - hard wall-clock cap (default 60 minutes).
+  @param model - model override for the planning step only, or "" for the ambient model.
+  @param provider - provider for the model override.
   """
+  // The guard Result is the return value: a success carries the summary (or,
+  // when a trip was rejected, the last saved draft), and a failure carries
+  // whatever actually went wrong.
   const captured = guard(cost: maxCost, time: maxTime) {
-    const planText = if plan == "" then llm("Analyse this task and outline the steps:\n${withContext(task, context)}") else plan
-    let state: PlanState = { summary: "", done: false, extra: withContext(task, context) }
+    // The override applies to the planning step only. Each worker agent the
+    // generated plan calls resolves its own model.
+    const planText = if plan == "" then llm(
+      "Analyse this task and outline the steps:\n${withContext(task: task, context: context)}",
+      llmOptions(model: model, provider: provider),
+    ) else plan
+    let state: PlanState = {
+      summary: "",
+      done: false,
+      extra: withContext(task: task, context: context)
+    }
     let attemptsLeft = PLANNER_MAX_ATTEMPTS
     while (!state.done && attemptsLeft > 0) {
-      state = planStep(task, planText, state)
+      state = planStep(task: task, planText: planText, state: state)
+      saveDraft(state.summary)
       attemptsLeft = attemptsLeft - 1
     }
     return state.summary
   }
-  return unwrapGuard(captured, "Planner")
+  return captured
 }

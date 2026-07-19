@@ -1,3 +1,5 @@
+import { ls, glob, grep, exec } from "std::shell"
+
 import {
   _compile,
   _compileFile,
@@ -14,9 +16,6 @@ import {
   _subprocessDepth,
  } from "agency-lang/stdlib-lib/agency.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
-import { systemMessage } from "std::thread"
-import { docsSkill } from "std::skills"
-import { ls, glob, grep, exec } from "std::shell"
 
 /** @module
   @summary Tools for compiling, type-checking, running, formatting, and inspecting Agency programs from Agency code.
@@ -256,10 +255,30 @@ def checkRunCodeLimits(
   stdout: number,
 ): string {
   const checks = [
-    { name: "wallClock", value: wallClock, max: 3600s, unit: "milliseconds" },
-    { name: "memory", value: memory, max: 4096mb, unit: "bytes" },
-    { name: "ipcPayload", value: ipcPayload, max: 1024mb, unit: "bytes" },
-    { name: "stdout", value: stdout, max: 100mb, unit: "bytes" },
+    {
+    name: "wallClock",
+    value: wallClock,
+    max: 3600s,
+    unit: "milliseconds"
+  },
+    {
+    name: "memory",
+    value: memory,
+    max: 4096mb,
+    unit: "bytes"
+  },
+    {
+    name: "ipcPayload",
+    value: ipcPayload,
+    max: 1024mb,
+    unit: "bytes"
+  },
+    {
+    name: "stdout",
+    value: stdout,
+    max: 100mb,
+    unit: "bytes"
+  },
   ]
   for (check in checks) {
     if (check.value <= 0) {
@@ -372,360 +391,6 @@ export idempotent def getEffects(source: string): Result<EffectsByExport> {
   return try _getEffects(source)
 }
 
-/** One review finding. `error: true` means the code is broken (parse or
-type error, or the reviewer judged it does not do the task); `error:
-false` is advisory feedback, including typecheck warnings. */
-export type Feedback = {
-  error: boolean;
-  feedback: string
-}
-
-export def mergeFeedback(
-  a: Result<Feedback[]>,
-  b: Result<Feedback[]>,
-): Result<Feedback[]> {
-  """
-  Merge two feedback Results by concatenating their success arrays or
-  returning the first failure.
-
-  @param a - First feedback Result
-  @param b - Second feedback Result
-  """
-  if (a is success(aVal)) {
-    if (b is success(bVal)) {
-      return success([...aVal, ...bVal])
-    } else {
-      return b
-    }
-  } else {
-    return a
-  }
-}
-
-def parseFeedback(source: string): Result<Feedback[]> {
-  const result = try _parseAST(source)
-  if (result is failure(err)) {
-    return success([{ error: true, feedback: "Parse error: ${err}" }])
-  }
-  return success([])
-}
-
-// Report -> findings, separated from typecheckFeedback so writeAgency
-// can format an already-computed report without re-checking.
-def reportFeedback(report: TypeCheckReport): Feedback[] {
-  const feedback: Feedback[] = []
-  for (error in report.errors) {
-    feedback.push({ error: true, feedback: "Error: ${error.message}" })
-  }
-  for (warning in report.warnings) {
-    feedback.push({ error: false, feedback: "Warning: ${warning.message}" })
-  }
-  return feedback
-}
-
-def typecheckFeedback(source: string): Result<Feedback[]> {
-  const result = try _typecheck(source)
-  if (result is failure(err)) {
-    return success([{ error: true, feedback: "Typecheck failed: ${err}" }])
-  }
-  return success(reportFeedback(result.value))
-}
-
-def llmFeedback(source: string, task: string): Result<Feedback[]> {
-  let out: Result<Feedback[]> = success([])
-  thread(label: "review") {
-    const items: Feedback[] = llm("""You are reviewing Agency-language code.
-The code was written for this task:
-<task>
-${task}
-</task>
-
-<code>
-${source}
-</code>
-
-Return a list of feedback items. Set error=true only if the code does
-not accomplish the task. Keep feedback brief and concrete.""")
-    out = success(items)
-  }
-  return out
-}
-
-export def review(source: string, task: string = ""): Result<Feedback[]> {
-  """
-  Review Agency source code. Always merges parse and typecheck findings;
-  when a task description is given, an LLM pass also judges whether the
-  code accomplishes the task.
-
-  @param source - Agency source code as a string
-  @param task - Optional description of what the code should do
-  """
-  let feedback: Result<Feedback[]> = success([])
-  feedback = mergeFeedback(feedback, parseFeedback(source))
-  feedback = mergeFeedback(feedback, typecheckFeedback(source))
-  if (task != "") {
-    feedback = mergeFeedback(feedback, llmFeedback(source, task))
-  }
-  if (feedback is success(items)) {
-    if (items.length == 0) {
-      return success([{ error: false, feedback: "Code is valid with no errors or warnings." }])
-    }
-  }
-  return feedback
-}
-
-def renderSingleFeedback(f: Feedback): string {
-  if (f.error) {
-    return `Error: ${f.feedback}`
-  } else {
-    return `Feedback: ${f.feedback}`
-  }
-}
-
-export def renderFeedback(feedback: Result<Feedback[]>): string {
-  """
-  Render a feedback Result as human-readable text, one line per finding.
-
-  @param feedback - The Result review() returned
-  """
-  if (feedback is success(val)) {
-    return map(val, renderSingleFeedback).join("\n\n")
-  }
-  return feedback.error
-}
-
-export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
-  """
-  True when any finding is an error, or when the feedback Result itself
-  is a failure.
-
-  @param feedback - The Result review() returned
-  """
-  if (feedback is success(val)) {
-    return some(val, \f -> f.error)
-  }
-  // If the feedback itself is a failure, we can treat that as an error state.
-  return true
-}
-
-/** Pass a successful feedback list through unchanged; map any failure to
-  no findings. Used to make verification fail open. A verifier that could
-  not run reports nothing rather than a blocking error. */
-export def failOpenFeedback(r: Result<Feedback[]>): Result<Feedback[]> {
-  return match (r) {
-    success(items) => success(items)
-    failure(_) => success([])
-  }
-}
-
-/** A specific syntax reminder to inject next to a diagnostic, or "" when no
-  known pattern matches. Point-of-need guidance: the rule lands better delivered
-  alongside the error than buried in the system prompt. Matches on the actual
-  diagnostic wording the compiler emits, not on the user's source. */
-export def syntaxHintFor(errors: string): string {
-  if (errors =~ re/for loop condition/) {
-    return "Reminder: Agency has no C-style for loop. Count with a while loop, or iterate with for (x in items)."
-  }
-  return ""
-}
-
-/** True when the source declares a `node main` entry point. Missing main is
-  not a typecheck diagnostic, so writeAgency checks for it directly. */
-def hasMainNode(source: string): boolean {
-  return source =~ re/node\s+main\s*\(/
-}
-
-/** Prepend the point-of-need syntax hint to a diagnostic block, if one applies. */
-def withSyntaxHint(findings: string): string {
-  const hint = syntaxHintFor(findings)
-  return if hint == "" then findings else "${hint}\n\n${findings}"
-}
-
-static const verifyTools: any[] = [
-  read.partial(useAgentCwd: true),
-  ls.partial(useAgentCwd: true),
-  glob.partial(useAgentCwd: true),
-  grep.partial(useAgentCwd: true),
-  exec.partial(useAgentCwd: true),
-]
-
-static const verifySysPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, COMPUTE, and report.
-
-The grading tests are hidden and NOT in this environment, so you must reconstruct and ACTUALLY RUN every check the task states — never eyeball the artifact.
-
-Method:
-1. Enumerate EVERY explicit success criterion in the task. Two kinds: the output contract (exact file path and name, format, JSON keys, field types, units, signed-vs-unsigned, the stated whitespace / trailing-newline requirement) AND every quantitative rule (lengths, ranges, counts, thresholds, temperatures, GC content, percentages, etc.).
-2. For EACH criterion, use the `exec` tool to COMPUTE the artifact's actual value and compare it to the requirement. If the task names a specific tool or command to compute a value (e.g. a CLI with exact flags), install if needed and run THAT tool — it is the ground truth; do not approximate it with your own estimate.
-3. A criterion you did NOT computationally verify is itself a gap — report it as one. A near-miss on any numeric constraint is an error: report the actual computed value vs. the requirement (e.g. "Tm difference 6.5°C, limit 5°C").
-
-Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers."""
-
-// The throwing inner: two-phase inspection. `verify` wraps it fail-open.
-def verifyInner(task: string, criteria: string[] = []): Feedback[] {
-  let items: Feedback[] = []
-  thread(label: "verify") {
-    systemMessage(verifySysPrompt)
-    // When a caller supplies an expert checklist, it is authoritative — verify
-    // must check those exact items (with the exact tool/flags/sub-sequence they
-    // name) rather than re-deriving looser criteria of its own.
-    const authoritativeCriteria = """
-
-These domain-specific acceptance criteria are AUTHORITATIVE — check EACH one exactly as written, using the exact tool, flags, and input sub-sequence it names:
-- ${criteria.join("\n- ")}"""
-    const criteriaBlock = if criteria.length == 0 then "" else authoritativeCriteria
-    const analysis: string = llm("The task was:\n\n${task}${criteriaBlock}\n\nEnumerate every explicit success criterion (including the authoritative ones above, if any), then for EACH one use `exec` to compute the artifact's actual value and compare it to the requirement (run any tool/command named as ground truth). Report a concrete pass/fail per criterion with the computed numbers. A criterion you did not actually compute counts as a failure.", { tools: verifyTools })
-    const parsed: Feedback[] = llm("Convert this analysis into Feedback items — one per concrete finding: error=true for an unmet criterion (name it), error=false for a satisfied one. Empty list if you cannot tell.\n\nAnalysis:\n${analysis}")
-    items = parsed
-  }
-  return items
-}
-
-export def verify(task: string, criteria: string[] = []): Result<Feedback[]> {
-  """
-  Reconstruct a task's success criteria, run the produced artifact against
-  them, and return findings. `error: true` marks an unmet criterion (strict
-  on the output contract); `error: false` a satisfied one. Fails open (empty
-  success) if verification cannot run, so it never blocks.
-
-  @param task - The original task description to verify against.
-  @param criteria - Optional authoritative acceptance criteria (e.g. an expert
-    checklist) that verify must check exactly, instead of only re-deriving its
-    own from the task text.
-  """
-  return failOpenFeedback(try verifyInner(task, criteria))
-}
-
-type GeneratedCode = {
-  code: string
-}
-
-/** The failure payload writeAgency returns on retry exhaustion: the last
-generated source and its typecheck diagnostics. */
-export type WriteFailure = {
-  source: string;
-  errors: TypeCheckDiagnostic[]
-}
-
-// Kept in sync by hand with the syntax rules in the code subagent prompt
-// (lib/agents/agency-agent/subagents/code.agency) — the authoritative
-// source is docs/site/guide/basic-syntax.md, which the model can read
-// through the docs tool.
-static const writeSysPrompt = """You write code in the Agency language.
-Agency syntax rules you MUST follow:
-- Functions: def name(param: Type): ReturnType { ... }
-- Nodes: node name() { ... } — export the entry node.
-- if / while / for require parentheses AND curly braces: if (x > 5) { ... }
-- The ONLY for loop is for-in over an array: for (item in items) { ... }
-  There is NO C-style for (let i = 0; i < n; i++) loop. To count, use a
-  while loop:
-    let i = 1
-    while (i <= 3) {
-      print(i)
-      i = i + 1
-    }
-- Declare variables with let or const before use.
-- No Python-style colon blocks. Always { ... }.
-
-Here are complete, correct Agency programs. Copy their structure: the imports, the `node main`, and the explicit `return` at the end.
-
-EXAMPLE 1, compute and return a value:
-node main(): number {
-  let total = 0
-  for (x in [1, 2, 3]) {
-    total = total + x
-  }
-  return total
-}
-
-EXAMPLE 2, import a tool and define and call a helper:
-import { bash } from "std::shell"
-def greet(name: string): string {
-  return "Hello, \${name}"
-}
-node main(): string {
-  bash(command: "echo starting")
-  return greet("world")
-}
-
-EXAMPLE 3, get structured output from the model by annotating the result type:
-type Summary = { title: string; points: string[] }
-node main(): Summary {
-  const s: Summary = llm("Summarize the water cycle with a title and three bullet points.")
-  return s
-}
-
-Commonly useful standard library modules:
-- std::shell: bash, exec, ls, grep, glob (run commands, inspect files)
-- std::http: fetch, fetchJSON (call web APIs)
-- std::array: map, filter (transform lists)
-- std::agency: writeAgency, runCode, review (generate and run Agency code)
-
-If you are unsure about syntax or a standard-library function, read the
-relevant page with the docs tool before writing code.
-Return only the complete program in the code field."""
-
-export def writeAgency(
-  task: string,
-  context: string = "",
-  maxAttempts: number = 3,
-): Result<string, WriteFailure> {
-  """
-  Generate Agency source code for a task description. Typechecks each
-  attempt and feeds diagnostics back to the model, up to maxAttempts
-  tries. Success holds source that compiles and typechecks; on retry
-  exhaustion the failure holds { source, errors } for the last attempt.
-
-  @param task - What the generated program should do
-  @param context - Optional extra material (available data, examples)
-  @param maxAttempts - Max generation attempts before giving up (default 3)
-  """
-  const docsTool = docsSkill("guide")
-  let result: Result<string, WriteFailure> = failure({ source: "", errors: [] })
-  thread(label: "writeAgency") {
-    systemMessage(writeSysPrompt)
-    let prompt = "Write an Agency program for this task:\n<task>\n${task}\n</task>"
-    if (context != "") {
-      prompt = prompt + "\n<context>\n${context}\n</context>"
-    }
-    let attempt = 0
-    let done = false
-    while (attempt < maxAttempts && !done) {
-      attempt = attempt + 1
-      const generated: GeneratedCode = llm(prompt, { tools: [docsTool] })
-      const source = generated.code
-      const checked = try _typecheck(source)
-      if (checked is failure(parseErr)) {
-        result = failure({ source: source, errors: [] })
-        // _typecheck throws for import-resolution failures as well as
-        // parse failures. In the import case the re-parse succeeds and
-        // renders no findings — fall back to the thrown error so the
-        // model always gets a diagnostic to repair against.
-        let findings = renderFeedback(parseFeedback(source))
-        if (findings == "") {
-          findings = "${parseErr}"
-        }
-        prompt = "That code has problems:\n${withSyntaxHint(findings)}\nReturn a corrected complete program."
-      } else if (checked.value.errors.length > 0) {
-        result = failure({ source: source, errors: checked.value.errors })
-        const findings = renderFeedback(success(reportFeedback(checked.value)))
-        prompt = "That code has problems:\n${withSyntaxHint(findings)}\nReturn a corrected complete program."
-      } else {
-        const compiled = try _compile(source)
-        if (compiled is failure(compileErr)) {
-          result = failure({ source: source, errors: [] })
-          prompt = "That code failed to compile:\n${withSyntaxHint("${compileErr}")}\nReturn a corrected complete program."
-        } else if (!hasMainNode(source)) {
-          result = failure({ source: source, errors: [] })
-          prompt = "The program compiles but has no `node main`. Every program MUST have a node named `main` as its entry point. Add one and return the complete program."
-        } else {
-          result = success(source)
-          done = true
-        }
-      }
-    }
-  }
-  return result
-}
 
 type FilterImportsResult = {
   source: string;
@@ -842,7 +507,10 @@ export def walkAST(
   return result.clone
 }
 
-export idempotent def getNodesOfType(source: string, types: string[]): Result<any[]> {
+export idempotent def getNodesOfType(
+  source: string,
+  types: string[],
+): Result<any[]> {
   """
   Parse Agency source code and return every AST node whose `type` field matches any of the provided types.
 

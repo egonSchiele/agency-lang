@@ -1,4 +1,4 @@
-import { writeAgency } from "std::agency"
+import { agencyCodingAgent } from "std::agents/agency/coding"
 
 // First mock returns code with a type error (const type mismatch —
 // undeclared identifiers silently type as any and would not trip the
@@ -9,7 +9,7 @@ import { writeAgency } from "std::agency"
 // regardless of input. That wiring is accepted as unverified here;
 // statelog inspection would be the mechanism if it ever matters.)
 node repairs() {
-  const result = writeAgency("return the number one")
+  const result = agencyCodingAgent("return the number one")
   if (result is failure(err)) {
     return "failed"
   }
@@ -19,7 +19,7 @@ node repairs() {
 // First mock is unparseable (not just a type error), second is valid —
 // exercises the parse-failure branch of the loop.
 node repairsParse() {
-  const result = writeAgency("return the number one")
+  const result = agencyCodingAgent("return the number one")
   if (result is failure(err)) {
     return "failed"
   }
@@ -29,14 +29,14 @@ node repairsParse() {
 // One attempt, permanently broken output -> exhaustion failure carrying
 // the last source and its diagnostics.
 node exhausts() {
-  const result = writeAgency("return the number one", maxAttempts: 1)
+  const result = agencyCodingAgent("return the number one", maxAttempts: 1)
   if (result is success(src)) {
     return "unexpected success"
   }
   if (result is failure(err)) {
-    // writeAgency is unmarked (neutral tier), so the failure is not
+    // agencyCodingAgent is unmarked (neutral tier), so the failure is not
     // destructive and the tool loop keeps it callable.
-    return [err.source.includes("const x: number"), err.errors.length > 0, result.destructiveRan]
+    return [err.source.includes("const x: number"), err.problems.length > 0, result.destructiveRan]
   }
   return "unreachable"
 }

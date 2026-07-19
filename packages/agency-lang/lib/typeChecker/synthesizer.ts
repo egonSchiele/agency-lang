@@ -572,12 +572,6 @@ function synthPipeRhs(
   return rhsType;
 }
 
-/** `Result<T>` for a guarded block: `T` joins the block's own returns
- *  (returns inside nested functions/blocks excluded, the inference.ts
- *  rule). No returns → the block yields void; any `any` → `any`. The
- *  failure side stays `any`, the `try`-expression precedent — the
- *  err-side narrowing users rely on (`isFailure`, `error.type`) is
- *  field-based, not type-based. */
 /** The block argument of a call, if it carries one. The single home for
  *  the block cast - every block-typing consumer reads through this. */
 function blockOf(
@@ -635,7 +629,9 @@ const BLOCK_CALL_RESULT: Record<
   // (guardDesugar.ts + the TypeChecker constructor); _guard's own
   // annotation is the generic Result, so parameterize it from the
   // block. A direct `_guard` call with a block gets the same, correct,
-  // typing.
+  // typing. The failure side stays `any`, the try-expression
+  // precedent: the err-side narrowing users rely on (`isFailure`,
+  // `error.type`) is field-based, not type-based.
   _guard: (element) => ({
     type: "resultType",
     successType: element,
@@ -662,8 +658,16 @@ function synthFunctionCall(
   ctx: TypeCheckerContext,
 ): VariableType {
   // Reserved block-carrying calls (guard construct, fork, race) take
-  // their type from the block's returns - see BLOCK_CALL_RESULT.
-  const wrapBlockResult = BLOCK_CALL_RESULT[expr.functionName];
+  // their type from the block's returns - see BLOCK_CALL_RESULT. The
+  // Object.hasOwn guard is load-bearing: functionName is user-supplied,
+  // and a bare index on an object literal walks the prototype chain, so
+  // a user function named toString/valueOf/constructor with a block
+  // would get "wrapped" by Object.prototype methods - a silently wrong
+  // type, not a crash. (The sibling tables, CALL_NAME and
+  // COMPREHENSION_PREFIXES, have closed keysets and no such exposure.)
+  const wrapBlockResult = Object.hasOwn(BLOCK_CALL_RESULT, expr.functionName)
+    ? BLOCK_CALL_RESULT[expr.functionName]
+    : undefined;
   const calledBlock = blockOf(expr);
   if (wrapBlockResult !== undefined && calledBlock !== undefined) {
     return wrapBlockResult(blockReturnType(calledBlock, scope, ctx));

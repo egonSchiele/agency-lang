@@ -221,6 +221,28 @@ describe("degenerate shapes", () => {
     ).toHaveLength(0);
   });
 
+  it("a user function named toString with a block does not hit the table", () => {
+    // expr.functionName is user-controlled and BLOCK_CALL_RESULT is a
+    // plain object literal, so a bare index would walk the prototype
+    // chain: table["toString"] is Object.prototype.toString, and the
+    // dispatch would wrap the block type with it - synthesizing the
+    // string "[object Object]" as a type, silently. The Object.hasOwn
+    // guard keeps inherited keys out; this call must type through the
+    // ordinary user-def path instead.
+    expect(
+      clean(
+        `def toString(xs: number[]): number[] {
+  return xs
+}
+
+node main() {
+  const r: number[] = toString([1, 2]) as x { return x }
+  return r
+}`,
+      ),
+    ).toHaveLength(0);
+  });
+
   it("a blockless fork call falls back to the builtin type and does not crash", () => {
     // the table dispatch is gated on blockOf(expr); a blockless call
     // must fall through to BUILTIN_FUNCTION_TYPES (any[]), not reach

@@ -10,6 +10,7 @@
  * (`setAgentCwd`/`getAgentCwd`), which `agent.agency` pins to the user's
  * cwd at startup.
  */
+import { filter } from "std::array"
 import { agencyCodingAgent } from "std::agents/agency/coding"
 import { agencyExpertAgent } from "std::agents/agency/expert"
 import { codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
@@ -302,9 +303,17 @@ def escalateToExpert(task: string, agencyTask: boolean): string {
   const guidance = guidanceOrEmpty(consultExpert(task: task, agencyTask: agencyTask))
   const ideas = brainstormApproaches(task: task, guidance: renderGuidance(guidance))
   const alternatives = renderAlternatives(ideas)
+  // Join only the non-empty parts: both renderings return "" on their
+  // fail-open paths, and a bare "\n" would defeat withContext's
+  // empty-context gate — the solver must run untouched when there is
+  // genuinely no context.
+  const contextParts = filter(
+    [renderGuidance(guidance), renderChosen(ideas)],
+    \part -> part != "",
+  )
   const solved = supervisedSolve(
     task: task,
-    context: "${renderGuidance(guidance)}\n${renderChosen(ideas)}",
+    context: contextParts.join("\n"),
     agencyTask: agencyTask,
     alternatives: alternatives,
   )

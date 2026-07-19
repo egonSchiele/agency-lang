@@ -5,28 +5,44 @@
       "description": "the judge's pick becomes chosen; the rest stay alternatives in order",
       "input": "",
       "expectedOutput": "\"robust|simple,reuse|robust wins\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "splitBadIndexFailsOpen",
       "description": "an out-of-range judge index chooses nothing and keeps every approach",
       "input": "",
-      "expectedOutput": "\"chosen:0|alternatives:1\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "expectedOutput": "\"chosen:0|alternatives:1|rationale:confused judge\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "emptyBrainstormRendersEmpty",
       "description": "an empty brainstorm renders to nothing for both solver and supervisor",
       "input": "",
       "expectedOutput": "\"solver:0|supervisor:0\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "renderingsCarryTheNames",
       "description": "chosen goes to the solver block, set-asides go to the supervisor block",
       "input": "",
       "expectedOutput": "\"true|true|true\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

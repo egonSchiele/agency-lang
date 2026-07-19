@@ -36,7 +36,9 @@ node splitKeepsOrder(): string {
 }
 
 // An out-of-range index means no approach was chosen: everything stays an
-// alternative and the solve proceeds as if no brainstorm ran.
+// alternative and the solve proceeds as if no brainstorm ran. The judge's
+// rationale is kept as a debugging breadcrumb — it renders nowhere when
+// nothing was chosen.
 node splitBadIndexFailsOpen(): string {
   const result = splitChoice(
     approaches: [approach("simple")],
@@ -44,7 +46,7 @@ node splitBadIndexFailsOpen(): string {
     rationale: "confused judge",
   )
   const chosenCount = if result.chosen == null then 0 else 1
-  return "chosen:${chosenCount}|alternatives:${result.alternatives.length}"
+  return "chosen:${chosenCount}|alternatives:${result.alternatives.length}|rationale:${result.rationale}"
 }
 
 // An empty brainstorm renders to nothing everywhere it travels.

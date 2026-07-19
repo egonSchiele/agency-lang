@@ -55,7 +55,9 @@ type Choice = {
 
 /** Split the judge's pick from the rest. Pure, so tests can pin the
   out-of-range behavior: a bad index means no approach was chosen and
-  everything stays an alternative. */
+  everything stays an alternative. The rationale is kept even then — it
+  never renders anywhere when nothing was chosen, and it is the one
+  breadcrumb explaining why the judge went out of range. */
 export def splitChoice(
   approaches: Approach[],
   chosenIndex: number,
@@ -66,7 +68,7 @@ export def splitChoice(
     return {
       chosen: null,
       alternatives: approaches,
-      rationale: ""
+      rationale: rationale
     }
   }
   const alternatives = []

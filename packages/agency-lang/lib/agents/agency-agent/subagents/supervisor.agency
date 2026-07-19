@@ -25,7 +25,14 @@ import { SuperviseDecision } from "std::supervise"
 import { truncate } from "../lib/utils.agency"
 
 // The verifier is a pulse check here, not a final gate: small budgets,
-// because it runs every interval and its findings only steer.
+// because it runs every interval and its findings only steer. Whose
+// budget it spends: the check runs in the supervise handler, which
+// registered before the solver's own cost guard went live, so that guard
+// is suspended during checks and this spend charges whatever sits ABOVE
+// the solve (the session budget). Supervision overhead is not the
+// solver's work, so that is the right ledger — but it adds up to
+// roughly checks × CHECK_MAX_COST on top of the solve's cap (~6 checks
+// on a 30-minute run).
 static const CHECK_MAX_COST = $2.00
 static const CHECK_MAX_TIME = 2m
 

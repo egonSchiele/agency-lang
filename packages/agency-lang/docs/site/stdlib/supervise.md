@@ -52,7 +52,7 @@ export type SuperviseDecision = {
 supervise(
   every: number,
   maxTime: number,
-  check: (elapsed: number) -> SuperviseDecision,
+  check: (elapsed: number, draft: any) -> SuperviseDecision,
   block: () -> any,
 ): Result<any>
 ```
@@ -61,7 +61,11 @@ Run a block, pausing it every interval to check progress and steer it.
 
   @param every - How often to pause and check
   @param maxTime - Total time budget across all intervals
-  @param check - Called at each pause with elapsed time, and decides whether to continue, redirect, or stop
+  @param check - Called at each pause with elapsed time and the block's most
+    recent saveDraft value (null when none has been saved), and decides
+    whether to continue, redirect, or stop. The draft is the block's own
+    account of its progress: a draft that has not changed between checks is
+    strong evidence the block is stalled.
   @param block - The long-running work
 
 **Parameters:**
@@ -70,7 +74,7 @@ Run a block, pausing it every interval to check progress and steer it.
 |---|---|---|
 | every | `number` |  |
 | maxTime | `number` |  |
-| check | `(elapsed: number) => SuperviseDecision` |  |
+| check | `(elapsed: number, draft: any) => SuperviseDecision` |  |
 | block | `() => any` |  |
 
 **Returns:** `Result<any>`

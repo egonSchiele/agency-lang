@@ -97,3 +97,15 @@ export def formatTurnFailure(errText: string): string {
   }
   return "⚠ The request failed: ${errText}"
 }
+
+export def parseModelSpec(command: string): string {
+  """
+  Return the model text after `/model`, or "" when the command carries none.
+
+  @param command - The whole slash command as the user typed it, trimmed
+  """
+  if (command == "/model") {
+    return ""
+  }
+  return command.substring(7).trim()
+}

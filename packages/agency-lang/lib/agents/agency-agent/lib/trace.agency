@@ -1,0 +1,129 @@
+/*
+ * Tool and LLM call tracing, and the flags that decide when to show it. An
+ * interactive run traces by default; a one-shot run stays quiet unless the
+ * user asked for it.
+ *
+ * No @module banner here on purpose: a file holding a top-level callback()
+ * cannot also carry one, or the preprocessor rejects it. See issue below.
+ */
+import { map } from "std::array"
+import { env } from "std::system"
+import { pushMessage } from "std::ui/cli"
+
+import { formatArgs, formatToolResponse, retryReasonLabel } from "./utils.agency"
+import { renderLLMCallResponse } from "./utils/renderLLMCallResponse.agency"
+
+let AGENT_DEBUG: boolean = env("AGENT_DEBUG") == "1"
+let VERBOSE: boolean = false
+
+// Whether the agent is running in interactive (TTY) mode.
+let _isInteractive: boolean = true
+
+// Live tool-call tracing. Always shown in the interactive REPL, but in
+// one-shot mode it's suppressed unless the user opts in
+// with `--verbose` / `--debug` (AGENT_DEBUG). A function, not a static
+// const: it reads globals that `main()` sets after module init, so the
+// value must be computed per call.
+def _showTraces(): boolean {
+  return _isInteractive || VERBOSE || AGENT_DEBUG
+}
+
+
+callback("onToolCallStart") as data {
+  if (_showTraces()) {
+    pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  }
+}
+
+callback("onToolCallEnd") as data {
+  if (_showTraces()) {
+    if (data.result is success(_result)) {
+      pushMessage(color.dim.green("${formatToolResponse(_result)}"))
+    } else if (data.result is failure(_error)) {
+      pushMessage(color.red(" ⎿  Error: ${_error}"))
+    } else {
+      pushMessage(color.dim("${formatToolResponse(data.result)}"))
+    }
+  }
+}
+
+callback("onLLMCallStart") as data {
+  if (AGENT_DEBUG || VERBOSE) {
+    pushMessage(color.green.dim("💬 [${data.model}] ${data.prompt}"))
+  }
+}
+
+callback("onLLMCallEnd") as data {
+  if (data.result.hostedToolResults) {
+    for (result in data.result.hostedToolResults) {
+      match(result.tool) {
+        "web_search" => {
+          const queries = map(result.queries, \q -> "\"${q}\"").join(", ")
+          // there's also result.sources and result.citations
+          pushMessage(
+            color.yellow(
+            "⏺ web_search(provider: '${result.provider}', queries: [${queries}])",
+          ),
+          )
+        }
+      }
+    }
+  }
+  if (AGENT_DEBUG || VERBOSE) {
+    pushMessage(
+      color.green.dim("💬 [${data.model}] ${renderLLMCallResponse(data.result)}"),
+    )
+  }
+}
+
+callback("onLLMRetry") as data {
+  if (_showTraces()) {
+    pushMessage(
+      color.dim(
+      "⟳ ${retryReasonLabel(data.reason)} — retrying (${data.attempt}/${data.maxRetries})…",
+    ),
+    )
+  }
+}
+
+export def isDebug(): boolean {
+  """
+  Whether debug tracing is on for this run.
+  """
+  return AGENT_DEBUG
+}
+
+export def isVerbose(): boolean {
+  """
+  Whether verbose tracing is on for this run.
+  """
+  return VERBOSE
+}
+
+export def setDebug(on: boolean) {
+  """
+  Turn debug tracing on for the rest of the run.
+
+  @param on - Whether to trace
+  """
+  AGENT_DEBUG = on
+}
+
+export def setVerbose(on: boolean) {
+  """
+  Turn verbose tracing on for the rest of the run.
+
+  @param on - Whether to trace
+  """
+  VERBOSE = on
+}
+
+export def setInteractive(on: boolean) {
+  """
+  Record whether a user is at a terminal, which decides whether tool traces
+  are shown by default.
+
+  @param on - Whether the run is interactive
+  """
+  _isInteractive = on
+}

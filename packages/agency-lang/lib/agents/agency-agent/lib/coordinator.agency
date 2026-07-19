@@ -1,0 +1,297 @@
+/** @module
+  @summary The coordinator: it reads a turn, picks the specialist that should
+  handle it, and hands back the reply. What it routes to are agents; what
+  surrounds it is the CLI and the REPL.
+*/
+import { localModelsSupported, listModelNames } from "std::agency/local"
+import { parseArgs } from "std::args"
+import { map } from "std::array"
+import { today } from "std::date"
+import { generateImage } from "std::image"
+import { applyAgentCwd, setAgentCwd } from "std::index"
+import { listHostedModels, hostedModelInfo, setLlmOptions } from "std::llm"
+import { setMemoryId, disableMemory } from "std::memory"
+import { basename, dirname } from "std::path"
+import {
+  ScopedRuleFields,
+  cliPolicyHandler,
+  parsePolicyFile,
+  setPolicy,
+  minimalAutoApprovePolicy,
+  recommendedAutoApprovePolicy,
+  builtinPolicy,
+  builtinPolicyNames,
+  BUILTIN_POLICIES,
+ } from "std::policy"
+import { exists } from "std::shell"
+import { commandsDir, expandSlash } from "std::skills"
+import { highlight } from "std::syntax"
+import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
+import {
+  Attachment,
+  attachToReply,
+  getCost,
+  getModelCosts,
+  image,
+  systemMessage,
+ } from "std::thread"
+import { chooseOption, ChoiceItem } from "std::ui"
+import {
+  clearMessages,
+  pushMessage,
+  repl,
+  clearScreen,
+  clearHistory,
+ } from "std::ui/cli"
+
+import { parseAgentArgs } from "./args.agency"
+import { detectAttachments, modalityFilter } from "./attachments.agency"
+import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
+import { mergedPalette, projectCommands } from "./commandPalette.agency"
+import {
+  POLICY_PATH,
+  SESSION_POLICY_PATH,
+  HISTORY_PATH,
+  ALWAYS_FIELDS,
+ } from "./config.agency"
+import { getHeader } from "./header.agency"
+import { generateImageFile } from "./images.agency"
+import { getMcpTools, maybeLoadMcp, mcpSlashCommand } from "./mcp.agency"
+import { filterHostedModels, ModelFilters } from "./modelFilters.agency"
+import {
+  parseModelFlag,
+  parseModelSpec,
+  knownProviders,
+  missingProviderEnvVar,
+  Resolved,
+ } from "./models.agency"
+import {
+  givePolicyChoice,
+  printPolicyHelp,
+  getPolicyForAgent,
+ } from "./policy.agency"
+import {
+  buildLayers,
+  resolveAll,
+  diffResolved,
+  Ctx,
+  SlotChange,
+ } from "./resolution.agency"
+import {
+  configureSearch,
+  setSearchBackend,
+  getSearchBackend,
+  availableBackendItems,
+ } from "./search.agency"
+import {
+  Session,
+  switchModel,
+  reactToSlotChange,
+  modelChoiceItems,
+  parseModelsFilters,
+  markMemoryEmbeddingsPinned,
+  pickModelsForAgent,
+ } from "./session.agency"
+import {
+  getCapabilitySettings,
+  getModelSettings,
+  loadSettings,
+  saveSettings,
+ } from "./settings.agency"
+import { SLOTS } from "./slots.agency"
+import {
+  truncate,
+  formatArgs,
+  formatToolResponse,
+  retryReasonLabel,
+  formatTurnFailure,
+ } from "./utils.agency"
+import { renderLLMCallResponse } from "./utils/renderLLMCallResponse.agency"
+import {
+  configureModels,
+  configureLocalModel,
+  enableAgentMemory,
+  getResolvedSlots,
+  applyResolved,
+  promoteAll,
+  currentProvider,
+  resolveMaxToolCallRounds,
+  getCapabilities,
+  getCapabilitiesResolved,
+  getCapabilityModelKey,
+  getCapabilityProvider,
+  refreshCapabilities,
+  embeddingKeyStatus,
+  memoryEnablePlan,
+  overrideFromResolved,
+  embeddingsOverride,
+  providerEnvMissing,
+ } from "../shared.agency"
+import { codeAgent, setCodeOneShot } from "../subagents/code.agency"
+import { explorerAgent } from "../subagents/explorer.agency"
+import { oracleAgent } from "../subagents/oracle.agency"
+import { researchAgent } from "../subagents/research.agency"
+import { reviewAgent } from "../subagents/review.agency"
+
+
+// UI mode select — one-line swap between the alt-screen TUI and the
+// line-mode REPL. Both modules expose the same `repl` / `pushMessage`
+// / `clearMessages` surface (line mode re-exports `pushMessage` and
+// `clearMessages` from `std::ui`). Trial both and decide. See
+// `docs/superpowers/ideas/2026-06-02-line-mode-agent.md`.
+//
+//import { clearMessages, pushMessage, repl } from "std::ui"
+
+
+export def loadAgentsMd(dir: string): string {
+  """
+  Read `AGENTS.md` from `dir` if it exists and return it wrapped in a
+  <project_context> block ready to splice into a system prompt. Returns
+  an empty string if there is no AGENTS.md or it cannot be read.
+  """
+  if (!exists("AGENTS.md", dir)) {
+    return ""
+  }
+  const result = read("AGENTS.md", dir) with approve
+  if (isFailure(result)) {
+    return ""
+  }
+  return """
+
+  <project_context>
+  ${result.value}
+  </project_context>
+  """
+}
+
+// Per-turn grounding context. Captured at startup and re-used so the
+
+let _context: string = ""
+
+// In-session model selection state (the pin + per-slot overrides chosen via
+// `/model` this run). `switchModel` is pure over this value — it copies,
+// never mutates — so the REPL folds its return back in here.
+
+let first = true
+
+// Valid `--agent` targets. Empty / "main" routes through the coordinator.
+export static const START_AGENTS = ["main", "code", "research", "oracle", "explorer", "review"]
+static const MAIN_PROMPT_LARGE = read("../prompts/main-large.md") with approve
+static const MAIN_PROMPT_SMALL = read("../prompts/main-small.md") with approve
+
+static const mainAgentTools = [
+  researchAgent,
+  codeAgent,
+  reviewAgent,
+  oracleAgent,
+  explorerAgent,
+  generateImageFile,
+]
+
+
+export def maybeEnableMemory() {
+  const status = embeddingKeyStatus(getResolvedSlots())
+  const plan = memoryEnablePlan(getCapabilities().memory, status)
+  markMemoryEmbeddingsPinned(plan == "enable-override")
+  return match(plan) {
+    "skip" => null
+    "enable-override" => {
+      enableAgentMemory(status.override)
+      return null
+    }
+    "enable-fallback" => {
+      print(
+        color.dim(
+        "Memory: the embedding slot needs ${status.varName}, which is not set. Falling back to the default embedding behavior.",
+      ),
+      )
+      enableAgentMemory()
+      return null
+    }
+    _ => {
+      enableAgentMemory()
+      return null
+    }
+  }
+}
+
+def mainAgent(prompt: string | (string | Attachment)[]): string {
+  // const doSummarize = getCapabilities().summarize
+  thread(label: "main", session: "main") {
+    setMemoryId("main")
+    if (first) {
+      const promptSize = getCapabilities().prompt
+      const sysPrompt = match(promptSize) {
+        "small" => MAIN_PROMPT_SMALL catch ""
+        _ => MAIN_PROMPT_LARGE catch ""
+      }
+      systemMessage("${sysPrompt}${_context}")
+      first = false
+    }
+    const result = llm(
+      prompt,
+      {
+      memory: true,
+      tools: [...mainAgentTools, ...getMcpTools()]
+    },
+    )
+  }
+  return result
+}
+
+def checkForAttachments(expanded: string): Attachment[] {
+  // Auto-attach image/PDF files the user referenced (drag-drop or typed
+  // path), filtered to what the resolved model accepts. Never silent:
+  // every attach and every skip prints a visible line.
+  const detected = modalityFilter(detectAttachments(expanded))
+  for (skippedFile in detected.skipped) {
+    pushMessage(
+      color.yellow("📎 skipped ${skippedFile.label} (${skippedFile.reason})"),
+    )
+  }
+  if (detected.attached.length == 0) {
+    return []
+  }
+  for (item in detected.attached) {
+    pushMessage(color.dim("📎 attached ${item.label}"))
+  }
+  const attachments = map(detected.attached) as item {
+    return item.attachment
+  }
+  return attachments
+}
+
+type AgentTarget =
+  | "code"
+  | "explorer"
+  | "main"
+  | "oracle"
+  | "research"
+  | "review"
+  | "coordinator"
+
+export def dispatchAgent(agentName: AgentTarget, userMsg: string): string {
+  const expanded = expandSlash(userMsg, projectCommands)
+  return match(agentName) {
+    "code" => codeAgent(expanded)
+    "research" => researchAgent(expanded)
+    "oracle" => oracleAgent(expanded)
+    "explorer" => explorerAgent(expanded)
+    "review" => reviewAgent(expanded)
+    _ => {
+      const attachments = checkForAttachments(expanded)
+      return mainAgent([expanded, ...attachments])
+    }
+  }
+}
+
+
+export def setGroundingContext(context: string) {
+  """
+  Set the per-run grounding spliced into the coordinator prompt: the date,
+  the working directory, and the project AGENTS.md.
+
+  @param context - The grounding text
+  """
+  _context = context
+}

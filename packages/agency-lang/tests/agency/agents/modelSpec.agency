@@ -1,0 +1,15 @@
+import { parseModelSpec } from "../../../lib/agents/agency-agent/lib/utils.agency"
+
+// `/model <name>` read its text from a free variable that was never the
+// user's input, so a name was silently ignored and the picker always opened.
+node readsTheNameAfterTheCommand(): boolean {
+  return parseModelSpec("/model gpt-4o") == "gpt-4o"
+}
+
+node baresCommandHasNoSpec(): boolean {
+  return parseModelSpec("/model") == ""
+}
+
+node trimsSurroundingSpace(): boolean {
+  return parseModelSpec("/model   claude-opus-4-8  ") == "claude-opus-4-8"
+}

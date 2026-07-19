@@ -137,500 +137,33 @@ import { reviewAgent } from "./subagents/review.agency"
 //
 //import { clearMessages, pushMessage, repl } from "std::ui"
 
-/*
- * Agency Agent — helps users create and modify Agency code.
- *
- * Multi-thread architecture: the coordinator (`mainAgent`) runs the
- * user's message with the specialists registered as tools. Each
- * specialist has its own thread / system prompt / tool set, and the
- * coordinator's LLM delegates by calling one as a tool and getting its
- * reply back (call/return — not a flat hop/handoff loop):
- *   - `code.agency`     — writes, edits, typechecks, runs code
- *   - `research.agency` — looks up docs, fetches URLs, browses web
- *   - `review.agency`   — parse/typecheck feedback on Agency code
- *   - `oracle.agency`   — read-only critique on a stronger model
- *   - `explorer.agency` — read-only broad codebase/docs synthesis
- *
- * The standard library does the heavy lifting:
- *   - `std::policy.cliPolicyHandler` provides the interactive
- *     approve/reject/always menu and persists "always" decisions to
- *     `~/.agency-agent/policy.json`.
- *   - `std::ui.repl` provides the terminal UI: a bordered scroll
- *     output area, status line (cost + label), command palette
- *     opened with `/`, and history-aware input bar.
- *
- * This file's responsibilities collapse to:
- *   1. Per-turn callback (`_runTurn`) wiring the user message into
- *      `mainAgent` and printing the reply into the scroll output.
- *   2. Per-effect ALWAYS_FIELDS map for the policy handler's
- *      "approve-always-here" option.
- *   3. Wire the specialists into `mainAgentTools`.
- *
- * Other features:
- * - Doc-as-skills: bundles `docs/site/guide` etc. (copied to
- *   `dist/lib/agents/docs/` at build time, see makefile) and
- *   exposes each Markdown file as a skill the research agent can
- *   read on demand.
- * - Typechecking: the code agent can call `typecheck` on any
- *   source it generates to verify the code before showing it.
- * - File I/O tools: `read`, `write`, `edit` for actually creating /
- *   editing `.agency` files.
- */
-
-let AGENT_DEBUG: boolean = env("AGENT_DEBUG") == "1"
-let VERBOSE: boolean = false
-
-// Whether the agent is running in interactive (TTY) mode.
-let _isInteractive: boolean = true
-
-// The `--policy` argument (a built-in name or a policy-file path),
-// or "" when absent
+import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
+// The `--policy` argument (a built-in name or a policy-file path), or "" when
+// absent. CLI-owned: main() sets it, setupSession() reads it.
 let _policyArg: string = ""
 
-// Live tool-call tracing. Always shown in the interactive REPL, but in
-// one-shot mode it's suppressed unless the user opts in
-// with `--verbose` / `--debug` (AGENT_DEBUG). A function, not a static
-// const: it reads globals that `main()` sets after module init, so the
-// value must be computed per call.
-def _showTraces(): boolean {
-  return _isInteractive || VERBOSE || AGENT_DEBUG
-}
+import {
+  dispatchAgent,
+  setGroundingContext,
+  loadAgentsMd,
+  maybeEnableMemory,
+  START_AGENTS,
+ } from "./lib/coordinator.agency"
+import { startInteractive, renderAgentResponse } from "./lib/repl.agency"
 
-/**************************
-**** CALLBACKS / HOOKS ****
-***************************/
-
-callback("onToolCallStart") as data {
-  if (_showTraces()) {
-    pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
-  }
-}
-
-callback("onToolCallEnd") as data {
-  if (_showTraces()) {
-    if (data.result is success(_result)) {
-      pushMessage(color.dim.green("${formatToolResponse(_result)}"))
-    } else if (data.result is failure(_error)) {
-      pushMessage(color.red(" ⎿  Error: ${_error}"))
-    } else {
-      pushMessage(color.dim("${formatToolResponse(data.result)}"))
-    }
-  }
-}
-
-callback("onLLMCallStart") as data {
-  if (AGENT_DEBUG || VERBOSE) {
-    pushMessage(color.green.dim("💬 [${data.model}] ${data.prompt}"))
-  }
-}
-
-callback("onLLMCallEnd") as data {
-  if (data.result.hostedToolResults) {
-    for (result in data.result.hostedToolResults) {
-      match(result.tool) {
-        "web_search" => {
-          const queries = map(result.queries, \q -> "\"${q}\"").join(", ")
-          // there's also result.sources and result.citations
-          pushMessage(
-            color.yellow(
-            "⏺ web_search(provider: '${result.provider}', queries: [${queries}])",
-          ),
-          )
-        }
-      }
-    }
-  }
-  if (AGENT_DEBUG || VERBOSE) {
-    pushMessage(
-      color.green.dim("💬 [${data.model}] ${renderLLMCallResponse(data.result)}"),
-    )
-  }
-}
-
-callback("onLLMRetry") as data {
-  if (_showTraces()) {
-    pushMessage(
-      color.dim(
-      "⟳ ${retryReasonLabel(data.reason)} — retrying (${data.attempt}/${data.maxRetries})…",
-    ),
-    )
-  }
-}
-
-def loadAgentsMd(dir: string): string {
-  """
-  Read `AGENTS.md` from `dir` if it exists and return it wrapped in a
-  <project_context> block ready to splice into a system prompt. Returns
-  an empty string if there is no AGENTS.md or it cannot be read.
-  """
-  if (!exists("AGENTS.md", dir)) {
-    return ""
-  }
-  const result = read("AGENTS.md", dir) with approve
-  if (isFailure(result)) {
-    return ""
-  }
-  return """
-
-  <project_context>
-  ${result.value}
-  </project_context>
-  """
-}
-
-// Per-turn grounding context. Captured at startup and re-used so the
-// LLM doesn't have to re-ground each turn.
-let _context: string = ""
-
-// In-session model selection state (the pin + per-slot overrides chosen via
-// `/model` this run). `switchModel` is pure over this value — it copies,
-// never mutates — so the REPL folds its return back in here.
-let _session: Session = {
-  pin: "",
-  slots: {}
-}
-
-def searchSlashCommand(): boolean {
-  const opts = availableBackendItems()
-  const choice = chooseOption(
-    "Web search backend",
-    "Pick how this agent searches the web. Current: ${getSearchBackend()}",
-    opts,
-    false,
-    true,
-  )
-  if (choice != "" && choice != null && choice != undefined) {
-    setSearchBackend(choice)
-    pushMessage("Web search backend set to: ${choice}")
-  }
-  return true
-}
-
-def costSlashCommand(): boolean {
-  // Derive BOTH the header total and the per-model breakdown from the
-  // same process-wide accumulator (getModelCosts), so the `Cost:` /
-  // `Tokens:` lines and the rows below them can never visibly disagree.
-  // (getCost()/getTokens() read the per-branch accumulator, a different
-  // scope — adjacent in the output, they could in principle diverge.)
-  // Rows are sorted by cost descending by getModelCosts(); a subagent
-  // on a pricier model (e.g. the oracle on opus-4.8) shows up here.
-  const byModel = getModelCosts()
-  let totalCost = 0.0
-  let totalTokens = 0
-  for (m in byModel) {
-    totalCost = totalCost + m.cost
-    totalTokens = totalTokens + m.inputTokens + m.outputTokens
-  }
-  pushMessage("Cost:   $${totalCost.toFixed(4)}")
-  pushMessage("Tokens: ${totalTokens}")
-  if (byModel.length > 0) {
-    pushMessage("")
-    pushMessage("By model:")
-    for (m in byModel) {
-      pushMessage(
-        "  ${m.model}  ↑${m.inputTokens} ↓${m.outputTokens}  $${m.cost.toFixed(4)}",
-      )
-    }
-  }
-  return true
-}
-
-def modelSlashCommand(): boolean {
-  let spec = ""
-  if (trimmed != "/model") {
-    spec = trimmed.substring(7).trim()
-  }
-  if (spec == "") {
-    pushMessage("Current models:")
-    const current = getResolvedSlots()
-    for (slot in Object.keys(current)) {
-      const resolved = current[slot]
-      if (resolved != null) {
-        pushMessage("  ${slot}: ${resolved.model} (${resolved.via})")
-      }
-    }
-    const items = modelChoiceItems({})
-    const choice = chooseOption(
-      "Model",
-      "Pick a model, or type one (or slot=model, e.g. reasoning=claude-opus-4-8). Empty to cancel.",
-      items,
-      allowFreeText: true,
-      allowCancel: true,
-    )
-    if (choice == "" || choice == null) {
-      return true
-    }
-    spec = choice
-  }
-  const ctx: Ctx = {
-    provider: currentProvider(),
-    price: "standard"
-  }
-  const out = switchModel(_session, spec, ctx, getResolvedSlots())
-  _session = out.session
-  for (change in out.changes) {
-    reactToSlotChange(change)
-  }
-  pushMessage("Model set:")
-  for (slot in Object.keys(out.resolved)) {
-    const resolved = out.resolved[slot]
-    if (resolved != null) {
-      pushMessage(color.dim("  ${slot}: ${resolved.model} (${resolved.via})"))
-    }
-  }
-  return true
-}
-
-def modelsSlashCommand(trimmed: string): boolean {
-  const filters = parseModelsFilters(trimmed)
-  const models = filterHostedModels(listHostedModels(), filters)
-  if (models.length == 0) {
-    pushMessage("No models match.")
-    return true
-  }
-  for (model in models) {
-    pushMessage(
-      "  ${model.name}  (${model.provider}, $${model.inputCost}/1M in, ${model.contextWindow} ctx)",
-    )
-  }
-  return true
-}
-
-def localSlashCommand(): boolean {
-  if (!localModelsSupported()) {
-    pushMessage(
-      color.yellow(
-      "Local models need smoltalk-llama-cpp. Install:  ! npm i -g smoltalk-llama-cpp",
-    ),
-    )
-    return true
-  }
-  let items: ChoiceItem[] = []
-  for (modelName in listModelNames()) {
-    items.push({
-      key: modelName.name,
-      label: modelName.name
-    })
-  }
-  const choice = chooseOption(
-    "Local model",
-    "Pick a local model, or type an hf: URI / .gguf path (downloads on first use):",
-    items,
-    allowFreeText: true,
-    allowCancel: true,
-  )
-  if (choice == "" || choice == null) {
-    return true
-  }
-  const before = getResolvedSlots()
-  configureLocalModel(choice)
-  configureSearch(true)
-  for (change in diffResolved(before, getResolvedSlots())) {
-    reactToSlotChange(change)
-  }
-  pushMessage("Switched to local model: ${choice}")
-  return true
-}
-
-// Slash-command + user-message dispatcher invoked by `repl()` for
-// every Enter keystroke. Return `false` to terminate the loop.
-def _runTurn(msg: string): boolean {
-  // Trim once for built-in matching so `"/help\n"` (piped) or
-  // `"  /clear"` behave the same as `"/clear"`. `expandSlash` is
-  // whitespace-tolerant in its own right, but it still receives the
-  // raw `msg` so the LLM sees the exact text the user typed when
-  // nothing matches.
-  const trimmed = msg.trim()
-  return match(trimmed) {
-    "" => true
-    "/exit" => false
-    "/quit" => false
-    "/clear" => {
-      clearMessages()
-      return true
-    }
-    "/clear-history" => {
-      clearHistory()
-      pushMessage("Input history cleared.")
-      return true
-    }
-    "/help" => {
-      pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /settings, /mcp, /paste, /help",
-      )
-      return true
-    }
-    "/settings" => {
-      showCapabilities()
-      editCapabilities()
-      return true
-    }
-    "/mcp" => mcpSlashCommand()
-    "/search" => searchSlashCommand()
-    "/cost" => costSlashCommand()
-    "/model" => modelSlashCommand()
-    "/models" => modelsSlashCommand(trimmed)
-    "/local" => localSlashCommand()
-    _ => {
-      if (trimmed.startsWith("/model ")) {
-        return modelSlashCommand()
-      }
-      if (trimmed.startsWith("/models ")) {
-        return modelsSlashCommand(trimmed)
-      }
-      return renderUserTurn(trimmed, msg)
-    }
-  }
-}
-
-let first = true
-
-// Valid `--agent` targets. Empty / "main" routes through the coordinator.
-static const START_AGENTS = ["main", "code", "research", "oracle", "explorer", "review"]
-static const MAIN_PROMPT_LARGE = read("prompts/main-large.md") with approve
-static const MAIN_PROMPT_SMALL = read("prompts/main-small.md") with approve
-
-static const mainAgentTools = [
-  researchAgent,
-  codeAgent,
-  reviewAgent,
-  oracleAgent,
-  explorerAgent,
-  generateImageFile,
-]
-
-/** Enable memory when the capability profile allows it. When the user
-  pointed the embedding slot at a provider, embeddings run there. A
-  missing API key degrades to the default embedding behavior with one
-  notice. It never blocks startup. The `_memoryEmbeddingsPinned` guard that
-  `reactToSlotChange` consults lives in `./lib/session.agency`; we set it
-  here via `markMemoryEmbeddingsPinned`. */
-def maybeEnableMemory() {
-  const status = embeddingKeyStatus(getResolvedSlots())
-  const plan = memoryEnablePlan(getCapabilities().memory, status)
-  markMemoryEmbeddingsPinned(plan == "enable-override")
-  return match(plan) {
-    "skip" => null
-    "enable-override" => {
-      enableAgentMemory(status.override)
-      return null
-    }
-    "enable-fallback" => {
-      print(
-        color.dim(
-        "Memory: the embedding slot needs ${status.varName}, which is not set. Falling back to the default embedding behavior.",
-      ),
-      )
-      enableAgentMemory()
-      return null
-    }
-    _ => {
-      enableAgentMemory()
-      return null
-    }
-  }
-}
-
-def mainAgent(prompt: string | (string | Attachment)[]): string {
-  // const doSummarize = getCapabilities().summarize
-  thread(label: "main", session: "main") {
-    setMemoryId("main")
-    if (first) {
-      const promptSize = getCapabilities().prompt
-      const sysPrompt = match(promptSize) {
-        "small" => MAIN_PROMPT_SMALL catch ""
-        _ => MAIN_PROMPT_LARGE catch ""
-      }
-      systemMessage("${sysPrompt}${_context}")
-      first = false
-    }
-    const result = llm(
-      prompt,
-      {
-      memory: true,
-      tools: [...mainAgentTools, ...getMcpTools()]
-    },
-    )
-  }
-  return result
-}
-
-def checkForAttachments(expanded: string): Attachment[] {
-  // Auto-attach image/PDF files the user referenced (drag-drop or typed
-  // path), filtered to what the resolved model accepts. Never silent:
-  // every attach and every skip prints a visible line.
-  const detected = modalityFilter(detectAttachments(expanded))
-  for (skippedFile in detected.skipped) {
-    pushMessage(
-      color.yellow("📎 skipped ${skippedFile.label} (${skippedFile.reason})"),
-    )
-  }
-  if (detected.attached.length == 0) {
-    return []
-  }
-  for (item in detected.attached) {
-    pushMessage(color.dim("📎 attached ${item.label}"))
-  }
-  const attachments = map(detected.attached) as item {
-    return item.attachment
-  }
-  return attachments
-}
-
-type AgentTarget =
-  | "code"
-  | "explorer"
-  | "main"
-  | "oracle"
-  | "research"
-  | "review"
-  | "coordinator"
-
-export def dispatchAgent(agentName: AgentTarget, userMsg: string): string {
-  const expanded = expandSlash(userMsg, projectCommands)
-  return match(agentName) {
-    "code" => codeAgent(expanded)
-    "research" => researchAgent(expanded)
-    "oracle" => oracleAgent(expanded)
-    "explorer" => explorerAgent(expanded)
-    "review" => reviewAgent(expanded)
-    _ => {
-      const attachments = checkForAttachments(expanded)
-      return mainAgent([expanded, ...attachments])
-    }
-  }
-}
-
-def renderUserTurn(trimmed: string, msg: string): boolean {
-  const result = try dispatchAgent("coordinator", msg)
-  renderAgentResponse(result)
-  return true
-}
-
-def _buildStatus(): { left: string; right: string; context: string } {
-  const roundedCost = "$${getCost().toFixed(4)}"
-  return {
-    left: "",
-    right: roundedCost,
-    context: ""
-  }
-}
-
-// Shared session setup for both interactive and one-shot modes. Builds
-// the grounding context, loads (or initializes) the policy, and
-// returns the installed CLI policy handler.
 def setupSession(interactive: boolean): any {
   setAgentCwd(cwd())
 
   // Grounding: the LLM shouldn't have to ask where it is or what day it
   // is. Also load `AGENTS.md` if present.
   const projectContext = loadAgentsMd(cwd()) with approve
-  _context = """
+  const grounding = """
 
   Current date: ${today()}
   Current working directory: ${cwd()}
   ${projectContext}
   """
+  setGroundingContext(grounding)
 
   const { policyFile, sessionPolicy } = getPolicyForAgent(_policyArg, interactive)
 
@@ -642,7 +175,7 @@ def setupSession(interactive: boolean): any {
 }
 
 def oneShotAgent(target: string, prompt: string): string {
-  _isInteractive = false
+  setInteractive(false)
   const handler = setupSession(interactive: false)
   handle {
     const result = try dispatchAgent(target, prompt)
@@ -656,42 +189,6 @@ def oneShotAgent(target: string, prompt: string): string {
 /* A seeded turn is if the user invokes the Agency agent with
 an initial prompt – by using the agency doctor command, for example.
 It means that agent starts with an initial prompt already there to respond to. */
-def runSeedTurn(target: string, msg: string) {
-  pushMessage(color.dim("> ${msg}"))
-  const response = try dispatchAgent(target, msg)
-  renderAgentResponse(response)
-}
-
-def renderAgentResponse(
-  response: Result<string | null, { error: string }>,
-): void {
-  if (response is success(reply)) {
-    if (reply != "" && reply != null) {
-      pushMessage(highlight("${reply}\n", language: "markdown"))
-    } else {
-      pushMessage(color.red("No reply generated."))
-    }
-  } else if (response is failure(f)) {
-    pushMessage(color.red(formatTurnFailure("${f.error}")))
-  }
-}
-
-def startInteractive(handler: any, seedTarget: string, seedPrompt: string) {
-  handle {
-    if (seedPrompt != "") {
-      runSeedTurn(seedTarget, seedPrompt)
-    }
-    repl(
-      status: _buildStatus,
-      onSubmit: _runTurn,
-      prompt: "> ",
-      historyFile: HISTORY_PATH,
-      historyMax: 1000,
-      paletteCommands: mergedPalette(),
-    )
-  } with handler
-  print(color.cyan("\nGoodbye!"))
-}
 
 node main() {
   // Parse CLI flags first — `parseArgs` exits on --help / --version /
@@ -705,10 +202,10 @@ node main() {
   // last).
 
   if (args.flags.debug) {
-    AGENT_DEBUG = true
+    setDebug(true)
   }
   if (args.flags.verbose) {
-    VERBOSE = true
+    setVerbose(true)
   }
 
   if (isFailure(MAIN_PROMPT_LARGE)) {
@@ -816,3 +313,4 @@ node main() {
     startInteractive(handler, startAgent, positionalQuery)
   }
 }
+

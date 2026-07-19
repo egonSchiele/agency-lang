@@ -716,6 +716,18 @@ async function runRaceFirstTime<T>(
   const { parentFrame, hooks } = opts;
   const raceKey = opts.raceWinnerLocalKey;
 
+  // Promise.race([]) never settles, so a race over zero branches used to
+  // hang the whole program (unsettled top-level await, exit 13) with no
+  // diagnostic. Zero branches means nothing can win: resolve to null,
+  // matching how absent lookups normalize (obj[missingKey], unmatched
+  // match -> null). Reachable from user code via a comprehension filter
+  // that matches nothing: `race [f(x) for x in xs if p(x)]`. No winner
+  // index is persisted - a resume of a zero-branch race re-runs this
+  // same guard.
+  if (tasks.length === 0) {
+    return { kind: "values", values: [null as T] };
+  }
+
   // Tag promises with their index so we can identify the winner / first
   // failure regardless of resolution order.
   const tagged = tasks.map((t, i) =>

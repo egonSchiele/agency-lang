@@ -11,9 +11,10 @@
  * PR #595 collapsed the equivalent hand-copied drift in the prelude list.
  *
  * Arrays iterate by element. Non-null objects iterate by key. Everything
- * else — null, undefined, numbers, STRINGS — iterates nothing, matching
- * how a JS `for...of` over a non-iterable simply does nothing rather than
- * crashing mid-flow.
+ * else — null, undefined, numbers, STRINGS — iterates nothing. That is an
+ * Agency semantic choice (a JS `for...of` over a non-iterable would
+ * throw): agent code frequently feeds an LLM-shaped value into a loop,
+ * and iterating nothing beats crashing mid-flow.
  *
  * This returns a CLASSIFICATION, deliberately, not a built list of pairs.
  * `Runner.loop` holds the caller's array by reference and re-reads its

@@ -111,13 +111,15 @@ function paramNameFor(node: Comprehension): string {
     : PARAM;
 }
 
-/** `__comprehensionItem[n]` - recovers one binder from a pair.
+/** `<paramName>[position]` - recovers one binder from a pair. The block
+ *  parameter name is passed in rather than assuming PARAM, so this cannot
+ *  silently read an out-of-scope name if paramNameFor ever grows a case.
  *  NumberLiteral carries its value as a STRING (lib/types/literals.ts,
  *  and parallelDesugar's numLit helper). */
-function pairIndex(position: number): Expression {
+function pairIndex(paramName: string, position: number): Expression {
   return {
     type: "valueAccess",
-    base: varRef(PARAM),
+    base: varRef(paramName),
     chain: [
       { kind: "index", index: { type: "number", value: String(position) } },
     ],
@@ -167,15 +169,18 @@ function bindTarget(
  *  Empty for a single-name binder, which IS the parameter. A two-binder
  *  form unpacks both halves of a `_pairsOf` pair. A destructuring binder
  *  binds the whole parameter through its pattern. */
-function unpackStatements(node: Comprehension): AgencyNode[] {
+function unpackStatements(
+  node: Comprehension,
+  paramName: string,
+): AgencyNode[] {
   if (node.indexVar) {
     return [
-      bindTarget(node.itemVar, pairIndex(0)),
-      bindName(node.indexVar, pairIndex(1)),
+      bindTarget(node.itemVar, pairIndex(paramName, 0)),
+      bindName(node.indexVar, pairIndex(paramName, 1)),
     ];
   }
   if (typeof node.itemVar !== "string") {
-    return [bindTarget(node.itemVar, varRef(PARAM))];
+    return [bindTarget(node.itemVar, varRef(paramName))];
   }
   return [];
 }
@@ -216,8 +221,11 @@ function comprehensionSource(
  *
  *  Only fills a MISSING loc, so nodes carried over from the user's source
  *  (the body expression, the iterable, the condition) keep their own real
- *  positions. Uses the same `mapChildren` traversal as `desugarNode` -
- *  one walking strategy per file. */
+ *  positions. It DOES descend into those carried subtrees: any node the
+ *  parser left unstamped picks up the comprehension's location, which is
+ *  deliberate - a location on the right line beats no location at all.
+ *  Uses the same `mapChildren` traversal as `desugarNode` - one walking
+ *  strategy per file. */
 function stampLoc<T>(target: T, loc: Comprehension["loc"]): T {
   if (!loc || !target || typeof target !== "object") return target;
   const node = target as any;
@@ -235,14 +243,18 @@ function lower(node: Comprehension): FunctionCall {
   // whichever block is processed second would overwrite the first
   // block's stamps - the same aliasing hazard Assignment.matchSource
   // deep-clones to avoid.
-  const source = comprehensionSource(node, unpackStatements(node), paramName);
+  const source = comprehensionSource(
+    node,
+    unpackStatements(node, paramName),
+    paramName,
+  );
 
   return stampLoc(
     call(
       node.parallel ? "fork" : "map",
       [source],
       blockArg(
-        [...unpackStatements(node), returnStmt(node.expression)],
+        [...unpackStatements(node, paramName), returnStmt(node.expression)],
         paramName,
       ),
     ),

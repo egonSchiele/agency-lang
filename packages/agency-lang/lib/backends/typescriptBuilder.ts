@@ -2810,10 +2810,15 @@ export class TypeScriptBuilder {
     // those), so every argument is positional. processResolvedArgs is the
     // one place that decides reference-vs-call for functionCall arguments;
     // this loop used to be a hand-copy of it and drifted (the fork/race
-    // guard landed in one and not the other).
-    const argNodes = this.processResolvedArgs(
-      args as (Expression | SplatExpression)[],
+    // guard landed in one and not the other). The filter is a checked
+    // narrowing of the branch invariant, not a cast - if a namedArgument
+    // ever reached here it would be dropped by the predicate instead of
+    // silently miscompiled as a positional value.
+    const positionalArgs = args.filter(
+      (arg): arg is Expression | SplatExpression =>
+        arg.type !== "namedArgument",
     );
+    const argNodes = this.processResolvedArgs(positionalArgs);
 
     return ts.obj({
       type: ts.str("positional"),

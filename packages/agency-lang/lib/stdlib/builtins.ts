@@ -337,7 +337,15 @@ export function _entries(obj: any): { key: string; value: any }[] {
 export function _pairsOf(src: unknown): unknown[][] {
   const shape = classifyIterable(src);
   if (shape.kind === "array") {
-    return (src as unknown[]).map((item, index) => [item, index]);
+    // Built by index, not Array.prototype.map: map skips sparse-array
+    // holes and leaves holes in its result, while Runner.loop visits
+    // every index up to length (yielding undefined). Index-building
+    // keeps the two agreeing on sparse arrays too.
+    const arr = src as unknown[];
+    return Array.from({ length: arr.length }, (_, index) => [
+      arr[index],
+      index,
+    ]);
   }
   if (shape.kind === "record") {
     const record = src as Record<string, unknown>;

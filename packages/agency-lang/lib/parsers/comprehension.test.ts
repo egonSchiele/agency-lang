@@ -125,7 +125,8 @@ describe("comprehensionParser", () => {
   // have always parsed as arrays of variable names (probed - this is
   // pre-existing behavior, not something this feature introduced). Pin
   // that they at least never become half-baked comprehension nodes, so
-  // a later improvement (a real diagnostic) shows up as a diff.
+  // a later improvement shows up as a diff. A real diagnostic at the
+  // comprehension is tracked as issue #602.
   it.each([["[x for x in]"], ["[for x in xs]"], ["[x for in xs]"]])(
     "parses the malformed comprehension %s as an array, not a comprehension",
     (src) => {

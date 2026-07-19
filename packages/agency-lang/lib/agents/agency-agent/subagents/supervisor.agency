@@ -104,7 +104,9 @@ def verifierEvidence(task: string, minutes: number): { text: string; findings: n
   // success([])), so empty findings are ambiguous: a clean run and a
   // verifier that could not run (budget, policy) look the same here. Say
   // so, rather than reporting "no findings" as if it were a measurement.
-  const findings = checked.value.length
+  // The catch fallback is belt-and-braces for the same reason.
+  const items = checked catch []
+  const findings = items.length
   if (findings == 0) {
     return {
       text: "(the verifier returned no findings — either nothing was measurable yet or it could not run; judge from the check history alone)",

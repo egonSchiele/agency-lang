@@ -56,3 +56,20 @@ candidates here, correcting the plan's earlier assumption.
 CI pain that motivated #575; `supervise` is. They are cleared and worth migrating
 for determinism, but if either resists (Task 6 Step 4 point 6), leaving it slow is
 acceptable. `supervise` is the one that must land.
+
+## Migrated (final)
+
+Only the two `spin(3000000)` nodes in `supervise.agency` were migrated:
+`overshootIsCoveredByTheGrant` and `checkSeesDraft`. These were the CI cost.
+`fakeClock` is per test case, so those two carry `"fakeClock": true` and use
+`_advanceTime` while the file's cheap `spin(300000)` nodes keep the real clock
+untouched. Result: `overshootIsCoveredByTheGrant` went from ~70s to ~0.7s and
+still fails when the `grant = nextInterval` regression is reintroduced
+(verified against a reverted build). The whole file dropped from ~76s to ~13s.
+
+Left on the real clock, deliberately: the `spin(300000)` nodes in
+`supervise.agency` (~0.8s each, not worth the per-node interleaving risk),
+`nestedGuardResume.agency`, `trip-time.agency`, and `trip-join.agency`. Each
+migration needs its own trace of when `spent` is sampled and how a trip
+surfaces, and none of them is a CI-time problem. They can be migrated later,
+one at a time, if determinism ever matters more than the ~0.8s cost.

@@ -74,7 +74,8 @@
         {
           "type": "exact"
         }
-      ]
+      ],
+      "fakeClock": true
     },
     {
       "nodeName": "checkSeesDraft",
@@ -85,7 +86,8 @@
         {
           "type": "exact"
         }
-      ]
+      ],
+      "fakeClock": true
     },
     {
       "nodeName": "nestedSuperviseIsolated",

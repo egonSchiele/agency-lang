@@ -1,5 +1,6 @@
 import { supervise, SuperviseDecision } from "std::supervise"
 import { getThread, currentThreadId } from "std::thread"
+import test { _advanceTime } from "std::date"
 
 const checks = []
 
@@ -118,19 +119,21 @@ let slowChecks = 0
 def slowCheck(elapsed: number, draft: any): SuperviseDecision {
   checks.push("checked")
   slowChecks = slowChecks + 1
-  // Only the first one is slow. One is enough to push the block well past
-  // the limit it tripped on, and spinning on every trip would make the test
-  // take minutes.
+  // Only the first check overshoots. One is enough to push the block well past
+  // the limit it tripped on. With the fake clock, advancing 500ms against the
+  // 100ms interval makes the overshoot (400ms) exactly what the grant must
+  // cover — deterministic, where the old spin(3000000) was a load-dependent
+  // race.
   if (slowChecks == 1) {
-    spin(3000000)
+    _advanceTime(500)
   }
   return { action: "continue", message: "" }
 }
 
 node overshootIsCoveredByTheGrant(): string {
-  const r = supervise(every: 1ms, maxTime: 600000, check: slowCheck) {
-    const s = spin(3000000)
-    return "done:${s}"
+  const r = supervise(every: 100ms, maxTime: 600000, check: slowCheck) {
+    _advanceTime(500)
+    return "done:spun"
   }
   if (isFailure(r)) {
     return "failed:${r.error}"
@@ -152,8 +155,8 @@ def recordDraft(elapsed: number, draft: any): SuperviseDecision {
 node checkSeesDraft(): string {
   const r = supervise(every: 100ms, maxTime: 600000, check: recordDraft) {
     saveDraft("partial")
-    const s = spin(3000000)
-    return "done:${s}"
+    _advanceTime(500)
+    return "done:spun"
   }
   if (isFailure(r)) { return "unexpected-failure" }
   return "${r.value}|firstDraft:${draftsSeen[0] ?? "none"}"

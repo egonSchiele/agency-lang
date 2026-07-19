@@ -7,7 +7,7 @@
  * testable — this harness just calls it with the deterministic LLM
  * provider (see agentTurn.test.json) and checks the reply comes back.
  */
-import { dispatchAgent } from "../agent.agency"
+import { dispatchAgent } from "../lib/coordinator.agency"
 import {
   switchModel,
   reactToSlotChange,

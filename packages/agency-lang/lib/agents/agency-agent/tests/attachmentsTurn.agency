@@ -1,4 +1,4 @@
-import { dispatchAgent } from "../agent.agency"
+import { dispatchAgent } from "../lib/coordinator.agency"
 import { applyResolved } from "../shared.agency"
 import { getThread, listThreads } from "std::thread"
 

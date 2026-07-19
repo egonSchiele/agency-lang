@@ -725,6 +725,11 @@ async function runRaceFirstTime<T>(
   // index is persisted - a resume of a zero-branch race re-runs this
   // same guard.
   if (tasks.length === 0) {
+    // runBatch paused the parent's TimeGuards before dispatching here,
+    // and every VALUE exit must charge-and-resume them or the parent's
+    // clock stays paused forever after the region. Zero branches charge
+    // zero time; the call is only the resume.
+    chargeAndResumeParentTimeGuards(opts.parentStack, [], "max");
     return { kind: "values", values: [null as T] };
   }
 

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { TimeGuard } from "./guard.js";
 import { getRuntimeContext, runInTestContext } from "./asyncContext.js";
 import { readCause } from "./errors.js";
 import type { Interrupt } from "./interrupts.js";
@@ -463,6 +464,37 @@ describe("runBatch — mode 'sequential'", () => {
 
 describe("runBatch — mode 'race'", () => {
   const WINNER_KEY = "__race_winner_test";
+
+  it("empty race resolves to null and resumes the parent time guards", async () => {
+    const { ctx } = makeCtx();
+    const { parentStack, parentFrame } = makeParent();
+    // A real TimeGuard so the charge-and-resume instanceof filter sees
+    // it, with stubbed methods so no real timers arm inside the test.
+    const guard = new TimeGuard(60_000);
+    guard.pause = vi.fn();
+    guard.resume = vi.fn();
+    parentStack.guards.push(guard);
+
+    const result = await runBatch<number>({
+      ctx,
+      parentStack,
+      parentFrame,
+      checkpointLocation: cpLoc,
+      mode: "race",
+      raceWinnerLocalKey: WINNER_KEY,
+      children: [],
+    });
+
+    // no branch can win: null, matching how absent lookups normalize
+    expect(result).toEqual({ kind: "values", values: [null] });
+    // no winner index persisted - a resume re-runs the empty guard
+    expect(parentFrame.locals[WINNER_KEY]).toBeUndefined();
+    // runBatch pauses the parent clock before dispatching to the race;
+    // the empty exit must resume it like every other value exit, or the
+    // parent's time budget stays paused forever after the region
+    expect(guard.pause).toHaveBeenCalled();
+    expect(guard.resume).toHaveBeenCalled();
+  });
 
   it("first to settle wins; losers are aborted and their branches deleted", async () => {
     const { ctx } = makeCtx();

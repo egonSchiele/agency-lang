@@ -1,5 +1,7 @@
 import type { StateStack } from "./state/stateStack.js";
 import { AgencyAbort, AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
+import { Clock, realClock, TimerHandle } from "./clock.js";
+import { __ctx } from "./asyncContext.js";
 
 /** Monotonic source of stable per-guard ids. Threaded into the
  *  `guardTrip` AbortCause a TimeGuard emits so boundaries can identify
@@ -73,7 +75,7 @@ function clampGrant(
  *     working time at the final join.
  *
  * `toJSON` serializes ONLY persistent state — runtime fields
- * (AbortControllers, setTimeout handles, performance.now() stamps)
+ * (AbortControllers, timer handles, monotonic clock stamps)
  * are NOT included. They're re-established by `resume()` at the first
  * runner step after deserialization.
  */
@@ -524,13 +526,13 @@ export class TimeGuard implements Guard {
    *  double-charge or double-arm. Starts paused — install() flips to
    *  running via startWindow(). */
   private state: "running" | "paused" = "paused";
-  /** performance.now() stamp of the current window's start. Only
-   *  valid when state === "running". */
+  /** Monotonic clock stamp of the current window's start (via clock()).
+   *  Only valid when state === "running". */
   private windowStart: number | undefined = undefined;
   /** AbortController whose .abort() fires when the timer expires. */
   private controller: AbortController | undefined = undefined;
   /** Node setTimeout handle for the in-process timer. */
-  private timerHandle: ReturnType<typeof setTimeout> | undefined = undefined;
+  private timerHandle: TimerHandle | undefined = undefined;
   /** Set when the abort signal fires. Read by check() to convert the
    *  silent abort into a typed throw at the next sync point. */
   private tripped: boolean = false;
@@ -593,7 +595,7 @@ export class TimeGuard implements Guard {
     // popGuard rebuilds without this one.
     this.cancelTimer();
     if (this.state === "running") {
-      this.elapsedMs += performance.now() - this.windowStart!;
+      this.elapsedMs += this.clock().now() - this.windowStart!;
       this.windowStart = undefined;
       this.state = "paused";
     }
@@ -635,7 +637,7 @@ export class TimeGuard implements Guard {
 
   pause(): void {
     if (this.state === "paused") return;
-    this.elapsedMs += performance.now() - this.windowStart!;
+    this.elapsedMs += this.clock().now() - this.windowStart!;
     this.windowStart = undefined;
     this.cancelTimer();
     this.state = "paused";
@@ -726,7 +728,7 @@ export class TimeGuard implements Guard {
     if (this.state === "running") {
       this.cancelTimer();
       this.state = "paused";
-      this.elapsedMs += performance.now() - this.windowStart!;
+      this.elapsedMs += this.clock().now() - this.windowStart!;
       this.windowStart = undefined;
       this.startWindow();
     }
@@ -758,7 +760,7 @@ export class TimeGuard implements Guard {
     return (
       this.elapsedMs +
       (this.state === "running" && this.windowStart !== undefined
-        ? performance.now() - this.windowStart
+        ? this.clock().now() - this.windowStart
         : 0)
     );
   }
@@ -854,6 +856,15 @@ export class TimeGuard implements Guard {
     stack.rebuildAbortSignal();
   }
 
+  /** The time source. Reads the run's clock when a frame is present; a
+   *  guard revived from a checkpoint runs frameless and meters against the
+   *  real clock, exactly as before this seam existed. `__ctx()` is the
+   *  canonical lax accessor; do not use `agency.ctxMaybe()` here (agency.ts
+   *  imports TimeGuard, so that would be a circular import). */
+  private clock(): Clock {
+    return __ctx()?.clock ?? realClock;
+  }
+
   private startWindow(): void {
     // A disarmed guard must never arm its abort timer: check() already
     // reports nothing, but a live timer would still fire the branch's
@@ -863,14 +874,14 @@ export class TimeGuard implements Guard {
     if (this.disarmed) return;
     const remaining = this.timeLimit - this.elapsedMs;
     const delay = remaining > 0 ? remaining : 0;
-    this.timerHandle = setTimeout(() => {
+    this.timerHandle = this.clock().setTimer(() => {
       // Abort WITH a structured cause so any in-flight leaf op (sleep,
       // fetch, …) listening on the composed signal rejects carrying the
       // guard trip — not a bare cancel that the guard's `try` boundary
       // can't recognize and would let escape as an unhandled rejection.
       const spent = this.elapsedMs +
         (this.windowStart !== undefined
-          ? performance.now() - this.windowStart
+          ? this.clock().now() - this.windowStart
           : 0);
       // Abort with an AgencyCancelledError that CARRIES the structured
       // cause. Keeping `signal.reason` an Error (not a bare object) means
@@ -890,13 +901,13 @@ export class TimeGuard implements Guard {
         ),
       );
     }, delay);
-    this.windowStart = performance.now();
+    this.windowStart = this.clock().now();
     this.state = "running";
   }
 
   private cancelTimer(): void {
     if (this.timerHandle) {
-      clearTimeout(this.timerHandle);
+      this.clock().clearTimer(this.timerHandle);
       this.timerHandle = undefined;
     }
   }

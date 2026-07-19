@@ -100,7 +100,12 @@ export type Expression =
   | InterruptStatement
   | BlockArgument
   | IsExpression
-  | MatchBlock;
+  | MatchBlock
+  // Pre-lowering only: comprehensionDesugar rewrites every Comprehension
+  // into map/filter/fork calls inside parseAgency's `lower` block, so
+  // stages after the parser only meet one on a `lower: false` parse
+  // (formatter, std::agency AST walks).
+  | Comprehension;
 
 /**
  * Runtime set of every `type` string in the `Expression` union above. Kept
@@ -133,6 +138,7 @@ export const EXPRESSION_NODE_TYPES: readonly string[] = [
   "blockArgument",
   "isExpression",
   "matchBlock",
+  "comprehension",
 ];
 
 /** True when `node` is an `Expression` (per `EXPRESSION_NODE_TYPES`). */

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "single-binder comprehensions in every expression position the spec advertises",
+      "expectedOutput": "\"2,8|4,8|4|4|4|4|0,0|20\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

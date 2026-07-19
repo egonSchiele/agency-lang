@@ -1,0 +1,43 @@
+def double(x: number): number {
+  return x * 2
+}
+
+def isEven(x: number): boolean {
+  return x % 2 == 0
+}
+
+// a comprehension inside a def, not just a node
+def sumDoubled(xs: number[]): number {
+  return reduce([double(x) for x in xs], 0, \(acc, x) -> acc + x)
+}
+
+node main(): string {
+  const xs = [1, 2, 3, 4]
+
+  const doubled = [double(x) for x in xs]
+  const evens = [double(x) for x in xs if isEven(x)]
+
+  // call-argument position. There is NO length() function in the
+  // language (arrays only have the .length property), so the counting
+  // is done with reduce, which also keeps the comprehension in a real
+  // argument slot - the rev-1 coverage bug this position guards.
+  const nested = reduce([double(x) for x in xs], 0, \(acc, x) -> acc + 1)
+
+  // object literal field
+  const wrapped = { items: [double(x) for x in xs] }
+
+  // inside a block argument body, which exercises the bodySlots path
+  const inBlock = map([1, 2]) as n {
+    const inner = [double(y) for y in xs]
+    return inner.length
+  }
+
+  // nested comprehension
+  const grid = [[double(y) for y in row] for row in [[1, 2], [3]]]
+
+  // empty and degenerate sources
+  const fromEmpty = [double(x) for x in []]
+  const noMatch = [double(x) for x in xs if x > 100]
+
+  return "${doubled[0]},${doubled[3]}|${evens[0]},${evens[1]}|${nested}|${wrapped.items[1]}|${inBlock[0]}|${grid[0][1]}|${fromEmpty.length},${noMatch.length}|${sumDoubled(xs)}"
+}

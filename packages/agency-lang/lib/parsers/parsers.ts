@@ -4648,6 +4648,9 @@ const iterationBinderFragment: Parser<any>[] = [
   ),
 ];
 
+// Cast for the same reason as forLoopParser below: the shared
+// iterationBinderFragment is Parser<any>[], so seqC cannot infer the
+// itemVar/indexVar captures through the spread.
 export const comprehensionParser: Parser<Comprehension> = label(
   "a list comprehension",
   withLoc(
@@ -4701,9 +4704,14 @@ export const comprehensionParser: Parser<Comprehension> = label(
         char("]"),
       ),
     ),
-  ),
+  ) as unknown as Parser<Comprehension>,
 );
 
+// The `as unknown as` cast exists because iterationBinderFragment is typed
+// Parser<any>[] (tarsec's seqC cannot infer captures through a spread), so
+// the inferred capture object loses `itemVar`/`indexVar`. The fragment
+// really does capture both - comprehension.test.ts and the for-loop suite
+// pin it at runtime.
 export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(memo(
   "forLoopParser",
   seqC(
@@ -4738,7 +4746,7 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(memo(
       ),
     ),
   ),
-)));
+)) as unknown as Parser<ForLoop>);
 
 // Parses: name, name?, name: type, name?: type, name = default, name? = default, name: type = default
 export const functionParameterParser: Parser<FunctionParameter> = memo(

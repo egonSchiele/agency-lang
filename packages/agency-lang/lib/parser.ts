@@ -21,6 +21,7 @@ import {
 
 import { AgencyConfig } from "./config.js";
 import { lowerPatterns, PatternLoweringError } from "./lowering/patternLowering.js";
+import { desugarComprehensionsInBody } from "./lowering/comprehensionDesugar.js";
 import { LoweringError } from "./lowering/loweringError.js";
 import render from "./templates/backends/agency/template.js";
 import { preludeImportLine } from "./prelude.js";
@@ -273,6 +274,15 @@ export function parseAgency(
     const result = _parseAgency(input, config);
     if (result.success) {
       if (lower) {
+        // Comprehensions desugar FIRST, so a destructuring binder
+        // (`[f(name) for {name} in people]`) becomes an ordinary
+        // pattern assignment that lowerPatterns then handles with its
+        // existing machinery. Running after would leave a pattern no
+        // later stage knows how to read.
+        result.result.nodes = desugarComprehensionsInBody(
+          result.result.nodes,
+        ) as typeof result.result.nodes;
+
         // Apply pattern lowering pass: transforms destructuring/pattern syntax
         // into existing AST constructs. The format path opts out by passing
         // `lower: false` so it can print patterns back as patterns.

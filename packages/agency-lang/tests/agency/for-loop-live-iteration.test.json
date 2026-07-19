@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "for loops iterate arrays live, so an append during the loop is visited",
+      "expectedOutput": "\"1,2,3,99,\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

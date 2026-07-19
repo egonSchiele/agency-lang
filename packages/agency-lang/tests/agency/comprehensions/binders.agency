@@ -1,0 +1,36 @@
+node main(): string {
+  const xs = ["a", "b", "c", "d"]
+
+  // two-binder over an array: second binder is the INDEX
+  const indexed = ["${i}:${x}" for x, i in xs]
+
+  // the Python-semantics case: indices are positions in the SOURCE,
+  // so filtering out "b" leaves indices 0, 2, 3 - NOT 0, 1, 2
+  const filtered = ["${i}:${x}" for x, i in xs if x != "b"]
+
+  // two-binder over an object: second binder is the VALUE
+  const config = { host: "local", port: "80" }
+  const lines = ["${k}=${v}" for k, v in config]
+
+  // filtering over an object goes through a separate code path
+  const kept = ["${k}" for k, v in config if v != "80"]
+
+  // object destructuring binder
+  const people = [{ name: "Alice", age: 30 }, { name: "Bob", age: 25 }]
+  const greets = ["Hi ${name}" for {name, age} in people]
+
+  // array destructuring binder
+  const pairs = [["x", 1], ["y", 2]]
+  const flat = ["${a}${b}" for [a, b] in pairs]
+
+  // destructuring FIRST binder combined with an index binder
+  const both = ["${name}@${i}" for {name}, i in people]
+
+  // two-binder plus fork
+  const forked = fork ["${i}:${x}" for x, i in xs]
+
+  // non-iterable source gives an empty array, matching for loops
+  const empty = [x for x in null]
+
+  return "${filtered[0]},${filtered[1]},${filtered[2]}|${lines[0]}|${kept[0]},${kept.length}|${greets[1]}|${flat[1]}|${both[1]}|${forked[3]}|${indexed[3]}|${empty.length}"
+}

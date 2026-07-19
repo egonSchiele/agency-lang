@@ -62,6 +62,15 @@ node main() {
 }
 ```
 
+The loop above is deliberate: `saveDraft` has to run after each topic, and a
+comprehension body is a single expression. When you only want the results and
+do not need to save progress between them, a
+[comprehension](/guide/comprehensions) is shorter:
+
+```ts
+const reports = fork [research(topic) for topic in topics]
+```
+
 Things to note:
 
 - The last saved value wins.

@@ -1,0 +1,14 @@
+node main(): string {
+  const names = ["a", "b", "c"]
+
+  // blocks.md:80 - inline block form
+  const inline = mapWithIndex(names, \(name, index) -> "${index}:${name}")
+
+  // blocks.md:55 - trailing block form. mapWithIndex passes BOTH
+  // arguments, so unlike `map` the second parameter is really bound.
+  const trailing = mapWithIndex(names) as (name, index) {
+    return "${index}-${name}"
+  }
+
+  return "${inline[0]},${inline[2]}|${trailing[0]},${trailing[2]}"
+}

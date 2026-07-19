@@ -22,6 +22,7 @@ import {
 import type { ThreadStore } from "./state/threadStore.js";
 import type { HandlerFn } from "./types.js";
 import { matchValName } from "../matchVal.js";
+import { classifyIterable } from "../utils/iteration.js";
 
 /** Options bag for the new `Runner.thread(id, method, opts, callback)`
  *  signature. All fields are optional; emitter passes only the ones
@@ -969,16 +970,21 @@ export class Runner {
 
     this.frame.locals[iterKey] = this.frame.locals[iterKey] ?? 0;
 
-    // Records (plain objects) iterate by key. Arrays iterate by element.
-    // Anything else (null, undefined, primitives) is treated as an empty
-    // iterable, matching how a JS `for...of` over a non-iterable would
-    // simply do nothing rather than crash mid-flow.
+    // Records iterate by key, arrays by element, everything else is empty.
+    // The CLASSIFICATION is shared with `_pairsOf` so comprehensions and
+    // `for` loops cannot disagree about what is iterable
+    // (utils/iteration.ts). The iteration itself stays exactly as it was:
+    // for arrays `iterable` is the caller's own array, and the loop below
+    // re-reads `.length` each step, so a body that appends to the array it
+    // is iterating keeps going. Materializing a snapshot here would break
+    // that (pinned by tests/agency/for-loop-live-iteration.agency).
+    const shape = classifyIterable(items_);
     let iterable: any[];
     let isRecord = false;
-    if (Array.isArray(items_)) {
-      iterable = items_;
-    } else if (items_ != null && typeof items_ === "object") {
-      iterable = Object.keys(items_);
+    if (shape.kind === "array") {
+      iterable = items_ as any[];
+    } else if (shape.kind === "record") {
+      iterable = shape.keys;
       isRecord = true;
     } else {
       iterable = [];

@@ -107,6 +107,7 @@ import {
 import { EffectDeclaration } from "../types/effectDeclaration.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
+import { Comprehension } from "../types/comprehension.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { ParallelBlock, SeqBlock } from "../types/parallelBlock.js";
 import { IfElse } from "../types/ifElse.js";
@@ -2713,6 +2714,14 @@ const baseAtom: Parser<Expression> = or(
   schemaAccessParser,
   schemaExpressionParser,
   lazy(() => interruptExprParser),
+  // MUST precede agencyArrayParser, valueAccessParser, and literalParser.
+  // Ahead of agencyArrayParser because that parser would consume `[f(x)`
+  // and then fail at `for`. Ahead of the other two because `fork [...]`
+  // starts with an identifier, which valueAccessParser/literalParser
+  // would happily match as a plain name, leaving the comprehension
+  // unmatched. A future reorder that only preserves the first constraint
+  // breaks the fork form while the sequential form keeps passing.
+  lazy(() => comprehensionParser),
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),
   lazy(() => booleanParser),
@@ -4613,6 +4622,99 @@ export const destructiveBlockParser: Parser<SeqBlock> = label("a destructive blo
   ),
 )));
 
+/** The iteration binder: an item name or destructuring pattern, plus an
+ *  optional `, index` second binder. Shared between forLoopParser and
+ *  comprehensionParser so `for (x, i in xs)` and `[f(x) for x, i in xs]`
+ *  can never drift apart in what they accept. Captures `itemVar` and
+ *  (optionally) `indexVar`. */
+const iterationBinderFragment: Parser<any>[] = [
+  capture(
+    or(
+      lazy(() => arrayBindingPatternParser),
+      lazy(() => objectBindingPatternParser),
+      many1WithJoin(varNameChar),
+    ),
+    "itemVar",
+  ),
+  optional(
+    captureCaptures(
+      seqC(
+        optionalSpaces,
+        char(","),
+        optionalSpaces,
+        capture(many1WithJoin(varNameChar), "indexVar"),
+      ),
+    ),
+  ),
+];
+
+// Cast for the same reason as forLoopParser below: the shared
+// iterationBinderFragment is Parser<any>[], so seqC cannot infer the
+// itemVar/indexVar captures through the spread.
+export const comprehensionParser: Parser<Comprehension> = label(
+  "a list comprehension",
+  withLoc(
+    memo(
+      "comprehensionParser",
+      seqC(
+        set("type", "comprehension"),
+        capture(
+          map(optional(seqR(str("fork"), spaces)), (r) => r !== null),
+          "parallel",
+        ),
+        char("["),
+        optionalSpacesOrNewline,
+        capture(
+          lazy(() => exprParser),
+          "expression",
+        ),
+        // `optionalSpacesOrNewline` BEFORE each keyword, required `spaces`
+        // AFTER. Before must be optional because exprParser eats trailing
+        // whitespace after a call (`f(x) ` leaves rest `for...`) but not
+        // after a bare name (`x ` leaves rest ` for...`) - requiring
+        // whitespace here broke every call-bodied comprehension. It must
+        // cross newlines (optionalSpaces is spaces/tabs only) or a
+        // comprehension could only break lines after a call, never before
+        // `in`/`if`. After must be required so `for` stays a whole word:
+        // `[format, other]` fails at str("for") because exprParser
+        // greedily consumed the full identifier `format`, and `forx`
+        // fails the required space.
+        optionalSpacesOrNewline,
+        str("for"),
+        spaces,
+        ...iterationBinderFragment,
+        optionalSpacesOrNewline,
+        str("in"),
+        spaces,
+        capture(
+          lazy(() => exprParser),
+          "iterable",
+        ),
+        optional(
+          captureCaptures(
+            seqC(
+              optionalSpacesOrNewline,
+              str("if"),
+              spaces,
+              capture(
+                lazy(() => exprParser),
+                "condition",
+              ),
+            ),
+          ),
+        ),
+        optionalSpacesOrNewline,
+        char("]"),
+      ),
+    ),
+  ) as unknown as Parser<Comprehension>,
+);
+
+// The `as unknown as` cast exists because iterationBinderFragment is typed
+// Parser<any>[] (tarsec's seqC cannot infer captures through a spread), so
+// the inferred capture object loses `itemVar`/`indexVar`. The fragment
+// really does capture both - comprehension.test.ts and the for-loop suite
+// pin it at runtime.
 export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(memo(
   "forLoopParser",
   seqC(
@@ -4626,24 +4728,7 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(memo(
         "expected `(` to open for loop condition",
         optional(or(str("let"), str("const"))),
         optionalSpaces,
-        capture(
-          or(
-            lazy(() => arrayBindingPatternParser),
-            lazy(() => objectBindingPatternParser),
-            many1WithJoin(varNameChar),
-          ),
-          "itemVar",
-        ),
-        optional(
-          captureCaptures(
-            seqC(
-              optionalSpaces,
-              char(","),
-              optionalSpaces,
-              capture(many1WithJoin(varNameChar), "indexVar"),
-            ),
-          ),
-        ),
+        ...iterationBinderFragment,
         optionalSpaces,
         or(str("in"), str("of")),
         spaces,
@@ -4664,7 +4749,7 @@ export const forLoopParser: Parser<ForLoop> = label("a for loop", withLoc(memo(
       ),
     ),
   ),
-)));
+)) as unknown as Parser<ForLoop>);
 
 // Parses: name, name?, name: type, name?: type, name = default, name? = default, name: type = default
 export const functionParameterParser: Parser<FunctionParameter> = memo(

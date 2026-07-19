@@ -1,0 +1,21 @@
+def risky(x: number): number {
+  raise interrupt("approve", { value: x })
+  return x * 2
+}
+
+node main(): string {
+  let out = ""
+  handle {
+    const results = fork([1, 2, 3]) as x {
+      return risky(x)
+    }
+    const rejected = if isFailure(results[1]) then "fail" else "ok"
+    out = "${results.length}|${results[0]}|${rejected}|${results[2]}"
+  } with (d) {
+    if (d.data.value == 2) {
+      return reject()
+    }
+    return approve()
+  }
+  return out
+}

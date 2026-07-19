@@ -14,6 +14,7 @@ import {
   _range,
   _input,
   _sleep,
+  _pairsOf as _pairsOfImpl,
  } from "agency-lang/stdlib-lib/builtins.js"
 import { _resolve } from "agency-lang/stdlib-lib/path.js"
 import {
@@ -304,6 +305,29 @@ export def map(arr: any[], func: (any) -> any): any[] {
     newArr.push(func(item))
   }
   return newArr
+}
+
+export def _pairsOf(src: any): any[] {
+  """
+  Internal: the lowering target for two-binder list comprehensions - use
+  a comprehension, not this function. Returns pairs in binder order,
+  matching the `for` loop: arrays give [item, index], objects give
+  [key, value], and anything else gives an empty array.
+
+  @param src - An array, an object, or anything else
+  """
+  return _pairsOfImpl(src)
+}
+
+export def mapWithIndex(arr: any[], func: (any, any) -> any): any[] {
+  """
+  Apply a function to each item of an array along with its index, and
+  return a new array of the results.
+
+  @param arr - The array to map over
+  @param func - Called with the item and its zero-based index
+  """
+  return map(_pairsOf(arr)) as pair { return func(pair[0], pair[1]) }
 }
 
 export def filter(arr: any[], func: (any) -> any): any[] {

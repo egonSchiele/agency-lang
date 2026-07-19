@@ -1,0 +1,21 @@
+def double(x: number): number {
+  return x * 2
+}
+
+def total(xs: number[]): number {
+  return reduce(xs, 0, \(acc, x) -> acc + x)
+}
+
+node main(): string {
+  // fork as a function ARGUMENT - this is what currently crashes
+  const summed = total(fork([1, 2, 3]) as x { return double(x) })
+
+  // race gets the same fix, and is otherwise untested
+  const first = total([race([5]) as x { return double(x) }])
+
+  // regression guard: a bare function reference as an argument must
+  // still be passed as a reference, not called
+  const doubled = map([1, 2, 3], double)
+
+  return "${summed}|${first}|${doubled[0]},${doubled[1]},${doubled[2]}"
+}

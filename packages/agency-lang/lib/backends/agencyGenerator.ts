@@ -5,6 +5,7 @@ import {
   AgencyNode,
   AgencyProgram,
   Assignment,
+  Comprehension,
   DebuggerStatement,
   InterruptStatement,
   Literal,
@@ -502,6 +503,8 @@ export class AgencyGenerator {
         return this.processFinalizeBlock(node);
       case "guardBlock":
         return this.processGuardBlock(node);
+      case "comprehension":
+        return this.processComprehension(node);
       case "withModifier":
         return `${this.processNode(node.statement)} with ${node.handlerName}`;
       case "staticStatement":
@@ -1704,6 +1707,21 @@ export class AgencyGenerator {
     return this.indentStr(
       `guard${argsStr} {\n${bodyCodeStr}${this.indentStr("}")}`,
     );
+  }
+
+  protected processComprehension(node: Comprehension): string {
+    const prefix = node.parallel ? "fork " : "";
+    const expr = this.processNode(node.expression).trim();
+    const binder =
+      typeof node.itemVar === "string"
+        ? node.itemVar
+        : this.processNode(node.itemVar).trim();
+    const index = node.indexVar ? `, ${node.indexVar}` : "";
+    const iterable = this.processNode(node.iterable).trim();
+    const cond = node.condition
+      ? ` if ${this.processNode(node.condition).trim()}`
+      : "";
+    return `${prefix}[${expr} for ${binder}${index} in ${iterable}${cond}]`;
   }
 
   protected processSkill(node: Skill): string {

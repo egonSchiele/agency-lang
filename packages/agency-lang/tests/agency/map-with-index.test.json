@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "mapWithIndex binds both parameters in inline and trailing block forms",
+      "expectedOutput": "\"0:a,2:c|0-a,2-c\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

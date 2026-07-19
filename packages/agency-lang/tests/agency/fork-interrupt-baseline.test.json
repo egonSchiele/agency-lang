@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "interrupts raised inside a fork block body resume per branch; a rejected branch fails alone",
+      "expectedOutput": "\"3|2|fail|6\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

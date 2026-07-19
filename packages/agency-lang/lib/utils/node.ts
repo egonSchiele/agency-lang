@@ -63,6 +63,14 @@ export function expressionChildren(node: AgencyNode): AgencyNode[] {
       return [node.condition];
     case "forLoop":
       return [node.iterable];
+    case "comprehension":
+      // The binder is deliberately excluded: it is a binding site, not a
+      // sub-expression, matching how forLoop returns only its iterable.
+      return [
+        node.expression,
+        node.iterable,
+        ...(node.condition ? [node.condition] : []),
+      ];
     case "functionCall":
     case "interruptStatement":
       return node.arguments.map(unwrapCallArg);
@@ -407,6 +415,20 @@ export function* walkNodes(
       yield* walkNodes([node.condition], [...ancestors, node], scopes);
     } else if (node.type === "forLoop") {
       yield* walkNodes([node.iterable as AgencyNode], [...ancestors, node], scopes);
+    } else if (node.type === "comprehension") {
+      // Only reachable on `lower: false` parses (formatter, std::agency's
+      // agent-facing AST walk) — the compile path desugars comprehensions
+      // away before any walk. The binder is a binding site, not a
+      // sub-expression, so it is not descended into, matching forLoop.
+      yield* walkNodes(
+        [
+          node.expression,
+          node.iterable,
+          ...(node.condition ? [node.condition] : []),
+        ],
+        [...ancestors, node],
+        scopes,
+      );
     } else if (node.type === "whileLoop") {
       yield* walkNodes([node.condition], [...ancestors, node], scopes);
     } else if (node.type === "messageThread") {

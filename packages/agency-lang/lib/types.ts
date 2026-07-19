@@ -32,6 +32,7 @@ import { AwaitPending } from "./types/awaitPending.js";
 import { HandleBlock } from "./types/handleBlock.js";
 import { FinalizeBlock } from "./types/finalizeBlock.js";
 import { GuardBlock } from "./types/guardBlock.js";
+import { Comprehension } from "./types/comprehension.js";
 import { DebuggerStatement } from "./types/debuggerStatement.js";
 import { WithModifier } from "./types/withModifier.js";
 import { StaticStatement } from "./types/staticStatement.js";
@@ -72,6 +73,7 @@ export * from "./types/forLoop.js";
 export * from "./types/handleBlock.js";
 export * from "./types/finalizeBlock.js";
 export * from "./types/guardBlock.js";
+export * from "./types/comprehension.js";
 export * from "./types/keyword.js";
 export * from "./types/debuggerStatement.js";
 export * from "./types/blockArgument.js";
@@ -98,7 +100,12 @@ export type Expression =
   | InterruptStatement
   | BlockArgument
   | IsExpression
-  | MatchBlock;
+  | MatchBlock
+  // Pre-lowering only: comprehensionDesugar rewrites every Comprehension
+  // into map/filter/fork calls inside parseAgency's `lower` block, so
+  // stages after the parser only meet one on a `lower: false` parse
+  // (formatter, std::agency AST walks).
+  | Comprehension;
 
 /**
  * Runtime set of every `type` string in the `Expression` union above. Kept
@@ -131,6 +138,7 @@ export const EXPRESSION_NODE_TYPES: readonly string[] = [
   "blockArgument",
   "isExpression",
   "matchBlock",
+  "comprehension",
 ];
 
 /** True when `node` is an `Expression` (per `EXPRESSION_NODE_TYPES`). */
@@ -338,6 +346,7 @@ export type AgencyNode =
   | HandleBlock
   | FinalizeBlock
   | GuardBlock
+  | Comprehension
   | WithModifier
   | StaticStatement
   | DebuggerStatement

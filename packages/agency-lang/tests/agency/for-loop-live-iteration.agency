@@ -1,0 +1,17 @@
+node main(): string {
+  const xs = [1, 2, 3]
+  let seen = ""
+  let steps = 0
+  for (x in xs) {
+    seen = seen + "${x},"
+    steps = steps + 1
+    // append once, on the last original element. A snapshotted
+    // iteration stops at 3; a live one picks up 99.
+    if (x == 3) {
+      if (steps < 10) {
+        xs.push(99)
+      }
+    }
+  }
+  return seen
+}

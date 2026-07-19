@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "_pairsOf mirrors Runner.loop for arrays, objects, strings, and non-iterables",
+      "expectedOutput": "\"a0|host=local|0,0,0,0\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

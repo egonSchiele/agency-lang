@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "fork and race work in argument position and bare function refs still work",
+      "expectedOutput": "\"12|10|2,4,6\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

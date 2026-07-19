@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "fork comprehensions inherit branch isolation and work in argument position",
+      "expectedOutput": "\"2,4,6|0|6|12|2,6\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

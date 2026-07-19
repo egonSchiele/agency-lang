@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "nodeName": "tripsOnFakeAdvance",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"tripped\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "doesNotTripUnderBudget",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"finished\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "advanceWithoutFakeClockErrors",
+      "input": "",
+      "expectedOutput": "\"_advanceTime() needs a fake clock. Set \\\"fakeClock\\\": true on this test case.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

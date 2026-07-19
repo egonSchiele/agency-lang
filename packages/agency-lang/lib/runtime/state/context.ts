@@ -351,6 +351,11 @@ export class RuntimeContext<T> {
     execCtx.maxCallDepth = this.maxCallDepth;
     execCtx.failurePropagation = this.failurePropagation;
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
+    // The execution context is built via Object.create, bypassing the
+    // constructor, so carry the clock over from the global context. Without
+    // this the run would meter against `undefined` and the fake-clock seam
+    // (_advanceTime) would never see the FakeClock the constructor installed.
+    execCtx.clock = this.clock;
     execCtx.handlers = [];
     execCtx.callbacks = {};
     execCtx.topLevelCallbacks = [];

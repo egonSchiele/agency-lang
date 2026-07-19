@@ -1,0 +1,39 @@
+import test { _advanceTime } from "std::date"
+
+// The fake clock trips a time guard deterministically: _advanceTime moves the
+// clock past the 100ms budget, the guard trips, and the in-program handler
+// rejects it so the block returns a Failure. No real time is spent.
+node tripsOnFakeAdvance(): string {
+  handle {
+    const r = guard(time: 100ms) {
+      _advanceTime(200)
+      return "never reached"
+    }
+    if (isFailure(r)) { return "tripped" }
+    return r.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
+}
+
+// Advancing under the budget does not trip: the block finishes normally.
+node doesNotTripUnderBudget(): string {
+  const r = guard(time: 100ms) {
+    _advanceTime(50)
+    return "finished"
+  }
+  if (isFailure(r)) { return "tripped" }
+  return r.value
+}
+
+// The opt-out: a test case WITHOUT "fakeClock" keeps the real clock, and
+// _advanceTime refuses loudly instead of silently doing nothing. Capture its
+// own result — the refusal is a Failure carrying the "fake clock" message.
+node advanceWithoutFakeClockErrors(): string {
+  const res = _advanceTime(10)
+  if (isFailure(res)) { return res.error }
+  return "no-error"
+}

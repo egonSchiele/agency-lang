@@ -38,4 +38,14 @@ describe("RuntimeContext.clock", () => {
     const explicit = new FakeClock();
     expect(makeCtx(explicit).clock).toBe(explicit);
   });
+
+  it("createExecutionContext inherits the clock (it bypasses the constructor)", async () => {
+    // Regression: the execution context is built via Object.create, not the
+    // constructor, so it must copy clock explicitly. Without this the run
+    // meters against `undefined` and _advanceTime never sees the FakeClock.
+    const clock = new FakeClock();
+    const ctx = makeCtx(clock);
+    const execCtx = await ctx.createExecutionContext("r1");
+    expect(execCtx.clock).toBe(clock);
+  });
 });

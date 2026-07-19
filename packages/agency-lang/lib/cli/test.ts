@@ -70,6 +70,11 @@ type TestCase = {
   argv?: string[];
   // Per-test fetch mocks; merged over file-level `fetchMocks` (this wins).
   fetchMocks?: FetchMock[];
+  // Install a deterministic fake clock for this test case. Guard fixtures use
+  // it with the `_advanceTime` seam (import test from "std::date") to trip time
+  // guards without spending real time. Off by default: the run keeps the real
+  // clock. See docs/superpowers/specs/2026-07-19-fake-clock-time-guards-design.md.
+  fakeClock?: boolean;
 };
 type Tests = {
   sourceFile?: string;
@@ -595,6 +600,7 @@ async function runSingleTest(
       timeoutMs,
       signal,
       llmMocks: testCase.llmMocks,
+      fakeClock: testCase.fakeClock,
       useTestLLMProvider: testCase.useTestLLMProvider,
       argv: testCase.argv,
       fetchMocks,

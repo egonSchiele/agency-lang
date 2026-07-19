@@ -1,16 +1,28 @@
 /** @module
   @summary Reviews a work product against a task and returns findings.
 
-  The work is handed in as text; review reads it and judges it. It never
-  touches the file system and never runs anything. To verify work on disk by
-  measuring it, use verifierAgent instead. For Agency source specifically,
-  agencyReviewAgent adds parse and typecheck findings.
+  Review reads the work and looks things up. The verifier runs the work and
+  measures it. This agent never touches the file system and never executes
+  what it is reviewing, but it can consult the web to check a claim: whether
+  an API is used correctly, whether a cited source says what the work says it
+  does. For Agency source specifically, agencyReviewAgent adds parse and
+  typecheck findings.
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
+import { searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
+import { webTools } from "std::agents/lib/toolkits"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You review a work product against a task. For each finding, return a Feedback item: error=true when the work fails the task on that point (name the specific problem), error=false for a satisfied point. Be brief and concrete. Judge only against the task and context given; do not invent requirements."""
+
+export def buildTools(): any[] {
+  """
+  Return the reviewer's lookup tools. It reads and checks; it has no tools
+  that change anything.
+  """
+  return [...webTools(), ...searchTools()]
+}
 
 def judgeWork(
   work: string,
@@ -32,7 +44,12 @@ ${work}
 """
   const items: Feedback[] = llm(
     prompt,
-    llmOptions(model: model, provider: provider, tools: extraTools),
+    llmOptions(
+      model: model,
+      provider: provider,
+      tools: buildTools().concat(extraTools),
+      hostedTools: ["web_search"],
+    ),
   )
   return items
 }

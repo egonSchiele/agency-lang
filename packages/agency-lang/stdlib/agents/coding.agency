@@ -23,6 +23,7 @@ import {
   memoryTools,
   agencyDocTools,
   planningTools,
+  webTools,
  } from "std::agents/lib/toolkits"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -56,6 +57,7 @@ export def buildTools(): any[] {
     ...memoryTools(),
     ...agencyDocTools(),
     ...planningTools(),
+    ...webTools(),
   ]
 }
 

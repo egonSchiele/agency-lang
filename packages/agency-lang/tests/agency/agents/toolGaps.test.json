@@ -1,0 +1,81 @@
+{
+  "tests": [
+    {
+      "nodeName": "agencyVerifierCanSeeFiles",
+      "description": "the Agency verifier can inspect files the program wrote",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "verifierCanComputeAndReadBytes",
+      "description": "the verifier can run pipelines and read bytes",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "agencyCodingHasDocsAndTypecheck",
+      "description": "the Agency writer can look up diagnostics and check drafts",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "agencyCodingFetchesButDoesNotSearch",
+      "description": "the Agency writer fetches named pages but does not search",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "codingCanFetch",
+      "description": "the coding agent can fetch what its search finds",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "reviewersLookUpButCannotWrite",
+      "description": "reviewers gained lookups and still cannot change anything",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noAgentHasDuplicateToolNames",
+      "description": "no agent offers two tools with the same name",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

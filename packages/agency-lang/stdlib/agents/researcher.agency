@@ -87,12 +87,16 @@ def researchLoop(
     if (critique == "") {
       msg = question
     }
+    // Provider-hosted search runs server-side, needs no API key, and works
+    // where outbound HTTP is blocked, so it complements the client-side
+    // providers in researchTools rather than replacing them.
     const answer = llm(
       msg,
       llmOptions(
         model: model,
         provider: provider,
         tools: researchTools.concat(extraTools),
+        hostedTools: ["web_search"],
       ),
     )
     saveDraft(answer)

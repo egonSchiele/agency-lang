@@ -8,8 +8,7 @@
 import { concurrencyPool } from "std::concurrency"
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
-import { readOnlyFileTools } from "std::agents/lib/toolkits"
-import { exec } from "std::shell"
+import { readOnlyFileTools, shellTools } from "std::agents/lib/toolkits"
 import { systemMessage, threadIsNew } from "std::thread"
 
 // One judge per criterion, four at a time: enough concurrency to keep the
@@ -18,10 +17,15 @@ static const POOL_SIZE = 4
 
 export def buildTools(): any[] {
   """
-  Return the verifier's tools. It inspects and measures; it has no write
-  tools, because a verifier that can fix things is no longer a verifier.
+  Return the verifier's tools. It measures with shell pipelines and reads
+  bytes, because a criterion checked by eye is a criterion not checked. It
+  has no write tools: a verifier that can fix things is no longer a verifier.
   """
-  return [...readOnlyFileTools(), exec.partial(useAgentCwd: true)]
+  return [
+    ...readOnlyFileTools(),
+    ...shellTools(),
+    readBinary.partial(useAgentCwd: true),
+  ]
 }
 
 static const systemPrompt = """You verify whether a coding task was completed correctly. You do NOT fix anything. Inspect, COMPUTE, and report.

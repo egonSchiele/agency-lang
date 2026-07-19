@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An interrupt that would surface to the user from inside a handler function is refused as a rejection with an explanatory message (read:refused), rather than killing the run.",
+      "input": "",
+      "expectedOutput": "\"work done|read:refused\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

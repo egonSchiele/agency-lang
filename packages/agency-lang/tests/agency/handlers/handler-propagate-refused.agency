@@ -1,0 +1,40 @@
+// The outer handler propagates the read the inner handler raised, which
+// would ask a human — and a handler function cannot pause to wait. The
+// read gets a rejection explaining why, and the run continues. The
+// outcome is in the return value so CI asserts that the refusal landed as
+// a failure Result rather than a crash.
+let readOutcome = "unread"
+
+def doWork(): string {
+  interrupt("please review")
+  return "work done"
+}
+
+def inner(): string {
+  // @tc-ignore AG3010
+  handle {
+    return doWork()
+  } with (data) {
+    const contents = read("handler-propagate-refused.agency")
+    if (contents is failure(err)) {
+      readOutcome = "refused"
+    }
+    if (contents is success(text)) {
+      readOutcome = "succeeded"
+    }
+    return approve()
+  }
+}
+
+node main() {
+  let result = ""
+  handle {
+    result = inner()
+  } with (data) {
+    if (data.effect == "std::read") {
+      return propagate()
+    }
+    return approve()
+  }
+  return "${result}|read:${readOutcome}"
+}

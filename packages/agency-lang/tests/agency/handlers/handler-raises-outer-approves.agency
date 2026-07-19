@@ -1,0 +1,45 @@
+// A handler raises a bare read. The handler never hears its own raise;
+// the OUTER handler approves it. No `with approve` anywhere. Without
+// exclusion this recurses to HandlerRecursionError, because nothing here
+// is a base case.
+//
+// The return value encodes three observables so CI asserts all of them,
+// not just the happy return: the work finished, the read succeeded, and
+// the inner handler body ran EXACTLY once. reviews:1 is the
+// handlers-are-safety-infrastructure assertion — exclusion must never
+// skip the handler for the interrupt it exists to review, and re-entry
+// would push it to 2.
+let reviews = 0
+let readOutcome = "unread"
+
+def doWork(): string {
+  interrupt("please review")
+  return "work done"
+}
+
+def inner(): string {
+  // @tc-ignore AG3010
+  handle {
+    return doWork()
+  } with (data) {
+    reviews = reviews + 1
+    const contents = read("handler-raises-outer-approves.agency")
+    if (contents is success(text)) {
+      readOutcome = "ok"
+    }
+    if (contents is failure(err)) {
+      readOutcome = "rejected"
+    }
+    return approve()
+  }
+}
+
+node main() {
+  let result = ""
+  handle {
+    result = inner()
+  } with (data) {
+    return approve()
+  }
+  return "${result}|read:${readOutcome}|reviews:${reviews}"
+}

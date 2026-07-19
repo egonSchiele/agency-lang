@@ -20,6 +20,11 @@ import { Approved, GraphState, Rejected, RunNodeResult } from "./types.js";
 import type { HandlerEntry } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
+import {
+  runAsHandler,
+  executingHandlers,
+  insideHandlerFunction,
+} from "./executingHandlers.js";
 
 export type InterruptApprove = {
   type: "approve";
@@ -242,6 +247,7 @@ async function runHandlerChain(
     // historical behavior exactly: the outermost approval overwrites.
     const approvals: any[] = [];
     let hasPropagation = false;
+    const executing = executingHandlers();
     const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
     try {
       for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
@@ -251,6 +257,17 @@ async function runHandlerChain(
         // no statelog decision, exactly as if they were not registered.
         // Guard trips use this for the registration-site visibility rule.
         if (eligible && !eligible(entry)) continue;
+        // A handler never hears its own raises: an entry currently
+        // executing in this lineage is skipped and the rest of the chain
+        // decides. Re-entering the raiser was the only source of the
+        // handler recursion, and the raiser's vote was never load-bearing
+        // — the same author writes the raise and the handler. Safety is
+        // fail-closed: an excluded entry contributes nothing, so the raise
+        // executes only if an OUTER handler (or an explicit `with
+        // approve`) approves it, and is rejected otherwise.
+        if (executing.includes(entry)) {
+          continue;
+        }
         // A handler runs under its REGISTRATION site's budget: every
         // guard that was not live when it registered is suspended on
         // this branch for the duration of the call — not gating, not
@@ -265,7 +282,7 @@ async function runHandlerChain(
         ctx.enterToolCall();
         let result: any;
         try {
-          result = await entry.fn(interruptObj);
+          result = await runAsHandler(entry, () => entry.fn(interruptObj));
         } finally {
           ctx.exitToolCall();
           if (suspensionToken !== undefined) {
@@ -442,6 +459,38 @@ function renderVerdict(
       interrupt: interruptSummary,
     });
     return { type: "approve", value: merged.value };
+  }
+  // An interrupt raised inside a handler function cannot surface: asking
+  // the user means pausing, and a handler function has no step counters
+  // to pause into. Refuse as a rejection rather than killing the run —
+  // the raise site gets a failed Result explaining why, and the handler
+  // carries on degraded.
+  //
+  // No resolvedBy gate: renderVerdict has exactly one call site (the
+  // origin dispatch below) and resolvedBy is "ipc" whenever a PARENT
+  // process decided — a subprocess handler's raise under a propagating
+  // parent arrives here exactly that way, and gating on "handler" would
+  // skip the refusal for it.
+  //
+  // The message must not suggest `with approve` as the fix: propagation
+  // beats collected approvals in the merge (hasPropagation returns before
+  // approvals are consulted), so under a propagating outer handler an
+  // in-handler `with approve` does not prevent this refusal.
+  if (insideHandlerFunction()) {
+    ctx.statelogClient.interruptResolved({
+      interruptId,
+      outcome: "rejected",
+      resolvedBy,
+      interrupt: interruptSummary,
+    });
+    return {
+      type: "reject",
+      value:
+        `Cannot ask the user about "${effect}" from inside a handler ` +
+        `function: answering would require pausing, and a handler cannot ` +
+        `pause. Have an outer handler approve or reject this effect ` +
+        `instead.`,
+    };
   }
   // propagated or noResponse — surface to the user.
   // Note: checkpointCreated for these interrupts is emitted by the generated

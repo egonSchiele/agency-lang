@@ -641,6 +641,19 @@ const BLOCK_CALL_RESULT: Record<
     successType: element,
     failureType: ANY_T,
   }),
+  // fork joins every branch into a list. The list shape is kept even
+  // for an `any` element - any[] still catches scalar annotations.
+  // Failure slots are deliberately invisible (spec: "optimistic about
+  // failures").
+  fork: (element) => ({ type: "arrayType", elementType: element }),
+  // race yields the first-SETTLED branch, or null when zero branches
+  // ran (empty source, or a comprehension filter that matched nothing
+  // - #604). An `any` element collapses to any, NOT any | null:
+  // unionTypes does not absorb any, and fail-open must stay fail-open.
+  // COUPLED to #606: if the empty-race return value or first-success
+  // semantics change there, this row changes with them.
+  race: (element) =>
+    isAnyType(element) ? ANY_T : unionTypes([element, NULL_T]),
 };
 
 function synthFunctionCall(

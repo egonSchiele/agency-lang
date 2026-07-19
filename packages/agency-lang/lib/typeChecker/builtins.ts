@@ -319,10 +319,12 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
 
   // --- Concurrency (language constructs with block arguments) ---
   // `fork` and `race` are special — they take a `string[]` of labels plus a
-  // block, and their return type depends on the block body. We type the
-  // return as `any` for now (no generic-block inference yet) but mark them
-  // `acceptsBlock` so the typechecker doesn't reject the call shape, and
-  // populate `description` so the LSP hover shows useful docs.
+  // block, and their return type depends on the block body. Block-carrying
+  // calls are typed by the synthesizer (BLOCK_CALL_RESULT in synthesizer.ts:
+  // fork -> T[], race -> T | null, T inferred from the block's returns); the
+  // returnType fields below are only the fallback for blockless call shapes.
+  // `acceptsBlock` keeps the call shape legal, and `description` feeds the
+  // LSP hover.
   fork: {
     params: [anyArray],
     returnType: anyArray,

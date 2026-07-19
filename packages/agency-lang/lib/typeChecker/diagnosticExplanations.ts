@@ -190,9 +190,9 @@ node main() {
 
 **How to fix:** wrap the call in a \`handle\` block for the effects it may raise, or confirm a handler is installed higher up.`,
 
-  handlerBodyRaises: `A handler that itself raises interrupts would re-enter the handler chain — the dispatcher visits every handler, including the one currently running — and recurse until the runtime aborts with a recursion error.
+  handlerBodyRaises: `RETIRED. Handler functions may raise interrupts: a handler never hears its own raises (the dispatcher skips the executing handler entry), so the recursion this diagnostic guarded against cannot happen. The raise is decided by the rest of the chain — an outer handler or an explicit \`with approve\` — and a raise nothing settles is rejected with an explanatory message, because a handler cannot pause to ask the user.
 
-**How to fix:** restructure so the handler does not call interrupt-raising code (for example, hoist file I/O out of the handler). If you are certain it is safe, suppress with \`// @tc-ignore\` on the line above the \`handle\` block.`,
+**How to fix:** nothing — code this diagnostic used to flag is now legal. If you suppressed it with \`// @tc-ignore AG3010\`, remove the suppression. See the handlers guide for the full rules.`,
 
   interruptInCallback: `Callbacks fire as side effects at points where execution cannot pause, so their body may not \`interrupt\` — an interrupt would need to stop the run to ask the user something, which a callback has no way to do.
 

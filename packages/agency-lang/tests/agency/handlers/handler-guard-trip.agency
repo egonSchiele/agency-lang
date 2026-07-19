@@ -1,0 +1,48 @@
+// A guard INSIDE the handler body trips. The trip (std::guard) skips the
+// executing handler and is answered by the OUTER handler, which extends
+// the budget. This is the supervise shape — an expensive check running
+// inside a guard handler — reduced to a fixture. The grant is a DELTA
+// that must cover the overshoot the block ran past its limit before the
+// trip was answered (see the overshoot lesson in stdlib/supervise.agency),
+// so it is granted generously.
+let tripsSeen = 0
+
+def spin(rounds: number): string {
+  let count = 0
+  while (count < rounds) {
+    count = count + 1
+  }
+  return "spun"
+}
+
+def inner(): string {
+  handle {
+    interrupt("please review")
+    return "work done"
+  } with (data) {
+    const guarded = guard(time: 5ms, label: "in-handler") {
+      const spun = spin(3000000)
+      return "guarded:${spun}"
+    }
+    // isFailure, not match: guard Results are read with isFailure by
+    // convention in code that may pause and resume.
+    if (isFailure(guarded)) {
+      return approve()
+    }
+    return approve()
+  }
+}
+
+node main() {
+  let result = ""
+  handle {
+    result = inner()
+  } with (data) {
+    if (data.effect == "std::guard" && data.data.label == "in-handler") {
+      tripsSeen = tripsSeen + 1
+      return approve({ maxTime: 600000 })
+    }
+    return approve()
+  }
+  return "${result}|trips:${tripsSeen}"
+}

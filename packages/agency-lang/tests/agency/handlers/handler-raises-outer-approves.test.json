@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A handler raises a bare read; the handler is skipped for its own raise and the outer handler approves it (read:ok). The handler body runs exactly once (reviews:1).",
+      "input": "",
+      "expectedOutput": "\"work done|read:ok|reviews:1\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

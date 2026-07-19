@@ -33,21 +33,7 @@ describe("a callback call contributes to the caller's inferred effects", () => {
   });
 });
 
-describe("a handler that calls a raising callback trips the handler diagnostic", () => {
-  const handlerErr = (src: string): boolean =>
-    typecheckSource(src).some((e) => /handler/i.test(e.message));
-
-  it("fires when the handler body calls a raising callback", () => {
-    const src = `def useIt(cb: (string) -> string raises <std::read>) {
-      handle { print("hi") } with (payload) { print(cb("x")) }
-    }`;
-    expect(handlerErr(src)).toBe(true);
-  });
-
-  it("stays clean when the callback raises nothing", () => {
-    const src = `def useIt(cb: (string) -> string raises <>) {
-      handle { print("hi") } with (payload) { print(cb("x")) }
-    }`;
-    expect(handlerErr(src)).toBe(false);
-  });
-});
+// The "handler body calls a raising callback" cases asserted AG3010,
+// which is retired: handler bodies may raise, so there is no handler
+// diagnostic for a raising callback to trip. Callback effect propagation
+// itself is covered by the `exceeds` cases above.

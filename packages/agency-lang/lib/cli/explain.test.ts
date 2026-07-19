@@ -41,11 +41,15 @@ describe("renderDiagnosticText", () => {
 });
 
 describe("renderDiagnosticList", () => {
-  it("lists every code exactly once", () => {
+  it("lists every active code exactly once and no retired codes", () => {
     const listed = plain(renderDiagnosticList());
     for (const entry of Object.values(DIAGNOSTICS)) {
       const occurrences = listed.split(entry.code).length - 1;
-      expect(occurrences, entry.code).toBe(1);
+      if ("retired" in entry) {
+        expect(occurrences, entry.code).toBe(0);
+      } else {
+        expect(occurrences, entry.code).toBe(1);
+      }
     }
   });
 });

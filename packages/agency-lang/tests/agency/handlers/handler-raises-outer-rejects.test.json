@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An outer handler rejecting an effect a handler raised still sees it, and its rejection wins (read:rejected). read:succeeded means handler raises are bypassing the outer chain.",
+      "input": "",
+      "expectedOutput": "\"work done|read:rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

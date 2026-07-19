@@ -1,0 +1,26 @@
+// No outer approver at all: the ordinary `with approve` supplies the
+// approval for the handler's own raise. This is the reviewer shape —
+// llm(..., tools: [...]) with approve — in miniature.
+let readOutcome = "unread"
+
+def doWork(): string {
+  interrupt("please review")
+  return "work done"
+}
+
+node main() {
+  let result = ""
+  handle {
+    result = doWork()
+  } with (data) {
+    const contents = read("handler-raises-with-approve.agency") with approve
+    if (isSuccess(contents)) {
+      readOutcome = "ok"
+    }
+    if (isFailure(contents)) {
+      readOutcome = "rejected"
+    }
+    return approve()
+  }
+  return "${result}|read:${readOutcome}"
+}

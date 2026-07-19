@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Ordinary `with approve` inside a handler approves the handler's own raise with no outer approver. read:rejected means the with-approve inner handler was wrongly excluded too.",
+      "input": "",
+      "expectedOutput": "\"work done|read:ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

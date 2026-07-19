@@ -94,16 +94,6 @@ This function may raise interrupts, but it is called from a place that is not in
 
 **How to fix:** wrap the call in a `handle` block for the effects it may raise, or confirm a handler is installed higher up.
 
-<a id="ag3010"></a>
-
-## AG3010 — Handler &#123;handler&#125; may raise interrupts [&#123;effects&#125;]. That would re-enter the handler chain (the dispatcher visits every handler, even the one currently running) and recurse until `HandlerRecursionError` fires at runtime. Restructure so the handler doesn't call interrupt-raising code (e.g. hoist file I/O out of the handler), or suppress this error with `// @tc-ignore` on the line above the `handle` block.
-
-*Default severity: error.*
-
-A handler that itself raises interrupts would re-enter the handler chain — the dispatcher visits every handler, including the one currently running — and recurse until the runtime aborts with a recursion error.
-
-**How to fix:** restructure so the handler does not call interrupt-raising code (for example, hoist file I/O out of the handler). If you are certain it is safe, suppress with `// @tc-ignore` on the line above the `handle` block.
-
 <a id="ag3011"></a>
 
 ## AG3011 — `interrupt` is not allowed inside a callback body (callback registered on '&#123;hook&#125;' may raise [&#123;effects&#125;]). Callbacks fire as side effects; their body cannot pause execution to ask the user a question. Move the `interrupt` into the calling node/function instead, or use a runtime guard if you wanted budget enforcement.

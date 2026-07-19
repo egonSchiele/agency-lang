@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "A guard trip raised while a handler executes routes past the excluded handler to the outer chain, which extends the budget. trips:0 means mid-handler guard trips are not reaching outer handlers.",
+      "input": "",
+      "expectedOutput": "\"work done|trips:1\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

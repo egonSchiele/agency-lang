@@ -50,7 +50,10 @@ export function renderDiagnosticText(codeOrName: string): {
 export function renderDiagnosticList(): string {
   const blocks: string[] = [];
   for (const cat of DIAGNOSTIC_CATEGORIES) {
+    // Retired diagnostics stay out of the list, matching the docs pages;
+    // a direct `agency explain <code>` lookup still answers for them.
     const rows = Object.entries(DIAGNOSTICS)
+      .filter(([, e]) => !("retired" in e))
       .filter(([, e]) => categoryForCode(e.code)?.prefix === cat.prefix)
       .sort(([, a], [, b]) => a.code.localeCompare(b.code))
       .map(([, e]) => `  ${color.bold(e.code)}  ${e.message}`);

@@ -8,7 +8,12 @@ import {
 
 const pages = generateDiagnosticsPages();
 const byPath = Object.fromEntries(pages.map((p) => [p.relPath, p.contents]));
-const codes = Object.values(DIAGNOSTICS).map((e) => e.code);
+// Retired diagnostics keep their registry entry (the code stays reserved,
+// `agency explain` still answers) but are omitted from the docs pages.
+const activeEntries = Object.values(DIAGNOSTICS).filter(
+  (e) => !("retired" in e),
+);
+const codes = activeEntries.map((e) => e.code);
 
 describe("generateDiagnosticsPages", () => {
   it("emits index.md plus one page per category", () => {
@@ -29,7 +34,7 @@ describe("generateDiagnosticsPages", () => {
   });
 
   it("each code appears on exactly its own category page", () => {
-    for (const entry of Object.values(DIAGNOSTICS)) {
+    for (const entry of activeEntries) {
       const cat = categoryForCode(entry.code)!;
       const page = byPath[`${cat.slug}.md`];
       expect(page.includes(`## ${entry.code}`), `${entry.code} on ${cat.slug}`).toBe(true);

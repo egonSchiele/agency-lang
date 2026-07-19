@@ -282,81 +282,108 @@ describe("agency.interrupt — frame requirements", () => {
   });
 });
 
-// Regression test for the recursive handler bug debugged in
-// https://ampcode.com/threads/T-019e7a80-0a51-75ce-840e-89b5f595da5c.
-// A handler whose body raises an interrupt triggers a nested
-// runHandlerChain dispatch that visits the same handler again
-// (the chain visits every handler, even after one approves), leading
-// to unbounded recursion. The runtime now bounds nested-dispatch depth
-// at MAX_HANDLER_CHAIN_DEPTH and throws HandlerRecursionError when
-// exceeded, naming the offending interrupt kind in the message.
-describe("agency.interrupt — recursive-handler guard", () => {
-  it("throws HandlerRecursionError when a handler keeps re-entering itself", async () => {
+// A handler never hears its own raises: the dispatcher skips the
+// executing entry, so a handler body may raise without re-entering
+// itself, and an in-handler raise nothing settles is refused as a
+// rejection (a handler cannot pause to ask the user). These tests pin
+// that rule. The depth guard (MAX_HANDLER_CHAIN_DEPTH) survives only as
+// a backstop: exclusion is per activation, so sibling registrations of
+// the same handler still hear each other, bounded by registration count.
+// (This suite once pinned the opposite behavior — unbounded recursion
+// caught by HandlerRecursionError, debugged in
+// https://ampcode.com/threads/T-019e7a80-0a51-75ce-840e-89b5f595da5c.)
+describe("agency.interrupt — raising inside a handler", () => {
+  // A handler never hears its own raises: the executing entry is skipped
+  // during dispatch. With no other handler registered, nothing settles the
+  // inner raise, and it cannot surface (a handler cannot pause to ask the
+  // user), so it comes back as a rejection whose message names the effect.
+  // The handler carries on and the original interrupt resolves normally —
+  // this used to recurse to HandlerRecursionError.
+  it("refuses a handler's own raise instead of re-entering it", async () => {
     const ctx = makeMockCtx();
-    // The handler ALWAYS calls interrupt(...) before returning. Its inner
-    // interrupt re-dispatches the chain, which visits this same handler
-    // again — infinite recursion without the depth guard.
-    const selfRecursingHandler = async () => {
-      await agency.interrupt({
+    let innerOutcome: any;
+    const raisingHandler = async () => {
+      innerOutcome = await agency.interrupt({
         effect: "inner",
         message: "raised from inside handler",
         data: {},
       });
-      return approve();
+      return approve("outer-ok");
     };
-    await expect(
-      inFrame(ctx, () =>
-        agency.withResumableScope({ name: "recursive" }, async (s) => {
-          await s.step(async () => {
-            await agency.withHandler(selfRecursingHandler, async () => {
-              await agency.interrupt({
-                effect: "outer",
-                message: "trips the chain the first time",
-                data: {},
-              });
+    let outerResult: any;
+    await inFrame(ctx, () =>
+      agency.withResumableScope({ name: "self-raise" }, async (s) => {
+        await s.step(async () => {
+          await agency.withHandler(raisingHandler, async () => {
+            outerResult = await agency.interrupt({
+              effect: "outer",
+              message: "trips the chain the first time",
+              data: {},
             });
           });
-          return "unreachable";
-        }),
-      ),
-    ).rejects.toThrow(/Handler chain dispatch nested .* levels deep/);
+        });
+        return "done";
+      }),
+    );
+    expect(isRejected(innerOutcome)).toBe(true);
+    expect(innerOutcome.value).toContain('Cannot ask the user about "inner"');
+    expect(isApproved(outerResult)).toBe(true);
+    expect(outerResult.value).toBe("outer-ok");
   });
 
-  it("names the offending interrupt kind in the error message", async () => {
+  // Exclusion is per ENTRY (registration), not per source handler. Two
+  // registrations of the same handler are two entries: activation two's
+  // raise is heard by activation one, which raises again — and at that
+  // point BOTH activations are executing, so the third-level raise is
+  // refused. Nesting is bounded by the number of registrations, and the
+  // outer activation hears the inner's raise exactly once.
+  it("a sibling registration of the same handler hears the raise once", async () => {
     const ctx = makeMockCtx();
-    const selfRecursingHandler = async () => {
-      await agency.interrupt({
-        effect: "deep-recursion-kind",
+    let heardInner = 0;
+    let refusals = 0;
+    const raisingHandler = async (intr: { effect: string }) => {
+      if (intr.effect === "inner") {
+        heardInner += 1;
+      }
+      const outcome = await agency.interrupt({
+        effect: "inner",
         message: "raised from inside handler",
         data: {},
       });
+      if (isRejected(outcome)) {
+        refusals += 1;
+      }
       return approve();
     };
-    try {
-      await inFrame(ctx, () =>
-        agency.withResumableScope({ name: "named" }, async (s) => {
-          await s.step(async () => {
-            await agency.withHandler(selfRecursingHandler, async () => {
+    await inFrame(ctx, () =>
+      agency.withResumableScope({ name: "sibling-activations" }, async (s) => {
+        await s.step(async () => {
+          await agency.withHandler(raisingHandler, async () =>
+            agency.withHandler(raisingHandler, async () => {
               await agency.interrupt({
                 effect: "outer",
                 message: "trips first",
                 data: {},
               });
-            });
-          });
-          return "unreachable";
-        }),
-      );
-      throw new Error("expected HandlerRecursionError to be thrown");
-    } catch (e) {
-      expect((e as Error).name).toBe("HandlerRecursionError");
-      expect((e as Error).message).toContain("deep-recursion-kind");
-    }
+            }),
+          );
+        });
+        return "done";
+      }),
+    );
+    // Deterministic flow: the outer kickoff visits both entries; each
+    // activation's raise is heard by the other side exactly once, and
+    // each cross-heard raise re-raises into a dispatch where both
+    // entries are executing, which is refused. Exact counts, because a
+    // broken exclusion inflates them before it crashes — a > 0 assertion
+    // would sleep through that.
+    expect(heardInner).toBe(2);
+    expect(refusals).toBe(2);
   });
 
-  it("a recursion throw does not leak depth into the next legitimate dispatch", async () => {
+  it("a refused in-handler raise does not leak state into the next dispatch", async () => {
     const ctx = makeMockCtx();
-    const selfRecursingHandler = async () => {
+    const raisingHandler = async () => {
       await agency.interrupt({
         effect: "inner",
         message: "x",
@@ -364,22 +391,20 @@ describe("agency.interrupt — recursive-handler guard", () => {
       });
       return approve();
     };
-    await expect(
-      inFrame(ctx, () =>
-        agency.withResumableScope({ name: "cleanup" }, async (s) => {
-          await s.step(async () => {
-            await agency.withHandler(selfRecursingHandler, async () => {
-              await agency.interrupt({ effect: "outer", message: "x", data: {} });
-            });
+    await inFrame(ctx, () =>
+      agency.withResumableScope({ name: "cleanup" }, async (s) => {
+        await s.step(async () => {
+          await agency.withHandler(raisingHandler, async () => {
+            await agency.interrupt({ effect: "outer", message: "x", data: {} });
           });
-          return "unreachable";
-        }),
-      ),
-    ).rejects.toThrow(/Handler chain dispatch nested/);
-    // Depth lives in AsyncLocalStorage, so the failed dispatch's scope has
-    // fully unwound — a fresh, non-recursive dispatch must start from depth 0
-    // and resolve normally rather than inheriting a stale count and tripping
-    // the limit prematurely.
+        });
+        return "done";
+      }),
+    );
+    // Exclusion and depth both live in AsyncLocalStorage, so the refused
+    // dispatch's scope has fully unwound — a fresh dispatch must start
+    // clean and resolve normally rather than inheriting stale executing
+    // entries or a stale depth count.
     let result: any;
     await inFrame(ctx, () =>
       agency.withResumableScope({ name: "after-throw" }, async (s) => {

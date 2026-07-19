@@ -1,4 +1,3 @@
-import { typecheck, parseAST } from "std::agency"
 /*
  * Code subagent — handles anything that touches code or the file
  * system: writing, editing, typechecking, running shell commands.
@@ -11,39 +10,18 @@ import { typecheck, parseAST } from "std::agency"
  * (`setAgentCwd`/`getAgentCwd`), which `agent.agency` pins to the user's
  * cwd at startup.
  */
-import { todoWrite, todoList } from "std::agent"
 import { agencyCodingAgent } from "std::agents/agency/coding"
 import { agencyExpertAgent } from "std::agents/agency/expert"
-import { codingAgent } from "std::agents/coding"
+import { codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
 import { expertAgent } from "std::agents/expert"
 import { verifierAgent } from "std::agents/verifier"
 import { ExpertGuidance, guidanceOrEmpty, renderGuidance } from "std::agents/lib/expertGuidance"
 import { Feedback, feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { plannerAgent } from "std::agents/planner"
-import { edit } from "std::fs"
-import {
-  gitStatus,
-  gitLog,
-  gitDiff,
-  gitShow,
-  gitBranchList,
-  gitRemoteList,
-  gitBlame,
-  gitStashList,
-  gitAdd,
-  gitCommit,
-  gitCheckout,
-  gitSwitch,
-  gitBranchCreate,
-  gitBranchDelete,
-  gitStashPush,
-  gitStashPop,
-  gitRestore,
- } from "std::git"
 import { setAgentCwd, getAgentCwd } from "std::index"
-import { remember, recall, setMemoryId } from "std::memory"
-import { exec, ls, glob, grep, bash } from "std::shell"
-import { skillsDir, docsSkill } from "std::skills"
+import { skillsDir } from "std::skills"
+import { setMemoryId } from "std::memory"
+import { exec } from "std::shell"
 import { systemMessage } from "std::thread"
 
 import { withWebSearch, getSearchBackend } from "../lib/search.agency"
@@ -56,10 +34,6 @@ import {
 
 static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with approve
 
-static const docSkill = docsSkill("guide")
-static const cliSkill = docsSkill("cli")
-static const diagnosticsSkill = docsSkill("diagnostics")
-static const stdlibSkill = docsSkill("stdlib")
 
 export def agencyCli(args: string[]): any {
   """
@@ -98,44 +72,9 @@ export static const codeSysPrompt = promptFile("../prompts/code.md")
 // startup, changeable via setAgentCwd). The base functions default this
 // to false, so non-agent callers are unaffected.
 export static const codeTools: any[] = [
-  setAgentCwd,
-  getAgentCwd,
-  read.partial(useAgentCwd: true),
-  write.partial(useAgentCwd: true),
-  edit.partial(useAgentCwd: true),
-  ls.partial(useAgentCwd: true),
-  glob.partial(useAgentCwd: true),
-  grep.partial(useAgentCwd: true),
-  bash.partial(useAgentCwd: true),
-  gitStatus,
-  gitLog,
-  gitDiff,
-  gitShow,
-  gitBranchList,
-  gitRemoteList,
-  gitBlame,
-  gitStashList,
-  gitAdd,
-  gitCommit,
-  gitCheckout,
-  gitSwitch,
-  gitBranchCreate,
-  gitBranchDelete,
-  gitStashPush,
-  gitStashPop,
-  gitRestore,
+  ...codingAgentTools(),
   agencyCli,
-  typecheck,
-  parseAST,
-  remember,
-  recall,
   superpowersSkill,
-  docSkill,
-  cliSkill,
-  diagnosticsSkill,
-  stdlibSkill,
-  todoWrite,
-  todoList,
   oracleAgent,
 ]
 
@@ -268,37 +207,41 @@ export def codeAgent(userMsg: string, agencyTask: boolean = false) {
     other language.
   """
   const originalUserMsg = userMsg
-  // Triage: a multi-part task is delegated to plannerAgent (shows a plan, then
-  // runs it) instead of the direct loop. Simple tasks fall through.
   const decision = triage(userMsg)
   if (routeFor(decision) == "planner") {
-    // Complex tasks acquire domain expertise first, then solve with it, then
-    // verify against the expert checklist. `escalate` (the mid-flight tool)
-    // still uses plannerAgent.
-    //
-    // The expert consult runs once per task and sets the whole direction, so it
-    // gets the slow/strong model (the oracle pattern). The solve loop stays on
-    // the ambient model. Benchmarks that pin every slot to one model are
-    // unaffected: getSlowModel() resolves to that same pinned model.
-    const consult = consultExpert(task: userMsg, agencyTask: agencyTask)
-    const guidance = guidanceOrEmpty(consult)
-    const solved = solve(
-      task: userMsg,
-      context: renderGuidance(guidance),
-      agencyTask: agencyTask,
-    )
-    let summary = if isFailure(solved) then "Coding agent stopped: ${solved.error}" else solved.value
-    // The expert checklist is authoritative acceptance criteria: verify the
-    // work against it and give the solver one round to fix what failed.
-    const checked = verifierAgent(
-      userMsg,
-      criteria: guidance.checklist,
-      maxCost: $5.00,
-      maxTime: 5m,
-    )
-    if (feedbackHasErrors(checked)) {
-      const fixMsg = """
-${userMsg}
+    return escalateToExpert(task: userMsg, agencyTask: agencyTask)
+  }
+  if (_oneShot) {
+    return solveUnattended(task: userMsg, agencyTask: agencyTask)
+  }
+  return converse(userMsg: userMsg, originalUserMsg: originalUserMsg, agencyTask: agencyTask)
+}
+
+/* A multi-part task acquires domain expertise first, solves with it, then
+   verifies against the expert's checklist and gets one round to fix what
+   failed. `escalate`, the mid-flight tool, still uses plannerAgent. */
+def escalateToExpert(task: string, agencyTask: boolean): string {
+  const guidance = guidanceOrEmpty(consultExpert(task: task, agencyTask: agencyTask))
+  const solved = solve(
+    task: task,
+    context: renderGuidance(guidance),
+    agencyTask: agencyTask,
+  )
+  let summary = ""
+  if (isFailure(solved)) {
+    summary = "Coding agent stopped: ${solved.error}"
+  } else {
+    summary = solved.value
+  }
+  const checked = verifierAgent(
+    task: task,
+    criteria: guidance.checklist,
+    maxCost: $5.00,
+    maxTime: 5m,
+  )
+  if (feedbackHasErrors(checked)) {
+    const fixMsg = """
+${task}
 
 A strict review found these problems:
 
@@ -306,92 +249,87 @@ ${renderFeedback(checked)}
 
 Fix each problem exactly.
 """
-      const fixed = solve(task: fixMsg, context: "", agencyTask: agencyTask)
-      if (!isFailure(fixed)) {
-        summary = fixed.value
-      }
+    const fixed = solve(task: fixMsg, context: "", agencyTask: agencyTask)
+    if (!isFailure(fixed)) {
+      summary = fixed.value
     }
-    return summary
   }
-  const tools = [...codeTools]
-  // A "simple" task that turns out to need a plan can still switch mid-flight.
-  tools.push(escalate.partial(task: userMsg))
+  return summary
+}
 
-  let hasErrorsFromFeedback = false
-  let needsFix = false
-  let verifyRounds = 0
-  let iterations = 0
-  // Declared per-call (was an implicit module global) so a value never
-  // leaks between codeAgent invocations.
+/* `agency agent -p`: nobody is here to answer a question and there is no next
+   turn, which is what the stdlib coding agent already does. The rules for
+   working that way are the whole of ONE_SHOT_NOTE, so they travel as context
+   rather than as a second copy of the loop. */
+def solveUnattended(task: string, agencyTask: boolean): string {
+  const solved = solve(task: task, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
+  if (isFailure(solved)) {
+    return "The task did not complete: ${solved.error}"
+  }
+  const checked = verifierAgent(task: task, maxCost: $5.00, maxTime: 5m)
+  if (!feedbackHasErrors(checked)) {
+    return solved.value
+  }
+  const fixMsg = """
+${task}
+
+A fresh review found these gaps:
+
+${renderFeedback(checked)}
+
+Fix each one; your work will be re-checked.
+"""
+  const fixed = solve(task: fixMsg, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
+  if (isFailure(fixed)) {
+    return solved.value
+  }
+  return fixed.value
+}
+
+/* The interactive turn, which is the part that is genuinely this agent's own:
+   a conversation with the user, in their thread, formatted for the REPL. */
+def converse(
+  userMsg: string,
+  originalUserMsg: string,
+  agencyTask: boolean,
+): string {
+  const tools = [...codeTools]
+  tools.push(escalate.partial(task: userMsg))
+  let message = userMsg
+  let attemptsLeft = 3
   let reply = ""
-  // Per-call primer so the loop always runs at least once. Do NOT reuse
-  // the module-level `_first` for this: `_first` persists across calls (it
-  // gates the one-time system message on the resumed "code" thread), so
-  // using it as the loop primer meant every call after the first skipped
-  // the tool-enabled llm() entirely — the agent appeared to "lose" its
-  // tools on the second turn.
-  let firstIteration = true
-  // const doSummarize = getCapabilities().summarize
   thread(label: "code", session: "code") {
     setMemoryId("code")
-    while ((hasErrorsFromFeedback || needsFix || firstIteration) && iterations < 5) {
-      firstIteration = false
-      iterations += 1
-      if (_first) {
-        // Compose the system prompt from the static base plus the
-        // capabilities that are actually active this run.
-        let sys = codeSysPrompt
-        if (getSearchBackend() != "off") {
-          sys = "${sys}\n\n${WEB_SEARCH_NOTE}"
-        }
-        if (_oneShot) {
-          sys = "${sys}\n\n${ONE_SHOT_NOTE}"
-        }
-        systemMessage(sys)
-        _first = false
+    if (_first) {
+      let sys = codeSysPrompt
+      if (getSearchBackend() != "off") {
+        sys = "${sys}\n\n${WEB_SEARCH_NOTE}"
       }
-      reply = llm(
-        userMsg,
-        withWebSearch({
-        memory: true,
-        tools: tools
-      }),
-      )
-
+      systemMessage(sys)
+      _first = false
+    }
+    let done = false
+    while (!done && attemptsLeft > 0) {
+      attemptsLeft = attemptsLeft - 1
+      reply = llm(message, withWebSearch({ memory: true, tools: tools }))
+      // Reviewing the .agency files just written only means something on the
+      // Agency path; elsewhere there are none and this is a no-op.
       let feedback: Result<Feedback[]> = success([])
       if (agencyTask) {
         feedback = reviewWrittenFiles() with approve
       }
-      hasErrorsFromFeedback = feedbackHasErrors(feedback)
-      if (hasErrorsFromFeedback) {
-        const rendered = renderFeedback(feedback)
-        userMsg = """
+      if (feedbackHasErrors(feedback)) {
+        message = """
         The last code had errors:
 
-        ${rendered}
+        ${renderFeedback(feedback)}
 
         Please fix the errors.
         """
-      } else if (_oneShot && verifyRounds < 2) {
-        const gaps = verifierAgent(task: originalUserMsg)
-        if (feedbackHasErrors(gaps)) {
-          userMsg = """
-            Your work isn't complete yet. A fresh review found these gaps:
-
-            <gaps>
-            ${renderFeedback(gaps)}
-            </gaps>
-
-            Fix each gap; your work will be re-verified.
-            """
-          needsFix = true
-          verifyRounds += 1
-        } else {
-          needsFix = false
-        }
+      } else {
+        done = true
       }
     }
-
     const formatPrompt = """
    Please format this response so it correctly addresses the user's question. Remove any extra text such as "this code now typechecks correctly" or "this code doesn't have any errors now".
 
@@ -405,8 +343,7 @@ Fix each problem exactly.
    ${reply}
    ```
    """
-
-    const formattedReply = llm(formatPrompt)
+    reply = llm(formatPrompt)
   }
-  return formattedReply
+  return reply
 }

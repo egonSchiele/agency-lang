@@ -34,6 +34,13 @@ export type SuperviseDecision = {
 // firing the outer check against the inner guard's numbers and, because
 // guard grants accumulate in the approval merge, extending the inner
 // budget twice.
+//
+// LIMITATION: instances in sibling fork branches can still collide.
+// Module globals are branch-isolated under fork, so two branches that
+// each call supervise() increment isolated copies of this counter from
+// the same base and mint the same label — while the handler chain is
+// shared across branches. Do not call supervise() in parallel fork
+// branches until the label carries branch identity.
 let _instanceCounter = 0
 
 export def supervise(
@@ -52,7 +59,10 @@ export def supervise(
     whether to continue, redirect, or stop. The draft is the block's own
     account of its progress: a draft that has not changed between checks is
     strong evidence the block is stalled.
-  @param block - The long-running work
+  @param block - The long-running work. Known limitation: do not call
+    supervise() in parallel fork branches — sibling instances can mint
+    colliding guard labels (the instance counter is branch-isolated
+    while the handler chain is shared) and answer each other's trips.
   """
   if (maxTime < every) {
     return failure("supervise: maxTime is less than the check interval, so no checkpoint would ever be reached")

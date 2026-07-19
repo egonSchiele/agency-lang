@@ -177,6 +177,10 @@ def innerCheck(elapsed: number, draft: any): SuperviseDecision {
 }
 
 node nestedSuperviseIsolated(): string {
+  // Self-contained: the counters are file-scope, so reset them here in
+  // case nodes run in a different order or more than once.
+  outerChecks = 0
+  innerChecks = 0
   // The outer interval is huge, so any outerChecks count comes from the
   // outer handler wrongly answering the inner instance's trips.
   const r = supervise(every: 600000, maxTime: 6000000, check: outerCheck) {

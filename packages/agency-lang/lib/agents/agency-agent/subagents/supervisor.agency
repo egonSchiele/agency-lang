@@ -77,9 +77,28 @@ type SupervisorFrame = {
 // before its supervise() and pops after; progressCheck reads and writes
 // the innermost frame. A single flat state here would let the inner run
 // wipe the outer run's history mid-flight.
+//
+// KNOWN LEAK, bounded: the pop is skipped when an abort unwinds through
+// the supervised run (an outer budget trip mid-solve — the very path
+// the milestone drafts exist for). A finalize cannot do the pop: a
+// return-less finalize replaces the aborted scope's salvage value with
+// undefined, clobbering the drafts this feature exists to deliver
+// (probed directly; see PR #614). Leaked frames sit BELOW the next
+// run's frame and are never read — progressCheck only touches the top —
+// so the only costs are growth across a long agent session and stale
+// supervisorHistory() between runs. The clamp below bounds the growth.
 let _frames: SupervisorFrame[] = []
 
+// Legitimate nesting is structurally shallow (a supervised coordinator
+// turn over a supervised solve is depth 2). Anything past this is
+// leaked frames from aborted runs; push drops the oldest to stay
+// bounded.
+static const MAX_SUPERVISOR_FRAMES = 8
+
 export def pushSupervisorFrame(alternatives: string = "") {
+  if (_frames.length >= MAX_SUPERVISOR_FRAMES) {
+    _frames = _frames.slice(_frames.length - MAX_SUPERVISOR_FRAMES + 1)
+  }
   _frames.push(
     {
     history: [],

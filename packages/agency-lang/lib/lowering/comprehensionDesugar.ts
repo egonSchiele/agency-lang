@@ -207,6 +207,23 @@ function comprehensionSource(
   );
 }
 
+/** Copy the comprehension's source location onto a synthesized node and
+ *  everything under it. Without this, a type error inside a comprehension
+ *  body points at generated `map(...)` internals instead of the line the
+ *  user wrote. See docs/dev/locations.md.
+ *
+ *  Only fills a MISSING loc, so nodes carried over from the user's source
+ *  (the body expression, the iterable, the condition) keep their own real
+ *  positions. Uses the same `mapChildren` traversal as `desugarNode` -
+ *  one walking strategy per file. */
+function stampLoc<T>(target: T, loc: Comprehension["loc"]): T {
+  if (!loc || !target || typeof target !== "object") return target;
+  const node = target as any;
+  if (node.type && !node.loc) node.loc = loc;
+  mapChildren(node, (child) => stampLoc(child, loc));
+  return target;
+}
+
 function lower(node: Comprehension): FunctionCall {
   const paramName = paramNameFor(node);
   // unpackStatements is called ONCE PER BLOCK, deliberately. The filter
@@ -218,12 +235,15 @@ function lower(node: Comprehension): FunctionCall {
   // deep-clones to avoid.
   const source = comprehensionSource(node, unpackStatements(node), paramName);
 
-  return call(
-    node.parallel ? "fork" : "map",
-    [source],
-    blockArg(
-      [...unpackStatements(node), returnStmt(node.expression)],
-      paramName,
+  return stampLoc(
+    call(
+      node.parallel ? "fork" : "map",
+      [source],
+      blockArg(
+        [...unpackStatements(node), returnStmt(node.expression)],
+        paramName,
+      ),
     ),
+    node.loc,
   );
 }

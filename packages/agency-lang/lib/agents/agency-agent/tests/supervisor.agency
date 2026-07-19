@@ -9,6 +9,9 @@ import {
   stringifyDraft,
   draftDelta,
   renderDraftSection,
+  pushSupervisorFrame,
+  popSupervisorFrame,
+  supervisorHistory,
  } from "../subagents/supervisor.agency"
 
 def record(assessment: string): CheckRecord {
@@ -77,6 +80,26 @@ node draftSectionFlagsUnchanged(): string {
   const changedNotFlagged = !changedBlock.includes("BYTE-IDENTICAL")
   const noneHasNoDraftTag = !noneBlock.includes("<draft>")
   return "${unchangedFlagged}|${changedNotFlagged}|${noneHasNoDraftTag}"
+}
+
+// Supervised runs nest (a supervised coordinator delegates to a
+// supervised solve), so the working state is a stack of frames: the
+// inner run's history must not touch the outer run's, and popping the
+// inner frame must land back on the outer one intact.
+node nestedFramesAreIsolated(): string {
+  pushSupervisorFrame()
+  supervisorHistory().push(record("progressing"))
+  pushSupervisorFrame()
+  const innerEmpty = supervisorHistory().length
+  supervisorHistory().push(record("stalled"))
+  supervisorHistory().push(record("stalled"))
+  const innerCount = supervisorHistory().length
+  popSupervisorFrame()
+  const outerCount = supervisorHistory().length
+  const outerRecord = supervisorHistory()[0]
+  const outerAssessment = if outerRecord == null then "missing" else outerRecord.assessment
+  popSupervisorFrame()
+  return "innerEmpty:${innerEmpty}|inner:${innerCount}|outer:${outerCount}|outerSaw:${outerAssessment}"
 }
 
 // The first stalled check keeps the reviewer's own action.

@@ -180,6 +180,12 @@ export def brainstormApproaches(
     const proposals = fork(ANGLES) as angle {
       return proposeApproach(task: task, guidance: guidance, angle: angle)
     }
+    // Partial result: if the budget trips during the judge call below,
+    // the three finished proposals are still worth keeping — the trip
+    // salvages this draft (all proposals as alternatives, none chosen),
+    // the solver proceeds undirected, and the supervisor still gets the
+    // full list for redirects.
+    saveDraft({ chosen: null, alternatives: proposals, rationale: "" })
     const choice = judgeApproaches(task: task, approaches: proposals)
     return splitChoice(
       approaches: proposals,
@@ -187,7 +193,9 @@ export def brainstormApproaches(
       rationale: choice.rationale,
     )
   }
-  // isFailure, not match: this can run inside blocks that pause and resume.
+  // isFailure, not match: this can run inside blocks that pause and
+  // resume. A trip after the draft arrives success-shaped carrying it;
+  // only a run that saved nothing lands here.
   if (isFailure(captured)) {
     return EMPTY_BRAINSTORM
   }

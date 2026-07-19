@@ -66,7 +66,10 @@ Run a block, pausing it every interval to check progress and steer it.
     whether to continue, redirect, or stop. The draft is the block's own
     account of its progress: a draft that has not changed between checks is
     strong evidence the block is stalled.
-  @param block - The long-running work
+  @param block - The long-running work. Known limitation: do not call
+    supervise() in parallel fork branches — sibling instances can mint
+    colliding guard labels (the instance counter is branch-isolated
+    while the handler chain is shared) and answer each other's trips.
 
 **Parameters:**
 
@@ -79,4 +82,4 @@ Run a block, pausing it every interval to check progress and steer it.
 
 **Returns:** `Result<any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/supervise.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/supervise.agency#L46))

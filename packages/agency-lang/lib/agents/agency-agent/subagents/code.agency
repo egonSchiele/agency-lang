@@ -37,7 +37,11 @@ import {
   renderChosen,
   renderAlternatives,
  } from "./brainstorm.agency"
-import { progressCheck, resetSupervisor } from "./supervisor.agency"
+import {
+  progressCheck,
+  pushSupervisorFrame,
+  popSupervisorFrame,
+ } from "./supervisor.agency"
 
 
 static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with approve
@@ -148,13 +152,7 @@ def escalate(task: string, reason: string, plan: string): string {
   @param reason - why this task needs a multi-step plan.
   @param plan - your outline of the steps.
   """
-  const planned = plannerAgent(
-    task,
-    context: reason,
-    plan: plan,
-    maxCost: ESCALATE_MAX_COST,
-    maxTime: ESCALATE_MAX_TIME,
-  )
+  const planned = supervisedPlan(task: task, reason: reason, plan: plan)
   if (isFailure(planned)) {
     return "Planner stopped: ${planned.error}"
   }
@@ -240,33 +238,73 @@ export def flattenSolveOutcome(captured: Result<any>): Result<string> {
    continue, redirect the paused worker, or stop a run that two checks in a
    row found stalled. This is what turns a 15-minute thrash into a 5-minute
    course correction. */
+/* One frame push, one supervised run of `work`, one pop, one flatten.
+   The single home of the outcome-normalization subtleties: the block
+   reads work's Result with isFailure, never match (a match inside a
+   block that pauses and resumes evaluates to null — see
+   tests/agency/supervise/nestedGuardResume.agency), and normalizes to a
+   plain SolveOutcome because a mid-run stop salvages the worker's draft
+   in place of the block's return value. The pop is skipped when an
+   abort unwinds through here; supervisor.agency documents why that
+   leak is accepted and how it is bounded. */
+def supervisedRun(
+  task: string,
+  alternatives: string,
+  work: () -> Result<string>,
+): Result<string> {
+  pushSupervisorFrame(alternatives: alternatives)
+  const captured = supervise(
+    every: SUPERVISE_EVERY,
+    maxTime: ESCALATE_MAX_TIME,
+    check: progressCheck.partial(task: task),
+  ) {
+    const worked = work()
+    if (isFailure(worked)) {
+      return {
+        ok: false,
+        summary: "${worked.error}"
+      }
+    }
+    return {
+      ok: true,
+      summary: worked.value
+    }
+  }
+  popSupervisorFrame()
+  return flattenSolveOutcome(captured)
+}
+
 def supervisedSolve(
   task: string,
   context: string,
   agencyTask: boolean,
   alternatives: string = "",
 ): Result<string> {
-  resetSupervisor(alternatives: alternatives)
-  const captured = supervise(
-    every: SUPERVISE_EVERY,
-    maxTime: ESCALATE_MAX_TIME,
-    check: progressCheck.partial(task: task),
-  ) {
-    // isFailure, not match: a match inside a block that pauses and resumes
-    // evaluates to null (see tests/agency/supervise/nestedGuardResume.agency).
-    const solved = solve(task: task, context: context, agencyTask: agencyTask)
-    if (isFailure(solved)) {
-      return {
-        ok: false,
-        summary: "${solved.error}"
-      }
-    }
-    return {
-      ok: true,
-      summary: solved.value
-    }
-  }
-  return flattenSolveOutcome(captured)
+  return supervisedRun(
+    task: task,
+    alternatives: alternatives,
+    work: \-> solve(task: task, context: context, agencyTask: agencyTask),
+  )
+}
+
+/* The planner escalation, supervised the same way as a solve: it hands
+   plannerAgent the largest budget in the agent and previously ran it
+   with nobody watching. Draft deltas fail open here — the planner's
+   generated program runs in a subprocess, so its drafts live in the
+   child and the delta reads "none" in the parent; the verifier and
+   check history still carry the evidence. */
+def supervisedPlan(task: string, reason: string, plan: string): Result<string> {
+  return supervisedRun(
+    task: task,
+    alternatives: "",
+    work: \-> plannerAgent(
+      task,
+      context: reason,
+      plan: plan,
+      maxCost: ESCALATE_MAX_COST,
+      maxTime: ESCALATE_MAX_TIME,
+    ),
+  )
 }
 
 export def codeAgent(userMsg: string, agencyTask: boolean = false) {
@@ -322,6 +360,10 @@ def escalateToExpert(task: string, agencyTask: boolean): string {
     summary = "Coding agent stopped: ${solved.error}"
   } else {
     summary = solved.value
+    // Milestone draft: a completed solve is worth keeping even if the
+    // verify or fix round below is cut short by an outer budget guard —
+    // salvage-on-abort then returns this instead of nothing.
+    saveDraft(summary)
   }
   const checked = verifierAgent(
     task: task,
@@ -342,6 +384,7 @@ Fix each problem exactly.
     const fixed = supervisedSolve(task: fixMsg, context: "", agencyTask: agencyTask, alternatives: alternatives)
     if (!isFailure(fixed)) {
       summary = fixed.value
+      saveDraft(summary)
     }
   }
   return summary
@@ -356,6 +399,9 @@ def solveUnattended(task: string, agencyTask: boolean): string {
   if (isFailure(solved)) {
     return "The task did not complete: ${solved.error}"
   }
+  // Milestone draft: the verify and fix rounds below can be cut short by
+  // an outer budget guard; the completed solve must survive that.
+  saveDraft(solved.value)
   const checked = verifierAgent(task: task, maxCost: $5.00, maxTime: 5m)
   if (!feedbackHasErrors(checked)) {
     return solved.value
@@ -373,6 +419,7 @@ Fix each one; your work will be re-checked.
   if (isFailure(fixed)) {
     return solved.value
   }
+  saveDraft(fixed.value)
   return fixed.value
 }
 

@@ -28,6 +28,21 @@ export type SuperviseDecision = {
   message: string
 }
 
+// Each supervise call guards with its own label, so nested supervision
+// works: the chain visits every handler, and with a shared label an
+// inner instance's trip would also be answered by the outer handler —
+// firing the outer check against the inner guard's numbers and, because
+// guard grants accumulate in the approval merge, extending the inner
+// budget twice.
+//
+// LIMITATION: instances in sibling fork branches can still collide.
+// Module globals are branch-isolated under fork, so two branches that
+// each call supervise() increment isolated copies of this counter from
+// the same base and mint the same label — while the handler chain is
+// shared across branches. Do not call supervise() in parallel fork
+// branches until the label carries branch identity.
+let _instanceCounter = 0
+
 export def supervise(
   every: number,
   maxTime: number,
@@ -44,22 +59,28 @@ export def supervise(
     whether to continue, redirect, or stop. The draft is the block's own
     account of its progress: a draft that has not changed between checks is
     strong evidence the block is stalled.
-  @param block - The long-running work
+  @param block - The long-running work. Known limitation: do not call
+    supervise() in parallel fork branches — sibling instances can mint
+    colliding guard labels (the instance counter is branch-isolated
+    while the handler chain is shared) and answer each other's trips.
   """
   if (maxTime < every) {
     return failure("supervise: maxTime is less than the check interval, so no checkpoint would ever be reached")
   }
+  _instanceCounter = _instanceCounter + 1
+  const instanceLabel = "std::supervise#${_instanceCounter}"
   handle {
-    const captured = guard(time: every, label: "std::supervise") {
+    const captured = guard(time: every, label: instanceLabel) {
       return block()
     }
     return captured
   } with (intr) {
-    // Only answer trips from OUR guard. The block's own guards (an agent's
-    // cost and time caps) raise the same std::guard effect; without this
-    // label gate we would answer an inner trip, extend the wrong guard, and
-    // corrupt our own accounting.
-    if (intr.effect != "std::guard" || intr.data.label != "std::supervise") {
+    // Only answer trips from OUR guard — by instance, not by family. The
+    // block's own guards (an agent's cost and time caps) raise the same
+    // std::guard effect, and so does a NESTED supervise; without this
+    // exact-label gate we would answer another instance's trip, extend
+    // the wrong guard, and corrupt our own accounting.
+    if (intr.effect != "std::guard" || intr.data.label != instanceLabel) {
       return pass()
     }
     // The working time the block has actually consumed. Counting intervals

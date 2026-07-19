@@ -58,26 +58,78 @@ export type CheckRecord = {
   message: string
 }
 
-// History of this run's checks. Reset at the start of each supervised solve;
-// each check appends its own record.
-let _history: CheckRecord[] = []
+/** One supervised run's working state. `history` is this run's checks;
+  `alternatives` is the brainstorm's set-aside approaches rendered as text
+  ("" when no brainstorm ran) so a redirect can steer toward a specific
+  one; `lastDraft` is the solver's draft as of the previous check,
+  stringified for comparison — the draft is the solver's own account of
+  completed progress, and one that has not changed between checks is the
+  sharpest stall evidence available. */
+type SupervisorFrame = {
+  history: CheckRecord[];
+  alternatives: string;
+  lastDraft: string
+}
 
-// The approaches the solver considered and did not pick, rendered as text
-// by the brainstorm step. "" when no brainstorm ran. A redirect can steer
-// toward a specific alternative instead of a vague "try something else".
-let _alternatives: string = ""
+// A STACK of frames, because supervised runs nest: the one-shot
+// coordinator turn is supervised, and it delegates to codeAgent, whose
+// supervisedSolve supervises again. Each supervised run pushes a frame
+// before its supervise() and pops after; progressCheck reads and writes
+// the innermost frame. A single flat state here would let the inner run
+// wipe the outer run's history mid-flight.
+//
+// KNOWN LEAK, bounded: the pop is skipped when an abort unwinds through
+// the supervised run (an outer budget trip mid-solve — the very path
+// the milestone drafts exist for). A finalize cannot do the pop: a
+// return-less finalize replaces the aborted scope's salvage value with
+// undefined, clobbering the drafts this feature exists to deliver
+// (probed directly; see PR #614). Leaked frames sit BELOW the next
+// run's frame and are never read — progressCheck only touches the top —
+// so the only costs are growth across a long agent session and stale
+// supervisorHistory() between runs. The clamp below bounds the growth.
+let _frames: SupervisorFrame[] = []
 
-// The solver's draft as of the previous check, stringified for comparison.
-// The draft is the solver's own account of completed progress: a draft
-// that has not changed between checks is the sharpest stall evidence
-// available — a thrashing solver churns the workspace but its "here is
-// what I have finished" statement does not advance.
-let _lastDraft: string = ""
+// Legitimate nesting is structurally shallow (a supervised coordinator
+// turn over a supervised solve is depth 2). Anything past this is
+// leaked frames from aborted runs; push drops the oldest to stay
+// bounded.
+static const MAX_SUPERVISOR_FRAMES = 8
 
-export def resetSupervisor(alternatives: string = "") {
-  _history = []
-  _alternatives = alternatives
-  _lastDraft = ""
+export def pushSupervisorFrame(alternatives: string = "") {
+  if (_frames.length >= MAX_SUPERVISOR_FRAMES) {
+    _frames = _frames.slice(_frames.length - MAX_SUPERVISOR_FRAMES + 1)
+  }
+  _frames.push(
+    {
+    history: [],
+    alternatives: alternatives,
+    lastDraft: ""
+  },
+  )
+}
+
+export def popSupervisorFrame() {
+  _frames = _frames.slice(0, _frames.length - 1)
+}
+
+/** The innermost frame. Defensive: a progressCheck with no pushed frame
+  (a caller forgot the push) gets a fresh implicit one rather than a
+  crash inside a guard handler. */
+def currentFrame(): SupervisorFrame {
+  if (_frames.length == 0) {
+    pushSupervisorFrame()
+  }
+  const frame = _frames[_frames.length - 1]
+  if (frame == null) {
+    // Unreachable after the push above; satisfies the null-normalized
+    // index type.
+    return {
+      history: [],
+      alternatives: "",
+      lastDraft: ""
+    }
+  }
+  return frame
 }
 
 /** A draft as comparable text: "" for none, the string itself, or JSON for
@@ -114,7 +166,7 @@ export def draftDelta(
 }
 
 export def supervisorHistory(): CheckRecord[] {
-  return _history
+  return currentFrame().history
 }
 
 /** Apply the thrash backstop to the reviewer's verdict. Two ways to a
@@ -266,7 +318,7 @@ Earlier checks this run:
 <history>
 ${history}
 </history>
-${renderAlternativesSection(_alternatives)}
+${renderAlternativesSection(currentFrame().alternatives)}
 Judge the evidence:
 - assessment: "progressing" when the findings show real movement toward the task since the last check; "stalled" when nothing meaningful has changed, or it keeps redoing the same thing. Mid-run gaps are normal — unstarted criteria are only a bad sign when they were also unstarted last check. An unchanged draft is strong stall evidence: a busy workspace with an unadvanced self-report usually means the solver is redoing work.
 - action "continue": on track. The default — pick it unless the evidence clearly says otherwise.
@@ -291,8 +343,9 @@ export def progressCheck(task: string, elapsed: number, draft: any): SuperviseDe
   @param draft - The solver's most recent saveDraft value, or null
   """
   const minutes = Math.round(elapsed / 60000)
+  const frame = currentFrame()
   const draftText = stringifyDraft(draft)
-  const delta = draftDelta(draftText, _lastDraft)
+  const delta = draftDelta(draftText, frame.lastDraft)
   const evidence = verifierEvidence(task: task, minutes: minutes)
   const verdict: SupervisorVerdict = llm(
     reviewPrompt(
@@ -300,12 +353,12 @@ export def progressCheck(task: string, elapsed: number, draft: any): SuperviseDe
     minutes: minutes,
     evidence: evidence.text,
     draftSection: renderDraftSection(draftText, delta),
-    history: renderHistory(_history),
+    history: renderHistory(frame.history),
   ),
   )
-  const decision = applyThrashRule(verdict, _history, delta == "unchanged")
-  _lastDraft = draftText
-  _history.push(
+  const decision = applyThrashRule(verdict, frame.history, delta == "unchanged")
+  frame.lastDraft = draftText
+  frame.history.push(
     {
     minutes: minutes,
     findings: evidence.findings,

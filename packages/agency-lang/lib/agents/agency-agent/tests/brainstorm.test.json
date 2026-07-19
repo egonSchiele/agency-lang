@@ -43,6 +43,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "salvagedDraftShapeRenders",
+      "description": "the trip-salvaged draft renders nothing for the solver and everything for the supervisor",
+      "input": "",
+      "expectedOutput": "\"solver:0|all:true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

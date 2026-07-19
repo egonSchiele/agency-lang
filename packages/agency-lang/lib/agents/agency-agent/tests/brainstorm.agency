@@ -61,6 +61,22 @@ node emptyBrainstormRendersEmpty(): string {
   return "solver:${solverBlock.length}|supervisor:${supervisorBlock.length}"
 }
 
+// The salvaged-draft shape (all proposals as alternatives, none chosen)
+// renders correctly at both destinations: nothing for the solver, the
+// full list for the supervisor. This is what a budget trip during the
+// judge call hands back.
+node salvagedDraftShapeRenders(): string {
+  const salvaged: BrainstormResult = {
+    chosen: null,
+    alternatives: [approach("simple"), approach("robust"), approach("reuse")],
+    rationale: ""
+  }
+  const solverBlock = renderChosen(salvaged)
+  const supervisorBlock = renderAlternatives(salvaged)
+  const supervisorHasAll = supervisorBlock.includes("simple") && supervisorBlock.includes("robust") && supervisorBlock.includes("reuse")
+  return "solver:${solverBlock.length}|all:${supervisorHasAll}"
+}
+
 // A real result renders the chosen name for the solver and the set-aside
 // names for the supervisor.
 node renderingsCarryTheNames(): string {

@@ -1,6 +1,7 @@
 import * as readline from "readline";
 import process from "process";
 import { readFile, writeFile, appendFile } from "fs/promises";
+import { classifyIterable } from "../utils/iteration.js";
 import { existsSync } from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -324,6 +325,25 @@ export function _values(obj: any): any[] {
 
 export function _entries(obj: any): { key: string; value: any }[] {
   return Object.entries(obj).map(([key, value]) => ({ key, value }));
+}
+
+/** The two-binder comprehension lowering target. Shares its notion of
+ *  "what is iterable" with `Runner.loop` via classifyIterable, so
+ *  `[f(x,i) for x, i in src]` and `for (x, i in src)` cannot disagree.
+ *
+ *  Unlike the loop, this genuinely does build a list: the comprehension
+ *  desugars to `map(_pairsOf(src))`, and `map` needs a real array. Only
+ *  the classification is shared, which is the part that would drift. */
+export function _pairsOf(src: unknown): unknown[][] {
+  const shape = classifyIterable(src);
+  if (shape.kind === "array") {
+    return (src as unknown[]).map((item, index) => [item, index]);
+  }
+  if (shape.kind === "record") {
+    const record = src as Record<string, unknown>;
+    return shape.keys.map((key) => [key, record[key]]);
+  }
+  return [];
 }
 
 export function _range(startOrN: number, end?: number): number[] {

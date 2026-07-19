@@ -1,0 +1,18 @@
+node main(): string {
+  const arrPairs = _pairsOf(["a", "b"])
+  const a0 = "${arrPairs[0][0]}${arrPairs[0][1]}"
+
+  const objPairs = _pairsOf({ host: "local", port: "80" })
+  const o0 = "${objPairs[0][0]}=${objPairs[0][1]}"
+
+  // non-iterables give an empty array, matching Runner.loop, NOT an error.
+  // A string is the interesting one: it falls to the empty branch, so
+  // `[c for c in "abc"]` iterates nothing. Pinned deliberately - someone
+  // will expect characters.
+  const fromNull = _pairsOf(null)
+  const fromNum = _pairsOf(42)
+  const fromStr = _pairsOf("abc")
+  const fromEmpty = _pairsOf([])
+
+  return "${a0}|${o0}|${fromNull.length},${fromNum.length},${fromStr.length},${fromEmpty.length}"
+}

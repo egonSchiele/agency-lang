@@ -1,0 +1,193 @@
+/*
+ * Brainstorm-before-solving: when a task triages as complex, spend a
+ * moment generating genuinely different directions before committing to
+ * one, instead of running with the first idea.
+ *
+ * Three proposers run in parallel via `fork`, each pushed toward a
+ * different bias (simplest thing, most robust thing, most reuse). A
+ * judge picks the one to pursue. The chosen approach travels into the
+ * solver's context; the rejected ones travel to the supervisor, so a
+ * mid-run redirect can name a specific alternative when the chosen path
+ * is not working.
+ *
+ * Everything fails open: a brainstorm that errors or runs out of budget
+ * returns empty renderings, and the solve proceeds exactly as it would
+ * have without one.
+ */
+import { map } from "std::array"
+
+// Deliberately opinionated biases, so the three proposals differ in kind
+// rather than phrasing.
+static const ANGLES = [
+  "the simplest thing that could possibly work — smallest change, fewest moving parts",
+  "the most robust and thorough approach — handles edge cases, verifiable at every step",
+  "maximum reuse — lean on existing code, tools, and conventions instead of building anything new",
+]
+
+static const BRAINSTORM_MAX_COST = $2.00
+static const BRAINSTORM_MAX_TIME = 3m
+
+/** One proposed direction for the task. */
+export type Approach = {
+  name: string;
+  plan: string;
+  risk: string
+}
+
+/** What a brainstorm produces: the approach to pursue, the ones set
+  aside, and why the judge chose as it did. */
+export type BrainstormResult = {
+  chosen: (Approach | null);
+  alternatives: Approach[];
+  rationale: string
+}
+
+static const EMPTY_BRAINSTORM: BrainstormResult = {
+  chosen: null,
+  alternatives: [],
+  rationale: ""
+}
+
+type Choice = {
+  chosenIndex: number;
+  rationale: string
+}
+
+/** Split the judge's pick from the rest. Pure, so tests can pin the
+  out-of-range behavior: a bad index means no approach was chosen and
+  everything stays an alternative. */
+export def splitChoice(
+  approaches: Approach[],
+  chosenIndex: number,
+  rationale: string,
+): BrainstormResult {
+  const chosen = approaches[chosenIndex]
+  if (chosen == null) {
+    return {
+      chosen: null,
+      alternatives: approaches,
+      rationale: ""
+    }
+  }
+  const alternatives = []
+  let index = 0
+  for (approach in approaches) {
+    if (index != chosenIndex) {
+      alternatives.push(approach)
+    }
+    index = index + 1
+  }
+  return {
+    chosen: chosen,
+    alternatives: alternatives,
+    rationale: rationale
+  }
+}
+
+def renderApproach(approach: Approach): string {
+  return """- ${approach.name}
+  Plan: ${approach.plan}
+  Risk: ${approach.risk}"""
+}
+
+/** The chosen-direction block for the solver's context, or "" when no
+  brainstorm ran (or it failed open). Pure. */
+export def renderChosen(result: BrainstormResult): string {
+  const chosen = result.chosen
+  if (chosen == null) {
+    return ""
+  }
+  return """
+The direction to pursue, chosen after comparing several (${result.rationale}):
+${renderApproach(chosen)}
+
+Follow this direction unless you discover it cannot work; if it fails, say so plainly in your summary rather than silently switching."""
+}
+
+/** The alternatives block for the supervisor, or "" when there are none.
+  Pure. */
+export def renderAlternatives(result: BrainstormResult): string {
+  if (result.alternatives.length == 0) {
+    return ""
+  }
+  return map(result.alternatives, renderApproach).join("\n")
+}
+
+def proposeApproach(task: string, guidance: string, angle: string): Approach {
+  const proposal: Approach = llm(
+    """
+Propose ONE concrete approach to the task below, favoring ${angle}.
+
+<task>
+${task}
+</task>
+
+${guidance}
+
+Return:
+- name: a short label for the approach
+- plan: the concrete steps, 2 to 5 sentences
+- risk: the main way this approach fails
+
+Commit to the bias you were given — do not hedge toward a middle ground.
+""",
+  )
+  return proposal
+}
+
+def judgeApproaches(task: string, approaches: Approach[]): Choice {
+  const rendered = []
+  let index = 0
+  for (approach in approaches) {
+    rendered.push("[${index}] ${renderApproach(approach)}")
+    index = index + 1
+  }
+  const choice: Choice = llm(
+    """
+Pick the best approach for this task.
+
+<task>
+${task}
+</task>
+
+<approaches>
+${rendered.join("\n\n")}
+</approaches>
+
+Return chosenIndex (the [n] of the winner) and rationale (one sentence,
+naming what tipped the decision).
+""",
+  )
+  return choice
+}
+
+export def brainstormApproaches(
+  task: string,
+  guidance: string = "",
+): BrainstormResult {
+  """
+  Generate several genuinely different directions for a complex task in
+  parallel, then pick one to pursue. Returns the chosen approach, the
+  set-aside alternatives, and the judge's rationale. Fails open to an
+  empty result — a solve without a brainstorm is a normal solve.
+
+  @param task - The task to brainstorm directions for
+  @param guidance - Expert guidance to fold into each proposal, or ""
+  """
+  const captured = guard(cost: BRAINSTORM_MAX_COST, time: BRAINSTORM_MAX_TIME) {
+    const proposals = fork(ANGLES) as angle {
+      return proposeApproach(task: task, guidance: guidance, angle: angle)
+    }
+    const choice = judgeApproaches(task: task, approaches: proposals)
+    return splitChoice(
+      approaches: proposals,
+      chosenIndex: choice.chosenIndex,
+      rationale: choice.rationale,
+    )
+  }
+  // isFailure, not match: this can run inside blocks that pause and resume.
+  if (isFailure(captured)) {
+    return EMPTY_BRAINSTORM
+  }
+  return captured.value
+}

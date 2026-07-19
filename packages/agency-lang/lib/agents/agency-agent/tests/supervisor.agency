@@ -11,7 +11,7 @@ import {
 def record(assessment: string): CheckRecord {
   return {
     minutes: 5,
-    filesChanged: 1,
+    findings: 1,
     assessment: assessment,
     action: "continue",
     message: ""

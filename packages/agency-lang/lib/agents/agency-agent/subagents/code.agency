@@ -31,6 +31,11 @@ import { oracleAgent } from "./oracle.agency"
 import {
   reviewWrittenFiles,
  } from "./review.agency"
+import {
+  brainstormApproaches,
+  renderChosen,
+  renderAlternatives,
+ } from "./brainstorm.agency"
 import { progressCheck, resetSupervisor } from "./supervisor.agency"
 
 
@@ -238,8 +243,9 @@ def supervisedSolve(
   task: string,
   context: string,
   agencyTask: boolean,
+  alternatives: string = "",
 ): Result<string> {
-  resetSupervisor()
+  resetSupervisor(alternatives: alternatives)
   const captured = supervise(
     every: SUPERVISE_EVERY,
     maxTime: ESCALATE_MAX_TIME,
@@ -285,15 +291,22 @@ export def codeAgent(userMsg: string, agencyTask: boolean = false) {
   return converse(userMsg: userMsg, originalUserMsg: originalUserMsg, agencyTask: agencyTask)
 }
 
-/* A multi-part task acquires domain expertise first, solves with it, then
-   verifies against the expert's checklist and gets one round to fix what
-   failed. `escalate`, the mid-flight tool, still uses plannerAgent. */
+/* A multi-part task acquires domain expertise first, brainstorms several
+   genuinely different directions and commits to one, solves with both in
+   context, then verifies against the expert's checklist and gets one round
+   to fix what failed. The set-aside directions travel to the supervisor,
+   so a mid-run redirect can name a specific alternative when the chosen
+   path is not working. `escalate`, the mid-flight tool, still uses
+   plannerAgent. */
 def escalateToExpert(task: string, agencyTask: boolean): string {
   const guidance = guidanceOrEmpty(consultExpert(task: task, agencyTask: agencyTask))
+  const ideas = brainstormApproaches(task: task, guidance: renderGuidance(guidance))
+  const alternatives = renderAlternatives(ideas)
   const solved = supervisedSolve(
     task: task,
-    context: renderGuidance(guidance),
+    context: "${renderGuidance(guidance)}\n${renderChosen(ideas)}",
     agencyTask: agencyTask,
+    alternatives: alternatives,
   )
   let summary = ""
   if (isFailure(solved)) {
@@ -317,7 +330,7 @@ ${renderFeedback(checked)}
 
 Fix each problem exactly.
 """
-    const fixed = supervisedSolve(task: fixMsg, context: "", agencyTask: agencyTask)
+    const fixed = supervisedSolve(task: fixMsg, context: "", agencyTask: agencyTask, alternatives: alternatives)
     if (!isFailure(fixed)) {
       summary = fixed.value
     }

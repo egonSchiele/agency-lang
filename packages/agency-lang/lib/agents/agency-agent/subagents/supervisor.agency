@@ -2,26 +2,34 @@
  * The supervisor: the reviewer that std::supervise calls while the code
  * subagent's solver is paused at a checkpoint.
  *
- * At each pause it gathers evidence of what the solver has actually done
- * (git status and diff of the agent working directory), shows that evidence
- * plus the history of earlier checks to a reviewer LLM, and turns the
+ * At each pause it sends the stdlib verifier agent into the workspace to
+ * measure what the solver has actually done, shows those findings plus
+ * the history of earlier checks (and the approaches the solver decided
+ * against, when a brainstorm ran) to a reviewer LLM, and turns the
  * reviewer's verdict into a SuperviseDecision: continue, redirect with a
  * course-correction message (injected into the solver's paused
  * conversation), or stop.
  *
- * The check callback runs inside a guard handler, so it stays lean: direct
- * git reads and one tool-free llm() call. Giving the reviewer its own tool
- * loop would raise nested interrupts from inside a handler, which is more
- * machinery than a five-minute pulse check needs.
+ * The check callback runs inside a guard handler. Handlers may raise
+ * interrupts (a handler never hears its own raises), so the verifier
+ * brings its full toolset — shell, file reads, real measurements —
+ * governed by the outer policy like any other tool call. Everything
+ * fails open: a verifier that cannot run (budget refused, policy
+ * rejection) yields no findings, and the reviewer judges from history
+ * alone rather than the check crashing the run.
  */
-import { gitIsRepo, gitStatus, gitDiff } from "std::git"
+import { verifierAgent } from "std::agents/verifier"
+import {
+  Feedback,
+  feedbackHasErrors,
+  renderFeedback,
+ } from "std::agents/lib/feedback"
 import { SuperviseDecision } from "std::supervise"
 
-import { truncate } from "../lib/utils.agency"
-
-// The raw patch can be huge; the reviewer needs the shape of the work, not
-// every hunk.
-static const MAX_PATCH_CHARS = 6000
+// The verifier is a pulse check here, not a final gate: small budgets,
+// because it runs every interval and its findings only steer.
+static const CHECK_MAX_COST = $2.00
+static const CHECK_MAX_TIME = 2m
 
 /** What the reviewer LLM returns for one check. `assessment` is its read of
   the evidence; `action`/`message` are what it wants done about it. */
@@ -34,7 +42,7 @@ export type SupervisorVerdict = {
 /** One earlier check, as the next check sees it. */
 export type CheckRecord = {
   minutes: number;
-  filesChanged: number;
+  findings: number;
   assessment: string;
   action: string;
   message: string
@@ -44,8 +52,14 @@ export type CheckRecord = {
 // each check appends its own record.
 let _history: CheckRecord[] = []
 
-export def resetSupervisor() {
+// The approaches the solver considered and did not pick, rendered as text
+// by the brainstorm step. "" when no brainstorm ran. A redirect can steer
+// toward a specific alternative instead of a vague "try something else".
+let _alternatives: string = ""
+
+export def resetSupervisor(alternatives: string = "") {
   _history = []
+  _alternatives = alternatives
 }
 
 export def supervisorHistory(): CheckRecord[] {
@@ -79,53 +93,33 @@ export def applyThrashRule(
   }
 }
 
-/** What the solver has actually changed on disk, plus how many files that
-  is. Fails open: outside a git repo (or on any git error) there is simply
-  no workspace evidence, and the reviewer is told so rather than the check
-  crashing the run. */
-def workspaceEvidence(): { text: string; filesChanged: number } {
-  // Two distinct ways to end up without evidence: the directory is not a
-  // repo, or git itself failed (an error, or policy rejecting the read).
-  // The reviewer is told which, so it never reasons from "there is no
-  // repo" when there is one.
-  const gitFailed = {
-    text: "(git could not be read — no workspace evidence available; judge from the check history alone)",
-    filesChanged: 0
-  }
-  const isRepo = try gitIsRepo()
-  if (isFailure(isRepo)) {
-    return gitFailed
-  }
-  if (!isRepo.value) {
+/** What the verifier measured in the workspace, plus how many findings it
+  reported. Fails open: a verifier that could not run (budget, policy, any
+  error) yields no evidence, and the reviewer is told so rather than the
+  check crashing the run. */
+def verifierEvidence(task: string, minutes: number): { text: string; findings: number } {
+  const checked = verifierAgent(
+    task: task,
+    context: "This is a MID-RUN progress check at about ${minutes} minutes, not a final verification. The work is expected to be incomplete. Measure what exists so far and report which criteria are already satisfied, which are in visible progress, and which show no sign of being started. Do not pad the report with gaps that are merely not-yet-reached.",
+    maxCost: CHECK_MAX_COST,
+    maxTime: CHECK_MAX_TIME,
+  )
+  if (isFailure(checked)) {
     return {
-      text: "(no git repository — no workspace evidence available; judge from the check history alone)",
-      filesChanged: 0
+      text: "(the verifier could not run: ${checked.error} — judge from the check history alone)",
+      findings: 0
     }
   }
-  const status = try gitStatus()
-  if (isFailure(status)) {
-    return gitFailed
-  }
-  const lines = []
-  for (entry in status.value.entries) {
-    lines.push("${entry.index}${entry.worktree} ${entry.path}")
-  }
-  let text = """
-Changed files (${lines.length}):
-${lines.join("\n")}
-"""
-  const diff = try gitDiff()
-  if (diff is success(d)) {
-    text = """
-${text}
-
-Working-tree diff (truncated):
-${truncate(d.patch, MAX_PATCH_CHARS)}
-"""
+  const findings = checked.value.length
+  if (findings == 0) {
+    return {
+      text: "(the verifier ran and reported no findings)",
+      findings: 0
+    }
   }
   return {
-    text: text,
-    filesChanged: lines.length
+    text: renderFeedback(checked),
+    findings: findings
   }
 }
 
@@ -140,10 +134,26 @@ def renderHistory(history: CheckRecord[]): string {
       note = " — ${record.message}"
     }
     lines.push(
-      "- at ${record.minutes}m: ${record.filesChanged} files changed, assessment ${record.assessment}, action ${record.action}${note}",
+      "- at ${record.minutes}m: ${record.findings} verifier findings, assessment ${record.assessment}, action ${record.action}${note}",
     )
   }
   return lines.join("\n")
+}
+
+/** The alternatives block for the review prompt, or "" when no brainstorm
+  ran. Pure, so tests can pin the shape. */
+export def renderAlternativesSection(alternatives: string): string {
+  if (alternatives == "") {
+    return ""
+  }
+  return """
+
+Approaches the solver considered and did NOT pick:
+<alternatives>
+${alternatives}
+</alternatives>
+If the current approach is failing, a redirect may tell the solver to switch to one of these — name it explicitly.
+"""
 }
 
 def reviewPrompt(
@@ -160,18 +170,18 @@ The task it was given:
 ${task}
 </task>
 
-What it has changed in the workspace so far:
-<workspace>
+What an independent verifier just measured in the workspace:
+<verifier_findings>
 ${evidence}
-</workspace>
+</verifier_findings>
 
 Earlier checks this run:
 <history>
 ${history}
 </history>
-
+${renderAlternativesSection(_alternatives)}
 Judge the evidence:
-- assessment: "progressing" when the workspace shows real movement toward the task since the last check; "stalled" when nothing meaningful has changed, or it keeps redoing the same thing.
+- assessment: "progressing" when the findings show real movement toward the task since the last check; "stalled" when nothing meaningful has changed, or it keeps redoing the same thing. Mid-run gaps are normal — unstarted criteria are only a bad sign when they were also unstarted last check.
 - action "continue": on track. The default — pick it unless the evidence clearly says otherwise.
 - action "redirect": working, but drifting, overbuilding, or looping on a failed approach. Put a short, concrete course correction in `message`, addressed directly to the agent — it is delivered into its conversation as if from the user (e.g. "Stop rewriting the parser; the failing test needs the lexer fixed first").
 - action "stop": continuing is pointless — the approach is destructive, or the task cannot be completed. Put the reason in `message`.
@@ -182,16 +192,17 @@ Set `message` to "" for continue. Never redirect just to say "keep going".
 
 export def progressCheck(task: string, elapsed: number): SuperviseDecision {
   """
-  The check callback for a supervised solve: review the workspace evidence
-  and check history, then continue, redirect, or stop the paused solver.
-  Bind the task first: `progressCheck.partial(task: task)` is the
+  The check callback for a supervised solve: send the verifier into the
+  workspace, review its findings and the check history, then continue,
+  redirect, or stop the paused solver. Bind the task first:
+  `progressCheck.partial(task: task)` is the
   `(elapsed) -> SuperviseDecision` shape std::supervise expects.
 
   @param task - The task the supervised solver is working on
   @param elapsed - Working time the solver has consumed so far, in ms
   """
   const minutes = Math.round(elapsed / 60000)
-  const evidence = workspaceEvidence()
+  const evidence = verifierEvidence(task: task, minutes: minutes)
   const verdict: SupervisorVerdict = llm(
     reviewPrompt(
     task: task,
@@ -204,7 +215,7 @@ export def progressCheck(task: string, elapsed: number): SuperviseDecision {
   _history.push(
     {
     minutes: minutes,
-    filesChanged: evidence.filesChanged,
+    findings: evidence.findings,
     assessment: verdict.assessment,
     action: decision.action,
     message: decision.message

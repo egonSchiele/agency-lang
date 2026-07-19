@@ -22,6 +22,7 @@ import { setAgentCwd, getAgentCwd } from "std::index"
 import { skillsDir } from "std::skills"
 import { setMemoryId } from "std::memory"
 import { exec } from "std::shell"
+import { supervise } from "std::supervise"
 import { systemMessage } from "std::thread"
 
 import { withWebSearch, getSearchBackend } from "../lib/search.agency"
@@ -30,6 +31,7 @@ import { oracleAgent } from "./oracle.agency"
 import {
   reviewWrittenFiles,
  } from "./review.agency"
+import { progressCheck, resetSupervisor } from "./supervisor.agency"
 
 
 static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with approve
@@ -102,6 +104,9 @@ let _first = true
 
 static const ESCALATE_MAX_COST = $20.00
 static const ESCALATE_MAX_TIME = 15m
+
+// How often a supervised solve pauses for the supervisor's progress check.
+static const SUPERVISE_EVERY = 5m
 
 type TriageResult = {
   path: "simple" | "complex";
@@ -194,6 +199,69 @@ def solve(task: string, context: string, agencyTask: boolean): Result<string> {
   )
 }
 
+/* The supervised block cannot hand a Result straight out: a stop mid-run
+   salvages the worker's saveDraft draft in place of the block's return
+   value, so the block normalizes to this plain shape and the flattener
+   sorts out what actually came back. */
+type SolveOutcome = {
+  ok: boolean;
+  summary: string
+}
+
+/** Turn what supervise hands back into the solve Result the callers expect.
+  Three shapes arrive here: a failure (the supervisor stopped a draftless
+  run, or maxTime passed), a SolveOutcome (the block ran to completion), or
+  a salvaged draft (the supervisor stopped the run after the worker saved
+  one — drafts are strings, so anything without a `summary` field is one).
+  Exported for tests. */
+export def flattenSolveOutcome(captured: Result<any>): Result<string> {
+  if (isFailure(captured)) {
+    return failure("${captured.error}")
+  }
+  const value = captured.value
+  if (value.summary == null) {
+    return success(
+      "The run was stopped early by the supervisor. Its last saved draft:\n\n${value}",
+    )
+  }
+  if (!value.ok) {
+    return failure(value.summary)
+  }
+  return success(value.summary)
+}
+
+/* solve, paused every SUPERVISE_EVERY for the supervisor's progress check:
+   continue, redirect the paused worker, or stop a run that two checks in a
+   row found stalled. This is what turns a 15-minute thrash into a 5-minute
+   course correction. */
+def supervisedSolve(
+  task: string,
+  context: string,
+  agencyTask: boolean,
+): Result<string> {
+  resetSupervisor()
+  const captured = supervise(
+    every: SUPERVISE_EVERY,
+    maxTime: ESCALATE_MAX_TIME,
+    check: progressCheck.partial(task: task),
+  ) {
+    // isFailure, not match: a match inside a block that pauses and resumes
+    // evaluates to null (see tests/agency/supervise/nestedGuardResume.agency).
+    const solved = solve(task: task, context: context, agencyTask: agencyTask)
+    if (isFailure(solved)) {
+      return {
+        ok: false,
+        summary: "${solved.error}"
+      }
+    }
+    return {
+      ok: true,
+      summary: solved.value
+    }
+  }
+  return flattenSolveOutcome(captured)
+}
+
 export def codeAgent(userMsg: string, agencyTask: boolean = false) {
   """
   This agent can help with all coding-related tasks,
@@ -222,7 +290,7 @@ export def codeAgent(userMsg: string, agencyTask: boolean = false) {
    failed. `escalate`, the mid-flight tool, still uses plannerAgent. */
 def escalateToExpert(task: string, agencyTask: boolean): string {
   const guidance = guidanceOrEmpty(consultExpert(task: task, agencyTask: agencyTask))
-  const solved = solve(
+  const solved = supervisedSolve(
     task: task,
     context: renderGuidance(guidance),
     agencyTask: agencyTask,
@@ -249,7 +317,7 @@ ${renderFeedback(checked)}
 
 Fix each problem exactly.
 """
-    const fixed = solve(task: fixMsg, context: "", agencyTask: agencyTask)
+    const fixed = supervisedSolve(task: fixMsg, context: "", agencyTask: agencyTask)
     if (!isFailure(fixed)) {
       summary = fixed.value
     }
@@ -262,7 +330,7 @@ Fix each problem exactly.
    working that way are the whole of ONE_SHOT_NOTE, so they travel as context
    rather than as a second copy of the loop. */
 def solveUnattended(task: string, agencyTask: boolean): string {
-  const solved = solve(task: task, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
+  const solved = supervisedSolve(task: task, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
   if (isFailure(solved)) {
     return "The task did not complete: ${solved.error}"
   }
@@ -279,7 +347,7 @@ ${renderFeedback(checked)}
 
 Fix each one; your work will be re-checked.
 """
-  const fixed = solve(task: fixMsg, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
+  const fixed = supervisedSolve(task: fixMsg, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
   if (isFailure(fixed)) {
     return solved.value
   }

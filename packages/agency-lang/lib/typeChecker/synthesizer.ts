@@ -572,55 +572,105 @@ function synthPipeRhs(
   return rhsType;
 }
 
-/** `Result<T>` for a guarded block: `T` joins the block's own returns
- *  (returns inside nested functions/blocks excluded, the inference.ts
- *  rule). No returns → the block yields void; any `any` → `any`. The
- *  failure side stays `any`, the `try`-expression precedent — the
- *  err-side narrowing users rely on (`isFailure`, `error.type`) is
- *  field-based, not type-based. */
-function synthGuardCall(
+/** The block argument of a call, if it carries one. The single home for
+ *  the block cast - every block-typing consumer reads through this. */
+function blockOf(
   expr: AgencyNode & { type: "functionCall" },
+): { body: AgencyNode[] } | undefined {
+  return (expr as unknown as { block?: { body: AgencyNode[] } }).block;
+}
+
+/** The type a block argument's OWN returns produce. The walk skips
+ *  returns belonging to nested function/node/block definitions, then
+ *  folds: no returns -> void; any return typed `any` -> `any`
+ *  (fail-open); otherwise the union of the distinct return types.
+ *  Every BLOCK_CALL_RESULT row reads through this one walk, so the
+ *  block constructs cannot drift on what counts as a block-level
+ *  return. */
+function blockReturnType(
+  block: { body: AgencyNode[] },
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType {
-  const block = (expr as unknown as { block: { body: AgencyNode[] } }).block;
   const returnTypes: VariableType[] = [];
   for (const { node, ancestors } of walkNodes(block.body)) {
-    if (node.type !== "returnStatement" || !node.value) continue;
+    if (node.type !== "returnStatement" || !node.value) {
+      continue;
+    }
     const nested = ancestors.some(
       (a) =>
         a.type === "function" ||
         a.type === "graphNode" ||
         a.type === "blockArgument",
     );
-    if (!nested) returnTypes.push(synthType(node.value, scope, ctx));
+    if (!nested) {
+      returnTypes.push(synthType(node.value, scope, ctx));
+    }
   }
-  let successType: VariableType;
   if (returnTypes.length === 0) {
-    successType = { type: "primitiveType", value: "void" };
-  } else if (returnTypes.some((t) => isAnyType(t))) {
-    successType = ANY_T;
-  } else {
-    successType = unionTypes(returnTypes);
+    return VOID_T;
   }
-  return { type: "resultType", successType, failureType: ANY_T };
+  if (returnTypes.some((t) => isAnyType(t))) {
+    return ANY_T;
+  }
+  return unionTypes(returnTypes);
 }
+
+/** Reserved calls whose type comes from their block's returns. The walk
+ *  is shared (blockReturnType); only the wrapper differs. Adding
+ *  another block-carrying reserved call is a row. Keying on the call
+ *  name is shadow-proof: every key is in RESERVED_FUNCTION_NAMES. */
+const BLOCK_CALL_RESULT: Record<
+  string,
+  (element: VariableType) => VariableType
+> = {
+  // The guard construct's Result<T> precision. By synth time the
+  // construct has desugared to `_guard(...)` carrying its block
+  // (guardDesugar.ts + the TypeChecker constructor); _guard's own
+  // annotation is the generic Result, so parameterize it from the
+  // block. A direct `_guard` call with a block gets the same, correct,
+  // typing. The failure side stays `any`, the try-expression
+  // precedent: the err-side narrowing users rely on (`isFailure`,
+  // `error.type`) is field-based, not type-based.
+  _guard: (element) => ({
+    type: "resultType",
+    successType: element,
+    failureType: ANY_T,
+  }),
+  // fork joins every branch into a list. The list shape is kept even
+  // for an `any` element - any[] still catches scalar annotations.
+  // Failure slots are deliberately invisible (spec: "optimistic about
+  // failures").
+  fork: (element) => ({ type: "arrayType", elementType: element }),
+  // race yields the first-SETTLED branch, or null when zero branches
+  // ran (empty source, or a comprehension filter that matched nothing
+  // - #604). An `any` element collapses to any, NOT any | null:
+  // unionTypes does not absorb any, and fail-open must stay fail-open.
+  // COUPLED to #606: if the empty-race return value or first-success
+  // semantics change there, this row changes with them.
+  race: (element) =>
+    isAnyType(element) ? ANY_T : unionTypes([element, NULL_T]),
+};
 
 function synthFunctionCall(
   expr: AgencyNode & { type: "functionCall" },
   scope: Scope,
   ctx: TypeCheckerContext,
 ): VariableType {
-  // The guard construct's Result<T> precision. By synth time the
-  // construct has desugared to a `_guard(...)` call carrying its block
-  // (see guardDesugar.ts + the TypeChecker constructor), and _guard's
-  // own annotation is the generic `Result` — so parameterize it here
-  // from the BLOCK's returns, the way an unannotated def body infers.
-  // Keyed on the desugared shape (name + block), which user code only
-  // produces via the construct; a direct `_guard` call with a block
-  // gets the same, correct, typing.
-  if (expr.functionName === "_guard" && (expr as { block?: unknown }).block) {
-    return synthGuardCall(expr, scope, ctx);
+  // Reserved block-carrying calls (guard construct, fork, race) take
+  // their type from the block's returns - see BLOCK_CALL_RESULT. The
+  // Object.hasOwn guard is load-bearing: functionName is user-supplied,
+  // and a bare index on an object literal walks the prototype chain, so
+  // a user function named toString/valueOf/constructor with a block
+  // would get "wrapped" by Object.prototype methods - a silently wrong
+  // type, not a crash. (The sibling tables, CALL_NAME and
+  // COMPREHENSION_PREFIXES, have closed keysets and no such exposure.)
+  const wrapBlockResult = Object.hasOwn(BLOCK_CALL_RESULT, expr.functionName)
+    ? BLOCK_CALL_RESULT[expr.functionName]
+    : undefined;
+  const calledBlock = blockOf(expr);
+  if (wrapBlockResult !== undefined && calledBlock !== undefined) {
+    return wrapBlockResult(blockReturnType(calledBlock, scope, ctx));
   }
   // Result constructors: parameterize ResultType from the argument so callers
   // get `Result<T, any>` (success) or `Result<any, T>` (failure). The names

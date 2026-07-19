@@ -1,0 +1,109 @@
+// The supervised-solve seams, tested without any LLM: the thrash backstop
+// that turns repeated stalls into a stop, and the flattener that sorts out
+// the three shapes supervise can hand back.
+import { flattenSolveOutcome } from "../subagents/code.agency"
+import {
+  applyThrashRule,
+  CheckRecord,
+  SupervisorVerdict,
+ } from "../subagents/supervisor.agency"
+
+def record(assessment: string): CheckRecord {
+  return {
+    minutes: 5,
+    filesChanged: 1,
+    assessment: assessment,
+    action: "continue",
+    message: ""
+  }
+}
+
+def stalledVerdict(): SupervisorVerdict {
+  return {
+    assessment: "stalled",
+    action: "redirect",
+    message: "same failing test as last time"
+  }
+}
+
+// The first stalled check keeps the reviewer's own action.
+node firstStallIsNotStopped(): string {
+  const decision = applyThrashRule(stalledVerdict(), [])
+  return decision.action
+}
+
+// A second consecutive stalled check becomes a stop, whatever the reviewer chose.
+node secondConsecutiveStallStops(): string {
+  const decision = applyThrashRule(stalledVerdict(), [record("stalled")])
+  return decision.action
+}
+
+// A stall after a progressing check is not consecutive: no stop.
+node stallAfterProgressIsNotStopped(): string {
+  const decision = applyThrashRule(
+    stalledVerdict(),
+    [record("stalled"), record("progressing")],
+  )
+  return decision.action
+}
+
+// A progressing verdict passes through untouched even after a stall.
+node progressPassesThrough(): string {
+  const verdict: SupervisorVerdict = {
+    assessment: "progressing",
+    action: "continue",
+    message: ""
+  }
+  const decision = applyThrashRule(verdict, [record("stalled")])
+  return decision.action
+}
+
+// The block ran to completion and succeeded: the summary comes out.
+node flattenCompletedSolve(): string {
+  const captured: Result<any> = success(
+    {
+    ok: true,
+    summary: "wrote the fix"
+  },
+  )
+  const flat = flattenSolveOutcome(captured)
+  if (isFailure(flat)) {
+    return "unexpected-failure"
+  }
+  return flat.value
+}
+
+// The block ran to completion but the solver failed: a failure comes out.
+node flattenFailedSolve(): string {
+  const captured: Result<any> = success(
+    {
+    ok: false,
+    summary: "solver gave up"
+  },
+  )
+  const flat = flattenSolveOutcome(captured)
+  if (isFailure(flat)) {
+    return "failure:${flat.error}"
+  }
+  return "unexpected-success"
+}
+
+// A stop mid-run salvaged the worker's draft (a string): surfaced as success.
+node flattenSalvagedDraft(): string {
+  const captured: Result<any> = success("half the files are written")
+  const flat = flattenSolveOutcome(captured)
+  if (isFailure(flat)) {
+    return "unexpected-failure"
+  }
+  return flat.value
+}
+
+// supervise itself failed (draftless stop or maxTime): the failure passes through.
+node flattenSuperviseFailure(): string {
+  const captured: Result<any> = failure("supervise: maxTime reached")
+  const flat = flattenSolveOutcome(captured)
+  if (isFailure(flat)) {
+    return "failure:${flat.error}"
+  }
+  return "unexpected-success"
+}

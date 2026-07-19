@@ -8,7 +8,7 @@
 */
 import { reviewAgent } from "std::agents/review"
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
-import { searchTools } from "std::agents/lib/search"
+import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools } from "std::agents/lib/toolkits"
 import { Critique, revise } from "std::strategy"
@@ -47,10 +47,17 @@ static const groundingInstruction = "Judge grounding: error=true if a claim is u
 // uncited claim is an error finding, which becomes the critique the next
 // attempt has to address.
 def checkGrounding(task: string, answer: any): Critique {
+  // Capped well below the reviewer's own defaults, and deliberately. The
+  // reviewer now carries fetch and search, and this call runs once per
+  // attempt inside the researcher's budget. Left uncapped, a question this
+  // call site can answer from the answer text alone could turn into a
+  // research session of its own, charged to the researcher.
   const reviewed = reviewAgent(
     work: "${answer}",
     task: task,
     context: groundingInstruction,
+    maxCost: $1.00,
+    maxTime: 2m,
   )
   if (!feedbackHasErrors(reviewed)) {
     return { accepted: true, feedback: "" }
@@ -102,7 +109,7 @@ def researchLoop(
         model: model,
         provider: provider,
         tools: researchTools.concat(extraTools),
-        hostedTools: ["web_search"],
+        hostedTools: hostedSearchTools(model),
       ),
     )
     saveDraft(answer)

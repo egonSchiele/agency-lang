@@ -14,6 +14,7 @@
   grounds its guidance in the bundled docs instead of the web.
 */
 import { ExpertGuidance, emptyGuidance } from "std::agents/lib/expertGuidance"
+import { hostedSearchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
@@ -60,7 +61,7 @@ def consult(
       model: model,
       provider: provider,
       tools: buildTools().concat(extraTools),
-      hostedTools: ["web_search"],
+      hostedTools: hostedSearchTools(model),
     ),
   )
   return guidance

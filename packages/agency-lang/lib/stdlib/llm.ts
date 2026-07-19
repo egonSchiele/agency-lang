@@ -123,6 +123,7 @@ export function _modelSupportsInput(model: string, modality: string): boolean | 
   return modelSupportsInputModality(model, modality) ?? null;
 }
 
+
 /** Fetch the latest model-data blob and return it pre-serialized. No
  *  registration — the CLI prints this to stdout for the user to save and later
  *  load with `std::llm.loadModelData`. */

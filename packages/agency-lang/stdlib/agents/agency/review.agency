@@ -8,7 +8,7 @@
 */
 import { TypeCheckReport, typecheck, parseAST } from "std::agency"
 import { Feedback, mergeFeedback, failOpenFeedback } from "std::agents/lib/feedback"
-import { searchTools } from "std::agents/lib/search"
+import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions } from "std::agents/lib/shared"
 import { agencyDocTools, webTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
@@ -85,7 +85,7 @@ Return a list of feedback items.
       model: model,
       provider: provider,
       tools: buildTools().concat(extraTools),
-      hostedTools: ["web_search"],
+      hostedTools: hostedSearchTools(model),
     ),
   )
   return judged

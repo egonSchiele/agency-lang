@@ -158,7 +158,9 @@ def fallbackState(task: string, state: PlanState): PlanState {
 }
 
 def judgeAfterRun(task: string, state: PlanState): PlanState {
-  const fb = verifierAgent(task: task)
+  // Capped: this runs once per plan attempt inside the planner's budget, and
+  // the verifier's own default would let a single check take a fifth of it.
+  const fb = verifierAgent(task: task, maxCost: $5.00, maxTime: 5m)
   return if feedbackHasErrors(fb) then regenState(state, renderFeedback(fb)) else completedState(state)
 }
 
@@ -196,9 +198,13 @@ def planStep(
   planText: string,
   state: PlanState,
 ): PlanState raises <std::agents::planApprove> {
+  // Capped for the same reason: one attempt of many, inside the planner's
+  // budget rather than alongside it.
   const gen = agencyCodingAgent(
     task: planCodePrompt(task, planText),
     context: state.extra,
+    maxCost: $10.00,
+    maxTime: 10m,
   )
   return match(gen) {
     failure(_) => fallbackState(task, state)

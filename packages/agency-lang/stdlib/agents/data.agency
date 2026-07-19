@@ -8,7 +8,7 @@
   these APIs usually means finding an identifier first, such as a FRED series
   ID or an EDGAR CIK, so the agent carries search and fetch tools too.
 */
-import { searchTools } from "std::agents/lib/search"
+import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools } from "std::agents/lib/toolkits"
 import { dbnomicsSeries } from "std::data/finance/dbnomics"
@@ -91,7 +91,7 @@ def answer(
       model: model,
       provider: provider,
       tools: buildTools().concat(extraTools),
-      hostedTools: ["web_search"],
+      hostedTools: hostedSearchTools(model),
     ),
   )
 }

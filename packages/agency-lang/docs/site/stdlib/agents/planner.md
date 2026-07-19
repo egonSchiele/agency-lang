@@ -107,7 +107,7 @@ runApproved(
 
 **Returns:** [PlanState](#planstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L180))
 
 ### plannerAgent
 
@@ -157,4 +157,4 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L209))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L215))

@@ -42,7 +42,22 @@ export function _docsDir(section: "guide" | "cli" | "diagnostics" | "stdlib"): s
  * `stdlib/agents/skills/<agent>`. Resolved through getStdlibDir for the
  * same reason as _docsDir: a path relative to the calling file works in the
  * repo and breaks once the package is installed into node_modules.
+ *
+ * The name is confined to that directory. `agentSkill` deliberately skips
+ * the approval interrupt that `skillsDir` raises, on the grounds that these
+ * files ship inside the package, so an `agent` of `"../../.."` would turn a
+ * trusted scan into an unprompted scan of somewhere else entirely. Confining
+ * here keeps that trust argument true.
  */
 export function _agentSkillsDir(agent: string): string {
-  return path.join(getStdlibDir(), "agents", "skills", agent);
+  const root = path.join(getStdlibDir(), "agents", "skills");
+  const resolved = path.resolve(root, agent);
+  const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
+  if (resolved !== root && !resolved.startsWith(rootWithSep)) {
+    throw new Error(
+      `agentSkill: '${agent}' resolves outside the shipped skills directory. ` +
+        `Skill names are relative paths under stdlib/agents/skills.`,
+    );
+  }
+  return resolved;
 }

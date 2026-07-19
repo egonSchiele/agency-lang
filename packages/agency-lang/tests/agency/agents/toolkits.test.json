@@ -1,9 +1,70 @@
 {
   "tests": [
-    { "nodeName": "everyBundleHasTools", "description": "every bundle returns tools", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "writableIsASupersetOfReadOnly", "description": "writable adds write and edit to read-only", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "noBundleHasDuplicateNames", "description": "no bundle offers two tools with the same name", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "wikipediaToolsAreRenamed", "description": "wikipedia tools do not advertise a bare search", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "docsToolsHaveStableNames", "description": "docs tools carry stable machine-independent names", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+    {
+      "nodeName": "everyBundleHasTools",
+      "description": "every bundle returns tools",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "writableIsASupersetOfReadOnly",
+      "description": "writable adds write and edit to read-only",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noBundleHasDuplicateNames",
+      "description": "no bundle offers two tools with the same name",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "wikipediaToolsAreRenamed",
+      "description": "wikipedia tools do not advertise a bare search",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "docsToolsHaveStableNames",
+      "description": "docs tools carry stable machine-independent names",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "fileAndShellToolsAreCwdBound",
+      "description": "every file and shell tool in a bundle is bound to the agent working directory",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
   ]
 }

@@ -1,0 +1,60 @@
+import {
+  readOnlyFileTools,
+  writableFileTools,
+  shellTools,
+  gitTools,
+  webTools,
+  agencyDocTools,
+  agencyCodeTools,
+  memoryTools,
+  planningTools,
+ } from "std::agents/lib/toolkits"
+
+def allBundles(): any[] {
+  return [
+    readOnlyFileTools(),
+    writableFileTools(),
+    shellTools(),
+    gitTools(),
+    webTools(),
+    agencyDocTools(),
+    agencyCodeTools(),
+    memoryTools(),
+    planningTools(),
+  ]
+}
+
+node everyBundleHasTools(): boolean {
+  return every(allBundles(), \bundle -> bundle.length > 0)
+}
+
+node writableIsASupersetOfReadOnly(): boolean {
+  return writableFileTools().length == readOnlyFileTools().length + 2
+}
+
+// Providers reject two tools with the same name, and .partial() preserves the
+// base name, so a bundle can collide with itself. This is the check that
+// catches it before a provider does.
+node noBundleHasDuplicateNames(): boolean {
+  for (bundle in allBundles()) {
+    const names = map(bundle, \tool -> tool.name)
+    if (unique(names, \name -> name).length != names.length) {
+      return false
+    }
+  }
+  return true
+}
+
+// The wikipedia tools must not advertise a bare `search`, which collides with
+// the web-search providers in std::agents/lib/search.
+node wikipediaToolsAreRenamed(): boolean {
+  const names = map(webTools(), \tool -> tool.name)
+  return names.includes("wikipedia_search") && !names.includes("search")
+}
+
+// The docs tools carry stable names rather than ones derived from the
+// absolute install path, which differs per machine.
+node docsToolsHaveStableNames(): boolean {
+  const names = map(agencyDocTools(), \tool -> tool.name)
+  return names.includes("agency_guide") && names.includes("agency_diagnostics")
+}

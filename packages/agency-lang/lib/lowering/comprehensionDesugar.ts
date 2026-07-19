@@ -1,4 +1,4 @@
-import type { AgencyNode, Expression } from "../types.js";
+import type { AgencyNode, Assignment, Expression } from "../types.js";
 import type { BlockArgument } from "../types/blockArgument.js";
 import type { Comprehension } from "../types/comprehension.js";
 import type { FunctionCall } from "../types/function.js";
@@ -111,19 +111,119 @@ function paramNameFor(node: Comprehension): string {
     : PARAM;
 }
 
+/** `__comprehensionItem[n]` - recovers one binder from a pair.
+ *  NumberLiteral carries its value as a STRING (lib/types/literals.ts,
+ *  and parallelDesugar's numLit helper). */
+function pairIndex(n: number): Expression {
+  return {
+    type: "valueAccess",
+    base: varRef(PARAM),
+    chain: [{ kind: "index", index: { type: "number", value: String(n) } }],
+  } as unknown as Expression;
+}
+
+/** `const <name> = <value>` */
+function bindName(name: string, value: Expression): Assignment {
+  return { type: "assignment", variableName: name, declKind: "const", value };
+}
+
+/** `const <pattern> = <value>` - used for destructuring binders, because
+ *  a destructured BLOCK PARAMETER does not parse (`map(xs) as ([a, b]) { }`
+ *  fails with "expected node body"), while destructuring in a `const`
+ *  works fine.
+ *
+ *  `pattern` is the field lowerPatterns keys on (patternLowering.ts,
+ *  `if (!node.pattern)`). It creates its own temp and calls
+ *  extractBindings, and never reads `variableName` on that path, so the
+ *  empty string is inert rather than a placeholder. */
+function bindPattern(
+  pattern: Comprehension["itemVar"],
+  value: Expression,
+): Assignment {
+  return {
+    type: "assignment",
+    variableName: "",
+    pattern: pattern as Assignment["pattern"],
+    declKind: "const",
+    value,
+  };
+}
+
+/** Bind one binder target, whichever shape it is. */
+function bindTarget(
+  target: Comprehension["itemVar"],
+  value: Expression,
+): Assignment {
+  return typeof target === "string"
+    ? bindName(target, value)
+    : bindPattern(target, value);
+}
+
+/** The statements the block body must run before the user's expression,
+ *  to recover the binders from the block parameter.
+ *
+ *  Empty for a single-name binder, which IS the parameter. A two-binder
+ *  form unpacks both halves of a `_pairsOf` pair. A destructuring binder
+ *  binds the whole parameter through its pattern. */
+function unpackStatements(node: Comprehension): AgencyNode[] {
+  if (node.indexVar) {
+    return [
+      bindTarget(node.itemVar, pairIndex(0)),
+      bindName(node.indexVar, pairIndex(1)),
+    ];
+  }
+  if (typeof node.itemVar !== "string") {
+    return [bindTarget(node.itemVar, varRef(PARAM))];
+  }
+  return [];
+}
+
+/** The collection the map runs over.
+ *
+ *  A two-binder form pairs the items with their indices BEFORE any
+ *  filtering, so the index is the position in the SOURCE, matching
+ *  Python's enumerate-then-filter order. Filtering first would number the
+ *  output instead, which is a silent wrong-answer bug rather than an
+ *  error. Order here is load-bearing: `_pairsOf` must be innermost. */
+function comprehensionSource(
+  node: Comprehension,
+  unpack: AgencyNode[],
+  paramName: string,
+): Expression {
+  const paired: Expression = node.indexVar
+    ? ({
+        type: "functionCall",
+        functionName: "_pairsOf",
+        arguments: [node.iterable],
+      } as FunctionCall)
+    : node.iterable;
+
+  if (!node.condition) return paired;
+
+  return call(
+    "filter",
+    [paired],
+    blockArg([...unpack, returnStmt(node.condition)], paramName),
+  );
+}
+
 function lower(node: Comprehension): FunctionCall {
   const paramName = paramNameFor(node);
-  const source = node.condition
-    ? call(
-        "filter",
-        [node.iterable],
-        blockArg([returnStmt(node.condition)], paramName),
-      )
-    : node.iterable;
+  // unpackStatements is called ONCE PER BLOCK, deliberately. The filter
+  // block and the map block are different scopes, and scope resolution
+  // stamps scope/blockDepth onto assignment and variable nodes per
+  // enclosing block. If the two blocks shared the same node instances,
+  // whichever block is processed second would overwrite the first
+  // block's stamps - the same aliasing hazard Assignment.matchSource
+  // deep-clones to avoid.
+  const source = comprehensionSource(node, unpackStatements(node), paramName);
 
   return call(
     node.parallel ? "fork" : "map",
     [source],
-    blockArg([returnStmt(node.expression)], paramName),
+    blockArg(
+      [...unpackStatements(node), returnStmt(node.expression)],
+      paramName,
+    ),
   );
 }

@@ -72,6 +72,64 @@ describe("comprehensionDesugar", () => {
     expect(out.block.body[0].value.functionName).toBe("map");
   });
 
+  it("wraps the source in _pairsOf for a two-binder form", () => {
+    const out = desugarExpr("[f(x, i) for x, i in xs]");
+    expect(out.functionName).toBe("map");
+    expect(out.arguments[0].functionName).toBe("_pairsOf");
+    expect(out.block.params[0].name).toBe("__comprehensionItem");
+    // two unpack statements then the return
+    expect(out.block.body).toHaveLength(3);
+  });
+
+  it("pairs BEFORE filtering, so indices are source positions", () => {
+    const out = desugarExpr("[f(x, i) for x, i in xs if p(x)]");
+    // map( filter( _pairsOf(xs) ) ) - _pairsOf must be innermost
+    expect(out.functionName).toBe("map");
+    expect(out.arguments[0].functionName).toBe("filter");
+    expect(out.arguments[0].arguments[0].functionName).toBe("_pairsOf");
+  });
+
+  it("moves a destructuring binder into a pattern const inside the body", () => {
+    const out = desugarExpr("[name for {name, age} in people]");
+    expect(out.block.params[0].name).toBe("__comprehensionItem");
+    expect(out.block.body[0].type).toBe("assignment");
+    // `pattern` is what lowerPatterns keys on; it runs AFTER us
+    expect(out.block.body[0].pattern.type).toBe("objectPattern");
+    expect(out.block.body[0].declKind).toBe("const");
+  });
+
+  it("handles an array-pattern binder", () => {
+    const out = desugarExpr("[a for [a, b] in pairs]");
+    expect(out.block.body[0].pattern.type).toBe("arrayPattern");
+  });
+
+  it("handles a destructuring first binder alongside an index binder", () => {
+    const out = desugarExpr("[f(name, i) for {name}, i in people]");
+    expect(out.arguments[0].functionName).toBe("_pairsOf");
+    // first statement destructures pair[0], second binds pair[1]
+    expect(out.block.body[0].pattern.type).toBe("objectPattern");
+    expect(out.block.body[1].variableName).toBe("i");
+  });
+
+  it("gives the filter block the same unpacking as the map block", () => {
+    const out = desugarExpr("[f(x, i) for x, i in xs if p(x)]");
+    const filterBlock = out.arguments[0].block;
+    // regression guard for the rev-1 ordering hazard: a filter with no
+    // unpacking would reference unbound names
+    expect(filterBlock.body).toHaveLength(3);
+    expect(filterBlock.body[0].type).toBe("assignment");
+  });
+
+  it("gives each block its OWN unpack node instances", () => {
+    // scope resolution stamps scope/blockDepth per enclosing block, so a
+    // node instance shared between the filter block and the map block
+    // would get its stamps overwritten by whichever block runs second
+    const out = desugarExpr("[f(x, i) for x, i in xs if p(x)]");
+    const filterBlock = out.arguments[0].block;
+    expect(filterBlock.body[0]).not.toBe(out.block.body[0]);
+    expect(filterBlock.body[1]).not.toBe(out.block.body[1]);
+  });
+
   it("is idempotent", () => {
     const result = parseAgency(
       "node main() {\n  const r = [f(x) for x in xs]\n}",

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "two-binder, destructuring, object filtering, and fork composition with source-position indices",
+      "expectedOutput": "\"0:a,2:c,3:d|host=local|host,1|Hi Bob|y2|Bob@1|3:d|3:d|0\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

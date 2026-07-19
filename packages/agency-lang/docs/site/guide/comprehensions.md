@@ -48,11 +48,49 @@ let count = 0
 const results = fork [tally(x) for x in xs]
 ```
 
-If you need the changes to stick, use the plain form, or read
-[concurrency](/guide/concurrency) for `shared: true`.
+If you need the changes to stick, use `forkShared`:
+
+```ts
+let total = 0
+
+def tally(x: number): number {
+  total = total + x
+  return x
+}
+
+// every branch adds into the SAME total - it really accumulates
+const seen = forkShared [tally(x) for x in xs]
+```
+
+Two things to know about `forkShared`. First, sharing only matters when the body
+*changes* something: a body that only reads a global behaves the same either way,
+so `forkShared [total + x for x in xs]` gains nothing over `fork`. Second, the
+branches run at the same time, so the order of their writes is unpredictable.
+Adding to a total works because addition lands the same in any order; building an
+ordered string or overwriting one field does not. See
+[concurrency](/guide/concurrency) for the full story on shared state.
 
 The `if` clause runs before the work fans out, so the filter itself is not
 concurrent. Only the body is.
+
+## Taking the first result
+
+Put `race` in front and you get the first item to finish - one value, **not a
+list**:
+
+```ts
+// whichever summary comes back first wins; the other branches are cancelled
+const fastest = race [summarize(doc) for doc in docs]
+```
+
+Two edges to know. If nothing runs at all - the source is empty, or the `if`
+clause filters everything out - the result is `null`. And "first to finish"
+includes finishing badly: if the quickest branch fails, that failure is what you
+get back, so check with `isFailure` when the body can fail.
+
+`raceShared` combines racing with shared globals. One caveat comes with it: a
+losing branch that already changed a global before it was cancelled leaves that
+change behind. There is no undo - that is what sharing means.
 
 ## Binders
 

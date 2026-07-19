@@ -106,3 +106,7 @@ print(globalVar)
 ```
 
 The same option works on `race` and `parallel` too.
+
+The comprehension forms spell this as a prefix:
+[`forkShared [...]` and `raceShared [...]`](/guide/comprehensions). A `race` over
+an empty list resolves to `null`.

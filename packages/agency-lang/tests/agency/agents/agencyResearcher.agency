@@ -1,0 +1,22 @@
+import { agencyResearcherAgent, buildTools } from "std::agents/agency/researcher"
+
+def hasTool(tools: any[], name: string): boolean {
+  return some(tools, \tool -> tool.name == name)
+}
+
+node answersFromTheDocs(): string {
+  const result = agencyResearcherAgent(question: "what is a guard")
+  if (isFailure(result)) { return "failed" }
+  return result.value
+}
+
+// It reads the bundled docs and Agency source, and has no web or
+// encyclopedia tools: an answer about Agency assembled from the open web is
+// usually an answer about a different language.
+node readsDocsAndNotTheWeb(): boolean {
+  const tools = buildTools()
+  const reads = hasTool(tools, "agency_guide") && hasTool(tools, "agency_diagnostics") && hasTool(tools, "typecheck")
+  const noWeb = !hasTool(tools, "fetch") && !hasTool(tools, "wikipedia_search")
+  const cannotWrite = !hasTool(tools, "write") && !hasTool(tools, "bash")
+  return reads && noWeb && cannotWrite
+}

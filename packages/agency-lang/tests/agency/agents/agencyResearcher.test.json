@@ -1,0 +1,6 @@
+{
+  "tests": [
+    { "nodeName": "answersFromTheDocs", "description": "the Agency researcher returns its answer as a success Result", "input": "", "expectedOutput": "\"a guard caps cost and time\"", "evaluationCriteria": [{ "type": "exact" }], "useTestLLMProvider": true, "llmMocks": [{ "return": "a guard caps cost and time" }] },
+    { "nodeName": "readsDocsAndNotTheWeb", "description": "it reads the bundled docs and source, with no web tools and nothing that writes", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

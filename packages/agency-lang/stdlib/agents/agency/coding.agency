@@ -100,8 +100,6 @@ Return only the complete program in the code field."""
 // search returns other languages' idioms, which is the exact failure the
 // system prompt above spends its length fighting. Targeted fetch is fine: it
 // retrieves a page the caller already named.
-// Skills we ship for this agent: markdown the model reads on demand,
-// so teaching it something new costs a file rather than prompt length.
 static const skills = agentSkill("agency/coding")
 
 export def buildTools(): any[] {

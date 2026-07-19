@@ -284,6 +284,10 @@ export default defineConfig({
                   link: "/stdlib/agents/agency/expert",
                 },
                 {
+                  text: "agents/agency/researcher",
+                  link: "/stdlib/agents/agency/researcher",
+                },
+                {
                   text: "agents/agency/review",
                   link: "/stdlib/agents/agency/review",
                 },

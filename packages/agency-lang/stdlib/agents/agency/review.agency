@@ -29,8 +29,6 @@ export def reportFeedback(report: TypeCheckReport): Feedback[] {
   return feedback
 }
 
-// Skills we ship for this agent: markdown the model reads on demand,
-// so teaching it something new costs a file rather than prompt length.
 static const skills = agentSkill("agency/review")
 
 export def buildTools(): any[] {
@@ -136,8 +134,5 @@ export def agencyReviewAgent(
     }
     return judged
   }
-  // The parse and typecheck findings are already computed and free, so a
-  // judgment that could not finish returns them alone rather than losing
-  // them. failOpenFeedback turns any failure into no extra findings.
   return mergeFeedback(feedback, failOpenFeedback(captured))
 }

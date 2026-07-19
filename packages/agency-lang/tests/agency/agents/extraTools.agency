@@ -1,0 +1,21 @@
+import { reviewAgent } from "std::agents/review"
+import { feedbackHasErrors } from "std::agents/lib/feedback"
+
+let toolWasCalled = false
+
+def markerTool(note: string): string {
+  """Record that the agent was able to call an injected tool."""
+  toolWasCalled = true
+  return "recorded: ${note}"
+}
+
+// A tool passed via extraTools must reach the provider, so the model can
+// call it. The first mock calls the tool; the second returns findings.
+node injectedToolReachesTheAgent(): boolean {
+  const findings = reviewAgent(
+    work: "some work",
+    task: "a task",
+    extraTools: [markerTool],
+  )
+  return toolWasCalled && !feedbackHasErrors(findings)
+}

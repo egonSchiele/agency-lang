@@ -111,6 +111,7 @@ def solve(
   context: string,
   model: string,
   provider: string,
+  extraTools: any[],
 ): string {
   if (threadIsNew()) {
     systemMessage(systemPrompt)
@@ -125,7 +126,7 @@ ${finalizeReminder}
     llmOptions(
       model: model,
       provider: provider,
-      tools: tools,
+      tools: tools.concat(extraTools),
       hostedTools: ["web_search"],
     ),
   )
@@ -139,6 +140,7 @@ export def codingAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<string> {
   """
   Write, edit, and run code to complete a task on disk. Returns a short
@@ -151,6 +153,7 @@ export def codingAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   // The guard Result is the return value: a success carries the reply (or,
   // when a trip was rejected, the agent's most recent saveDraft), and a
@@ -159,7 +162,13 @@ export def codingAgent(
   return guard(cost: maxCost, time: maxTime) {
     let reply = ""
     thread(label: "codingAgent", session: session) {
-      reply = solve(task: task, context: context, model: model, provider: provider)
+      reply = solve(
+        task: task,
+        context: context,
+        model: model,
+        provider: provider,
+        extraTools: extraTools,
+      )
     }
     return reply
   }

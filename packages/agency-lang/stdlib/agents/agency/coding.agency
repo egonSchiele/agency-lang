@@ -183,6 +183,7 @@ def generateLoop(
   maxAttempts: number,
   model: string,
   provider: string,
+  extraTools: any[],
 ): WriteOutcome {
   if (threadIsNew()) {
     systemMessage(systemPrompt)
@@ -200,7 +201,7 @@ def generateLoop(
     }
     const generated: GeneratedCode = llm(
       prompt,
-      llmOptions(model: model, provider: provider, tools: tools),
+      llmOptions(model: model, provider: provider, tools: tools.concat(extraTools)),
     )
     const outcome = outcomeFor(source: generated.code)
     saveDraft(outcome)
@@ -217,6 +218,7 @@ export def agencyCodingAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<string, WriteFailure> {
   """
   Write an Agency program for the task. Iterates until the source parses,
@@ -231,11 +233,19 @@ export def agencyCodingAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   const captured = guard(cost: maxCost, time: maxTime) {
     let outcome: WriteOutcome = { valid: false, source: "", problems: ["generation never ran"] }
     thread(label: "agencyCodingAgent", session: session) {
-      outcome = generateLoop(task, context, maxAttempts, model, provider)
+      outcome = generateLoop(
+        task: task,
+        context: context,
+        maxAttempts: maxAttempts,
+        model: model,
+        provider: provider,
+        extraTools: extraTools,
+      )
     }
     return outcome
   }

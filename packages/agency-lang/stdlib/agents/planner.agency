@@ -11,6 +11,7 @@ import { codingAgent } from "std::agents/coding"
 import { verifierAgent } from "std::agents/verifier"
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { llmOptions, withContext } from "std::agents/lib/shared"
+import { readOnlyFileTools } from "std::agents/lib/toolkits"
 import { getAgentCwd } from "std::index"
 
 /** Raised before a generated plan-agent runs, so the plan, source, and
@@ -200,6 +201,8 @@ export def plannerAgent(
   maxTime: number = 60m,
   model: string = "",
   provider: string = "",
+  session: string = "",
+  extraTools: any[] = [],
 ): Result<string> raises <std::agents::planApprove, std::guard> {
   """
   Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
@@ -215,17 +218,30 @@ export def plannerAgent(
   @param maxTime - hard wall-clock cap (default 60 minutes).
   @param model - model override for the planning step only, or "" for the ambient model.
   @param provider - provider for the model override.
+  @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   // The guard Result is the return value: a success carries the summary (or,
   // when a trip was rejected, the last saved draft), and a failure carries
   // whatever actually went wrong.
   const captured = guard(cost: maxCost, time: maxTime) {
-    // The override applies to the planning step only. Each worker agent the
-    // generated plan calls resolves its own model.
-    const planText = if plan == "" then llm(
-      "Analyse this task and outline the steps:\n${withContext(task: task, context: context)}",
-      llmOptions(model: model, provider: provider),
-    ) else plan
+    // The drafting call runs in its own thread so the planner honors the
+    // same session contract as every other agent. The model override applies
+    // to this step only: each worker agent the generated plan calls resolves
+    // its own model.
+    let planText = plan
+    if (plan == "") {
+      thread(label: "plannerAgent", session: session) {
+        planText = llm(
+          "Analyse this task and outline the steps:\n${withContext(task: task, context: context)}",
+          llmOptions(
+            model: model,
+            provider: provider,
+            tools: readOnlyFileTools().concat(extraTools),
+          ),
+        )
+      }
+    }
     let state: PlanState = {
       summary: "",
       done: false,

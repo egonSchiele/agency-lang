@@ -43,6 +43,7 @@ export def verifierAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<Feedback[]> {
   """
   Verify work on disk against a task: derive measurable success criteria,
@@ -57,6 +58,7 @@ export def verifierAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   const captured = guard(cost: maxCost, time: maxTime) {
     let results: Feedback[][] = []
@@ -82,7 +84,7 @@ export def verifierAgent(
 
       const generatedCriteria: string[] = llm(
         generateCriteriaPrompt,
-        llmOptions(model: model, provider: provider),
+        llmOptions(model: model, provider: provider, tools: extraTools),
       )
 
       const allCriteria = criteria.concat(generatedCriteria)
@@ -102,7 +104,11 @@ export def verifierAgent(
 
         const items: Feedback[] = llm(
           prompt,
-          llmOptions(model: model, provider: provider, tools: tools),
+          llmOptions(
+            model: model,
+            provider: provider,
+            tools: tools.concat(extraTools),
+          ),
         )
         return items
       }

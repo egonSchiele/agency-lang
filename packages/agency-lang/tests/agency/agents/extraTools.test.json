@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "injectedToolReachesTheAgent",
+      "description": "a tool passed via extraTools is callable by the agent",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCall": { "name": "markerTool", "args": { "note": "hello" } } },
+        { "return": [] }
+      ]
+    }
+  ]
+}

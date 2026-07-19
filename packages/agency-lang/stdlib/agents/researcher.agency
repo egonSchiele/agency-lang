@@ -70,6 +70,7 @@ def researchLoop(
   maxAttempts: number,
   model: string,
   provider: string,
+  extraTools: any[],
 ): string {
   const researchTools = buildTools()
   if (threadIsNew()) {
@@ -91,7 +92,11 @@ def researchLoop(
     }
     const answer = llm(
       msg,
-      llmOptions(model: model, provider: provider, tools: researchTools),
+      llmOptions(
+        model: model,
+        provider: provider,
+        tools: researchTools.concat(extraTools),
+      ),
     )
     saveDraft(answer)
     return answer
@@ -107,6 +112,7 @@ export def researcherAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<string> {
   """
   Answer a research question from web and Wikipedia sources and return a
@@ -120,6 +126,7 @@ export def researcherAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   // The guard Result is the return value: a success carries the answer (or,
   // when a trip was rejected, the best draft so far), and a failure carries
@@ -133,6 +140,7 @@ export def researcherAgent(
         maxAttempts: maxAttempts,
         model: model,
         provider: provider,
+        extraTools: extraTools,
       )
     }
     return answer

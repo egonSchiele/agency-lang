@@ -46,6 +46,7 @@ def judgeAgainstTask(
   task: string,
   model: string,
   provider: string,
+  extraTools: any[],
 ): Feedback[] {
   if (threadIsNew()) {
     systemMessage(systemPrompt)
@@ -62,7 +63,10 @@ ${source}
 
 Return a list of feedback items.
 """
-  const judged: Feedback[] = llm(prompt, llmOptions(model: model, provider: provider))
+  const judged: Feedback[] = llm(
+    prompt,
+    llmOptions(model: model, provider: provider, tools: extraTools),
+  )
   return judged
 }
 
@@ -75,6 +79,7 @@ export def agencyReviewAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<Feedback[]> {
   """
   Review Agency source code and return findings. Always includes parse and
@@ -89,6 +94,7 @@ export def agencyReviewAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   let feedback: Result<Feedback[]> = success([])
   feedback = mergeFeedback(feedback, parseFeedback(source))
@@ -104,6 +110,7 @@ export def agencyReviewAgent(
         task: task,
         model: model,
         provider: provider,
+        extraTools: extraTools,
       )
     }
     return judged

@@ -16,6 +16,7 @@ def judgeResult(
   data: any,
   model: string,
   provider: string,
+  extraTools: any[],
 ): Feedback[] {
   if (threadIsNew()) {
     systemMessage(systemPrompt)
@@ -27,7 +28,10 @@ ${task}
 The program ran and produced this result:
 ${data}
 """
-  const items: Feedback[] = llm(prompt, llmOptions(model: model, provider: provider))
+  const items: Feedback[] = llm(
+    prompt,
+    llmOptions(model: model, provider: provider, tools: extraTools),
+  )
   return items
 }
 
@@ -40,6 +44,7 @@ def runAndJudge(
   model: string,
   provider: string,
   session: string,
+  extraTools: any[],
 ): Feedback[] {
   const ran = runCode(source)
   if (ran is failure(err)) {
@@ -47,7 +52,13 @@ def runAndJudge(
   }
   let items: Feedback[] = []
   thread(label: "agencyVerifierAgent", session: session) {
-    items = judgeResult(task: task, data: ran.value, model: model, provider: provider)
+    items = judgeResult(
+      task: task,
+      data: ran.value,
+      model: model,
+      provider: provider,
+      extraTools: extraTools,
+    )
   }
   return items
 }
@@ -61,6 +72,7 @@ export def agencyVerifierAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<Feedback[]> {
   """
   Run an Agency program and judge its result against the task. A program that
@@ -75,6 +87,7 @@ export def agencyVerifierAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   const captured = guard(cost: maxCost, time: maxTime) {
     return runAndJudge(
@@ -83,6 +96,7 @@ export def agencyVerifierAgent(
       model: model,
       provider: provider,
       session: session,
+      extraTools: extraTools,
     )
   }
   // Fail open: a verification that could not run reports no findings rather

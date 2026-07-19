@@ -8,6 +8,7 @@ import { runCode } from "std::agency"
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
 import { readOnlyFileTools, shellTools } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You judge whether a program's actual result satisfies a task.
@@ -16,13 +17,17 @@ The value the program returned is only part of its result. When the task asks fo
 
 For each finding, return a Feedback item: error=true when it fails the task (name the specific problem), error=false for a satisfied point."""
 
+// Skills we ship for this agent: markdown the model reads on demand,
+// so teaching it something new costs a file rather than prompt length.
+static const skills = agentSkill("agency/verifier")
+
 export def buildTools(): any[] {
   """
   Return the Agency verifier's tools. It reads and measures what the program
   left behind; it has no write tools, because a verifier that can fix things
   is no longer a verifier.
   """
-  return [...readOnlyFileTools(), ...shellTools()]
+  return [...readOnlyFileTools(), ...shellTools(), skills]
 }
 
 def judgeResult(

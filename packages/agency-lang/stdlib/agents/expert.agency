@@ -16,14 +16,19 @@
 import { ExpertGuidance, emptyGuidance } from "std::agents/lib/expertGuidance"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
+
+// Skills we ship for this agent: markdown the model reads on demand,
+// so teaching it something new costs a file rather than prompt length.
+static const skills = agentSkill("expert")
 
 export def buildTools(): any[] {
   """
   Return the expert's tools: the web and encyclopedia lookups it uses to
   confirm domain specifics.
   """
-  return webTools()
+  return [...webTools(), skills]
 }
 
 static const systemPrompt = """You are a domain expert advising a weaker coding agent that is about to attempt the task below and tends to miss domain-specific conventions.

@@ -18,6 +18,19 @@ syntax rules and acceptance checklist a solver needs, grounded in the
 
 ## Functions
 
+### buildTools
+
+```ts
+buildTools(): any[]
+```
+
+Return the Agency expert's tools: the bundled language documentation and
+  the source inspectors it cites in its guidance.
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L24))
+
 ### agencyExpertAgent
 
 ```ts
@@ -29,6 +42,7 @@ agencyExpertAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<ExpertGuidance>
 ```
 
@@ -42,6 +56,7 @@ Consult an Agency-language specialist: return the syntax rules and
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 **Parameters:**
 
@@ -54,7 +69,8 @@ Consult an Agency-language specialist: return the syntax rules and
 | model | `string` | "" |
 | provider | `string` | "" |
 | session | `string` | "" |
+| extraTools | `any[]` | [] |
 
 **Returns:** `Result<ExpertGuidance>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/expert.agency#L59))

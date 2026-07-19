@@ -9,11 +9,16 @@ import { concurrencyPool } from "std::concurrency"
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
 import { readOnlyFileTools, shellTools } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
 // One judge per criterion, four at a time: enough concurrency to keep the
 // verification quick without flooding the provider with parallel requests.
 static const POOL_SIZE = 4
+
+// Skills we ship for this agent: markdown the model reads on demand,
+// so teaching it something new costs a file rather than prompt length.
+static const skills = agentSkill("verifier")
 
 export def buildTools(): any[] {
   """
@@ -25,6 +30,7 @@ export def buildTools(): any[] {
     ...readOnlyFileTools(),
     ...shellTools(),
     readBinary.partial(useAgentCwd: true),
+    skills,
   ]
 }
 

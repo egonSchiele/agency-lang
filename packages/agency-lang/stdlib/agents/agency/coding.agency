@@ -18,6 +18,7 @@ import {
  } from "std::agents/lib/toolkits"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { Critique, revise } from "std::strategy"
+import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
 /** A failed generation: the last source attempted, with the problems found
@@ -99,6 +100,10 @@ Return only the complete program in the code field."""
 // search returns other languages' idioms, which is the exact failure the
 // system prompt above spends its length fighting. Targeted fetch is fine: it
 // retrieves a page the caller already named.
+// Skills we ship for this agent: markdown the model reads on demand,
+// so teaching it something new costs a file rather than prompt length.
+static const skills = agentSkill("agency/coding")
+
 export def buildTools(): any[] {
   """
   Return the Agency writer's tools: the bundled documentation, the source
@@ -112,6 +117,7 @@ export def buildTools(): any[] {
     fetch,
     fetchJSON,
     fetchMarkdown,
+    skills,
   ]
 }
 

@@ -14,14 +14,19 @@
 import { ExpertGuidance, emptyGuidance } from "std::agents/lib/expertGuidance"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { agencyDocTools, agencyCodeTools } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
+
+// Skills we ship for this agent: markdown the model reads on demand,
+// so teaching it something new costs a file rather than prompt length.
+static const skills = agentSkill("agency/expert")
 
 export def buildTools(): any[] {
   """
   Return the Agency expert's tools: the bundled language documentation and
   the source inspectors it cites in its guidance.
   """
-  return [...agencyDocTools(), ...agencyCodeTools()]
+  return [...agencyDocTools(), ...agencyCodeTools(), skills]
 }
 
 static const systemPrompt = """You are an expert in the Agency programming language, advising a weaker coding agent that is about to attempt the task below.

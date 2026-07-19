@@ -25,6 +25,7 @@ import { hnStories, hnItem, hnUser, hnSearch } from "std::data/tech/hackernews"
 import { ycBatch, ycIndustry, ycTag, ycList, ycMeta } from "std::data/tech/yc"
 import { usaspendingAwards, usaspendingAward } from "std::data/usaspending"
 import { wikidataSearch, wikidataEntity, wikidataQuery } from "std::data/wikidata"
+import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You answer questions using structured public-data APIs.
@@ -33,6 +34,10 @@ static const systemPrompt = """You answer questions using structured public-data
 - Name the source and the identifier behind every figure you report, so a reader can check it.
 - State the units, the period, and any revision or seasonal adjustment the source applies. A number without its units is not an answer.
 - When a source has no data for what was asked, say so plainly. NEVER estimate a number and present it as retrieved."""
+
+// Skills we ship for this agent: markdown the model reads on demand,
+// so teaching it something new costs a file rather than prompt length.
+static const skills = agentSkill("data")
 
 export def buildTools(): any[] {
   """
@@ -66,6 +71,7 @@ export def buildTools(): any[] {
     ycMeta,
     ...webTools(),
     ...searchTools(),
+    skills,
   ]
 }
 

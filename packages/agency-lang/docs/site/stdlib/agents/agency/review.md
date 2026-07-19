@@ -7,8 +7,9 @@ description: "Reviews Agency source code: parse findings, typecheck findings, an
 
 an optional LLM judgment of whether the code accomplishes a task.
 
-  Review reads; it never runs the code. To execute a program and judge its
-  actual result, use agencyVerifierAgent instead.
+  Review reads the work and looks things up. The verifier runs the work and
+  measures it. This agent never executes the code it reviews, but it can
+  consult the bundled Agency documentation and the web to check a claim.
 
 ## Functions
 
@@ -29,7 +30,20 @@ Convert a typecheck report into findings: one error item per error, one
 
 **Returns:** `Feedback[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L21))
+
+### buildTools
+
+```ts
+buildTools(): any[]
+```
+
+Return the Agency reviewer's lookup tools: the bundled language
+  documentation, plus web lookups for anything outside it.
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L36))
 
 ### agencyReviewAgent
 
@@ -43,6 +57,7 @@ agencyReviewAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<Feedback[]>
 ```
 
@@ -58,6 +73,7 @@ Review Agency source code and return findings. Always includes parse and
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 **Parameters:**
 
@@ -71,7 +87,8 @@ Review Agency source code and return findings. Always includes parse and
 | model | `string` | "" |
 | provider | `string` | "" |
 | session | `string` | "" |
+| extraTools | `any[]` | [] |
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L94))

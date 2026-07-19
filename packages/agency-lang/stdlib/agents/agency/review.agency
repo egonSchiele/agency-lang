@@ -11,6 +11,7 @@ import { Feedback, mergeFeedback, failOpenFeedback } from "std::agents/lib/feedb
 import { searchTools } from "std::agents/lib/search"
 import { llmOptions } from "std::agents/lib/shared"
 import { agencyDocTools, webTools } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You review Agency-language code. Return a list of feedback items. Set error=true only if the code does not accomplish the task. Keep feedback brief and concrete."""
@@ -28,12 +29,16 @@ export def reportFeedback(report: TypeCheckReport): Feedback[] {
   return feedback
 }
 
+// Skills we ship for this agent: markdown the model reads on demand,
+// so teaching it something new costs a file rather than prompt length.
+static const skills = agentSkill("agency/review")
+
 export def buildTools(): any[] {
   """
   Return the Agency reviewer's lookup tools: the bundled language
   documentation, plus web lookups for anything outside it.
   """
-  return [...agencyDocTools(), ...webTools(), ...searchTools()]
+  return [...agencyDocTools(), ...webTools(), ...searchTools(), skills]
 }
 
 def parseFeedback(source: string): Result<Feedback[]> {

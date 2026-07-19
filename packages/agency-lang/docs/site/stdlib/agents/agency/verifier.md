@@ -10,6 +10,20 @@ The verifier runs; review reads. To check source text without executing it,
 
 ## Functions
 
+### buildTools
+
+```ts
+buildTools(): any[]
+```
+
+Return the Agency verifier's tools. It reads and measures what the program
+  left behind; it has no write tools, because a verifier that can fix things
+  is no longer a verifier.
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L24))
+
 ### agencyVerifierAgent
 
 ```ts
@@ -22,6 +36,7 @@ agencyVerifierAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<Feedback[]>
 ```
 
@@ -37,6 +52,7 @@ Run an Agency program and judge its result against the task. A program that
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 **Parameters:**
 
@@ -50,7 +66,8 @@ Run an Agency program and judge its result against the task. A program that
 | model | `string` | "" |
 | provider | `string` | "" |
 | session | `string` | "" |
+| extraTools | `any[]` | [] |
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L89))

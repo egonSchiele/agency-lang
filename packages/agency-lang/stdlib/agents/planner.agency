@@ -12,7 +12,20 @@ import { verifierAgent } from "std::agents/verifier"
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { readOnlyFileTools } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
 import { getAgentCwd } from "std::index"
+
+// Skills we ship for this agent: markdown the model reads on demand, so
+// teaching it something new costs a file rather than prompt length.
+static const skills = agentSkill("planner")
+
+export def buildTools(): any[] {
+  """
+  Return the planner's tools: read-only access to the project it is planning
+  for, plus its skills.
+  """
+  return [...readOnlyFileTools(), skills]
+}
 
 /** Raised before a generated plan-agent runs, so the plan, source, and
   capability envelope can be shown and approved. Reject halts and fails. */
@@ -237,7 +250,7 @@ export def plannerAgent(
           llmOptions(
             model: model,
             provider: provider,
-            tools: readOnlyFileTools().concat(extraTools),
+            tools: buildTools().concat(extraTools),
           ),
         )
       }

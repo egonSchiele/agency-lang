@@ -12,6 +12,20 @@ criteria and computes each one with tools.
 
 ## Functions
 
+### buildTools
+
+```ts
+buildTools(): any[]
+```
+
+Return the verifier's tools. It measures with shell pipelines and reads
+  bytes, because a criterion checked by eye is a criterion not checked. It
+  has no write tools: a verifier that can fix things is no longer a verifier.
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L23))
+
 ### verifierAgent
 
 ```ts
@@ -24,6 +38,7 @@ verifierAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<Feedback[]>
 ```
 
@@ -39,6 +54,7 @@ Verify work on disk against a task: derive measurable success criteria,
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 **Parameters:**
 
@@ -52,7 +68,8 @@ Verify work on disk against a task: derive measurable success criteria,
 | model | `string` | "" |
 | provider | `string` | "" |
 | session | `string` | "" |
+| extraTools | `any[]` | [] |
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/verifier.agency#L48))

@@ -13,6 +13,19 @@ a cited answer, retrying until every claim is grounded.
 
 ## Functions
 
+### buildTools
+
+```ts
+buildTools(): any[]
+```
+
+Return the researcher's tools: the encyclopedia and fetch tools that need
+  no key, plus whichever search providers the environment has a key for.
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L35))
+
 ### researcherAgent
 
 ```ts
@@ -25,6 +38,7 @@ researcherAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<string>
 ```
 
@@ -39,6 +53,7 @@ Answer a research question from web and Wikipedia sources and return a
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 **Parameters:**
 
@@ -52,7 +67,8 @@ Answer a research question from web and Wikipedia sources and return a
 | model | `string` | "" |
 | provider | `string` | "" |
 | session | `string` | "" |
+| extraTools | `any[]` | [] |
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/researcher.agency#L112))

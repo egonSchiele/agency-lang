@@ -36,3 +36,13 @@ export function _readSkill(filepath: string): string {
 export function _docsDir(section: "guide" | "cli" | "diagnostics" | "stdlib"): string {
   return path.join(getStdlibDir(), "docs", section);
 }
+
+/**
+ * Absolute path to the skills we ship for one agent, under
+ * `stdlib/agents/skills/<agent>`. Resolved through getStdlibDir for the
+ * same reason as _docsDir: a path relative to the calling file works in the
+ * repo and breaks once the package is installed into node_modules.
+ */
+export function _agentSkillsDir(agent: string): string {
+  return path.join(getStdlibDir(), "agents", "skills", agent);
+}

@@ -20,6 +20,19 @@ acceptance checklist a solver needs to get the task right.
 
 ## Functions
 
+### buildTools
+
+```ts
+buildTools(): any[]
+```
+
+Return the expert's tools: the web and encyclopedia lookups it uses to
+  confirm domain specifics.
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L26))
+
 ### expertAgent
 
 ```ts
@@ -31,6 +44,7 @@ expertAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<ExpertGuidance>
 ```
 
@@ -44,6 +58,7 @@ Consult a domain expert: identify the task's technical domain and return
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 **Parameters:**
 
@@ -56,6 +71,7 @@ Consult a domain expert: identify the task's technical domain and return
 | model | `string` | "" |
 | provider | `string` | "" |
 | session | `string` | "" |
+| extraTools | `any[]` | [] |
 
 **Returns:** `Result<ExpertGuidance>`
 

@@ -30,8 +30,12 @@ node doesNotTripUnderBudget(): string {
 }
 
 // The opt-out: a test case WITHOUT "fakeClock" keeps the real clock, and
-// _advanceTime refuses loudly instead of silently doing nothing. Capture its
-// own result — the refusal is a Failure carrying the "fake clock" message.
+// _advanceTime refuses loudly instead of silently doing nothing. There is no
+// guard/handler here (unlike the trip node above): _advanceTimeImpl throws a
+// plain Error, and this relies on failure propagation converting that non-abort
+// throw into a Failure whose `.error` is the message. That conversion is the
+// contract under test — if it ever changed shape, this safety check would need
+// to change with it.
 node advanceWithoutFakeClockErrors(): string {
   const res = _advanceTime(10)
   if (isFailure(res)) { return res.error }

@@ -1,4 +1,4 @@
-export type TimerHandle = { id: number };
+export type TimerHandle = { id: ReturnType<typeof setTimeout> | number };
 
 /**
  * The seam every guard time read and timer goes through. The real clock is
@@ -18,10 +18,8 @@ export type Clock = {
 export const realClock: Clock = {
   now: () => performance.now(),
   wallTime: () => Date.now(),
-  setTimer: (fn, delayMs) => ({
-    id: setTimeout(fn, delayMs) as unknown as number,
-  }),
-  clearTimer: (handle) => clearTimeout(handle.id),
+  setTimer: (fn, delayMs) => ({ id: setTimeout(fn, delayMs) }),
+  clearTimer: (handle) => clearTimeout(handle.id as ReturnType<typeof setTimeout>),
 };
 
 export class FakeClock implements Clock {
@@ -54,12 +52,22 @@ export class FakeClock implements Clock {
 
   /**
    * Move the clock forward `ms` and fire every timer due within that span.
-   * Terminates: nothing here arms a timer, and each iteration removes one, so
-   * the pending list strictly shrinks. A guard timer's callback only aborts;
-   * it never re-arms (re-arming is startWindow, which runs at a later runner
-   * step), so there is no runaway and no firing cap.
+   *
+   * Termination: in this codebase's usage the loop always ends. A guard
+   * timer's callback only aborts; it never re-arms (re-arming is startWindow,
+   * which runs at a later runner step), and every guard delay is >= 0, so each
+   * iteration removes one timer and no callback adds one that is due earlier.
+   * The loop is NOT proof against an arbitrary caller that arms a fresh 0ms
+   * timer from inside a fired callback — that is a hypothetical no code here
+   * does, so there is no firing cap. The guard below rejects the one misuse
+   * that is easy to hit by accident: a negative or NaN advance, which would
+   * move the clock backward or corrupt it.
    */
   advance(ms: number): void {
+    if (!(ms >= 0)) {
+      // Catches negative and NaN (NaN fails every comparison).
+      throw new Error(`advance(${ms}): ms must be a non-negative number.`);
+    }
     const target = this.monotonicMs + ms;
     while (true) {
       // The earliest timer still due within the span. Re-computed each pass,

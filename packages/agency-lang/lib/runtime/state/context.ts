@@ -77,7 +77,9 @@ function reviveNative<T>(data: T): T {
  *  AGENCY_FAKE_CLOCK env var, otherwise the real clock. The env var is set by
  *  the test runner per test case (see lib/cli/util.ts). */
 function defaultClock(): Clock {
-  return process.env.AGENCY_FAKE_CLOCK ? new FakeClock() : realClock;
+  // Require exactly "1", not any truthy string. AGENCY_FAKE_CLOCK=0 must
+  // disable, not enable — a non-empty "0" is truthy and would surprise.
+  return process.env.AGENCY_FAKE_CLOCK === "1" ? new FakeClock() : realClock;
 }
 
 /* bunch of stuff that every node/function in the runtime needs access to,
@@ -92,7 +94,15 @@ export class RuntimeContext<T> {
   onStreamLock: boolean;
   handlers: HandlerEntry[];
   /** The time source for guards. Real by default; a FakeClock only when a
-   *  test opts in. NOT serialized — reconstructed per run, like handlers. */
+   *  test opts in. NOT serialized — reconstructed per run, like handlers.
+   *
+   *  DRIFT WARNING: this and the other non-serialized runtime fields
+   *  (handlers, callbacks, checkpoints, locks, …) are set by the constructor
+   *  AND, separately, by `createExecutionContext`, which builds the execution
+   *  context via `Object.create` and copies fields by hand. A field added
+   *  here but forgotten there is silently `undefined` at run time with no
+   *  compile error — that is the bug the `clock` copy fixed. If you add a
+   *  non-serialized field, copy it in `createExecutionContext` too. */
   clock: Clock;
   locks: Record<string, Promise<void>>;
   lockOwners: Record<string, string>;

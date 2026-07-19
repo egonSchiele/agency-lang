@@ -90,6 +90,13 @@ describe("FakeClock", () => {
     expect(inner).toBe(true);
   });
 
+  it("rejects a negative or NaN advance rather than corrupting the clock", () => {
+    const clock = new FakeClock();
+    expect(() => clock.advance(-5)).toThrow(/non-negative/);
+    expect(() => clock.advance(NaN)).toThrow(/non-negative/);
+    expect(clock.now()).toBe(0); // unchanged by the rejected calls
+  });
+
   it("does NOT fire a timer a callback arms beyond the advance target", () => {
     const clock = new FakeClock();
     let inner = false;

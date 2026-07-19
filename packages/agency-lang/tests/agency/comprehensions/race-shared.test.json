@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "raceShared returns the winner and losing branches shared writes persist without rollback",
+      "expectedOutput": "\"30|6\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "timeoutMs": 30000
+    }
+  ]
+}

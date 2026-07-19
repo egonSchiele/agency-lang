@@ -1,0 +1,37 @@
+def risky(x: number): number {
+  raise interrupt("approve", { value: x })
+  sleep((4 - x) * 100)
+  return x * 2
+}
+
+node allApproved(): string {
+  let out = ""
+  handle {
+    // every branch raises, every branch is approved; the shortest
+    // sleep (item 3) wins. Losers holding nothing - their interrupts
+    // were resolved before the sleeps began.
+    const winner = race [risky(x) for x in [1, 2, 3]]
+    out = "${winner}"
+  } with (d) {
+    return approve()
+  }
+  return out
+}
+
+node fastestRejected(): string {
+  let out = ""
+  handle {
+    // race is first-SETTLED: the rejected branch fails before any
+    // sibling wakes from its sleep, so the race returns the FAILURE,
+    // not the next-fastest success (probed against the block form)
+    const winner = race [risky(x) for x in [1, 2, 3]]
+    const failed = if isFailure(winner) then "fail" else "ok"
+    out = "${failed}"
+  } with (d) {
+    if (d.data.value == 3) {
+      return reject()
+    }
+    return approve()
+  }
+  return out
+}

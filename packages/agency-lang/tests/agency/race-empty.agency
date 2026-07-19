@@ -1,0 +1,12 @@
+node main(): string {
+  // race over nothing: no branch can win, so the result is null -
+  // matching how absent lookups normalize (obj[missing], unmatched
+  // match). Before this fix the program HUNG (unsettled top-level
+  // await, exit 13), which a filter matching nothing made easy to hit.
+  const winner = race([]) as x { return x * 2 }
+
+  // fork over nothing already worked; pin the pair together
+  const empty = fork([]) as x { return x * 2 }
+
+  return "${winner == null}|${empty.length}"
+}

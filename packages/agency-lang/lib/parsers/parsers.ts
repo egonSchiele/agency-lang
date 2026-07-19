@@ -107,7 +107,11 @@ import {
 import { EffectDeclaration } from "../types/effectDeclaration.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
-import { Comprehension } from "../types/comprehension.js";
+import {
+  Comprehension,
+  COMPREHENSION_PREFIXES,
+  SEQ_PREFIX,
+} from "../types/comprehension.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { ParallelBlock, SeqBlock } from "../types/parallelBlock.js";
 import { IfElse } from "../types/ifElse.js";
@@ -4656,11 +4660,31 @@ export const comprehensionParser: Parser<Comprehension> = label(
   withLoc(
     memo(
       "comprehensionParser",
-      seqC(
+      map(
+        seqC(
         set("type", "comprehension"),
+        // The concurrency prefix, as a raw keyword; the map() below this
+        // seqC converts it to mode/shared via COMPREHENSION_PREFIXES.
+        // Ordering in the or() is load-bearing: LONGEST FIRST, or
+        // str("fork") would half-match the fork in forkShared and then
+        // die on the required whitespace.
         capture(
-          map(optional(seqR(str("fork"), spaces)), (r) => r !== null),
-          "parallel",
+          map(
+            optional(
+              seqR(
+                or(
+                  str("forkShared"),
+                  str("raceShared"),
+                  str("fork"),
+                  str("race"),
+                ),
+                spaces,
+              ),
+            ),
+            // seqR returns ALL results as an array; the keyword is [0]
+            (r) => (r === null ? null : (r as unknown[])[0]),
+          ),
+          "prefix",
         ),
         char("["),
         optionalSpacesOrNewline,
@@ -4705,6 +4729,19 @@ export const comprehensionParser: Parser<Comprehension> = label(
         ),
         optionalSpacesOrNewline,
         char("]"),
+        ),
+        // Convert the raw prefix keyword into mode/shared by table
+        // lookup - one branch, the sequential case being a table row
+        // (SEQ_PREFIX) rather than a special case. The return annotation
+        // is the node's one construction-site type check, since the
+        // trailing cast below erases inference.
+        (result: any): Comprehension => {
+          const { prefix, ...rest } = result;
+          const fields = prefix
+            ? COMPREHENSION_PREFIXES[prefix as string]
+            : SEQ_PREFIX;
+          return { ...rest, ...fields };
+        },
       ),
     ),
   ) as unknown as Parser<Comprehension>,

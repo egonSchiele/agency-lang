@@ -1,0 +1,22 @@
+let approvals = 0
+
+def risky(x: number): number {
+  raise interrupt("approve", { value: x })
+  approvals = approvals + 1
+  return x * 2
+}
+
+node main(): string {
+  let out = ""
+  handle {
+    const results = forkShared [risky(x) for x in [1, 2, 3]]
+    const rejected = if isFailure(results[1]) then "fail" else "ok"
+    out = "${results.length}|${results[0]}|${rejected}|${results[2]}|${approvals}"
+  } with (d) {
+    if (d.data.value == 2) {
+      return reject()
+    }
+    return approve()
+  }
+  return out
+}

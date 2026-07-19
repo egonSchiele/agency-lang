@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "race over an empty list returns null instead of hanging; fork over an empty list returns []",
+      "expectedOutput": "\"true|0\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "timeoutMs": 30000
+    }
+  ]
+}

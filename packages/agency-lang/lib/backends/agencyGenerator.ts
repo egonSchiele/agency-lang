@@ -24,6 +24,7 @@ import {
 } from "../types.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
+import { comprehensionPrefixString } from "../types/comprehension.js";
 import { BlockArgument } from "../types/blockArgument.js";
 import {
   AgencyArray,
@@ -1710,7 +1711,7 @@ export class AgencyGenerator {
   }
 
   protected processComprehension(node: Comprehension): string {
-    const prefix = node.parallel ? "fork " : "";
+    const prefix = comprehensionPrefixString(node);
     const expr = this.processNode(node.expression).trim();
     const binder =
       typeof node.itemVar === "string"

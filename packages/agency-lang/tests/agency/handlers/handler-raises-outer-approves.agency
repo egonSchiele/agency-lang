@@ -23,10 +23,10 @@ def inner(): string {
   } with (data) {
     reviews = reviews + 1
     const contents = read("handler-raises-outer-approves.agency")
-    if (contents is success(text)) {
+    if (isSuccess(contents)) {
       readOutcome = "ok"
     }
-    if (contents is failure(err)) {
+    if (isFailure(contents)) {
       readOutcome = "rejected"
     }
     return approve()

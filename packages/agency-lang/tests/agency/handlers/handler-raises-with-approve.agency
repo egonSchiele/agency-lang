@@ -14,10 +14,10 @@ node main() {
     result = doWork()
   } with (data) {
     const contents = read("handler-raises-with-approve.agency") with approve
-    if (contents is success(text)) {
+    if (isSuccess(contents)) {
       readOutcome = "ok"
     }
-    if (contents is failure(err)) {
+    if (isFailure(contents)) {
       readOutcome = "rejected"
     }
     return approve()

@@ -20,7 +20,7 @@ def inner(): string {
   } with (data) {
     for (i in range(0, 12)) {
       const contents = read("handler-raises-depth.agency")
-      if (contents is success(text)) {
+      if (isSuccess(contents)) {
         seen = seen + 1
       }
     }

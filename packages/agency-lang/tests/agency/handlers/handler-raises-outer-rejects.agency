@@ -13,10 +13,10 @@ def inner(): string {
     return doWork()
   } with (data) {
     const contents = read("handler-raises-outer-rejects.agency")
-    if (contents is failure(err)) {
+    if (isFailure(contents)) {
       readOutcome = "rejected"
     }
-    if (contents is success(text)) {
+    if (isSuccess(contents)) {
       readOutcome = "succeeded"
     }
     return approve()

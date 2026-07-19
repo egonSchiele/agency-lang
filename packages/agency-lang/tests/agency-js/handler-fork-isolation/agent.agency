@@ -24,7 +24,7 @@ node runForkIsolation(): string {
       }
       if (data.message == "kickoff-${tag}") {
         const contents = read("agent.agency")
-        if (contents is failure(err)) {
+        if (isFailure(contents)) {
           print("READ ${tag} rejected")
         }
         return approve()

@@ -96,13 +96,13 @@ This function may raise interrupts, but it is called from a place that is not in
 
 <a id="ag3010"></a>
 
-## AG3010 — Handler &#123;handler&#125; may raise interrupts [&#123;effects&#125;]. That would re-enter the handler chain (the dispatcher visits every handler, even the one currently running) and recurse until `HandlerRecursionError` fires at runtime. Restructure so the handler doesn't call interrupt-raising code (e.g. hoist file I/O out of the handler), or suppress this error with `// @tc-ignore` on the line above the `handle` block.
+## AG3010 — RETIRED: handler functions may raise interrupts. The dispatcher skips the executing handler for its own raises, so the recursion this diagnostic guarded against cannot happen. Remove any `// @tc-ignore AG3010` suppressions.
 
 *Default severity: error.*
 
-A handler that itself raises interrupts would re-enter the handler chain — the dispatcher visits every handler, including the one currently running — and recurse until the runtime aborts with a recursion error.
+RETIRED. Handler functions may raise interrupts: a handler never hears its own raises (the dispatcher skips the executing handler entry), so the recursion this diagnostic guarded against cannot happen. The raise is decided by the rest of the chain — an outer handler or an explicit `with approve` — and a raise nothing settles is rejected with an explanatory message, because a handler cannot pause to ask the user.
 
-**How to fix:** restructure so the handler does not call interrupt-raising code (for example, hoist file I/O out of the handler). If you are certain it is safe, suppress with `// @tc-ignore` on the line above the `handle` block.
+**How to fix:** nothing — code this diagnostic used to flag is now legal. If you suppressed it with `// @tc-ignore AG3010`, remove the suppression. See the handlers guide for the full rules.
 
 <a id="ag3011"></a>
 

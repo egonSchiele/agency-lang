@@ -15,10 +15,10 @@ def inner(): string {
     return doWork()
   } with (data) {
     const contents = read("handler-propagate-refused.agency")
-    if (contents is failure(err)) {
+    if (isFailure(contents)) {
       readOutcome = "refused"
     }
-    if (contents is success(text)) {
+    if (isSuccess(contents)) {
       readOutcome = "succeeded"
     }
     return approve()

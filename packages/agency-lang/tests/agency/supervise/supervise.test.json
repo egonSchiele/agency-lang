@@ -86,6 +86,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "nestedSuperviseIsolated",
+      "description": "a nested supervise instance's trips are answered only by its own handler",
+      "input": "",
+      "expectedOutput": "\"inner:spun|innerChecked:true|outerChecks:0\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

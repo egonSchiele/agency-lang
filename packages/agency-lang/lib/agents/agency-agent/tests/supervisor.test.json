@@ -153,6 +153,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "nestedFramesAreIsolated",
+      "description": "nested supervisor frames keep isolated histories and pop back intact",
+      "input": "",
+      "expectedOutput": "\"innerEmpty:0|inner:2|outer:1|outerSaw:progressing\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

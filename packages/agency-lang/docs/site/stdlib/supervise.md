@@ -79,4 +79,4 @@ Run a block, pausing it every interval to check progress and steer it.
 
 **Returns:** `Result<any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/supervise.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/supervise.agency#L39))

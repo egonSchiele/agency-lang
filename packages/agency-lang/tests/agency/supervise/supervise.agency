@@ -158,3 +158,35 @@ node checkSeesDraft(): string {
   if (isFailure(r)) { return "unexpected-failure" }
   return "${r.value}|firstDraft:${draftsSeen[0] ?? "none"}"
 }
+
+// Nested supervision: the inner instance's trips must be answered by the
+// INNER handler only. With a shared guard label the outer handler would
+// answer them too — firing the outer check against the inner guard's
+// numbers and double-extending the inner budget via grant accumulation.
+let outerChecks = 0
+let innerChecks = 0
+
+def outerCheck(elapsed: number, draft: any): SuperviseDecision {
+  outerChecks = outerChecks + 1
+  return { action: "continue", message: "" }
+}
+
+def innerCheck(elapsed: number, draft: any): SuperviseDecision {
+  innerChecks = innerChecks + 1
+  return { action: "continue", message: "" }
+}
+
+node nestedSuperviseIsolated(): string {
+  // The outer interval is huge, so any outerChecks count comes from the
+  // outer handler wrongly answering the inner instance's trips.
+  const r = supervise(every: 600000, maxTime: 6000000, check: outerCheck) {
+    const inner = supervise(every: 5ms, maxTime: 600000, check: innerCheck) {
+      const s = spin(300000)
+      return "inner:${s}"
+    }
+    if (isFailure(inner)) { return "inner-failed" }
+    return inner.value
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return "${r.value}|innerChecked:${innerChecks > 0}|outerChecks:${outerChecks}"
+}

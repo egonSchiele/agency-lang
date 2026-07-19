@@ -1,0 +1,40 @@
+// Twelve sequential raises exceed MAX_HANDLER_CHAIN_DEPTH (10) if depth
+// accumulated across them. It does not: the handler body executes inside
+// the dispatch's handlerChainDepthALS.run(depth) scope, so every raise
+// from inside it dispatches at the SAME inherited depth — siblings one
+// level down, and siblings never stack (the comment on
+// handlerChainDepthALS says exactly this).
+//
+// The outer handler is the approver for the twelve reads; without it
+// they would have no approver and be refused.
+let seen = 0
+
+def doWork(): string {
+  interrupt("please review")
+  return "work done"
+}
+
+def inner(): string {
+  // @tc-ignore AG3010
+  handle {
+    return doWork()
+  } with (data) {
+    for (i in range(0, 12)) {
+      const contents = read("handler-raises-depth.agency")
+      if (contents is success(text)) {
+        seen = seen + 1
+      }
+    }
+    return approve()
+  }
+}
+
+node main() {
+  let result = ""
+  handle {
+    result = inner()
+  } with (data) {
+    return approve()
+  }
+  return "${result}|reads:${seen}"
+}

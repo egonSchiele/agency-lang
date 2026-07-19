@@ -1,0 +1,38 @@
+// The outer handler rejects the read the inner handler raised. The
+// rejection lands at the raise site as a failure Result and the run
+// continues. This is the users-can-always-reject guarantee, asserted.
+let readOutcome = "unread"
+
+def doWork(): string {
+  interrupt("please review")
+  return "work done"
+}
+
+def inner(): string {
+  // @tc-ignore AG3010
+  handle {
+    return doWork()
+  } with (data) {
+    const contents = read("handler-raises-outer-rejects.agency")
+    if (contents is failure(err)) {
+      readOutcome = "rejected"
+    }
+    if (contents is success(text)) {
+      readOutcome = "succeeded"
+    }
+    return approve()
+  }
+}
+
+node main() {
+  let result = ""
+  handle {
+    result = inner()
+  } with (data) {
+    if (data.effect == "std::read") {
+      return reject()
+    }
+    return approve()
+  }
+  return "${result}|read:${readOutcome}"
+}

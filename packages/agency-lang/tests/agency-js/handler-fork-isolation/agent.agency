@@ -1,0 +1,37 @@
+// Fork branches SHARE the handler chain: branch B's handler is invoked
+// for branch A's interrupt — including the kickoffs. Each handler gates
+// its read on ITS OWN branch's kickoff message, so the only read a
+// handler should ever be ASKED about is the sibling branch's.
+//
+// This is an agency-js test because the ask-counts cannot ride the
+// return value: the sibling's handler runs in the RAISER's lineage, so
+// its counter write lands in the raising branch's isolated state and is
+// discarded at the join. Prints share one stdout, so the JS side counts
+// the ASKED lines instead.
+//
+// Correct: each tag ASKED exactly once. A missing line means exclusion
+// leaked across lineages; a doubled line means a handler was re-entered
+// for its own read.
+node runForkIsolation(): string {
+  // @tc-ignore AG3010
+  const results = fork(["A", "B"]) as tag {
+    handle {
+      interrupt("kickoff-${tag}")
+      return "${tag} done"
+    } with (data) {
+      if (data.effect == "std::read") {
+        print("ASKED ${tag}")
+        return reject()
+      }
+      if (data.message == "kickoff-${tag}") {
+        const contents = read("agent.agency")
+        if (contents is failure(err)) {
+          print("READ ${tag} rejected")
+        }
+        return approve()
+      }
+      return pass()
+    }
+  }
+  return results.join(",")
+}

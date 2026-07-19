@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "Twelve sequential raises inside one handler dispatch as siblings at the same depth and do not accumulate toward MAX_HANDLER_CHAIN_DEPTH. A lower count with no crash means reads are silently failing.",
+      "input": "",
+      "expectedOutput": "\"work done|reads:12\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

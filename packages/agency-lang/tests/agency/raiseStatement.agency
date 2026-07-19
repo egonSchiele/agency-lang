@@ -1,5 +1,8 @@
 def doWrite(): string {
-  raise std::write("confirm?", {})
+  // std::write declares { dir, filename } - the values are immaterial
+  // to this test (it exercises raise mechanics, and the handler
+  // approves/rejects regardless), but the schema is checked (AG3006)
+  raise std::write("confirm?", { dir: ".", filename: "out.txt" })
   return "wrote"
 }
 

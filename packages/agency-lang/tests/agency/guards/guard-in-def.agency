@@ -1,4 +1,6 @@
 
+import { GuardFailureData } from "std::thread"
+
 // Guard inside a `def` function (bare failure shape) instead of a
 // `node` (envelope failure shape). The function-body auto-wrap in
 // codegen differs between def and node; both must re-throw

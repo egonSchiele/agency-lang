@@ -29,7 +29,11 @@ node main() {
     if (e.effect == "std::run") {
       return approve()
     }
-    if (e.effect == "std::bash" && e.data.command == "echo phase-two") {
+    // index access, not .command: this handler's inferred data union
+    // only sees the subprocess (std::run) shape - the nested bash
+    // interrupt arrives across the subprocess boundary, which effect
+    // inference cannot see through
+    if (e.effect == "std::bash" && e.data["command"] == "echo phase-two") {
       return approve()
     }
   }

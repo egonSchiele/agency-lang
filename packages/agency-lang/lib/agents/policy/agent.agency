@@ -82,8 +82,9 @@ def deleteFromPolicy(interruptEffect: InterruptEffect, index: number): boolean {
   Delete the rule at the specified index for the given interrupt effect from the current policy.
   Returns true if the rule was successfully deleted, or false if the index was out of bounds.
   """
-  if (currentPolicy[interruptEffect] && index < currentPolicy[interruptEffect].length) {
-    currentPolicy[interruptEffect].splice(index, 1)
+  const rules = currentPolicy[interruptEffect]
+  if (rules != null && index < rules.length) {
+    rules.splice(index, 1)
     return true
   }
   return false
@@ -158,7 +159,7 @@ What actions would you like to allow?
   Decide the next step. If the user is describing what they want, build or update the policy and use addToPolicy, setPolicy, or deleteFromPolicy. Show the user the policy and get confirmation that it looks good. When you are done, return  { type: "done" }. Otherwise, ask the user a question to clarify what they want, and return { type: "askQuestion", question: "..." }.
   """
 
-  systemMessage(systemPrompt)
+  systemMessage(systemPrompt catch "")
   assistantMessage(contextMessage)
   userMessage(userInput)
 

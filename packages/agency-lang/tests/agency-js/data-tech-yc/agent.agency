@@ -48,7 +48,11 @@ node tParseMeta(raw: any): any {
 }
 
 node tMetaFinalize(raw: any): any {
-  return metaFinalize(success(raw)) catch {}
+  const r = metaFinalize(success(raw))
+  if (r is failure(e)) {
+    return {}
+  }
+  return r.value
 }
 
 node tCompaniesFinalizeErr(): string {
@@ -109,12 +113,22 @@ node callListBad(): string {
 
 node mockBatch(): any {
   const r = ycBatch("Winter 2012") with approve
-  return r catch "FAIL"
+  // sentinel via a guard, not `catch "FAIL"` - the catch default is
+  // checked against the success type, and "FAIL" is deliberately not one
+  if (r is failure(e)) {
+    return "FAIL"
+  }
+  return r.value
 }
 
 node mockMeta(): any {
   const r = ycMeta() with approve
-  return r catch "FAIL"
+  // sentinel via a guard, not `catch "FAIL"` - the catch default is
+  // checked against the success type, and "FAIL" is deliberately not one
+  if (r is failure(e)) {
+    return "FAIL"
+  }
+  return r.value
 }
 
 node mockBatchBad(): string {

@@ -16,7 +16,7 @@ import { codingAgent } from "std::agents/coding"
 import { expertAgent } from "std::agents/expert"
 import { verifierAgent } from "std::agents/verifier"
 import { guidanceOrEmpty, renderGuidance } from "std::agents/lib/expertGuidance"
-import { feedbackHasErrors as guidanceFeedbackHasErrors, renderFeedback as guidanceRenderFeedback } from "std::agents/lib/feedback"
+import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { plannerAgent } from "std::agents/planner"
 import { edit } from "std::fs"
 import {
@@ -49,10 +49,7 @@ import { getSlowModel, getSlowProvider } from "../shared.agency"
 import { oracleAgent } from "./oracle.agency"
 import {
   reviewWrittenFiles,
-  renderFeedback,
-  feedbackHasErrors,
  } from "./review.agency"
-import { verify, renderGaps, unwrapVerdict } from "./verify.agency"
 
 
 static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with approve
@@ -257,13 +254,13 @@ export def codeAgent(userMsg: string) {
       maxCost: $5.00,
       maxTime: 5m,
     )
-    if (guidanceFeedbackHasErrors(checked)) {
+    if (feedbackHasErrors(checked)) {
       const fixMsg = """
 ${userMsg}
 
 A strict review found these problems:
 
-${guidanceRenderFeedback(checked)}
+${renderFeedback(checked)}
 
 Fix each problem exactly.
 """
@@ -335,14 +332,13 @@ Fix each problem exactly.
         Please fix the errors.
         """
       } else if (_oneShot && verifyRounds < 2) {
-        const verdictResult = try verify(originalUserMsg)
-        const verdict = unwrapVerdict(verdictResult)
-        if (!verdict.satisfied) {
+        const gaps = verifierAgent(task: originalUserMsg)
+        if (feedbackHasErrors(gaps)) {
           userMsg = """
             Your work isn't complete yet. A fresh review found these gaps:
 
             <gaps>
-            ${renderGaps(verdict.gaps)}
+            ${renderFeedback(gaps)}
             </gaps>
 
             Fix each gap; your work will be re-verified.

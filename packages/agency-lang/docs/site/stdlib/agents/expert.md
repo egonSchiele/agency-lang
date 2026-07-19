@@ -31,7 +31,7 @@ Return the expert's tools: the web and encyclopedia lookups it uses to
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L25))
 
 ### expertAgent
 
@@ -75,4 +75,4 @@ Consult a domain expert: identify the task's technical domain and return
 
 **Returns:** `Result<ExpertGuidance>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/expert.agency#L66))

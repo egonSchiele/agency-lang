@@ -9,30 +9,19 @@
  * the research subagent uses them. `static const` caches the Skill
  * across runs.
  */
-import { todoWrite, todoList } from "std::agent"
-import { fetch, fetchJSON, fetchMarkdown } from "std::http"
-import { remember, recall, setMemoryId } from "std::memory"
-import { docsSkill } from "std::skills"
+import {
+  agencyDocTools,
+  memoryTools,
+  planningTools,
+  webTools,
+ } from "std::agents/lib/toolkits"
+import { setMemoryId } from "std::memory"
 import { highlight } from "std::syntax"
 import { systemMessage } from "std::thread"
-import {
-  search as wikipediaSearch,
-  summary as wikipediaSummary,
-  article as wikipediaArticle,
- } from "std::wikipedia"
 
 import { withWebSearch } from "../lib/search.agency"
 
 
-// Packaged docs served via std::skills docsSkill (no startup approval
-// interrupt — the docs ship with the stdlib). Built once at module
-// load; `static` caches the tool across runs. Guide and CLI reference
-// are separate tools so the LLM can pick the right corpus instead of
-// grepping a giant blob of docs.
-static const docSkill = docsSkill("guide")
-static const cliSkill = docsSkill("cli")
-static const diagnosticsSkill = docsSkill("diagnostics")
-static const stdlibSkill = docsSkill("stdlib")
 
 export static const researchSysPrompt = """
 You are the **research specialist** of a multi-thread Agency-language
@@ -108,29 +97,13 @@ replies appear with colored headings, bold/italic styling, link
 underlining, and properly highlighted code fences.
 """
 
-// The wikipedia tools are imported under aliases (`search as
-// wikipediaSearch`, …), but an import alias only renames the binding — the
-// tool name stays the underlying `search` / `summary` / `article`. Without
-// `.rename()`, `wikipediaSearch` collides with `std::web/search`'s `search` in
-// this same list (both advertise the tool name "search"), which providers
-// reject. Rename them to distinct, self-describing names.
 export static const researchTools: any[] = [
-  docSkill,
-  cliSkill,
-  diagnosticsSkill,
-  stdlibSkill,
-  wikipediaSearch.rename("wikipedia_search"),
-  wikipediaSummary.rename("wikipedia_summary"),
-  wikipediaArticle.rename("wikipedia_article"),
-  fetch,
-  fetchJSON,
-  fetchMarkdown,
-  remember,
-  recall,
+  ...agencyDocTools(),
+  ...webTools(),
+  ...memoryTools(),
+  ...planningTools(),
   highlight.partial(language: "ts"),
   print,
-  todoWrite,
-  todoList,
 ]
 
 // only add system message the first time

@@ -228,6 +228,36 @@ describe("comprehensionParser", () => {
     expect(parseFailsWith("[x for x in]", /iterable/)).toBe(true);
   });
 
+  it("reports a missing binder even with no space before the bracket", () => {
+    // an editor auto-closing the bracket turns a half-typed `[x for`
+    // into `[x for]` - the commit must not be gated on the user having
+    // typed a trailing space
+    expect(parseFailsWith("[x for]", /binder/)).toBe(true);
+    expect(parseFailsWith("[x for ]", /binder/)).toBe(true);
+  });
+
+  // in/if inside the commit points are word-bounded, so a fused token
+  // reports the missing KEYWORD rather than blaming the next clause
+  it("does not let insomething match as in", () => {
+    expect(
+      parseFailsWith("[x for x insomething]", /expected `in`/),
+    ).toBe(true);
+  });
+
+  it("does not let iffy match as a filter if", () => {
+    // iffy is not a filter keyword; with the boundary the optional
+    // filter backtracks and the close-bracket commit reports instead
+    expect(parseFailsWith("[x for x in xs iffy]", /close/)).toBe(true);
+  });
+
+  it("still treats forever as an identifier, not a for prefix", () => {
+    // the word boundary after `for` replaces the old required-space
+    // rule; a longer identifier must still fail BEFORE the commit and
+    // fall through to the array comma rule
+    expect(parseFails("[x forever]")).toBe(true);
+    expect(parseFailsWith("[x forever]", /comprehension/)).toBe(false);
+  });
+
   it("reports a missing in keyword", () => {
     // the binder greedily reads the word `in` as its name, so the
     // commit fires at the missing `in` position (over `xs`)

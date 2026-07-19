@@ -4720,23 +4720,29 @@ export const comprehensionParser: Parser<Comprehension> = label(
         // whitespace here broke every call-bodied comprehension. It must
         // cross newlines (optionalSpaces is spaces/tabs only) or a
         // comprehension could only break lines after a call, never before
-        // `in`/`if`. After must be required so `for` stays a whole word:
-        // `[format, other]` fails at str("for") because exprParser
-        // greedily consumed the full identifier `format`, and `forx`
-        // fails the required space.
+        // `in`/`if`. `for` stays a whole word via the not(varNameChar)
+        // boundary below: `[format, other]` fails at str("for") because
+        // exprParser greedily consumed the full identifier `format`, and
+        // `forx` fails the boundary.
         optionalSpacesOrNewline,
         str("for"),
-        spaces,
-        // COMMIT POINT (#602). Once `[ expr for ` has matched, nothing
-        // but a comprehension attempt can be on the wire - arrays,
-        // strings containing the word for, and format-style identifiers
-        // all diverge earlier (pinned in comprehension.test.ts). So
-        // from here failures are hard, targeted parseError throws
-        // instead of a silent backtrack into the array parser, which
-        // used to swallow half-typed comprehensions.
+        // word boundary, not required whitespace: `[x for]` (an editor
+        // auto-closing a half-typed comprehension) must still reach the
+        // commit and get the binder message, while `forever` must fail
+        // here, BEFORE the commit, and fall through to the array rule
+        not(varNameChar),
+        // COMMIT POINT (#602). Once `[ expr for` has matched as a whole
+        // word, nothing but a comprehension attempt can be on the wire -
+        // arrays, strings containing the word for, and format-style
+        // identifiers all diverge earlier (pinned in
+        // comprehension.test.ts). So from here failures are hard,
+        // targeted parseError throws instead of a silent backtrack into
+        // the array parser, which used to swallow half-typed
+        // comprehensions.
         captureCaptures(
           parseError(
             "expected a binder name or pattern after `for` in this list comprehension",
+            spaces,
             ...iterationBinderFragment,
           ),
         ),
@@ -4745,6 +4751,10 @@ export const comprehensionParser: Parser<Comprehension> = label(
             "expected `in` after the list comprehension binder",
             optionalSpacesOrNewline,
             str("in"),
+            // word-bounded (the ifExpressionParser precedent), so
+            // `insomething` reports the missing `in` here instead of
+            // committing past it and blaming the iterable
+            not(varNameChar),
           ),
         ),
         // the required whitespace after `in` lives with the iterable,
@@ -4765,8 +4775,13 @@ export const comprehensionParser: Parser<Comprehension> = label(
             seqC(
               optionalSpacesOrNewline,
               str("if"),
-              // committed once `if` matched: a filter keyword with no
-              // condition is a broken comprehension, not an array
+              // word boundary: `iffy` is an identifier, not a filter
+              // keyword - it must fail here so the optional backtracks
+              // and the close-bracket commit reports instead
+              not(varNameChar),
+              // committed once `if` matched as a whole word: a filter
+              // keyword with no condition is a broken comprehension,
+              // not an array
               captureCaptures(
                 parseError(
                   "expected a filter condition after `if` in this list comprehension",

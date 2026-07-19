@@ -96,12 +96,22 @@ node callSearchGoverned(name: string): any {
 
 node mockSearch(): any {
   const r = wikidataSearch("Andreessen Horowitz") with approve
-  return r catch "FAIL"
+  // sentinel via a guard, not `catch "FAIL"` - the catch default is
+  // checked against the success type, and "FAIL" is deliberately not one
+  if (r is failure(e)) {
+    return "FAIL"
+  }
+  return r.value
 }
 
 node mockEntity(): any {
   const r = wikidataEntity("Q42") with approve
-  return r catch "FAIL"
+  // sentinel via a guard, not `catch "FAIL"` - the catch default is
+  // checked against the success type, and "FAIL" is deliberately not one
+  if (r is failure(e)) {
+    return "FAIL"
+  }
+  return r.value
 }
 
 node mockEntityUnknown(): string {
@@ -114,5 +124,10 @@ node mockEntityUnknown(): string {
 
 node mockQuery(): any {
   const r = wikidataQuery("SELECT ?item ?itemLabel WHERE { ?item wdt:P31 wd:Q5 } LIMIT 1") with approve
-  return r catch "FAIL"
+  // sentinel via a guard, not `catch "FAIL"` - the catch default is
+  // checked against the success type, and "FAIL" is deliberately not one
+  if (r is failure(e)) {
+    return "FAIL"
+  }
+  return r.value
 }

@@ -16,8 +16,11 @@ node main(args: { policyFile: string }): string {
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
     interrupt std::edit("apply edits?", {
+      dir: ".",
       filename: "foo.agency",
       edits: [{ oldText: "a", newText: "b", replaceAll: false }],
+      before: "a",
+      after: "b",
     })
   } with (data) {
     return handler(data)

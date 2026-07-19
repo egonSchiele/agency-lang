@@ -39,7 +39,7 @@ node main() {
   }
   // Have the LLM review the code
   thread {
-    systemMessage(systemPrompt)
+    systemMessage(systemPrompt catch "")
     let typeErrorMessage = "The type checker found no errors."
     if (typeErrors != "") {
       typeErrorMessage = "The type checker reported the following errors:\n${typeErrors}"

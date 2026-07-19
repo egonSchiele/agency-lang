@@ -4,9 +4,9 @@ import { routeFor } from "../../../lib/agents/agency-agent/subagents/code.agency
 // TriageResult, does codeAgent route correctly? "complex" -> plannerAgent,
 // anything else -> the direct loop.
 node complexRoutesToPlanner(): boolean {
-  return routeFor({ path: "complex", plan: "outline" }) == "planner"
+  return routeFor({ path: "complex", plan: ["outline"] }) == "planner"
 }
 
 node simpleRoutesToDirect(): boolean {
-  return routeFor({ path: "simple", plan: "" }) == "direct"
+  return routeFor({ path: "simple", plan: [] }) == "direct"
 }

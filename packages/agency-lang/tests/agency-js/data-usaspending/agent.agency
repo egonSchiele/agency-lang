@@ -121,10 +121,20 @@ node callAwardsBad(): string {
 
 node mockAwards(): any {
   const r = usaspendingAwards(recipient: "Lockheed") with approve
-  return r catch "FAIL"
+  // sentinel via a guard, not `catch "FAIL"` - the catch default is
+  // checked against the success type, and "FAIL" is deliberately not one
+  if (r is failure(e)) {
+    return "FAIL"
+  }
+  return r.value
 }
 
 node mockAward(): any {
   const r = usaspendingAward("22834500") with approve
-  return r catch "FAIL"
+  // sentinel via a guard, not `catch "FAIL"` - the catch default is
+  // checked against the success type, and "FAIL" is deliberately not one
+  if (r is failure(e)) {
+    return "FAIL"
+  }
+  return r.value
 }

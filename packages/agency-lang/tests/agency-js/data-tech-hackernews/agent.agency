@@ -126,12 +126,22 @@ node callSearchBad(): string {
 
 node mockStories(): any {
   const r = hnStories("top", 2) with approve
-  return r catch "FAIL"
+  // sentinel via a guard, not `catch "FAIL"` - the catch default is
+  // checked against the success type, and "FAIL" is deliberately not one
+  if (r is failure(e)) {
+    return "FAIL"
+  }
+  return r.value
 }
 
 node mockItem(): any {
   const r = hnItem(8863) with approve
-  return r catch "FAIL"
+  // sentinel via a guard, not `catch "FAIL"` - the catch default is
+  // checked against the success type, and "FAIL" is deliberately not one
+  if (r is failure(e)) {
+    return "FAIL"
+  }
+  return r.value
 }
 
 node mockItemNull(): string {
@@ -144,5 +154,10 @@ node mockItemNull(): string {
 
 node mockSearch(): any {
   const r = hnSearch("dropbox") with approve
-  return r catch "FAIL"
+  // sentinel via a guard, not `catch "FAIL"` - the catch default is
+  // checked against the success type, and "FAIL" is deliberately not one
+  if (r is failure(e)) {
+    return "FAIL"
+  }
+  return r.value
 }

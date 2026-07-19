@@ -12,11 +12,13 @@ import { typecheck, parseAST } from "std::agency"
  * cwd at startup.
  */
 import { todoWrite, todoList } from "std::agent"
+import { agencyCodingAgent } from "std::agents/agency/coding"
+import { agencyExpertAgent } from "std::agents/agency/expert"
 import { codingAgent } from "std::agents/coding"
 import { expertAgent } from "std::agents/expert"
 import { verifierAgent } from "std::agents/verifier"
-import { guidanceOrEmpty, renderGuidance } from "std::agents/lib/expertGuidance"
-import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
+import { ExpertGuidance, guidanceOrEmpty, renderGuidance } from "std::agents/lib/expertGuidance"
+import { Feedback, feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { plannerAgent } from "std::agents/planner"
 import { edit } from "std::fs"
 import {
@@ -209,7 +211,51 @@ def escalate(task: string, reason: string, plan: string): string {
   return planned.value
 }
 
-export def codeAgent(userMsg: string) {
+/* The expert consult runs once and sets the whole direction, so it gets the
+   slow model slot. The solve loop stays on the ambient one. */
+def consultExpert(task: string, agencyTask: boolean): Result<ExpertGuidance> {
+  if (agencyTask) {
+    return agencyExpertAgent(
+      task: task,
+      maxCost: ESCALATE_MAX_COST,
+      maxTime: 5m,
+      model: getSlowModel(),
+      provider: getSlowProvider(),
+    )
+  }
+  return expertAgent(
+    task: task,
+    maxCost: ESCALATE_MAX_COST,
+    maxTime: 5m,
+    model: getSlowModel(),
+    provider: getSlowProvider(),
+  )
+}
+
+/* agencyCodingAgent returns source rather than writing files, so its result
+   is handed back as the reply for the user to place. */
+def solve(task: string, context: string, agencyTask: boolean): Result<string> {
+  if (agencyTask) {
+    const written = agencyCodingAgent(
+      task: task,
+      context: context,
+      maxCost: ESCALATE_MAX_COST,
+      maxTime: ESCALATE_MAX_TIME,
+    )
+    if (isFailure(written)) {
+      return failure("could not write valid Agency code: ${written.error.problems}")
+    }
+    return success(written.value)
+  }
+  return codingAgent(
+    task: task,
+    context: context,
+    maxCost: ESCALATE_MAX_COST,
+    maxTime: ESCALATE_MAX_TIME,
+  )
+}
+
+export def codeAgent(userMsg: string, agencyTask: boolean = false) {
   """
   This agent can help with all coding-related tasks,
   such as reading, writing, or editing code. It can also
@@ -217,6 +263,9 @@ export def codeAgent(userMsg: string) {
   such as questions related to the Agency syntax or CLI tool.
 
   @param userMsg - a message describing what help is needed.
+  @param agencyTask - true when the code in question is Agency code, which
+    routes to the agents that know the language. Leave it false for every
+    other language.
   """
   const originalUserMsg = userMsg
   // Triage: a multi-part task is delegated to plannerAgent (shows a plan, then
@@ -231,19 +280,12 @@ export def codeAgent(userMsg: string) {
     // gets the slow/strong model (the oracle pattern). The solve loop stays on
     // the ambient model. Benchmarks that pin every slot to one model are
     // unaffected: getSlowModel() resolves to that same pinned model.
-    const consult = expertAgent(
-      userMsg,
-      maxCost: ESCALATE_MAX_COST,
-      maxTime: 5m,
-      model: getSlowModel(),
-      provider: getSlowProvider(),
-    )
+    const consult = consultExpert(task: userMsg, agencyTask: agencyTask)
     const guidance = guidanceOrEmpty(consult)
-    const solved = codingAgent(
-      userMsg,
+    const solved = solve(
+      task: userMsg,
       context: renderGuidance(guidance),
-      maxCost: ESCALATE_MAX_COST,
-      maxTime: ESCALATE_MAX_TIME,
+      agencyTask: agencyTask,
     )
     let summary = if isFailure(solved) then "Coding agent stopped: ${solved.error}" else solved.value
     // The expert checklist is authoritative acceptance criteria: verify the
@@ -264,11 +306,7 @@ ${renderFeedback(checked)}
 
 Fix each problem exactly.
 """
-      const fixed = codingAgent(
-        fixMsg,
-        maxCost: ESCALATE_MAX_COST,
-        maxTime: ESCALATE_MAX_TIME,
-      )
+      const fixed = solve(task: fixMsg, context: "", agencyTask: agencyTask)
       if (!isFailure(fixed)) {
         summary = fixed.value
       }
@@ -320,7 +358,10 @@ Fix each problem exactly.
       }),
       )
 
-      const feedback = reviewWrittenFiles() with approve
+      let feedback: Result<Feedback[]> = success([])
+      if (agencyTask) {
+        feedback = reviewWrittenFiles() with approve
+      }
       hasErrorsFromFeedback = feedbackHasErrors(feedback)
       if (hasErrorsFromFeedback) {
         const rendered = renderFeedback(feedback)

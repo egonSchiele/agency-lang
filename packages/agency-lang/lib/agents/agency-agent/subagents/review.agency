@@ -1,4 +1,5 @@
 import { agencyReviewAgent } from "std::agents/agency/review"
+import { reviewAgent as generalReviewAgent } from "std::agents/review"
 import { Feedback, mergeFeedback, renderFeedback } from "std::agents/lib/feedback"
 import { setMemoryId } from "std::memory"
 import { gitStatus, gitIsRepo } from "std::git"
@@ -13,15 +14,21 @@ type AgencyCode = {
   code: string
 }
 
-export def reviewAgent(userMsg: string): string {
+export def reviewAgent(userMsg: string, agencyTask: boolean = false): string {
   """
-  This agent can review any code written in the agency language.
-  It can provide feedback on syntax errors, type errors, and best practices.
+  Review code and report what is wrong with it: errors, risks, and things
+  worth changing.
 
-  @param userMsg - a message describing the code to review or the help needed.
+  @param userMsg - the code to review, or a message describing what to review.
+  @param agencyTask - true when the code is Agency code, which routes to the
+    reviewer that parses and typechecks it. Leave it false for every other
+    language, where that reviewer has nothing useful to say.
   """
-  const feedbackResult = review(userMsg)
-  return renderFeedback(feedbackResult)
+  if (!agencyTask) {
+    const general = generalReviewAgent(work: userMsg, task: "Review this code.")
+    return renderFeedback(general)
+  }
+  return renderFeedback(review(userMsg))
 }
 
 export def review(userMsg: string): Result<Feedback[]> {

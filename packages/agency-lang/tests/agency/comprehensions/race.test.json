@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "race comprehensions return the first finisher as a scalar; filters, single items, and empty results compose",
+      "expectedOutput": "\"6|4|14|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "timeoutMs": 30000
+    }
+  ]
+}

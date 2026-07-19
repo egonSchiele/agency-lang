@@ -1,0 +1,19 @@
+let log = ""
+
+def probe(x: number): number {
+  // synchronous shared write BEFORE the first await, so every branch
+  // logs regardless of who wins
+  log = log + "${x},"
+  sleep((4 - x) * 100)
+  return x * 10
+}
+
+node main(): string {
+  const winner = raceShared [probe(x) for x in [1, 2, 3]]
+
+  // all three pre-sleep writes persist, including the losing branches -
+  // raceShared does not roll back. Assert length, not order: which
+  // branch wrote first is a scheduler property, how many characters
+  // survived is the rollback property under test.
+  return "${winner}|${log.length}"
+}

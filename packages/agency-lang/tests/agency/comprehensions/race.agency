@@ -1,0 +1,23 @@
+def slowDouble(x: number): number {
+  // item 1 sleeps longest, item 3 shortest - the winner is deterministic
+  sleep((4 - x) * 100)
+  return x * 2
+}
+
+node main(): string {
+  // race returns ONE value, not a list - the first branch to finish
+  const winner = race [slowDouble(x) for x in [1, 2, 3]]
+
+  // filter composes: excluding 3 changes who wins
+  const winnerFiltered = race [slowDouble(x) for x in [1, 2, 3] if x != 3]
+
+  // one branch: still a scalar, not a one-element list
+  const single = race [slowDouble(x) for x in [7]]
+
+  // a filter matching NOTHING used to hang the program; the empty race
+  // now resolves to null at the block level, and the comprehension
+  // inherits it
+  const none = race [slowDouble(x) for x in [1, 2, 3] if x > 100]
+
+  return "${winner}|${winnerFiltered}|${single}|${none == null}"
+}

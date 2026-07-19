@@ -1,0 +1,39 @@
+let counter = 0
+
+def bump(x: number): number {
+  // no await between reading and writing counter, so each increment is
+  // atomic within its microtask - THAT is why exactly-3 is safe to
+  // assert even though shared write ORDER is nondeterministic (the
+  // guide says so in the same PR). Adding an await inside this
+  // function would make the count racy; do not.
+  counter = counter + 1
+  return x * 2
+}
+
+def slowDouble(x: number): number {
+  // inverted: item 1 sleeps longest, so completion order reverses
+  // source order and an implementation returning completion order
+  // prints 6,4,2
+  sleep((4 - x) * 100)
+  return x * 2
+}
+
+node main(): string {
+  const xs = [1, 2, 3]
+
+  // forkShared branches mutate the SAME globals - the mirror of
+  // fork.agency, where the identical body leaves counter at 0. Probed
+  // against the hand-written fork(xs, shared: true) form before pinning.
+  const doubled = forkShared [bump(x) for x in xs]
+  const afterShared = counter
+
+  // filter composes: only two branches run, only two increments land
+  const filtered = forkShared [bump(x) for x in xs if x != 2]
+  const afterFiltered = counter
+
+  // results keep SOURCE order on the shared path too - shareGlobals
+  // changes which GlobalStore branches point at, not how results join
+  const ordered = forkShared [slowDouble(x) for x in xs]
+
+  return "${doubled[0]},${doubled[1]},${doubled[2]}|${afterShared}|${filtered[0]},${filtered[1]}|${afterFiltered}|${ordered[0]},${ordered[1]},${ordered[2]}"
+}

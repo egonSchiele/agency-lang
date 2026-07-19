@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "forkShared mutations survive the join, filters compose, and results keep source order",
+      "expectedOutput": "\"2,4,6|3|2,6|5|2,4,6\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "timeoutMs": 30000
+    }
+  ]
+}

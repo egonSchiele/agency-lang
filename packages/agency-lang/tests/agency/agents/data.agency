@@ -1,0 +1,33 @@
+import { dataAgent, buildTools } from "std::agents/data"
+
+node answersFromAMock(): string {
+  const result = dataAgent(task: "what is the current unemployment rate")
+  if (isFailure(result)) { return "failed" }
+  return result.value
+}
+
+// Every connector family must be reachable, and no two tools may share a
+// name: providers reject duplicates and this agent has the longest list.
+node carriesEveryConnectorFamily(): boolean {
+  const names = map(buildTools(), \tool -> tool.name)
+  const required = [
+    "fredSeries",
+    "dbnomicsSeries",
+    "edgarFilings",
+    "gdeltNews",
+    "usaspendingAwards",
+    "wikidataSearch",
+    "littlesisSearch",
+    "hnSearch",
+    "ycBatch",
+  ]
+  const hasAll = every(required, \name -> names.includes(name))
+  return hasAll && unique(names, \name -> name).length == names.length
+}
+
+// It can look up an identifier before querying, which is the failure mode
+// the system prompt warns about.
+node canFindIdentifiersBeforeQuerying(): boolean {
+  const names = map(buildTools(), \tool -> tool.name)
+  return names.includes("fetchMarkdown") && names.includes("wikipedia_search")
+}

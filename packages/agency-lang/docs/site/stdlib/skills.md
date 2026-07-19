@@ -125,6 +125,26 @@ Build a docs tool for an LLM over the packaged Agency documentation.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L243))
 
+### agentSkill
+
+```ts
+agentSkill(agent: string)
+```
+
+Build a skills tool over the skills shipped for one agent. The returned
+  tool lists every skill in its description and lets the model read any one
+  on demand.
+
+  @param agent - Which agent's skills to serve, as a path under the shipped skills directory
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| agent | `string` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L263))
+
 ### commandsDir
 
 ```ts
@@ -177,7 +197,7 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L330))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L350))
 
 ### expandSlash
 
@@ -216,4 +236,4 @@ Expand a /command in `msg` into its command body. Returns the rendered
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L387))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L407))

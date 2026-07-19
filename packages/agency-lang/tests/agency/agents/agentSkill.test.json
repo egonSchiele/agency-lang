@@ -1,0 +1,8 @@
+{
+  "tests": [
+    { "nodeName": "shippedSkillsResolveAndList", "description": "a shipped skills directory resolves and lists its files", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "nestedAgentSkillsResolve", "description": "a nested agent skills directory resolves", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "skillToolHasAStableName", "description": "the skills tool name does not embed the install path", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "agentsCarryTheirSkills", "description": "an agent carries its own skills tool", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

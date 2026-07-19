@@ -176,6 +176,7 @@ export def modelSupportsInput(model: string, modality: string): boolean | null {
   return _modelSupportsInput(model, modality)
 }
 
+
 // Accumulation details (kept out of the docstring, which is also the LLM tool
 // description): when called more than once, the newly loaded file wins over
 // previously loaded files and over the built-in catalog on provider+name

@@ -1,0 +1,104 @@
+import {
+  readOnlyFileTools,
+  writableFileTools,
+  shellTools,
+  gitTools,
+  webTools,
+  agencyDocTools,
+  agencyCodeTools,
+  memoryTools,
+  planningTools,
+ } from "std::agents/lib/toolkits"
+
+def allBundles(): any[] {
+  return [
+    readOnlyFileTools(),
+    writableFileTools(),
+    shellTools(),
+    gitTools(),
+    webTools(),
+    agencyDocTools(),
+    agencyCodeTools(),
+    memoryTools(),
+    planningTools(),
+  ]
+}
+
+node everyBundleHasTools(): boolean {
+  return every(allBundles(), \bundle -> bundle.length > 0)
+}
+
+// Membership, not arity: an arity check passes if someone drops grep and
+// adds two unrelated tools, which is exactly the drift this asserts against.
+node writableIsASupersetOfReadOnly(): boolean {
+  const writableNames = map(writableFileTools(), \tool -> tool.name)
+  const coversReadOnly = every(readOnlyFileTools(), \tool -> writableNames.includes(tool.name))
+  return coversReadOnly && writableFileTools().length == readOnlyFileTools().length + 2
+}
+
+/** True when a tool has `useAgentCwd` bound to true by partial application.
+  The bound arguments arrive as parallel indices and values, so the check
+  looks the parameter up by name and then reads the value bound at its
+  position. */
+def isCwdBound(tool: any): boolean {
+  const args = tool.boundArgs
+  if (args == null) {
+    return false
+  }
+  let position = 0
+  let cwdIndex = -1
+  for (param in args.originalParams) {
+    if (param.name == "useAgentCwd") {
+      cwdIndex = position
+    }
+    position = position + 1
+  }
+  if (cwdIndex < 0) {
+    return false
+  }
+  let slot = 0
+  let bound = false
+  for (index in args.indices) {
+    if (index == cwdIndex && args.values[slot] == true) {
+      bound = true
+    }
+    slot = slot + 1
+  }
+  return bound
+}
+
+// Composing from a bundle must not silently move an agent onto the process
+// working directory. This is invisible in CI otherwise, because tests run
+// from the repo root where the two usually coincide: it shows up only as an
+// agent reading or writing outside the directory it was pointed at.
+node fileAndShellToolsAreCwdBound(): boolean {
+  const shouldBeBound = [...writableFileTools(), ...shellTools()]
+  return every(shouldBeBound, isCwdBound)
+}
+
+// Providers reject two tools with the same name, and .partial() preserves the
+// base name, so a bundle can collide with itself. This is the check that
+// catches it before a provider does.
+node noBundleHasDuplicateNames(): boolean {
+  for (bundle in allBundles()) {
+    const names = map(bundle, \tool -> tool.name)
+    if (unique(names, \name -> name).length != names.length) {
+      return false
+    }
+  }
+  return true
+}
+
+// The wikipedia tools must not advertise a bare `search`, which collides with
+// the web-search providers in std::agents/lib/search.
+node wikipediaToolsAreRenamed(): boolean {
+  const names = map(webTools(), \tool -> tool.name)
+  return names.includes("wikipedia_search") && !names.includes("search")
+}
+
+// The docs tools carry stable names rather than ones derived from the
+// absolute install path, which differs per machine.
+node docsToolsHaveStableNames(): boolean {
+  const names = map(agencyDocTools(), \tool -> tool.name)
+  return names.includes("agency_guide") && names.includes("agency_diagnostics")
+}

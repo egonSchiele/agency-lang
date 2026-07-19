@@ -14,23 +14,23 @@
   grounds its guidance in the bundled docs instead of the web.
 */
 import { ExpertGuidance, emptyGuidance } from "std::agents/lib/expertGuidance"
+import { hostedSearchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { fetch, fetchJSON, fetchMarkdown } from "std::http"
+import { webTools } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
-import {
-  search as wikipediaSearch,
-  summary as wikipediaSummary,
-  article as wikipediaArticle,
- } from "std::wikipedia"
 
-static const tools: any[] = [
-  wikipediaSearch,
-  wikipediaSummary,
-  wikipediaArticle,
-  fetch,
-  fetchJSON,
-  fetchMarkdown,
-]
+// Skills we ship for this agent: markdown the model reads on demand,
+// so teaching it something new costs a file rather than prompt length.
+static const skills = agentSkill("expert")
+
+export def buildTools(): any[] {
+  """
+  Return the expert's tools: the web and encyclopedia lookups it uses to
+  confirm domain specifics.
+  """
+  return [...webTools(), skills]
+}
 
 static const systemPrompt = """You are a domain expert advising a weaker coding agent that is about to attempt the task below and tends to miss domain-specific conventions.
 
@@ -47,6 +47,7 @@ def consult(
   context: string,
   model: string,
   provider: string,
+  extraTools: any[],
 ): ExpertGuidance {
   if (threadIsNew()) {
     systemMessage(systemPrompt)
@@ -59,8 +60,8 @@ def consult(
     llmOptions(
       model: model,
       provider: provider,
-      tools: tools,
-      hostedTools: ["web_search"],
+      tools: buildTools().concat(extraTools),
+      hostedTools: hostedSearchTools(model),
     ),
   )
   return guidance
@@ -74,6 +75,7 @@ export def expertAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<ExpertGuidance> {
   """
   Consult a domain expert: identify the task's technical domain and return
@@ -86,6 +88,7 @@ export def expertAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   // The guard Result is the return value: its failure carries whatever
   // actually went wrong, whether that is a tripped budget or a failure from
@@ -93,7 +96,13 @@ export def expertAgent(
   return guard(cost: maxCost, time: maxTime) {
     let guidance: ExpertGuidance = emptyGuidance
     thread(label: "expertAgent", session: session) {
-      guidance = consult(task: task, context: context, model: model, provider: provider)
+      guidance = consult(
+        task: task,
+        context: context,
+        model: model,
+        provider: provider,
+        extraTools: extraTools,
+      )
     }
     return guidance
   }

@@ -1,4 +1,4 @@
-import { searchTools, searchProviderNames } from "std::agents/lib/search"
+import { searchTools, searchProviderNames, hostedSearchTools } from "std::agents/lib/search"
 
 // Which keys a developer has set varies, so this pins the invariants that
 // hold either way rather than a specific provider list: every name comes
@@ -11,4 +11,15 @@ node namesComeFromTheCatalog(): boolean {
 
 node oneToolPerAvailableProvider(): boolean {
   return searchTools().length == searchProviderNames().length
+}
+
+// Hosted search is requested from one place rather than hardcoded at each
+// agent. It is deliberately not gated on the model: see the comment in
+// std::agents/lib/search for why a catalog-based gate would answer
+// "unsupported" for every model and silently disable search everywhere.
+node hostedSearchIsRequestedFromOnePlace(): boolean {
+  const capable = hostedSearchTools("gpt-4o-mini")
+  const unknown = hostedSearchTools("some-local-model-nobody-shipped")
+  const ambient = hostedSearchTools()
+  return capable.includes("web_search") && unknown.includes("web_search") && ambient.includes("web_search")
 }

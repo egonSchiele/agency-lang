@@ -29,9 +29,22 @@ effect std::agents::planApprove {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L18))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L32))
 
 ## Functions
+
+### buildTools
+
+```ts
+buildTools(): any[]
+```
+
+Return the planner's tools: read-only access to the project it is planning
+  for, plus its skills.
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L22))
 
 ### planCodePrompt
 
@@ -51,7 +64,7 @@ Build the code-generation instruction: emit a program whose `node main` composes
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L63))
 
 ### renderEffects
 
@@ -70,7 +83,7 @@ Human-readable capability envelope for the approval prompt, or an honest
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L91))
 
 ### runApproved
 
@@ -94,7 +107,7 @@ runApproved(
 
 **Returns:** [PlanState](#planstate)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L180))
 
 ### plannerAgent
 
@@ -107,6 +120,8 @@ plannerAgent(
   maxTime: number = 60m,
   model: string = "",
   provider: string = "",
+  session: string = "",
+  extraTools: any[] = [],
 ): Result<string> raises <std::agents::planApprove, std::guard>
 ```
 
@@ -123,6 +138,8 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
   @param maxTime - hard wall-clock cap (default 60 minutes).
   @param model - model override for the planning step only, or "" for the ambient model.
   @param provider - provider for the model override.
+  @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 **Parameters:**
 
@@ -135,7 +152,9 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 | maxTime | `number` | 60m |
 | model | `string` | "" |
 | provider | `string` | "" |
+| session | `string` | "" |
+| extraTools | `any[]` | [] |
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L195))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L215))

@@ -267,6 +267,7 @@ export default defineConfig({
               collapsed: true,
               items: [
                 { text: "agents/coding", link: "/stdlib/agents/coding" },
+                { text: "agents/data", link: "/stdlib/agents/data" },
                 { text: "agents/expert", link: "/stdlib/agents/expert" },
                 { text: "agents/planner", link: "/stdlib/agents/planner" },
                 { text: "agents/researcher", link: "/stdlib/agents/researcher" },
@@ -298,6 +299,10 @@ export default defineConfig({
                 },
                 { text: "agents/lib/search", link: "/stdlib/agents/lib/search" },
                 { text: "agents/lib/shared", link: "/stdlib/agents/lib/shared" },
+                {
+                  text: "agents/lib/toolkits",
+                  link: "/stdlib/agents/lib/toolkits",
+                },
               ],
             },
             { text: "args", link: "/stdlib/args" },

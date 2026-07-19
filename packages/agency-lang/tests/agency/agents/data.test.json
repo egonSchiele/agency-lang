@@ -1,0 +1,27 @@
+{
+  "tests": [
+    {
+      "nodeName": "answersFromAMock",
+      "description": "the data agent returns its answer as a success Result",
+      "input": "",
+      "expectedOutput": "\"unemployment was 4.1 percent in the latest month, FRED series UNRATE\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "unemployment was 4.1 percent in the latest month, FRED series UNRATE" }]
+    },
+    {
+      "nodeName": "carriesEveryConnectorFamily",
+      "description": "every connector family is reachable and no tool name repeats",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "canFindIdentifiersBeforeQuerying",
+      "description": "the agent can look up an identifier before querying",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -12,7 +12,7 @@ import { frontmatter } from "std::markdown"
 // the interrupt-raising versions have.
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
-import { _docsDir } from "agency-lang/stdlib-lib/skills.js"
+import { _docsDir, _agentSkillsDir } from "agency-lang/stdlib-lib/skills.js"
 
 /** @module
   @summary Give an LLM access to a directory of skills, and support Claude-Code-style slash commands.
@@ -258,6 +258,26 @@ export def docsSkill(section: "guide" | "cli" | "diagnostics" | "stdlib") {
   // every read the LLM later performs still raises std::read and goes
   // through handlers/policies exactly like any other read tool.
   return buildSkillsTool(_docsDir(section), "flat", "", true)
+}
+
+export def agentSkill(agent: string) {
+  """
+  Build a skills tool over the skills shipped for one agent. The returned
+  tool lists every skill in its description and lets the model read any one
+  on demand.
+
+  @param agent - Which agent's skills to serve, as a path under the shipped skills directory
+  """
+  // No approval interrupt for the startup scan, matching docsSkill: these
+  // skills ship inside the agency package, so scanning them carries the same
+  // trust as running the stdlib itself. The returned tool is read.partial, so
+  // every read the LLM later performs still raises std::read and goes through
+  // handlers and policies exactly like any other read tool.
+  //
+  // The explicit name matters: the name derived from a directory embeds the
+  // absolute install path, so it differs per machine and gets truncated.
+  const name = "skills_" + agent.replace("/", "_")
+  return buildSkillsTool(_agentSkillsDir(agent), "flat", name)
 }
 
 // ============================================================

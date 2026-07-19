@@ -1,0 +1,71 @@
+import { buildTools as codingTools } from "std::agents/coding"
+import { buildTools as verifierTools } from "std::agents/verifier"
+import { buildTools as reviewTools } from "std::agents/review"
+import { buildTools as agencyVerifierTools } from "std::agents/agency/verifier"
+import { buildTools as agencyCodingTools } from "std::agents/agency/coding"
+import { buildTools as agencyReviewTools } from "std::agents/agency/review"
+
+def hasTool(tools: any[], name: string): boolean {
+  return some(tools, \tool -> tool.name == name)
+}
+
+// The worst gap: the Agency verifier ran a program and judged its return
+// value while unable to see any file the program wrote.
+node agencyVerifierCanSeeFiles(): boolean {
+  const tools = agencyVerifierTools()
+  return hasTool(tools, "read") && hasTool(tools, "bash")
+}
+
+// The verifier is told to compute values and inspect bytes.
+node verifierCanComputeAndReadBytes(): boolean {
+  const tools = verifierTools()
+  return hasTool(tools, "bash") && hasTool(tools, "readBinary")
+}
+
+// The Agency writer could not look up the AG#### codes its own retry prompt
+// quoted at it, nor check a draft before spending an attempt on it.
+node agencyCodingHasDocsAndTypecheck(): boolean {
+  const tools = agencyCodingTools()
+  return hasTool(tools, "agency_diagnostics") && hasTool(tools, "typecheck") && hasTool(tools, "read")
+}
+
+// It gets targeted fetch but deliberately no search: an open-ended search
+// for Agency syntax returns other languages' idioms.
+node agencyCodingFetchesButDoesNotSearch(): boolean {
+  const tools = agencyCodingTools()
+  return hasTool(tools, "fetchMarkdown") && !hasTool(tools, "web_search_brave")
+}
+
+// The coding agent could search the web but not fetch what it found.
+node codingCanFetch(): boolean {
+  return hasTool(codingTools(), "fetchMarkdown")
+}
+
+// Both reviewers can look things up now, and still cannot change anything.
+node reviewersLookUpButCannotWrite(): boolean {
+  const plain = reviewTools()
+  const agency = agencyReviewTools()
+  const canLookUp = hasTool(plain, "fetchMarkdown") && hasTool(agency, "agency_guide")
+  const cannotWrite = !hasTool(plain, "write") && !hasTool(agency, "write") && !hasTool(agency, "bash")
+  return canLookUp && cannotWrite
+}
+
+// No agent may offer two tools with the same name: providers reject that,
+// and .partial() preserves the base name so it is easy to do by accident.
+node noAgentHasDuplicateToolNames(): boolean {
+  const lists = [
+    codingTools(),
+    verifierTools(),
+    reviewTools(),
+    agencyVerifierTools(),
+    agencyCodingTools(),
+    agencyReviewTools(),
+  ]
+  for (list in lists) {
+    const names = map(list, \tool -> tool.name)
+    if (unique(names, \name -> name).length != names.length) {
+      return false
+    }
+  }
+  return true
+}

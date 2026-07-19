@@ -1,0 +1,27 @@
+import { agentSkill } from "std::skills"
+import { buildTools as dataTools } from "std::agents/data"
+
+// The shipped directory must resolve and list what is in it. A path relative
+// to the calling file, or a missing package files entry, breaks this for
+// installed users while working fine in the repo.
+node shippedSkillsResolveAndList(): boolean {
+  const tool = agentSkill("data")
+  return tool.description =~ re/finding-identifiers/
+}
+
+// A nested agent directory resolves too.
+node nestedAgentSkillsResolve(): boolean {
+  const tool = agentSkill("agency/coding")
+  return tool.description.length > 0
+}
+
+// The tool carries a stable name rather than one derived from the absolute
+// install path, which differs per machine.
+node skillToolHasAStableName(): boolean {
+  return agentSkill("data").name == "skills_data"
+}
+
+// Every agent carries its own skills tool.
+node agentsCarryTheirSkills(): boolean {
+  return some(dataTools(), \tool -> tool.name == "skills_data")
+}

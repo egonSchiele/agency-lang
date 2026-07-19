@@ -11,8 +11,14 @@ import { compile } from "std::agency"
 import { agencyReviewAgent } from "std::agents/agency/review"
 import { renderFeedback, feedbackHasErrors } from "std::agents/lib/feedback"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { docsSkill } from "std::skills"
+import {
+  agencyDocTools,
+  agencyCodeTools,
+  readOnlyFileTools,
+ } from "std::agents/lib/toolkits"
+import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { Critique, revise } from "std::strategy"
+import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
 /** A failed generation: the last source attempted, with the problems found
@@ -81,10 +87,39 @@ Commonly useful standard library modules:
 - std::agency: runCode (run Agency code)
 
 If you are unsure about syntax or a standard-library function, read the
-relevant page with the docs tool before writing code.
+relevant page with the docs tool before writing code. When a diagnostic code
+(AG####) comes back, look it up in the diagnostics reference rather than
+guessing at the fix.
+
+Typecheck your draft before returning it, and fix what it reports. An
+attempt you already know does not typecheck wastes a whole round.
 Return only the complete program in the code field."""
 
-static const tools: any[] = [docsSkill("guide")]
+// No hosted web search here, unlike codingAgent. This agent writes one
+// language whose authoritative docs ship in this package, and an open-ended
+// search returns other languages' idioms, which is the exact failure the
+// system prompt above spends its length fighting. Targeted fetch is fine: it
+// retrieves a page the caller already named.
+// Skills we ship for this agent: markdown the model reads on demand,
+// so teaching it something new costs a file rather than prompt length.
+static const skills = agentSkill("agency/coding")
+
+export def buildTools(): any[] {
+  """
+  Return the Agency writer's tools: the bundled documentation, the source
+  inspectors it checks drafts with, read-only access to the project it is
+  writing for, and fetches for a named external resource.
+  """
+  return [
+    ...agencyDocTools(),
+    ...agencyCodeTools(),
+    ...readOnlyFileTools(),
+    fetch,
+    fetchJSON,
+    fetchMarkdown,
+    skills,
+  ]
+}
 
 export def syntaxHintFor(errors: string): string {
   """
@@ -183,6 +218,7 @@ def generateLoop(
   maxAttempts: number,
   model: string,
   provider: string,
+  extraTools: any[],
 ): WriteOutcome {
   if (threadIsNew()) {
     systemMessage(systemPrompt)
@@ -200,7 +236,11 @@ def generateLoop(
     }
     const generated: GeneratedCode = llm(
       prompt,
-      llmOptions(model: model, provider: provider, tools: tools),
+      llmOptions(
+        model: model,
+        provider: provider,
+        tools: buildTools().concat(extraTools),
+      ),
     )
     const outcome = outcomeFor(source: generated.code)
     saveDraft(outcome)
@@ -217,6 +257,7 @@ export def agencyCodingAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<string, WriteFailure> {
   """
   Write an Agency program for the task. Iterates until the source parses,
@@ -231,11 +272,19 @@ export def agencyCodingAgent(
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   const captured = guard(cost: maxCost, time: maxTime) {
     let outcome: WriteOutcome = { valid: false, source: "", problems: ["generation never ran"] }
     thread(label: "agencyCodingAgent", session: session) {
-      outcome = generateLoop(task, context, maxAttempts, model, provider)
+      outcome = generateLoop(
+        task: task,
+        context: context,
+        maxAttempts: maxAttempts,
+        model: model,
+        provider: provider,
+        extraTools: extraTools,
+      )
     }
     return outcome
   }

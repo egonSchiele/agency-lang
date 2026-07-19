@@ -28,9 +28,23 @@ export type WriteFailure = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L26))
 
 ## Functions
+
+### buildTools
+
+```ts
+buildTools(): any[]
+```
+
+Return the Agency writer's tools: the bundled documentation, the source
+  inspectors it checks drafts with, read-only access to the project it is
+  writing for, and fetches for a named external resource.
+
+**Returns:** `any[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L107))
 
 ### syntaxHintFor
 
@@ -51,7 +65,7 @@ Return a specific syntax reminder to inject next to a diagnostic, or ""
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L124))
 
 ### agencyCodingAgent
 
@@ -65,6 +79,7 @@ agencyCodingAgent(
   model: string = "",
   provider: string = "",
   session: string = "",
+  extraTools: any[] = [],
 ): Result<string, WriteFailure>
 ```
 
@@ -80,6 +95,7 @@ Write an Agency program for the task. Iterates until the source parses,
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param session - Session name to share a thread across calls, or "" for isolated
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 **Parameters:**
 
@@ -93,7 +109,8 @@ Write an Agency program for the task. Iterates until the source parses,
 | model | `string` | "" |
 | provider | `string` | "" |
 | session | `string` | "" |
+| extraTools | `any[]` | [] |
 
 **Returns:** `Result<string, WriteFailure>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L211))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L251))

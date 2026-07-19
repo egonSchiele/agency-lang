@@ -64,6 +64,17 @@
           "return": "one"
         }
       ]
+    },
+    {
+      "nodeName": "overshootIsCoveredByTheGrant",
+      "description": "a block that overshoots its limit still gets a valid approval",
+      "input": "",
+      "expectedOutput": "\"done:spun\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

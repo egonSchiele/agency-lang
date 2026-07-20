@@ -392,10 +392,8 @@ Parse an ISO 8601 datetime string into an instant (epoch milliseconds).
 formatDuration(ms: number): string
 ```
 
-Render a duration in milliseconds as a compact human string, largest unit
-  first: "5m 32s", "1h 1s", "2d 3h". The granularity is whole seconds (a
-  sub-second duration is "0s") and the largest unit is days (a long duration
-  reads like "40d", never weeks or months). A negative duration gets a leading "-".
+Render a duration in milliseconds as a readable string like "5m 32s" or
+  "2w 3d". Whole-second granularity; largest unit is weeks.
 
   @param ms - The duration in milliseconds
 
@@ -417,14 +415,12 @@ Render a millisecond duration as a readable string like "5m 32s".
 elapsedTime(since: number): string
 ```
 
-Returns how long has elapsed since the given instant, as a readable duration
-  like "5m 32s". Capture the start with `now()`, then call this to see the time
-  since. The largest unit is days, so a multi-day span reads like "2d 3h". If
-  you need the raw milliseconds for math, use `now() - since` instead.
+How much time has elapsed since the given instant, as a readable duration
+  like "5m 32s". Capture the start with now().
 
-  @param since - The starting instant (epoch milliseconds), e.g. from now()
+  @param since - The starting instant, from now()
 
-How long has elapsed since an instant, as a readable duration string.
+How much time has elapsed since an instant, as a readable duration string.
 
 **Parameters:**
 
@@ -434,4 +430,4 @@ How long has elapsed since an instant, as a readable duration string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L229))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L227))

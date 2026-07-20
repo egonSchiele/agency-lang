@@ -22,13 +22,15 @@ export const realClock: Clock = {
   clearTimer: (handle) => clearTimeout(handle.id as ReturnType<typeof setTimeout>),
 };
 
+/** The wall-clock epoch a fresh FakeClock reports as "now" (before any advance).
+ *  A realistic date, not 0, so a fixture reading today()/format(now()) under a
+ *  fake clock gets 2026, not 1970. std::date reads wallTime() (#609), so this is
+ *  load-bearing — clock.test.ts references this constant, not a literal. */
+export const FAKE_CLOCK_WALL_BASE_MS = Date.UTC(2026, 0, 1);
+
 export class FakeClock implements Clock {
   private monotonicMs = 0;
-  // Base for wall time. Zero for now, so a frozen calendar reads as 1970.
-  // Nothing calls wallTime() in this feature, so it does not matter yet. When
-  // #609 wires std::date through the seam, seed this from a realistic epoch so
-  // a test reading "today" does not get 1970. Known follow-up, not a bug here.
-  private wallBaseMs = 0;
+  private wallBaseMs = FAKE_CLOCK_WALL_BASE_MS;
   private timers: { dueAt: number; fn: () => void; id: number }[] = [];
   private nextId = 1;
 

@@ -1,4 +1,4 @@
-import { _now, _today, _tomorrow, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth, _format, _formatDate, _parse } from "agency-lang/stdlib-lib/date.js"
+import { _now, _today, _tomorrow, _nextDayOfWeek, _atTime, _startOfDay, _endOfDay, _startOfWeek, _endOfWeek, _startOfMonth, _endOfMonth, _format, _formatDate, _formatDuration, _parse } from "agency-lang/stdlib-lib/date.js"
 import { _advanceTimeImpl } from "agency-lang/stdlib-lib/builtins.js"
 
 /** @module
@@ -210,4 +210,26 @@ export def parse(iso: string): number {
   @param iso - The ISO 8601 datetime string
   """
   return _parse(iso)
+}
+
+/** Render a millisecond duration as a readable string like "5m 32s". */
+export def formatDuration(ms: number): string {
+  """
+  Render a duration in milliseconds as a readable string like "5m 32s" or
+  "2w 3d". Whole-second granularity; largest unit is weeks.
+
+  @param ms - The duration in milliseconds
+  """
+  return _formatDuration(ms)
+}
+
+/** How much time has elapsed since an instant, as a readable duration string. */
+export def elapsedTime(since: number): string {
+  """
+  How much time has elapsed since the given instant, as a readable duration
+  like "5m 32s". Capture the start with now().
+
+  @param since - The starting instant, from now()
+  """
+  return formatDuration(now() - since)
 }

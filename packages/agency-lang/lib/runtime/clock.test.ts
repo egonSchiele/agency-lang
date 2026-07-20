@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { FakeClock, realClock } from "./clock.js";
+import { FakeClock, realClock, FAKE_CLOCK_WALL_BASE_MS } from "./clock.js";
 
 describe("FakeClock", () => {
   it("starts at zero and advances now() and wallTime() together", () => {
     const clock = new FakeClock();
     expect(clock.now()).toBe(0);
-    expect(clock.wallTime()).toBe(0);
+    // wallTime() starts at the seeded wall base (a 2026 date, not 0), so date
+    // reads under a fake clock aren't 1970. It advances in step with now().
+    expect(clock.wallTime()).toBe(FAKE_CLOCK_WALL_BASE_MS);
     clock.advance(200);
     expect(clock.now()).toBe(200);
-    expect(clock.wallTime()).toBe(200);
+    expect(clock.wallTime()).toBe(FAKE_CLOCK_WALL_BASE_MS + 200);
   });
 
   it("fires a timer whose due time falls within the advance", () => {

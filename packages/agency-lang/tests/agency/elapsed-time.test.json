@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "nodeName": "elapsedIsDeterministic",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"1m 5s\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "elapsedTime is deterministic under a fake clock: 65s advanced reads as '1m 5s'."
+    },
+    {
+      "nodeName": "rawMathIsExact",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "65000",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "now() - start is exact under a fake clock; elapsedTime is the legible layer over it."
+    },
+    {
+      "nodeName": "agentPull",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"checked\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "elapsedTime.partial(since: start) is a valid zero-argument tool the model can call; the tool executes and returns '1m 30s' into the thread, and the model answers 'checked'.",
+      "llmMocks": [
+        { "toolCall": { "name": "elapsedTime", "args": {} } },
+        { "return": "checked" }
+      ]
+    }
+  ]
+}

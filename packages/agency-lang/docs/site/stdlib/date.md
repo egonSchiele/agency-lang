@@ -385,3 +385,49 @@ Parse an ISO 8601 datetime string into an instant (epoch milliseconds).
 **Returns:** `number`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L203))
+
+### formatDuration
+
+```ts
+formatDuration(ms: number): string
+```
+
+Render a duration in milliseconds as a readable string like "5m 32s" or
+  "2w 3d". Whole-second granularity; largest unit is weeks.
+
+  @param ms - The duration in milliseconds
+
+Render a millisecond duration as a readable string like "5m 32s".
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| ms | `number` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L216))
+
+### elapsedTime
+
+```ts
+elapsedTime(since: number): string
+```
+
+How much time has elapsed since the given instant, as a readable duration
+  like "5m 32s". Capture the start with now().
+
+  @param since - The starting instant, from now()
+
+How much time has elapsed since an instant, as a readable duration string.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| since | `number` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L227))

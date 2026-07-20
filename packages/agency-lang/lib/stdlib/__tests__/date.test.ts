@@ -7,6 +7,7 @@ import {
   _atTime,
   _format,
   _formatDate,
+  _formatDuration,
   _parse,
   _startOfDay,
   _endOfDay,
@@ -15,6 +16,36 @@ import {
   _startOfMonth,
   _endOfMonth,
 } from "../date.js";
+
+describe("_formatDuration", () => {
+  it("renders durations largest-to-smallest, dropping zero units", () => {
+    expect(_formatDuration(332000)).toBe("5m 32s");
+    expect(_formatDuration(3661000)).toBe("1h 1m 1s");
+    expect(_formatDuration(3600000)).toBe("1h");
+    expect(_formatDuration(3601000)).toBe("1h 1s"); // zero minutes dropped
+    expect(_formatDuration(45000)).toBe("45s");
+    expect(_formatDuration(90061000)).toBe("1d 1h 1m 1s");
+  });
+
+  it("uses weeks as the largest unit", () => {
+    expect(_formatDuration(691200000)).toBe("1w 1d"); // 8 days
+    expect(_formatDuration(604800000)).toBe("1w"); // exactly 7 days
+    expect(_formatDuration(40 * 86400000)).toBe("5w 5d"); // 40 days = 5w 5d
+  });
+
+  it("handles the second boundaries", () => {
+    expect(_formatDuration(999)).toBe("0s");
+    expect(_formatDuration(1000)).toBe("1s");
+    expect(_formatDuration(59999)).toBe("59s");
+    expect(_formatDuration(86400000)).toBe("1d");
+    expect(_formatDuration(604800000)).toBe("1w");
+  });
+
+  it("signs negatives, with no negative zero", () => {
+    expect(_formatDuration(-332000)).toBe("-5m 32s");
+    expect(_formatDuration(-500)).toBe("0s"); // not "-0s"
+  });
+});
 
 describe("date bridges", () => {
   const LA = "America/Los_Angeles";

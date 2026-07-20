@@ -139,6 +139,8 @@ atTime(date: string, time: string, timezone: string = ""): number
 
 Get the instant (epoch milliseconds) of a wall-clock time on a calendar date,
   in a timezone. Example: atTime("2026-05-05", "09:00", "America/New_York").
+  Throws if the date or time cannot be parsed, so bad input fails loudly instead
+  of becoming a silent NaN.
 
   @param date - The calendar date, "YYYY-MM-DD"
   @param time - The wall-clock time, "HH:MM" or "HH:MM:SS"
@@ -181,7 +183,7 @@ Get midnight of the day containing an instant, as epoch milliseconds.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L98))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L100))
 
 ### endOfDay
 
@@ -207,7 +209,7 @@ Get the last millisecond of the day containing an instant.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L113))
 
 ### startOfWeek
 
@@ -232,7 +234,7 @@ Get midnight on Sunday of the week containing an instant.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L127))
 
 ### endOfWeek
 
@@ -258,7 +260,7 @@ Get the last millisecond of Saturday of the week containing an instant.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L140))
 
 ### startOfMonth
 
@@ -283,7 +285,7 @@ Get midnight on the 1st of the month containing an instant.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L152))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L154))
 
 ### endOfMonth
 
@@ -308,7 +310,7 @@ Get the last millisecond of the last day of the month containing an instant.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L167))
 
 ### format
 
@@ -333,7 +335,7 @@ Format an instant as an ISO 8601 string with milliseconds and offset.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L180))
 
 ### formatDate
 
@@ -357,7 +359,7 @@ Format an instant as the "YYYY-MM-DD" calendar date it falls on.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L190))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L192))
 
 ### parse
 
@@ -382,4 +384,4 @@ Parse an ISO 8601 datetime string into an instant (epoch milliseconds).
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L203))

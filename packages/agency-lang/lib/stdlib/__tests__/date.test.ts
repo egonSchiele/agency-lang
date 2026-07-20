@@ -122,6 +122,11 @@ describe("_atTime", () => {
     expect(_format(ms, "America/New_York")).toBe("2026-05-05T00:00:00.000-04:00");
     expect(_format(ms, "UTC")).toBe("2026-05-05T04:00:00.000+00:00");
   });
+
+  it("throws on an unparseable date rather than returning NaN", () => {
+    // A NaN instant would silently poison downstream arithmetic; fail loudly.
+    expect(() => _atTime("not-a-date", "09:00", "UTC")).toThrow(/Invalid date/);
+  });
 });
 
 describe("boundary functions as numbers", () => {

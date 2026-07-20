@@ -1,28 +1,5 @@
 ## Unreleased
 
-### Breaking: std::date represents instants as numbers
-
-An instant — a moment in time — is now epoch milliseconds (a number), not an ISO
-string. `now()`, `atTime`, and `startOf*`/`endOf*` return numbers; `today`,
-`tomorrow`, and `nextDayOfWeek` still return `"YYYY-MM-DD"` strings, because a
-calendar date is a whole day, not a moment.
-
-Migration:
-- Display an instant with `format(x, timezone)`; get its calendar date with
-  `formatDate(x, timezone)`.
-- `now()` no longer takes a timezone — an instant is absolute. Move the timezone
-  to `format(now(), timezone)`.
-- `add`, `addMinutes`, `addHours`, `addDays` are removed. Use `+`/`-` with
-  duration literals: `add(t, ms)` → `t + ms`, `addHours(t, 2)` → `t + 2h`,
-  `addDays(t, 3)` → `t + 3d`. This is behavior-preserving; the old helpers did
-  fixed-millisecond arithmetic.
-- `startOf*`/`endOf*` now take an optional instant (default `now()`) instead of a
-  date string. `endOf*` returns the last millisecond of the span
-  (`23:59:59.999`), so an instant is always within `[startOf, endOf]` of its own
-  span.
-- New `parse(iso)` turns an ISO string into an instant; it throws on input
-  JavaScript's `Date` rejects (so bad input fails loudly, not as a silent `NaN`).
-
 ### Breaking: relative paths now resolve against the working directory
 
 Every path-taking function (`read`, `write`, `edit`, `ls`, `grep`, `glob`,

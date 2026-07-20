@@ -136,6 +136,11 @@ export function _atTime(date: string, time: string, timezone?: string): number {
   // The wall-clock time treated as if it were UTC. `wall = utc + offset`, so
   // the real instant is `wallAsUtc - offset`.
   const wallAsUtc = Date.parse(`${date}T${time.padEnd(8, ":00").slice(0, 8)}Z`);
+  if (Number.isNaN(wallAsUtc)) {
+    // Fail loudly, like parseToDate — a NaN instant would silently poison
+    // every downstream arithmetic and comparison.
+    throw new Error(`Invalid date/time: "${date}" "${time}"`);
+  }
   const offset = offsetMsInTz(wallAsUtc, tz);
   const instant = wallAsUtc - offset;
   // Near a DST transition the offset at the candidate instant can differ from

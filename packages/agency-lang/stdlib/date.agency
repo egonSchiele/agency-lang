@@ -86,6 +86,8 @@ export def atTime(date: string, time: string, timezone: string = ""): number {
   """
   Get the instant (epoch milliseconds) of a wall-clock time on a calendar date,
   in a timezone. Example: atTime("2026-05-05", "09:00", "America/New_York").
+  Throws if the date or time cannot be parsed, so bad input fails loudly instead
+  of becoming a silent NaN.
 
   @param date - The calendar date, "YYYY-MM-DD"
   @param time - The wall-clock time, "HH:MM" or "HH:MM:SS"

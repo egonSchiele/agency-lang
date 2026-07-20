@@ -1,58 +1,28 @@
-import { now, today, tomorrow, addDays, addHours, addMinutes, startOfDay, endOfDay } from "std::date"
+import { now, today, tomorrow, startOfDay, endOfDay, format, formatDate, parse } from "std::date"
 
-node main() {
-  // now() returns an ISO 8601 string
-  const n = now()
-  if (n == "") {
-    return "now failed: empty string"
-  }
+node main(): string {
+  // now() is a number (epoch millis)
+  const current = now()
+  if (current <= 0) { return "now failed" }
 
-  // today() returns a date string
-  const t = today()
-  if (t == "") {
-    return "today failed: empty string"
-  }
+  // today() and tomorrow() are still date strings
+  const todayStr = today()
+  if (todayStr == "") { return "today failed" }
+  if (tomorrow() == todayStr) { return "tomorrow failed: same as today" }
 
-  // tomorrow() returns a date string
-  const tm = tomorrow()
-  if (tm == "") {
-    return "tomorrow failed: empty string"
-  }
+  // arithmetic replaces the old add* helpers
+  if (current + 2h <= current) { return "add failed" }
+  if (current - 30m >= current) { return "subtract failed" }
 
-  // addDays should shift the date
-  const plusOne = addDays(t, 1)
-  if (plusOne == "") {
-    return "addDays failed: empty string"
-  }
-  if (plusOne == t) {
-    return "addDays failed: same as today"
-  }
+  // boundaries return numbers; the current instant is inside its own day
+  if (startOfDay(current) > current) { return "startOfDay failed" }
+  if (endOfDay(current) < current) { return "endOfDay failed" }
 
-  // addHours should shift the time
-  const plusHour = addHours(n, 1)
-  if (plusHour == "") {
-    return "addHours failed: empty string"
-  }
-  if (plusHour == n) {
-    return "addHours failed: same as now"
-  }
+  // format / parse round-trip exactly
+  if (parse(format(current)) != current) { return "round-trip failed" }
 
-  // addMinutes should shift the time
-  const plusMin = addMinutes(n, 30)
-  if (plusMin == "") {
-    return "addMinutes failed: empty string"
-  }
-
-  // startOfDay and endOfDay should return valid strings
-  const sod = startOfDay(t)
-  if (sod == "") {
-    return "startOfDay failed: empty string"
-  }
-
-  const eod = endOfDay(t)
-  if (eod == "") {
-    return "endOfDay failed: empty string"
-  }
+  // formatDate agrees with today() for the current instant
+  if (formatDate(current) != todayStr) { return "formatDate failed" }
 
   return "date ok"
 }

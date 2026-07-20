@@ -20,6 +20,9 @@ node dirAnchoredWrite(): boolean {
   const w = write("tmp-out.txt", "temp", outDir) with approve
   const back = read("tmp-out.txt", outDir) with approve
   remove(outDir + "/tmp-out.txt") with approve
+  if (w is failure(e)) {
+    return false
+  }
   if (back is success(content)) {
     return content == "temp"
   }
@@ -33,6 +36,9 @@ node absoluteFilenameAllowed(): boolean {
   const w = write(outPath, "abs") with approve
   const back = read(outPath) with approve
   remove(outPath) with approve
+  if (w is failure(e)) {
+    return false
+  }
   if (back is success(content)) {
     return content == "abs"
   }

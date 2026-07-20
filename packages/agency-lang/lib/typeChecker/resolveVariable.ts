@@ -1,6 +1,7 @@
 import type { FunctionDefinition, GraphNodeDefinition } from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
+import { BUILTIN_VARIABLES } from "../config.js";
 import { JS_GLOBALS } from "./resolveCall.js";
 
 /**
@@ -60,9 +61,11 @@ const has = (obj: object, name: string): boolean =>
  *   2. Local `def`/`node`               — function reference.
  *   3. Imported function/node           — cross-file function reference.
  *   4. `BUILTIN_FUNCTION_TYPES`         — Agency primitive as function ref.
- *   5. JS global (callable or namespace) — covers both bare `parseInt` and
+ *   5. `BUILTIN_VARIABLES`              — builtin variables (`color`,
+ *                                          `__dirname`).
+ *   6. JS global (callable or namespace) — covers both bare `parseInt` and
  *                                          namespace bases like `JSON`.
- *   6. Otherwise: unresolved.
+ *   7. Otherwise: unresolved.
  */
 export function resolveVariable(
   name: string,
@@ -77,6 +80,7 @@ export function resolveVariable(
   if (input.jsImportedNames && has(input.jsImportedNames, name))
     return { kind: "jsImported" };
   if (has(BUILTIN_FUNCTION_TYPES, name)) return { kind: "builtin" };
+  if (BUILTIN_VARIABLES.includes(name)) return { kind: "builtin" };
   if (has(JS_GLOBALS, name)) return { kind: "jsGlobal" };
   return { kind: "unresolved" };
 }

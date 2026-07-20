@@ -34,6 +34,12 @@ import { uniqBy } from "../utils.js";
 import type { BlockArgument } from "../types/blockArgument.js";
 import { NULL_T, VOID_T } from "./primitives.js";
 
+/** Own-property lookup for name-keyed maps. A plain `obj[name]` on a
+ *  user-controlled identifier like "toString" hits the prototype chain
+ *  and returns a function where a type/def is expected. */
+const hasOwn = (obj: object, name: string): boolean =>
+  Object.prototype.hasOwnProperty.call(obj, name);
+
 /** Names treated as Result constructors (synth parameterizes ResultType from arg). */
 const RESULT_CONSTRUCTORS = new Set<string>(["success", "failure"]);
 
@@ -284,11 +290,15 @@ export function synthType(
       // Builtin variables resolve only after scope lookup fails, so a
       // real binding named `__dirname` shadows the builtin (the same
       // rule the generator applies — see issue #453).
-      const builtinVarType = BUILTIN_VARIABLE_TYPES[expr.value];
-      if (builtinVarType) {
-        return builtinVarType;
+      if (hasOwn(BUILTIN_VARIABLE_TYPES, expr.value)) {
+        return BUILTIN_VARIABLE_TYPES[expr.value];
       }
-      const fnDef = ctx.functionDefs[expr.value];
+      // Same hasOwnProperty rule for the def/node/import maps: a name
+      // like "toString" would otherwise resolve to a prototype method
+      // and crash assignability with a params-less functionRefType.
+      const fnDef = hasOwn(ctx.functionDefs, expr.value)
+        ? ctx.functionDefs[expr.value]
+        : undefined;
       if (fnDef) {
         return {
           type: "functionRefType",
@@ -298,7 +308,9 @@ export function synthType(
           returnTypeValidated: fnDef.returnTypeValidated,
         };
       }
-      const nodeDef = ctx.nodeDefs[expr.value];
+      const nodeDef = hasOwn(ctx.nodeDefs, expr.value)
+        ? ctx.nodeDefs[expr.value]
+        : undefined;
       if (nodeDef) {
         return {
           type: "functionRefType",
@@ -308,7 +320,9 @@ export function synthType(
           returnTypeValidated: nodeDef.returnTypeValidated,
         };
       }
-      const imported = ctx.importedFunctions[expr.value];
+      const imported = hasOwn(ctx.importedFunctions, expr.value)
+        ? ctx.importedFunctions[expr.value]
+        : undefined;
       if (imported) {
         return {
           type: "functionRefType",

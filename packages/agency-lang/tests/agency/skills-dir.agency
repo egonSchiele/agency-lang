@@ -1,17 +1,17 @@
 import { skillsDir } from "std::skills"
 
 def stdDesc(): string {
-  const tool = skillsDir("skills-dir-fixture/std", "standard") with approve
+  const tool = skillsDir(__dirname + "/skills-dir-fixture/std", "standard") with approve
   return tool.description
 }
 
 def flatDesc(): string {
-  const tool = skillsDir("skills-dir-fixture/flat", "flat") with approve
+  const tool = skillsDir(__dirname + "/skills-dir-fixture/flat", "flat") with approve
   return tool.description
 }
 
 def emptyDesc(): string {
-  const tool = skillsDir("skills-dir-fixture/empty", "flat") with approve
+  const tool = skillsDir(__dirname + "/skills-dir-fixture/empty", "flat") with approve
   return tool.description
 }
 
@@ -96,13 +96,13 @@ node siblingDeepPathsStayDistinct(): boolean {
 
 // An explicit name overrides the derived one.
 node explicitNameOverrides(): boolean {
-  const tool = skillsDir("skills-dir-fixture/flat", "flat", "my_docs") with approve
+  const tool = skillsDir(__dirname + "/skills-dir-fixture/flat", "flat", "my_docs") with approve
   return tool.name == "my_docs"
 }
 
 // An explicit name is still sanitized (spaces/punctuation rejected by
 // providers) and capped.
 node explicitNameSanitized(): boolean {
-  const tool = skillsDir("skills-dir-fixture/flat", "flat", "My Cool Skill!") with approve
+  const tool = skillsDir(__dirname + "/skills-dir-fixture/flat", "flat", "My Cool Skill!") with approve
   return tool.name == "My_Cool_Skill"
 }

@@ -73,7 +73,10 @@ Renders a millisecond duration as a compact human string. The exact format:
 - Emit each unit whose value is greater than zero, largest to smallest, joined by
   a single space, with a one-letter suffix: `d`, `h`, `m`, `s`.
 - If every unit is zero (the duration is under one second), emit `"0s"`.
-- A negative duration gets a leading `-` on the whole string.
+- A negative duration gets a leading `-` on the whole string — EXCEPT there is no
+  negative zero: if the magnitude rounds to `"0s"` (a sub-second negative like
+  `-500`), the result is `"0s"`, not `"-0s"`. The `-` is only added when there is a
+  non-zero unit to sign.
 
 Worked examples:
 
@@ -86,6 +89,7 @@ Worked examples:
 | 500 | `"0s"` |
 | 90061000 | `"1d 1h 1m 1s"` |
 | -332000 | `"-5m 32s"` |
+| -500 | `"0s"` |
 
 Deliberate limits, stated so they are decisions and not accidents:
 
@@ -109,10 +113,14 @@ that sets `fakeClock: true` and advances time would still see the real wall cloc
 from `now()` — and an `elapsedTime` test could not be deterministic.
 
 Route every current-time read in `lib/stdlib/date.ts` through the clock on the
-runtime context, exactly as the time guard does. Add one helper:
+runtime context, exactly as the time guard does. Add one helper — named to make
+loud that it reads WALL time, not the monotonic guard clock:
 
 ```ts
-function clockNow(): number {
+// The current WALL-CLOCK instant (epoch ms), through the runtime clock so a
+// fake clock can drive it. NOT clock.now() — that is the monotonic guard clock;
+// date math must meter against wall time.
+function wallClockNow(): number {
   return (__ctx()?.clock ?? realClock).wallTime();
 }
 ```
@@ -123,31 +131,54 @@ reads `Date.now()`, so anything running frameless (including the existing date
 unit tests, which call `_now()` with no frame) behaves exactly as before.
 
 Then:
-- `_now()` returns `clockNow()` instead of `Date.now()`.
-- The three `new Date()` current-time reads become `new Date(clockNow())`.
+- `_now()` returns `wallClockNow()` instead of `Date.now()`.
+- The three `new Date()` current-time reads become `new Date(wallClockNow())`.
 
 Under `fakeClock: true`, `now()` reads the `FakeClock`'s `wallTime()`, so
 `_advanceTime(ms)` moves it and `elapsedTime` is exact.
 
-**Seed the fake clock's wall base.** `FakeClock.wallBaseMs` is `0` today, so a
-faked `now()` reads as 1 January 1970 — fine for a difference like `elapsedTime`
-(the base cancels), but a fixture that reads `today()` or `format(now())` under a
-fake clock would get 1970. Seed `wallBaseMs` to a fixed, realistic epoch (e.g.
-`Date.UTC(2026, 0, 1)`) so a faked absolute date is sane. This only affects
-`wallTime()` readers; guards meter against the monotonic clock and are untouched.
-Per-test control of the seed is out of scope — a fixed constant is enough here.
+**Seed the fake clock's wall base — and update #618's clock test.** `FakeClock.wallBaseMs`
+is `0` today, so a faked `now()` reads as 1 January 1970 — fine for a difference
+like `elapsedTime` (the base cancels), but a fixture that reads `today()` or
+`format(now())` under a fake clock would get 1970. Seed `wallBaseMs` to a fixed,
+realistic epoch so a faked absolute date is sane.
+
+There is a consequence the plan MUST handle: `lib/runtime/clock.test.ts` (from
+#618) pins `wallTime()` at construction and after an advance:
+
+```
+clock.test.ts:8    expect(clock.wallTime()).toBe(0);
+clock.test.ts:11   expect(clock.wallTime()).toBe(200);   // after advance(200)
+```
+
+Seeding makes those `wallBaseMs` and `wallBaseMs + 200`, so both assertions fail
+and must be updated. And once `date.ts` reads `wallTime()`, those assertions stop
+being incidental (the #618 comment "nothing calls wallTime() in this feature" is
+no longer true), so the seed must be a **single shared constant** — export it from
+`clock.ts` (e.g. `FAKE_CLOCK_WALL_BASE_MS = Date.UTC(2026, 0, 1)`), have `wallBaseMs`
+initialize from it, and reference the same constant in `clock.test.ts` rather than
+duplicating a literal. This only affects `wallTime()` readers; guards meter against
+the monotonic clock and are untouched. Per-test control of the seed is out of scope.
 
 ### 4. The agent pull, and partial application with zero unbound parameters
 
 The motivating call is `elapsedTime.partial(since: start)`, which binds the only
 parameter and leaves a function with **zero** unbound parameters, handed to
-`llm(...)` as a tool the model calls with no arguments.
+`llm(...)` as a tool the model calls with no arguments. Because `elapsedTime` now
+returns a readable string, that tool hands the model `"5m 32s"` directly — the
+legible agent surface, no separate formatted wrapper needed. This is the whole
+point of the string return type: the blessed agent tool IS `elapsedTime.partial`.
 
-This is the one part of the design whose end-to-end behavior is unverified. The
-runtime's `.partial()` does not forbid binding every parameter (checked in an
-earlier investigation), but whether a zero-parameter tool survives tool-schema
-generation and an actual model tool call was never confirmed. So the plan must
-prove it early:
+This is the one part of the design whose end-to-end behavior is unverified, and it
+is unverified in a way that can change the public API, so **the plan must run these
+checks FIRST — before finalizing pieces 1 and 2.** The runtime's `.partial()` does
+not forbid binding every parameter (checked in an earlier investigation), but
+whether a zero-parameter tool survives tool-schema generation and an actual model
+tool call was never confirmed. If it fails, the fallback ("keep one nominal
+parameter") reshapes `elapsedTime`'s signature and its whole ergonomics — and that
+fallback is especially bad here, because the model does not know `start`, so a
+nominal parameter it must fill is close to unusable. A negative result is not a
+plumbing detail to discover late; it forces an API decision. Prove:
 
 - A zero-argument partial is callable and returns the right value:
   `elapsedTime.partial(since: start)()` equals `elapsedTime(start)` — the readable
@@ -169,7 +200,8 @@ infeasible.
 ## Testing
 
 - `_formatDuration`: the table above, plus the exact boundaries — 999 ms → `"0s"`,
-  1000 ms → `"1s"`, 59_999 ms → `"59s"`, 86_400_000 ms → `"1d"`, and a negative.
+  1000 ms → `"1s"`, 59_999 ms → `"59s"`, 86_400_000 ms → `"1d"`, `-332000` →
+  `"-5m 32s"`, and the negative-zero case `-500` → `"0s"` (not `"-0s"`).
 - `elapsedTime` determinism under the fake clock: an agency execution test with
   `fakeClock: true` that captures `const start = now()`, calls
   `_advanceTime(65000)`, and asserts `elapsedTime(start) == "1m 5s"`. (65 seconds,
@@ -179,15 +211,22 @@ infeasible.
 - `now()` through the seam: under `fakeClock: true`, `now()` reflects
   `_advanceTime`; frameless (the existing date unit tests) it still reads the real
   clock. Confirm the existing `__tests__/date.test.ts` still passes untouched.
-- The wall-base seed: under a fake clock, `formatDate(now())` reads a 2026 date,
-  not 1970.
+- The wall-base seed: under a fake clock, `formatDate(now())` reads the seeded 2026
+  date, not 1970. And `clock.test.ts`'s two `wallTime()` assertions are updated to
+  the shared constant and still pass.
 - The agent pull: the three checks in piece 4.
+- No import cycle: a quick grep confirming `lib/runtime` does not import
+  `lib/stdlib/date` back (checked — it does not today, but the plan reconfirms it,
+  since `date.ts` newly depends on `lib/runtime`).
 
 ## Out of scope
 
 - Changing how `today`/`tomorrow`/`nextDayOfWeek` present (they stay calendar-date
-  strings; they only gain fake-clock awareness via `clockNow()`).
+  strings; they only gain fake-clock awareness via `wallClockNow()`).
 - A `subtract` function — with numbers, subtraction is the `-` operator (#609's
   original question, resolved by PR 1).
 - Per-test seeding of the fake clock's wall base; a fixed constant is enough.
-- Weeks/months in `formatDuration`, and sub-second granularity.
+- Weeks/months in `formatDuration`, and sub-second granularity. The day cap is a
+  real product decision, not just a limit: a multi-day agent session reading
+  `"40d"` is exactly this feature's scenario, so `elapsedTime`'s and
+  `formatDuration`'s docstrings must state that the largest unit is days.

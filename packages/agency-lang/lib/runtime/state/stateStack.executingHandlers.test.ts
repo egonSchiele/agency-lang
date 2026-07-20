@@ -21,7 +21,7 @@ describe("StateStack.executingHandlerEntries", () => {
     const child = new StateStack();
     child.adoptExecutingHandlersFrom(parent);
     expect(child.executingHandlerEntries).toEqual([e]);
-    expect(child.executingHandlerEntries[0]).toBe(e); // same entry OBJECT: exclusion is identity-based
+    expect(child.executingHandlerEntries[0]).toBe(e); // entry objects are copied by reference, not cloned
     parent.executingHandlerEntries.pop();
     expect(child.executingHandlerEntries).toEqual([e]); // parent pop does not reach the child
   });

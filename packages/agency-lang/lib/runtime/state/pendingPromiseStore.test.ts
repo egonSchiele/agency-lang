@@ -145,3 +145,24 @@ describe("PendingPromiseStore watermark", () => {
     expect(preSettled).toBe(false); // the slow pre-mark promise was not awaited
   });
 });
+
+describe("awaitPending rejectInterrupts", () => {
+  it("throws ConcurrentInterruptError for an interrupt-shaped result when opted in", async () => {
+    const store = new PendingPromiseStore();
+    const k = store.add(Promise.resolve([{ type: "interrupt", interruptId: "x" }]));
+    await expect(
+      store.awaitPending([k], { rejectInterrupts: true }),
+    ).rejects.toBeInstanceOf(ConcurrentInterruptError);
+  });
+
+  it("passes interrupt-shaped results through when not opted in", async () => {
+    const store = new PendingPromiseStore();
+    let resolved: any = null;
+    const k = store.add(
+      Promise.resolve([{ type: "interrupt", interruptId: "x" }]),
+      (v) => { resolved = v; },
+    );
+    await store.awaitPending([k]);
+    expect(resolved).toEqual([{ type: "interrupt", interruptId: "x" }]);
+  });
+});

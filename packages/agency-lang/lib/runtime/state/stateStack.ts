@@ -385,13 +385,19 @@ export class StateStack {
 
   /** Handler entries executing on this branch, innermost last. The
    *  dispatcher (runHandlerChain) pushes before a handler body runs and
-   *  pops after; self-exclusion and the in-handler pause refusals read
-   *  this list. Lives on the stack rather than an AsyncLocalStorage so
-   *  every reader reaches it through a plain object reference it
-   *  already holds — there is no ambient lookup to lose. Never
-   *  serialized: no interrupt-pause checkpoint may exist while it is
-   *  non-empty (assertNoExecutingHandlers), so a deserialized stack
-   *  correctly starts empty.
+   *  pops after. This list serves the PAUSE side of issue #616 only:
+   *  the guard-trip refusals and the interrupt-pause checkpoint
+   *  assertions read it. Self-exclusion (a handler never hears its own
+   *  raises) does NOT read it — that stays on the executingHandlers.ts
+   *  ALS, because exclusion needs per-lineage precision this per-branch
+   *  list cannot give (a concurrent sibling dispatch must still reach a
+   *  handler another dispatch is executing). Lives on the stack rather
+   *  than an AsyncLocalStorage so every pause-side reader reaches it
+   *  through a plain object reference it already holds — there is no
+   *  ambient lookup to lose. Never serialized: no interrupt-pause
+   *  checkpoint may exist while it is non-empty
+   *  (assertNoExecutingHandlers), so a deserialized stack correctly
+   *  starts empty.
    *  See docs/superpowers/specs/2026-07-19-issue-616-no-pause-inside-handlers-design.md */
   executingHandlerEntries: HandlerEntry[] = [];
 

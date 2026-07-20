@@ -238,10 +238,13 @@ async function runHandlerChain(
   // below and climbs the depth.
   if ((ctx.handlers ?? []).length > 0 && !stack) {
     throw new Error(
-      "Interrupt dispatch reached runHandlerChain with handlers registered but no StateStack. " +
-        "The executing-handler mark lives on the stack; dispatching without one would silently " +
-        "disable self-exclusion and the in-handler pause refusal. Pass the raising branch " +
-        "stack to interruptWithHandlers / gatherChainOutcome.",
+      "Cannot run interrupt handlers: no StateStack was passed in. " +
+        "While a handler runs, the runtime records it on the StateStack. " +
+        "That record is what stops a guard trip inside the handler from " +
+        "pausing the run. With no stack there is nowhere to record the " +
+        "handler, so that protection would silently turn off. To fix " +
+        "this, pass the current StateStack when calling " +
+        "interruptWithHandlers or gatherChainOutcome.",
     );
   }
   const depth = (handlerChainDepthALS.getStore() ?? 0) + 1;
@@ -308,6 +311,7 @@ async function runHandlerChain(
             // right now, which cannot settle until this chain returns.
             await ctx.pendingPromises.awaitPending(
               ctx.pendingPromises.keysSince(promiseWatermark),
+              { rejectInterrupts: true },
             );
           } finally {
             const idx = stack!.executingHandlerEntries.lastIndexOf(entry);

@@ -82,9 +82,8 @@ export function _parse(iso: string): number {
 
 // --- Current time ---
 
-export function _now(timezone?: string): string {
-  const tz = timezone || getLocalTimezone();
-  return formatWithTimezone(new Date(), tz);
+export function _now(): number {
+  return Date.now();
 }
 
 export function _today(timezone?: string): string {
@@ -156,87 +155,94 @@ export function _nextDayOfWeek(dayName: string, timezone?: string): string {
 
 // --- Combining date + time + timezone ---
 
-export function _atTime(date: string, time: string, timezone?: string): string {
-  const tz = timezone || getLocalTimezone();
-  // Parse date (YYYY-MM-DD) and time (HH:MM or HH:MM:SS)
-  const timeParts = time.split(":");
-  const hour = parseInt(timeParts[0], 10);
-  const minute = parseInt(timeParts[1], 10);
-  const second = timeParts[2] ? parseInt(timeParts[2], 10) : 0;
+// The timezone offset (ms east of UTC) in effect at a given instant. EDT
+// (-04:00) is -14400000. Parsed from the offset formatWithTimezone renders.
+function offsetMsInTz(instant: number, tz: string): number {
+  const match = formatWithTimezone(new Date(instant), tz).match(
+    /([+-])(\d{2}):(\d{2})$/,
+  );
+  if (!match) return 0;
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * (parseInt(match[2], 10) * 60 + parseInt(match[3], 10)) * 60000;
+}
 
-  // Create a date in the target timezone by trial
-  // Start with a guess, then adjust
-  const guess = new Date(`${date}T${time.padEnd(8, ":00")}Z`);
-  const formatted = formatWithTimezone(guess, tz);
-
-  // Check if the hour/minute match; if not, adjust for timezone offset
-  const fParts = formatted.split("T")[1];
-  const fHour = parseInt(fParts.slice(0, 2), 10);
-  const fMinute = parseInt(fParts.slice(3, 5), 10);
-
-  const hourDiff = hour - fHour;
-  const minuteDiff = minute - fMinute;
-  const totalDiffMs = (hourDiff * 60 + minuteDiff) * 60 * 1000;
-
-  const adjusted = new Date(guess.getTime() + totalDiffMs);
-  // Also adjust seconds
-  const adjustedFormatted = formatWithTimezone(adjusted, tz);
-  const finalParts = adjustedFormatted.split("T");
-  const finalTime = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
-  const offset = finalParts[1].slice(8); // extract +/-HH:MM offset
-
-  return `${date}T${finalTime}${offset}`;
+export function _atTime(date: string, time: string, timezone?: string): number {
+  const tz = resolveTz(timezone);
+  // The wall-clock time treated as if it were UTC. `wall = utc + offset`, so
+  // the real instant is `wallAsUtc - offset`.
+  const wallAsUtc = Date.parse(`${date}T${time.padEnd(8, ":00").slice(0, 8)}Z`);
+  const offset = offsetMsInTz(wallAsUtc, tz);
+  const instant = wallAsUtc - offset;
+  // Near a DST transition the offset at the candidate instant can differ from
+  // the offset at `wallAsUtc`; recompute once against the candidate.
+  const settled = offsetMsInTz(instant, tz);
+  return settled === offset ? instant : wallAsUtc - settled;
 }
 
 // --- Range boundaries ---
 
-export function _startOfDay(date?: string, timezone?: string): string {
-  const tz = timezone || getLocalTimezone();
-  const dateStr = date || _today(tz);
-  return _atTime(dateStr, "00:00:00", tz);
+// Weekday of a calendar-date string, machine-independent: getUTCDay() on a
+// noon-UTC instant. Never getDay(), which reads the runner's local timezone
+// and is off by one on far-east zones. 0 = Sunday.
+function weekdayOf(dateStr: string): number {
+  return new Date(dateStr + "T12:00:00Z").getUTCDay();
 }
 
-export function _endOfDay(date?: string, timezone?: string): string {
-  const tz = timezone || getLocalTimezone();
-  const dateStr = date || _today(tz);
-  return _atTime(dateStr, "23:59:59", tz);
-}
-
-export function _startOfWeek(date?: string, timezone?: string): string {
-  const tz = timezone || getLocalTimezone();
-  const dateStr = date || _today(tz);
-  const d = new Date(dateStr + "T12:00:00Z"); // noon to avoid DST edge cases
-  const day = d.getDay(); // 0 = Sunday
-  d.setDate(d.getDate() - day);
-  const mondayDate = formatWithTimezone(d, tz).slice(0, 10);
-  return _atTime(mondayDate, "00:00:00", tz);
-}
-
-export function _endOfWeek(date?: string, timezone?: string): string {
-  const tz = timezone || getLocalTimezone();
-  const dateStr = date || _today(tz);
+// Date-string transforms: "YYYY-MM-DD" -> "YYYY-MM-DD", timezone-independent
+// because the input is already the tz-local calendar date.
+function sundayOf(dateStr: string): string {
   const d = new Date(dateStr + "T12:00:00Z");
-  const day = d.getDay();
-  d.setDate(d.getDate() + (6 - day));
-  const saturdayDate = formatWithTimezone(d, tz).slice(0, 10);
-  return _atTime(saturdayDate, "23:59:59", tz);
+  d.setUTCDate(d.getUTCDate() - weekdayOf(dateStr));
+  return d.toISOString().slice(0, 10);
 }
-
-export function _startOfMonth(date?: string, timezone?: string): string {
-  const tz = timezone || getLocalTimezone();
-  const dateStr = date || _today(tz);
-  const monthDate = dateStr.slice(0, 8) + "01";
-  return _atTime(monthDate, "00:00:00", tz);
+function saturdayOf(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + (6 - weekdayOf(dateStr)));
+  return d.toISOString().slice(0, 10);
 }
-
-export function _endOfMonth(date?: string, timezone?: string): string {
-  const tz = timezone || getLocalTimezone();
-  const dateStr = date || _today(tz);
+function firstOfMonth(dateStr: string): string {
+  return dateStr.slice(0, 8) + "01";
+}
+function lastOfMonth(dateStr: string): string {
   const year = parseInt(dateStr.slice(0, 4), 10);
-  const month = parseInt(dateStr.slice(5, 7), 10);
-  const lastDay = new Date(year, month, 0).getDate();
-  const lastDate = `${dateStr.slice(0, 8)}${String(lastDay).padStart(2, "0")}`;
-  return _atTime(lastDate, "23:59:59", tz);
+  const month = parseInt(dateStr.slice(5, 7), 10); // 1-indexed
+  // Date.UTC(y, month, 0) is day 0 of the NEXT month = the last day of this one.
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${dateStr.slice(0, 8)}${String(lastDay).padStart(2, "0")}`;
+}
+
+// The one place the four-step "instant -> date -> transform -> re-pin" pipeline
+// lives. `edge` picks midnight (start) or the last millisecond of the day (end).
+function boundary(
+  instant: number,
+  timezone: string | undefined,
+  toDate: (dateStr: string) => string,
+  edge: "start" | "end",
+): number {
+  const tz = resolveTz(timezone);
+  const dateStr = toDate(_formatDate(instant, tz));
+  return edge === "start"
+    ? _atTime(dateStr, "00:00:00", tz)
+    : _atTime(dateStr, "23:59:59", tz) + 999; // last ms of the day
+}
+
+export function _startOfDay(instant: number, timezone?: string): number {
+  return boundary(instant, timezone, (d) => d, "start");
+}
+export function _endOfDay(instant: number, timezone?: string): number {
+  return boundary(instant, timezone, (d) => d, "end");
+}
+export function _startOfWeek(instant: number, timezone?: string): number {
+  return boundary(instant, timezone, sundayOf, "start");
+}
+export function _endOfWeek(instant: number, timezone?: string): number {
+  return boundary(instant, timezone, saturdayOf, "end");
+}
+export function _startOfMonth(instant: number, timezone?: string): number {
+  return boundary(instant, timezone, firstOfMonth, "start");
+}
+export function _endOfMonth(instant: number, timezone?: string): number {
+  return boundary(instant, timezone, lastOfMonth, "end");
 }
 
 // --- Utility ---

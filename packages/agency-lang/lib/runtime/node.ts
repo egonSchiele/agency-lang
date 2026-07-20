@@ -106,13 +106,12 @@ async function initFreshExecCtx(
   execCtx: RuntimeContext<GraphState>,
   opts: {
     initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
-    registerTopLevelCallbacks?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
     moduleDir?: string;
   },
 ): Promise<void> {
-  const { initializeGlobals, registerTopLevelCallbacks, moduleDir } = opts;
+  const { initializeGlobals, moduleDir } = opts;
 
-  // initializeGlobals + registerTopLevelCallbacks both invoke Agency
+  // initializeGlobals + callback registration both invoke Agency
   // code that goes through `__call` — and `__call` reads `ctx` /
   // `threads` / `stateStack` from the ALS frame after the
   // drop-per-call-context-plumbing migration. Without an ALS frame
@@ -232,18 +231,16 @@ export async function runExportedFunction({
   fn,
   namedArgs,
   initializeGlobals,
-  registerTopLevelCallbacks,
   moduleDir,
 }: {
   ctx: RuntimeContext<GraphState>;
   fn: AgencyFunction;
   namedArgs: Record<string, unknown>;
   initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
-  registerTopLevelCallbacks?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
   moduleDir?: string;
 }): Promise<unknown> {
   const execCtx = await ctx.createExecutionContext(nanoid());
-  await initFreshExecCtx(execCtx, { initializeGlobals, registerTopLevelCallbacks, moduleDir });
+  await initFreshExecCtx(execCtx, { initializeGlobals, moduleDir });
 
   const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
   try {
@@ -280,7 +277,6 @@ export async function runNode({
   messages,
   callbacks,
   initializeGlobals,
-  registerTopLevelCallbacks,
   abortSignal,
   moduleDir,
 }: {
@@ -309,18 +305,6 @@ export async function runNode({
   // initializes global variables on the execution context
   initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
 
-  // Re-registers any module top-level `callback(name, fn) { ... }` blocks
-  // on the live execCtx. Module top-level callbacks are stored on
-  // `ctx.topLevelCallbacks`, which is reset on every new execCtx and is
-  // NOT serialized into checkpoints — so a separate, rerunnable
-  // registration phase is required (instead of folding it into
-  // `initializeGlobals`, which only runs once per module). The same
-  // helper is also re-invoked on resume from `respondToInterrupts` so
-  // top-level callbacks survive interrupt round-trips.
-  registerTopLevelCallbacks?: (
-    ctx: RuntimeContext<GraphState>,
-  ) => void | Promise<void>;
-
   // An AbortSignal for cancelling the agent mid-execution.
   // When aborted, in-flight LLM requests are torn down and a AgencyCancelledError is thrown.
   abortSignal?: AbortSignal;
@@ -346,7 +330,7 @@ export async function runNode({
   // see `initFreshExecCtx` for the full ordering rationale (and the
   // `node main() { route({ systemPrompt: foreignStatic }) }` case where a
   // foreign static is read only from a function body).
-  await initFreshExecCtx(execCtx, { initializeGlobals, registerTopLevelCallbacks, moduleDir });
+  await initFreshExecCtx(execCtx, { initializeGlobals, moduleDir });
   // Install the CLI-driven root policy handler (agency run --policy). No-op
   // unless AGENCY_RUN_POLICY is set and this is the root process (not an IPC
   // subprocess). Installed here — after the exec context exists, before the

@@ -24,12 +24,6 @@ export async function rewindFrom(args: {
   checkpoint: Checkpoint;
   overrides: Record<string, unknown>;
   metadata?: Record<string, any>;
-  // See respondToInterrupts / runNode — every fresh execCtx loses
-  // ctx.topLevelCallbacks and needs to re-run module-level
-  // `callback(...)` registrations.
-  registerTopLevelCallbacks?: (
-    ctx: RuntimeContext<GraphState>,
-  ) => void | Promise<void>;
   // See runNode's docstring on the same field — seeded by generated
   // code so the rewound graph's stdlib helpers resolve paths against
   // the compiled module dir.

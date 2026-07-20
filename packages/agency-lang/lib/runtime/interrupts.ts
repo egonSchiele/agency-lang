@@ -649,12 +649,6 @@ export async function respondToInterrupts(args: {
   responses: InterruptResponse[];
   overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
-  // See runNode's docstring on the same field — on resume we have to
-  // re-register module top-level callbacks because `topLevelCallbacks`
-  // lives on the (fresh) execCtx and is not checkpointed.
-  registerTopLevelCallbacks?: (
-    ctx: RuntimeContext<GraphState>,
-  ) => void | Promise<void>;
   // See runNode's docstring on the same field — seeded by generated
   // code so the resumed graph's stdlib helpers resolve paths against
   // the compiled module dir.

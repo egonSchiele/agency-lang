@@ -1,18 +1,13 @@
+import test { _advanceTime } from "std::date"
+
 // A guard INSIDE the handler body trips, and the outer handler
 // PROPAGATES std::guard instead of answering. A propagated in-handler
 // trip cannot ask the user (handlers cannot pause), so it is refused:
 // the guard block fails with the trip error, the handler completes
 // degraded, and the run never pauses. This is the issue-616 refusal
-// path; the answered path lives in handler-guard-trip.agency.
+// path; the answered path lives in handler-guard-trip.agency. The fake
+// clock drives the trip, same as the sibling fixture.
 let sawFailure = false
-
-def spin(rounds: number): string {
-  let count = 0
-  while (count < rounds) {
-    count = count + 1
-  }
-  return "spun"
-}
 
 def inner(): string {
   handle {
@@ -20,8 +15,8 @@ def inner(): string {
     return "work done"
   } with (data) {
     const guarded = guard(time: 5ms, label: "in-handler") {
-      const spun = spin(3000000)
-      return "guarded:${spun}"
+      _advanceTime(20)
+      return "guarded:done"
     }
     if (isFailure(guarded)) {
       sawFailure = true

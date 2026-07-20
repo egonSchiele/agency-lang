@@ -1,19 +1,14 @@
+import test { _advanceTime } from "std::date"
+
 // A guard INSIDE the handler body trips. The trip (std::guard) skips the
 // executing handler and is answered by the OUTER handler, which extends
 // the budget. This is the supervise shape — an expensive check running
-// inside a guard handler — reduced to a fixture. The grant is a DELTA
-// that must cover the overshoot the block ran past its limit before the
-// trip was answered (see the overshoot lesson in stdlib/supervise.agency),
-// so it is granted generously.
+// inside a guard handler — reduced to a fixture. The fake clock drives
+// the trip: _advanceTime jumps past the 5ms budget, the gate at the next
+// step raises the trip, and after the outer grant the block completes.
+// (The original wall-clock spin could not finish inside CI's per-test
+// cap: its 3M loop iterations compile to 3M awaited runner steps.)
 let tripsSeen = 0
-
-def spin(rounds: number): string {
-  let count = 0
-  while (count < rounds) {
-    count = count + 1
-  }
-  return "spun"
-}
 
 def inner(): string {
   handle {
@@ -21,8 +16,8 @@ def inner(): string {
     return "work done"
   } with (data) {
     const guarded = guard(time: 5ms, label: "in-handler") {
-      const spun = spin(3000000)
-      return "guarded:${spun}"
+      _advanceTime(20)
+      return "guarded:done"
     }
     // isFailure, not match: guard Results are read with isFailure by
     // convention in code that may pause and resume.

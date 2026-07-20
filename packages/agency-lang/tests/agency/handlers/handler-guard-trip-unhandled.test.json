@@ -2,6 +2,7 @@
   "tests": [
     {
       "nodeName": "main",
+      "fakeClock": true,
       "description": "An in-handler guard trip with no outer handler registered is refused as a rejection rather than pausing a run nobody can resume. The guard block fails, the handler completes, the run finishes.",
       "input": "",
       "expectedOutput": "\"work done|failed:true\"",

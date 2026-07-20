@@ -2,7 +2,8 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "A guard trip raised while a handler executes routes past the excluded handler to the outer chain, which extends the budget. trips:0 means mid-handler guard trips are not reaching outer handlers.",
+      "fakeClock": true,
+      "description": "A guard trip raised while a handler executes routes past the excluded handler to the outer chain, which extends the budget. trips:0 means mid-handler guard trips are not reaching outer handlers. Driven by the fake clock so the trip is deterministic and cheap enough for CI.",
       "input": "",
       "expectedOutput": "\"work done|trips:1\"",
       "evaluationCriteria": [{ "type": "exact" }],

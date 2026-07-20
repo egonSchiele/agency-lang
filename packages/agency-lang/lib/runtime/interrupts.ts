@@ -311,7 +311,9 @@ async function runHandlerChain(
             );
           } finally {
             const idx = stack!.executingHandlerEntries.lastIndexOf(entry);
-            if (idx !== -1) stack!.executingHandlerEntries.splice(idx, 1);
+            if (idx !== -1) {
+              stack!.executingHandlerEntries.splice(idx, 1);
+            }
             ctx.exitToolCall();
             if (suspensionToken !== undefined) {
               stack!.endSuspension(suspensionToken);

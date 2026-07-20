@@ -214,7 +214,7 @@ Why this is safe: a skipped handler contributes nothing — not an approve — s
 
 Three caveats:
 
-1. **A raise nothing settles cannot ask the user.** Handler functions cannot pause, so where ordinary code would propagate to you for a decision, a handler's raise is rejected with an explanatory message. In practice: if your outer handlers propagate an effect, a handler raising that effect gets a failure Result, not a prompt.
+1. **A raise nothing settles cannot ask the user.** Handler functions cannot pause, so where ordinary code would propagate to you for a decision, a handler's raise is rejected with an explanatory message. This covers guard trips too: a `guard` block inside a handler whose trip no outer handler answers fails with the trip error instead of pausing. In practice: if your outer handlers propagate an effect, a handler raising that effect gets a failure Result, not a prompt.
 2. **Propagation beats approval.** If an outer handler propagates the effect, even a `with approve` inside the handler does not save the raise — it is rejected as in caveat 1.
 3. **The skip is per activation, not per source handler.** A recursive function containing a handle block registers one handler entry per activation, and only the executing activation is skipped. Sibling activations still hear the raise; the chain-depth limit backstops that shape.
 

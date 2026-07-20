@@ -537,3 +537,24 @@ runtime.
   `grantedMs` and propagates up nested joins one at a time. Grants
   never cross budgets (decision 16): only clones sharing the parent's
   guardId are read.
+
+## No pause inside handlers (issue #616)
+
+Handler functions compile to plain callbacks with no step counters, so
+there is no step address inside a handler for a resume to replay back
+to. That makes one rule absolute: an interrupt-pause checkpoint must
+never capture a moment when a handler is mid-flight, because that
+checkpoint could never be resumed. The enforcement has two carriers.
+`StateStack.executingHandlerEntries` is the loss-proof one: the
+dispatcher mirrors each executing handler entry onto the raising
+branch's stack, branch stacks inherit a snapshot of it through
+`runBatch`, and the guard-trip machinery refuses to surface (it throws
+the original trip error instead) while the list is non-empty. Every
+interrupt-pause checkpoint site calls
+`stack.assertNoExecutingHandlers()`, which walks the branch subtree and
+fails loudly if the impossible happens. The `executingHandlers.ts`
+AsyncLocalStorage remains, but only for what the stack cannot express:
+per-lineage precision, so self-exclusion and the `renderVerdict`
+refusal can tell a handler's OWN raises apart from concurrent sibling
+dispatches on the same branch. The design rationale lives in
+`docs/superpowers/specs/2026-07-19-issue-616-no-pause-inside-handlers-design.md`.

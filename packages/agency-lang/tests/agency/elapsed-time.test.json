@@ -23,6 +23,7 @@
       "expectedOutput": "\"checked\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "description": "elapsedTime.partial(since: start) is a valid zero-argument tool the model can call; the tool executes and returns '1m 30s' into the thread, and the model answers 'checked'.",
+      "useTestLLMProvider": true,
       "llmMocks": [
         { "toolCall": { "name": "elapsedTime", "args": {} } },
         { "return": "checked" }

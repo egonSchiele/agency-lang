@@ -18,11 +18,12 @@
  * rejection) yields no findings, and the reviewer judges from history
  * alone rather than the check crashing the run.
  */
-import { verifierAgent } from "std::agents/verifier"
 import { renderFeedback } from "std::agents/lib/feedback"
+import { verifierAgent } from "std::agents/verifier"
 import { SuperviseDecision } from "std::supervise"
 
 import { truncate } from "../lib/utils.agency"
+
 
 // The verifier is a pulse check here, not a final gate: small budgets,
 // because it runs every interval and its findings only steer. Whose
@@ -99,17 +100,15 @@ export def pushSupervisorFrame(alternatives: string = "") {
   if (_frames.length >= MAX_SUPERVISOR_FRAMES) {
     _frames = _frames.slice(_frames.length - MAX_SUPERVISOR_FRAMES + 1)
   }
-  _frames.push(
-    {
+  _frames.push({
     history: [],
     alternatives: alternatives,
     lastDraft: ""
-  },
-  )
+  })
 }
 
 export def popSupervisorFrame() {
-  _frames = _frames.slice(0, _frames.length - 1)
+  _frames.pop()
 }
 
 /** The innermost frame. Defensive: a progressCheck with no pushed frame
@@ -152,7 +151,7 @@ export def stringifyDraft(draft: any): string {
 export def draftDelta(
   current: string,
   previous: string,
-): ("none" | "first" | "changed" | "unchanged") {
+): "none" | "first" | "changed" | "unchanged" {
   if (current == "") {
     return "none"
   }
@@ -212,7 +211,10 @@ export def applyThrashRule(
   reported. Fails open: a verifier that could not run (budget, policy, any
   error) yields no evidence, and the reviewer is told so rather than the
   check crashing the run. */
-def verifierEvidence(task: string, minutes: number): { text: string; findings: number } {
+def verifierEvidence(
+  task: string,
+  minutes: number,
+): { text: string; findings: number } {
   const checked = verifierAgent(
     task: task,
     context: "This is a MID-RUN progress check at about ${minutes} minutes, not a final verification. The work is expected to be incomplete. Measure what exists so far and report which criteria are already satisfied, which are in visible progress, and which show no sign of being started. Do not pad the report with gaps that are merely not-yet-reached.",
@@ -329,7 +331,11 @@ Set `message` to "" for continue. Never redirect just to say "keep going".
 """
 }
 
-export def progressCheck(task: string, elapsed: number, draft: any): SuperviseDecision {
+export def progressCheck(
+  task: string,
+  elapsed: number,
+  draft: any,
+): SuperviseDecision {
   """
   The check callback for a supervised solve: send the verifier into the
   workspace, compare the solver's draft against the last check's, review
@@ -342,7 +348,7 @@ export def progressCheck(task: string, elapsed: number, draft: any): SuperviseDe
   @param elapsed - Working time the solver has consumed so far, in ms
   @param draft - The solver's most recent saveDraft value, or null
   """
-  const minutes = Math.round(elapsed / 60000)
+  const minutes = Math.round(elapsed / (60 * 1000))
   const frame = currentFrame()
   const draftText = stringifyDraft(draft)
   const delta = draftDelta(draftText, frame.lastDraft)

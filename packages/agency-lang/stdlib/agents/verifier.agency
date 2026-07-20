@@ -73,20 +73,20 @@ export def verifierAgent(
       if (threadIsNew()) {
         systemMessage(systemPrompt)
       }
-      const criteriaString = map(criteria, \criterion -> `- ${criterion}`).join("\n")
-      const authoritativeCriteria = """
-      Here is some example criteria that has already been provided for this task. Use it as a reference, but do not assume it is complete. Don't duplicate any of these, come up with new criteria.
+      const criteriaString = criteriaAsString(criteria)
+      /*       const authoritativeCriteria = """
+      Here is some example criteria that has already been provided for this task.
+      Use it as a reference, but do not assume it is complete. Don't duplicate any of these,
+      come up with new criteria.
       <criteria>
       ${criteriaString}
       </criteria>
     """
       const criteriaBlock = if criteria.length == 0 then "" else authoritativeCriteria
-
+ */
       const generateCriteriaPrompt = """
     Given this task, come up with measurable criteria for success.
     <task>${task}</task>
-
-    ${criteriaBlock}
     """
 
       const generatedCriteria: string[] = llm(
@@ -94,38 +94,38 @@ export def verifierAgent(
         llmOptions(model: model, provider: provider, tools: extraTools),
       )
 
-      const allCriteria = criteria.concat(generatedCriteria)
+      const allCriteria = [...criteria, ...generatedCriteria]
 
-      results = concurrencyPool(size: POOL_SIZE, items: allCriteria) as criterion {
-        const prompt = """
+      const prompt = """
       Given this task:
       <task>${task}</task>
 
       Judge it against this criterion:
-      <criterion>${criterion}</criterion>
+      <criterion>${criteriaAsString(allCriteria)}</criterion>
 
       Verify, don't assume. Use your tools to see what code has been produced, and compare it to the criterion.
       Report a concrete pass/fail. If the criterion involves a number, compute that number.
       A criterion you did not actually compute counts as a failure.
       """
 
-        const items: Feedback[] = llm(
-          prompt,
-          llmOptions(
-          model: model,
-          provider: provider,
-          tools: buildTools().concat(extraTools),
-        ),
-        )
-        return items
-      }
-
-      return flatten(results)
-    }
-    finalize {
-      return flatten(results)
+      const items: Feedback[] = llm(
+        prompt,
+        llmOptions(
+        model: model,
+        provider: provider,
+        tools: buildTools().concat(extraTools),
+      ),
+      )
+      return items
     }
   }
 
   return failOpenFeedback(captured)
+}
+
+def criteriaAsString(criteria: string[]): string {
+  if (criteria.length == 0) {
+    return ""
+  }
+  return map(criteria, \criterion -> "- ${criterion}").join("\n")
 }

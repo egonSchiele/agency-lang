@@ -1078,11 +1078,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("[args...]", "Arguments forwarded to the agent")
     .option(
       "--max-cost <dollars>",
-      "Abort if the agent's LLM spend exceeds this many dollars (0 = local models only; negative = no limit)",
+      "Abort if the agent's LLM spend exceeds this many dollars (0 = local models only; negative = no limit). Must come before the agent's own flags",
     )
     .option(
       "--max-time <duration>",
-      "Abort if the agent's working time exceeds this duration (e.g. 30m or 2d); waiting on a human is not counted; zero/negative = no limit",
+      "Abort if the agent's working time exceeds this duration (e.g. 30m or 2d); waiting on a human is not counted; zero/negative = no limit. Must come before the agent's own flags",
     )
     .helpOption(false)
     .action((args: string[], opts: { maxCost?: string; maxTime?: string }) => {
@@ -1586,16 +1586,33 @@ export async function runCli(
 // (e.g. `agency agent --foo bar` becomes `agency agent -- --foo bar`).
 // No-op when the user already wrote `--`, or when `agent` is not the
 // subcommand being invoked.
+//
+// Exception: the agent command has its OWN commander options — --max-cost and
+// --max-time — which set the root budget guard and so MUST be parsed by
+// commander, not forwarded. Skip past any that lead the agent args (right
+// after `agent`) before inserting the separator, so `agency agent --max-cost 5
+// -p task` becomes `agency agent --max-cost 5 -- -p task`. Without this the
+// separator forwards them and the budget silently never applies. Budget flags
+// therefore must come first, before the agent program's own flags.
+const AGENT_BUDGET_OPTIONS = ["--max-cost", "--max-time"];
+
 export function injectAgentSeparator(argv: string[]): string[] {
   const subcommandIdx = findSubcommandIndex(argv);
   if (subcommandIdx === -1) return argv;
   if (argv[subcommandIdx] !== "agent") return argv;
-  if (argv[subcommandIdx + 1] === "--") return argv;
-  return [
-    ...argv.slice(0, subcommandIdx + 1),
-    "--",
-    ...argv.slice(subcommandIdx + 1),
-  ];
+  let sep = subcommandIdx + 1;
+  while (sep < argv.length) {
+    const tok = argv[sep];
+    if (AGENT_BUDGET_OPTIONS.includes(tok)) {
+      sep += 2; // `--max-cost 5`: skip the flag and its separate value
+    } else if (AGENT_BUDGET_OPTIONS.some((o) => tok.startsWith(`${o}=`))) {
+      sep += 1; // `--max-cost=5`: flag and value are one token
+    } else {
+      break;
+    }
+  }
+  if (argv[sep] === "--") return argv;
+  return [...argv.slice(0, sep), "--", ...argv.slice(sep)];
 }
 
 // Walk past `node`, the script path, and any leading top-level options

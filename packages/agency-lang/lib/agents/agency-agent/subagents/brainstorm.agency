@@ -37,7 +37,7 @@ export type Approach = {
 /** What a brainstorm produces: the approach to pursue, the ones set
   aside, and why the judge chose as it did. */
 export type BrainstormResult = {
-  chosen: (Approach | null);
+  chosen?: Approach;
   alternatives: Approach[];
   rationale: string
 }
@@ -71,14 +71,7 @@ export def splitChoice(
       rationale: rationale
     }
   }
-  const alternatives = []
-  let index = 0
-  for (approach in approaches) {
-    if (index != chosenIndex) {
-      alternatives.push(approach)
-    }
-    index = index + 1
-  }
+  const alternatives = [approach for approach, index in approaches if index != chosenIndex]
   return {
     chosen: chosen,
     alternatives: alternatives,
@@ -100,8 +93,12 @@ export def renderChosen(result: BrainstormResult): string {
     return ""
   }
   return """
-The direction to pursue, chosen after comparing several (${result.rationale}):
+The direction to pursue, chosen after comparing several different options:
+<direction>
 ${renderApproach(chosen)}
+</direction>
+
+The rationale for the choice: ${result.rationale}
 
 Follow this direction unless you discover it cannot work; if it fails, say so plainly in your summary rather than silently switching."""
 }
@@ -138,12 +135,7 @@ Commit to the bias you were given — do not hedge toward a middle ground.
 }
 
 def judgeApproaches(task: string, approaches: Approach[]): Choice {
-  const rendered = []
-  let index = 0
-  for (approach in approaches) {
-    rendered.push("[${index}] ${renderApproach(approach)}")
-    index = index + 1
-  }
+  const rendered = ["[${index}] ${renderApproach(approach)}" for approach, index in approaches]
   const choice: Choice = llm(
     """
 Pick the best approach for this task.
@@ -185,7 +177,13 @@ export def brainstormApproaches(
     // salvages this draft (all proposals as alternatives, none chosen),
     // the solver proceeds undirected, and the supervisor still gets the
     // full list for redirects.
-    saveDraft({ chosen: null, alternatives: proposals, rationale: "" })
+    saveDraft(
+      {
+      chosen: null,
+      alternatives: proposals,
+      rationale: ""
+    },
+    )
     const choice = judgeApproaches(task: task, approaches: proposals)
     return splitChoice(
       approaches: proposals,

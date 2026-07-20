@@ -7,6 +7,7 @@ import { promisify } from "util";
 
 import {
   createProgram,
+  injectAgentSeparator,
   parseNonNegativeInt,
   parsePositiveInt,
   runCli,
@@ -184,5 +185,48 @@ describe("integer flag parsers reject parseInt footguns", () => {
     for (const bad of ["1.5", "3abc", "0x10", "-1", "", "1e3"]) {
       expect(() => parseNonNegativeInt(bad)).toThrow();
     }
+  });
+});
+
+describe("injectAgentSeparator", () => {
+  const N = ["node", "agency"];
+
+  it("inserts `--` right after `agent` so agent flags are forwarded", () => {
+    expect(injectAgentSeparator([...N, "agent", "--policy", "approve-all"])).toEqual(
+      [...N, "agent", "--", "--policy", "approve-all"],
+    );
+  });
+
+  it("keeps --max-cost/--max-time BEFORE the `--` so commander parses them", () => {
+    // The bug this guards: without skipping the budget flags, they land after
+    // `--` and get forwarded to the agent instead of installing the budget.
+    expect(
+      injectAgentSeparator([...N, "agent", "--max-cost", "5", "-p", "task"]),
+    ).toEqual([...N, "agent", "--max-cost", "5", "--", "-p", "task"]);
+    expect(
+      injectAgentSeparator([
+        ...N, "agent", "--max-cost", "5", "--max-time", "30m", "--policy", "reject",
+      ]),
+    ).toEqual([
+      ...N, "agent", "--max-cost", "5", "--max-time", "30m", "--", "--policy", "reject",
+    ]);
+  });
+
+  it("handles the --flag=value form of the budget options", () => {
+    expect(
+      injectAgentSeparator([...N, "agent", "--max-time=30m", "-p", "task"]),
+    ).toEqual([...N, "agent", "--max-time=30m", "--", "-p", "task"]);
+  });
+
+  it("leaves argv untouched when the user already wrote `--`", () => {
+    const already = [...N, "agent", "--max-cost", "5", "--", "-p", "task"];
+    expect(injectAgentSeparator(already)).toEqual(already);
+    const bare = [...N, "agent", "--", "-p", "task"];
+    expect(injectAgentSeparator(bare)).toEqual(bare);
+  });
+
+  it("is a no-op for other subcommands", () => {
+    const run = [...N, "run", "foo.agency", "--max-cost", "5"];
+    expect(injectAgentSeparator(run)).toEqual(run);
   });
 });

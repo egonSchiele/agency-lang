@@ -59,7 +59,7 @@ async function resolveSpawnCwd(
   allowedPaths: string[],
 ): Promise<string> {
   if (!cwd) return "";
-  const resolved = await resolveDir(cwd, allowedPaths, "cwd");
+  const resolved = await resolveDir(cwd, allowedPaths);
   let stat;
   try {
     stat = await fs.stat(resolved);
@@ -522,7 +522,7 @@ async function resolveProbePath(
   allowedPaths: string[],
 ): Promise<string> {
   if (dir === "") {
-    return resolveDir(filename, allowedPaths, "cwd");
+    return resolveDir(filename, allowedPaths);
   }
   const full = await resolvePath(dir, filename);
   await assertContained(full, allowedPaths, getModuleDir());

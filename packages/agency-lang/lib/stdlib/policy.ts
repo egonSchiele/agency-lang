@@ -26,6 +26,6 @@ export async function _writePolicyFile(
   if (!result.success) throw new Error(`Invalid policy: ${result.error}`);
   // `resolveDir` (cwd-anchored) handles `~` expansion + allow-list
   // enforcement uniformly with the fs.ts / system.ts / speech.ts call sites.
-  const full = await resolveDir(filePath, allowedPaths ?? [], "cwd");
+  const full = await resolveDir(filePath, allowedPaths ?? []);
   writeFileSync(full, JSON.stringify(policy, null, 2) + "\n", { mode: 0o600 });
 }

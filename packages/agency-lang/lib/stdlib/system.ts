@@ -122,7 +122,7 @@ async function screenshotImpl(
   // Route through `resolveDir` (cwd-anchored) so `~` expansion and
   // allow-list enforcement land in one place — same pattern as
   // `_mkdir`/`_copy`/`_remove` in fs.ts.
-  const resolvedPath = await resolveDir(filepath, allowedPaths ?? [], "cwd");
+  const resolvedPath = await resolveDir(filepath, allowedPaths ?? []);
   const hasRegion = x >= 0 && y >= 0 && width >= 0 && height >= 0;
   const signal = ctx.getAbortSignal(stack);
 

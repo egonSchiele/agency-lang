@@ -45,7 +45,7 @@ async function speakImpl(
       if (outputFile !== "") {
         // `resolveDir` (cwd-anchored) handles `~` expansion + allow-list
         // enforcement uniformly with the fs.ts call sites.
-        const outPath = await resolveDir(outputFile, allowedPaths ?? [], "cwd");
+        const outPath = await resolveDir(outputFile, allowedPaths ?? []);
         args.push("-o", outPath);
       }
       await abortableExec("say", args, ctx.getAbortSignal(stack));
@@ -109,7 +109,7 @@ async function recordImpl(
   }
 
   const outPath = outputFile
-    ? await resolveDir(outputFile, allowedPaths ?? [], "cwd")
+    ? await resolveDir(outputFile, allowedPaths ?? [])
     : path.join(os.tmpdir(), `agency-rec-${nanoid()}.wav`);
 
   const args = [outPath];
@@ -229,7 +229,7 @@ async function transcribeImpl(
     );
   }
 
-  const resolvedPath = await resolveDir(filepath, allowedPaths ?? [], "cwd");
+  const resolvedPath = await resolveDir(filepath, allowedPaths ?? []);
   const fileData = await readFile(resolvedPath);
   const filename = path.basename(resolvedPath);
 

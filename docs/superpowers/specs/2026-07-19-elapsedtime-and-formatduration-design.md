@@ -23,38 +23,42 @@ the plumbing that makes both testable.
 
 ### The decision this design rests on
 
-`elapsedTime(since)` is just `now() - since`, so the function has to earn its
-place. The choice (made in brainstorming) is that it earns it two ways, split
-across two functions:
+`elapsedTime` exists to be handed to a model, so it returns a **readable string**,
+not a number. A model reads `"5m 32s"` immediately; `332000` is an opaque integer.
+This is PR 1's rule applied directly: the surface an agent calls is legible.
 
-- `elapsedTime(since): number` is the math primitive. It returns milliseconds, so
-  it composes: `elapsedTime(start) > 5m` is a plain comparison.
-- `formatDuration(ms): string` is the legibility layer. It turns a millisecond
-  duration into a human string like `"5m 32s"`.
+Two functions, one built on the other:
 
-That split honors PR 1's rule — the surface an agent calls should be legible, a
-raw instant is a math primitive — without forcing every caller through a
-formatter. A code path that wants the number uses `elapsedTime` directly; an
-agent tool that wants a readable answer wraps it in `formatDuration`, or hands the
-model `elapsedTime` with a docstring that states the unit plainly.
+- `elapsedTime(since): string` is the agent-facing function. It returns a
+  human-readable duration like `"5m 32s"` — literally `formatDuration(now() - since)`.
+- `formatDuration(ms): string` is the general renderer underneath it. It turns any
+  millisecond duration into that same human string, so it is useful on its own for
+  rendering a computed duration (`formatDuration(deadline - start)`), not only "time
+  since now".
+
+The raw number is still available with no function at all: `now() - since` is the
+milliseconds, and `elapsedTime(start) > 5m` becomes `now() - start > 5m` when a
+program needs to compare rather than display. So nothing is lost by making
+`elapsedTime` return a string — the number was always one subtraction away.
 
 ## The four pieces
 
 ### 1. `elapsedTime`
 
 ```
-export def elapsedTime(since: number): number {
-  return now() - since
+export def elapsedTime(since: number): string {
+  return formatDuration(now() - since)
 }
 ```
 
-`since` is an instant (a number, post-#620). The result is milliseconds elapsed
-from `since` to now. Positive when `since` is in the past; negative if `since` is
-in the future. It lives in `stdlib/date.agency` beside `now`/`format`.
+`since` is an instant (a number, post-#620). The result is a readable duration
+from `since` to now, e.g. `"5m 32s"`. If `since` is in the future the string is
+negative, e.g. `"-5m 32s"`. It lives in `stdlib/date.agency` beside `now`/`format`.
 
-The docstring must state the unit, because this function is meant to be handed to
-a model as a tool and the docstring becomes the tool description: "Returns the
-number of milliseconds elapsed since the given instant."
+The docstring is the tool description a model sees, so it says what the string
+means: "Returns how long has elapsed since the given instant, as a readable
+duration like \"5m 32s\"." A program that needs the raw milliseconds writes
+`now() - since` instead.
 
 ### 2. `formatDuration`
 
@@ -146,12 +150,13 @@ generation and an actual model tool call was never confirmed. So the plan must
 prove it early:
 
 - A zero-argument partial is callable and returns the right value:
-  `elapsedTime.partial(since: start)()` equals `now() - start`.
+  `elapsedTime.partial(since: start)()` equals `elapsedTime(start)` — the readable
+  duration string.
 - The tool definition generated for that partial is well-formed with an empty
   parameter set — the JSON schema a model would be given.
 - A model can invoke it end to end: an execution test using the deterministic LLM
   provider, with a mock that issues a tool call to the zero-argument tool, and an
-  assertion that the call returns the elapsed milliseconds.
+  assertion that the call returns the duration string.
 
 If any of these fails — most likely the schema or the tool-call path rejecting a
 zero-parameter tool — that is a real fix, and it lives in the tool-registration or
@@ -166,8 +171,11 @@ infeasible.
 - `_formatDuration`: the table above, plus the exact boundaries — 999 ms → `"0s"`,
   1000 ms → `"1s"`, 59_999 ms → `"59s"`, 86_400_000 ms → `"1d"`, and a negative.
 - `elapsedTime` determinism under the fake clock: an agency execution test with
-  `fakeClock: true` that captures `const start = now()`, calls `_advanceTime(500)`,
-  and asserts `elapsedTime(start) == 500`. This is the test PR 1 could not write.
+  `fakeClock: true` that captures `const start = now()`, calls
+  `_advanceTime(65000)`, and asserts `elapsedTime(start) == "1m 5s"`. (65 seconds,
+  not a sub-second amount, so the readable string is meaningful rather than
+  `"0s"`.) This is the test PR 1 could not write. Also assert the raw math is exact
+  with a second capture: `now() - start == 65000`.
 - `now()` through the seam: under `fakeClock: true`, `now()` reflects
   `_advanceTime`; frameless (the existing date unit tests) it still reads the real
   clock. Confirm the existing `__tests__/date.test.ts` still passes untouched.

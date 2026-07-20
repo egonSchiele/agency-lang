@@ -476,11 +476,6 @@ function runInBranchAlsFrame<T>(
       stack: branch.stack,
       threads: branchThreads,
       globals: branchGlobals,
-      // Inherit `moduleDir` from the parent so stdlib helpers inside
-      // the branch resolve paths relative to the same compiled
-      // module that started the run. This frame doesn't spread
-      // `{ ...parent }`, so the inheritance has to be explicit.
-      moduleDir: parent.moduleDir,
     },
     async () => {
       try {

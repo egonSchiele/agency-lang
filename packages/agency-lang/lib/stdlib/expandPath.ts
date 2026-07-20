@@ -20,8 +20,8 @@ import path from "node:path";
  *
  * Layering: `expandPath` is intentionally a **pure string transform**
  * with no async, no ALS access, and no base-directory awareness. The
- * "resolve relative paths against the right base (moduleDir vs cwd)
- * and assert containment" policy lives one layer up in `resolveDir`
+ * "resolve relative paths against the cwd and assert containment"
+ * policy lives one layer up in `resolveDir`
  * (and `resolvePath` for the dir+filename case). Keeping the layers
  * split means `expandPath` is trivially testable in isolation, and
  * each caller picks the base it wants without this helper having to

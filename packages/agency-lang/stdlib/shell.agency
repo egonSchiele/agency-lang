@@ -191,7 +191,7 @@ export idempotent def ls(
 
   A recursive listing skips heavyweight dirs (node_modules, .git, dist, build, .next, .cache) and stops at maxResults. A non-recursive listing still shows those dirs. If entries look truncated, narrow dir or raise maxResults.
 
-  @param dir - The directory to list (relative paths resolve against the module directory)
+  @param dir - The directory to list. Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
   @param recursive - Whether to walk subdirectories
   @param maxResults - Maximum number of entries to return
   @param allowedPaths - Only allow listing directories under these prefixes
@@ -229,7 +229,7 @@ export idempotent def grep(
   Returned file values are relative to dir. Returns at most maxResults matches; if matches look truncated, narrow dir or refine the pattern.
 
   @param pattern - The regex pattern to search for
-  @param dir - The directory to search in (relative paths resolve against the module directory)
+  @param dir - The directory to search in. Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
   @param flags - Regex flags
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
@@ -259,7 +259,7 @@ export idempotent def glob(
   Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the pattern is not valid glob syntax or the directory cannot be read.
 
   @param pattern - The glob pattern to match
-  @param dir - The directory to search in (relative paths resolve against the module directory)
+  @param dir - The directory to search in. Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set

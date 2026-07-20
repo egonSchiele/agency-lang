@@ -109,7 +109,7 @@ Edit a single file by applying one or more text replacements atomically. Each ed
 
   @param filename - The file to edit
   @param edits - Text replacements to apply in order; each has oldText, newText, and replaceAll (replace every occurrence when true)
-  @param dir - The directory to resolve the filename against
+  @param dir - The directory to resolve the filename against. Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
   @param useAgentCwd - When true, resolve a relative path against the agent working directory if one is set
 
 * The `std::edit` interrupt carries the full `before` and `after` file contents

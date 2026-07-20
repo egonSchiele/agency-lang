@@ -243,7 +243,7 @@ read(
 Read the contents of a file and return it as a string.
 
   @param filename - The file to read
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param dir - The directory to resolve the filename against (defaults to "."). Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
   @param offset - 1-indexed line to start at (0 means start of file)
   @param limit - Maximum number of lines to return (0 means read to end of file)
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
@@ -280,7 +280,7 @@ Write content to a file.
 
   @param filename - The file to write
   @param content - The content to write
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param dir - The directory to resolve the filename against (defaults to "."). Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
   @param mode - How to handle an existing file
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
 
@@ -317,7 +317,7 @@ Write base64-encoded binary data to a file: images, audio, video, PDFs, or any
 
   @param filename - The file to write
   @param base64 - The binary content, base64-encoded
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param dir - The directory to resolve the filename against (defaults to "."). Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
   @param mode - How to handle an existing file
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
 
@@ -351,7 +351,7 @@ Read a file and return its contents as a Base64-encoded string. Works for any
   binary file: images, audio, video, PDFs.
 
   @param filename - The file to read
-  @param dir - The directory to resolve the filename against (defaults to ".")
+  @param dir - The directory to resolve the filename against (defaults to "."). Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
 
 **Parameters:**

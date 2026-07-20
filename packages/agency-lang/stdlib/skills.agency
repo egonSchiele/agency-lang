@@ -343,7 +343,8 @@ def stripFm(raw: string): string {
  * `argHint` default to `""` (never null/undefined). Missing or empty
  * `dir` returns `[]`.
  *
- * Relative `dir` resolves against the calling module's directory.
+ * Relative `dir` resolves against the current working directory;
+ * pass `__dirname` for a directory relative to the current Agency file.
  * For project-level commands (e.g. `.claude/commands` at the project
  * root), pass an absolute path: `"${cwd()}/.claude/commands"`.
  */
@@ -352,9 +353,9 @@ export def commandsDir(dir: string): any[] {
   Discover .md files under `dir` and parse each as a slash-command
   template. Returns [] if `dir` is missing or empty.
 
-  @param dir - Directory containing command markdown files. Pass an
-    absolute path (e.g. cwd()/.claude/commands) to anchor at the
-    project root rather than the calling module's directory.
+  @param dir - Directory containing command markdown files. Relative
+    paths resolve against the current working directory; pass __dirname
+    for a directory relative to the current Agency file.
   """
   return interrupt std::skills::commandsDir("Are you sure you want to scan this directory for slash command files?", {
     dir: dir

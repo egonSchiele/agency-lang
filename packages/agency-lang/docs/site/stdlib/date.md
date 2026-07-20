@@ -1,24 +1,27 @@
 ---
 name: "date"
-description: "Builds timezone-aware ISO 8601 date strings, the format that APIs like Google Calendar expect."
+description: "Work with instants as epoch-millisecond numbers, and calendar dates as strings."
 ---
 
 # date
 
-Builds timezone-aware ISO 8601 date strings, the format that APIs like Google
-Calendar expect. Every function returns a string, not a Date object. Most
-accept an optional IANA `timezone` (e.g. "America/New_York"). Omit it to
-use your local timezone.
+An instant — a specific moment in time — is a number: milliseconds since 1970,
+the same value JavaScript's Date.now() gives. Do math on it directly with the
+usual operators and duration literals: `now() + 2h`, `deadline - now()`. A
+calendar date — a whole day, like "today" — stays a "YYYY-MM-DD" string, because
+which day it is depends on the timezone. Use `format` to turn an instant into a
+readable string, `formatDate` for its calendar date, and `parse` to read an ISO
+string back into an instant.
 
 ```ts
-import { atTime, addMinutes, tomorrow } from "std::date"
+import { now, atTime, nextDayOfWeek, format } from "std::date"
 import { createEvent } from "std::calendar"
 
 node main() {
-  // Tomorrow at 3pm Pacific for one hour
+  // 3pm next Monday Pacific for one hour
   const tz = "America/Los_Angeles"
-  const start = atTime(tomorrow(tz), "15:00", tz)
-  createEvent(summary: "Dentist", start: start, end: addMinutes(start, 60))
+  const start = atTime(nextDayOfWeek("monday", tz), "15:00", tz)
+  createEvent(summary: "Dentist", start: format(start, tz), end: format(start + 1h, tz))
 }
 ```
 
@@ -40,31 +43,25 @@ export type DayOfWeek =
   | "saturday"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L28))
 
 ## Functions
 
 ### now
 
 ```ts
-now(timezone: string = ""): string
+now(): number
 ```
 
-Get the current date and time as a timezone-aware ISO 8601 string (e.g. "2026-05-05T10:30:00-07:00").
+Get the current instant as epoch milliseconds (a number). To display it as a
+  string, use format(now(), timezone). An instant is absolute and has no
+  timezone of its own.
 
-  @param timezone - IANA timezone name like "America/New_York" (defaults to the local timezone)
+Get the current instant as epoch milliseconds.
 
-Get the current date and time as an ISO 8601 string with timezone offset.
+**Returns:** `number`
 
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| timezone | `string` | "" |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L28))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L31))
 
 ### today
 
@@ -86,7 +83,7 @@ Get today's date as a YYYY-MM-DD string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L54))
 
 ### tomorrow
 
@@ -108,103 +105,7 @@ Get tomorrow's date as a YYYY-MM-DD string.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L61))
-
-### add
-
-```ts
-add(datetime: string, ms: number): string
-```
-
-Add a duration in milliseconds to a datetime string, returning a new ISO 8601 datetime string. Negative values subtract.
-
-  @param datetime - The ISO 8601 datetime string
-  @param ms - The number of milliseconds to add (negative to subtract)
-
-Add a duration to a datetime string. Use with unit literals: add(now(), 2h), add(start, 7d)
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| datetime | `string` |  |
-| ms | `number` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L71))
-
-### addMinutes
-
-```ts
-addMinutes(datetime: string, minutes: number): string
-```
-
-Add minutes to a datetime string. Returns a new ISO 8601 datetime string. Negative values subtract minutes.
-
-  @param datetime - The ISO 8601 datetime string
-  @param minutes - Number of minutes to add (negative to subtract)
-
-Add minutes to a datetime string and return the new datetime.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| datetime | `string` |  |
-| minutes | `number` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L82))
-
-### addHours
-
-```ts
-addHours(datetime: string, hours: number): string
-```
-
-Add hours to a datetime string. Returns a new ISO 8601 datetime string. Negative values subtract hours.
-
-  @param datetime - The ISO 8601 datetime string
-  @param hours - Number of hours to add (negative to subtract)
-
-Add hours to a datetime string and return the new datetime.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| datetime | `string` |  |
-| hours | `number` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L93))
-
-### addDays
-
-```ts
-addDays(datetime: string, days: number): string
-```
-
-Add days to a datetime string. Returns a new ISO 8601 datetime string. Negative values subtract days. Note: adds a fixed 24 hours per day. On DST transition days the wall-clock time may shift by an hour. For DST-safe day arithmetic, compute the target date separately and use atTime().
-
-  @param datetime - The ISO 8601 datetime string
-  @param days - Number of days to add (negative to subtract)
-
-Add days to a datetime string and return the new datetime. Note: adds a fixed 24 hours per day, which may shift the wall-clock time by an hour on DST transition days. For DST-safe day arithmetic, use atTime with a date string instead.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| datetime | `string` |  |
-| days | `number` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L64))
 
 ### nextDayOfWeek
 
@@ -228,21 +129,24 @@ Get the date of the next occurrence of a day of the week (e.g. "monday").
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L74))
 
 ### atTime
 
 ```ts
-atTime(date: string, time: string, timezone: string = ""): string
+atTime(date: string, time: string, timezone: string = ""): number
 ```
 
-Combine a date and time into a full timezone-aware ISO 8601 string. For example, atTime("2026-05-10", "15:00", "America/Los_Angeles") returns "2026-05-10T15:00:00-07:00". Uses local timezone if not specified.
+Get the instant (epoch milliseconds) of a wall-clock time on a calendar date,
+  in a timezone. Example: atTime("2026-05-05", "09:00", "America/New_York").
+  Throws if the date or time cannot be parsed, so bad input fails loudly instead
+  of becoming a silent NaN.
 
-  @param date - The date string (YYYY-MM-DD)
-  @param time - The time string (HH:MM)
-  @param timezone - The timezone to use
+  @param date - The calendar date, "YYYY-MM-DD"
+  @param time - The wall-clock time, "HH:MM" or "HH:MM:SS"
+  @param timezone - IANA timezone name (defaults to local)
 
-Combine a date (YYYY-MM-DD) and time (HH:MM) into a timezone-aware ISO 8601 string.
+Get the instant of a wall-clock time on a calendar date, in a timezone.
 
 **Parameters:**
 
@@ -252,150 +156,232 @@ Combine a date (YYYY-MM-DD) and time (HH:MM) into a timezone-aware ISO 8601 stri
 | time | `string` |  |
 | timezone | `string` | "" |
 
-**Returns:** `string`
+**Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L126))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L85))
 
 ### startOfDay
 
 ```ts
-startOfDay(date: string = "", timezone: string = ""): string
+startOfDay(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get midnight (00:00:00) of a given date as a timezone-aware ISO 8601 string. Uses today if no date provided.
+Get midnight (00:00:00) of the day containing `instant`, in a timezone, as
+  epoch milliseconds. Defaults to now(). Display it with format(...).
 
-  @param date - The date string
-  @param timezone - The timezone to use
+  @param instant - The instant whose day to use (defaults to now())
+  @param timezone - IANA timezone name (defaults to local)
 
-Get the start of the day (midnight) as an ISO 8601 string.
+Get midnight of the day containing an instant, as epoch milliseconds.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| date | `string` | "" |
+| instant | `number \| null` | null |
 | timezone | `string` | "" |
 
-**Returns:** `string`
+**Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L138))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L100))
 
 ### endOfDay
 
 ```ts
-endOfDay(date: string = "", timezone: string = ""): string
+endOfDay(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get the end of the day (23:59:59) of a given date as a timezone-aware ISO 8601 string. Uses today if no date provided.
+Get the last millisecond (23:59:59.999) of the day containing `instant`, in a
+  timezone, as epoch milliseconds. Defaults to now(). An instant is always
+  within [startOfDay, endOfDay] of its own day.
 
-  @param date - The date string
-  @param timezone - The timezone to use
+  @param instant - The instant whose day to use (defaults to now())
+  @param timezone - IANA timezone name (defaults to local)
 
-Get the end of the day (23:59:59) as an ISO 8601 string.
+Get the last millisecond of the day containing an instant.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| date | `string` | "" |
+| instant | `number \| null` | null |
 | timezone | `string` | "" |
 
-**Returns:** `string`
+**Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L113))
 
 ### startOfWeek
 
 ```ts
-startOfWeek(date: string = "", timezone: string = ""): string
+startOfWeek(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get midnight on Sunday of the week containing the given date. Uses this week if no date provided.
+Get midnight on Sunday of the week containing `instant`, in a timezone, as
+  epoch milliseconds. Weeks begin on Sunday. Defaults to now().
 
-  @param date - A date within the week
-  @param timezone - The timezone to use
+  @param instant - An instant within the week (defaults to now())
+  @param timezone - IANA timezone name (defaults to local)
 
-Get the start of the current week (Sunday midnight) as an ISO 8601 string.
+Get midnight on Sunday of the week containing an instant.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| date | `string` | "" |
+| instant | `number \| null` | null |
 | timezone | `string` | "" |
 
-**Returns:** `string`
+**Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L127))
 
 ### endOfWeek
 
 ```ts
-endOfWeek(date: string = "", timezone: string = ""): string
+endOfWeek(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get 23:59:59 on Saturday of the week containing the given date. Uses this week if no date provided.
+Get the last millisecond (23:59:59.999) of Saturday of the week containing
+  `instant`, in a timezone, as epoch milliseconds. Weeks end on Saturday.
+  Defaults to now().
 
-  @param date - A date within the week
-  @param timezone - The timezone to use
+  @param instant - An instant within the week (defaults to now())
+  @param timezone - IANA timezone name (defaults to local)
 
-Get the end of the current week (Saturday 23:59:59) as an ISO 8601 string.
+Get the last millisecond of Saturday of the week containing an instant.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| date | `string` | "" |
+| instant | `number \| null` | null |
 | timezone | `string` | "" |
 
-**Returns:** `string`
+**Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L171))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L140))
 
 ### startOfMonth
 
 ```ts
-startOfMonth(date: string = "", timezone: string = ""): string
+startOfMonth(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get midnight on the 1st of the month containing the given date. Uses this month if no date provided.
+Get midnight on the 1st of the month containing `instant`, in a timezone, as
+  epoch milliseconds. Defaults to now().
 
-  @param date - A date within the month
-  @param timezone - The timezone to use
+  @param instant - An instant within the month (defaults to now())
+  @param timezone - IANA timezone name (defaults to local)
 
-Get the start of the month (1st at midnight) as an ISO 8601 string.
+Get midnight on the 1st of the month containing an instant.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| date | `string` | "" |
+| instant | `number \| null` | null |
 | timezone | `string` | "" |
 
-**Returns:** `string`
+**Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L182))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L154))
 
 ### endOfMonth
 
 ```ts
-endOfMonth(date: string = "", timezone: string = ""): string
+endOfMonth(instant: number | null = null, timezone: string = ""): number
 ```
 
-Get 23:59:59 on the last day of the month containing the given date. Uses this month if no date provided.
+Get the last millisecond (23:59:59.999) of the last day of the month
+  containing `instant`, in a timezone, as epoch milliseconds. Defaults to now().
 
-  @param date - A date within the month
-  @param timezone - The timezone to use
+  @param instant - An instant within the month (defaults to now())
+  @param timezone - IANA timezone name (defaults to local)
 
-Get the end of the month (last day at 23:59:59) as an ISO 8601 string.
+Get the last millisecond of the last day of the month containing an instant.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| date | `string` | "" |
+| instant | `number \| null` | null |
+| timezone | `string` | "" |
+
+**Returns:** `number`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L167))
+
+### format
+
+```ts
+format(ms: number, timezone: string = ""): string
+```
+
+Format an instant (epoch milliseconds) as an ISO 8601 string with
+  milliseconds and offset, e.g. "2026-05-05T10:30:00.123-07:00".
+
+  @param ms - The instant to format
+  @param timezone - IANA timezone name (defaults to local)
+
+Format an instant as an ISO 8601 string with milliseconds and offset.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| ms | `number` |  |
 | timezone | `string` | "" |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L193))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L180))
+
+### formatDate
+
+```ts
+formatDate(ms: number, timezone: string = ""): string
+```
+
+Format an instant as the "YYYY-MM-DD" calendar date it falls on in a timezone.
+
+  @param ms - The instant to format
+  @param timezone - IANA timezone name (defaults to local)
+
+Format an instant as the "YYYY-MM-DD" calendar date it falls on.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| ms | `number` |  |
+| timezone | `string` | "" |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L192))
+
+### parse
+
+```ts
+parse(iso: string): number
+```
+
+Parse an ISO 8601 datetime string into an instant (epoch milliseconds). Throws
+  if the string cannot be parsed, so bad input fails loudly instead of becoming
+  a silent NaN. Strictness matches JavaScript's Date, not RFC 3339: loosely
+  valid strings like "2026" or "2026-05" are accepted.
+
+  @param iso - The ISO 8601 datetime string
+
+Parse an ISO 8601 datetime string into an instant (epoch milliseconds).
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| iso | `string` |  |
+
+**Returns:** `number`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/date.agency#L203))

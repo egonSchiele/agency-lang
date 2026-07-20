@@ -3,12 +3,11 @@ import {
   _now,
   _today,
   _tomorrow,
-  _add,
-  _addMinutes,
-  _addHours,
-  _addDays,
   _nextDayOfWeek,
   _atTime,
+  _format,
+  _formatDate,
+  _parse,
   _startOfDay,
   _endOfDay,
   _startOfWeek,
@@ -17,121 +16,86 @@ import {
   _endOfMonth,
 } from "../date.js";
 
+describe("date bridges", () => {
+  const LA = "America/Los_Angeles";
+
+  it("format emits milliseconds and offset", () => {
+    // 2026-05-05T17:30:00.123Z is 10:30 in Los Angeles (UTC-7 in May)
+    const ms = Date.UTC(2026, 4, 5, 17, 30, 0, 123);
+    expect(_format(ms, LA)).toBe("2026-05-05T10:30:00.123-07:00");
+  });
+
+  it("format at UTC ends in +00:00", () => {
+    const ms = Date.UTC(2026, 4, 5, 17, 30, 0, 0);
+    expect(_format(ms, "UTC")).toBe("2026-05-05T17:30:00.000+00:00");
+  });
+
+  it("parse(format(x)) round-trips exactly at several instants", () => {
+    for (const x of [
+      Date.UTC(2026, 4, 5, 17, 30, 0, 123), // afternoon, ms present
+      Date.UTC(2026, 0, 1, 0, 0, 0, 0), // midnight UTC
+      Date.UTC(2026, 5, 15, 6, 30, 0, 500),
+    ]) {
+      expect(_parse(_format(x, LA))).toBe(x);
+      expect(_parse(_format(x, "Asia/Kolkata"))).toBe(x); // +05:30
+      expect(_parse(_format(x, "UTC"))).toBe(x);
+    }
+  });
+
+  it("parse accepts an ISO string with no fractional seconds", () => {
+    expect(_parse("2026-05-05T10:30:00-07:00")).toBe(
+      Date.UTC(2026, 4, 5, 17, 30, 0, 0),
+    );
+  });
+
+  it("parse throws on input new Date cannot read", () => {
+    expect(() => _parse("not a date")).toThrow();
+  });
+
+  it("formatDate returns the calendar date in the given timezone", () => {
+    // An instant that is 5 May in New York but already 6 May in Tokyo.
+    const ms = Date.UTC(2026, 4, 5, 20, 0, 0);
+    expect(_formatDate(ms, "America/New_York")).toBe("2026-05-05");
+    expect(_formatDate(ms, "Asia/Tokyo")).toBe("2026-05-06");
+    expect(_formatDate(ms, "UTC")).toBe("2026-05-05");
+  });
+});
+
 describe("_now", () => {
-  it("returns an ISO 8601 string with offset", () => {
-    const result = _now("America/New_York");
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
-  });
-
-  it("uses specified timezone", () => {
-    const ny = _now("America/New_York");
-    const la = _now("America/Los_Angeles");
-    // Both should be valid ISO strings (may differ in offset)
-    expect(ny).toMatch(/[+-]\d{2}:\d{2}$/);
-    expect(la).toMatch(/[+-]\d{2}:\d{2}$/);
+  it("returns a number close to Date.now()", () => {
+    const before = Date.now();
+    const value = _now();
+    expect(typeof value).toBe("number");
+    expect(value).toBeGreaterThanOrEqual(before);
+    expect(value).toBeLessThan(before + 5000);
   });
 });
 
-describe("_today", () => {
-  it("returns a YYYY-MM-DD string", () => {
-    const result = _today("UTC");
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+describe("_today / _tomorrow", () => {
+  it("today returns a YYYY-MM-DD string", () => {
+    expect(_today("UTC")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
-});
 
-describe("_tomorrow", () => {
-  it("returns the day after today", () => {
+  it("tomorrow returns the day after today", () => {
     const todayDate = _today("UTC");
-    const tomorrowDate = _tomorrow("UTC");
-    const todayParts = todayDate.split("-").map(Number);
-    const d = new Date(Date.UTC(todayParts[0], todayParts[1] - 1, todayParts[2]));
-    d.setUTCDate(d.getUTCDate() + 1);
-    const expected = d.toISOString().slice(0, 10);
-    expect(tomorrowDate).toBe(expected);
-  });
-});
-
-describe("_add", () => {
-  it("adds milliseconds to a datetime", () => {
-    const result = _add("2026-05-05T10:00:00-07:00", 7200000); // 2 hours
-    expect(result).toContain("2026-05-05T12:00:00");
-  });
-
-  it("adds negative duration", () => {
-    const result = _add("2026-05-05T10:00:00-07:00", -3600000); // -1 hour
-    expect(result).toContain("2026-05-05T09:00:00");
-  });
-
-  it("adds days worth of milliseconds", () => {
-    const result = _add("2026-05-05T10:00:00-07:00", 86400000); // 1 day
-    expect(result).toContain("2026-05-06T10:00:00");
-  });
-
-  it("preserves timezone offset", () => {
-    const result = _add("2026-05-05T10:00:00-07:00", 60000); // 1 minute
-    expect(result).toBe("2026-05-05T10:01:00-07:00");
-  });
-});
-
-describe("_addMinutes", () => {
-  it("adds minutes to a datetime", () => {
-    const result = _addMinutes("2026-05-10T10:00:00Z", 30);
-    expect(result).toContain("10:30:00");
-  });
-
-  it("handles crossing hour boundary", () => {
-    const result = _addMinutes("2026-05-10T10:45:00Z", 30);
-    expect(result).toContain("11:15:00");
-  });
-
-  it("handles negative minutes", () => {
-    const result = _addMinutes("2026-05-10T10:00:00Z", -30);
-    expect(result).toContain("09:30:00");
-  });
-
-  it("preserves timezone offset from input", () => {
-    const result = _addMinutes("2026-05-10T10:00:00-07:00", 30);
-    expect(result).toBe("2026-05-10T10:30:00-07:00");
-  });
-
-  it("preserves UTC (Z) as +00:00", () => {
-    const result = _addMinutes("2026-05-10T10:00:00Z", 30);
-    // Z input should give ISO output (which uses Z)
-    expect(result).toContain("10:30:00");
-  });
-
-  it("preserves positive timezone offset", () => {
-    const result = _addMinutes("2026-05-10T10:00:00+05:30", 60);
-    expect(result).toBe("2026-05-10T11:00:00+05:30");
-  });
-});
-
-describe("_addHours", () => {
-  it("adds hours to a datetime", () => {
-    const result = _addHours("2026-05-10T10:00:00Z", 2);
-    expect(result).toContain("12:00:00");
-  });
-});
-
-describe("_addDays", () => {
-  it("adds days to a datetime", () => {
-    const result = _addDays("2026-05-10T10:00:00Z", 3);
-    expect(result).toContain("2026-05-13");
+    const [y, m, d] = todayDate.split("-").map(Number);
+    const expected = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+    expect(_tomorrow("UTC")).toBe(expected);
   });
 });
 
 describe("_nextDayOfWeek", () => {
   it("returns a YYYY-MM-DD string", () => {
-    const result = _nextDayOfWeek("monday", "UTC");
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(_nextDayOfWeek("monday", "UTC")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it("returns a future date (not today even if today is that day)", () => {
-    const today = new Date();
-    const dayName = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"][today.getDay()];
+  it("returns a future date", () => {
+    const now = new Date();
+    const dayName = [
+      "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+    ][now.getDay()];
     const result = _nextDayOfWeek(dayName, "UTC");
-    const resultDate = new Date(result + "T12:00:00Z");
-    expect(resultDate.getTime()).toBeGreaterThan(today.getTime());
+    expect(new Date(result + "T12:00:00Z").getTime()).toBeGreaterThan(now.getTime());
   });
 
   it("throws on invalid day name", () => {
@@ -140,72 +104,82 @@ describe("_nextDayOfWeek", () => {
 });
 
 describe("_atTime", () => {
-  it("combines date and time with timezone offset", () => {
-    const result = _atTime("2026-05-10", "15:00", "America/Los_Angeles");
-    expect(result).toMatch(/^2026-05-10T15:00:00[+-]\d{2}:\d{2}$/);
+  it("returns the instant of a wall-clock time on a date, in a timezone", () => {
+    // 09:00 on 2026-05-05 in New York (UTC-4 in May) is 13:00 UTC.
+    const ms = _atTime("2026-05-05", "09:00", "America/New_York");
+    expect(_format(ms, "America/New_York")).toBe("2026-05-05T09:00:00.000-04:00");
   });
 
-  it("handles UTC timezone", () => {
-    const result = _atTime("2026-05-10", "09:30", "UTC");
-    expect(result).toBe("2026-05-10T09:30:00+00:00");
+  it("handles UTC and seconds", () => {
+    const ms = _atTime("2026-05-10", "09:30:45", "UTC");
+    expect(_format(ms, "UTC")).toBe("2026-05-10T09:30:45.000+00:00");
   });
 
-  it("handles seconds in time", () => {
-    const result = _atTime("2026-05-10", "09:30:45", "UTC");
-    expect(result).toBe("2026-05-10T09:30:45+00:00");
-  });
-});
-
-describe("_startOfDay / _endOfDay", () => {
-  it("startOfDay returns midnight", () => {
-    const result = _startOfDay("2026-05-10", "UTC");
-    expect(result).toBe("2026-05-10T00:00:00+00:00");
+  it("resolves a time whose UTC offset crosses midnight", () => {
+    // Midnight May 5 in New York is 04:00 UTC May 5 — the case the old
+    // string-building code masked (it returned the input date verbatim).
+    const ms = _atTime("2026-05-05", "00:00:00", "America/New_York");
+    expect(_format(ms, "America/New_York")).toBe("2026-05-05T00:00:00.000-04:00");
+    expect(_format(ms, "UTC")).toBe("2026-05-05T04:00:00.000+00:00");
   });
 
-  it("endOfDay returns 23:59:59", () => {
-    const result = _endOfDay("2026-05-10", "UTC");
-    expect(result).toBe("2026-05-10T23:59:59+00:00");
+  it("throws on an unparseable date rather than returning NaN", () => {
+    // A NaN instant would silently poison downstream arithmetic; fail loudly.
+    expect(() => _atTime("not-a-date", "09:00", "UTC")).toThrow(/Invalid date/);
   });
 });
 
-describe("_startOfWeek / _endOfWeek", () => {
-  it("startOfWeek returns Sunday midnight", () => {
-    // 2026-05-10 is a Sunday
-    const result = _startOfWeek("2026-05-10", "UTC");
-    expect(result).toContain("2026-05-10T00:00:00");
+describe("boundary functions as numbers", () => {
+  const NY = "America/New_York";
+
+  it("startOfDay is midnight and endOfDay is the last millisecond", () => {
+    const noon = _atTime("2026-05-05", "12:00", NY);
+    expect(_format(_startOfDay(noon, NY), NY)).toBe("2026-05-05T00:00:00.000-04:00");
+    expect(_format(_endOfDay(noon, NY), NY)).toBe("2026-05-05T23:59:59.999-04:00");
   });
 
-  it("endOfWeek returns Saturday 23:59:59", () => {
-    // 2026-05-10 is a Sunday, Saturday is 2026-05-16
-    const result = _endOfWeek("2026-05-10", "UTC");
-    expect(result).toContain("2026-05-16T23:59:59");
-  });
-});
-
-describe("_startOfMonth / _endOfMonth", () => {
-  it("startOfMonth returns the 1st at midnight", () => {
-    const result = _startOfMonth("2026-05-15", "UTC");
-    expect(result).toContain("2026-05-01T00:00:00");
+  it("an instant is always within [startOfDay, endOfDay] of its own day", () => {
+    // Late in the day: this FAILS if endOfDay is 23:59:59.000 instead of .999.
+    const late = _atTime("2026-05-05", "23:59:59", NY) + 500;
+    expect(_startOfDay(late, NY)).toBeLessThanOrEqual(late);
+    expect(late).toBeLessThanOrEqual(_endOfDay(late, NY));
   });
 
-  it("endOfMonth returns the last day at 23:59:59", () => {
-    const result = _endOfMonth("2026-05-15", "UTC");
-    expect(result).toContain("2026-05-31T23:59:59");
+  it("handles the DST spring-forward day (23-hour day)", () => {
+    // New York springs forward at 02:00 on 2026-03-08 (EST -> EDT).
+    const noon = _atTime("2026-03-08", "12:00", NY);
+    expect(_format(_startOfDay(noon, NY), NY)).toBe("2026-03-08T00:00:00.000-05:00");
+    expect(_format(_endOfDay(noon, NY), NY)).toBe("2026-03-08T23:59:59.999-04:00");
   });
 
-  it("handles February correctly", () => {
-    const result = _endOfMonth("2026-02-10", "UTC");
-    expect(result).toContain("2026-02-28T23:59:59");
+  it("handles the DST fall-back day (25-hour day)", () => {
+    // New York falls back at 02:00 on 2026-11-01 (EDT -> EST).
+    const noon = _atTime("2026-11-01", "12:00", NY);
+    expect(_format(_startOfDay(noon, NY), NY)).toBe("2026-11-01T00:00:00.000-04:00");
+    expect(_format(_endOfDay(noon, NY), NY)).toBe("2026-11-01T23:59:59.999-05:00");
   });
 
-  it("handles leap year February", () => {
-    const result = _endOfMonth("2028-02-10", "UTC");
-    expect(result).toContain("2028-02-29T23:59:59");
+  it("startOfWeek begins on Sunday; endOfWeek is Saturday (the chosen convention)", () => {
+    const noon = _atTime("2026-05-05", "12:00", NY); // Tuesday
+    expect(_formatDate(_startOfWeek(noon, NY), NY)).toBe("2026-05-03");
+    expect(_formatDate(_endOfWeek(noon, NY), NY)).toBe("2026-05-09");
   });
-});
 
-describe("error handling", () => {
-  it("throws on invalid datetime input", () => {
-    expect(() => _addMinutes("not-a-date", 10)).toThrow("Invalid date/time");
+  it("a week that straddles a month boundary rolls correctly", () => {
+    const noon = _atTime("2026-05-01", "12:00", NY); // Friday; its Sunday is Apr 26
+    expect(_formatDate(_startOfWeek(noon, NY), NY)).toBe("2026-04-26");
+    expect(_formatDate(_endOfWeek(noon, NY), NY)).toBe("2026-05-02");
+  });
+
+  it("startOfMonth and endOfMonth handle 31-, 30-, and February months", () => {
+    const may = _atTime("2026-05-15", "12:00", NY);
+    expect(_formatDate(_startOfMonth(may, NY), NY)).toBe("2026-05-01");
+    expect(_formatDate(_endOfMonth(may, NY), NY)).toBe("2026-05-31");
+    const apr = _atTime("2026-04-15", "12:00", NY);
+    expect(_formatDate(_endOfMonth(apr, NY), NY)).toBe("2026-04-30");
+    const febCommon = _atTime("2026-02-15", "12:00", NY);
+    expect(_formatDate(_endOfMonth(febCommon, NY), NY)).toBe("2026-02-28");
+    const febLeap = _atTime("2024-02-15", "12:00", NY);
+    expect(_formatDate(_endOfMonth(febLeap, NY), NY)).toBe("2024-02-29");
   });
 });

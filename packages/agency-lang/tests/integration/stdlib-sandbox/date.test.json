@@ -2,10 +2,14 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Date operations: now, today, tomorrow, addDays, addHours, addMinutes, startOfDay, endOfDay",
+      "description": "Date numbers API: now/today/tomorrow, + and - arithmetic with duration literals, startOfDay/endOfDay bounds, format/parse round-trip, formatDate",
       "input": "",
       "expectedOutput": "\"date ok\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

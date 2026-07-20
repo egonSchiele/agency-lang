@@ -8,6 +8,7 @@ import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
 import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError, makeAbortCause } from "../errors.js";
 import type { AbortCause } from "../errors.js";
+import { Clock, realClock, FakeClock } from "../clock.js";
 import { agencyStore } from "../asyncContext.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
 import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
@@ -72,6 +73,15 @@ function reviveNative<T>(data: T): T {
   );
 }
 
+/** The default clock for a run: a FakeClock only when a test opts in via the
+ *  AGENCY_FAKE_CLOCK env var, otherwise the real clock. The env var is set by
+ *  the test runner per test case (see lib/cli/util.ts). */
+function defaultClock(): Clock {
+  // Require exactly "1", not any truthy string. AGENCY_FAKE_CLOCK=0 must
+  // disable, not enable — a non-empty "0" is truthy and would surprise.
+  return process.env.AGENCY_FAKE_CLOCK === "1" ? new FakeClock() : realClock;
+}
+
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
 export class RuntimeContext<T> {
@@ -83,6 +93,17 @@ export class RuntimeContext<T> {
   callbacks: AgencyCallbacks;
   onStreamLock: boolean;
   handlers: HandlerEntry[];
+  /** The time source for guards. Real by default; a FakeClock only when a
+   *  test opts in. NOT serialized — reconstructed per run, like handlers.
+   *
+   *  DRIFT WARNING: this and the other non-serialized runtime fields
+   *  (handlers, callbacks, checkpoints, locks, …) are set by the constructor
+   *  AND, separately, by `createExecutionContext`, which builds the execution
+   *  context via `Object.create` and copies fields by hand. A field added
+   *  here but forgotten there is silently `undefined` at run time with no
+   *  compile error — that is the bug the `clock` copy fixed. If you add a
+   *  non-serialized field, copy it in `createExecutionContext` too. */
+  clock: Clock;
   locks: Record<string, Promise<void>>;
   lockOwners: Record<string, string>;
   lockWaiters: Record<string, string[]>;
@@ -221,6 +242,9 @@ export class RuntimeContext<T> {
      *  test/runtime constructors keep working; defaults to "info" to
      *  match the established no-debug-by-default behavior. */
     logLevel?: LogLevel;
+    /** Test-only override. Omitted in production, where defaultClock()
+     *  (the env var or the realClock default) applies. */
+    clock?: Clock;
   }) {
     // One runtime merge, applied for BOTH transports so a subprocess launched
     // with explicit IPC overrides still inherits the env override (e.g. a
@@ -232,6 +256,7 @@ export class RuntimeContext<T> {
       args,
       getRuntimeConfigOverrides(),
     );
+    this.clock = args.clock ?? defaultClock();
     const statelogConfig = {
       ...args.statelogConfig,
       traceId: args.statelogConfig.traceId || nanoid(),
@@ -336,6 +361,11 @@ export class RuntimeContext<T> {
     execCtx.maxCallDepth = this.maxCallDepth;
     execCtx.failurePropagation = this.failurePropagation;
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
+    // The execution context is built via Object.create, bypassing the
+    // constructor, so carry the clock over from the global context. Without
+    // this the run would meter against `undefined` and the fake-clock seam
+    // (_advanceTime) would never see the FakeClock the constructor installed.
+    execCtx.clock = this.clock;
     execCtx.handlers = [];
     execCtx.callbacks = {};
     execCtx.topLevelCallbacks = [];

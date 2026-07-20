@@ -212,6 +212,9 @@ type ExecuteNodeArgs = {
   // per-call cost / token output. Setting this is equivalent to running
   // with AGENCY_USE_TEST_LLM_PROVIDER=1 for the spawned subprocess only.
   useTestLLMProvider?: boolean;
+  // Install a deterministic fake clock in the spawned subprocess (sets
+  // AGENCY_FAKE_CLOCK=1). Guard fixtures use it with the `_advanceTime` seam.
+  fakeClock?: boolean;
   // Extra command-line arguments forwarded to the spawned subprocess.
   // These land in `process.argv.slice(2)` of the running agent —
   // primarily for testing std::args and other argv-reading code.
@@ -377,6 +380,7 @@ export async function executeNodeAsync({
   llmMocks,
   useTestLLMProvider,
   fetchMocks,
+  fakeClock,
   ...rest
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string }> {
   const useDeterministic =
@@ -384,6 +388,12 @@ export async function executeNodeAsync({
   const env: Record<string, string> = useDeterministic
     ? { AGENCY_LLM_MOCKS: JSON.stringify(llmMocks ?? []) }
     : {};
+
+  // Independent of deterministic mode: a fixture opts into the fake clock, and
+  // the subprocess installs it when constructing the RuntimeContext.
+  if (fakeClock) {
+    env.AGENCY_FAKE_CLOCK = "1";
+  }
 
   // Sandbox the agent home per test case: the agent config derives every
   // ~/.agency-agent path from AGENCY_AGENT_HOME when set, so tests can

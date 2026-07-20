@@ -205,6 +205,17 @@ export class State {
     }
   }
 
+  /** Visit every branch stack hanging off this frame. Branches are
+   *  private; this is the read path for walks that must cover the whole
+   *  branch subtree (StateStack.assertNoExecutingHandlers). */
+  forEachBranchStack(fn: (stack: StateStack) => void): void {
+    if (this.branches) {
+      for (const branch of Object.values(this.branches)) {
+        fn(branch.stack);
+      }
+    }
+  }
+
   toJSON(): StateJSON {
     const json: StateJSON = {
       args: deepClone(this.args),
@@ -371,6 +382,51 @@ export class StateStack {
   // currently not serialized, but used to track if we've hit an interrupt in the current branch
   interrupted: boolean = false;
   hasChildInterrupts: boolean = false;
+
+  /** Handler entries executing on this branch, innermost last. The
+   *  dispatcher (runHandlerChain) pushes before a handler body runs and
+   *  pops after; self-exclusion and the in-handler pause refusals read
+   *  this list. Lives on the stack rather than an AsyncLocalStorage so
+   *  every reader reaches it through a plain object reference it
+   *  already holds — there is no ambient lookup to lose. Never
+   *  serialized: no interrupt-pause checkpoint may exist while it is
+   *  non-empty (assertNoExecutingHandlers), so a deserialized stack
+   *  correctly starts empty.
+   *  See docs/superpowers/specs/2026-07-19-issue-616-no-pause-inside-handlers-design.md */
+  executingHandlerEntries: HandlerEntry[] = [];
+
+  /** Snapshot the parent mark into this branch stack. runBatch calls
+   *  this alongside guard rehydration for every branch it starts: a
+   *  branch created while a handler executes runs while that handler
+   *  executes (all runBatch modes join before returning), so it
+   *  inherits the exclusion identity and the no-pause refusal. A
+   *  snapshot, not a shared reference — the parent pops its entries on
+   *  handler exit and the branch must not observe that mid-flight. */
+  adoptExecutingHandlersFrom(parent: StateStack): void {
+    this.executingHandlerEntries = [...parent.executingHandlerEntries];
+  }
+
+  /** Throw if any handler is executing on this stack or any branch
+   *  under it. Called at the interrupt-pause checkpoint sites: handlers
+   *  have no step address, so a pause taken mid-handler could never be
+   *  resumed. Walks branches because a mark can live on a branch stack
+   *  whose parent is unmarked (a tool-call branch created inside a
+   *  handler). */
+  assertNoExecutingHandlers(): void {
+    if (this.executingHandlerEntries.length > 0) {
+      throw new Error(
+        "Cannot pause the run while a handler function is executing: " +
+          "handlers have no step address, so this checkpoint could never " +
+          "be resumed. This is a runtime bug — an in-handler pause path " +
+          "was reached. See issue #616.",
+      );
+    }
+    for (const frame of this.stack) {
+      frame.forEachBranchStack((branchStack) =>
+        branchStack.assertNoExecutingHandlers(),
+      );
+    }
+  }
 
   // Per-branch abort signal. Set by Runner.runRace / Runner.runForkAll on each
   // branch's stack. When the parent fork/race aborts a losing branch, this

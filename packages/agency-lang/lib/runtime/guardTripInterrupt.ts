@@ -83,6 +83,10 @@ async function raiseOneTrip(
 ): Promise<Interrupt[] | undefined> {
   const scope = GuardScope.resolve(stack, tripped)!;
   const key = guardTripKey(tripped);
+  // Reads the STACK mark, not the executing-handlers ALS: the pause
+  // refusals must survive the ALS coming up empty (issue #616), and the
+  // stack is reachable here as a plain parameter.
+  const inHandler = stack.executingHandlerEntries.length > 0;
 
   // Resume path FIRST: an answered question must never re-ask. The key
   // is derived from guard state (see guardTripKey), so a replay of THIS
@@ -95,6 +99,15 @@ async function raiseOneTrip(
       delete stack.other[key];
       applyVerdict(recorded, scope, tripped, err, stack);
       return undefined;
+    }
+    // A persisted open question must not re-surface from inside a
+    // handler: re-surfacing pauses, and a handler cannot pause. The
+    // trip stands as a rejection; the guard boundary converts it. The
+    // stale key is dropped so a later out-of-handler replay does not
+    // resurrect a question whose trip already resolved as a rejection.
+    if (inHandler) {
+      delete stack.other[key];
+      throw err;
     }
     // The question is already OPEN (persisted, no answer yet — e.g. a
     // resume triggered by answering a DIFFERENT interrupt in the same
@@ -150,6 +163,14 @@ async function raiseOneTrip(
       // then hand the batch to the PromptRunner step for its snapshot +
       // checkpoint + bailout machinery.
       const interrupts = verdict as Interrupt[];
+      // Inside a handler, renderVerdict already refuses unanswered
+      // raises when its ALS is intact — this stack-read check is the
+      // one that holds when the ALS is not. Reaching it means a pause
+      // was about to be persisted from inside a handler; fail as the
+      // rejection it must be, never as serialized state.
+      if (inHandler) {
+        throw err;
+      }
       stack.other[key] = interrupts[0].interruptId;
       return interrupts;
     } finally {
@@ -319,6 +340,7 @@ export async function raiseGuardTripsAtStep(args: {
   // at this step so the resumed replay re-enters HERE, re-detects, and
   // applies the recorded answer before the step body ever runs — which
   // is what makes this raise point replay-safe by construction.
+  stack.assertNoExecutingHandlers();
   const checkpointId = ctx.checkpoints.create(stack, ctx, args.location);
   const checkpoint = ctx.checkpoints.get(checkpointId);
   outcome.forEach((intr) => {

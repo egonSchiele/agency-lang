@@ -1,7 +1,7 @@
 import { glob } from "std::shell"
 
 node main() {
-  let result = glob("*.xyz", "glob-fixtures") with approve
+  let result = glob("*.xyz", __dirname + "/glob-fixtures") with approve
   if (isSuccess(result)) {
     return { ok: true, count: result.value.length }
   }

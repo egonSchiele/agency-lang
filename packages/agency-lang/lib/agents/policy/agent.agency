@@ -18,7 +18,7 @@ callback("onToolCallEnd") as data {
   print("Finished calling ${data.toolName}.")
 }
 
-systemPrompt = read("system.md", "./prompts") with approve
+systemPrompt = read("system.md", __dirname + "/prompts") with approve
 
 type Question = {
   type: "askQuestion";

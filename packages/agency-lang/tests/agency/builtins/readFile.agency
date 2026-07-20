@@ -1,6 +1,6 @@
 node main() {
   handle {
-    const contents = read("testdata.txt") catch "error reading file"
+    const contents = read("testdata.txt", __dirname) catch "error reading file"
   } with (data) {
     return approve()
   }

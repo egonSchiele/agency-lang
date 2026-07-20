@@ -12,7 +12,7 @@ def inner(): string {
   handle {
     return doWork()
   } with (data) {
-    const contents = read("handler-raises-outer-rejects.agency")
+    const contents = read("handler-raises-outer-rejects.agency", __dirname)
     if (isFailure(contents)) {
       readOutcome = "rejected"
     }

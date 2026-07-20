@@ -176,8 +176,27 @@ let first = true
 
 // Valid `--agent` targets. Empty / "main" routes through the coordinator.
 export static const START_AGENTS = ["main", "code", "research", "oracle", "explorer", "review"]
-static const MAIN_PROMPT_LARGE = read("../prompts/main-large.md") with approve
-static const MAIN_PROMPT_SMALL = read("../prompts/main-small.md") with approve
+static const MAIN_PROMPT_LARGE = read("../prompts/main-large.md", __dirname) with approve
+static const MAIN_PROMPT_SMALL = read("../prompts/main-small.md", __dirname) with approve
+
+// The main system prompts are read from disk at static-init. If either read
+// failed, the agent would silently run without its system prompt, so exit
+// loudly instead. Called from the `main` node before the first turn.
+export def checkMainPrompts() {
+  if (isFailure(MAIN_PROMPT_LARGE)) {
+    print(
+      color.red("Failed to read prompts/main-large.md: ${MAIN_PROMPT_LARGE.error}"),
+    )
+    process.exit(1)
+  }
+
+  if (isFailure(MAIN_PROMPT_SMALL)) {
+    print(
+      color.red("Failed to read prompts/main-small.md: ${MAIN_PROMPT_SMALL.error}"),
+    )
+    process.exit(1)
+  }
+}
 
 static const mainAgentTools = [
   researchAgent,

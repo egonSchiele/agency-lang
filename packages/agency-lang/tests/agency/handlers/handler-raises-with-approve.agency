@@ -13,7 +13,7 @@ node main() {
   handle {
     result = doWork()
   } with (data) {
-    const contents = read("handler-raises-with-approve.agency") with approve
+    const contents = read("handler-raises-with-approve.agency", __dirname) with approve
     if (isSuccess(contents)) {
       readOutcome = "ok"
     }

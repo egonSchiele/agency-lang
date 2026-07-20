@@ -147,6 +147,7 @@ import {
   setGroundingContext,
   loadAgentsMd,
   maybeEnableMemory,
+  checkMainPrompts,
   START_AGENTS,
  } from "./lib/coordinator.agency"
 import { startInteractive, renderAgentResponse } from "./lib/repl.agency"
@@ -208,19 +209,7 @@ node main() {
     setVerbose(true)
   }
 
-  if (isFailure(MAIN_PROMPT_LARGE)) {
-    print(
-      color.red("Failed to read prompts/main-large.md: ${MAIN_PROMPT_LARGE.error}"),
-    )
-    process.exit(1)
-  }
-
-  if (isFailure(MAIN_PROMPT_SMALL)) {
-    print(
-      color.red("Failed to read prompts/main-small.md: ${MAIN_PROMPT_SMALL.error}"),
-    )
-    process.exit(1)
-  }
+  checkMainPrompts()
 
   // `--policy` is an optional-value flag: a bare `--policy` (no name or
   // path) prints the usage + the built-in policies and exits, rather than

@@ -1,0 +1,19 @@
+// An IMPORTED module in a SUBDIRECTORY doing file-relative reads — the
+// exact shape the old entry-module anchoring silently broke (see
+// docs/superpowers/specs/2026-07-19-cwd-path-anchoring-design.md).
+
+export def readColocated(): string {
+  const result = read("fixture.txt", __dirname) with approve
+  if (result is success(content)) {
+    return content
+  }
+  return "READ_FAILED"
+}
+
+export def readUpward(): string {
+  const result = read("../dirname-paths-shared.txt", __dirname) with approve
+  if (result is success(content)) {
+    return content
+  }
+  return "READ_FAILED"
+}

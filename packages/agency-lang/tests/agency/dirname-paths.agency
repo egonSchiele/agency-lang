@@ -1,0 +1,67 @@
+import { readColocated, readUpward } from "./dirname-paths/helper.agency"
+import { ls, exists } from "std::shell"
+import { remove } from "std::fs"
+
+// Imported module reads its own colocated fixture via __dirname — the
+// exact shape the entry-module bug broke.
+node colocatedRead(): string {
+  return readColocated()
+}
+
+// Upward traversal through __dirname: the old resolvePath guards
+// rejected this even with the right anchor.
+node upwardRead(): string {
+  return readUpward()
+}
+
+// A write anchored to this file via an absolute dir argument.
+node dirAnchoredWrite(): boolean {
+  const outDir = __dirname + "/dirname-paths"
+  const w = write("tmp-out.txt", "temp", outDir) with approve
+  const back = read("tmp-out.txt", outDir) with approve
+  remove(outDir + "/tmp-out.txt") with approve
+  if (back is success(content)) {
+    return content == "temp"
+  }
+  return false
+}
+
+// Absolute FILENAME (not just dir) now allowed: resolvePath previously
+// hard-threw on any absolute filename.
+node absoluteFilenameAllowed(): boolean {
+  const outPath = __dirname + "/dirname-paths/tmp-abs.txt"
+  const w = write(outPath, "abs") with approve
+  const back = read(outPath) with approve
+  remove(outPath) with approve
+  if (back is success(content)) {
+    return content == "abs"
+  }
+  return false
+}
+
+// exists and read agree on the same anchored path.
+node probeAgreesWithRead(): boolean {
+  const dir = __dirname + "/dirname-paths"
+  if (!exists("fixture.txt", dir)) {
+    return false
+  }
+  const r = read("fixture.txt", dir) with approve
+  if (r is success(content)) {
+    return content == "colocated"
+  }
+  return false
+}
+
+// The allow-list still fails closed after resolvePath lost its internal
+// containment: probing outside allowedPaths throws. This certifies only
+// the allow-list-bearing functions (ls/grep/glob/stat/exists and the
+// fs-mutations); read/write/edit have no allow-list — their gate is the
+// std::read/std::write interrupt. Read-only op on purpose: never port
+// this attempt-the-violation shape to a write or remove.
+node allowListStillCloses(): boolean {
+  const result = try ls("/", false, 10, ["./nonexistent-allowroot"]) with approve
+  if (result is failure(e)) {
+    return true
+  }
+  return false
+}

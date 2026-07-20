@@ -6,8 +6,8 @@ import { expandPath } from "./expandPath.js";
 /** The sync policy core: expand shorthands, resolve against cwd. The ONE
  *  home of "what does a relative path mean" — sync-only callers that cannot
  *  await `resolveDir` (e.g. `_readSkill`) use this instead of copying it. */
-export function resolveCwdPath(p: string): string {
-  return path.resolve(process.cwd(), expandPath(p));
+export function resolveCwdPath(target: string): string {
+  return path.resolve(process.cwd(), expandPath(target));
 }
 
 /**

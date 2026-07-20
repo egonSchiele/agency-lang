@@ -1,7 +1,7 @@
 import { commandsDir, expandSlash } from "std::skills"
 
 def loadFixture() {
-  return commandsDir("commands-dir-fixture") with approve
+  return commandsDir(__dirname + "/commands-dir-fixture") with approve
 }
 
 // ---------- discovery ----------
@@ -94,7 +94,7 @@ node descriptionOnlyHasEmptyArgHint(): boolean {
 }
 
 node missingDirReturnsEmpty(): boolean {
-  const cmds = commandsDir("commands-dir-fixture-does-not-exist") with approve
+  const cmds = commandsDir(__dirname + "/commands-dir-fixture-does-not-exist") with approve
   return cmds.length == 0
 }
 

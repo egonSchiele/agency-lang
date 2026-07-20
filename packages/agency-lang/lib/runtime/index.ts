@@ -50,6 +50,7 @@ export { __UNINIT_STATIC, __readStatic } from "./staticInit.js";
 export {
   __registerStaticInit,
   __registerGlobalsInit,
+  __registerCallbacksInit,
   __awaitStaticInit,
   __awaitGlobalsInit,
 } from "./crossModuleInitRegistry.js";

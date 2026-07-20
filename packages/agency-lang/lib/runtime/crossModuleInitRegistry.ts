@@ -35,6 +35,7 @@ type InitFn = (ctx: unknown) => Promise<unknown>;
 
 const staticInits: Record<string, InitFn> = {};
 const globalsInits: Record<string, InitFn> = {};
+const callbackInits: Record<string, InitFn> = {};
 
 /**
  * Register a module's `__initializeStatic` function under its absolute
@@ -51,6 +52,16 @@ export function __registerStaticInit(moduleId: string, fn: InitFn): void {
 
 export function __registerGlobalsInit(moduleId: string, fn: InitFn): void {
   globalsInits[moduleId] = fn;
+}
+
+/**
+ * Register a module's `__registerTopLevelCallbacks` function under its
+ * absolute moduleId. Called by every compiled module on JS-load, mirroring
+ * `__registerGlobalsInit`. Last-write-wins for the test-fixture case where the
+ * same absolute path loads twice in one process.
+ */
+export function __registerCallbacksInit(moduleId: string, fn: InitFn): void {
+  callbackInits[moduleId] = fn;
 }
 
 /**
@@ -148,5 +159,28 @@ export async function __initAllRegistered(ctx: unknown): Promise<void> {
     // current output; the registry-level check is the safety net.
     if (globals?.isInitialized(moduleId)) continue;
     await globalsInits[moduleId](ctx);
+  }
+}
+
+/**
+ * Closure-wide top-level-callback registration: clear any previously
+ * registered callbacks once, then run every JS-loaded module's
+ * `__registerTopLevelCallbacks` so callbacks defined in imported modules fire,
+ * not just those in the entry module.
+ *
+ * Called from the fresh-run, resume, and rewind paths in place of the old
+ * "entry module only" registration. The single reset lives HERE (not in each
+ * per-module function) so one module's registration never clobbers another's.
+ *
+ * Process = closure for both real runs (one process per `agency run`) and the
+ * test runner (one spawned node subprocess per test case), so iterating the
+ * whole registry registers exactly the entry's import closure. The one
+ * theoretical exception — a long-lived process loading several unrelated
+ * closures — matches the documented globals-registry limitation above.
+ */
+export async function __initAllRegisteredCallbacks(ctx: unknown): Promise<void> {
+  (ctx as { topLevelCallbacks: unknown[] }).topLevelCallbacks = [];
+  for (const moduleId of Object.keys(callbackInits)) {
+    await callbackInits[moduleId](ctx);
   }
 }

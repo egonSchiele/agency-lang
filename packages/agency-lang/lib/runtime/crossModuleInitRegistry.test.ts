@@ -8,11 +8,11 @@ describe("callback registry", () => {
   it("resets the list once, then runs every registered module in registration order", async () => {
     const ctx: { topLevelCallbacks: string[] } = { topLevelCallbacks: ["stale"] };
 
-    __registerCallbacksInit("a.agency", async (c: any) => {
-      c.topLevelCallbacks.push("a");
+    __registerCallbacksInit("a.agency", async (target: any) => {
+      target.topLevelCallbacks.push("a");
     });
-    __registerCallbacksInit("b.agency", async (c: any) => {
-      c.topLevelCallbacks.push("b");
+    __registerCallbacksInit("b.agency", async (target: any) => {
+      target.topLevelCallbacks.push("b");
     });
 
     await __initAllRegisteredCallbacks(ctx);
@@ -26,11 +26,11 @@ describe("callback registry", () => {
     // Register inside the test so it passes standalone (.only). The registry
     // is process-global with last-write-wins, so re-registering the same
     // moduleIds as the previous test is harmless.
-    __registerCallbacksInit("a.agency", async (c: any) => {
-      c.topLevelCallbacks.push("a");
+    __registerCallbacksInit("a.agency", async (target: any) => {
+      target.topLevelCallbacks.push("a");
     });
-    __registerCallbacksInit("b.agency", async (c: any) => {
-      c.topLevelCallbacks.push("b");
+    __registerCallbacksInit("b.agency", async (target: any) => {
+      target.topLevelCallbacks.push("b");
     });
     const ctx: { topLevelCallbacks: string[] } = { topLevelCallbacks: ["stale"] };
     await __initAllRegisteredCallbacks(ctx);

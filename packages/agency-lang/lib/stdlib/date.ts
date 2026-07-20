@@ -1,7 +1,19 @@
+import { __ctx } from "../runtime/asyncContext.js";
+import { realClock } from "../runtime/clock.js";
+
 const DAYS_OF_WEEK = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 function getLocalTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+// The current WALL-CLOCK instant (epoch ms), read through the runtime clock so a
+// fake clock can drive it (making now()/elapsedTime deterministic under
+// fakeClock). NOT clock.now() — that is the monotonic guard clock; date math
+// must meter against wall time. Frameless (outside an Agency run) it falls back
+// to realClock.wallTime() === Date.now(), so nothing changes off-frame.
+function wallClockNow(): number {
+  return (__ctx()?.clock ?? realClock).wallTime();
 }
 
 function resolveTz(timezone?: string): string {
@@ -80,19 +92,38 @@ export function _parse(iso: string): number {
   return parseToDate(iso).getTime();
 }
 
+const MS_PER = { d: 86400000, h: 3600000, m: 60000, s: 1000 };
+
+/** Render a millisecond duration as a compact human string, largest unit first:
+ *  "5m 32s", "1h 1s", "1d 2h". Whole-second granularity (sub-second is "0s");
+ *  largest unit is days. Negatives get a leading "-", but there is no "-0s". */
+export function _formatDuration(ms: number): string {
+  let remaining = Math.floor(Math.abs(ms) / 1000) * 1000;
+  const parts: string[] = [];
+  for (const unit of ["d", "h", "m", "s"] as const) {
+    const value = Math.floor(remaining / MS_PER[unit]);
+    if (value > 0) {
+      parts.push(`${value}${unit}`);
+      remaining -= value * MS_PER[unit];
+    }
+  }
+  if (parts.length === 0) return "0s"; // sub-second, either sign
+  return (ms < 0 ? "-" : "") + parts.join(" ");
+}
+
 // --- Current time ---
 
 export function _now(): number {
-  return Date.now();
+  return wallClockNow();
 }
 
 export function _today(timezone?: string): string {
   const tz = timezone || getLocalTimezone();
-  return formatWithTimezone(new Date(), tz).slice(0, 10);
+  return formatWithTimezone(new Date(wallClockNow()), tz).slice(0, 10);
 }
 
 export function _tomorrow(timezone?: string): string {
-  const d = new Date();
+  const d = new Date(wallClockNow());
   d.setDate(d.getDate() + 1);
   const tz = timezone || getLocalTimezone();
   return formatWithTimezone(d, tz).slice(0, 10);
@@ -108,7 +139,7 @@ export function _nextDayOfWeek(dayName: string, timezone?: string): string {
     );
   }
 
-  const now = new Date();
+  const now = new Date(wallClockNow());
   const current = now.getDay();
   let daysAhead = target - current;
   if (daysAhead <= 0) daysAhead += 7;

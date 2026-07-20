@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mergeFor, mergeForIpc } from "./effectMerge.js";
 import { interruptWithHandlers, mergeChainOutcomes, pass } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
+import { StateStack } from "./state/stateStack.js";
 
 describe("mergeFor — the table is total", () => {
   it("an unregistered effect keeps the historical overwrite, including a valueless outer clobbering an inner value", () => {
@@ -62,7 +63,7 @@ describe("the chain merges approvals through the effect table", () => {
       async () => ({ type: "approve", value: { maxCost: 0.5, message: "outer says go" } }),
       async () => ({ type: "approve", value: { maxCost: 0.5 } }),
     ]);
-    const verdict = await interruptWithHandlers("std::guard", "m", {}, "o", ctx);
+    const verdict = await interruptWithHandlers("std::guard", "m", {}, "o", ctx, new StateStack());
     expect(verdict).toEqual({
       type: "approve",
       value: {
@@ -79,7 +80,7 @@ describe("the chain merges approvals through the effect table", () => {
       async () => ({ type: "approve", value: undefined }),
       async () => ({ type: "approve", value: 42 }),
     ]);
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(verdict).toEqual({ type: "approve", value: undefined });
   });
 
@@ -90,7 +91,7 @@ describe("the chain merges approvals through the effect table", () => {
       async () => ({ type: "approve", value: { maxCost: 0.75 } }),
     ]);
     const verdict = (await interruptWithHandlers(
-      "std::guard", "m", {}, "o", ctx,
+      "std::guard", "m", {}, "o", ctx, new StateStack(),
     )) as any;
     expect(verdict.value.maxCost).toBe(1.0);
   });

@@ -1,0 +1,29 @@
+import test { _advanceTime } from "std::date"
+
+// Same shape as handler-guard-trip-propagate, with NO outer handler:
+// the in-handler trip has nobody to answer it. The refusal must
+// convert it to a failed guard Result instead of pausing a run that
+// nobody could resume. The fake clock drives the trip, same as the
+// sibling fixtures.
+let sawFailure = false
+
+def inner(): string {
+  handle {
+    interrupt("please review")
+    return "work done"
+  } with (data) {
+    const guarded = guard(time: 5ms, label: "in-handler") {
+      _advanceTime(20)
+      return "guarded:done"
+    }
+    if (isFailure(guarded)) {
+      sawFailure = true
+    }
+    return approve()
+  }
+}
+
+node main() {
+  const result = inner()
+  return "${result}|failed:${sawFailure}"
+}

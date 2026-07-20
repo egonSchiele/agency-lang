@@ -16,7 +16,10 @@ export class PendingPromiseStore {
     return key;
   }
 
-  async awaitPending(keys: string[]): Promise<void> {
+  async awaitPending(
+    keys: string[],
+    opts?: { rejectInterrupts?: boolean },
+  ): Promise<void> {
     const entries = keys
       .map((k) => ({ key: k, entry: this.pending[k] }))
       .filter((e) => e.entry !== undefined);
@@ -27,6 +30,20 @@ export class PendingPromiseStore {
 
     for (let i = 0; i < entries.length; i++) {
       const { key, entry } = entries[i];
+      // Same guard awaitAll applies: a result that IS an interrupt
+      // means an async function paused while we were awaiting it, which
+      // this code path cannot transport. The handler-exit await opts in
+      // so an in-handler straggler cannot be silently consumed here.
+      if (
+        opts?.rejectInterrupts &&
+        (hasInterrupts(results[i]) || isInterrupt(results[i]))
+      ) {
+        throw new ConcurrentInterruptError(
+          "An async function launched inside a handler returned an interrupt. " +
+            "Handlers cannot pause, so this interrupt cannot be delivered. " +
+            "Await the async call inside the handler body, or move it outside the handler.",
+        );
+      }
       if (entry!.resolve) {
         entry!.resolve(results[i]);
       }
@@ -67,5 +84,20 @@ export class PendingPromiseStore {
 
   clear(): void {
     this.pending = {};
+  }
+
+  /** Position marker for keysSince. Handler dispatch records this
+   *  before running a handler body so handler exit can await exactly
+   *  the promises the handler launched — awaiting the full set would
+   *  deadlock on the async call whose raise is being dispatched. */
+  watermark(): number {
+    return this.counter;
+  }
+
+  /** Still-pending keys registered at or after the given watermark. */
+  keysSince(mark: number): string[] {
+    return Object.keys(this.pending).filter(
+      (k) => Number(k.slice("__pending_".length)) >= mark,
+    );
   }
 }

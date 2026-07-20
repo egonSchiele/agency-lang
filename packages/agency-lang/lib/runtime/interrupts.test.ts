@@ -9,6 +9,7 @@ import {
   pass,
 } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
+import { StateStack } from "./state/stateStack.js";
 
 describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
   const originalSend = process.send;
@@ -54,7 +55,7 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     const ctx = makeCtx([async () => ({ type: "approve", value: "ok" })]);
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(verdict).toEqual({ type: "approve", value: "ok" });
     expect(resolved).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "approved", resolvedBy: "handler" }),
@@ -67,7 +68,7 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     const ctx = makeCtx([]);
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(verdict).toEqual({ type: "approve", value: "parent-ok" });
     expect(resolved).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "approved", resolvedBy: "ipc" }),
@@ -81,7 +82,7 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     const ctx = makeCtx([async () => ({ type: "reject", value: "no" })]);
     const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
 
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(verdict).toEqual({ type: "reject", value: "no" });
     expect(send).not.toHaveBeenCalled();
     expect(resolved).toHaveBeenCalledTimes(1);
@@ -100,7 +101,7 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     const { outcome } = await gatherChainOutcome(
       { effect: "std::bash", message: "m", data: {}, origin: "o" },
       ctx,
-      undefined,
+      new StateStack(),
       "child-intr-1",
     );
     expect(outcome).toEqual({ kind: "rejected", value: "no" });
@@ -148,7 +149,7 @@ describe("interruptWithHandlers expectsValue", () => {
       },
     ]);
     const verdict = await interruptWithHandlers(
-      "unknown", "Question for user", {}, "o", ctx, undefined,
+      "unknown", "Question for user", {}, "o", ctx, new StateStack(),
       { expectsValue: true },
     );
     expect(verdict).toEqual({ type: "approve", value: "Adit" });
@@ -308,7 +309,7 @@ describe("pass()", () => {
       async () => ({ type: "approve", value: "outer" }), // outer (walked last)
       async () => pass(),                                // inner (walked first)
     ]);
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(verdict).toEqual({ type: "approve", value: "outer" });
   });
 
@@ -317,7 +318,7 @@ describe("pass()", () => {
       async () => ({ type: "approve", value: "outer" }),
       async () => undefined,
     ]);
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(verdict).toEqual({ type: "approve", value: "outer" });
   });
 
@@ -328,14 +329,14 @@ describe("pass()", () => {
       async () => pass(),
     ]);
     const decisions = vi.spyOn(ctx.statelogClient, "handlerDecision");
-    await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     const kinds = decisions.mock.calls.map((c) => c[0].decision);
     expect(kinds).toEqual(["pass", "pass", "approve"]);
   });
 
   it("every handler passing surfaces the interrupt", async () => {
     const ctx = makeCtx([async () => pass(), async () => pass()]);
-    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx);
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(Array.isArray(verdict)).toBe(true);
     expect((verdict as any)[0].effect).toBe("std::bash");
   });

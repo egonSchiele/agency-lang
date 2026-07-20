@@ -318,6 +318,11 @@ function rehydrateInheritedGuards(
   branch: BranchState,
   parentStack: StateStack,
 ): void {
+  // Before the rehydration flag: the executing-handler snapshot must
+  // track the parent's CURRENT list on every entry, not the list from
+  // the branch's first rehydration. A branch started inside a handler
+  // inherits its exclusion identity and the no-pause refusal (#616).
+  branch.stack.adoptExecutingHandlersFrom(parentStack);
   if (branch.guardsRehydrated) return;
   branch.stack.rehydrateInheritedGuardsFrom(parentStack);
   branch.guardsRehydrated = true;
@@ -526,6 +531,7 @@ function stampSharedCheckpoint<T>(
   // snapshot the per-tool `messages.push(...)`es that happened during
   // the batch into `self.messagesJSON` before the deep-clone fires.
   hooks?.beforeCheckpoint?.();
+  parentStack.assertNoExecutingHandlers();
   const cpId = ctx.checkpoints.create(parentStack, ctx, checkpointLocation);
   const cp = ctx.checkpoints.get(cpId)!;
   for (const intr of interrupts) {

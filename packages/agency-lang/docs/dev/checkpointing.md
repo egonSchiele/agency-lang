@@ -235,3 +235,21 @@ node main() {
 
 - **Unit tests**: `lib/runtime/checkpoint.test.ts`, `lib/runtime/state/checkpointStore.test.ts`
 - **Generator fixture**: `tests/typescriptGenerator/checkpoint-restore.agency` + `.mjs`
+
+---
+
+## Checkpoints and executing handlers (issue #616)
+
+Not every checkpoint is a pause: guard scopes create pinned checkpoints
+during normal execution, including inside handler functions. But the
+interrupt-pause kind — where the run exits and hands a checkpoint to
+the user — must never capture a stack with a handler mid-flight,
+because handlers have no step address to resume into. The four
+interrupt-pause creation sites (`raiseGuardTripsAtStep`, the TS-raise
+surface path in `agencyInterrupt.ts`, the prompt-step bailout in
+`promptRunner.ts`, and the shared batch checkpoint in `runBatch.ts`)
+each call `StateStack.assertNoExecutingHandlers()` first. The list it
+checks is maintained by the interrupt dispatcher, is inherited by
+branch stacks, and is deliberately never serialized: since no pause can
+exist while it is non-empty, a deserialized stack correctly starts with
+it empty.

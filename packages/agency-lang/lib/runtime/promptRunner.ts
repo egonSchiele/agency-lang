@@ -109,6 +109,7 @@ export class PromptRunner {
       this.opts.self.messagesJSON = this.opts.snapshotMessages();
       const basePath = this.opts.checkpointInfo?.stepPath ?? "";
       const stepPath = basePath ? `${basePath}/${key}` : key;
+      this.opts.stateStack.assertNoExecutingHandlers();
       const cpId = this.opts.ctx.checkpoints.create(
         this.opts.stateStack,
         this.opts.ctx,

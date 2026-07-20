@@ -186,6 +186,7 @@ export async function interrupt<T = unknown>(
   // resume, the replay sees the id and short-circuits via the lookup
   // above.
   frame.locals[key] = intr.interruptId;
+  stack.assertNoExecutingHandlers();
   const checkpointId = ctx.checkpoints.create(stack, ctx, {
     moduleId: callsite.moduleId,
     scopeName: callsite.scopeName,

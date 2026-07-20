@@ -161,7 +161,7 @@ describe("PromptRunner.step interrupt handling", () => {
     const runner = new PromptRunner({
       self,
       ctx,
-      stateStack: {} as any,
+      stateStack: new StateStack(),
       checkpointInfo: { moduleId: "m", scopeName: "s", stepPath: "p" },
       snapshotMessages: () => {
         snapshots.push("snapshot");
@@ -194,7 +194,7 @@ describe("PromptRunner.step interrupt handling", () => {
     const runner = new PromptRunner({
       self: {},
       ctx,
-      stateStack: {} as any,
+      stateStack: new StateStack(),
       checkpointInfo: undefined,
       snapshotMessages: () => [],
     });
@@ -218,7 +218,7 @@ describe("PromptRunner.step interrupt handling", () => {
     const runner = new PromptRunner({
       self: {},
       ctx,
-      stateStack: {} as any,
+      stateStack: new StateStack(),
       checkpointInfo: { moduleId: "m", scopeName: "s", stepPath: "p" },
       snapshotMessages: () => [],
     });

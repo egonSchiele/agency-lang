@@ -22,10 +22,16 @@ import type { HandlerEntry } from "./types.js";
  * activation is skipped. Sibling activations of the same source handler
  * still hear the raise; MAX_HANDLER_CHAIN_DEPTH backstops that shape.
  *
- * This state never needs checkpointing. Checkpoints capture a paused run,
- * and no interrupt raised inside a handler ever surfaces to pause one
- * (renderVerdict refuses those as rejections), so a checkpoint can never
- * observe this stack non-empty on the paused lineage.
+ * This ALS is NOT what keeps pauses out of handlers, and it is never
+ * checkpointed. The pause guarantee lives on the stack instead:
+ * runHandlerChain mirrors each executing entry into
+ * `StateStack.executingHandlerEntries`, the guard-trip machinery refuses
+ * to surface while that list is non-empty, and every interrupt-pause
+ * checkpoint site asserts it empty (issue #616). The ALS carries only
+ * the per-lineage precision that the stack mark cannot: which raises
+ * are a handler's OWN. If this ALS ever loses a read, exclusion can
+ * misfire (bounded by MAX_HANDLER_CHAIN_DEPTH) — but the run still
+ * cannot pause mid-handler, because the pause refusals read the stack.
  */
 const executingHandlersALS = new AsyncLocalStorage<HandlerEntry[]>();
 

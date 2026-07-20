@@ -236,6 +236,17 @@ async function runHandlerChain(
   // inherited parent depth, so fan-out breadth never accumulates; only a
   // handler whose body re-enters the chain nests inside the `run(...)` scope
   // below and climbs the depth.
+  if ((ctx.handlers ?? []).length > 0 && !stack) {
+    throw new Error(
+      "Cannot run interrupt handlers: no StateStack was passed in. " +
+        "While a handler runs, the runtime records it on the StateStack. " +
+        "That record is what stops a guard trip inside the handler from " +
+        "pausing the run. With no stack there is nowhere to record the " +
+        "handler, so that protection would silently turn off. To fix " +
+        "this, pass the current StateStack when calling " +
+        "interruptWithHandlers or gatherChainOutcome.",
+    );
+  }
   const depth = (handlerChainDepthALS.getStore() ?? 0) + 1;
   if (depth > MAX_HANDLER_CHAIN_DEPTH) {
     throw new HandlerRecursionError(interruptObj.effect, MAX_HANDLER_CHAIN_DEPTH);
@@ -259,7 +270,12 @@ async function runHandlerChain(
         if (eligible && !eligible(entry)) continue;
         // A handler never hears its own raises: an entry currently
         // executing in this lineage is skipped and the rest of the chain
-        // decides. Re-entering the raiser was the only source of the
+        // decides. Per-LINEAGE (the ALS), not the per-branch stack mark:
+        // concurrent sibling dispatches on one branch must still reach a
+        // handler that another dispatch is executing — only a raise from
+        // within the handler's own body is its own. The stack mark below
+        // serves the pause refusals, which want the coarser fact.
+        // Re-entering the raiser was the only source of the
         // handler recursion, and the raiser's vote was never load-bearing
         // — the same author writes the raise and the handler. Safety is
         // fail-closed: an excluded entry contributes nothing, so the raise
@@ -278,15 +294,34 @@ async function runHandlerChain(
         const suspensionToken = stack
           ? stack.beginSuspension(entry.liveGuardIds)
           : undefined;
+        stack!.executingHandlerEntries.push(entry);
+        const promiseWatermark = ctx.pendingPromises.watermark();
         // Treat handler execution as atomic for the debugger — same as LLM tool calls.
         ctx.enterToolCall();
         let result: any;
         try {
           result = await runAsHandler(entry, () => entry.fn(interruptObj));
         } finally {
-          ctx.exitToolCall();
-          if (suspensionToken !== undefined) {
-            stack!.endSuspension(suspensionToken);
+          try {
+            // Handler exit is an await boundary for the promises the
+            // handler launched: an async call that outlived the body
+            // would otherwise keep running un-marked. Scoped by the
+            // watermark, not awaitAll — the full pending set can
+            // contain the async call whose raise is being dispatched
+            // right now, which cannot settle until this chain returns.
+            await ctx.pendingPromises.awaitPending(
+              ctx.pendingPromises.keysSince(promiseWatermark),
+              { rejectInterrupts: true },
+            );
+          } finally {
+            const idx = stack!.executingHandlerEntries.lastIndexOf(entry);
+            if (idx !== -1) {
+              stack!.executingHandlerEntries.splice(idx, 1);
+            }
+            ctx.exitToolCall();
+            if (suspensionToken !== undefined) {
+              stack!.endSuspension(suspensionToken);
+            }
           }
         }
         // A handler that is a compiled def returns an AbortedResult when

@@ -1,0 +1,30 @@
+import { now, elapsedTime } from "std::date"
+import test { _advanceTime } from "std::date"
+
+// The fake clock makes elapsedTime deterministic: 65 seconds of advanced time
+// reads as "1m 5s", the readable duration a model would get.
+node elapsedIsDeterministic(): string {
+  const start = now()
+  _advanceTime(65000)
+  return elapsedTime(start)
+}
+
+// The raw milliseconds are exact — elapsedTime is the legible layer over this.
+node rawMathIsExact(): number {
+  const start = now()
+  _advanceTime(65000)
+  return now() - start
+}
+
+// The motivating agent pull: elapsedTime.partial(since: start) binds the only
+// parameter, leaving a zero-argument tool the model calls to check its own time.
+// A passing run proves the fully-bound partial produces a valid, callable tool.
+node agentPull(): string {
+  const start = now()
+  _advanceTime(90000)
+  const answer = llm(
+    "Call the elapsedTime tool once to check how long you have worked.",
+    { tools: [elapsedTime.partial(since: start)] },
+  )
+  return answer
+}

@@ -1,7 +1,7 @@
 import { exec } from "std::shell"
 import { args } from "std::system"
 import { systemMessage } from "std::thread"
-systemPrompt = read("./prompts/system.md")
+systemPrompt = read("prompts/system.md", __dirname)
 
 type Severity = "critical" | "warning" | "suggestion"
 

@@ -1,0 +1,10 @@
+{
+  "tests": [
+    { "nodeName": "colocatedRead", "input": "", "expectedOutput": "\"colocated\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "upwardRead", "input": "", "expectedOutput": "\"shared\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "dirAnchoredWrite", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "absoluteFilenameAllowed", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "probeAgreesWithRead", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "allowListStillCloses", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

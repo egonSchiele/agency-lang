@@ -1,7 +1,7 @@
 import { glob } from "std::shell"
 
 node main() {
-  let result = glob("{ts", "glob-fixtures") with approve
+  let result = glob("{ts", __dirname + "/glob-fixtures") with approve
   let hasError = false
   if (isFailure(result)) {
     hasError = result.error != null

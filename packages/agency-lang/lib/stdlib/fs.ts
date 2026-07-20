@@ -119,7 +119,7 @@ export async function _applyPatch(
     // Resolve via `resolveDir` (cwd-anchored — fs ops are
     // process-cwd-relative, not module-dir-relative). This expands
     // `~` and runs the allow-list check in one place.
-    const full = await resolveDir(f.path, allowedPaths ?? [], "cwd");
+    const full = await resolveDir(f.path, allowedPaths ?? []);
     let original = "";
     if (f.isNew) {
       original = "";
@@ -241,7 +241,7 @@ export async function _mkdir(
   dir: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  const full = await resolveDir(dir, allowedPaths ?? [], "cwd");
+  const full = await resolveDir(dir, allowedPaths ?? []);
   await fs.mkdir(full, { recursive: true });
 }
 
@@ -250,8 +250,8 @@ export async function _copy(
   dest: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  const srcFull = await resolveDir(src, allowedPaths ?? [], "cwd");
-  const destFull = await resolveDir(dest, allowedPaths ?? [], "cwd");
+  const srcFull = await resolveDir(src, allowedPaths ?? []);
+  const destFull = await resolveDir(dest, allowedPaths ?? []);
   await fs.cp(srcFull, destFull, { recursive: true });
 }
 
@@ -260,8 +260,8 @@ export async function _move(
   dest: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  const srcFull = await resolveDir(src, allowedPaths ?? [], "cwd");
-  const destFull = await resolveDir(dest, allowedPaths ?? [], "cwd");
+  const srcFull = await resolveDir(src, allowedPaths ?? []);
+  const destFull = await resolveDir(dest, allowedPaths ?? []);
   await rejectDangerousPath(src, "move", "source");
   try {
     await fs.rename(srcFull, destFull);
@@ -279,7 +279,7 @@ export async function _remove(
   target: string,
   allowedPaths?: string[],
 ): Promise<void> {
-  const full = await resolveDir(target, allowedPaths ?? [], "cwd");
+  const full = await resolveDir(target, allowedPaths ?? []);
   await rejectDangerousPath(target, "remove", "target");
   await fs.rm(full, { recursive: true, force: true });
 }

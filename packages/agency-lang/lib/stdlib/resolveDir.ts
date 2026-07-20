@@ -1,21 +1,24 @@
 import path from "node:path";
 import process from "node:process";
-import { getModuleDir } from "../runtime/asyncContext.js";
 import { assertContained } from "./assertContained.js";
 import { expandPath } from "./expandPath.js";
 
+/** The sync policy core: expand shorthands, resolve against cwd. The ONE
+ *  home of "what does a relative path mean" — sync-only callers that cannot
+ *  await `resolveDir` (e.g. `_readSkill`) use this instead of copying it. */
+export function resolveCwdPath(target: string): string {
+  return path.resolve(process.cwd(), expandPath(target));
+}
+
 /**
  * Resolve a directory argument the way every path-taking stdlib
- * function should:
+ * function does:
  *
  *  1. Expand user shorthands (currently `~`, eventually env vars and
  *     normalization) via `expandPath`.
- *  2. Resolve against `base` (default: module dir) so a relative
- *     entry sits next to the Agency module that owns it. Shell-like
- *     callers (`_exec`/`_bash`) and fs-like callers (`_mkdir`/`_copy`/
- *     `_move`/`_remove`) pass `process.cwd()` because their relative
- *     paths should mean "the user's working directory" rather than
- *     "the module dir."
+ *  2. Resolve against `process.cwd()`. A relative path always means
+ *     "relative to where the program was run". Agency code that wants
+ *     a path relative to its own file passes `__dirname`.
  *  3. Assert containment against `allowedPaths` so a policy can
  *     reject paths outside the allow-list.
  *
@@ -30,11 +33,8 @@ import { expandPath } from "./expandPath.js";
 export async function resolveDir(
   dir: string,
   allowedPaths: string[] = [],
-  base?: "moduleDir" | "cwd",
 ): Promise<string> {
-  const expanded = expandPath(dir);
-  const baseDir = base === "cwd" ? process.cwd() : getModuleDir();
-  const root = path.resolve(baseDir, expanded);
-  await assertContained(root, allowedPaths, baseDir);
+  const root = resolveCwdPath(dir);
+  await assertContained(root, allowedPaths, process.cwd());
   return root;
 }

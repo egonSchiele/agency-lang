@@ -195,9 +195,9 @@ remember("Alice's favourite colour is blue") with approve
 Call it again with the same `dir` and nothing happens — so it's safe to enable
 in `main()` even if a `static const _ = enableMemory({...})` already ran. Call
 it with a *different* `dir` and you switch stores. The `dir` is resolved against
-your working directory (the same as `agency.json`'s `memory.dir`, and
-deliberately *not* the module dir like `read`/`write`), and it's created if it
-doesn't exist.
+your working directory, the same as `agency.json`'s `memory.dir` and every
+path-taking function like `read`/`write`, and it's created if it doesn't
+exist.
 
 ### `disableMemory()`
 

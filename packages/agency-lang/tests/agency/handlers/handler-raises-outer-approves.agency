@@ -22,7 +22,7 @@ def inner(): string {
     return doWork()
   } with (data) {
     reviews = reviews + 1
-    const contents = read("handler-raises-outer-approves.agency")
+    const contents = read("handler-raises-outer-approves.agency", __dirname)
     if (isSuccess(contents)) {
       readOutcome = "ok"
     }

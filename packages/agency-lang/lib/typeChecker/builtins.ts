@@ -13,6 +13,14 @@ import {
 const anyArray = { type: "arrayType", elementType: ANY_T } as const;
 const stringArray = { type: "arrayType", elementType: string } as const;
 
+/** Types for `BUILTIN_VARIABLES` (lib/config.ts) that the checker knows.
+ *  `__dirname` is the per-module directory constant every compiled module
+ *  defines (imports.mustache:38). `color` is deliberately absent — it has
+ *  never been typed and typing it is unrelated scope. */
+export const BUILTIN_VARIABLE_TYPES: Record<string, VariableType> = {
+  __dirname: string,
+};
+
 const optional = (t: VariableType): VariableType => ({
   type: "unionType",
   types: [t, nullT],

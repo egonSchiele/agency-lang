@@ -40,10 +40,9 @@ export async function assertContained(
   // absolute paths `path.resolve` returns them unchanged, so callers
   // that already pre-resolve their target only need to pick `baseDir`
   // so relative entries in `allowedRoots` match. Tools resolving paths
-  // against the Agency module directory (see `_ls`/`_grep`/`_glob` and
-  // `resolvePath`) should pass `getModuleDir()` so a relative entry in
-  // `allowedPaths` sits in the same root as the data the tool is
-  // operating on.
+  // via `resolveDir`/`resolvePath` pass `process.cwd()` so a relative
+  // entry in `allowedPaths` sits in the same root as the data the tool
+  // is operating on.
   //
   // Each entry is run through `expandPath` first so a policy that
   // says `allowedPaths: ["~/proj"]` matches paths resolved under

@@ -258,19 +258,22 @@ describe("_writeAST / _format / _formatFile", () => {
     );
   });
 
-  it("_writeAST rejects path traversal via .. segments", async () => {
+  it("_writeAST allows upward traversal via .. segments", async () => {
+    const sub = join(dir, "sub");
+    mkdirSync(sub);
     const ast = _parseAST(`node main() { return 1 }`);
-    // resolvePath inside _write rejects this lexically.
-    await expect(_writeAST(ast, dir, "../escape.agency", true)).rejects.toThrow(
-      /escapes directory/,
-    );
+    // resolvePath no longer enforces containment; ".." resolves like
+    // open() in other languages. Both dirs are inside this test's
+    // mkdtemp sandbox.
+    await _writeAST(ast, sub, "../upward.agency", true);
+    expect(existsSync(join(dir, "upward.agency"))).toBe(true);
   });
 
-  it("_writeAST rejects absolute filenames", async () => {
+  it("_writeAST allows absolute filenames (they win over dir)", async () => {
     const ast = _parseAST(`node main() { return 1 }`);
-    await expect(
-      _writeAST(ast, dir, "/etc/passwd", true),
-    ).rejects.toThrow(/absolute/);
+    const outPath = join(dir, "abs-out.agency");
+    await _writeAST(ast, join(dir, "ignored-when-abs"), outPath, true);
+    expect(existsSync(outPath)).toBe(true);
   });
 
   it("_formatFile formats a file in place", () => {

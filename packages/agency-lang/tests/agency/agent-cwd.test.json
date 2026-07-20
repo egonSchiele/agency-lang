@@ -6,7 +6,7 @@
     { "nodeName": "applyKeepsAbsolute", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "applyEmptyReturnsBase", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "applyUnsetPassesThrough", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "unsetReadsModuleDir", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "unsetReadsCwd", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "setRedirectsRead", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "defaultIgnoresAgentCwd", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "bashRunsInAgentCwd", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },

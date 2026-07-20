@@ -154,9 +154,7 @@ commandsDir(dir: string): any[]
 Discover .md files under `dir` and parse each as a slash-command
   template. Returns [] if `dir` is missing or empty.
 
-  @param dir - Directory containing command markdown files. Pass an
-    absolute path (e.g. cwd()/.claude/commands) to anchor at the
-    project root rather than the calling module's directory.
+  @param dir - Directory containing command markdown files.
 
 * Discover Claude-Code-format slash commands under `dir`. Each `.md`
  * file becomes one command record `{ name, description, argHint, body }`.
@@ -183,7 +181,8 @@ Discover .md files under `dir` and parse each as a slash-command
  * `argHint` default to `""` (never null/undefined). Missing or empty
  * `dir` returns `[]`.
  *
- * Relative `dir` resolves against the calling module's directory.
+ * Relative `dir` resolves against the current working directory;
+ * pass `__dirname` for a directory relative to the current Agency file.
  * For project-level commands (e.g. `.claude/commands` at the project
  * root), pass an absolute path: `"${cwd()}/.claude/commands"`.
 
@@ -197,7 +196,7 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L350))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L351))
 
 ### expandSlash
 
@@ -236,4 +235,4 @@ Expand a /command in `msg` into its command body. Returns the rendered
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L407))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L406))

@@ -121,7 +121,7 @@ Always create new commits. Never use `git push --force` or `git commit --amend`.
 
 ### Route path arguments through `resolveDir` / `resolvePath`
 
-Any new stdlib function in `lib/stdlib/` that takes a `dir`, `cwd`, `src`, `dest`, or `path` argument MUST resolve it via [`resolveDir`](../../lib/stdlib/resolveDir.ts) (for directories) or [`resolvePath`](../../lib/stdlib/resolvePath.ts) (for the dir-plus-filename case). Do NOT call `path.resolve(moduleDir, …)` or `path.resolve(process.cwd(), …)` directly on user-supplied paths.
+Any new stdlib function in `lib/stdlib/` that takes a `dir`, `cwd`, `src`, `dest`, or `path` argument MUST resolve it via [`resolveDir`](../../lib/stdlib/resolveDir.ts) (for directories) or [`resolvePath`](../../lib/stdlib/resolvePath.ts) (for the dir-plus-filename case). Do NOT call `path.resolve(process.cwd(), …)` directly on user-supplied paths; sync-only code uses `resolveCwdPath` from the same module so the expand-then-resolve policy stays single-homed.
 
 `resolveDir`/`resolvePath` delegate to [`expandPath`](../../lib/stdlib/expandPath.ts), which is the single owner of path-shorthand policy (today: leading `~`; later: env vars, normalization, etc.). Inlining `path.resolve` at a new call site encodes the policy locally, so any future expansion rule has to be added at every site — exactly the "inconsistent patterns" anti-pattern this module exists to prevent.
 

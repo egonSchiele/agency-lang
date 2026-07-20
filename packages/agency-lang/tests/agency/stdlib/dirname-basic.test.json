@@ -9,7 +9,7 @@
           "type": "exact"
         }
       ],
-      "description": "dirname() returns the module directory, and a co-located fixture file is reachable from it"
+      "description": "__dirname is this file's directory, and a co-located fixture file is reachable from it"
     }
   ]
 }

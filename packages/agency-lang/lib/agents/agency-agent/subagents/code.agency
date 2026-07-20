@@ -44,7 +44,7 @@ import {
  } from "./supervisor.agency"
 
 
-static const superpowersSkill = skillsDir("./skills/superpowers", "flat") with approve
+static const superpowersSkill = skillsDir(__dirname + "/skills/superpowers", "flat") with approve
 
 
 export def agencyCli(args: string[]): any {

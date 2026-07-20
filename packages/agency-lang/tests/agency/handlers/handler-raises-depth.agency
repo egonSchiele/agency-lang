@@ -19,7 +19,7 @@ def inner(): string {
     return doWork()
   } with (data) {
     for (i in range(0, 12)) {
-      const contents = read("handler-raises-depth.agency")
+      const contents = read("handler-raises-depth.agency", __dirname)
       if (isSuccess(contents)) {
         seen = seen + 1
       }

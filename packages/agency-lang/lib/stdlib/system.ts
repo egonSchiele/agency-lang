@@ -1,7 +1,7 @@
 import process from "process";
 import { detectPlatform } from "./utils.js";
 import { abortableExec } from "./abortable.js";
-import { getModuleDir, getRuntimeContext } from "../runtime/asyncContext.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { resolveDir } from "./resolveDir.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
@@ -13,17 +13,6 @@ export function _args(): string[] {
 
 export function _cwd(): string {
   return process.cwd();
-}
-
-/**
- * Return the absolute path of the directory containing the *compiled
- * JavaScript* of the Agency module that initiated the current run.
- * Reads through the ALS frame seeded by `runNode` / `runInBootstrapFrame`.
- * Falls back to `process.cwd()` when no Agency frame is active (e.g.
- * the helper is called from non-Agency code).
- */
-export function _dirname(): string {
-  return getModuleDir();
 }
 
 export function _env(name: string): string | null {
@@ -122,7 +111,7 @@ async function screenshotImpl(
   // Route through `resolveDir` (cwd-anchored) so `~` expansion and
   // allow-list enforcement land in one place — same pattern as
   // `_mkdir`/`_copy`/`_remove` in fs.ts.
-  const resolvedPath = await resolveDir(filepath, allowedPaths ?? [], "cwd");
+  const resolvedPath = await resolveDir(filepath, allowedPaths ?? []);
   const hasRegion = x >= 0 && y >= 0 && width >= 0 && height >= 0;
   const signal = ctx.getAbortSignal(stack);
 

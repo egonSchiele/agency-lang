@@ -1,30 +1,20 @@
 import fs from "fs";
 import path from "path";
-import { getModuleDir } from "../runtime/asyncContext.js";
 import { getStdlibDir } from "../importPaths.js";
-import { expandPath } from "./expandPath.js";
+import { resolveCwdPath } from "./resolveDir.js";
 
 /**
- * Read a skill file colocated with the calling Agency module. The
- * `filepath` is resolved against the module's directory (the directory
- * of the compiled `.js`, which by convention is the directory of the
- * source `.agency` file) via the ALS frame seeded by `runNode` /
- * `runInBootstrapFrame`. Falls back to `process.cwd()` when called
- * outside any Agency execution frame (e.g. from non-Agency host code).
- *
- * `filepath` is passed through `expandPath` first so a user-typed
- * `~/.agency/skills/foo.md` resolves to `$HOME/.agency/skills/foo.md`
- * — same shorthand policy every other stdlib path-taking entry point
- * follows (see docs/dev/coding-standards.md). We don't go through
- * `resolvePath`/`resolveDir` because (a) the function is sync by
- * design and `resolveDir` is async, and (b) skills are trusted
- * colocated resources, so the allow-list / symlink-escape checks
- * those helpers run aren't applicable here.
+ * Read a skill file. `filepath` resolves against `process.cwd()` like
+ * every other path-taking stdlib entry point; a skill colocated with
+ * the calling Agency file is read with
+ * `readSkill(__dirname + "/skills/x.md")`. `~` expands
+ * (`resolveCwdPath` runs `expandPath`) so `~/.agency/skills/foo.md`
+ * works. No allow-list / symlink checks: skills are trusted resources
+ * and the function is sync by design (`resolveDir` is async;
+ * `resolveCwdPath` is its sync core).
  */
 export function _readSkill(filepath: string): string {
-  const dirname = getModuleDir();
-  const fullPath = path.resolve(dirname, expandPath(filepath));
-  return fs.readFileSync(fullPath, "utf8");
+  return fs.readFileSync(resolveCwdPath(filepath), "utf8");
 }
 
 /**

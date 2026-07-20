@@ -93,5 +93,5 @@ function resolveStatelogPath(
   statelogPath: string,
   allowedPaths: string[],
 ): Promise<string> {
-  return resolveDir(statelogPath, allowedPaths, "cwd");
+  return resolveDir(statelogPath, allowedPaths);
 }

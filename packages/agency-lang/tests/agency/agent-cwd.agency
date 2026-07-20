@@ -34,9 +34,10 @@ import { cwd } from "std::system"
 import { join } from "std::path"
 
 // Gap 5 — with NO agent cwd set, a relative read resolves against the
-// test's own module directory (tests/agency/), reading "from module".
-node unsetReadsModuleDir(): boolean {
-  const r = read("cwd-probe.txt") with approve
+// process working directory (the package root when the test runner
+// invokes this), reading "from module" via the cwd-relative path.
+node unsetReadsCwd(): boolean {
+  const r = read("tests/agency/cwd-probe.txt") with approve
   if (r is success(v)) {
     return v.trim() == "from module"
   }
@@ -57,12 +58,11 @@ node setRedirectsRead(): boolean {
 }
 
 // Opt-in default: WITHOUT useAgentCwd, a relative read ignores the agent
-// cwd even when set, and resolves against the module dir ("from module").
-// This is what keeps co-located resources (e.g. skillsDir bundles) working
-// inside an agent that has set its cwd.
+// cwd even when set, and resolves against the process working directory
+// ("from module" via the cwd-relative path).
 node defaultIgnoresAgentCwd(): boolean {
   setAgentCwd(join(cwd(), "tests/agency/cwd-fixture-a"))
-  const r = read("cwd-probe.txt") with approve
+  const r = read("tests/agency/cwd-probe.txt") with approve
   if (r is success(v)) {
     return v.trim() == "from module"
   }

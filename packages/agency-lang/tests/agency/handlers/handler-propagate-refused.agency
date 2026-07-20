@@ -14,7 +14,7 @@ def inner(): string {
   handle {
     return doWork()
   } with (data) {
-    const contents = read("handler-propagate-refused.agency")
+    const contents = read("handler-propagate-refused.agency", __dirname)
     if (isFailure(contents)) {
       readOutcome = "refused"
     }

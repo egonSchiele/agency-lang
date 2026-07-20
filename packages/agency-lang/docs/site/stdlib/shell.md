@@ -199,7 +199,7 @@ List entries in a directory. Each entry has name, path, type ("file", "dir", "sy
 
   A recursive listing skips heavyweight dirs (node_modules, .git, dist, build, .next, .cache) and stops at maxResults. A non-recursive listing still shows those dirs. If entries look truncated, narrow dir or raise maxResults.
 
-  @param dir - The directory to list (relative paths resolve against the module directory)
+  @param dir - The directory to list
   @param recursive - Whether to walk subdirectories
   @param maxResults - Maximum number of entries to return
   @param allowedPaths - Only allow listing directories under these prefixes
@@ -239,7 +239,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
   Returned file values are relative to dir. Returns at most maxResults matches; if matches look truncated, narrow dir or refine the pattern.
 
   @param pattern - The regex pattern to search for
-  @param dir - The directory to search in (relative paths resolve against the module directory)
+  @param dir - The directory to search in
   @param flags - Regex flags
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
@@ -277,7 +277,7 @@ glob(
 Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the pattern is not valid glob syntax or the directory cannot be read.
 
   @param pattern - The glob pattern to match
-  @param dir - The directory to search in (relative paths resolve against the module directory)
+  @param dir - The directory to search in
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set

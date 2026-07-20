@@ -1,12 +1,12 @@
-// Documents PR #225 fix #8 finding: a top-level
-// `callback("onThreadEnd")` defined in an IMPORTED module does NOT
-// fire when the entry-point module opens `thread { }` blocks. This
-// is why `lib/stdlib/threads.ts` registers the registry's
-// onThreadEnd snapshotter via `registerGlobalHook(...)` instead of
-// a top-level Agency-side `callback(...)`. Fixture asserts the
-// negative behaviour so a future change that makes imported
-// modules' callbacks fire will trip this test and prompt the
-// stdlib hook migration described in PR #225.
+// Historical note: this fixture originally pinned the OPPOSITE — a
+// top-level `callback("onThreadEnd")` in an IMPORTED module did NOT
+// fire (PR #225 fix #8), which is why `lib/stdlib/threads.ts`
+// registers its onThreadEnd snapshotter via `registerGlobalHook(...)`
+// instead of a top-level Agency-side `callback(...)`. The
+// cross-module callback registry fixed that hole, so the fixture now
+// pins the positive: imported-module callbacks fire exactly like
+// entry-module ones (see `tests/agency-js/entry-module-callback-fires/`
+// for the entry-module direction).
 import { setMutable } from "../../helpers/mutableVar.js"
 
 callback("onThreadEnd") as evt {

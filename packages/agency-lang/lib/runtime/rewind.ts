@@ -1,5 +1,6 @@
 import type { Checkpoint } from "./state/checkpointStore.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
+import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import { RestoreSignal } from "./errors.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
@@ -23,12 +24,6 @@ export async function rewindFrom(args: {
   checkpoint: Checkpoint;
   overrides: Record<string, unknown>;
   metadata?: Record<string, any>;
-  // See respondToInterrupts / runNode — every fresh execCtx loses
-  // ctx.topLevelCallbacks and needs to re-run module-level
-  // `callback(...)` registrations.
-  registerTopLevelCallbacks?: (
-    ctx: RuntimeContext<GraphState>,
-  ) => void | Promise<void>;
   // See runNode's docstring on the same field — seeded by generated
   // code so the rewound graph's stdlib helpers resolve paths against
   // the compiled module dir.
@@ -53,13 +48,11 @@ export async function rewindFrom(args: {
   // (the `callback(...)` wrapper) that needs an ALS frame for
   // `__call` post-migration. See `runInBootstrapFrame` in
   // lib/runtime/asyncContext.ts.
-  if (args.registerTopLevelCallbacks) {
-    await runInBootstrapFrame(
-      execCtx,
-      () => args.registerTopLevelCallbacks!(execCtx),
-      { moduleDir: args.moduleDir },
-    );
-  }
+  await runInBootstrapFrame(
+    execCtx,
+    () => __initAllRegisteredCallbacks(execCtx),
+    { moduleDir: args.moduleDir },
+  );
   execCtx.restoreState(checkpoint);
   execCtx._skipNextCheckpoint = true;
 

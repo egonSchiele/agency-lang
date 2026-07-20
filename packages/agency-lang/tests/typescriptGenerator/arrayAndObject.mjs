@@ -22,7 +22,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn,
   Schema, __validateType, __validateChain, __validateChainRecursive,
@@ -87,13 +87,13 @@ function pass() { return { type: "pass" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
-export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
-export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, moduleDir: __dirname });
+export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata, moduleDir: __dirname });
 
 // Invoke an exported function in a node-grade execution frame. Used by
 // `agency serve` to call a function from an HTTP/MCP request — outside any
 // Agency execution frame, which generated function bodies otherwise require.
-export const __invokeFunction = (fn: any, namedArgs: Record<string, unknown>) => _runExportedFunction({ ctx: __globalCtx, fn, namedArgs, initializeGlobals: __initializeGlobals, registerTopLevelCallbacks: __registerTopLevelCallbacks, moduleDir: __dirname });
+export const __invokeFunction = (fn: any, namedArgs: Record<string, unknown>) => _runExportedFunction({ ctx: __globalCtx, fn, namedArgs, initializeGlobals: __initializeGlobals, moduleDir: __dirname });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 // Reconfigure the trace file path at runtime. Mutates the module-level
@@ -249,8 +249,9 @@ async function __initializeGlobals(__ctx) {
 }
 __registerGlobalsInit("arrayAndObject.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
-  __ctx.topLevelCallbacks = [];
+
 }
+__registerCallbacksInit("arrayAndObject.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 //  Test arrays and objects
 //  Simple array

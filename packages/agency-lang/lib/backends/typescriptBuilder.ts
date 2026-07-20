@@ -4542,9 +4542,6 @@ export class TypeScriptBuilder {
                   messages: ts.id("messages"),
                   callbacks: ts.id("callbacks"),
                   initializeGlobals: ts.id("__initializeGlobals"),
-                  registerTopLevelCallbacks: ts.id(
-                    "__registerTopLevelCallbacks",
-                  ),
                   moduleDir: ts.id("__dirname"),
                 }),
               ])

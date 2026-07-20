@@ -1,4 +1,4 @@
 {
-  "importedCallbackFired": false,
-  "threadId": null
+  "importedCallbackFired": true,
+  "threadId": "t1"
 }

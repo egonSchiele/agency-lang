@@ -465,6 +465,13 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
   );
 
   sections.push(buildRegisterTopLevelCallbacksFn(opts));
+  // And for top-level callbacks, so imported modules' registrations
+  // run too (the runtime driver iterates this registry).
+  sections.push(
+    ts.raw(
+      `__registerCallbacksInit(${JSON.stringify(displayModuleId(registryId))}, __registerTopLevelCallbacks);`,
+    ),
+  );
 
   sections.push(ts.statements(opts.generatedStatements));
 
@@ -683,27 +690,21 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
 /**
  * Emit:
  *   async function __registerTopLevelCallbacks(__ctx) {
- *     __ctx.topLevelCallbacks = []
  *     …topLevelCallbackStatements
  *   }
  *
- * The body clears any previously-registered top-level callbacks before
- * re-registering so this is safe to call on every fresh run and every
- * resume without accumulating duplicate registrations across restores.
- * Always emitted (even when empty) so the calling runtime can call it
- * unconditionally — generated modules don't have to detect the no-op
- * case.
+ * The body is append-only: the single `__ctx.topLevelCallbacks = []`
+ * reset lives in the runtime driver `__initAllRegisteredCallbacks`,
+ * which clears once and then runs every registered module's function.
+ * Resetting here would make each imported module wipe the previous
+ * module's registrations. Always emitted (even when empty) so every
+ * module has a registry entry and the driver needs no no-callbacks
+ * special case.
  */
 function buildRegisterTopLevelCallbacksFn(opts: AssembleSectionsOpts): TsNode {
   // Same parameter-context rule as buildInitializeGlobalsFn — `__ctx`
   // here is the function parameter, not an ALS-installed value.
-  const body: TsNode[] = [
-    ts.assign(
-      ts.prop(ts.id("__ctx"), "topLevelCallbacks"),
-      ts.arr([]),
-    ),
-    ...opts.topLevelCallbackStatements,
-  ];
+  const body: TsNode[] = [...opts.topLevelCallbackStatements];
   return ts.functionDecl(
     "__registerTopLevelCallbacks",
     [{ name: "__ctx" }],

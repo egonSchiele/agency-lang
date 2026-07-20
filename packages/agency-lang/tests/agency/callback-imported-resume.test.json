@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "imported-module callback survives interrupt+resume and fires after resume",
+      "input": "",
+      "expectedOutput": "\"fired,\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "pause" }
+      ]
+    }
+  ]
+}

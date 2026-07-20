@@ -2,6 +2,7 @@ import * as smoltalk from "smoltalk";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
 import { runInBootstrapFrame } from "./asyncContext.js";
+import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import {
   AgencyCancelledError,
   HandlerRecursionError,
@@ -683,12 +684,6 @@ export async function respondToInterrupts(args: {
   responses: InterruptResponse[];
   overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
-  // See runNode's docstring on the same field — on resume we have to
-  // re-register module top-level callbacks because `topLevelCallbacks`
-  // lives on the (fresh) execCtx and is not checkpointed.
-  registerTopLevelCallbacks?: (
-    ctx: RuntimeContext<GraphState>,
-  ) => void | Promise<void>;
   // See runNode's docstring on the same field — seeded by generated
   // code so the resumed graph's stdlib helpers resolve paths against
   // the compiled module dir.
@@ -759,13 +754,11 @@ export async function respondToInterrupts(args: {
   // reads ctx/threads/stack from ALS after the
   // drop-per-call-context-plumbing migration. See lib/runtime/node.ts
   // and lib/runtime/asyncContext.ts (`runInBootstrapFrame`).
-  if (args.registerTopLevelCallbacks) {
-    await runInBootstrapFrame(
-      execCtx,
-      () => args.registerTopLevelCallbacks!(execCtx),
-      { moduleDir: args.moduleDir },
-    );
-  }
+  await runInBootstrapFrame(
+    execCtx,
+    () => __initAllRegisteredCallbacks(execCtx),
+    { moduleDir: args.moduleDir },
+  );
   execCtx.restoreState(checkpoint);
   execCtx.setInterruptResponses(responseMap);
   if (metadata.callbacks) Object.assign(execCtx.callbacks, metadata.callbacks);

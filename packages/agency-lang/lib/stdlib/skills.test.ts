@@ -21,8 +21,8 @@ describe("_readSkill", () => {
 
   it("reads a skill at a ~/-prefixed path", () => {
     // The bug this guards against: pre-fix, `_readSkill("~/foo.md")`
-    // resolved `~` as a literal directory name under the module dir,
-    // producing `<moduleDir>/~/foo.md` and throwing ENOENT instead of
+    // resolved `~` as a literal directory name under the base dir,
+    // producing `<base>/~/foo.md` and throwing ENOENT instead of
     // reading from the user's home.
     const skillDir = path.join(fakeHome, ".agency", "skills");
     fs.mkdirSync(skillDir, { recursive: true });
@@ -42,9 +42,10 @@ describe("_readSkill", () => {
     expect(_readSkill("~/bare.md")).toBe("bare body");
   });
 
-  it("still resolves a relative path against the module dir (no regression)", () => {
-    // Confirms the `expandPath` wrapper is a no-op on non-tilde paths.
-    // Outside an Agency frame, getModuleDir() falls back to process.cwd().
+  it("still resolves a relative path against the cwd (no regression)", () => {
+    // Confirms the `expandPath` wrapper is a no-op on non-tilde paths;
+    // relative skill paths anchor to process.cwd() like every other
+    // path-taking stdlib entry point.
     const cwd = process.cwd();
     const targetPath = path.join(cwd, "relative-skill.md");
     fs.writeFileSync(targetPath, "relative body");

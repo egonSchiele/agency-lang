@@ -211,8 +211,8 @@ export async function _forget(query: string): Promise<void> {
  * stacks the new frame on top — pop it with `disableMemory()`.
  *
  * Auto-creates the dir if missing. Resolves `dir` against
- * `process.cwd()` (deliberately the same as `agency.json`'s
- * `memory.dir`, NOT the module dir like `read`/`write`).
+ * `process.cwd()`, the same as `agency.json`'s `memory.dir` and
+ * every path-taking stdlib function.
  */
 export async function _enableMemory(config: MemoryConfig): Promise<void> {
   const { stack } = getRuntimeContext();

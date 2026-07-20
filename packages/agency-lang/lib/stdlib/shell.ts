@@ -15,7 +15,7 @@ import {
   seqC,
   str,
 } from "tarsec";
-import { getModuleDir, getRuntimeContext } from "../runtime/asyncContext.js";
+import { getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -499,18 +499,19 @@ export type StatInfo = {
 
 /**
  * Resolve a probe path for `stat`/`exists`, applying the same path
- * policy (shorthand expansion + allow-list containment) every other
- * stdlib path-taking entry point uses.
+ * policy (shorthand expansion, cwd anchoring, allow-list containment)
+ * every other stdlib path-taking entry point uses.
  *
  * - If `dir` is the empty string (the legacy / unset sentinel),
- *   `filename` is treated as a stand-alone probe path anchored to
- *   `process.cwd()`. Routed through `resolveDir` so `_stat("~", "")`
- *   and `_exists("~/foo", "")` expand the shorthand.
- * - Otherwise resolve via `resolvePath(dir, filename)` (which delegates
- *   dir-expansion + module-dir anchoring to `resolveDir` and runs the
- *   traversal / symlink-escape checks), then layer the allow-list
- *   check on top — `resolvePath` doesn't take `allowedPaths` because
- *   it's the lower-level helper.
+ *   `filename` is a stand-alone probe path. Routed through
+ *   `resolveDir` so `_stat("~", "")` and `_exists("~/foo", "")`
+ *   expand the shorthand.
+ * - Otherwise resolve via `resolvePath(dir, filename)`, then layer
+ *   the allow-list check on top — `resolvePath` doesn't take
+ *   `allowedPaths` because it's the lower-level helper.
+ *
+ * Both forms anchor to `process.cwd()`, so `exists(p)` and `read(p)`
+ * always agree on which file they mean.
  *
  * Probing for a path outside the allow-list is itself a containment
  * violation — both `_stat` and `_exists` throw rather than silently
@@ -525,7 +526,7 @@ async function resolveProbePath(
     return resolveDir(filename, allowedPaths);
   }
   const full = await resolvePath(dir, filename);
-  await assertContained(full, allowedPaths, getModuleDir());
+  await assertContained(full, allowedPaths, process.cwd());
   return full;
 }
 

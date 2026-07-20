@@ -1,12 +1,11 @@
-import { dirname } from "std::system"
 import { exists } from "std::shell"
 import { join } from "std::path"
 
 node main() {
-  let d = dirname()
-  // dirname() should be a non-empty absolute path whose directory holds
-  // this compiled module — so the fixture file co-located with this
-  // .agency should resolve and exist on disk.
+  let d = __dirname
+  // __dirname is a non-empty absolute path holding this file's compiled
+  // module — so the fixture file co-located with this .agency should
+  // resolve and exist on disk.
   return {
     nonEmpty: d != "",
     fixtureExists: exists(join(d, "dirname-fixture.txt"))

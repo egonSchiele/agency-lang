@@ -1,0 +1,34 @@
+// Same shape as handler-guard-trip-propagate, with NO outer handler:
+// the in-handler trip has nobody to answer it. The refusal must
+// convert it to a failed guard Result instead of pausing a run that
+// nobody could resume.
+let sawFailure = false
+
+def spin(rounds: number): string {
+  let count = 0
+  while (count < rounds) {
+    count = count + 1
+  }
+  return "spun"
+}
+
+def inner(): string {
+  handle {
+    interrupt("please review")
+    return "work done"
+  } with (data) {
+    const guarded = guard(time: 5ms, label: "in-handler") {
+      const spun = spin(3000000)
+      return "guarded:${spun}"
+    }
+    if (isFailure(guarded)) {
+      sawFailure = true
+    }
+    return approve()
+  }
+}
+
+node main() {
+  const result = inner()
+  return "${result}|failed:${sawFailure}"
+}

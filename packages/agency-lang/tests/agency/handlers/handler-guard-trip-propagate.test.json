@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "An in-handler guard trip that the outer chain propagates is refused as a rejection: the guard block fails, the handler completes, the run never pauses. failed:false means the trip either paused the run or was silently approved.",
+      "input": "",
+      "expectedOutput": "\"work done|failed:true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

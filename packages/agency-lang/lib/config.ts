@@ -20,7 +20,7 @@ export const BUILTIN_FUNCTIONS: Record<string, string> = {};
 
 export const BUILTIN_TOOLS: string[] = [];
 
-export const BUILTIN_VARIABLES = ["color"];
+export const BUILTIN_VARIABLES = ["color", "__dirname"];
 
 /** Reply-attachment caps (tools showing images to the model — see
  *  docs/dev/reply-attachments.md). The byte cap mirrors smoltalk's

@@ -11,7 +11,7 @@ import type {
   SplatExpression,
 } from "../types/dataStructures.js";
 import { formatTypeHint } from "../utils/formatType.js";
-import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES } from "./builtins.js";
+import { BUILTIN_FUNCTION_TYPES, AGENCY_FUNCTION_METHOD_TYPES, BUILTIN_VARIABLE_TYPES } from "./builtins.js";
 import { isAssignable, isNever, safeResolveType } from "./assignability.js";
 import { typeAt, flowHasNarrowFor, stablePrefix } from "./flow.js";
 import { literalToType } from "./literalType.js";
@@ -280,6 +280,13 @@ export function synthType(
           }
         }
         return scopeType;
+      }
+      // Builtin variables resolve only after scope lookup fails, so a
+      // real binding named `__dirname` shadows the builtin (the same
+      // rule the generator applies — see issue #453).
+      const builtinVarType = BUILTIN_VARIABLE_TYPES[expr.value];
+      if (builtinVarType) {
+        return builtinVarType;
       }
       const fnDef = ctx.functionDefs[expr.value];
       if (fnDef) {

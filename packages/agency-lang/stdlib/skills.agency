@@ -353,9 +353,7 @@ export def commandsDir(dir: string): any[] {
   Discover .md files under `dir` and parse each as a slash-command
   template. Returns [] if `dir` is missing or empty.
 
-  @param dir - Directory containing command markdown files. Relative
-    paths resolve against the current working directory; pass __dirname
-    for a directory relative to the current Agency file.
+  @param dir - Directory containing command markdown files.
   """
   return interrupt std::skills::commandsDir("Are you sure you want to scan this directory for slash command files?", {
     dir: dir

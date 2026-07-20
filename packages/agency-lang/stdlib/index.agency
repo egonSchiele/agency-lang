@@ -172,7 +172,7 @@ export idempotent def read(
   Read the contents of a file and return it as a string.
 
   @param filename - The file to read
-  @param dir - The directory to resolve the filename against (defaults to "."). Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
+  @param dir - The directory to resolve the filename against (defaults to ".")
   @param offset - 1-indexed line to start at (0 means start of file)
   @param limit - Maximum number of lines to return (0 means read to end of file)
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
@@ -201,7 +201,7 @@ export def write(
 
   @param filename - The file to write
   @param content - The content to write
-  @param dir - The directory to resolve the filename against (defaults to "."). Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
+  @param dir - The directory to resolve the filename against (defaults to ".")
   @param mode - How to handle an existing file
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
   """
@@ -232,7 +232,7 @@ export def writeBinary(
 
   @param filename - The file to write
   @param base64 - The binary content, base64-encoded
-  @param dir - The directory to resolve the filename against (defaults to "."). Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
+  @param dir - The directory to resolve the filename against (defaults to ".")
   @param mode - How to handle an existing file
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
   """
@@ -259,7 +259,7 @@ export idempotent def readBinary(
   binary file: images, audio, video, PDFs.
 
   @param filename - The file to read
-  @param dir - The directory to resolve the filename against (defaults to "."). Relative paths resolve against the current working directory; pass __dirname for a path relative to the current Agency file
+  @param dir - The directory to resolve the filename against (defaults to ".")
   @param useAgentCwd - Resolve relative paths against the agent working directory instead of dir
   """
   if (useAgentCwd) {

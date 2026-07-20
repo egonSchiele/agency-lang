@@ -98,41 +98,6 @@ export function _tomorrow(timezone?: string): string {
   return formatWithTimezone(d, tz).slice(0, 10);
 }
 
-// --- Date arithmetic ---
-
-export function _add(datetime: string, ms: number): string {
-  const d = parseToDate(datetime);
-  d.setTime(d.getTime() + ms);
-  const offset = extractOffset(datetime);
-  if (offset) {
-    return formatWithOffset(d, offset);
-  }
-  return d.toISOString();
-}
-
-export function _addMinutes(datetime: string, minutes: number): string {
-  const d = parseToDate(datetime);
-  d.setTime(d.getTime() + minutes * 60 * 1000);
-
-  // Preserve the timezone offset from the input
-  const offset = extractOffset(datetime);
-  if (offset) {
-    return formatWithOffset(d, offset);
-  }
-  return d.toISOString();
-}
-
-export function _addHours(datetime: string, hours: number): string {
-  return _addMinutes(datetime, hours * 60);
-}
-
-// NOTE: This adds a fixed 24 hours per day. On DST transition days, a
-// calendar day is 23 or 25 hours, so the wall-clock time may shift by
-// an hour. To avoid this, use _atTime with a timezone-aware date instead.
-export function _addDays(datetime: string, days: number): string {
-  return _addMinutes(datetime, days * 24 * 60);
-}
-
 // --- Relative dates ---
 
 export function _nextDayOfWeek(dayName: string, timezone?: string): string {
@@ -245,27 +210,3 @@ export function _endOfMonth(instant: number, timezone?: string): number {
   return boundary(instant, timezone, lastOfMonth, "end");
 }
 
-// --- Utility ---
-
-function extractOffset(datetime: string): string | null {
-  // Match +HH:MM or -HH:MM at end of string
-  const match = datetime.match(/([+-]\d{2}:\d{2})$/);
-  if (match) return match[1];
-  // Match Z (UTC)
-  if (datetime.endsWith("Z")) return "+00:00";
-  return null;
-}
-
-function formatWithOffset(date: Date, offset: string): string {
-  // Parse offset to minutes
-  const sign = offset[0] === "-" ? -1 : 1;
-  const hours = parseInt(offset.slice(1, 3), 10);
-  const mins = parseInt(offset.slice(4, 6), 10);
-  const offsetMs = sign * (hours * 60 + mins) * 60 * 1000;
-
-  // Get the local time in the target offset
-  const localTime = new Date(date.getTime() + offsetMs);
-  const iso = localTime.toISOString(); // YYYY-MM-DDTHH:MM:SS.sssZ
-
-  return `${iso.slice(0, 19)}${offset}`;
-}

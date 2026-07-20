@@ -614,7 +614,6 @@ async function runResumeLoop(
   execCtx: RuntimeContext<GraphState>,
   startNodeName: string,
   agentStartTime: number,
-  moduleDir?: string,
 ): Promise<any> {
   let nodeName = startNodeName;
   while (true) {
@@ -644,7 +643,6 @@ async function runResumeLoop(
               statelogClient: execCtx.statelogClient,
             },
           ),
-        { moduleDir },
       );
       await execCtx.pendingPromises.awaitAll();
       const returnObject = createReturnObject({ result, globals: execCtx.globals });
@@ -684,10 +682,6 @@ export async function respondToInterrupts(args: {
   responses: InterruptResponse[];
   overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
-  // See runNode's docstring on the same field — seeded by generated
-  // code so the resumed graph's stdlib helpers resolve paths against
-  // the compiled module dir.
-  moduleDir?: string;
 }): Promise<any> {
   const { ctx, interrupts, responses, metadata = {} } = args;
   const responseMap = buildResponseMap(interrupts, responses);
@@ -757,7 +751,6 @@ export async function respondToInterrupts(args: {
   await runInBootstrapFrame(
     execCtx,
     () => __initAllRegisteredCallbacks(execCtx),
-    { moduleDir: args.moduleDir },
   );
   execCtx.restoreState(checkpoint);
   execCtx.setInterruptResponses(responseMap);
@@ -768,7 +761,7 @@ export async function respondToInterrupts(args: {
   execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
   const agentStartTime = performance.now();
   try {
-    return await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime, args.moduleDir);
+    return await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     execCtx.statelogClient.error({ errorType: "runtimeError", message: errorMessage });

@@ -106,10 +106,9 @@ async function initFreshExecCtx(
   execCtx: RuntimeContext<GraphState>,
   opts: {
     initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
-    moduleDir?: string;
   },
 ): Promise<void> {
-  const { initializeGlobals, moduleDir } = opts;
+  const { initializeGlobals } = opts;
 
   // initializeGlobals + callback registration both invoke Agency
   // code that goes through `__call` — and `__call` reads `ctx` /
@@ -158,16 +157,16 @@ async function initFreshExecCtx(
   // Process-global + idempotent (see loadProviderModules), so it is safe and
   // cheap to call on every fresh run.
   await loadProviderModules(execCtx);
-  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx), { moduleDir });
+  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx));
   if (initializeGlobals) {
-    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });
+    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx));
   }
   // Re-register top-level callbacks for EVERY module in the closure (not
   // just the entry) AFTER global init, so imported-module callbacks fire
   // and any globals they read are already set up. The driver owns the
   // single topLevelCallbacks reset. Keep this in sync with the resume
   // (interrupts.ts) and rewind (rewind.ts) paths.
-  await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx), { moduleDir });
+  await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx));
 }
 
 /**
@@ -231,16 +230,14 @@ export async function runExportedFunction({
   fn,
   namedArgs,
   initializeGlobals,
-  moduleDir,
 }: {
   ctx: RuntimeContext<GraphState>;
   fn: AgencyFunction;
   namedArgs: Record<string, unknown>;
   initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
-  moduleDir?: string;
 }): Promise<unknown> {
   const execCtx = await ctx.createExecutionContext(nanoid());
-  await initFreshExecCtx(execCtx, { initializeGlobals, moduleDir });
+  await initFreshExecCtx(execCtx, { initializeGlobals });
 
   const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
   try {
@@ -250,7 +247,6 @@ export async function runExportedFunction({
         stack: execCtx.stateStack,
         threads: threadStore,
         globals: execCtx.globals,
-        moduleDir,
       },
       async () => {
         const result = await fn.invoke({
@@ -278,7 +274,6 @@ export async function runNode({
   callbacks,
   initializeGlobals,
   abortSignal,
-  moduleDir,
 }: {
   // global execution context
   ctx: RuntimeContext<GraphState>;
@@ -294,13 +289,6 @@ export async function runNode({
   messages?: MessageJSON[];
 
   callbacks?: AgencyCallbacks;
-
-  // Absolute path of the directory of the compiled JS module that is
-  // initiating this run. Seeded by generated code from `imports.mustache`
-  // (passing `__dirname`). Stashed in the ALS frame as `moduleDir` so
-  // stdlib helpers (e.g. `resolvePath`, `_dirname`) can resolve paths
-  // relative to the module instead of `process.cwd()`.
-  moduleDir?: string;
 
   // initializes global variables on the execution context
   initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
@@ -330,7 +318,7 @@ export async function runNode({
   // see `initFreshExecCtx` for the full ordering rationale (and the
   // `node main() { route({ systemPrompt: foreignStatic }) }` case where a
   // foreign static is read only from a function body).
-  await initFreshExecCtx(execCtx, { initializeGlobals, moduleDir });
+  await initFreshExecCtx(execCtx, { initializeGlobals });
   // Install the CLI-driven root policy handler (agency run --policy). No-op
   // unless AGENCY_RUN_POLICY is set and this is the root process (not an IPC
   // subprocess). Installed here — after the exec context exists, before the
@@ -372,7 +360,6 @@ export async function runNode({
         name: "onAgentStart",
         data: { nodeName, args: data, messages: messages || [], cancel },
       }),
-    { moduleDir },
   );
 
   const agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
@@ -398,7 +385,6 @@ export async function runNode({
             stack: execCtx.stateStack,
             threads: threadStore,
             globals: execCtx.globals,
-            moduleDir,
           },
           () =>
             execCtx.graph.run(
@@ -445,7 +431,6 @@ export async function runNode({
               stack: execCtx.stateStack,
               threads: threadStore,
               globals: execCtx.globals,
-              moduleDir,
             },
             () =>
               callHook({

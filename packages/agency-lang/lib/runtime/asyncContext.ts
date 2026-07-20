@@ -98,21 +98,6 @@ export type AgencyStore = {
    * a Runner come into scope).
    */
   runner?: Runner;
-  /**
-   * Absolute path of the directory containing the *compiled* JS module
-   * that initiated this Agency run. Seeded by generated code at every
-   * runtime entry point and inherited by every inner ALS frame —
-   * either implicitly via a `{ ...store }` spread or explicitly by
-   * carrying `agencyStore.getStore()?.moduleDir` into a freshly-built
-   * frame. Read by stdlib helpers that resolve paths relative to the
-   * module (`resolvePath`, `_readSkill`, `_dirname`).
-   *
-   * Optional because there is no sensible default when no frame is
-   * active (tests that call helpers directly, or bootstrap paths that
-   * never went through the generated entry). Helpers must fall back
-   * to `process.cwd()` and document that fallback.
-   */
-  moduleDir?: string;
 };
 
 export const agencyStore = new AsyncLocalStorage<AgencyStore>();
@@ -257,16 +242,6 @@ export function __globals(): GlobalStore | undefined {
 }
 
 /**
- * Read the module directory from the current ALS frame. Returns
- * `process.cwd()` as a fallback when no frame is active or no module
- * directory was seeded. Callers that need strictness should use
- * `getRuntimeContext().moduleDir` directly.
- */
-export function getModuleDir(): string {
-  return agencyStore.getStore()?.moduleDir ?? process.cwd();
-}
-
-/**
  * Convenience wrapper for tests that construct a RuntimeContext manually
  * and need to invoke stdlib helpers that read from ALS. Mirrors
  * `agencyStore.run(...)` but with explicit named parameters so test
@@ -307,7 +282,6 @@ export function runInTestContext<T>(
 export async function runInBootstrapFrame<T>(
   ctx: RuntimeContext<any>,
   fn: () => T | Promise<T>,
-  opts?: { moduleDir?: string },
 ): Promise<T> {
   return agencyStore.run(
     {
@@ -320,7 +294,6 @@ export async function runInBootstrapFrame<T>(
       // sharing is exactly right: writes done by `__initializeGlobals`
       // land on the RuntimeContext's store and persist across the run.
       globals: ctx.globals,
-      moduleDir: opts?.moduleDir,
     },
     fn,
   );

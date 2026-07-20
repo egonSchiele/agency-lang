@@ -178,10 +178,6 @@ export class Runner {
    *  avoid clobbering an outer frame with `undefined`. */
   private runInScope<T>(fn: () => Promise<T>): Promise<T> {
     if (this.stack && this.threads) {
-      // Inherit `moduleDir` from any outer ALS frame so stdlib helpers
-      // invoked inside this step resolve paths relative to the same
-      // compiled module that started the run. This frame doesn't
-      // spread `{ ...store }`, so the inheritance has to be explicit.
       const outer = agencyStore.getStore();
       return agencyStore.run(
         {
@@ -200,7 +196,6 @@ export class Runner {
             stepPath: this.path.join("."),
           },
           runner: this,
-          moduleDir: outer?.moduleDir,
         },
         fn,
       );

@@ -24,10 +24,6 @@ export async function rewindFrom(args: {
   checkpoint: Checkpoint;
   overrides: Record<string, unknown>;
   metadata?: Record<string, any>;
-  // See runNode's docstring on the same field — seeded by generated
-  // code so the rewound graph's stdlib helpers resolve paths against
-  // the compiled module dir.
-  moduleDir?: string;
 }): Promise<any> {
   const { ctx, overrides, metadata = {} } = args;
   const checkpoint = deepClone(args.checkpoint);
@@ -51,7 +47,6 @@ export async function rewindFrom(args: {
   await runInBootstrapFrame(
     execCtx,
     () => __initAllRegisteredCallbacks(execCtx),
-    { moduleDir: args.moduleDir },
   );
   execCtx.restoreState(checkpoint);
   execCtx._skipNextCheckpoint = true;
@@ -92,7 +87,6 @@ export async function rewindFrom(args: {
                 statelogClient: execCtx.statelogClient,
               },
             ),
-          { moduleDir: args.moduleDir },
         );
         await execCtx.pendingPromises.awaitAll();
         return createReturnObject({ result, globals: execCtx.globals });

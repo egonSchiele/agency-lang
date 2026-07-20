@@ -58,15 +58,12 @@ describe("resolveDir", () => {
     ).rejects.toThrow(/not under/);
   });
 
-  it("ignores any moduleDir on an active ALS frame", async () => {
-    // Path resolution is cwd-anchored even inside an Agency execution
-    // frame; the legacy per-run moduleDir no longer affects it.
+  it("stays cwd-anchored inside an active ALS frame", async () => {
     const result = await agencyStore.run(
       {
         ctx: {} as any,
         stack: {} as any,
         threads: {} as any,
-        moduleDir: "/some/module/dir",
       },
       () => resolveDir("./prompts"),
     );

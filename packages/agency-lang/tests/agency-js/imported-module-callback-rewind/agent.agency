@@ -1,0 +1,13 @@
+import { noop } from "./mod.agency"
+
+def helper(): string {
+  return "x"
+}
+
+node main() {
+  // Reference imported symbol so the module is loaded.
+  const _ = noop()
+  const cid = checkpoint()
+  helper()
+  return getCheckpoint(cid)
+}

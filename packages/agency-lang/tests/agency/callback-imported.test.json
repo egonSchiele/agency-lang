@@ -1,0 +1,9 @@
+{
+  "tests": [{
+    "nodeName": "main",
+    "input": "",
+    "expectedOutput": "2",
+    "evaluationCriteria": [{ "type": "exact" }],
+    "description": "top-level callback in an imported module fires for the whole run"
+  }]
+}

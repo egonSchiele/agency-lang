@@ -1,0 +1,11 @@
+import { readObserved } from "./callback-imported-resume-helpers.agency"
+
+def helper(): string {
+  return "x"
+}
+
+node main() {
+  const _y = interrupt("pause")
+  helper()
+  return readObserved()
+}

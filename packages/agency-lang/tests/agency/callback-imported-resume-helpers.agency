@@ -1,0 +1,11 @@
+let observed: string = ""
+
+callback("onFunctionStart") as data {
+  if (data.functionName == "helper") {
+    observed = observed + "fired,"
+  }
+}
+
+export def readObserved(): string {
+  return observed
+}

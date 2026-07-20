@@ -22,7 +22,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn,
   Schema, __validateType, __validateChain, __validateChainRecursive,
@@ -177,8 +177,9 @@ async function __initializeGlobals(__ctx) {
 }
 __registerGlobalsInit("euler-0001.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
-  __ctx.topLevelCallbacks = [];
+
 }
+__registerCallbacksInit("euler-0001.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 //  Project Euler Problem 1: Multiples of 3 or 5
 //  Find the sum of all the multiples of 3 or 5 below 1000.

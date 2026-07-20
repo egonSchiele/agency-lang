@@ -1,0 +1,11 @@
+let fireCount: number = 0
+
+callback("onFunctionStart") as data {
+  if (data.functionName == "helper") {
+    fireCount = fireCount + 1
+  }
+}
+
+export def readFireCount(): number {
+  return fireCount
+}

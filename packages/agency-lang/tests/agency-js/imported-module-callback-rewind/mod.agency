@@ -1,0 +1,14 @@
+import { setMutable } from "../../helpers/mutableVar.js"
+
+// Top-level callback in an IMPORTED module. The rewind path builds a
+// fresh execCtx, so this only fires post-rewind if rewindFrom re-runs
+// every module's registration (not just the entry's).
+callback("onFunctionStart") as data {
+  if (data.functionName == "helper") {
+    setMutable("imported-onFunctionStart-fired", true)
+  }
+}
+
+export def noop(): number {
+  return 0
+}

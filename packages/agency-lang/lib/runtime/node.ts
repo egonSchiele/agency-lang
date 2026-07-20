@@ -13,7 +13,7 @@ import {
 } from "./errors.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { __initAllRegistered } from "./crossModuleInitRegistry.js";
+import { __initAllRegistered, __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import { loadProviderModules } from "./providerModules.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
@@ -163,14 +163,12 @@ async function initFreshExecCtx(
   if (initializeGlobals) {
     await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx), { moduleDir });
   }
-  // Top-level callbacks are re-registered every fresh run AFTER global
-  // init so any module-level vars they reference (via `__ctx.globals`)
-  // are already set up. The registration sequence mirrors what
-  // `respondToInterrupts` does on resume — keep them in sync if you
-  // touch either site.
-  if (registerTopLevelCallbacks) {
-    await runInBootstrapFrame(execCtx, () => registerTopLevelCallbacks(execCtx), { moduleDir });
-  }
+  // Re-register top-level callbacks for EVERY module in the closure (not
+  // just the entry) AFTER global init, so imported-module callbacks fire
+  // and any globals they read are already set up. The driver owns the
+  // single topLevelCallbacks reset. Keep this in sync with the resume
+  // (interrupts.ts) and rewind (rewind.ts) paths.
+  await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx), { moduleDir });
 }
 
 /**

@@ -22,7 +22,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn,
   Schema, __validateType, __validateChain, __validateChainRecursive,
@@ -195,8 +195,9 @@ async function __initializeGlobals(__ctx) {
 }
 __registerGlobalsInit("splat.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
-  __ctx.topLevelCallbacks = [];
+
 }
+__registerCallbacksInit("splat.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 export default graph
 export const __sourceMap = {};

@@ -1,11 +1,10 @@
-// Positive baseline counterpart to
-// `tests/agency-js/threads-fix-callback-propagation/`. That fixture
-// pins the negative: a top-level `callback("onThreadEnd")` defined in
-// an IMPORTED module does NOT fire when the entry-point opens a
-// `thread { }`. This fixture pins the positive: a top-level
-// `callback("onThreadEnd")` defined in the ENTRY module DOES fire.
-// Combined, the two tests cover both directions and would break
-// loudly if the propagation rule changed in either direction.
+// Entry-module counterpart to
+// `tests/agency-js/threads-fix-callback-propagation/`: that fixture
+// covers a top-level `callback("onThreadEnd")` in an IMPORTED module,
+// this one covers the same callback in the ENTRY module. Both fire
+// (imported-module callbacks register through the cross-module
+// registry), and the pair would break loudly if either direction
+// regressed.
 import { setMutable } from "../../helpers/mutableVar.js"
 
 callback("onThreadEnd") as evt {

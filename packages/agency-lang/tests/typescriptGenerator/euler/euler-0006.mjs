@@ -22,7 +22,7 @@ import {
   deepClone as __deepClone,
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
-  __registerStaticInit, __registerGlobalsInit, __awaitStaticInit, __awaitGlobalsInit,
+  __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn,
   Schema, __validateType, __validateChain, __validateChainRecursive,
@@ -177,8 +177,9 @@ async function __initializeGlobals(__ctx) {
 }
 __registerGlobalsInit("euler-0006.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
-  __ctx.topLevelCallbacks = [];
+
 }
+__registerCallbacksInit("euler-0006.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 //  Project Euler Problem 6: Sum Square Difference
 //  Find the difference between the sum of the squares and the square of the sum

@@ -1,0 +1,11 @@
+import { readFireCount } from "./callback-imported-helpers.agency"
+
+def helper(): string {
+  return "x"
+}
+
+node main() {
+  helper()
+  helper()
+  return readFireCount()
+}

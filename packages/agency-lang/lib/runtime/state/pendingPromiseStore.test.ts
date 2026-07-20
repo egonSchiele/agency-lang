@@ -115,3 +115,33 @@ describe("PendingPromiseStore", () => {
     });
   });
 });
+
+describe("PendingPromiseStore watermark", () => {
+  it("keysSince returns only keys registered at or after the mark", () => {
+    const store = new PendingPromiseStore();
+    store.add(Promise.resolve(1));
+    const mark = store.watermark();
+    const k1 = store.add(Promise.resolve(2));
+    const k2 = store.add(Promise.resolve(3));
+    expect(store.keysSince(mark).sort()).toEqual([k1, k2].sort());
+  });
+
+  it("keysSince skips keys that were already awaited", async () => {
+    const store = new PendingPromiseStore();
+    const mark = store.watermark();
+    const k1 = store.add(Promise.resolve("a"));
+    await store.awaitPending([k1]);
+    const k2 = store.add(Promise.resolve("b"));
+    expect(store.keysSince(mark)).toEqual([k2]);
+  });
+
+  it("awaitPending(keysSince(mark)) leaves pre-mark promises alone", async () => {
+    const store = new PendingPromiseStore();
+    let preSettled = false;
+    store.add(new Promise<void>((r) => setTimeout(() => { preSettled = true; r(); }, 5)));
+    const mark = store.watermark();
+    store.add(Promise.resolve("post"));
+    await store.awaitPending(store.keysSince(mark));
+    expect(preSettled).toBe(false); // the slow pre-mark promise was not awaited
+  });
+});

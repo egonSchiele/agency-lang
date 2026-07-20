@@ -68,4 +68,19 @@ export class PendingPromiseStore {
   clear(): void {
     this.pending = {};
   }
+
+  /** Position marker for keysSince. Handler dispatch records this
+   *  before running a handler body so handler exit can await exactly
+   *  the promises the handler launched — awaiting the full set would
+   *  deadlock on the async call whose raise is being dispatched. */
+  watermark(): number {
+    return this.counter;
+  }
+
+  /** Still-pending keys registered at or after the given watermark. */
+  keysSince(mark: number): string[] {
+    return Object.keys(this.pending).filter(
+      (k) => Number(k.slice("__pending_".length)) >= mark,
+    );
+  }
 }

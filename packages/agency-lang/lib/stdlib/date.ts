@@ -4,9 +4,17 @@ function getLocalTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-function formatWithTimezone(date: Date, timezone: string): string {
+function resolveTz(timezone?: string): string {
+  return timezone || getLocalTimezone();
+}
+
+function formatWithTimezone(
+  date: Date,
+  timezone: string,
+  includeMillis: boolean = false,
+): string {
   // Get the offset for this date in the target timezone
-  const formatter = new Intl.DateTimeFormat("en-US", {
+  const options: Intl.DateTimeFormatOptions = {
     timeZone: timezone,
     year: "numeric",
     month: "2-digit",
@@ -16,7 +24,11 @@ function formatWithTimezone(date: Date, timezone: string): string {
     second: "2-digit",
     hour12: false,
     timeZoneName: "longOffset",
-  });
+  };
+  if (includeMillis) {
+    options.fractionalSecondDigits = 3;
+  }
+  const formatter = new Intl.DateTimeFormat("en-US", options);
 
   const parts = formatter.formatToParts(date);
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
@@ -38,7 +50,11 @@ function formatWithTimezone(date: Date, timezone: string): string {
     offset = match ? match[1] : "+00:00";
   }
 
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`;
+  const frac = includeMillis
+    ? `.${(get("fractionalSecond") || "000").padEnd(3, "0")}`
+    : "";
+
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}${frac}${offset}`;
 }
 
 function parseToDate(datetime: string): Date {
@@ -47,6 +63,21 @@ function parseToDate(datetime: string): Date {
     throw new Error(`Invalid date/time: "${datetime}"`);
   }
   return d;
+}
+
+// --- Bridges between instants (numbers) and strings ---
+
+export function _format(ms: number, timezone?: string): string {
+  return formatWithTimezone(new Date(ms), resolveTz(timezone), true);
+}
+
+export function _formatDate(ms: number, timezone?: string): string {
+  return formatWithTimezone(new Date(ms), resolveTz(timezone)).slice(0, 10);
+}
+
+export function _parse(iso: string): number {
+  // parseToDate throws when new Date(iso) is NaN.
+  return parseToDate(iso).getTime();
 }
 
 // --- Current time ---

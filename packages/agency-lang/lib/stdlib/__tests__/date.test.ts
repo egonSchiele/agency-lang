@@ -27,11 +27,18 @@ describe("_formatDuration", () => {
     expect(_formatDuration(90061000)).toBe("1d 1h 1m 1s");
   });
 
+  it("uses weeks as the largest unit", () => {
+    expect(_formatDuration(691200000)).toBe("1w 1d"); // 8 days
+    expect(_formatDuration(604800000)).toBe("1w"); // exactly 7 days
+    expect(_formatDuration(40 * 86400000)).toBe("5w 5d"); // 40 days = 5w 5d
+  });
+
   it("handles the second boundaries", () => {
     expect(_formatDuration(999)).toBe("0s");
     expect(_formatDuration(1000)).toBe("1s");
     expect(_formatDuration(59999)).toBe("59s");
     expect(_formatDuration(86400000)).toBe("1d");
+    expect(_formatDuration(604800000)).toBe("1w");
   });
 
   it("signs negatives, with no negative zero", () => {

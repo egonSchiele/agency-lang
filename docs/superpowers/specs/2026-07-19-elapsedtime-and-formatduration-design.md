@@ -96,8 +96,10 @@ Deliberate limits, stated so they are decisions and not accidents:
 - **Granularity stops at seconds.** Sub-second durations round down to `"0s"`.
   For "how long have I been working" that is the right resolution; a millisecond
   count is what `elapsedTime` is for.
-- **Units stop at days.** Weeks and months are ambiguous (a month is not a fixed
-  number of days), so the largest unit is `d`. A 40-day duration reads `"40d"`.
+- **Units stop at weeks.** A week is a fixed 7 days, so it is unambiguous; months
+  are not (a month is not a fixed number of days), so the largest unit is `w` and
+  there are no months. A 40-day duration reads `"5w 5d"`. (Owner's call on review:
+  weeks, not days.)
 - **Zero intermediate units are dropped, not shown.** `3600000 + 1000` is
   `"1h 1s"`, not `"1h 0m 1s"`. Compact over aligned.
 
@@ -226,7 +228,5 @@ infeasible.
 - A `subtract` function — with numbers, subtraction is the `-` operator (#609's
   original question, resolved by PR 1).
 - Per-test seeding of the fake clock's wall base; a fixed constant is enough.
-- Weeks/months in `formatDuration`, and sub-second granularity. The day cap is a
-  real product decision, not just a limit: a multi-day agent session reading
-  `"40d"` is exactly this feature's scenario, so `elapsedTime`'s and
-  `formatDuration`'s docstrings must state that the largest unit is days.
+- Months in `formatDuration` (ambiguous; weeks are the largest unit), and
+  sub-second granularity.

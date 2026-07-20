@@ -92,15 +92,15 @@ export function _parse(iso: string): number {
   return parseToDate(iso).getTime();
 }
 
-const MS_PER = { d: 86400000, h: 3600000, m: 60000, s: 1000 };
+const MS_PER = { w: 604800000, d: 86400000, h: 3600000, m: 60000, s: 1000 };
 
 /** Render a millisecond duration as a compact human string, largest unit first:
- *  "5m 32s", "1h 1s", "1d 2h". Whole-second granularity (sub-second is "0s");
- *  largest unit is days. Negatives get a leading "-", but there is no "-0s". */
+ *  "5m 32s", "1h 1s", "2w 3d". Whole-second granularity (sub-second is "0s");
+ *  largest unit is weeks. Negatives get a leading "-", but there is no "-0s". */
 export function _formatDuration(ms: number): string {
   let remaining = Math.floor(Math.abs(ms) / 1000) * 1000;
   const parts: string[] = [];
-  for (const unit of ["d", "h", "m", "s"] as const) {
+  for (const unit of ["w", "d", "h", "m", "s"] as const) {
     const value = Math.floor(remaining / MS_PER[unit]);
     if (value > 0) {
       parts.push(`${value}${unit}`);

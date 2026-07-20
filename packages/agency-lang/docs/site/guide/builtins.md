@@ -71,6 +71,13 @@ These are built-in methods you can call on any Agency function or tool value (th
 |---|---|---|
 | `schema` | `schema<T>` | Expression that returns the Zod schema for a type `T`. Useful when passing a schema to a TypeScript function or validator. See [Schemas](/guide/schemas). |
 
+## Built-in Variables
+
+| Name | Type | Description |
+|---|---|---|
+| `__dirname` | `string` | The absolute path of the directory containing the current `.agency` file. Each file gets its own value, so an imported module can name its own directory no matter which file started the run. Relative paths in file functions resolve against the working directory; pass `__dirname` to anchor a path to the current file instead: `read("prompts/main.md", __dirname)`. |
+| `color` | object | Terminal color helpers for `print` output, e.g. `color.red("error")`, `color.dim("note")`. |
+
 ## Debugging
 
 | Name | Signature | Description |

@@ -1,3 +1,27 @@
+## Unreleased
+
+### Breaking: relative paths now resolve against the working directory
+
+Every path-taking function (`read`, `write`, `edit`, `ls`, `grep`, `glob`,
+`stat`, `exists`, `readSkill`, ...) now resolves relative paths against the
+directory the program was run from, matching how file I/O works in other
+languages. Previously some functions resolved against the entry module's
+directory, some against the cwd, and `stat`/`exists` switched per call.
+
+To read a file relative to the current Agency file, use the new `__dirname`
+builtin: `read("prompts/main.md", __dirname)`. `std::system::dirname()` is
+removed (it could only ever report the entry module's directory); `__dirname`
+replaces it. Upward traversal (`../`) and absolute filenames are now allowed.
+
+Security note: `ls`/`grep`/`glob`/`stat`/`exists` and the fs-mutation
+functions keep their allow-list containment, which still fails closed.
+`read`/`write`/`writeBinary`/`readBinary`/`edit` have never had an
+allow-list; they are gated by the `std::read`/`std::write`/`std::edit`
+interrupts, which are unchanged. What this release removes is their
+internal path containment (no `..`, no absolute filenames), so an
+approved read or write can now reach any path the interrupt policy
+allows.
+
 ## Jul 17 2026 — v0.9.0
 
 ### Language / Typechecker

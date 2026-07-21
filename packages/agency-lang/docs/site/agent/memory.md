@@ -1,5 +1,7 @@
 # Memory
 
+*This feature is still a work in progress. It may not work or this documentation may be out of date.*
+
 The agent can remember facts across runs. Tell it your name, a project
 convention, or a decision you made, and it can recall that later, even in a new
 session days from now. Memory means you do not have to re-explain the same
@@ -15,9 +17,7 @@ tool and look one up with a `recall` tool. Recall also happens automatically: th
 agent pulls in relevant remembered facts as it works, without keeping them all in
 the conversation history.
 
-Saving a fact is itself an action that goes through your
-[approval policy](/agent/approvals), so the agent cannot quietly record something
-you did not want written down.
+Saving a fact is itself an action that goes through your approval policy, so the agent cannot quietly record something you did not want written down.
 
 ## Per-agent scopes
 

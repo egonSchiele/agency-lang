@@ -1,6 +1,8 @@
 # Using MCP servers with the agent
 
-The agency agent can use tools from external [MCP](https://modelcontextprotocol.io)
+*This feature is still a work in progress. It may not work or this documentation may be out of date.*
+
+The Agency agent can use tools from external [MCP](https://modelcontextprotocol.io)
 (Model Context Protocol) servers — filesystem access, GitHub, databases, and the
 rest of the MCP ecosystem. Every MCP tool call is gated by the agent's approval
 policy, so a side-effectful call cannot happen without your say-so.

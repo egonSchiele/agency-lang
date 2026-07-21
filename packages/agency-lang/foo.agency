@@ -1,10 +1,6 @@
-// global variable
-let count = 0
-
+import { now } from "std::date"
 node main() {
-  const xs = range(10)
-  // count is still 0 afterwards - each branch changed its own copy
-  const results = forkShared [count += x for x in xs]
-  print("count after fork: ${count}, results are ${results}")
-  // prints 0
+  const start = now()
+  sleep(4)
+  print(elapsedTime(since: start))
 }

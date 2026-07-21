@@ -1,58 +1,53 @@
 # Models and settings
 
-The agent picks a model provider automatically from the API keys in your
-environment. Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, or an
-OpenRouter key, and the agent uses that provider's default models. You can
-override the choice per role, switch models mid-session, run a local model, and
-tune per-model behavior.
+The agent picks a model provider automatically from the API keys in your environment. Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`, and the agent will pick it up automatically. You can also set an explicit model and provider:
+
+```bash
+agency agent --provider anthropic
+agency agent --model claude-opus-4-8
+```
 
 ## Model slots
 
-The agent uses different models for different jobs. Each job is a **slot**:
+The agent uses different models for different jobs:
 
-- **main** — ordinary work: the coordinator and the code and research agents.
-- **reasoning** — deep thinking: the oracle and explorer.
-- **embedding** — the vectors behind [memory](/agent/memory).
+- **main** — fast and cheap model for ordinary work
+- **reasoning** — slower and more capable model for deep thinking
+- **embedding** — computes vector embeddings, needed for [memory](/agent/memory).
 
-Splitting the slots lets you run everyday turns on a fast, cheap model while the
-oracle reasons on a stronger one.
-
-## Choosing models at launch
-
-Set the model for every slot at once with `--model`, or set the fast and slow
-slots separately:
+You can set models for specific slots:
 
 ```bash
-# one model for everything
-agency agent --model claude-opus-4-8
-
 # a fast model for ordinary work, a stronger one for deep reasoning
 agency agent --fastmodel claude-haiku-4-5 --slowmodel claude-opus-4-8
 ```
 
-`--fastmodel` sets the main slot; `--slowmodel` sets the reasoning slot. You can
-also target a slot through `--model` with `slot=model`:
+If you set a provider, Agency will use its preset models for that provider:
+
+```bash
+# use google's fast and slow models
+agency agent --provider google
+```
+
+If you set a model using the `--model` flag, it will use that model for everything:
+
+```bash
+# one model for everything
+agency agent --model claude-opus-4-8
+```
+
+You can also target a slot through `--model` using `slot=model`:
 
 ```bash
 agency agent --model reasoning=claude-opus-4-8
 ```
 
-### Forcing a provider
-
-`--provider` forces the provider instead of auto-detecting it. Alone, it selects
-that provider's default models:
-
-```bash
-agency agent --provider anthropic
-```
-
-Pair it with `--model` to reach any other provider, such as a LiteLLM proxy, an
-OpenAI-compatible endpoint, or a custom model.
+Agency will print the models its going to use at startup. You can also run `/model` to see the models it's currently using.
 
 ## Switching models mid-session
 
-`/model` switches models without restarting. Run it bare to see the current slots
-and pick from the catalog, or pass a spec directly:
+You can switch models without restarting by using `/model`. Run it bare to see the current slots
+and pick from the catalog, or set a slot directly:
 
 ```
 /model                                    # show current, then pick
@@ -60,23 +55,18 @@ and pick from the catalog, or pass a spec directly:
 /model reasoning=claude-opus-4-8          # set one slot
 ```
 
-A model change takes effect on your next turn. It never disturbs a call already
-in flight.
-
-`/models` lists the hosted catalog with prices and context sizes. Pass a provider
-to narrow it: `/models anthropic`.
+You can use `/models` to list the hosted catalog with prices and context sizes. Pass a provider
+to filter: `/models anthropic`.
 
 ## Local models
 
-The agent can run a local model through
-[`smoltalk-llama-cpp`](https://www.npmjs.com/package/smoltalk-llama-cpp). Install
-it first:
+The agent can run a local model through [`smoltalk-llama-cpp`](https://www.npmjs.com/package/smoltalk-llama-cpp). Install it first:
 
 ```bash
 npm i -g smoltalk-llama-cpp
 ```
 
-Then launch with `--local`, or switch mid-session with `/local`:
+Then launch the agent with `--local`, or switch mid-session with `/local`:
 
 ```bash
 agency agent --local                 # guided setup: pick from a catalog
@@ -84,26 +74,12 @@ agency agent --local qwen3.5-2b      # a curated short name
 agency agent --local ./model.gguf    # a local .gguf file
 ```
 
-`--local` pins every slot to the local model and downloads it on first use. It is
-mutually exclusive with `--model`, `--fastmodel`, and `--slowmodel`. Local models
-have no embedding endpoint, so memory falls back to its default behavior.
+You can also just start to agency agent with `agency agent --local`, and it will guide you through the entire process. If you pick a model that you haven't downloaded, Agency will download it for you from hugging face.
 
-## Per-model settings
+`--local` pins every slot to the local model and downloads it on first use. It is mutually exclusive with `--model`, `--fastmodel`, and `--slowmodel`. Local models have no embedding endpoint, so memory falls back to its default behavior.
 
-`/settings` shows the current model's capability profile and lets you change it.
-The profile has four fields:
+The ability to use local models is an important feature of Agency, and it's only possible because of important contributions by a few people:
 
-- **prompt** — `large` (the full coordinator prompt) or `small` (a compact prompt
-  for small-context models).
-- **summarize** — whether closed threads are summarized. See
-  [cross-thread context](/guide/cross-thread-context).
-- **memory** — whether [memory](/agent/memory) is on.
-- **maxTokens** — the default output-token cap for a reply.
-
-When you change a setting, the agent asks which **scope** it applies to: this
-model, this provider, or all models. A more specific scope wins. This lets you,
-for example, shrink the prompt only for one small local model while everything
-else keeps the full prompt.
-
-Some changes apply immediately, and some take effect at the next launch. The
-agent tells you which when you save.
+- [Georgi Gerganov](https://github.com/ggerganov) (llama.cpp)
+- [HuggingFace](https://huggingface.co) (hosts models for download)
+- [Catai](https://github.com/withcatai) (node-llama-cpp)

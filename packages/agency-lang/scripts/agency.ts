@@ -691,7 +691,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--shard <i/N>",
       "Run only shard i of N (1-based), e.g. --shard 2/4. Splits the collected test files across N runs.",
     )
-    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean; shard?: string }) => {
+    .option(
+      "--collect-only",
+      "With --coverage, write the raw coverage data but skip the report. Used by sharded CI runs, which merge the shards and report once elsewhere; generating a per-shard report would wastefully recompile every source file for its source map.",
+    )
+    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean; shard?: string; collectOnly?: boolean }) => {
       const config = getConfig();
       if (opts.coverage) {
         process.env.AGENCY_COVERAGE = "1";
@@ -732,7 +736,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         console.log(colorFn(`      Tests  ${testsStatus} (${totalTests})`));
       }
       printSlowestTests(totals.slowTests);
-      if (opts.coverage) {
+      if (opts.coverage && !opts.collectOnly) {
         const reportTargets = testFile.length > 0 ? testFile : ["."];
         await generateReport(config, reportTargets);
       }
@@ -756,7 +760,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--shard <i/N>",
       "Run only shard i of N (1-based), e.g. --shard 2/4. Splits the collected test dirs across N runs.",
     )
-    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean; shard?: string }) => {
+    .option(
+      "--collect-only",
+      "With --coverage, write the raw coverage data but skip the report. Used by sharded CI runs, which merge the shards and report once elsewhere; generating a per-shard report would wastefully recompile every source file for its source map.",
+    )
+    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean; shard?: string; collectOnly?: boolean }) => {
       const config = getConfig();
       if (opts.coverage) {
         process.env.AGENCY_COVERAGE = "1";
@@ -768,7 +776,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       const shard = opts.shard ? parseShardSpec(opts.shard) : undefined;
       const parallel = opts.parallel ?? config.test?.parallel ?? 1;
       await testTs(config, testFile, parallel, shard);
-      if (opts.coverage) {
+      if (opts.coverage && !opts.collectOnly) {
         const reportTargets = testFile.length > 0 ? testFile : ["."];
         await generateReport(config, reportTargets);
       }

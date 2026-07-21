@@ -6,6 +6,7 @@ import { parseAgency } from "../parser.js";
 import { SymbolTable } from "../symbolTable.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
+import type { TypeCheckError } from "./types.js";
 
 // A `tools:` argument must be an ARRAY of tools. A lone tool value is not
 // assignable, and the type checker should say so at compile time instead of
@@ -15,15 +16,18 @@ import { typeCheck } from "./index.js";
 // imported function — is caught when passed to `tools:` without brackets, and
 // is accepted once wrapped in an array.
 
-function check(source: string): string[] {
+function check(source: string): TypeCheckError[] {
   const parsed = parseAgency(source);
   if (!parsed.success) throw new Error(`parse failed: ${parsed.message}`);
   const info = buildCompilationUnit(parsed.result, undefined, undefined, source);
-  return typeCheck(parsed.result, {}, info).errors.map((e) => e.message);
+  return typeCheck(parsed.result, {}, info).errors;
 }
 
 // Cross-module variant so imported functions resolve to real signatures.
-function checkImporter(files: Record<string, string>, entry: string): string[] {
+function checkImporter(
+  files: Record<string, string>,
+  entry: string,
+): TypeCheckError[] {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-toolarg-"));
   try {
     for (const [name, src] of Object.entries(files)) {
@@ -35,14 +39,17 @@ function checkImporter(files: Record<string, string>, entry: string): string[] {
     if (!parsed.success) throw new Error(`parse failed: ${parsed.message}`);
     const symbols = SymbolTable.build(entryPath);
     const info = buildCompilationUnit(parsed.result, symbols, entryPath, src);
-    return typeCheck(parsed.result, {}, info).errors.map((e) => e.message);
+    return typeCheck(parsed.result, {}, info).errors;
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
-const toolsArrayError = (e: string) =>
-  e.includes("Named argument 'tools'") && e.includes("any[] | null");
+// AG6014 is the named-argument type mismatch; `params.name` is the argument
+// that failed to type-check. Keying off the code + param is stabler than
+// matching the rendered message text.
+const toolsArrayError = (e: TypeCheckError) =>
+  e.code === "AG6014" && e.params.name === "tools";
 
 describe("tools: argument must be an array — locally-defined tools", () => {
   it("rejects a lone .partial() result", () => {
@@ -141,6 +148,8 @@ def pick(names: string[], needle: string): string[] {
   return filter(names, _match.partial(needle: needle))
 }
 `);
-    expect(errs.filter((e) => e.includes("not assignable"))).toEqual([]);
+    // AG6019 is the call-argument assignability error the full 2-arg
+    // signature would trigger against filter's (any) -> any callback.
+    expect(errs.filter((e) => e.code === "AG6019")).toEqual([]);
   });
 });

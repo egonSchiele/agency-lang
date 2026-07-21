@@ -9,10 +9,11 @@ values whose type isn't pinned down: the result of an LLM call, a field that
 could be missing, a `draft` that a partial-result function hands back, or
 anything typed `any`.
 
-Today the only way to ask that question is to fall back to raw JavaScript-style
-checks, and they are genuinely unpleasant to write and read. Here is a real
-example. It takes a `draft` that might be `null`, a string, or an object, and
-turns it into a display string:
+Today you can ask a few narrow versions of that question — `null` is already a
+pattern, so `draft is null` and a `null =>` match arm work — but for everything
+past null you fall back to raw JavaScript-style checks, and they are genuinely
+unpleasant to write and read. Here is a real example. It takes a `draft` that
+might be `null`, a string, or an object, and turns it into a display string:
 
 ```ts
 if (draft == null) {
@@ -103,8 +104,10 @@ return JSON.stringify(draft)
 ```
 
 Every line now says what it means. There is no stringify trick and no magic
-phrase. After `draft is string` succeeds, `draft` is narrowed to `string` inside
-that branch, so `return draft` typechecks.
+phrase. (The first line already works today, because `null` is a literal
+pattern; `draft is string` is the new part.) After `draft is string` succeeds,
+`draft` is narrowed to `string` inside that branch, so `return draft`
+typechecks.
 
 As a plain boolean it works the same way the existing `is` does:
 
@@ -112,16 +115,66 @@ As a plain boolean it works the same way the existing `is` does:
 const looksLikeText = value is string   // boolean
 ```
 
+### How `is Type` coexists with binder patterns
+
+There is a collision to resolve here, and it deserves its own section because
+it changes an existing construct. A bare identifier is a valid pattern today:
+`if (x is y)` parses as an always-true test that binds a new variable `y` to
+the value of `x`, and `y => ...` in a match arm is a catch-all that binds the
+scrutinee. So `x is Person` already means something — "bind `Person`" — and
+none of the primitive type names are reserved words. Without a rule, the parser
+cannot tell a binder from a type name, and any rule that consults the symbol
+table to decide risks spooky action at a distance: adding `type s = ...` to a
+module would silently change what `x is s` means somewhere else.
+
+The rule we adopt: **grammar position decides binder-vs-type; name resolution
+never changes the meaning of a working program.** Concretely:
+
+1. **After `is`, a top-level bare identifier is always a type reference.** The
+   always-true binder form is retired. It was always expressible as
+   `const y = x`, and a search across the tests, stdlib, and examples found
+   zero uses — every textual hit was English prose in comments. The identifier
+   resolves against the type namespace: primitive names always resolve, alias
+   names resolve through the symbol table. A name that is not a type is a
+   compile error with a pointed message: `` `foo` is not a type; to bind the
+   value write `const foo = x` ``. Nested patterns are untouched —
+   `x is {name, age}` keeps its binders, because the ambiguity only ever
+   existed at the top level of the right-hand side. `success` / `failure`
+   remain intercepted as Result patterns before any of this applies.
+2. **The arm-level `: Type` suffix always parses its right side with the type
+   grammar.** It is new syntax, so there is nothing to disambiguate. A
+   non-type name there gets the same compile error as rule 1.
+3. **Bare-identifier match arms stay binders.** The binding catch-all
+   (`other => f(other)`) is genuinely useful, unlike the `is` binder. The
+   confusion hazard — `Person =>` binds anything while `p: Person =>` tests —
+   is closed by a checker warning: when a bare arm binder's name matches an
+   in-scope type, warn and suggest `p: Person` or `is Person`.
+
+This gives the safety property we want: scope changes can only turn a compile
+error into working code (a name that starts resolving as a type), never
+silently change what a working program does. The one theoretical exception is
+pre-existing code that wrote `if (x is y)` where `y` is *also* an in-scope
+type — that would silently become a runtime test instead of erroring. Given
+the binder form has zero observed usage at all, we accept this.
+
+One back-compat direction is already safe: in pure-boolean contexts
+(`const b = x is y`), the bare binder is a compile error today ("has nowhere
+to bind"), so `value is string` there goes from error to working — no break.
+
 ### Spelling 2: `pattern: Type` (the bind-and-test form)
 
 Use `pattern: Type` inside a `match` arm when you want to destructure or bind the
 value *and* test its type in one move. The left side is any pattern Agency
 already supports — a binding, an object pattern, an array pattern, or `_`. The
-`: Type` suffix adds the type test and the narrowing.
+`: Type` suffix adds the type test and the narrowing. The type after the colon
+is anything the type grammar can spell in one piece: a primitive, a named
+alias, a typed array, or an inline object type
+(`person: {name: string, age: number} => ...` works and tests the structural
+shape) — everything except a bare inline union (see Tier 2).
 
 ```ts
 match (input) {
-  is null              => ""
+  null                 => ""
   s: string            => s
   {name, age}: Person  => "${name}, ${age}"
   [x, y]: number[]     => x + y
@@ -131,7 +184,7 @@ match (input) {
 
 Read the arms top to bottom:
 
-- `is null` — the test-only form as an arm; matches when `input` is `null`.
+- `null` — the existing literal pattern; matches when `input` is `null`.
 - `s: string` — matches when `input` is a string, binding it to `s`.
 - `{name, age}: Person` — matches when `input` is a valid `Person`, and
   destructures `name` and `age` out of it.
@@ -139,9 +192,12 @@ Read the arms top to bottom:
   least) two elements, binding the first two.
 - `_` — the catch-all.
 
-`is Type` as an arm is exactly the no-binding case of `pattern: Type`; `is null`
-means the same as `_: null`. We support both because `is` is the natural "just
-test it" word everywhere else in the language, and `_: null` reads awkwardly.
+`is Type` is also allowed as an arm — it is exactly the no-binding case of
+`pattern: Type`, and `is` is the natural "just test it" word everywhere else in
+the language (`is boolean => ...` reads better than `_: boolean => ...`). Note
+that for null specifically this makes three equivalent spellings (`null`,
+`is null`, `_: null`); the literal `null` arm already exists and stays the
+idiomatic one, which is why the example above uses it.
 
 ### Guards compose as usual
 
@@ -174,10 +230,28 @@ direct JavaScript checks with no schema involved.
 | `object`            | non-null, non-array `typeof x === "object"`     |
 | `any[]`             | `Array.isArray(x)`                              |
 
-`object` means "a plain object" — it excludes `null` and arrays, which is the
-distinction the opening example needed. `any[]` is the coarse "is it any array"
-check; there is no new `array` keyword, because `any[]` already expresses it
-using the existing array-suffix grammar.
+`object` means "any non-null, non-array object" — which is the distinction the
+opening example needed, and matches the meaning the built-in `object` type
+already has (every object type is assignable to it; its schema is an
+any-record). Note what that includes: class instances such as a `Date` or
+`Map` arriving through JS interop count as `object` (they are objects to
+`typeof`), so `is object` is not a "JSON-serializable plain object" test. For
+that common question the stdlib ships a `Json` type whose `@validate`
+validator is a precise round-trip check (plain objects, arrays, finite
+numbers, strings, booleans, null — rejecting class instances, functions,
+NaN/Infinity, and cycles): `x is Json` runs the full walk through the normal
+Tier 2 path, and is the flagship example of the validator unification this
+feature is built on. If you need a specific shape, test the shape
+(`{name}: Person`). `any[]`
+is the coarse "is it any array" check; there is no new `array` keyword,
+because `any[]` already expresses it using the existing array-suffix grammar.
+
+Two JavaScript realities carry through deliberately, and the guide should say
+so: `NaN` is a number (`typeof NaN === "number"`), so `NaN is number` is true;
+and the `null` check is loose — it matches `undefined` too, for consistency
+with the existing literal `null` pattern (which lowers to `== null`) and with
+the runtime's existing undefined-to-null normalization. An interop-produced
+`undefined` therefore matches `null` patterns and `_`, and nothing else.
 
 These six checks are all it takes to solve the original `draft` problem and the
 large majority of "what kind of value did I get" branching.
@@ -185,8 +259,12 @@ large majority of "what kind of value did I get" branching.
 ### Tier 2: named and structural types (reuse validation)
 
 When the type on the right is a named alias (`Person`), a typed array
-(`number[]`), a union, or any type with a shape or custom validation, the type
-pattern reuses machinery Agency already has: the runtime schema.
+(`number[]`), or any type with a shape or custom validation, the type pattern
+reuses machinery Agency already has: the runtime schema. Unions are Tier 2 too,
+but in v1 they must arrive through a named alias
+(`type Id = string | number` then `x is Id`) — an inline union in pattern
+position (`x is string | number`) is not spellable, which sidesteps the
+precedence questions `|` would raise inside an expression.
 
 `x is Person` succeeds exactly when `schema(Person).parse(x)` succeeds. That means
 the check verifies:
@@ -220,6 +298,30 @@ a `u` of `{ name: "Kid", age: 12 }` has the right shape but fails `isAdult`, so 
 falls through to `reject(u)`. This is intended: the type pattern respects the
 full meaning of the type, validators included.
 
+Built-in generics (`Record<...>`, `Partial<...>`, `Pick<...>`, and friends)
+work when applied to concrete arguments: they resolve to plain types before
+the schema is built, so a type pattern gets exactly the bang's behavior for
+them — including, for now, the bang's known hole: `@validate` tags are
+silently dropped inside `Record`/`Array`/`Schema`
+([#630](https://github.com/egonSchiele/agency-lang/issues/630)), so
+`x is Record<string, Age>` is shape-only until that is fixed. A bare type
+*parameter* is different: `x is T` where `T` is a generic parameter has no
+runtime schema (the type is erased) and is a compile error.
+
+Names that are JavaScript classes but not Agency types (`Date`, `Map`,
+`RegExp`, ...) are compile errors like any other unknown type name, with a
+tailored message: type patterns only test Agency types, so there is never a
+question of whether a given name means a schema check or an `instanceof`
+check. Use `is object` or a helper function for JS natives.
+
+There is a cost to state plainly, too. A `match` with several Tier 2 arms runs
+a full schema parse — the deep structural walk plus every attached validator —
+per arm, in order, until one matches. Validators are ordinary Agency functions,
+so a *non-matching* arm's test can run user code. This is the same cost profile
+the bang already has, and we accept it; but if a validator is expensive or has
+side effects, putting its type in a many-armed `match` multiplies that cost,
+and users should know that.
+
 ## Two semantic rules that need to be explicit
 
 ### Rule 1: `is` never mutates. It binds the original value.
@@ -238,6 +340,22 @@ If you actually want the validated-and-transformed value, that is what the bang
 operator is for: `const p: Person! = u` gives you a `Result` carrying the
 transformed value. The two constructs stay cleanly separated — `is`/type-patterns
 *test and narrow*, `!` *validates and transforms*.
+
+This rule has a hole, and we choose to document it rather than close it. A
+*transforming* validator counts as a pass: the guide's clamp example turns
+`age: -5` into `success(1)`, so `{ name: "Alice", age: -5 }` **matches**
+`p: Person` — and `p` is bound to the original, with `age` still `-5`,
+statically typed `Person`. The arm now holds a value the type's own validator
+would have rewritten. If your validators repair values rather than merely
+accept or reject them, a type pattern tells you "this is repairable," not
+"this is already valid" — reach for the bang when that difference matters.
+
+We considered closing the hole by matching only when the parse output equals
+the input (transform was the identity), but rejected it: Agency's generated
+object schemas strip unknown keys, so a structurally valid value with an extra
+field would have parse output ≠ input and wrongly fail the test. A structural
+type test must accept extra fields, so identity-comparison is not a viable
+match criterion.
 
 ### Rule 2: type patterns live in exactly two places
 
@@ -287,6 +405,17 @@ For a Tier 2 type, the narrowed type is the named type itself: after
 `{name, age}: Person` matches, the value (and the destructured fields) have their
 `Person` types.
 
+Narrowing is **positive-only in v1**: the value narrows in the branch where the
+test succeeded, and nowhere else. After `if (x is string) { return x }`, `x` is
+*not* narrowed to exclude `string` in the code that follows, and a later match
+arm is not narrowed by the failure of earlier type-pattern arms. (`is null` is
+the one exception, and only by inheritance: it parses as the existing literal
+null pattern, which lowers to `x == null` — a form the checker already narrows
+in *both* branches. That existing behavior is unchanged.) Negative
+narrowing is a possible future refinement (it needs care anyway, since a
+Tier 2 test can fail on a validator rather than on the type). None of the
+examples in this spec depend on it.
+
 ### Exhaustiveness
 
 Type-pattern arms do **not** count toward the exhaustiveness check. A `match` that
@@ -318,7 +447,7 @@ The opening example, rewritten end to end:
 ```ts
 def render(draft: any): string {
   match (draft) {
-    is null   => ""
+    null      => ""
     s: string => s
     _         => JSON.stringify(draft)
   }
@@ -330,7 +459,7 @@ Distinguishing several shapes an LLM might return:
 ```ts
 def describe(value: any): string {
   match (value) {
-    is null            => "nothing"
+    null               => "nothing"
     s: string          => "text: ${s}"
     n: number          => "number: ${n}"
     is boolean         => "a flag"
@@ -363,6 +492,15 @@ def toText(v: any): string {
 - **Exhaustiveness credit for type-pattern arms.** Always require `_`.
 - **A dedicated `array` keyword.** Use `any[]` (coarse) or `T[]` (validated).
 - **Binding the transformed/validated value from a type pattern.** Use `Type!`.
+- **Negative narrowing.** A failed type test does not narrow the other branch.
+- **Inline union types in pattern position.** `x is string | number` is not
+  spellable; use a named alias.
+- **`keyof` and indexed-access types in pattern position.** Not blocked (the
+  type grammar parses them and they resolve like anywhere else) but not
+  specified or tested — behavior follows whatever `schema(T)` does for the
+  resolved type.
+- **Testing JS-native classes (`Date`, `Map`, ...).** Compile error with a
+  tailored message; no `instanceof` semantics in the pattern namespace.
 
 ## Open questions for the plan stage
 
@@ -374,13 +512,22 @@ should resolve them:
    parser to optionally consume a trailing `: Type` without colliding with object
    pattern syntax (`{ type: "x" }` uses `:` inside braces). Confirm the arm-level
    `:` is unambiguous.
-2. **The `is Type` code path vs. the existing `is pattern` code path.** `is` today
-   parses a pattern on its right. A type is not currently a pattern. Decide whether
-   a type pattern becomes a new pattern-node variant (so `is` needs no special
-   case) or a distinct branch in the `is` parser.
-3. **How Tier 2 reaches the schema at runtime.** The generated check needs a handle
-   to `schema(T)` for the named type. Confirm the schema for an arbitrary in-scope
-   type alias is reachable from the point where the pattern compiles.
+2. **Where binder-vs-type resolution runs.** The design rule is fixed (see "How
+   `is Type` coexists with binder patterns"): after `is`, a top-level bare
+   identifier is a type reference. The plan must decide *where* that resolution
+   happens — the parser can emit a single "name in type position" node and let
+   the preprocessor or checker resolve it against the symbol table, since the
+   parser alone cannot know the in-scope aliases.
+3. **How Tier 2 reaches the schema at runtime.** Mostly pre-answered:
+   `schema(T)` is already a user-facing function that works on arbitrary
+   in-scope aliases, so the generated check can emit `schema(T)` and lean on
+   the existing schema machinery. Confirm nothing breaks when the pattern
+   compiles inside nested scopes.
 4. **Interaction with Result patterns.** `success` / `failure` are already
-   pattern keywords. Confirm `is Type` and `success`/`failure` do not collide and
-   that a value can be tested for both in sequence.
+   pattern keywords and stay intercepted before bare-identifier handling.
+   Confirm `is Type` and `success`/`failure` do not collide and that a value
+   can be tested for both in sequence.
+5. **Async validators.** `@validate` validators are Agency functions. Confirm
+   whether the schema parse can be async at the point a type pattern compiles;
+   if it can, the compiled form of `if (x is Person)` and of match-arm tests
+   must await, which shapes the generated code.

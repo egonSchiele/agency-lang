@@ -354,7 +354,6 @@ Pattern matching is covered in the [section on pattern matching](/guide/pattern-
 
 Variables and functions beginning with two underscores (`__name`) are reserved for the compiler and runtime, so you cannot use them in your code.
 
-
 ### JavaScript features that don't exist in Agency
 - Lambdas.
 - Async/await. Everything is awaited by default, and there are specific constructs for [concurrency](/guide/concurrency).

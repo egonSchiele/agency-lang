@@ -201,3 +201,64 @@ def f(x: any): string {
     expect(errors.some((e) => e.code === "AG5003" || e.code === "AG5004")).toBe(false);
   });
 });
+
+describe("review fixes (PR #631)", () => {
+  it("coarse test on a literal union does not widen it", () => {
+    // `is string` on "a" | "b" must KEEP the literal union: replacing it
+    // with `string` would make returning x where "a" | "b" is expected fail.
+    const errors = check(`
+def f(x: "a" | "b"): "a" | "b" {
+  if (x is string) {
+    return x
+  }
+  return "a"
+}
+`);
+    expect(errors).toEqual([]);
+  });
+
+  it("typed arms warn AG5004 for property binders named like types", () => {
+    const errors = check(`
+type Person = { name: string }
+def f(x: any): string {
+  return match (x) {
+    {name: string}: Person => "typed"
+    _ => "no"
+  }
+}
+`);
+    expect(errors.some((e) => e.code === "AG5004")).toBe(true);
+  });
+
+  it("nested object patterns warn AG5004", () => {
+    const errors = check(`
+def f(x: any): string {
+  return match (x) {
+    {a: {name: string}} => "nested"
+    _ => "no"
+  }
+}
+`);
+    expect(errors.some((e) => e.code === "AG5004")).toBe(true);
+  });
+
+  it("shadow warnings anchor to the arm, not the match head", () => {
+    // The offending arm is the LAST of three; its loc must sit below the
+    // first arm's line, proving we point at the binder rather than match(.
+    const errors = check(`
+type Person = { name: string }
+def f(x: any): string {
+  return match (x) {
+    "first" => "a"
+    "second" => "b"
+    Person => "bound"
+    _ => "no"
+  }
+}
+`);
+    const warning = errors.find((e) => e.code === "AG5003");
+    expect(warning).toBeDefined();
+    const firstArmLine = errors.length >= 0 ? 5 : 0;
+    expect(warning!.loc?.line).toBeGreaterThan(firstArmLine);
+  });
+});

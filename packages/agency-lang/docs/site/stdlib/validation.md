@@ -233,7 +233,7 @@ export type Json = any
 
 **Validators:** `isJsonValue`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L237))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L230))
 
 ### JsonObject
 
@@ -249,7 +249,7 @@ export type JsonObject = object
 
 **Validators:** `isJsonObject`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L242))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L235))
 
 ## Constants
 
@@ -610,4 +610,4 @@ Returns success if value is a plain JSON-serializable object (non-null,
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L219))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/validation.agency#L212))

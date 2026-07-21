@@ -1,6 +1,7 @@
 import { diagnostic } from "./diagnostics.js";
 import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { MatchArmMeta, MatchBlockCase } from "../types/matchBlock.js";
+import type { ObjectPattern } from "../types/pattern.js";
 import type { SourceLocation } from "../types/base.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 import type { Scope } from "./scope.js";
@@ -236,30 +237,44 @@ function warnTypeShadowingBinders(site: MatchSite, ctx: TypeCheckerContext): voi
   const aliases = ctx.getTypeAliases();
   const isTypeName = (name: string): boolean =>
     aliases[name] !== undefined || SHADOWABLE_PRIMITIVE_NAMES.includes(name);
+
+  // Recursive so nested object patterns ({a: {name: string}}) warn too.
+  // Diagnostics anchor to the binder node itself, not the whole match.
+  const warnObjectPatternProps = (pattern: ObjectPattern): void => {
+    for (const prop of pattern.properties) {
+      if (prop.type !== "objectPatternProperty") continue;
+      if (prop.value.type === "variableName" && isTypeName(prop.value.value)) {
+        ctx.errors.push(
+          diagnostic(
+            "propertyBinderShadowsType",
+            { field: prop.key, name: prop.value.value },
+            prop.value.loc ?? pattern.loc ?? site.loc ?? null,
+          ),
+        );
+      } else if (prop.value.type === "objectPattern") {
+        warnObjectPatternProps(prop.value);
+      }
+    }
+  };
+
   for (const arm of site.arms) {
     if (arm.caseValue === "_") continue;
     const cv = arm.caseValue;
     if (!arm.guarded && cv.type === "variableName" && isTypeName(cv.value)) {
       ctx.errors.push(
-        diagnostic("bareArmBinderShadowsType", { name: cv.value }, site.loc ?? null),
+        diagnostic(
+          "bareArmBinderShadowsType",
+          { name: cv.value },
+          cv.loc ?? site.loc ?? null,
+        ),
       );
     }
-    if (cv.type === "objectPattern") {
-      for (const prop of cv.properties) {
-        if (
-          prop.type === "objectPatternProperty" &&
-          prop.value.type === "variableName" &&
-          isTypeName(prop.value.value)
-        ) {
-          ctx.errors.push(
-            diagnostic(
-              "propertyBinderShadowsType",
-              { field: prop.key, name: prop.value.value },
-              site.loc ?? null,
-            ),
-          );
-        }
-      }
+    // A typed arm ({name: string}: Person =>) wraps its pattern in a
+    // typePattern; the shadow trap applies to the INNER pattern — and a
+    // typed arm is exactly where a user is thinking in types.
+    const inner = cv.type === "typePattern" ? cv.pattern : cv;
+    if (inner !== null && inner.type === "objectPattern") {
+      warnObjectPatternProps(inner);
     }
   }
 }

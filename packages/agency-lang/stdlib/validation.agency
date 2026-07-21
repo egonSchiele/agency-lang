@@ -206,14 +206,7 @@ export def isJsonValue(value: any): Result {
 
   @param value - The value to check.
   """
-  const check = _isJsonValue(value)
-  if (check.ok) {
-    return success(value)
-  }
-  if (check.path == "") {
-    return failure(check.reason)
-  }
-  return failure("${check.reason} at ${check.path}")
+  return _isJsonValue(value)
 }
 
 export def isJsonObject(value: any): Result {

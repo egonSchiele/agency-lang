@@ -7,7 +7,7 @@ import type {
 } from "../types/typeHints.js";
 import { Scope } from "./scope.js";
 import { walkNodes } from "../utils/node.js";
-import { safeResolveType } from "./assignability.js";
+import { isAssignable, safeResolveType } from "./assignability.js";
 import { literalToType } from "./literalType.js";
 import { resultToObjectUnion } from "./resultUnion.js";
 import { unescapeStringLiteralValue } from "../parsers/parsers.js";
@@ -70,9 +70,15 @@ export function narrowByRefine(
     case "presence":
       return narrowUnionByPresence(current, refine.present, aliases);
     case "typeTest":
-      // The test succeeding means the value IS the tested type; that type is
-      // strictly more precise than (or equal to) whatever we knew before, so
-      // it simply replaces the current type in the guarded region.
+      // If what we already know is at least as precise as the tested type
+      // (e.g. `is string` on `"a" | "b"`), the test tells us nothing new —
+      // replacing would WIDEN the literal union to `string` and break code
+      // that returns the narrowed value where the union is expected. `any`
+      // is excluded: it is "assignable" to everything, but the whole point
+      // of the test is to escape it.
+      if (!isAnyType(current) && isAssignable(current, refine.testedType, aliases)) {
+        return null;
+      }
       return refine.testedType;
   }
 }

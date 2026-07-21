@@ -1,14 +1,16 @@
 import { __isJsonValue } from "../runtime/jsonValue.js";
+import { success, failure } from "../runtime/result.js";
+import type { ResultValue } from "../runtime/result.js";
 
-export type JsonCheckResult = { ok: boolean; path: string; reason: string };
-
-/** stdlib bridge for `std::validation`'s `isJsonValue`. Returns a plain
- *  object (never throws) so the Agency wrapper can build the failure
- *  message with the offending path. */
-export function _isJsonValue(value: unknown): JsonCheckResult {
-  const result = __isJsonValue(value);
-  if (result.ok) {
-    return { ok: true, path: "", reason: "" };
+/** stdlib bridge for `std::validation`'s `isJsonValue`. Returns a runtime
+ *  `Result` like the other stdlib validators (validators.ts), with the
+ *  offending path folded into the failure message. */
+export function _isJsonValue(value: unknown): ResultValue {
+  const check = __isJsonValue(value);
+  if (check.ok) {
+    return success(value);
   }
-  return { ok: false, path: result.path, reason: result.reason };
+  return failure(
+    check.path === "" ? check.reason : `${check.reason} at ${check.path}`,
+  );
 }

@@ -31,3 +31,28 @@ describe("__isJsonValue", () => {
     }
   });
 });
+
+describe("__isJsonValue round-trip edge cases", () => {
+  test("rejects arrays with holes or extra enumerable properties", () => {
+    // eslint-disable-next-line no-sparse-arrays
+    expect(__isJsonValue([1, , 3]).ok).toBe(false);
+    const arr: number[] & { x?: number } = [1, 2];
+    arr.x = 1;
+    expect(__isJsonValue(arr).ok).toBe(false);
+  });
+
+  test("rejects symbol-keyed properties", () => {
+    const withSymbol: Record<string | symbol, unknown> = { a: 1 };
+    withSymbol[Symbol("s")] = 2;
+    expect(__isJsonValue(withSymbol).ok).toBe(false);
+    const arrWithSymbol: unknown[] = [1];
+    (arrWithSymbol as unknown as Record<symbol, unknown>)[Symbol("s")] = 2;
+    expect(__isJsonValue(arrWithSymbol).ok).toBe(false);
+  });
+
+  test("rejects non-enumerable own properties", () => {
+    const hidden = { a: 1 };
+    Object.defineProperty(hidden, "secret", { value: 2, enumerable: false });
+    expect(__isJsonValue(hidden).ok).toBe(false);
+  });
+});

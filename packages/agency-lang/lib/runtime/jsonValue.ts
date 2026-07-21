@@ -3,7 +3,9 @@ type JsonCheck = { ok: true } | { ok: false; path: string; reason: string };
 /** Precise "round-trips through JSON.stringify/parse unchanged" check for
  *  the stdlib `Json` type. Plain data only: class instances (Date, Map, ...)
  *  and non-finite numbers are rejected because stringify silently rewrites
- *  them; functions/undefined/symbols do not serialize at all. */
+ *  them; functions/undefined/symbols do not serialize at all; holes, extra
+ *  array properties, symbol keys, and non-enumerable properties are rejected
+ *  because stringify drops them. */
 export function __isJsonValue(value: unknown): JsonCheck {
   return walkJson(value, "", []);
 }
@@ -22,6 +24,15 @@ function walkJson(value: unknown, path: string, ancestors: unknown[]): JsonCheck
     if (ancestors.includes(value)) {
       return { ok: false, path, reason: "cycle detected" };
     }
+    // Enumerable keys must be exactly the indices: a hole ([,1]) parses back
+    // as null, and an extra property (a.x = 1) is dropped — neither
+    // round-trips.
+    if (Object.keys(value).length !== value.length) {
+      return { ok: false, path, reason: "array has holes or extra properties that JSON drops" };
+    }
+    if (Object.getOwnPropertySymbols(value).length > 0) {
+      return { ok: false, path, reason: "symbol-keyed properties are dropped by JSON" };
+    }
     const nested = [...ancestors, value];
     for (let i = 0; i < value.length; i++) {
       const result = walkJson(value[i], `${path}[${i}]`, nested);
@@ -38,6 +49,12 @@ function walkJson(value: unknown, path: string, ancestors: unknown[]): JsonCheck
     }
     if (ancestors.includes(value)) {
       return { ok: false, path, reason: "cycle detected" };
+    }
+    if (Object.getOwnPropertySymbols(value).length > 0) {
+      return { ok: false, path, reason: "symbol-keyed properties are dropped by JSON" };
+    }
+    if (Object.getOwnPropertyNames(value).length !== Object.keys(value).length) {
+      return { ok: false, path, reason: "non-enumerable properties are dropped by JSON" };
     }
     const nested = [...ancestors, value];
     for (const key of Object.keys(value)) {

@@ -3349,7 +3349,11 @@ const caseLhsParser: Parser<unknown> = (input: string) => {
     armGated(wildcardSuffixParser),
     armGated(patternSuffixParser),
     armGated(defaultCaseParser),
-    armGated(lazy(() => matchPatternParser)),
+    // withLoc so every pattern caseValue carries its own span — the
+    // binder-shadow warnings (AG5003/AG5004) anchor diagnostics to the arm,
+    // not the match head, and bare variableName patterns otherwise have no
+    // loc of their own.
+    armGated(withLoc(lazy(() => matchPatternParser))),
   )(input);
   if (armResult.success) {
     return armResult;

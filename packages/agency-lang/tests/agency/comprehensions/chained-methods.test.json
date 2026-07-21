@@ -3,8 +3,8 @@
     {
       "nodeName": "main",
       "input": "",
-      "description": "chaining a method/index directly onto a bracket literal (comprehension .join, array .join, array index, comprehension .join in interpolation)",
-      "expectedOutput": "\"- a\\n- b\\n- c|1-2-3|20|vals: - a, - b, - c\"",
+      "description": "chaining a method/index/slice onto a bracket literal (comprehension .join, array .join, array index, slice-then-join, chained fork, comprehension .join in interpolation)",
+      "expectedOutput": "{\"bulleted\":\"- a\\n- b\\n- c\",\"dashed\":\"1-2-3\",\"middle\":20,\"sliced\":\"10,20\",\"forked\":\"<a>|<b>|<c>\",\"inline\":\"vals: - a, - b, - c\"}",
       "evaluationCriteria": [
         {
           "type": "exact"

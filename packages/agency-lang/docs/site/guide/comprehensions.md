@@ -105,25 +105,6 @@ const greetings = ["Hi ${name}" for {name, age} in people]
 const firsts = [a for [a, b] in pairs]
 ```
 
-## Calling methods on a comprehension
-
-A comprehension is an expression, so you can call a method on it, index it,
-or slice it directly - no need to assign it to a variable first:
-
-```ts
-const lines = ["- ${item}" for item in items].join("\n")
-```
-
-This works anywhere an expression is allowed, including inside string
-interpolation:
-
-```ts
-const block = "<criteria>${["- ${c}" for c in allCriteria].join("\n")}</criteria>"
-```
-
-The same holds for plain array literals: `[1, 2, 3].join("-")` and
-`[10, 20, 30][1]`.
-
 ## References
 
 - [Concurrency](/guide/concurrency)

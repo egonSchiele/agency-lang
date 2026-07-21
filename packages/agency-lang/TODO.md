@@ -236,3 +236,34 @@ A ternary (`if c then a else b`) inside a block body evaluates to null: the
 ternary's match value is written to the enclosing frame and read from the
 block frame. An if/else statement in the same position works. Pinned in
 tests/agency/agents/blockProbe.agency and filed as #591. Same family as #590.
+
+---
+
+Pattern matching on type would help with stuff like this:
+
+```ts
+export def stringifyDraft(draft: any): string {
+  if (draft == null) {
+    return ""
+  }
+  const asString = "${draft}"
+  if (asString == "[object Object]") {
+    return JSON.stringify(draft)
+  }
+  return asString
+}
+```
+
+---
+
+This should work in string interpolation:
+
+```ts
+"""
+<criterion>${["- ${criterion}" for criterion in allCriteria].join("\n")}</criterion>
+"""
+```
+
+---
+
+Should be able to call methods on comprehensions, like `join`.

@@ -190,31 +190,37 @@ The rules of handlers are thus:
 
 Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. If no handler approves, rejects, or propagates, by default, the interrupt propagates up to the user for a decision.
 
-## Raising interrupts inside a handler
+## Raising interrupts inside a handler function
 
-A handler's body may raise interrupts, directly or through anything it calls. One rule makes this safe: **a handler never hears its own raises.** Every handler up the chain runs on every interrupt, so a handler that raised would otherwise be called to review its own raise, call itself again, and loop forever. Instead, the dispatcher skips the handler that is currently executing, and every *other* handler decides — an outer policy or an outer reject governs a handler's tool calls exactly as it governs everything else.
+Lets start with some terminology:
 
-This is what lets a reviewer inside a handler use tools:
-
-```agency
+```ts
 handle {
-  agentDoesWork()
+  // this is the "handler body"
 } with (data) {
-  const verdict: { ok: boolean } = llm("Should I allow this?", tools: [read, grep])
-  if (verdict.ok) {
-    return approve()
-  }
-  return reject()
+  // this is the "handler function"
 }
 ```
 
-The tools' reads are decided by the rest of the chain. To pre-authorize them instead, wrap the call — `llm(...) with approve` — which registers an ordinary inner approving handler and shows the exemption in source.
+You can raise interrupts inside a handler body – that is the entire purpose of the handler. You can also raise interrupts inside the handler function. That is the part where you would catch and handle an interrupt, but you can raise interrupts there as well. Any interrupt raised in the handler function needs to be handled by an outer handler wrapping the inner handler:
 
-Why this is safe: a skipped handler contributes nothing — not an approve — so a handler's raise executes only if an outer handler approves it, or the author wrote a visible `with approve`. An outer reject beats that approve (rule 1 above), and everything nobody settles is rejected. Every path fails closed.
+```ts
+// outer handler
+handle {
+  // inner handler
+  handle {
+    // this is the "handler body"
+  } with (data) {
+    // this is the "handler function"
+    raise interrupt("This is an interrupt raised inside the handler function")
+  }
+} with (data) {
+  // That interrupt can get handled here.
+}
+```
 
-Three caveats:
+A handler function never triggers for an interrupt raised in itself because that could go into an infinite loop.
 
-1. **A raise nothing settles cannot ask the user.** Handler functions cannot pause, so where ordinary code would propagate to you for a decision, a handler's raise is rejected with an explanatory message. In practice: if your outer handlers propagate an effect, a handler raising that effect gets a failure Result, not a prompt.
-2. **Propagation beats approval.** If an outer handler propagates the effect, even a `with approve` inside the handler does not save the raise — it is rejected as in caveat 1.
-3. **The skip is per activation, not per source handler.** A recursive function containing a handle block registers one handler entry per activation, and only the executing activation is skipped. Sibling activations still hear the raise; the chain-depth limit backstops that shape.
-
+::: warning
+One important note about interrupts raised inside handler functions: *you have to respond to them in code*. You cannot propagate them to a user. If any interrupt raised in the handler function gets propagated to a user, either using the `propagate` keyword or because that interrupt was simply not responded to, that would be an error.
+:::

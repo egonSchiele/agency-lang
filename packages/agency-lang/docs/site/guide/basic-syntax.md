@@ -149,14 +149,18 @@ for ({ name, age } in people) {
 }
 ```
 
-Other loop constructs, such as map, are part of the [agency standard library](/stdlib/array).
+Other loop constructs, such as `map`, are part of the [agency standard library](/stdlib/array).
 
-To build a new array from an existing one, a
-[list comprehension](/guide/comprehensions) is usually shorter than a loop:
+## List comprehensions
+
+Agency also supports Python-style list comprehensions:
 
 ```ts
 const doubled = [x * 2 for x in numbers]
 ```
+
+List comprehensions are covered in more detail in the [section on list comprehensions](/guide/comprehensions).
+
 
 ## Comments
 
@@ -349,7 +353,6 @@ Pattern matching is covered in the [section on pattern matching](/guide/pattern-
 ### Reserved names
 
 Variables and functions beginning with two underscores (`__name`) are reserved for the compiler and runtime, so you cannot use them in your code.
-
 
 ### JavaScript features that don't exist in Agency
 - Lambdas.

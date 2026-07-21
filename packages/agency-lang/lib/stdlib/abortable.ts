@@ -42,6 +42,32 @@ export type SpawnResult = {
   exitCode: number;
 };
 
+/**
+ * Stream teardown error codes that are safe to swallow. They mean the pipe
+ * went away — the child exited or we killed it (byte-cap, timeout, abort) —
+ * rather than a genuine failure. Everything else on a stdio stream is routed
+ * to the promise's reject so it becomes a normal Failure at the call site.
+ */
+const BENIGN_STREAM_ERRORS = new Set(["EPIPE", "ECONNRESET"]);
+
+/**
+ * Attach an `error` listener to a child's stdio stream. Each of stdin/stdout/
+ * stderr is its own EventEmitter, and an `error` event with no listener is
+ * re-thrown by Node from an event-loop tick — outside any try/catch — which
+ * crashes the whole process instead of converting to a Failure. `child.on
+ * ("error")` does NOT cover these; the stream emitters need their own guard.
+ */
+function guardStdioStream(
+  stream: NodeJS.ReadableStream | NodeJS.WritableStream | null | undefined,
+  reject: (err: unknown) => void,
+): void {
+  stream?.on("error", (err: NodeJS.ErrnoException) => {
+    if (!BENIGN_STREAM_ERRORS.has(err.code ?? "")) {
+      reject(err);
+    }
+  });
+}
+
 export type AbortableSpawnOptions = SpawnOptions & {
   input?: string;
   /** Time limit in ms. 0 or undefined = no time limit. */
@@ -115,6 +141,14 @@ export function abortableSpawn(
     });
     child.stderr!.on("data", (data: string) => { stderr += data; });
 
+    // Guard every stdio stream against a stray `error` event, or an unhandled
+    // one crashes the process. The common case is EPIPE on stdin: a child that
+    // ignores stdin (a file reader like `hexdump`) or exits early closes its
+    // stdin pipe with no reader, so our write raises EPIPE. stdout/stderr can
+    // likewise emit late errors when we kill the child mid-read.
+    guardStdioStream(child.stdin, reject);
+    guardStdioStream(child.stdout, reject);
+    guardStdioStream(child.stderr, reject);
     if (options.input) {
       child.stdin!.write(options.input);
       child.stdin!.end();
@@ -196,6 +230,11 @@ export function abortableExec(
     let aborted = false;
     child.stderr?.setEncoding("utf8");
     child.stderr?.on("data", (data: string) => { stderr += data; });
+    // stdin/stdout are `ignore`d here (no stream), but stderr is piped and,
+    // like any stdio emitter, crashes the process on an unhandled `error`.
+    guardStdioStream(child.stdin, reject);
+    guardStdioStream(child.stdout, reject);
+    guardStdioStream(child.stderr, reject);
 
     const onAbort = () => {
       aborted = true;

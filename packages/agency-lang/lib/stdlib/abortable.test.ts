@@ -58,6 +58,33 @@ describe("abortableSpawn", () => {
     expect(result.stdout).toBe("hello");
     expect(result.exitCode).toBe(0);
   });
+
+  it("resolves (does not crash) when input is written to a child that ignores stdin", async () => {
+    // `true` exits immediately without reading stdin, so its stdin pipe has
+    // no reader by the time we write. A large payload overflows the pipe
+    // buffer and makes the write raise EPIPE. Without an `error` listener on
+    // child.stdin that unhandled event crashes the whole process; the handler
+    // added in abortable.ts swallows EPIPE so the call resolves instead.
+    const bigInput = "x".repeat(1_000_000);
+    const result = await abortableSpawn("true", [], {
+      input: bigInput,
+      signal: new AbortController().signal,
+    });
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("resolves with truncated output (does not crash) when the child is killed mid-read", async () => {
+    // `yes` streams forever. The byte cap kills the child from inside the
+    // stdout `data` handler, tearing down the pipe while a read is in flight
+    // — the case where stdout/stderr can emit a late `error`. The stream
+    // guards keep that from crashing the process; the call resolves truncated.
+    const result = await abortableSpawn("yes", [], {
+      maxOutputBytes: 1000,
+      signal: new AbortController().signal,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("[output truncated at 1000 bytes]");
+  });
 });
 
 describe("__internal_sleep", () => {

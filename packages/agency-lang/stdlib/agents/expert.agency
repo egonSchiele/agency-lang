@@ -30,7 +30,8 @@ export def buildTools(): any[] {
   return [...webTools(), skills]
 }
 
-static const systemPrompt = """You are a domain expert advising a weaker coding agent that is about to attempt the task below and tends to miss domain-specific conventions.
+static const systemPrompt = """
+You are a domain expert advising a weaker coding agent that is about to attempt the task below and tends to miss domain-specific conventions.
 
 Identify the technical domain, then return the knowledge it needs:
 - domain: a short name for the field (e.g. "molecular biology", "ELF binaries").

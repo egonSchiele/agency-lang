@@ -75,7 +75,7 @@ These are built-in methods you can call on any Agency function or tool value (th
 
 | Name | Type | Description |
 |---|---|---|
-| `__dirname` | `string` | The absolute path of the directory containing the current `.agency` file. Each file gets its own value, so an imported module can name its own directory no matter which file started the run. Relative paths in file functions resolve against the working directory; pass `__dirname` to anchor a path to the current file instead: `read("prompts/main.md", __dirname)`. |
+| `__dirname` | `string` | The absolute path of the directory containing the current `.agency` file. |
 | `color` | object | Terminal color helpers for `print` output, e.g. `color.red("error")`, `color.dim("note")`. |
 
 ## Debugging
@@ -88,3 +88,9 @@ These are built-in methods you can call on any Agency function or tool value (th
 | Name | Signature | Description |
 |---|---|---|
 | `registerTools` | `registerTools(tools)` | Register MCP tools with the agent. See [MCP](/guide/mcp). |
+
+## Partial Results
+
+| Name | Signature | Description |
+|---|---|---|
+| `saveDraft` | `saveDraft(value)` | Save a partial result to be returned if the function is interrupted. See [Partial Results](/guide/partial-results). |

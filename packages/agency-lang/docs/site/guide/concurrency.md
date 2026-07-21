@@ -71,7 +71,7 @@ You can write normal Agency code in `seq`. Unlike the `parallel` block, it doesn
 
 ## State isolation across branches
 
-Each branch in Agency gets isolated state. We will cover this more in the state isolation section. For now, you just need to know that if you have a global variable, each thread in `fork`, `race`, or `parallel` will get their copy of that global variable:
+Each branch in Agency gets isolated state for global variables. We will cover this more in the state isolation section. For now, you just need to know that if you have a global variable, each thread in `fork`, `race`, or `parallel` will get their copy of that global variable:
 
 ```ts
 const globalVar = 0
@@ -107,6 +107,4 @@ print(globalVar)
 
 The same option works on `race` and `parallel` too.
 
-The comprehension forms spell this as a prefix:
-[`forkShared [...]` and `raceShared [...]`](/guide/comprehensions). A `race` over
-an empty list resolves to `null`.
+You can also use [list comprehensions](/guide/comprehensions) with `fork` and `race`.

@@ -104,9 +104,7 @@ We can just create a global variable, `todos`, and then add todos to it. Each ru
 
 ## Isolation across concurrent branches
 
-Suppose you want to run three research agents in parallel to explore a topic in different ways. You want all three agents to keep track of their todos. *The same isolation property also extends to branches.*
-
-You can still use the same todos code without worrying about concurrency, because each agent will get their own copy of the `todos` variable.
+Suppose you want to run three research agents in parallel to explore a topic in different ways. You want all three agents to keep track of their todos. A similar isolation property also extends to branches: each branch gets its own copy of the global variables. You can still use the same todos code without worrying about concurrency, because each agent will get their own copy of the `todos` variable.
 
 ```ts
 parallel {
@@ -116,7 +114,15 @@ parallel {
 }
 ```
 
-If you *want* branches to have shared state, you can get that too; pass `shared: true`. See the [concurrency guide](/guide/concurrency) for details.
+If you *want* branches to have shared state, you can get that too; pass `shared: true`. Note that this only applies to global variables -- any local variables are shared between branches.
+
+Summary:
+
+- agent runs = full isolation
+- branches = state isolation for global variables, shared state for local variables
+- branches with `shared: true` = no state isolation
+
+See the [concurrency guide](/guide/concurrency) for details.
 
 ## State in TypeScript
 This isolated state model only applies to state defined in agency. Any state that you define in TypeScript will not get this kind of state isolation, unless you explicitly code it to. In the agent code above, if the `log` array lived in TypeScript code, then the requests wouldn't have state isolation:

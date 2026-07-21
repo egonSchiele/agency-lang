@@ -119,13 +119,9 @@ export function runDiagnostics(
 
   try {
     program = resolveReExports(program, symbolTable, fsPath);
-    // Analysis-only path (the LSP never executes anything): honor
-    // `import test` so migrated test files keep full editor support instead
-    // of dying on a single 0:0 error. Execution paths still default to deny.
-    program = resolveImports(program, symbolTable, fsPath, {
-      allowTestImports: true,
-    });
   } catch (err) {
+    // A re-export failure (e.g. a cycle) leaves the module graph unusable, so
+    // there is nothing meaningful left to type-check. Report and stop.
     diagnostics.push({
       severity: DiagnosticSeverity.Error,
       range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
@@ -133,6 +129,41 @@ export function runDiagnostics(
       source: "agency",
     });
     return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [] };
+  }
+
+  // Analysis-only path (the LSP never executes anything):
+  //  - `allowTestImports` honors `import test` so migrated test files keep full
+  //    editor support instead of dying on a single 0:0 error.
+  //  - `onUnresolvable` drops any import that can't be resolved (instead of
+  //    aborting the whole rewrite) and reports it at its own location, so every
+  //    *other* import and the rest of the file still type-check.
+  try {
+    program = resolveImports(program, symbolTable, fsPath, {
+      allowTestImports: true,
+      onUnresolvable: (err) => {
+        const loc = err.loc;
+        const range = loc
+          ? { start: doc.positionAt(loc.start), end: doc.positionAt(loc.end) }
+          : { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
+        diagnostics.push({
+          severity: DiagnosticSeverity.Error,
+          range,
+          message: err.message,
+          source: "agency",
+        });
+      },
+    });
+  } catch (err) {
+    // Defensive: `onUnresolvable` absorbs every expected import failure, so a
+    // throw here is unexpected. Report it but keep the (unrewritten) program so
+    // the type checker still runs — a single import must never blank the file
+    // or crash the server (updateDocument runs in a bare debounce callback).
+    diagnostics.push({
+      severity: DiagnosticSeverity.Error,
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+      message: err instanceof Error ? err.message : String(err),
+      source: "agency",
+    });
   }
 
   const info = buildCompilationUnit(program, symbolTable, fsPath, source);

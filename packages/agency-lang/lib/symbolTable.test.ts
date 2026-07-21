@@ -553,3 +553,60 @@ describe("SymbolTable: star and transitive re-exports", () => {
     }
   });
 });
+
+describe("SymbolTable.build: in-memory overrides", () => {
+  // The LSP passes the live editor buffer here so an unsaved edit (a just-typed
+  // import) is crawled instead of the stale saved file.
+  it("crawls an import present only in the override, not on disk", () => {
+    const { paths, cleanup } = withTempFiles({
+      dep: `export def helper(): number {\n  return 1\n}\n`,
+      // Saved on disk: no import of dep.
+      main: `node main() {\n  return 0\n}\n`,
+    });
+    try {
+      const buffer = `import { helper } from "${paths.dep}"\nnode main() {\n  return helper()\n}\n`;
+      const st = SymbolTable.build(paths.main, {}, { [path.resolve(paths.main)]: buffer });
+      // The dependency was only referenced by the override, yet it was crawled.
+      expect(st.getFile(path.resolve(paths.dep))?.helper?.kind).toBe("function");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("builds a not-yet-saved entrypoint from its override", () => {
+    const dir = path.join(os.tmpdir(), `st-override-${Date.now()}`);
+    const virtualFile = path.join(dir, "unsaved.agency");
+    // The file does not exist on disk; the override is the only source.
+    const buffer = `export def onlyInBuffer(): number {\n  return 7\n}\n`;
+    const st = SymbolTable.build(virtualFile, {}, { [path.resolve(virtualFile)]: buffer });
+    expect(st.getFile(path.resolve(virtualFile))?.onlyInBuffer?.kind).toBe("function");
+  });
+});
+
+describe("SymbolTable.build: an unresolvable import doesn't abort the crawl", () => {
+  // Following a `pkg::` import that isn't installed makes resolveAgencyImportPath
+  // throw. That must not abort discovery of the file's *other* imports — else a
+  // single just-typed bad import in the editor would blank the whole table.
+  it("still crawls a good import alongside an uninstalled pkg:: import", () => {
+    const { paths, cleanup } = withTempFiles({
+      dep: `export def helper(): number {\n  return 1\n}\n`,
+      main: `node main() {\n  return 0\n}\n`,
+    });
+    try {
+      const buffer = [
+        `import { helper } from "${paths.dep}"`,
+        `import { nope } from "pkg::@definitely/not-installed-xyz"`,
+        `node main() {`,
+        `  return helper()`,
+        `}`,
+        ``,
+      ].join("\n");
+      // Must not throw despite the uninstalled pkg:: import.
+      const st = SymbolTable.build(paths.main, {}, { [path.resolve(paths.main)]: buffer });
+      // The good dependency was still crawled.
+      expect(st.getFile(path.resolve(paths.dep))?.helper?.kind).toBe("function");
+    } finally {
+      cleanup();
+    }
+  });
+});

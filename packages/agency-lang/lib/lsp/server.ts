@@ -6,10 +6,14 @@ import {
   TextDocuments,
   TextDocumentSyncKind,
   InitializeResult,
+  InitializeParams,
   CompletionList,
+  DidChangeWatchedFilesNotification,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import * as path from "path";
 import { SymbolTable } from "../symbolTable.js";
+import { evictParseCache } from "../parseCache.js";
 import { uriToPath } from "./uri.js";
 import { getWorkspaceForFile, invalidateWorkspace } from "./workspace.js";
 import { runDiagnostics } from "./diagnostics.js";
@@ -43,7 +47,16 @@ export function startServer(): void {
   // Debounce timers for diagnostics (per URI)
   const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  connection.onInitialize((): InitializeResult => {
+  // Whether the client can accept a dynamic `didChangeWatchedFiles`
+  // registration. When true we register a `**/*.agency` watcher ourselves in
+  // `onInitialized` so file-change events arrive regardless of how (or whether)
+  // the client was configured to watch Agency files.
+  let supportsWatchedFilesRegistration = false;
+
+  connection.onInitialize((params: InitializeParams): InitializeResult => {
+    supportsWatchedFilesRegistration =
+      params.capabilities.workspace?.didChangeWatchedFiles
+        ?.dynamicRegistration ?? false;
     return {
       capabilities: {
         textDocumentSync: TextDocumentSyncKind.Incremental,
@@ -65,13 +78,42 @@ export function startServer(): void {
     };
   });
 
+  connection.onInitialized(() => {
+    if (!supportsWatchedFilesRegistration) return;
+    // Watch both Agency source and config files. `agency.json` changes were
+    // already handled by `onDidChangeWatchedFiles`; registering the watcher
+    // here makes that (and the new `.agency` handling) work even for clients
+    // that do not watch these globs on their own.
+    connection.client
+      .register(DidChangeWatchedFilesNotification.type, {
+        watchers: [
+          { globPattern: "**/*.agency" },
+          { globPattern: "**/agency.json" },
+        ],
+      })
+      .catch(() => {
+        // Registration is best-effort; some clients reject it. Open-document
+        // edits still update via onDidChangeContent.
+      });
+  });
+
   function updateDocument(doc: TextDocument) {
     const fsPath = uriToPath(doc.uri);
     const { config } = getWorkspaceForFile(fsPath);
 
     let symbolTable = new SymbolTable();
     try {
-      symbolTable = SymbolTable.build(fsPath, config);
+      // Feed every open document's live buffer as an override so unsaved edits
+      // (e.g. a just-typed `import`) are reflected in the symbol table. Building
+      // purely from disk would resolve imports against the stale saved files,
+      // making `resolveImports` reject symbols from a module a buffer imports
+      // but the saved file does not — for the active file OR any open file it
+      // imports.
+      const overrides: Record<string, string> = {};
+      for (const open of documents.all()) {
+        overrides[path.resolve(uriToPath(open.uri))] = open.getText();
+      }
+      symbolTable = SymbolTable.build(fsPath, config, overrides);
     } catch {
       // If symbol table build fails (e.g. file not on disk yet), continue with empty table
     }
@@ -122,6 +164,7 @@ export function startServer(): void {
   });
 
   connection.onDidChangeWatchedFiles((params) => {
+    let anyAgencyChanged = false;
     for (const change of params.changes) {
       if (change.uri.endsWith("agency.json")) {
         const root = uriToPath(change.uri).replace(/\/agency\.json$/, "");
@@ -133,6 +176,21 @@ export function startServer(): void {
             updateDocument(doc);
           }
         }
+      } else if (change.uri.endsWith(".agency")) {
+        // A saved (or externally changed) .agency file may be imported by open
+        // documents, so their symbol tables are now stale. Evict the file's
+        // cached parse — the mtime+size cache key can miss same-size edits in a
+        // long-lived process — and rebuild every open document below.
+        evictParseCache(path.resolve(uriToPath(change.uri)));
+        anyAgencyChanged = true;
+      }
+    }
+    if (anyAgencyChanged) {
+      // Import graphs cross files and workspaces, so a single .agency change can
+      // invalidate any open document. Rebuilding all open docs is the simple,
+      // always-correct choice; there are only ever a handful open at once.
+      for (const doc of documents.all()) {
+        updateDocument(doc);
       }
     }
   });

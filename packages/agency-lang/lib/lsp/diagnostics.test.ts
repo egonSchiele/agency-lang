@@ -196,6 +196,126 @@ describe("runDiagnostics — shadowing a prelude name", () => {
   });
 });
 
+describe("runDiagnostics — unsaved edits use the editor buffer", () => {
+  // The reported bug: the LSP built its symbol table from the *saved* file but
+  // ran diagnostics on the *editor buffer*. Typing `import { now } from
+  // "std::date"` before saving left the symbol table unaware of std::date, so
+  // `resolveImports` rejected `now` ("Symbol 'now' is not defined in
+  // 'std::date'") and — because that threw before the type checker ran — every
+  // other squiggle in the file vanished. The server now feeds the buffer into
+  // SymbolTable.build via an override, so a just-typed import resolves without
+  // a save. These tests drive that override the same way the server does.
+  function buildWithBuffer(mainFile: string, buffer: string): SymbolTable {
+    return SymbolTable.build(mainFile, {}, { [path.resolve(mainFile)]: buffer });
+  }
+
+  it("resolves a just-typed import that the saved file lacks", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-unsaved-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      // Saved on disk: no import yet.
+      fs.writeFileSync(
+        mainFile,
+        ["node main() {", "  print(now())", "}", ""].join("\n"),
+      );
+      // Editor buffer: the import has been typed but not saved.
+      const buffer = [
+        'import { now } from "std::date"',
+        "node main() {",
+        "  print(now())",
+        "}",
+        "",
+      ].join("\n");
+
+      const doc = makeDoc(buffer, `file://${mainFile}`);
+      const { diagnostics, program } = runDiagnostics(
+        doc,
+        mainFile,
+        {},
+        buildWithBuffer(mainFile, buffer),
+      );
+
+      expect(program).not.toBeNull();
+      expect(diagnostics.map((d) => d.message)).toEqual([]);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps unrelated diagnostics when only some names are imported", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-partial-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      fs.writeFileSync(
+        mainFile,
+        ["node main() {", "  print(now())", "}", ""].join("\n"),
+      );
+      // Buffer imports `now` but not `elapsedTime`. The `elapsedTime` squiggle
+      // must survive — the old code wiped it by aborting before type-checking.
+      const buffer = [
+        'import { now } from "std::date"',
+        "node main() {",
+        "  const start = now()",
+        "  print(elapsedTime(since: start))",
+        "}",
+        "",
+      ].join("\n");
+
+      const doc = makeDoc(buffer, `file://${mainFile}`);
+      const { diagnostics } = runDiagnostics(
+        doc,
+        mainFile,
+        {},
+        buildWithBuffer(mainFile, buffer),
+      );
+
+      const messages = diagnostics.map((d) => d.message);
+      expect(messages).toContain("Function 'elapsedTime' is not defined.");
+      // The bogus "Symbol 'now' is not defined in 'std::date'" must be gone.
+      expect(messages.some((m) => /'now'.*not defined in/.test(m))).toBe(false);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("runDiagnostics — an unresolvable import degrades gracefully", () => {
+  // A single bad import must not blank out the file: the type checker still
+  // runs, good imports still resolve, and the bad import is reported once (by
+  // the checker's checkMissingImports pass) at its own location.
+  it("reports the bad import once and still resolves the good one", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-lsp-baddimp-"));
+    try {
+      const mainFile = path.join(tmpDir, "main.agency");
+      const source = [
+        'import { now } from "std::date"',
+        'import { doesNotExist } from "std::date"',
+        "node main() {",
+        "  print(now())",
+        "}",
+        "",
+      ].join("\n");
+      fs.writeFileSync(mainFile, source);
+
+      const doc = makeDoc(source, `file://${mainFile}`);
+      const symbolTable = SymbolTable.build(mainFile, {});
+      const { diagnostics, program } = runDiagnostics(doc, mainFile, {}, symbolTable);
+
+      expect(program).not.toBeNull();
+      const messages = diagnostics.map((d) => d.message);
+      // The bad name is reported exactly once, not duplicated.
+      const badImportErrors = messages.filter((m) =>
+        /'doesNotExist'.*not defined in/.test(m),
+      );
+      expect(badImportErrors).toHaveLength(1);
+      // The good import still resolves: `now` must not read as undefined.
+      expect(messages.some((m) => /'now' is not defined/.test(m))).toBe(false);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("runDiagnostics — test-only imports", () => {
   // The LSP is an analysis-only path: it must honor `import test` so
   // migrated test files keep full editor support instead of dying on a

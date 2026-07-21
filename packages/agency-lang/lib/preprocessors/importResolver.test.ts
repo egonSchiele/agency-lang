@@ -272,6 +272,76 @@ describe("resolveImports", () => {
     ).toThrow("Symbol 'missing' is not defined in './other.agency'");
   });
 
+  it("onUnresolvable drops a bad import and reports it instead of throwing", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [makeImportStatement(["missing"], "./other.agency")],
+    };
+    const symbolTable = table({
+      "/project/other.agency": {},
+    });
+    const reported: string[] = [];
+    const result = resolveImports(program, symbolTable, "/project/main.agency", {
+      onUnresolvable: (err) => reported.push(err.message),
+    });
+    // The unresolvable name produces no rewritten node, and it is reported.
+    expect(result.nodes).toHaveLength(0);
+    expect(reported).toEqual([
+      "Symbol 'missing' is not defined in './other.agency'",
+    ]);
+  });
+
+  it("onUnresolvable resolves good imports even when another is bad", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        makeImportStatement(["add"], "./utils.agency"),
+        makeImportStatement(["missing"], "./other.agency"),
+      ],
+    };
+    const symbolTable = table({
+      "/project/utils.agency": { add: fn("add", { exported: true }) },
+      "/project/other.agency": {},
+    });
+    const reported: string[] = [];
+    const result = resolveImports(program, symbolTable, "/project/main.agency", {
+      onUnresolvable: (err) => reported.push(err.message),
+    });
+    // The good import is rewritten; the bad one is dropped and reported.
+    expect(result.nodes).toHaveLength(1);
+    const good = result.nodes[0] as ImportStatement;
+    expect(good.type).toBe("importStatement");
+    if (good.importedNames[0].type === "namedImport") {
+      expect(good.importedNames[0].importedNames).toEqual(["add"]);
+    }
+    expect(reported).toEqual([
+      "Symbol 'missing' is not defined in './other.agency'",
+    ]);
+  });
+
+  it("onUnresolvable keeps good names in a mixed single statement", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [makeImportStatement(["add", "missing"], "./utils.agency")],
+    };
+    const symbolTable = table({
+      "/project/utils.agency": { add: fn("add", { exported: true }) },
+    });
+    const reported: string[] = [];
+    const result = resolveImports(program, symbolTable, "/project/main.agency", {
+      onUnresolvable: (err) => reported.push(err.message),
+    });
+    // `add` resolves; only `missing` is dropped and reported.
+    expect(result.nodes).toHaveLength(1);
+    const good = result.nodes[0] as ImportStatement;
+    if (good.importedNames[0].type === "namedImport") {
+      expect(good.importedNames[0].importedNames).toEqual(["add"]);
+    }
+    expect(reported).toEqual([
+      "Symbol 'missing' is not defined in './utils.agency'",
+    ]);
+  });
+
   it("leaves non-.agency imports untouched", () => {
     const tsImport: ImportStatement = {
       type: "importStatement",
@@ -330,6 +400,40 @@ describe("resolveImports", () => {
     expect(() =>
       resolveImports(program, symbolTable, "/project/main.agency"),
     ).toThrow(/marker.*cannot be applied to node 'greet'/);
+  });
+
+  it("onUnresolvable surfaces a retry-safety marker on a node (not silent)", () => {
+    // Regression: these structural-misuse errors have no checkMissingImports
+    // counterpart, so skipping them silently would let the editor disagree with
+    // `agency compile`. They must reach the callback.
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        {
+          type: "importStatement",
+          modulePath: "./other.agency",
+          isAgencyImport: true,
+          importedNames: [
+            {
+              type: "namedImport",
+              importedNames: ["greet"],
+              destructiveNames: ["greet"],
+              aliases: {},
+            },
+          ],
+        },
+      ],
+    };
+    const symbolTable = table({
+      "/project/other.agency": { greet: nodeSym("greet") },
+    });
+    const reported: string[] = [];
+    const result = resolveImports(program, symbolTable, "/project/main.agency", {
+      onUnresolvable: (err) => reported.push(err.message),
+    });
+    expect(result.nodes).toHaveLength(0);
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toMatch(/marker.*cannot be applied to node 'greet'/);
   });
 
   // Test-only imports: `import test { ... }`
@@ -427,5 +531,21 @@ describe("resolveImports", () => {
     expect(() =>
       resolveImports(program, symbolTable, "/project/main.agency"),
     ).toThrow(/cannot be used with TypeScript or npm imports/);
+  });
+
+  it("onUnresolvable surfaces an import-test gate on a TS module (not silent)", () => {
+    // Statement-level failure: the whole statement is dropped and reported.
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [testImport(["helper"], "./foo.ts")],
+    };
+    const reported: string[] = [];
+    const result = resolveImports(program, table({}), "/project/main.agency", {
+      allowTestImports: true,
+      onUnresolvable: (err) => reported.push(err.message),
+    });
+    expect(result.nodes).toHaveLength(0);
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toMatch(/cannot be used with TypeScript or npm imports/);
   });
 });

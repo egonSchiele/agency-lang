@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { parseAgencyFileCached } from "./parseCache.js";
+import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config.js";
 import type {
   AgencyNode,
@@ -132,9 +133,17 @@ export class SymbolTable {
     this.effectDecls = effectDecls;
   }
 
+  /**
+   * @param overrides Maps an absolute file path to in-memory source that
+   *   replaces the on-disk contents for that file. The LSP passes the active
+   *   editor buffer here so an unsaved edit (e.g. a just-typed `import`) is
+   *   reflected in the symbol table without waiting for a save. Keyed by
+   *   `path.resolve`d absolute path to match how `visit` normalizes paths.
+   */
   static build(
     entrypoint: string | string[],
     config: AgencyConfig = {},
+    overrides: Record<string, string> = {},
   ): SymbolTable {
     const parsed: Record<string, { symbols: FileSymbols; program: AgencyProgram }> = {};
     const visited = new Set<string>();
@@ -144,17 +153,20 @@ export class SymbolTable {
       if (visited.has(absPath)) return;
       visited.add(absPath);
 
-      if (!fs.existsSync(absPath)) return;
+      const override = overrides[absPath];
+      if (override === undefined && !fs.existsSync(absPath)) return;
 
       if (config.verbose) {
         console.log(`[SymbolTable] Processing ${absPath}`);
       }
 
-      const parseResult = parseAgencyFileCached(
-        absPath,
-        config,
-        !isNonTemplatedStdlib(absPath),
-      );
+      const applyTemplate = !isNonTemplatedStdlib(absPath);
+      // An override is unsaved buffer text with no meaningful mtime/size, so
+      // parse it directly rather than through the disk-keyed parse cache.
+      const parseResult =
+        override !== undefined
+          ? parseAgency(override, config, applyTemplate)
+          : parseAgencyFileCached(absPath, config, applyTemplate);
       if (!parseResult.success) {
         if (config.verbose) {
           console.error(
@@ -167,19 +179,32 @@ export class SymbolTable {
       const program = parseResult.result;
       parsed[absPath] = { symbols: classifySymbols(program), program };
 
+      // Following an import may throw before it can be visited — e.g. a
+      // `pkg::` module that isn't installed makes `resolveAgencyImportPath`
+      // throw. That must not abort the whole crawl: symbol discovery is
+      // best-effort, and the unresolvable import is reported downstream (by
+      // resolveImports / the type checker's checkMissingImports) with a proper
+      // location. Skip what won't resolve and keep crawling the rest.
+      const visitImport = (modulePath: string): void => {
+        try {
+          visit(resolveAgencyImportPath(modulePath, absPath));
+        } catch {
+          /* unresolvable import path — reported downstream, not here */
+        }
+      };
       for (const { node } of walkNodes(program.nodes)) {
         if (node.type === "importNodeStatement") {
-          visit(resolveAgencyImportPath(node.agencyFile, absPath));
+          visitImport(node.agencyFile);
         } else if (
           node.type === "importStatement" &&
           isAgencyImport(node.modulePath)
         ) {
-          visit(resolveAgencyImportPath(node.modulePath, absPath));
+          visitImport(node.modulePath);
         } else if (
           node.type === "exportFromStatement" &&
           isAgencyImport(node.modulePath)
         ) {
-          visit(resolveAgencyImportPath(node.modulePath, absPath));
+          visitImport(node.modulePath);
         }
       }
     }

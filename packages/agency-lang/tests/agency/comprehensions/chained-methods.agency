@@ -1,0 +1,16 @@
+// Chaining a method / index directly onto a bracket literal, in the
+// positions users actually write: a comprehension `.join`, an array
+// literal `.join`, an array literal index, and a comprehension `.join`
+// inside string interpolation. The return value pins the exact content so
+// a codegen or runtime regression that produced the wrong join/index
+// output would fail, not just a crash.
+node main(): string {
+  const xs = ["a", "b", "c"]
+
+  const bulleted = ["- ${c}" for c in xs].join("\n")
+  const dashed = [1, 2, 3].join("-")
+  const middle = [10, 20, 30][1]
+  const inline = "vals: ${["- ${c}" for c in xs].join(", ")}"
+
+  return "${bulleted}|${dashed}|${middle}|${inline}"
+}

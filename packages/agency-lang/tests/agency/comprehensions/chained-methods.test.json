@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "description": "chaining a method/index directly onto a bracket literal (comprehension .join, array .join, array index, comprehension .join in interpolation)",
+      "expectedOutput": "\"- a\\n- b\\n- c|1-2-3|20|vals: - a, - b, - c\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

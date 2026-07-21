@@ -10,7 +10,7 @@
 */
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { webTools } from "std::agents/lib/toolkits"
+import { webTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { dbnomicsSeries } from "std::data/finance/dbnomics"
 import { edgarFilings, edgarFilingsByCik } from "std::data/finance/edgar"
 import { fredSeries, fredSeriesInfo } from "std::data/finance/fred"
@@ -37,7 +37,11 @@ static const systemPrompt = """You answer questions using structured public-data
 - Find the exact identifier before you query. A FRED series ID, an EDGAR CIK, a Wikidata Q-number: look it up rather than guessing, because a wrong identifier returns a real answer to the wrong question, which is far worse than an error.
 - Name the source and the identifier behind every figure you report, so a reader can check it.
 - State the units, the period, and any revision or seasonal adjustment the source applies. A number without its units is not an answer.
-- When a source has no data for what was asked, say so plainly. NEVER estimate a number and present it as retrieved."""
+- When a source has no data for what was asked, say so plainly. NEVER estimate a number and present it as retrieved.
+
+## Communicating with the user
+- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${SAVE_DRAFT_HINT}
+"""
 
 static const skills = agentSkill("data")
 
@@ -87,12 +91,13 @@ def answer(
   if (threadIsNew()) {
     systemMessage(systemPrompt)
   }
+
   return llm(
     withContext(task: task, context: context),
     llmOptions(
     model: model,
     provider: provider,
-    tools: buildTools().concat(extraTools),
+    tools: [...buildTools(), ...extraTools, saveDraft],
     hostedTools: hostedSearchTools(model),
   ),
   )
@@ -134,5 +139,11 @@ export def dataAgent(
       )
     }
     return reply
+
+    // Salvage the model's best-so-far saveDraft if an outer budget guard
+    // trips mid-answer; the assignment above would otherwise drop it.
+    finalize {
+      return reply
+    }
   }
 }

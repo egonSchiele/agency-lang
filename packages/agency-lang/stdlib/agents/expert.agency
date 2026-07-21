@@ -52,16 +52,17 @@ def consult(
     systemMessage(systemPrompt)
   }
 
-  const guidance: ExpertGuidance = llm(
+  // Return position so a saveDraft the model files mid-consult propagates
+  // out as partial ExpertGuidance; an assignment here would drop it.
+  return llm(
     "Task:\n${withContext(task: task, context: context)}",
     llmOptions(
     model: model,
     provider: provider,
-    tools: buildTools().concat(extraTools),
+    tools: buildTools().concat(extraTools).concat([saveDraft]),
     hostedTools: hostedSearchTools(model),
   ),
   )
-  return guidance
 }
 
 export def expertAgent(
@@ -100,5 +101,11 @@ export def expertAgent(
       )
     }
     return guidance
+
+    // Salvage the model's partial guidance if an outer budget guard trips
+    // mid-consult; the assignment above would otherwise drop it.
+    finalize {
+      return guidance
+    }
   }
 }

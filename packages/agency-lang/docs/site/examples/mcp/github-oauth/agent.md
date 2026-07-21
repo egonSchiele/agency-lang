@@ -1,5 +1,8 @@
+```ts
 import { mcp } from "pkg::@agency-lang/mcp"
-/* Example: Using an MCP server with OAuth authentication
+```
+
+Example: Using an MCP server with OAuth authentication
 
    This example connects to GitHub's MCP server, which requires OAuth.
    On the first run, your browser opens for GitHub authorization.
@@ -15,8 +18,8 @@ import { mcp } from "pkg::@agency-lang/mcp"
    To run:
      copy agency.json from the root of the repo to this directory, or add the "mcpServers" config to your existing agency.json
      pnpm run agency examples/mcp/github-oauth/agent.agency
-*/
 
+```ts
 node main() {
   print("Connecting to GitHub MCP server with OAuth...")
   const tools = try mcp("github") catch []
@@ -30,3 +33,4 @@ node main() {
   }
   print("Connected to GitHub. Found ${tools.length} tools.")
 }
+```

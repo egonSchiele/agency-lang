@@ -15,9 +15,13 @@ import {
   readOnlyFileTools,
   agencyDocTools,
   webTools,
+  SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
+
+import { communicationTools } from "./lib/toolkits.agency"
+
 
 static const skills = agentSkill("explorer")
 
@@ -100,6 +104,10 @@ summary, which is the fastest way to answer "what exists".
   read 12, read 12.
 - Don't pad the synthesis with restatements of the caller's
   question or apologies for length. Get to the substance.
+
+## Communicating with the user
+- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${SAVE_DRAFT_HINT}
+
 """
 
 export def buildTools(): any[] {
@@ -112,6 +120,7 @@ export def buildTools(): any[] {
     ...agencyDocTools(),
     ...webTools(),
     ...searchTools(),
+    ...communicationTools(),
     skills,
   ]
 }
@@ -131,7 +140,7 @@ def survey(
     llmOptions(
     model: model,
     provider: provider,
-    tools: buildTools().concat(extraTools),
+    tools: [...buildTools(), ...extraTools, saveDraft],
     hostedTools: hostedSearchTools(model),
     reasoningEffort: "high",
     thinking: true,
@@ -180,5 +189,11 @@ export def explorerAgent(
       )
     }
     return reply
+
+    // Salvage the model's best-so-far saveDraft if an outer budget guard
+    // trips mid-exploration; the assignment above would otherwise drop it.
+    finalize {
+      return reply
+    }
   }
 }

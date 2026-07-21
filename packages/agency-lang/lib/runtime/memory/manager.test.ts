@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  userMessage,
+  assistantMessage,
+  systemMessage,
+  toolMessage,
+} from "smoltalk";
 import { MemoryManager } from "./manager.js";
 import { FileMemoryStore } from "./store.js";
 import { StatelogClient } from "../../statelogClient.js";
@@ -753,5 +759,116 @@ describe("MemoryManager.resolveEmbedding (provider-aware embeddings)", () => {
 
   it("disables Tier-2 when no provider or model can be determined", () => {
     expect(mgr({ smoltalkDefaults: {} }).resolveEmbedding()).toBeNull();
+  });
+});
+
+describe("MemoryManager compaction and auto-extraction on agentic threads", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-compact-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const tool = (content: string) =>
+    toolMessage(content, { tool_call_id: "t1", name: "shell" });
+
+  // The shape an agentic run produces: one user request up front, then
+  // assistant/tool traffic for the rest of the thread.
+  function toolLoopThread() {
+    return [
+      systemMessage("You are an agent."),
+      userMessage("do the task"),
+      assistantMessage("running step one", { toolCalls: [] }),
+      tool("step one output"),
+      assistantMessage("running step two", { toolCalls: [] }),
+      tool("step two output"),
+      assistantMessage("all done"),
+    ];
+  }
+
+  function makeManager(client: ReturnType<typeof mockLlmClient>) {
+    return new MemoryManager({
+      store: new FileMemoryStore(tmpDir),
+      config: {
+        dir: tmpDir,
+        embeddings: { model: "text-embedding-3-small" },
+        autoExtract: { interval: 1 },
+        compaction: { trigger: "messages", threshold: 5 },
+      },
+      llmClient: client,
+    });
+  }
+
+  // The prompt string sent on the nth (0-based) llmClient.text call.
+  function promptOfCall(client: ReturnType<typeof mockLlmClient>, n: number) {
+    return client.text.mock.calls[n][0].messages[0].content as string;
+  }
+
+  it("compacts a tool loop with no user messages past the midpoint", async () => {
+    const client = mockLlmClient();
+    const manager = makeManager(client);
+    const messages = toolLoopThread();
+
+    const plan = await manager.compactIfNeeded(messages);
+
+    expect(plan).not.toBeNull();
+    // Head keeps the real system message.
+    expect(plan!.systemPrefixIndices).toEqual([0]);
+    // The kept tail must never begin with a tool reply — that would
+    // orphan it from its assistant tool_calls message.
+    expect(messages[plan!.tailIndices[0]].role).toBe("assistant");
+    expect(plan!.summaryMessageContent).toContain(
+      "Previous conversation summary:",
+    );
+  });
+
+  it("auto-extraction only sends messages added since the last pass", async () => {
+    const client = mockLlmClient();
+    const manager = makeManager(client);
+
+    const first = [userMessage("alpha fact"), assistantMessage("noted")];
+    await manager.onTurn(first);
+    expect(promptOfCall(client, 0)).toContain("alpha fact");
+
+    const second = [...first, assistantMessage("gamma detail")];
+    await manager.onTurn(second);
+    expect(client.text.mock.calls.length).toBe(2);
+    expect(promptOfCall(client, 1)).toContain("gamma detail");
+    expect(promptOfCall(client, 1)).not.toContain("alpha fact");
+  });
+
+  it("keeps extracting new messages after compaction reshapes the thread", async () => {
+    const client = mockLlmClient();
+    const manager = makeManager(client);
+    const messages = toolLoopThread();
+
+    // Turn 1 extracts the whole thread (interval=1, nothing seen yet).
+    await manager.onTurn(messages);
+    const callsBeforeCompaction = client.text.mock.calls.length;
+
+    // Compact, then rebuild the thread exactly the way prompt.ts does.
+    const plan = await manager.compactIfNeeded(messages);
+    expect(plan).not.toBeNull();
+    const head = plan!.systemPrefixIndices.map((i) => messages[i]);
+    const tail = plan!.tailIndices.map((i) => messages[i]);
+    const reshaped = [
+      ...head,
+      systemMessage(plan!.summaryMessageContent),
+      ...tail,
+    ];
+
+    // Next turn adds one genuinely new message.
+    const next = [...reshaped, assistantMessage("BRAND NEW FACT")];
+    await manager.onTurn(next);
+
+    const lastCall = client.text.mock.calls.length - 1;
+    expect(lastCall).toBeGreaterThanOrEqual(callsBeforeCompaction);
+    // The new message is extracted; the kept tail is not re-sent.
+    expect(promptOfCall(client, lastCall)).toContain("BRAND NEW FACT");
+    expect(promptOfCall(client, lastCall)).not.toContain("step two output");
   });
 });

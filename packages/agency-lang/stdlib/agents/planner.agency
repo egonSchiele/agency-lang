@@ -10,10 +10,13 @@ import { agencyCodingAgent } from "std::agents/agency/coding"
 import { codingAgent } from "std::agents/coding"
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { readOnlyFileTools } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { verifierAgent } from "std::agents/verifier"
 import { getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
+
+import { communicationTools } from "./lib/toolkits.agency"
+
 
 static const skills = agentSkill("planner")
 
@@ -22,7 +25,7 @@ export def buildTools(): any[] {
   Return the planner's tools: read-only access to the project it is planning
   for, plus its skills.
   """
-  return [...readOnlyFileTools(), skills]
+  return [...readOnlyFileTools(), skills, ...communicationTools()]
 }
 
 /** Raised before a generated plan-agent runs, so the plan, source, and
@@ -44,7 +47,12 @@ static const importableSurface = """You may import and compose these building bl
 - import { plannerAgent } from "std::agents/planner"            decompose a genuinely complex sub-task into its own planned agent
 - direct tools from std::shell, std::fs, std::http, and the rest of the standard library
 
-Prefer to DO THE WORK directly: call codingAgent (or researchAgent, or direct tools) to actually create files, run commands, and produce the deliverable. Use plannerAgent ONLY for a sub-task that is itself large and multi-step; never call plannerAgent for a concrete, single-step piece of work, and never just re-plan without doing anything."""
+Prefer to DO THE WORK directly: call codingAgent (or researchAgent, or direct tools) to actually create files, run commands, and produce the deliverable. Use plannerAgent ONLY for a sub-task that is itself large and multi-step; never call plannerAgent for a concrete, single-step piece of work, and never just re-plan without doing anything.
+
+
+## Communicating with the user
+- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${SAVE_DRAFT_HINT}
+"""
 
 static const planExample = """EXAMPLE, compose a worker in a node main. Worker agents return a Result, so unwrap it:
 import { codingAgent } from "std::agents/coding"
@@ -251,7 +259,7 @@ export def plannerAgent(
           llmOptions(
           model: model,
           provider: provider,
-          tools: buildTools().concat(extraTools),
+          tools: [...buildTools(), ...extraTools, saveDraft],
         ),
         )
       }

@@ -52,6 +52,8 @@ export const PRELUDE_NAMES: readonly string[] = [
   "unique",
   "groupBy",
   "flatten",
+  "setAgentCwd",
+  "getAgentCwd",
 ];
 
 /** The prelude as a single-line `import { … } from "std::index"` statement. */

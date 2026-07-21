@@ -1,21 +1,21 @@
+```ts
 import { mcp } from "pkg::@agency-lang/mcp"
-/*
-  The Agency agent — same as the regular OAuth example.
+```
+
+The Agency agent — same as the regular OAuth example.
   The TypeScript wrapper in run.ts shows how to customize the OAuth flow.
   To run:
     Make sure the "mcpServers" config in agency.json includes the github server.
     pnpm run agency compile examples/mcp/github-oauth-ts/agent.agency
     npx tsx examples/mcp/github-oauth-ts/run.ts
-*/
 
+```ts
 node main() {
   const tools = mcp("github") catch []
-
   if (tools.length == 0) {
     print("Could not connect to GitHub MCP server.")
     return null
   }
-
   const result = llm(
     "What are my 5 most recently updated GitHub repositories?",
     {
@@ -24,3 +24,4 @@ node main() {
   )
   return result
 }
+```

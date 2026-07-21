@@ -285,6 +285,12 @@ export def agencyCodingAgent(
       )
     }
     return outcome
+
+    // Salvage the last completed attempt (generateLoop saveDrafts each one)
+    // if an outer budget guard trips; the assignment above would drop it.
+    finalize {
+      return outcome
+    }
   }
   // The guard Result cannot pass straight through here: this agent reports
   // failures as a WriteFailure carrying the last source. isFailure, not

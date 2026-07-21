@@ -47,11 +47,11 @@ def consult(
   if (threadIsNew()) {
     systemMessage(systemPrompt)
   }
-  const guidance: ExpertGuidance = llm(
+  // Return position so a model saveDraft propagates as partial guidance.
+  return llm(
     "Task:\n${withContext(task: task, context: context)}",
-    llmOptions(model: model, provider: provider, tools: buildTools().concat(extraTools)),
+    llmOptions(model: model, provider: provider, tools: buildTools().concat(extraTools).concat([saveDraft])),
   )
-  return guidance
 }
 
 export def agencyExpertAgent(
@@ -89,5 +89,10 @@ export def agencyExpertAgent(
       )
     }
     return guidance
+
+    // Salvage the model's partial guidance if an outer budget guard trips.
+    finalize {
+      return guidance
+    }
   }
 }

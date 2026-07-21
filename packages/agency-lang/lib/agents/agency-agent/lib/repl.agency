@@ -142,7 +142,7 @@ import { reviewAgent } from "../subagents/review.agency"
 //
 //import { clearMessages, pushMessage, repl } from "std::ui"
 
-import { dispatchAgent } from "./coordinator.agency"
+import { runTurn } from "./coordinator.agency"
 import { parseModelSpec } from "./utils.agency"
 
 let _session: Session = {
@@ -343,7 +343,7 @@ def _runTurn(msg: string): boolean {
 
 
 def renderUserTurn(trimmed: string, msg: string): boolean {
-  const result = try dispatchAgent("coordinator", msg)
+  const result = try runTurn("coordinator", msg)
   renderAgentResponse(result)
   return true
 }
@@ -363,7 +363,7 @@ export def buildStatus(): { left: string; right: string; context: string } {
 
 export def runSeedTurn(target: string, msg: string) {
   pushMessage(color.dim("> ${msg}"))
-  const response = try dispatchAgent(target, msg)
+  const response = try runTurn(target, msg)
   renderAgentResponse(response)
 }
 

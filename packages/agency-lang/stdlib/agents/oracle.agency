@@ -17,6 +17,7 @@ import {
   agencyCodeTools,
   agencyDocTools,
   webTools,
+  SAVE_DRAFT_HINT,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -78,7 +79,7 @@ authoritative — consult them rather than recalling.
 - Don't pad with summaries of what you read. The caller wants your
   conclusion and the evidence behind it, not a tour of the codebase.
 - Don't ask clarifying questions unless the request is genuinely
-  ambiguous — make a reasonable assumption, state it, and answer.
+  ambiguous — make a reasonable assumption, state it, and answer.${SAVE_DRAFT_HINT}
 """
 
 export def buildTools(): any[] {
@@ -111,7 +112,7 @@ def consider(
     llmOptions(
     model: model,
     provider: provider,
-    tools: buildTools().concat(extraTools),
+    tools: buildTools().concat(extraTools).concat([saveDraft]),
     hostedTools: hostedSearchTools(model),
     reasoningEffort: "high",
     thinking: true,
@@ -161,5 +162,11 @@ export def oracleAgent(
       )
     }
     return reply
+
+    // Salvage the model's best-so-far saveDraft if an outer budget guard
+    // trips mid-analysis; the assignment above would otherwise drop it.
+    finalize {
+      return reply
+    }
   }
 }

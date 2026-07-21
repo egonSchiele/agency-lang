@@ -89,7 +89,7 @@ export def enableAgentMemory(embeddings: (EmbeddingsOverride | null) = null) {
 // `configureModels()`. The deep subagents (oracle, explorer) read these.
 // An empty slowProvider means "let smoltalk resolve the provider from
 // the model name".
-let slowModel: string = "gpt-5.5"
+let slowModel: string = "gpt-5.6-sol"
 let slowProvider: string = "openai-responses"
 
 export def getSlowModel(): string {

@@ -44,7 +44,7 @@
     {
       "nodeName": "fallsToBuiltinDefault",
       "input": "",
-      "expectedOutput": "{\"model\":\"claude-sonnet-4-6\",\"provider\":\"anthropic\",\"via\":\"built-in:price=standard\"}",
+      "expectedOutput": "{\"model\":\"claude-sonnet-5\",\"provider\":\"anthropic\",\"via\":\"built-in:price=standard\"}",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -64,7 +64,7 @@
     {
       "nodeName": "parityMainAnthropic",
       "input": "",
-      "expectedOutput": "{\"model\":\"claude-sonnet-4-6\",\"provider\":\"anthropic\",\"via\":\"built-in:price=standard\"}",
+      "expectedOutput": "{\"model\":\"claude-sonnet-5\",\"provider\":\"anthropic\",\"via\":\"built-in:price=standard\"}",
       "evaluationCriteria": [
         {
           "type": "exact"

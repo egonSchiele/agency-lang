@@ -19,7 +19,7 @@
     {
       "nodeName": "applyResolvedSetsSlots",
       "input": "",
-      "expectedOutput": "\"claude-sonnet-4-6|claude-opus-4-8|anthropic\"",
+      "expectedOutput": "\"claude-sonnet-5|claude-opus-4-8|anthropic\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -49,7 +49,7 @@
     {
       "nodeName": "switchPerSlotOnly",
       "input": "",
-      "expectedOutput": "\"claude-opus-4-8|claude-sonnet-4-6\"",
+      "expectedOutput": "\"claude-opus-4-8|claude-sonnet-5\"",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -249,7 +249,7 @@
     {
       "nodeName": "switchPerSlotFromPromotedOpenaiSession",
       "input": "",
-      "expectedOutput": "\"gpt-4o-mini/claude-opus-4-8\"",
+      "expectedOutput": "\"gpt-5-mini/claude-opus-4-8\"",
       "evaluationCriteria": [
         {
           "type": "exact"

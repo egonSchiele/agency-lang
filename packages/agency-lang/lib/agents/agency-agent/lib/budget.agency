@@ -1,0 +1,190 @@
+/** @module
+  @summary Per-turn time and cost budgets parsed from the user's own words.
+
+  The user often states a soft deadline in plain language ("be quick, no
+  more than 30 seconds"). This module turns that into a real `guard` around
+  the turn. Three pieces:
+
+  - `parseTurnBudget` reads a budget out of the message and stores it. It
+    runs once per turn and resets every turn, so a deadline stated on one
+    message never leaks into the next.
+  - `budgetTime` / `budgetCost` hand the stored budget (or a generous
+    fallback) to the guard `coordinator.runTurn` wraps around the turn.
+  - `turnBudgetHandler` is the top-level handler for that guard. When the
+    budget trips it asks the user whether to grant more, and either extends
+    the guard in place or stops.
+
+  Why a guard and not a "check the clock" tool: a tool the model must choose
+  to call has no forcing function, and the model is suspended inside slow
+  tool calls exactly when the time is burning. The guard is enforced by the
+  runtime, cancels the in-flight call when it fires, and resumes in place
+  when granted more budget.
+*/
+import { formatDuration } from "std::date"
+
+import { isInteractive } from "./trace.agency"
+
+// The guard's label. The handler answers ONLY the trip carrying this label.
+// A subagent's own cost/time caps raise the same `std::guard` effect, so
+// without the label filter this handler would answer the wrong guard and
+// corrupt its accounting (the same rule `std::supervise` follows).
+export static const TURN_BUDGET_LABEL = "agency-turn"
+
+// Per-run (global, not static): each session starts clean, and the value is
+// overwritten at the top of every turn. This carries the parsed budget from
+// the parse site to the guard site without threading it through dispatch.
+let _maxTimeMs: number | null = null
+let _maxCost: number | null = null
+
+// Generous fallbacks so the guard always has a concrete number. A turn with
+// no stated budget runs under these, which are high enough never to bite a
+// normal turn but still cap a true runaway.
+export def budgetTime(): number { return _maxTimeMs ?? 1h }
+export def budgetCost(): number { return _maxCost ?? $50.00 }
+
+// The best-so-far value from the guard trip, captured when the user (or a
+// one-shot run) declines more budget. The trip carries `draftValue` — the
+// innermost saveDraft on the whole branch — so it crosses the subagents'
+// own guards, which salvage-on-abort alone cannot. runTurn reads this to
+// show the partial instead of a bare "stopped" line.
+let _lastPartial: any = null
+
+export def lastTurnPartial(): any { return _lastPartial }
+export def clearTurnPartial() { _lastPartial = null }
+
+type ParsedBudget = {
+  // null means the user stated no limit for that dimension. Never invent a
+  // deadline: a hallucinated 30s would cut off a turn that never asked for
+  // one.
+  maxSeconds: number | null
+  maxDollars: number | null
+}
+
+// A cheap gate so the extraction LLM call only fires when the message
+// plausibly names a limit. Most turns have no deadline, and an extra
+// round-trip on every one of them is the very slowness this feature fights.
+def hasBudgetClue(msg: string): boolean {
+  const lower = msg.toLowerCase()
+  const clues = ["second", "minute", "hour", "quick", "fast", "$", "budget"]
+  for (clue in clues) {
+    if (lower.includes(clue)) {
+      return true
+    }
+  }
+  return false
+}
+
+export def parseTurnBudget(msg: string) {
+  """
+  Read any time/cost budget from the user's message and store it for this
+  turn. Resets the budget every turn: a deadline on one message does not
+  carry to the next.
+  """
+  if (!hasBudgetClue(msg)) {
+    _maxTimeMs = null
+    _maxCost = null
+    return
+  }
+  // Isolated thread so the extraction Q&A never pollutes the coordinator's
+  // conversation.
+  let parsed: ParsedBudget = { maxSeconds: null, maxDollars: null }
+  thread(label: "budgetParse", session: "budgetParse") {
+    const extracted: ParsedBudget = llm(
+      """
+      Extract any explicit time or cost budget the user stated for this
+      task. Fill a field ONLY if the user named a concrete limit (a number
+      of seconds/minutes/hours, or a dollar amount). Vague urgency like
+      "quickly" with no number is NOT a budget: return null for it.
+
+      Message: ${msg}
+      """,
+    )
+    parsed = extracted
+  }
+  if (parsed.maxSeconds == null) {
+    _maxTimeMs = null
+  } else {
+    _maxTimeMs = parsed.maxSeconds * 1000
+  }
+  _maxCost = parsed.maxDollars
+}
+
+type MoreBudget = {
+  grant: boolean
+  extraSeconds: number | null
+  extraDollars: number | null
+}
+
+def parseMoreBudget(reply: string): MoreBudget {
+  let parsed: MoreBudget = { grant: false, extraSeconds: null, extraDollars: null }
+  thread(label: "budgetParse", session: "budgetParse") {
+    const extracted: MoreBudget = llm(
+      """
+      The user was asked whether to grant an agent more time or money to
+      finish a task. Read their reply. Set grant to true only if they agreed
+      to give more. Fill extraSeconds / extraDollars with any amount they
+      named, else null.
+
+      Reply: ${reply}
+      """,
+    )
+    parsed = extracted
+  }
+  return parsed
+}
+
+export def turnBudgetHandler(intr: any): any {
+  """
+  Top-level handler for the per-turn budget guard. Answers only this turn's
+  trip (matched by label) and passes every other interrupt through: subagent
+  budget caps keep bubbling to their own owners, and tool-approval
+  interrupts keep reaching the policy handler.
+  """
+  if (intr.effect != "std::guard" || intr.data.label != TURN_BUDGET_LABEL) {
+    return pass()
+  }
+
+  // One-shot / piped runs: nobody is here to answer, so honor the budget as
+  // a hard stop rather than blocking on a prompt that never returns. Keep
+  // the best-so-far draft so runTurn can still show it.
+  if (!isInteractive()) {
+    _lastPartial = intr.data.draftValue
+    return reject()
+  }
+
+  const dimension = intr.data.dimension
+  const spent = intr.data.spent
+  const limit = intr.data.limit
+  let spentLabel = "$${spent.toFixed(2)}"
+  if (dimension == "time") {
+    spentLabel = formatDuration(spent)
+  }
+
+  const prompt = "\n⏳ I've used ${spentLabel} on this and I'm not done. Give me more ${dimension}? (e.g. '30 more seconds', or 'no')\n> "
+  const reply = input(color.yellow(prompt))
+  const decision = parseMoreBudget(reply)
+  if (!decision.grant) {
+    // Keep the best-so-far draft so runTurn shows it instead of just a
+    // "stopped" line. draftValue is the innermost saveDraft on the branch,
+    // so it survives the subagents' own guards.
+    _lastPartial = intr.data.draftValue
+    return reject()
+  }
+
+  // The runtime refuses a grant that leaves the budget still over its limit.
+  // By the time a trip is answered the work has already run past the limit
+  // (further on a loaded machine), so the grant must first cover that
+  // overshoot, then add what the user offered. Extend only the dimension
+  // that tripped.
+  const overshoot = spent - limit
+  if (dimension == "time") {
+    return approve({
+      maxTime: overshoot + (decision.extraSeconds ?? 0) * 1000,
+      message: "The user granted more time. Wrap up as soon as you reasonably can.",
+    })
+  }
+  return approve({
+    maxCost: overshoot + (decision.extraDollars ?? $0),
+    message: "The user granted more budget. Wrap up as soon as you reasonably can.",
+  })
+}

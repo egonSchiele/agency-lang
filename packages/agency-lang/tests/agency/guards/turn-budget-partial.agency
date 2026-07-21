@@ -1,0 +1,68 @@
+// The agency agent's turn budget: an outer guard wraps a subagent that has
+// its OWN guard. When the outer (turn) guard trips, the handler mirrors
+// turnBudgetHandler — it reads the trip's draftValue to recover the model's
+// best-so-far answer, then either rejects (show the partial) or approves
+// (grant more time and let the work finish). The fake clock drives the trip
+// deterministically: _advanceTime jumps past the 50ms turn budget.
+import test { _advanceTime } from "std::date"
+
+// Stands in for the inner llm call: saveDraft records the model's best-so-far
+// (as the saveDraft tool would), then the outer turn budget trips.
+def solve(): string {
+  saveDraft("PARTIAL-ANSWER")
+  _advanceTime(100)
+  return "FULL-ANSWER"
+}
+
+// Stands in for a subagent like codingAgent: its own guard wraps a thread
+// that calls solve, with a finalize to salvage on its own budget.
+def subagent(): Result<string> {
+  return guard(cost: $50, time: 10s, label: "inner") {
+    let reply = ""
+    thread(label: "sub", session: "sub") {
+      reply = solve()
+    }
+    return reply
+
+    finalize {
+      return reply
+    }
+  }
+}
+
+// Handler declines more time. The partial must still reach us: draftValue is
+// the innermost saveDraft on the whole branch, so it crosses the subagent's
+// own guard.
+node rejectTurn() {
+  let partial = "none"
+  handle {
+    const r = guard(time: 50ms, label: "agency-turn") {
+      return subagent()
+    }
+    return "failure:${isFailure(r)}|partial:${partial}"
+  } with (i) {
+    if (i.effect == "std::guard" && i.data.label == "agency-turn") {
+      partial = "${i.data.draftValue}"
+      return reject()
+    }
+    return pass()
+  }
+}
+
+// Handler grants more time. The work then finishes and returns the full answer.
+node approveTurn() {
+  handle {
+    const r = guard(time: 50ms, label: "agency-turn") {
+      return subagent()
+    }
+    if (r is success(v)) {
+      return "success:${v}"
+    }
+    return "failure"
+  } with (i) {
+    if (i.effect == "std::guard" && i.data.label == "agency-turn") {
+      return approve({ maxTime: 600000 })
+    }
+    return pass()
+  }
+}

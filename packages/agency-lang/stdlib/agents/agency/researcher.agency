@@ -59,7 +59,7 @@ def answer(
     llmOptions(
       model: model,
       provider: provider,
-      tools: buildTools().concat(extraTools),
+      tools: buildTools().concat(extraTools).concat([saveDraft]),
     ),
   )
 }
@@ -99,5 +99,11 @@ export def agencyResearcherAgent(
       )
     }
     return reply
+
+    // Salvage the model's best-so-far saveDraft if an outer budget guard
+    // trips mid-answer; the assignment above would otherwise drop it.
+    finalize {
+      return reply
+    }
   }
 }

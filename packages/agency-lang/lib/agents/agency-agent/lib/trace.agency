@@ -10,8 +10,13 @@ import { map } from "std::array"
 import { env } from "std::system"
 import { pushMessage } from "std::ui/cli"
 
-import { formatArgs, formatToolResponse, retryReasonLabel } from "./utils.agency"
+import {
+  formatArgs,
+  formatToolResponse,
+  retryReasonLabel,
+ } from "./utils.agency"
 import { renderLLMCallResponse } from "./utils/renderLLMCallResponse.agency"
+
 
 let AGENT_DEBUG: boolean = env("AGENT_DEBUG") == "1"
 let VERBOSE: boolean = false
@@ -28,14 +33,22 @@ def _showTraces(): boolean {
   return _isInteractive || VERBOSE || AGENT_DEBUG
 }
 
-
+static const SKIP_TRACING = ["whatIAmDoing"]
 callback("onToolCallStart") as data {
+  if (SKIP_TRACING.includes(data.toolName)) {
+    return
+  }
+
   if (_showTraces()) {
     pushMessage(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
   }
 }
 
 callback("onToolCallEnd") as data {
+  if (SKIP_TRACING.includes(data.toolName)) {
+    return
+  }
+
   if (_showTraces()) {
     if (data.result is success(_result)) {
       pushMessage(color.dim.green("${formatToolResponse(_result)}"))
@@ -126,4 +139,12 @@ export def setInteractive(on: boolean) {
   @param on - Whether the run is interactive
   """
   _isInteractive = on
+}
+
+export def isInteractive(): boolean {
+  """
+  Whether a user is at a terminal to answer prompts. False in one-shot and
+  piped runs, where there is nobody to respond to an interrupt.
+  """
+  return _isInteractive
 }

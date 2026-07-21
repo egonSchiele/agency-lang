@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  userMessage,
-  assistantMessage,
-  systemMessage,
-  toolMessage,
-} from "smoltalk";
+import { userMessage, assistantMessage, toolMessage } from "smoltalk";
 import {
   buildCompactionPrompt,
   buildMergeSummaryPrompt,
@@ -71,15 +66,15 @@ describe("findCompactionSplitPoint", () => {
       userMessage("1"),
       assistantMessage("2"),
       userMessage("3"),
-      assistantMessage("4"),
+      userMessage("4"),
       userMessage("5"),
       assistantMessage("6"),
     ];
-    // midpoint = 3, messages[3] is "assistant", walk forward to messages[4] (user)
-    expect(findCompactionSplitPoint(messages)).toBe(4);
+    // midpoint = 3, messages[3] is a user message — split right there
+    expect(findCompactionSplitPoint(messages)).toBe(3);
   });
 
-  it("walks forward past assistant tool_call/tool sequence", () => {
+  it("accepts an assistant message as the boundary", () => {
     const messages = [
       userMessage("1"),
       assistantMessage("2"),
@@ -89,31 +84,46 @@ describe("findCompactionSplitPoint", () => {
       assistantMessage("6"),
       userMessage("7"),
     ];
-    // midpoint = 3 (assistant). walk to 6 (user)
-    expect(findCompactionSplitPoint(messages)).toBe(6);
+    // midpoint = 3 (assistant) — an assistant boundary is clean: its
+    // tool reply at 4 stays on the same (kept) side
+    expect(findCompactionSplitPoint(messages)).toBe(3);
   });
 
-  it("returns -1 when no user boundary exists after midpoint", () => {
+  it("finds a split in a tool loop with no user messages past the midpoint", () => {
+    // The agentic shape: one user request, then assistant/tool pairs.
+    const messages = [
+      userMessage("do the task"),
+      assistantMessage("calling tool", { toolCalls: [] }),
+      tm("result 1"),
+      assistantMessage("calling tool again", { toolCalls: [] }),
+      tm("result 2"),
+      assistantMessage("done"),
+    ];
+    // midpoint = 3 (assistant) — must not return -1
+    expect(findCompactionSplitPoint(messages)).toBe(3);
+  });
+
+  it("never returns the index of a tool reply", () => {
     const messages = [
       userMessage("1"),
       assistantMessage("2"),
-      assistantMessage("3"),
+      tm("3"),
+      tm("4"),
+      tm("5"),
+      assistantMessage("6"),
+    ];
+    // midpoint = 3 (tool) — walk past the tool replies to 5 (assistant)
+    expect(findCompactionSplitPoint(messages)).toBe(5);
+  });
+
+  it("returns -1 when only tool replies exist after midpoint", () => {
+    const messages = [
+      userMessage("1"),
+      assistantMessage("2"),
+      tm("3"),
       tm("4"),
     ];
-    // midpoint = 2, walk forward — no user message exists after midpoint
+    // midpoint = 2, everything after is tool replies — no clean boundary
     expect(findCompactionSplitPoint(messages)).toBe(-1);
-  });
-
-  it("skips system messages at the head when computing midpoint", () => {
-    const messages = [
-      systemMessage("system1"),
-      systemMessage("system2"),
-      userMessage("1"),
-      assistantMessage("2"),
-      userMessage("3"),
-      assistantMessage("4"),
-    ];
-    // 6 messages total, midpoint = 3 (assistant), walk to 4 (user)
-    expect(findCompactionSplitPoint(messages)).toBe(4);
   });
 });

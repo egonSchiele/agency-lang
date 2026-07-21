@@ -21,9 +21,11 @@ UPSTREAM="https://github.com/TheMikeMerrill/personal-site.git"
 if [ ! -f "$BUNDLE" ]; then
   echo "No bundle found; cloning $UPSTREAM once to cache it..."
   TMP="$(mktemp -d)"
+  trap 'rm -rf "$TMP"' EXIT   # clean up even if clone/bundle fails
   git clone --quiet "$UPSTREAM" "$TMP/ps"
   git -C "$TMP/ps" bundle create "$BUNDLE" --all
   rm -rf "$TMP"
+  trap - EXIT
 fi
 
 rm -rf "$HERE/fixture"

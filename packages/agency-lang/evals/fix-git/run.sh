@@ -16,7 +16,7 @@ INSTRUCTION="I just made some changes to my personal site and checked out master
 
 [ -d "$HERE/fixture/personal-site" ] || "$HERE/build-fixture.sh"
 
-RUN="$HERE/runs/$(date +%Y%m%d-%H%M%S)"
+RUN="$HERE/runs/$(date +%Y%m%d-%H%M%S)-$$"   # pid suffix avoids same-second collisions
 mkdir -p "$RUN"
 cp -R "$HERE/fixture/personal-site" "$RUN/workdir"   # $RUN/workdir IS the repo
 STATELOG="$RUN/statelog.jsonl"

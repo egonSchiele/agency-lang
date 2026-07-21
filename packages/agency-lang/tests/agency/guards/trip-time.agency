@@ -1,10 +1,20 @@
-// Time trips raised resumably (resumable-guards PR 3). Wall-clock
-// fixtures are allowed here per the plan's test discipline — this
-// behavior is irreducibly about time — but every margin is huge: limits
-// are tens of milliseconds against delays of tens of SECONDS, and the
-// step-boundary detection reads elapsed working time directly
-// (overBudgetAndArmed), not the timer, so timer starvation in tight
-// await loops cannot flake it.
+import test { _advanceTime } from "std::date"
+
+// Time trips raised resumably (resumable-guards PR 3).
+//
+// The step-boundary nodes (1, 2, 5, 6) run under the FAKE CLOCK
+// ("fakeClock": true in the test.json): _advanceTime jumps past the
+// budget, the gate at the next runner step raises the trip, and the
+// spin shrinks from 300k awaited steps to 50 — the trip no longer
+// depends on how fast the runner chews steps. The wall-clock originals
+// flaked twice on slow CI runners despite tens-of-seconds margins.
+//
+// The in-flight nodes (3, 4) STAY wall-clock on purpose: the mock's
+// delayMs "generation" is a real timer honoring the abort signal
+// (deterministicClient.ts abortableDelay), exactly like a real
+// provider, and nothing can advance a fake clock while the fixture is
+// blocked awaiting the request. Their only timing requirement is
+// limit << delayMs (100ms vs 60s), which no runner blows.
 
 const log = []
 
@@ -17,16 +27,17 @@ def spin(rounds: number): string {
 }
 
 // 1. A time trip DETECTED AT A STEP BOUNDARY mid-computation: the
-// handler grants more time and the loop simply continues to completion.
+// handler grants more time and the work simply continues to completion.
 node stepBoundaryApproved() {
   handle {
     const r = guard(time: 5ms) {
-      const s = spin(300000)
+      _advanceTime(20)
+      const s = spin(50)
       return "done:${s}"
     }
     if (isFailure(r)) { return "unexpected-failure" }
     // The log entry proves a trip actually fired and was granted —
-    // without it, a loop that finishes under budget would pass this
+    // without it, a block that finishes under budget would pass this
     // test without exercising anything.
     return "${r.value}|${log[0]}"
   } with (i) {
@@ -39,17 +50,16 @@ node stepBoundaryApproved() {
 }
 
 // 2. Same detection, rejected: the salvage pipeline runs and the guard
-// returns the saved draft. The budget is 100ms, not 5ms: the trip must
-// not fire before the saveDraft step runs, and on a slow CI runner the
-// walk from pushGuard to the block's first step can eat more than 5ms
-// (the probe raises at step ENTRY, so a too-early trip rejects with no
-// draft filed — observed on CI as "no-salvage"). Approve-path nodes
-// keep 5ms; for them an early trip is answered and the work continues.
+// returns the saved draft. The advance comes AFTER saveDraft, so the
+// draft is always filed before the trip — the early-trip race the
+// wall-clock version had to leave 100ms of margin for is now
+// structural ordering.
 node stepBoundaryRejected() {
   handle {
     const r = guard(time: 100ms) {
       saveDraft("partial-spin")
-      const s = spin(300000)
+      _advanceTime(200)
+      const s = spin(50)
       return "done:${s}"
     }
     if (isFailure(r)) { return "no-salvage" }
@@ -65,7 +75,7 @@ node stepBoundaryRejected() {
 // 3. A time trip cancelling an IN-FLIGHT request (the mock "generates"
 // for 60 seconds; the 100ms budget cancels it): the handler grants more
 // time and the request is RE-ISSUED from the same thread state — the
-// second mock answers it.
+// second mock answers it. Wall-clock by design; see the header.
 node midRequestApproved() {
   handle {
     const r = guard(time: 100ms) {
@@ -82,7 +92,7 @@ node midRequestApproved() {
   }
 }
 
-// 4. In-flight cancellation, rejected: salvage.
+// 4. In-flight cancellation, rejected: salvage. Wall-clock by design.
 node midRequestRejected() {
   handle {
     const r = guard(time: 100ms) {
@@ -107,7 +117,8 @@ node midRequestRejected() {
 // completes.
 node checkpointApproved() {
   const r = guard(time: 5ms) {
-    const s = spin(300000)
+    _advanceTime(20)
+    const s = spin(50)
     return "done:${s}"
   }
   if (isFailure(r)) { return "unexpected-failure" }
@@ -116,15 +127,16 @@ node checkpointApproved() {
 
 def slowTool(): string {
   """Does slow work and reports when done."""
-  return spin(300000)
+  _advanceTime(20)
+  return spin(50)
 }
 
 // 6. Taxonomy case (b): the trip fires while a TOOL is executing. The
-// raise happens at the tool code's own step boundary; on approve the
-// tool CONTINUES where it paused, finishes, and its result reaches the
-// thread normally — the second mock consumes that result and answers.
-// There is never a dangling tool_use, because the tool call completes
-// on resume.
+// advance happens inside the tool body, so the raise happens at the
+// tool code's own step boundary; on approve the tool CONTINUES where it
+// paused, finishes, and its result reaches the thread normally — the
+// second mock consumes that result and answers. There is never a
+// dangling tool_use, because the tool call completes on resume.
 node toolBodyApproved() {
   handle {
     const r = guard(time: 5ms) {

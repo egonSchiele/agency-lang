@@ -438,6 +438,22 @@ export default defineConfig({
           ],
         },
       ],
+      "/diagnostics/": [
+        {
+          text: "Diagnostics",
+          items: [
+            { text: "Overview", link: "/diagnostics/" },
+            { text: "Checking", link: "/diagnostics/checking" },
+            { text: "Effects", link: "/diagnostics/effects" },
+            { text: "Match", link: "/diagnostics/match" },
+            { text: "Names", link: "/diagnostics/names" },
+            { text: "Static Init", link: "/diagnostics/static-init" },
+            { text: "Tools", link: "/diagnostics/tools" },
+            { text: "Types and Aliases", link: "/diagnostics/types-aliases" },
+
+          ],
+        },
+      ],
     },
     socialLinks: [
       { icon: "github", link: "https://github.com/egonSchiele/agency-lang" },

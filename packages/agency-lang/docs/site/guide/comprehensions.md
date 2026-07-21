@@ -5,15 +5,11 @@ description: Build a new list from an existing one in a single expression, eithe
 
 # List comprehensions
 
-A list comprehension builds a new array from an existing collection, in one
-expression:
+Agency supports Python-style list comprehensions:
 
 ```ts
 const doubled = [x * 2 for x in numbers]
 ```
-
-That is the same as writing a loop that appends to an array, but shorter and
-without a mutable variable to get wrong.
 
 ## Filtering
 
@@ -25,86 +21,68 @@ const bigNames = [name for name in names if name.length > 5]
 
 ## Running the items concurrently
 
-Put `fork` in front and every item runs at the same time:
+Prefix with `fork` to run each item concurrently:
 
 ```ts
 const summaries = fork [llm("Summarize: ${doc}") for doc in docs]
 ```
 
-Use this when the body is slow, which for an agent usually means it makes an
-LLM call. Ten documents take about as long as one, instead of ten times as
-long. Results come back in the order of the original list, no matter which
-item finishes first.
+Note that each branch will get isolated state for global variables. See the [state isolation](/guide/state-isolation#isolation-across-concurrent-branches) section for more details.
 
-The two forms differ in one important way beyond speed. `fork` gives each item
-its own copy of your global variables, and throws those copies away when the
-work joins back up. So a body that changes a global will not have that change
-survive:
+Example:
 
 ```ts
+// global variable
 let count = 0
 
-// count is still 0 afterwards - each branch changed its own copy
-const results = fork [tally(x) for x in xs]
+node main() {
+  const xs = range(10)
+  // count is still 0 afterwards - each branch changed its own copy
+  const results = fork [count += x for x in xs]
+}
 ```
 
-If you need the changes to stick, use `forkShared`:
+Each branch got its own copy of `count`. The state wasn't shared, and was thrown away when the branch finished.
+
+### Shared state
+If you want shared state, use `forkShared`:
 
 ```ts
-let total = 0
+// global variable
+let count = 0
 
-def tally(x: number): number {
-  total = total + x
-  return x
+node main() {
+  const xs = range(10)
+  // count is now 45
+  const results = forkShared [count += x for x in xs]
 }
-
-// every branch adds into the SAME total - it really accumulates
-const seen = forkShared [tally(x) for x in xs]
 ```
 
-Two things to know about `forkShared`. First, sharing only matters when the body
-*changes* something: a body that only reads a global behaves the same either way,
-so `forkShared [total + x for x in xs]` gains nothing over `fork`. Second, the
-branches run at the same time, so the order of their writes is unpredictable.
-Adding to a total works because addition lands the same in any order; building an
-ordered string or overwriting one field does not. See
-[concurrency](/guide/concurrency) for the full story on shared state.
+See the [concurrency](/guide/concurrency) and [state isolation](/guide/state-isolation#isolation-across-concurrent-branches) docs for more on shared state.
 
-The `if` clause runs before the work fans out, so the filter itself is not
-concurrent. Only the body is.
+The `if` clause runs before the work fans out, so the filter itself is not concurrent.
 
-## Taking the first result
+## `race` and `raceShared`
 
-Put `race` in front and you get the first item to finish - one value, **not a
-list**:
+Put `race` in front to get the first result back, and cancel the rest:
 
 ```ts
 // whichever summary comes back first wins; the other branches are cancelled
 const fastest = race [summarize(doc) for doc in docs]
 ```
 
-Two edges to know. If nothing runs at all - the source is empty, or the `if`
-clause filters everything out - the result is `null`. And "first to finish"
-includes finishing badly: if the quickest branch fails, that failure is what you
-get back, so check with `isFailure` when the body can fail.
-
-`raceShared` combines racing with shared globals. One caveat comes with it: a
-losing branch that already changed a global before it was cancelled leaves that
-change behind. There is no undo - that is what sharing means.
+Note that this returns a *single result*, not a list. `race` also gets isolated state. To share state, use `raceShared`.
 
 ## Binders
 
-The part after `for` works exactly like the one in a
-[`for` loop](/guide/basic-syntax#loops).
-
-A second binder gives you the index when you are iterating an array:
+List comprehension with an index variable:
 
 ```ts
 const labeled = ["${i}: ${name}" for name, i in names]
 // ["0: Alice", "1: Bob"]
 ```
 
-For an object, the second binder is the value at that key instead:
+For an object, the list comprehension iterates over the key-value pairs:
 
 ```ts
 const config = { host: "localhost", port: "8080" }
@@ -112,8 +90,7 @@ const lines = ["${k}=${v}" for k, v in config]
 // ["host=localhost", "port=8080"]
 ```
 
-The indices are positions in the collection you started with, not in the
-result. So filtering does not renumber them:
+Filtering does not renumber indices:
 
 ```ts
 const xs = ["a", "b", "c", "d"]
@@ -121,46 +98,14 @@ const kept = ["${i}:${x}" for x, i in xs if x != "b"]
 // ["0:a", "2:c", "3:d"] - note the missing 1
 ```
 
-You can also pull apart each item as you go:
+You can also destructure each item as you go:
 
 ```ts
 const greetings = ["Hi ${name}" for {name, age} in people]
 const firsts = [a for [a, b] in pairs]
 ```
 
-## Things to know
-
-A long comprehension can be broken across lines:
-
-```ts
-const summaries = fork [summarize(doc)
-  for doc in docs
-  if doc.length > 0]
-```
-
-If it is getting long, though, that is usually a sign the body wants to be a
-named function.
-
-Anything that is not a list or an object gives you an empty result rather than
-an error, which matches how `for` loops behave. That includes strings, so
-`[c for c in "abc"]` gives you `[]`, not a list of characters.
-
-## When to use a block instead
-
-The body of a comprehension is a single expression. When you need several
-statements, use the block form, which does the same job:
-
-```ts
-const reports = map(topics) as topic {
-  const notes = research(topic)
-  return summarize(notes)
-}
-```
-
-`fork(topics) as topic { ... }` is the concurrent equivalent.
-
 ## References
 
-- [Concurrency](/guide/concurrency) - `fork`, `race`, and shared state
-- [Blocks](/guide/blocks) - the multi-statement form
-- [std::index](/stdlib/) - `map`, `filter`, `reduce`, and friends
+- [Concurrency](/guide/concurrency)
+- [Blocks](/guide/blocks)

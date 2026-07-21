@@ -141,6 +141,22 @@ type Pair<A = string, B> = { first: A, second: B }
 
 Schemas come later in the guide, but [click here](/guide/schemas) if you want to learn more.
 
+## Diagnostics
+
+Each typecheck error has a unique code like `AG3010`. See [the list of codes](/diagnostics/index) for details.
+
+You can also look up information about a code using `explain`:
+
+```bash
+agency explain AG3010
+```
+
+Or run with no code to see the full list of codes:
+
+```bash
+agency explain
+```
+
 ## Suppressing typecheck errors
 
 **`// @tc-nocheck`** — Put it at the top of a file. Silences every typecheck error in the file.
@@ -167,11 +183,11 @@ node main() {
 }
 ```
 
-**`// @tc-ignore AG6019`** — Silences only the named `AG####` codes on the next line (comma- or space-separated; trailing prose is ignored). A malformed code like `AG601` suppresses *nothing*, so a typo never widens to suppress-everything.
+**`// @tc-ignore AG6019, AG3010`** — Silences only the named `AG####` codes on the next line.
 
 ```ts
 node main() {
-  // @tc-ignore AG6019
+  // @tc-ignore AG6019, AG3010
   double("not a number")   // only the argument-type error is suppressed
 }
 ```

@@ -262,7 +262,12 @@ export function resolveTypeDeep(
   t: VariableType,
   typeAliases: Record<string, TypeAliasEntry>,
 ): VariableType {
-  let current = t;
+  // Pure pre-pass, before ANY resolution: stamp Record nodes with their
+  // written args. mapTypes maps children before parents, so by the time the
+  // resolving passes below reach a Record node its typeArgs are already
+  // resolved — the alias identity the validation-descriptor builder needs
+  // (#630) would be gone. Stamping first captures the genuinely-written args.
+  let current = mapTypes(t, stampRecordWrittenArgs);
   // Iterate until a pass produces no change. Generic-alias depth is bounded
   // in practice; MAX_GENERIC_RESOLUTION_PASSES exists only to prevent
   // runaway loops on a bug.
@@ -272,6 +277,15 @@ export function resolveTypeDeep(
     current = next;
   }
   return current;
+}
+
+/** See the pre-pass in resolveTypeDeep. No-op once stamped, so the
+ *  fixpoint iteration stays stable. */
+function stampRecordWrittenArgs(n: VariableType): VariableType {
+  if (n.type === "genericType" && n.name === "Record" && !n.writtenTypeArgs) {
+    return { ...n, writtenTypeArgs: n.typeArgs };
+  }
+  return n;
 }
 
 /**

@@ -1,0 +1,28 @@
+// Module A: the validator calls a NON-exported helper. If the consumer ever
+// inlines the validator instead of routing through this module's
+// __agency_descriptor, minimumAge does not exist in the consumer scope and
+// validation crashes — that is the #630 regression this directory guards.
+
+def minimumAge(): number {
+  return 18
+}
+
+export def isAdult(v: number): Result<number> {
+  if (v < minimumAge()) {
+    return failure("too young")
+  }
+  return success(v)
+}
+
+export def clampToOne(v: number): Result<number> {
+  if (v < 0) {
+    return success(1)
+  }
+  return success(v)
+}
+
+@validate(isAdult)
+export type Age = number
+
+@validate(clampToOne)
+export type Repaired = number

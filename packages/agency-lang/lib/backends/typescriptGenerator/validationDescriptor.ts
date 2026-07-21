@@ -425,28 +425,15 @@ function descriptor(
   }
 
   if (variableType.type === "unionType") {
-    const branches = variableType.types.map((m) => {
-      const branchSchema = schemaNode(m, typeAliases, typeAliasesFull, pendingAliases);
-      const branchDesc = descriptor(m, typeAliases, typeAliasesFull, seen, pendingAliases);
-      // `(v) => (<branchSchema>).safeParse(v).success`
-      const test = ts.arrowFn(
-        [{ name: "v" }],
-        ts.prop(
-          ts.methodCall(branchSchema, "safeParse", [ts.id("v")]),
-          "success",
-        ),
-      );
-      return ts.obj([
-        ts.set("test", test),
-        ts.set("descriptor", branchDesc),
-      ]);
-    });
-    return objEntries([
-      ["kind", ts.str("union")],
-      ["schema", schema],
-      ["validators", validatorsArr],
-      ["branches", ts.arr(branches)],
-    ]);
+    return unionDescriptor(
+      variableType,
+      schema,
+      validatorsArr,
+      typeAliases,
+      typeAliasesFull,
+      seen,
+      pendingAliases,
+    );
   }
 
   if (variableType.type === "resultType") {
@@ -464,31 +451,90 @@ function descriptor(
     ]);
   }
 
-  // Record<K, V>: walk entry VALUES against V's descriptor (#630). Built
-  // from the WRITTEN value arg when available so an alias arg keeps its
-  // identity and hits the typeAliasVariable ref branch above — validators
-  // then execute against the descriptor built in the alias-defining module,
-  // never inlined into the consumer's scope. Keys stay schema-checked only
-  // (a transforming key validator would mean rewriting keys — out of scope).
   if (variableType.type === "genericType" && variableType.name === "Record") {
-    const valueArg = variableType.writtenTypeArgs?.[1] ?? variableType.typeArgs[1];
-    const valueDesc = descriptor(
-      valueArg,
+    return recordDescriptor(
+      variableType,
+      schema,
+      validatorsArr,
       typeAliases,
       typeAliasesFull,
-      seen, pendingAliases);
-    return objEntries([
-      ["kind", ts.str("record")],
-      ["schema", schema],
-      ["validators", validatorsArr],
-      ["value", valueDesc],
-    ]);
+      seen,
+      pendingAliases,
+    );
   }
 
   return objEntries([
     ["kind", ts.str("leaf")],
     ["schema", schema],
     ["validators", validatorsArr],
+  ]);
+}
+
+/** Union: each branch carries a schema-based membership test plus its own
+ *  descriptor; the walker runs the first branch whose test accepts. */
+function unionDescriptor(
+  variableType: Extract<VariableType, { type: "unionType" }>,
+  schema: TsNode,
+  validatorsArr: TsNode,
+  typeAliases: Record<string, VariableType>,
+  typeAliasesFull: Record<string, TypeAliasEntry>,
+  seen: Set<string>,
+  pendingAliases?: Set<string>,
+): TsNode {
+  const branches = variableType.types.map((m) => {
+    const branchSchema = schemaNode(m, typeAliases, typeAliasesFull, pendingAliases);
+    const branchDesc = descriptor(m, typeAliases, typeAliasesFull, seen, pendingAliases);
+    // `(v) => (<branchSchema>).safeParse(v).success`
+    const test = ts.arrowFn(
+      [{ name: "v" }],
+      ts.prop(
+        ts.methodCall(branchSchema, "safeParse", [ts.id("v")]),
+        "success",
+      ),
+    );
+    return ts.obj([
+      ts.set("test", test),
+      ts.set("descriptor", branchDesc),
+    ]);
+  });
+  return objEntries([
+    ["kind", ts.str("union")],
+    ["schema", schema],
+    ["validators", validatorsArr],
+    ["branches", ts.arr(branches)],
+  ]);
+}
+
+/**
+ * Record<K, V>: walk entry VALUES against V's descriptor (#630). Built from
+ * the WRITTEN value arg when available so an alias arg keeps its identity
+ * and hits the typeAliasVariable ref branch in `descriptor` — validators
+ * then execute against the descriptor built in the alias-defining module,
+ * never inlined into the consumer's scope. Keys stay schema-checked only
+ * (a transforming key validator would mean rewriting keys — out of scope).
+ */
+function recordDescriptor(
+  variableType: Extract<VariableType, { type: "genericType" }>,
+  schema: TsNode,
+  validatorsArr: TsNode,
+  typeAliases: Record<string, VariableType>,
+  typeAliasesFull: Record<string, TypeAliasEntry>,
+  seen: Set<string>,
+  pendingAliases?: Set<string>,
+): TsNode {
+  const valueArg = variableType.writtenTypeArgs?.[1] ?? variableType.typeArgs[1];
+  const valueDesc = descriptor(
+    valueArg,
+    typeAliases,
+    typeAliasesFull,
+    seen,
+    pendingAliases,
+  );
+  return objEntries([
+    ["kind", ts.str("record")],
+    ["schema", schema],
+    ["validators", validatorsArr],
+    ["value", valueDesc],
   ]);
 }
 

@@ -94,6 +94,19 @@ export type TypeValidationDescriptor =
       element: TypeValidationDescriptor;
     }
   | {
+      /**
+       * A Record<K, V>: every entry value walks the same `value` descriptor
+       * (#630 — this is how alias-carried validators on the value type run).
+       * KEYS are schema-checked only: running validators on keys would mean
+       * rewriting keys when a validator transforms, which needs its own
+       * design. Documented in the guide.
+       */
+      kind: "record";
+      schema: z.ZodType;
+      validators: AgencyValidator[];
+      value: TypeValidationDescriptor;
+    }
+  | {
       kind: "union";
       schema: z.ZodType;
       validators: AgencyValidator[];
@@ -224,6 +237,24 @@ async function walk(
         const r = await walk(
           (parsed as Record<string, unknown>)[key],
           childDesc,
+          depth + 1,
+          maxDepth,
+        );
+        if (!isSuccess(r)) return r;
+        out[key] = (r as { value: unknown }).value;
+      }
+      return success(out);
+    }
+
+    case "record": {
+      if (parsed === null || typeof parsed !== "object") {
+        return success(parsed);
+      }
+      const out: Record<string, unknown> = {};
+      for (const key of Object.keys(parsed as Record<string, unknown>)) {
+        const r = await walk(
+          (parsed as Record<string, unknown>)[key],
+          descriptor.value,
           depth + 1,
           maxDepth,
         );

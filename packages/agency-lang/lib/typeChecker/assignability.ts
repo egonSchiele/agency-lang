@@ -145,7 +145,12 @@ function resolveTypeWithGuard(
     if (isBuiltinGenericName(vt.name)) {
       return evalBuiltinGeneric(
         vt.name,
-        vt.typeArgs,
+        // Prefer the written args when this node has been resolved before
+        // (Record keeps its wrapper, so it can meet the resolver twice).
+        // apply() resolves its args itself, so this is idempotent — and it
+        // keeps writtenTypeArgs genuinely written across passes, which the
+        // validation-descriptor builder relies on for alias identity (#630).
+        vt.writtenTypeArgs ?? vt.typeArgs,
         (t) => resolveTypeWithGuard(t, typeAliases, inProgress),
         vt.tags,
       );

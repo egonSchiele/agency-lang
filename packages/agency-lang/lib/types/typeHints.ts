@@ -57,6 +57,17 @@ export type GenericType = {
   name: string;
   typeArgs: VariableType[];
   /**
+   * The type args exactly as WRITTEN, before alias resolution. Set by the
+   * Record builtin (builtinGenerics.ts) so the validation-descriptor
+   * builder can keep alias identity: a written alias arg routes through
+   * the deferred `__agency_descriptor` ref, so its validators execute in
+   * the defining module where their free identifiers exist — never
+   * inlined into the consuming module (#630). Excluded from typeKey:
+   * resolved args are a function of written args, so type identity is
+   * unaffected.
+   */
+  writtenTypeArgs?: VariableType[];
+  /**
    * Value arguments at the use site of a value-parameterized alias.
    * Example: `BoundedList<string>(3)` — typeArgs is `[string]`, valueArgs is `[3]`.
    * Restricted to the same expression subset accepted by tag arguments.

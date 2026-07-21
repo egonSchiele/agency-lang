@@ -464,6 +464,27 @@ function descriptor(
     ]);
   }
 
+  // Record<K, V>: walk entry VALUES against V's descriptor (#630). Built
+  // from the WRITTEN value arg when available so an alias arg keeps its
+  // identity and hits the typeAliasVariable ref branch above — validators
+  // then execute against the descriptor built in the alias-defining module,
+  // never inlined into the consumer's scope. Keys stay schema-checked only
+  // (a transforming key validator would mean rewriting keys — out of scope).
+  if (variableType.type === "genericType" && variableType.name === "Record") {
+    const valueArg = variableType.writtenTypeArgs?.[1] ?? variableType.typeArgs[1];
+    const valueDesc = descriptor(
+      valueArg,
+      typeAliases,
+      typeAliasesFull,
+      seen, pendingAliases);
+    return objEntries([
+      ["kind", ts.str("record")],
+      ["schema", schema],
+      ["validators", validatorsArr],
+      ["value", valueDesc],
+    ]);
+  }
+
   return objEntries([
     ["kind", ts.str("leaf")],
     ["schema", schema],

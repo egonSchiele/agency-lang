@@ -139,9 +139,10 @@ function resolveTypeWithGuard(
     // types) live in the builtinGenerics.ts registry and evaluate eagerly.
     // The resolver callback carries this call's in-progress guard, so
     // recursive alias arguments degrade gracefully (self-refs stay
-    // nominal). Tag handling is per-entry: utility types merge the
-    // occurrence's tags as the use-site layer; Array/Schema/Record keep
-    // their historical behavior.
+    // nominal). Tag handling is per-entry: utility types and Array merge
+    // the occurrence's tags as the use-site layer; Record keeps them
+    // verbatim on its wrapper; Schema drops them (a schema value is not
+    // validated data). See the registry comment in builtinGenerics.ts.
     if (isBuiltinGenericName(vt.name)) {
       return evalBuiltinGeneric(
         vt.name,

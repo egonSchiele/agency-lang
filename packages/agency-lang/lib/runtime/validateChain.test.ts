@@ -314,3 +314,24 @@ describe("record descriptor kind (#630)", () => {
     expect(isFailure(await __validateChainRecursive({ a: -1 }, viaRef))).toBe(true);
   });
 });
+
+describe("record walker prototype safety", () => {
+  it("stores a user-supplied __proto__ key as an own entry, never the prototype", async () => {
+    // Zod's z.record drops own __proto__ keys, so reach the walker with a
+    // permissive schema (as a ref-carried descriptor could) to prove the
+    // walker is safe on its own.
+    const permissiveRecord: TypeValidationDescriptor = {
+      kind: "record",
+      schema: z.any(),
+      validators: [],
+      value: { kind: "leaf", schema: z.number(), validators: [] },
+    };
+    const hostile = JSON.parse('{"__proto__": 7, "a": 1}');
+    const r = await __validateChainRecursive(hostile, permissiveRecord);
+    expect(isSuccess(r)).toBe(true);
+    const out = (r as { value: Record<string, unknown> }).value;
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyNames(out).sort()).toEqual(["__proto__", "a"]);
+    expect(Object.getOwnPropertyDescriptor(out, "__proto__")?.value).toBe(7);
+  });
+});

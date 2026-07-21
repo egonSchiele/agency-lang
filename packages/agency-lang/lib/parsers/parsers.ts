@@ -162,6 +162,7 @@ import {
   ObjectPatternShorthand,
   RestPattern,
   ResultPattern,
+  TypePattern,
   WildcardPattern,
 } from "../types/pattern.js";
 
@@ -2852,7 +2853,7 @@ const atomWithIs: Parser<Expression> = (input: string) => {
     str("is"),
     not(varNameChar),
     optionalSpaces,
-    capture(lazy(() => matchPatternParser), "pattern"),
+    capture(lazy(() => isRhsParser), "pattern"),
   )(baseResult.rest);
   if (!isCheck.success) return baseResult;
   return success(
@@ -5433,6 +5434,46 @@ export const resultPatternParser: Parser<ResultPattern> = withLoc(
     );
   },
 );
+
+// A type in pattern position: `is string`, `is Person`, `is number[]`, and
+// the match-arm suffix `pattern: Type`. Parses one non-union,
+// non-intersection type — bare inline unions and intersections are
+// deliberately not spellable in pattern position (use a named alias). This
+// must be intersectionItemParser, not unionItemParser: the intersection
+// separator `&` would otherwise half-consume the expression operator `&&`
+// in `x is string && y` and strand the parse mid-token.
+export const typePatternParser: Parser<TypePattern> = withLoc(
+  map(intersectionItemParser, (typeHint) => ({
+    type: "typePattern" as const,
+    pattern: null,
+    typeHint,
+  })),
+) as Parser<TypePattern>;
+
+// The right-hand side of the `is` operator. Same alternatives as
+// _matchPatternParser EXCEPT the bare-identifier binder, which is retired
+// after `is`: a top-level bare identifier there is always a type reference
+// (see the type-patterns spec, "How is Type coexists with binder patterns").
+// Literals and result patterns run first so `is null` / `is true` /
+// `is success` keep their existing meanings; typePatternParser is last and
+// catches type names (`string`, `Person`, `number[]`).
+const _isRhsParser = (input: string): ParserResult<MatchPattern> => {
+  const parser = or(
+    lazy(() => arrayMatchPatternParser),
+    lazy(() => objectMatchPatternParser),
+    restPatternParser,
+    wildcardPatternParser,
+    nullParser,
+    booleanParser,
+    unitLiteralParser,
+    resultPatternParser,
+    numberParser,
+    _stringParser,
+    typePatternParser,
+  );
+  return parser(input) as ParserResult<MatchPattern>;
+};
+export const isRhsParser: Parser<MatchPattern> = _isRhsParser;
 
 const _matchPatternParser = (input: string): ParserResult<MatchPattern> => {
   // NOTE: cannot reuse simpleLiteralParser directly because it tries

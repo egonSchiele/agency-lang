@@ -841,3 +841,86 @@ describe("result pattern", () => {
     });
   });
 });
+
+describe("type patterns after `is`", () => {
+  it("parses `x is string` as a typePattern, not a binder", () => {
+    const result = exprParser("x is string");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "isExpression",
+      pattern: {
+        type: "typePattern",
+        pattern: null,
+        typeHint: { type: "primitiveType", value: "string" },
+      },
+    });
+  });
+
+  it("parses `x is Person` as a typePattern with an alias type", () => {
+    const result = exprParser("x is Person");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).pattern.type).toBe("typePattern");
+    expect((result.result as any).pattern.pattern).toBeNull();
+  });
+
+  it("parses `x is any[]` as a coarse array typePattern", () => {
+    const result = exprParser("x is any[]");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const pattern = (result.result as any).pattern;
+    expect(pattern.type).toBe("typePattern");
+    expect(pattern.typeHint.type).toBe("arrayType");
+  });
+
+  it("parses `x is number[]` as a typed-array typePattern", () => {
+    const result = exprParser("x is number[]");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).pattern.typeHint.type).toBe("arrayType");
+  });
+
+  it("keeps structural patterns after is unchanged", () => {
+    const result = exprParser("x is { name }");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).pattern.type).toBe("objectPattern");
+  });
+
+  it("keeps result patterns after is unchanged", () => {
+    const result = exprParser("x is success(v)");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).pattern.type).toBe("resultPattern");
+  });
+
+  it("keeps `x is null` as the literal null pattern", () => {
+    const result = exprParser("x is null");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).pattern.type).toBe("null");
+  });
+
+  it("binds tighter than &&: `x is string && y`", () => {
+    const result = exprParser("x is string && y");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "binOpExpression",
+      operator: "&&",
+      left: { type: "isExpression", pattern: { type: "typePattern" } },
+      right: { type: "variableName", value: "y" },
+    });
+  });
+
+  it("parses `a is Person == b` with is on the left of ==", () => {
+    const result = exprParser("a is Person == b");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "binOpExpression",
+      left: { type: "isExpression", pattern: { type: "typePattern" } },
+    });
+  });
+});

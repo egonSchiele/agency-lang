@@ -1,0 +1,127 @@
+// Execution tests for type patterns (spec 2026-07-20-type-patterns-design.md).
+// Covers: tier-1 coarse checks, tier-2 shape + validator checks, Rule 1
+// (binds the ORIGINAL value: validators decide the match but never rewrite),
+// arm ordering, the is-operator in plain conditions, the match(x is T) guard
+// form, and loose-null agreement with the literal null pattern.
+
+def isAdult(age: number): Result<number> {
+  if (age < 18) {
+    return failure("too young")
+  }
+  return success(age)
+}
+
+def clampAge(age: number): Result<number> {
+  if (age < 0) {
+    return success(1)
+  }
+  return success(age)
+}
+
+type Person = {
+  name: string,
+  @validate(isAdult) age: number,
+}
+
+type Repaired = {
+  name: string,
+  @validate(clampAge) age: number,
+}
+
+def describe(value: any): string {
+  return match (value) {
+    null => "null"
+    s: string => "string:${s}"
+    n: number => "number:${n}"
+    is boolean => "boolean"
+    is any[] => "array"
+    {name}: Person => "person:${name}"
+    is object => "object"
+    _ => "other"
+  }
+}
+
+node coarse() {
+  const parts = [
+    describe(null),
+    describe("hi"),
+    describe(42),
+    describe(true),
+    describe([1, 2]),
+    describe({ name: "Ada", age: 30 }),
+    describe({ x: 1 }),
+  ]
+  return parts.join("|")
+}
+
+node validatorRejects() {
+  // Right shape, failing validator: must NOT match Person, falls to object.
+  return describe({ name: "Kid", age: 12 })
+}
+
+node bindsOriginal() {
+  // Rule 1 with a transforming validator: clampAge repairs age -5 to 1, so
+  // the match SUCCEEDS, but the bound value must be the ORIGINAL (-5).
+  const u: any = { name: "Neg", age: -5 }
+  return match (u) {
+    {age}: Repaired => "matched:${age}"
+    _ => "no match"
+  }
+}
+
+node isCondition() {
+  // Branch-dispatch test: v is `any`, so this cannot observe narrowing
+  // (the typechecker suite pins that). It pins that the branch executes.
+  const v: any = "text"
+  if (v is string) {
+    return "len:${v.length}"
+  }
+  return "not-string"
+}
+
+node isBoolean() {
+  const v: any = 5
+  const b = v is string
+  if (b == false) {
+    return "not-a-string"
+  }
+  return "was-string"
+}
+
+node typedArrayTier2() {
+  // The number[] schema path is per-element: a string element must fail.
+  const good: any = [1, 2]
+  const bad: any = [1, "two"]
+  let out = ""
+  if (good is number[]) {
+    out = "good-yes"
+  }
+  if (bad is number[]) {
+    out = "${out},bad-yes"
+  } else {
+    out = "${out},bad-no"
+  }
+  return out
+}
+
+node matchGuardForm() {
+  // The match(expr is pattern) guard form with a type pattern.
+  const v: any = { name: "Ada", age: 30 }
+  let out = "not-person"
+  match (v is Person) {
+    true => out = "is-person"
+    _ => out = "unmatched"
+  }
+  return out
+}
+
+node looseNull() {
+  // A missing key normalizes to null; `is null` must agree with the literal
+  // null pattern (loose), so interop-shaped absent values match.
+  const obj: any = {}
+  const missing: any = obj["nope"]
+  if (missing is null) {
+    return "missing-is-null"
+  }
+  return "missing-not-null"
+}

@@ -872,7 +872,7 @@ export class AgencyGenerator {
    * (`is string =>`), and since `is Type` and `_: Type` parse to the same
    * node, `_: Type` intentionally normalizes to `is Type`.
    */
-  private formatArmCaseValue(caseValue: MatchPattern | Expression): string {
+  private formatArmCaseValue(caseValue: MatchPattern): string {
     if (caseValue.type === "typePattern") {
       const tp = caseValue as TypePattern;
       return tp.pattern === null

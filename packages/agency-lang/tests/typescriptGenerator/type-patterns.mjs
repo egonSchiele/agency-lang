@@ -281,51 +281,67 @@ return;
 
 ]);
       await runner.step(4, async (runner) => {
-__stack.locals.__scrutinee_1 = __stack.args.value;
+__stack.locals.__scrutinee_7 = __stack.args.value;
       });
       await runner.ifElse(5, [
 
   {
-    condition: async () => __eq(__stack.locals.__scrutinee_1, null),
+    condition: async () => __eq(__stack.locals.__scrutinee_7, null),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
-`null`
+__stack.locals.__armval_2 = `null`;
             });
-    },
-  },
-
-  {
-    condition: async () => __coarseTypeTest(__stack.locals.__scrutinee_1, "number"),
-    body: async (runner) => {
 await runner.step(1, async (runner) => {
-__stack.locals.n = __stack.locals.__scrutinee_1;
-            });
-await runner.step(2, async (runner) => {
-`number`
+runner.exitMatch(1, __stack.locals.__armval_2);
+return;
             });
     },
   },
 
   {
-    condition: async () => isSuccess(__validateType(__stack.locals.__scrutinee_1, Person)),
+    condition: async () => __coarseTypeTest(__stack.locals.__scrutinee_7, "number"),
     body: async (runner) => {
+await runner.step(2, async (runner) => {
+__stack.locals.n = __stack.locals.__scrutinee_7;
+            });
 await runner.step(3, async (runner) => {
-__stack.locals.name = __stack.locals.__scrutinee_1.name;
+__stack.locals.__armval_3 = `number`;
             });
 await runner.step(4, async (runner) => {
-`person: ${__stack.locals.name}`
+runner.exitMatch(1, __stack.locals.__armval_3);
+return;
             });
     },
   },
 
   {
-    condition: async () => isSuccess(__validateType(__stack.locals.__scrutinee_1, z.object({ "tag": z.string() }))),
+    condition: async () => isSuccess(__validateType(__stack.locals.__scrutinee_7, Person)),
     body: async (runner) => {
 await runner.step(5, async (runner) => {
-__stack.locals.p = __stack.locals.__scrutinee_1;
+__stack.locals.name = __stack.locals.__scrutinee_7.name;
             });
 await runner.step(6, async (runner) => {
-`tagged: ${__stack.locals.p.tag}`
+__stack.locals.__armval_4 = `person: ${__stack.locals.name}`;
+            });
+await runner.step(7, async (runner) => {
+runner.exitMatch(1, __stack.locals.__armval_4);
+return;
+            });
+    },
+  },
+
+  {
+    condition: async () => isSuccess(__validateType(__stack.locals.__scrutinee_7, z.object({ "tag": z.string() }))),
+    body: async (runner) => {
+await runner.step(8, async (runner) => {
+__stack.locals.p = __stack.locals.__scrutinee_7;
+            });
+await runner.step(9, async (runner) => {
+__stack.locals.__armval_5 = `tagged: ${__stack.locals.p.tag}`;
+            });
+await runner.step(10, async (runner) => {
+runner.exitMatch(1, __stack.locals.__armval_5);
+return;
             });
     },
   },
@@ -333,13 +349,22 @@ await runner.step(6, async (runner) => {
   {
     condition: async () => true,
     body: async (runner) => {
-await runner.step(7, async (runner) => {
-`other`
+await runner.step(11, async (runner) => {
+__stack.locals.__armval_6 = `other`;
+            });
+await runner.step(12, async (runner) => {
+runner.exitMatch(1, __stack.locals.__armval_6);
+return;
             });
     },
   },
 
-]);
+], undefined, { matchId: 1 });
+      await runner.step(6, async (runner) => {
+__functionCompleted = true;
+runner.halt(__nn(__stack.locals.__matchval_1))
+return;
+      });
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
@@ -539,4 +564,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"type-patterns.agency:describe":{"1":{"line":6,"col":2},"2":{"line":9,"col":2},"3":{"line":12,"col":2},"4":{"line":15,"col":2},"5":{"line":15,"col":2},"1.0":{"line":7,"col":4},"2.0":{"line":10,"col":4},"3.0":{"line":13,"col":4},"5.1":{"line":15,"col":2},"5.3":{"line":15,"col":2},"5.5":{"line":15,"col":2}},"type-patterns.agency:main":{"1":{"line":25,"col":2}}};
+export const __sourceMap = {"type-patterns.agency:describe":{"1":{"line":6,"col":2},"2":{"line":9,"col":2},"3":{"line":12,"col":2},"4":{"line":15,"col":9},"5":{"line":15,"col":9},"6":{"line":15,"col":2},"1.0":{"line":7,"col":4},"2.0":{"line":10,"col":4},"3.0":{"line":13,"col":4},"5.2":{"line":15,"col":9},"5.5":{"line":15,"col":9},"5.8":{"line":15,"col":9}},"type-patterns.agency:main":{"1":{"line":25,"col":2}}};

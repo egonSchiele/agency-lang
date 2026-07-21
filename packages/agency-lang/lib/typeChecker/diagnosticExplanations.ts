@@ -47,6 +47,10 @@ export const DIAGNOSTIC_EXPLANATIONS: Record<DiagnosticName, string> = {
 
 **How to fix:** declare the alias, import it from the module that defines it, or fix a typo in the name.`,
 
+  typePatternUnknownType: `A type pattern (\`x is T\`, or a match arm \`p: T\`) named something that is not a type. After \`is\`, a bare identifier is always read as a type reference — the old always-true binder form was retired — so a variable name or a JavaScript class name (like \`Date\`) in that position is an error rather than a silent match-anything.
+
+**How to fix:** if you meant a type, declare or import it. If you meant to bind the value, write \`const name = x\` instead. For JavaScript classes, use \`is object\` or a helper function — type patterns only test Agency types.`,
+
   genericRequiresTypeArgs: `This is a generic type — it is parameterized by other types (like the element type of a list) — and it cannot be used bare. The type arguments are required.
 
 **How to fix:** supply the type arguments in angle brackets, e.g. write the element type the generic wraps.`,

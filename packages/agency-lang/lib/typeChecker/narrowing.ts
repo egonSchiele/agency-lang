@@ -34,7 +34,12 @@ export type Refine =
       literal: StringLiteralType | NumberLiteralType | BooleanLiteralType;
       keep: boolean;
     }
-  | { kind: "presence"; present: boolean };
+  | { kind: "presence"; present: boolean }
+  // A type pattern's test (`x is T`): the then-branch narrows the subject to
+  // the tested type. Positive-only by design — a Tier 2 test can fail on a
+  // validator even when the static type matches, so the else-branch (and any
+  // negative fact) would be unsound.
+  | { kind: "typeTest"; testedType: VariableType };
 export type NarrowCandidate = { ref: Reference; refine: Refine };
 export type ConditionFacts = { then: NarrowCandidate[]; else: NarrowCandidate[] };
 
@@ -64,6 +69,11 @@ export function narrowByRefine(
       );
     case "presence":
       return narrowUnionByPresence(current, refine.present, aliases);
+    case "typeTest":
+      // The test succeeding means the value IS the tested type; that type is
+      // strictly more precise than (or equal to) whatever we knew before, so
+      // it simply replaces the current type in the guarded region.
+      return refine.testedType;
   }
 }
 
@@ -219,6 +229,17 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
           refine: { kind: "presence", present: true },
         },
       ],
+      else: [],
+    };
+  }
+
+  // A type pattern's lowered test: `x is T` (or a match arm `p: T` testing
+  // the scrutinee temp). Then-branch only — see the `typeTest` Refine.
+  if (condition.type === "typeTestExpression") {
+    const ref = asPathReference(condition.expression);
+    if (!ref) return NO_FACTS;
+    return {
+      then: [{ ref, refine: { kind: "typeTest", testedType: condition.typeHint } }],
       else: [],
     };
   }

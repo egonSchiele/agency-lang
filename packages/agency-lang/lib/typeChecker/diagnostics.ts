@@ -143,6 +143,11 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "Type alias '{alias}' is not defined (referenced in '{context}').",
   },
+  typePatternUnknownType: {
+    code: "AG1013",
+    severity: "error",
+    message: "`{name}` is not a type; {hint}",
+  },
   genericRequiresTypeArgs: {
     code: "AG1007",
     severity: "error",

@@ -13,7 +13,7 @@ def describe(value: any): string {
   if (value is object) {
     return "object"
   }
-  match (value) {
+  return match (value) {
     null => "null"
     n: number => "number"
     {name}: Person => "person: ${name}"

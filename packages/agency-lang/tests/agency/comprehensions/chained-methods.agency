@@ -1,0 +1,19 @@
+// Chaining a method / index / slice directly onto a bracket literal, in
+// the positions users actually write: a comprehension `.join`, an array
+// literal `.join`, an array literal index, a slice-then-join, a chained
+// `fork` comprehension, and a comprehension `.join` inside interpolation.
+// Returning the object pins the exact content of each, so a codegen or
+// runtime regression that produced a wrong join/index/slice result fails,
+// not just a crash.
+node main() {
+  const xs = ["a", "b", "c"]
+
+  return {
+    bulleted: ["- ${c}" for c in xs].join("\n"),
+    dashed: [1, 2, 3].join("-"),
+    middle: [10, 20, 30][1],
+    sliced: [10, 20, 30][0:2].join(","),
+    forked: fork ["<${c}>" for c in xs].join("|"),
+    inline: "vals: ${["- ${c}" for c in xs].join(", ")}",
+  }
+}

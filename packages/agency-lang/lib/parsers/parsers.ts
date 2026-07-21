@@ -2178,7 +2178,7 @@ const literalDelimiter = (closer: string) =>
     optionalSpacesOrNewline,
   );
 
-export const agencyArrayParser: Parser<AgencyArray> = trace(
+export const agencyArrayParser: Parser<AgencyArray> = memo(
   "agencyArrayParser",
   map(
     seqC(
@@ -2509,6 +2509,48 @@ const parenAccessParser: Parser<ValueAccess> = map(
     }) as ValueAccess,
 );
 
+/**
+ * Parse `[...] chain` - a bracket literal (list comprehension or array
+ * literal) followed by an access chain, e.g. `[x for x in xs].join(", ")`
+ * or `[1, 2, 3][0]`. Mirrors parenAccessParser: it produces the same
+ * `valueAccess` node the paren form `([...]).chain` already produces, so
+ * desugaring, typing, and codegen need no changes (they already accept a
+ * comprehension or array in `valueAccess.base`).
+ *
+ * comprehensionParser MUST come before agencyArrayParser for the same
+ * reason it does in baseAtom: agencyArrayParser would consume `[f(x)` from
+ * `[f(x) for x in xs]` and then fail at `for`.
+ *
+ * The `many1` (at least one chain element) is load-bearing. A bare `[...]`
+ * with no chain fails this parser and falls through to the plain
+ * comprehension/array parsers in baseAtom, so unchained literals are
+ * unaffected.
+ *
+ * withLoc-wrapped, mirroring schemaAccessParser (the other bare valueAccess
+ * entry in baseAtom). parenAccessParser is not a precedent for this: it
+ * lives inside _valueAccessParser and inherits a loc from the withLoc on
+ * valueAccessParser one level up. As a direct baseAtom entry,
+ * bracketAccessParser needs its own withLoc or the valueAccess node lands
+ * with no source location and diagnostics on the whole expression degrade.
+ */
+const bracketAccessParser: Parser<ValueAccess> = withLoc(
+  map(
+    seqC(
+      capture(
+        or(lazy(() => comprehensionParser), lazy(() => agencyArrayParser)),
+        "base",
+      ),
+      capture(many1(chainElementParser), "chain"),
+    ),
+    (result) =>
+      ({
+        type: "valueAccess" as const,
+        base: result.base as unknown as AgencyNode,
+        chain: result.chain,
+      }) as ValueAccess,
+  ),
+);
+
 export const _valueAccessParser: Parser<VariableNameLiteral | FunctionCall | ValueAccess> = memo("_valueAccessParser", (
   input: string,
 ): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> => {
@@ -2739,6 +2781,12 @@ const baseAtom: Parser<Expression> = or(
   schemaAccessParser,
   schemaExpressionParser,
   lazy(() => interruptExprParser),
+  // MUST precede comprehensionParser and agencyArrayParser: a chained
+  // bracket literal like `[...].join(...)` must be consumed whole, else the
+  // bare parser wins and strands the trailing chain ("expected node body").
+  // many1 makes an unchained `[...]` fall through to the bare parsers
+  // below, so nothing regresses.
+  lazy(() => bracketAccessParser),
   // MUST precede agencyArrayParser, valueAccessParser, and literalParser.
   // Ahead of agencyArrayParser because that parser would consume `[f(x)`
   // and then fail at `for`. Ahead of the other two because `fork [...]`

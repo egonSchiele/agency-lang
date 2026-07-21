@@ -72,7 +72,7 @@ const __globalCtx = new RuntimeContext({
   dirname: __dirname,
   logLevel: "info",
   traceConfig: {
-    program: "function.agency"
+    program: "type-patterns.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -168,18 +168,20 @@ function registerTools(tools: any[]) {
 }
 
 async function __initializeGlobals(__ctx) {
-  if (__ctx.globals.isInitialized("function.agency")) {
+  if (__ctx.globals.isInitialized("type-patterns.agency")) {
     return;
   }
-  __ctx.globals.markInitialized("function.agency")
+  __ctx.globals.markInitialized("type-patterns.agency")
 }
-__registerGlobalsInit("function.agency", __initializeGlobals);
+__registerGlobalsInit("type-patterns.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
 
 }
-__registerCallbacksInit("function.agency", __registerTopLevelCallbacks);
+__registerCallbacksInit("type-patterns.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __test_impl() {
+const Person = z.object({ "name": z.string(), "age": z.number() });
+type Person = z.infer<typeof Person>;
+async function __describe_impl(value: any) {
   const __setupData = setupFunction();
   const __stack = __setupData.stack;
 const __step = __setupData.step;
@@ -187,12 +189,13 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  if (!__globals()!.isInitialized("function.agency")) {
+  if (!__globals()!.isInitialized("type-patterns.agency")) {
     await __initializeGlobals(__ctx)
   }
   let __funcStartTime: number = performance.now();
+  __stack.args["value"] = value;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "test", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "type-patterns.agency", scopeName: "describe", threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -209,147 +212,9 @@ let __resultCheckpointId = -1;
 if (__ctx._pendingArgOverrides) {
   const __overrides = __ctx._pendingArgOverrides;
   __ctx._pendingArgOverrides = undefined;
-
-}
-
-  try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
-      ctx: __ctx,
-      stack: __setupData.stateStack,
-      threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
-          name: "onFunctionStart",
-          data: {
-            functionName: "test",
-            args: {},
-            moduleId: "function.agency"
-          }
-        })
-      });
-      await runner.step(1, async (runner) => {
-__stack.locals.foo = 1;
-      });
-    })
-    if (runner.halted) {
-      if (isFailure(runner.haltResult)) {
-        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
-      }
-      return runner.haltResult;
-    }
-  } catch (__error) {
-    if (__error instanceof RestoreSignal) {
-  throw __error;
-}
-// All aborts — cancellations (Esc / abort) AND guard trips — are now a single
-// AgencyAbort carrying an AbortCause, and must propagate untouched. The owning
-// guard's `try` converts its own guardTrip; every other abort unwinds. One
-// rung replaces the old GuardExceededError + isAbortError ladder. Converting
-// any abort to a Failure here would (a) hide a guard trip so the block appears
-// to succeed over budget, and (b) let a cancel limp onward / surface as a
-// logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
-if (__error instanceof AgencyAbort) {
-  // An abort stopped this function. It does not throw past its own frame:
-  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
-  // if it saved one. The caller's post-call check spots the marker and
-  // stops too, so the abort travels up the stack as a plain value, the
-  // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "test");
-}
-// Surface the underlying exception via logger + statelog before
-// converting to a Failure. Without this, a caller that doesn't
-// inspect the result (the common case for void side-effect calls)
-// silently loses the error — a debugging nightmare. See the
-// recordAlwaysScoped bug debugged in
-// https://ampcode.com/threads/T-019e7a3a-edfa-74d6-917a-255c31bf8491.
-{
-  const __errMsg = __error instanceof Error ? __error.message : String(__error);
-  const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
-  const __log = __createLogger(__ctx.logLevel);
-  __log.error("Function " + "test" + " threw an exception (converted to Failure): " + __errMsg);
-  if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
-    errorType: "runtimeError",
-    message: __errMsg,
-    functionName: "test",
-  });
-}
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    destructiveRan: __self.__destructiveRan,
-    functionName: "test",
-    args: __stack.args,
-  }
-);
-
-  } finally {
-    __stateStack()?.pop()
-    if (__functionCompleted) {
-      await callHook({
-        name: "onFunctionEnd",
-        data: {
-          functionName: "test",
-          timeTaken: performance.now() - __funcStartTime
-        }
-      })
-    }
-  }
-}
-export const test = __AgencyFunction.create({
-  name: "test",
-  module: "function.agency",
-  fn: __test_impl,
-  params: [],
-  toolDefinition: {
-    name: "test",
-    description: "No description provided.",
-    schema: z.object({})
-  },
-  exported: false
-}, __toolRegistry);
-async function __add_impl(a: any, b: any) {
-  const __setupData = setupFunction();
-  const __stack = __setupData.stack;
-const __step = __setupData.step;
-const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
-let __forked;
-let __functionCompleted = false;
-  if (!__globals()!.isInitialized("function.agency")) {
-    await __initializeGlobals(__ctx)
-  }
-  let __funcStartTime: number = performance.now();
-  __stack.args["a"] = a;
-  __stack.args["b"] = b;
-  __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "function.agency", scopeName: "add", threads: __setupData.threads });
-  // `__resultCheckpointId` is referenced by interruptAssignment /
-// interruptReturn templates when an interrupt rejects and `runner.halt`
-// builds a Failure carrying the entry checkpoint for `result.retry(...)`.
-// We keep the variable declared (sentinel -1) but skip the createPinned
-// call: pinning at every function entry causes pinned checkpoints to
-// accumulate without bound (evictIfNeeded only evicts unpinned), and the
-// JSON deep-clone of stateStack + globals on each call is a measurable
-// per-keystroke cost inside std::ui's repl loop. The cost of always
-// pinning outweighs the retry-on-failure feature, so it is disabled.
-// `ctx.checkpoints.get(-1)` returns undefined, so the failure path
-// gracefully omits the embedded checkpoint and retry simply becomes a
-// no-op rather than failing.
-let __resultCheckpointId = -1;
-if (__ctx._pendingArgOverrides) {
-  const __overrides = __ctx._pendingArgOverrides;
-  __ctx._pendingArgOverrides = undefined;
-  if ("a" in __overrides) {
-    a = __overrides["a"];
-    __stack.args["a"] = a;
-  }
-  if ("b" in __overrides) {
-    b = __overrides["b"];
-    __stack.args["b"] = b;
+  if ("value" in __overrides) {
+    value = __overrides["value"];
+    __stack.args["value"] = value;
   }
 
 }
@@ -365,18 +230,116 @@ if (__ctx._pendingArgOverrides) {
 await callHook({
           name: "onFunctionStart",
           data: {
-            functionName: "add",
+            functionName: "describe",
             args: {
-              a: a,
-              b: b
+              value: value
             },
-            moduleId: "function.agency"
+            moduleId: "type-patterns.agency"
           }
         })
       });
-      await runner.step(1, async (runner) => {
-//  multi-param function
+      await runner.ifElse(1, [
+
+  {
+    condition: async () => __coarseTypeTest(__stack.args.value, "string"),
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(`text`)
+return;
+            });
+    },
+  },
+
+]);
+      await runner.ifElse(2, [
+
+  {
+    condition: async () => __coarseTypeTest(__stack.args.value, "array"),
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(`list`)
+return;
+            });
+    },
+  },
+
+]);
+      await runner.ifElse(3, [
+
+  {
+    condition: async () => __coarseTypeTest(__stack.args.value, "object"),
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+__functionCompleted = true;
+runner.halt(`object`)
+return;
+            });
+    },
+  },
+
+]);
+      await runner.step(4, async (runner) => {
+__stack.locals.__scrutinee_1 = __stack.args.value;
       });
+      await runner.ifElse(5, [
+
+  {
+    condition: async () => __eq(__stack.locals.__scrutinee_1, null),
+    body: async (runner) => {
+await runner.step(0, async (runner) => {
+`null`
+            });
+    },
+  },
+
+  {
+    condition: async () => __coarseTypeTest(__stack.locals.__scrutinee_1, "number"),
+    body: async (runner) => {
+await runner.step(1, async (runner) => {
+__stack.locals.n = __stack.locals.__scrutinee_1;
+            });
+await runner.step(2, async (runner) => {
+`number`
+            });
+    },
+  },
+
+  {
+    condition: async () => isSuccess(__validateType(__stack.locals.__scrutinee_1, Person)),
+    body: async (runner) => {
+await runner.step(3, async (runner) => {
+__stack.locals.name = __stack.locals.__scrutinee_1.name;
+            });
+await runner.step(4, async (runner) => {
+`person: ${__stack.locals.name}`
+            });
+    },
+  },
+
+  {
+    condition: async () => isSuccess(__validateType(__stack.locals.__scrutinee_1, z.object({ "tag": z.string() }))),
+    body: async (runner) => {
+await runner.step(5, async (runner) => {
+__stack.locals.p = __stack.locals.__scrutinee_1;
+            });
+await runner.step(6, async (runner) => {
+`tagged: ${__stack.locals.p.tag}`
+            });
+    },
+  },
+
+  {
+    condition: async () => true,
+    body: async (runner) => {
+await runner.step(7, async (runner) => {
+`other`
+            });
+    },
+  },
+
+]);
     })
     if (runner.halted) {
       if (isFailure(runner.haltResult)) {
@@ -401,7 +364,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "add");
+  return AbortedResult.fromError(__error, __stack, "describe");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -413,12 +376,12 @@ if (__error instanceof AgencyAbort) {
   const __errMsg = __error instanceof Error ? __error.message : String(__error);
   const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
   const __log = __createLogger(__ctx.logLevel);
-  __log.error("Function " + "add" + " threw an exception (converted to Failure): " + __errMsg);
+  __log.error("Function " + "describe" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
   __ctx.statelogClient?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
-    functionName: "add",
+    functionName: "describe",
   });
 }
 return failure(
@@ -426,7 +389,7 @@ return failure(
   {
     checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
     destructiveRan: __self.__destructiveRan,
-    functionName: "add",
+    functionName: "describe",
     args: __stack.args,
   }
 );
@@ -437,36 +400,29 @@ return failure(
       await callHook({
         name: "onFunctionEnd",
         data: {
-          functionName: "add",
+          functionName: "describe",
           timeTaken: performance.now() - __funcStartTime
         }
       })
     }
   }
 }
-export const add = __AgencyFunction.create({
-  name: "add",
-  module: "function.agency",
-  fn: __add_impl,
+export const describe = __AgencyFunction.create({
+  name: "describe",
+  module: "type-patterns.agency",
+  fn: __describe_impl,
   params: [{
-    name: "a",
+    name: "value",
     hasDefault: false,
     defaultValue: undefined,
     variadic: false,
     isFunctionTyped: false,
-    acceptsResult: false
-  }, {
-    name: "b",
-    hasDefault: false,
-    defaultValue: undefined,
-    variadic: false,
-    isFunctionTyped: false,
-    acceptsResult: false
+    acceptsResult: true
   }],
   toolDefinition: {
-    name: "add",
+    name: "describe",
     description: "No description provided.",
-    schema: z.object({"a": z.string(), "b": z.string(), })
+    schema: z.object({"value": z.any(), })
   },
   exported: false
 }, __toolRegistry);
@@ -480,7 +436,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function.agency", scopeName: "main", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "type-patterns.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
       ...getRuntimeContext(),
@@ -499,9 +455,9 @@ await callHook({
       await runner.step(1, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
-          args: [await __call(test, {
+          args: [await __call(describe, {
             type: "positional",
-            args: []
+            args: [`hi`]
           })]
         });
 if (hasInterrupts(__funcResult)) {
@@ -583,4 +539,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"function.agency:test":{"1":{"line":1,"col":2}},"function.agency:add":{},"function.agency:main":{"1":{"line":9,"col":2}}};
+export const __sourceMap = {"type-patterns.agency:describe":{"1":{"line":6,"col":2},"2":{"line":9,"col":2},"3":{"line":12,"col":2},"4":{"line":15,"col":2},"5":{"line":15,"col":2},"1.0":{"line":7,"col":4},"2.0":{"line":10,"col":4},"3.0":{"line":13,"col":4},"5.1":{"line":15,"col":2},"5.3":{"line":15,"col":2},"5.5":{"line":15,"col":2}},"type-patterns.agency:main":{"1":{"line":25,"col":2}}};

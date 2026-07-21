@@ -28,6 +28,8 @@ import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { BlockArgument } from "@/types/blockArgument.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
+import { TypeTestExpression } from "@/types/pattern.js";
+import { CoarseKind } from "@/runtime/typeTest.js";
 import { expressionToString } from "@/utils/node.js";
 import { trimDocStringSegments } from "@/utils/docStringText.js";
 import { toCompiledImportPath } from "../importPaths.js";
@@ -100,6 +102,32 @@ import { isAnyType, isFunctionTyped, paramAcceptsFailure } from "../typeChecker/
 import { rejectValueParamCycle } from "./valueParamCycle.js";
 
 import { $, ts } from "../ir/builders.js";
+
+/** Tier 1 mapping for type patterns: which coarse runtime check a typeHint
+ *  compiles to, or null for the schema (Tier 2) path. See the type-patterns
+ *  spec, "Tier 1: coarse runtime types". */
+function coarseKindFor(typeHint: VariableType): CoarseKind | null {
+  if (typeHint.type === "primitiveType") {
+    if (
+      typeHint.value === "string" ||
+      typeHint.value === "number" ||
+      typeHint.value === "boolean" ||
+      typeHint.value === "null" ||
+      typeHint.value === "object"
+    ) {
+      return typeHint.value;
+    }
+    return null;
+  }
+  if (
+    typeHint.type === "arrayType" &&
+    typeHint.elementType.type === "primitiveType" &&
+    typeHint.elementType.value === "any"
+  ) {
+    return "array";
+  }
+  return null;
+}
 import { printTs } from "../ir/prettyPrint.js";
 import type {
   TsNode,
@@ -663,6 +691,8 @@ export class TypeScriptBuilder {
         return this.processNewExpression(node);
       case "schemaExpression":
         return this.processSchemaExpression(node);
+      case "typeTestExpression":
+        return this.processTypeTestExpression(node);
       case "interruptStatement":
         return this.processInterruptStatement(node);
       case "regex":
@@ -1391,6 +1421,21 @@ export class TypeScriptBuilder {
   private processSchemaExpression(node: SchemaExpression): TsNode {
     const zodSchema = this.zodSchemaFor(node.typeArg);
     return ts.new(ts.id("Schema"), [ts.raw(zodSchema)]);
+  }
+
+  /**
+   * A type pattern's runtime test (`x is T`, arm `p: T`). Tier 1 (coarse
+   * primitives and `any[]`) compiles to `__coarseTypeTest(v, kind)`; every
+   * other type reuses the bang's validation path via `validateExpr`, wrapped
+   * in `isSuccess(...)` — shape AND `@validate` validators decide the match.
+   */
+  private processTypeTestExpression(node: TypeTestExpression): TsNode {
+    const value = this.processNode(node.expression);
+    const coarse = coarseKindFor(node.typeHint);
+    if (coarse !== null) {
+      return ts.call(ts.id("__coarseTypeTest"), [value, ts.str(coarse)]);
+    }
+    return ts.call(ts.id("isSuccess"), [this.validateExpr(node.typeHint, value)]);
   }
 
   /**

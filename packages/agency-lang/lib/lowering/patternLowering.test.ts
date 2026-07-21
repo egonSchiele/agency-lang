@@ -791,3 +791,85 @@ print(r is success) with approve
     expect(survived).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// type patterns
+// ---------------------------------------------------------------------------
+
+describe("type pattern lowering", () => {
+  function findAll(nodes: AgencyNode[], pred: (n: any) => boolean): any[] {
+    return walkNodesArray(nodes)
+      .map((entry) => entry.node as any)
+      .filter(pred);
+  }
+
+  it("is Type in an if condition lowers to a typeTestExpression", () => {
+    const body = parseMainBody(`const x: any = 1\nif (x is string) { print(x) }`);
+    const lowered = lowerPatterns(body);
+    const ifs = findAll(lowered, (n) => n.type === "ifElse");
+    expect(ifs.length).toBeGreaterThan(0);
+    expect(ifs[0].condition).toMatchObject({
+      type: "typeTestExpression",
+      typeHint: { type: "primitiveType", value: "string" },
+    });
+  });
+
+  it("arm binder with type suffix binds the ORIGINAL scrutinee", () => {
+    const body = parseMainBody(
+      `const x: any = 1\nmatch (x) {\ns: string => print(s)\n_ => print("no")\n}`,
+    );
+    const lowered = lowerPatterns(body);
+    const assigns = findAll(
+      lowered,
+      (n) => n.type === "assignment" && n.variableName === "s",
+    );
+    expect(assigns.length).toBe(1);
+    // Bound from the scrutinee temp variable, not from any validation result.
+    expect(assigns[0].value.type).toBe("variableName");
+  });
+
+  it("destructuring arm with type suffix emits the field binders", () => {
+    const body = parseMainBody(
+      `const x: any = 1\nmatch (x) {\n{name}: Person => print(name)\n_ => print("no")\n}`,
+    );
+    const lowered = lowerPatterns(body);
+    const assigns = findAll(
+      lowered,
+      (n) => n.type === "assignment" && n.variableName === "name",
+    );
+    expect(assigns.length).toBe(1);
+    expect(assigns[0].value.type).toBe("valueAccess");
+    const tests = findAll(lowered, (n) => n.type === "typeTestExpression");
+    expect(tests.length).toBeGreaterThan(0);
+  });
+
+  it("array pattern with type suffix emits element binders and the test", () => {
+    const body = parseMainBody(
+      `const x: any = 1\nmatch (x) {\n[a, b]: number[] => print(a)\n_ => print("no")\n}`,
+    );
+    const lowered = lowerPatterns(body);
+    expect(
+      findAll(lowered, (n) => n.type === "assignment" && n.variableName === "a").length,
+    ).toBe(1);
+    expect(findAll(lowered, (n) => n.type === "typeTestExpression").length).toBeGreaterThan(0);
+  });
+
+  it("lowered match keeps the typePattern in matchSource for exhaustiveness", () => {
+    const body = parseMainBody(
+      `const x: any = 1\nmatch (x) {\ns: string => print(s)\n_ => print("no")\n}`,
+    );
+    const lowered = lowerPatterns(body);
+    const scrutinees = findAll(lowered, (n) => n.type === "assignment" && n.matchSource);
+    expect(scrutinees.length).toBe(1);
+    expect(
+      scrutinees[0].matchSource.some((m: any) => m.caseValue?.type === "typePattern"),
+    ).toBe(true);
+  });
+
+  it("is Type as a plain boolean stays legal (no binders to reject)", () => {
+    const body = parseMainBody(`const x: any = 1\nconst b = x is string`);
+    const lowered = lowerPatterns(body);
+    const assigns = findAll(lowered, (n) => n.type === "assignment" && n.variableName === "b");
+    expect(assigns[0].value.type).toBe("typeTestExpression");
+  });
+});

@@ -426,7 +426,8 @@ class PatternLowerer {
         ((c.caseValue !== "_" &&
           (c.caseValue.type === "objectPattern" ||
             c.caseValue.type === "arrayPattern" ||
-            c.caseValue.type === "resultPattern")) ||
+            c.caseValue.type === "resultPattern" ||
+            c.caseValue.type === "typePattern")) ||
           c.guard !== undefined),
     );
 
@@ -1013,6 +1014,13 @@ class PatternLowerer {
           ),
         ];
       }
+      case "typePattern":
+        // The type test contributes no bindings of its own; the inner
+        // pattern binds from the SAME source — the original value, never a
+        // validator-transformed copy (spec Rule 1).
+        return pattern.pattern === null
+          ? []
+          : this.extractBindings(pattern.pattern, source, declKind, loc);
       default:
         // Literal — produces no binding
         return [];
@@ -1067,6 +1075,20 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
     case "resultPattern":
       checks.push(resultCheckCall(pattern.kind, source, pattern.loc));
       break;
+    case "typePattern": {
+      // The runtime type test itself, compiled away by the builder (coarse
+      // check or schema validation). Inner-pattern checks run after it.
+      checks.push({
+        type: "typeTestExpression",
+        expression: cloneExpr(source),
+        typeHint: pattern.typeHint,
+        loc: pattern.loc,
+      } as Expression);
+      if (pattern.pattern !== null) {
+        collectChecks(pattern.pattern as MatchPattern, source, checks);
+      }
+      break;
+    }
     default: {
       // Literal — equality check
       checks.push(makeBinOp(cloneExpr(source), "==", pattern as Expression, pattern.loc));
@@ -1154,6 +1176,8 @@ function walkPattern(
       }
     } else if (pattern.type === "objectPatternProperty") {
       walkPattern(pattern.value as MatchPattern, visit);
+    } else if (pattern.type === "typePattern" && pattern.pattern !== null) {
+      walkPattern(pattern.pattern, visit);
     }
   }
 }

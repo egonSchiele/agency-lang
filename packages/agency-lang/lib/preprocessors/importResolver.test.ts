@@ -272,6 +272,48 @@ describe("resolveImports", () => {
     ).toThrow("Symbol 'missing' is not defined in './other.agency'");
   });
 
+  it("skipUnresolvable keeps a bad import instead of throwing", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [makeImportStatement(["missing"], "./other.agency")],
+    };
+    const symbolTable = table({
+      "/project/other.agency": {},
+    });
+    const result = resolveImports(program, symbolTable, "/project/main.agency", {
+      skipUnresolvable: true,
+    });
+    // The original (unrewritten) statement survives so the type checker's
+    // checkMissingImports pass can still see it and report the bad name.
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0]).toBe(program.nodes[0]);
+  });
+
+  it("skipUnresolvable resolves good imports even when another is bad", () => {
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [
+        makeImportStatement(["add"], "./utils.agency"),
+        makeImportStatement(["missing"], "./other.agency"),
+      ],
+    };
+    const symbolTable = table({
+      "/project/utils.agency": { add: fn("add", { exported: true }) },
+      "/project/other.agency": {},
+    });
+    const result = resolveImports(program, symbolTable, "/project/main.agency", {
+      skipUnresolvable: true,
+    });
+    // The good import is rewritten normally; the bad one passes through as-is.
+    expect(result.nodes).toHaveLength(2);
+    const good = result.nodes[0] as ImportStatement;
+    expect(good.type).toBe("importStatement");
+    if (good.importedNames[0].type === "namedImport") {
+      expect(good.importedNames[0].importedNames).toEqual(["add"]);
+    }
+    expect(result.nodes[1]).toBe(program.nodes[1]);
+  });
+
   it("leaves non-.agency imports untouched", () => {
     const tsImport: ImportStatement = {
       type: "importStatement",

@@ -56,6 +56,20 @@ export const _internal = {
   },
 };
 
+/**
+ * Drop any cached parse for `absPath` (both the templated and raw variants).
+ *
+ * The mtime+size validity check has a documented blind spot for long-lived
+ * processes (see the header comment): an edit that keeps byte count identical
+ * within one filesystem timestamp granule serves a stale AST. The LSP evicts
+ * explicitly when it learns a file changed on disk so a save always yields a
+ * fresh parse, regardless of that granularity.
+ */
+export function evictParseCache(absPath: string): void {
+  delete cache[`t:${absPath}`];
+  delete cache[`r:${absPath}`];
+}
+
 export function parseAgencyFileCached(
   absPath: string,
   config: AgencyConfig = {},

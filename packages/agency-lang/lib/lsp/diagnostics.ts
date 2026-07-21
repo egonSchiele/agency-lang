@@ -119,13 +119,9 @@ export function runDiagnostics(
 
   try {
     program = resolveReExports(program, symbolTable, fsPath);
-    // Analysis-only path (the LSP never executes anything): honor
-    // `import test` so migrated test files keep full editor support instead
-    // of dying on a single 0:0 error. Execution paths still default to deny.
-    program = resolveImports(program, symbolTable, fsPath, {
-      allowTestImports: true,
-    });
   } catch (err) {
+    // A re-export failure (e.g. a cycle) leaves the module graph unusable, so
+    // there is nothing meaningful left to type-check. Report and stop.
     diagnostics.push({
       severity: DiagnosticSeverity.Error,
       range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
@@ -134,6 +130,19 @@ export function runDiagnostics(
     });
     return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [] };
   }
+
+  // Analysis-only path (the LSP never executes anything):
+  //  - `allowTestImports` honors `import test` so migrated test files keep full
+  //    editor support instead of dying on a single 0:0 error.
+  //  - `skipUnresolvable` drops any import that can't be resolved instead of
+  //    aborting the whole rewrite. That keeps every *other* import (and the
+  //    rest of the file) type-checked; the type checker's `checkMissingImports`
+  //    pass reports each bad import at its own location (AG4008/4009/4010), so
+  //    there is no need to surface a duplicate here.
+  program = resolveImports(program, symbolTable, fsPath, {
+    allowTestImports: true,
+    skipUnresolvable: true,
+  });
 
   const info = buildCompilationUnit(program, symbolTable, fsPath, source);
   const { errors, scopes, interruptEffectsByFunction } = typeCheck(program, config, info);

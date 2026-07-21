@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { parseAgencyFileCached, _internal } from "./parseCache.js";
+import { parseAgencyFileCached, evictParseCache, _internal } from "./parseCache.js";
 
 function writeTempAgencyFile(contents: string): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-parsecache-"));
@@ -118,5 +118,34 @@ describe("parseAgencyFileCached", () => {
   test("missing file returns a failure instead of throwing", () => {
     const result = parseAgencyFileCached("/nonexistent/nope.agency", {});
     expect(result.success).toBe(false);
+  });
+
+  test("evictParseCache forces a re-parse even when mtime and size match", () => {
+    // Guards the long-lived-process blind spot: same-size + same-mtime edits
+    // would otherwise serve a stale AST. Explicit eviction must re-parse. Both
+    // variants are pinned so it clears the templated and raw keys.
+    const file = writeTempAgencyFile(VALID_PROGRAM);
+    parseAgencyFileCached(file, {}, true);
+    parseAgencyFileCached(file, {}, false);
+    const before = { ..._internal.stats };
+
+    // Change content but restore the original mtime+size so the cache's own
+    // validity check would consider the entry valid.
+    const stat = fs.statSync(file);
+    fs.writeFileSync(file, VALID_PROGRAM_B);
+    fs.utimesSync(file, stat.atime, stat.mtime);
+
+    evictParseCache(file);
+
+    const templated = parseAgencyFileCached(file, {}, true);
+    const raw = parseAgencyFileCached(file, {}, false);
+    expect(templated.success).toBe(true);
+    expect(raw.success).toBe(true);
+    if (templated.success) {
+      expect(JSON.stringify(templated.result)).toContain("world");
+    }
+    // Both reads missed (re-parsed) rather than hitting the stale entries.
+    expect(_internal.stats.hits).toBe(before.hits);
+    expect(_internal.stats.misses).toBe(before.misses + 2);
   });
 });

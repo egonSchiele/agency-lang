@@ -78,6 +78,7 @@ import {
   ObjectPatternShorthand,
   RestPattern,
   ResultPattern,
+  TypePattern,
   WildcardPattern,
 } from "@/types/pattern.js";
 
@@ -849,10 +850,36 @@ export class AgencyGenerator {
         const rp = pattern as ResultPattern;
         return rp.binding === null ? rp.kind : `${rp.kind}(${rp.binding})`;
       }
+      case "typePattern": {
+        // After `is` the surrounding printer already wrote the operator, so
+        // the test-only form is just the type. The bind-and-test form only
+        // occurs in match arms, printed by formatArmCaseValue.
+        const tp = pattern as TypePattern;
+        const typeStr = variableTypeToString(tp.typeHint, this.typeAliases, true);
+        return tp.pattern === null
+          ? typeStr
+          : `${this.formatPattern(tp.pattern)}: ${typeStr}`;
+      }
       default:
         // variableName / literals — defer to existing rendering
         return this.processNode(pattern as AgencyNode).trim();
     }
+  }
+
+  /**
+   * An arm's left side. Type patterns print differently here than after the
+   * `is` operator: the test-only form needs the `is` keyword written out
+   * (`is string =>`), and since `is Type` and `_: Type` parse to the same
+   * node, `_: Type` intentionally normalizes to `is Type`.
+   */
+  private formatArmCaseValue(caseValue: MatchPattern | Expression): string {
+    if (caseValue.type === "typePattern") {
+      const tp = caseValue as TypePattern;
+      return tp.pattern === null
+        ? `is ${variableTypeToString(tp.typeHint, this.typeAliases, true)}`
+        : this.formatPattern(tp);
+    }
+    return this.processNode(caseValue as AgencyNode).trim();
   }
 
   private formatObjectPattern(node: ObjectPattern): string {
@@ -1239,7 +1266,7 @@ export class AgencyGenerator {
       const pattern =
         caseNode.caseValue === "_"
           ? "_"
-          : this.processNode(caseNode.caseValue as AgencyNode).trim();
+          : this.formatArmCaseValue(caseNode.caseValue);
 
       const guardCode = caseNode.guard
         ? ` if (${this.processNode(caseNode.guard).trim()})`

@@ -105,3 +105,46 @@ describe("agencyGenerator - match block arm printing", () => {
     expect(formatSource(formatted!)).toBe(formatted);
   });
 });
+
+describe("type pattern formatting", () => {
+  it("round-trips every type-pattern spelling", () => {
+    const src = `type Person = {
+  name: string,
+}
+
+def describe(value: any): string {
+  if (value is string) {
+    return "text"
+  }
+  return match (value) {
+    null => "null"
+    n: number => "number"
+    { name }: Person => "person"
+    [x, y]: number[] => "pair"
+    is boolean => "flag"
+    _ => "other"
+  }
+}
+`;
+    const first = formatSource(src)!;
+    // Idempotent: formatting the formatted output changes nothing.
+    expect(formatSource(first)).toBe(first);
+    // Every spelling survives.
+    expect(first).toContain("value is string");
+    expect(first).toContain("n: number =>");
+    expect(first).toContain("{ name }: Person =>");
+    expect(first).toContain("[x, y]: number[] =>");
+    expect(first).toContain("is boolean =>");
+  });
+
+  it("normalizes _: Type to is Type (same parse node, documented)", () => {
+    const src = `def f(x: any): number {
+  return match (x) {
+    _: string => 1
+    _ => 0
+  }
+}
+`;
+    expect(formatSource(src)).toContain("is string =>");
+  });
+});

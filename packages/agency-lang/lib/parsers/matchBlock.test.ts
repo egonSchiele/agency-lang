@@ -885,3 +885,103 @@ describe("match parser loc spans (statement vs expression form)", () => {
     }
   });
 });
+
+describe("type patterns in match arms", () => {
+  it("binder with type suffix: `s: string => s`", () => {
+    const result = matchBlockParserCase("s: string => s");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.caseValue).toMatchObject({
+      type: "typePattern",
+      pattern: { type: "variableName", value: "s" },
+      typeHint: { type: "primitiveType", value: "string" },
+    });
+  });
+
+  it("object pattern with type suffix and guard", () => {
+    const result = matchBlockParserCase("{name, age}: Person if (age > 100) => name");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result.caseValue as any).type).toBe("typePattern");
+    expect((result.result.caseValue as any).pattern.type).toBe("objectPattern");
+    expect(result.result.guard).toBeDefined();
+  });
+
+  it("`is Type` as an arm", () => {
+    const result = matchBlockParserCase("is boolean => 1");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.caseValue).toMatchObject({
+      type: "typePattern",
+      pattern: null,
+      typeHint: { type: "primitiveType", value: "boolean" },
+    });
+  });
+
+  it("wildcard with type suffix: `_: null => 0`", () => {
+    const result = matchBlockParserCase("_: null => 0");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.caseValue).toMatchObject({
+      type: "typePattern",
+      pattern: null,
+      typeHint: { type: "primitiveType", value: "null" },
+    });
+  });
+
+  it("array pattern with type suffix: `[x, y]: number[]`", () => {
+    const result = matchBlockParserCase("[x, y]: number[] => x");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result.caseValue as any).type).toBe("typePattern");
+    expect((result.result.caseValue as any).pattern.type).toBe("arrayPattern");
+    expect((result.result.caseValue as any).typeHint.type).toBe("arrayType");
+  });
+
+  it("inline object type as the suffix", () => {
+    const result = matchBlockParserCase("person: {name: string, age: number} => person");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result.caseValue as any).type).toBe("typePattern");
+    expect((result.result.caseValue as any).pattern).toMatchObject({
+      type: "variableName",
+      value: "person",
+    });
+    expect((result.result.caseValue as any).typeHint.type).toBe("objectType");
+  });
+
+  it("bare binder arm still binds", () => {
+    const result = matchBlockParserCase("other => other");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result.caseValue as any).type).toBe("variableName");
+  });
+
+  it("object pattern with internal colon is not a type suffix", () => {
+    const result = matchBlockParserCase('{ type: "click", x } => x');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result.caseValue as any).type).toBe("objectPattern");
+  });
+
+  it("REGRESSION: expression-guard arm still parses", () => {
+    const result = matchBlockParserCase('role == "admin" => 1');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result.caseValue as any).type).toBe("binOpExpression");
+  });
+
+  it("REGRESSION: literal arm still parses", () => {
+    const result = matchBlockParserCase('"small" => 1');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result.caseValue as any).type).toBe("string");
+  });
+
+  it("REGRESSION: bare wildcard arm still parses", () => {
+    const result = matchBlockParserCase("_ => 0");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.caseValue).toBe("_");
+  });
+});

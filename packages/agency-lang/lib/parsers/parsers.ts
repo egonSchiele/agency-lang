@@ -3248,25 +3248,109 @@ export const defaultCaseParser: Parser<DefaultCase> = map(
   () => "_" as DefaultCase,
 );
 
-// Match arm LHS parser. Tries in order:
-//   1. `_` (default case)
-//   2. matchPattern, but only accepts if followed by `=>` or ` if (...)` —
-//      this prevents `v` from being parsed as a pattern when the user wrote
-//      `v > 5 =>` in `match(x is pat)` guard form.
-//   3. exprParser, as a fallback for guard expressions.
-const caseLhsParser: Parser<unknown> = (input: string) => {
-  const def = defaultCaseParser(input);
-  if (def.success) return def;
+// The arm lookahead, shared by every alternative: an arm LHS is only
+// accepted when the next non-space token is `=>` or a guard `if`. This
+// prevents `v` from being parsed as a pattern when the user wrote `v > 5 =>`
+// in the `match(x is pat)` guard form.
+function armFollowsPattern(rest: string): boolean {
+  const trimmed = rest.replace(/^[ \t]+/, "");
+  return trimmed.startsWith("=>") || /^if[^A-Za-z0-9_]/.test(trimmed);
+}
 
-  const pat = lazy(() => matchPatternParser)(input);
-  if (pat.success) {
-    // Look ahead: is the next non-space token `=>` or `if`?
-    const trimmed = pat.rest.replace(/^[ \t]+/, "");
-    if (trimmed.startsWith("=>") || /^if[^A-Za-z0-9_]/.test(trimmed)) {
-      return pat;
+// Wrap an arm-LHS alternative so it only wins when the lookahead holds.
+function armGated<T>(parser: Parser<T>): Parser<T> {
+  return (input: string) => {
+    const result = parser(input);
+    if (!result.success) {
+      return result;
     }
-  }
+    if (!armFollowsPattern(result.rest)) {
+      return fail("arm LHS must be followed by => or an if guard")(input) as ParserResult<T>;
+    }
+    return result;
+  };
+}
 
+// ` : Type` — the arm-level type suffix of `pattern: Type`.
+const armTypeSuffixParser: Parser<{ typeHint: VariableType }> = seqC(
+  optionalSpaces,
+  char(":"),
+  optionalSpaces,
+  capture(intersectionItemParser, "typeHint"),
+);
+
+// `is Type` arm: the test-only form (`is boolean => ...`).
+const isArmParser: Parser<TypePattern> = withLoc(
+  map(
+    seqC(
+      str("is"),
+      not(varNameChar),
+      spaces,
+      // lazy: typePatternParser is declared later in this file
+      capture(lazy(() => typePatternParser), "typePattern"),
+    ),
+    (captures: { typePattern: TypePattern }) => captures.typePattern,
+  ),
+) as Parser<TypePattern>;
+
+// `_ : Type` — wildcard with a type suffix; same node as the is-form.
+const wildcardSuffixParser: Parser<TypePattern> = withLoc(
+  map(
+    seqC(defaultCaseParser, capture(armTypeSuffixParser, "suffix")),
+    (captures: { suffix: { typeHint: VariableType } }) => ({
+      type: "typePattern" as const,
+      pattern: null,
+      typeHint: captures.suffix.typeHint,
+    }),
+  ),
+) as Parser<TypePattern>;
+
+// `pattern : Type` — bind-and-test. Only binders, object patterns, and
+// array patterns take the suffix (the shapes the spec allows).
+const patternSuffixParser: Parser<TypePattern> = withLoc((input: string) => {
+  const patternResult = lazy(() => matchPatternParser)(input);
+  if (!patternResult.success) {
+    return patternResult;
+  }
+  const innerPattern = patternResult.result as MatchPattern;
+  const suffixable =
+    innerPattern.type === "variableName" ||
+    innerPattern.type === "objectPattern" ||
+    innerPattern.type === "arrayPattern";
+  if (!suffixable) {
+    return fail("pattern kind does not take a type suffix")(input);
+  }
+  const suffixResult = armTypeSuffixParser(patternResult.rest);
+  if (!suffixResult.success) {
+    return fail("no arm-level type suffix")(input);
+  }
+  return success(
+    {
+      type: "typePattern" as const,
+      pattern: innerPattern as BindingPattern,
+      typeHint: (suffixResult.result as { typeHint: VariableType }).typeHint,
+    },
+    suffixResult.rest,
+  );
+}) as Parser<TypePattern>;
+
+// Match arm LHS parser: ordered alternatives, each gated by the arm
+// lookahead, with exprParser as the final fallback. The fallback is
+// load-bearing — it is how expression-guard arms (`role == "admin" =>`) in
+// the `match(x is pat)` form reach the parser. Ordering: suffix forms come
+// before their prefixes (`_ : T` before `_`; `s: T` before the bare binder,
+// which would otherwise win and then fail the lookahead on `:`).
+const caseLhsParser: Parser<unknown> = (input: string) => {
+  const armResult = or(
+    armGated(isArmParser),
+    armGated(wildcardSuffixParser),
+    armGated(patternSuffixParser),
+    armGated(defaultCaseParser),
+    armGated(lazy(() => matchPatternParser)),
+  )(input);
+  if (armResult.success) {
+    return armResult;
+  }
   return exprParser(input);
 };
 

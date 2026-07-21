@@ -103,14 +103,17 @@ export function startServer(): void {
 
     let symbolTable = new SymbolTable();
     try {
-      // Feed the live editor buffer for the active file so an unsaved edit
-      // (e.g. a just-typed `import`) is reflected in the symbol table. Building
-      // purely from disk would resolve imports against the stale saved file,
-      // making `resolveImports` reject symbols from a module the buffer imports
-      // but the saved file does not.
-      symbolTable = SymbolTable.build(fsPath, config, {
-        [path.resolve(fsPath)]: doc.getText(),
-      });
+      // Feed every open document's live buffer as an override so unsaved edits
+      // (e.g. a just-typed `import`) are reflected in the symbol table. Building
+      // purely from disk would resolve imports against the stale saved files,
+      // making `resolveImports` reject symbols from a module a buffer imports
+      // but the saved file does not — for the active file OR any open file it
+      // imports.
+      const overrides: Record<string, string> = {};
+      for (const open of documents.all()) {
+        overrides[path.resolve(uriToPath(open.uri))] = open.getText();
+      }
+      symbolTable = SymbolTable.build(fsPath, config, overrides);
     } catch {
       // If symbol table build fails (e.g. file not on disk yet), continue with empty table
     }

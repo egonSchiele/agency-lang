@@ -5,7 +5,7 @@ import type {
   NamedImport,
 } from "../types/importStatement.js";
 import type { SourceLocation } from "../types/base.js";
-import type { SymbolTable, SymbolInfo } from "../symbolTable.js";
+import type { SymbolTable, SymbolInfo, FileSymbols } from "../symbolTable.js";
 import {
   resolveAgencyImportPath,
   isAgencyImport,
@@ -63,14 +63,36 @@ function assertImportable(
   }
 }
 
+/** Coerce any thrown value into an ImportResolutionError, attaching `loc` when
+ *  the original didn't already carry one (e.g. a plain Error from
+ *  `resolveAgencyImportPath` for an uninstalled pkg::). */
+function asImportResolutionError(
+  err: unknown,
+  loc: SourceLocation | undefined,
+): ImportResolutionError {
+  if (err instanceof ImportResolutionError) return err;
+  return new ImportResolutionError(
+    err instanceof Error ? err.message : String(err),
+    loc,
+  );
+}
+
 export function resolveImports(
   program: AgencyProgram,
   symbolTable: SymbolTable,
   currentFile: string,
-  opts: { allowTestImports?: boolean; skipUnresolvable?: boolean } = {},
+  opts: {
+    allowTestImports?: boolean;
+    // Analysis mode (LSP): when set, an unresolvable import is not fatal.
+    // Instead of throwing, resolveImports drops the offending name (or whole
+    // statement) from the rewrite and reports it here, so every *other* import
+    // still resolves and the rest of the file still type-checks. The compile
+    // path leaves this unset and hard-fails on the first bad import.
+    onUnresolvable?: (err: ImportResolutionError) => void;
+  } = {},
 ): AgencyProgram {
   const allowTestImports = opts.allowTestImports ?? false;
-  const skipUnresolvable = opts.skipUnresolvable ?? false;
+  const onUnresolvable = opts.onUnresolvable;
   const newNodes: AgencyNode[] = [];
 
   for (const node of program.nodes) {
@@ -78,29 +100,15 @@ export function resolveImports(
       newNodes.push(node);
       continue;
     }
-    try {
-      newNodes.push(
-        ...resolveImportStatement(
-          node,
-          symbolTable,
-          currentFile,
-          allowTestImports,
-        ),
-      );
-    } catch (err) {
-      // Analysis mode (LSP): a single unresolvable import must not abort the
-      // whole rewrite — that would leave every *other* import unresolved and
-      // reported as undefined at its use sites. Keep the original (unrewritten)
-      // statement so every other import still resolves AND the type checker's
-      // `checkMissingImports` pass can still see this node and report the
-      // specific bad name at its own location (AG4008/4009/4010). The compile
-      // path leaves `skipUnresolvable` off and still hard-fails here.
-      if (skipUnresolvable && err instanceof ImportResolutionError) {
-        newNodes.push(node);
-        continue;
-      }
-      throw err;
-    }
+    newNodes.push(
+      ...resolveImportStatement(
+        node,
+        symbolTable,
+        currentFile,
+        allowTestImports,
+        onUnresolvable,
+      ),
+    );
   }
 
   return { ...program, nodes: newNodes };
@@ -172,56 +180,79 @@ function classifyImportedName(
 }
 
 /**
+ * Enforce the `import test` gates: the keyword is only for first-party (std::
+ * and local) Agency modules, and only under the test harness. Throws an
+ * {@link ImportResolutionError} on a violation. Must run BEFORE the non-Agency
+ * short-circuit in the caller — otherwise `import test { x } from "./foo.ts"`
+ * (or a bare npm path) would slip through untouched, making the keyword a
+ * silent no-op — and before symbol lookup, so a pkg:: rejection does not
+ * depend on the package resolving.
+ */
+function assertTestOnlyImportable(
+  node: ImportStatement,
+  allowTestImports: boolean,
+): void {
+  if (!node.testOnly) return;
+  if (isPkgImport(node.modulePath)) {
+    throw new ImportResolutionError(
+      "`import test` cannot be used with pkg:: imports; it is only for first-party (std:: and local) modules.",
+      node.loc,
+    );
+  }
+  if (!isAgencyImport(node.modulePath)) {
+    throw new ImportResolutionError(
+      "`import test` cannot be used with TypeScript or npm imports; it is only for first-party (std:: and local) modules.",
+      node.loc,
+    );
+  }
+  if (!allowTestImports) {
+    throw new ImportResolutionError(
+      "`import test` is only allowed under the test harness.",
+      node.loc,
+    );
+  }
+}
+
+/**
  * Resolve a single `import { ... }` statement into the specialized node(s) it
  * expands to (an ImportNodeStatement for imported nodes, an ImportStatement for
  * functions/types/constants), returning them in the order they should appear.
- * Throws an {@link ImportResolutionError} if any imported name can't be
- * resolved. Non-Agency and namespace/default imports pass through unchanged.
+ *
+ * Without `onUnresolvable`, throws an {@link ImportResolutionError} on the
+ * first problem (the compile path). With it, each unresolvable name is dropped
+ * from the rewrite and reported through the callback instead, so good names in
+ * the same statement still resolve. Non-Agency and namespace/default imports
+ * pass through unchanged.
  */
 function resolveImportStatement(
   node: ImportStatement,
   symbolTable: SymbolTable,
   currentFile: string,
   allowTestImports: boolean,
+  onUnresolvable?: (err: ImportResolutionError) => void,
 ): AgencyNode[] {
+  let fileSymbols: FileSymbols;
+  try {
+    assertTestOnlyImportable(node, allowTestImports);
+    if (!isAgencyImport(node.modulePath)) return [node];
+    // Namespace/default imports (including mixed `import foo, { bar }`) pass
+    // through unchanged — rewriting only the named part would duplicate the
+    // default/namespace binding still carried by this original statement.
+    if (node.importedNames.some((n) => n.type !== "namedImport")) return [node];
+    // May throw a plain Error for a pkg:: that isn't installed; the caller's
+    // `onUnresolvable` path coerces it so it stays skippable, not fatal.
+    fileSymbols = symbolTable.getFile(resolveAgencyImportPath(node.modulePath, currentFile)) ?? {};
+  } catch (err) {
+    // A statement-level failure (bad `import test`, unresolvable module path)
+    // means nothing in this statement resolves — drop it whole and report.
+    if (onUnresolvable) {
+      onUnresolvable(asImportResolutionError(err, node.loc));
+      return [];
+    }
+    throw err;
+  }
+
   const out: AgencyNode[] = [];
-
-  // Per-statement gate for test-only imports. Must run BEFORE the
-  // non-Agency short-circuit below — otherwise `import test { x } from
-  // "./foo.ts"` (or a bare npm path) would slip through untouched, making
-  // the keyword a silent no-op instead of an error — and before symbol
-  // lookup, so a pkg:: rejection does not depend on the package resolving.
-  if (node.testOnly) {
-    if (isPkgImport(node.modulePath)) {
-      throw new ImportResolutionError(
-        "`import test` cannot be used with pkg:: imports; it is only for first-party (std:: and local) modules.",
-        node.loc,
-      );
-    }
-    if (!isAgencyImport(node.modulePath)) {
-      throw new ImportResolutionError(
-        "`import test` cannot be used with TypeScript or npm imports; it is only for first-party (std:: and local) modules.",
-        node.loc,
-      );
-    }
-    if (!allowTestImports) {
-      throw new ImportResolutionError(
-        "`import test` is only allowed under the test harness.",
-        node.loc,
-      );
-    }
-  }
-
-  if (!isAgencyImport(node.modulePath)) {
-    return [node];
-  }
-
-  const importedFilePath = resolveAgencyImportPath(
-    node.modulePath,
-    currentFile,
-  );
-  const fileSymbols = symbolTable.getFile(importedFilePath) ?? {};
-
   const buckets: ImportBuckets = {
     nodeNames: [],
     functionNames: [],
@@ -233,25 +264,31 @@ function resolveImportStatement(
   const aliases: Record<string, string> = {};
 
   for (const nameType of node.importedNames) {
-    if (nameType.type !== "namedImport") {
-      // Namespace or default imports of .agency files — keep as-is
-      out.push(node);
-      continue;
-    }
+    if (nameType.type !== "namedImport") continue; // guaranteed above
 
     for (const name of nameType.importedNames) {
-      const symbol = fileSymbols[name];
-      if (!symbol) {
-        throw new ImportResolutionError(
-          `Symbol '${name}' is not defined in '${node.modulePath}'`,
-          node.loc,
-        );
+      try {
+        const symbol = fileSymbols[name];
+        if (!symbol) {
+          throw new ImportResolutionError(
+            `Symbol '${name}' is not defined in '${node.modulePath}'`,
+            node.loc,
+          );
+        }
+        // Carry forward any alias from the original import
+        if (nameType.aliases[name]) {
+          aliases[name] = nameType.aliases[name];
+        }
+        classifyImportedName(name, symbol, nameType, node, buckets);
+      } catch (err) {
+        // Per-name failure: drop just this name (good names still resolve) and
+        // report it. The compile path (no callback) rethrows to hard-fail.
+        if (onUnresolvable) {
+          onUnresolvable(asImportResolutionError(err, node.loc));
+          continue;
+        }
+        throw err;
       }
-      // Carry forward any alias from the original import
-      if (nameType.aliases[name]) {
-        aliases[name] = nameType.aliases[name];
-      }
-      classifyImportedName(name, symbol, nameType, node, buckets);
     }
   }
 

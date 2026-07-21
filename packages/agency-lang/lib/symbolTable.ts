@@ -179,19 +179,32 @@ export class SymbolTable {
       const program = parseResult.result;
       parsed[absPath] = { symbols: classifySymbols(program), program };
 
+      // Following an import may throw before it can be visited — e.g. a
+      // `pkg::` module that isn't installed makes `resolveAgencyImportPath`
+      // throw. That must not abort the whole crawl: symbol discovery is
+      // best-effort, and the unresolvable import is reported downstream (by
+      // resolveImports / the type checker's checkMissingImports) with a proper
+      // location. Skip what won't resolve and keep crawling the rest.
+      const visitImport = (modulePath: string): void => {
+        try {
+          visit(resolveAgencyImportPath(modulePath, absPath));
+        } catch {
+          /* unresolvable import path — reported downstream, not here */
+        }
+      };
       for (const { node } of walkNodes(program.nodes)) {
         if (node.type === "importNodeStatement") {
-          visit(resolveAgencyImportPath(node.agencyFile, absPath));
+          visitImport(node.agencyFile);
         } else if (
           node.type === "importStatement" &&
           isAgencyImport(node.modulePath)
         ) {
-          visit(resolveAgencyImportPath(node.modulePath, absPath));
+          visitImport(node.modulePath);
         } else if (
           node.type === "exportFromStatement" &&
           isAgencyImport(node.modulePath)
         ) {
-          visit(resolveAgencyImportPath(node.modulePath, absPath));
+          visitImport(node.modulePath);
         }
       }
     }

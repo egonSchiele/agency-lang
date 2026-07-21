@@ -134,15 +134,37 @@ export function runDiagnostics(
   // Analysis-only path (the LSP never executes anything):
   //  - `allowTestImports` honors `import test` so migrated test files keep full
   //    editor support instead of dying on a single 0:0 error.
-  //  - `skipUnresolvable` drops any import that can't be resolved instead of
-  //    aborting the whole rewrite. That keeps every *other* import (and the
-  //    rest of the file) type-checked; the type checker's `checkMissingImports`
-  //    pass reports each bad import at its own location (AG4008/4009/4010), so
-  //    there is no need to surface a duplicate here.
-  program = resolveImports(program, symbolTable, fsPath, {
-    allowTestImports: true,
-    skipUnresolvable: true,
-  });
+  //  - `onUnresolvable` drops any import that can't be resolved (instead of
+  //    aborting the whole rewrite) and reports it at its own location, so every
+  //    *other* import and the rest of the file still type-check.
+  try {
+    program = resolveImports(program, symbolTable, fsPath, {
+      allowTestImports: true,
+      onUnresolvable: (err) => {
+        const loc = err.loc;
+        const range = loc
+          ? { start: doc.positionAt(loc.start), end: doc.positionAt(loc.end) }
+          : { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
+        diagnostics.push({
+          severity: DiagnosticSeverity.Error,
+          range,
+          message: err.message,
+          source: "agency",
+        });
+      },
+    });
+  } catch (err) {
+    // Defensive: `onUnresolvable` absorbs every expected import failure, so a
+    // throw here is unexpected. Report it but keep the (unrewritten) program so
+    // the type checker still runs — a single import must never blank the file
+    // or crash the server (updateDocument runs in a bare debounce callback).
+    diagnostics.push({
+      severity: DiagnosticSeverity.Error,
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+      message: err instanceof Error ? err.message : String(err),
+      source: "agency",
+    });
+  }
 
   const info = buildCompilationUnit(program, symbolTable, fsPath, source);
   const { errors, scopes, interruptEffectsByFunction } = typeCheck(program, config, info);

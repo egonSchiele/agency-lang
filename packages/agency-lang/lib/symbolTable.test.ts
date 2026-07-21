@@ -582,3 +582,31 @@ describe("SymbolTable.build: in-memory overrides", () => {
     expect(st.getFile(path.resolve(virtualFile))?.onlyInBuffer?.kind).toBe("function");
   });
 });
+
+describe("SymbolTable.build: an unresolvable import doesn't abort the crawl", () => {
+  // Following a `pkg::` import that isn't installed makes resolveAgencyImportPath
+  // throw. That must not abort discovery of the file's *other* imports — else a
+  // single just-typed bad import in the editor would blank the whole table.
+  it("still crawls a good import alongside an uninstalled pkg:: import", () => {
+    const { paths, cleanup } = withTempFiles({
+      dep: `export def helper(): number {\n  return 1\n}\n`,
+      main: `node main() {\n  return 0\n}\n`,
+    });
+    try {
+      const buffer = [
+        `import { helper } from "${paths.dep}"`,
+        `import { nope } from "pkg::@definitely/not-installed-xyz"`,
+        `node main() {`,
+        `  return helper()`,
+        `}`,
+        ``,
+      ].join("\n");
+      // Must not throw despite the uninstalled pkg:: import.
+      const st = SymbolTable.build(paths.main, {}, { [path.resolve(paths.main)]: buffer });
+      // The good dependency was still crawled.
+      expect(st.getFile(path.resolve(paths.dep))?.helper?.kind).toBe("function");
+    } finally {
+      cleanup();
+    }
+  });
+});

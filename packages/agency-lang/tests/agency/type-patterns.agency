@@ -125,3 +125,23 @@ node looseNull() {
   }
   return "missing-not-null"
 }
+
+import { Json, JsonObject } from "std::validation"
+
+node jsonCheck() {
+  const good: any = { a: [1, "x", null], b: { c: true } }
+  const bad: any = { a: [1, 0 / 0] }
+  let out = ""
+  if (good is Json) {
+    out = "good-yes"
+  }
+  if (bad is Json) {
+    out = "${out},bad-yes"
+  } else {
+    out = "${out},bad-no"
+  }
+  if (good is JsonObject) {
+    out = "${out},obj-yes"
+  }
+  return out
+}

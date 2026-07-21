@@ -29,9 +29,9 @@ node bothAreReadOnly(): boolean {
 // Both read files and consult the bundled docs; the oracle additionally
 // inspects Agency source, which the explorer has no need of.
 node toolsMatchTheirJobs(): boolean {
-  const oracleReads = hasTool(oracleTools(), "read") && hasTool(oracleTools(), "agency_guide")
+  const oracleReads = hasTool(oracleTools(), "read") && hasTool(oracleTools(), "agencyGuide")
   const oracleChecks = hasTool(oracleTools(), "typecheck")
-  const explorerReads = hasTool(explorerTools(), "glob") && hasTool(explorerTools(), "agency_stdlib")
+  const explorerReads = hasTool(explorerTools(), "glob") && hasTool(explorerTools(), "agencyStdlib")
   return oracleReads && oracleChecks && explorerReads
 }
 

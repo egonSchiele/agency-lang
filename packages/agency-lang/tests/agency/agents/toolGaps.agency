@@ -26,7 +26,7 @@ node verifierCanComputeAndReadBytes(): boolean {
 // quoted at it, nor check a draft before spending an attempt on it.
 node agencyCodingHasDocsAndTypecheck(): boolean {
   const tools = agencyCodingTools()
-  return hasTool(tools, "agency_diagnostics") && hasTool(tools, "typecheck") && hasTool(tools, "read")
+  return hasTool(tools, "agencyDiagnostics") && hasTool(tools, "typecheck") && hasTool(tools, "read")
 }
 
 // It gets targeted fetch but deliberately no search: an open-ended search
@@ -45,7 +45,7 @@ node codingCanFetch(): boolean {
 node reviewersLookUpButCannotWrite(): boolean {
   const plain = reviewTools()
   const agency = agencyReviewTools()
-  const canLookUp = hasTool(plain, "fetchMarkdown") && hasTool(agency, "agency_guide")
+  const canLookUp = hasTool(plain, "fetchMarkdown") && hasTool(agency, "agencyGuide")
   const cannotWrite = !hasTool(plain, "write") && !hasTool(agency, "write") && !hasTool(agency, "bash")
   return canLookUp && cannotWrite
 }

@@ -23,13 +23,11 @@ describe("the prelude", () => {
   });
 
   // The prelude is deliberately a *subset* of what std::index exports:
-  // setAgentCwd and friends are importable but intentionally not in scope
-  // everywhere. So the check above runs in one direction only — this
-  // records why, so nobody "fixes" it into a two-way equality check and
-  // drags those names into every file.
+  // applyAgentCwd is importable but intentionally not in scope everywhere.
+  // So the check above runs in one direction only — this records why, so
+  // nobody "fixes" it into a two-way equality check and drags those names
+  // into every file.
   it("is a subset, not a mirror, of the std::index exports", () => {
-    expect(PRELUDE_NAMES).not.toContain("setAgentCwd");
-    expect(PRELUDE_NAMES).not.toContain("getAgentCwd");
     expect(PRELUDE_NAMES).not.toContain("applyAgentCwd");
   });
 

@@ -86,8 +86,8 @@ and produce structured overviews. Typical questions you answer:
   them when the answer is purely conceptual rather than structural.
 
 For questions about the Agency language itself, the bundled docs tools
-(`agency_guide`, `agency_cli`, `agency_diagnostics`, `agency_stdlib`) are
-authoritative. `agency_stdlib` lists every std:: module with a one-line
+(`agencyGuide`, `agencyCli`, `agencyDiagnostics`, `agencyStdlib`) are
+authoritative. `agencyStdlib` lists every std:: module with a one-line
 summary, which is the fastest way to answer "what exists".
 
 ## What NOT to do

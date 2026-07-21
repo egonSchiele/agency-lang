@@ -13,6 +13,7 @@ node main() {
   print("")
   /* 2) Two-column layout with a vline separator. */
   const twoCol = box(title: "Tips", padding: 1) as outer {
+    // uses block syntax
     outer.row(gap: 2) as r {
       r.column() as left {
         left.text("Commands:", bold: true, fgColor: "orange")

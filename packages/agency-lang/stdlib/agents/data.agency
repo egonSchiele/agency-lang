@@ -10,7 +10,7 @@
 */
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { webTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import { webTools, communicationTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { dbnomicsSeries } from "std::data/finance/dbnomics"
 import { edgarFilings, edgarFilingsByCik } from "std::data/finance/edgar"
 import { fredSeries, fredSeriesInfo } from "std::data/finance/fred"
@@ -77,6 +77,7 @@ export def buildTools(): any[] {
     ycMeta,
     ...webTools(),
     ...searchTools(),
+    ...communicationTools(),
     skills,
   ]
 }

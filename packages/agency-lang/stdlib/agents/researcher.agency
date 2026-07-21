@@ -97,7 +97,7 @@ def researchLoop(
       llmOptions(
       model: model,
       provider: provider,
-      tools: [...researchTools, ...extraTools],
+      tools: [...researchTools, ...extraTools, saveDraft],
       hostedTools: hostedSearchTools(model),
     ),
     )

@@ -68,7 +68,7 @@ You are typically asked one of:
   No "it depends" without specifying what it depends on.
 
 For questions about the Agency language itself, the bundled docs tools
-(`agency_guide`, `agency_cli`, `agency_diagnostics`, `agency_stdlib`) are
+(`agencyGuide`, `agencyCli`, `agencyDiagnostics`, `agencyStdlib`) are
 authoritative — consult them rather than recalling.
 
 ## What NOT to do

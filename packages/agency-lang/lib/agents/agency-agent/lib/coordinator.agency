@@ -4,9 +4,10 @@
   surrounds it is the CLI and the REPL.
 */
 import { localModelsSupported, listModelNames } from "std::agency/local"
+import { whatIAmDoing } from "std::agents/lib/toolkits"
 import { parseArgs } from "std::args"
 import { map } from "std::array"
-import { today } from "std::date"
+import { today, now, elapsedTime } from "std::date"
 import { generateImage } from "std::image"
 import { applyAgentCwd, setAgentCwd } from "std::index"
 import { listHostedModels, hostedModelInfo, setLlmOptions } from "std::llm"
@@ -243,6 +244,10 @@ export def maybeEnableMemory() {
 
 def mainAgent(prompt: string | (string | Attachment)[]): string {
   // const doSummarize = getCapabilities().summarize
+  // The prompt tells the model to report progress (whatIAmDoing) and watch
+  // the clock (elapsedTime), so both must be in its tool list. elapsedTime
+  // is anchored to this turn's start.
+  const turnStart = now()
   thread(label: "main", session: "main") {
     setMemoryId("main")
     if (first) {
@@ -258,7 +263,12 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
       prompt,
       {
       memory: true,
-      tools: [...mainAgentTools, ...getMcpTools()]
+      tools: [
+      ...mainAgentTools,
+      ...getMcpTools(),
+      whatIAmDoing,
+      elapsedTime.partial(since: turnStart),
+    ]
     },
     )
   }

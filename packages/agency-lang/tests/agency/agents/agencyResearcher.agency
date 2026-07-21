@@ -15,7 +15,7 @@ node answersFromTheDocs(): string {
 // usually an answer about a different language.
 node readsDocsAndNotTheWeb(): boolean {
   const tools = buildTools()
-  const reads = hasTool(tools, "agency_guide") && hasTool(tools, "agency_diagnostics") && hasTool(tools, "typecheck")
+  const reads = hasTool(tools, "agencyGuide") && hasTool(tools, "agencyDiagnostics") && hasTool(tools, "typecheck")
   const noWeb = !hasTool(tools, "fetch") && !hasTool(tools, "wikipedia_search")
   const cannotWrite = !hasTool(tools, "write") && !hasTool(tools, "bash")
   return reads && noWeb && cannotWrite

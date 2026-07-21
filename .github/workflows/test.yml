@@ -98,39 +98,40 @@ jobs:
       # collects no coverage, so it has no coupling to the coverage steps.
       run: pnpm run test:agents
 
+  # The agency execution suite (~11 min unsharded) is the critical path. We
+  # split it into N shards that run in parallel, each compiling and running
+  # only its slice of the test files (see `--shard` in lib/cli/test.ts). The
+  # slice is a deterministic round-robin over the sorted file list, so the
+  # shards together cover every test file exactly once.
+  #
+  # Node 23.x is intentionally NOT in this job: running the full suite on two
+  # node versions doubled the runner cost and put whichever runner was slower
+  # on the critical path. The cheaper `build` job still exercises node 23.x
+  # (unit tests + build), so 23.x is not left entirely uncovered.
   agency-tests:
-    # `pull-requests: write` is required so the coverage reporter can post
-    # a sticky comment on PRs.
-    #
-    # Security notes:
-    #   * This workflow uses `pull_request`, NOT `pull_request_target`. PRs
-    #     from forks therefore receive a read-only `GITHUB_TOKEN` regardless
-    #     of the `permissions:` block, so a fork cannot abuse this scope.
-    #   * For same-repo PRs the author already has push access, so the
-    #     incremental risk of granting comment-write to that PR's workflow
-    #     run is minimal.
-    #   * The post step is wrapped with `continue-on-error: true` so that a
-    #     missing/restricted token never fails the build.
     permissions:
       contents: read
-      pull-requests: write
 
     runs-on: ubuntu-latest
 
     strategy:
+      # Don't cancel the other shards when one fails — we still want the full
+      # pass/fail picture (and coverage from the shards that did finish).
+      fail-fast: false
       matrix:
-        node-version: [22.x, 23.x]
+        shard: [1, 2, 3, 4]
+
+    env:
+      SHARD_COUNT: "4"
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
         # Don't write GITHUB_TOKEN into .git/config: no step does
-        # authenticated git operations afterward (the coverage comment
-        # authenticates via github-script's injected client), and these
-        # jobs execute PR-controlled code — the agency tests compile and
-        # run programs from the PR — which could otherwise read the
-        # persisted token.
+        # authenticated git operations afterward, and these jobs execute
+        # PR-controlled code — the agency tests compile and run programs
+        # from the PR — which could otherwise read the persisted token.
         persist-credentials: false
 
     - name: Set up pnpm
@@ -139,60 +140,54 @@ jobs:
         version: 9
         run_install: false
 
-    - name: Set up Node.js ${{ matrix.node-version }}
+    - name: Set up Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 22.x
         cache: 'pnpm'
     - run: pnpm install
     - run: make
-    - name: Agency execution tests
+    - name: Agency execution tests (shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }})
       working-directory: packages/agency-lang
       env:
         AGENCY_USE_TEST_LLM_PROVIDER: "1"
-      # On node 22 we collect step coverage so the next step can report on
-      # stdlib. `--coverage` (without `--accumulate`) cleans `.coverage/` first,
-      # so the runner does not need to be otherwise prepared.
+      # `--coverage` turns on step-coverage collection (writes cov-*.json into
+      # .coverage/); `--collect-only` skips the per-shard report, which would
+      # otherwise recompile every source file for its source map — wasteful
+      # when this shard ran only a slice. The coverage-report job merges the
+      # shards and reports once. `--coverage` (no --accumulate) wipes
+      # .coverage/ first; the agency-js step below adds --accumulate so it
+      # does not wipe this step's data.
       run: |
-        if [ "${{ matrix.node-version }}" = "22.x" ]; then
-          time node ./dist/scripts/agency.js test tests/agency -p 12 --coverage
-        else
-          pnpm run test:agency
-        fi
-    - name: Agency-JS integration tests
+        time node ./dist/scripts/agency.js test tests/agency -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }} --coverage --collect-only
+    - name: Agency-JS integration tests (shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }})
       working-directory: packages/agency-lang
       env:
         AGENCY_USE_TEST_LLM_PROVIDER: "1"
       run: |
-        if [ "${{ matrix.node-version }}" = "22.x" ]; then
-          time node ./dist/scripts/agency.js test js tests/agency-js -p 12 --coverage --accumulate
-        else
-          pnpm run test:agency-js
-        fi
-    - name: Generate stdlib coverage report
-      if: matrix.node-version == '22.x' && always() && !cancelled()
-      working-directory: packages/agency-lang
-      # `coverage report` triggers a recompile of every target .agency file:
-      # type warnings go to stderr (silenced) and "file.agency → file.js"
-      # progress lines go to stdout interleaved with the report itself
-      # (filtered out with grep).
-      run: |
-        node ./dist/scripts/agency.js coverage report stdlib 2>/dev/null \
-          | grep -v ' → ' \
-          | tee coverage-summary.txt
-        node ./dist/scripts/agency.js coverage report --detail stdlib 2>/dev/null \
-          | grep -v ' → ' \
-          | tee coverage-detail.txt
-    - name: Post stdlib coverage comment
-      if: matrix.node-version == '22.x' && github.event_name == 'pull_request' && always() && !cancelled()
-      continue-on-error: true
-      uses: ./.github/actions/coverage-comment
+        time node ./dist/scripts/agency.js test js tests/agency-js -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }} --coverage --collect-only --accumulate
+    - name: Upload shard coverage
+      # Upload even when tests failed so the coverage comment still reflects
+      # what ran (mirrors the old always()-guarded report step). `always()`
+      # overrides the default "skip on prior-step failure"; `!cancelled()`
+      # still skips on cancellation. Filenames are `cov-<pid>-<uuid>.json`,
+      # so shard outputs never collide when merged.
+      #
+      # include-hidden-files is REQUIRED: the coverage dir is `.coverage`, a
+      # dot-directory, and upload-artifact@v4 skips hidden files by default —
+      # without this the whole dir is silently dropped ("No files were found")
+      # even though it is full of cov-*.json.
+      if: ${{ always() && !cancelled() }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
-        summary-path: packages/agency-lang/coverage-summary.txt
-        detail-path: packages/agency-lang/coverage-detail.txt
-        title: Standard Library Coverage
+        name: coverage-shard-${{ matrix.shard }}
+        path: packages/agency-lang/.coverage
+        include-hidden-files: true
+        if-no-files-found: ignore
+        retention-days: 1
     - name: github stdlib smoke test
-      # Only run on `push` to main, NEVER on `pull_request` events.
+      # Only run on `push` to main, NEVER on `pull_request` events, and only
+      # on ONE shard (the work is not shardable and must run exactly once).
       #
       # Even though `pull_request` from forks does not expose secrets,
       # `pull_request` from same-repo branches DOES — anyone with push
@@ -205,7 +200,7 @@ jobs:
       # `secrets.*` cannot be referenced inside step-level `if:` expressions,
       # so we gate on the event/ref here and skip inside the script when
       # `GITHUB_TOKEN` is empty (e.g. on forks of this repo).
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.node-version == '22.x'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.shard == 1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TEST_TOKEN }}
       run: |
@@ -214,6 +209,113 @@ jobs:
           exit 0
         fi
         pnpm -F @agency-lang/github test:agency
+
+  # Merge the per-shard coverage and render the report text. Coverage is only
+  # meaningful once every shard has contributed its hits; `loadCoverageData`
+  # (lib/cli/coverage.ts) unions every `cov-*.json` in the dir, so "merging"
+  # is just gathering all shard artifacts into one `.coverage/`.
+  #
+  # This job holds NO write token. It is where the untrusted work happens —
+  # `pnpm install` (lifecycle scripts), `make`, and `coverage report` (which
+  # recompiles .agency files and parses the shard-produced coverage JSON). It
+  # produces two plain-text files and hands them to the comment job, which is
+  # the only job with a write token. That split keeps PR-controlled build and
+  # parse steps away from the token (see the security note on coverage-comment).
+  coverage-report:
+    needs: agency-tests
+    # Run even if a shard failed (partial coverage is still worth reporting).
+    # `always()` overrides the default "skip when a needed job failed";
+    # `!cancelled()` still skips on cancellation.
+    if: ${{ always() && !cancelled() }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        version: 9
+        run_install: false
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 22.x
+        cache: 'pnpm'
+    - run: pnpm install
+    - run: make
+    - name: Download shard coverage
+      # `merge-multiple: true` flattens every shard artifact into one dir;
+      # UUID filenames guarantee no collisions.
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        path: packages/agency-lang/.coverage
+        pattern: coverage-shard-*
+        merge-multiple: true
+    - name: Generate stdlib coverage report
+      working-directory: packages/agency-lang
+      # `coverage report` reads the merged `.coverage/` and recompiles each
+      # target .agency file for its source map: type warnings go to stderr
+      # (silenced) and "file.agency → file.js" progress lines go to stdout
+      # interleaved with the report itself (filtered out with grep).
+      run: |
+        node ./dist/scripts/agency.js coverage report stdlib 2>/dev/null \
+          | grep -v ' → ' \
+          | tee coverage-summary.txt
+        node ./dist/scripts/agency.js coverage report --detail stdlib 2>/dev/null \
+          | grep -v ' → ' \
+          | tee coverage-detail.txt
+    - name: Upload coverage report text
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: coverage-report-text
+        path: |
+          packages/agency-lang/coverage-summary.txt
+          packages/agency-lang/coverage-detail.txt
+        if-no-files-found: ignore
+        retention-days: 1
+
+  # Post (or update) the sticky coverage comment on the PR. This is the ONLY
+  # job with `pull-requests: write`, and it deliberately does the minimum: it
+  # downloads the pre-rendered text from coverage-report and runs the comment
+  # action. It does NOT run `pnpm install`, `make`, or any .agency recompile,
+  # and it never parses the shard-produced (PR-controlled) coverage JSON — all
+  # of that happens in the no-token coverage-report job.
+  #
+  # Security: this workflow is `pull_request`, NOT `pull_request_target`, so a
+  # fork PR gets a read-only token regardless of this block; the post step is
+  # `continue-on-error` so a restricted token never fails the build. The
+  # coverage-comment action's render.js only reads the text files (require
+  # 'fs'), so no dependency install is needed. Residual (pre-existing): the
+  # action's render.js is repo code and runs under github-script with the
+  # token; eliminating that entirely would mean inlining a pinned script.
+  coverage-comment:
+    needs: coverage-report
+    if: ${{ always() && !cancelled() && github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+    - name: Download coverage report text
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        name: coverage-report-text
+        path: packages/agency-lang
+    - name: Post stdlib coverage comment
+      continue-on-error: true
+      uses: ./.github/actions/coverage-comment
+      with:
+        summary-path: packages/agency-lang/coverage-summary.txt
+        detail-path: packages/agency-lang/coverage-detail.txt
+        title: Standard Library Coverage
 
   integration-credentials:
     # Only run on push to main or daily cron — never on PRs (secrets not available to forks).

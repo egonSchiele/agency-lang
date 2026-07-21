@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "rejects",
+      "description": "Cross-module Record value validator (calling a module-private helper) rejects a failing entry.",
+      "input": "",
+      "expectedOutput": "\"rejected:too young\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "passes",
+      "description": "Valid entries pass and values are preserved.",
+      "input": "",
+      "expectedOutput": "\"ok:30,45\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "transforms",
+      "description": "A transforming validator on the value type writes repaired values back per entry.",
+      "input": "",
+      "expectedOutput": "\"fixed:1,2\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "patternTest",
+      "description": "is Record<string, Age> runs value validators through the tier-2 type-pattern path.",
+      "input": "",
+      "expectedOutput": "\"good-yes,bad-no\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "nested",
+      "description": "Nested records validate through both levels.",
+      "input": "",
+      "expectedOutput": "\"deep-rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

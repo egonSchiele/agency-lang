@@ -82,7 +82,8 @@ describe("resolveType: built-in generic Record", () => {
       typeArgs: [stringType, numberType],
     };
     const result = resolveType(input, {});
-    expect(result).toEqual(input);
+    // writtenTypeArgs rides along for the validation-descriptor builder (#630).
+    expect(result).toEqual({ ...input, writtenTypeArgs: [stringType, numberType] });
   });
 
   it("resolves aliases inside Record value position", () => {
@@ -101,6 +102,11 @@ describe("resolveType: built-in generic Record", () => {
       type: "genericType",
       name: "Record",
       typeArgs: [stringType, numberType],
+      // Written args keep the alias identity that resolution erases (#630).
+      writtenTypeArgs: [
+        stringType,
+        { type: "typeAliasVariable", aliasName: "N" },
+      ],
     });
   });
 
@@ -280,6 +286,9 @@ describe("resolveType: user-defined generic aliases", () => {
       type: "genericType",
       name: "Record",
       typeArgs: [stringType, anyType],
+      // Written args after param substitution: V has already been replaced
+      // by its default before Record.apply sees the args (#630).
+      writtenTypeArgs: [stringType, anyType],
     });
   });
 
@@ -555,6 +564,16 @@ describe("resolveTypeDeep: nested generic resolution", () => {
         {
           type: "objectType",
           properties: [{ key: "value", value: numberType }],
+        },
+      ],
+      // The written value arg keeps the Container<number> reference so the
+      // descriptor builder can preserve alias identity (#630).
+      writtenTypeArgs: [
+        stringType,
+        {
+          type: "genericType",
+          name: "Container",
+          typeArgs: [numberType],
         },
       ],
     });

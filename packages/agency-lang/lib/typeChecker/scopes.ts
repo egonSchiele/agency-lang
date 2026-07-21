@@ -374,6 +374,38 @@ function checkConstMutations(
   }
 }
 
+const hasOwn = (obj: object, name: string): boolean =>
+  Object.prototype.hasOwnProperty.call(obj, name);
+
+/**
+ * The scope type for an imported name. A resolved Agency function/node import
+ * resolves to its real function type, not `any`, so passing one where a
+ * specific type is expected — a lone tool where a `tools:` array is required,
+ * for instance — is caught exactly as it is for a locally-defined `def`. Value
+ * references read this scope binding, so without it an imported tool would
+ * silently type as `any` and slip past the check.
+ *
+ * A JS import stays `any` (its signature is unknown to the type checker), and
+ * an unresolved Agency import stays `any` too (absent from importedFunctions),
+ * preserving the fail-open behavior for missing modules. Both membership tests
+ * use an own-property check so a name like `toString` is not mistaken for a
+ * prototype method on these plain-object registries.
+ */
+function importedValueType(
+  name: string,
+  ctx: TypeCheckerContext,
+): VariableType {
+  if (hasOwn(ctx.jsImportedNames, name)) return ANY_T;
+  if (!hasOwn(ctx.importedFunctions, name)) return ANY_T;
+  const imported = ctx.importedFunctions[name];
+  return {
+    type: "functionRefType",
+    name,
+    params: imported.parameters,
+    returnType: imported.returnType ?? null,
+  };
+}
+
 /**
  * Walk a body of statements and declare every binding into the given scope.
  * Recurses into nested blocks using the same scope, which preserves today's
@@ -401,7 +433,7 @@ export function walkScopeBody(
       case "importStatement":
         for (const importName of node.importedNames) {
           for (const name of getImportedNames(importName)) {
-            scope.declare(name, ANY_T);
+            scope.declare(name, importedValueType(name, ctx));
           }
         }
         break;

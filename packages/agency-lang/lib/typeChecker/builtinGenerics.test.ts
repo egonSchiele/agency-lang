@@ -67,13 +67,26 @@ describe("container forms through the registry", () => {
     });
   });
 
-  it("Record keeps its genericType wrapper with resolved args and use-site tags", () => {
+  it("Array merges use-site tags onto the lowered arrayType (#630)", () => {
+    const tag = { type: "tag" as const, name: "validate", arguments: [] };
+    const out = evalBuiltinGeneric("Array", [NUM], id, [tag]);
+    expect(out).toEqual({
+      type: "arrayType",
+      elementType: NUM,
+      tags: [tag],
+    });
+  });
+
+  it("Record keeps its genericType wrapper with resolved args, written args, and use-site tags", () => {
     const tag = { type: "tag" as const, name: "validate", arguments: [] };
     const out = evalBuiltinGeneric("Record", [STR, NUM], id, [tag]);
     expect(out).toEqual({
       type: "genericType",
       name: "Record",
       typeArgs: [STR, NUM],
+      // The written (unresolved) args survive alongside the resolved ones so
+      // the validation-descriptor builder can keep alias identity (#630).
+      writtenTypeArgs: [STR, NUM],
       tags: [tag],
     });
   });

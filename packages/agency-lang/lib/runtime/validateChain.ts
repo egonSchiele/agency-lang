@@ -94,6 +94,19 @@ export type TypeValidationDescriptor =
       element: TypeValidationDescriptor;
     }
   | {
+      /**
+       * A Record<K, V>: every entry value walks the same `value` descriptor
+       * (#630 — this is how alias-carried validators on the value type run).
+       * KEYS are schema-checked only: running validators on keys would mean
+       * rewriting keys when a validator transforms, which needs its own
+       * design. Documented in the guide.
+       */
+      kind: "record";
+      schema: z.ZodType;
+      validators: AgencyValidator[];
+      value: TypeValidationDescriptor;
+    }
+  | {
       kind: "union";
       schema: z.ZodType;
       validators: AgencyValidator[];
@@ -229,6 +242,30 @@ async function walk(
         );
         if (!isSuccess(r)) return r;
         out[key] = (r as { value: unknown }).value;
+      }
+      return success(out);
+    }
+
+    case "record": {
+      if (parsed === null || typeof parsed !== "object") {
+        return success(parsed);
+      }
+      const entries = parsed as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const key of Object.keys(entries)) {
+        const r = await walk(entries[key], descriptor.value, depth + 1, maxDepth);
+        if (!isSuccess(r)) return r;
+        // defineProperty, not assignment: record keys are user data, and
+        // assigning a key like "__proto__" would rewrite the prototype
+        // instead of storing the entry (prototype pollution). Zod's record
+        // parse drops such keys today, but a ref-carried schema may not —
+        // the walker must be safe on its own.
+        Object.defineProperty(out, key, {
+          value: (r as { value: unknown }).value,
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
       }
       return success(out);
     }

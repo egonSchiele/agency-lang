@@ -139,13 +139,19 @@ function resolveTypeWithGuard(
     // types) live in the builtinGenerics.ts registry and evaluate eagerly.
     // The resolver callback carries this call's in-progress guard, so
     // recursive alias arguments degrade gracefully (self-refs stay
-    // nominal). Tag handling is per-entry: utility types merge the
-    // occurrence's tags as the use-site layer; Array/Schema/Record keep
-    // their historical behavior.
+    // nominal). Tag handling is per-entry: utility types and Array merge
+    // the occurrence's tags as the use-site layer; Record keeps them
+    // verbatim on its wrapper; Schema drops them (a schema value is not
+    // validated data). See the registry comment in builtinGenerics.ts.
     if (isBuiltinGenericName(vt.name)) {
       return evalBuiltinGeneric(
         vt.name,
-        vt.typeArgs,
+        // Prefer the written args when this node has been resolved before
+        // (Record keeps its wrapper, so it can meet the resolver twice).
+        // apply() resolves its args itself, so this is idempotent — and it
+        // keeps writtenTypeArgs genuinely written across passes, which the
+        // validation-descriptor builder relies on for alias identity (#630).
+        vt.writtenTypeArgs ?? vt.typeArgs,
         (t) => resolveTypeWithGuard(t, typeAliases, inProgress),
         vt.tags,
       );
@@ -257,7 +263,12 @@ export function resolveTypeDeep(
   t: VariableType,
   typeAliases: Record<string, TypeAliasEntry>,
 ): VariableType {
-  let current = t;
+  // Pure pre-pass, before ANY resolution: stamp Record nodes with their
+  // written args. mapTypes maps children before parents, so by the time the
+  // resolving passes below reach a Record node its typeArgs are already
+  // resolved — the alias identity the validation-descriptor builder needs
+  // (#630) would be gone. Stamping first captures the genuinely-written args.
+  let current = mapTypes(t, stampRecordWrittenArgs);
   // Iterate until a pass produces no change. Generic-alias depth is bounded
   // in practice; MAX_GENERIC_RESOLUTION_PASSES exists only to prevent
   // runaway loops on a bug.
@@ -267,6 +278,15 @@ export function resolveTypeDeep(
     current = next;
   }
   return current;
+}
+
+/** See the pre-pass in resolveTypeDeep. No-op once stamped, so the
+ *  fixpoint iteration stays stable. */
+function stampRecordWrittenArgs(n: VariableType): VariableType {
+  if (n.type === "genericType" && n.name === "Record" && !n.writtenTypeArgs) {
+    return { ...n, writtenTypeArgs: n.typeArgs };
+  }
+  return n;
 }
 
 /**

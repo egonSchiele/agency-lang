@@ -364,3 +364,124 @@ property of `null` or `undefined` (e.g. `const { name } = null`) throws a
 `TypeError`, which Agency captures and surfaces as a `failure` Result.
 At runtime, a match without a `_` arm that matches no other arm is a
 no-op — no branch runs.
+
+## Type patterns
+
+A **type pattern** tests the runtime type of a value. It answers questions
+like "is this a string?" or "is this a valid `Person`?" directly, where you
+previously needed JavaScript-style tricks. There are two spellings.
+
+### `is Type`: the test form
+
+Use a type after `is` anywhere the `is` operator works — in `if` / `while`
+conditions or as a plain boolean:
+
+```ts
+def render(draft: any): string {
+  if (draft is null)   { return "" }
+  if (draft is string) { return draft }
+  return JSON.stringify(draft)
+}
+
+const looksLikeText = value is string   // boolean
+```
+
+After a successful test the value narrows: inside the `draft is string`
+branch, `draft` has type `string`.
+
+Important behavior change: a bare identifier after `is` is **always a type
+reference** now. The old always-true binder form (`x is y` binding `y`) was
+retired — a name that is not a type is a compile error (AG1013) telling you
+to write `const y = x` if you meant to bind.
+
+### `pattern: Type`: the bind-and-test form (match arms)
+
+In a match arm, add `: Type` after a pattern to test the type and
+destructure in one move. `is Type` also works as an arm for a test with no
+binding:
+
+```ts
+return match (input) {
+  null                 => ""
+  s: string            => s
+  {name, age}: Person  => "${name}, ${age}"
+  [x, y]: number[]     => "pair"
+  is boolean           => "flag"
+  _                    => JSON.stringify(input)
+}
+```
+
+The suffix works on binders, object patterns, array patterns, and inline
+object types (`p: {tag: string} => ...`). It is match-arm only: in `let` /
+`const` declarations, `: Type` stays a static annotation with no runtime
+check (use the bang, `Person!`, for validated declarations).
+
+### What a test checks
+
+Coarse types compile to cheap JavaScript checks: `string`, `number`,
+`boolean`, `null`, `object` (any non-null, non-array object — a `Date` from
+JS interop counts), and `any[]` (any array). Notes: `NaN is number` is true
+(`typeof` semantics), and the `null` check is loose — it matches an
+interop-produced `undefined` too, agreeing with the literal `null` pattern.
+
+Every other type — named aliases, typed arrays like `number[]`, inline
+object types — validates against the type's schema, **including its
+`@validate` validators**. `x is Person` succeeds exactly when `x` would pass
+`Person` validation:
+
+```ts
+type Person = {
+  name: string,
+  @validate(isAdult) age: number,
+}
+
+match (u) {
+  p: Person => greet(p)   // shape AND isAdult must pass
+  _         => reject(u)
+}
+```
+
+Two rules to know:
+
+1. **The pattern binds the original value.** Validators decide *whether* the
+   arm matches, never rewrite what you get. A validator that repairs values
+   (say, clamping a negative age) counts as a pass, and the bound value is
+   still the un-repaired original — so a type pattern tells you "this is
+   repairable", not "this is already valid". When that difference matters,
+   use the bang: `const p: Person! = u` gives you the transformed value.
+2. **Type-pattern arms never satisfy exhaustiveness.** A match using them
+   still needs a `_` arm, because a validator can reject a value whose
+   static type looks right.
+
+Narrowing is positive-only: the value narrows where the test succeeded, and
+nowhere else (no else-branch narrowing). `object` narrows to the opaque
+`object` type — you can stringify or pass it along, but reading fields needs
+a shape test instead.
+
+### Checking for JSON
+
+`is object` is deliberately coarse. To ask "is this a plain JSON-serializable
+tree?" use the stdlib `Json` type — its validator is a precise round-trip
+check (plain objects, arrays, strings, finite numbers, booleans, null;
+rejects class instances like `Date`, functions, `NaN`, and cycles):
+
+```ts
+if (x is Json) {
+  save(JSON.stringify(x))
+}
+```
+
+### JavaScript classes are not testable
+
+`x is Date` is a compile error: `Date`, `Map`, and friends are JavaScript
+classes, not Agency types, and type patterns never mean `instanceof`. Use
+`is object`, a shape test, or a helper function.
+
+### One footgun
+
+Inside an object *pattern*, `{name: string}` does not test that `name` is a
+string — it binds the field to a new variable called `string` (pattern
+semantics predating type patterns). The checker warns (AG5004) when a binder
+name shadows a type; test the whole value instead: `p: Person =>` or
+`p: {name: string} =>` (the colon *after the closing brace* is the type
+position).

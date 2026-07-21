@@ -160,6 +160,29 @@ jobs:
       # does not wipe this step's data.
       run: |
         time node ./dist/scripts/agency.js test tests/agency -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }} --coverage --collect-only
+    - name: DEBUG coverage diagnosis
+      if: ${{ always() && matrix.shard == 1 }}
+      working-directory: packages/agency-lang
+      env:
+        AGENCY_USE_TEST_LLM_PROVIDER: "1"
+      run: |
+        echo "=== cwd ==="; pwd
+        echo "=== cov files anywhere in workspace after real shard cmd ==="
+        find "$GITHUB_WORKSPACE" -name 'cov-*.json' 2>/dev/null | wc -l
+        echo "=== ls .coverage ==="; ls -la .coverage 2>&1 | head || echo "NO .coverage dir"
+        echo "=== CONTROL A: env-only coverage on tiny dir ==="
+        rm -rf .coverage
+        AGENCY_COVERAGE=1 AGENCY_COVERAGE_OUTDIR="$PWD/.coverage" node ./dist/scripts/agency.js test tests/agency/topsort -p 4 >/dev/null 2>&1 || true
+        echo "control A cov files: $(ls .coverage 2>/dev/null | grep -c '^cov-' || echo 0)"
+        echo "=== CONTROL B: plain --coverage (the #634 form) on tiny dir ==="
+        rm -rf .coverage
+        node ./dist/scripts/agency.js test tests/agency/topsort -p 4 --coverage >/dev/null 2>&1 || true
+        echo "control B cov files: $(ls .coverage 2>/dev/null | grep -c '^cov-' || echo 0)"
+        echo "=== CONTROL C: --coverage --collect-only on tiny dir ==="
+        rm -rf .coverage
+        node ./dist/scripts/agency.js test tests/agency/topsort -p 4 --coverage --collect-only >/dev/null 2>&1 || true
+        echo "control C cov files: $(ls .coverage 2>/dev/null | grep -c '^cov-' || echo 0)"
+        rm -rf .coverage
     - name: Agency-JS integration tests (shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }})
       working-directory: packages/agency-lang
       env:

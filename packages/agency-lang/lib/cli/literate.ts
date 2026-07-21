@@ -4,10 +4,7 @@ import { parse, readFile } from "./commands.js";
 import { findRecursively } from "./util.js";
 import { AgencyNode, AgencyProgram, AgencyMultiLineComment } from "@/types.js";
 import { codeFence } from "@/utils/markdown.js";
-import {
-  multiLineCommentParser,
-  simpleStringParser,
-} from "@/parsers/parsers.js";
+import { multiLineCommentParser } from "@/parsers/parsers.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -115,54 +112,65 @@ function classify(program: AgencyProgram): Segment[] {
 
 // --- rendering ------------------------------------------------------------
 
+// One left-to-right pass over rendered code, matching whichever comes first:
+// a string literal, a `//` line comment, or a `/* */` block comment. Strings
+// and line comments are matched only so that a `/*` inside them is never read
+// as the start of a block comment — the block comment is the only token we act
+// on. Everything the regex does not match is ordinary code.
+const CODE_TOKEN =
+  /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`|\/\/[^\n]*|\/\*[\s\S]*?\*\//g;
+
+/** Prose for a matched block-comment token, or "" for an empty comment. */
+function commentProse(token: string): string {
+  const parsed = multiLineCommentParser(token);
+  if (!parsed.success) return "";
+  return stripJsdocStars(parsed.result.content).trim();
+}
+
 /**
  * Split a rendered code string into markdown, pulling every multi-line comment
  * (`/* *\/` and `/** *\/`) out of the code and rendering it as prose between
  * two code fences. This is what lets a comment nested inside a `node` or `def`
  * body — one the segment classifier never sees, because it only inspects the
- * top-level nodes — read as literate prose.
- *
- * We scan the already-rendered code left to right. String literals are matched
- * and copied over wholesale so that a `/*` appearing inside a string is not
- * mistaken for the start of a comment. Single-line `//` comments are left in
- * the code, matching the convention that block comments narrate and inline
+ * top-level nodes — read as literate prose. Single-line `//` comments are left
+ * in the code, matching the convention that block comments narrate and inline
  * comments annotate.
  */
 function weaveComments(code: string, lang: string): string {
   const parts: string[] = [];
   let codeBuf = "";
-  let rest = code;
 
   const flushCode = (): void => {
-    // Drop leading blank lines left behind when a comment on its own line is
-    // lifted out, so the reopened fence does not start with an empty line.
+    // The newline that ends the line *before* a lifted comment belongs to the
+    // next code run, so after a comment is pulled out that run can start with a
+    // blank line. Drop those leading blank lines (but keep the first real
+    // line's indentation) so the reopened fence looks clean.
     const trimmed = codeBuf.replace(/^(?:[ \t]*\n)+/, "");
     if (trimmed.trim() !== "") parts.push(codeFence(trimmed, lang));
     codeBuf = "";
   };
 
-  while (rest.length > 0) {
-    const str = simpleStringParser(rest);
-    if (str.success) {
-      codeBuf += rest.slice(0, rest.length - str.rest.length);
-      rest = str.rest;
+  const token = new RegExp(CODE_TOKEN);
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = token.exec(code)) !== null) {
+    codeBuf += code.slice(last, match.index);
+    last = token.lastIndex;
+    const tok = match[0];
+    if (!tok.startsWith("/*")) {
+      // A string literal or `//` comment: keep it in the code verbatim.
+      codeBuf += tok;
       continue;
     }
-    const comment = multiLineCommentParser(rest);
-    if (comment.success) {
-      const prose = stripJsdocStars(comment.result.content).trim();
-      rest = comment.rest;
-      // An empty comment (`/**/`) leaves no prose; drop it without splitting
-      // the surrounding code into two fences.
-      if (prose !== "") {
-        flushCode();
-        parts.push(prose);
-      }
-      continue;
-    }
-    codeBuf += rest[0];
-    rest = rest.slice(1);
+    const prose = commentProse(tok);
+    // An empty comment (`/**/`) leaves no prose. Drop just the comment token —
+    // the surrounding whitespace stayed in the code runs — without splitting
+    // the fence.
+    if (prose === "") continue;
+    flushCode();
+    parts.push(prose);
   }
+  codeBuf += code.slice(last);
   flushCode();
   return parts.join("\n\n");
 }

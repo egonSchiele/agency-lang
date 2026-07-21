@@ -371,6 +371,39 @@ def second(): number { return 2 }
     expect(md).toContain('"not /* a comment */ really"');
   });
 
+  it("drops an empty block comment without eating surrounding whitespace", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `def foo(): number {
+  /**/
+  return 1
+}
+`,
+    );
+
+    // Whole thing stays in one fence (no split for an empty comment)...
+    const fenceCount = (md.match(/```agency/g) ?? []).length;
+    expect(fenceCount).toBe(1);
+    // ...and `return 1` keeps its two-space indentation.
+    expect(md).toMatch(/\n {2}return 1\n/);
+  });
+
+  it("does not weave a `/*` that appears inside a `//` line comment", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `def foo(): number {
+  // see /* not a real comment */ above
+  return 1
+}
+`,
+    );
+
+    // No split: the `/* ... */` is inside a line comment, so it stays as code.
+    const fenceCount = (md.match(/```agency/g) ?? []).length;
+    expect(fenceCount).toBe(1);
+    expect(md).toContain("// see /* not a real comment */ above");
+  });
+
   it("adds a 'View source' link at the top when --base-url is given", () => {
     const md = weaveAndRead(
       "test.agency",

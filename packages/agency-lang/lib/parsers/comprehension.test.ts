@@ -300,3 +300,91 @@ describe("comprehensionParser", () => {
     expect(node.condition).toBeDefined();
   });
 });
+
+describe("bracketAccessParser (chained bracket literals)", () => {
+  // A dotted `.name(...)` is parsed by dotMethodCallParser and tagged
+  // kind: "methodCall". A dotted bare `.name` is kind: "property". A
+  // trailing `[i]` is "index", `[a:b]` is "slice", and a bare `(args)`
+  // applied to a previous chain result is "call". These kinds are asserted
+  // below exactly as the parser emits them - verified against the source.
+  it("parses a method call on a comprehension", () => {
+    const node = parseExpr('["- ${c}" for c in xs].join("\\n")');
+    expect(node.type).toBe("valueAccess");
+    expect(node.base.type).toBe("comprehension");
+    expect(node.chain).toHaveLength(1);
+    expect(node.chain[0].kind).toBe("methodCall");
+  });
+
+  it("parses a method call on a plain array literal", () => {
+    const node = parseExpr('[1, 2, 3].join("-")');
+    expect(node.type).toBe("valueAccess");
+    expect(node.base.type).toBe("agencyArray");
+    expect(node.chain[0].kind).toBe("methodCall");
+  });
+
+  it("parses a bare property access on an array literal", () => {
+    const node = parseExpr("[1, 2, 3].length");
+    expect(node.type).toBe("valueAccess");
+    expect(node.base.type).toBe("agencyArray");
+    expect(node.chain[0].kind).toBe("property");
+  });
+
+  it("parses an index on an array literal", () => {
+    const node = parseExpr("[10, 20, 30][1]");
+    expect(node.type).toBe("valueAccess");
+    expect(node.base.type).toBe("agencyArray");
+    expect(node.chain[0].kind).toBe("index");
+  });
+
+  it("parses a slice on an array literal", () => {
+    const node = parseExpr("[10, 20, 30][0:2]");
+    expect(node.type).toBe("valueAccess");
+    expect(node.chain[0].kind).toBe("slice");
+  });
+
+  it("parses an index-then-call chain (real `call` element, length 2)", () => {
+    // `[0]` is the index; the trailing `("x")` is a `call` element applied
+    // to the index result. This is the only shape that produces a
+    // kind: "call" element (a dotted `.m()` is "methodCall"), AND it is the
+    // first chain of length 2, so it proves many1 consumes more than one
+    // element. `[f, g]` are bare identifiers so the call target is a value,
+    // not a number - the parser does not type-check, so this parses fine.
+    const node = parseExpr('[f, g][0]("x")');
+    expect(node.type).toBe("valueAccess");
+    expect(node.chain).toHaveLength(2);
+    expect(node.chain[0].kind).toBe("index");
+    expect(node.chain[1].kind).toBe("call");
+  });
+
+  it("parses a chain on a fork comprehension", () => {
+    const node = parseExpr('fork ["- ${c}" for c in xs].join("\\n")');
+    // `fork` binds to the comprehension (comprehensionParser handles the
+    // prefix), which then carries the chain.
+    expect(node.type).toBe("valueAccess");
+    expect(node.base.type).toBe("comprehension");
+    expect(node.base.mode).toBe("fork");
+    expect(node.chain[0].kind).toBe("methodCall");
+  });
+
+  it("leaves a bare comprehension untouched (no chain)", () => {
+    // Guards against writing `many` instead of `many1`: with `many`, a bare
+    // `[...]` would wrongly become a zero-length-chain valueAccess.
+    const node = parseExpr("[f(x) for x in xs]");
+    expect(node.type).toBe("comprehension");
+  });
+
+  it("leaves a bare array literal untouched (no chain)", () => {
+    const node = parseExpr("[1, 2, 3]");
+    expect(node.type).toBe("agencyArray");
+  });
+
+  it("requires adjacency: whitespace breaks the chain", () => {
+    // `[1, 2, 3][0]` (adjacent) merges into an index - the index test above
+    // proves that. With a SPACE between, the chain must NOT form: chain
+    // elements consume no leading whitespace (chainElementParser starts at
+    // `.`/`[`/`(` with no optionalSpaces). So `[1, 2, 3] [0]` leaves `[0]`
+    // stranded and the whole program fails to parse. If a future change let
+    // chains skip whitespace, `[1, 2, 3] [0]` would parse and this flips.
+    expect(parseFails("[1, 2, 3] [0]")).toBe(true);
+  });
+});

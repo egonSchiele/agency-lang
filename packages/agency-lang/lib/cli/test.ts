@@ -527,6 +527,56 @@ function sanitizeParallel(parallel: number): number {
     : 1;
 }
 
+// One slice of the test suite, as passed via `--shard i/N`. `index` is
+// 1-based (shard 1 of N), matching how CI matrices number their entries.
+export type Shard = { index: number; total: number };
+
+// Parse a "2/4" shard spec. Exits on anything malformed or out of range so a
+// typo in CI fails loudly instead of silently running the wrong slice.
+export function parseShardSpec(spec: string): Shard {
+  const match = /^(\d+)\/(\d+)$/.exec(spec.trim());
+  if (!match) {
+    console.error(
+      color.red(`Invalid --shard value "${spec}". Expected "i/N" (e.g. "2/4").`),
+    );
+    process.exit(1);
+  }
+  const index = Number(match[1]);
+  const total = Number(match[2]);
+  if (total < 1 || index < 1 || index > total) {
+    console.error(
+      color.red(
+        `Invalid --shard value "${spec}". Require 1 <= i <= N and N >= 1.`,
+      ),
+    );
+    process.exit(1);
+  }
+  return { index, total };
+}
+
+// Keep only this shard's items. Sorting first makes the split identical on
+// every machine (directory-walk order is not guaranteed stable). The modulo
+// assignment is exhaustive and disjoint — every item has exactly one residue
+// mod N, so it lands in exactly one shard. No item is ever dropped or run
+// twice, even when the count does not divide evenly (13 items / 4 shards
+// splits 4,3,3,3). The union of all N shards equals the input set.
+export function partitionByShard<T>(
+  items: T[],
+  shard: Shard,
+  key: (item: T) => string,
+): T[] {
+  const sorted = [...items].sort((left, right) => {
+    const leftKey = key(left);
+    const rightKey = key(right);
+    if (leftKey < rightKey) return -1;
+    if (leftKey > rightKey) return 1;
+    return 0;
+  });
+  return sorted.filter(
+    (_item, position) => position % shard.total === shard.index - 1,
+  );
+}
+
 // Returns `(R | undefined)[]` (not `R[]`) because workers can exit
 // early when `shouldAbort()` becomes true, leaving holes in the result
 // array. Callers must handle `undefined` entries (typically: skip them
@@ -901,10 +951,24 @@ export async function test(
   config: AgencyConfig,
   inputPaths: string[],
   parallel: number = 1,
+  shard?: Shard,
 ): Promise<TestStats> {
-  const testFiles: string[] = [];
+  const collected: string[] = [];
   for (const inputPath of inputPaths) {
-    testFiles.push(...collectTestFiles(inputPath));
+    collected.push(...collectTestFiles(inputPath));
+  }
+  // Slice to this shard before compiling, so each shard only compiles and
+  // runs its own files — that is what makes sharding cut wall-clock rather
+  // than just splitting the run phase.
+  const testFiles = shard
+    ? partitionByShard(collected, shard, (f) => f)
+    : collected;
+  if (shard) {
+    console.log(
+      color.cyan(
+        `Shard ${shard.index}/${shard.total}: running ${testFiles.length} of ${collected.length} test file(s).`,
+      ),
+    );
   }
 
   // Compile every unique source exactly once, up front (grouped by merged
@@ -1151,8 +1215,13 @@ async function runTsTestDir(
   }
 }
 
-export async function testTs(config: AgencyConfig, inputPaths: string[], parallel: number = 1) {
-  const allDirs: string[] = [];
+export async function testTs(
+  config: AgencyConfig,
+  inputPaths: string[],
+  parallel: number = 1,
+  shard?: Shard,
+) {
+  const collectedDirs: string[] = [];
   for (const inputPath of inputPaths) {
     const testDirs = findTsTestDirs(inputPath);
     if (testDirs.length === 0) {
@@ -1160,8 +1229,18 @@ export async function testTs(config: AgencyConfig, inputPaths: string[], paralle
         color.yellow(`No TypeScript test directories found in ${inputPath}`),
       );
     } else {
-      allDirs.push(...testDirs);
+      collectedDirs.push(...testDirs);
     }
+  }
+  const allDirs = shard
+    ? partitionByShard(collectedDirs, shard, (d) => d)
+    : collectedDirs;
+  if (shard) {
+    console.log(
+      color.cyan(
+        `Shard ${shard.index}/${shard.total}: running ${allDirs.length} of ${collectedDirs.length} JS test dir(s).`,
+      ),
+    );
   }
 
   // testTs doesn't pass `shouldAbort`, so no entries can be undefined,

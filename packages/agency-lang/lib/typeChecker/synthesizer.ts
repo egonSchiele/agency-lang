@@ -888,6 +888,35 @@ function synthObject(
   };
 }
 
+/**
+ * The type of a tool-method chain element (`fn.partial(...)`,
+ * `fn.describe("…")`, `fn.rename("…")`, `fn.preapprove()`). Each returns a new
+ * tool, which is a function value — so we keep the receiver's functionRefType
+ * rather than collapsing to `any`. That is what makes a single tool ineligible
+ * where a `tools:` array is expected.
+ *
+ * `.partial(name: …)` binds arguments, so it drops those parameters from the
+ * resulting signature — `_matchesFilter(name, filterText).partial(filterText:)`
+ * becomes `(name) -> boolean`, which still satisfies a `(any) -> any` callback.
+ * The other methods leave the signature untouched. When the receiver isn't a
+ * known function we can't prove it's a tool, so we stay `any`.
+ */
+function toolMethodResultType(
+  receiver: VariableType,
+  methodName: string,
+  element: { functionCall: { arguments: any[] } },
+): VariableType {
+  if (receiver.type !== "functionRefType") return ANY_T;
+  if (methodName !== "partial") return receiver;
+  const boundNames = element.functionCall.arguments
+    .filter((a: any) => "type" in a && a.type === "namedArgument")
+    .map((a: any) => a.name);
+  return {
+    ...receiver,
+    params: receiver.params.filter((p) => !boundNames.includes(p.name)),
+  };
+}
+
 function validateAgencyFunctionMethod(
   expr: ValueAccess,
   element: { kind: "methodCall"; functionCall: { type: "functionCall"; functionName: string; arguments: any[] } },
@@ -1048,7 +1077,9 @@ export function synthValueAccess(
       const methodName = element.functionCall.functionName;
       if (methodName === "partial" || methodName in AGENCY_FUNCTION_METHOD_TYPES) {
         validateAgencyFunctionMethod(expr, element, methodName, scope, ctx);
-        currentType = ANY_T;
+        // Chaining still works past this point because the dispatch above keys
+        // on the method name, not the receiver type.
+        currentType = toolMethodResultType(currentType, methodName, element);
         continue;
       }
     }

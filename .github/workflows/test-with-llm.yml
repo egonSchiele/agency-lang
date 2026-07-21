@@ -17,11 +17,19 @@ permissions:
   contents: read
 
 jobs:
+  # The agency + agency-js suites are sharded (same round-robin split as the
+  # deterministic PR workflow) so the post-merge real-LLM run finishes faster.
+  # Each shard runs its own slice against the real provider. Note this raises
+  # peak concurrency against the OpenAI API (SHARD_COUNT × -p), so if these
+  # start hitting rate limits, lower `-p` or SHARD_COUNT.
   real-llm-tests:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [22.x]
+        shard: [1, 2, 3, 4]
+    env:
+      SHARD_COUNT: "4"
 
     steps:
     - name: Checkout repository
@@ -33,26 +41,49 @@ jobs:
         version: 9
         run_install: false
 
-    - name: Set up Node.js ${{ matrix.node-version }}
+    - name: Set up Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 22.x
         cache: 'pnpm'
 
     - run: pnpm install
     - run: make
 
-    - name: Agency execution tests (real LLM)
+    - name: Agency execution tests (real LLM, shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }})
       working-directory: packages/agency-lang
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      run: pnpm run test:agency
+      run: node ./dist/scripts/agency.js test tests/agency -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }}
 
-    - name: Agency-JS integration tests (real LLM)
+    - name: Agency-JS integration tests (real LLM, shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }})
       working-directory: packages/agency-lang
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      run: pnpm run test:agency-js
+      run: node ./dist/scripts/agency.js test js tests/agency-js -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }}
+
+  # The agent + efficacy suites are not the file-per-test agency suite and are
+  # not shardable by `--shard`; they run once in their own job.
+  real-llm-extras:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        version: 9
+        run_install: false
+
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 22.x
+        cache: 'pnpm'
+
+    - run: pnpm install
+    - run: make
 
     - name: Built-in agent tests (real LLM)
       working-directory: packages/agency-lang

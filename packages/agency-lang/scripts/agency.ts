@@ -18,7 +18,7 @@ import {
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
 import { resolveBudget } from "@/cli/budget.js";
-import { fixtures, test, testTs, SlowTest } from "@/cli/test.js";
+import { fixtures, test, testTs, SlowTest, parseShardSpec } from "@/cli/test.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
 import { createBundle, extractBundle } from "@/cli/bundle.js";
 import { traceLog } from "@/cli/events.js";
@@ -687,7 +687,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option("--coverage", "Enable coverage collection and report")
     .option("--accumulate", "Preserve existing coverage data (use with --coverage)")
-    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean }) => {
+    .option(
+      "--shard <i/N>",
+      "Run only shard i of N (1-based), e.g. --shard 2/4. Splits the collected test files across N runs.",
+    )
+    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean; shard?: string }) => {
       const config = getConfig();
       if (opts.coverage) {
         process.env.AGENCY_COVERAGE = "1";
@@ -699,8 +703,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
           cleanCoverage(config);
         }
       }
+      const shard = opts.shard ? parseShardSpec(opts.shard) : undefined;
       const parallel = opts.parallel ?? config.test?.parallel ?? 1;
-      const totals = await test(config, testFile, parallel);
+      const totals = await test(config, testFile, parallel, shard);
       const totalFiles = totals.filesPassed + totals.filesFailed;
       const totalTests = totals.passed + totals.failed;
       if (totalFiles > 0) {
@@ -747,7 +752,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option("--coverage", "Enable coverage collection and report")
     .option("--accumulate", "Preserve existing coverage data (use with --coverage)")
-    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean }) => {
+    .option(
+      "--shard <i/N>",
+      "Run only shard i of N (1-based), e.g. --shard 2/4. Splits the collected test dirs across N runs.",
+    )
+    .action(async (testFile: string[], opts: { parallel?: number; coverage?: boolean; accumulate?: boolean; shard?: string }) => {
       const config = getConfig();
       if (opts.coverage) {
         process.env.AGENCY_COVERAGE = "1";
@@ -756,8 +765,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
           cleanCoverage(config);
         }
       }
+      const shard = opts.shard ? parseShardSpec(opts.shard) : undefined;
       const parallel = opts.parallel ?? config.test?.parallel ?? 1;
-      await testTs(config, testFile, parallel);
+      await testTs(config, testFile, parallel, shard);
       if (opts.coverage) {
         const reportTargets = testFile.length > 0 ? testFile : ["."];
         await generateReport(config, reportTargets);

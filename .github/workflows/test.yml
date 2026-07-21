@@ -160,31 +160,29 @@ jobs:
       # does not wipe this step's data.
       run: |
         time node ./dist/scripts/agency.js test tests/agency -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }} --coverage --collect-only
-    - name: DEBUG count after agency (non-destructive)
-      if: ${{ always() && matrix.shard == 1 }}
-      working-directory: packages/agency-lang
-      run: echo "AFTER agency cov files in .coverage = $(ls .coverage 2>/dev/null | grep -c '^cov-' || echo 0)"
     - name: Agency-JS integration tests (shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }})
       working-directory: packages/agency-lang
       env:
         AGENCY_USE_TEST_LLM_PROVIDER: "1"
       run: |
         time node ./dist/scripts/agency.js test js tests/agency-js -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }} --coverage --collect-only --accumulate
-    - name: DEBUG count after agency-js (non-destructive)
-      if: ${{ always() && matrix.shard == 1 }}
-      working-directory: packages/agency-lang
-      run: echo "AFTER agency-js cov files in .coverage = $(ls .coverage 2>/dev/null | grep -c '^cov-' || echo 0)"
     - name: Upload shard coverage
       # Upload even when tests failed so the coverage comment still reflects
       # what ran (mirrors the old always()-guarded report step). `always()`
       # overrides the default "skip on prior-step failure"; `!cancelled()`
       # still skips on cancellation. Filenames are `cov-<pid>-<uuid>.json`,
       # so shard outputs never collide when merged.
+      #
+      # include-hidden-files is REQUIRED: the coverage dir is `.coverage`, a
+      # dot-directory, and upload-artifact@v4 skips hidden files by default —
+      # without this the whole dir is silently dropped ("No files were found")
+      # even though it is full of cov-*.json.
       if: ${{ always() && !cancelled() }}
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: coverage-shard-${{ matrix.shard }}
         path: packages/agency-lang/.coverage
+        include-hidden-files: true
         if-no-files-found: ignore
         retention-days: 1
     - name: github stdlib smoke test

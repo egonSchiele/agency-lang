@@ -64,10 +64,13 @@ gh run watch <run-id>            # block until the run finishes
 
 ## Secrets
 
+Pass the value on stdin or from a file, never with `--body "..."` — a value on
+the command line is captured in shell history and visible in process listings.
+
 ```bash
-gh secret set API_KEY --body "value"
-gh secret set SSH_KEY < ~/.ssh/id_ed25519   # read the value from a file
-gh secret list                               # names only; values are never shown
+printf %s "$API_KEY" | gh secret set API_KEY   # value piped in on stdin
+gh secret set SSH_KEY < ~/.ssh/id_ed25519      # value read from a file
+gh secret list                                 # names only; values are never shown
 gh secret delete API_KEY
 ```
 

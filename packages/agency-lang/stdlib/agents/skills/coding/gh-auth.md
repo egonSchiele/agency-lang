@@ -17,7 +17,9 @@ Check the environment first — a token is often already present:
 
 ```bash
 gh auth status
-echo "${GH_TOKEN:-${GITHUB_TOKEN:-no token in env}}"
+# Report whether a token is present without printing its value — never echo a
+# secret, since it would land in logs and transcripts.
+[ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ] && echo "a token is set" || echo "no token in env"
 ```
 
 `gh` reads `GH_TOKEN` and `GITHUB_TOKEN` automatically. If either is set, `gh`

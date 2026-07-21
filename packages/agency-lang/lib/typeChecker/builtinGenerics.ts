@@ -136,16 +136,23 @@ export function resolveKeysArg(
 }
 
 const BUILTIN_GENERICS: Record<string, BuiltinGeneric> = {
-  // Container forms. Array/Schema lower to their dedicated type nodes and
-  // (historical behavior, preserved) DROP use-site tags; Record keeps its
-  // genericType wrapper so codegen can emit z.record, and keeps use-site
-  // tags verbatim on that wrapper.
+  // Container forms. Array lowers to its dedicated type node and MERGES
+  // use-site tags (#630 — `@validate(f) Array<T>` used to drop them);
+  // Schema lowers to schemaType and still drops use-site tags (a schema
+  // value is not validated data, so there is nothing for a validator to
+  // run on). Record keeps its genericType wrapper so codegen can emit
+  // z.record, keeps use-site tags verbatim on that wrapper, and stashes
+  // the written args for the validation-descriptor builder.
   Array: {
     arity: 1,
-    apply: ([element], resolve) => ({
-      type: "arrayType",
-      elementType: resolve(element),
-    }),
+    apply: ([element], resolve, useSiteTags) =>
+      withUseSiteTags(
+        {
+          type: "arrayType",
+          elementType: resolve(element),
+        },
+        useSiteTags,
+      ),
   },
   Schema: {
     arity: 1,
@@ -167,6 +174,10 @@ const BUILTIN_GENERICS: Record<string, BuiltinGeneric> = {
         type: "genericType",
         name: "Record",
         typeArgs: [key, resolve(valueArg)],
+        // Written (unresolved) args: the descriptor builder needs the
+        // alias identity of the value type to emit a ref instead of
+        // inlining validators (#630 — see writtenTypeArgs in typeHints.ts).
+        writtenTypeArgs: [keyArg, valueArg],
       };
       if (useSiteTags) {
         node.tags = useSiteTags;

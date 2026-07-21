@@ -249,3 +249,89 @@ describe("ref descriptors (deferred reads for recursive/forward aliases)", () =>
     expect(isFailure(r)).toBe(true);
   });
 });
+
+describe("record descriptor kind (#630)", () => {
+  const ageDesc: TypeValidationDescriptor = {
+    kind: "leaf",
+    schema: z.number(),
+    validators: [isPos],
+  };
+  const recordDesc: TypeValidationDescriptor = {
+    kind: "record",
+    schema: z.record(z.string(), z.number()),
+    validators: [],
+    value: ageDesc,
+  };
+
+  it("runs the value descriptor validators per entry", async () => {
+    const ok = await __validateChainRecursive({ a: 1, b: 2 }, recordDesc);
+    expect(isSuccess(ok)).toBe(true);
+    const bad = await __validateChainRecursive({ a: 1, b: -5 }, recordDesc);
+    expect(isFailure(bad)).toBe(true);
+  });
+
+  it("writes transformed values back into the result", async () => {
+    const doublingDesc: TypeValidationDescriptor = {
+      kind: "record",
+      schema: z.record(z.string(), z.number()),
+      validators: [],
+      value: { kind: "leaf", schema: z.number(), validators: [doubleIt] },
+    };
+    const r = await __validateChainRecursive({ a: 1, b: 2 }, doublingDesc);
+    expect(isSuccess(r)).toBe(true);
+    expect((r as { value: unknown }).value).toEqual({ a: 2, b: 4 });
+  });
+
+  it("nested records validate through both levels", async () => {
+    const nested: TypeValidationDescriptor = {
+      kind: "record",
+      schema: z.record(z.string(), z.record(z.string(), z.number())),
+      validators: [],
+      value: recordDesc,
+    };
+    expect(isSuccess(await __validateChainRecursive({ x: { a: 1 } }, nested))).toBe(true);
+    expect(isFailure(await __validateChainRecursive({ x: { a: -1 } }, nested))).toBe(true);
+  });
+
+  it("record own validators run before per-entry walks", async () => {
+    const nonEmpty: AgencyValidator = async (v) =>
+      Object.keys(v as object).length > 0 ? success(v) : failure("empty record");
+    const withOwn: TypeValidationDescriptor = {
+      kind: "record",
+      schema: z.record(z.string(), z.number()),
+      validators: [nonEmpty],
+      value: ageDesc,
+    };
+    expect(isFailure(await __validateChainRecursive({}, withOwn))).toBe(true);
+    expect(isSuccess(await __validateChainRecursive({ a: 1 }, withOwn))).toBe(true);
+  });
+
+  it("record inside a ref resolves and validates", async () => {
+    const viaRef: TypeValidationDescriptor = {
+      kind: "ref",
+      get: () => recordDesc,
+    };
+    expect(isFailure(await __validateChainRecursive({ a: -1 }, viaRef))).toBe(true);
+  });
+});
+
+describe("record walker prototype safety", () => {
+  it("stores a user-supplied __proto__ key as an own entry, never the prototype", async () => {
+    // Zod's z.record drops own __proto__ keys, so reach the walker with a
+    // permissive schema (as a ref-carried descriptor could) to prove the
+    // walker is safe on its own.
+    const permissiveRecord: TypeValidationDescriptor = {
+      kind: "record",
+      schema: z.any(),
+      validators: [],
+      value: { kind: "leaf", schema: z.number(), validators: [] },
+    };
+    const hostile = JSON.parse('{"__proto__": 7, "a": 1}');
+    const r = await __validateChainRecursive(hostile, permissiveRecord);
+    expect(isSuccess(r)).toBe(true);
+    const out = (r as { value: Record<string, unknown> }).value;
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyNames(out).sort()).toEqual(["__proto__", "a"]);
+    expect(Object.getOwnPropertyDescriptor(out, "__proto__")?.value).toBe(7);
+  });
+});

@@ -1,0 +1,53 @@
+// #630: @validate tags must run through Record values, cross-module, via the
+// defining module's descriptor (see ages.agency for why inlining would crash).
+
+import { Age, Repaired } from "./ages.agency"
+
+node rejects() {
+  const ages: Record<string, Age>! = { a: 30, b: 12 }
+  if (ages is failure(err)) {
+    return "rejected:${err}"
+  }
+  return "accepted"
+}
+
+node passes() {
+  const ages: Record<string, Age>! = { a: 30, b: 45 }
+  if (ages is success(v)) {
+    return "ok:${v.a},${v.b}"
+  }
+  return "rejected"
+}
+
+node transforms() {
+  // The record walker must write transformed values back per entry.
+  const fixed: Record<string, Repaired>! = { a: -5, b: 2 }
+  if (fixed is success(v)) {
+    return "fixed:${v.a},${v.b}"
+  }
+  return "rejected"
+}
+
+node patternTest() {
+  // Type patterns ride the same descriptor machinery (tier 2).
+  const good: any = { a: 30 }
+  const bad: any = { a: 12 }
+  let out = ""
+  if (good is Record<string, Age>) {
+    out = "good-yes"
+  }
+  if (bad is Record<string, Age>) {
+    out = "${out},bad-yes"
+  } else {
+    out = "${out},bad-no"
+  }
+  return out
+}
+
+node nested() {
+  const deep: Record<string, Record<string, Age>>! = { x: { a: 12 } }
+  if (deep is failure(err)) {
+    return "deep-rejected"
+  }
+  return "deep-accepted"
+}

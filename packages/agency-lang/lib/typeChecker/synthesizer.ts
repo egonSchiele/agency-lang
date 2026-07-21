@@ -1,6 +1,8 @@
 import { isAnyType } from "./utils.js";
 import { diagnostic } from "./diagnostics.js";
 import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
+import type { TypeTestExpression } from "../types/pattern.js";
+import { visitTypes } from "./typeWalker.js";
 import { parseMatchValId } from "../matchVal.js";
 import { recordLikeKeyValue } from "./recordLike.js";
 import type { ResultType, UnionType, TypeAliasEntry } from "../types/typeHints.js";
@@ -374,6 +376,8 @@ export function synthType(
       // `schema` is listed in RESERVED_FUNCTION_NAMES so users can't define
       // their own `def schema()` (which would create parse ambiguity).
       return { type: "schemaType", inner: expr.typeArg };
+    case "typeTestExpression":
+      return synthTypeTestExpression(expr, scope, ctx);
     default:
       return ANY_T;
   }
@@ -384,6 +388,44 @@ export function synthType(
  * If the inner call already returns a Result, pass it through (matches
  * runtime `__tryCall` behavior). Otherwise wrap as `Result<T, any>`.
  */
+/** Names that are JavaScript classes users plausibly reach for in a type
+ *  pattern. They get a pointed AG1013 hint: type patterns never mean
+ *  `instanceof`, so there is no schema-vs-class ambiguity to learn. */
+const JS_CLASS_NAMES: readonly string[] = [
+  "Date", "Map", "Set", "RegExp", "Error", "Promise", "Function", "Symbol",
+];
+
+/**
+ * A type pattern's lowered test (`x is T`). Synthesizes `boolean`. The
+ * typeHint is validated here with AG1013 as the SOLE diagnostic (the generic
+ * AG1006 path never sees type-pattern hints — they live in an expression,
+ * not an annotation), so `x is Bogus` reads as "not a type, did you mean to
+ * bind?" rather than a generic alias error.
+ */
+function synthTypeTestExpression(
+  expr: TypeTestExpression,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType {
+  synthType(expr.expression, scope, ctx);
+  const aliases = ctx.getTypeAliases();
+  visitTypes(expr.typeHint, (t) => {
+    if (t.type === "typeAliasVariable" && !aliases[t.aliasName]) {
+      const hint = JS_CLASS_NAMES.includes(t.aliasName)
+        ? `\`${t.aliasName}\` is a JavaScript class, and type patterns only test Agency types. Use \`is object\` or a helper function.`
+        : `to bind the value write \`const ${t.aliasName} = x\`.`;
+      ctx.errors.push(
+        diagnostic(
+          "typePatternUnknownType",
+          { name: t.aliasName, hint },
+          expr.loc ?? null,
+        ),
+      );
+    }
+  });
+  return BOOLEAN_T;
+}
+
 function synthTryExpression(
   expr: AgencyNode & { type: "tryExpression" },
   scope: Scope,

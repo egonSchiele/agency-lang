@@ -162,6 +162,7 @@ import {
   ObjectPatternShorthand,
   RestPattern,
   ResultPattern,
+  TypePattern,
   WildcardPattern,
 } from "../types/pattern.js";
 
@@ -2896,11 +2897,14 @@ const atomWithIs: Parser<Expression> = (input: string) => {
   const baseResult = atom(input);
   if (!baseResult.success) return baseResult;
   const isCheck = seqC(
-    spaces,
+    // Same-line whitespace ONLY (not `spaces`, which spans newlines): an
+    // arm body ending in an atom must not merge with a following line's
+    // `is Type => ...` arm into one isExpression.
+    many1(oneOf(" \t")),
     str("is"),
     not(varNameChar),
     optionalSpaces,
-    capture(lazy(() => matchPatternParser), "pattern"),
+    capture(lazy(() => isRhsParser), "pattern"),
   )(baseResult.rest);
   if (!isCheck.success) return baseResult;
   return success(
@@ -3295,25 +3299,113 @@ export const defaultCaseParser: Parser<DefaultCase> = map(
   () => "_" as DefaultCase,
 );
 
-// Match arm LHS parser. Tries in order:
-//   1. `_` (default case)
-//   2. matchPattern, but only accepts if followed by `=>` or ` if (...)` —
-//      this prevents `v` from being parsed as a pattern when the user wrote
-//      `v > 5 =>` in `match(x is pat)` guard form.
-//   3. exprParser, as a fallback for guard expressions.
-const caseLhsParser: Parser<unknown> = (input: string) => {
-  const def = defaultCaseParser(input);
-  if (def.success) return def;
+// The arm lookahead, shared by every alternative: an arm LHS is only
+// accepted when the next non-space token is `=>` or a guard `if`. This
+// prevents `v` from being parsed as a pattern when the user wrote `v > 5 =>`
+// in the `match(x is pat)` guard form.
+function armFollowsPattern(rest: string): boolean {
+  const trimmed = rest.replace(/^[ \t]+/, "");
+  return trimmed.startsWith("=>") || /^if[^A-Za-z0-9_]/.test(trimmed);
+}
 
-  const pat = lazy(() => matchPatternParser)(input);
-  if (pat.success) {
-    // Look ahead: is the next non-space token `=>` or `if`?
-    const trimmed = pat.rest.replace(/^[ \t]+/, "");
-    if (trimmed.startsWith("=>") || /^if[^A-Za-z0-9_]/.test(trimmed)) {
-      return pat;
+// Wrap an arm-LHS alternative so it only wins when the lookahead holds.
+function armGated<T>(parser: Parser<T>): Parser<T> {
+  return (input: string) => {
+    const result = parser(input);
+    if (!result.success) {
+      return result;
     }
-  }
+    if (!armFollowsPattern(result.rest)) {
+      return fail("arm LHS must be followed by => or an if guard")(input) as ParserResult<T>;
+    }
+    return result;
+  };
+}
 
+// ` : Type` — the arm-level type suffix of `pattern: Type`.
+const armTypeSuffixParser: Parser<{ typeHint: VariableType }> = seqC(
+  optionalSpaces,
+  char(":"),
+  optionalSpaces,
+  capture(intersectionItemParser, "typeHint"),
+);
+
+// `is Type` arm: the test-only form (`is boolean => ...`).
+const isArmParser: Parser<TypePattern> = withLoc(
+  map(
+    seqC(
+      str("is"),
+      not(varNameChar),
+      spaces,
+      // lazy: typePatternParser is declared later in this file
+      capture(lazy(() => typePatternParser), "typePattern"),
+    ),
+    (captures: { typePattern: TypePattern }) => captures.typePattern,
+  ),
+) as Parser<TypePattern>;
+
+// `_ : Type` — wildcard with a type suffix; same node as the is-form.
+const wildcardSuffixParser: Parser<TypePattern> = withLoc(
+  map(
+    seqC(defaultCaseParser, capture(armTypeSuffixParser, "suffix")),
+    (captures: { suffix: { typeHint: VariableType } }) => ({
+      type: "typePattern" as const,
+      pattern: null,
+      typeHint: captures.suffix.typeHint,
+    }),
+  ),
+) as Parser<TypePattern>;
+
+// `pattern : Type` — bind-and-test. Only binders, object patterns, and
+// array patterns take the suffix (the shapes the spec allows).
+const patternSuffixParser: Parser<TypePattern> = withLoc((input: string) => {
+  const patternResult = lazy(() => matchPatternParser)(input);
+  if (!patternResult.success) {
+    return patternResult;
+  }
+  const innerPattern = patternResult.result as MatchPattern;
+  const suffixable =
+    innerPattern.type === "variableName" ||
+    innerPattern.type === "objectPattern" ||
+    innerPattern.type === "arrayPattern";
+  if (!suffixable) {
+    return fail("pattern kind does not take a type suffix")(input);
+  }
+  const suffixResult = armTypeSuffixParser(patternResult.rest);
+  if (!suffixResult.success) {
+    return fail("no arm-level type suffix")(input);
+  }
+  return success(
+    {
+      type: "typePattern" as const,
+      pattern: innerPattern as BindingPattern,
+      typeHint: (suffixResult.result as { typeHint: VariableType }).typeHint,
+    },
+    suffixResult.rest,
+  );
+}) as Parser<TypePattern>;
+
+// Match arm LHS parser: ordered alternatives, each gated by the arm
+// lookahead, with exprParser as the final fallback. The fallback is
+// load-bearing — it is how expression-guard arms (`role == "admin" =>`) in
+// the `match(x is pat)` form reach the parser. Ordering: suffix forms come
+// before their prefixes (`_ : T` before `_`; `s: T` before the bare binder,
+// which would otherwise win and then fail the lookahead on `:`).
+const caseLhsParser: Parser<unknown> = (input: string) => {
+  const armResult = or(
+    armGated(isArmParser),
+    armGated(wildcardSuffixParser),
+    armGated(patternSuffixParser),
+    armGated(defaultCaseParser),
+    // withLoc so every pattern caseValue carries its own span — the
+    // binder-shadow warnings (AG5003/AG5004) anchor diagnostics to the arm,
+    // not the match head, and bare variableName patterns otherwise have no
+    // loc of their own.
+    armGated(withLoc(lazy(() => matchPatternParser))),
+  )(input);
+  if (armResult.success) {
+    return armResult;
+  }
   return exprParser(input);
 };
 
@@ -5370,10 +5462,12 @@ const _objectPatternShorthandParser: Parser<ObjectPatternShorthand> = (
 
 // Shared helpers for binding and match object-property parsers. The two
 // only differ by the inner value parser (bindingPatternParser vs
-// matchPatternParser); ObjectPatternProperty["value"] (= MatchPattern)
-// covers both, so we factor out the shape.
+// matchPatternParser). The value type is narrower than MatchPattern:
+// typePattern is top-level-only (is-RHS and arm position), so nested
+// property values never carry one — the parsers wired in here cannot
+// produce it, which is what makes the seam cast at the match call site safe.
 const propertyWithValueParser = (
-  valueParser: Parser<MatchPattern>,
+  valueParser: Parser<ObjectPatternProperty["value"]>,
 ): Parser<ObjectPatternProperty> => (input: string) => {
   const parser = seqC(
     set("type", "objectPatternProperty"),
@@ -5387,7 +5481,7 @@ const propertyWithValueParser = (
 };
 
 const objectPatternPropertyParser = (
-  valueParser: Parser<MatchPattern>,
+  valueParser: Parser<ObjectPatternProperty["value"]>,
 ): Parser<ObjectPatternProperty | ObjectPatternShorthand | RestPattern> =>
   or(
     restPatternParser,
@@ -5480,6 +5574,46 @@ export const resultPatternParser: Parser<ResultPattern> = withLoc(
   },
 );
 
+// A type in pattern position: `is string`, `is Person`, `is number[]`, and
+// the match-arm suffix `pattern: Type`. Parses one non-union,
+// non-intersection type — bare inline unions and intersections are
+// deliberately not spellable in pattern position (use a named alias). This
+// must be intersectionItemParser, not unionItemParser: the intersection
+// separator `&` would otherwise half-consume the expression operator `&&`
+// in `x is string && y` and strand the parse mid-token.
+export const typePatternParser: Parser<TypePattern> = withLoc(
+  map(intersectionItemParser, (typeHint) => ({
+    type: "typePattern" as const,
+    pattern: null,
+    typeHint,
+  })),
+) as Parser<TypePattern>;
+
+// The right-hand side of the `is` operator. Same alternatives as
+// _matchPatternParser EXCEPT the bare-identifier binder, which is retired
+// after `is`: a top-level bare identifier there is always a type reference
+// (see the type-patterns spec, "How is Type coexists with binder patterns").
+// Literals and result patterns run first so `is null` / `is true` /
+// `is success` keep their existing meanings; typePatternParser is last and
+// catches type names (`string`, `Person`, `number[]`).
+const _isRhsParser = (input: string): ParserResult<MatchPattern> => {
+  const parser = or(
+    lazy(() => arrayMatchPatternParser),
+    lazy(() => objectMatchPatternParser),
+    restPatternParser,
+    wildcardPatternParser,
+    nullParser,
+    booleanParser,
+    unitLiteralParser,
+    resultPatternParser,
+    numberParser,
+    _stringParser,
+    typePatternParser,
+  );
+  return parser(input) as ParserResult<MatchPattern>;
+};
+export const isRhsParser: Parser<MatchPattern> = _isRhsParser;
+
 const _matchPatternParser = (input: string): ParserResult<MatchPattern> => {
   // NOTE: cannot reuse simpleLiteralParser directly because it tries
   // numberParser before variableNameParser, and numberParser is greedy on `_`
@@ -5515,7 +5649,12 @@ export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
         optionalSpacesOrNewline,
         capture(
           or(
-            sepBy(commaWithNewline, lazy(() => matchPatternParser)),
+            sepBy(
+              commaWithNewline,
+              // Safe narrowing: nested array elements never carry a
+              // typePattern (top-level-only; see ArrayPattern in pattern.ts).
+              lazy(() => matchPatternParser) as Parser<ArrayPattern["elements"][number]>,
+            ),
             succeed([]),
           ),
           "elements",
@@ -5533,7 +5672,12 @@ export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
 
 const _matchObjectPropertyParser: Parser<
   ObjectPatternProperty | ObjectPatternShorthand | RestPattern
-> = objectPatternPropertyParser(lazy(() => matchPatternParser));
+> = objectPatternPropertyParser(
+  // Safe narrowing: matchPatternParser only produces typePattern where
+  // typePatternParser is wired (is-RHS and arm top level), never in nested
+  // property position.
+  lazy(() => matchPatternParser) as Parser<ObjectPatternProperty["value"]>,
+);
 
 export const objectMatchPatternParser: Parser<ObjectPattern> = label(
   "an object match pattern",

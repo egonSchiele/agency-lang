@@ -7,7 +7,7 @@ import type {
 } from "../types/typeHints.js";
 import { Scope } from "./scope.js";
 import { walkNodes } from "../utils/node.js";
-import { safeResolveType } from "./assignability.js";
+import { isAssignable, safeResolveType } from "./assignability.js";
 import { literalToType } from "./literalType.js";
 import { resultToObjectUnion } from "./resultUnion.js";
 import { unescapeStringLiteralValue } from "../parsers/parsers.js";
@@ -34,7 +34,12 @@ export type Refine =
       literal: StringLiteralType | NumberLiteralType | BooleanLiteralType;
       keep: boolean;
     }
-  | { kind: "presence"; present: boolean };
+  | { kind: "presence"; present: boolean }
+  // A type pattern's test (`x is T`): the then-branch narrows the subject to
+  // the tested type. Positive-only by design — a Tier 2 test can fail on a
+  // validator even when the static type matches, so the else-branch (and any
+  // negative fact) would be unsound.
+  | { kind: "typeTest"; testedType: VariableType };
 export type NarrowCandidate = { ref: Reference; refine: Refine };
 export type ConditionFacts = { then: NarrowCandidate[]; else: NarrowCandidate[] };
 
@@ -64,6 +69,17 @@ export function narrowByRefine(
       );
     case "presence":
       return narrowUnionByPresence(current, refine.present, aliases);
+    case "typeTest":
+      // If what we already know is at least as precise as the tested type
+      // (e.g. `is string` on `"a" | "b"`), the test tells us nothing new —
+      // replacing would WIDEN the literal union to `string` and break code
+      // that returns the narrowed value where the union is expected. `any`
+      // is excluded: it is "assignable" to everything, but the whole point
+      // of the test is to escape it.
+      if (!isAnyType(current) && isAssignable(current, refine.testedType, aliases)) {
+        return null;
+      }
+      return refine.testedType;
   }
 }
 
@@ -219,6 +235,17 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
           refine: { kind: "presence", present: true },
         },
       ],
+      else: [],
+    };
+  }
+
+  // A type pattern's lowered test: `x is T` (or a match arm `p: T` testing
+  // the scrutinee temp). Then-branch only — see the `typeTest` Refine.
+  if (condition.type === "typeTestExpression") {
+    const ref = asPathReference(condition.expression);
+    if (!ref) return NO_FACTS;
+    return {
+      then: [{ ref, refine: { kind: "typeTest", testedType: condition.typeHint } }],
       else: [],
     };
   }

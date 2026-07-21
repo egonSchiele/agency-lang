@@ -143,6 +143,11 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "Type alias '{alias}' is not defined (referenced in '{context}').",
   },
+  typePatternUnknownType: {
+    code: "AG1013",
+    severity: "error",
+    message: "`{name}` is not a type; {hint}",
+  },
   genericRequiresTypeArgs: {
     code: "AG1007",
     severity: "error",
@@ -471,6 +476,18 @@ export const DIAGNOSTICS = {
     code: "AG5002",
     severity: "error",
     message: "match is not exhaustive: missing {missing}.",
+  },
+  bareArmBinderShadowsType: {
+    code: "AG5003",
+    severity: "warning",
+    message:
+      "`{name}` here binds the value; it does not test the type. Did you mean `p: {name}` or `is {name}`?",
+  },
+  propertyBinderShadowsType: {
+    code: "AG5004",
+    severity: "warning",
+    message:
+      "`{field}: {name}` here binds the `{field}` field to a variable called `{name}`; it does not test the field type. Field-level type tests are not supported — test the whole value with a typed pattern instead.",
   },
   notAllPathsReturn: {
     code: "AG2012",

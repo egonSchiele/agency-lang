@@ -1,0 +1,103 @@
+{
+  "tests": [
+    {
+      "nodeName": "coarse",
+      "description": "Tier 1 coarse checks and tier 2 Person arm dispatch correctly across null, string, number, boolean, array, valid person, and plain object.",
+      "input": "",
+      "expectedOutput": "\"null|string:hi|number:42|boolean|array|person:Ada|object\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "validatorRejects",
+      "description": "Right shape but failing validator does not match the named type; falls through to the object arm.",
+      "input": "",
+      "expectedOutput": "\"object\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bindsOriginal",
+      "description": "A transforming validator counts as a pass but the bound value is the original, untransformed one (Rule 1).",
+      "input": "",
+      "expectedOutput": "\"matched:-5\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "isCondition",
+      "description": "is string in an if-condition dispatches into the branch.",
+      "input": "",
+      "expectedOutput": "\"len:4\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "isBoolean",
+      "description": "is Type works as a plain boolean expression in a pure-boolean context.",
+      "input": "",
+      "expectedOutput": "\"not-a-string\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "typedArrayTier2",
+      "description": "is number[] runs the per-element schema: all-number array passes, mixed array fails.",
+      "input": "",
+      "expectedOutput": "\"good-yes,bad-no\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "matchGuardForm",
+      "description": "match(expr is Type) guard form works with a type pattern on the scrutinee.",
+      "input": "",
+      "expectedOutput": "\"is-person\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "looseNull",
+      "description": "Missing-key access (normalized null) matches is null via the literal null path.",
+      "input": "",
+      "expectedOutput": "\"missing-is-null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "jsonCheck",
+      "description": "The stdlib Json type via a type pattern: plain JSON tree passes, NaN-bearing tree fails, JsonObject accepts a plain object.",
+      "input": "",
+      "expectedOutput": "\"good-yes,bad-no,obj-yes\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

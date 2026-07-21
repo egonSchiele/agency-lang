@@ -1,4 +1,5 @@
 import { _isEmail, _isUrl, _isUuid, _isInt, _isPositive, _isNegative, _min, _max, _minLength, _maxLength, _matches } from "agency-lang/stdlib-lib/validators.js"
+import { _isJsonValue } from "agency-lang/stdlib-lib/jsonValue.js"
 
 /** @module
   @summary Validators and format helpers for constrained types, for use with @validate(...) and @jsonSchema(...).
@@ -196,3 +197,39 @@ export type MatchesPattern(pat: string) = string
 /** An array whose length is in the inclusive range `[min, max]`. */
 @jsonSchema({ minItems: min, maxItems: max })
 export type BoundedArray<T>(min: number, max: number) = T[]
+
+export def isJsonValue(value: any): Result {
+  """
+  Returns success if value is a plain JSON tree that round-trips through
+  JSON serialization unchanged, failure (naming the offending path)
+  otherwise.
+
+  @param value - The value to check.
+  """
+  return _isJsonValue(value)
+}
+
+export def isJsonObject(value: any): Result {
+  """
+  Returns success if value is a plain JSON-serializable object (non-null,
+  non-array), failure otherwise.
+
+  @param value - The value to check.
+  """
+  if (value is object) {
+    return isJsonValue(value)
+  }
+  return failure("expected a plain JSON object")
+}
+
+/** A value that round-trips through JSON unchanged: null, booleans, strings,
+    finite numbers, arrays of Json, and plain objects of Json. Class
+    instances (Date, Map, ...), functions, NaN/Infinity, and cyclic
+    structures are rejected. */
+@validate(isJsonValue)
+export type Json = any
+
+/** A plain JSON-serializable object: non-null, non-array, and every value
+    reachable from it is Json. */
+@validate(isJsonObject)
+export type JsonObject = object

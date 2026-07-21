@@ -1,6 +1,7 @@
 import { diagnostic } from "./diagnostics.js";
 import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { MatchArmMeta, MatchBlockCase } from "../types/matchBlock.js";
+import type { ObjectPattern } from "../types/pattern.js";
 import type { SourceLocation } from "../types/base.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 import type { Scope } from "./scope.js";
@@ -217,6 +218,67 @@ function checkSite(site: MatchSite, configured: Severity, ctx: TypeCheckerContex
   );
 }
 
+/** Primitive names a binder can shadow just as confusingly as an alias. */
+const SHADOWABLE_PRIMITIVE_NAMES: readonly string[] = [
+  "string", "number", "boolean", "object",
+];
+
+/**
+ * Warn when a binder is named like a type, because with type patterns in the
+ * language it READS like a type test but binds instead:
+ *   - an un-guarded bare-binder arm (`Person => ...` matches anything and
+ *     binds it to `Person`) → AG5003;
+ *   - a property-position binder (`{name: string}` binds the `name` field to
+ *     a variable called `string`) → AG5004, guarded or not.
+ * This pass already sits on every match site with the alias table in hand,
+ * which is why the warning lives here rather than in the synthesizer.
+ */
+function warnTypeShadowingBinders(site: MatchSite, ctx: TypeCheckerContext): void {
+  const aliases = ctx.getTypeAliases();
+  const isTypeName = (name: string): boolean =>
+    aliases[name] !== undefined || SHADOWABLE_PRIMITIVE_NAMES.includes(name);
+
+  // Recursive so nested object patterns ({a: {name: string}}) warn too.
+  // Diagnostics anchor to the binder node itself, not the whole match.
+  const warnObjectPatternProps = (pattern: ObjectPattern): void => {
+    for (const prop of pattern.properties) {
+      if (prop.type !== "objectPatternProperty") continue;
+      if (prop.value.type === "variableName" && isTypeName(prop.value.value)) {
+        ctx.errors.push(
+          diagnostic(
+            "propertyBinderShadowsType",
+            { field: prop.key, name: prop.value.value },
+            prop.value.loc ?? pattern.loc ?? site.loc ?? null,
+          ),
+        );
+      } else if (prop.value.type === "objectPattern") {
+        warnObjectPatternProps(prop.value);
+      }
+    }
+  };
+
+  for (const arm of site.arms) {
+    if (arm.caseValue === "_") continue;
+    const cv = arm.caseValue;
+    if (!arm.guarded && cv.type === "variableName" && isTypeName(cv.value)) {
+      ctx.errors.push(
+        diagnostic(
+          "bareArmBinderShadowsType",
+          { name: cv.value },
+          cv.loc ?? site.loc ?? null,
+        ),
+      );
+    }
+    // A typed arm ({name: string}: Person =>) wraps its pattern in a
+    // typePattern; the shadow trap applies to the INNER pattern — and a
+    // typed arm is exactly where a user is thinking in types.
+    const inner = cv.type === "typePattern" ? cv.pattern : cv;
+    if (inner !== null && inner.type === "objectPattern") {
+      warnObjectPatternProps(inner);
+    }
+  }
+}
+
 /** Normalize the two surviving match shapes to `(scrutineeType, arms)`. */
 function normalizeSite(
   node: AgencyNode,
@@ -271,6 +333,7 @@ export function checkMatchExhaustiveness(
         const site = normalizeSite(node, info.scope, ctx);
         if (site) {
           checkSite(site, configured, ctx);
+          warnTypeShadowingBinders(site, ctx);
         }
       }
     });

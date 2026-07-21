@@ -123,3 +123,13 @@ A generic type accepts a fixed maximum number of type arguments, and you supplie
 A generic type requires at least some minimum number of type arguments, and you supplied fewer.
 
 **How to fix:** add the missing type arguments; the message names how many are needed.
+
+<a id="ag1013"></a>
+
+## AG1013 — `&#123;name&#125;` is not a type; &#123;hint&#125;
+
+*Default severity: error.*
+
+A type pattern (`x is T`, or a match arm `p: T`) named something that is not a type. After `is`, a bare identifier is always read as a type reference — the old always-true binder form was retired — so a variable name or a JavaScript class name (like `Date`) in that position is an error rather than a silent match-anything.
+
+**How to fix:** if you meant a type, declare or import it. If you meant to bind the value, write `const name = x` instead. For JavaScript classes, use `is object` or a helper function — type patterns only test Agency types.

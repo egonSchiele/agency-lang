@@ -47,6 +47,18 @@ export const DIAGNOSTIC_EXPLANATIONS: Record<DiagnosticName, string> = {
 
 **How to fix:** declare the alias, import it from the module that defines it, or fix a typo in the name.`,
 
+  bareArmBinderShadowsType: `An un-guarded match arm whose left side is a bare name matches ANY value and binds it to that name — it never tests the type, even when the name is a type in scope. Writing \`Person => ...\` therefore does something very different from testing "is this a Person".
+
+**How to fix:** to test the type and bind, write \`p: Person => ...\`; to test only, write \`is Person => ...\`; to genuinely bind whatever arrives, pick a name that is not a type.`,
+
+  propertyBinderShadowsType: `Inside an object pattern, \`{field: name}\` binds the field to a new variable called \`name\` — it does not test the field's type, even when the name is a type in scope. \`{name: string}\` binds the \`name\` field to a variable called \`string\`.
+
+**How to fix:** field-level type tests are not supported; test the whole value against a typed shape instead (\`p: Person => ...\` or an inline object type), or pick a binder name that is not a type.`,
+
+  typePatternUnknownType: `A type pattern (\`x is T\`, or a match arm \`p: T\`) named something that is not a type. After \`is\`, a bare identifier is always read as a type reference — the old always-true binder form was retired — so a variable name or a JavaScript class name (like \`Date\`) in that position is an error rather than a silent match-anything.
+
+**How to fix:** if you meant a type, declare or import it. If you meant to bind the value, write \`const name = x\` instead. For JavaScript classes, use \`is object\` or a helper function — type patterns only test Agency types.`,
+
   genericRequiresTypeArgs: `This is a generic type — it is parameterized by other types (like the element type of a list) — and it cannot be used bare. The type arguments are required.
 
 **How to fix:** supply the type arguments in angle brackets, e.g. write the element type the generic wraps.`,

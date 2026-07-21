@@ -237,6 +237,8 @@ export function expressionToString(expr: Expression): string {
       return `/${expr.pattern}/${expr.flags}`;
     case "schemaExpression":
       return `schema(${variableTypeToString(expr.typeArg, {})})`;
+    case "typeTestExpression":
+      return `${expressionToString(expr.expression)} is ${variableTypeToString(expr.typeHint, {})}`;
     case "interruptStatement": {
       const args = expr.arguments.map(callArgToString).join(", ");
       return `interrupt ${expr.effect}(${args})`;
@@ -485,6 +487,8 @@ export function* walkNodes(
           yield* walkNodes([caseItem.caseValue as AgencyNode], [...ancestors, node], scopes);
         }
       }
+    } else if (node.type === "typeTestExpression") {
+      yield* walkNodes([node.expression], [...ancestors, node], scopes);
     } else if (node.type === "valueAccess") {
       yield* walkNodes([node.base], [...ancestors, node], scopes);
       for (const element of node.chain) {

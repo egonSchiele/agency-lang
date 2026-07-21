@@ -1,0 +1,27 @@
+type Person = {
+  name: string,
+  age: number,
+}
+
+def describe(value: any): string {
+  if (value is string) {
+    return "text"
+  }
+  if (value is any[]) {
+    return "list"
+  }
+  if (value is object) {
+    return "object"
+  }
+  return match (value) {
+    null => "null"
+    n: number => "number"
+    {name}: Person => "person: ${name}"
+    p: {tag: string} => "tagged: ${p.tag}"
+    _ => "other"
+  }
+}
+
+node main() {
+  print(describe("hi"))
+}

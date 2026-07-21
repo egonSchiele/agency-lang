@@ -5322,10 +5322,12 @@ const _objectPatternShorthandParser: Parser<ObjectPatternShorthand> = (
 
 // Shared helpers for binding and match object-property parsers. The two
 // only differ by the inner value parser (bindingPatternParser vs
-// matchPatternParser); ObjectPatternProperty["value"] (= MatchPattern)
-// covers both, so we factor out the shape.
+// matchPatternParser). The value type is narrower than MatchPattern:
+// typePattern is top-level-only (is-RHS and arm position), so nested
+// property values never carry one — the parsers wired in here cannot
+// produce it, which is what makes the seam cast at the match call site safe.
 const propertyWithValueParser = (
-  valueParser: Parser<MatchPattern>,
+  valueParser: Parser<ObjectPatternProperty["value"]>,
 ): Parser<ObjectPatternProperty> => (input: string) => {
   const parser = seqC(
     set("type", "objectPatternProperty"),
@@ -5339,7 +5341,7 @@ const propertyWithValueParser = (
 };
 
 const objectPatternPropertyParser = (
-  valueParser: Parser<MatchPattern>,
+  valueParser: Parser<ObjectPatternProperty["value"]>,
 ): Parser<ObjectPatternProperty | ObjectPatternShorthand | RestPattern> =>
   or(
     restPatternParser,
@@ -5467,7 +5469,12 @@ export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
         optionalSpacesOrNewline,
         capture(
           or(
-            sepBy(commaWithNewline, lazy(() => matchPatternParser)),
+            sepBy(
+              commaWithNewline,
+              // Safe narrowing: nested array elements never carry a
+              // typePattern (top-level-only; see ArrayPattern in pattern.ts).
+              lazy(() => matchPatternParser) as Parser<ArrayPattern["elements"][number]>,
+            ),
             succeed([]),
           ),
           "elements",
@@ -5485,7 +5492,12 @@ export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
 
 const _matchObjectPropertyParser: Parser<
   ObjectPatternProperty | ObjectPatternShorthand | RestPattern
-> = objectPatternPropertyParser(lazy(() => matchPatternParser));
+> = objectPatternPropertyParser(
+  // Safe narrowing: matchPatternParser only produces typePattern where
+  // typePatternParser is wired (is-RHS and arm top level), never in nested
+  // property position.
+  lazy(() => matchPatternParser) as Parser<ObjectPatternProperty["value"]>,
+);
 
 export const objectMatchPatternParser: Parser<ObjectPattern> = label(
   "an object match pattern",

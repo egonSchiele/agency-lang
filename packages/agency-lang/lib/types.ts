@@ -49,6 +49,8 @@ import {
   ObjectPattern,
   RestPattern,
   ResultPattern,
+  TypePattern,
+  TypeTestExpression,
   WildcardPattern,
 } from "./types/pattern.js";
 export * from "./types/pattern.js";
@@ -100,6 +102,7 @@ export type Expression =
   | InterruptStatement
   | BlockArgument
   | IsExpression
+  | TypeTestExpression
   | MatchBlock
   // Pre-lowering only: comprehensionDesugar rewrites every Comprehension
   // into map/filter/fork calls inside parseAgency's `lower` block, so
@@ -137,6 +140,7 @@ export const EXPRESSION_NODE_TYPES: readonly string[] = [
   "interruptStatement",
   "blockArgument",
   "isExpression",
+  "typeTestExpression",
   "matchBlock",
   "comprehension",
 ];
@@ -358,11 +362,13 @@ export type AgencyNode =
   | InterruptStatement
   | BlockArgument
   | IsExpression
+  | TypeTestExpression
   | ObjectPattern
   | ArrayPattern
   | RestPattern
   | WildcardPattern
-  | ResultPattern;
+  | ResultPattern
+  | TypePattern;
 
 export type AgencyProgram = {
   type: "agencyProgram";

@@ -477,6 +477,18 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "match is not exhaustive: missing {missing}.",
   },
+  bareArmBinderShadowsType: {
+    code: "AG5003",
+    severity: "warning",
+    message:
+      "`{name}` here binds the value; it does not test the type. Did you mean `p: {name}` or `is {name}`?",
+  },
+  propertyBinderShadowsType: {
+    code: "AG5004",
+    severity: "warning",
+    message:
+      "`{field}: {name}` here binds the `{field}` field to a variable called `{name}`; it does not test the field type. Field-level type tests are not supported — test the whole value with a typed pattern instead.",
+  },
   notAllPathsReturn: {
     code: "AG2012",
     severity: "error",

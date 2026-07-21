@@ -2849,7 +2849,10 @@ const atomWithIs: Parser<Expression> = (input: string) => {
   const baseResult = atom(input);
   if (!baseResult.success) return baseResult;
   const isCheck = seqC(
-    spaces,
+    // Same-line whitespace ONLY (not `spaces`, which spans newlines): an
+    // arm body ending in an atom must not merge with a following line's
+    // `is Type => ...` arm into one isExpression.
+    many1(oneOf(" \t")),
     str("is"),
     not(varNameChar),
     optionalSpaces,

@@ -130,3 +130,74 @@ def f(x: any): boolean {
     expect(err!.message).toMatch(/JavaScript class/);
   });
 });
+
+describe("type patterns and exhaustiveness", () => {
+  it("type-pattern arms do not satisfy exhaustiveness", () => {
+    const errors = check(`
+def f(x: "a" | "b"): number {
+  return match (x) {
+    s: string => 1
+  }
+}
+`);
+    expect(errors.some((e) => e.code === "AG5002")).toBe(true);
+  });
+
+  it("coarse type arms over a fully covered union still demand _", () => {
+    // Spec v1 decision: type-pattern arms NEVER earn exhaustiveness credit,
+    // even when coarse Tier 1 arms provably cover the closed union.
+    const errors = check(`
+def f(x: "a" | "b"): number {
+  return match (x) {
+    is string => 1
+    is number => 2
+  }
+}
+`);
+    expect(errors.some((e) => e.code === "AG5002")).toBe(true);
+  });
+});
+
+describe("binder-shadows-type warnings", () => {
+  it("bare binder arm named like a type warns AG5003", () => {
+    const errors = check(`
+type Person = { name: string }
+def f(x: any): string {
+  return match (x) {
+    Person => "bound"
+    _ => "no"
+  }
+}
+`);
+    expect(
+      errors.some((e) => e.code === "AG5003" && e.severity === "warning"),
+    ).toBe(true);
+  });
+
+  it("property-position binder named like a type warns AG5004", () => {
+    // In pattern position, {name: string} binds the name field to a variable
+    // called "string" — it does NOT test the field type. Warn.
+    const errors = check(`
+def f(x: any): string {
+  return match (x) {
+    {name: string} => string
+    _ => "no"
+  }
+}
+`);
+    expect(errors.some((e) => e.code === "AG5004")).toBe(true);
+  });
+
+  it("negatives: ordinary binders and guarded arms do not warn", () => {
+    const errors = check(`
+type Person = { name: string }
+def f(x: any): string {
+  return match (x) {
+    other if (other != null) => "guarded"
+    rest => "bound"
+  }
+}
+`);
+    expect(errors.some((e) => e.code === "AG5003" || e.code === "AG5004")).toBe(false);
+  });
+});

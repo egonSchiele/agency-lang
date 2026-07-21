@@ -217,6 +217,53 @@ function checkSite(site: MatchSite, configured: Severity, ctx: TypeCheckerContex
   );
 }
 
+/** Primitive names a binder can shadow just as confusingly as an alias. */
+const SHADOWABLE_PRIMITIVE_NAMES: readonly string[] = [
+  "string", "number", "boolean", "object",
+];
+
+/**
+ * Warn when a binder is named like a type, because with type patterns in the
+ * language it READS like a type test but binds instead:
+ *   - an un-guarded bare-binder arm (`Person => ...` matches anything and
+ *     binds it to `Person`) → AG5003;
+ *   - a property-position binder (`{name: string}` binds the `name` field to
+ *     a variable called `string`) → AG5004, guarded or not.
+ * This pass already sits on every match site with the alias table in hand,
+ * which is why the warning lives here rather than in the synthesizer.
+ */
+function warnTypeShadowingBinders(site: MatchSite, ctx: TypeCheckerContext): void {
+  const aliases = ctx.getTypeAliases();
+  const isTypeName = (name: string): boolean =>
+    aliases[name] !== undefined || SHADOWABLE_PRIMITIVE_NAMES.includes(name);
+  for (const arm of site.arms) {
+    if (arm.caseValue === "_") continue;
+    const cv = arm.caseValue;
+    if (!arm.guarded && cv.type === "variableName" && isTypeName(cv.value)) {
+      ctx.errors.push(
+        diagnostic("bareArmBinderShadowsType", { name: cv.value }, site.loc ?? null),
+      );
+    }
+    if (cv.type === "objectPattern") {
+      for (const prop of cv.properties) {
+        if (
+          prop.type === "objectPatternProperty" &&
+          prop.value.type === "variableName" &&
+          isTypeName(prop.value.value)
+        ) {
+          ctx.errors.push(
+            diagnostic(
+              "propertyBinderShadowsType",
+              { field: prop.key, name: prop.value.value },
+              site.loc ?? null,
+            ),
+          );
+        }
+      }
+    }
+  }
+}
+
 /** Normalize the two surviving match shapes to `(scrutineeType, arms)`. */
 function normalizeSite(
   node: AgencyNode,
@@ -271,6 +318,7 @@ export function checkMatchExhaustiveness(
         const site = normalizeSite(node, info.scope, ctx);
         if (site) {
           checkSite(site, configured, ctx);
+          warnTypeShadowingBinders(site, ctx);
         }
       }
     });

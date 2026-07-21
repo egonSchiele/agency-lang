@@ -174,17 +174,18 @@ export def turnBudgetHandler(intr: any): any {
   // The runtime refuses a grant that leaves the budget still over its limit.
   // By the time a trip is answered the work has already run past the limit
   // (further on a loaded machine), so the grant must first cover that
-  // overshoot, then add what the user offered. Extend only the dimension
-  // that tripped.
+  // overshoot, then add what the user offered. A bare "yes" with no amount
+  // gets a default grant — overshoot alone would leave zero headroom and
+  // trip again immediately. Extend only the dimension that tripped.
   const overshoot = spent - limit
   if (dimension == "time") {
     return approve({
-      maxTime: overshoot + (decision.extraSeconds ?? 0) * 1000,
+      maxTime: overshoot + (decision.extraSeconds ?? 60) * 1000,
       message: "The user granted more time. Wrap up as soon as you reasonably can.",
     })
   }
   return approve({
-    maxCost: overshoot + (decision.extraDollars ?? $0),
+    maxCost: overshoot + (decision.extraDollars ?? $1),
     message: "The user granted more budget. Wrap up as soon as you reasonably can.",
   })
 }

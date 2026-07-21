@@ -24,7 +24,7 @@ function writeInput(name: string, contents: string): string {
 function weaveAndRead(
   name: string,
   contents: string,
-  opts: { lang?: string } = {},
+  opts: { lang?: string; baseUrl?: string } = {},
 ): string {
   const inputPath = writeInput(name, contents);
   const outputDir = path.join(tmpDir, "out");
@@ -34,6 +34,7 @@ function weaveAndRead(
     outputDir,
     [],
     opts.lang ?? "agency",
+    opts.baseUrl,
   );
   const outName = name.replace(/\.agency$/, ".md");
   return fs.readFileSync(path.join(outputDir, outName), "utf-8");
@@ -308,6 +309,159 @@ def second(): number { return 2 }
     expect(firstIdx).toBeGreaterThanOrEqual(0);
     expect(importIdx).toBeGreaterThan(firstIdx);
     expect(secondIdx).toBeGreaterThan(importIdx);
+  });
+
+  it("weaves a block comment nested inside a function body into prose", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `def foo(): number {
+  /* explain the return */
+  return 1
+}
+`,
+    );
+
+    // The comment becomes prose, so the one code fence is split in two
+    // around it: head of the function, then prose, then the body.
+    const defIdx = md.indexOf("def foo");
+    const proseIdx = md.indexOf("explain the return");
+    const returnIdx = md.indexOf("return 1");
+    expect(defIdx).toBeGreaterThanOrEqual(0);
+    expect(proseIdx).toBeGreaterThan(defIdx);
+    expect(returnIdx).toBeGreaterThan(proseIdx);
+
+    const fenceCount = (md.match(/```agency/g) ?? []).length;
+    expect(fenceCount).toBe(2);
+  });
+
+  it("weaves a block comment nested at any depth into prose", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `def foo(): number {
+  if (true) {
+    /* explain the branch */
+    return 1
+  }
+  return 0
+}
+`,
+    );
+
+    const proseIdx = md.indexOf("explain the branch");
+    expect(proseIdx).toBeGreaterThanOrEqual(0);
+    // It is prose, not code: the head fence closes before it and a new
+    // fence reopens after it.
+    const fenceCount = (md.match(/```agency/g) ?? []).length;
+    expect(fenceCount).toBe(2);
+  });
+
+  it("does not treat `/*` inside a string literal as a comment", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `def foo(): string {
+  return "not /* a comment */ really"
+}
+`,
+    );
+
+    // The string is copied over wholesale, so nothing is woven out and the
+    // whole node stays in a single fence.
+    const fenceCount = (md.match(/```agency/g) ?? []).length;
+    expect(fenceCount).toBe(1);
+    expect(md).toContain('"not /* a comment */ really"');
+  });
+
+  it("drops an empty block comment without eating surrounding whitespace", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `def foo(): number {
+  /**/
+  return 1
+}
+`,
+    );
+
+    // Whole thing stays in one fence (no split for an empty comment)...
+    const fenceCount = (md.match(/```agency/g) ?? []).length;
+    expect(fenceCount).toBe(1);
+    // ...and `return 1` keeps its two-space indentation.
+    expect(md).toMatch(/\n {2}return 1\n/);
+  });
+
+  it("does not weave a `/*` that appears inside a `//` line comment", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `def foo(): number {
+  // see /* not a real comment */ above
+  return 1
+}
+`,
+    );
+
+    // No split: the `/* ... */` is inside a line comment, so it stays as code.
+    const fenceCount = (md.match(/```agency/g) ?? []).length;
+    expect(fenceCount).toBe(1);
+    expect(md).toContain("// see /* not a real comment */ above");
+  });
+
+  it("adds a 'View source' link at the top when --base-url is given", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `def foo(): number { return 1 }\n`,
+      { baseUrl: "https://example.com/src" },
+    );
+
+    // The link is the first line and points at the source file.
+    expect(md.startsWith("[View source](https://example.com/src/test.agency)")).toBe(
+      true,
+    );
+    // And the code still follows it.
+    const linkIdx = md.indexOf("[View source]");
+    const fenceIdx = md.indexOf("```agency");
+    expect(fenceIdx).toBeGreaterThan(linkIdx);
+  });
+
+  it("omits the 'View source' link when no base URL is given", () => {
+    const md = weaveAndRead("test.agency", `def foo(): number { return 1 }\n`);
+    expect(md).not.toContain("View source");
+  });
+
+  it("strips a trailing slash from the base URL", () => {
+    const md = weaveAndRead(
+      "test.agency",
+      `def foo(): number { return 1 }\n`,
+      { baseUrl: "https://example.com/src/" },
+    );
+    expect(md).toContain("(https://example.com/src/test.agency)");
+    expect(md).not.toContain("src//test.agency");
+  });
+
+  it("uses the tree-relative path for the source link on directory input", () => {
+    const inputDir = path.join(tmpDir, "src");
+    const nestedDir = path.join(inputDir, "nested");
+    fs.mkdirSync(nestedDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(nestedDir, "b.agency"),
+      `def b(): number { return 2 }\n`,
+    );
+
+    const outputDir = path.join(tmpDir, "out");
+    generateLiterate(
+      {},
+      inputDir,
+      outputDir,
+      [],
+      "agency",
+      "https://example.com/src",
+    );
+
+    const md = fs.readFileSync(
+      path.join(outputDir, "nested", "b.md"),
+      "utf-8",
+    );
+    expect(md).toContain(
+      "[View source](https://example.com/src/nested/b.agency)",
+    );
   });
 
   it("smoke-tests against stdlib/markdown.agency (real-world AST)", () => {

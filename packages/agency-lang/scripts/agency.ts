@@ -1047,10 +1047,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Directory names to ignore when scanning recursively",
     )
     .option("--lang <name>", "Code-fence language tag", "agency")
+    .option("--base-url <url>", "Base URL for a 'View source' link at the top")
     .action(
       (
         input: string,
-        opts: { output: string; ignore?: string[]; lang: string },
+        opts: {
+          output: string;
+          ignore?: string[];
+          lang: string;
+          baseUrl?: string;
+        },
       ) => {
         const config = getConfig();
         generateLiterate(
@@ -1059,6 +1065,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           opts.output,
           opts.ignore || [],
           opts.lang,
+          opts.baseUrl,
         );
       },
     );

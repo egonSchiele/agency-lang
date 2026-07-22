@@ -5,13 +5,21 @@ import { box, row, column, text, hline, vline, render } from "std::ui/layout"
 import { table } from "std::ui/table"
 
 node main() {
-  /* 1) Plain bordered box with a title. */
+```
+
+1) Plain bordered box with a title.
+
+```ts
   const greeting = box(title: "Welcome", titleColor: "orange") as b {
     b.text("Hello from std::ui/layout!", bold: true)
   }
   print(render(greeting))
   print("")
-  /* 2) Two-column layout with a vline separator. */
+```
+
+2) Two-column layout with a vline separator.
+
+```ts
   const twoCol = box(title: "Tips", padding: 1) as outer {
     // uses block syntax
     outer.row(gap: 2) as r {
@@ -30,7 +38,11 @@ node main() {
   }
   print(render(twoCol))
   print("")
-  /* 3) Box with heavy border style. */
+```
+
+3) Box with heavy border style.
+
+```ts
   const heavy = box(
     title: "ALERT",
     titleColor: "red",
@@ -42,7 +54,11 @@ node main() {
   }
   print(render(heavy))
   print("")
-  /* 4) Simple data table. */
+```
+
+4) Simple data table.
+
+```ts
   const inventory = table(
     title: "Inventory",
     header: ["SKU", "Item", "Qty"],
@@ -51,7 +67,11 @@ node main() {
   )
   print(render(inventory))
   print("")
-  /* 5) Another table showing styled cells (red for negatives, green for positives) + caption. */
+```
+
+5) Another table showing styled cells (red for negatives, green for positives) + caption.
+
+```ts
   const ledger = table(
     title: "Ledger",
     caption: "today",
@@ -70,8 +90,12 @@ node main() {
   )
   print(render(ledger))
   print("")
-  /* 6) Full-width three-column splash, demonstrating top-down sizing
-  and text wrap inside percentage-width boxes. */
+```
+
+6) Full-width three-column splash, demonstrating top-down sizing
+  and text wrap inside percentage-width boxes.
+
+```ts
   const splash = box(width: "full", title: "Sized layout", padding: 1) as outer {
     outer.row(gap: 2) as r {
       r.box(width: "33%", title: "Commands") as b {
@@ -91,7 +115,11 @@ node main() {
   }
   print(render(splash))
   print("")
-  /* 7) Sized table with a fixed first column and a percentage-width notes column. */
+```
+
+7) Sized table with a fixed first column and a percentage-width notes column.
+
+```ts
   const sized = table(
     title: "Build summary",
     width: "full",

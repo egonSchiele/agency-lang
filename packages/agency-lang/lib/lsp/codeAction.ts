@@ -11,6 +11,22 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import type { SymbolTable } from "../symbolTable.js";
 import { uriToPath } from "./uri.js";
 import { getStdlibFiles, stdlibModuleName } from "../importPaths.js";
+import { parseAgency } from "../parser.js";
+import { runLinter } from "../linter/registry.js";
+import { unusedImportsBatchEdits } from "../linter/rules/unusedImports.js";
+import type { LintContext, LintEdit } from "../linter/types.js";
+
+/** Dedicated source-action kind for remove-on-save. Offered alongside the
+ *  generic SourceFixAll so either `editor.codeActionsOnSave` configuration
+ *  triggers the removal. */
+export const REMOVE_UNUSED_IMPORTS_KIND = "source.removeUnusedImports";
+
+function lintEditToTextEdit(doc: TextDocument, e: LintEdit): TextEdit {
+  return {
+    range: { start: doc.positionAt(e.start), end: doc.positionAt(e.end) },
+    newText: e.newText,
+  };
+}
 
 // Lazily built index: symbol name → "std::module"
 let stdlibIndex: Record<string, string> | null = null;
@@ -42,6 +58,34 @@ export function getCodeActions(
     if (importAction) actions.push(importAction);
     const stdlibAction = suggestStdlibImport(diagnostic, doc);
     if (stdlibAction) actions.push(stdlibAction);
+  }
+
+  const source = doc.getText();
+  const parsed = parseAgency(source, {}, false);
+  if (parsed.success) {
+    const ctx: LintContext = { program: parsed.result, source, filePath: uriToPath(doc.uri) };
+    const findings = runLinter(ctx).filter((f) => f.fix);
+    for (const f of findings) {
+      actions.push({
+        title: f.fix!.title,
+        kind: CodeActionKind.QuickFix,
+        edit: { changes: { [doc.uri]: f.fix!.edits.map((e) => lintEditToTextEdit(doc, e)) } },
+      });
+    }
+    if (findings.length > 0) {
+      // The batch regenerates each statement ONCE with all of its unused
+      // names removed (one edit per statement) — concatenating the
+      // per-finding fixes instead would produce overlapping edits whenever
+      // one statement has two unused names, which VS Code rejects.
+      const batchEdits = unusedImportsBatchEdits(ctx).map((e) => lintEditToTextEdit(doc, e));
+      for (const kind of [CodeActionKind.SourceFixAll, REMOVE_UNUSED_IMPORTS_KIND]) {
+        actions.push({
+          title: "Remove all unused imports",
+          kind,
+          edit: { changes: { [doc.uri]: batchEdits } },
+        });
+      }
+    }
   }
 
   return actions;

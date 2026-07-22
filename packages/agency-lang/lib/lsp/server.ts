@@ -8,6 +8,7 @@ import {
   InitializeResult,
   InitializeParams,
   CompletionList,
+  CodeActionKind,
   DidChangeWatchedFilesNotification,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -29,7 +30,7 @@ import { handleSignatureHelp } from "./signatureHelp.js";
 import { handleReferences } from "./references.js";
 import { handleRename, handlePrepareRename } from "./rename.js";
 import { handleTypeDefinition } from "./typeDefinition.js";
-import { getCodeActions } from "./codeAction.js";
+import { getCodeActions, REMOVE_UNUSED_IMPORTS_KIND } from "./codeAction.js";
 import { getWorkspaceSymbols } from "./workspaceSymbol.js";
 import type { DocumentState } from "./documentState.js";
 
@@ -71,7 +72,13 @@ export function startServer(): void {
         renameProvider: { prepareProvider: true },
         documentHighlightProvider: true,
         foldingRangeProvider: true,
-        codeActionProvider: true,
+        codeActionProvider: {
+          codeActionKinds: [
+            CodeActionKind.QuickFix,
+            CodeActionKind.SourceFixAll,
+            REMOVE_UNUSED_IMPORTS_KIND,
+          ],
+        },
         workspaceSymbolProvider: true,
         documentLinkProvider: {},
       },

@@ -200,3 +200,23 @@ describe("code-action kind filtering (context.only)", () => {
     expect(actions).toEqual([]);
   });
 });
+
+describe("cached lint results", () => {
+  it("uses the cache instead of re-linting when provided", () => {
+    // The document HAS an unused import, but the (deliberately empty) cache
+    // wins — proving no re-parse happens when a valid cache is passed.
+    const source = `import { a } from "./x.agency"\nnode main() { return 1 }\n`;
+    const doc = makeDoc(source);
+    const actions = getCodeActions(
+      {
+        textDocument: { uri: doc.uri },
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        context: { diagnostics: [] },
+      },
+      doc,
+      new SymbolTable(),
+      { findings: [], batchEdits: [] },
+    );
+    expect(actions.filter((a) => a.title.startsWith("Remove"))).toEqual([]);
+  });
+});

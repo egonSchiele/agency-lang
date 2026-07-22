@@ -125,16 +125,21 @@ export function startServer(): void {
       // If symbol table build fails (e.g. file not on disk yet), continue with empty table
     }
 
-    const { diagnostics, program, info, semanticIndex, scopes } = runDiagnostics(
-      doc,
-      fsPath,
-      config,
-      symbolTable,
-    );
+    const { diagnostics, program, info, semanticIndex, scopes, lintFindings, lintBatchEdits } =
+      runDiagnostics(doc, fsPath, config, symbolTable);
     connection.sendDiagnostics({ uri: doc.uri, diagnostics });
 
     if (program && info) {
-      docStates.set(doc.uri, { program, info, semanticIndex, scopes, symbolTable });
+      docStates.set(doc.uri, {
+        program,
+        info,
+        semanticIndex,
+        scopes,
+        symbolTable,
+        lintFindings,
+        lintBatchEdits,
+        lintVersion: doc.version,
+      });
     } else {
       docStates.delete(doc.uri);
     }
@@ -296,7 +301,15 @@ export function startServer(): void {
     const doc = documents.get(params.textDocument.uri);
     const state = docStates.get(params.textDocument.uri);
     if (!doc || !state) return [];
-    return getCodeActions(params, doc, state.symbolTable);
+    // Reuse the lint results the diagnostics pass already computed — but only
+    // when the buffer has not changed since (diagnostics run debounced, so a
+    // code-action request can be newer). On a version mismatch getCodeActions
+    // falls back to a fresh parse; stale offset edits would corrupt the text.
+    const cachedLint =
+      state.lintVersion === doc.version
+        ? { findings: state.lintFindings, batchEdits: state.lintBatchEdits }
+        : undefined;
+    return getCodeActions(params, doc, state.symbolTable, cachedLint);
   });
 
   connection.onDocumentLinks((params) => {

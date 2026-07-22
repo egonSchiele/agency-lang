@@ -4,6 +4,8 @@ import {
   DiagnosticTag,
 } from "vscode-languageserver-protocol";
 import { runLinter } from "../linter/registry.js";
+import { unusedImportsBatchEdits } from "../linter/rules/unusedImports.js";
+import type { LintEdit, LintFinding } from "../linter/types.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { parseAgency } from "../parser.js";
 import { resolveImports } from "../preprocessors/importResolver.js";
@@ -68,6 +70,9 @@ type DiagnosticsResult = {
   info: CompilationUnit | null;
   semanticIndex: SemanticIndex;
   scopes: ScopeInfo[];
+  /** Lint results for the code-action path to reuse (see DocumentState). */
+  lintFindings: LintFinding[];
+  lintBatchEdits: LintEdit[];
 };
 
 export function runDiagnostics(
@@ -100,7 +105,7 @@ export function runDiagnostics(
         source: "agency",
       });
     }
-    return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [] };
+    return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [], lintFindings: [], lintBatchEdits: [] };
   }
 
   let program = parseResult.result;
@@ -136,7 +141,7 @@ export function runDiagnostics(
       message: err instanceof Error ? err.message : String(err),
       source: "agency",
     });
-    return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [] };
+    return { diagnostics, program: null, info: null, semanticIndex: {}, scopes: [], lintFindings: [], lintBatchEdits: [] };
   }
 
   // Analysis-only path (the LSP never executes anything):
@@ -192,7 +197,8 @@ export function runDiagnostics(
     });
   }
 
-  const lintFindings = runLinter({ program: lintProgram, source, filePath: fsPath });
+  const lintCtx = { program: lintProgram, source, filePath: fsPath };
+  const lintFindings = runLinter(lintCtx);
   for (const f of lintFindings) {
     diagnostics.push({
       // v1: every lint finding is a hint. When the first warning-severity
@@ -213,5 +219,7 @@ export function runDiagnostics(
     info,
     semanticIndex: buildSemanticIndex(program, fsPath, symbolTable, interruptEffectsByFunction),
     scopes,
+    lintFindings,
+    lintBatchEdits: lintFindings.length > 0 ? unusedImportsBatchEdits(lintCtx) : [],
   };
 }

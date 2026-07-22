@@ -11,7 +11,8 @@
       ],
       "useTestLLMProvider": true,
       "llmMocks": [],
-      "description": "A time trip detected at a step boundary mid-loop: the handler grants more time and the loop runs to completion."
+      "description": "A time trip detected at a step boundary mid-loop: the handler grants more time and the loop runs to completion. Runs under the fake clock: _advanceTime drives the trip deterministically.",
+      "fakeClock": true
     },
     {
       "nodeName": "stepBoundaryRejected",
@@ -24,7 +25,8 @@
       ],
       "useTestLLMProvider": true,
       "llmMocks": [],
-      "description": "The same detection, rejected: the carry-on-abort pipeline salvages the saved draft."
+      "description": "The same detection, rejected: the carry-on-abort pipeline salvages the saved draft. Runs under the fake clock: _advanceTime drives the trip deterministically.",
+      "fakeClock": true
     },
     {
       "nodeName": "midRequestApproved",
@@ -84,7 +86,8 @@
           }
         }
       ],
-      "description": "PR 3 headline: a step-boundary time trip surfaces across a real checkpoint; the harness grants time with a valued approve; the resumed run re-detects the restored over-budget guard, applies the answer, and completes."
+      "description": "PR 3 headline: a step-boundary time trip surfaces across a real checkpoint; the harness grants time with a valued approve; the resumed run re-detects the restored over-budget guard, applies the answer, and completes. Runs under the fake clock: _advanceTime drives the trip deterministically.",
+      "fakeClock": true
     },
     {
       "nodeName": "toolBodyApproved",
@@ -107,7 +110,8 @@
           "return": "tool-reported:spun"
         }
       ],
-      "description": "Taxonomy case (b): the trip fires inside an executing TOOL; the raise happens at the tool's own step boundary, the handler grants time, the tool completes on resume, and its result reaches the thread — no dangling tool_use."
+      "description": "Taxonomy case (b): the trip fires inside an executing TOOL; the raise happens at the tool's own step boundary, the handler grants time, the tool completes on resume, and its result reaches the thread \u2014 no dangling tool_use. Runs under the fake clock: _advanceTime drives the trip deterministically.",
+      "fakeClock": true
     }
   ]
 }

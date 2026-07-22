@@ -1,0 +1,61 @@
+import { queueNote, queueEarly, queueElsewhere } from "./tools.js"
+import { attachToReply, image } from "std::thread"
+
+// Mid-round queueing happens from a top-level onToolCallEnd callback: it
+// fires at tool-DISPATCH level, which shares the parent conversation, so
+// current() is the outer thread. (Inside a TOOL BODY current() is the
+// tool's private throwaway thread — a queueMessage there dies with it,
+// by the same isolation that keeps a tool's llm() calls out of the outer
+// conversation. Tools hand content outward via attachToReply.)
+callback("onToolCallEnd") as data {
+  if (data.toolName == "lookup") {
+    const q = queueNote("queued mid-round")
+  }
+}
+
+def lookup(): string {
+  return "found it"
+}
+
+node midRound() {
+  return llm("use the tool", { tools: [lookup] })
+}
+
+// queueEarly runs as a plain call before a NO-tool llm(). The queued
+// message must be delivered by that call's initial boundary, ahead of
+// the prompt.
+node preQueued() {
+  const q = queueEarly("queued before the call")
+  return llm("answer briefly")
+}
+
+// queueElsewhere queues onto a different thread. Nothing on the main
+// thread may deliver it.
+node scoped() {
+  const q = queueElsewhere("for the side thread")
+  return llm("answer briefly")
+}
+
+// Order + resume: one round where an attachment, a queued message, and
+// guard feedback ALL co-occur. The chart tool attaches an image; the
+// onToolCallEnd callback above queues (its filter matches lookup only,
+// so chartTool has its own callback below); the tiny cost budget trips
+// at the round gate and the harness approve carries a message.
+callback("onToolCallEnd") as data {
+  if (data.toolName == "chartTool") {
+    const q = queueNote("queued middle")
+  }
+}
+
+def chartTool(path: string): string {
+  attachToReply(image(path))
+  return "chart ready"
+}
+
+node ordered() {
+  const r = guard(cost: $0.000001, label: "budget") {
+    return llm("use the tool", { tools: [chartTool] })
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return r
+}

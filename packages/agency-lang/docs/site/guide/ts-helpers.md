@@ -98,6 +98,7 @@ The active thread is the `MessageThread` instance the surrounding LLM call (or b
 | `agency.thread.assistant(content)` | push an assistant-role message |
 | `agency.thread.store()` / `storeMaybe()` | the full `ThreadStore` |
 | `agency.thread.with(threadId, fn)` | run `fn` with `threadId` as the active thread |
+| `agency.thread.current().queueMessage(content, opts?)` | queue a message for the thread's next request-turn |
 
 ### Pushing messages
 
@@ -107,6 +108,31 @@ export async function setupConversation(systemPrompt: string): Promise<void> {
   agency.thread.user("Begin.");
 }
 ```
+
+### Queueing a message for the next turn
+
+`thread.user(...)` pushes immediately, which mid-turn can land a message
+between an assistant's tool calls and their results — a conversation the
+provider rejects. `queueMessage` defers instead: it queues on the thread,
+and the runtime delivers before the thread's next request. Queued between
+calls, the message arrives ahead of the next call's prompt; queued during
+a turn (from a callback, say), it arrives after that turn's tool results.
+
+```ts
+agency.thread.current().queueMessage("Budget check: wrap up soon.");
+agency.thread.current().queueMessage(content, {
+  role: "assistant",   // default "user"; "system" is not allowed
+  label: "myFeature",  // statelog label, default null
+});
+```
+
+The queue is serialized with the thread and waits indefinitely — if the
+thread never runs another `llm()`, nothing is delivered and nothing
+errors. Retry re-issues (guard trips, validation) re-send the same turn
+and do not deliver. Inside a tool body, `current()` is the tool's private
+throwaway thread, so a `queueMessage` there dies with the tool; use
+`attachToReply` to hand content outward, or queue from a callback, which
+fires where the outer conversation is current.
 
 ### Switching threads
 

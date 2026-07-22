@@ -638,3 +638,13 @@ describe("agency.withLock", () => {
     expect(acquires[0].ownerId).toBe(acquires[1].ownerId);
   });
 });
+
+describe("agency.thread.current().queueMessage", () => {
+  it("queues onto the active thread inside a test context", () => {
+    const env = setup();
+    agency.withTestContext(env, () => {
+      agency.thread.current().queueMessage("x");
+      expect(env.threads.getOrCreateActive().hasQueuedMessages()).toBe(true);
+    });
+  });
+});

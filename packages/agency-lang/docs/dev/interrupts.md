@@ -496,11 +496,14 @@ halves:
   (GuardApproveError) never leaves a message behind. Feedback queued in
   a fork branch that makes no further request dies with the branch at
   the join — same lifetime as the branch's reply-attachment queue.
-- **Draining:** `runPrompt` drains the queue in an idempotent step of
+- **Draining:** the turn-boundary machinery (`lib/runtime/turnBoundary.ts`,
+  `guardFeedbackProducer`) drains the queue in an idempotent step of
   its own right before each request step — `guardFeedback.initial`,
   `round.N.guardFeedback`, `validation.N.guardFeedback`, and
   `<key>.retryFeedback.N` inside the trip-retry wrapper (a mid-request
-  approve's message belongs in the re-issued request). Everything
+  approve's message belongs in the re-issued request). `prompt.ts`
+  reaches those steps through `runInitialBoundary`,
+  `runRoundBoundary`, and `runGateAndFeedback`. Everything
   queued drains as ONE user-role thread message, entries
   newline-joined oldest first — providers like Anthropic want
   user/assistant alternation, so a drain must not emit a run of

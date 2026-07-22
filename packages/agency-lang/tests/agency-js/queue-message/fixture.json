@@ -5,5 +5,10 @@
   "midRoundAfterToolResult": true,
   "preQueuedDelivered": true,
   "preQueuedBeforePrompt": true,
-  "scopedNotDeliveredToMainThread": true
+  "scopedNotDeliveredToMainThread": true,
+  "orderedTripsAtGate": true,
+  "orderedResumedToDone": true,
+  "orderedAllThreePresent": true,
+  "orderedSequence": true,
+  "orderedExactlyOnce": true
 }

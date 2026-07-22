@@ -1,4 +1,5 @@
 import { queueNote, queueEarly, queueElsewhere } from "./tools.js"
+import { attachToReply, image } from "std::thread"
 
 // Mid-round queueing happens from a top-level onToolCallEnd callback: it
 // fires at tool-DISPATCH level, which shares the parent conversation, so
@@ -33,4 +34,28 @@ node preQueued() {
 node scoped() {
   const q = queueElsewhere("for the side thread")
   return llm("answer briefly")
+}
+
+// Order + resume: one round where an attachment, a queued message, and
+// guard feedback ALL co-occur. The chart tool attaches an image; the
+// onToolCallEnd callback above queues (its filter matches lookup only,
+// so chartTool has its own callback below); the tiny cost budget trips
+// at the round gate and the harness approve carries a message.
+callback("onToolCallEnd") as data {
+  if (data.toolName == "chartTool") {
+    const q = queueNote("queued middle")
+  }
+}
+
+def chartTool(): string {
+  attachToReply(image("/tmp/qm-order-chart.png"))
+  return "chart ready"
+}
+
+node ordered() {
+  const r = guard(cost: $0.000001, label: "budget") {
+    return llm("use the tool", { tools: [chartTool] })
+  }
+  if (isFailure(r)) { return "unexpected-failure" }
+  return r
 }

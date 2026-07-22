@@ -1,4 +1,4 @@
-import { midRound, preQueued, scoped, __setLLMClient } from "./agent.js";
+import { midRound, preQueued, scoped, ordered, respondToInterrupts, approve, __setLLMClient } from "./agent.js";
 import { writeFileSync } from "fs";
 import { ToolCall } from "smoltalk";
 
@@ -7,7 +7,8 @@ import { ToolCall } from "smoltalk";
 // honest way to assert WHERE a queued message was delivered.
 
 const USAGE = { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 };
-const COST = { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" };
+// Non-zero cost so guard(cost: $0.000001) actually trips in scenario 4.
+const COST = { inputCost: 0.000001, outputCost: 0.000001, totalCost: 0.000002, currency: "USD" };
 
 function makeClient(script) {
   const captured = [];
@@ -91,6 +92,44 @@ const out = {};
   await scoped({});
   const all = flat(captured).join("||");
   out.scopedNotDeliveredToMainThread = !contains(all, "for the side thread");
+}
+
+// Scenario 4 (order + resume across the boundary): attachment, queued
+// message, and guard feedback co-occur in one round. The cost guard trips
+// at the round gate (a REAL pause), the approve carries a message, and
+// the resumed second request must contain all three in order: tool
+// result, then attachment, then queued, then feedback. Delivery across
+// the pause also proves exactly-once: each appears a single time.
+{
+  const fs = await import("fs");
+  fs.writeFileSync("/tmp/qm-order-chart.png",
+    Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC", "base64"));
+  const { captured, client } = makeClient([
+    { toolCalls: [new ToolCall("c1", "chartTool", {})] },
+    { output: "done" },
+  ]);
+  __setLLMClient(client);
+  const paused = await ordered({});
+  const isPaused = Array.isArray(paused.data);
+  out.orderedTripsAtGate = isPaused;
+  const resumed = isPaused
+    ? await respondToInterrupts(paused.data, [approve({ maxCost: 0.0001, message: "feedback last" })])
+    : paused;
+  // ordered() returns the guard Result envelope on success.
+  out.orderedResumedToDone = resumed.data?.value === "done";
+
+  const second = captured[captured.length - 1];
+  const idxOf = (pred) => second.findIndex(pred);
+  const toolIdx = idxOf((m) => m.role === "tool");
+  const attIdx = idxOf((m) => JSON.stringify(m.content ?? "").includes("chartTool"));
+  const queuedIdx = idxOf((m) => typeof m.content === "string" && m.content.includes("queued middle"));
+  const fbIdx = idxOf((m) => typeof m.content === "string" && m.content.includes("feedback last"));
+  out.orderedAllThreePresent = attIdx !== -1 && queuedIdx !== -1 && fbIdx !== -1;
+  out.orderedSequence = toolIdx < attIdx && attIdx < queuedIdx && queuedIdx < fbIdx;
+  const countIn = (needle) =>
+    second.filter((m) => JSON.stringify(m.content ?? "").includes(needle)).length;
+  out.orderedExactlyOnce =
+    countIn("queued middle") === 1 && countIn("feedback last") === 1;
 }
 
 for (const [k, v] of Object.entries(out)) {

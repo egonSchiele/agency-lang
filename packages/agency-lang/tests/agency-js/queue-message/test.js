@@ -101,8 +101,7 @@ const out = {};
 // result, then attachment, then queued, then feedback. Delivery across
 // the pause also proves exactly-once: each appears a single time.
 {
-  const fs = await import("fs");
-  fs.writeFileSync("/tmp/qm-order-chart.png",
+  writeFileSync("/tmp/qm-order-chart.png",
     Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC", "base64"));
   const { captured, client } = makeClient([
     { toolCalls: [new ToolCall("c1", "chartTool", {})] },

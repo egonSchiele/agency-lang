@@ -27,9 +27,10 @@ round.
    result text, and moves survivors to
    `self.runnerState.replyAttachments` (per-llm()-call, serialized,
    fork-safe).
-3. After `stack.popBranches()` and before the next LLM call, the loop
-   injects ONE user message (`pr.step` "attachReplies", resume-
-   idempotent): a label text part before each attachment part. Path
+3. After `stack.popBranches()` and before the next LLM call, the round
+   boundary (`runRoundBoundary` in `lib/runtime/turnBoundary.ts`,
+   `attachmentsProducer`) injects ONE user message (`pr.step`
+   "round.N.attachReplies", resume-idempotent): a label text part before each attachment part. Path
    sources are inlined to base64 at build time so the persistent thread
    never re-reads a deletable file; url/base64 sources pass through.
    Injection after the COMPLETE round satisfies every provider's

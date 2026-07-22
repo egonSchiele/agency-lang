@@ -88,9 +88,13 @@ describe("lint page", () => {
     }
   });
 
-  it("index links every AL code exactly once", () => {
+  it("index links every active AL code exactly once", () => {
     const index = byPath["index.md"];
-    for (const [, e] of Object.entries(LINT_DIAGNOSTICS)) {
+    // Same retired-filter as the generator: a retired code keeps its registry
+    // entry (the number stays reserved) but drops out of the docs pages.
+    for (const [, e] of Object.entries(LINT_DIAGNOSTICS).filter(
+      ([, entry]) => !("retired" in entry),
+    )) {
       expect(index.split(`[${e.code}](`).length - 1, e.code).toBe(1);
     }
   });

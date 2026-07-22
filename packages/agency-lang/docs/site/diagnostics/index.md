@@ -5,7 +5,7 @@ name: "Diagnostics"
 # Diagnostic codes
 
 Every type-checker error and warning carries a stable `AG####` code, and
-every `agency lint` finding a stable `AL####` code.
+every `agency lint` finding carries a stable `AL####` code.
 Look one up with `agency explain <code>` (e.g. `agency explain AG2005`),
 or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 

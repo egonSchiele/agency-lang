@@ -14,7 +14,7 @@ import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 
 import { getSlowModel, getSlowProvider } from "../shared.agency"
 
-export def explorerAgent(userMsg: string): string {
+export def explorerAgent(userMsg: string): Result<string> {
   """
   Ask the explorer — a read-only researcher on a stronger
   reasoning model — to produce a broad, synthesizing answer about
@@ -42,14 +42,13 @@ export def explorerAgent(userMsg: string): string {
   @param userMsg - the question, with the scope of coverage you
     want covered
   """
-  const result = stdExplorerAgent(
+  // Returned as a Result rather than a string saying the explorer failed: the
+  // tool loop only recognizes a failure it can see, and a failure worded as
+  // prose invites the coordinator to ask the same question again.
+  return stdExplorerAgent(
     question: userMsg,
     model: getSlowModel(),
     provider: getSlowProvider(),
     session: "explorer",
   )
-  if (isFailure(result)) {
-    return "The explorer could not finish: ${result.error}"
-  }
-  return result.value
 }

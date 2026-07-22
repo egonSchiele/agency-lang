@@ -1,0 +1,40 @@
+{
+  "tests": [
+    {
+      "nodeName": "replyPassesValueThrough",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "replyNamesTheReason",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "draftUnwrapsSuccess",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "draftPassesPlainStringThrough",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "draftOfNothingIsEmpty",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "draftIgnoresFailure",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -141,7 +141,7 @@ export def routeFor(decision: TriageResult): string {
   return if decision.path == "complex" then "planner" else "direct"
 }
 
-def escalate(task: string, reason: string, plan: string): string {
+def escalate(task: string, reason: string, plan: string): Result<string> {
   """
   Switch this task to plan-as-code: writes and runs a purpose-built agent for a
   multi-step task, showing you the plan first. Reach for this ONLY when the task
@@ -152,11 +152,10 @@ def escalate(task: string, reason: string, plan: string): string {
   @param reason - why this task needs a multi-step plan.
   @param plan - your outline of the steps.
   """
-  const planned = supervisedPlan(task: task, reason: reason, plan: plan)
-  if (isFailure(planned)) {
-    return "Planner stopped: ${planned.error}"
-  }
-  return planned.value
+  // A stopped planner is returned as a Result, not as a sentence saying it
+  // stopped: the caller here is a model, and a failure worded as prose looks
+  // to it like an answer worth acting on or retrying verbatim.
+  return supervisedPlan(task: task, reason: reason, plan: plan)
 }
 
 /* The expert consult runs once and sets the whole direction, so it gets the
@@ -294,7 +293,10 @@ def supervisedPlan(task: string, reason: string, plan: string): Result<string> {
   )
 }
 
-export def codeAgent(userMsg: string, agencyTask: boolean = false) {
+export def codeAgent(
+  userMsg: string,
+  agencyTask: boolean = false,
+): Result<string> {
   """
   This agent can help with all coding-related tasks,
   such as reading, writing, or editing code. It can also
@@ -314,7 +316,11 @@ export def codeAgent(userMsg: string, agencyTask: boolean = false) {
   if (_oneShot) {
     return solveUnattended(task: userMsg, agencyTask: agencyTask)
   }
-  return converse(userMsg: userMsg, originalUserMsg: originalUserMsg, agencyTask: agencyTask)
+  // converse holds a conversation rather than running to a verdict, so it has
+  // no failure to report; the other two routes can stop short and say so.
+  return success(
+    converse(userMsg: userMsg, originalUserMsg: originalUserMsg, agencyTask: agencyTask),
+  )
 }
 
 /* A multi-part task acquires domain expertise first, brainstorms several
@@ -324,7 +330,7 @@ export def codeAgent(userMsg: string, agencyTask: boolean = false) {
    so a mid-run redirect can name a specific alternative when the chosen
    path is not working. `escalate`, the mid-flight tool, still uses
    plannerAgent. */
-def escalateToExpert(task: string, agencyTask: boolean): string {
+def escalateToExpert(task: string, agencyTask: boolean): Result<string> {
   const guidance = guidanceOrEmpty(consultExpert(task: task, agencyTask: agencyTask))
   const ideas = brainstormApproaches(task: task, guidance: renderGuidance(guidance))
   const alternatives = renderAlternatives(ideas)
@@ -342,15 +348,22 @@ def escalateToExpert(task: string, agencyTask: boolean): string {
     agencyTask: agencyTask,
     alternatives: alternatives,
   )
+  // `stopped` holds why the solve gave up, and is cleared if the fix round
+  // below rescues the task. It is carried separately from `summary` so the
+  // reason travels back as a failure rather than as prose the coordinator
+  // would read as an answer.
   let summary = ""
+  let stopped = ""
   if (isFailure(solved)) {
-    summary = "Coding agent stopped: ${solved.error}"
+    stopped = "${solved.error}"
   } else {
     summary = solved.value
     // Milestone draft: a completed solve is worth keeping even if the
     // verify or fix round below is cut short by an outer budget guard —
-    // salvage-on-abort then returns this instead of nothing.
-    saveDraft(summary)
+    // salvage-on-abort then returns this instead of nothing. Saved as a
+    // success because salvage returns the draft in place of this function's
+    // return value, so the two must have the same type.
+    saveDraft(success(summary))
   }
   const checked = verifierAgent(
     task: task,
@@ -371,27 +384,31 @@ Fix each problem exactly.
     const fixed = supervisedSolve(task: fixMsg, context: "", agencyTask: agencyTask, alternatives: alternatives)
     if (!isFailure(fixed)) {
       summary = fixed.value
-      saveDraft(summary)
+      stopped = ""
+      saveDraft(success(summary))
     }
   }
-  return summary
+  if (stopped != "") {
+    return failure(stopped)
+  }
+  return success(summary)
 }
 
 /* `agency agent -p`: nobody is here to answer a question and there is no next
    turn, which is what the stdlib coding agent already does. The rules for
    working that way are the whole of ONE_SHOT_NOTE, so they travel as context
    rather than as a second copy of the loop. */
-def solveUnattended(task: string, agencyTask: boolean): string {
+def solveUnattended(task: string, agencyTask: boolean): Result<string> {
   const solved = supervisedSolve(task: task, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
   if (isFailure(solved)) {
-    return "The task did not complete: ${solved.error}"
+    return failure("${solved.error}")
   }
   // Milestone draft: the verify and fix rounds below can be cut short by
   // an outer budget guard; the completed solve must survive that.
-  saveDraft(solved.value)
+  saveDraft(success(solved.value))
   const checked = verifierAgent(task: task, maxCost: $5.00, maxTime: 5m)
   if (!feedbackHasErrors(checked)) {
-    return solved.value
+    return success(solved.value)
   }
   const fixMsg = """
 ${task}
@@ -404,10 +421,10 @@ Fix each one; your work will be re-checked.
 """
   const fixed = supervisedSolve(task: fixMsg, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
   if (isFailure(fixed)) {
-    return solved.value
+    return success(solved.value)
   }
-  saveDraft(fixed.value)
-  return fixed.value
+  saveDraft(success(fixed.value))
+  return success(fixed.value)
 }
 
 /* The interactive turn, which is the part that is genuinely this agent's own:

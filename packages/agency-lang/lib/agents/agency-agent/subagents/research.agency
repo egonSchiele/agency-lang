@@ -36,7 +36,10 @@ For a question spanning more than two sources, call `todoWrite` first and tick e
 
 Keep replies brief. Cite sources. Show, do not lecture."""
 
-export def researchAgent(userMsg: string, agencyTopic: boolean = false): string {
+export def researchAgent(
+  userMsg: string,
+  agencyTopic: boolean = false,
+): Result<string> {
   """
   Answer a question that needs reading rather than writing: looking something
   up, summarizing a document, gathering background, or recalling a stored
@@ -65,8 +68,10 @@ export def researchAgent(userMsg: string, agencyTopic: boolean = false): string 
       extraTools: researchTools,
     )
   }
-  if (isFailure(result)) {
-    return "Research did not finish: ${result.error}"
-  }
-  return result.value
+  // Returned as a Result, not as a string saying the research failed. A
+  // failure phrased as ordinary prose reads to the coordinator as a normal
+  // answer, so it re-issues the identical call; a Result reaches the tool
+  // loop's failure path, which labels it an error, counts it, and drops the
+  // tool after too many.
+  return result
 }

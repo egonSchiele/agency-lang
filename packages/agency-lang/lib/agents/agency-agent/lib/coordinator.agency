@@ -306,19 +306,48 @@ type AgentTarget =
   | "review"
   | "coordinator"
 
+/* The subagents hand back a Result so that when the coordinator calls one as a
+   tool, the tool loop sees a real failure. `--agent code` and friends bypass
+   the coordinator and print straight to a person, and a person is better
+   served by a sentence than by a Result, so the unwrapping happens here. */
+export def replyOrReason(reply: Result<string>, stopped: string): string {
+  if (isFailure(reply)) {
+    return "${stopped}: ${reply.error}"
+  }
+  return reply.value
+}
+
 export def dispatchAgent(agentName: AgentTarget, userMsg: string): string {
   const expanded = expandSlash(userMsg, projectCommands)
   return match(agentName) {
-    "code" => codeAgent(expanded)
-    "research" => researchAgent(expanded)
-    "oracle" => oracleAgent(expanded)
-    "explorer" => explorerAgent(expanded)
+    "code" => replyOrReason(codeAgent(expanded), "The coding agent stopped")
+    "research" => replyOrReason(researchAgent(expanded), "Research did not finish")
+    "oracle" => replyOrReason(oracleAgent(expanded), "The oracle could not finish")
+    "explorer" => replyOrReason(explorerAgent(expanded), "The explorer could not finish")
     "review" => reviewAgent(expanded)
     _ => {
       const attachments = checkForAttachments(expanded)
       return mainAgent([expanded, ...attachments])
     }
   }
+}
+
+/* Turn a saved draft into the text to show the user. A draft has the type of
+   the function that saved it, so now that the subagents return `Result<string>`
+   their drafts arrive wrapped; deeper workers still save bare strings. Both
+   shapes reach here, and a wrapper printed verbatim would show the user a
+   Result object instead of their answer. */
+export def draftText(partial: any): string {
+  if (partial == null) {
+    return ""
+  }
+  if (isSuccess(partial)) {
+    return "${partial.value}"
+  }
+  if (isFailure(partial)) {
+    return ""
+  }
+  return "${partial}"
 }
 
 export def runTurn(agentName: AgentTarget, userMsg: string): string {
@@ -349,8 +378,8 @@ export def runTurn(agentName: AgentTarget, userMsg: string): string {
         // Show the best-so-far draft the handler kept, if any, rather than
         // only a "stopped" line. The draft is the innermost saveDraft from
         // anywhere in the turn, so it survives the subagents' own guards.
-        const partial = lastTurnPartial()
-        if (partial != null && partial != "") {
+        const partial = draftText(lastTurnPartial())
+        if (partial != "") {
           const header = color.yellow("⏳ Stopped (over the ${dimension} budget). Best answer so far:")
           return "${header}\n\n${partial}"
         }

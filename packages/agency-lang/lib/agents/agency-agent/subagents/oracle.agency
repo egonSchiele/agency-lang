@@ -14,7 +14,7 @@ import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 
 import { getSlowModel, getSlowProvider } from "../shared.agency"
 
-export def oracleAgent(userMsg: string): string {
+export def oracleAgent(userMsg: string): Result<string> {
   """
   Ask the oracle — a read-only senior reviewer on a stronger
   reasoning model — for a second opinion on a hard problem. Call
@@ -37,14 +37,13 @@ export def oracleAgent(userMsg: string): string {
   @param userMsg - the question, with all the context the oracle
     needs to answer it
   """
-  const result = stdOracleAgent(
+  // Returned as a Result rather than a string saying the oracle failed: the
+  // tool loop only recognizes a failure it can see, and a failure worded as
+  // prose invites the coordinator to ask the same question again.
+  return stdOracleAgent(
     question: userMsg,
     model: getSlowModel(),
     provider: getSlowProvider(),
     session: "oracle",
   )
-  if (isFailure(result)) {
-    return "The oracle could not finish: ${result.error}"
-  }
-  return result.value
 }

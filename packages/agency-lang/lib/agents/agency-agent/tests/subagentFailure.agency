@@ -1,0 +1,49 @@
+/*
+ * The coordinator's subagents return a Result, so a subagent that stops short
+ * reaches the tool loop as a failure rather than as a sentence about failing.
+ * That leaves two places where a Result has to become text again, both of them
+ * pure and both tested here without an LLM:
+ *
+ *   - `replyOrReason`, for `agency agent --agent code` and friends, where the
+ *     reply goes straight to a person with no coordinator in between.
+ *   - `draftText`, for the best-so-far draft shown when a turn runs out of
+ *     budget. Drafts take the type of whatever function saved them, so the
+ *     subagents' drafts now arrive wrapped while deeper workers still save
+ *     bare strings.
+ */
+
+import { draftText, replyOrReason } from "../lib/coordinator.agency"
+
+node replyPassesValueThrough(): boolean {
+  return replyOrReason(success("here is your answer"), "The agent stopped")
+    == "here is your answer"
+}
+
+node replyNamesTheReason(): boolean {
+  const shown = replyOrReason(
+    failure("over the time budget"),
+    "The coding agent stopped",
+  )
+  return shown == "The coding agent stopped: over the time budget"
+}
+
+// A subagent's own draft: saved as a success so it matches the function's
+// return type, and unwrapped before the user sees it.
+node draftUnwrapsSuccess(): boolean {
+  return draftText(success("half an answer")) == "half an answer"
+}
+
+// A deeper stdlib worker still saves a plain string.
+node draftPassesPlainStringThrough(): boolean {
+  return draftText("half an answer") == "half an answer"
+}
+
+node draftOfNothingIsEmpty(): boolean {
+  return draftText(null) == ""
+}
+
+// A failure is not a draft. Showing its error text under "Best answer so far"
+// would present the reason the turn stopped as the work it managed to do.
+node draftIgnoresFailure(): boolean {
+  return draftText(failure("over the time budget")) == ""
+}

@@ -2,6 +2,7 @@ import type { AgencyNode, AgencyProgram, Expression } from "@/types.js";
 import type { FunctionCall, FunctionDefinition } from "@/types/function.js";
 import type { VariableNameLiteral } from "@/types/literals.js";
 import { walkNodes } from "@/utils/node.js";
+import { LIFTED_CALLBACK_PREFIX } from "@/runtime/blockNames.js";
 
 /**
  * Lifts `callback("onX") as data { ... body ... }` (or the bare `{ ... }`
@@ -30,7 +31,7 @@ import { walkNodes } from "@/utils/node.js";
  * undefined-variable check runs over them.
  */
 
-const NAME_PREFIX = "__cb";
+const NAME_PREFIX = LIFTED_CALLBACK_PREFIX;
 
 /**
  * Generates fresh `__cb_<scope>_<n>` names. Closes over a per-invocation

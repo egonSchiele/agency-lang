@@ -45,15 +45,15 @@ ${task}
 The program ran and produced this result:
 ${data}
 """
-  const items: Feedback[] = llm(
+  // Return position so a model saveDraft propagates as partial findings.
+  return llm(
     prompt,
     llmOptions(
       model: model,
       provider: provider,
-      tools: buildTools().concat(extraTools),
+      tools: buildTools().concat(extraTools).concat([saveDraft]),
     ),
   )
-  return items
 }
 
 // Returns findings, never a Result: a program that cannot run is itself an
@@ -82,6 +82,13 @@ def runAndJudge(
     )
   }
   return items
+
+  // Salvage the model's partial findings if an outer budget guard trips
+  // mid-judgment; the assignment above would otherwise drop them. `items` is
+  // nullable inside finalize (it may not have been assigned yet).
+  finalize {
+    return items ?? []
+  }
 }
 
 export def agencyVerifierAgent(

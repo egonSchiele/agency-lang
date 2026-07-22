@@ -31,9 +31,14 @@ export function shouldCompact(
 /**
  * Find a safe split point that respects message boundaries.
  *
- * Per resolved decision #5: walk forward from the midpoint until the
- * boundary message is a `user` message — so we never split between an
- * `assistant` with `tool_calls` and its corresponding `tool` replies.
+ * Walk forward from the midpoint until the boundary message is a `user`
+ * or `assistant` message. A `tool` reply is never a boundary — keeping
+ * the thread from a tool reply onward would orphan it from the
+ * `assistant` message carrying its `tool_calls`. Any other role is safe:
+ * tool replies always follow their assistant message, so keeping from an
+ * assistant message keeps its replies with it. Accepting assistant
+ * boundaries matters for agentic tool loops, where the only user message
+ * is the opening request and everything after is assistant/tool traffic.
  *
  * Returns the index of the message that should be the FIRST kept message
  * (i.e., everything before this index is compacted).
@@ -43,7 +48,8 @@ export function shouldCompact(
 export function findCompactionSplitPoint(messages: smoltalk.Message[]): number {
   const midpoint = Math.floor(messages.length / 2);
   for (let i = midpoint; i < messages.length; i++) {
-    if (messages[i].role === "user") return i;
+    const role = messages[i].role;
+    if (role === "user" || role === "assistant") return i;
   }
   return -1;
 }

@@ -1,5 +1,6 @@
-/* Showcases the terminal layouts you can build with the `std::ui/layout` module. */
+Showcases the terminal layouts you can build with the `std::ui/layout` module.
 
+```ts
 import { box, row, column, text, hline, vline, render } from "std::ui/layout"
 import { table } from "std::ui/table"
 
@@ -10,7 +11,6 @@ node main() {
   }
   print(render(greeting))
   print("")
-
   /* 2) Two-column layout with a vline separator. */
   const twoCol = box(title: "Tips", padding: 1) as outer {
     // uses block syntax
@@ -30,7 +30,6 @@ node main() {
   }
   print(render(twoCol))
   print("")
-
   /* 3) Box with heavy border style. */
   const heavy = box(
     title: "ALERT",
@@ -43,7 +42,6 @@ node main() {
   }
   print(render(heavy))
   print("")
-
   /* 4) Simple data table. */
   const inventory = table(
     title: "Inventory",
@@ -53,7 +51,6 @@ node main() {
   )
   print(render(inventory))
   print("")
-
   /* 5) Another table showing styled cells (red for negatives, green for positives) + caption. */
   const ledger = table(
     title: "Ledger",
@@ -73,7 +70,6 @@ node main() {
   )
   print(render(ledger))
   print("")
-
   /* 6) Full-width three-column splash, demonstrating top-down sizing
   and text wrap inside percentage-width boxes. */
   const splash = box(width: "full", title: "Sized layout", padding: 1) as outer {
@@ -95,7 +91,6 @@ node main() {
   }
   print(render(splash))
   print("")
-
   /* 7) Sized table with a fixed first column and a percentage-width notes column. */
   const sized = table(
     title: "Build summary",
@@ -120,3 +115,4 @@ node main() {
   )
   print(render(sized))
 }
+```

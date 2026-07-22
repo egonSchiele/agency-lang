@@ -7,10 +7,12 @@
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
-import { readOnlyFileTools, shellTools } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, shellTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { concurrencyPool } from "std::concurrency"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
+
+import { communicationTools } from "./lib/toolkits.agency"
 
 static const POOL_SIZE = 4
 
@@ -25,6 +27,7 @@ export def buildTools(): any[] {
   return [
     ...readOnlyFileTools(),
     ...shellTools(),
+    ...communicationTools(),
     readBinary.partial(useAgentCwd: true),
     skills,
   ]
@@ -39,7 +42,26 @@ Method:
 2. For EACH criterion, use the `exec` tool to COMPUTE the artifact's actual value and compare it to the requirement. If the task names a specific tool or command to compute a value (e.g. a CLI with exact flags), install if needed and run THAT tool — it is the ground truth; do not approximate it with your own estimate.
 3. A criterion you did NOT computationally verify is itself a gap — report it as one. A near-miss on any numeric constraint is an error: report the actual computed value vs. the requirement (e.g. "Tm difference 6.5°C, limit 5°C").
 
-Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers."""
+Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers.${SAVE_DRAFT_HINT}"""
+
+// The judgment call, split out so its declared `Feedback[]` return type
+// flows into `llm` and a model saveDraft propagates as typed partial
+// findings when an outer guard trips.
+def judgeCriteria(
+  prompt: string,
+  model: string,
+  provider: string,
+  extraTools: any[],
+): Feedback[] {
+  return llm(
+    prompt,
+    llmOptions(
+    model: model,
+    provider: provider,
+    tools: [...buildTools(), ...extraTools, saveDraft],
+  ),
+  )
+}
 
 export def verifierAgent(
   task: string,
@@ -108,15 +130,16 @@ export def verifierAgent(
       A criterion you did not actually compute counts as a failure.
       """
 
-      const items: Feedback[] = llm(
-        prompt,
-        llmOptions(
+      // A typed helper in return position so a saveDraft the model files
+      // mid-verification propagates out to the guard as Feedback[]. Inlining
+      // `return llm(...)` here would infer string (no declared return type to
+      // thread), and `const items = llm(...)` would drop the partial.
+      return judgeCriteria(
+        prompt: prompt,
         model: model,
         provider: provider,
-        tools: buildTools().concat(extraTools),
-      ),
+        extraTools: extraTools,
       )
-      return items
     }
   }
 

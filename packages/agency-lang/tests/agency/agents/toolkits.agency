@@ -100,5 +100,5 @@ node wikipediaToolsAreRenamed(): boolean {
 // absolute install path, which differs per machine.
 node docsToolsHaveStableNames(): boolean {
   const names = map(agencyDocTools(), \tool -> tool.name)
-  return names.includes("agency_guide") && names.includes("agency_diagnostics")
+  return names.includes("agencyGuide") && names.includes("agencyDiagnostics")
 }

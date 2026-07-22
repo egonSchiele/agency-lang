@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "nodeName": "rejectTurn",
+      "fakeClock": true,
+      "description": "When the turn guard trips and the handler declines more time, the innermost saveDraft (PARTIAL-ANSWER) reaches the handler via draftValue, crossing the subagent's own guard, and the turn returns a failure so the partial can be shown.",
+      "input": "",
+      "expectedOutput": "\"failure:true|partial:PARTIAL-ANSWER\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "approveTurn",
+      "fakeClock": true,
+      "description": "When the turn guard trips and the handler grants more time, the subagent resumes and returns the full answer.",
+      "input": "",
+      "expectedOutput": "\"success:FULL-ANSWER\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

@@ -22,15 +22,25 @@ describe("the prelude", () => {
     expect(missing).toEqual([]);
   });
 
-  // The prelude is deliberately a *subset* of what std::index exports:
-  // setAgentCwd and friends are importable but intentionally not in scope
-  // everywhere. So the check above runs in one direction only — this
-  // records why, so nobody "fixes" it into a two-way equality check and
-  // drags those names into every file.
-  it("is a subset, not a mirror, of the std::index exports", () => {
-    expect(PRELUDE_NAMES).not.toContain("setAgentCwd");
-    expect(PRELUDE_NAMES).not.toContain("getAgentCwd");
-    expect(PRELUDE_NAMES).not.toContain("applyAgentCwd");
+  // The guide promises that every *function* in std::index is pre-imported
+  // in every file (docs/site/guide/agency-stdlib.md). This is the other
+  // direction of the check above: export a new function from
+  // stdlib/index.agency without adding it to PRELUDE_NAMES and this fails.
+  // Types (like WriteMode) are exempt — the promise covers functions.
+  it("mirrors every function std::index exports", () => {
+    const stdlibPath = resolveAgencyImportPath("std::index", process.cwd());
+    const symbolTable = SymbolTable.build(stdlibPath, {});
+    const symbols = symbolTable.getFile(stdlibPath);
+    expect(symbols).toBeDefined();
+
+    const exportedFunctions = Object.keys(symbols!).filter(
+      (name) =>
+        symbols![name].exported && symbols![name].kind === "function",
+    );
+    const missing = exportedFunctions.filter(
+      (n) => !PRELUDE_NAMES.includes(n),
+    );
+    expect(missing).toEqual([]);
   });
 
   // AGENCY_TEMPLATE_OFFSET (lib/parsers/parsers.ts) hardcodes how many lines

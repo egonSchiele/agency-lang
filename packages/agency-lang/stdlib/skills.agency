@@ -14,6 +14,7 @@ import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
 import { _docsDir, _agentSkillsDir } from "agency-lang/stdlib-lib/skills.js"
 
+
 /** @module
   @summary Give an LLM access to a directory of skills, and support Claude-Code-style slash commands.
   Give an LLM access to a directory of skills, and support Claude-Code-style
@@ -182,10 +183,20 @@ def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
  * description lists every available skill so the LLM knows which
  * `location` to pass back as `filename`.
  */
-effect std::skills::skillsDir { dir: string, layout: "flat" | "standard" }
-effect std::skills::commandsDir { dir: string }
+effect std::skills::skillsDir {
+  dir: string;
+  layout: "flat" | "standard"
+}
+effect std::skills::commandsDir {
+  dir: string
+}
 
-def buildSkillsTool(dir: string, layout: "flat" | "standard", name: string = "", recursive: boolean = false) {
+def buildSkillsTool(
+  dir: string,
+  layout: "flat" | "standard",
+  name: string = "",
+  recursive: boolean = false,
+) {
   let pattern = "*/SKILL.md"
   if (layout == "flat") {
     pattern = "*.{md,markdown}"
@@ -197,7 +208,7 @@ def buildSkillsTool(dir: string, layout: "flat" | "standard", name: string = "",
   const pathsResult = try _glob(pattern, dir, 500, [])
   if (pathsResult is success(paths)) {
     lines = map(paths) as path {
-      const data = ((try _read(dir, path, 0, 0)) |> frontmatter) catch {}
+      const data = (try _read(dir, path, 0, 0) |> frontmatter) catch {}
       let entry = flatEntry(path, data)
       if (layout == "standard") {
         entry = standardEntry(path, data)
@@ -224,7 +235,11 @@ def buildSkillsTool(dir: string, layout: "flat" | "standard", name: string = "",
   return read.partial(dir: dir).describe(description).rename(toolName)
 }
 
-export def skillsDir(dir: string, layout: "flat" | "standard" = "standard", name: string = "") {
+export def skillsDir(
+  dir: string,
+  layout: "flat" | "standard" = "standard",
+  name: string = "",
+) {
   """
   Build a skills tool for an LLM over a directory of skills.
 
@@ -240,17 +255,18 @@ export def skillsDir(dir: string, layout: "flat" | "standard" = "standard", name
   return buildSkillsTool(dir, layout, name)
 }
 
-export def docsSkill(section: "guide" | "cli" | "diagnostics" | "stdlib") {
+export def docsSkill(
+  section:
+  | "guide"
+  | "cli"
+  | "diagnostics"
+  | "stdlib"
+  | "agent",
+) {
   """
   Build a docs tool for an LLM over the packaged Agency documentation.
-  "guide" serves the language guide (syntax, types, control flow);
-  "cli" serves the CLI reference; "diagnostics" serves the type-checker
-  diagnostic codes (AG####) with explanations and fixes; "stdlib" serves
-  the standard-library reference, one page per std:: module. The returned
-  tool lists every page in its description and lets the model read any one
-  on demand.
 
-  @param section - Which documentation set to serve: "guide", "cli", "diagnostics", or "stdlib".
+  @param section - Which documentation set to serve
   """
   // No approval interrupt for the startup scan: these docs ship inside
   // the agency package, so scanning them carries the same trust as
@@ -276,7 +292,7 @@ export def agentSkill(agent: string) {
   //
   // The explicit name matters: the name derived from a directory embeds the
   // absolute install path, so it differs per machine and gets truncated.
-  const name = "skills_" + agent.replace("/", "_")
+  const name = "skills_${agent.replace("/", "_")}"
   return buildSkillsTool(_agentSkillsDir(agent), "flat", name)
 }
 
@@ -362,7 +378,7 @@ export def commandsDir(dir: string): any[] {
   const pathsResult = try _glob("*.md", dir, 500, [])
   if (pathsResult is success(paths)) {
     return map(paths) as p {
-      const raw = (try _read(dir, p, 0, 0)) catch ""
+      const raw = try _read(dir, p, 0, 0) catch ""
       // `catch {}` collapses parse failures + a missing frontmatter
       // block to an empty object so the dot access below is safe.
       const fm = frontmatter(raw) catch {}

@@ -1,3 +1,4 @@
+```ts
 import { mcp } from "pkg::@agency-lang/mcp"
 // Example: Using an MCP server (no authentication required)
 //
@@ -8,23 +9,23 @@ import { mcp } from "pkg::@agency-lang/mcp"
 // To run:
 //   Make sure the "mcpServers" config in agency.json includes the filesystem server.
 //   pnpm run agency examples/mcp/filesystem/agent.agency
-
 node main() {
   const tools = mcp("filesystem") catch []
-
   if (tools.length == 0) {
     print("Could not connect to the filesystem MCP server.")
     return null
   }
-
   print("Connected to filesystem MCP server.")
   print("Available tools:")
   for (tool in tools) {
     print("  - ${tool.name}")
   }
-
-  const result = llm("List the files in /tmp and tell me how many there are.", {
+  const result = llm(
+    "List the files in /tmp and tell me how many there are.",
+    {
     tools: [...tools]
-  })
+  },
+  )
   print(result)
 }
+```

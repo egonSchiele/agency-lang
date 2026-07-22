@@ -22,10 +22,10 @@ static const skills = agentSkill("agency/researcher")
 static const systemPrompt = """You answer questions about the Agency programming language.
 
 The bundled documentation is authoritative, so read it rather than recalling:
-- `agency_guide` for syntax, types, control flow, error handling, and built-ins
-- `agency_cli` for the command-line tool
-- `agency_diagnostics` for a type-checker code (AG####), its meaning, and its fix
-- `agency_stdlib` for what each std:: module offers, one summary per module
+- `agencyGuide` for syntax, types, control flow, error handling, and built-ins
+- `agencyCliDocs` for the command-line tool
+- `agencyDiagnostics` for a type-checker code (AG####), its meaning, and its fix
+- `agencyStdlib` for what each std:: module offers, one summary per module
 
 Agency is not TypeScript, Python, or Rust, and the differences are exactly where a confident answer goes wrong. When a question touches a construct you have not just read about, read the page before answering.
 
@@ -59,7 +59,7 @@ def answer(
     llmOptions(
       model: model,
       provider: provider,
-      tools: buildTools().concat(extraTools),
+      tools: buildTools().concat(extraTools).concat([saveDraft]),
     ),
   )
 }
@@ -99,5 +99,11 @@ export def agencyResearcherAgent(
       )
     }
     return reply
+
+    // Salvage the model's best-so-far saveDraft if an outer budget guard
+    // trips mid-answer; the assignment above would otherwise drop it.
+    finalize {
+      return reply
+    }
   }
 }

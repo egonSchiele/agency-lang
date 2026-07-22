@@ -53,6 +53,17 @@ export class MemoryCacheEntry {
    */
   turnsSinceExtraction = 0;
 
+  /**
+   * How many thread messages auto-extraction has already consumed.
+   * `MemoryManager.onTurn` slices the thread from this index, so each
+   * extraction pass reads only what arrived since the previous one and
+   * the extraction prompt stays bounded no matter how long the thread
+   * grows. `compactIfNeeded` remaps it when compaction rewrites the
+   * thread. In-memory only, like `turnsSinceExtraction` — a fresh
+   * manager starts at 0 and simply re-reads the thread once.
+   */
+  extractedUpTo = 0;
+
   private readonly graph: MemoryGraph;
   private readonly embeddings: EmbeddingManager;
   private summary: ConversationSummary | null;

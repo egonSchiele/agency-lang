@@ -756,6 +756,19 @@ def _handler(intr: any): any {
   if (_internalIo) {
     return approve()
   }
+
+  // A guard trip is not a policy decision. It is owned by whatever `handle`
+  // block wraps the guard, which alone knows how much extra budget to grant
+  // (an approval with too little is refused by the runtime). Passing here
+  // lets that handler's verdict stand; an empty approve/reject or a
+  // `propagate` from this generic handler would either be refused or, since
+  // propagate outranks approve, override the real grant and re-prompt the
+  // user. The auto-approve handler passes on `std::guard` for the same
+  // reason (see agencyFunction.ts).
+  if (intr.effect == "std::guard") {
+    return pass()
+  }
+
   maybeLoadPolicy()
   maybeFlush()
 

@@ -45,10 +45,26 @@ import {
 // Bundled Agency docs. `static` caches each tool across calls. Each gets an
 // explicit name: the name docsSkill derives from a directory embeds the
 // absolute install path, which differs per machine and is truncated to fit.
-static const docSkill = docsSkill("guide").rename("agency_guide")
-static const cliSkill = docsSkill("cli").rename("agency_cli")
-static const diagnosticsSkill = docsSkill("diagnostics").rename("agency_diagnostics")
-static const stdlibSkill = docsSkill("stdlib").rename("agency_stdlib")
+static const docSkill = docsSkill("guide").rename("agencyGuide")
+static const cliSkill = docsSkill("cli").rename("agencyCliDocs")
+static const diagnosticsSkill = docsSkill("diagnostics").rename("agencyDiagnostics")
+static const stdlibSkill = docsSkill("stdlib").rename("agencyStdlib")
+static const agentSkill = docsSkill("agent").rename("agencyAgent")
+
+export def whatIAmDoing(message: string): string {
+  """
+  Tell the user what you are doing. Use this tool often to update the user on what you're up to.
+  """
+  print(message)
+  return "Delivered message to user."
+}
+
+export def communicationTools(): any[] {
+  """
+  Return tools that help the agent communicate with the user.
+  """
+  return [whatIAmDoing]
+}
 
 export def readOnlyFileTools(): any[] {
   """
@@ -79,10 +95,7 @@ export def shellTools(): any[] {
   Return tools that run commands: bash for a shell pipeline, exec for a
   single binary with arguments.
   """
-  return [
-    bash.partial(useAgentCwd: true),
-    exec.partial(useAgentCwd: true),
-  ]
+  return [bash.partial(useAgentCwd: true), exec.partial(useAgentCwd: true)]
 }
 
 export def gitTools(): any[] {
@@ -133,7 +146,7 @@ export def agencyDocTools(): any[] {
   reference, the type-checker diagnostic codes, and the standard-library
   reference.
   """
-  return [docSkill, cliSkill, diagnosticsSkill, stdlibSkill]
+  return [docSkill, cliSkill, diagnosticsSkill, stdlibSkill, agentSkill]
 }
 
 export def agencyCodeTools(): any[] {
@@ -159,3 +172,8 @@ export def planningTools(): any[] {
   """
   return [todoWrite, todoList, saveDraft]
 }
+
+// A model-facing instruction, spliced into an agent's prompt when the agent
+// offers the `saveDraft` tool. Tells the model to checkpoint its best answer
+// so a run cut short by a budget guard still returns something useful.
+export static const SAVE_DRAFT_HINT = "\n\nIf you might run low on time or budget, call `saveDraft` with your best answer so far as you work, and update it as you improve. If the run is cut short, the last draft you saved is what the user receives — a run that saved nothing returns nothing."

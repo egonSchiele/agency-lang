@@ -4,9 +4,10 @@
   surrounds it is the CLI and the REPL.
 */
 import { localModelsSupported, listModelNames } from "std::agency/local"
+import { whatIAmDoing } from "std::agents/lib/toolkits"
 import { parseArgs } from "std::args"
 import { map } from "std::array"
-import { today } from "std::date"
+import { today, now, elapsedTime } from "std::date"
 import { generateImage } from "std::image"
 import { applyAgentCwd, setAgentCwd } from "std::index"
 import { listHostedModels, hostedModelInfo, setLlmOptions } from "std::llm"
@@ -44,8 +45,42 @@ import {
   clearHistory,
  } from "std::ui/cli"
 
+import {
+  configureModels,
+  configureLocalModel,
+  enableAgentMemory,
+  getResolvedSlots,
+  applyResolved,
+  promoteAll,
+  currentProvider,
+  resolveMaxToolCallRounds,
+  getCapabilities,
+  getCapabilitiesResolved,
+  getCapabilityModelKey,
+  getCapabilityProvider,
+  refreshCapabilities,
+  embeddingKeyStatus,
+  memoryEnablePlan,
+  overrideFromResolved,
+  embeddingsOverride,
+  providerEnvMissing,
+ } from "../shared.agency"
+import { codeAgent, setCodeOneShot } from "../subagents/code.agency"
+import { explorerAgent } from "../subagents/explorer.agency"
+import { oracleAgent } from "../subagents/oracle.agency"
+import { researchAgent } from "../subagents/research.agency"
+import { reviewAgent } from "../subagents/review.agency"
 import { parseAgentArgs } from "./args.agency"
 import { detectAttachments, modalityFilter } from "./attachments.agency"
+import {
+  TURN_BUDGET_LABEL,
+  budgetTime,
+  budgetCost,
+  parseTurnBudget,
+  turnBudgetHandler,
+  lastTurnPartial,
+  clearTurnPartial,
+ } from "./budget.agency"
 import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
 import { mergedPalette, projectCommands } from "./commandPalette.agency"
 import {
@@ -107,31 +142,6 @@ import {
   formatTurnFailure,
  } from "./utils.agency"
 import { renderLLMCallResponse } from "./utils/renderLLMCallResponse.agency"
-import {
-  configureModels,
-  configureLocalModel,
-  enableAgentMemory,
-  getResolvedSlots,
-  applyResolved,
-  promoteAll,
-  currentProvider,
-  resolveMaxToolCallRounds,
-  getCapabilities,
-  getCapabilitiesResolved,
-  getCapabilityModelKey,
-  getCapabilityProvider,
-  refreshCapabilities,
-  embeddingKeyStatus,
-  memoryEnablePlan,
-  overrideFromResolved,
-  embeddingsOverride,
-  providerEnvMissing,
- } from "../shared.agency"
-import { codeAgent, setCodeOneShot } from "../subagents/code.agency"
-import { explorerAgent } from "../subagents/explorer.agency"
-import { oracleAgent } from "../subagents/oracle.agency"
-import { researchAgent } from "../subagents/research.agency"
-import { reviewAgent } from "../subagents/review.agency"
 
 
 // UI mode select — one-line swap between the alt-screen TUI and the
@@ -141,7 +151,6 @@ import { reviewAgent } from "../subagents/review.agency"
 // `docs/superpowers/ideas/2026-06-02-line-mode-agent.md`.
 //
 //import { clearMessages, pushMessage, repl } from "std::ui"
-
 
 export def loadAgentsMd(dir: string): string {
   """
@@ -207,7 +216,6 @@ static const mainAgentTools = [
   generateImageFile,
 ]
 
-
 export def maybeEnableMemory() {
   const status = embeddingKeyStatus(getResolvedSlots())
   const plan = memoryEnablePlan(getCapabilities().memory, status)
@@ -236,6 +244,10 @@ export def maybeEnableMemory() {
 
 def mainAgent(prompt: string | (string | Attachment)[]): string {
   // const doSummarize = getCapabilities().summarize
+  // The prompt tells the model to report progress (whatIAmDoing) and watch
+  // the clock (elapsedTime), so both must be in its tool list. elapsedTime
+  // is anchored to this turn's start.
+  const turnStart = now()
   thread(label: "main", session: "main") {
     setMemoryId("main")
     if (first) {
@@ -251,7 +263,12 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
       prompt,
       {
       memory: true,
-      tools: [...mainAgentTools, ...getMcpTools()]
+      tools: [
+      ...mainAgentTools,
+      ...getMcpTools(),
+      whatIAmDoing,
+      elapsedTime.partial(since: turnStart),
+    ]
     },
     )
   }
@@ -304,6 +321,46 @@ export def dispatchAgent(agentName: AgentTarget, userMsg: string): string {
   }
 }
 
+export def runTurn(agentName: AgentTarget, userMsg: string): string {
+  """
+  Run one user turn under a time/cost guard parsed from the user's message.
+  A single guard wraps the whole turn — the coordinator and every subagent
+  it calls — so the budget is a true total, not a per-subagent cap that
+  would silently sum. When the guard trips, `turnBudgetHandler` asks the
+  user whether to grant more and resumes in place, or stops.
+  """
+  parseTurnBudget(userMsg)
+  clearTurnPartial()
+  handle {
+    const result = guard(
+      time: budgetTime(),
+      cost: budgetCost(),
+      label: TURN_BUDGET_LABEL,
+    ) {
+      return dispatchAgent(agentName, userMsg)
+    }
+    return match(result) {
+      success(reply) => reply
+      failure(f) => {
+        let dimension = "cost"
+        if (f.type == "timeoutFailure") {
+          dimension = "time"
+        }
+        // Show the best-so-far draft the handler kept, if any, rather than
+        // only a "stopped" line. The draft is the innermost saveDraft from
+        // anywhere in the turn, so it survives the subagents' own guards.
+        const partial = lastTurnPartial()
+        if (partial != null && partial != "") {
+          const header = color.yellow("⏳ Stopped (over the ${dimension} budget). Best answer so far:")
+          return "${header}\n\n${partial}"
+        }
+        return color.yellow(
+          "⏳ Stopped: over the ${dimension} budget for this turn.",
+        )
+      }
+    }
+  } with turnBudgetHandler
+}
 
 export def setGroundingContext(context: string) {
   """

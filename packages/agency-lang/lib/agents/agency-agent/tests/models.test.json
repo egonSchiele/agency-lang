@@ -4,13 +4,13 @@
     {
       "nodeName": "openaiDetectedRoutesBothToResponses",
       "input": "",
-      "expectedOutput": "{\"fastModel\":\"gpt-4o-mini\",\"fastProvider\":\"openai-responses\",\"slowModel\":\"gpt-5.5\",\"slowProvider\":\"openai-responses\"}",
+      "expectedOutput": "{\"fastModel\":\"gpt-5-mini\",\"fastProvider\":\"openai-responses\",\"slowModel\":\"gpt-5.6-sol\",\"slowProvider\":\"openai-responses\"}",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
       "nodeName": "anthropicDetectedKeepsNative",
       "input": "",
-      "expectedOutput": "{\"fastModel\":\"claude-sonnet-4-6\",\"fastProvider\":\"\",\"slowModel\":\"claude-opus-4-8\",\"slowProvider\":\"anthropic\"}",
+      "expectedOutput": "{\"fastModel\":\"claude-sonnet-5\",\"fastProvider\":\"\",\"slowModel\":\"claude-opus-4-8\",\"slowProvider\":\"anthropic\"}",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
@@ -36,9 +36,9 @@
     { "nodeName": "specProviderEstablishedNoSplit", "input": "", "expectedOutput": "{\"model\":\"deepseek/deepseek-r1\",\"provider\":\"\"}", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "specBareModel", "input": "", "expectedOutput": "{\"model\":\"gpt-5.5\",\"provider\":\"\"}", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "specUnknownPrefixNoSplit", "input": "", "expectedOutput": "{\"model\":\"unknown-vendor/some-model\",\"provider\":\"\"}", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "priceMainAnthropic", "input": "", "expectedOutput": "{\"model\":\"claude-sonnet-4-6\",\"provider\":\"\",\"via\":\"built-in:price=standard\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "priceMainAnthropic", "input": "", "expectedOutput": "{\"model\":\"claude-sonnet-5\",\"provider\":\"\",\"via\":\"built-in:price=standard\"}", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "priceReasoningAnthropic", "input": "", "expectedOutput": "{\"model\":\"claude-opus-4-8\",\"provider\":\"anthropic\",\"via\":\"built-in:price=standard\"}", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "priceMainOpenaiPromoted", "input": "", "expectedOutput": "{\"model\":\"gpt-4o-mini\",\"provider\":\"openai-responses\",\"via\":\"built-in:price=standard\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "priceMainOpenaiPromoted", "input": "", "expectedOutput": "{\"model\":\"gpt-5-mini\",\"provider\":\"openai-responses\",\"via\":\"built-in:price=standard\"}", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "priceEmbeddingDerived", "input": "", "expectedOutput": "{\"model\":\"\",\"provider\":\"\",\"via\":\"built-in:embedding(derived)\"}", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "priceUnknownProviderFails", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "modelFlagPerSlot", "input": "", "expectedOutput": "{\"slot\":\"reasoning\",\"model\":\"claude-opus-4-8\"}", "evaluationCriteria": [{ "type": "exact" }] },

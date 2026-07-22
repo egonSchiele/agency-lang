@@ -38,8 +38,8 @@ importers:
         specifier: ^2.4.2
         version: 2.4.2
       smoltalk:
-        specifier: ^0.8.3
-        version: 0.8.3(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.21.1)
+        specifier: ^0.8.4
+        version: 0.8.4(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.21.1)
       tarsec:
         specifier: 0.4.7
         version: 0.4.7
@@ -680,8 +680,8 @@ packages:
     resolution: {integrity: sha512-rZAP3aVgB9ds9KOeUSL+zZ21hPmo8dh6fnIFwRQj5EAZl9gzR7wxYbYXYysAM8CTqGmUGyp2S4kUdV17MnGuWQ==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
-  '@google/genai@2.11.0':
-    resolution: {integrity: sha512-d2Csf29vS0GfHc52H0MG25ccY4FKvvbDgqDlEovLrPLF8sPegWr/GGO+LMOy85/1SnX0iV0zDAW7R8SsvWg8Vg==}
+  '@google/genai@2.13.0':
+    resolution: {integrity: sha512-GM7C8Kaomvjz05x5JEO6+l3d/pciL9LxAG9dUjJLD7nTPZ9X0Cfsf2Z7eET6UjgWyUmxXCHtYnQoQ77F9+ZIOQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -2292,8 +2292,8 @@ packages:
   oniguruma-to-es@4.3.6:
     resolution: {integrity: sha512-csuQ9x3Yr0cEIs/Zgx/OEt9iBw9vqIunAPQkx19R/fiMq2oGVTgcMqO/V3Ybqefr1TBvosI6jU539ksaBULJyA==}
 
-  openai@6.47.0:
-    resolution: {integrity: sha512-xYr+R9woSzWxVxeiqkkNbHhv89tZDEI6eBMbrdPnv3poh+mijHvbhS35a+3o6xHa411/ns8j5ENY3So9DCXWYw==}
+  openai@6.48.0:
+    resolution: {integrity: sha512-KhVp+FyV50QrXNextvL9hIU5l6ox5HYuKQjGVk7lIqprgJol90+dQXWONV6S1lRWsKA1bXjrow8RsUT14M1hNA==}
     peerDependencies:
       '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
       '@smithy/hash-node': '>=4.3.0 <5'
@@ -2584,8 +2584,8 @@ packages:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
 
-  smoltalk@0.8.3:
-    resolution: {integrity: sha512-WGc6F0eAsblH1oxswji3CJES2Tqg2+r8hm7S4/IVItPoluOBFbbu6eKMRaMDJROQ5NBHd4Zc8yVD/0kCzRlLhQ==}
+  smoltalk@0.8.4:
+    resolution: {integrity: sha512-gdp8zPzNICcPUAZiZFk+m/gkNi/PG1FR/En3Z+4ERVLwcQ1VqkqqPY5ZCZsL/vd3bn9Y44/7j5Gj0UmMoa/xqg==}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -3396,7 +3396,7 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@google/genai@2.11.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))':
+  '@google/genai@2.13.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))':
     dependencies:
       google-auth-library: 10.9.0
       p-retry: 4.6.2
@@ -5141,7 +5141,7 @@ snapshots:
       regex: 6.1.0
       regex-recursion: 6.0.2
 
-  openai@6.47.0(ws@8.21.1)(zod@4.4.3):
+  openai@6.48.0(ws@8.21.1)(zod@4.4.3):
     optionalDependencies:
       ws: 8.21.1
       zod: 4.4.3
@@ -5460,13 +5460,13 @@ snapshots:
 
   slash@3.0.0: {}
 
-  smoltalk@0.8.3(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.21.1):
+  smoltalk@0.8.4(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.21.1):
     dependencies:
       '@anthropic-ai/sdk': 0.109.1(zod@4.4.3)
-      '@google/genai': 2.11.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))
+      '@google/genai': 2.13.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))
       nanoid: 5.1.6
       ollama: 0.6.3
-      openai: 6.47.0(ws@8.21.1)(zod@4.4.3)
+      openai: 6.48.0(ws@8.21.1)(zod@4.4.3)
       zod: 4.4.3
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'

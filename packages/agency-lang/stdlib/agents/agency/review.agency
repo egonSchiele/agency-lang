@@ -77,16 +77,16 @@ ${source}
 
 Return a list of feedback items.
 """
-  const judged: Feedback[] = llm(
+  // Return position so a model saveDraft propagates as partial findings.
+  return llm(
     prompt,
     llmOptions(
       model: model,
       provider: provider,
-      tools: buildTools().concat(extraTools),
+      tools: buildTools().concat(extraTools).concat([saveDraft]),
       hostedTools: hostedSearchTools(model),
     ),
   )
-  return judged
 }
 
 export def agencyReviewAgent(
@@ -133,6 +133,11 @@ export def agencyReviewAgent(
       )
     }
     return judged
+
+    // Salvage the model's partial findings if an outer budget guard trips.
+    finalize {
+      return judged
+    }
   }
   return mergeFeedback(feedback, failOpenFeedback(captured))
 }

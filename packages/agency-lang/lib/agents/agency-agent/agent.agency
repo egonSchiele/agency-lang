@@ -3,7 +3,6 @@ import { parseArgs } from "std::args"
 import { map } from "std::array"
 import { today } from "std::date"
 import { generateImage } from "std::image"
-import { applyAgentCwd, setAgentCwd } from "std::index"
 import { listHostedModels, hostedModelInfo, setLlmOptions } from "std::llm"
 import { setMemoryId, disableMemory } from "std::memory"
 import { basename, dirname } from "std::path"
@@ -49,6 +48,14 @@ import {
   HISTORY_PATH,
   ALWAYS_FIELDS,
  } from "./lib/config.agency"
+import {
+  runTurn,
+  setGroundingContext,
+  loadAgentsMd,
+  maybeEnableMemory,
+  checkMainPrompts,
+  START_AGENTS,
+ } from "./lib/coordinator.agency"
 import { getHeader } from "./lib/header.agency"
 import { generateImageFile } from "./lib/images.agency"
 import { getMcpTools, maybeLoadMcp, mcpSlashCommand } from "./lib/mcp.agency"
@@ -65,6 +72,7 @@ import {
   printPolicyHelp,
   getPolicyForAgent,
  } from "./lib/policy.agency"
+import { startInteractive, renderAgentResponse } from "./lib/repl.agency"
 import {
   buildLayers,
   resolveAll,
@@ -94,6 +102,7 @@ import {
   saveSettings,
  } from "./lib/settings.agency"
 import { SLOTS } from "./lib/slots.agency"
+import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
 import {
   truncate,
   formatArgs,
@@ -137,20 +146,10 @@ import { reviewAgent } from "./subagents/review.agency"
 //
 //import { clearMessages, pushMessage, repl } from "std::ui"
 
-import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
 // The `--policy` argument (a built-in name or a policy-file path), or "" when
 // absent. CLI-owned: main() sets it, setupSession() reads it.
 let _policyArg: string = ""
 
-import {
-  dispatchAgent,
-  setGroundingContext,
-  loadAgentsMd,
-  maybeEnableMemory,
-  checkMainPrompts,
-  START_AGENTS,
- } from "./lib/coordinator.agency"
-import { startInteractive, renderAgentResponse } from "./lib/repl.agency"
 
 def setupSession(interactive: boolean): any {
   setAgentCwd(cwd())
@@ -179,7 +178,7 @@ def oneShotAgent(target: string, prompt: string): string {
   setInteractive(false)
   const handler = setupSession(interactive: false)
   handle {
-    const result = try dispatchAgent(target, prompt)
+    const result = try runTurn(target, prompt)
     return match(result) {
       success(r) => r
       failure(f) => formatTurnFailure("${f.error}")
@@ -302,4 +301,3 @@ node main() {
     startInteractive(handler, startAgent, positionalQuery)
   }
 }
-

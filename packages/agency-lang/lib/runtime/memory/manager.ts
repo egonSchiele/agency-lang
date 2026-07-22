@@ -992,10 +992,19 @@ export class MemoryManager {
       entry.turnsSinceExtraction++;
       const interval = this.config.autoExtract?.interval ?? 5;
       if (entry.turnsSinceExtraction >= interval) {
-        this.logger.debug(
-          `[memory] onTurn: turn ${entry.turnsSinceExtraction}/${interval} — running autoExtract`,
-        );
-        await this.autoExtract(entry, messages);
+        // Extract only the messages added since the last pass. Earlier
+        // messages were already extracted; re-sending the whole thread
+        // would grow the extraction prompt without bound and eventually
+        // overflow the memory model's context window.
+        const start = Math.min(entry.extractedUpTo, messages.length);
+        const fresh = messages.slice(start);
+        if (fresh.length > 0) {
+          this.logger.debug(
+            `[memory] onTurn: turn ${entry.turnsSinceExtraction}/${interval} — running autoExtract on ${fresh.length} new messages`,
+          );
+          await this.autoExtract(entry, fresh);
+        }
+        entry.extractedUpTo = messages.length;
         entry.turnsSinceExtraction = 0;
       }
     } catch (err) {
@@ -1057,9 +1066,10 @@ export class MemoryManager {
       // Find a clean split point that does not break a tool_call/tool sequence.
       const splitInConv = findCompactionSplitPoint(conversation);
       if (splitInConv === -1) {
-        // No clean split — warn with the message count so users can tell
-        // why their thread isn't being compacted (e.g. mostly assistant
-        // + tool messages with no user turns past the midpoint).
+        // No clean split — only possible when everything from the
+        // midpoint on is tool replies, which a well-formed thread never
+        // produces. Warn with the counts so a user who does hit it can
+        // tell why their thread isn't being compacted.
         this.logger.warn(
           `[memory] compaction skipped: no clean split point found in ${messages.length} messages (conversation=${conversation.length})`,
         );
@@ -1110,6 +1120,15 @@ export class MemoryManager {
       this.logger.debug(
         `[memory] compaction done: toCompact=${toCompact.length} tail=${tailIndices.length} merged=${merged} summaryChars=${newSummary.length}`,
       );
+
+      // The caller rebuilds the thread as head + summary + tail. Remap
+      // the auto-extraction watermark into that new thread so the next
+      // onTurn neither re-extracts the kept tail nor skips genuinely
+      // new messages (a stale watermark larger than the shrunken thread
+      // would clamp to its end and swallow whatever comes next).
+      const extracted = Math.min(entry.extractedUpTo, messages.length);
+      entry.extractedUpTo =
+        systemPrefixIndices.length + 1 + Math.max(0, extracted - tailStart);
 
       return {
         systemPrefixIndices,

@@ -5,13 +5,13 @@
   "customNoModel": "FAIL:--provider ollama has no built-in defaults; also pass --model (or --fastmodel/--slowmodel). Providers with defaults: openai, anthropic, google, openrouter.",
   "customWithModel": "ollama",
   "planOpenai": {
-    "fastModel": "gpt-4o-mini",
+    "fastModel": "gpt-5-mini",
     "fastProvider": "openai-responses",
-    "slowModel": "gpt-5.5",
+    "slowModel": "gpt-5.6-sol",
     "slowProvider": "openai-responses"
   },
   "planAnthropic": {
-    "fastModel": "claude-sonnet-4-6",
+    "fastModel": "claude-sonnet-5",
     "fastProvider": "",
     "slowModel": "claude-opus-4-8",
     "slowProvider": "anthropic"

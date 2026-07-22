@@ -164,13 +164,15 @@ export def memoryTools(): any[] {
   return [remember, recall]
 }
 
+// saveDraft is deliberately not here. Every worker offers saveDraft itself at
+// its own llm call, so a caller can hand this bundle to an agent as extra tools
+// without landing saveDraft in the list twice, which the provider rejects.
 export def planningTools(): any[] {
   """
-  Return tools an agent uses to organize a long run: a todo list, and
-  saveDraft for checkpointing partial work so an aborted run still returns
-  something.
+  Return tools an agent uses to organize a long run: writing and reading a
+  todo list.
   """
-  return [todoWrite, todoList, saveDraft]
+  return [todoWrite, todoList]
 }
 
 // A model-facing instruction, spliced into an agent's prompt when the agent

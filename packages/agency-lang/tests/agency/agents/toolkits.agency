@@ -89,6 +89,16 @@ node noBundleHasDuplicateNames(): boolean {
   return true
 }
 
+// Every worker appends its own saveDraft at its llm call, so a bundle a caller
+// hands an agent as extra tools must not carry saveDraft too. When planningTools
+// did, passing it as extraTools put saveDraft in the list twice and the call was
+// rejected before it reached the provider.
+node planningToolsComposesWithAgentSaveDraft(): boolean {
+  const composed = [...planningTools(), saveDraft]
+  const names = map(composed, \tool -> tool.name)
+  return unique(names, \name -> name).length == names.length
+}
+
 // The wikipedia tools must not advertise a bare `search`, which collides with
 // the web-search providers in std::agents/lib/search.
 node wikipediaToolsAreRenamed(): boolean {

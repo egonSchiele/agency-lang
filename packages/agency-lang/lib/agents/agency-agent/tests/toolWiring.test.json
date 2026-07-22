@@ -15,6 +15,20 @@
       "llmMocks": [{ "return": "pong" }]
     },
     {
+      "nodeName": "composedAgencyResearchToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [{ "return": "pong" }]
+    },
+    {
+      "nodeName": "composedResearchToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [{ "return": "pong" }]
+    },
+    {
       "nodeName": "oracleToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",

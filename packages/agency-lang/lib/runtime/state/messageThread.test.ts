@@ -209,3 +209,49 @@ describe("MessageThread label-preserving edits", () => {
     expect(revived.labelAt(1)).toBe("coder");
   });
 });
+
+describe("MessageThread.queueMessage", () => {
+  it("queues without touching the visible messages", () => {
+    const t = new MessageThread();
+    t.queueMessage("later");
+    expect(t.getMessages()).toHaveLength(0);
+    expect(t.hasQueuedMessages()).toBe(true);
+  });
+
+  it("takeQueuedMessages is FIFO, preserves role and label, and is destructive", () => {
+    const t = new MessageThread();
+    t.queueMessage("a");
+    t.queueMessage("b", { role: "assistant", label: "lbl" });
+    const q = t.takeQueuedMessages();
+    expect(q.map((m) => m.content)).toEqual(["a", "b"]);
+    expect(q[0]).toMatchObject({ role: "user", label: null });
+    expect(q[1]).toMatchObject({ role: "assistant", label: "lbl" });
+    expect(t.takeQueuedMessages()).toEqual([]);
+    expect(t.hasQueuedMessages()).toBe(false);
+  });
+
+  it("survives a toJSON/fromJSON round trip through plain JSON", () => {
+    const t = new MessageThread();
+    t.queueMessage("survives");
+    const revived = MessageThread.fromJSON(JSON.parse(JSON.stringify(t.toJSON())));
+    expect(revived.takeQueuedMessages().map((m) => m.content)).toEqual(["survives"]);
+  });
+
+  it("an empty queue does not change the serialized shape", () => {
+    const t = new MessageThread();
+    expect("queuedMessages" in t.toJSON()).toBe(false);
+  });
+
+  it("adoptFrom carries the pending queue (the prompt.ts resume path)", () => {
+    // prompt.ts:1048 restores via args.messages.adoptFrom(restored); a queue
+    // that survives toJSON but not adoptFrom would be dropped exactly on
+    // resume, the moment it matters most.
+    const restored = new MessageThread();
+    restored.queueMessage("pending across resume");
+    const alias = new MessageThread();
+    alias.adoptFrom(restored);
+    expect(alias.takeQueuedMessages().map((m) => m.content)).toEqual([
+      "pending across resume",
+    ]);
+  });
+});

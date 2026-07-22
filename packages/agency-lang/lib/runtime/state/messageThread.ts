@@ -8,6 +8,19 @@ export type MessageThreadJSON = {
   hidden?: boolean;
   label?: string | null;
   summary?: string | null;
+  queuedMessages?: QueuedMessage[];
+};
+
+/** A message waiting on a thread for delivery at the thread's next
+ *  request-turn (see MessageThread.queueMessage). Plain data — content is
+ *  a string or smoltalk user-content parts, both JSON-safe — so the queue
+ *  serializes with the thread wherever the thread serializes. No "system"
+ *  role: a mid-thread system turn is rejected or reinterpreted by some
+ *  providers, and a caller who wants to steer can say role "user". */
+export type QueuedMessage = {
+  role: "user" | "assistant";
+  content: string | smoltalk.UserContentInput;
+  label: string | null;
 };
 
 export class MessageThread {
@@ -59,6 +72,11 @@ export class MessageThread {
    *  keep it that way. A rewrite via `setMessages` with no labels
    *  (summarization, repair) drops them; that is intended. */
   messageLabels: (string | null)[];
+  /** Messages queued by `queueMessage`, waiting for the thread's next
+   *  request-turn. Drained by the turn-boundary machinery in the tool
+   *  loop; never sent to the provider directly from here. Serialized
+   *  only when non-empty (same rule as messageLabels). */
+  queuedMessages: QueuedMessage[] = [];
 
   constructor(messages: smoltalk.Message[] = []) {
     this.messages = messages;
@@ -119,6 +137,10 @@ export class MessageThread {
   adoptFrom(other: MessageThread): void {
     this.messages = [...other.messages];
     this.messageLabels = [...other.messageLabels];
+    // The pending queue rides along: prompt.ts restores a resumed call via
+    // adoptFrom (its args.messages alias), and a queue that survived
+    // toJSON but not adoptFrom would be dropped exactly on resume.
+    this.queuedMessages = [...other.queuedMessages];
   }
 
   /** The ONLY append. Everything that adds a message goes through here,
@@ -131,6 +153,36 @@ export class MessageThread {
   /** The label of the message at `index`, or null when unlabeled. */
   labelAt(index: number): string | null {
     return this.messageLabels[index] ?? null;
+  }
+
+  /** Queue a message for delivery at this thread's next request-turn:
+   *  the start of the thread's next `llm()` call, or after a tool round
+   *  within a running call. The mid-turn-safe counterpart to an immediate
+   *  `push` — callable at any moment without breaking the tool-call /
+   *  tool-result adjacency the provider requires. If no `llm()` ever runs
+   *  against this thread again, the message simply waits, serialized with
+   *  the thread. */
+  queueMessage(
+    content: QueuedMessage["content"],
+    opts: { role?: "user" | "assistant"; label?: string } = {},
+  ): void {
+    this.queuedMessages.push({
+      role: opts.role ?? "user",
+      content,
+      label: opts.label ?? null,
+    });
+  }
+
+  /** Remove and return every queued message, oldest first. Called by the
+   *  turn-boundary drain exactly once per delivery point. */
+  takeQueuedMessages(): QueuedMessage[] {
+    const taken = this.queuedMessages;
+    this.queuedMessages = [];
+    return taken;
+  }
+
+  hasQueuedMessages(): boolean {
+    return this.queuedMessages.length > 0;
   }
 
   newChild(): MessageThread {
@@ -168,6 +220,11 @@ export class MessageThread {
     // thread — the one way to reach `messageLabels` without a writer.
     if (this.messageLabels.some((l) => l !== null)) {
       json.messageLabels = [...this.messageLabels];
+    }
+    // Same emit-only-when-meaningful rule (and same copy-not-alias rule)
+    // as messageLabels above.
+    if (this.queuedMessages.length > 0) {
+      json.queuedMessages = [...this.queuedMessages];
     }
     return json;
   }
@@ -228,6 +285,13 @@ export class MessageThread {
     thread.hidden = _hidden;
     thread.label = _label;
     thread.summary = _summary;
+    if (
+      !Array.isArray(json) &&
+      "queuedMessages" in json &&
+      json.queuedMessages !== undefined
+    ) {
+      thread.queuedMessages = [...json.queuedMessages];
+    }
 
     return thread;
   }

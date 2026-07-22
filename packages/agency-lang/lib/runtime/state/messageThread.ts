@@ -1,6 +1,13 @@
 import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
-import { deepClone } from "../utils.js";
+
+/** Queue entries are plain JSON-safe data (the QueuedMessage contract), so
+ *  the built-in structuredClone suffices. Deliberately NOT runtime/utils'
+ *  deepClone: importing it here creates the cycle messageThread → utils →
+ *  runtime/index → threadStore → messageThread, which left ThreadStore
+ *  undefined while bootstrapThreadStore's `extends` evaluated (caught by
+ *  CI's full-suite load order; the touched-suite runs missed it). */
+const cloneQueue = (q: QueuedMessage[]): QueuedMessage[] => structuredClone(q);
 
 export type MessageThreadJSON = {
   messages: smoltalk.MessageJSON[];
@@ -245,7 +252,7 @@ export class MessageThread {
     // mutate the live queue (labels are primitives, so spread suffices
     // there; entries are objects, so it does not).
     if (this.queuedMessages.length > 0) {
-      json.queuedMessages = deepClone(this.queuedMessages);
+      json.queuedMessages = cloneQueue(this.queuedMessages);
     }
     return json;
   }
@@ -314,7 +321,7 @@ export class MessageThread {
       "queuedMessages" in json &&
       Array.isArray(json.queuedMessages)
     ) {
-      thread.queuedMessages = deepClone(json.queuedMessages);
+      thread.queuedMessages = cloneQueue(json.queuedMessages);
     }
 
     return thread;

@@ -1,4 +1,5 @@
 import * as smoltalk from "smoltalk";
+import type { Interrupt } from "./interrupts.js";
 import type { MessageThread } from "./state/messageThread.js";
 import type { StateStack } from "./state/stateStack.js";
 import {
@@ -35,10 +36,17 @@ export type TurnMessage = {
 
 export type BoundaryContext = {
   /** The PromptRunner's step method, bound. Injected so this module is
-   *  unit-testable with a recording fake. */
-  step: (key: string, body: () => Promise<void>) => Promise<void>;
-  /** runPrompt's guardGate closure (raiseGuardTripsUntilClear). */
-  guardGate: () => Promise<void>;
+   *  unit-testable with a recording fake. The body's return type matters:
+   *  pr.step treats a returned Interrupt[] as "pause here" and stamps a
+   *  checkpoint — that is HOW a guard trip suspends the run. */
+  step: (
+    key: string,
+    body: () => Promise<Interrupt[] | void>,
+  ) => Promise<void>;
+  /** runPrompt's guardGate closure (raiseGuardTripsUntilClear). Its
+   *  Interrupt[] return is the pause signal and MUST flow through to
+   *  step() unaltered — never wrap this in a void-returning adapter. */
+  guardGate: () => Promise<Interrupt[] | void>;
   /** The live conversation of this llm() call. */
   messages: MessageThread;
   /** Per-llm()-call serialized state; home of replyAttachments. */

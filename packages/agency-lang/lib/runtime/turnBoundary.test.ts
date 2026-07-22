@@ -200,3 +200,21 @@ describe("canonical step sequences", () => {
     expect(messages.labelAt(2)).toBe("guard:a");
   });
 });
+
+describe("guard pause signal flows through the boundary untouched", () => {
+  it("the gate body return value reaches step() (pr.step pauses on Interrupt[])", async () => {
+    // Regression pin for the migration hazard: wrapping guardGate in a
+    // void-returning adapter would silently discard the Interrupt[] that
+    // pr.step turns into a checkpoint-and-pause.
+    const returns: unknown[] = [];
+    const fakeInterrupts = [{ id: "i1" }] as never[];
+    const { bctx } = makeBctx({
+      step: async (_key, body) => {
+        returns.push(await body());
+      },
+      guardGate: async () => fakeInterrupts,
+    });
+    await runGateAndFeedback("g", "f", bctx);
+    expect(returns[0]).toBe(fakeInterrupts);
+  });
+});

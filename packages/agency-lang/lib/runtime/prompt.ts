@@ -14,6 +14,12 @@ import {
   appendReplyMarker,
   type HarvestedReplyAttachment,
 } from "./replyAttachments.js";
+import {
+  runInitialBoundary,
+  runRoundBoundary,
+  runGateAndFeedback,
+  type BoundaryContext,
+} from "./turnBoundary.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
 import { abortableSleep } from "../stdlib/abortable.js";
 import { decideRetry, decideValidationRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
@@ -1124,27 +1130,20 @@ export async function runPrompt(args: {
   // (they push messages). See lib/runtime/guardTripInterrupt.ts.
   const guardGate = () => raiseGuardTripsUntilClear(ctx, stateStack);
 
-  // The delivery half of approve({message}) (resumable-guards PR 4):
-  // drain the branch's queued reviewer feedback into the thread, in an
-  // idempotent step of its own right before a request step. Everything
-  // queued drains as ONE user message, entries newline-joined oldest
-  // first — providers like Anthropic want user/assistant alternation,
-  // so one drain must not emit a run of consecutive user messages.
-  // The label lists each contributing guard once, in the same order.
-  // Labels are observability-only (#557) — the model sees an ordinary
-  // user message, which is the point: guard feedback steers the model
-  // exactly like a user would.
-  const drainGuardFeedback = async () => {
-    const feedback = stateStack.takeGuardFeedback();
-    if (feedback.length === 0) return;
-    const text = feedback.map((f) => f.text).join("\n");
-    const label = feedback
-      .map((f) => f.label)
-      .filter((l, i, all) => all.indexOf(l) === i)
-      .join(",");
-    messages.push(smoltalk.userMessage(text), label);
-    self.messagesJSON = snapshotThread();
-  };
+  // Message delivery at turn boundaries (attachments, guard feedback,
+  // queueMessage entries) lives in turnBoundary.ts. Built fresh at each
+  // boundary call: `messages` is reassigned every round, so a captured
+  // reference would go stale after round 1.
+  const boundaryCtx = (): BoundaryContext => ({
+    step: (key, body) => pr.step(key, body),
+    guardGate,
+    messages,
+    runnerState: self.runnerState,
+    stateStack,
+    snapshot: (thread) => {
+      self.messagesJSON = thread.toJSON();
+    },
+  });
 
   // A REQUEST step wrapped in the time-trip retry loop (resumable-guards
   // PR 3). When the timer kills the in-flight request, _runPrompt's
@@ -1165,12 +1164,14 @@ export async function runPrompt(args: {
     let gateAttempt = 0;
     while (true) {
       if (stateStack.firstRaisableTrip() !== null) {
-        await pr.step(`${key}.retryGate.${gateAttempt}`, guardGate);
         // An approve at THIS gate may have queued feedback; it belongs
         // in the re-issued request, so drain before the body re-runs.
-        await pr.step(
+        // Retries are the SAME turn re-sent, so this is deliberately
+        // NOT a queuedMessages delivery point.
+        await runGateAndFeedback(
+          `${key}.retryGate.${gateAttempt}`,
           `${key}.retryFeedback.${gateAttempt}`,
-          drainGuardFeedback,
+          boundaryCtx(),
         );
         gateAttempt += 1;
         continue; // re-probe: each budget is owed its own question
@@ -1185,11 +1186,11 @@ export async function runPrompt(args: {
     }
   };
   try {
-    await pr.step("guardGate.initial", guardGate);
-    // Feedback queued before this llm() call — by the initial gate just
-    // above, or by an earlier step-boundary approve anywhere on this
-    // branch — lands ahead of the new prompt: it reviews PAST work.
-    await pr.step("guardFeedback.initial", drainGuardFeedback);
+    // The call-entry boundary: queueMessage entries queued before this
+    // llm() call, then the gate, then feedback queued by the gate or by
+    // an earlier step-boundary approve anywhere on this branch. All land
+    // ahead of the new prompt: they review PAST work.
+    await runInitialBoundary(boundaryCtx());
     // The prompt push is its OWN idempotent step so the request step
     // below is re-issue-safe: an in-process trip retry (or a resumed
     // replay) re-runs the request body without duplicating the user
@@ -1825,40 +1826,16 @@ export async function runPrompt(args: {
           (fn) => !removedTools.includes(fn.name),
         );
 
-        // Reply attachments harvested from this round's tools (and any
-        // earlier round whose injection was pre-empted by an interrupt):
-        // inject ONE labeled user message after ALL tool results — the
-        // provider adjacency rules require the assistant's tool calls to
-        // be answered by every tool result before any other message.
-        // Resume-safety (verified): pr.step marks the key in
-        // completedSteps and skips it on resume; PromptRunner snapshots
-        // messagesJSON in beforeCheckpoint (promptRunner.ts) so a
-        // checkpoint stamped after this step completes carries the
-        // injected message, and resume restores messages from
-        // messagesJSON — the same mechanism that preserves sibling
-        // tool-message pushes. Clearing the buffer inside the step keeps
-        // the outer guard consistent on replay. The explicit messagesJSON
-        // write matches the pattern at the first-LLM-call and nextLlmCall
-        // sites.
-        const pendingReplies = (self.runnerState.replyAttachments ??
-          []) as HarvestedReplyAttachment[];
-        if (pendingReplies.length > 0) {
-          await pr.step(`round.${round}.attachReplies`, async () => {
-            messages.push(
-              smoltalk.userMessage(
-                buildReplyUserMessage(pendingReplies) as smoltalk.UserContentInput,
-              ),
-            );
-            self.runnerState.replyAttachments = [];
-            self.messagesJSON = snapshotThread();
-          });
-        }
-
-        // The PREVIOUS round's charge may have crossed a limit (the old
-        // post-charge throw site); raise it before the next request goes
-        // out, so nothing more is spent while the question is open.
-        await pr.step(`round.${round}.guardGate`, guardGate);
-        await pr.step(`round.${round}.guardFeedback`, drainGuardFeedback);
+        // The round boundary: after ALL tool results (provider adjacency
+        // rules require the assistant's tool calls to be answered by
+        // every tool result before any other message), deliver reply
+        // attachments, then queueMessage entries, then raise any tripped
+        // guard before more money is spent, then deliver the approver's
+        // feedback as the last word before the next request. Delivery
+        // discipline (idempotent steps, buffer-clear inside the step,
+        // messagesJSON refresh) is owned by turnBoundary.ts — see its
+        // module header for the resume-safety argument.
+        await runRoundBoundary(round, boundaryCtx());
         // Next LLM call wrapped in pr.step for resume idempotency. Once
         // marked done, resume re-entries skip the LLM call. The llmCall
         // span stays open across rounds (one span per llm() call), so we
@@ -1958,10 +1935,12 @@ export async function runPrompt(args: {
         messages.push(smoltalk.userMessage(decision.feedback));
         self.messagesJSON = snapshotThread();
       });
-      await pr.step(`validation.${validationAttempt}.guardGate`, guardGate);
-      await pr.step(
+      // Validation retries are the same turn re-sent: gate and feedback
+      // only, deliberately NOT a queuedMessages delivery point.
+      await runGateAndFeedback(
+        `validation.${validationAttempt}.guardGate`,
         `validation.${validationAttempt}.guardFeedback`,
-        drainGuardFeedback,
+        boundaryCtx(),
       );
       await requestStepWithTripRetry(`validation.${validationAttempt}.llmCall`, async () => {
         const nextResult = await _runPrompt({

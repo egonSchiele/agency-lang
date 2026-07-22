@@ -1,0 +1,77 @@
+import { compile, run } from "std::agency"
+
+// The middle process registers a block-bodied scoped callback, then pauses
+// across serialize/resume (grandchild bash is unhandled). After the resume it
+// runs a SECOND child; if the callback survived the round trip, that child's
+// onNodeStart increments the counter again. Healthy expectation: cb=2.
+node main() {
+  const grandSource = """
+import { bash } from "std::shell"
+node main() {
+  let r = bash("echo deep-ok")
+  return r.stdout
+}
+"""
+  const secondSource = """
+node main() {
+  return "second done"
+}
+"""
+  const childSource = """
+import { compile, run } from "std::agency"
+
+let starts: number = 0
+
+node main(grandSource: string, secondSource: string) {
+  callback("onNodeStart") as data {
+    starts = starts + 1
+  }
+  const c = compile(grandSource)
+  if (isFailure(c)) {
+    return "inner compile failed"
+  }
+  const c2 = compile(secondSource)
+  if (isFailure(c2)) {
+    return "second compile failed"
+  }
+  handle {
+    const result = run(compiled: c.value, node: "main")
+    let firstData = ""
+    if (isSuccess(result)) {
+      firstData = result.value.data
+    }
+    if (isFailure(result)) {
+      return "inner run failed"
+    }
+    const second = run(compiled: c2.value, node: "main")
+    if (isFailure(second)) {
+      return "second run failed"
+    }
+    return "\${firstData}:cb=\${starts}"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}
+"""
+  const compileResult = compile(childSource)
+  if (isFailure(compileResult)) {
+    return "compile failed"
+  }
+  handle {
+    const result = run(
+      compiled: compileResult.value,
+      node: "main",
+      args: { grandSource: grandSource, secondSource: secondSource },
+    )
+    if (isSuccess(result)) {
+      return "OK: ${result.value.data}"
+    }
+    return "run failed"
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

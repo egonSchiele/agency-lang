@@ -2,7 +2,7 @@ import { BaseReviver } from "./baseReviver.js";
 import { AgencyFunction } from "../agencyFunction.js";
 import type { FuncParam, ToolDefinition } from "../agencyFunction.js";
 import { isBlockName, isLiftedCallbackName } from "../blockNames.js";
-import { getRuntimeContext } from "../asyncContext.js";
+import { agencyStore } from "../asyncContext.js";
 
 type FunctionRefRegistry = Record<string, AgencyFunction>;
 
@@ -204,17 +204,13 @@ function makeLazyCallbackRef(
 /** Surface an unresolvable fire in the trace, not only the terminal.
  *  fireWithGuard catches the throw and console.errors it, which is
  *  invisible after the fact; the Statelog error event makes the dropped
- *  callback findable. Best-effort: no ALS frame (e.g. a bare unit test)
- *  means no client, and that is fine. */
+ *  callback findable. Best-effort: `agencyStore.getStore()` is undefined
+ *  outside any runtime frame (e.g. a bare unit test), and no client means
+ *  nothing to emit to — the caller throws the real error either way. */
 function emitLazyCallbackMissError(name: string, msg: string): void {
-  try {
-    const { ctx } = getRuntimeContext();
-    ctx.statelogClient?.error?.({
-      errorType: "runtimeError",
-      message: msg,
-      functionName: name,
-    });
-  } catch {
-    // outside any runtime context — nothing to emit to
-  }
+  agencyStore.getStore()?.ctx?.statelogClient?.error?.({
+    errorType: "runtimeError",
+    message: msg,
+    functionName: name,
+  });
 }

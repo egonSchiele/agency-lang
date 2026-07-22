@@ -13,7 +13,13 @@
         }
       ],
       "modulePath": "std::http",
-      "isAgencyImport": true
+      "isAgencyImport": true,
+      "loc": {
+        "line": 0,
+        "col": 0,
+        "start": 0,
+        "end": 34
+      }
     },
     {
       "type": "function",

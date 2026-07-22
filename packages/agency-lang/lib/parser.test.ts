@@ -253,7 +253,10 @@ describe("parseAgency loc.line invariant", () => {
   const collectLines = (program: AgencyProgram): number[] => {
     const lines: number[] = [];
     for (const { node } of walkNodes(program.nodes)) {
-      if (node.loc) lines.push(node.loc.line);
+      // A negative line marks a template-injected node (the prelude import
+      // sits on the wrapper's lines, above line 0 of the user's source). The
+      // invariant is about user-source nodes, which only exist at line >= 0.
+      if (node.loc && node.loc.line >= 0) lines.push(node.loc.line);
     }
     return lines;
   };

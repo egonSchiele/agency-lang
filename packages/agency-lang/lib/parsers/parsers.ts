@@ -3535,7 +3535,7 @@ const quotedPath: Parser<string> = map(
   (res) => res.path,
 );
 
-export const importNodeStatmentParser: Parser<ImportNodeStatement> = memo(
+export const importNodeStatmentParser: Parser<ImportNodeStatement> = withLoc(memo(
   "importNodeStatement",
   seqC(
     set("type", "importNodeStatement"),
@@ -3560,7 +3560,7 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = memo(
       ),
     ),
   ),
-);
+));
 
 const nameWithOptionalAlias = or(
   map(
@@ -3676,7 +3676,7 @@ const importNameTypeParser: Parser<ImportNameType[]> = sepBy(
   or(namedImportParser, namespaceImportParser, defaultImportParser),
 );
 
-export const importStatmentParser: Parser<ImportStatement> = map(
+export const importStatmentParser: Parser<ImportStatement> = withLoc(map(
   memo(
     "importStatement",
     seqC(
@@ -3722,7 +3722,7 @@ export const importStatmentParser: Parser<ImportStatement> = map(
     }
     return out;
   },
-);
+));
 
 // =============================================================================
 // exportFromStatement.ts — `export { x } from "..."` and `export * from "..."`

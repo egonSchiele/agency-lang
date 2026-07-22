@@ -4,6 +4,8 @@ import {
   categoryForCode,
 } from "@/typeChecker/diagnostics.js";
 import { DIAGNOSTIC_EXPLANATIONS } from "@/typeChecker/diagnosticExplanations.js";
+import { LINT_DIAGNOSTICS } from "@/linter/diagnostics.js";
+import { LINT_EXPLANATIONS } from "@/linter/diagnosticExplanations.js";
 
 type Page = { relPath: string; contents: string };
 
@@ -48,9 +50,10 @@ function indexPage(): string {
     "",
     "# Diagnostic codes",
     "",
-    "Every type-checker error and warning carries a stable `AG####` code.",
+    "Every type-checker error and warning carries a stable `AG####` code, and",
+    "every `agency lint` finding a stable `AL####` code.",
     "Look one up with `agency explain <code>` (e.g. `agency explain AG2005`),",
-    "or suppress one on the next line with `// @tc-ignore AG####`.",
+    "or suppress a type-checker one on the next line with `// @tc-ignore AG####`.",
     "",
   ];
   for (const cat of DIAGNOSTIC_CATEGORIES) {
@@ -63,6 +66,44 @@ function indexPage(): string {
       lines.push(`| [${e.code}](${cat.slug}.md#${anchor}) | ${escapeCell(messageForMd(e.message))} |`);
     }
     lines.push("");
+  }
+  lines.push("## Lint", "");
+  lines.push("| Code | Message |", "| --- | --- |");
+  for (const [, e] of lintEntries()) {
+    lines.push(`| [${e.code}](lint.md#${e.code.toLowerCase()}) | ${escapeCell(messageForMd(e.message))} |`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+/** Active lint codes, sorted. The lint registry is one flat namespace (no
+ *  category table — a deliberate divergence from the type checker), so all
+ *  AL codes share the single lint.md page. */
+function lintEntries() {
+  return Object.entries(LINT_DIAGNOSTICS)
+    .filter(([, e]) => !("retired" in e))
+    .sort(([, a], [, b]) => a.code.localeCompare(b.code));
+}
+
+function lintPage(): string {
+  const lines = [
+    "---",
+    'name: "Lint"',
+    "---",
+    "",
+    "# Lint",
+    "",
+    "Findings from `agency lint` and the editor (grayed-out code, quick",
+    "fixes). Lint findings are style and hygiene notices, not errors: the",
+    "program still compiles and runs, and `agency lint` exits 0 on",
+    "hint-level findings so they never fail CI.",
+    "",
+  ];
+  for (const [name, e] of lintEntries()) {
+    lines.push(`<a id="${e.code.toLowerCase()}"></a>`, "");
+    lines.push(`## ${e.code} — ${messageForMd(e.message)}`, "");
+    lines.push(`*Default severity: ${e.severity}.*`, "");
+    lines.push(LINT_EXPLANATIONS[name as keyof typeof LINT_EXPLANATIONS], "");
   }
   return lines.join("\n");
 }
@@ -90,5 +131,6 @@ export function generateDiagnosticsPages(): Page[] {
       relPath: `${cat.slug}.md`,
       contents: categoryPage(cat),
     })),
+    { relPath: "lint.md", contents: lintPage() },
   ];
 }

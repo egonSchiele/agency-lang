@@ -18,6 +18,29 @@ Starts the Agency Language Server over stdio. Most editor extensions launch this
 
 The Agency [VSCode extension](/guide/vscode-extension) uses this to provide syntax highlighting, typechecking, and other editor features.
 
+### Lint findings in the editor
+
+The language server runs the same rules as [`agency lint`](/cli/lint). An unused import renders grayed out (it carries the LSP `Unnecessary` tag), and the lightbulb menu on it offers:
+
+- **Remove unused import '&lt;name&gt;'** — removes just that name, or the whole `import` line when it was the only name.
+- **Remove all unused imports** — one action that cleans up every unused name in the file.
+
+### Remove unused imports on save
+
+VS Code can apply the batch removal automatically whenever you save. Add either of these to your settings — the dedicated kind only removes unused imports, while `source.fixAll` also runs any other fix-all providers you have installed:
+
+```json
+"editor.codeActionsOnSave": {
+  "source.removeUnusedImports": "explicit"
+}
+```
+
+```json
+"editor.codeActionsOnSave": {
+  "source.fixAll": "explicit"
+}
+```
+
 ### Coding agent integration
 If you'd like to use Agency with a coding agent, you can scaffold the right configuration with:
 

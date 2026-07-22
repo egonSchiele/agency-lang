@@ -168,3 +168,35 @@ describe("unused-import code actions", () => {
     expect(actions.filter((a) => a.title.startsWith("Remove"))).toEqual([]);
   });
 });
+
+describe("code-action kind filtering (context.only)", () => {
+  it("returns only the batch action when the client asks for source.fixAll", () => {
+    const source = `import { a, b } from "./x.agency"\nnode main() { return 1 }\n`;
+    const doc = makeDoc(source);
+    const actions = getCodeActions(
+      {
+        textDocument: { uri: doc.uri },
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        context: { diagnostics: [], only: ["source.fixAll"] },
+      },
+      doc,
+      new SymbolTable(),
+    );
+    expect(actions.map((a) => a.kind)).toEqual(["source.fixAll"]);
+  });
+
+  it("returns nothing lint-related when the client asks for refactor kinds", () => {
+    const source = `import { a } from "./x.agency"\nnode main() { return 1 }\n`;
+    const doc = makeDoc(source);
+    const actions = getCodeActions(
+      {
+        textDocument: { uri: doc.uri },
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        context: { diagnostics: [], only: ["refactor"] },
+      },
+      doc,
+      new SymbolTable(),
+    );
+    expect(actions).toEqual([]);
+  });
+});

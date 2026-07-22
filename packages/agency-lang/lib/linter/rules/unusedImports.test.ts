@@ -88,3 +88,32 @@ describe("unused-imports rule: detection", () => {
     expect(findings[0].loc.start).toBeGreaterThan(source.indexOf("ab") + 1);
   });
 });
+
+describe("unused-imports rule: at-risk used positions are kept", () => {
+  it("keeps an import used only as a named handler (functionRef, no type field)", () => {
+    const src = [
+      `import { myHandler } from "./handlers.agency"`,
+      `node main() {`,
+      `  handle { print(1) } with myHandler`,
+      `}`,
+      ``,
+    ].join("\n");
+    expect(names(src)).toEqual([]);
+  });
+
+  it("keeps an import node used only as a goto target", () => {
+    const src = [
+      `import node { second } from "./other.agency"`,
+      `node main() {`,
+      `  goto second()`,
+      `}`,
+      ``,
+    ].join("\n");
+    expect(names(src)).toEqual([]);
+  });
+
+  it("flags an unused import named after an Object.prototype key", () => {
+    expect(names(`import { constructor } from "./x.agency"\nnode main() { return 1 }\n`))
+      .toEqual(["constructor"]);
+  });
+});

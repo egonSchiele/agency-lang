@@ -12,18 +12,28 @@ import { lintDiagnostic } from "../diagnostics.js";
 
 /** Names referenced anywhere in the file body. Conservative: an imported name
  *  found here is treated as used, so the rule never removes a used import.
- *  The reference positions and their node shapes (verified via pnpm run ast):
- *    - value reference / access-chain base → `variableName` (.value)
- *    - direct call                         → `functionCall` (.functionName)
- *    - bare type annotation                → `typeAliasVariable` (.aliasName)
- *    - parameterized type                  → `genericType` (.name)
+ *
+ *  Collection is conservative BY CONSTRUCTION, not by enumerating node types:
+ *  any object carrying a name-bearing field (`functionName`, `aliasName`,
+ *  `handlerName`) contributes that name, regardless of its `type`/`kind`
+ *  discriminant. Over-collection only makes the rule keep an import (safe,
+ *  possibly a missed detection); an allow-list of discriminants risks
+ *  under-collection, which deletes a used import — a `handle { } with fn`
+ *  handler reference is `{ kind: "functionRef", functionName }` with no
+ *  `type` field at all, and removing a handler's import silently unregisters
+ *  the handler (CLAUDE.md-critical). Two fields stay discriminated because
+ *  their names are too generic to collect blindly: `value` (string literals
+ *  also have one) and `name` (parameters also have one).
+ *
  *  This is a generic structural walk, NOT walkNodes: walkNodes visits
  *  statement-level AgencyNodes and does not descend into type hints or tag
  *  arguments, which are exactly the positions that would cause a false
  *  "unused" (and a deleted needed import) if missed. Import statements are
  *  excluded so an import does not count as its own use. */
 export function collectReferencedNames(program: AgencyProgram): Record<string, true> {
-  const used: Record<string, true> = {};
+  // Null prototype: identifiers are user-controlled, and on a plain object a
+  // key like "__proto__" or "constructor" would hit the prototype chain.
+  const used: Record<string, true> = Object.create(null);
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
       for (const item of value) {
@@ -33,13 +43,19 @@ export function collectReferencedNames(program: AgencyProgram): Record<string, t
     }
     if (value && typeof value === "object") {
       const node = value as Record<string, unknown>;
+      if (typeof node.functionName === "string") {
+        used[node.functionName] = true;
+      }
+      if (typeof node.aliasName === "string") {
+        used[node.aliasName] = true;
+      }
+      if (typeof node.handlerName === "string") {
+        used[node.handlerName] = true;
+      }
       if (node.type === "variableName" && typeof node.value === "string") {
         used[node.value] = true;
-      } else if (node.type === "functionCall" && typeof node.functionName === "string") {
-        used[node.functionName] = true;
-      } else if (node.type === "typeAliasVariable" && typeof node.aliasName === "string") {
-        used[node.aliasName] = true;
-      } else if (node.type === "genericType" && typeof node.name === "string") {
+      }
+      if (node.type === "genericType" && typeof node.name === "string") {
         used[node.name] = true;
       }
       for (const key of Object.keys(node)) {
@@ -181,7 +197,13 @@ function removalEdit(
   const span = statementSpan(source, stmt);
   const rebuilt = rebuildWithout(stmt, localNames);
   if (rebuilt === null) {
-    const end = source[loc.end] === "\n" ? loc.end + 1 : loc.end;
+    // The parser's span usually already consumed the statement's trailing
+    // newline. Only extend past one when it did not (statement at EOF or
+    // followed by `;`); extending unconditionally would eat the NEXT line's
+    // newline and collapse an intentional blank line between imports.
+    const spanEndsWithNewline = source[loc.end - 1] === "\n";
+    const end =
+      !spanEndsWithNewline && source[loc.end] === "\n" ? loc.end + 1 : loc.end;
     return { start: loc.start, end, newText: "" };
   }
   return { start: span.start, end: span.end, newText: printImport(rebuilt) };

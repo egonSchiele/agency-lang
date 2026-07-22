@@ -77,3 +77,22 @@ describe("unused-imports rule: batch edits", () => {
     expect(unusedImportsBatchEdits(ctxFor(src))).toEqual([]);
   });
 });
+
+describe("unused-imports rule: whole-line deletion edges", () => {
+  it("preserves a blank line that follows a deleted import", () => {
+    const src = [
+      `import { a } from "./x.agency"`,
+      ``,
+      `node main() { return 1 }`,
+      ``,
+    ].join("\n");
+    const f = unusedImportsRule.run(ctxFor(src))[0];
+    expect(applied(src, f)).toBe(`\nnode main() { return 1 }\n`);
+  });
+
+  it("deletes a statement at EOF with no trailing newline", () => {
+    const src = `node main() { return 1 }\nimport { a } from "./x.agency"`;
+    const f = unusedImportsRule.run(ctxFor(src))[0];
+    expect(applied(src, f)).toBe(`node main() { return 1 }\n`);
+  });
+});

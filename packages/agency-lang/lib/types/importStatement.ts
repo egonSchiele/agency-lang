@@ -40,8 +40,11 @@ export type DefaultImport = {
 export function getImportedNames(importNameType: ImportNameType): string[] {
   switch (importNameType.type) {
     case "namedImport":
-      return importNameType.importedNames.map(
-        (n) => importNameType.aliases[n] ?? n,
+      // Own-property check: names are user identifiers, and a plain lookup
+      // for a name like "constructor" would return the inherited prototype
+      // member instead of the (absent) alias.
+      return importNameType.importedNames.map((n) =>
+        Object.hasOwn(importNameType.aliases, n) ? importNameType.aliases[n] : n,
       );
     case "namespaceImport":
       return [importNameType.importedNames];

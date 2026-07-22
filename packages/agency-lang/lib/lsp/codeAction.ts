@@ -60,25 +60,44 @@ export function getCodeActions(
     if (stdlibAction) actions.push(stdlibAction);
   }
 
+  // `context.only` is the client's kind filter (e.g. `["source.fixAll"]` on
+  // save). Kinds are hierarchical: a filter matches a kind that equals it or
+  // extends it with a `.` segment. Honoring it skips the parse + lint below
+  // entirely when the client asked for kinds we do not produce.
+  const only = params.context.only;
+  const wantsKind = (kind: string): boolean =>
+    !only || only.some((o) => kind === o || kind.startsWith(`${o}.`));
+  const wantsQuickFix = wantsKind(CodeActionKind.QuickFix);
+  const wantsBatch =
+    wantsKind(CodeActionKind.SourceFixAll) || wantsKind(REMOVE_UNUSED_IMPORTS_KIND);
+  if (!wantsQuickFix && !wantsBatch) {
+    return actions;
+  }
+
   const source = doc.getText();
   const parsed = parseAgency(source, {}, false);
   if (parsed.success) {
     const ctx: LintContext = { program: parsed.result, source, filePath: uriToPath(doc.uri) };
     const findings = runLinter(ctx).filter((f) => f.fix);
-    for (const f of findings) {
-      actions.push({
-        title: f.fix!.title,
-        kind: CodeActionKind.QuickFix,
-        edit: { changes: { [doc.uri]: f.fix!.edits.map((e) => lintEditToTextEdit(doc, e)) } },
-      });
+    if (wantsQuickFix) {
+      for (const f of findings) {
+        actions.push({
+          title: f.fix!.title,
+          kind: CodeActionKind.QuickFix,
+          edit: { changes: { [doc.uri]: f.fix!.edits.map((e) => lintEditToTextEdit(doc, e)) } },
+        });
+      }
     }
-    if (findings.length > 0) {
+    if (wantsBatch && findings.length > 0) {
       // The batch regenerates each statement ONCE with all of its unused
       // names removed (one edit per statement) — concatenating the
       // per-finding fixes instead would produce overlapping edits whenever
       // one statement has two unused names, which VS Code rejects.
       const batchEdits = unusedImportsBatchEdits(ctx).map((e) => lintEditToTextEdit(doc, e));
       for (const kind of [CodeActionKind.SourceFixAll, REMOVE_UNUSED_IMPORTS_KIND]) {
+        if (!wantsKind(kind)) {
+          continue;
+        }
         actions.push({
           title: "Remove all unused imports",
           kind,

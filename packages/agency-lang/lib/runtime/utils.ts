@@ -171,8 +171,53 @@ export type ModelUsage = {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  /** Tokens read back from an existing cache entry. */
+  cachedInputTokens: number;
+  /** Tokens written to a new cache entry. */
+  cacheCreationInputTokens: number;
   cost: number;
 };
+
+/**
+ * Read one counter off a token-stats object. Every place that reads these
+ * slots goes through here, so "what does a missing or broken counter mean"
+ * is answered once.
+ *
+ * There are two ways a slot can fail to hold a number, and they are not the
+ * same thing.
+ *
+ * MISSING (`undefined` / `null`) is ordinary and reads as zero in silence.
+ * Stats restored from a checkpoint written before a field existed have no
+ * key for it, a provider that does not do prompt caching never reports a
+ * cache count, and a fresh per-model entry starts life without the keys that
+ * `updateTokenStats` has not written yet.
+ *
+ * PRESENT BUT NOT A FINITE NUMBER is a bug, and gets said out loud.
+ * `updateTokenStats` is the only writer and only ever writes numbers, so a
+ * string or an object in one of these slots means either the stats object
+ * was corrupted upstream, or a provider returned a non-number in its usage /
+ * cost payload — which nothing enforces at runtime, since the `number |
+ * undefined` parameter types are erased. NaN lands here too: it is the
+ * signature of an earlier `undefined + n`, and it would otherwise spread to
+ * every total it touches.
+ *
+ * Both cases read as zero, because the alternative is throwing, and every
+ * caller of this is a cost display, a REPL footer, or a log line. None of
+ * them is worth taking a run down for. Warning is what keeps the second case
+ * from hiding: the totals will be short by whatever the slot held, and the
+ * message says so.
+ */
+function counterValue(value: unknown, where: string): number {
+  if (value === undefined || value === null) return 0;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  console.warn(
+    `[agency] token stats: ${where} holds ${String(value)}, which is not a ` +
+      `finite number. Counting it as 0 — the reported totals will be short ` +
+      `by whatever it held. Only updateTokenStats writes these slots, so ` +
+      `this means the stats object or a provider's usage payload is wrong.`,
+  );
+  return 0;
+}
 
 /**
  * Normalize the raw `__tokenStats.models` map into a typed, defensively
@@ -185,11 +230,17 @@ export function normalizeModelUsage(rawModels: unknown): ModelUsage[] {
   if (!rawModels || typeof rawModels !== "object") return [];
   const out: ModelUsage[] = [];
   for (const [model, v] of Object.entries(rawModels as Record<string, any>)) {
+    // The label names the model, so a warning points at the entry to look at
+    // rather than just the field name.
+    const read = (key: keyof ModelUsage | "totalCost") =>
+      counterValue(v?.[key], `models.${model}.${key}`);
     out.push({
       model,
-      inputTokens: typeof v?.inputTokens === "number" ? v.inputTokens : 0,
-      outputTokens: typeof v?.outputTokens === "number" ? v.outputTokens : 0,
-      cost: typeof v?.totalCost === "number" ? v.totalCost : 0,
+      inputTokens: read("inputTokens"),
+      outputTokens: read("outputTokens"),
+      cachedInputTokens: read("cachedInputTokens"),
+      cacheCreationInputTokens: read("cacheCreationInputTokens"),
+      cost: read("totalCost"),
     });
   }
   out.sort((a, b) => b.cost - a.cost || (a.model < b.model ? -1 : 1));
@@ -202,13 +253,32 @@ type StatUsage = {
   inputTokens?: number;
   outputTokens?: number;
   cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
   totalTokens?: number;
 };
 type StatCost = {
   inputCost?: number;
   outputCost?: number;
+  cachedInputCost?: number;
+  cacheCreationInputCost?: number;
   totalCost?: number;
 };
+
+/** Add to one counter on a token-stats object.
+ *
+ *  Both sides go through `counterValue`, which is where "missing is fine,
+ *  malformed is a bug worth saying out loud" is decided. The target side
+ *  catches a slot an older checkpoint never wrote; the incoming side catches
+ *  a provider handing back something that is not a number in its usage or
+ *  cost payload.
+ *
+ *  Values are `unknown` rather than `number` because `tokenStats.cost` holds
+ *  `currency: "USD"` next to its counters, so the object this walks is not
+ *  uniformly numeric and a `Record<string, number>` would be claiming
+ *  otherwise. */
+function addTo(target: Record<string, unknown>, key: string, amount: unknown): void {
+  target[key] = counterValue(target[key], key) + counterValue(amount, `${key} (incoming)`);
+}
 
 export function updateTokenStats(args: {
   globals: GlobalStore;
@@ -238,16 +308,26 @@ export function updateTokenStats(args: {
     }
     const m = tokenStats.models[model] ??
       (tokenStats.models[model] = { inputTokens: 0, outputTokens: 0, totalCost: 0 });
-    m.inputTokens += usage.inputTokens || 0;
-    m.outputTokens += usage.outputTokens || 0;
-    m.totalCost += cost.totalCost || 0;
+    addTo(m, "inputTokens", usage.inputTokens);
+    addTo(m, "outputTokens", usage.outputTokens);
+    addTo(m, "cachedInputTokens", usage.cachedInputTokens);
+    addTo(m, "cacheCreationInputTokens", usage.cacheCreationInputTokens);
+    addTo(m, "totalCost", cost.totalCost);
   }
-  tokenStats.usage.inputTokens += usage.inputTokens || 0;
-  tokenStats.usage.outputTokens += usage.outputTokens || 0;
-  tokenStats.usage.cachedInputTokens += usage.cachedInputTokens || 0;
-  tokenStats.usage.totalTokens += usage.totalTokens || 0;
+  // Cache reads and cache writes are tracked separately from ordinary input.
+  // Without them the breakdown does not reconcile with its own total: on a
+  // long agent run most of the money goes to cache writes, and most of the
+  // tokens to cache reads, so a report of input + output alone can account
+  // for well under half the bill.
+  addTo(tokenStats.usage, "inputTokens", usage.inputTokens);
+  addTo(tokenStats.usage, "outputTokens", usage.outputTokens);
+  addTo(tokenStats.usage, "cachedInputTokens", usage.cachedInputTokens);
+  addTo(tokenStats.usage, "cacheCreationInputTokens", usage.cacheCreationInputTokens);
+  addTo(tokenStats.usage, "totalTokens", usage.totalTokens);
 
-  tokenStats.cost.inputCost += cost.inputCost || 0;
-  tokenStats.cost.outputCost += cost.outputCost || 0;
-  tokenStats.cost.totalCost += cost.totalCost || 0;
+  addTo(tokenStats.cost, "inputCost", cost.inputCost);
+  addTo(tokenStats.cost, "outputCost", cost.outputCost);
+  addTo(tokenStats.cost, "cachedInputCost", cost.cachedInputCost);
+  addTo(tokenStats.cost, "cacheCreationInputCost", cost.cacheCreationInputCost);
+  addTo(tokenStats.cost, "totalCost", cost.totalCost);
 }

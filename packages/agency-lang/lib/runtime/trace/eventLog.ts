@@ -50,6 +50,7 @@ export type LlmCallEvent = BaseEvent & {
     inputTokens: number;
     outputTokens: number;
     cachedInputTokens: number;
+    cacheCreationInputTokens: number;
     totalTokens: number;
   } | null;
 };
@@ -177,6 +178,9 @@ function getTokenUsageDiff(
     cachedInputTokens:
       (currStats.usage.cachedInputTokens ?? 0) -
       (prevStats.usage.cachedInputTokens ?? 0),
+    cacheCreationInputTokens:
+      (currStats.usage.cacheCreationInputTokens ?? 0) -
+      (prevStats.usage.cacheCreationInputTokens ?? 0),
     totalTokens:
       (currStats.usage.totalTokens ?? 0) -
       (prevStats.usage.totalTokens ?? 0),

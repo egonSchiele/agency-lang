@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { deepFreeze, extractStructuredResponse, updateTokenStats } from "./utils.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { deepFreeze, extractStructuredResponse, normalizeModelUsage, updateTokenStats } from "./utils.js";
 import { isSuccess, isFailure } from "./result.js";
 import { z } from "zod";
 import { GlobalStore } from "./state/globalStore.js";
@@ -81,6 +81,8 @@ describe("updateTokenStats per-model breakdown", () => {
     expect(stats.models["opus-4.8"]).toEqual({
       inputTokens: 10,
       outputTokens: 5,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       totalCost: 0.001,
     });
     // The aggregate totals still accumulate independently.
@@ -95,6 +97,8 @@ describe("updateTokenStats per-model breakdown", () => {
     expect(globals.getTokenStats().models["opus-4.8"]).toEqual({
       inputTokens: 12,
       outputTokens: 8,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       totalCost: 0.0015,
     });
   });
@@ -104,8 +108,8 @@ describe("updateTokenStats per-model breakdown", () => {
     updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "gpt-5-mini" });
     updateTokenStats({ globals, usage: usage(20, 10), cost: cost(0.03), model: "opus-4.8" });
     const models = globals.getTokenStats().models;
-    expect(models["gpt-5-mini"]).toEqual({ inputTokens: 10, outputTokens: 5, totalCost: 0.001 });
-    expect(models["opus-4.8"]).toEqual({ inputTokens: 20, outputTokens: 10, totalCost: 0.03 });
+    expect(models["gpt-5-mini"]).toMatchObject({ inputTokens: 10, outputTokens: 5, totalCost: 0.001 });
+    expect(models["opus-4.8"]).toMatchObject({ inputTokens: 20, outputTokens: 10, totalCost: 0.03 });
   });
 
   it("does not record a model entry when no model name is supplied", () => {
@@ -126,7 +130,7 @@ describe("updateTokenStats per-model breakdown", () => {
     expect(stats.usage.inputTokens).toBe(15);
     expect(stats.usage.outputTokens).toBe(7);
     expect(stats.usage.totalTokens).toBe(22);
-    expect(stats.models["smollm2-135m"]).toEqual({
+    expect(stats.models["smollm2-135m"]).toMatchObject({
       inputTokens: 15,
       outputTokens: 7,
       totalCost: 0,
@@ -142,7 +146,7 @@ describe("updateTokenStats per-model breakdown", () => {
     // …and the entry is recorded as a normal own key.
     const models = globals.getTokenStats().models;
     expect(Object.prototype.hasOwnProperty.call(models, "__proto__")).toBe(true);
-    expect(models["__proto__"]).toEqual({ inputTokens: 1, outputTokens: 1, totalCost: 0.001 });
+    expect(models["__proto__"]).toMatchObject({ inputTokens: 1, outputTokens: 1, totalCost: 0.001 });
   });
 
   it("backfills the models slot for token-stats restored from older checkpoints", () => {
@@ -151,11 +155,86 @@ describe("updateTokenStats per-model breakdown", () => {
     const stats = globals.getTokenStats();
     delete stats.models;
     updateTokenStats({ globals, usage: usage(1, 1), cost: cost(0.0002), model: "opus-4.8" });
-    expect(globals.getTokenStats().models["opus-4.8"]).toEqual({
+    expect(globals.getTokenStats().models["opus-4.8"]).toMatchObject({
       inputTokens: 1,
       outputTokens: 1,
       totalCost: 0.0002,
     });
+  });
+});
+
+describe("updateTokenStats cache accounting", () => {
+  // A prompt-cached call: a few uncached tokens, a block written to the cache,
+  // a block read back from it. Providers price all three differently.
+  const cachedUsage = {
+    inputTokens: 2,
+    outputTokens: 100,
+    cachedInputTokens: 5000,
+    cacheCreationInputTokens: 400,
+    totalTokens: 5502,
+  };
+  const cachedCost = {
+    inputCost: 0.000006,
+    outputCost: 0.0015,
+    cachedInputCost: 0.0015,
+    cacheCreationInputCost: 0.0015,
+    totalCost: 0.004506,
+  };
+
+  it("records cache reads and writes alongside ordinary input", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
+    const stats = globals.getTokenStats();
+    expect(stats.usage.cachedInputTokens).toBe(5000);
+    expect(stats.usage.cacheCreationInputTokens).toBe(400);
+    expect(stats.cost.cachedInputCost).toBeCloseTo(0.0015, 10);
+    expect(stats.cost.cacheCreationInputCost).toBeCloseTo(0.0015, 10);
+  });
+
+  // The bug this guards: `totalCost` counted cache spend but the breakdown did
+  // not, so a caller adding up the parts got a number far below the total.
+  it("reports a breakdown that adds up to the total", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
+    updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
+    const { cost: c } = globals.getTokenStats();
+    const parts =
+      c.inputCost + c.outputCost + c.cachedInputCost + c.cacheCreationInputCost;
+    expect(parts).toBeCloseTo(c.totalCost, 10);
+  });
+
+  it("counts every token class in the usage breakdown", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
+    const { usage: u } = globals.getTokenStats();
+    const parts =
+      u.inputTokens + u.outputTokens + u.cachedInputTokens + u.cacheCreationInputTokens;
+    expect(parts).toBe(u.totalTokens);
+  });
+
+  // Token-stats restored from a checkpoint written before these fields existed
+  // have `undefined` there. `undefined += n` is NaN, which would then poison
+  // every later total on the run.
+  it("accumulates onto token-stats restored from older checkpoints", () => {
+    const globals = GlobalStore.withTokenStats();
+    const stats = globals.getTokenStats();
+    delete stats.usage.cacheCreationInputTokens;
+    delete stats.cost.cachedInputCost;
+    delete stats.cost.cacheCreationInputCost;
+    updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
+    const restored = globals.getTokenStats();
+    expect(restored.usage.cacheCreationInputTokens).toBe(400);
+    expect(restored.cost.cachedInputCost).toBeCloseTo(0.0015, 10);
+    expect(restored.cost.cacheCreationInputCost).toBeCloseTo(0.0015, 10);
+  });
+
+  it("leaves the cache fields at zero for a model that does not cache", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "gpt-5-mini" });
+    const stats = globals.getTokenStats();
+    expect(stats.usage.cacheCreationInputTokens).toBe(0);
+    expect(stats.cost.cacheCreationInputCost).toBe(0);
+    expect(stats.cost.cachedInputCost).toBe(0);
   });
 });
 
@@ -227,5 +306,119 @@ describe("extractStructuredResponse — markdown code fences (step 2)", () => {
     const r = extractStructuredResponse(s, schema);
     expect(isSuccess(r)).toBe(true);
     if (isSuccess(r)) expect(r.value).toEqual(value);
+  });
+});
+
+describe("normalizeModelUsage", () => {
+  it("carries cache reads and writes through to the per-model view", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({
+      globals,
+      usage: {
+        inputTokens: 2,
+        outputTokens: 100,
+        cachedInputTokens: 5000,
+        cacheCreationInputTokens: 400,
+        totalTokens: 5502,
+      },
+      cost: { inputCost: 0, outputCost: 0, totalCost: 0.004506 },
+      model: "sonnet-5",
+    });
+    const [row] = normalizeModelUsage(globals.getTokenStats().models);
+    expect(row).toEqual({
+      model: "sonnet-5",
+      inputTokens: 2,
+      outputTokens: 100,
+      cachedInputTokens: 5000,
+      cacheCreationInputTokens: 400,
+      cost: 0.004506,
+    });
+  });
+
+  // Entries written before the cache fields existed have no key for them; the
+  // per-model view must read zero rather than undefined, or the `/cost`
+  // totals that add these up become NaN.
+  it("reads zero for a per-model entry missing the cache fields", () => {
+    const [row] = normalizeModelUsage({
+      "opus-4.8": { inputTokens: 10, outputTokens: 5, totalCost: 0.02 },
+    });
+    expect(row.cachedInputTokens).toBe(0);
+    expect(row.cacheCreationInputTokens).toBe(0);
+  });
+});
+
+describe("token-stats counters: missing vs malformed", () => {
+  // A missing counter is ordinary — an older checkpoint, or a provider that
+  // does not cache — so it reads as zero without comment. A malformed one is
+  // a bug, and has to be audible or it hides behind a plausible total.
+  let warn: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => warn.mockRestore());
+
+  it("reads a missing counter as zero, silently", () => {
+    const globals = GlobalStore.withTokenStats();
+    delete globals.getTokenStats().usage.cacheCreationInputTokens;
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
+    expect(globals.getTokenStats().usage.cacheCreationInputTokens).toBe(0);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("does not warn about a provider that omits cache counts entirely", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "gpt-5-mini" });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  // `tokenStats.cost` holds `currency: "USD"` next to its counters, so the
+  // object being accumulated into is not uniformly numeric. Adding must never
+  // touch a non-counter slot.
+  it("leaves the currency field alone", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
+    expect(globals.getTokenStats().cost.currency).toBe("USD");
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  // NaN is the signature of an earlier `undefined + n`. Left alone it spreads
+  // to every total it touches, so it recovers to zero — and says why.
+  it("recovers from a NaN counter and warns", () => {
+    const globals = GlobalStore.withTokenStats();
+    globals.getTokenStats().usage.inputTokens = NaN;
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
+    expect(globals.getTokenStats().usage.inputTokens).toBe(10);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("inputTokens");
+  });
+
+  it("restarts a counter holding a string, and warns instead of concatenating", () => {
+    const globals = GlobalStore.withTokenStats();
+    globals.getTokenStats().usage.outputTokens = "12" as unknown as number;
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
+    // 5, not "125".
+    expect(globals.getTokenStats().usage.outputTokens).toBe(5);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  // The incoming side matters too: nothing validates a provider's usage
+  // payload at runtime, so a string there would otherwise be counted silently.
+  it("warns when a provider supplies a non-numeric usage value", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({
+      globals,
+      usage: { inputTokens: "900" as unknown as number, outputTokens: 5, totalTokens: 905 },
+      cost: cost(0.001),
+      model: "opus-4.8",
+    });
+    expect(globals.getTokenStats().usage.inputTokens).toBe(0);
+    expect(warn).toHaveBeenCalled();
+    expect(String(warn.mock.calls[0][0])).toContain("incoming");
+  });
+
+  it("warns when a per-model entry holds a malformed counter", () => {
+    normalizeModelUsage({ "opus-4.8": { inputTokens: {}, outputTokens: 5, totalCost: 0.02 } });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("models.opus-4.8.inputTokens");
   });
 });

@@ -196,6 +196,12 @@ export type ModelCost = {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  // Tokens read back from a cache entry, and tokens written to a new one.
+  // Both are input-side and both are billed, at rates that differ from
+  // `inputTokens` — so a total that leaves them out understates a cached
+  // conversation by most of its size.
+  cachedInputTokens: number;
+  cacheCreationInputTokens: number;
   cost: number
 }
 

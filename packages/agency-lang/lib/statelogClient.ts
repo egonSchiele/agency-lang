@@ -93,16 +93,24 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 1500;
 
 // === Token / cost types ===
 
+// `cachedInputTokens` are tokens READ from an existing cache entry;
+// `cacheCreationInputTokens` are tokens WRITTEN to a new one. Providers bill
+// them at different rates (a write costs more than ordinary input, a read
+// costs far less), so a breakdown that omits either cannot explain its own
+// total.
 export type TokenUsage = {
   inputTokens?: number;
   outputTokens?: number;
   cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
   totalTokens?: number;
 };
 
 export type TokenCost = {
   inputCost?: number;
   outputCost?: number;
+  cachedInputCost?: number;
+  cacheCreationInputCost?: number;
   totalCost?: number;
 };
 

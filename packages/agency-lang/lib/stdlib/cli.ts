@@ -1128,16 +1128,30 @@ function readTokenSnapshot(): TokenSnapshot {
     // the defensive field-narrowing in `normalizeModelUsage`.
     const models: ModelTotals = {};
     for (const m of normalizeModelUsage((stats as { models?: unknown }).models)) {
-      models[m.model] = { tokens: m.inputTokens + m.outputTokens, cost: m.cost };
+      models[m.model] = {
+        tokens:
+          m.inputTokens +
+          m.outputTokens +
+          m.cachedInputTokens +
+          m.cacheCreationInputTokens,
+        cost: m.cost,
+      };
     }
     const usage = (stats as { usage?: Record<string, unknown> }).usage;
     if (!usage || typeof usage !== "object") {
       return { inputTokens: 0, outputTokens: 0, models };
     }
+    const num = (v: unknown) => (typeof v === "number" ? v : 0);
     return {
-      inputTokens: typeof usage.inputTokens === "number" ? usage.inputTokens : 0,
-      outputTokens:
-        typeof usage.outputTokens === "number" ? usage.outputTokens : 0,
+      // The footer's `↑` is "how much went up the wire this turn", so cache
+      // reads and writes belong in it: both are input the provider billed
+      // for. Counting only uncached input reports a small fraction of a
+      // cached conversation — on a long agent turn, a few percent of it.
+      inputTokens:
+        num(usage.inputTokens) +
+        num(usage.cachedInputTokens) +
+        num(usage.cacheCreationInputTokens),
+      outputTokens: num(usage.outputTokens),
       models,
     };
   } catch {

@@ -252,15 +252,22 @@ export class GlobalStore {
       // `/cost` (cumulative per-model breakdown). Null-prototype so a
       // provider-supplied model name (e.g. `__proto__`) can't pollute it.
       models: Object.create(null),
+      // Cache reads (`cached*`) and cache writes (`cacheCreation*`) are
+      // counted apart from ordinary input because providers price all three
+      // differently. Reporting only input and output leaves most of an agent
+      // run's spend unexplained.
       usage: {
         inputTokens: 0,
         outputTokens: 0,
         cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
         totalTokens: 0,
       },
       cost: {
         inputCost: 0,
         outputCost: 0,
+        cachedInputCost: 0,
+        cacheCreationInputCost: 0,
         totalCost: 0,
         currency: "USD",
       },

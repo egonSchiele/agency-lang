@@ -255,3 +255,35 @@ describe("MessageThread.queueMessage", () => {
     ]);
   });
 });
+
+describe("queueMessage validation and copy semantics (PR 651 review)", () => {
+  it("rejects an invalid role at enqueue time", () => {
+    const t = new MessageThread();
+    expect(() =>
+      t.queueMessage("x", { role: "system" as never }),
+    ).toThrow(/role must be "user" or "assistant"/);
+  });
+
+  it("rejects assistant-role content that is not a string", () => {
+    const t = new MessageThread();
+    expect(() =>
+      t.queueMessage([{ type: "text", text: "hi" }] as never, { role: "assistant" }),
+    ).toThrow(/assistant-role queued messages must have string content/);
+  });
+
+  it("mutating toJSON output does not mutate the live queue", () => {
+    const t = new MessageThread();
+    t.queueMessage("original");
+    const json = t.toJSON();
+    (json.queuedMessages![0] as { content: string }).content = "tampered";
+    expect(t.takeQueuedMessages()[0].content).toBe("original");
+  });
+
+  it("fromJSON tolerates queuedMessages: null in persisted JSON", () => {
+    const t = new MessageThread();
+    const json = t.toJSON();
+    (json as { queuedMessages: unknown }).queuedMessages = null;
+    const revived = MessageThread.fromJSON(json);
+    expect(revived.hasQueuedMessages()).toBe(false);
+  });
+});

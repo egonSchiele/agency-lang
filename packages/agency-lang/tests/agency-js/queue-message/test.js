@@ -1,5 +1,7 @@
 import { midRound, preQueued, scoped, ordered, respondToInterrupts, approve, __setLLMClient } from "./agent.js";
 import { writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import { ToolCall } from "smoltalk";
 
 // Each scenario gets a fresh recording client: it captures the messages
@@ -101,10 +103,13 @@ const out = {};
 // result, then attachment, then queued, then feedback. Delivery across
 // the pause also proves exactly-once: each appears a single time.
 {
-  writeFileSync("/tmp/qm-order-chart.png",
+  // Unique per-process path so concurrent test runs cannot race on one
+  // file; the path reaches the agency tool via the mocked tool-call args.
+  const chartPath = join(tmpdir(), `qm-order-chart-${process.pid}.png`);
+  writeFileSync(chartPath,
     Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC", "base64"));
   const { captured, client } = makeClient([
-    { toolCalls: [new ToolCall("c1", "chartTool", {})] },
+    { toolCalls: [new ToolCall("c1", "chartTool", { path: chartPath })] },
     { output: "done" },
   ]);
   __setLLMClient(client);

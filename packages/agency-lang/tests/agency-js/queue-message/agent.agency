@@ -47,8 +47,8 @@ callback("onToolCallEnd") as data {
   }
 }
 
-def chartTool(): string {
-  attachToReply(image("/tmp/qm-order-chart.png"))
+def chartTool(path: string): string {
+  attachToReply(image(path))
   return "chart ready"
 }
 

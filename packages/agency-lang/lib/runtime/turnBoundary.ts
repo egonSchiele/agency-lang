@@ -108,9 +108,13 @@ export const queuedMessagesProducer: TurnMessageProducer = {
   name: "queuedMessages",
   take: (bctx) =>
     bctx.messages.takeQueuedMessages().map((q) => ({
+      // No cast on the assistant branch: QueuedMessage is a discriminated
+      // union whose assistant arm is string-only, enforced at
+      // queueMessage. The user cast only widens string into the
+      // UserContentInput union smoltalk already accepts.
       message:
         q.role === "assistant"
-          ? smoltalk.assistantMessage(q.content as string)
+          ? smoltalk.assistantMessage(q.content)
           : smoltalk.userMessage(q.content as smoltalk.UserContentInput),
       label: q.label,
     })),

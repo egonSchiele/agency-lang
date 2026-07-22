@@ -1,5 +1,6 @@
 import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
+import { deepClone } from "../utils.js";
 
 export type MessageThreadJSON = {
   messages: smoltalk.MessageJSON[];
@@ -16,12 +17,13 @@ export type MessageThreadJSON = {
  *  a string or smoltalk user-content parts, both JSON-safe — so the queue
  *  serializes with the thread wherever the thread serializes. No "system"
  *  role: a mid-thread system turn is rejected or reinterpreted by some
- *  providers, and a caller who wants to steer can say role "user". */
-export type QueuedMessage = {
-  role: "user" | "assistant";
-  content: string | smoltalk.UserContentInput;
-  label: string | null;
-};
+ *  providers, and a caller who wants to steer can say role "user".
+ *  Assistant content is string-only — smoltalk.assistantMessage takes a
+ *  string, and the union makes the compiler reject an array at the
+ *  queueMessage call site instead of a producer papering over it. */
+export type QueuedMessage =
+  | { role: "user"; content: string | smoltalk.UserContentInput; label: string | null }
+  | { role: "assistant"; content: string; label: string | null };
 
 export class MessageThread {
   messages: smoltalk.Message[] = [];
@@ -163,14 +165,30 @@ export class MessageThread {
    *  against this thread again, the message simply waits, serialized with
    *  the thread. */
   queueMessage(
-    content: QueuedMessage["content"],
+    content: string | smoltalk.UserContentInput,
     opts: { role?: "user" | "assistant"; label?: string } = {},
   ): void {
-    this.queuedMessages.push({
-      role: opts.role ?? "user",
-      content,
-      label: opts.label ?? null,
-    });
+    // Runtime validation, not just types: this is a public API callable
+    // from plain JS helpers, where an invalid role or an assistant
+    // message with array content would otherwise surface later as a
+    // malformed provider message, far from the caller that made it.
+    const role = opts.role ?? "user";
+    const label = opts.label ?? null;
+    if (role === "assistant") {
+      if (typeof content !== "string") {
+        throw new Error(
+          "queueMessage: assistant-role queued messages must have string content",
+        );
+      }
+      this.queuedMessages.push({ role, content, label });
+      return;
+    }
+    if (role !== "user") {
+      throw new Error(
+        `queueMessage: role must be "user" or "assistant" (got ${JSON.stringify(role)})`,
+      );
+    }
+    this.queuedMessages.push({ role, content, label });
   }
 
   /** Remove and return every queued message, oldest first. Called by the
@@ -221,10 +239,13 @@ export class MessageThread {
     if (this.messageLabels.some((l) => l !== null)) {
       json.messageLabels = [...this.messageLabels];
     }
-    // Same emit-only-when-meaningful rule (and same copy-not-alias rule)
-    // as messageLabels above.
+    // Same emit-only-when-meaningful rule as messageLabels above. Deep
+    // clone, not an array spread: a spread copies the array but aliases
+    // the entry objects, so a consumer editing the returned JSON could
+    // mutate the live queue (labels are primitives, so spread suffices
+    // there; entries are objects, so it does not).
     if (this.queuedMessages.length > 0) {
-      json.queuedMessages = [...this.queuedMessages];
+      json.queuedMessages = deepClone(this.queuedMessages);
     }
     return json;
   }
@@ -285,12 +306,15 @@ export class MessageThread {
     thread.hidden = _hidden;
     thread.label = _label;
     thread.summary = _summary;
+    // Accept only a real array: persisted JSON containing
+    // `queuedMessages: null` (or any non-array) must not throw during
+    // resume — it revives as an empty queue, same as the absent key.
     if (
       !Array.isArray(json) &&
       "queuedMessages" in json &&
-      json.queuedMessages !== undefined
+      Array.isArray(json.queuedMessages)
     ) {
-      thread.queuedMessages = [...json.queuedMessages];
+      thread.queuedMessages = deepClone(json.queuedMessages);
     }
 
     return thread;

@@ -159,6 +159,81 @@ describe("updateTokenStats per-model breakdown", () => {
   });
 });
 
+describe("updateTokenStats cache accounting", () => {
+  // A prompt-cached call: a few uncached tokens, a block written to the cache,
+  // a block read back from it. Providers price all three differently.
+  const cachedUsage = {
+    inputTokens: 2,
+    outputTokens: 100,
+    cachedInputTokens: 5000,
+    cacheCreationInputTokens: 400,
+    totalTokens: 5502,
+  };
+  const cachedCost = {
+    inputCost: 0.000006,
+    outputCost: 0.0015,
+    cachedInputCost: 0.0015,
+    cacheCreationInputCost: 0.0015,
+    totalCost: 0.004506,
+  };
+
+  it("records cache reads and writes alongside ordinary input", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
+    const stats = globals.getTokenStats();
+    expect(stats.usage.cachedInputTokens).toBe(5000);
+    expect(stats.usage.cacheCreationInputTokens).toBe(400);
+    expect(stats.cost.cachedInputCost).toBeCloseTo(0.0015, 10);
+    expect(stats.cost.cacheCreationInputCost).toBeCloseTo(0.0015, 10);
+  });
+
+  // The bug this guards: `totalCost` counted cache spend but the breakdown did
+  // not, so a caller adding up the parts got a number far below the total.
+  it("reports a breakdown that adds up to the total", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
+    updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
+    const { cost: c } = globals.getTokenStats();
+    const parts =
+      c.inputCost + c.outputCost + c.cachedInputCost + c.cacheCreationInputCost;
+    expect(parts).toBeCloseTo(c.totalCost, 10);
+  });
+
+  it("counts every token class in the usage breakdown", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
+    const { usage: u } = globals.getTokenStats();
+    const parts =
+      u.inputTokens + u.outputTokens + u.cachedInputTokens + u.cacheCreationInputTokens;
+    expect(parts).toBe(u.totalTokens);
+  });
+
+  // Token-stats restored from a checkpoint written before these fields existed
+  // have `undefined` there. `undefined += n` is NaN, which would then poison
+  // every later total on the run.
+  it("accumulates onto token-stats restored from older checkpoints", () => {
+    const globals = GlobalStore.withTokenStats();
+    const stats = globals.getTokenStats();
+    delete stats.usage.cacheCreationInputTokens;
+    delete stats.cost.cachedInputCost;
+    delete stats.cost.cacheCreationInputCost;
+    updateTokenStats({ globals, usage: cachedUsage, cost: cachedCost, model: "sonnet-5" });
+    const restored = globals.getTokenStats();
+    expect(restored.usage.cacheCreationInputTokens).toBe(400);
+    expect(restored.cost.cachedInputCost).toBeCloseTo(0.0015, 10);
+    expect(restored.cost.cacheCreationInputCost).toBeCloseTo(0.0015, 10);
+  });
+
+  it("leaves the cache fields at zero for a model that does not cache", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "gpt-5-mini" });
+    const stats = globals.getTokenStats();
+    expect(stats.usage.cacheCreationInputTokens).toBe(0);
+    expect(stats.cost.cacheCreationInputCost).toBe(0);
+    expect(stats.cost.cachedInputCost).toBe(0);
+  });
+});
+
 describe("extractStructuredResponse — wrapper-key unwrapping (step 5)", () => {
   const envelope = z.object({ response: z.number() });
 

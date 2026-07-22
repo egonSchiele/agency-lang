@@ -202,13 +202,23 @@ type StatUsage = {
   inputTokens?: number;
   outputTokens?: number;
   cachedInputTokens?: number;
+  cacheCreationInputTokens?: number;
   totalTokens?: number;
 };
 type StatCost = {
   inputCost?: number;
   outputCost?: number;
+  cachedInputCost?: number;
+  cacheCreationInputCost?: number;
   totalCost?: number;
 };
+
+/** Add to a counter that may be absent. Token-stats objects restored from a
+ *  checkpoint written before a field existed have `undefined` there, and
+ *  `undefined += n` is NaN — which then poisons every later total. */
+function addTo(target: Record<string, number>, key: string, amount: number | undefined): void {
+  target[key] = (target[key] || 0) + (amount || 0);
+}
 
 export function updateTokenStats(args: {
   globals: GlobalStore;
@@ -242,12 +252,20 @@ export function updateTokenStats(args: {
     m.outputTokens += usage.outputTokens || 0;
     m.totalCost += cost.totalCost || 0;
   }
-  tokenStats.usage.inputTokens += usage.inputTokens || 0;
-  tokenStats.usage.outputTokens += usage.outputTokens || 0;
-  tokenStats.usage.cachedInputTokens += usage.cachedInputTokens || 0;
-  tokenStats.usage.totalTokens += usage.totalTokens || 0;
+  // Cache reads and cache writes are tracked separately from ordinary input.
+  // Without them the breakdown does not reconcile with its own total: on a
+  // long agent run most of the money goes to cache writes, and most of the
+  // tokens to cache reads, so a report of input + output alone can account
+  // for well under half the bill.
+  addTo(tokenStats.usage, "inputTokens", usage.inputTokens);
+  addTo(tokenStats.usage, "outputTokens", usage.outputTokens);
+  addTo(tokenStats.usage, "cachedInputTokens", usage.cachedInputTokens);
+  addTo(tokenStats.usage, "cacheCreationInputTokens", usage.cacheCreationInputTokens);
+  addTo(tokenStats.usage, "totalTokens", usage.totalTokens);
 
-  tokenStats.cost.inputCost += cost.inputCost || 0;
-  tokenStats.cost.outputCost += cost.outputCost || 0;
-  tokenStats.cost.totalCost += cost.totalCost || 0;
+  addTo(tokenStats.cost, "inputCost", cost.inputCost);
+  addTo(tokenStats.cost, "outputCost", cost.outputCost);
+  addTo(tokenStats.cost, "cachedInputCost", cost.cachedInputCost);
+  addTo(tokenStats.cost, "cacheCreationInputCost", cost.cacheCreationInputCost);
+  addTo(tokenStats.cost, "totalCost", cost.totalCost);
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { deepFreeze, extractStructuredResponse, normalizeModelUsage, updateTokenStats } from "./utils.js";
 import { isSuccess, isFailure } from "./result.js";
 import { z } from "zod";
@@ -347,31 +347,78 @@ describe("normalizeModelUsage", () => {
   });
 });
 
-describe("updateTokenStats slot hygiene", () => {
+describe("token-stats counters: missing vs malformed", () => {
+  // A missing counter is ordinary — an older checkpoint, or a provider that
+  // does not cache — so it reads as zero without comment. A malformed one is
+  // a bug, and has to be audible or it hides behind a plausible total.
+  let warn: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => warn.mockRestore());
+
+  it("reads a missing counter as zero, silently", () => {
+    const globals = GlobalStore.withTokenStats();
+    delete globals.getTokenStats().usage.cacheCreationInputTokens;
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
+    expect(globals.getTokenStats().usage.cacheCreationInputTokens).toBe(0);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("does not warn about a provider that omits cache counts entirely", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "gpt-5-mini" });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   // `tokenStats.cost` holds `currency: "USD"` next to its counters, so the
   // object being accumulated into is not uniformly numeric. Adding must never
-  // touch a non-counter slot, and must not concatenate into one either.
+  // touch a non-counter slot.
   it("leaves the currency field alone", () => {
     const globals = GlobalStore.withTokenStats();
     updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
     expect(globals.getTokenStats().cost.currency).toBe("USD");
+    expect(warn).not.toHaveBeenCalled();
   });
 
-  // A counter that somehow holds NaN (a checkpoint written mid-bug, a
-  // provider returning garbage) must recover rather than stay NaN forever:
-  // NaN + n is NaN, so one bad value would otherwise sink the whole run.
-  it("recovers a counter that is already NaN", () => {
+  // NaN is the signature of an earlier `undefined + n`. Left alone it spreads
+  // to every total it touches, so it recovers to zero — and says why.
+  it("recovers from a NaN counter and warns", () => {
     const globals = GlobalStore.withTokenStats();
     globals.getTokenStats().usage.inputTokens = NaN;
     updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
     expect(globals.getTokenStats().usage.inputTokens).toBe(10);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("inputTokens");
   });
 
-  it("recovers a counter holding a non-number", () => {
+  it("restarts a counter holding a string, and warns instead of concatenating", () => {
     const globals = GlobalStore.withTokenStats();
     globals.getTokenStats().usage.outputTokens = "12" as unknown as number;
     updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
-    // 5, not "125" — a string slot restarts the count rather than concatenating.
+    // 5, not "125".
     expect(globals.getTokenStats().usage.outputTokens).toBe(5);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  // The incoming side matters too: nothing validates a provider's usage
+  // payload at runtime, so a string there would otherwise be counted silently.
+  it("warns when a provider supplies a non-numeric usage value", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({
+      globals,
+      usage: { inputTokens: "900" as unknown as number, outputTokens: 5, totalTokens: 905 },
+      cost: cost(0.001),
+      model: "opus-4.8",
+    });
+    expect(globals.getTokenStats().usage.inputTokens).toBe(0);
+    expect(warn).toHaveBeenCalled();
+    expect(String(warn.mock.calls[0][0])).toContain("incoming");
+  });
+
+  it("warns when a per-model entry holds a malformed counter", () => {
+    normalizeModelUsage({ "opus-4.8": { inputTokens: {}, outputTokens: 5, totalCost: 0.02 } });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("models.opus-4.8.inputTokens");
   });
 });

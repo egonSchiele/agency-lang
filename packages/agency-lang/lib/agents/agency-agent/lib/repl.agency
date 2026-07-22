@@ -178,8 +178,8 @@ def costSlashCommand(): boolean {
   const byModel = getModelCosts()
   let totalCost = 0.0
   let totalTokens = 0
-  let totalRead = 0
-  let totalWritten = 0
+  let totalCacheRead = 0
+  let totalCacheWrite = 0
   for (m in byModel) {
     totalCost = totalCost + m.cost
     // Cache reads and writes are input tokens too. Counting only
@@ -188,14 +188,14 @@ def costSlashCommand(): boolean {
     totalTokens = totalTokens
       + m.inputTokens + m.outputTokens
       + m.cachedInputTokens + m.cacheCreationInputTokens
-    totalRead = totalRead + m.cachedInputTokens
-    totalWritten = totalWritten + m.cacheCreationInputTokens
+    totalCacheRead = totalCacheRead + m.cachedInputTokens
+    totalCacheWrite = totalCacheWrite + m.cacheCreationInputTokens
   }
   pushMessage("Cost:   $${totalCost.toFixed(4)}")
   pushMessage("Tokens: ${totalTokens}")
-  if (totalRead > 0 || totalWritten > 0) {
+  if (totalCacheRead > 0 || totalCacheWrite > 0) {
     pushMessage(
-      color.dim("        ${totalWritten} written to cache, ${totalRead} read back"),
+      color.dim("        ${totalCacheWrite} written to cache, ${totalCacheRead} read back"),
     )
   }
   if (byModel.length > 0) {

@@ -2,6 +2,10 @@ import { describe, it, expect } from "vitest";
 import { AgencyFunction } from "../agencyFunction.js";
 import { FunctionRefReviver } from "./functionRefReviver.js";
 import { nativeTypeReplacer, nativeTypeReviver, functionRefReviver } from "./index.js";
+import { runInTestContext, getRuntimeContext } from "../asyncContext.js";
+import { RuntimeContext } from "../state/context.js";
+import { StateStack } from "../state/stateStack.js";
+import { ThreadStore } from "../state/threadStore.js";
 
 function makeAgencyFunction(name: string, module: string): AgencyFunction {
   return new AgencyFunction({
@@ -425,5 +429,117 @@ describe("FunctionRefReviver with bound functions", () => {
     expect(result).toBe(12);
 
     functionRefReviver.registry = null;
+  });
+});
+
+describe("lazy callback refs (#544)", () => {
+  function reviveRef(reviver: FunctionRefReviver, name: string, module: string) {
+    return reviver.revive({ __nativeType: "FunctionRef", name, module });
+  }
+
+  it("revives a missing __cb_* name as a lazy ref instead of throwing", () => {
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    const ref = reviveRef(reviver, "__cb_main_0", "agency_abc") as AgencyFunction;
+    expect(AgencyFunction.isAgencyFunction(ref)).toBe(true);
+    expect(ref.name).toBe("__cb_main_0");
+    expect(ref.module).toBe("agency_abc");
+  });
+
+  it("still throws for ordinary missing names", () => {
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    expect(() => reviveRef(reviver, "myHelper", "app.agency")).toThrow(/not found in registry/);
+  });
+
+  it("still throws for near-miss names (strict predicate)", () => {
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    expect(() => reviveRef(reviver, "__cb_helper", "app.agency")).toThrow(/not found in registry/);
+  });
+
+  it("does not self-register the lazy ref under the real key", () => {
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    reviveRef(reviver, "__cb_main_0", "agency_abc");
+    expect(reviver.registry["agency_abc:__cb_main_0"]).toBeUndefined();
+  });
+
+  it("round-trips: serialize(revive(ref)) reproduces the original FunctionRef", () => {
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    const ref = reviveRef(reviver, "__cb_main_0", "agency_abc") as AgencyFunction;
+    expect(reviver.serialize(ref)).toEqual({
+      __nativeType: "FunctionRef",
+      name: "__cb_main_0",
+      module: "agency_abc",
+    });
+  });
+
+  it("a registry HIT returns the exact registered instance, never a lazy wrapper", () => {
+    // The guard against the lazy branch shadowing the direct path. A
+    // fire-count fixture cannot catch that bug (a shadowing lazy ref would
+    // resolve and fire anyway); only identity can.
+    const reviver = new FunctionRefReviver();
+    const real = makeAgencyFunction("__cb_main_0", "agency_abc");
+    reviver.registry = { "agency_abc:__cb_main_0": real };
+    const revived = reviveRef(reviver, "__cb_main_0", "agency_abc");
+    expect(revived).toBe(real);
+  });
+
+  it("resolves through the registry at invoke time (late registration)", async () => {
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    const ref = reviveRef(reviver, "__cb_main_0", "agency_abc") as AgencyFunction;
+
+    let received: unknown = null;
+    reviver.registry["agency_abc:__cb_main_0"] = new AgencyFunction({
+      name: "__cb_main_0",
+      module: "agency_abc",
+      fn: async (data: unknown) => { received = data; },
+      params: [{ name: "data", hasDefault: false, defaultValue: undefined, variadic: false }],
+      toolDefinition: null,
+    });
+
+    await ref.invoke({ type: "positional", args: [{ cost: 1 }] });
+    expect(received).toEqual({ cost: 1 });
+  });
+
+  it("delegates at the same frame depth as a direct invoke", async () => {
+    // Guards the injection/capture specs' frame arithmetic: the lazy fn is
+    // a plain arrow (no setupFunction call), so no extra frame may appear.
+    const depths: number[] = [];
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    const real = new AgencyFunction({
+      name: "__cb_main_0",
+      module: "agency_abc",
+      fn: async () => { depths.push(getRuntimeContext().stack.stack.length); },
+      params: [{ name: "data", hasDefault: false, defaultValue: undefined, variadic: false }],
+      toolDefinition: null,
+    });
+    const lazy = reviveRef(reviver, "__cb_main_0", "agency_abc") as AgencyFunction;
+    reviver.registry["agency_abc:__cb_main_0"] = real;
+
+    const ctx = new RuntimeContext({
+      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+    await runInTestContext(ctx, new StateStack(), new ThreadStore(), async () => {
+      await real.invoke({ type: "positional", args: [{}] });
+      await lazy.invoke({ type: "positional", args: [{}] });
+    });
+    expect(depths).toHaveLength(2);
+    expect(depths[1]).toBe(depths[0]);
+  });
+
+  it("throws a precise error when fired while still unresolvable", async () => {
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    const ref = reviveRef(reviver, "__cb_main_0", "agency_abc") as AgencyFunction;
+    await expect(ref.invoke({ type: "positional", args: [{}] })).rejects.toThrow(
+      /__cb_main_0.*agency_abc/s,
+    );
   });
 });

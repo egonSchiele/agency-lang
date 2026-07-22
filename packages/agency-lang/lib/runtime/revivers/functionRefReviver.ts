@@ -1,7 +1,8 @@
 import { BaseReviver } from "./baseReviver.js";
 import { AgencyFunction } from "../agencyFunction.js";
 import type { FuncParam, ToolDefinition } from "../agencyFunction.js";
-import { isBlockName } from "../blockNames.js";
+import { isBlockName, isLiftedCallbackName } from "../blockNames.js";
+import { getRuntimeContext } from "../asyncContext.js";
 
 type FunctionRefRegistry = Record<string, AgencyFunction>;
 
@@ -115,6 +116,16 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     if (isBlockName(name)) {
       return makeBlockStub(name, module);
     }
+    // Lifted callback bodies (`__cb_<scope>_<n>`) can miss legitimately:
+    // a parent process deserializes state that embeds a CHILD's checkpoint
+    // (subprocess resume payload), and the parent never imports the child's
+    // module. Unlike blocks, nothing rebinds a scoped-callback registration
+    // on replay, so the revived entry may legitimately fire later — hence a
+    // lazy resolve-at-invoke ref, not a tripwire. See blockNames.ts for the
+    // side-by-side contrast.
+    if (isLiftedCallbackName(name)) {
+      return makeLazyCallbackRef(name, module, this);
+    }
     throw new Error(
       `FunctionRefReviver: function "${name}" from module "${module}" not found in registry. ` +
       `The function may have been renamed or removed since this state was serialized.`
@@ -142,4 +153,68 @@ function makeBlockStub(name: string, module: string): AgencyFunction {
     params: [],
     toolDefinition: null,
   });
+}
+
+/** A lazy reference for an unregistered lifted-callback name: a real
+ *  AgencyFunction (so restore succeeds and the frame slot round-trips —
+ *  serialize() reads only name/module, so serialize(revive(x)) === x)
+ *  whose body resolves the registry AT INVOKE TIME and delegates. In the
+ *  embedding process (a parent holding a child's checkpoint) it is never
+ *  invoked, only re-serialized. In a process that owns the module, the
+ *  direct lookup wins and this is never even constructed. Plain `new` on
+ *  purpose — must NOT self-register under the real name.
+ *
+ *  Delegation preserves the callback calling convention: the hook
+ *  dispatcher invokes via `{ type: "positional", args: [eventData] }`, and
+ *  this fn declares the same single `data` param the lifted def declares,
+ *  then forwards its received positional args verbatim to the resolved
+ *  function's own invoke. No stack frame is pushed here (frames are pushed
+ *  by generated impl bodies via setupFunction, and this fn is a plain
+ *  arrow), so a callback fired through a lazy ref runs at the same frame
+ *  depth as one fired through its fresh registration.
+ *
+ *  Lifted callback registrations never carry bound params (codegen
+ *  registers the bare def), so this factory deliberately does not support
+ *  the bound-params reconstruction branch of revive(). */
+function makeLazyCallbackRef(
+  name: string,
+  module: string,
+  reviver: FunctionRefReviver,
+): AgencyFunction {
+  return new AgencyFunction({
+    name,
+    module,
+    fn: async (...args: unknown[]) => {
+      const real = reviver.registry?.[`${module}:${name}`];
+      if (!real) {
+        const msg =
+          `Callback "${name}" from module "${module}" crossed a process ` +
+          `boundary and was fired before its module was loaded (or the ` +
+          `callback was removed since this state was serialized).`;
+        emitLazyCallbackMissError(name, msg);
+        throw new Error(msg);
+      }
+      return real.invoke({ type: "positional", args });
+    },
+    params: [{ name: "data", hasDefault: false, defaultValue: undefined, variadic: false }],
+    toolDefinition: null,
+  });
+}
+
+/** Surface an unresolvable fire in the trace, not only the terminal.
+ *  fireWithGuard catches the throw and console.errors it, which is
+ *  invisible after the fact; the Statelog error event makes the dropped
+ *  callback findable. Best-effort: no ALS frame (e.g. a bare unit test)
+ *  means no client, and that is fine. */
+function emitLazyCallbackMissError(name: string, msg: string): void {
+  try {
+    const { ctx } = getRuntimeContext();
+    ctx.statelogClient?.error?.({
+      errorType: "runtimeError",
+      message: msg,
+      functionName: name,
+    });
+  } catch {
+    // outside any runtime context — nothing to emit to
+  }
 }

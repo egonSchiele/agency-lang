@@ -23,7 +23,7 @@ static const systemPrompt = """You answer questions about the Agency programming
 
 The bundled documentation is authoritative, so read it rather than recalling:
 - `agencyGuide` for syntax, types, control flow, error handling, and built-ins
-- `agencyCli` for the command-line tool
+- `agencyCliDocs` for the command-line tool
 - `agencyDiagnostics` for a type-checker code (AG####), its meaning, and its fix
 - `agencyStdlib` for what each std:: module offers, one summary per module
 

@@ -46,7 +46,7 @@ import {
 // explicit name: the name docsSkill derives from a directory embeds the
 // absolute install path, which differs per machine and is truncated to fit.
 static const docSkill = docsSkill("guide").rename("agencyGuide")
-static const cliSkill = docsSkill("cli").rename("agencyCli")
+static const cliSkill = docsSkill("cli").rename("agencyCliDocs")
 static const diagnosticsSkill = docsSkill("diagnostics").rename("agencyDiagnostics")
 static const stdlibSkill = docsSkill("stdlib").rename("agencyStdlib")
 static const agentSkill = docsSkill("agent").rename("agencyAgent")

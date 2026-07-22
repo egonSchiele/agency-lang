@@ -92,9 +92,25 @@ export async function _toolMessage(
   let argsRecord: Record<string, any>;
   try {
     argsRecord = JSON.parse(JSON.stringify(args ?? {}));
-  } catch {
+  } catch (e) {
     throw new Error(
       `toolMessage: args for "${name}" could not be serialized to JSON`,
+      { cause: e },
+    );
+  }
+  // Arguments must be a JSON object (a record), which every real tool call is.
+  // A bare number, string, or array round-trips cleanly but violates that
+  // contract (consumers like dropNullDefaultedArgs expect a record) and a
+  // provider may reject the thread. Enforce it here so the docstring's "as an
+  // object" is real.
+  if (
+    typeof argsRecord !== "object" ||
+    argsRecord === null ||
+    Array.isArray(argsRecord)
+  ) {
+    const got = Array.isArray(argsRecord) ? "array" : typeof argsRecord;
+    throw new Error(
+      `toolMessage: args for "${name}" must be a JSON object, got ${got}`,
     );
   }
 

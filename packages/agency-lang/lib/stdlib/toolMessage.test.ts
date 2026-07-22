@@ -102,6 +102,24 @@ describe("_toolMessage", () => {
     expect(threads.getOrCreateActive().getMessages()).toHaveLength(2);
   });
 
+  it("throws when args is not a JSON object and pushes nothing", async () => {
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+
+    for (const bad of [5, "raw", [1, 2]]) {
+      await expect(
+        agency.withTestContext(
+          { ctx, stack: ctx.stateStack, threads },
+          async () => {
+            await _toolMessage("t", bad, "r");
+          },
+        ),
+      ).rejects.toThrow(/must be a JSON object/);
+    }
+
+    expect(threads.getOrCreateActive().getMessages()).toHaveLength(0);
+  });
+
   it("throws a clear error on non-serializable args and pushes nothing", async () => {
     const ctx = makeCtx();
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);

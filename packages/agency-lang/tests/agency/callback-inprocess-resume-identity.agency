@@ -1,0 +1,22 @@
+import { bash } from "std::shell"
+
+// In-process resume sanity check for the #544 fix: a scoped block callback
+// registered before an interrupt still fires after the in-process resume.
+// The real shadowing guard is the registry-hit identity unit test in
+// functionRefReviver.test.ts; this fixture only proves the end-to-end path.
+let calls = 0
+
+def helper(): string {
+  return "h"
+}
+
+node main() {
+  callback("onFunctionStart") as data {
+    if (data.functionName == "helper") {
+      calls = calls + 1
+    }
+  }
+  const r = bash("echo hi")
+  const h = helper()
+  return "cb=${calls}"
+}

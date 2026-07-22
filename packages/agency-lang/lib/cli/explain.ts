@@ -5,6 +5,11 @@ import {
   type DiagnosticName,
 } from "@/typeChecker/diagnostics.js";
 import { DIAGNOSTIC_EXPLANATIONS } from "@/typeChecker/diagnosticExplanations.js";
+import {
+  LINT_DIAGNOSTICS,
+  type LintDiagnosticName,
+} from "@/linter/diagnostics.js";
+import { LINT_EXPLANATIONS } from "@/linter/diagnosticExplanations.js";
 import { color } from "@/utils/termcolors.js";
 
 function lookup(codeOrName: string): DiagnosticName | undefined {
@@ -20,6 +25,17 @@ function lookup(codeOrName: string): DiagnosticName | undefined {
   return undefined;
 }
 
+/** Same lookup for lint codes/names, tried after the AG#### registry misses. */
+function lookupLint(codeOrName: string): LintDiagnosticName | undefined {
+  const q = codeOrName.trim();
+  if (Object.hasOwn(LINT_DIAGNOSTICS, q)) return q as LintDiagnosticName;
+  const upper = q.toUpperCase();
+  for (const [name, entry] of Object.entries(LINT_DIAGNOSTICS)) {
+    if (entry.code.toUpperCase() === upper) return name as LintDiagnosticName;
+  }
+  return undefined;
+}
+
 /** Rendered detail for one diagnostic. `found:false` carries the not-found
  *  message with a suggestion; the caller prints it and exits 1. */
 export function renderDiagnosticText(codeOrName: string): {
@@ -28,6 +44,19 @@ export function renderDiagnosticText(codeOrName: string): {
 } {
   const name = lookup(codeOrName);
   if (!name) {
+    const lintName = lookupLint(codeOrName);
+    if (lintName) {
+      const entry = LINT_DIAGNOSTICS[lintName];
+      const lines = [
+        `${color.bold(entry.code)} ${color.dim(lintName)}`,
+        `${color.dim("severity:")} ${entry.severity} ${color.dim("(lint)")}`,
+        "",
+        entry.message,
+        "",
+        LINT_EXPLANATIONS[lintName],
+      ];
+      return { found: true, text: lines.join("\n") };
+    }
     return {
       found: false,
       text: `Unknown diagnostic code '${codeOrName}'. Run 'agency explain --list' to see all codes.`,

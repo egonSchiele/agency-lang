@@ -53,3 +53,16 @@ describe("renderDiagnosticList", () => {
     }
   });
 });
+
+describe("lint code fallthrough", () => {
+  it("explains a lint code (AL0001)", () => {
+    const result = renderDiagnosticText("AL0001");
+    expect(result.found).toBe(true);
+    expect(result.text).toContain("AL0001");
+    expect(result.text.toLowerCase()).toContain("import");
+  });
+
+  it("still rejects unknown codes", () => {
+    expect(renderDiagnosticText("AL9999").found).toBe(false);
+  });
+});

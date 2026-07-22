@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { DiagnosticSeverity, DiagnosticTag } from "vscode-languageserver-protocol";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -350,5 +351,29 @@ describe("runDiagnostics — test-only imports", () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("lint diagnostics", () => {
+  it("emits a Hint diagnostic tagged Unnecessary for an unused import", () => {
+    const source = `import { now } from "std::date"\nnode main() { return 1 }\n`;
+    const doc = makeDoc(source);
+    const { diagnostics } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+    const lint = diagnostics.find((d) => d.code === "AL0001");
+    expect(lint).toBeDefined();
+    expect(lint!.severity).toBe(DiagnosticSeverity.Hint);
+    expect(lint!.tags).toContain(DiagnosticTag.Unnecessary);
+    // The grayed range covers only the name 'now'.
+    expect(source.slice(
+      doc.offsetAt(lint!.range.start),
+      doc.offsetAt(lint!.range.end),
+    )).toBe("now");
+  });
+
+  it("does not gray out the injected prelude names", () => {
+    const source = `node main() { return 1 }\n`;
+    const doc = makeDoc(source);
+    const { diagnostics } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+    expect(diagnostics.filter((d) => d.code === "AL0001")).toEqual([]);
   });
 });

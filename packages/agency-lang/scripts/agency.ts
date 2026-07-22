@@ -17,6 +17,8 @@ import {
   installDirFromUrl,
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
+import { lintSource } from "@/linter/registry.js";
+import { formatFindings } from "@/cli/lint.js";
 import { resolveBudget } from "@/cli/budget.js";
 import { fixtures, test, testTs, SlowTest, parseShardSpec } from "@/cli/test.js";
 import { generateReport, cleanCoverage } from "@/cli/coverage.js";
@@ -959,6 +961,32 @@ export function createProgram(deps: CliDependencies = {}): Command {
         console.error(text);
         process.exit(1);
       }
+    });
+
+  program
+    .command("lint")
+    .description("Lint .agency file(s) for style issues (reads from stdin if no input)")
+    .argument("[inputs...]", "Paths to .agency input files")
+    .action(async (inputs: string[]) => {
+      const config = getConfig();
+      let anyFindings = false;
+      await forEachSource(inputs, (contents, src) => {
+        const filePath = src.kind === "file" ? src.path : "<stdin>";
+        const findings = lintSource(contents, filePath, config);
+        if (findings.length > 0) {
+          anyFindings = true;
+          console.log(formatFindings(filePath, findings));
+          console.log("");
+        }
+      });
+      if (!anyFindings) {
+        console.log("No lint findings.");
+      } else {
+        console.log("Run `agency explain <code>` for details.");
+      }
+      // All v1 findings are hints; hints never fail CI, so the exit code
+      // stays 0. The PR that adds the first warning-severity rule adds the
+      // non-zero path.
     });
 
   program

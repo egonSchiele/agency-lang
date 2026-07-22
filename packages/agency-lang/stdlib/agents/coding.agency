@@ -92,7 +92,7 @@ ${finalizeReminder}
     llmOptions(
     model: model,
     provider: provider,
-    tools: [...buildTools(), ...extraTools],
+    tools: [...buildTools(), ...extraTools, saveDraft],
     hostedTools: hostedSearchTools(model),
   ),
   )

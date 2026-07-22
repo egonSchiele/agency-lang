@@ -22,7 +22,7 @@ An agent's tool list should read as a description of what that agent may
 export static const SAVE_DRAFT_HINT = "\n\nIf you might run low on time or budget, call `saveDraft` with your best answer so far as you work, and update it as you improve. If the run is cut short, the last draft you saved is what the user receives — a run that saved nothing returns nothing."
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L179))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L181))
 
 ## Functions
 
@@ -166,10 +166,9 @@ Return tools that persist and retrieve facts across sessions.
 planningTools(): any[]
 ```
 
-Return tools an agent uses to organize a long run: a todo list, and
-  saveDraft for checkpointing partial work so an aborted run still returns
-  something.
+Return tools an agent uses to organize a long run: writing and reading a
+  todo list.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L167))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L170))

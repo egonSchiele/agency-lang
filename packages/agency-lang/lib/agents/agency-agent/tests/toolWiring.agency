@@ -20,6 +20,11 @@ import { researchTools } from "../subagents/research.agency"
 // so a duplicate name in either list still breaks this agent.
 import { buildTools as oracleTools } from "std::agents/oracle"
 import { buildTools as explorerTools } from "std::agents/explorer"
+// The two research agents researchAgent routes to. researchTools is handed to
+// whichever one runs as extraTools, so the list that reaches the provider is
+// the agent's own tools plus researchTools plus the saveDraft the agent appends.
+import { buildTools as agencyResearcherOwnTools } from "std::agents/agency/researcher"
+import { buildTools as researcherOwnTools } from "std::agents/researcher"
 
 def pingWith(tools: any[]): string {
   // Reject any interrupt a tool might raise. Under the deterministic
@@ -52,6 +57,17 @@ node codeToolsHaveUniqueNames() {
 
 node researchToolsHaveUniqueNames() {
   return pingWith(researchTools)
+}
+
+// Pinging a list on its own is what let a real duplicate through: researchTools
+// carried saveDraft and so did the agent receiving it, so neither list was wrong
+// by itself. These ping what each research agent actually sends.
+node composedAgencyResearchToolsHaveUniqueNames() {
+  return pingWith([...agencyResearcherOwnTools(), ...researchTools, saveDraft])
+}
+
+node composedResearchToolsHaveUniqueNames() {
+  return pingWith([...researcherOwnTools(), ...researchTools, saveDraft])
 }
 
 node oracleToolsHaveUniqueNames() {

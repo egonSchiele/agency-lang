@@ -34,6 +34,17 @@
       ]
     },
     {
+      "nodeName": "planningToolsComposesWithAgentSaveDraft",
+      "description": "planningTools does not duplicate the saveDraft an agent appends itself",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "wikipediaToolsAreRenamed",
       "description": "wikipedia tools do not advertise a bare search",
       "input": "",

@@ -94,20 +94,8 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
   }
 
   private findInRegistry(name: string, module: string): AgencyFunction {
-    // Fast path: direct lookup by composite `${module}:${name}` key.
-    const direct = this.registry![`${module}:${name}`];
-    if (direct && direct.name === name && direct.module === module) {
-      return direct;
-    }
-
-    // Slow path: linear scan covers two legacy cases — older `.js`
-    // output that keyed by bare name, and any future keying scheme
-    // collisions. Either way the function identity check is authoritative.
-    for (const entry of Object.values(this.registry!)) {
-      if (entry.name === name && entry.module === module) {
-        return entry;
-      }
-    }
+    const found = lookupInRegistry(this.registry!, name, module);
+    if (found) return found;
 
     // Compiler-generated blocks register themselves only when their creating
     // line executes. A fresh process restoring a checkpoint has executed
@@ -131,6 +119,29 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
       `The function may have been renamed or removed since this state was serialized.`
     );
   }
+}
+
+/** The one registry lookup, shared by revive-time resolution and the lazy
+ *  callback ref's fire-time resolution so the two can never diverge. Fast
+ *  path is the composite `${module}:${name}` key; the linear scan covers
+ *  two legacy cases — older `.js` output that keyed by bare name, and any
+ *  future keying scheme collisions. Either way the function identity check
+ *  is authoritative. */
+function lookupInRegistry(
+  registry: FunctionRefRegistry,
+  name: string,
+  module: string,
+): AgencyFunction | undefined {
+  const direct = registry[`${module}:${name}`];
+  if (direct && direct.name === name && direct.module === module) {
+    return direct;
+  }
+  for (const entry of Object.values(registry)) {
+    if (entry.name === name && entry.module === module) {
+      return entry;
+    }
+  }
+  return undefined;
 }
 
 /** A lazy tripwire for an unregistered block reference: a real
@@ -175,7 +186,17 @@ function makeBlockStub(name: string, module: string): AgencyFunction {
  *
  *  Lifted callback registrations never carry bound params (codegen
  *  registers the bare def), so this factory deliberately does not support
- *  the bound-params reconstruction branch of revive(). */
+ *  the bound-params reconstruction branch of revive().
+ *
+ *  CORRECTNESS ASSUMPTION: `reviver.registry` must be the persistent LIVE
+ *  registry — in production it is aliased once at module load to the global
+ *  `__toolRegistry` and never nulled or swapped. If a future change ever
+ *  set the reviver's registry transiently per deserialize and cleared it
+ *  after restore, every late fire would wrongly hit the throw below for a
+ *  callback that is actually resolvable. The "late registration" unit test
+ *  pins this behavior. Resolution goes through lookupInRegistry, the same
+ *  lookup revive() uses, so legacy bare-name-keyed registries resolve at
+ *  fire time exactly as they do at revive time. */
 function makeLazyCallbackRef(
   name: string,
   module: string,
@@ -185,7 +206,9 @@ function makeLazyCallbackRef(
     name,
     module,
     fn: async (...args: unknown[]) => {
-      const real = reviver.registry?.[`${module}:${name}`];
+      const real = reviver.registry
+        ? lookupInRegistry(reviver.registry, name, module)
+        : undefined;
       if (!real) {
         const msg =
           `Callback "${name}" from module "${module}" crossed a process ` +

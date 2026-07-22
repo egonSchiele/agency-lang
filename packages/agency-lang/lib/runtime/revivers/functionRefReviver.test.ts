@@ -543,3 +543,29 @@ describe("lazy callback refs (#544)", () => {
     );
   });
 });
+
+describe("lazy callback refs resolve through the shared lookup", () => {
+  it("resolves a legacy bare-name-keyed registry entry at fire time", async () => {
+    // Older compiled output keyed the registry by bare name. revive()'s
+    // linear scan finds those; the lazy ref must resolve them identically
+    // at fire time, or a legacy callback would revive fine and then throw
+    // when fired.
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    const ref = reviver.revive({
+      __nativeType: "FunctionRef", name: "__cb_main_0", module: "agency_abc",
+    }) as AgencyFunction;
+
+    let fired = false;
+    reviver.registry["__cb_main_0"] = new AgencyFunction({
+      name: "__cb_main_0",
+      module: "agency_abc",
+      fn: async () => { fired = true; },
+      params: [{ name: "data", hasDefault: false, defaultValue: undefined, variadic: false }],
+      toolDefinition: null,
+    });
+
+    await ref.invoke({ type: "positional", args: [{}] });
+    expect(fired).toBe(true);
+  });
+});

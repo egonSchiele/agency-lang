@@ -1,7 +1,9 @@
 import {
   Diagnostic,
   DiagnosticSeverity,
+  DiagnosticTag,
 } from "vscode-languageserver-protocol";
+import { runLinter } from "../linter/registry.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { parseAgency } from "../parser.js";
 import { resolveImports } from "../preprocessors/importResolver.js";
@@ -102,6 +104,12 @@ export function runDiagnostics(
   }
 
   let program = parseResult.result;
+  // The linter needs the pristine parse: later passes (resolveReExports,
+  // resolveImports) return rewritten programs whose import statements are
+  // replaced or dropped. The pipeline below reassigns `program`, so this
+  // alias keeps pointing at the original. Parsed with applyTemplate=false,
+  // so finding offsets index straight into `source`.
+  const lintProgram = parseResult.result;
 
   // The CLI parses source through a template that auto-injects an
   // `import { ... } from "std::index"` statement. The LSP path uses
@@ -180,6 +188,21 @@ export function runDiagnostics(
       severity: DiagnosticSeverity.Error,
       range,
       message: err.message,
+      source: "agency",
+    });
+  }
+
+  const lintFindings = runLinter({ program: lintProgram, source, filePath: fsPath });
+  for (const f of lintFindings) {
+    diagnostics.push({
+      // v1: every lint finding is a hint. When the first warning-severity
+      // rule ships, replace this with a severity map — do not let it
+      // silently render warnings as hints.
+      severity: DiagnosticSeverity.Hint,
+      tags: [DiagnosticTag.Unnecessary],
+      code: f.code,
+      range: { start: doc.positionAt(f.loc.start), end: doc.positionAt(f.loc.end) },
+      message: f.message,
       source: "agency",
     });
   }

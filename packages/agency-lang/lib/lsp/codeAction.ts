@@ -14,7 +14,7 @@ import { getStdlibFiles, stdlibModuleName } from "../importPaths.js";
 import { parseAgency } from "../parser.js";
 import { runLinter } from "../linter/registry.js";
 import { unusedImportsBatchEdits } from "../linter/rules/unusedImports.js";
-import type { LintContext, LintEdit } from "../linter/types.js";
+import type { LintContext, LintEdit, LintFinding } from "../linter/types.js";
 
 /** Dedicated source-action kind for remove-on-save. Offered alongside the
  *  generic SourceFixAll so either `editor.codeActionsOnSave` configuration
@@ -46,10 +46,19 @@ function getStdlibIndex(): Record<string, string> {
   return stdlibIndex;
 }
 
+/** Lint results already computed by the diagnostics pass, valid for the
+ *  document's current version. When present, getCodeActions skips its own
+ *  parse + lint. */
+export type CachedLint = {
+  findings: LintFinding[];
+  batchEdits: LintEdit[];
+};
+
 export function getCodeActions(
   params: CodeActionParams,
   doc: TextDocument,
   symbolTable: SymbolTable,
+  cachedLint?: CachedLint,
 ): CodeAction[] {
   const actions: CodeAction[] = [];
 
@@ -74,11 +83,9 @@ export function getCodeActions(
     return actions;
   }
 
-  const source = doc.getText();
-  const parsed = parseAgency(source, {}, false);
-  if (parsed.success) {
-    const ctx: LintContext = { program: parsed.result, source, filePath: uriToPath(doc.uri) };
-    const findings = runLinter(ctx).filter((f) => f.fix);
+  const lint = cachedLint ?? computeLint(doc);
+  if (lint) {
+    const findings = lint.findings.filter((f) => f.fix);
     if (wantsQuickFix) {
       for (const f of findings) {
         actions.push({
@@ -93,7 +100,7 @@ export function getCodeActions(
       // names removed (one edit per statement) — concatenating the
       // per-finding fixes instead would produce overlapping edits whenever
       // one statement has two unused names, which VS Code rejects.
-      const batchEdits = unusedImportsBatchEdits(ctx).map((e) => lintEditToTextEdit(doc, e));
+      const batchEdits = lint.batchEdits.map((e) => lintEditToTextEdit(doc, e));
       for (const kind of [CodeActionKind.SourceFixAll, REMOVE_UNUSED_IMPORTS_KIND]) {
         if (!wantsKind(kind)) {
           continue;
@@ -108,6 +115,22 @@ export function getCodeActions(
   }
 
   return actions;
+}
+
+/** Fallback when no valid cached lint result exists: parse the current
+ *  buffer and lint it. Returns null when the buffer does not parse. */
+function computeLint(doc: TextDocument): CachedLint | null {
+  const source = doc.getText();
+  const parsed = parseAgency(source, {}, false);
+  if (!parsed.success) {
+    return null;
+  }
+  const ctx: LintContext = { program: parsed.result, source, filePath: uriToPath(doc.uri) };
+  const findings = runLinter(ctx);
+  return {
+    findings,
+    batchEdits: findings.length > 0 ? unusedImportsBatchEdits(ctx) : [],
+  };
 }
 
 /**

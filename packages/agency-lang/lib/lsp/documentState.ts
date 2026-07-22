@@ -3,6 +3,7 @@ import type { CompilationUnit } from "../compilationUnit.js";
 import type { SemanticIndex } from "./semantics.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
 import type { SymbolTable } from "../symbolTable.js";
+import type { LintEdit, LintFinding } from "../linter/types.js";
 
 export type DocumentState = {
   program: AgencyProgram;
@@ -10,4 +11,13 @@ export type DocumentState = {
   semanticIndex: SemanticIndex;
   scopes: ScopeInfo[];
   symbolTable: SymbolTable;
+  /** Lint results computed by the diagnostics pass, reused by the
+   *  code-action path so a lightbulb request does not re-parse and re-lint
+   *  the document. Valid only while the document is still at
+   *  `lintVersion` — diagnostics run on a debounce, so a code-action
+   *  request can arrive with a newer buffer, and offset-based edits
+   *  computed against old text would corrupt the new text. */
+  lintFindings: LintFinding[];
+  lintBatchEdits: LintEdit[];
+  lintVersion: number;
 };

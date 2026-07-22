@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateDiagnosticsPages } from "./diagnosticsDocs.js";
+import { LINT_DIAGNOSTICS } from "@/linter/diagnostics.js";
 import {
   DIAGNOSTICS,
   DIAGNOSTIC_CATEGORIES,
@@ -71,6 +72,30 @@ describe("generateDiagnosticsPages", () => {
     for (const { contents } of pages) {
       const headings = [...contents.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
       expect(new Set(headings).size).toBe(headings.length);
+    }
+  });
+});
+
+describe("lint page", () => {
+  it("emits lint.md with every active AL code and its explanation anchor", () => {
+    const lint = byPath["lint.md"];
+    expect(lint).toBeTruthy();
+    for (const [, e] of Object.entries(LINT_DIAGNOSTICS).filter(
+      ([, entry]) => !("retired" in entry),
+    )) {
+      expect(lint.includes(`## ${e.code}`), e.code).toBe(true);
+      expect(lint.includes(`<a id="${e.code.toLowerCase()}"></a>`), e.code).toBe(true);
+    }
+  });
+
+  it("index links every active AL code exactly once", () => {
+    const index = byPath["index.md"];
+    // Same retired-filter as the generator: a retired code keeps its registry
+    // entry (the number stays reserved) but drops out of the docs pages.
+    for (const [, e] of Object.entries(LINT_DIAGNOSTICS).filter(
+      ([, entry]) => !("retired" in entry),
+    )) {
+      expect(index.split(`[${e.code}](`).length - 1, e.code).toBe(1);
     }
   });
 });

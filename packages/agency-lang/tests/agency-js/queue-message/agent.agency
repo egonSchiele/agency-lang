@@ -1,0 +1,36 @@
+import { queueNote, queueEarly, queueElsewhere } from "./tools.js"
+
+// Mid-round queueing happens from a top-level onToolCallEnd callback: it
+// fires at tool-DISPATCH level, which shares the parent conversation, so
+// current() is the outer thread. (Inside a TOOL BODY current() is the
+// tool's private throwaway thread — a queueMessage there dies with it,
+// by the same isolation that keeps a tool's llm() calls out of the outer
+// conversation. Tools hand content outward via attachToReply.)
+callback("onToolCallEnd") as data {
+  if (data.toolName == "lookup") {
+    const q = queueNote("queued mid-round")
+  }
+}
+
+def lookup(): string {
+  return "found it"
+}
+
+node midRound() {
+  return llm("use the tool", { tools: [lookup] })
+}
+
+// queueEarly runs as a plain call before a NO-tool llm(). The queued
+// message must be delivered by that call's initial boundary, ahead of
+// the prompt.
+node preQueued() {
+  const q = queueEarly("queued before the call")
+  return llm("answer briefly")
+}
+
+// queueElsewhere queues onto a different thread. Nothing on the main
+// thread may deliver it.
+node scoped() {
+  const q = queueElsewhere("for the side thread")
+  return llm("answer briefly")
+}

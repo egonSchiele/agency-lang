@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "toolMessage seeds an assistant tool-call followed by its tool result, readable from the thread",
+      "input": "",
+      "expectedOutput": "\"assistant|tool:Draft saved.\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    }
+  ]
+}

@@ -27,6 +27,7 @@ primitives, so you can compose your own variants in user code.
 import {
   _systemMessage,
   _userMessage,
+  _toolMessage,
   _assistantMessage,
   _imageAttachment,
   _fileAttachment,
@@ -82,6 +83,27 @@ export def userMessage(msg: string | (string | Attachment)[], label: string = ""
   @param label - Optional debug label shown in statelog. Never sent to the model.
   """
   _userMessage(msg, label)
+}
+
+export def toolMessage(
+  name: string,
+  args: any,
+  result: string,
+  label: string = "",
+) {
+  """
+  Add a synthetic tool call and its result to the current thread, as if the
+  model had made the call. Nothing runs; this only shapes the conversation the
+  model reads on its next llm() call. Use it to make the model see work a
+  scaffold did on its behalf. Call it at a clean point in the thread, not in
+  the middle of a tool exchange still waiting for its result.
+
+  @param name - The tool name the model will see it "called"
+  @param args - The call arguments, as an object (serialized to JSON)
+  @param result - The tool response content
+  @param label - Optional debug tag shown in statelog. Never sent to the model.
+  """
+  _toolMessage(name, args, result, label)
 }
 
 export def image(

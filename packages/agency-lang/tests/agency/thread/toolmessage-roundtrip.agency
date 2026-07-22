@@ -1,0 +1,29 @@
+import { toolMessage, listThreads, getThread } from "std::thread"
+
+node main(): string {
+  toolMessage("saveDraft", { value: "hello" }, "Draft saved.")
+
+  const info = listThreads(false)
+  if (info is failure(_e)) {
+    return "listThreads failed"
+  }
+  const threads = info.value
+  if (threads.length == 0) {
+    return "no threads"
+  }
+
+  const read = getThread(threads[0].id, 0, 50)
+  if (read is failure(_e)) {
+    return "getThread failed"
+  }
+  const msgs = read.value
+  if (msgs.length < 2) {
+    return "too few messages"
+  }
+  // Encode the last TWO roles so a dropped assistant tool-call message (which
+  // would leave an invalid, unmatched tool result) is caught here. getThread
+  // cannot expose tool_call_id, so true pairing is left to the unit test.
+  const prev = msgs[msgs.length - 2]
+  const last = msgs[msgs.length - 1]
+  return "${prev.role}|${last.role}:${last.content}"
+}

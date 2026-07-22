@@ -1,4 +1,5 @@
 import * as smoltalk from "smoltalk";
+import { nanoid } from "nanoid";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
 import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
 import { __tryCall, type ResultValue } from "../runtime/result.js";
@@ -69,6 +70,64 @@ export async function _userMessage(
 ): Promise<void> {
   const { threads } = getRuntimeContext();
   threads.getOrCreateActive().push(smoltalk.userMessage(msg), label || null);
+}
+
+/** Seed a synthetic tool call and its result onto the active thread, as if
+ *  the model had made the call. Nothing executes: this only shapes the
+ *  conversation. `args` is validated by a JSON round-trip up front, so a
+ *  non-serializable value throws here rather than being rejected by the
+ *  provider on the next `llm()`. Both messages carry `label`, an
+ *  observability-only tag (see `_userMessage`). The id is synthetic — real
+ *  tool-call ids come from the provider, this one is minted with nanoid. */
+export async function _toolMessage(
+  name: string,
+  args: any,
+  result: string,
+  label: string = "",
+): Promise<void> {
+  // Round-trip up front so a non-serializable value throws HERE, not far away
+  // when the provider rejects the thread on the next llm(). One catch covers
+  // both failure shapes: JSON.stringify throws on a circular object, and
+  // returns undefined for a bare function (which then fails in JSON.parse).
+  let argsRecord: Record<string, any>;
+  try {
+    argsRecord = JSON.parse(JSON.stringify(args ?? {}));
+  } catch (e) {
+    throw new Error(
+      `toolMessage: args for "${name}" could not be serialized to JSON`,
+      { cause: e },
+    );
+  }
+  // Arguments must be a JSON object (a record), which every real tool call is.
+  // A bare number, string, or array round-trips cleanly but violates that
+  // contract (consumers like dropNullDefaultedArgs expect a record) and a
+  // provider may reject the thread. Enforce it here so the docstring's "as an
+  // object" is real.
+  if (
+    typeof argsRecord !== "object" ||
+    argsRecord === null ||
+    Array.isArray(argsRecord)
+  ) {
+    const got = Array.isArray(argsRecord) ? "array" : typeof argsRecord;
+    throw new Error(
+      `toolMessage: args for "${name}" must be a JSON object, got ${got}`,
+    );
+  }
+
+  const id = nanoid();
+  const { threads } = getRuntimeContext();
+  const thread = threads.getOrCreateActive();
+
+  thread.push(
+    smoltalk.assistantMessage("", {
+      toolCalls: [new smoltalk.ToolCall(id, name, argsRecord)],
+    }),
+    label || null,
+  );
+  thread.push(
+    smoltalk.toolMessage(result, { tool_call_id: id, name }),
+    label || null,
+  );
 }
 
 export async function __internal_assistantMessage(

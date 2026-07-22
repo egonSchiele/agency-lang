@@ -2,12 +2,12 @@ import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
 
 /** Queue entries are plain JSON-safe data (the QueuedMessage contract), so
- *  the built-in structuredClone suffices. Deliberately NOT runtime/utils'
+ *  a JSON round trip clones them. Deliberately NOT runtime/utils'
  *  deepClone: importing it here creates the cycle messageThread → utils →
- *  runtime/index → threadStore → messageThread, which left ThreadStore
- *  undefined while bootstrapThreadStore's `extends` evaluated (caught by
- *  CI's full-suite load order; the touched-suite runs missed it). */
-const cloneQueue = (q: QueuedMessage[]): QueuedMessage[] => structuredClone(q);
+ *  runtime/index → threadStore → messageThread, which leaves ThreadStore
+ *  undefined while bootstrapThreadStore's `extends` evaluates. */
+const cloneQueue = (q: QueuedMessage[]): QueuedMessage[] =>
+  JSON.parse(JSON.stringify(q));
 
 export type MessageThreadJSON = {
   messages: smoltalk.MessageJSON[];
@@ -149,7 +149,7 @@ export class MessageThread {
     // The pending queue rides along: prompt.ts restores a resumed call via
     // adoptFrom (its args.messages alias), and a queue that survived
     // toJSON but not adoptFrom would be dropped exactly on resume.
-    this.queuedMessages = [...other.queuedMessages];
+    this.queuedMessages = cloneQueue(other.queuedMessages);
   }
 
   /** The ONLY append. Everything that adds a message goes through here,

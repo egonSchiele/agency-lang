@@ -111,11 +111,12 @@ export async function setupConversation(systemPrompt: string): Promise<void> {
 
 ### Queueing a message for the next turn
 
-`thread.user(...)` pushes immediately, which is unsafe in the middle of a
-model turn: a message inserted between an assistant's tool calls and their
-results produces a conversation the provider rejects. `queueMessage` is the
-deferred, always-safe alternative. It appends to a pending queue on the
-thread and returns; the runtime delivers the queue at the next safe point.
+`thread.user(...)` pushes immediately, which mid-turn can land a message
+between an assistant's tool calls and their results — a conversation the
+provider rejects. `queueMessage` defers instead: it queues on the thread,
+and the runtime delivers before the thread's next request. Queued between
+calls, the message arrives ahead of the next call's prompt; queued during
+a turn (from a callback, say), it arrives after that turn's tool results.
 
 ```ts
 agency.thread.current().queueMessage("Budget check: wrap up soon.");
@@ -125,31 +126,13 @@ agency.thread.current().queueMessage(content, {
 });
 ```
 
-The delivery semantics, precisely:
-
-- **Delivered before the thread's next request-turn.** A message queued
-  between calls is delivered at the start of the thread's next `llm()`
-  call, ahead of the new prompt — so a call that uses no tools still
-  delivers. A message queued during a turn (from a callback, say) is
-  delivered after that turn's tool results and before the next request.
-- **Retry re-issues do not deliver.** A trip retry or validation retry
-  re-sends the same turn; messages queued during it wait for the next
-  real turn.
-- **The queue waits indefinitely.** If no `llm()` ever runs against the
-  thread again, the queue stays on the thread, serialized with it across
-  pauses. No deadline, no error.
-- **Scoped to the thread you call it on.** Queueing onto a non-active
-  thread delivers when THAT thread next runs a call.
-- **Inside a tool body, `current()` is the tool's private thread.** Tool
-  bodies run against an isolated, throwaway `ThreadStore` (that isolation
-  is what keeps a tool's own `llm()` calls out of the outer
-  conversation), so a `queueMessage` there dies with the tool. To hand
-  content outward from a tool, use `attachToReply`; to steer the outer
-  conversation mid-turn, queue from a callback — callbacks fire where the
-  outer conversation is current.
-- No `"system"` role: a system message appearing mid-conversation is
-  rejected or silently reinterpreted by some providers. Say `role:
-  "user"`.
+The queue is serialized with the thread and waits indefinitely — if the
+thread never runs another `llm()`, nothing is delivered and nothing
+errors. Retry re-issues (guard trips, validation) re-send the same turn
+and do not deliver. Inside a tool body, `current()` is the tool's private
+throwaway thread, so a `queueMessage` there dies with the tool; use
+`attachToReply` to hand content outward, or queue from a callback, which
+fires where the outer conversation is current.
 
 ### Switching threads
 

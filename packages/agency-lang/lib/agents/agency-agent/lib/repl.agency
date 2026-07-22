@@ -178,18 +178,33 @@ def costSlashCommand(): boolean {
   const byModel = getModelCosts()
   let totalCost = 0.0
   let totalTokens = 0
+  let totalRead = 0
+  let totalWritten = 0
   for (m in byModel) {
     totalCost = totalCost + m.cost
-    totalTokens = totalTokens + m.inputTokens + m.outputTokens
+    // Cache reads and writes are input tokens too. Counting only
+    // inputTokens + outputTokens reports a fraction of a cached
+    // conversation — on a long agent run, often under a tenth of it.
+    totalTokens = totalTokens
+      + m.inputTokens + m.outputTokens
+      + m.cachedInputTokens + m.cacheCreationInputTokens
+    totalRead = totalRead + m.cachedInputTokens
+    totalWritten = totalWritten + m.cacheCreationInputTokens
   }
   pushMessage("Cost:   $${totalCost.toFixed(4)}")
   pushMessage("Tokens: ${totalTokens}")
+  if (totalRead > 0 || totalWritten > 0) {
+    pushMessage(
+      color.dim("        ${totalWritten} written to cache, ${totalRead} read back"),
+    )
+  }
   if (byModel.length > 0) {
     pushMessage("")
     pushMessage("By model:")
     for (m in byModel) {
+      const up = m.inputTokens + m.cachedInputTokens + m.cacheCreationInputTokens
       pushMessage(
-        "  ${m.model}  ↑${m.inputTokens} ↓${m.outputTokens}  $${m.cost.toFixed(4)}",
+        "  ${m.model}  ↑${up} ↓${m.outputTokens}  $${m.cost.toFixed(4)}",
       )
     }
   }

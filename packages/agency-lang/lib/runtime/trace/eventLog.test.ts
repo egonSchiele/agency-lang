@@ -624,10 +624,14 @@ describe("detectLlmCalls", () => {
     });
     const events = detectLlmCalls(prev, curr, 1);
     const llmEvent = events.find((e: any) => e.type === "llm-call") as any;
+    // Neither checkpoint carries `cacheCreationInputTokens` — they stand in
+    // for stats written before that field existed — so its delta must read
+    // zero rather than NaN.
     expect(llmEvent.tokenUsage).toEqual({
       inputTokens: 15,
       outputTokens: 7,
       cachedInputTokens: 3,
+      cacheCreationInputTokens: 0,
       totalTokens: 22,
     });
   });

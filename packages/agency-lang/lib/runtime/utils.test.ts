@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deepFreeze, extractStructuredResponse, updateTokenStats } from "./utils.js";
+import { deepFreeze, extractStructuredResponse, normalizeModelUsage, updateTokenStats } from "./utils.js";
 import { isSuccess, isFailure } from "./result.js";
 import { z } from "zod";
 import { GlobalStore } from "./state/globalStore.js";
@@ -81,6 +81,8 @@ describe("updateTokenStats per-model breakdown", () => {
     expect(stats.models["opus-4.8"]).toEqual({
       inputTokens: 10,
       outputTokens: 5,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       totalCost: 0.001,
     });
     // The aggregate totals still accumulate independently.
@@ -95,6 +97,8 @@ describe("updateTokenStats per-model breakdown", () => {
     expect(globals.getTokenStats().models["opus-4.8"]).toEqual({
       inputTokens: 12,
       outputTokens: 8,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
       totalCost: 0.0015,
     });
   });
@@ -104,8 +108,8 @@ describe("updateTokenStats per-model breakdown", () => {
     updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "gpt-5-mini" });
     updateTokenStats({ globals, usage: usage(20, 10), cost: cost(0.03), model: "opus-4.8" });
     const models = globals.getTokenStats().models;
-    expect(models["gpt-5-mini"]).toEqual({ inputTokens: 10, outputTokens: 5, totalCost: 0.001 });
-    expect(models["opus-4.8"]).toEqual({ inputTokens: 20, outputTokens: 10, totalCost: 0.03 });
+    expect(models["gpt-5-mini"]).toMatchObject({ inputTokens: 10, outputTokens: 5, totalCost: 0.001 });
+    expect(models["opus-4.8"]).toMatchObject({ inputTokens: 20, outputTokens: 10, totalCost: 0.03 });
   });
 
   it("does not record a model entry when no model name is supplied", () => {
@@ -126,7 +130,7 @@ describe("updateTokenStats per-model breakdown", () => {
     expect(stats.usage.inputTokens).toBe(15);
     expect(stats.usage.outputTokens).toBe(7);
     expect(stats.usage.totalTokens).toBe(22);
-    expect(stats.models["smollm2-135m"]).toEqual({
+    expect(stats.models["smollm2-135m"]).toMatchObject({
       inputTokens: 15,
       outputTokens: 7,
       totalCost: 0,
@@ -142,7 +146,7 @@ describe("updateTokenStats per-model breakdown", () => {
     // …and the entry is recorded as a normal own key.
     const models = globals.getTokenStats().models;
     expect(Object.prototype.hasOwnProperty.call(models, "__proto__")).toBe(true);
-    expect(models["__proto__"]).toEqual({ inputTokens: 1, outputTokens: 1, totalCost: 0.001 });
+    expect(models["__proto__"]).toMatchObject({ inputTokens: 1, outputTokens: 1, totalCost: 0.001 });
   });
 
   it("backfills the models slot for token-stats restored from older checkpoints", () => {
@@ -151,7 +155,7 @@ describe("updateTokenStats per-model breakdown", () => {
     const stats = globals.getTokenStats();
     delete stats.models;
     updateTokenStats({ globals, usage: usage(1, 1), cost: cost(0.0002), model: "opus-4.8" });
-    expect(globals.getTokenStats().models["opus-4.8"]).toEqual({
+    expect(globals.getTokenStats().models["opus-4.8"]).toMatchObject({
       inputTokens: 1,
       outputTokens: 1,
       totalCost: 0.0002,
@@ -302,5 +306,43 @@ describe("extractStructuredResponse — markdown code fences (step 2)", () => {
     const r = extractStructuredResponse(s, schema);
     expect(isSuccess(r)).toBe(true);
     if (isSuccess(r)) expect(r.value).toEqual(value);
+  });
+});
+
+describe("normalizeModelUsage", () => {
+  it("carries cache reads and writes through to the per-model view", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({
+      globals,
+      usage: {
+        inputTokens: 2,
+        outputTokens: 100,
+        cachedInputTokens: 5000,
+        cacheCreationInputTokens: 400,
+        totalTokens: 5502,
+      },
+      cost: { inputCost: 0, outputCost: 0, totalCost: 0.004506 },
+      model: "sonnet-5",
+    });
+    const [row] = normalizeModelUsage(globals.getTokenStats().models);
+    expect(row).toEqual({
+      model: "sonnet-5",
+      inputTokens: 2,
+      outputTokens: 100,
+      cachedInputTokens: 5000,
+      cacheCreationInputTokens: 400,
+      cost: 0.004506,
+    });
+  });
+
+  // Entries written before the cache fields existed have no key for them; the
+  // per-model view must read zero rather than undefined, or the `/cost`
+  // totals that add these up become NaN.
+  it("reads zero for a per-model entry missing the cache fields", () => {
+    const [row] = normalizeModelUsage({
+      "opus-4.8": { inputTokens: 10, outputTokens: 5, totalCost: 0.02 },
+    });
+    expect(row.cachedInputTokens).toBe(0);
+    expect(row.cacheCreationInputTokens).toBe(0);
   });
 });

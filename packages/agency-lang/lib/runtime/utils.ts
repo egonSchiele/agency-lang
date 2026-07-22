@@ -171,6 +171,10 @@ export type ModelUsage = {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  /** Tokens read back from an existing cache entry. */
+  cachedInputTokens: number;
+  /** Tokens written to a new cache entry. */
+  cacheCreationInputTokens: number;
   cost: number;
 };
 
@@ -189,6 +193,12 @@ export function normalizeModelUsage(rawModels: unknown): ModelUsage[] {
       model,
       inputTokens: typeof v?.inputTokens === "number" ? v.inputTokens : 0,
       outputTokens: typeof v?.outputTokens === "number" ? v.outputTokens : 0,
+      cachedInputTokens:
+        typeof v?.cachedInputTokens === "number" ? v.cachedInputTokens : 0,
+      cacheCreationInputTokens:
+        typeof v?.cacheCreationInputTokens === "number"
+          ? v.cacheCreationInputTokens
+          : 0,
       cost: typeof v?.totalCost === "number" ? v.totalCost : 0,
     });
   }
@@ -248,9 +258,11 @@ export function updateTokenStats(args: {
     }
     const m = tokenStats.models[model] ??
       (tokenStats.models[model] = { inputTokens: 0, outputTokens: 0, totalCost: 0 });
-    m.inputTokens += usage.inputTokens || 0;
-    m.outputTokens += usage.outputTokens || 0;
-    m.totalCost += cost.totalCost || 0;
+    addTo(m, "inputTokens", usage.inputTokens);
+    addTo(m, "outputTokens", usage.outputTokens);
+    addTo(m, "cachedInputTokens", usage.cachedInputTokens);
+    addTo(m, "cacheCreationInputTokens", usage.cacheCreationInputTokens);
+    addTo(m, "totalCost", cost.totalCost);
   }
   // Cache reads and cache writes are tracked separately from ordinary input.
   // Without them the breakdown does not reconcile with its own total: on a

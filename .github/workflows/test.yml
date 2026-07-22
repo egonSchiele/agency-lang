@@ -12,12 +12,28 @@ on:
 permissions:
   contents: read
 
-# The test suites are split across two parallel jobs (`build` and
-# `agency-tests`) to cut wall-clock time. Each job is self-contained — it
-# runs its own `pnpm install && make` (~2 min) rather than sharing a build
-# artifact, which would serialize the jobs and cost about as much in
-# upload/download as it saves.
+# Cancel an in-progress run when a newer commit is pushed to the same PR (or
+# branch). Without this, every push to a PR leaves the previous ~8-min run
+# executing to completion, wasting runner-minutes and delaying the result for
+# the commit you actually care about. Keyed by workflow + ref so runs on
+# different PRs never cancel each other. Pushes to `main` are NOT cancelled:
+# each merge commit must get a full run (its own coverage + the main-only
+# integration steps), so we fall back to the unique run id there.
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: true
+
+# The test suites are split across parallel jobs to cut wall-clock time. Each
+# job is self-contained — it runs its own `pnpm install && make` (~1 min)
+# rather than sharing a build artifact, which would serialize the jobs and
+# cost about as much in upload/download as it saves. The `build` job's heavy
+# steps used to run serially (unit tests, then integration, then agent tests),
+# which made it the critical path; they now fan out into `build`,
+# `integration`, and `agent-tests` so they run concurrently.
 jobs:
+  # `build` runs the vitest unit suite on both supported node versions and
+  # produces the docs. The integration and agent suites live in their own jobs
+  # (below) so they no longer serialize behind these unit tests.
   build:
     runs-on: ubuntu-latest
 
@@ -54,8 +70,30 @@ jobs:
       if: matrix.node-version == '22.x'
       run: pnpm run docs
     - run: pnpm test:run
+
+  # Integration tests (tarball install, bundlers, CLI, StateLog, stdlib
+  # sandbox). These are node-22-only and independent of the unit suite, so
+  # they run in parallel with `build` rather than serially behind it.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        version: 9
+        run_install: false
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 22.x
+        cache: 'pnpm'
+    - run: pnpm install
+    - run: make
     - name: Integration tests (tarball install, bundlers, CLI)
-      if: matrix.node-version == '22.x'
       env:
         TMPDIR: ${{ runner.temp }}
       run: |
@@ -68,7 +106,7 @@ jobs:
         node tests/integration/serve/test.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
     - name: Main-only CLI command integration tests
-      if: matrix.node-version == '22.x' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       env:
         TMPDIR: ${{ runner.temp }}
       run: |
@@ -77,25 +115,44 @@ jobs:
         node tests/integration/cli-main/test.mjs ./agency-lang-*.tgz
         rm -f agency-lang-*.tgz
     - name: StateLog integration tests
-      if: matrix.node-version == '22.x'
       working-directory: packages/agency-lang
       run: node tests/integration/statelog/test.mjs
     - name: Stdlib sandbox tests
-      if: matrix.node-version == '22.x'
       working-directory: packages/agency-lang
       env:
         CI: "true"
       run: node tests/integration/stdlib-sandbox/run.mjs
       timeout-minutes: 10
+
+  # Smoke tests for the agents bundled under lib/agents/ (deterministic LLM
+  # provider, no API key). Catches wiring regressions like duplicate tool names
+  # that only surface when an agent actually issues an LLM call. Runs on node
+  # 22 only — agent tool-schema wiring is not node-version-sensitive, so the
+  # 23.x pass added ~2.5 min with no extra coverage. Its own job so the ~2.5
+  # min no longer serializes behind the unit suite.
+  agent-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        version: 9
+        run_install: false
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 22.x
+        cache: 'pnpm'
+    - run: pnpm install
+    - run: make
     - name: Built-in agent tests
       working-directory: packages/agency-lang
       env:
         AGENCY_USE_TEST_LLM_PROVIDER: "1"
-      # Smoke tests for the agents bundled under lib/agents/ (deterministic
-      # LLM provider, no API key). Catches wiring regressions like duplicate
-      # tool names that only surface when an agent actually issues an LLM
-      # call. Lives in this job (not agency-tests) for load balance — it
-      # collects no coverage, so it has no coupling to the coverage steps.
       run: pnpm run test:agents
 
   # The agency execution suite (~11 min unsharded) is the critical path. We

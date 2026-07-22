@@ -346,3 +346,32 @@ describe("normalizeModelUsage", () => {
     expect(row.cacheCreationInputTokens).toBe(0);
   });
 });
+
+describe("updateTokenStats slot hygiene", () => {
+  // `tokenStats.cost` holds `currency: "USD"` next to its counters, so the
+  // object being accumulated into is not uniformly numeric. Adding must never
+  // touch a non-counter slot, and must not concatenate into one either.
+  it("leaves the currency field alone", () => {
+    const globals = GlobalStore.withTokenStats();
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
+    expect(globals.getTokenStats().cost.currency).toBe("USD");
+  });
+
+  // A counter that somehow holds NaN (a checkpoint written mid-bug, a
+  // provider returning garbage) must recover rather than stay NaN forever:
+  // NaN + n is NaN, so one bad value would otherwise sink the whole run.
+  it("recovers a counter that is already NaN", () => {
+    const globals = GlobalStore.withTokenStats();
+    globals.getTokenStats().usage.inputTokens = NaN;
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
+    expect(globals.getTokenStats().usage.inputTokens).toBe(10);
+  });
+
+  it("recovers a counter holding a non-number", () => {
+    const globals = GlobalStore.withTokenStats();
+    globals.getTokenStats().usage.outputTokens = "12" as unknown as number;
+    updateTokenStats({ globals, usage: usage(10, 5), cost: cost(0.001), model: "opus-4.8" });
+    // 5, not "125" — a string slot restarts the count rather than concatenating.
+    expect(globals.getTokenStats().usage.outputTokens).toBe(5);
+  });
+});

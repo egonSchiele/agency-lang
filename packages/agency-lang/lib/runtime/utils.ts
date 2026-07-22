@@ -223,11 +223,22 @@ type StatCost = {
   totalCost?: number;
 };
 
-/** Add to a counter that may be absent. Token-stats objects restored from a
- *  checkpoint written before a field existed have `undefined` there, and
- *  `undefined += n` is NaN — which then poisons every later total. */
-function addTo(target: Record<string, number>, key: string, amount: number | undefined): void {
-  target[key] = (target[key] || 0) + (amount || 0);
+/** Add to one counter on a token-stats object.
+ *
+ *  The slot may be missing: stats restored from a checkpoint written before
+ *  a field existed have `undefined` there, and `undefined + n` is NaN, which
+ *  then poisons every later total on the run.
+ *
+ *  The slot may also not be a number at all. `tokenStats.cost` holds
+ *  `currency: "USD"` alongside its counters, so the object this walks is not
+ *  uniformly numeric — hence `unknown` values rather than a `Record<string,
+ *  number>` that would claim otherwise. Anything that is not a finite number
+ *  starts from zero, which is the right reading for a counter and keeps a
+ *  stray string from being concatenated into one. */
+function addTo(target: Record<string, unknown>, key: string, amount: number | undefined): void {
+  const current = target[key];
+  const base = typeof current === "number" && Number.isFinite(current) ? current : 0;
+  target[key] = base + (amount || 0);
 }
 
 export function updateTokenStats(args: {

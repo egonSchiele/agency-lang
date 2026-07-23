@@ -156,6 +156,50 @@ File-level fields (siblings of `tests`):
 - `skipOnCI` (optional) — `true` to skip every test in the file when running in CI
 - `skipReason` (optional) — human-readable reason printed when a file is skipped
 - `defaultTimeoutMs` (optional) — file-level default timeout, overridden by per-test `timeoutMs`
+- `expectedCompileError` (optional) — assert that the sibling `.agency` file **fails to compile**, and that the failure text contains this substring. A file that sets it has no `tests` array: the compile is the test. See below.
+
+### Expected compile errors
+
+Some things are supposed to be rejected at compile time — a program with an
+unfilled template hole, a type error you want pinned by its diagnostic code.
+A `.test.json` can assert that:
+
+```json
+{
+  "expectedCompileError": "AG2001",
+  "description": "A string cannot be assigned to a number"
+}
+```
+
+The test passes when compiling the sibling `.agency` file fails **and** the
+failure text contains the substring. Substring rather than exact match,
+because compiler output carries absolute paths and line numbers that differ
+by machine; the diagnostic code is the stable part. Parse errors carry no
+code, so those tests pin a phrase from the message instead
+(`"Failed to parse"`).
+
+Two things to know:
+
+- The compile runs in a child `agency compile` process whose working
+  directory is the fixture's own directory, and the CLI reads its config
+  from exactly there: `<fixture dir>/agency.json`, used as-is — not merged
+  over the project config the way the rest of the runner does it, and not
+  inherited from the repo root. A fixture directory without its own
+  `agency.json` compiles with an **empty** config (typechecker off), so
+  every fixture directory in this mode ships a complete `agency.json`.
+  Type-error fixtures need `typechecker.strict`, and the diagnostic must
+  be error severity — strict mode only refuses to compile on errors, not
+  warnings.
+- These files are skipped by the up-front precompile pass, which is what
+  lets a deliberately-broken source sit in the tree without ending the run.
+  Keep them in a directory of their own, and add that directory to
+  `coverage.exclude` in `agency.json` so `--coverage` does not try to
+  compile them for a source map.
+
+`llmMocks`, `fetchMocks`, and a non-empty `tests` array are rejected rather
+than ignored — nothing runs in this mode, so their presence means the test
+was expected to do something it does not do. File-level `skip` keeps its
+meaning and wins: a skipped file is skipped, compile expectation and all.
 
 ### Evaluation criteria
 

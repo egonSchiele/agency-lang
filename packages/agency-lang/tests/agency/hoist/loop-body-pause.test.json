@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "6",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        },
+        {
+          "action": "approve"
+        },
+        {
+          "action": "approve"
+        }
+      ]
+    }
+  ]
+}

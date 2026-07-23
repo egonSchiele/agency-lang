@@ -1,0 +1,22 @@
+// A pause INSIDE a while condition, resumed. This is the worst-behaved
+// position pre-pass: Runner.whileLoop awaits the condition before the
+// completed-iteration skip, so a condition call re-ran once per
+// completed iteration on resume. The calls counter pins single
+// execution per iteration.
+effect mytest::tick { i: number }
+
+let calls = 0
+
+def gate(i: number): number {
+  calls = calls + 1
+  const ok = interrupt mytest::tick("Continue?", { i: i })
+  return i
+}
+
+node main() {
+  let i = 0
+  while (gate(i) < 2) {
+    i = i + 1
+  }
+  return "i=${i} calls=${calls}"
+}

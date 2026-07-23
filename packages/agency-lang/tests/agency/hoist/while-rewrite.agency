@@ -1,0 +1,14 @@
+// The while rewrite at runtime, with a COMPARISON in the condition (a
+// bare boolean call could not distinguish a correct emission from a
+// broken one). Compiles to while(true) + if/else-break.
+def count(i: number): number {
+  return i
+}
+
+node main() {
+  let i = 0
+  while (count(i) < 3) {
+    i = i + 1
+  }
+  return "done ${i}"
+}

@@ -1,0 +1,27 @@
+// FunctionRef round-trips with the derivation chain in the pausing
+// frame: the hoisted temp holds a partial-bound tool and a renamed tool
+// when the gate pauses. After resume the mock calls the RENAMED tool,
+// which only works if the revived ref kept its rename (PR #653,
+// registeredName).
+effect mytest::gate { x: number }
+
+def add(a: number, b: number): number {
+  """Adds two numbers."""
+  return a + b
+}
+
+def hello(name: string): string {
+  """Says hello."""
+  return "hello ${name}"
+}
+
+def gateTool(x: number): number {
+  """Waits for approval."""
+  const ok = interrupt mytest::gate("Proceed?", { x: x })
+  return x
+}
+
+node main() {
+  const answer = llm("Use the gate, then greet Ada.", { tools: [add.partial(a: 5), hello.rename("greet_tool"), gateTool] })
+  return answer
+}

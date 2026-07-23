@@ -338,3 +338,29 @@ def f(n: number): number {
     expect(JSON.stringify(twice)).toBe(JSON.stringify(once));
   });
 });
+
+describe("fixture shape pins (S6): the flagship fixtures exercise hoisted shapes", () => {
+  // The resume-regression fixtures only prove anything if their llm
+  // options argument actually becomes a hoisted temp. Pinning that here
+  // makes the guarantee permanent — a one-time unwire-and-rerun proves
+  // it once, this proves it on every CI run.
+  it("resume-regression-args: the llm options argument is a __hoist temp reference", async () => {
+    const fs = await import("node:fs");
+    const src = fs.readFileSync(
+      new URL("../../tests/agency/hoist/resume-regression-args.agency", import.meta.url),
+      "utf8",
+    );
+    const parsed = parseAgency(src, {}, true);
+    if (!parsed.success) throw new Error(parsed.message);
+    const main = (parsed.result.nodes as any[]).find((n) => n.type === "graphNode");
+    const out = hoistCallsInScope(main.body) as any[];
+    const t = temps(out) as any[];
+    expect(t).toHaveLength(1);
+    expect(t[0].value.functionName).toBe("myOptions");
+    const llmStmt = (stmts(out) as any[]).find(
+      (n) => n.value?.functionName === "llm",
+    );
+    const optionsArg = llmStmt.value.arguments[1];
+    expect(optionsArg).toMatchObject({ type: "variableName", value: t[0].variableName });
+  });
+});

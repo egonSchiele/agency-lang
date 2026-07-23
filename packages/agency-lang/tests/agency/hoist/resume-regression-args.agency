@@ -1,0 +1,22 @@
+// THE flagship regression: the reported bug shape, a helper call in
+// argument position of llm(). Replay of the paused statement used to
+// re-execute myOptions(), which stole the next queued frame; the pass
+// hoists it into a skippable step. Resumes through respondToInterrupts,
+// the same entry point the interactive CLI (run -i) uses, where
+// bisect-a.agency reproduced the original 400.
+effect mytest::greet { name: string }
+
+def greetTool(name: string): string {
+  """Greets a person."""
+  const ok = interrupt mytest::greet("Approve greeting?", { name: name })
+  return "greeted ${name}"
+}
+
+def myOptions(): any {
+  return { tools: [greetTool] }
+}
+
+node main() {
+  const answer = llm("Greet Ada using the tool.", myOptions())
+  return answer
+}

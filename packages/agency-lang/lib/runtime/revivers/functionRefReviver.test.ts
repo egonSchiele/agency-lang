@@ -83,10 +83,17 @@ describe("FunctionRefReviver", () => {
         .toThrow("no registry set");
     });
 
-    it("throws when function is not found", () => {
+    it("revives a missing ordinary function to a tripwire stub (#652)", async () => {
+      // revive() also runs during SERIALIZATION (deepClone in State.toJSON),
+      // so a miss must never throw eagerly — it would crash checkpoint
+      // writes. The stub throws only when invoked.
       reviver.registry = {};
-      expect(() => reviver.revive({ name: "missing", module: "test.agency" }))
-        .toThrow("not found in registry");
+      const stub = reviver.revive({ name: "missing", module: "test.agency" });
+      expect(AgencyFunction.isAgencyFunction(stub)).toBe(true);
+      expect(stub.name).toBe("missing");
+      await expect(
+        stub.invoke({ type: "positional", args: [] }),
+      ).rejects.toThrow(/never loaded its module/);
     });
 
     it("revives an unregistered block ref to a stub instead of throwing", () => {
@@ -117,14 +124,17 @@ describe("FunctionRefReviver", () => {
       expect(msg).toContain("before replay rebound it");
     });
 
-    it("non-block names still throw eagerly on a registry miss", () => {
+    it("near-miss block names revive to the generic stub, not the block stub", async () => {
+      // Pins the STRICT block-name predicate: these two must not match
+      // isBlockName, and the generic-stub message (vs "before replay
+      // rebound it") proves which branch they took.
       reviver.registry = {};
-      expect(() =>
-        reviver.revive({ name: "__blockish", module: "test.agency" }),
-      ).toThrow("not found in registry");
-      expect(() =>
-        reviver.revive({ name: "__block_", module: "test.agency" }),
-      ).toThrow("not found in registry");
+      for (const name of ["__blockish", "__block_"]) {
+        const stub = reviver.revive({ name, module: "test.agency" });
+        await expect(
+          stub.invoke({ type: "positional", args: [] }),
+        ).rejects.toThrow(/never loaded its module/);
+      }
     });
 
     it("a REGISTERED block name resolves to the real function, not a stub", () => {
@@ -446,16 +456,18 @@ describe("lazy callback refs (#544)", () => {
     expect(ref.module).toBe("agency_abc");
   });
 
-  it("still throws for ordinary missing names", () => {
+  it("ordinary missing names get the generic stub, not the callback lazy ref", async () => {
     const reviver = new FunctionRefReviver();
     reviver.registry = {};
-    expect(() => reviveRef(reviver, "myHelper", "app.agency")).toThrow(/not found in registry/);
-  });
-
-  it("still throws for near-miss names (strict predicate)", () => {
-    const reviver = new FunctionRefReviver();
-    reviver.registry = {};
-    expect(() => reviveRef(reviver, "__cb_helper", "app.agency")).toThrow(/not found in registry/);
+    for (const name of ["myHelper", "__cb_helper"]) {
+      const stub = reviveRef(reviver, name, "app.agency") as AgencyFunction;
+      // The generic stub is a tripwire: unlike the callback lazy ref, it
+      // does NOT re-check the registry at invoke time.
+      reviver.registry[`app.agency:${name}`] = makeAgencyFunction(name, "app.agency");
+      await expect(
+        stub.invoke({ type: "positional", args: [] }),
+      ).rejects.toThrow(/never loaded its module/);
+    }
   });
 
   it("does not self-register the lazy ref under the real key", () => {
@@ -541,6 +553,110 @@ describe("lazy callback refs (#544)", () => {
     await expect(ref.invoke({ type: "positional", args: [{}] })).rejects.toThrow(
       /__cb_main_0.*agency_abc/s,
     );
+  });
+});
+
+describe("renamed functions round-trip (#652)", () => {
+  function makeRegistered(
+    registry: Record<string, AgencyFunction>,
+  ): AgencyFunction {
+    return AgencyFunction.create({
+      name: "search",
+      module: "stdlib/wikipedia.agency",
+      fn: (query: string) => `results for ${query}`,
+      params: [
+        { name: "query", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      toolDefinition: { name: "search", description: "Search Wikipedia", schema: null },
+    }, registry);
+  }
+
+  it("serialize records the registered name when the function was renamed", () => {
+    const reviver = new FunctionRefReviver();
+    const registry: Record<string, AgencyFunction> = {};
+    const renamed = makeRegistered(registry).rename("wikipedia_search");
+    expect(reviver.serialize(renamed)).toEqual({
+      __nativeType: "FunctionRef",
+      name: "wikipedia_search",
+      module: "stdlib/wikipedia.agency",
+      registeredName: "search",
+      toolDescription: "Search Wikipedia",
+    });
+  });
+
+  it("serialize omits registeredName for never-renamed functions", () => {
+    const reviver = new FunctionRefReviver();
+    const registry: Record<string, AgencyFunction> = {};
+    const fn = makeRegistered(registry);
+    expect(reviver.serialize(fn)).not.toHaveProperty("registeredName");
+  });
+
+  it("a renamed function revives via the registered name and keeps the new name", async () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const renamed = makeRegistered(registry).rename("wikipedia_search");
+    functionRefReviver.registry = registry;
+
+    const json = JSON.stringify({ tool: renamed }, nativeTypeReplacer);
+    const restored = JSON.parse(json, nativeTypeReviver);
+
+    expect(restored.tool.name).toBe("wikipedia_search");
+    expect(restored.tool.toolDefinition.name).toBe("wikipedia_search");
+    const result = await restored.tool.invoke({ type: "positional", args: ["cats"] });
+    expect(result).toBe("results for cats");
+
+    functionRefReviver.registry = null;
+  });
+
+  it("rename composed with partial round-trips", async () => {
+    const registry: Record<string, AgencyFunction> = {};
+    const composed = makeRegistered(registry)
+      .rename("wikipedia_search")
+      .partial({ query: "dogs" });
+    functionRefReviver.registry = registry;
+
+    const json = JSON.stringify({ tool: composed }, nativeTypeReplacer);
+    const restored = JSON.parse(json, nativeTypeReviver);
+
+    expect(restored.tool.name).toBe("wikipedia_search");
+    expect(restored.tool.getUnboundParams()).toHaveLength(0);
+    const result = await restored.tool.invoke({ type: "positional", args: [] });
+    expect(result).toBe("results for dogs");
+
+    functionRefReviver.registry = null;
+  });
+
+  it("deepClone-style round-trip of a renamed ref survives a registry miss intact", () => {
+    // The #652 crash shape: State.toJSON deepClones state holding a renamed
+    // ref in a process whose registry lacks the module. The clone must
+    // reproduce the ref byte-for-byte so the checkpoint stays correct.
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    const serialized = {
+      __nativeType: "FunctionRef",
+      name: "wikipedia_search",
+      module: "stdlib/wikipedia.agency",
+      registeredName: "search",
+      toolDescription: "Search Wikipedia",
+    };
+    const stub = reviver.revive(serialized) as AgencyFunction;
+    expect(reviver.serialize(stub)).toEqual(serialized);
+  });
+
+  it("the miss stub preserves bound params and preapproval through re-serialization", () => {
+    const reviver = new FunctionRefReviver();
+    reviver.registry = {};
+    const serialized = {
+      __nativeType: "FunctionRef",
+      name: "read",
+      module: "stdlib/shell.agency",
+      params: [
+        { name: "useAgentCwd", hasDefault: false, defaultValue: undefined, variadic: false, isBound: true, boundValue: true },
+        { name: "path", hasDefault: false, defaultValue: undefined, variadic: false },
+      ],
+      isPreapproved: true,
+    };
+    const stub = reviver.revive(serialized) as AgencyFunction;
+    expect(reviver.serialize(stub)).toEqual(serialized);
   });
 });
 

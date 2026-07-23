@@ -81,6 +81,7 @@ export type AgencyFunctionOpts = {
   exported?: boolean;
   markers?: ToolMarkers;
   isPreapproved?: boolean;
+  registeredName?: string;
 };
 
 export class AgencyFunction {
@@ -98,10 +99,18 @@ export class AgencyFunction {
   readonly exported: boolean;
   readonly markers: ToolMarkers;
   private readonly _isPreapproved: boolean;
+  /** The key this function's registered ancestor is stored under in the
+   *  function registry. `.rename()` changes `name` but not this, and the
+   *  other derivations carry it forward — `.partial()` and `.preapprove()`
+   *  directly, `.describe()` via `withToolDefinition()` — so a serialized
+   *  ref to any derived copy can find its registry entry again. Equal to
+   *  `name` for functions never renamed. */
+  readonly registeredName: string;
 
   constructor(opts: AgencyFunctionOpts) {
     this.name = opts.name;
     this.module = opts.module;
+    this.registeredName = opts.registeredName ?? opts.name;
     this._fn = opts.fn;
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
@@ -146,6 +155,7 @@ export class AgencyFunction {
       exported: this.exported,
       markers: this.markers,
       isPreapproved: this._isPreapproved,
+      registeredName: this.registeredName,
     });
   }
 
@@ -249,6 +259,7 @@ export class AgencyFunction {
       exported: this.exported,
       markers: this.markers,
       isPreapproved: this._isPreapproved,
+      registeredName: this.registeredName,
     });
   }
 
@@ -295,6 +306,7 @@ export class AgencyFunction {
       exported: this.exported,
       markers: this.markers,
       isPreapproved: true,
+      registeredName: this.registeredName,
     });
   }
 
@@ -331,6 +343,9 @@ export class AgencyFunction {
       exported: this.exported,
       markers: this.markers,
       isPreapproved: this._isPreapproved,
+      // The registry never learns the new name, so serialization keeps the
+      // registered name for revival (see FunctionRefReviver).
+      registeredName: this.registeredName,
     });
   }
 

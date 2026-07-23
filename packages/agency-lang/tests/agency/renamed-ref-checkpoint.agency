@@ -1,0 +1,22 @@
+import { bash } from "std::shell"
+
+// Integration regression for #652: a renamed tool held in frame state must
+// survive a checkpoint WRITE. State.toJSON deep-clones locals through
+// JSON.parse with revivers installed, so the renamed ref is revived during
+// the write; before the fix that threw ("greet_tool" not in registry) and
+// killed the checkpoint. The bash() interrupt below forces the write while
+// the renamed and partial-bound refs are live locals, and the calls after
+// resume prove the revived refs still work.
+
+def hello(name: string): string {
+  return "hello ${name}"
+}
+
+node main() {
+  const greet = hello.rename("greet_tool")
+  const bob = hello.partial(name: "Bob")
+  const r = bash("echo go")
+  const a = greet(name: "Ada")
+  const b = bob()
+  return "${a}|${b}"
+}

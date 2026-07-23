@@ -79,7 +79,8 @@ export class MessageThread {
    *  Nothing else touches `this.messages`. A desync does not degrade
    *  gracefully — it shifts every later label onto the wrong message — so
    *  keep it that way. A rewrite via `setMessages` with no labels
-   *  (summarization, repair) drops them; that is intended. */
+   *  (summarization) drops them; that is intended. (Thread repair
+   *  appends via `push`, so it keeps them.) */
   messageLabels: (string | null)[];
   /** Messages queued by `queueMessage`, waiting for the thread's next
    *  request-turn. Drained by the turn-boundary machinery in the tool

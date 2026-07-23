@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest";
 import * as smoltalk from "smoltalk";
 import { makeAbortCause } from "./errors.js";
 import { MessageThread } from "./state/messageThread.js";
-import { markThreadCancelled, needsThreadRepair } from "./threadRepair.js";
+import {
+  markThreadCancelled,
+  needsThreadRepair,
+  unansweredToolCalls,
+} from "./threadRepair.js";
 
 /** Convenience builders for the markThreadCancelled repair-shape tests. */
 const asst = (text: string, toolCalls?: Array<{ id: string; name: string }>) =>
@@ -100,5 +104,59 @@ describe("needsThreadRepair — repair policy", () => {
     ).toBe(false);
     expect(needsThreadRepair(makeAbortCause({ kind: "raceLoser" }))).toBe(false);
     expect(needsThreadRepair(makeAbortCause({ kind: "cleanup" }))).toBe(false);
+  });
+});
+
+describe("unansweredToolCalls", () => {
+  it("returns only the trailing assistant turn's unanswered calls", () => {
+    const t = new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [{ id: "x", name: "f" }]),
+      tool("x"),
+      asst("", [
+        { id: "a", name: "whatIAmDoing" },
+        { id: "b", name: "codeAgent" },
+      ]),
+      tool("a"),
+    ]);
+    expect(unansweredToolCalls(t).map((c) => c.id)).toEqual(["b"]);
+  });
+
+  it("ignores unanswered calls on EARLIER assistant turns — the contract is trailing-turn only", () => {
+    const t = new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [{ id: "old", name: "f" }]), // never answered, but not trailing
+      asst("", [{ id: "new", name: "f" }]),
+    ]);
+    expect(unansweredToolCalls(t).map((c) => c.id)).toEqual(["new"]);
+  });
+
+  it("trailing assistant with no tool calls (an ordinary reply) reports empty", () => {
+    const t = new MessageThread([smoltalk.userMessage("hi"), asst("hello")]);
+    expect(unansweredToolCalls(t)).toEqual([]);
+  });
+
+  it("valid tail and no-assistant threads both report empty", () => {
+    const valid = new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [{ id: "x", name: "f" }]),
+      tool("x"),
+    ]);
+    expect(unansweredToolCalls(valid)).toEqual([]);
+    expect(unansweredToolCalls(new MessageThread([smoltalk.userMessage("hi")]))).toEqual([]);
+  });
+});
+
+describe("markThreadCancelled — label preservation (push, not setMessages)", () => {
+  it("keeps per-message debug labels on the right messages and stays aligned", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.userMessage("go"), "the-user-msg");
+    t.push(asst("", [{ id: "y", name: "f" }]), "the-tool-round");
+    markThreadCancelled(t);
+    expect(t.labelAt(0)).toBe("the-user-msg");
+    expect(t.labelAt(1)).toBe("the-tool-round");
+    expect(roles(t)).toEqual(["user", "assistant", "tool", "assistant"]);
+    // The alignment invariant messageThread.ts warns about: lengths match.
+    expect(t.messageLabels.length).toBe(t.getMessages().length);
   });
 });

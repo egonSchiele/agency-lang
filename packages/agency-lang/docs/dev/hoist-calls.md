@@ -25,7 +25,7 @@ Design history and the full position analysis: `docs/superpowers/specs/2026-07-2
 
 ## Where it runs
 
-`TypescriptPreprocessor.preprocess()`, between `collectSkills()` and `addAwaitPendingCalls()`. Guards and parallel blocks are already desugared by then; the await pass and scope resolution see the temps like hand-written statements. The pass lives in `lib/preprocessors/hoistCalls.ts`; the rulings table at the top of that file is the source of truth for what hoists where. Summary:
+`TypescriptPreprocessor.preprocess()`, between `collectSkills()` and `addAwaitPendingCalls()`. Guards and parallel blocks are already desugared by then; the await pass and scope resolution see the temps like hand-written statements. The pass lives in `lib/preprocessors/hoistCalls.ts`. **Positions and evaluation modes are data, not code in the pass:** `lib/utils/expressionSlots.ts` is the source of truth — the expression twin of `bodySlots`, completeness-checked against `EXPRESSION_NODE_TYPES`, with each position carrying an eval mode (`once` / `perIteration` / `conditional` / `opaque`). The pass keeps only hoist POLICY: which nodes become temps, the statement-tail rule, chain unit-hoisting, the while restructure, per-frame counters. An expression kind missing from the table makes the pass THROW by name rather than silently skip. Summary of what the modes produce:
 
 | Position | Ruling | Why |
 |---|---|---|
@@ -50,7 +50,7 @@ Accepted behavior change: `for (x in async getItems())` used to be rejected by `
 
 ## The tripwire
 
-Residual shapes the pass does not cover can still desync: calls nested inside opaque positions (short-circuit right sides, catch expressions, try operands, with-modified statements), block bodies nested inside opaque expressions, and mid-chain method calls inside a hoisted access chain (the chain BASE and every argument hoist; a later chain segment re-running an earlier method call is what remains). Those now fail loudly instead of corrupting silently: every frame is stamped with its owner's scope name at CLAIM time, and a mismatched claim throws
+Residual shapes the pass does not cover can still desync: calls nested inside opaque positions (short-circuit right sides, catch expressions, try operands, with-modified statements), block bodies nested inside opaque expressions, mid-chain method calls inside a hoisted access chain (the chain BASE and every argument hoist; a later chain segment re-running an earlier method call is what remains), and two holes the expressionSlots refactor DISCOVERED in the original pass and preserved for behavior identity — bare method-call statements (`result.push(transform(item))`: `transform` is not hoisted) and bare expression statements (a naked binOp statement such as the parsed form of `print(...) + greet`). Closing those two is a deliberate follow-up with its own fixtures, not a refactor side effect. Those now fail loudly instead of corrupting silently: every frame is stamped with its owner's scope name at CLAIM time, and a mismatched claim throws
 
 ```
 Resume desync: function "X" tried to claim the saved state of "Y".

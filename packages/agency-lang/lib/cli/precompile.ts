@@ -34,7 +34,10 @@ export type { CompileGroup as PrecompileGroup };
 // the process before any test runs:
 //   - `skip: true` (or `skipOnCI: true` under CI), mirroring runTestFile.
 //   - `expectedCompileError`, whose whole point is a source that fails;
-//     runTestFile compiles it in a child process instead.
+//     runTestFile compiles it in a child process instead. Presence, not
+//     type: a wrongly-typed value must still keep the broken source out
+//     of this pass — the runner validates the type and fails just that
+//     fixture.
 // Malformed .test.json is treated as live; the runner will surface the
 // real error.
 function isExcludedFromPrecompile(testJsonFile: string): boolean {
@@ -43,7 +46,7 @@ function isExcludedFromPrecompile(testJsonFile: string): boolean {
     return (
       tests.skip === true ||
       (tests.skipOnCI === true && !!process.env.CI) ||
-      typeof tests.expectedCompileError === "string"
+      tests.expectedCompileError !== undefined
     );
   } catch {
     return false;

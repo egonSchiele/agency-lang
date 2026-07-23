@@ -858,7 +858,7 @@ async function runExpectedCompileError(
   suite: SuiteContext,
   log: (msg: string) => void,
 ): Promise<TestStats> {
-  const expected = tests.expectedCompileError!;
+  const expected = tests.expectedCompileError;
   // Absolute, because the child runs with cwd set to the fixture's
   // directory — a runner-relative path would no longer resolve there.
   const sourcePath = path.resolve(testFile.replace(/\.test\.json$/, ".agency"));
@@ -880,6 +880,16 @@ async function runExpectedCompileError(
       slowTests: [],
     };
   };
+
+  // The precompile pass excludes these files on field PRESENCE, so a
+  // wrongly-typed value lands here rather than exiting the suite there —
+  // this is where it gets its clear per-fixture failure.
+  if (typeof expected !== "string") {
+    suite.completed.push(testFile);
+    return fail(
+      `'expectedCompileError' must be a string, got: ${JSON.stringify(expected)}`,
+    );
+  }
 
   const incompatible = findIncompatibleField(tests);
   if (incompatible) {
@@ -948,7 +958,7 @@ async function runTestFile(
     }
 
     let passed = 0;
-    const cases = tests.tests ?? [];
+    const cases = Array.isArray(tests.tests) ? tests.tests : [];
     const total = cases.length;
 
     // File-level skip: if the .test.json has `"skip": true` at the top
@@ -974,6 +984,27 @@ async function runTestFile(
     // file in this mode has no cases: the compile is the test.
     if (tests.expectedCompileError !== undefined) {
       return await runExpectedCompileError(tests, testFile, suite, log);
+    }
+
+    // Neither cases nor a compile expectation: the file is malformed.
+    // Before `tests` became optional this crashed the runner with a
+    // TypeError; passing silently as "0/0" would be quieter than either.
+    // (An explicit empty `tests: []` keeps its longstanding 0/0 pass.)
+    if (!Array.isArray(tests.tests)) {
+      log(
+        color.red(
+          `  ✗ ${testFile} has no 'tests' array and no 'expectedCompileError'`,
+        ),
+      );
+      suite.completed.push(testFile);
+      return {
+        passed: 0,
+        failed: 1,
+        filesPassed: 0,
+        filesFailed: 1,
+        failedFiles: [testFile],
+        slowTests: [],
+      };
     }
 
     let skipped = 0;

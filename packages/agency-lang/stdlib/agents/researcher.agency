@@ -11,6 +11,7 @@ import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
 import { webTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { reviewAgent } from "std::agents/review"
+import { now } from "std::date"
 import { agentSkill } from "std::skills"
 import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -46,13 +47,24 @@ export def buildTools(): any[] {
 
 static const groundingInstruction = "Judge grounding: error=true if a claim is ungrounded or uncited or the task is not fully answered."
 
-def checkGrounding(task: string, answer: any): Critique {
+def checkGrounding(task: string, startedAt: number, answer: any): Critique {
+  // Verification effort scales with the work: the review gets half the
+  // time the answer took to produce, clamped between 20s and 2m. A
+  // 70-second answer gets a 35-second check instead of a 2-minute one;
+  // a long research run keeps the old cap.
+  let reviewTime = (now() - startedAt) / 2
+  if (reviewTime < 20s) {
+    reviewTime = 20s
+  }
+  if (reviewTime > 2m) {
+    reviewTime = 2m
+  }
   const reviewed = reviewAgent(
     work: "${answer}",
     task: task,
     context: groundingInstruction,
     maxCost: $1.00,
-    maxTime: 2m,
+    maxTime: reviewTime,
   )
   if (!feedbackHasErrors(reviewed)) {
     return {
@@ -85,7 +97,8 @@ def researchLoop(
     systemMessage(systemPrompt)
   }
   const question = withContext(task: task, context: context)
-  return revise(maxAttempts: maxAttempts, check: checkGrounding.partial(task: task)) as critique {
+  const startedAt = now()
+  return revise(maxAttempts: maxAttempts, check: checkGrounding.partial(task: task, startedAt: startedAt)) as critique {
 
     let msg = critique
     if (critique == "") {

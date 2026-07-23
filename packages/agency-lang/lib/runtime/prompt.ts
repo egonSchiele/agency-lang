@@ -941,7 +941,7 @@ export async function runPrompt(args: {
     .filter((fn) => fn.toolDefinition)
     .map(
       (fn) =>
-        findIntrinsic(fn)?.buildDefinition({ draftSchema: args.draftSchema }) ??
+        findIntrinsic(fn)?.buildDefinition({ draftSchema: args.draftSchema, fn }) ??
         fn.toolDefinition!,
     );
   // Pre-flight: reject duplicate tool names before they reach the provider,

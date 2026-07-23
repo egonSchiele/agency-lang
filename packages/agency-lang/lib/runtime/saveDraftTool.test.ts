@@ -49,11 +49,22 @@ describe("saveDraft intrinsic — recognition", () => {
   it("a stdlib function with another name is NOT recognized", () => {
     expect(findIntrinsic(fakeFn("finalize", "stdlib/index.agency"))).toBeUndefined();
   });
+
+  it("a renamed stdlib saveDraft IS recognized — registeredName survives .rename() (#654)", () => {
+    const renamed = fakeFn("saveDraft", "stdlib/index.agency").rename("save_progress");
+    expect(findIntrinsic(renamed)).toBe(saveDraftIntrinsic);
+  });
+
+  it("a renamed tool advertises its renamed name, so dispatch and the model agree", () => {
+    const renamed = fakeFn("saveDraft", "stdlib/index.agency").rename("save_progress");
+    const def = saveDraftIntrinsic.buildDefinition({ draftSchema: undefined, fn: renamed });
+    expect(def.name).toBe("save_progress");
+  });
 });
 
 describe("saveDraft intrinsic — synthesized definition", () => {
   it("declares exactly one required value param from the threaded schema", () => {
-    const def = saveDraftIntrinsic.buildDefinition({ draftSchema: z.number() });
+    const def = saveDraftIntrinsic.buildDefinition({ draftSchema: z.number(), fn: fakeFn("saveDraft", "stdlib/index.agency") });
     expect(def.name).toBe("saveDraft");
     expect(def.description).toMatch(/best-so-far/);
     const schema = def.schema as z.ZodObject<any>;
@@ -63,7 +74,7 @@ describe("saveDraft intrinsic — synthesized definition", () => {
   });
 
   it("falls back to string when no schema was threaded", () => {
-    const def = saveDraftIntrinsic.buildDefinition({ draftSchema: undefined });
+    const def = saveDraftIntrinsic.buildDefinition({ draftSchema: undefined, fn: fakeFn("saveDraft", "stdlib/index.agency") });
     const schema = def.schema as z.ZodObject<any>;
     expect(schema.shape.value.safeParse("x").success).toBe(true);
     expect(schema.shape.value.safeParse(3).success).toBe(false);

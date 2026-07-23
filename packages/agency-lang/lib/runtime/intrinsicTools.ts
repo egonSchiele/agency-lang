@@ -32,8 +32,10 @@ export type IntrinsicTool = {
    *  never object identity — the prelude auto-import means modules
    *  hold their own wrapper objects). */
   matches: (fn: AgencyFunction) => boolean;
-  /** The provider-facing definition, replacing the def's own. */
-  buildDefinition: (ctx: { draftSchema: unknown }) => ToolDefinition;
+  /** The provider-facing definition, replacing the def's own. Receives
+   *  the matched function so a renamed tool advertises its renamed
+   *  name — the name the model calls and dispatch matches against. */
+  buildDefinition: (ctx: { draftSchema: unknown; fn: AgencyFunction }) => ToolDefinition;
   /** Handle one call; the return value is the tool-result text.
    *  Contract note: EVERY call must produce a tool-result message
    *  (providers reject a tool_use with no result), and for now that

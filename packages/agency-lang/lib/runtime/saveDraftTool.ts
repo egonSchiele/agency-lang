@@ -35,17 +35,20 @@ export function draftCharCount(value: unknown): number {
   }
 }
 
-/** `saveDraft` passed as a tool. Aliases (`const s = saveDraft`) keep
- *  both identity fields, so they recognize; a user's own def named
- *  saveDraft carries its own module id, so it runs as an ordinary
- *  tool. A `.rename()`d stdlib saveDraft changes the name and is NOT
- *  recognized — it falls through to the def path, whose draft files
- *  on the tool branch and is discarded (documented limitation). */
+/** `saveDraft` passed as a tool. Recognition is by `registeredName`
+ *  (the registry key `.rename()` preserves, #653) plus the stdlib
+ *  module id: aliases (`const s = saveDraft`), `.rename()`d copies,
+ *  and derived forms all recognize, while a user's own def named
+ *  saveDraft carries its own module id and runs as an ordinary tool.
+ *  The synthesized definition advertises `fn.name` — the renamed name
+ *  when there is one — because that is what the model calls and what
+ *  tool-call dispatch matches against (#654). */
 export const saveDraftIntrinsic: IntrinsicTool = {
-  matches: (fn) => fn.name === "saveDraft" && fn.module === STDLIB_INDEX_MODULE,
+  matches: (fn) =>
+    fn.registeredName === "saveDraft" && fn.module === STDLIB_INDEX_MODULE,
 
-  buildDefinition: ({ draftSchema }) => ({
-    name: "saveDraft",
+  buildDefinition: ({ draftSchema, fn }) => ({
+    name: fn.name,
     description: DESCRIPTION,
     schema: z.object({ value: (draftSchema as z.ZodTypeAny) ?? z.string() }),
   }),
@@ -54,7 +57,7 @@ export const saveDraftIntrinsic: IntrinsicTool = {
     const callArgs = toolCall.arguments ?? {};
     // Own-property check: the args object comes from the model.
     if (!Object.prototype.hasOwnProperty.call(callArgs, "value")) {
-      return 'Error: saveDraft requires a "value" argument. Nothing was saved.';
+      return `Error: ${toolCall.name} requires a "value" argument. Nothing was saved.`;
     }
     const value = callArgs.value;
     // Save FIRST, validate second. The schema is a best-effort hint

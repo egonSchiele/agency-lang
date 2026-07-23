@@ -1,0 +1,13 @@
+// A renamed stdlib saveDraft keeps intrinsic semantics (#654):
+// recognition is by registeredName, which .rename() preserves, and the
+// synthesized tool definition advertises the renamed name — so the
+// model calls save_progress, dispatch matches it, and the draft still
+// lands on the CALLER frame where the guard salvage reads it.
+node main() {
+  const s = saveDraft.rename("save_progress")
+  const result = guard(cost: 0.000001) {
+    return llm("work", tools: [s])
+  }
+  if (isFailure(result)) { return "no-draft" }
+  return result.value
+}

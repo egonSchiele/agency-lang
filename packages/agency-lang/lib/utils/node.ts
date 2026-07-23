@@ -18,6 +18,7 @@ import type { BlockArgument } from "@/types/blockArgument.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
 import { color } from "@/utils/termcolors.js";
 import { bodySlots } from "@/utils/bodySlots.js";
+import { expressionSlots } from "@/utils/expressionSlots.js";
 
 /** `BlockArgument` is a child of `FunctionCall`, not a standalone statement,
  * so it isn't in the `AgencyNode` union. But blocks DO appear on the ancestors
@@ -49,100 +50,39 @@ function unwrapCallArg(arg: Expression | SplatExpression | NamedArgument): Expre
  * own their scope and are walked separately.
  */
 export function expressionChildren(node: AgencyNode): AgencyNode[] {
+  const derived = expressionSlots(node).map((s) => s.expr);
   switch (node.type) {
-    case "binOpExpression":
-      return [node.left, node.right];
-    case "assignment":
-      return [node.value, ...accessChainExpressions(node.accessChain)];
-    case "returnStatement":
-    case "matchYield":
-      return node.value ? [node.value] : [];
-    case "ifElse":
-      return [node.condition];
-    case "whileLoop":
-      return [node.condition];
-    case "forLoop":
-      return [node.iterable];
-    case "comprehension":
-      // The binder is deliberately excluded: it is a binding site, not a
-      // sub-expression, matching how forLoop returns only its iterable.
-      return [
-        node.expression,
-        node.iterable,
-        ...(node.condition ? [node.condition] : []),
-      ];
-    case "functionCall":
-    case "interruptStatement":
-      return node.arguments.map(unwrapCallArg);
+    case "assignment": {
+      // Historical flow order [value, ...targetChain] differs from the
+      // slots' evaluation order [targetChain..., value]. Flow analysis
+      // (attachExpressionsToFlow) consumes THIS order and hoisting
+      // consumes the slots' order — both are load-bearing, so the
+      // divergence is an explicit shim here, not a silent change.
+      if (derived.length === 0) return derived;
+      return [derived[derived.length - 1], ...derived.slice(0, -1)];
+    }
+    case "comprehension": {
+      // Same flow-vs-evaluation divergence: historically
+      // [expression, iterable, condition?].
+      const [iterable, expression, ...cond] = derived;
+      return [expression, iterable, ...cond];
+    }
     case "gotoStatement":
-      return [node.nodeCall];
-    case "withModifier":
-    case "staticStatement":
-      return [node.statement];
-    case "matchBlock":
-      // The scrutinee. Case patterns + bodies are visited via walkScopeBody /
-      // the flow builder's matchBlock rule, not here.
-      return [node.expression];
-    case "valueAccess":
-      return [node.base, ...accessChainExpressions(node.chain)];
-    case "agencyArray":
-      return node.items.map((item) => (item.type === "splat" ? item.value : item));
-    case "agencyObject": {
-      const children: AgencyNode[] = [];
-      for (const entry of node.entries) {
-        if ("type" in entry && entry.type === "splat") {
-          children.push(entry.value);
-        } else {
-          // Non-splat entries are key/value; computedKey is optional. Cast
-          // mirrors getAllVariablesInBody (the union isn't cleanly narrowable).
-          const kv = entry as { computedKey?: Expression; value: Expression };
-          if (kv.computedKey) {
-            children.push(kv.computedKey);
-          }
-          children.push(kv.value);
-        }
-      }
-      return children;
-    }
-    case "string":
-    case "multiLineString": {
-      const children: AgencyNode[] = [];
-      for (const seg of node.segments) {
-        if (seg.type === "interpolation") {
-          children.push(seg.expression);
-        }
-      }
-      return children;
-    }
-    case "tryExpression":
-      return [node.call];
-    case "newExpression":
-      return node.arguments;
-    default:
-      // Leaves (variableName, literals, …), comments, patterns, and nested
-      // definitions (function/graphNode) have no expression children here.
+      // Flow attaches to the call node itself; the slot table exposes
+      // only its arguments (the call is control flow, not a rewritable
+      // position).
+      return [(node as { nodeCall: AgencyNode }).nodeCall];
+    case "messageThread":
+    case "isExpression":
+    case "typeTestExpression":
+      // Historically absent from this view (messageThread named args are
+      // reached via walkNodes; is/typeTest narrowing has its own flow
+      // rules). Preserved empty so type-checker behavior is untouched;
+      // the slot table remains the complete enumeration.
       return [];
+    default:
+      return derived;
   }
-}
-
-/** Expression operands carried by an access chain (`a[i]`, `a[i:j]`, `a.m(x)`). */
-function accessChainExpressions(chain: AccessChainElement[] | undefined): AgencyNode[] {
-  const out: AgencyNode[] = [];
-  for (const el of chain ?? []) {
-    if (el.kind === "index") {
-      out.push(el.index);
-    } else if (el.kind === "slice") {
-      if (el.start) {
-        out.push(el.start);
-      }
-      if (el.end) {
-        out.push(el.end);
-      }
-    } else if (el.kind === "methodCall") {
-      out.push(el.functionCall);
-    }
-  }
-  return out;
 }
 
 /** Convert a function call argument to string. */

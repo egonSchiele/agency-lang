@@ -26,8 +26,8 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     // A renamed function is not in the registry under its new name, so the
     // ref must carry the name its registered ancestor was created under —
     // revive() looks that up and re-applies the rename.
-    if (value.originalName !== value.name) {
-      result.originalName = value.originalName;
+    if (value.registeredName !== value.name) {
+      result.registeredName = value.registeredName;
     }
     // Serialize params with bound values inline
     if (value.params.some(p => p.isBound)) {
@@ -56,7 +56,7 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     const name = value.name as string;
     const module = value.module as string;
     const lookupName =
-      typeof value.originalName === "string" ? value.originalName : name;
+      typeof value.registeredName === "string" ? value.registeredName : name;
 
     const found = lookupInRegistry(this.registry, lookupName, module);
     if (!found) {
@@ -140,6 +140,20 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     // nothing spontaneously fires these, so a tripwire is honest. The stub
     // is built from the serialized fields so serialize(revive(x)) === x and
     // the ref rides through this process undamaged.
+    //
+    // Unlike the block and callback branches, a miss HERE is never
+    // expected, so it must be findable even if the stub is never invoked
+    // (a stale checkpoint after a refactor would otherwise restore clean
+    // and only fail — or silently not fail — much later). Emit at revive
+    // time; the invoke-time emit inside the stub still fires on top of
+    // this if something actually calls it.
+    emitFunctionRefMissError(
+      name,
+      `FunctionRefReviver: function "${name}" from module "${module}" not ` +
+        `found in registry; revived to a stub that will throw if invoked. ` +
+        `The function may have been renamed or removed since this state ` +
+        `was serialized.`,
+    );
     return makeUnresolvedFunctionStub(name, module, value);
   }
 }
@@ -248,14 +262,20 @@ function makeLazyCallbackRef(
 }
 
 /** A serialization-preserving tripwire for a ref whose function is in no
- *  loaded module: params, tool description, preapproval, and originalName
+ *  loaded module: params, tool description, preapproval, and registeredName
  *  are rebuilt from the serialized fields so serialize(revive(x)) === x —
  *  the ref can ride through this process (a parent holding an embedded
  *  child checkpoint, #652) and revive intact in the process that owns the
  *  module. Unlike callbacks, nothing fires these spontaneously, so the
  *  body throws instead of resolving lazily: if the direct lookup missed,
  *  the module genuinely is not loaded here, and a call must surface that.
- *  Plain `new` on purpose — must NOT self-register under the real name. */
+ *  Plain `new` on purpose — must NOT self-register under the real name.
+ *
+ *  The rebuilt fields mirror EXACTLY what serialize() writes — no more
+ *  (`exported` and `markers` are absent because serialize() never emits
+ *  them). If a field is ever added to serialize(), it must be added here
+ *  and to the round-trip tests in the same change, or the stub silently
+ *  drops it on re-serialization. */
 function makeUnresolvedFunctionStub(
   name: string,
   module: string,
@@ -264,8 +284,8 @@ function makeUnresolvedFunctionStub(
   return new AgencyFunction({
     name,
     module,
-    originalName:
-      typeof value.originalName === "string" ? value.originalName : name,
+    registeredName:
+      typeof value.registeredName === "string" ? value.registeredName : name,
     fn: () => {
       const msg =
         `Function "${name}" from module "${module}" crossed a serialization ` +

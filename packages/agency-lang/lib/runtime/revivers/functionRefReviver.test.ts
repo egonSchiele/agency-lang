@@ -125,15 +125,15 @@ describe("FunctionRefReviver", () => {
     });
 
     it("near-miss block names revive to the generic stub, not the block stub", async () => {
+      // Pins the STRICT block-name predicate: these two must not match
+      // isBlockName, and the generic-stub message (vs "before replay
+      // rebound it") proves which branch they took.
       reviver.registry = {};
       for (const name of ["__blockish", "__block_"]) {
         const stub = reviver.revive({ name, module: "test.agency" });
-        const outcome = await stub
-          .invoke({ type: "positional", args: [] })
-          .then((v: unknown) => v, (e: unknown) => e);
-        const msg =
-          outcome instanceof Error ? outcome.message : JSON.stringify(outcome);
-        expect(msg).toContain("never loaded its module");
+        await expect(
+          stub.invoke({ type: "positional", args: [] }),
+        ).rejects.toThrow(/never loaded its module/);
       }
     });
 
@@ -579,16 +579,16 @@ describe("renamed functions round-trip (#652)", () => {
       __nativeType: "FunctionRef",
       name: "wikipedia_search",
       module: "stdlib/wikipedia.agency",
-      originalName: "search",
+      registeredName: "search",
       toolDescription: "Search Wikipedia",
     });
   });
 
-  it("serialize omits originalName for never-renamed functions", () => {
+  it("serialize omits registeredName for never-renamed functions", () => {
     const reviver = new FunctionRefReviver();
     const registry: Record<string, AgencyFunction> = {};
     const fn = makeRegistered(registry);
-    expect(reviver.serialize(fn)).not.toHaveProperty("originalName");
+    expect(reviver.serialize(fn)).not.toHaveProperty("registeredName");
   });
 
   it("a renamed function revives via the registered name and keeps the new name", async () => {
@@ -635,7 +635,7 @@ describe("renamed functions round-trip (#652)", () => {
       __nativeType: "FunctionRef",
       name: "wikipedia_search",
       module: "stdlib/wikipedia.agency",
-      originalName: "search",
+      registeredName: "search",
       toolDescription: "Search Wikipedia",
     };
     const stub = reviver.revive(serialized) as AgencyFunction;

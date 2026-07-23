@@ -246,7 +246,7 @@ export def plannerAgent(
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
-  const captured = guard(cost: maxCost, time: maxTime) {
+  const captured = guard(cost: maxCost, time: maxTime, label: "plannerAgent") {
     // The drafting call runs in its own thread so the planner honors the
     // same session contract as every other agent. The model override applies
     // to this step only: each worker agent the generated plan calls resolves

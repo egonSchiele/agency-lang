@@ -177,7 +177,7 @@ export def explorerAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  return guard(cost: maxCost, time: maxTime) {
+  return guard(cost: maxCost, time: maxTime, label: "explorerAgent") {
     let reply = ""
     thread(label: "explorerAgent", summarize: true, session: session) {
       reply = survey(

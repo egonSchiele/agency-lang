@@ -90,7 +90,7 @@ export def reviewAgent(
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
-  const captured = guard(cost: maxCost, time: maxTime) {
+  const captured = guard(cost: maxCost, time: maxTime, label: "reviewAgent") {
     let items: Feedback[] = []
     thread(label: "reviewAgent", session: session) {
       items = judgeWork(

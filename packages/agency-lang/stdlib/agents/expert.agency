@@ -89,7 +89,7 @@ export def expertAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  return guard(cost: maxCost, time: maxTime) {
+  return guard(cost: maxCost, time: maxTime, label: "expertAgent") {
     let guidance: ExpertGuidance = emptyGuidance
     thread(label: "expertAgent", session: session) {
       guidance = consult(

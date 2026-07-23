@@ -77,7 +77,7 @@ export def agencyExpertAgent(
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
-  return guard(cost: maxCost, time: maxTime) {
+  return guard(cost: maxCost, time: maxTime, label: "agencyExpertAgent") {
     let guidance: ExpertGuidance = emptyGuidance
     thread(label: "agencyExpertAgent", session: session) {
       guidance = consult(

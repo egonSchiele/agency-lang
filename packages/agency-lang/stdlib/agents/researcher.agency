@@ -132,7 +132,7 @@ export def researcherAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  return guard(cost: maxCost, time: maxTime) {
+  return guard(cost: maxCost, time: maxTime, label: "researcherAgent") {
     let answer = ""
     thread(label: "researcherAgent", session: session) {
       answer = researchLoop(

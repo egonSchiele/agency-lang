@@ -25,7 +25,9 @@ function toImportSpec(node: AgencyNode): ImportSpec | null {
   if (node.type === "importStatement" && node.isAgencyImport) {
     const names = node.importedNames
       .filter((nameType) => nameType.type === "namedImport")
-      .flatMap((nameType) => nameType.importedNames);
+      .flatMap((nameType) =>
+        nameType.importedNames.filter((n): n is string => typeof n === "string"),
+      );
     return { modulePath: node.modulePath, names, loc: node.loc ?? null, testOnly: !!node.testOnly };
   }
   if (node.type === "importNodeStatement") {

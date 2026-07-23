@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"A confidence score from 0 to 100|The overall sentiment\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "@jsonSchema({description}) written directly on an object property reaches the emitted schema — the replacement path for the deprecated `#` property-description syntax"
+    }
+  ]
+}

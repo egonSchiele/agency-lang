@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"refused\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A generated program's file read is rejected by the parent's handler — governance survives templating",
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "Can I read this template?" }
+      ]
+    }
+  ]
+}

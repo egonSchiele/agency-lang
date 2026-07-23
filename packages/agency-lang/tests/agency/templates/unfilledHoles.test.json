@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8001",
+  "description": "A template with unfilled holes refuses to compile and names the hole"
+}

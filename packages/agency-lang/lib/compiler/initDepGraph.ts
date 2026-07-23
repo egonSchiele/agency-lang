@@ -45,6 +45,7 @@
  */
 
 import type { AgencyProgram, AgencyNode, Expression } from "../types.js";
+import { declaredName } from "../types/hole.js";
 import type { Assignment } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
 import type { FunctionDefinition } from "../types/function.js";
@@ -178,7 +179,7 @@ export function makeFunctionDefLookup(
     if (program) {
       for (const node of program.nodes) {
         if (node.type !== "function") continue;
-        map[node.functionName] = node;
+        map[declaredName(node.functionName)] = node;
       }
     }
     localDefsByModule[moduleId] = map;
@@ -247,7 +248,7 @@ export function makeFunctionDefLookup(
         if (!isAgencyImport(node.modulePath)) continue;
         for (const nameType of node.importedNames) {
           if (nameType.type !== "namedImport") continue;
-          for (const original of nameType.importedNames) {
+          for (const original of nameType.importedNames.map(declaredName)) {
             // Walk through the local alias the importer uses, not the
             // original name — that's how the importer references it.
             const localAlias =

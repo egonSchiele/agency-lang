@@ -1,6 +1,8 @@
 type Sentiment = {
-  sentiment: "positive" | "negative" | "neutral" # The overall sentiment;
-  confidence: number # A confidence score from 0 to 100
+  @jsonSchema({ description: "The overall sentiment" })
+  sentiment: "positive" | "negative" | "neutral",
+  @jsonSchema({ description: "A confidence score from 0 to 100" })
+  confidence: number
 }
 
 node analyzeSentiment(text: string) {

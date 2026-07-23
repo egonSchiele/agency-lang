@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8002",
+  "description": "An expression hole in a position that supplies no type must carry an annotation"
+}

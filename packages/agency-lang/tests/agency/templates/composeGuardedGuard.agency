@@ -1,0 +1,9 @@
+def guarded(): string {
+  const result = guard(time: #minutes) {
+    #body
+  }
+  if (isFailure(result)) {
+    return "tripped"
+  }
+  return result.value
+}

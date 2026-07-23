@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import path from "path";
 import fs from "fs";
 import { CompletionItem, CompletionItemKind, InsertTextFormat } from "vscode-languageserver-protocol";
@@ -68,7 +69,7 @@ export function getCompletions(info: CompilationUnit, context?: CompletionContex
 
   for (const node of info.graphNodes) {
     const detail = formatDetail(node.parameters, node.returnType);
-    add(node.nodeName, CompletionItemKind.Module, detail);
+    add(declaredName(node.nodeName), CompletionItemKind.Module, detail);
   }
 
   const globalAliases = info.typeAliases.get(GLOBAL_SCOPE_KEY);

@@ -1,0 +1,9 @@
+import { #tool } from "std::index"
+
+export node main(): string {
+  const result: any = #call
+  if (isFailure(result)) {
+    return "refused"
+  }
+  return "read-ok"
+}

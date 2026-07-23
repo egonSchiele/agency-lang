@@ -54,16 +54,4 @@ describe("objectTypeParser — property tags", () => {
     expect(nameProp?.tags).toBeUndefined();
   });
 
-  it("preserves legacy # description alongside tags", () => {
-    const src = `{
-      @validate(isEmail)
-      email: string # the work email
-    }`;
-    const r = objectTypeParser(src);
-    expect(r.success).toBe(true);
-    if (!r.success) return;
-    const prop = r.result.properties[0];
-    expect(prop.tags).toHaveLength(1);
-    expect(prop.description).toBe("the work email");
-  });
 });

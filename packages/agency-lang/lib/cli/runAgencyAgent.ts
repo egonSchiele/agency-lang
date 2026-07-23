@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -148,12 +149,12 @@ function argsStringForNode(
   const parameterNames = node.parameters.map((param) => param.name);
   for (const name of Object.keys(args)) {
     if (!parameterNames.includes(name)) {
-      throw new Error(`Unknown argument "${name}" for node ${node.nodeName}`);
+      throw new Error(`Unknown argument "${name}" for node ${declaredName(node.nodeName)}`);
     }
   }
   if (node.parameters.length === 0) {
     if (Object.keys(args).length > 0) {
-      throw new Error(`Node ${node.nodeName} does not take arguments`);
+      throw new Error(`Node ${declaredName(node.nodeName)} does not take arguments`);
     }
     return "";
   }
@@ -167,7 +168,7 @@ function argsStringForNode(
   );
   return node.parameters
     .slice(0, Math.max(lastProvidedIndex, lastRequiredIndex) + 1)
-    .map((param) => serializeArg(args, param, node.nodeName))
+    .map((param) => serializeArg(args, param, declaredName(node.nodeName)))
     .join(", ");
 }
 

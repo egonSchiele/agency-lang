@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import prompts from "prompts";
 
 const onCancel = () => {
@@ -97,7 +98,7 @@ export async function pickANode(nodes: GraphNodeDefinition[]): Promise<string> {
     process.exit(0);
   }
   if (nodes.length === 1) {
-    return nodes[0].nodeName;
+    return declaredName(nodes[0].nodeName);
   }
   const response = await prompts(
     {
@@ -105,8 +106,8 @@ export async function pickANode(nodes: GraphNodeDefinition[]): Promise<string> {
       name: "node",
       message: "Pick a node:",
       choices: nodes.map((node) => ({
-        title: node.nodeName,
-        value: node.nodeName,
+        title: declaredName(node.nodeName),
+        value: declaredName(node.nodeName),
       })),
     },
     { onCancel },

@@ -18,6 +18,13 @@ function names(source: string): string[] {
 }
 
 describe("unused-imports rule: detection", () => {
+  it("never reports a template's hole specifier as unused", () => {
+    // `#tool` is an identifier hole (template file); it binds nothing, so
+    // the unused-imports rule must skip it rather than flag or crash.
+    expect(names(`import { #tool } from "std::fs"\n\nnode main() { return 1 }\n`))
+      .toEqual([]);
+  });
+
   it("flags an import that is never referenced", () => {
     expect(names(`import { now } from "std::date"\nnode main() { return 1 }\n`))
       .toEqual(["now"]);

@@ -139,7 +139,10 @@ function namedImportWithout(nameType: NamedImport, localNames: string[]): NamedI
       Object.keys(nameType.aliases).find((o) => nameType.aliases[o] === localName) ??
       localName,
   );
-  const importedNames = nameType.importedNames.filter((n) => !originals.includes(n));
+  // Hole entries (template import specifiers) are never reported unused.
+  const importedNames = nameType.importedNames.filter(
+    (n) => typeof n !== "string" || !originals.includes(n),
+  );
   if (importedNames.length === 0) {
     return null;
   }

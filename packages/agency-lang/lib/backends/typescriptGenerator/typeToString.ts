@@ -47,7 +47,7 @@ function valueArgExprToString(expr: Expression): string {
             const fc = element.functionCall;
             const args = fc.arguments
               .map((arg) => {
-                if ("name" in arg && arg.name) {
+                if ("name" in arg && arg.name && arg.type !== "hole") {
                   return `${arg.name}: ${valueArgExprToString(arg.value as Expression)}`;
                 }
                 return valueArgExprToString(

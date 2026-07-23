@@ -1,0 +1,20 @@
+// @jsonSchema can sit directly on an object property (not just on the
+// property's type alias), and a `description` written that way reaches
+// the emitted schema at properties.<name>.description.
+//
+// This is the replacement path for the deprecated `#` property-description
+// syntax, so it must keep working: `#` is being removed to free the sigil,
+// and these descriptions are functional — they are what tells a model that
+// `confidence` runs 0 to 100 rather than 0 to 1.
+
+type Sentiment = {
+  @jsonSchema({ description: "A confidence score from 0 to 100" })
+  confidence: number,
+  @jsonSchema({ description: "The overall sentiment" })
+  sentiment: string
+}
+
+node main(): string {
+  const js = schema(Sentiment).toJSONSchema()
+  return js.properties.confidence.description + "|" + js.properties.sentiment.description
+}

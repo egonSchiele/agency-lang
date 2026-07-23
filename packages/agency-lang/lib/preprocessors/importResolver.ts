@@ -267,6 +267,9 @@ function resolveImportStatement(
     if (nameType.type !== "namedImport") continue; // guaranteed above
 
     for (const name of nameType.importedNames) {
+      // A hole specifier (template file) has no symbol to resolve; leave it
+      // for fill to replace.
+      if (typeof name !== "string") continue;
       try {
         const symbol = fileSymbols[name];
         if (!symbol) {

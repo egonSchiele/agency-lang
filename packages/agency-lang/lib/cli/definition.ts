@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import { parseAgency } from "../parser.js";
 import { AgencyProgram } from "../types.js";
 import { SourceLocation } from "../types/base.js";
@@ -51,9 +52,9 @@ export function collectDefinitions(
 
   for (const node of program.nodes) {
     if (node.type === "graphNode" && node.loc) {
-      defs[node.nodeName] = node.loc;
+      defs[declaredName(node.nodeName)] = node.loc;
     } else if (node.type === "function" && node.loc) {
-      defs[node.functionName] = node.loc;
+      defs[declaredName(node.functionName)] = node.loc;
     } else if (node.type === "typeAlias" && node.loc) {
       defs[node.aliasName] = node.loc;
     }

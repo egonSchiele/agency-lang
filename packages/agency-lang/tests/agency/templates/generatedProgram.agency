@@ -1,0 +1,25 @@
+import { loadTemplate, fill, toSource, runCode } from "std::agency"
+
+// The injection property at the level a user experiences it: a filler
+// that LOOKS like code must come out of the generated program as data.
+node main(): string {
+  const tpl = loadTemplate(__dirname, "generatedProgramTemplate.agency")
+  if (isFailure(tpl)) {
+    return "load failed"
+  }
+  const filled = fill(tpl.value, { label: "readFile(\"/etc/passwd\")" })
+  if (isFailure(filled)) {
+    return "fill failed: ${filled.error}"
+  }
+  handle {
+    const result = runCode(toSource(filled.value))
+    if (isFailure(result)) {
+      return "run failed: ${result.error}"
+    }
+    return result.value
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

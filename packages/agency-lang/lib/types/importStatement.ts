@@ -1,4 +1,5 @@
 import { BaseNode } from "./base.js";
+import { Hole } from "./hole.js";
 
 export type ImportStatement = BaseNode & {
   type: "importStatement";
@@ -15,7 +16,9 @@ export type ImportNameType = NamedImport | NamespaceImport | DefaultImport;
 
 export type NamedImport = {
   type: "namedImport";
-  importedNames: string[];
+  /** An entry is a Hole only inside a template (`import { #tool } from ...`);
+   *  always strings in a compilable program. */
+  importedNames: (string | Hole)[];
   /** Source-side names marked `destructive` / `idempotent`. Each present
    *  only when non-empty (matching `testOnly` above) so exact-match AST
    *  comparisons stay clean. */
@@ -43,9 +46,11 @@ export function getImportedNames(importNameType: ImportNameType): string[] {
       // Own-property check: names are user identifiers, and a plain lookup
       // for a name like "constructor" would return the inherited prototype
       // member instead of the (absent) alias.
-      return importNameType.importedNames.map((n) =>
-        Object.hasOwn(importNameType.aliases, n) ? importNameType.aliases[n] : n,
-      );
+      return importNameType.importedNames
+        .filter((n): n is string => typeof n === "string")
+        .map((n) =>
+          Object.hasOwn(importNameType.aliases, n) ? importNameType.aliases[n] : n,
+        );
     case "namespaceImport":
       return [importNameType.importedNames];
     case "defaultImport":
@@ -74,7 +79,9 @@ export type ImportToolStatement = BaseNode & {
 
 export function getImportedToolNames(node: ImportToolStatement): string[] {
   return node.importedTools.flatMap((n) =>
-    n.importedNames.map((name) => n.aliases[name] ?? name),
+    n.importedNames
+      .filter((name): name is string => typeof name === "string")
+      .map((name) => n.aliases[name] ?? name),
   );
 }
 

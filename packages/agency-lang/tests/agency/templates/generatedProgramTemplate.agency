@@ -1,0 +1,4 @@
+export node main(): string {
+  const label: string = #label
+  return "generated:" + label
+}

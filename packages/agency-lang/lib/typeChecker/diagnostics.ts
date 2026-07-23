@@ -578,6 +578,18 @@ export const DIAGNOSTICS = {
     message:
       "Function '{name}' cannot be both destructive and idempotent — those markers are contradictory. Pick one.",
   },
+  unfilledHoles: {
+    code: "AG8001",
+    severity: "error",
+    message:
+      "This file is a template with unfilled holes ({names}) and cannot be run directly. Load it with `loadTemplate` and fill it first.",
+  },
+  holeNeedsTypeAnnotation: {
+    code: "AG8002",
+    severity: "error",
+    message:
+      "The hole `#{name}` is in a position that gives it no expected type. Annotate it, for example `#{name}: string`.",
+  },
 } as const;
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;
@@ -596,6 +608,7 @@ export const DIAGNOSTIC_CATEGORIES = [
   { prefix: "AG5", slug: "match", title: "Match and narrowing" },
   { prefix: "AG6", slug: "tools", title: "Calls, tools, and LLM usage" },
   { prefix: "AG7", slug: "static-init", title: "Static init, config, and imports" },
+  { prefix: "AG8", slug: "templates", title: "Code templates and holes" },
 ] as const;
 
 /** The category a code belongs to, by its AG# prefix, or undefined if none. */

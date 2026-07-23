@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"news-ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Two templates compose while a hole is still open; the grafted hole fills later and the program runs",
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "Can I read this template?" },
+        { "action": "approve", "expectedMessage": "Can I read this template?" }
+      ]
+    }
+  ]
+}

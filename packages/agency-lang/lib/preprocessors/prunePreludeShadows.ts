@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import type { AgencyProgram } from "../types.js";
 
 /**
@@ -33,9 +34,9 @@ export function prunePreludeShadows(program: AgencyProgram): void {
   const shadowed = new Set<string>();
   for (const node of program.nodes) {
     if (node.type === "function") {
-      shadowed.add(node.functionName);
+      shadowed.add(declaredName(node.functionName));
     } else if (node.type === "graphNode") {
-      shadowed.add(node.nodeName);
+      shadowed.add(declaredName(node.nodeName));
     } else if (node.type === "assignment" && node.declKind) {
       // Top-level `let`/`const` global. `declKind` is absent on a bare
       // re-assignment (`x = 1`), which is not a new binding.
@@ -53,9 +54,10 @@ export function prunePreludeShadows(program: AgencyProgram): void {
     }
     for (const spec of node.importedNames) {
       if (spec.type !== "namedImport") continue;
-      spec.importedNames = spec.importedNames.filter(
-        (name) => !shadowed.has(spec.aliases[name] ?? name),
-      );
+      spec.importedNames = spec.importedNames.filter((entry) => {
+        const name = declaredName(entry);
+        return !shadowed.has(spec.aliases[name] ?? name);
+      });
       // Re-filter the marker lists, and DELETE them when filtering empties
       // them — `destructiveNames`/`idempotentNames` are present only when
       // non-empty (the exact-match-AST invariant), so a leftover `[]` would

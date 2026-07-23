@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import { diagnostic } from "./diagnostics.js";
 import type { TypeCheckerContext } from "./types.js";
 
@@ -18,7 +19,7 @@ export function checkConflictingMarkers(ctx: TypeCheckerContext): void {
       ctx.errors.push(
         diagnostic(
           "conflictingMarkers",
-          { name: node.functionName },
+          { name: declaredName(node.functionName) },
           node.loc ?? null,
         ),
       );

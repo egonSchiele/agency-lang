@@ -378,6 +378,11 @@ export function synthType(
       return { type: "schemaType", inner: expr.typeArg };
     case "typeTestExpression":
       return synthTypeTestExpression(expr, scope, ctx);
+    case "hole":
+      // A template hole's type is its inline annotation when present.
+      // Without one it synthesizes as `any`; positions that supply no
+      // expected type either are flagged by checkTemplateHoles (AG8002).
+      return expr.typeAnnotation ?? ANY_T;
     default:
       return ANY_T;
   }

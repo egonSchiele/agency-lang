@@ -87,6 +87,10 @@ export const NO_EXPRESSION_SLOTS: Record<string, true> = {
   schemaExpression: true,
   // Params are binders; the body is STATEMENTS, owned by bodySlots.
   blockArgument: true,
+  // A template hole is a leaf: it stands for an expression but contains
+  // none. Programs with holes refuse to compile (AG8001), so hoistCalls
+  // only meets one via the LSP/template paths, where a leaf is correct.
+  hole: true,
 };
 
 /** Every kind the switch below enumerates — expression kinds AND the

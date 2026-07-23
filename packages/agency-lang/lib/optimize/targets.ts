@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -259,8 +260,8 @@ function directOptimizeScope(ancestors: AgencyNode[]): string | null {
   if (ancestors.length === 0) return "global";
   if (ancestors.length !== 1) return null;
   const parent = ancestors[0];
-  if (parent.type === "function") return parent.functionName;
-  if (parent.type === "graphNode") return parent.nodeName;
+  if (parent.type === "function") return declaredName(parent.functionName);
+  if (parent.type === "graphNode") return declaredName(parent.nodeName);
   return null;
 }
 

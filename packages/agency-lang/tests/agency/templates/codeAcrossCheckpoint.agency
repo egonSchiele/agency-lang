@@ -1,0 +1,22 @@
+import { loadTemplate, fill, toSource } from "std::agency"
+
+// Holds a Code value across an interrupt checkpoint, so the state stack
+// must serialize and restore it, then fills it AFTER resume. Asserts on
+// the filled program's printed content — a hole count alone could be
+// satisfied by a destroyed value.
+node main(): string {
+  const tplResult = loadTemplate(__dirname, "codeAcrossCheckpointTemplate.agency")
+  if (isFailure(tplResult)) {
+    return "load failed: ${tplResult.error}"
+  }
+  const _pause = interrupt("pause")
+  const filled = fill(tplResult.value, { value: 42 })
+  if (isFailure(filled)) {
+    return "fill failed: ${filled.error}"
+  }
+  const source = toSource(filled.value)
+  if (source.includes("const v: number = 42")) {
+    return "ok"
+  }
+  return "unexpected: ${source}"
+}

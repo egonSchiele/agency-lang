@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import { ANY_T } from "./primitives.js";
 import {
   AgencyNode,
@@ -58,11 +59,11 @@ function buildDefScope(
   topLevelScope: Scope,
   ctx: TypeCheckerContext,
 ): ScopeInfo {
-  const name = def.type === "function" ? def.functionName : def.nodeName;
+  const name = declaredName(def.type === "function" ? def.functionName : def.nodeName);
   const sk =
     def.type === "function"
-      ? scopeKey(functionScope(def.functionName))
-      : scopeKey(nodeScope(def.nodeName));
+      ? scopeKey(functionScope(declaredName(def.functionName)))
+      : scopeKey(nodeScope(declaredName(def.nodeName)));
   // Chain to the module scope so top-level bindings are visible inside the
   // def (lookup only — the boundary flag keeps declarations local, and the
   // top-level scope is fully walked before any def scope is built).

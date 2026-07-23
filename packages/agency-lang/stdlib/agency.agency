@@ -1,4 +1,5 @@
 import { ls, glob, grep, exec } from "std::shell"
+import { Json } from "std::validation"
 
 import {
   _compile,
@@ -15,6 +16,14 @@ import {
   _filterImports,
   _subprocessDepth,
  } from "agency-lang/stdlib-lib/agency.js"
+import {
+  _loadTemplate,
+  _holesOf,
+  _fill,
+  _parseExpr,
+  _parseStatements,
+  _toSource,
+} from "agency-lang/stdlib-lib/template.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
 /** @module
@@ -464,6 +473,84 @@ export idempotent def format(source: string): Result {
   @param source - Agency source code as a string
   """
   return try _format(source)
+}
+
+/** `Code` is `AST` plus a fragment kind: a value can hold a whole program
+  (what `loadTemplate` and `parseAST` produce), a statement list, or a
+  single expression. The kind is what lets an expression-sized fragment
+  fill an expression hole. */
+export type Code = {
+  type: "agencyProgram";
+  kind?: "program" | "statements" | "expr";
+  nodes: any[];
+  docComment?: any
+}
+
+export type HoleInfo = {
+  name: string,
+  sort: "expr" | "statements" | "identifier" | "decl",
+  splice: boolean,
+  type: string | null
+}
+
+export def loadTemplate(dir: string, filename: string): Result<Code> {
+  """
+  Load an Agency file containing holes as a template.
+
+  @param dir - The sandbox directory
+  @param filename - The template file, resolved relative to dir
+  """
+  return interrupt std::read("Can I read this template?", {
+    dir: dir,
+    filename: filename
+  })
+  return try _loadTemplate(dir, filename)
+}
+
+export idempotent def holesOf(template: Code): HoleInfo[] {
+  """
+  The unfilled holes in a template, in the order they appear. Each entry has the hole's name, its sort (what category of thing fills it), whether it is a splice, and its type when one is known.
+
+  @param template - A template loaded with loadTemplate
+  """
+  return _holesOf(template)
+}
+
+export idempotent def fill(template: Code, values: Record<string, Json | Code>): Result<Code> {
+  """
+  Fill holes in a template. Plain values become literals and are never parsed; Code values are grafted as trees. Filling some holes and not others returns a template with the rest still in it.
+
+  @param template - A template loaded with loadTemplate
+  @param values - A record mapping hole names to values
+  """
+  return try _fill(template, values)
+}
+
+export idempotent def toSource(code: Code): string {
+  """
+  Print a Code value back to Agency source, including any unfilled holes.
+
+  @param code - A template or filled program
+  """
+  return _toSource(code)
+}
+
+export idempotent def parseExpr(source: string): Result<Code> {
+  """
+  Parse a single Agency expression into a Code fragment that can fill an expr hole. Fails on anything other than exactly one expression.
+
+  @param source - Agency source for one expression
+  """
+  return try _parseExpr(source)
+}
+
+export idempotent def parseStatements(source: string): Result<Code> {
+  """
+  Parse a list of Agency statements into a Code fragment that can fill a statements hole.
+
+  @param source - Agency source for one or more statements
+  """
+  return try _parseStatements(source)
 }
 
 /** Read and write happen inside the same interrupt, so approving it approves both.

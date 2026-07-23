@@ -170,8 +170,10 @@ describe("generateDoc", () => {
       path.join(inputDir, "test.agency"),
       `
 export type User = {
-  name: string # The user's name;
-  age: number # The user's age
+  @jsonSchema({ description: "The user's name" })
+  name: string,
+  @jsonSchema({ description: "The user's age" })
+  age: number
 }
 
 type Internal = {
@@ -209,8 +211,8 @@ node main() {
     expect(output).toContain("## Types");
     expect(output).toContain("### User");
     expect(output).toContain("```ts\nexport type User =");
-    expect(output).toContain("name: string # The user's name");
-    expect(output).toContain("age: number # The user's age");
+    expect(output).toContain("name: string");
+    expect(output).toContain("age: number");
     expect(output).not.toContain("### Internal");
 
     // Functions section — heading is name only, signature in code fence

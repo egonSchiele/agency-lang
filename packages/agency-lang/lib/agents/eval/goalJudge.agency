@@ -1,6 +1,8 @@
 type GoalVerdict = {
-  score: number # a score from 0.0 to 1.0 where 1.0 means the output fully satisfies the goal;
-  reasoning: string # brief explanation for the score
+  @jsonSchema({ description: "a score from 0.0 to 1.0 where 1.0 means the output fully satisfies the goal" })
+  score: number,
+  @jsonSchema({ description: "brief explanation for the score" })
+  reasoning: string
 }
 
 node main(goal: string, output: string, expected: string = ""): GoalVerdict {

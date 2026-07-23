@@ -1,3 +1,4 @@
+import { declaredName } from "./types/hole.js";
 import * as fs from "fs";
 import * as path from "path";
 import { parseAgencyFileCached } from "./parseCache.js";
@@ -353,6 +354,8 @@ export class SymbolTable {
     for (const nameType of stmt.importedNames) {
       if (nameType.type !== "namedImport") continue;
       for (const originalName of nameType.importedNames) {
+        // Hole specifiers (template files) resolve to nothing.
+        if (typeof originalName !== "string") continue;
         const symbol = this.files[file]?.[originalName];
         if (!symbol) continue;
         out.push({
@@ -426,28 +429,28 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
   for (const { node } of walkNodes(program.nodes)) {
     switch (node.type) {
       case "graphNode":
-        symbols[node.nodeName] = {
+        symbols[declaredName(node.nodeName)] = {
           kind: "node",
-          name: node.nodeName,
+          name: declaredName(node.nodeName),
           loc: node.loc,
           parameters: node.parameters,
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
           exported: !!node.exported,
-          interruptEffects: collectDirectInterruptEffects(node.nodeName, node.body),
+          interruptEffects: collectDirectInterruptEffects(declaredName(node.nodeName), node.body),
         };
         break;
       case "function":
-        symbols[node.functionName] = {
+        symbols[declaredName(node.functionName)] = {
           kind: "function",
-          name: node.functionName,
+          name: declaredName(node.functionName),
           loc: node.loc,
           markers: node.markers,
           exported: !!node.exported,
           parameters: node.parameters,
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
-          interruptEffects: collectDirectInterruptEffects(node.functionName, node.body),
+          interruptEffects: collectDirectInterruptEffects(declaredName(node.functionName), node.body),
         };
         break;
       case "typeAlias":

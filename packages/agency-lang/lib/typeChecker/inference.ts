@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import { isAnyType } from "./utils.js";
 import { ANY_T } from "./primitives.js";
 import {
@@ -27,7 +28,7 @@ export function inferReturnTypes(ctx: TypeCheckerContext): void {
   for (const def of allDefs) {
     if (def.returnType) continue;
 
-    const name = def.type === "function" ? def.functionName : def.nodeName;
+    const name = declaredName(def.type === "function" ? def.functionName : def.nodeName);
     inferReturnTypeFor(name, def, ctx);
   }
 }
@@ -51,8 +52,8 @@ export function inferReturnTypeFor(
 
   const defScopeKey =
     def.type === "function"
-      ? scopeKey(functionScope(def.functionName))
-      : scopeKey(nodeScope(def.nodeName));
+      ? scopeKey(functionScope(declaredName(def.functionName)))
+      : scopeKey(nodeScope(declaredName(def.nodeName)));
 
   return ctx.withScope(defScopeKey, () => {
     const scope = new Scope(defScopeKey);

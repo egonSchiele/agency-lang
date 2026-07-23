@@ -152,8 +152,17 @@ function seedCounter(body: AgencyNode[]): number {
 function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
   switch (stmt.type) {
     case "assignment": {
+      // Indexed-assignment TARGETS carry expressions too:
+      // `arr[pick(i)] = compute(i)` evaluates the index before the
+      // value, so index temps come first and order is preserved.
+      const chainTemps: AgencyNode[] = [];
+      let out: any = stmt;
+      if (Array.isArray(stmt.accessChain) && stmt.accessChain.length > 0) {
+        const chain = walkChainEntries(stmt.accessChain, chainTemps, counter);
+        out = { ...out, accessChain: chain };
+      }
       const value = extractValue(stmt.value, counter);
-      return [...value.temps, { ...stmt, value: value.expr }];
+      return [...chainTemps, ...value.temps, { ...out, value: value.expr }];
     }
     case "returnStatement": {
       if (!stmt.value) return [stmt];
@@ -388,36 +397,10 @@ function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
     const temps: AgencyNode[] = [];
     const base = walk(node.base, counter, true);
     temps.push(...base.temps);
-    let chainHasMethodCall = false;
-    const chain = (node.chain ?? []).map((entry: any) => {
-      if (entry?.kind === "methodCall" && entry.functionCall) {
-        chainHasMethodCall = true;
-        const inner = walk(
-          { ...entry.functionCall, loc: entry.functionCall.loc ?? node.loc },
-          counter,
-          false,
-        );
-        temps.push(...inner.temps);
-        return { ...entry, functionCall: inner.expr };
-      }
-      if (entry?.kind === "index" && entry.index) {
-        const inner = walk(entry.index, counter, true);
-        temps.push(...inner.temps);
-        return { ...entry, index: inner.expr };
-      }
-      if (entry?.kind === "slice") {
-        let e = entry;
-        for (const key of ["start", "end"]) {
-          if (e[key]) {
-            const inner = walk(e[key], counter, true);
-            temps.push(...inner.temps);
-            if (inner.expr !== e[key]) e = { ...e, [key]: inner.expr };
-          }
-        }
-        return e;
-      }
-      return entry;
-    });
+    const chain = walkChainEntries(node.chain ?? [], temps, counter);
+    const chainHasMethodCall = (node.chain ?? []).some(
+      (entry: any) => entry?.kind === "methodCall" && entry.functionCall,
+    );
     const rebuilt = { ...node, base: base.expr, chain };
     if (!hoistSelf || !chainHasMethodCall) return { temps, expr: rebuilt };
     const ref = makeTemp(rebuilt, temps, counter);
@@ -464,6 +447,42 @@ function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
     }
   }
   return { temps, expr };
+}
+
+/** Walk the expression operands of an access chain (`a[i]`, `a[i:j]`,
+ *  `a.m(x)`): method-call arguments extract with the call withheld as
+ *  the segment's own operation, index expressions and slice bounds
+ *  extract fully. Shared by valueAccess expressions and indexed
+ *  assignment targets so the two cannot diverge. */
+function walkChainEntries(
+  chain: any[],
+  temps: AgencyNode[],
+  counter: Counter,
+): any[] {
+  return chain.map((entry: any) => {
+    if (entry?.kind === "methodCall" && entry.functionCall) {
+      const inner = walk(entry.functionCall, counter, false);
+      temps.push(...inner.temps);
+      return { ...entry, functionCall: inner.expr };
+    }
+    if (entry?.kind === "index" && entry.index) {
+      const inner = walk(entry.index, counter, true);
+      temps.push(...inner.temps);
+      return { ...entry, index: inner.expr };
+    }
+    if (entry?.kind === "slice") {
+      let e = entry;
+      for (const key of ["start", "end"]) {
+        if (e[key]) {
+          const inner = walk(e[key], counter, true);
+          temps.push(...inner.temps);
+          if (inner.expr !== e[key]) e = { ...e, [key]: inner.expr };
+        }
+      }
+      return e;
+    }
+    return entry;
+  });
 }
 
 /** Emit `const __hoist_N = <call>` into temps and return the reference

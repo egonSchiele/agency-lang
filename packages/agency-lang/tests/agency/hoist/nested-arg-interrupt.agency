@@ -1,0 +1,17 @@
+// The question this answers: f(g(x)) where g raises an interrupt — the
+// hoisted temp step carries the pause, and f still receives the value
+// after resume. Both plain defs, no llm involved.
+effect mytest::gone { x: number }
+
+def gatekeeper(x: number): number {
+  const ok = interrupt mytest::gone("Let it through?", { x: x })
+  return x + 1
+}
+
+def tenfold(a: number): number {
+  return a * 10
+}
+
+node main() {
+  return tenfold(gatekeeper(2))
+}

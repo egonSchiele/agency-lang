@@ -1,0 +1,28 @@
+// f(g(x), h(y)) where BOTH arguments raise interrupts: after hoisting
+// they are two sequential temp steps, so the run pauses twice, in
+// left-to-right order, and each helper runs exactly once. The order
+// list pins both properties.
+effect mytest::gtwo { tag: string }
+
+let order: string[] = []
+
+def gLeft(x: number): number {
+  order = [...order, "g"]
+  const ok = interrupt mytest::gtwo("left?", { tag: "g" })
+  return x + 1
+}
+
+def hRight(y: number): number {
+  order = [...order, "h"]
+  const ok = interrupt mytest::gtwo("right?", { tag: "h" })
+  return y + 2
+}
+
+def combine(a: number, b: number): number {
+  return a * 100 + b
+}
+
+node main() {
+  const result = combine(gLeft(1), hRight(3))
+  return "${result}|${order}"
+}

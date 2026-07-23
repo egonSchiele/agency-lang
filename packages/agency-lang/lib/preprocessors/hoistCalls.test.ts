@@ -431,11 +431,31 @@ def f(): string {
     expect(chainArg.base).toMatchObject({ type: "variableName" });
   });
 
-  it("is idempotent", () => {
+  it("hoists calls in assignment-target index expressions, before the value temps", () => {
+    // `arr[pick(i)] = compute(i)`: the index evaluates before the
+    // value, so the index temp comes first and the value call stays
+    // as the statement tail.
+    const body = hoistCallsInScope(
+      bodyOf(`
+def f(arr: number[], i: number): number {
+  arr[pick(i)] = compute(i)
+  return arr[0]
+}`),
+    );
+    const t = temps(body) as any[];
+    expect(t.map((n) => n.value.functionName)).toEqual(["pick"]);
+    const assign = (stmts(body) as any[]).find((n) => n.variableName === "arr");
+    expect(assign.accessChain[0].index).toMatchObject({ type: "variableName" });
+    expect(assign.value.functionName).toBe("compute");
+  });
+
+  it("is idempotent, including the while rewrite", () => {
     const once = hoistCallsInScope(
       bodyOf(`
 def f(n: number): number {
   if (score(n) > 3) { return outer(inner(1)) }
+  let i = 0
+  while (check(i) < 5) { i = i + weigh(scale(i)) }
   return 0
 }`),
     );

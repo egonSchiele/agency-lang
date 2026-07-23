@@ -233,7 +233,9 @@ export function _resolveTableWidths(
   const attrs = node.attrs;
   const { header, body, footer, columnCount } = _validateTable(attrs);
   // Empty table: nothing to size, no column widths to resolve.
-  if (columnCount === 0) return node;
+  if (columnCount === 0) {
+    return node;
+  }
   const columns = (attrs.columns as ColumnSpec[] | null | undefined) ?? [];
   const cellPadding = clampCellPadding(attrs.cellPadding);
   const columnDividers = (attrs.columnDividers as boolean | undefined) ?? true;
@@ -537,7 +539,9 @@ function _composeCaption(caption: string, width: number): Block | null {
 export function composeTable(node: LayoutNode): Block {
   const { header, body, footer, columnCount } = _validateTable(node.attrs);
   // Empty table renders as nothing — no frame, no lines.
-  if (columnCount === 0) return Block.empty();
+  if (columnCount === 0) {
+    return Block.empty();
+  }
   const attrs = node.attrs;
   // Clamp to a non-negative integer. `_innerTableWidth` and the
   // divider line both use `cellPadding` in width arithmetic; a

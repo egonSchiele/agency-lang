@@ -801,7 +801,9 @@ export class TimeGuard implements Guard {
     // either — suspension never serializes, so a branch pause would
     // revive the clone armed at 1ms. No clone is the only shape that
     // matches "invisible to enforcement".
-    if (this.suspended) return undefined;
+    if (this.suspended) {
+      return undefined;
+    }
     // Wall-clock time is not cumulative across parallel branches, so each
     // branch gets its OWN timer. It inherits the parent's REMAINING budget
     // at fork time (floored at 1ms, so "parent work, then branch" cannot

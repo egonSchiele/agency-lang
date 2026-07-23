@@ -50,7 +50,7 @@ Accepted behavior change: `for (x in async getItems())` used to be rejected by `
 
 ## The tripwire
 
-Residual shapes the pass does not cover (calls nested inside opaque positions, mid-chain method calls inside a hoisted access chain) can still desync. Those now fail loudly instead of corrupting silently: every frame is stamped with its owner's scope name at CLAIM time, and a mismatched claim throws
+Residual shapes the pass does not cover can still desync: calls nested inside opaque positions (short-circuit right sides, catch expressions, try operands, with-modified statements), block bodies nested inside opaque expressions, and mid-chain method calls inside a hoisted access chain (the chain BASE and every argument hoist; a later chain segment re-running an earlier method call is what remains). Those now fail loudly instead of corrupting silently: every frame is stamped with its owner's scope name at CLAIM time, and a mismatched claim throws
 
 ```
 Resume desync: function "X" tried to claim the saved state of "Y".

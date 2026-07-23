@@ -351,6 +351,86 @@ node main() {
     expect(inner).not.toContain("__hoist_");
   });
 
+  it("hoists goto arguments (the node call itself is control flow and stays)", () => {
+    const parsed = parseAgency(`
+node main() {
+  goto second(wrap(side(1)))
+}
+
+node second(x: number) {
+  return x
+}`, {}, true);
+    if (!parsed.success) throw new Error(parsed.message);
+    const main = (parsed.result.nodes as any[]).find(
+      (n) => n.type === "graphNode" && n.nodeName !== "second",
+    );
+    const out = hoistCallsInScope(main.body) as any[];
+    const t = temps(out) as any[];
+    expect(t.map((n) => n.value.functionName)).toEqual(["side", "wrap"]);
+    const g = (stmts(out) as any[]).find((n) => n.type === "gotoStatement");
+    expect(g.nodeCall.functionName).toBe("second");
+    expect(g.nodeCall.arguments[0]).toMatchObject({ type: "variableName" });
+  });
+
+  it("hoists nested calls in match-expression arm values, inside the arm", () => {
+    const body = hoistCallsInScope(
+      bodyOf(`
+def f(x: number): number {
+  const r = match(x) {
+    1 => big(small(1))
+    _ => 0
+  }
+  return r
+}`),
+    );
+    // The temp for small() lands INSIDE the arm body (conditional-
+    // correct), not the enclosing body.
+    expect(temps(body)).toHaveLength(0);
+    const flat = JSON.stringify(body);
+    expect(flat).toContain("__hoist_0");
+    expect(flat).toContain("small");
+  });
+
+  it("hoists thread named-arg calls to before the thread statement", () => {
+    const body = hoistCallsInScope(
+      bodyOf(`
+node main() {
+  thread(label: makeLabel()) {
+    const a = llm("hi")
+  }
+  return "ok"
+}`),
+    );
+    const t = temps(body) as any[];
+    expect(t.map((n) => n.value.functionName)).toEqual(["makeLabel"]);
+    const th = (stmts(body) as any[]).find((n) => n.type === "messageThread");
+    expect(th.label).toMatchObject({ type: "variableName" });
+    // The thread BODY is untouched at this level (llm is its statement
+    // tail inside the same-frame body).
+    expect(JSON.stringify(th.body)).toContain("llm");
+  });
+
+  it("hoists a chain base call, and its arguments, out of an access chain", () => {
+    const body = hoistCallsInScope(
+      bodyOf(`
+def f(): string {
+  const x = outer(mk(inner()).field)
+  return x
+}`),
+    );
+    const t = temps(body) as any[];
+    // inner() extracts first, then the base call mk(...) hoists as its
+    // own step; the chain applies .field to the temp ref.
+    expect(t.map((n) => n.value.functionName ?? n.value.type)).toEqual([
+      "inner",
+      "mk",
+    ]);
+    const assign = (stmts(body) as any[]).find((n) => n.variableName === "x");
+    const chainArg = assign.value.arguments[0];
+    expect(chainArg.type).toBe("valueAccess");
+    expect(chainArg.base).toMatchObject({ type: "variableName" });
+  });
+
   it("is idempotent", () => {
     const once = hoistCallsInScope(
       bodyOf(`

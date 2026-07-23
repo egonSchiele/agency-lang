@@ -122,15 +122,29 @@ export function hoistCallsInScope(
   return out;
 }
 
-/** Start numbering above any __hoist_N already present in the scope
+/** Start numbering above any __hoist_N DECLARED in the scope's subtree
  *  (user-declared or from an earlier run of the pass). This scan is the
- *  collision protection; it also makes the pass idempotent. */
+ *  collision protection; it also makes the pass idempotent. Walks the
+ *  tree for assignment declarations rather than regexing serialized
+ *  JSON, so a string literal containing "__hoist_5" cannot bump the
+ *  counter and the cost stays one linear visit per scope. */
 function seedCounter(body: AgencyNode[]): number {
   let max = -1;
-  for (const m of JSON.stringify(body).matchAll(/__hoist_(\d+)/g)) {
-    const n = Number(m[1]);
-    if (n > max) max = n;
-  }
+  const visit = (n: any): void => {
+    if (!n || typeof n !== "object") return;
+    if (Array.isArray(n)) {
+      for (const item of n) visit(item);
+      return;
+    }
+    if (n.type === "assignment" && typeof n.variableName === "string") {
+      const m = n.variableName.match(/^__hoist_(\d+)$/);
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+    for (const key of Object.keys(n)) {
+      if (key !== "loc") visit(n[key]);
+    }
+  };
+  visit(body);
   return max + 1;
 }
 
@@ -153,6 +167,41 @@ function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
       // walk) still hoist.
       const walked = walk(stmt, counter, false);
       return [...walked.temps, walked.expr];
+    }
+    case "gotoStatement": {
+      // The node call is control flow (it transfers, and node calls
+      // throw in value position), so it stays; its ARGUMENTS are
+      // ordinary expressions evaluated before the transfer and hoist.
+      const nodeCall = walk(stmt.nodeCall, counter, false);
+      return [...nodeCall.temps, { ...stmt, nodeCall: nodeCall.expr }];
+    }
+    case "matchYield": {
+      // Match-expression arm values (synthesized by lowerPatterns).
+      // Same shape as returnStatement: the value's tail stays, nested
+      // calls hoist — into the arm body, which is conditional-correct
+      // because arms are their own statement lists. typeSource is a
+      // typing-only mirror and stays untouched.
+      if (!stmt.value) return [stmt];
+      const value = extractValue(stmt.value, counter);
+      return [...value.temps, { ...stmt, value: value.expr }];
+    }
+    case "messageThread": {
+      // thread(label: makeLabel()) { ... } — the named-arg expressions
+      // evaluate once at thread open. Hoisted temps sit right before
+      // the statement; on a halted or resume-skipped runner both the
+      // temp steps and the thread step are skipped together, matching
+      // the lazy opts-thunk semantics.
+      const temps: AgencyNode[] = [];
+      let out: any = stmt;
+      for (const key of ["label", "summarize", "continueExpr", "sessionExpr", "hidden"]) {
+        const arg = out[key];
+        if (arg && typeof arg === "object") {
+          const inner = walk(arg, counter, true);
+          temps.push(...inner.temps);
+          if (inner.expr !== arg) out = { ...out, [key]: inner.expr };
+        }
+      }
+      return [...temps, recurseSlots(out, counter)];
     }
     case "ifElse": {
       // The runtime memoizes the chosen branch (__condbranch_ on the
@@ -327,16 +376,22 @@ function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
   }
 
   if (node.type === "valueAccess") {
-    // Chains hoist as a UNIT when any segment calls: splitting a chain
-    // mid-way would mean rebuilding it across statements. Nested
-    // arguments and index expressions hoist first; a pause inside a
-    // later chain segment re-running an earlier one is a documented
-    // residual (tripwire-covered).
+    // The BASE walks like any expression, so a call base hoists into
+    // its own step: `getConfig().model` becomes `const __h =
+    // getConfig()` then `__h.model` — the natural boundary, and its
+    // arguments extract with it. Chain segments then hoist as a UNIT
+    // when a method call remains: splitting a chain mid-way would mean
+    // rebuilding it across statements. Method-call arguments, index
+    // expressions, and slice bounds hoist first; a pause inside a
+    // later chain segment re-running an earlier method call is a
+    // documented residual (tripwire-covered).
     const temps: AgencyNode[] = [];
-    let hasCall = node.base?.type === "functionCall";
+    const base = walk(node.base, counter, true);
+    temps.push(...base.temps);
+    let chainHasMethodCall = false;
     const chain = (node.chain ?? []).map((entry: any) => {
       if (entry?.kind === "methodCall" && entry.functionCall) {
-        hasCall = true;
+        chainHasMethodCall = true;
         const inner = walk(
           { ...entry.functionCall, loc: entry.functionCall.loc ?? node.loc },
           counter,
@@ -348,13 +403,23 @@ function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
       if (entry?.kind === "index" && entry.index) {
         const inner = walk(entry.index, counter, true);
         temps.push(...inner.temps);
-        if (inner.expr !== entry.index) hasCall = hasCall || false;
         return { ...entry, index: inner.expr };
+      }
+      if (entry?.kind === "slice") {
+        let e = entry;
+        for (const key of ["start", "end"]) {
+          if (e[key]) {
+            const inner = walk(e[key], counter, true);
+            temps.push(...inner.temps);
+            if (inner.expr !== e[key]) e = { ...e, [key]: inner.expr };
+          }
+        }
+        return e;
       }
       return entry;
     });
-    const rebuilt = { ...node, chain };
-    if (!hoistSelf || !hasCall) return { temps, expr: rebuilt };
+    const rebuilt = { ...node, base: base.expr, chain };
+    if (!hoistSelf || !chainHasMethodCall) return { temps, expr: rebuilt };
     const ref = makeTemp(rebuilt, temps, counter);
     return { temps, expr: ref };
   }

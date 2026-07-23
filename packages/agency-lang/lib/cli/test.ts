@@ -859,7 +859,9 @@ async function runExpectedCompileError(
   log: (msg: string) => void,
 ): Promise<TestStats> {
   const expected = tests.expectedCompileError!;
-  const sourcePath = testFile.replace(/\.test\.json$/, ".agency");
+  // Absolute, because the child runs with cwd set to the fixture's
+  // directory — a runner-relative path would no longer resolve there.
+  const sourcePath = path.resolve(testFile.replace(/\.test\.json$/, ".agency"));
   const siblingJs = sourcePath.replace(/\.agency$/, ".js");
 
   log(color.cyan(`Expecting compile to fail with: ${expected}`));

@@ -38,15 +38,22 @@ node writableIsASupersetOfReadOnly(): boolean {
   return coversReadOnly && writableFileTools().length == readOnlyFileTools().length + 2
 }
 
-// Membership both ways: the full git bundle must cover every read-only
-// tool (so the two lists cannot drift apart), and the read-only bundle
-// must carry no tool that can change the repository.
+// readOnlyGitTools is a security-sensitive bundle (read-only agents
+// carry it), so unlike the membership-only checks above it is pinned
+// EXACTLY: adding any tool to it must fail here and force a conscious
+// test edit, not slip through a not-on-the-blocklist gap. The full git
+// bundle must also cover every read-only tool so the lists cannot
+// drift apart.
 node readOnlyGitIsTheReadHalfOfGitTools(): boolean {
-  const gitNames = map(gitTools(), \tool -> tool.name)
+  const expected = [
+    "gitIsRepo", "gitStatus", "gitLog", "gitDiff", "gitShow",
+    "gitBranchList", "gitRemoteList", "gitBlame", "gitStashList",
+  ]
   const readNames = map(readOnlyGitTools(), \tool -> tool.name)
+  const gitNames = map(gitTools(), \tool -> tool.name)
+  const exact = readNames.length == expected.length && every(expected, \name -> readNames.includes(name))
   const covered = every(readOnlyGitTools(), \tool -> gitNames.includes(tool.name))
-  const noWrites = !readNames.includes("gitCommit") && !readNames.includes("gitCheckout") && !readNames.includes("gitAdd") && !readNames.includes("gitRestore")
-  return covered && noWrites && readNames.includes("gitLog") && readNames.includes("gitIsRepo")
+  return exact && covered
 }
 
 /** True when a tool has `useAgentCwd` bound to true by partial application.

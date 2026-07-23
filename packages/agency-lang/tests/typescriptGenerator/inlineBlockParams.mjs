@@ -9,7 +9,7 @@ import os from "os";
 import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
-  setupNode, setupFunction, runNode, runPrompt, callHook,
+  setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
@@ -187,6 +187,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "mapItems");
   if (!__globals()!.isInitialized("inlineBlockParams.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -376,6 +377,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "main");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "inlineBlockParams.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
@@ -405,6 +407,9 @@ __stack.locals.doubled = await __call(mapItems, {
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 const __bframe___block_0 = __bstack;
+// Claim site: this block just pulled its frame via setupFunction. A
+// mismatched claim on resume replay is a frame desync and throws.
+claimFrameForScope(__bstack, "__block_0");
 
 __bstack.args["x"] = x;
 

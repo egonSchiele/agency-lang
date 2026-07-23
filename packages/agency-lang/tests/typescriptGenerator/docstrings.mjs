@@ -9,7 +9,7 @@ import os from "os";
 import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
-  setupNode, setupFunction, runNode, runPrompt, callHook,
+  setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
@@ -190,6 +190,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "add");
   if (!__globals()!.isInitialized("docstrings.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -347,6 +348,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "greet");
   if (!__globals()!.isInitialized("docstrings.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -490,6 +492,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "calculateArea");
   if (!__globals()!.isInitialized("docstrings.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -652,6 +655,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "processData");
   if (!__globals()!.isInitialized("docstrings.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -781,6 +785,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "versionedTool");
   if (!__globals()!.isInitialized("docstrings.agency")) {
     await __initializeGlobals(__ctx)
   }

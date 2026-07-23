@@ -108,6 +108,11 @@ This allows injecting messages into the restored state, useful for providing con
 
 The fact that shared variables persist across restores is what makes retry loops work — a shared counter can track how many times a checkpoint has been restored even though local variables reset.
 
+A checkpoint whose thread has since been repaired (see "Reopen repair" in
+threads.md) is stale: `restoreThreadForResume` throws rather than letting
+the old snapshot overwrite the repaired thread. `MessageThread.repairs` is
+the generation both sides compare; `markRepaired()` is its only writer.
+
 ---
 
 ## Configuration

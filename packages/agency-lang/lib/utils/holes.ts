@@ -32,14 +32,23 @@ export function findHoles(nodes: AgencyNode[]): Hole[] {
 /** Distinct hole names, in first-appearance order. Internal — fill's
  *  arity checks need only names; the public surface is holeInfos. */
 export function holeNames(nodes: AgencyNode[]): string[] {
-  const all = findHoles(nodes).map((hole) => hole.name);
-  return all.filter((name, index) => all.indexOf(name) === index);
+  const seen: Record<string, true> = {};
+  const names: string[] = [];
+  for (const hole of findHoles(nodes)) {
+    if (seen[hole.name]) continue;
+    seen[hole.name] = true;
+    names.push(hole.name);
+  }
+  return names;
 }
 
 /** Types the hole's POSITION supplies, keyed by hole name — today the
  *  annotated-assignment position (`const x: string = #text`). This is what
  *  lets holesOf report a type the template author never wrote on the hole
- *  itself. First occurrence wins, matching holeInfos. */
+ *  itself. First occurrence wins, matching holeInfos — so when the same
+ *  name appears in positions of DIFFERENT types, fill-time validation
+ *  checks against the first only, and a mismatch at the second position
+ *  falls through to the completed program's run-time check. */
 export function positionInferredTypes(nodes: AgencyNode[]): Record<string, string> {
   const inferred: Record<string, string> = {};
   for (const visit of walkNodesArray(nodes)) {

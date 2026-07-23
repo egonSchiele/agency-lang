@@ -131,6 +131,8 @@ const done = fill(program.value, { minutes: 120000 })        // now complete
 
 **The escape hatch is explicit.** `parseExpr` and `parseStatements` do parse their input — that is their job. Writing `fill(t, { v: parseExpr(modelOutput).value })` lets model-written code into the program, and a template author who writes that has chosen to. The generated program still runs in a subprocess under your `handle` blocks, so what it can *do* stays governed either way.
 
+One consequence for tool lists: if a model can call `parseExpr` *and* `fill` as tools, the model — not you — decides whether code gets in. If you are relying on templates as a structural constraint, wrap the composition in your own function and hand the model that one tool, not the parsing primitives.
+
 ## Hygiene: names cannot collide by accident
 
 Consider this template:

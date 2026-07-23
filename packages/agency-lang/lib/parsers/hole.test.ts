@@ -128,6 +128,16 @@ describe("splices and quoted names", () => {
     expect(parses(`node main() {\n  const x = #...items\n}\n`)).toBe(false);
   });
 
+  it("rejects a splice in a def-name position", () => {
+    expect(parses(`def #...name(): number {\n  return 1\n}\n`)).toBe(false);
+  });
+
+  it("rejects a splice in an import specifier", () => {
+    expect(parses(`import { #...tools } from "std::fs"\n\nnode main() {\n  return 1\n}\n`)).toBe(
+      false,
+    );
+  });
+
   it("allows a splice in statement position", () => {
     expect(parses(`node main() {\n  #...steps\n}\n`)).toBe(true);
   });
@@ -135,6 +145,36 @@ describe("splices and quoted names", () => {
   it("allows a splice in an argument list", () => {
     expect(parses(`node main() {\n  f(#...args)\n}\n`)).toBe(true);
   });
+});
+
+// The tripwire for hygiene's walker dependency (see freeNamesOf in
+// lib/runtime/template/hygiene.ts): every expression position a hole can
+// occupy must be REACHED by walkNodes' descent, or free-name analysis
+// under-reports and capture avoidance fails open. Each entry pins one
+// position; add one when a node kind gains an expression child.
+describe("hole positions are reachable by the walker", () => {
+  const positions: [string, string][] = [
+    ["assignment value", `node main() {\n  const x = #h\n}\n`],
+    ["binop operand", `node main() {\n  const x = #h + 1\n}\n`],
+    ["if condition", `node main() {\n  if (#h) {\n    return 1\n  }\n}\n`],
+    ["while condition", `node main() {\n  while (#h) {\n    return 1\n  }\n}\n`],
+    ["call argument", `node main() {\n  f(#h)\n}\n`],
+    ["named argument", `node main() {\n  f(count: #h)\n}\n`],
+    ["guard head argument", `node main() {\n  const r = guard(time: #h) {\n    return 1\n  }\n}\n`],
+    ["return value", `node main() {\n  return #h\n}\n`],
+    ["array element", `node main() {\n  const x = [#h]\n}\n`],
+    ["object value", `node main() {\n  const x = { k: #h }\n}\n`],
+    ["string interpolation", `node main() {\n  const x = "v: \${#h}"\n}\n`],
+    ["for-loop iterable", `node main() {\n  for (item in #h) {\n    print(item)\n  }\n}\n`],
+    ["match scrutinee", `node main() {\n  const x = match (#h) {\n    1 => "a"\n    _ => "b"\n  }\n}\n`],
+    ["try expression", `node main() {\n  const x = try f(#h)\n}\n`],
+  ];
+
+  for (const [label, source] of positions) {
+    it(`finds a hole in ${label}`, () => {
+      expect(firstHole(source).name).toBe("h");
+    });
+  }
 });
 
 describe("holes in operand positions", () => {

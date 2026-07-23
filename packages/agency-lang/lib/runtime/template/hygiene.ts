@@ -73,7 +73,17 @@ export function bindersOf(code: Code): string[] {
 
 /** Names a fragment USES but does not bind — the side of capture an
  *  earlier plan draft got wrong: comparing binders to binders finds
- *  nothing, because `tmp` used as an expression binds nothing. */
+ *  nothing, because `tmp` used as an expression binds nothing.
+ *
+ *  LOAD-BEARING DEPENDENCY: this is exactly as complete as `walkNodes`'
+ *  descent (lib/utils/node.ts). A node kind whose expression children the
+ *  walker misses under-reports free names here, no test fails, and a
+ *  filler silently captures a template binder — the precise bug hygiene
+ *  exists to prevent, failing open. (The guardBlock head-argument gap
+ *  fixed in this feature's PR is the historical example.) If you add a
+ *  node kind with expression children, audit the walker's descent AND add
+ *  that position to the hole-position battery in
+ *  lib/parsers/hole.test.ts, which is the tripwire for this path. */
 export function freeNamesOf(code: Code): string[] {
   const bound = bindersOf(code);
   const used: string[] = [];
@@ -85,13 +95,23 @@ export function freeNamesOf(code: Code): string[] {
     .filter((name, index, all) => all.indexOf(name) === index);
 }
 
+/** Every name a node declares or mentions: binders, variable uses, AND
+ *  declaration names (function, node, type alias). The declaration names
+ *  matter for the reserved-prefix check below — `fresh()` starts at
+ *  `__hyg1_`, so a filler declaring `def __hyg1_tmp()` could collide with
+ *  the very first rename if declarations went unchecked. */
+function allNamesOfNode(node: AgencyNode): string[] {
+  const names = [...bindersOfNode(node)];
+  if (node.type === "variableName") names.push(node.value);
+  if (node.type === "function") names.push(declaredName(node.functionName));
+  if (node.type === "graphNode") names.push(declaredName(node.nodeName));
+  if (node.type === "typeAlias") names.push(node.aliasName);
+  return names;
+}
+
 export function assertNoReservedPrefix(code: Code, what: string): void {
   for (const { node } of walkNodesArray(code.nodes)) {
-    const names = [
-      ...bindersOfNode(node),
-      ...(node.type === "variableName" ? [node.value] : []),
-    ];
-    for (const name of names) {
+    for (const name of allNamesOfNode(node)) {
       if (name.startsWith(RESERVED_PREFIX)) {
         throw new Error(
           `\`${name}\` uses the reserved prefix \`${RESERVED_PREFIX}\`, which templates keep for hygiene. Rename it in the ${what}.`,

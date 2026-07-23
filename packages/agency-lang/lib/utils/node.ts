@@ -493,6 +493,11 @@ export function* walkNodes(
       for (const arg of node.arguments) {
         yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
       }
+    } else if (node.type === "tryExpression") {
+      // `try expr` — found by the hole-position battery in hole.test.ts,
+      // which exists because free-name analysis (template hygiene) is
+      // only as complete as this descent.
+      yield* walkNodes([node.call as AgencyNode], [...ancestors, node], scopes);
     } else if (node.type === "importStatement") {
       // Template import specifiers may be identifier holes; real names are
       // plain strings with nothing to walk.

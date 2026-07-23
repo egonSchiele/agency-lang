@@ -165,7 +165,17 @@ function nodesFor(hole: Hole, value: unknown, expectedType?: string): AgencyNode
   if (expectedType) assertFillerType(hole, value, expectedType);
   if (isCode(value)) {
     assertKindMatchesSort(value, hole);
-    return value.nodes.map((node) => stampOrigin(node, hole));
+    // Deep-stamp the fragment, then guarantee the TOP node of each graft
+    // carries a stamped loc even when the fragment parser attached none
+    // (small literals parse loc-less) — the hole's own position is the
+    // honest fallback.
+    return value.nodes.map((node) => {
+      const stamped = stampOrigin(node, hole) as AgencyNode & {
+        loc?: SourceLocation;
+      };
+      if (stamped.loc === undefined) stamped.loc = fillerLoc(hole);
+      return stamped as AgencyNode;
+    });
   }
   return [liftValue(value, fillerLoc(hole))];
 }
@@ -255,10 +265,31 @@ function fillerLoc(hole: Hole): SourceLocation {
   return { ...hole.loc, origin: { kind: "filler", name: hole.name } };
 }
 
-function stampOrigin(node: AgencyNode, hole: Hole): AgencyNode {
-  const withLoc = node as AgencyNode & { loc?: SourceLocation };
-  return {
-    ...node,
-    loc: { ...(withLoc.loc ?? hole.loc), origin: { kind: "filler" as const, name: hole.name } },
-  } as AgencyNode;
+/**
+ * Stamp `origin` onto EVERY node of a grafted fragment, not just the top
+ * — a fragment's inner nodes carry positions into a source string that no
+ * longer exists, and an error there must still say which fill it came
+ * from. Recurses the whole tree (deep-cloning as it goes, which also
+ * protects against aliasing the caller's value); any object carrying a
+ * `loc` gets the stamp.
+ */
+function stampOrigin(node: unknown, hole: Hole): unknown {
+  if (Array.isArray(node)) return node.map((item) => stampOrigin(item, hole));
+  if (node === null || typeof node !== "object") return node;
+  const source = node as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(source)) {
+    out[key] = key === "loc" ? source[key] : stampOrigin(source[key], hole);
+  }
+  // Only nodes that already carry a position get the stamp — their loc
+  // points into a fragment source string that no longer exists, so the
+  // origin marker is what keeps an error there attributable. Loc-less
+  // sub-records (text segments and the like) keep their exact shape.
+  if (source.loc !== undefined) {
+    out.loc = {
+      ...(source.loc as SourceLocation),
+      origin: { kind: "filler" as const, name: hole.name },
+    };
+  }
+  return out;
 }

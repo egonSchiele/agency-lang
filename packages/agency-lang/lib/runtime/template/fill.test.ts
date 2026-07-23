@@ -50,6 +50,15 @@ describe("fillHoles: lifting", () => {
     expect(out).toContain("a: 1");
   });
 
+  it("rejects an object with a __proto__ key", () => {
+    // A `__proto__` key in a JS object literal sets the prototype even
+    // when quoted; a lifted record must never smuggle that in.
+    const poisoned = JSON.parse('{"__proto__": {"polluted": true}}');
+    expect(() =>
+      fillHoles(load(`node main() {\n  const x = #v\n}\n`), { v: poisoned }),
+    ).toThrow(/__proto__/);
+  });
+
   it("lifts null", () => {
     expect(fillAndPrint(`node main() {\n  const x = #v\n}\n`, { v: null })).toContain(
       "= null",
@@ -185,6 +194,23 @@ describe("fill-time type checking", () => {
     expect(fillAndPrint(t, { text: _parseExpr("getGreeting()") })).toContain(
       "getGreeting()",
     );
+  });
+});
+
+describe("fillHoles: origin stamping", () => {
+  it("stamps origin on every node of a grafted fragment, not just the top", () => {
+    const filled = fillHoles(load(`node main() {\n  #setup\n}\n`), {
+      setup: _parseStatements(`const x = f(1 + 2)`),
+    });
+    const nodeDef = filled.nodes.find((n) => n.type === "graphNode");
+    if (!nodeDef || nodeDef.type !== "graphNode") throw new Error("no node");
+    const assignment = nodeDef.body.find((n) => n.type === "assignment");
+    if (!assignment || assignment.type !== "assignment") throw new Error("no assignment");
+    // Top of the graft...
+    expect(assignment.loc?.origin).toEqual({ kind: "filler", name: "setup" });
+    // ...and a nested expression inside it.
+    const call = assignment.value as { loc?: { origin?: unknown } };
+    expect(call.loc?.origin).toEqual({ kind: "filler", name: "setup" });
   });
 });
 

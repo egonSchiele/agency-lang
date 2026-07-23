@@ -26,10 +26,22 @@ export function liftValue(value: unknown, loc: SourceLocation): AgencyNode {
   }
   if (typeof value === "object") {
     return objectLiteral(
-      Object.keys(value as object).map((key) => ({
-        key,
-        value: liftValue((value as Record<string, unknown>)[key], loc),
-      })),
+      Object.keys(value as object).map((key) => {
+        // In a JS object literal, a `__proto__` key — even quoted — sets
+        // the prototype instead of creating an own property. A lifted
+        // model-supplied record must never smuggle that in, so reject it
+        // loudly rather than emit a literal whose shape silently differs
+        // from the data.
+        if (key === "__proto__") {
+          throw new Error(
+            `Cannot lift an object with a "__proto__" key into a template.`,
+          );
+        }
+        return {
+          key,
+          value: liftValue((value as Record<string, unknown>)[key], loc),
+        };
+      }),
       loc,
     );
   }

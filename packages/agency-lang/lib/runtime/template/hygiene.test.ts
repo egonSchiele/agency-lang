@@ -104,4 +104,29 @@ describe("hygiene", () => {
       }),
     ).toThrow(/reserved/);
   });
+
+  // Declaration names must be covered too: fresh() starts at __hyg1_, so a
+  // filler declaring `def __hyg1_tmp()` could collide with the very first
+  // rename if declarations went unchecked.
+  it("rejects a filler declaring a function with the reserved prefix", () => {
+    expect(() =>
+      fillHoles(load(`#decls\n\nnode main() {\n  return 1\n}\n`), {
+        decls: _parseAST("def __hyg1_x(): number {\n  return 1\n}\n"),
+      }),
+    ).toThrow(/reserved/);
+  });
+
+  it("rejects a filler declaring a type alias with the reserved prefix", () => {
+    expect(() =>
+      fillHoles(load(`#decls\n\nnode main() {\n  return 1\n}\n`), {
+        decls: _parseAST("type __hyg1_T = string\n"),
+      }),
+    ).toThrow(/reserved/);
+  });
+
+  it("rejects a template whose node name uses the reserved prefix", () => {
+    expect(() =>
+      fillHoles(load(`node __hyg1_main() {\n  const x = #v\n}\n`), { v: 1 }),
+    ).toThrow(/reserved/);
+  });
 });

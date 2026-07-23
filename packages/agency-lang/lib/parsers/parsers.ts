@@ -995,7 +995,17 @@ export const statementHoleParser: Parser<Hole> = memo(
 
 export const identifierHoleParser: Parser<Hole> = memo(
   "identifierHoleParser",
-  map(lazy(() => holeParser), (hole) => ({ ...hole, sort: "identifier" as const })),
+  (input: string) => {
+    const result = holeParser(input);
+    if (!result.success) return result;
+    // A name position holds exactly one name; a splice has no meaning
+    // here. Rejecting at parse time keeps fill's identifier branch total
+    // (a splice flag reaching it would otherwise be silently dropped).
+    if (result.result.splice) {
+      return failure("a splice cannot appear in a name position", input);
+    }
+    return success({ ...result.result, sort: "identifier" as const }, result.rest);
+  },
 );
 
 export const declHoleParser: Parser<Hole> = memo(
@@ -1022,6 +1032,17 @@ const declNameHoleParser: Parser<Hole> = map(
   seqC(capture(lazy(() => identifierHoleParser), "hole"), optionalSpaces),
   (r: unknown) => (r as { hole: Hole }).hole,
 );
+
+/** A declaration name: an identifier hole or a raw name. When the input
+ *  starts with `#` there is NO raw-name fallback — otherwise a rejected
+ *  hole form (`def #...name`) would be swallowed as the literal string
+ *  "#...name" instead of failing the parse. */
+const declNameParser: Parser<string | Hole> = (input: string) => {
+  if (input.startsWith("#")) {
+    return declNameHoleParser(input) as ParserResult<string | Hole>;
+  }
+  return many1Till(char("("))(input) as ParserResult<string | Hole>;
+};
 
 export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: string): ParserResult<BooleanLiteral> => {
   const parser = seqC(
@@ -5273,7 +5294,7 @@ const _baseFunctionParser: Parser<any> = memo(
     set("type", "function"),
     capture(str("def"), "keyword"),
     many1(space),
-    capture(or(declNameHoleParser, many1Till(char("("))), "functionName"),
+    capture(declNameParser, "functionName"),
     char("("),
     optionalSpacesOrNewline,
     capture(
@@ -5442,7 +5463,7 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
       optionalSpaces,
       str("node"),
       many1(space),
-      capture(or(declNameHoleParser, many1Till(char("("))), "nodeName"),
+      capture(declNameParser, "nodeName"),
       char("("),
       optionalSpacesOrNewline,
       capture(

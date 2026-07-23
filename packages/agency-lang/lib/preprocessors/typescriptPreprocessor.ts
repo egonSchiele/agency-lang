@@ -32,6 +32,7 @@ import {
 } from "@/utils/node.js";
 import { desugarParallelInBody } from "./parallelDesugar.js";
 import { desugarGuardsInBody } from "./guardDesugar.js";
+import { hoistCallsInProgram } from "./hoistCalls.js";
 import { injectSchemaArgsInProgram } from "./injectSchemaArgs.js";
 import { prunePreludeShadows } from "./prunePreludeShadows.js";
 
@@ -344,6 +345,18 @@ export class TypescriptPreprocessor {
       this.importedFunctions,
     );
     this.collectSkills();
+    // Hoist helper calls into their own const steps so resume replay
+    // never re-executes a completed call (frame-queue desync; spec
+    // docs/superpowers/specs/2026-07-22-hoist-calls-resume-safety-design.md).
+    // After collectSkills so skill detection sees original call shapes;
+    // before addAwaitPendingCalls and resolveVariableScopes so the
+    // __hoist temps get awaits and scopes like hand-written statements.
+    //
+    // Accepted behavior change: `for (x in async getItems())` was
+    // rejected by validateNoAsyncInLoops (the async call sat under the
+    // loop node); hoisting moves it above the loop, so it now compiles.
+    // A relaxation, recorded here and in docs/dev/hoist-calls.md.
+    this.program = hoistCallsInProgram(this.program);
     this.addAwaitPendingCalls();
     this.validateNoAsyncInLoops();
 

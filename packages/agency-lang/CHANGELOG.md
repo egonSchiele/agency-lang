@@ -22,6 +22,45 @@ internal path containment (no `..`, no absolute filenames), so an
 approved read or write can now reach any path the interrupt policy
 allows.
 
+### Language / Typechecker
+- **List comprehensions** — `[expr for x in xs if cond]`, with `fork` / `forkShared` / `race` / `raceShared` prefixes for parallel comprehensions.
+- **Type patterns** — `match` can now match on the type of a value (`is Type`, `pattern: Type`), plus a stdlib `Json` type.
+- **fork/race return types** — a `fork` block is typed `T[]` and `race` is `T | null`, derived from the block's returns.
+- Access chains now parse on bracket literals (`[1, 2, 3].map(...)`).
+- Passing a single tool to `tools:` is now a type error instead of a runtime crash.
+- `@validate` validators now run through `Record` values.
+- Literal arrays and objects require commas between items, with targeted parse errors for half-typed comprehensions.
+
+### Standard Library
+- **Agents rework** — the worker agents moved onto the stdlib and were heavily refactored. Oracle, explorer, and data agents joined; each agent ships its own skill and carries the tools its job requires, including read-only git tools for the writer and verifiers.
+- **Supervision** — long-running solves run under `std::supervise` with periodic verifier check-ins, brainstorming before complex solves, and partial results saved at every milestone.
+- **`std::date` instants** — `now()` returns epoch milliseconds, plus `elapsedTime` and `formatDuration`.
+- **`std::thread`** — `queueMessage` queues a message for the model's next turn; `toolMessage` seeds a synthetic tool exchange.
+- Guard `Result<T>` annotations flow into `saveDraft` schemas, so drafts validate against the real return type.
+- An empty `table` renders as nothing instead of throwing mid-display.
+- AppleScript integrations pass data as argv instead of escaping it into the script source.
+
+### Agent
+- **Per-turn budgets** — a deadline or spend limit stated in your message ("no more than 30 seconds") becomes a real guard around the turn, with a prompt to grant more when it trips.
+- The entry point split into CLI, REPL, and coordinator, and the duplicate subagents collapsed onto the stdlib.
+- Compaction can now run after an assistant message, so a long tool-call chain cannot overflow the context. Summarization extracts only the new messages.
+- `--max-cost` / `--max-time` flags, a sticky interrupt prompt in line mode, and no more crashing on spawn errors.
+- The agent knows the standard library and its own docs via skills, uses the gh CLI, and reports what it is doing as it works.
+
+### Runtime
+- **Resume desync fixed** — helper calls are hoisted into their own skippable steps, so an in-process resume can no longer replay a completed call and corrupt saved frames.
+- **Abandoned tool calls repaired** — reopening a thread with a dangling tool call inserts a synthetic result instead of failing the next request with a provider 400.
+- Renamed tools now round-trip through checkpoints, and a registry miss no longer crashes checkpoint writes.
+- Handlers can raise interrupts without being triggered by their own interrupt, and a guard trip inside a handler rejects instead of pausing.
+- A guard suspended while its handler deliberates no longer leaks armed clones into tool-call branches (the 1ms-limit trip storm).
+- Scoped block callbacks survive cross-process pause/resume, and imported modules' top-level callbacks now fire.
+- Cache reads and writes are counted in the token/cost breakdown.
+
+### CLI & Editor
+- **`agency lint`** — new command with an unused-imports rule (AL0001), editor gray-out, and remove-on-save.
+- LSP fixes — no more false import errors on unsaved edits, and the prelude has a single definition so its phantom errors are gone.
+- `agency literate` weaves nested comments and takes `--base-url`; the docs gained rendered examples.
+
 ## Jul 17 2026 — v0.9.0
 
 ### Language / Typechecker

@@ -78,6 +78,29 @@ describe("groupTestSources", () => {
     expect(groups[0].files).toEqual([path.join(root, "live/main.agency")]);
   });
 
+  test("expectedCompileError test files are excluded, even wrongly typed", () => {
+    const root = writeTree({
+      live: { "main.agency": TRIVIAL, "main.test.json": TEST_JSON },
+      broken: {
+        "main.agency": "this does not even parse {{{",
+        "main.test.json": JSON.stringify({ expectedCompileError: "AG2001" }),
+      },
+      // Presence must be enough: precompiling this in-process would
+      // process.exit(1) and end the suite; the runner rejects the type.
+      mistyped: {
+        "main.agency": "this does not even parse {{{",
+        "main.test.json": JSON.stringify({ expectedCompileError: null }),
+      },
+    });
+    const groups = groupTestSources({}, [
+      path.join(root, "live/main.test.json"),
+      path.join(root, "broken/main.test.json"),
+      path.join(root, "mistyped/main.test.json"),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].files).toEqual([path.join(root, "live/main.agency")]);
+  });
+
   test("key-order-different but equal local configs are compatible (zod-normalized keys)", () => {
     // Two dirs whose agency.json files have the same content in different
     // key order, sharing an imported module. The session derives config

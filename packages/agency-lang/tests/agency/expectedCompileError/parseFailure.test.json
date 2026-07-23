@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "Failed to parse",
+  "description": "A file that cannot be parsed reports as one failing compile, and does not end the suite"
+}

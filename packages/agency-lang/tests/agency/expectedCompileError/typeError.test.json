@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG2001",
+  "description": "A type error under strict mode reports as one failing compile, matched by diagnostic code"
+}

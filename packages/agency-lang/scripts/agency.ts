@@ -259,10 +259,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
             process.exit(0);
           });
         } else {
+          // Test-harness only, mirroring the option every other test-runner
+          // compile passes (lib/cli/util.ts). Set by lib/cli/test.ts on the
+          // child it spawns for `expectedCompileError` files; nothing else
+          // sets it, so the default stays deny.
+          const allowTestImports =
+            process.env.AGENCY_ALLOW_TEST_IMPORTS === "1";
           for (const input of inputs) {
             compile(config, input, undefined, {
               ts: opts.ts,
               freshness: opts.force ? "force" : undefined,
+              allowTestImports,
             });
           }
           // If installed globally, the user will hit ERR_MODULE_NOT_FOUND

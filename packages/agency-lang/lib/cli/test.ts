@@ -18,6 +18,12 @@ import {
 } from "./util.js";
 import { color } from "@/utils/termcolors.js";
 import { formatDiff } from "@/utils/diff.js";
+import {
+  findIncompatibleField,
+  judgeCompileAttempt,
+  type CompileAttempt,
+} from "./expectedCompileError.js";
+import { safeDeleteFile } from "@/utils.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
 import { compile, loadConfig } from "./commands.js";
@@ -78,7 +84,23 @@ type TestCase = {
 };
 type Tests = {
   sourceFile?: string;
-  tests: TestCase[];
+  // Optional because a file with `expectedCompileError` has no cases to
+  // run: the compile itself is the test.
+  tests?: TestCase[];
+  // When set, this file asserts that its sibling .agency FAILS to compile
+  // and that the failure text contains this substring. Diagnostic codes
+  // ("AG8001") are the intended values; a distinctive phrase works too,
+  // which is what parse errors need since they carry no code.
+  //
+  // The compile runs in a child `agency compile` process. That is not an
+  // implementation detail: compile() reports parse failures, strict type
+  // errors, and closure failures with process.exit(1) rather than a throw
+  // (lib/compiler/buildSession.ts), so compiling in-process would kill the
+  // test runner. Such files are also skipped by the precompile pass
+  // (lib/cli/precompile.ts) for the same reason.
+  expectedCompileError?: string;
+  // Printed when the file runs, same role as the per-case field.
+  description?: string;
   // File-level fetch mocks applied to every test; overridden per-test.
   fetchMocks?: FetchMock[];
   // If true, skip every test in this file. Equivalent to setting `skip: true`
@@ -112,9 +134,12 @@ const TIMEOUT_CEILINGS = {
 
 const DEFAULT_PER_TEST_MS = 2 * 60 * 1000; // 2 minutes
 
-function resolveTimeoutMs(testCase: TestCase, fileDefaults: Tests): number {
+function resolveTimeoutMs(
+  testCase: TestCase | undefined,
+  fileDefaults: Tests,
+): number {
   const requested =
-    testCase.timeoutMs ?? fileDefaults.defaultTimeoutMs ?? DEFAULT_PER_TEST_MS;
+    testCase?.timeoutMs ?? fileDefaults.defaultTimeoutMs ?? DEFAULT_PER_TEST_MS;
   // Clamp to >= 1ms: Node treats `timeout: 0` (and negative) as "no
   // timeout", which would defeat the entire defensive-timeout goal.
   // Clamp to <= ceiling so a stray huge value can't escape the cap.
@@ -227,7 +252,7 @@ function writeTestCase(
   if (interruptHandlers && interruptHandlers.length > 0) {
     testCase.interruptHandlers = interruptHandlers;
   }
-  tests.tests.push(testCase);
+  (tests.tests ??= []).push(testCase);
   fs.writeFileSync(testFilePath, JSON.stringify(tests, null, 2));
   return testFilePath;
 }
@@ -770,6 +795,143 @@ async function runTestWithRetries(
   return outcome;
 }
 
+/**
+ * Compile `sourcePath` in a child `agency compile` process and report what
+ * happened. Never throws for a compile failure — a failed compile is the
+ * expected outcome here, so it comes back as data.
+ */
+async function compileInSubprocess(
+  sourcePath: string,
+  timeoutMs: number,
+  signal: AbortSignal,
+): Promise<CompileAttempt> {
+  // The CLI entry this runner is itself executing, so the child is
+  // guaranteed to be the same build as the parent.
+  const cliEntry = process.argv[1];
+  const options = {
+    cwd: path.dirname(sourcePath),
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: timeoutMs,
+    // isTimeoutError only recognizes a timeout kill by SIGKILL.
+    killSignal: "SIGKILL" as const,
+    signal,
+    env: { ...process.env, AGENCY_ALLOW_TEST_IMPORTS: "1" },
+  };
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [cliEntry, "compile", sourcePath],
+      options,
+    );
+    return { exitCode: 0, output: `${stderr}${stdout}` };
+  } catch (e) {
+    // Abort before timeout, mirroring the per-case path (runSingleTest):
+    // both kills use SIGKILL here, and the abort shape is the more
+    // specific claim.
+    if (isAbortError(e)) {
+      return { exitCode: null, output: "", killedBy: "abort" };
+    }
+    if (isTimeoutError(e)) {
+      return { exitCode: null, output: "", killedBy: "timeout" };
+    }
+    const err = e as { code?: unknown; stdout?: string; stderr?: string };
+    // An error with no captured streams never ran a compile — a missing
+    // CLI entry, a bad cwd. Reporting it as a compile attempt would let a
+    // broken harness masquerade as a failing fixture.
+    if (err.stdout === undefined && err.stderr === undefined) {
+      throw e;
+    }
+    return {
+      exitCode: typeof err.code === "number" ? err.code : 1,
+      output: `${err.stderr ?? ""}${err.stdout ?? ""}`,
+    };
+  }
+}
+
+/**
+ * Run a `.test.json` whose `expectedCompileError` is set. The file counts
+ * as exactly one test so suite totals and sharding stay honest.
+ */
+async function runExpectedCompileError(
+  tests: Tests,
+  testFile: string,
+  suite: SuiteContext,
+  log: (msg: string) => void,
+): Promise<TestStats> {
+  const expected = tests.expectedCompileError;
+  // Absolute, because the child runs with cwd set to the fixture's
+  // directory — a runner-relative path would no longer resolve there.
+  const sourcePath = path.resolve(testFile.replace(/\.test\.json$/, ".agency"));
+  const siblingJs = sourcePath.replace(/\.agency$/, ".js");
+
+  log(color.cyan(`Expecting compile to fail with: ${expected}`));
+  if (tests.description) {
+    log(color.cyan("Description:", tests.description) + "\n");
+  }
+
+  const fail = (reason: string): TestStats => {
+    log(color.red(`  ✗ ${reason}`));
+    return {
+      passed: 0,
+      failed: 1,
+      filesPassed: 0,
+      filesFailed: 1,
+      failedFiles: [testFile],
+      slowTests: [],
+    };
+  };
+
+  // The precompile pass excludes these files on field PRESENCE, so a
+  // wrongly-typed value lands here rather than exiting the suite there —
+  // this is where it gets its clear per-fixture failure.
+  if (typeof expected !== "string") {
+    suite.completed.push(testFile);
+    return fail(
+      `'expectedCompileError' must be a string, got: ${JSON.stringify(expected)}`,
+    );
+  }
+
+  const incompatible = findIncompatibleField(tests);
+  if (incompatible) {
+    // Returned normally, so the file belongs in `completed` (the
+    // suite-abort summary's definition, SuiteContext) even though it
+    // never compiled anything.
+    suite.completed.push(testFile);
+    return fail(
+      `'${incompatible}' cannot be combined with 'expectedCompileError': ` +
+        `nothing runs in this mode, only the compile.`,
+    );
+  }
+
+  // Any .js here is from an earlier run, and these sources exist to be
+  // broken — preferCompiled (lib/cli/util.ts) would happily execute one.
+  // safeDeleteFile no-ops quietly when there is nothing to delete.
+  safeDeleteFile(siblingJs, false);
+  const attempt = await compileInSubprocess(
+    sourcePath,
+    resolveTimeoutMs(undefined, tests),
+    suite.abortController.signal,
+  );
+  safeDeleteFile(siblingJs, false);
+
+  // Matches the per-case path: a file that ran to a verdict is completed,
+  // pass or fail. Only an abort leaves it off the list.
+  if (attempt.killedBy !== "abort") suite.completed.push(testFile);
+
+  const verdict = judgeCompileAttempt(expected, attempt);
+  if (!verdict.ok) return fail(verdict.reason);
+
+  log(color.green(`  ✓ Compile failed as expected`));
+  return {
+    passed: 1,
+    failed: 0,
+    filesPassed: 1,
+    filesFailed: 0,
+    failedFiles: [],
+    slowTests: [],
+  };
+}
+
 async function runTestFile(
   config: AgencyConfig,
   testFile: string,
@@ -796,7 +958,8 @@ async function runTestFile(
     }
 
     let passed = 0;
-    const total = tests.tests.length;
+    const cases = Array.isArray(tests.tests) ? tests.tests : [];
+    const total = cases.length;
 
     // File-level skip: if the .test.json has `"skip": true` at the top
     // level, skip every test in the file. This makes top-level skip work
@@ -816,6 +979,34 @@ async function runTestFile(
       };
     }
 
+    // After the skip check — a skipped file is skipped no matter what
+    // else it declares — and before any per-case machinery, because a
+    // file in this mode has no cases: the compile is the test.
+    if (tests.expectedCompileError !== undefined) {
+      return await runExpectedCompileError(tests, testFile, suite, log);
+    }
+
+    // Neither cases nor a compile expectation: the file is malformed.
+    // Before `tests` became optional this crashed the runner with a
+    // TypeError; passing silently as "0/0" would be quieter than either.
+    // (An explicit empty `tests: []` keeps its longstanding 0/0 pass.)
+    if (!Array.isArray(tests.tests)) {
+      log(
+        color.red(
+          `  ✗ ${testFile} has no 'tests' array and no 'expectedCompileError'`,
+        ),
+      );
+      suite.completed.push(testFile);
+      return {
+        passed: 0,
+        failed: 1,
+        filesPassed: 0,
+        filesFailed: 1,
+        failedFiles: [testFile],
+        slowTests: [],
+      };
+    }
+
     let skipped = 0;
     const slowTests: SlowTest[] = [];
     let aborted = false;
@@ -828,7 +1019,7 @@ async function runTestFile(
         break;
       }
 
-      const testCase = tests.tests[i];
+      const testCase = cases[i];
       const interruptInfo = testCase.interruptHandlers
         ? ` interrupts=${testCase.interruptHandlers.length}`
         : "";

@@ -1,0 +1,4 @@
+node main(): string {
+  const n: number = "not a number"
+  return n
+}

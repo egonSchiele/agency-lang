@@ -29,14 +29,25 @@ const BASE_GROUP_LABEL = "<base config>";
 // Back-compat name for existing importers (precompile.test.ts).
 export type { CompileGroup as PrecompileGroup };
 
-// File-level skip mirror of runTestFile's check: a `skip: true` (or
-// `skipOnCI: true` under CI) .test.json never runs, so its source must not
-// be precompiled either — it may intentionally not compile. Malformed
-// .test.json is treated as live; the runner will surface the real error.
-function isFileLevelSkipped(testJsonFile: string): boolean {
+// Two kinds of .test.json must not be precompiled, both because their
+// source may intentionally not compile — and a failure in this pass ends
+// the process before any test runs:
+//   - `skip: true` (or `skipOnCI: true` under CI), mirroring runTestFile.
+//   - `expectedCompileError`, whose whole point is a source that fails;
+//     runTestFile compiles it in a child process instead. Presence, not
+//     type: a wrongly-typed value must still keep the broken source out
+//     of this pass — the runner validates the type and fails just that
+//     fixture.
+// Malformed .test.json is treated as live; the runner will surface the
+// real error.
+function isExcludedFromPrecompile(testJsonFile: string): boolean {
   try {
     const tests = JSON.parse(fs.readFileSync(testJsonFile, "utf-8"));
-    return tests.skip === true || (tests.skipOnCI === true && !!process.env.CI);
+    return (
+      tests.skip === true ||
+      (tests.skipOnCI === true && !!process.env.CI) ||
+      tests.expectedCompileError !== undefined
+    );
   } catch {
     return false;
   }
@@ -54,7 +65,7 @@ export function groupTestSources(
       .resolve(testJsonFile)
       .replace(/\.test\.json$/, ".agency");
     if (!fs.existsSync(sourceFile)) continue;
-    if (isFileLevelSkipped(testJsonFile)) continue;
+    if (isExcludedFromPrecompile(testJsonFile)) continue;
 
     const dir = path.dirname(sourceFile);
     const localConfigPath = path.join(dir, "agency.json");

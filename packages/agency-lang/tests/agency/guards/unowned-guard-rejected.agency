@@ -1,0 +1,90 @@
+// turnBudgetHandler used to pass foreign std::guard trips through, and
+// since nothing above it answers guards, an unlabeled inner guard parked
+// the turn forever (the orphaned tool_use incident). Now a foreign trip is
+// rejected: the budget is a hard stop, the trip converts to a Failure at
+// the guard site, and the caller salvages like any other guard failure.
+// These tests drive the REAL handler — turn-budget-partial.agency only
+// imitates it.
+import test { _advanceTime } from "std::date"
+import { turnBudgetHandler, TURN_BUDGET_LABEL } from "../../../lib/agents/agency-agent/lib/budget.agency"
+import { setInteractive } from "../../../lib/agents/agency-agent/lib/trace.agency"
+
+// Stands in for a subagent body that saves a partial, then overruns its
+// budget. The finalize-as-draft salvage mirrors
+// tests/agency/guards/finalize-binder-returns-draft.agency, where a
+// REJECTED guard trip returns success carrying the finalize value.
+def workWithSalvage(): string {
+  saveDraft("PARTIAL")
+  _advanceTime(20000)
+  return "FULL"
+
+  finalize as draft {
+    if (draft != null) {
+      return draft
+    }
+    return "no-draft"
+  }
+}
+
+def workBare(): string {
+  _advanceTime(20000)
+  return "FULL"
+}
+
+def innerWithSalvage(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "expertAgent") {
+    return workWithSalvage()
+  }
+}
+
+def innerBare(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "oracleAgent") {
+    return workBare()
+  }
+}
+
+// Foreign label + salvage: reject converts the trip to a Failure at the
+// guard site, where finalize-as-draft turns it into a success carrying
+// the partial. This is the claim "salvage still runs", demonstrated.
+node foreignGuardSalvage() {
+  handle {
+    const r = innerWithSalvage()
+    if (r is success(v)) {
+      return "salvaged:${v}"
+    }
+    return "no-salvage"
+  } with turnBudgetHandler
+}
+
+// Foreign label, no salvage: a plain Failure the caller can match on.
+node foreignGuardBare() {
+  handle {
+    const r = innerBare()
+    return "failure:${isFailure(r)}"
+  } with turnBudgetHandler
+}
+
+// The handler's OWN label still takes the non-interactive reject path,
+// proving the label match is intact. _isInteractive defaults to true, so
+// the fixture must flip it or the handler would prompt via input() and
+// hang the harness.
+node ownLabelReject() {
+  setInteractive(false)
+  handle {
+    const r = guard(time: 50ms, label: TURN_BUDGET_LABEL) {
+      return workBare()
+    }
+    return "failure:${isFailure(r)}"
+  } with turnBudgetHandler
+}
+
+// Non-guard interrupts must still pass through to whoever is outside —
+// here, the test harness resolves it. Getting the early-return split
+// wrong would make the agent reject tool approvals, which would be far
+// worse than the bug being fixed.
+node nonGuardPassthrough() {
+  handle {
+    const r = interrupt("confirm")
+    return "resolved"
+  } with turnBudgetHandler
+}

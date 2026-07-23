@@ -12,7 +12,9 @@
     fallback) to the guard `coordinator.runTurn` wraps around the turn.
   - `turnBudgetHandler` is the top-level handler for that guard. When the
     budget trips it asks the user whether to grant more, and either extends
-    the guard in place or stops.
+    the guard in place or stops. It also rejects any OTHER guard trip that
+    reaches it — an unowned budget cap is honored as a hard stop rather
+    than parking the turn on a question nobody answers.
 
   Why a guard and not a "check the clock" tool: a tool the model must choose
   to call has no forcing function, and the model is suspended inside slow
@@ -135,13 +137,33 @@ def parseMoreBudget(reply: string): MoreBudget {
 
 export def turnBudgetHandler(intr: any): any {
   """
-  Top-level handler for the per-turn budget guard. Answers only this turn's
-  trip (matched by label) and passes every other interrupt through: subagent
-  budget caps keep bubbling to their own owners, and tool-approval
-  interrupts keep reaching the policy handler.
+  Top-level handler for the per-turn budget guard. Answers every guard trip
+  that reaches it: this turn's trip (matched by label) can be granted more
+  budget; any other guard trip has no owner by the time it gets here and is
+  rejected, so the budget is a hard stop instead of a question nobody
+  answers. Non-guard interrupts pass through to the policy handler.
   """
-  if (intr.effect != "std::guard" || intr.data.label != TURN_BUDGET_LABEL) {
+  if (intr.effect != "std::guard") {
     return pass()
+  }
+  if (intr.data.label != TURN_BUDGET_LABEL) {
+    // A guard trip that reaches this handler has no owner: handlers below
+    // us had their chance, and nothing above us answers guards. Passing
+    // would park the whole turn at a checkpoint nobody will ever resume
+    // (the orphaned tool_use incident, 2026-07-22 design doc). Honor the
+    // budget as a hard stop: reject converts the trip to a Failure at the
+    // guard site, where the caller salvages via finalize or draftValue.
+    // _lastPartial is deliberately NOT set here — that slot is the
+    // TURN's best-so-far for runTurn to show when the turn stops, and
+    // this turn is continuing; the inner guard's own salvage carries its
+    // partial back through the Result.
+    if (isInteractive()) {
+      const who = intr.data.label ?? "a subagent"
+      print(color.yellow(
+        "⏳ The ${intr.data.dimension} budget for ${who} ran out; stopping that step with its best result so far.",
+      ))
+    }
+    return reject()
   }
 
   // One-shot / piped runs: nobody is here to answer, so honor the budget as

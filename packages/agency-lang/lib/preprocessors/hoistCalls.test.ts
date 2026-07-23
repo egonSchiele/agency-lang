@@ -328,6 +328,29 @@ def f(x: any): any {
     expect(temps(body)).toHaveLength(0);
   });
 
+  it("thread blocks in value position keep their statements inside", () => {
+    // `const msgs = thread { ... }` is a statement-bearing construct in
+    // EXPRESSION position. Hoisting its inner calls out of the thread
+    // body would run them outside the thread (CI caught this: the
+    // thread tests returned []). Bodies of such constructs recurse as
+    // statement lists; nothing crosses the boundary.
+    const body = hoistCallsInScope(
+      bodyOf(`
+node main() {
+  const msgs = thread {
+    const res1: number[] = llm("What are the first 5 prime numbers?")
+    const res2: number = llm("Sum them.")
+  }
+  return msgs
+}`),
+    );
+    expect(temps(body)).toHaveLength(0);
+    const assign = (stmts(body) as any[]).find((n) => n.variableName === "msgs");
+    const inner = JSON.stringify(assign.value);
+    expect(inner).toContain("llm");
+    expect(inner).not.toContain("__hoist_");
+  });
+
   it("is idempotent", () => {
     const once = hoistCallsInScope(
       bodyOf(`

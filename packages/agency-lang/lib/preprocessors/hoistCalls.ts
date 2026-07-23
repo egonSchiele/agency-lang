@@ -359,12 +359,22 @@ function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
     return { temps, expr: ref };
   }
 
+  // Statement-bearing constructs in EXPRESSION position (a thread block
+  // as an assignment value is the live case; bodySlots is the
+  // authoritative enumeration). Their bodies recurse as statement
+  // lists — walking them as expressions would hoist inner calls OUT of
+  // the construct and change where they run. Placed after functionCall
+  // (which owns its block-argument slot above) so ordinary calls keep
+  // their argument walking.
+  if (bodySlots(node).length > 0) {
+    return { temps: [], expr: recurseSlots(node, counter) };
+  }
+
   // Generic descent for every other expression family (arrays, objects,
   // splats, string interpolations, unary forms, named wrappers). Copies
   // each object-valued child through the walker; `loc` is data, not a
-  // node. Statement lists never appear under these families — the
-  // constructs that carry them (block arguments, handler bodies) are
-  // handled above or by the statement dispatcher.
+  // node. Statement lists cannot appear below this point: bodySlots
+  // just claimed every construct that carries one.
   const temps: AgencyNode[] = [];
   let expr = node;
   for (const key of Object.keys(node)) {

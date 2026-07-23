@@ -7,6 +7,9 @@ import { getRuntimeContext, runInTestContext } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { TimeGuard } from "./guard.js";
 import { readCause } from "./errors.js";
+import * as smoltalk from "smoltalk";
+import { ABANDONED_TURN_TEXT } from "./threadRepair.js";
+import type { MessageThread } from "./state/messageThread.js";
 
 function makeFrame(): State {
   return new State({ args: {}, locals: {}, step: 0 });
@@ -1122,5 +1125,104 @@ describe("stripSlug", () => {
     expect(stripSlug("t")).toBe("t");
     expect(stripSlug("t1a")).toBe("t1a");
     expect(stripSlug("")).toBe("");
+  });
+});
+
+describe("thread() — abandoned-turn repair on reopen", () => {
+  // The shape a parked-then-abandoned turn leaves behind: trailing
+  // assistant with two tool calls, only one answered. Mirrors the trace
+  // in the orphaned-tool-use design doc.
+  const damage = (t: MessageThread) => {
+    t.push(smoltalk.userMessage("go"));
+    t.push(
+      smoltalk.assistantMessage("", {
+        toolCalls: [
+          new smoltalk.ToolCall("a", "whatIAmDoing", {}),
+          new smoltalk.ToolCall("b", "codeAgent", {}),
+        ],
+      }),
+    );
+    t.push(smoltalk.toolMessage("ok", { tool_call_id: "a", name: "whatIAmDoing" }));
+  };
+
+  // One thread() entry with its own fresh frame — the shape of a NEW
+  // turn. Returns the opened thread id.
+  async function openFresh(
+    threads: ThreadStore,
+    opts: Record<string, unknown>,
+  ): Promise<string> {
+    let tid = "";
+    const runner = new Runner(makeMockCtx(), makeFrame(), { threads });
+    await runner.thread(0, "create", opts, async () => {
+      tid = threads.activeId()!;
+    });
+    return tid;
+  }
+
+  it("session reopen repairs the dangling tail before new work lands", async () => {
+    const threads = new ThreadStore();
+    const tid = await openFresh(threads, { session: "main" });
+    damage(threads.get(tid)!);
+
+    await openFresh(threads, { session: "main" });
+
+    const thread = threads.get(tid)!;
+    const toolIds = thread
+      .getMessages()
+      .filter((m): m is smoltalk.ToolMessage => m instanceof smoltalk.ToolMessage)
+      .map((m) => m.tool_call_id);
+    expect(toolIds).toEqual(["a", "b"]);
+    expect((thread.getMessages().at(-1) as smoltalk.AssistantMessage).content).toBe(
+      ABANDONED_TURN_TEXT,
+    );
+    expect(thread.repairs).toBe(1);
+  });
+
+  it("thread(continue: id) reopen repairs too", async () => {
+    const threads = new ThreadStore();
+    const tid = await openFresh(threads, {});
+    damage(threads.get(tid)!);
+
+    await openFresh(threads, { continueId: tid });
+
+    expect(threads.get(tid)!.repairs).toBe(1);
+  });
+
+  it("valid thread reopens byte-identical, generation stays 0", async () => {
+    const threads = new ThreadStore();
+    const tid = await openFresh(threads, { session: "main" });
+    const thread = threads.get(tid)!;
+    thread.push(smoltalk.userMessage("hi"));
+    thread.push(smoltalk.assistantMessage("hello"));
+    const before = JSON.stringify(thread.toJSON());
+
+    await openFresh(threads, { session: "main" });
+
+    expect(JSON.stringify(thread.toJSON())).toBe(before);
+    expect(thread.repairs).toBe(0);
+  });
+
+  it("a checkpoint-resume re-entry does NOT repair — the frame-locals guard is load-bearing", async () => {
+    const threads = new ThreadStore();
+    const frame = makeFrame();
+    let tid = "";
+    const r1 = new Runner(makeMockCtx(), frame, { threads });
+    await r1.thread(0, "create", { session: "main" }, async () => {
+      tid = threads.activeId()!;
+    });
+    damage(threads.get(tid)!);
+
+    // Resume shape: locals carried over (they hold __thread_<path>), step
+    // counter back at the re-executing step — thread() re-enters its body
+    // WITHOUT re-running the open side effect, so no repair may fire.
+    const resumedFrame = new State({ args: {}, locals: { ...frame.locals }, step: 0 });
+    let reEntered = false;
+    const r2 = new Runner(makeMockCtx(), resumedFrame, { threads });
+    await r2.thread(0, "create", { session: "main" }, async () => {
+      reEntered = true;
+    });
+
+    expect(reEntered).toBe(true); // proves we exercised the guard branch, not a step skip
+    expect(threads.get(tid)!.repairs).toBe(0);
   });
 });

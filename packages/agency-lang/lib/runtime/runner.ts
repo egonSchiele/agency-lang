@@ -11,6 +11,7 @@ import { makeRedactReplacer, REDACTED } from "./redactForStatelog.js";
 import { __pipeBind } from "./result.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
 import { runBatch } from "./runBatch.js";
+import { repairReopenedThread } from "./threadRepair.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { BranchState, State } from "./state/stateStack.js";
@@ -702,6 +703,13 @@ export class Runner {
         tid = threads.createSubthread(createMeta);
       } else {
         tid = threads.create(createMeta);
+      }
+      if (isResumption) {
+        // Reopened threads are repaired before new work lands; a
+        // checkpoint resume never reaches this branch (the frame-locals
+        // guard above skips the whole open side effect). The full safety
+        // argument lives on repairReopenedThread.
+        repairReopenedThread(threads.get(tid), this.ctx.statelogClient, tid);
       }
       this.frame.locals[threadKey] = tid;
       this.frame.locals[resumptionKey] = isResumption;

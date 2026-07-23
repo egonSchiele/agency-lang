@@ -1207,6 +1207,26 @@ export class StatelogClient {
     });
   }
 
+  /** Fired when a reopened thread (session second+ entry or
+   *  `thread(continue: id)`) was found structurally invalid — its trailing
+   *  assistant message had tool calls with no results — and
+   *  `repairAbandonedTurn` synthesized the missing results before new work
+   *  was appended. A repair means a previous turn parked on an interrupt
+   *  and was abandoned; that is worth being able to find in a trace. */
+  async threadRepaired({
+    threadId,
+    toolCallIds,
+  }: {
+    threadId: string;
+    toolCallIds: string[];
+  }): Promise<void> {
+    await this.post({
+      type: "threadRepaired",
+      threadId,
+      toolCallIds,
+    });
+  }
+
   /** Fired when the `onThreadEnd` callback dispatcher itself throws
    *  inside the `Runner.thread` finally block. Individual callback
    *  errors are caught and logged by `fireWithGuard`; this event

@@ -215,7 +215,24 @@ __stack.locals.sumOfSquares = 0;
       await runner.step(2, async (runner) => {
 __stack.locals.sum = 0;
       });
-      await runner.loop(3, async () => (Array.from({length: 101 - 1}, (_, __i) => __i + 1)), async (i, _, runner) => {
+      await runner.step(3, async (runner) => {
+__stack.locals.__hoist_0 = await __call(range, {
+          type: "positional",
+          args: [1, 101]
+        });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.__hoist_0
+          })
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          throw __stack.locals.__hoist_0.toError()
+        }
+      });
+      await runner.loop(4, async () => (__stack.locals.__hoist_0), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.sumOfSquares = __stack.locals.sumOfSquares + i * i;
         });
@@ -223,10 +240,10 @@ await runner.step(1, async (runner) => {
 __stack.locals.sum = __stack.locals.sum + i;
         });
       });
-      await runner.step(4, async (runner) => {
+      await runner.step(5, async (runner) => {
 __stack.locals.squareOfSum = __stack.locals.sum * __stack.locals.sum;
       });
-      await runner.step(5, async (runner) => {
+      await runner.step(6, async (runner) => {
 runner.halt({
           messages: __threads(),
           data: __stack.locals.squareOfSum - __stack.locals.sumOfSquares
@@ -235,7 +252,7 @@ return;
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(6, async () => {
+    await runner.hook(7, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -300,4 +317,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"euler-0006.agency:main":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":11,"col":2},"5":{"line":12,"col":2},"3.0":{"line":8,"col":4},"3.1":{"line":9,"col":4}}};
+export const __sourceMap = {"euler-0006.agency:main":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":12},"4":{"line":7,"col":2},"5":{"line":11,"col":2},"6":{"line":12,"col":2},"4.0":{"line":8,"col":4},"4.1":{"line":9,"col":4}}};

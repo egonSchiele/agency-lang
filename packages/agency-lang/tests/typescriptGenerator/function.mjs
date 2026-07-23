@@ -500,12 +500,26 @@ await callHook({
         })
       });
       await runner.step(1, async (runner) => {
+__stack.locals.__hoist_0 = await __call(test, {
+          type: "positional",
+          args: []
+        });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.__hoist_0
+          })
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          throw __stack.locals.__hoist_0.toError()
+        }
+      });
+      await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
-          args: [await __call(test, {
-            type: "positional",
-            args: []
-          })]
+          args: [__stack.locals.__hoist_0]
         });
 if (hasInterrupts(__funcResult)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll()
@@ -521,7 +535,7 @@ if (isAborted(__funcResult)) {
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(2, async () => {
+    await runner.hook(3, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -586,4 +600,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"function.agency:test":{"1":{"line":1,"col":2}},"function.agency:add":{},"function.agency:main":{"1":{"line":9,"col":2}}};
+export const __sourceMap = {"function.agency:test":{"1":{"line":1,"col":2}},"function.agency:add":{},"function.agency:main":{"1":{"line":9,"col":8},"2":{"line":9,"col":2}}};

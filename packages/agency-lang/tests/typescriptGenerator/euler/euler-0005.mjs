@@ -425,11 +425,23 @@ await callHook({
         })
       });
       await runner.step(1, async (runner) => {
-__functionCompleted = true;
-runner.halt(__stack.args.a / await __call(gcd, {
+__stack.locals.__hoist_0 = await __call(gcd, {
           type: "positional",
           args: [__stack.args.a, __stack.args.b]
-        }) * __stack.args.b)
+        });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt(__stack.locals.__hoist_0)
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          runner.halt(__stack.locals.__hoist_0.carryThrough(__stack, "lcm"))
+          return;
+        }
+      });
+      await runner.step(2, async (runner) => {
+__functionCompleted = true;
+runner.halt(__stack.args.a / __stack.locals.__hoist_0 * __stack.args.b)
 return;
       });
     })
@@ -555,7 +567,24 @@ await callHook({
       await runner.step(1, async (runner) => {
 __stack.locals.result = 1;
       });
-      await runner.loop(2, async () => (Array.from({length: 21 - 2}, (_, __i) => __i + 2)), async (i, _, runner) => {
+      await runner.step(2, async (runner) => {
+__stack.locals.__hoist_0 = await __call(range, {
+          type: "positional",
+          args: [2, 21]
+        });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.__hoist_0
+          })
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          throw __stack.locals.__hoist_0.toError()
+        }
+      });
+      await runner.loop(3, async () => (__stack.locals.__hoist_0), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.result = await __call(lcm, {
             type: "positional",
@@ -574,7 +603,7 @@ if (isAborted(__stack.locals.result)) {
           }
         });
       });
-      await runner.step(3, async (runner) => {
+      await runner.step(4, async (runner) => {
 runner.halt({
           messages: __threads(),
           data: __stack.locals.result
@@ -583,7 +612,7 @@ return;
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(4, async () => {
+    await runner.hook(5, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -648,4 +677,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"euler-0005.agency:gcd":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":6,"col":2},"4":{"line":11,"col":2},"3.0":{"line":7,"col":4},"3.1":{"line":8,"col":4},"3.2":{"line":9,"col":4}},"euler-0005.agency:lcm":{"1":{"line":15,"col":2}},"euler-0005.agency:main":{"1":{"line":19,"col":2},"2":{"line":20,"col":2},"3":{"line":23,"col":2},"2.0":{"line":21,"col":4}}};
+export const __sourceMap = {"euler-0005.agency:gcd":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":6,"col":2},"4":{"line":11,"col":2},"3.0":{"line":7,"col":4},"3.1":{"line":8,"col":4},"3.2":{"line":9,"col":4}},"euler-0005.agency:lcm":{"1":{"line":15,"col":14},"2":{"line":15,"col":2}},"euler-0005.agency:main":{"1":{"line":19,"col":2},"2":{"line":20,"col":12},"3":{"line":20,"col":2},"4":{"line":23,"col":2},"3.0":{"line":21,"col":4}}};

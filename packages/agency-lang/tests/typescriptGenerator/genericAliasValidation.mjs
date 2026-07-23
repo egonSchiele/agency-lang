@@ -395,10 +395,24 @@ if (isAborted(__stack.locals.c)) {
           throw __stack.locals.c.toError()
         }
       });
-      await runner.ifElse(2, [
+      await runner.step(2, async (runner) => {
+__stack.locals.__hoist_0 = await isSuccess(__stack.locals.c);
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.__hoist_0
+          })
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          throw __stack.locals.__hoist_0.toError()
+        }
+      });
+      await runner.ifElse(3, [
 
   {
-    condition: async () => await isSuccess(__stack.locals.c),
+    condition: async () => __stack.locals.__hoist_0,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
@@ -423,7 +437,7 @@ if (isAborted(__funcResult)) {
 ]);
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(3, async () => {
+    await runner.hook(4, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -488,4 +502,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"genericAliasValidation.agency:process":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}},"genericAliasValidation.agency:main":{"1":{"line":8,"col":2},"2":{"line":9,"col":2},"2.0":{"line":10,"col":4}}};
+export const __sourceMap = {"genericAliasValidation.agency:process":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}},"genericAliasValidation.agency:main":{"1":{"line":8,"col":2},"2":{"line":9,"col":6},"3":{"line":9,"col":2},"3.0":{"line":10,"col":4}}};

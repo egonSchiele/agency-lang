@@ -431,13 +431,27 @@ __stack.locals.num = 1;
 await runner.step(0, async (runner) => {
 __stack.locals.num = __stack.locals.num + 1;
         });
-await runner.ifElse(1, [
+await runner.step(1, async (runner) => {
+__stack.locals.__hoist_0 = await __call(isPrime, {
+            type: "positional",
+            args: [__stack.locals.num]
+          });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+            await getRuntimeContext().ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.__hoist_0
+            })
+            return;
+          }
+if (isAborted(__stack.locals.__hoist_0)) {
+            throw __stack.locals.__hoist_0.toError()
+          }
+        });
+await runner.ifElse(2, [
 
   {
-    condition: async () => await __call(isPrime, {
-              type: "positional",
-              args: [__stack.locals.num]
-            }),
+    condition: async () => __stack.locals.__hoist_0,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.count = __stack.locals.count + 1;
@@ -521,4 +535,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"euler-0007.agency:isPrime":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":6,"col":2},"4":{"line":7,"col":2},"5":{"line":8,"col":2},"6":{"line":12,"col":2},"1.0":{"line":4,"col":15},"2.0":{"line":5,"col":15},"3.0":{"line":6,"col":34},"5.0.0":{"line":9,"col":42},"5.0":{"line":9,"col":4},"5.1":{"line":10,"col":4}},"euler-0007.agency:main":{"1":{"line":16,"col":2},"2":{"line":17,"col":2},"3":{"line":18,"col":2},"4":{"line":24,"col":2},"3.0":{"line":19,"col":4},"3.1.0":{"line":21,"col":6},"3.1":{"line":20,"col":4}}};
+export const __sourceMap = {"euler-0007.agency:isPrime":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":6,"col":2},"4":{"line":7,"col":2},"5":{"line":8,"col":2},"6":{"line":12,"col":2},"1.0":{"line":4,"col":15},"2.0":{"line":5,"col":15},"3.0":{"line":6,"col":34},"5.0.0":{"line":9,"col":42},"5.0":{"line":9,"col":4},"5.1":{"line":10,"col":4}},"euler-0007.agency:main":{"1":{"line":16,"col":2},"2":{"line":17,"col":2},"3":{"line":18,"col":2},"4":{"line":24,"col":2},"3.0":{"line":19,"col":4},"3.1":{"line":20,"col":8},"3.2.0":{"line":21,"col":6},"3.2":{"line":20,"col":4}}};

@@ -234,7 +234,24 @@ if (isAborted(__funcResult)) {
       await runner.step(4, async (runner) => {
 //  Range-based for loop
       });
-      await runner.loop(5, async () => (Array.from({length: 5 - 0}, (_, __i) => __i + 0)), async (i, _, runner) => {
+      await runner.step(5, async (runner) => {
+__stack.locals.__hoist_0 = await __call(range, {
+          type: "positional",
+          args: [0, 5]
+        });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.__hoist_0
+          })
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          throw __stack.locals.__hoist_0.toError()
+        }
+      });
+      await runner.loop(6, async () => (__stack.locals.__hoist_0), async (i, _, runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
             type: "positional",
@@ -253,13 +270,13 @@ if (isAborted(__funcResult)) {
           }
         });
       });
-      await runner.step(6, async (runner) => {
+      await runner.step(7, async (runner) => {
 //  Indexed for loop
       });
-      await runner.step(7, async (runner) => {
+      await runner.step(8, async (runner) => {
 __stack.locals.names = [`alice`, `bob`];
       });
-      await runner.loop(8, async () => (__stack.locals.names), async (name, index, runner) => {
+      await runner.loop(9, async () => (__stack.locals.names), async (name, index, runner) => {
 await runner.step(0, async (runner) => {
 const __funcResult = await __call(print, {
             type: "positional",
@@ -297,7 +314,7 @@ if (isAborted(__funcResult)) {
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(9, async () => {
+    await runner.hook(10, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -362,4 +379,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"forLoop.agency:main":{"2":{"line":2,"col":2},"3":{"line":3,"col":2},"5":{"line":8,"col":2},"7":{"line":13,"col":2},"8":{"line":14,"col":2},"3.0":{"line":4,"col":4},"5.0":{"line":9,"col":4},"8.0":{"line":15,"col":4},"8.1":{"line":16,"col":4}}};
+export const __sourceMap = {"forLoop.agency:main":{"2":{"line":2,"col":2},"3":{"line":3,"col":2},"5":{"line":8,"col":12},"6":{"line":8,"col":2},"8":{"line":13,"col":2},"9":{"line":14,"col":2},"3.0":{"line":4,"col":4},"6.0":{"line":9,"col":4},"9.0":{"line":15,"col":4},"9.1":{"line":16,"col":4}}};

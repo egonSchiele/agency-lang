@@ -480,12 +480,26 @@ await callHook({
         })
       });
       await runner.step(1, async (runner) => {
+__stack.locals.__hoist_0 = await __call(describe, {
+          type: "positional",
+          args: [`hi`]
+        });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.__hoist_0
+          })
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          throw __stack.locals.__hoist_0.toError()
+        }
+      });
+      await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
-          args: [await __call(describe, {
-            type: "positional",
-            args: [`hi`]
-          })]
+          args: [__stack.locals.__hoist_0]
         });
 if (hasInterrupts(__funcResult)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll()
@@ -501,7 +515,7 @@ if (isAborted(__funcResult)) {
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(2, async () => {
+    await runner.hook(3, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -566,4 +580,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"type-patterns.agency:describe":{"1":{"line":6,"col":2},"2":{"line":9,"col":2},"3":{"line":12,"col":2},"4":{"line":15,"col":9},"5":{"line":15,"col":9},"6":{"line":15,"col":2},"1.0":{"line":7,"col":4},"2.0":{"line":10,"col":4},"3.0":{"line":13,"col":4},"5.2":{"line":15,"col":9},"5.5":{"line":15,"col":9},"5.8":{"line":15,"col":9}},"type-patterns.agency:main":{"1":{"line":25,"col":2}}};
+export const __sourceMap = {"type-patterns.agency:describe":{"1":{"line":6,"col":2},"2":{"line":9,"col":2},"3":{"line":12,"col":2},"4":{"line":15,"col":9},"5":{"line":15,"col":9},"6":{"line":15,"col":2},"1.0":{"line":7,"col":4},"2.0":{"line":10,"col":4},"3.0":{"line":13,"col":4},"5.2":{"line":15,"col":9},"5.5":{"line":15,"col":9},"5.8":{"line":15,"col":9}},"type-patterns.agency:main":{"1":{"line":25,"col":8},"2":{"line":25,"col":2}}};

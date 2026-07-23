@@ -41,6 +41,21 @@ node codingCanFetch(): boolean {
   return hasTool(codingTools(), "fetchMarkdown")
 }
 
+// The changelog gap (2026-07-23): asked what changed since the last
+// release, the Agency writer and both verifiers had no git tools at
+// all. The writer probed for a `.git` directory by hand — which fails
+// in a monorepo, where `.git` lives above the package — and the
+// verifier fell back to filesystem-wide `find` scans that timed out to
+// empty output and produced a confident false "there is no repo here".
+// History is read-only, so all three carry the read bundle; none may
+// gain the write tools (the writer returns source, verifiers verify).
+node historyReadersHaveGitButCannotCommit(): boolean {
+  const lists = [agencyCodingTools(), verifierTools(), agencyVerifierTools()]
+  const canReadHistory = every(lists, \tools -> hasTool(tools, "gitLog") && hasTool(tools, "gitIsRepo"))
+  const cannotWrite = every(lists, \tools -> !hasTool(tools, "gitCommit") && !hasTool(tools, "gitCheckout"))
+  return canReadHistory && cannotWrite
+}
+
 // Both reviewers can look things up now, and still cannot change anything.
 node reviewersLookUpButCannotWrite(): boolean {
   const plain = reviewTools()

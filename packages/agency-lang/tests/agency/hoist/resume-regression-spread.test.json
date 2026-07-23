@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"done Ada\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "greetTool", "args": { "name": "Ada" } }] },
+        { "return": "done Ada" }
+      ],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

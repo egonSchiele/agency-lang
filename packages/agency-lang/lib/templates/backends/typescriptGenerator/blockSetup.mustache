@@ -2,6 +2,9 @@ const __bsetup = setupFunction();
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 const {{{frameVar}}} = __bstack;
+// Claim site: this block just pulled its frame via setupFunction. A
+// mismatched claim on resume replay is a frame desync and throws.
+claimFrameForScope(__bstack, {{{scopeName}}});
 {{#params}}
 __bstack.args[{{{this.paramNameQuoted}}}] = {{{this.paramName}}};
 {{/params}}

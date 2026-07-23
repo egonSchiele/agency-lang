@@ -1,0 +1,17 @@
+// A pause inside a hoisted temp's OWN step: the helper that builds the
+// llm options raises the interrupt. The temp is an assignment step and
+// must carry the interrupt; `built` pins single execution.
+effect mytest::opts { tag: string }
+
+let built = 0
+
+def needsApproval(): any {
+  const ok = interrupt mytest::opts("Build options?", { tag: "opts" })
+  built = built + 1
+  return {}
+}
+
+node main() {
+  const answer = llm("Say READY.", needsApproval())
+  return "${answer}|${built}"
+}

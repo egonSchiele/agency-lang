@@ -1,0 +1,23 @@
+// A pause inside a loop body statement that also hoists a helper: the
+// loop machinery clears __substep_/__condbranch_ per iteration but
+// never __hoist_ locals; this pins that interaction end to end.
+effect mytest::step { i: number }
+
+def double(x: number): number {
+  return x * 2
+}
+
+def confirm(i: number): number {
+  const ok = interrupt mytest::step("Go?", { i: i })
+  return i
+}
+
+node main() {
+  let total = 0
+  let i = 0
+  while (i < 3) {
+    total = total + double(confirm(i))
+    i = i + 1
+  }
+  return total
+}

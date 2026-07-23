@@ -9,7 +9,7 @@ import os from "os";
 import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
-  setupNode, setupFunction, runNode, runPrompt, callHook,
+  setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
@@ -190,6 +190,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "toDigit");
   if (!__globals()!.isInitialized("euler-0008.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -466,6 +467,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "main");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0008.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
@@ -500,12 +502,26 @@ __stack.locals.j = 0;
         });
 await runner.whileLoop(2, async () => __stack.locals.j < 13, async (runner) => {
 await runner.step(0, async (runner) => {
-__stack.locals.product = __stack.locals.product * await __call(toDigit, {
+__stack.locals.__hoist_0 = await __call(toDigit, {
               type: "positional",
               args: [__nn(__stack.locals.digits[__stack.locals.i + __stack.locals.j])]
             });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+              await getRuntimeContext().ctx.pendingPromises.awaitAll()
+              runner.halt({
+                ...__state,
+                data: __stack.locals.__hoist_0
+              })
+              return;
+            }
+if (isAborted(__stack.locals.__hoist_0)) {
+              throw __stack.locals.__hoist_0.toError()
+            }
           });
 await runner.step(1, async (runner) => {
+__stack.locals.product = __stack.locals.product * __stack.locals.__hoist_0;
+          });
+await runner.step(2, async (runner) => {
 __stack.locals.j = __stack.locals.j + 1;
           });
         });
@@ -599,4 +615,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"euler-0008.agency:toDigit":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":8,"col":2},"5":{"line":9,"col":2},"6":{"line":10,"col":2},"7":{"line":11,"col":2},"8":{"line":12,"col":2},"9":{"line":13,"col":2},"10":{"line":14,"col":2},"1.0":{"line":5,"col":18},"2.0":{"line":6,"col":18},"3.0":{"line":7,"col":18},"4.0":{"line":8,"col":18},"5.0":{"line":9,"col":18},"6.0":{"line":10,"col":18},"7.0":{"line":11,"col":18},"8.0":{"line":12,"col":18},"9.0":{"line":13,"col":18}},"euler-0008.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":20,"col":2},"4":{"line":21,"col":2},"5":{"line":33,"col":2},"4.0":{"line":22,"col":4},"4.1":{"line":23,"col":4},"4.2.0":{"line":25,"col":6},"4.2.1":{"line":26,"col":6},"4.2":{"line":24,"col":4},"4.3.0":{"line":29,"col":6},"4.3":{"line":28,"col":4},"4.4":{"line":31,"col":4}}};
+export const __sourceMap = {"euler-0008.agency:toDigit":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":8,"col":2},"5":{"line":9,"col":2},"6":{"line":10,"col":2},"7":{"line":11,"col":2},"8":{"line":12,"col":2},"9":{"line":13,"col":2},"10":{"line":14,"col":2},"1.0":{"line":5,"col":18},"2.0":{"line":6,"col":18},"3.0":{"line":7,"col":18},"4.0":{"line":8,"col":18},"5.0":{"line":9,"col":18},"6.0":{"line":10,"col":18},"7.0":{"line":11,"col":18},"8.0":{"line":12,"col":18},"9.0":{"line":13,"col":18}},"euler-0008.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":20,"col":2},"4":{"line":21,"col":2},"5":{"line":33,"col":2},"4.0":{"line":22,"col":4},"4.1":{"line":23,"col":4},"4.2.0":{"line":25,"col":26},"4.2.1":{"line":25,"col":6},"4.2.2":{"line":26,"col":6},"4.2":{"line":24,"col":4},"4.3.0":{"line":29,"col":6},"4.3":{"line":28,"col":4},"4.4":{"line":31,"col":4}}};

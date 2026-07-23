@@ -29,7 +29,7 @@ function makeCheckpoint(
     label: null,
     pinned: false,
     stack: {
-      stack: [{ args: {}, locals: {}, threads: null, step: 0 }],
+      stack: [{ args: {}, locals: {}, threads: null, step: 0, scopeName: null }],
       mode: "serialize",
       other: {},
       deserializeStackLength: 0,
@@ -98,7 +98,7 @@ describe("TraceWriter", () => {
         id: 1,
         stepPath: "1",
         stack: {
-          stack: [{ args: {}, locals: { x: 99 }, threads: null, step: 1 }],
+          stack: [{ args: {}, locals: { x: 99 }, threads: null, step: 1, scopeName: null }],
           mode: "serialize",
           other: {},
           deserializeStackLength: 0,

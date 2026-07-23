@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"salvaged\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "A function-level finalize on the abort path runs on the container frame without tripping the scope-name tripwire.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

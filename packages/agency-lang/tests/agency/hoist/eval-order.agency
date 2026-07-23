@@ -1,0 +1,27 @@
+// Pins evaluation order under hoisting: argument order, binary-op
+// order, short-circuit skip (right absent), try operand untouched, and
+// a pattern-binding condition. The order recorded here must be
+// identical with the pass unwired — verified once manually during
+// development; this fixture pins it for CI.
+let order: string[] = []
+
+def mark(tag: string, v: number): number {
+  order = [...order, tag]
+  return v
+}
+
+def add2(a: number, b: number): number {
+  return a + b
+}
+
+node main() {
+  const sum = add2(mark("a", 1), mark("b", 2))
+  const gated = mark("left", 0) > 0 && mark("right", 1) > 0
+  const combo = mark("l1", 1) + mark("l2", 2)
+  const t = try add2(mark("t1", 1), mark("t2", 2))
+  const pv = add2(mark("c", 3), 4)
+  if (pv is number) {
+    order = [...order, "pat"]
+  }
+  return "${order}"
+}

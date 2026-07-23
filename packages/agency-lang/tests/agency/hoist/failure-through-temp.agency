@@ -1,0 +1,18 @@
+// Failure propagation through a hoisted temp: the Failure lands in the
+// temp, and the consuming call's argument-propagation rules apply
+// unchanged (the body is skipped, the failure flows out).
+def failing(): number {
+  return failure("boom")
+}
+
+def wants(n: number): string {
+  return "got ${n}"
+}
+
+node main() {
+  const out = wants(failing())
+  if (out is failure(e)) {
+    return "propagated:${e}"
+  }
+  return "unexpected:${out}"
+}

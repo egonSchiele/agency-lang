@@ -1,0 +1,18 @@
+// Same regression as resume-regression-args, with the helper call in a
+// spread inside the options literal.
+effect mytest::greet2 { name: string }
+
+def greetTool(name: string): string {
+  """Greets a person."""
+  const ok = interrupt mytest::greet2("Approve greeting?", { name: name })
+  return "greeted ${name}"
+}
+
+def buildTools(): any[] {
+  return [greetTool]
+}
+
+node main() {
+  const answer = llm("Greet Ada using the tool.", { tools: [...buildTools()] })
+  return answer
+}

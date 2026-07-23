@@ -13,6 +13,9 @@ const __parentForkArgs = __bstack.args;
 const __bstack = __forkBranchStack.getNewState();
 const __self = __bstack.locals;
 const {{{frameVar}}} = __bstack;
+// Claim site: this branch just pulled its frame from the branch stack.
+// A mismatched claim on resume replay is a frame desync and throws.
+claimFrameForScope(__bstack, {{{scopeName}}});
 // \`__stateStack\` is read from ALS via the \`__stateStack()\` accessor.
 // The branch ALS frame seeded by \`runBatch.runInBranchAlsFrame\`
 // (lib/runtime/runBatch.ts) already carries \`stack: __forkBranchStack\`,
@@ -42,10 +45,10 @@ __forkBranchStack.pop();
 export type TemplateType = {
   isNested: boolean;
   frameVar: string | boolean | number;
+  scopeName: string | boolean | number;
   paramName: string;
   paramNameQuoted: string | boolean | number;
   moduleId: string | boolean | number;
-  scopeName: string | boolean | number;
   body: string | boolean | number;
 };
 

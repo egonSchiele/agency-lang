@@ -1,0 +1,19 @@
+// A rewritten while whose body carries a user break AND a user
+// continue: the rewrite injects its own break, so two exit paths flow
+// through one construct. continue must land on the hoisted condition
+// re-check at the loop top.
+def below(i: number): boolean {
+  return i < 10
+}
+
+node main() {
+  let i = 0
+  let sum = 0
+  while (below(i)) {
+    i = i + 1
+    if (i == 7) { break }
+    if (i == 2 || i == 4 || i == 6) { continue }
+    sum = sum + i
+  }
+  return "i=${i} sum=${sum}"
+}

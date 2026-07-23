@@ -9,7 +9,7 @@ import os from "os";
 import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
-  setupNode, setupFunction, runNode, runPrompt, callHook,
+  setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
@@ -189,6 +189,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "isPrime");
   if (!__globals()!.isInitialized("euler-0010.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -403,6 +404,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "main");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0010.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
@@ -426,13 +428,27 @@ __stack.locals.sum = 2;
 __stack.locals.n = 3;
       });
       await runner.whileLoop(3, async () => __stack.locals.n < 2000000, async (runner) => {
-await runner.ifElse(0, [
+await runner.step(0, async (runner) => {
+__stack.locals.__hoist_0 = await __call(isPrime, {
+            type: "positional",
+            args: [__stack.locals.n]
+          });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+            await getRuntimeContext().ctx.pendingPromises.awaitAll()
+            runner.halt({
+              ...__state,
+              data: __stack.locals.__hoist_0
+            })
+            return;
+          }
+if (isAborted(__stack.locals.__hoist_0)) {
+            throw __stack.locals.__hoist_0.toError()
+          }
+        });
+await runner.ifElse(1, [
 
   {
-    condition: async () => await __call(isPrime, {
-              type: "positional",
-              args: [__stack.locals.n]
-            }),
+    condition: async () => __stack.locals.__hoist_0,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.sum = __stack.locals.sum + __stack.locals.n;
@@ -441,7 +457,7 @@ __stack.locals.sum = __stack.locals.sum + __stack.locals.n;
   },
 
 ]);
-await runner.step(1, async (runner) => {
+await runner.step(2, async (runner) => {
 __stack.locals.n = __stack.locals.n + 2;
         });
       });
@@ -519,4 +535,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"euler-0010.agency:isPrime":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":6,"col":2},"4":{"line":7,"col":2},"5":{"line":8,"col":2},"6":{"line":12,"col":2},"1.0":{"line":4,"col":15},"2.0":{"line":5,"col":15},"3.0":{"line":6,"col":34},"5.0.0":{"line":9,"col":42},"5.0":{"line":9,"col":4},"5.1":{"line":10,"col":4}},"euler-0010.agency:main":{"1":{"line":16,"col":2},"2":{"line":17,"col":2},"3":{"line":18,"col":2},"4":{"line":24,"col":2},"3.0.0":{"line":20,"col":6},"3.0":{"line":19,"col":4},"3.1":{"line":22,"col":4}}};
+export const __sourceMap = {"euler-0010.agency:isPrime":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":6,"col":2},"4":{"line":7,"col":2},"5":{"line":8,"col":2},"6":{"line":12,"col":2},"1.0":{"line":4,"col":15},"2.0":{"line":5,"col":15},"3.0":{"line":6,"col":34},"5.0.0":{"line":9,"col":42},"5.0":{"line":9,"col":4},"5.1":{"line":10,"col":4}},"euler-0010.agency:main":{"1":{"line":16,"col":2},"2":{"line":17,"col":2},"3":{"line":18,"col":2},"4":{"line":24,"col":2},"3.0":{"line":19,"col":8},"3.1.0":{"line":20,"col":6},"3.1":{"line":19,"col":4},"3.2":{"line":22,"col":4}}};

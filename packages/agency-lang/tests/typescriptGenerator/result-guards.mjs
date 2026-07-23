@@ -9,7 +9,7 @@ import os from "os";
 import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
-  setupNode, setupFunction, runNode, runPrompt, callHook,
+  setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
@@ -187,6 +187,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "checkValue");
   if (!__globals()!.isInitialized("result-guards.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -236,10 +237,22 @@ await callHook({
           }
         })
       });
-      await runner.ifElse(1, [
+      await runner.step(1, async (runner) => {
+__stack.locals.__hoist_0 = await isSuccess(__stack.args.r);
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt(__stack.locals.__hoist_0)
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          runner.halt(__stack.locals.__hoist_0.carryThrough(__stack, "checkValue"))
+          return;
+        }
+      });
+      await runner.ifElse(2, [
 
   {
-    condition: async () => await isSuccess(__stack.args.r),
+    condition: async () => __stack.locals.__hoist_0,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __functionCompleted = true;
@@ -250,7 +263,7 @@ return;
   },
 
 ]);
-      await runner.step(2, async (runner) => {
+      await runner.step(3, async (runner) => {
 __functionCompleted = true;
 runner.halt(`error`)
 return;
@@ -342,4 +355,4 @@ export const checkValue = __AgencyFunction.create({
   exported: false
 }, __toolRegistry);
 export default graph
-export const __sourceMap = {"result-guards.agency:checkValue":{"1":{"line":1,"col":2},"2":{"line":4,"col":2},"1.0":{"line":2,"col":4}}};
+export const __sourceMap = {"result-guards.agency:checkValue":{"1":{"line":1,"col":6},"2":{"line":1,"col":2},"3":{"line":4,"col":2},"2.0":{"line":2,"col":4}}};

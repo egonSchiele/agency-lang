@@ -561,3 +561,18 @@ per-lineage precision, so self-exclusion and the `renderVerdict`
 refusal can tell a handler's OWN raises apart from concurrent sibling
 dispatches on the same branch. The design rationale lives in
 `docs/superpowers/specs/2026-07-19-issue-616-no-pause-inside-handlers-design.md`.
+
+## Replay and helper calls: the hoistCalls pass
+
+Resume replay re-runs the statement that was in progress at the pause.
+Before 2026-07, that replay also re-executed helper calls inside that
+statement which had already completed — `llm(msg, llmOptions(...))`
+re-ran `llmOptions()` — and each re-run consumed a saved frame from the
+positional restore queue that belonged to a still-live function. The
+`hoistCalls` preprocessor pass (docs/dev/hoist-calls.md) rewrites every
+such helper into its own `const __hoist_N = ...` statement, so on
+resume the helper's completed step is skipped and its value read back
+from the frame instead of recomputed. As a backstop, frames are stamped
+with their owner's scope name at claim time, and a mismatched claim on
+replay throws a "Resume desync" error instead of silently corrupting
+state.

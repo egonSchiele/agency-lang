@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"a,b,left,l1,l2,t1,t2,c,pat\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Helper execution order is unchanged by hoisting; the short-circuited right side never runs."
+    }
+  ]
+}

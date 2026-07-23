@@ -9,7 +9,7 @@ import os from "os";
 import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
-  setupNode, setupFunction, runNode, runPrompt, callHook,
+  setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
@@ -187,6 +187,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "test");
   if (!__globals()!.isInitialized("function.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -319,6 +320,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "add");
   if (!__globals()!.isInitialized("function.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -480,6 +482,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "main");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
@@ -497,12 +500,26 @@ await callHook({
         })
       });
       await runner.step(1, async (runner) => {
+__stack.locals.__hoist_0 = await __call(test, {
+          type: "positional",
+          args: []
+        });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.__hoist_0
+          })
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          throw __stack.locals.__hoist_0.toError()
+        }
+      });
+      await runner.step(2, async (runner) => {
 const __funcResult = await __call(print, {
           type: "positional",
-          args: [await __call(test, {
-            type: "positional",
-            args: []
-          })]
+          args: [__stack.locals.__hoist_0]
         });
 if (hasInterrupts(__funcResult)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll()
@@ -518,7 +535,7 @@ if (isAborted(__funcResult)) {
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(2, async () => {
+    await runner.hook(3, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -583,4 +600,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"function.agency:test":{"1":{"line":1,"col":2}},"function.agency:add":{},"function.agency:main":{"1":{"line":9,"col":2}}};
+export const __sourceMap = {"function.agency:test":{"1":{"line":1,"col":2}},"function.agency:add":{},"function.agency:main":{"1":{"line":9,"col":8},"2":{"line":9,"col":2}}};

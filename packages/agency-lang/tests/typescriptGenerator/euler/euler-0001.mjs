@@ -9,7 +9,7 @@ import os from "os";
 import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
-  setupNode, setupFunction, runNode, runPrompt, callHook,
+  setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
@@ -191,6 +191,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "main");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0001.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
@@ -210,7 +211,24 @@ await callHook({
       await runner.step(1, async (runner) => {
 __stack.locals.sum = 0;
       });
-      await runner.loop(2, async () => (Array.from({length: 1000 - 1}, (_, __i) => __i + 1)), async (i, _, runner) => {
+      await runner.step(2, async (runner) => {
+__stack.locals.__hoist_0 = await __call(range, {
+          type: "positional",
+          args: [1, 1000]
+        });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.__hoist_0
+          })
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          throw __stack.locals.__hoist_0.toError()
+        }
+      });
+      await runner.loop(3, async () => (__stack.locals.__hoist_0), async (i, _, runner) => {
 await runner.ifElse(0, [
 
   {
@@ -224,7 +242,7 @@ __stack.locals.sum = __stack.locals.sum + i;
 
 ]);
       });
-      await runner.step(3, async (runner) => {
+      await runner.step(4, async (runner) => {
 runner.halt({
           messages: __threads(),
           data: __stack.locals.sum
@@ -233,7 +251,7 @@ return;
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(4, async () => {
+    await runner.hook(5, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -298,4 +316,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"euler-0001.agency:main":{"1":{"line":4,"col":2},"2":{"line":5,"col":2},"3":{"line":10,"col":2},"2.0.0":{"line":7,"col":6},"2.0":{"line":6,"col":4}}};
+export const __sourceMap = {"euler-0001.agency:main":{"1":{"line":4,"col":2},"2":{"line":5,"col":12},"3":{"line":5,"col":2},"4":{"line":10,"col":2},"3.0.0":{"line":7,"col":6},"3.0":{"line":6,"col":4}}};

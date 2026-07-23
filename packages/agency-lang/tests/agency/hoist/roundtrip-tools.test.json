@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"hello Ada done\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "gateTool", "args": { "x": 1 } }] },
+        { "toolCalls": [{ "name": "greet_tool", "args": { "name": "Ada" } }] },
+        { "return": "hello Ada done" }
+      ],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

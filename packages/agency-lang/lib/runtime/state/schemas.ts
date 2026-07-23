@@ -27,6 +27,9 @@ export const stateJSONSchema = z.object({
   locals: z.record(z.string(), z.any()),
   threads: threadStoreJSONSchema.nullable(),
   step: z.number(),
+  // Accepts absent (external payloads validated pre-tripwire) and
+  // normalizes to null so the parsed shape satisfies StateJSON.
+  scopeName: z.string().nullable().optional().default(null),
   branches: z.record(z.string(), branchStateJSONSchema).optional(),
 });
 

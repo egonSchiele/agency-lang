@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"i=7 sum=9\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

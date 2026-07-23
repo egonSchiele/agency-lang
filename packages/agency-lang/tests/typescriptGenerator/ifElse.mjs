@@ -9,7 +9,7 @@ import os from "os";
 import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
-  setupNode, setupFunction, runNode, runPrompt, callHook,
+  setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
@@ -189,6 +189,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
+  claimFrameForScope(__stack, "main");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "ifElse.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
@@ -223,13 +224,27 @@ __stack.locals.result = `condition was true`;
   },
 
 ]);
-      await runner.ifElse(4, [
+      await runner.step(4, async (runner) => {
+__stack.locals.__hoist_0 = await __call(isReady, {
+          type: "positional",
+          args: []
+        });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.__hoist_0
+          })
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          throw __stack.locals.__hoist_0.toError()
+        }
+      });
+      await runner.ifElse(5, [
 
   {
-    condition: async () => await __call(isReady, {
-            type: "positional",
-            args: []
-          }),
+    condition: async () => __stack.locals.__hoist_0,
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.status = `ready`;
@@ -238,15 +253,15 @@ __stack.locals.status = `ready`;
   },
 
 ]);
-      await runner.step(5, async (runner) => {
+      await runner.step(6, async (runner) => {
 //  If statement with property access
       });
-      await runner.step(6, async (runner) => {
+      await runner.step(7, async (runner) => {
 __stack.locals.obj = {
           "active": true
         };
       });
-      await runner.ifElse(7, [
+      await runner.ifElse(8, [
 
   {
     condition: async () => __stack.locals.obj.active,
@@ -258,13 +273,13 @@ __stack.locals.message = `object is active`;
   },
 
 ]);
-      await runner.step(8, async (runner) => {
+      await runner.step(9, async (runner) => {
 //  Nested if statements
       });
-      await runner.step(9, async (runner) => {
+      await runner.step(10, async (runner) => {
 __stack.locals.outer = true;
       });
-      await runner.ifElse(10, [
+      await runner.ifElse(11, [
 
   {
     condition: async () => __stack.locals.outer,
@@ -288,7 +303,7 @@ __stack.locals.nested = `both true`;
   },
 
 ]);
-      await runner.step(11, async (runner) => {
+      await runner.step(12, async (runner) => {
 //  TODO fix
 //  If with index access
 //  arr = [1, 2, 3]
@@ -297,10 +312,10 @@ __stack.locals.nested = `both true`;
 //  }
 //  Multiple statements in then body
       });
-      await runner.step(12, async (runner) => {
+      await runner.step(13, async (runner) => {
 __stack.locals.condition = true;
       });
-      await runner.ifElse(13, [
+      await runner.ifElse(14, [
 
   {
     condition: async () => __stack.locals.condition,
@@ -318,13 +333,13 @@ __stack.locals.c = 3;
   },
 
 ]);
-      await runner.step(14, async (runner) => {
+      await runner.step(15, async (runner) => {
 //  Multiple statements in both then and else bodies
       });
-      await runner.step(15, async (runner) => {
+      await runner.step(16, async (runner) => {
 __stack.locals.value = false;
       });
-      await runner.ifElse(16, [
+      await runner.ifElse(17, [
 
   {
     condition: async () => __stack.locals.value,
@@ -339,10 +354,10 @@ __stack.locals.y = 20;
   },
 
 ]);
-      await runner.step(17, async (runner) => {
+      await runner.step(18, async (runner) => {
 //  Basic else
       });
-      await runner.ifElse(18, [
+      await runner.ifElse(19, [
 
   {
     condition: async () => __stack.locals.flag,
@@ -358,10 +373,10 @@ await runner.step(1, async (runner) => {
 __stack.locals.result = `no`;
           });
 });
-      await runner.step(19, async (runner) => {
+      await runner.step(20, async (runner) => {
 //  else if chain
       });
-      await runner.ifElse(20, [
+      await runner.ifElse(21, [
 
   {
     condition: async () => __eq(__stack.locals.a, 1),
@@ -388,7 +403,7 @@ __stack.locals.result = `other`;
 });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(21, async () => {
+    await runner.hook(22, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -453,4 +468,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"ifElse.agency:main":{"2":{"line":2,"col":2},"3":{"line":3,"col":2},"4":{"line":7,"col":2},"6":{"line":12,"col":2},"7":{"line":15,"col":2},"9":{"line":20,"col":2},"10":{"line":21,"col":2},"12":{"line":35,"col":2},"13":{"line":36,"col":2},"15":{"line":43,"col":2},"16":{"line":44,"col":2},"18":{"line":50,"col":2},"20":{"line":57,"col":2},"3.0":{"line":4,"col":4},"4.0":{"line":8,"col":4},"7.0":{"line":16,"col":4},"10.0":{"line":22,"col":4},"10.1.0":{"line":24,"col":6},"10.1":{"line":23,"col":4},"13.0":{"line":37,"col":4},"13.1":{"line":38,"col":4},"13.2":{"line":39,"col":4},"16.0":{"line":45,"col":4},"16.1":{"line":46,"col":4},"18.0":{"line":51,"col":4},"18.1":{"line":53,"col":4},"20.0":{"line":58,"col":4},"20.1":{"line":60,"col":4},"20.2":{"line":62,"col":4}}};
+export const __sourceMap = {"ifElse.agency:main":{"2":{"line":2,"col":2},"3":{"line":3,"col":2},"4":{"line":7,"col":6},"5":{"line":7,"col":2},"7":{"line":12,"col":2},"8":{"line":15,"col":2},"10":{"line":20,"col":2},"11":{"line":21,"col":2},"13":{"line":35,"col":2},"14":{"line":36,"col":2},"16":{"line":43,"col":2},"17":{"line":44,"col":2},"19":{"line":50,"col":2},"21":{"line":57,"col":2},"3.0":{"line":4,"col":4},"5.0":{"line":8,"col":4},"8.0":{"line":16,"col":4},"11.0":{"line":22,"col":4},"11.1.0":{"line":24,"col":6},"11.1":{"line":23,"col":4},"14.0":{"line":37,"col":4},"14.1":{"line":38,"col":4},"14.2":{"line":39,"col":4},"17.0":{"line":45,"col":4},"17.1":{"line":46,"col":4},"19.0":{"line":51,"col":4},"19.1":{"line":53,"col":4},"21.0":{"line":58,"col":4},"21.1":{"line":60,"col":4},"21.2":{"line":62,"col":4}}};

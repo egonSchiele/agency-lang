@@ -51,7 +51,7 @@ import {
   MessageThread,
   type MessageThreadJSON,
 } from "./state/messageThread.js";
-import { StateStack } from "./state/stateStack.js";
+import { StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { handleStreamingResponse } from "./streaming.js";
 import { GraphState } from "./types.js";
@@ -885,6 +885,10 @@ export async function runPrompt(args: {
 
   // Push a frame onto the state stack — runPrompt participates like any other function
   const { stateStack, stack } = setupFunction();
+  // Hand-written claim (generated code claims in its preambles; runPrompt
+  // is TypeScript). runPrompt's frame was the victim in the motivating
+  // desync: a replayed helper stole it and runPrompt restarted blank.
+  claimFrameForScope(stack, "runPrompt");
   const self = stack.locals;
 
   // Frame-backed locals (survive checkpoint/restore)

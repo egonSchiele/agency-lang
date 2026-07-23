@@ -35,7 +35,7 @@ describe("TraceReader", () => {
           scopeName: "myNode",
           stepPath: String(i),
           stack: {
-            stack: [{ args: {}, locals: { x: i }, threads: null, step: i }],
+            stack: [{ args: {}, locals: { x: i }, threads: null, step: i, scopeName: null }],
             mode: "serialize",
             other: {},
             deserializeStackLength: 0,
@@ -88,8 +88,9 @@ describe("TraceReader", () => {
             locals: { result: "hello" },
             threads: null,
             step: 3,
+            scopeName: null,
           },
-          { args: {}, locals: {}, threads: null, step: 0 },
+          { args: {}, locals: {}, threads: null, step: 0, scopeName: null },
         ],
         mode: "serialize",
         other: { foo: "bar" },
@@ -242,7 +243,7 @@ describe("TraceReader", () => {
         scopeName: "main",
         stepPath: "0",
         stack: {
-          stack: [{ args: {}, locals: {}, threads: null, step: 0 }],
+          stack: [{ args: {}, locals: {}, threads: null, step: 0, scopeName: null }],
           mode: "serialize",
           other: {},
           deserializeStackLength: 0,

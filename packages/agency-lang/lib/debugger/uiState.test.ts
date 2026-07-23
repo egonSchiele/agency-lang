@@ -12,6 +12,7 @@ function makeStackJSON(frames: Partial<StateJSON>[] = []): StateStackJSON {
       locals: f.locals ?? {},
       threads: f.threads ?? null,
       step: f.step ?? 0,
+      scopeName: f.scopeName ?? null,
       ...(f.branches ? { branches: f.branches } : {}),
     })),
     mode: "serialize",

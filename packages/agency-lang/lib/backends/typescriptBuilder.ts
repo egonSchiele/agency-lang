@@ -2195,6 +2195,11 @@ export class TypeScriptBuilder {
         ctx: ts.raw("getRuntimeContext().ctx"),
       }),
 
+      // Claim site: this function just pulled its frame via
+      // setupFunction. A mismatched claim on resume replay is a frame
+      // desync and throws (see claimFrameForScope).
+      ts.raw(`claimFrameForScope(__stack, ${JSON.stringify(functionName)});`),
+
       // Ensure this module's globals are initialized on the
       // current per-scope view. Runs BEFORE this function's own
       // `withAlsFrame` wrap, but the caller's ALS frame is still
@@ -3063,6 +3068,10 @@ export class TypeScriptBuilder {
       // from `stack.threads` JSON (or created fresh). `__threads()`
       // accessors emitted inside step bodies will then resolve to this
       // same store via `Runner.runInScope`.
+      // Claim site: this node just pulled its frame via setupNode. A
+      // mismatched claim on resume replay is a frame desync and throws.
+      ts.raw(`claimFrameForScope(__stack, ${JSON.stringify(nodeName)});`),
+
       ts.raw(
         `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)}, threads: __setupData.threads });`,
       ),

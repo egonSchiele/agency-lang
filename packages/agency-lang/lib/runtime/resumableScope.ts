@@ -50,6 +50,7 @@
 import { agencyStore, getRuntimeContext } from "./asyncContext.js";
 import { setupFunction } from "./node.js";
 import { Runner } from "./runner.js";
+import { claimFrameForScope } from "./state/stateStack.js";
 import { RESULT_ENTRY_LABEL } from "./state/checkpointStore.js";
 
 export type ResumableScopeOpts = {
@@ -120,6 +121,9 @@ export async function withResumableScope<T>(
   // Push a new frame on the active branch's stack (reads `stack` /
   // `threads` from the ALS frame, same as a generated function body).
   const { stateStack, stack, threads } = setupFunction();
+  // Hand-written claim (generated code claims in its preambles; this
+  // helper is TypeScript and pulls a real frame via setupFunction).
+  claimFrameForScope(stack, opts.name);
 
   if (pin) {
     await ctx.checkpoints.createPinned(stateStack, ctx, {

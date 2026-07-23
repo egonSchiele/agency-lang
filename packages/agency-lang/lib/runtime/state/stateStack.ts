@@ -6,6 +6,7 @@ import { sendCostTelemetryToParent } from "../costTelemetry.js";
 import { Checkpoint } from "../index.js";
 import { MemoryFrame } from "../memory/frame.js";
 import { deepClone } from "../utils.js";
+import { agencyStore } from "../asyncContext.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
 import { ThreadStoreJSON } from "./threadStore.js";
 
@@ -81,6 +82,15 @@ export class State {
    *  interrupt/resume. Read only by this frame's own catch rung (the
    *  carry-on-abort level rule); no other code walks it. */
   savedDraft?: { value: any };
+  /** The scope that CLAIMED this frame (pulled it from the stack via
+   *  setupFunction/setupNode), stamped by claimFrameForScope at the
+   *  claim sites: generated function/node/block preambles, runPrompt,
+   *  and withResumableScope. Null means never claimed. Claiming and
+   *  RUNNING are different events — a finalize Runner runs on its
+   *  container's frame and must not stamp — so the Runner constructor
+   *  never touches this. Always serialized; a mismatched claim on
+   *  resume replay is state corruption and throws. */
+  scopeName: string | null = null;
 
   constructor(
     opts: {
@@ -222,6 +232,7 @@ export class State {
       locals: deepClone(this.locals),
       threads: this.threads ? deepClone(this.threads) : null,
       step: this.step,
+      scopeName: this.scopeName,
     };
     if (this.scopedCallbacks && this.scopedCallbacks.length > 0) {
       // Pass `fn` through as a reference — the outer serializer (with
@@ -275,6 +286,7 @@ export class State {
       threads: json.threads,
       step: json.step,
     });
+    state.scopeName = json.scopeName ?? null;
     if (json.scopedCallbacks && json.scopedCallbacks.length > 0) {
       state.scopedCallbacks = json.scopedCallbacks.map((cb) => ({
         name: cb.name,
@@ -315,10 +327,43 @@ export type StateJSON = {
   locals: Record<string, any>;
   threads: ThreadStoreJSON | null;
   step: number;
+  scopeName: string | null;
   branches?: Record<string, BranchStateJSON>;
   scopedCallbacks?: Array<{ name: string; fn: any }>;
   savedDraft?: { value: any };
 };
+
+/** Stamp-or-check a frame claim. First claim stamps; a mismatched later
+ *  claim means resume replay handed this frame to the wrong function —
+ *  state corruption, so throw (house precedent: the guard-stack drift
+ *  throw in cloneForBranch below). Claiming and RUNNING are different
+ *  events — finalize Runners run on their container's frame and must
+ *  not stamp — so this is called from frame-claim sites only, never
+ *  the Runner constructor. Empty names never stamp: they mean a claim
+ *  site forgot its name (Runner defaults scopeName to "").
+ *  The statelog emit is not redundant with the throw: throws convert
+ *  to Failures at def boundaries and can be laundered downstream; the
+ *  event is the signal that survives. Best-effort via the ALS pattern
+ *  (no store in bare unit tests means no emit; the throw still fires). */
+export function claimFrameForScope(frame: State, scopeName: string): void {
+  if (!scopeName) return;
+  if (frame.scopeName === null || frame.scopeName === undefined) {
+    frame.scopeName = scopeName;
+    return;
+  }
+  if (frame.scopeName !== scopeName) {
+    const msg =
+      `Resume desync: function "${scopeName}" tried to claim the saved ` +
+      `state of "${frame.scopeName}". This is a compiler/runtime bug — ` +
+      `please report it with the program that produced it.`;
+    agencyStore.getStore()?.ctx?.statelogClient?.error?.({
+      errorType: "runtimeError",
+      message: msg,
+      functionName: scopeName,
+    });
+    throw new Error(msg);
+  }
+}
 
 export type StateStackJSON = {
   stack: StateJSON[];

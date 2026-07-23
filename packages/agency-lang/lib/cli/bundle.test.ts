@@ -40,7 +40,7 @@ describe("createBundle", () => {
         scopeName: "main",
         stepPath: "1",
         stack: {
-          stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1 }],
+          stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1, scopeName: null }],
           mode: "serialize",
           other: {},
           deserializeStackLength: 0,
@@ -141,7 +141,7 @@ describe("extractBundle", () => {
         scopeName: "main",
         stepPath: "1",
         stack: {
-          stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1 }],
+          stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1, scopeName: null }],
           mode: "serialize",
           other: {},
           deserializeStackLength: 0,

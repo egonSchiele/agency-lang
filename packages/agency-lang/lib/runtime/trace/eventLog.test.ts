@@ -21,7 +21,7 @@ function makeCheckpoint(overrides: Record<string, any> = {}): Checkpoint {
     label: null,
     pinned: false,
     stack: {
-      stack: [{ args: {}, locals: {}, threads: null, step: 0 }],
+      stack: [{ args: {}, locals: {}, threads: null, step: 0, scopeName: null }],
       mode: "serialize" as const,
       other: {},
       deserializeStackLength: 0,
@@ -95,7 +95,7 @@ describe("detectStackChanges", () => {
     const prev = makeCheckpoint({
       stepPath: "1",
       stack: {
-        stack: [{ args: {}, locals: {}, threads: null, step: 1 }],
+        stack: [{ args: {}, locals: {}, threads: null, step: 1, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -107,7 +107,7 @@ describe("detectStackChanges", () => {
       stepPath: "0",
       stack: {
         stack: [
-          { args: {}, locals: {}, threads: null, step: 1 },
+          { args: {}, locals: {}, threads: null, step: 1, scopeName: null },
           {
             args: { name: "Alice" },
             locals: { name: "Alice" },
@@ -134,7 +134,7 @@ describe("detectStackChanges", () => {
       stepPath: "2",
       stack: {
         stack: [
-          { args: {}, locals: {}, threads: null, step: 1 },
+          { args: {}, locals: {}, threads: null, step: 1, scopeName: null },
           {
             args: { name: "Alice" },
             locals: { name: "Alice" },
@@ -179,7 +179,7 @@ describe("detectStackChanges", () => {
       stepPath: "2",
       stack: {
         stack: [
-          { args: {}, locals: { x: 1 }, threads: null, step: 1 },
+          { args: {}, locals: { x: 1 }, threads: null, step: 1, scopeName: null },
           {
             args: { name: "Alice" },
             locals: { name: "Alice" },
@@ -198,7 +198,7 @@ describe("detectStackChanges", () => {
       stepPath: "2",
       stack: {
         stack: [
-          { args: {}, locals: { x: 1 }, threads: null, step: 2 },
+          { args: {}, locals: { x: 1 }, threads: null, step: 2, scopeName: null },
         ],
         mode: "serialize",
         other: {},
@@ -216,7 +216,7 @@ describe("detectStackChanges", () => {
     const prev = makeCheckpoint({
       stepPath: "1",
       stack: {
-        stack: [{ args: {}, locals: {}, threads: null, step: 1 }],
+        stack: [{ args: {}, locals: {}, threads: null, step: 1, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -228,9 +228,9 @@ describe("detectStackChanges", () => {
       stepPath: "0",
       stack: {
         stack: [
-          { args: {}, locals: {}, threads: null, step: 1 },
-          { args: { a: 1 }, locals: { a: 1 }, threads: null, step: 0 },
-          { args: { b: 2 }, locals: { b: 2 }, threads: null, step: 0 },
+          { args: {}, locals: {}, threads: null, step: 1, scopeName: null },
+          { args: { a: 1 }, locals: { a: 1 }, threads: null, step: 0, scopeName: null },
+          { args: { b: 2 }, locals: { b: 2 }, threads: null, step: 0, scopeName: null },
         ],
         mode: "serialize",
         other: {},
@@ -250,9 +250,9 @@ describe("detectStackChanges", () => {
       stepPath: "1",
       stack: {
         stack: [
-          { args: {}, locals: {}, threads: null, step: 1 },
-          { args: {}, locals: {}, threads: null, step: 1 },
-          { args: {}, locals: {}, threads: null, step: 1 },
+          { args: {}, locals: {}, threads: null, step: 1, scopeName: null },
+          { args: {}, locals: {}, threads: null, step: 1, scopeName: null },
+          { args: {}, locals: {}, threads: null, step: 1, scopeName: null },
         ],
         mode: "serialize",
         other: {},
@@ -265,7 +265,7 @@ describe("detectStackChanges", () => {
       stepPath: "2",
       stack: {
         stack: [
-          { args: {}, locals: {}, threads: null, step: 2 },
+          { args: {}, locals: {}, threads: null, step: 2, scopeName: null },
         ],
         mode: "serialize",
         other: {},
@@ -292,7 +292,7 @@ describe("detectVariableChanges", () => {
     const prev = makeCheckpoint({
       stepPath: "0",
       stack: {
-        stack: [{ args: {}, locals: {}, threads: null, step: 0 }],
+        stack: [{ args: {}, locals: {}, threads: null, step: 0, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -303,7 +303,7 @@ describe("detectVariableChanges", () => {
       stepPath: "1",
       stack: {
         stack: [
-          { args: {}, locals: { name: "Alice" }, threads: null, step: 1 },
+          { args: {}, locals: { name: "Alice" }, threads: null, step: 1, scopeName: null },
         ],
         mode: "serialize",
         other: {},
@@ -326,7 +326,7 @@ describe("detectVariableChanges", () => {
     const prev = makeCheckpoint({
       stepPath: "1",
       stack: {
-        stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1 }],
+        stack: [{ args: {}, locals: { x: 1 }, threads: null, step: 1, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -336,7 +336,7 @@ describe("detectVariableChanges", () => {
     const curr = makeCheckpoint({
       stepPath: "2",
       stack: {
-        stack: [{ args: {}, locals: { x: 2 }, threads: null, step: 2 }],
+        stack: [{ args: {}, locals: { x: 2 }, threads: null, step: 2, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -385,7 +385,7 @@ describe("detectVariableChanges", () => {
       stepPath: "1",
       stack: {
         stack: [
-          { args: {}, locals: { x: 42, y: "hello" }, threads: null, step: 1 },
+          { args: {}, locals: { x: 42, y: "hello" }, threads: null, step: 1, scopeName: null },
         ],
         mode: "serialize",
         other: {},
@@ -397,7 +397,7 @@ describe("detectVariableChanges", () => {
       stepPath: "2",
       stack: {
         stack: [
-          { args: {}, locals: { x: 42, y: "hello" }, threads: null, step: 2 },
+          { args: {}, locals: { x: 42, y: "hello" }, threads: null, step: 2, scopeName: null },
         ],
         mode: "serialize",
         other: {},
@@ -413,7 +413,7 @@ describe("detectVariableChanges", () => {
     const prev = makeCheckpoint({
       stepPath: "0",
       stack: {
-        stack: [{ args: {}, locals: {}, threads: null, step: 0 }],
+        stack: [{ args: {}, locals: {}, threads: null, step: 0, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -846,7 +846,7 @@ describe("detectBranches", () => {
     const prev = makeCheckpoint({
       stepPath: "1",
       stack: {
-        stack: [{ args: {}, locals: {}, threads: null, step: 1 }],
+        stack: [{ args: {}, locals: {}, threads: null, step: 1, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -879,7 +879,7 @@ describe("detectBranches", () => {
     const prev = makeCheckpoint({
       stepPath: "1",
       stack: {
-        stack: [{ args: {}, locals: {}, threads: null, step: 1 }],
+        stack: [{ args: {}, locals: {}, threads: null, step: 1, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -912,7 +912,7 @@ describe("detectBranches", () => {
     const prev = makeCheckpoint({
       stepPath: "2",
       stack: {
-        stack: [{ args: {}, locals: {}, threads: null, step: 2 }],
+        stack: [{ args: {}, locals: {}, threads: null, step: 2, scopeName: null }],
         mode: "serialize",
         other: {},
         deserializeStackLength: 0,
@@ -976,7 +976,7 @@ describe("generateEventLog", () => {
       stepPath: "1",
       stack: {
         stack: [
-          { args: {}, locals: { x: 42 }, threads: null, step: 1 },
+          { args: {}, locals: { x: 42 }, threads: null, step: 1, scopeName: null },
         ],
         mode: "serialize",
         other: {},

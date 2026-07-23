@@ -27,7 +27,7 @@ export {
   __globals,
   type AgencyStore,
 } from "./asyncContext.js";
-export { StateStack, State } from "./state/stateStack.js";
+export { StateStack, State, claimFrameForScope } from "./state/stateStack.js";
 export { GlobalStore } from "./state/globalStore.js";
 export { MessageThread } from "./state/messageThread.js";
 export { ThreadStore } from "./state/threadStore.js";

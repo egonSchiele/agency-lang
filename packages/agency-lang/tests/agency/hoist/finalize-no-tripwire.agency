@@ -1,0 +1,21 @@
+// Tripwire regression (frame claim/run distinction): a finalize block
+// constructs a SECOND Runner on its container's frame with scopeName
+// "<container>#finalize". Stamping at CLAIM sites (not the Runner
+// constructor) means that reuse must never trip "Resume desync" on the
+// abort path — the salvage path saveDraft depends on.
+def work(): string {
+  const reply = llm("Reply with: pong")
+  return reply
+
+  finalize {
+    return "salvaged"
+  }
+}
+
+node main() {
+  const result = guard(cost: 0.000001) {
+    return work()
+  }
+  if (isFailure(result)) { return "guard-failure" }
+  return result.value
+}

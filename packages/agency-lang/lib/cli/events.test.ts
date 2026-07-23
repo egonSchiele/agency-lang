@@ -37,7 +37,7 @@ describe("traceLog integration", () => {
         label: null,
         pinned: false,
         stack: {
-          stack: [{ args: {}, locals: {}, threads: null, step: 0 }],
+          stack: [{ args: {}, locals: {}, threads: null, step: 0, scopeName: null }],
           mode: "serialize" as const,
           other: {},
           deserializeStackLength: 0,
@@ -65,6 +65,7 @@ describe("traceLog integration", () => {
               locals: { greeting: "hello" },
               threads: null,
               step: 1,
+              scopeName: null,
             },
           ],
           mode: "serialize" as const,

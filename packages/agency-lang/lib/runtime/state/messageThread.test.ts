@@ -287,3 +287,41 @@ describe("queueMessage validation and copy semantics (PR 651 review)", () => {
     expect(revived.hasQueuedMessages()).toBe(false);
   });
 });
+
+describe("repair generation — markRepaired / isNewerThan", () => {
+  it("defaults to 0 and stays out of JSON until incremented", () => {
+    const t = new MessageThread([smoltalk.userMessage("hi")]);
+    expect(t.repairs).toBe(0);
+    expect("repairs" in t.toJSON()).toBe(false);
+  });
+
+  it("markRepaired is monotonic and round-trips through JSON", () => {
+    const t = new MessageThread([smoltalk.userMessage("hi")]);
+    t.markRepaired();
+    t.markRepaired();
+    expect(t.repairs).toBe(2);
+    expect(MessageThread.fromJSON(t.toJSON()).repairs).toBe(2);
+  });
+
+  it("legacy JSON without the field revives as 0", () => {
+    expect(MessageThread.fromJSON({ messages: [] }).repairs).toBe(0);
+  });
+
+  it("adoptFrom copies the counter with the content", () => {
+    const a = new MessageThread();
+    const b = new MessageThread([smoltalk.userMessage("hi")]);
+    b.markRepaired();
+    a.adoptFrom(b);
+    expect(a.repairs).toBe(1);
+  });
+
+  it("isNewerThan orders live thread against a snapshot", () => {
+    const live = new MessageThread();
+    const snapshot = new MessageThread();
+    expect(live.isNewerThan(snapshot)).toBe(false); // equal → restorable
+    live.markRepaired();
+    expect(live.isNewerThan(snapshot)).toBe(true); // repaired after → stale
+    snapshot.markRepaired();
+    expect(live.isNewerThan(snapshot)).toBe(false); // snapshot post-repair → fine
+  });
+});

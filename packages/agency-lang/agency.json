@@ -19,7 +19,8 @@
   },
   "coverage": {
     "exclude": [
-      "tests/agency/topsort/cycles/**"
+      "tests/agency/topsort/cycles/**",
+      "tests/agency/expectedCompileError/**"
     ]
   }
 }

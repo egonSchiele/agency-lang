@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { parseAgency } from "../parser.js";
 import { hoistCallsInScope } from "./hoistCalls.js";
 import type { AgencyNode } from "../types.js";
@@ -111,7 +112,8 @@ def f(): number {
     const names = JSON.stringify(body).match(/__hoist_\d+/g) ?? [];
     expect(names).toContain("__hoist_0");
     expect(names).toContain("__hoist_1");
-    expect(new Set(names).size).toBeGreaterThanOrEqual(2);
+    const unique = names.filter((n, i) => names.indexOf(n) === i);
+    expect(unique.length).toBeGreaterThanOrEqual(2);
   });
 
   it("numbering skips user-declared __hoist names (seeding is the guard; no lint rule exists)", () => {
@@ -344,9 +346,8 @@ describe("fixture shape pins (S6): the flagship fixtures exercise hoisted shapes
   // options argument actually becomes a hoisted temp. Pinning that here
   // makes the guarantee permanent — a one-time unwire-and-rerun proves
   // it once, this proves it on every CI run.
-  it("resume-regression-args: the llm options argument is a __hoist temp reference", async () => {
-    const fs = await import("node:fs");
-    const src = fs.readFileSync(
+  it("resume-regression-args: the llm options argument is a __hoist temp reference", () => {
+    const src = readFileSync(
       new URL("../../tests/agency/hoist/resume-regression-args.agency", import.meta.url),
       "utf8",
     );

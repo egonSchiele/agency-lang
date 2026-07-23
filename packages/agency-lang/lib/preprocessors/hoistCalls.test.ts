@@ -109,7 +109,7 @@ def f(): number {
   return total
 }`),
     );
-    const names = JSON.stringify(body).match(/__hoist_\d+/g) ?? [];
+    const names: string[] = JSON.stringify(body).match(/__hoist_\d+/g) ?? [];
     expect(names).toContain("__hoist_0");
     expect(names).toContain("__hoist_1");
     const unique = names.filter((n, i) => names.indexOf(n) === i);

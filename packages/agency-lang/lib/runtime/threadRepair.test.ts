@@ -3,8 +3,12 @@ import * as smoltalk from "smoltalk";
 import { makeAbortCause } from "./errors.js";
 import { MessageThread } from "./state/messageThread.js";
 import {
+  ABANDONED_CALL_TEXT,
+  ABANDONED_TURN_TEXT,
   markThreadCancelled,
   needsThreadRepair,
+  repairAbandonedTurn,
+  repairReopenedThread,
   unansweredToolCalls,
 } from "./threadRepair.js";
 
@@ -158,5 +162,83 @@ describe("markThreadCancelled — label preservation (push, not setMessages)", (
     expect(roles(t)).toEqual(["user", "assistant", "tool", "assistant"]);
     // The alignment invariant messageThread.ts warns about: lengths match.
     expect(t.messageLabels.length).toBe(t.getMessages().length);
+  });
+});
+
+describe("repairAbandonedTurn", () => {
+  const damaged = () =>
+    new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [
+        { id: "a", name: "whatIAmDoing" },
+        { id: "b", name: "codeAgent" },
+        { id: "c", name: "readDocs" },
+      ]),
+      tool("a"),
+    ]);
+
+  it("answers EVERY dangling call, appends the breadcrumb, bumps the generation", () => {
+    const t = damaged();
+    const repaired = repairAbandonedTurn(t);
+    expect(repaired.map((c) => c.id)).toEqual(["b", "c"]);
+    expect(roles(t)).toEqual(["user", "assistant", "tool", "tool", "tool", "assistant"]);
+    const stubs = t
+      .getMessages()
+      .filter((m): m is smoltalk.ToolMessage => m instanceof smoltalk.ToolMessage);
+    expect(stubs.map((m) => m.tool_call_id)).toEqual(["a", "b", "c"]);
+    expect(stubs[1].content).toBe(ABANDONED_CALL_TEXT);
+    expect((t.getMessages().at(-1) as smoltalk.AssistantMessage).content).toBe(
+      ABANDONED_TURN_TEXT,
+    );
+    expect(t.repairs).toBe(1);
+  });
+
+  it("valid thread: byte-identical no-op, generation untouched", () => {
+    const t = new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [{ id: "x", name: "f" }]),
+      tool("x"),
+    ]);
+    const before = JSON.stringify(t.toJSON());
+    expect(repairAbandonedTurn(t)).toEqual([]);
+    expect(JSON.stringify(t.toJSON())).toBe(before);
+    expect(t.repairs).toBe(0);
+  });
+
+  it("repairing twice counts twice — the generation is a counter, not a flag", () => {
+    const t = damaged();
+    repairAbandonedTurn(t);
+    t.push(asst("", [{ id: "z", name: "f" }])); // a second abandoned round
+    repairAbandonedTurn(t);
+    expect(t.repairs).toBe(2);
+  });
+});
+
+describe("repairReopenedThread — the seam helper", () => {
+  it("repairs and emits threadRepaired with the slugged id and the call ids", () => {
+    const t = new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [
+        { id: "a", name: "whatIAmDoing" },
+        { id: "b", name: "codeAgent" },
+      ]),
+      tool("a"),
+    ]);
+    const events: Array<{ threadId: string; toolCallIds: string[] }> = [];
+    repairReopenedThread(t, { threadRepaired: (e) => { events.push(e); } }, "7");
+    expect(events).toEqual([{ threadId: "t7", toolCallIds: ["b"] }]);
+    expect(t.repairs).toBe(1);
+  });
+
+  it("healthy thread: NO event, no changes", () => {
+    const t = new MessageThread([smoltalk.userMessage("hi"), asst("hello")]);
+    const events: unknown[] = [];
+    repairReopenedThread(t, { threadRepaired: (e) => { events.push(e); } }, "7");
+    expect(events).toEqual([]);
+    expect(t.repairs).toBe(0);
+  });
+
+  it("tolerates a missing thread and a missing statelog client", () => {
+    expect(() => repairReopenedThread(undefined, undefined, "7")).not.toThrow();
   });
 });

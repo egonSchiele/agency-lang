@@ -111,3 +111,70 @@ export function markThreadCancelled(
   });
   return dangling;
 }
+
+export const ABANDONED_CALL_TEXT =
+  "[Tool call interrupted; the turn was never resumed.]";
+export const ABANDONED_TURN_TEXT =
+  "[The previous turn was interrupted before it finished.]";
+
+/** Repair a thread whose previous turn parked on an unanswered interrupt
+ *  and was then abandoned (the user started a new turn instead of
+ *  answering). Distinct wording from `markThreadCancelled` on purpose:
+ *  nobody cancelled anything, so the breadcrumb tells the next turn's
+ *  model the work was interrupted — it can offer to pick it back up.
+ *  Bumps the thread's repair generation so a late restore of the
+ *  abandoned turn's checkpoint is refused instead of clobbering the
+ *  thread — see `restoreThreadForResume`. Total no-op on a valid
+ *  thread. */
+export function repairAbandonedTurn(
+  messages: MessageThread,
+): DanglingToolCall[] {
+  const dangling = unansweredToolCalls(messages);
+  if (dangling.length === 0) return [];
+  appendRepair(messages, dangling, {
+    perCall: ABANDONED_CALL_TEXT,
+    breadcrumb: ABANDONED_TURN_TEXT,
+  });
+  messages.markRepaired();
+  return dangling;
+}
+
+export type ThreadRepairedSink = {
+  threadRepaired?: (event: {
+    threadId: string;
+    toolCallIds: string[];
+  }) => Promise<void> | void;
+};
+
+/** Everything the reopen seam needs, so `Runner.thread()` stays one line.
+ *
+ *  A reopen (session second+ entry, or `thread(continue: id)`) means the
+ *  previous turn on this thread stopped mattering — at least for the
+ *  REPL, where a parked turn blocks the loop, so a reopen implies
+ *  abandonment. (Within a single run a reopen from a second step path is
+ *  also possible; it is harmless here because a healthy in-run thread
+ *  has no dangling tail.) If the abandoned turn parked mid-tool-round,
+ *  the thread still ends on an assistant message with unanswered tool
+ *  calls — a shape the provider rejects outright, which would otherwise
+ *  poison every later request on this session.
+ *
+ *  Safe at the reopen seam and ONLY there: a checkpoint resume of a
+ *  parked turn never reaches it — `Runner.thread()` guards the open side
+ *  effect behind `frame.locals[threadKey]`, which is restored with the
+ *  checkpoint, and `restoreBranchView` reinstates the active stack by
+ *  direct assignment. If either mechanism changes, this repair would
+ *  start firing mid-resume; the resume-re-entry test in runner.test.ts
+ *  exists to catch exactly that. */
+export function repairReopenedThread(
+  thread: MessageThread | undefined,
+  statelog: ThreadRepairedSink | undefined,
+  tid: string,
+): void {
+  if (!thread) return;
+  const repaired = repairAbandonedTurn(thread);
+  if (repaired.length === 0) return;
+  void statelog?.threadRepaired?.({
+    threadId: `t${tid}`,
+    toolCallIds: repaired.map((c) => c.id),
+  });
+}

@@ -10,7 +10,9 @@ def _badTable(attrs: any): any {
   return { type: "table", attrs: attrs, children: [] }
 }
 
-// No header / body / footer at all.
+// No header / body / footer at all: a valid EMPTY table that renders
+// as nothing (tryRender returns null on success). Table content is
+// routinely tool-derived, and empty crashing the display was a bug.
 node testAllSectionsMissing(): string {
   return tryRender(_badTable({}))
 }

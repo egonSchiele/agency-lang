@@ -1534,12 +1534,21 @@ describe("table — _coerceCell", () => {
 });
 
 describe("table — _validateTable", () => {
-  test("all-empty throws 'at least one of...'", () => {
-    expect(() => _validateTable({})).toThrow(/at least one of header \/ body \/ footer/);
+  test("all-empty is a valid empty table (columnCount 0), not an error", () => {
+    // Table content is routinely tool-derived; "no rows" crashed the
+    // agent CLI mid-display before this was made a valid degenerate.
+    const v = _validateTable({});
+    expect(v).toEqual({ header: [], body: [], footer: [], columnCount: 0 });
   });
-  test("body+footer empty + header undefined throws", () => {
-    expect(() => _validateTable({ body: [], footer: [] }))
-      .toThrow(/at least one of/);
+  test("body+footer empty + header undefined is the same empty table", () => {
+    expect(_validateTable({ body: [], footer: [] }).columnCount).toBe(0);
+  });
+  test("an empty table renders as nothing through the full pipeline", () => {
+    // The crash path was render -> sizeTable -> _validateTable throw;
+    // both the sizing and render handlers must short-circuit on the
+    // empty marker.
+    expect(renderTablePlain({})).toBe("");
+    expect(renderTablePlain({ body: [], footer: [] })).toBe("");
   });
   test("header alone is fine", () => {
     const v = _validateTable({ header: ["A", "B"] });
@@ -1613,12 +1622,15 @@ describe("table — _validateTable", () => {
       header: ["A"],
     })).toThrow(/columns must be an array, got string/);
   });
-  test("zero-column table (empty header) throws instead of rendering a degenerate frame", () => {
-    expect(() => _validateTable({ header: [] }))
+  test("empty header with no other content is the empty table, not an error", () => {
+    expect(_validateTable({ header: [] }).columnCount).toBe(0);
+  });
+  test("zero-column table (empty body row) throws — content present but degenerate", () => {
+    expect(() => _validateTable({ body: [[]] }))
       .toThrow(/at least one column is required/);
   });
-  test("zero-column table (empty body row) throws", () => {
-    expect(() => _validateTable({ body: [[]] }))
+  test("empty header alongside real body rows still throws the column mismatch", () => {
+    expect(() => _validateTable({ header: [], body: [["1", "2"]] }))
       .toThrow(/at least one column is required/);
   });
   test("cells are coerced in the returned sections", () => {

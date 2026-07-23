@@ -179,6 +179,155 @@ async function __registerTopLevelCallbacks(__ctx) {
 }
 __registerCallbacksInit("gotoWithArgs.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
+async function __decorate_impl(name: string) {
+  const __setupData = setupFunction();
+  const __stack = __setupData.stack;
+const __step = __setupData.step;
+const __self = __setupData.self;
+const __ctx = getRuntimeContext().ctx;
+let __forked;
+let __functionCompleted = false;
+  claimFrameForScope(__stack, "decorate");
+  if (!__globals()!.isInitialized("gotoWithArgs.agency")) {
+    await __initializeGlobals(__ctx)
+  }
+  let __funcStartTime: number = performance.now();
+  __stack.args["name"] = name;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "gotoWithArgs.agency", scopeName: "decorate", threads: __setupData.threads });
+  // `__resultCheckpointId` is referenced by interruptAssignment /
+// interruptReturn templates when an interrupt rejects and `runner.halt`
+// builds a Failure carrying the entry checkpoint for `result.retry(...)`.
+// We keep the variable declared (sentinel -1) but skip the createPinned
+// call: pinning at every function entry causes pinned checkpoints to
+// accumulate without bound (evictIfNeeded only evicts unpinned), and the
+// JSON deep-clone of stateStack + globals on each call is a measurable
+// per-keystroke cost inside std::ui's repl loop. The cost of always
+// pinning outweighs the retry-on-failure feature, so it is disabled.
+// `ctx.checkpoints.get(-1)` returns undefined, so the failure path
+// gracefully omits the embedded checkpoint and retry simply becomes a
+// no-op rather than failing.
+let __resultCheckpointId = -1;
+if (__ctx._pendingArgOverrides) {
+  const __overrides = __ctx._pendingArgOverrides;
+  __ctx._pendingArgOverrides = undefined;
+  if ("name" in __overrides) {
+    name = __overrides["name"];
+    __stack.args["name"] = name;
+  }
+
+}
+
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+await callHook({
+          name: "onFunctionStart",
+          data: {
+            functionName: "decorate",
+            args: {
+              name: name
+            },
+            moduleId: "gotoWithArgs.agency"
+          }
+        })
+      });
+      await runner.step(1, async (runner) => {
+__functionCompleted = true;
+runner.halt(`dear ${__stack.args.name}`)
+return;
+      });
+    })
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan)
+      }
+      return runner.haltResult;
+    }
+  } catch (__error) {
+    if (__error instanceof RestoreSignal) {
+  throw __error;
+}
+// All aborts — cancellations (Esc / abort) AND guard trips — are now a single
+// AgencyAbort carrying an AbortCause, and must propagate untouched. The owning
+// guard's `try` converts its own guardTrip; every other abort unwinds. One
+// rung replaces the old GuardExceededError + isAbortError ladder. Converting
+// any abort to a Failure here would (a) hide a guard trip so the block appears
+// to succeed over budget, and (b) let a cancel limp onward / surface as a
+// logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
+if (__error instanceof AgencyAbort) {
+  // An abort stopped this function. It does not throw past its own frame:
+  // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
+  // if it saved one. The caller's post-call check spots the marker and
+  // stops too, so the abort travels up the stack as a plain value, the
+  // same way interrupts do. See lib/runtime/abortedResult.ts.
+  return AbortedResult.fromError(__error, __stack, "decorate");
+}
+// Surface the underlying exception via logger + statelog before
+// converting to a Failure. Without this, a caller that doesn't
+// inspect the result (the common case for void side-effect calls)
+// silently loses the error — a debugging nightmare. See the
+// recordAlwaysScoped bug debugged in
+// https://ampcode.com/threads/T-019e7a3a-edfa-74d6-917a-255c31bf8491.
+{
+  const __errMsg = __error instanceof Error ? __error.message : String(__error);
+  const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+  const __log = __createLogger(__ctx.logLevel);
+  __log.error("Function " + "decorate" + " threw an exception (converted to Failure): " + __errMsg);
+  if (__errStack) __log.error(__errStack);
+  __ctx.statelogClient?.error?.({
+    errorType: "runtimeError",
+    message: __errMsg,
+    functionName: "decorate",
+  });
+}
+return failure(
+  __error instanceof Error ? __error.message : String(__error),
+  {
+    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+    destructiveRan: __self.__destructiveRan,
+    functionName: "decorate",
+    args: __stack.args,
+  }
+);
+
+  } finally {
+    __stateStack()?.pop()
+    if (__functionCompleted) {
+      await callHook({
+        name: "onFunctionEnd",
+        data: {
+          functionName: "decorate",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      })
+    }
+  }
+}
+export const decorate = __AgencyFunction.create({
+  name: "decorate",
+  module: "gotoWithArgs.agency",
+  fn: __decorate_impl,
+  params: [{
+    name: "name",
+    hasDefault: false,
+    defaultValue: undefined,
+    variadic: false,
+    isFunctionTyped: false,
+    acceptsResult: false
+  }],
+  toolDefinition: {
+    name: "decorate",
+    description: "No description provided.",
+    schema: z.object({"name": z.string(), })
+  },
+  exported: false
+}, __toolRegistry);
 graph.node("greet", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
@@ -294,20 +443,37 @@ await callHook({
         })
       });
       await runner.step(1, async (runner) => {
+__stack.locals.__hoist_0 = await __call(decorate, {
+          type: "positional",
+          args: [`world`]
+        });
+if (hasInterrupts(__stack.locals.__hoist_0)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          runner.halt({
+            ...__state,
+            data: __stack.locals.__hoist_0
+          })
+          return;
+        }
+if (isAborted(__stack.locals.__hoist_0)) {
+          throw __stack.locals.__hoist_0.toError()
+        }
+      });
+      await runner.step(2, async (runner) => {
 __stateStack()?.pop()
 __functionCompleted = true;
 runner.halt(goToNode("greet", {
           messages: __threads(),
           ctx: getRuntimeContext().ctx,
           data: {
-            name: `world`
+            name: __stack.locals.__hoist_0
           }
         }))
 return;
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(2, async () => {
+    await runner.hook(3, async () => {
 await callHook({
         name: "onNodeEnd",
         data: {
@@ -386,4 +552,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"gotoWithArgs.agency:greet":{"1":{"line":1,"col":2}},"gotoWithArgs.agency:main":{"1":{"line":5,"col":2}}};
+export const __sourceMap = {"gotoWithArgs.agency:decorate":{"1":{"line":1,"col":2}},"gotoWithArgs.agency:greet":{"1":{"line":5,"col":2}},"gotoWithArgs.agency:main":{"1":{"line":9,"col":13},"2":{"line":9,"col":2}}};

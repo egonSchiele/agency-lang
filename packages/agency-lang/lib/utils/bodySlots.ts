@@ -13,6 +13,15 @@
  *
  * Class methods are intentionally NOT included — classes are being removed
  * from the language. Add them here if that decision is reversed.
+ *
+ * The expression/statement seam (mirrored in expressionSlots.ts): some
+ * expressions also own statement bodies — a thread block in value
+ * position, a call with a block argument. The rule: when a consumer
+ * walks an expression and that node has bodySlots, its statement bodies
+ * are reached through THIS table, never through expression slots. An
+ * ifElse contributes only its condition to expressionSlots; its
+ * branches are statement bodies here, even in the value-position form
+ * pattern lowering rewrites at parse time.
  */
 import type { AgencyNode } from "../types.js";
 import type { FunctionDefinition } from "../types/function.js";

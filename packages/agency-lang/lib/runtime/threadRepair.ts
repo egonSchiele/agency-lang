@@ -175,8 +175,10 @@ export function repairReopenedThread(
   if (!thread) return;
   const repaired = repairAbandonedTurn(thread);
   if (repaired.length === 0) return;
+  // Raw registry id, not the `t`-slug: the other thread lifecycle events
+  // (threadCreated, threadResumed) emit raw ids, and consumers join on it.
   void statelog?.threadRepaired?.({
-    threadId: `t${tid}`,
+    threadId: tid,
     toolCallIds: repaired.map((c) => c.id),
   });
 }
@@ -206,11 +208,15 @@ export function restoreThreadForResume(
   const restored = MessageThread.fromJSON(snapshot);
   if (!live) return restored;
   if (live.isNewerThan(restored)) {
+    // State the observed fact; offer the usual cause only as a hint. The
+    // check cannot actually know WHY the thread is ahead of the snapshot —
+    // abandonment is the common case, but a concurrent branch reopening a
+    // shared session while this turn was parked produces the same refusal.
     const msg =
       "Cannot resume this turn: its conversation thread was repaired after " +
-      "this checkpoint was taken (the parked turn was abandoned and newer " +
-      "turns have run since). Restoring would overwrite the newer " +
-      "conversation, so it is refused.";
+      "this checkpoint was taken, so restoring would overwrite the newer " +
+      "conversation. This usually means the parked turn was abandoned and " +
+      "the session continued without it.";
     // Best-effort statelog BEFORE the throw: a throw converts to a Failure
     // at the next def boundary, and Failures can get laundered into prose
     // by the time a model or user sees them — the refusal must stay

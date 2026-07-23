@@ -43,10 +43,17 @@ def innerBare(): Result<string> {
   }
 }
 
+// Each node states its own interactivity instead of inheriting the
+// module default (true) — otherwise the file is order-sensitive: one
+// node flipping the module-global flag would silently change which
+// branch its siblings exercise.
+
 // Foreign label + salvage: reject converts the trip to a Failure at the
 // guard site, where finalize-as-draft turns it into a success carrying
 // the partial. This is the claim "salvage still runs", demonstrated.
+// Interactive: covers the notice-then-reject branch.
 node foreignGuardSalvage() {
+  setInteractive(true)
   handle {
     const r = innerWithSalvage()
     if (r is success(v)) {
@@ -57,7 +64,9 @@ node foreignGuardSalvage() {
 }
 
 // Foreign label, no salvage: a plain Failure the caller can match on.
+// Non-interactive: covers the reject-without-notice branch.
 node foreignGuardBare() {
+  setInteractive(false)
   handle {
     const r = innerBare()
     return "failure:${isFailure(r)}"
@@ -65,9 +74,9 @@ node foreignGuardBare() {
 }
 
 // The handler's OWN label still takes the non-interactive reject path,
-// proving the label match is intact. _isInteractive defaults to true, so
-// the fixture must flip it or the handler would prompt via input() and
-// hang the harness.
+// proving the label match is intact. Must be non-interactive: the
+// interactive own-label path prompts via input() and would hang the
+// harness.
 node ownLabelReject() {
   setInteractive(false)
   handle {
@@ -83,8 +92,9 @@ node ownLabelReject() {
 // wrong would make the agent reject tool approvals, which would be far
 // worse than the bug being fixed.
 node nonGuardPassthrough() {
+  setInteractive(false)
   handle {
-    const r = interrupt("confirm")
+    interrupt("confirm")
     return "resolved"
   } with turnBudgetHandler
 }

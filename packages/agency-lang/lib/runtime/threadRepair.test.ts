@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import * as smoltalk from "smoltalk";
 import { makeAbortCause } from "./errors.js";
+import { runInTestContext } from "./asyncContext.js";
+import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { MessageThread } from "./state/messageThread.js";
+import { StateStack } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
 import {
   ABANDONED_CALL_TEXT,
   ABANDONED_TURN_TEXT,
@@ -218,7 +222,7 @@ describe("repairAbandonedTurn", () => {
 });
 
 describe("repairReopenedThread — the seam helper", () => {
-  it("repairs and emits threadRepaired with the slugged id and the call ids", () => {
+  it("repairs and emits threadRepaired with the raw thread id and the call ids", () => {
     const t = new MessageThread([
       smoltalk.userMessage("go"),
       asst("", [
@@ -229,7 +233,8 @@ describe("repairReopenedThread — the seam helper", () => {
     ]);
     const events: Array<{ threadId: string; toolCallIds: string[] }> = [];
     repairReopenedThread(t, { threadRepaired: (e) => { events.push(e); } }, "7");
-    expect(events).toEqual([{ threadId: "t7", toolCallIds: ["b"] }]);
+    // Raw id, matching threadCreated/threadResumed — consumers join on it.
+    expect(events).toEqual([{ threadId: "7", toolCallIds: ["b"] }]);
     expect(t.repairs).toBe(1);
   });
 
@@ -282,5 +287,28 @@ describe("restoreThreadForResume", () => {
     const live = new MessageThread([smoltalk.userMessage("hi")]);
     live.markRepaired();
     expect(restoreThreadForResume(live.toJSON(), live)).toBe(live);
+  });
+
+  it("emits a statelog runtimeError alongside the refusal throw", () => {
+    // The emit exists so the refusal survives Failure laundering — if it
+    // silently stops firing, that is the exact failure mode it defends
+    // against, so the wiring gets its own assertion (mirrors the
+    // threadRepaired test above).
+    const ctx = makeMockCtx();
+    const errors: Array<Record<string, unknown>> = [];
+    ctx.statelogClient.error = (e: Record<string, unknown>) => {
+      errors.push(e);
+    };
+    const live = new MessageThread([smoltalk.userMessage("hi")]);
+    const snap = live.toJSON();
+    live.markRepaired();
+    runInTestContext(ctx, new StateStack(), new ThreadStore(), () => {
+      expect(() => restoreThreadForResume(snap, live)).toThrow(
+        /repaired after this checkpoint/,
+      );
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0].errorType).toBe("runtimeError");
+    expect(errors[0].functionName).toBe("restoreThreadForResume");
   });
 });

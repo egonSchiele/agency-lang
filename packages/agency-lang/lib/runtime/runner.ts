@@ -709,6 +709,13 @@ export class Runner {
         // checkpoint resume never reaches this branch (the frame-locals
         // guard above skips the whole open side effect). The full safety
         // argument lives on repairReopenedThread.
+        //
+        // The createSubthread branch below needs no repair even though it
+        // clones the parent's messages: a dangling tail only ever exists
+        // on a thread whose turn parked and bailed out of the whole run,
+        // so no code is left executing that could take a subthread off it
+        // — and a later run must reopen the parent (through this branch)
+        // before it can be active again.
         repairReopenedThread(threads.get(tid), this.ctx.statelogClient, tid);
       }
       this.frame.locals[threadKey] = tid;

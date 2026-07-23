@@ -124,7 +124,9 @@ export const HANDLED_KINDS: readonly string[] = [
  *  else: an unregistered kind must fail by name, not fall into a silent
  *  generic walk (that walk is how the drift holes stayed hidden). */
 export function isRegisteredExpressionKind(type: string): boolean {
-  return HANDLED_KINDS.includes(type) || type in NO_EXPRESSION_SLOTS;
+  // Object.hasOwn, not `in`: `in` walks the prototype chain, so an
+  // inherited key like "toString" would count as registered.
+  return HANDLED_KINDS.includes(type) || Object.hasOwn(NO_EXPRESSION_SLOTS, type);
 }
 
 const slot = (

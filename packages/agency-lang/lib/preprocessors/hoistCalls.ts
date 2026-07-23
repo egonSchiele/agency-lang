@@ -22,7 +22,13 @@
  * Structure comes from `expressionSlots` (lib/utils/expressionSlots.ts)
  * — positions and eval modes are data there, completeness-checked
  * against EXPRESSION_NODE_TYPES; an unregistered kind THROWS here
- * rather than falling into a silent generic walk.
+ * rather than falling into a silent generic walk. That guarantee is
+ * type-level for EXPRESSION kinds only. Statement kinds have no type
+ * mirror, so the statement dispatch is corpus-checked instead: every
+ * statement kind observed across stdlib and the generator fixtures
+ * must appear in one of the lists below (extracted, own-case,
+ * deliberately-not-extracted, or skipped), and the statement-position
+ * test in expressionSlots.test.ts fails by name on one that does not.
  * Statement-body recursion is driven by `bodySlots` (the single source
  * of truth for which fields hold statements); only the expression
  * interior uses a generic child walk. Rulings are data, not control
@@ -61,7 +67,7 @@ type Counter = { n: number };
 
 type Extraction = { temps: AgencyNode[]; expr: any };
 
-const SKIP_TYPES = ["comment", "newLine"];
+export const SKIP_TYPES = ["comment", "newLine"];
 
 export function hoistCallsInProgram(program: AgencyProgram): AgencyProgram {
   // Only function and graphNode bodies. Module-level initializers are
@@ -133,10 +139,8 @@ function seedCounter(body: AgencyNode[]): number {
 const TAIL_VALUE_KINDS = ["assignment", "returnStatement", "matchYield"];
 
 /** The statement kinds extraction applies to — the pre-slots dispatch
- *  set, kept exactly for behavior identity. functionCall /
- *  interruptStatement / whileLoop / withModifier / staticStatement /
- *  valueAccess have their own cases above the default. */
-const EXTRACTED_STATEMENT_KINDS = [
+ *  set, kept exactly for behavior identity. */
+export const EXTRACTED_STATEMENT_KINDS = [
   "assignment",
   "returnStatement",
   "matchYield",
@@ -145,6 +149,43 @@ const EXTRACTED_STATEMENT_KINDS = [
   "forLoop",
   "matchBlock",
   "messageThread",
+];
+
+/** Statement kinds with a dedicated case in rewriteStatement. Kept in
+ *  sync with the switch by hand; the statement-position corpus test
+ *  (expressionSlots.test.ts) is what makes a kind missing from every
+ *  list here fail by name. */
+export const STATEMENT_CASE_KINDS = [
+  "functionCall",
+  "interruptStatement",
+  "whileLoop",
+  "valueAccess",
+  "withModifier",
+  "staticStatement",
+];
+
+/** Statement kinds the pass deliberately does NOT extract from. Each
+ *  entry is a recorded ruling, not an oversight — a new statement kind
+ *  is absent from every list and fails the corpus test by name, which
+ *  is the statement-side half of the anti-drift guarantee (the
+ *  expression side is type-checked against EXPRESSION_NODE_TYPES). */
+export const NON_EXTRACTED_STATEMENT_KINDS = [
+  // A bare expression statement (`print(...) + greet` parses as one
+  // binOp). The pre-slots pass never touched these — recorded hole,
+  // tripwire-covered.
+  "binOpExpression",
+  // break / continue: no expression positions.
+  "keyword",
+  // Statement containers with no extraction applied at the container
+  // itself; their bodies still recurse via bodySlots (handler bodies
+  // excluded there — see recurseSlots).
+  "handleBlock",
+  "finalizeBlock",
+  "seqBlock",
+  "skill",
+  // Inert trivia (block comments reach rewriteStatement; line comments
+  // and newlines are skipped earlier via SKIP_TYPES).
+  "multiLineComment",
 ];
 
 // eslint-disable-next-line max-lines-per-function -- ordered policy cases over the slot iteration; splitting would scatter the dispatch
@@ -363,7 +404,16 @@ function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
   const temps: AgencyNode[] = [];
   let expr: any = node;
   for (const slot of expressionSlots(node)) {
-    if (slot.mode !== "once") continue;
+    if (slot.mode === "conditional" || slot.mode === "opaque") continue;
+    if (slot.mode === "perIteration") {
+      // Mirrors the statement dispatcher: a perIteration slot with no
+      // restructure strategy fails by name. Dead by construction today
+      // (comprehensions desugar at parse time), same as there.
+      throw new Error(
+        `hoistCalls: no restructure strategy for a perIteration ` +
+          `slot on "${node.type}" — see expressionSlots.ts`,
+      );
+    }
     const inner = walk(slot.expr, counter, true);
     temps.push(...inner.temps);
     if (inner.expr !== slot.expr) expr = slot.write(expr, inner.expr);

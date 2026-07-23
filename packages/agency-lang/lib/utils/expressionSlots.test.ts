@@ -11,6 +11,13 @@ import {
   NO_EXPRESSION_SLOTS,
 } from "./expressionSlots.js";
 import { expressionChildren } from "./node.js";
+import { bodySlots } from "./bodySlots.js";
+import {
+  EXTRACTED_STATEMENT_KINDS,
+  STATEMENT_CASE_KINDS,
+  NON_EXTRACTED_STATEMENT_KINDS,
+  SKIP_TYPES,
+} from "../preprocessors/hoistCalls.js";
 
 function bodyOf(src: string): any[] {
   const parsed = parseAgency(src, {}, true);
@@ -126,10 +133,17 @@ def f(x: number): number {
 });
 
 describe("expressionSlots: completeness against EXPRESSION_NODE_TYPES", () => {
+  // Scope caveat: EXPRESSION_NODE_TYPES mirrors the Expression union
+  // only. Statement kinds that carry expression positions (assignment,
+  // gotoStatement, messageThread, ifElse, forLoop, ...) are outside
+  // this guarantee — and those are the kinds the three original drift
+  // holes were in. The statement-position corpus test at the bottom of
+  // this file covers that half: every statement kind observed in the
+  // corpus must have a recorded ruling in hoistCalls.ts.
   it("every expression kind is enumerated or explicitly empty, never both", () => {
     for (const kind of EXPRESSION_NODE_TYPES) {
       const enumerated = HANDLED_KINDS.includes(kind);
-      const declaredEmpty = kind in NO_EXPRESSION_SLOTS;
+      const declaredEmpty = Object.hasOwn(NO_EXPRESSION_SLOTS, kind);
       expect(
         enumerated || declaredEmpty,
         `unregistered expression kind: ${kind} — add it to expressionSlots.ts`,
@@ -266,6 +280,47 @@ describe("expressionSlots: corpus invariants", () => {
         default:
           expect(viaChildren, `${file}: ${node.type}`).toEqual(derived);
       }
+    }
+  });
+
+  it("statement-position completeness: every statement kind in the corpus has a recorded ruling in hoistCalls", () => {
+    // The expression-side completeness test above is type-checked
+    // against EXPRESSION_NODE_TYPES; statement kinds have no type
+    // mirror, so this is the statement-side half of the guarantee. A
+    // new statement kind that reaches stdlib or the generator fixtures
+    // without a ruling fails here BY NAME instead of silently falling
+    // through hoistCalls' default dispatch unextracted.
+    const known = [
+      ...EXTRACTED_STATEMENT_KINDS,
+      ...STATEMENT_CASE_KINDS,
+      ...NON_EXTRACTED_STATEMENT_KINDS,
+      ...SKIP_TYPES,
+    ];
+    const seen: Record<string, string> = {};
+    for (const { file, node } of nodes) {
+      const bodies: any[][] = [];
+      if (node.type === "function" || node.type === "graphNode") {
+        bodies.push((node as any).body ?? []);
+      }
+      for (const slot of bodySlots(node)) bodies.push(slot.body);
+      for (const body of bodies) {
+        for (const stmt of body) {
+          if (stmt && typeof stmt === "object" && typeof stmt.type === "string") {
+            seen[stmt.type] ??= file;
+          }
+        }
+      }
+    }
+    // Sanity: the walk actually reaches statement positions.
+    expect(Object.keys(seen).length).toBeGreaterThan(15);
+    for (const [kind, file] of Object.entries(seen)) {
+      expect(
+        known.includes(kind),
+        `statement kind "${kind}" (first seen in ${file}) has no ruling in ` +
+          `hoistCalls.ts — add it to EXTRACTED_STATEMENT_KINDS, give it a ` +
+          `dispatch case (and STATEMENT_CASE_KINDS), or record it in ` +
+          `NON_EXTRACTED_STATEMENT_KINDS with a justification`,
+      ).toBe(true);
     }
   });
 });

@@ -56,6 +56,17 @@
       ]
     },
     {
+      "nodeName": "historyReadersHaveGitButCannotCommit",
+      "description": "the Agency writer and both verifiers read git history but cannot change the repo",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "reviewersLookUpButCannotWrite",
       "description": "reviewers gained lookups and still cannot change anything",
       "input": "",

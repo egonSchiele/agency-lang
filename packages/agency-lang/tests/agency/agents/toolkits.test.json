@@ -23,6 +23,17 @@
       ]
     },
     {
+      "nodeName": "readOnlyGitIsTheReadHalfOfGitTools",
+      "description": "readOnlyGitTools is covered by gitTools and carries no write tools",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "noBundleHasDuplicateNames",
       "description": "no bundle offers two tools with the same name",
       "input": "",

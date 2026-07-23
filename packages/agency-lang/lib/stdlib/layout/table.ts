@@ -71,8 +71,9 @@ export type ValidatedTable = {
   columnCount: number;
 };
 
-// Structural sanity for a `table` node. Throws on:
-//   * all three sections empty/unset
+// Structural sanity for a `table` node. An all-empty table (no header
+// cells, no body rows, no footer rows) is valid and returns
+// `columnCount: 0` — it renders as nothing. Throws on:
 //   * any present section whose row length disagrees with the column
 //     count (derived from `columns` if set, else `header`, else first
 //     body row, else first footer row)
@@ -108,10 +109,17 @@ export function _validateTable(attrs: Record<string, unknown>): ValidatedTable {
   const body   = checkSection(rawBody,   "body");
   const footer = checkSection(rawFooter, "footer");
 
-  if (!header && body.length === 0 && footer.length === 0) {
-    throw new Error(
-      "std::ui/layout.table: at least one of header / body / footer must be set",
-    );
+  // An all-empty table is a VALID table that renders as nothing.
+  // Table content is routinely model- or tool-derived (an agent
+  // rendering a result set), and "no rows" is a legitimate degenerate
+  // value there, not a programming error — throwing here crashed the
+  // agent CLI mid-display when a tool produced empty output (the
+  // 2026-07-23 changelog run). Structural errors — row length
+  // mismatches, a zero-cell row alongside real content — still throw
+  // below. `columnCount: 0` is the empty marker the sizing and render
+  // handlers short-circuit on.
+  if ((header ?? []).length === 0 && body.length === 0 && footer.length === 0) {
+    return { header: [], body: [], footer: [], columnCount: 0 };
   }
 
   const rawColumns = attrs.columns;
@@ -224,6 +232,10 @@ export function _resolveTableWidths(
 ): LayoutNode {
   const attrs = node.attrs;
   const { header, body, footer, columnCount } = _validateTable(attrs);
+  // Empty table: nothing to size, no column widths to resolve.
+  if (columnCount === 0) {
+    return node;
+  }
   const columns = (attrs.columns as ColumnSpec[] | null | undefined) ?? [];
   const cellPadding = clampCellPadding(attrs.cellPadding);
   const columnDividers = (attrs.columnDividers as boolean | undefined) ?? true;
@@ -526,6 +538,10 @@ function _composeCaption(caption: string, width: number): Block | null {
 
 export function composeTable(node: LayoutNode): Block {
   const { header, body, footer, columnCount } = _validateTable(node.attrs);
+  // Empty table renders as nothing — no frame, no lines.
+  if (columnCount === 0) {
+    return Block.empty();
+  }
   const attrs = node.attrs;
   // Clamp to a non-negative integer. `_innerTableWidth` and the
   // divider line both use `cellPadding` in width arithmetic; a

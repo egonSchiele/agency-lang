@@ -15,6 +15,7 @@ import {
   agencyDocTools,
   agencyCodeTools,
   readOnlyFileTools,
+  readOnlyGitTools,
  } from "std::agents/lib/toolkits"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { Critique, revise } from "std::strategy"
@@ -112,6 +113,7 @@ export def buildTools(): any[] {
     ...agencyDocTools(),
     ...agencyCodeTools(),
     ...readOnlyFileTools(),
+    ...readOnlyGitTools(),
     fetch,
     fetchJSON,
     fetchMarkdown,

@@ -4,6 +4,7 @@ import { buildTools as reviewTools } from "std::agents/review"
 import { buildTools as agencyVerifierTools } from "std::agents/agency/verifier"
 import { buildTools as agencyCodingTools } from "std::agents/agency/coding"
 import { buildTools as agencyReviewTools } from "std::agents/agency/review"
+import { gitTools, readOnlyGitTools } from "std::agents/lib/toolkits"
 
 def hasTool(tools: any[], name: string): boolean {
   return some(tools, \tool -> tool.name == name)
@@ -39,6 +40,26 @@ node agencyCodingFetchesButDoesNotSearch(): boolean {
 // The coding agent could search the web but not fetch what it found.
 node codingCanFetch(): boolean {
   return hasTool(codingTools(), "fetchMarkdown")
+}
+
+// The changelog gap (2026-07-23): asked what changed since the last
+// release, the Agency writer and both verifiers had no git tools at
+// all. The writer probed for a `.git` directory by hand — which fails
+// in a monorepo, where `.git` lives above the package — and the
+// verifier fell back to filesystem-wide `find` scans that timed out to
+// empty output and produced a confident false "there is no repo here".
+// History is read-only, so all three carry the read bundle; none may
+// gain ANY write tool. The write set is derived (gitTools minus
+// readOnlyGitTools) rather than hand-listed, so a git tool added later
+// is automatically asserted absent from these agents; the exact pin on
+// readOnlyGitTools itself lives in toolkits.agency.
+node historyReadersHaveGitButCannotCommit(): boolean {
+  const lists = [agencyCodingTools(), verifierTools(), agencyVerifierTools()]
+  const readNames = map(readOnlyGitTools(), \tool -> tool.name)
+  const writeNames = filter(map(gitTools(), \tool -> tool.name), \name -> !readNames.includes(name))
+  const canReadHistory = every(lists, \tools -> hasTool(tools, "gitLog") && hasTool(tools, "gitIsRepo"))
+  const cannotWrite = every(lists, \tools -> every(writeNames, \name -> !hasTool(tools, name)))
+  return canReadHistory && cannotWrite && writeNames.length > 0
 }
 
 // Both reviewers can look things up now, and still cannot change anything.

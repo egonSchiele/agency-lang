@@ -523,6 +523,36 @@ describe("suspension", () => {
     expect(g.check(new StateStack())).not.toBeNull();
   });
 
+  it("a suspended TimeGuard does not clone into branches", () => {
+    // The 2026-07-23 supervise storm: while a guard-trip handler runs
+    // its check, the tripped guard is suspended — but every tool call
+    // the check makes runs on its own branch stack, and cloneForBranch
+    // handed each branch an ARMED clone of the exhausted guard,
+    // floored at 1ms remaining. The clone tripped instantly, the
+    // owning handler was self-excluded from its own guard's echo, and
+    // the catch-all rejected the branch — once per tool call, forever.
+    // Handler work is metered by the registration site's guards only,
+    // so a suspended guard must be invisible to branches it did not
+    // meter in the first place: no clone.
+    const g = new TimeGuard(60000);
+    const parent = new StateStack();
+    const child = new StateStack();
+    g.suspend();
+    expect(g.cloneForBranch(parent, child)).toBeUndefined();
+    g.unsuspend();
+    expect(g.cloneForBranch(parent, child)).toBeDefined();
+  });
+
+  it("a suspended exhausted TimeGuard clones nothing even at the 1ms floor", () => {
+    // The exact storm shape: elapsed has consumed the whole budget, so
+    // an (incorrect) clone would get Math.max(1, remaining) = 1ms and
+    // trip on its first step. Suspension must win over the floor.
+    const g = new TimeGuard(1000);
+    (g as any).elapsedMs = 1000;
+    g.suspend();
+    expect(g.cloneForBranch(new StateStack(), new StateStack())).toBeUndefined();
+  });
+
   it("CostGuard suspension is stack-scoped, never object-scoped: the shared object still meters sibling branches", () => {
     // The same CostGuard object appears on two branch stacks
     // (cloneForBranch returns `this`). Suspending it FOR A HANDLER on

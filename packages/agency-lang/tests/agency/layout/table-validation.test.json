@@ -3,7 +3,7 @@
     {
       "nodeName": "testAllSectionsMissing",
       "input": "",
-      "expectedOutput": "\"std::ui/layout.table: at least one of header / body / footer must be set\"",
+      "expectedOutput": "null",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {

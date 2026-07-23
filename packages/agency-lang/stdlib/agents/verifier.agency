@@ -7,7 +7,7 @@
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
-import { readOnlyFileTools, shellTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, readOnlyGitTools, shellTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { concurrencyPool } from "std::concurrency"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -26,6 +26,7 @@ export def buildTools(): any[] {
   """
   return [
     ...readOnlyFileTools(),
+    ...readOnlyGitTools(),
     ...shellTools(),
     ...communicationTools(),
     readBinary.partial(useAgentCwd: true),

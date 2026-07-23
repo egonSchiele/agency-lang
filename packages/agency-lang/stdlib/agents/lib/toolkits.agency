@@ -14,6 +14,7 @@ import { typecheck, parseAST } from "std::agency"
 import { todoWrite, todoList } from "std::agent"
 import { edit } from "std::fs"
 import {
+  gitIsRepo,
   gitStatus,
   gitLog,
   gitDiff,
@@ -98,12 +99,18 @@ export def shellTools(): any[] {
   return [bash.partial(useAgentCwd: true), exec.partial(useAgentCwd: true)]
 }
 
-export def gitTools(): any[] {
+export def readOnlyGitTools(): any[] {
   """
-  Return the git tools. The read-only ones run without an approval prompt;
-  the ones that change the repository prompt for approval.
+  Return the read-only git tools: history, diffs, status, branches. Nothing
+  here changes the repository, so read-only agents (verifiers, reviewers,
+  writers with read-only project access) can carry them. gitIsRepo is
+  included because "am I inside a repo?" is the question an agent otherwise
+  answers by probing for a `.git` directory by hand — which fails in a
+  monorepo, where `.git` lives above the package directory (git itself
+  walks up; a manual probe does not).
   """
   return [
+    gitIsRepo,
     gitStatus,
     gitLog,
     gitDiff,
@@ -112,6 +119,16 @@ export def gitTools(): any[] {
     gitRemoteList,
     gitBlame,
     gitStashList,
+  ]
+}
+
+export def gitTools(): any[] {
+  """
+  Return the git tools. The read-only ones run without an approval prompt;
+  the ones that change the repository prompt for approval.
+  """
+  return [
+    ...readOnlyGitTools(),
     gitAdd,
     gitCommit,
     gitCheckout,

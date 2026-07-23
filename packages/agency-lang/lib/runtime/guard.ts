@@ -788,7 +788,22 @@ export class TimeGuard implements Guard {
   cloneForBranch(
     _parentStack: StateStack,
     _childStack: StateStack,
-  ): Guard {
+  ): Guard | undefined {
+    // A suspended guard clones NOTHING. Suspension means an interrupt
+    // handler is deliberating over this guard right now, and handler
+    // work is metered by the handler's registration-site guards only.
+    // Branches created during that work (each parallel tool call runs
+    // on its own branch stack) are handler work too. Cloning here armed
+    // an exhausted guard's remaining budget — Math.max(1, 0) = 1ms —
+    // into every such branch: an instant trip the owning handler is
+    // self-excluded from answering, once per tool call (the 2026-07-23
+    // supervise storm). A suspended-state clone would not survive
+    // either — suspension never serializes, so a branch pause would
+    // revive the clone armed at 1ms. No clone is the only shape that
+    // matches "invisible to enforcement".
+    if (this.suspended) {
+      return undefined;
+    }
     // Wall-clock time is not cumulative across parallel branches, so each
     // branch gets its OWN timer. It inherits the parent's REMAINING budget
     // at fork time (floored at 1ms, so "parent work, then branch" cannot

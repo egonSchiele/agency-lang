@@ -3,6 +3,7 @@ import {
   writableFileTools,
   shellTools,
   gitTools,
+  readOnlyGitTools,
   webTools,
   agencyDocTools,
   agencyCodeTools,
@@ -16,6 +17,7 @@ def allBundles(): any[] {
     writableFileTools(),
     shellTools(),
     gitTools(),
+    readOnlyGitTools(),
     webTools(),
     agencyDocTools(),
     agencyCodeTools(),
@@ -34,6 +36,24 @@ node writableIsASupersetOfReadOnly(): boolean {
   const writableNames = map(writableFileTools(), \tool -> tool.name)
   const coversReadOnly = every(readOnlyFileTools(), \tool -> writableNames.includes(tool.name))
   return coversReadOnly && writableFileTools().length == readOnlyFileTools().length + 2
+}
+
+// readOnlyGitTools is a security-sensitive bundle (read-only agents
+// carry it), so unlike the membership-only checks above it is pinned
+// EXACTLY: adding any tool to it must fail here and force a conscious
+// test edit, not slip through a not-on-the-blocklist gap. The full git
+// bundle must also cover every read-only tool so the lists cannot
+// drift apart.
+node readOnlyGitIsTheReadHalfOfGitTools(): boolean {
+  const expected = [
+    "gitIsRepo", "gitStatus", "gitLog", "gitDiff", "gitShow",
+    "gitBranchList", "gitRemoteList", "gitBlame", "gitStashList",
+  ]
+  const readNames = map(readOnlyGitTools(), \tool -> tool.name)
+  const gitNames = map(gitTools(), \tool -> tool.name)
+  const exact = readNames.length == expected.length && every(expected, \name -> readNames.includes(name))
+  const covered = every(readOnlyGitTools(), \tool -> gitNames.includes(tool.name))
+  return exact && covered
 }
 
 /** True when a tool has `useAgentCwd` bound to true by partial application.

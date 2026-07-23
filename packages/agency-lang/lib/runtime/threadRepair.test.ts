@@ -9,6 +9,7 @@ import {
   needsThreadRepair,
   repairAbandonedTurn,
   repairReopenedThread,
+  restoreThreadForResume,
   unansweredToolCalls,
 } from "./threadRepair.js";
 
@@ -242,5 +243,44 @@ describe("repairReopenedThread — the seam helper", () => {
 
   it("tolerates a missing thread and a missing statelog client", () => {
     expect(() => repairReopenedThread(undefined, undefined, "7")).not.toThrow();
+  });
+});
+
+describe("restoreThreadForResume", () => {
+  it("adopts into the live thread and preserves the alias", () => {
+    const live = new MessageThread([smoltalk.userMessage("hi")]);
+    const out = restoreThreadForResume(live.toJSON(), live);
+    expect(out).toBe(live); // same object — the caller's alias survives
+    expect(roles(out)).toEqual(["user"]);
+  });
+
+  it("no live thread: revives the snapshot", () => {
+    const snap = new MessageThread([smoltalk.userMessage("hi")]).toJSON();
+    expect(roles(restoreThreadForResume(snap, undefined))).toEqual(["user"]);
+  });
+
+  it("refuses a snapshot taken before a repair", () => {
+    const live = new MessageThread([smoltalk.userMessage("hi")]);
+    const snap = live.toJSON(); // generation 0
+    live.markRepaired();
+    expect(() => restoreThreadForResume(snap, live)).toThrow(
+      /repaired after this checkpoint/,
+    );
+    expect(live.repairs).toBe(1); // refusal must not have adopted anything
+  });
+
+  it("legacy bare-array snapshots (implicit generation 0) are refused after a repair", () => {
+    const live = new MessageThread([smoltalk.userMessage("hi")]);
+    live.markRepaired();
+    const legacy = [smoltalk.userMessage("hi").toJSON()];
+    expect(() => restoreThreadForResume(legacy, live)).toThrow(
+      /repaired after this checkpoint/,
+    );
+  });
+
+  it("a snapshot taken AFTER the repair restores fine", () => {
+    const live = new MessageThread([smoltalk.userMessage("hi")]);
+    live.markRepaired();
+    expect(restoreThreadForResume(live.toJSON(), live)).toBe(live);
   });
 });

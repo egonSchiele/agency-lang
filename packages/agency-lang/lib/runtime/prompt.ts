@@ -28,6 +28,7 @@ import type { NormalizedLLMError } from "./llmClient.js";
 import {
   markThreadCancelled,
   needsThreadRepair,
+  restoreThreadForResume,
 } from "./threadRepair.js";
 import { isGuardExceededError } from "./guard.js";
 import { callHook, invokeCallbacks } from "./hooks.js";
@@ -1043,23 +1044,11 @@ export async function runPrompt(args: {
   // stale snapshot from the original interrupt time, missing everything
   // that was appended after resume.
   //
-  // To keep the alias on resume, we write the saved JSON contents INTO
-  // args.messages rather than constructing a fresh MessageThread. The
-  // saved JSON and args.messages are equivalent on resume (both were
-  // captured in the same checkpoint), so this is effectively a no-op
-  // overwrite — but it preserves the alias for the rest of the run.
+  // See restoreThreadForResume for how the alias is preserved and when a
+  // restore is refused (a snapshot that predates a thread repair).
   let messages: MessageThread;
   if (self.messagesJSON) {
-    const restored = MessageThread.fromJSON(self.messagesJSON);
-    if (args.messages) {
-      // adoptFrom, not setMessages(restored.getMessages()): the latter
-      // takes only the messages and would drop the labels fromJSON just
-      // restored. The alias is still preserved.
-      args.messages.adoptFrom(restored);
-      messages = args.messages;
-    } else {
-      messages = restored;
-    }
+    messages = restoreThreadForResume(self.messagesJSON, args.messages);
   } else if (clientConfig.messages) {
     messages = MessageThread.fromJSON(clientConfig.messages);
   } else if (args.messages) {

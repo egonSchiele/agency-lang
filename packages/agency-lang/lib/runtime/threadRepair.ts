@@ -1,6 +1,8 @@
 import * as smoltalk from "smoltalk";
+import { agencyStore } from "./asyncContext.js";
 import type { AbortCause } from "./errors.js";
-import type { MessageThread } from "./state/messageThread.js";
+import { MessageThread } from "./state/messageThread.js";
+import type { MessageThreadJSON } from "./state/messageThread.js";
 
 /**
  * Thread repair after a hard cancellation, extracted from prompt.ts so the
@@ -177,4 +179,50 @@ export function repairReopenedThread(
     threadId: `t${tid}`,
     toolCallIds: repaired.map((c) => c.id),
   });
+}
+
+/** Rebuild the message thread when resuming from a checkpoint.
+ *
+ *  On resume the caller's `live` thread must stay ALIASED — mutations
+ *  during the resumed run (tool responses, the final assistant message)
+ *  must propagate to every other holder of the thread. So the restored
+ *  JSON is written INTO `live` via `adoptFrom` rather than swapping in a
+ *  fresh object (and adoptFrom, not setMessages: setMessages takes only
+ *  the messages and would drop the labels fromJSON just restored). On a
+ *  normal resume this is a no-op overwrite: both sides were captured in
+ *  the same checkpoint.
+ *
+ *  The exception is a checkpoint that predates a repair of the live
+ *  thread. Once `repairAbandonedTurn` has run, the parked turn that took
+ *  this snapshot was abandoned and newer turns may exist; restoring would
+ *  overwrite all of it. Refusing loudly is correct. The generation check
+ *  MUST run before `adoptFrom` — adoptFrom copies the snapshot's (lower)
+ *  generation onto the live thread, so checking after would always pass.
+ *  The ordering is pinned by tests. */
+export function restoreThreadForResume(
+  snapshot: MessageThreadJSON | smoltalk.MessageJSON[],
+  live: MessageThread | undefined,
+): MessageThread {
+  const restored = MessageThread.fromJSON(snapshot);
+  if (!live) return restored;
+  if (live.isNewerThan(restored)) {
+    const msg =
+      "Cannot resume this turn: its conversation thread was repaired after " +
+      "this checkpoint was taken (the parked turn was abandoned and newer " +
+      "turns have run since). Restoring would overwrite the newer " +
+      "conversation, so it is refused.";
+    // Best-effort statelog BEFORE the throw: a throw converts to a Failure
+    // at the next def boundary, and Failures can get laundered into prose
+    // by the time a model or user sees them — the refusal must stay
+    // findable in the trace regardless. Same rationale and shape as
+    // claimFrameForScope in state/stateStack.ts.
+    agencyStore.getStore()?.ctx?.statelogClient?.error?.({
+      errorType: "runtimeError",
+      message: msg,
+      functionName: "restoreThreadForResume",
+    });
+    throw new Error(msg);
+  }
+  live.adoptFrom(restored);
+  return live;
 }

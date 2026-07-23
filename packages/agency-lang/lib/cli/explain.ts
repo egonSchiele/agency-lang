@@ -89,5 +89,12 @@ export function renderDiagnosticList(): string {
     if (rows.length === 0) continue;
     blocks.push([color.underline(cat.title), ...rows].join("\n"));
   }
+  const lintRows = Object.entries(LINT_DIAGNOSTICS)
+    .filter(([, e]) => !("retired" in e))
+    .sort(([, a], [, b]) => a.code.localeCompare(b.code))
+    .map(([, e]) => `  ${color.bold(e.code)}  ${e.message}`);
+  if (lintRows.length > 0) {
+    blocks.push([color.underline("Lint"), ...lintRows].join("\n"));
+  }
   return blocks.join("\n\n");
 }

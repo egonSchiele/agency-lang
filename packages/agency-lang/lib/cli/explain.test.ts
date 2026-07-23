@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { renderDiagnosticText, renderDiagnosticList } from "./explain.js";
 import { DIAGNOSTICS } from "@/typeChecker/diagnostics.js";
+import { LINT_DIAGNOSTICS } from "@/linter/diagnostics.js";
 
 // termcolors colors unconditionally; strip ANSI to assert on text.
 // (Same pattern as lib/typeChecker/formatErrors.test.ts:10.)
@@ -64,5 +65,17 @@ describe("lint code fallthrough", () => {
 
   it("still rejects unknown codes", () => {
     expect(renderDiagnosticText("AL9999").found).toBe(false);
+  });
+});
+
+describe("renderDiagnosticList lint section", () => {
+  it("lists every active AL code under a Lint heading", () => {
+    const out = renderDiagnosticList();
+    expect(out).toContain("Lint");
+    for (const [, e] of Object.entries(LINT_DIAGNOSTICS).filter(
+      ([, entry]) => !("retired" in entry),
+    )) {
+      expect(out).toContain(e.code);
+    }
   });
 });

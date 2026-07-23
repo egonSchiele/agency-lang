@@ -12,12 +12,14 @@ import {
   unansweredToolCalls,
 } from "./threadRepair.js";
 
-/** Convenience builders for the markThreadCancelled repair-shape tests. */
+/** Convenience builders for the repair-shape tests. Real ToolCall
+ *  instances, not plain objects — AssistantMessage.toJSON calls
+ *  tc.toJSON() on each, so the byte-identical assertions need them. */
 const asst = (text: string, toolCalls?: Array<{ id: string; name: string }>) =>
   smoltalk.assistantMessage(
     text,
     toolCalls
-      ? { toolCalls: toolCalls.map((c) => ({ id: c.id, name: c.name, arguments: {} })) }
+      ? { toolCalls: toolCalls.map((c) => new smoltalk.ToolCall(c.id, c.name, {})) }
       : undefined,
   );
 const tool = (id: string) =>

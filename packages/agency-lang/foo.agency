@@ -1,6 +1,15 @@
+import { researcherAgent } from "std::agents/researcher"
 import { now } from "std::date"
 node main() {
-  const start = now()
-  sleep(4)
-  print(elapsedTime(since: start))
+  handle {
+    const prompt = "What are the top news stories today?"
+    const result = researcherAgent(task: prompt)
+    print(result)
+    return result
+  } with (data) {
+    return match(data.effect) {
+      "std::search" => approve()
+      _ => reject()
+    }
+  }
 }

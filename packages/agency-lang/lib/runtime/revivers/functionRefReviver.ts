@@ -23,6 +23,12 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
       name: value.name,
       module: value.module,
     };
+    // A renamed function is not in the registry under its new name, so the
+    // ref must carry the name its registered ancestor was created under —
+    // revive() looks that up and re-applies the rename.
+    if (value.originalName !== value.name) {
+      result.originalName = value.originalName;
+    }
     // Serialize params with bound values inline
     if (value.params.some(p => p.isBound)) {
       result.params = value.params;
@@ -49,8 +55,16 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     }
     const name = value.name as string;
     const module = value.module as string;
+    const lookupName =
+      typeof value.originalName === "string" ? value.originalName : name;
 
-    const original = this.findInRegistry(name, module);
+    const found = lookupInRegistry(this.registry, lookupName, module);
+    if (!found) {
+      return this.reviveMiss(name, module, value);
+    }
+    // Re-apply the rename so the revived function keeps the name tool-call
+    // dispatch and the LLM saw when the state was serialized.
+    const original = name === lookupName ? found : found.rename(name);
 
     let result: AgencyFunction;
 
@@ -93,10 +107,17 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     return result;
   }
 
-  private findInRegistry(name: string, module: string): AgencyFunction {
-    const found = lookupInRegistry(this.registry!, name, module);
-    if (found) return found;
-
+  /** A registry miss must never throw here: revive() also runs during
+   *  SERIALIZATION (`deepClone` inside `State.toJSON` round-trips through
+   *  `JSON.parse` with revivers), so an eager throw crashes checkpoint
+   *  writes — including the guard-trip checkpoint that salvages drafts
+   *  (#652). Every miss maps to a stub that survives re-serialization and
+   *  fails, precisely, only if something actually invokes it. */
+  private reviveMiss(
+    name: string,
+    module: string,
+    value: Record<string, unknown>,
+  ): AgencyFunction {
     // Compiler-generated blocks register themselves only when their creating
     // line executes. A fresh process restoring a checkpoint has executed
     // nothing yet, so a miss here is EXPECTED for blocks — replay rebinds
@@ -114,10 +135,12 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     if (isLiftedCallbackName(name)) {
       return makeLazyCallbackRef(name, module, this);
     }
-    throw new Error(
-      `FunctionRefReviver: function "${name}" from module "${module}" not found in registry. ` +
-      `The function may have been renamed or removed since this state was serialized.`
-    );
+    // Anything else: an ordinary function whose module this process never
+    // loaded — the same embedded-child-checkpoint shape as callbacks, but
+    // nothing spontaneously fires these, so a tripwire is honest. The stub
+    // is built from the serialized fields so serialize(revive(x)) === x and
+    // the ref rides through this process undamaged.
+    return makeUnresolvedFunctionStub(name, module, value);
   }
 }
 
@@ -214,7 +237,7 @@ function makeLazyCallbackRef(
           `Callback "${name}" from module "${module}" crossed a process ` +
           `boundary and was fired before its module was loaded (or the ` +
           `callback was removed since this state was serialized).`;
-        emitLazyCallbackMissError(name, msg);
+        emitFunctionRefMissError(name, msg);
         throw new Error(msg);
       }
       return real.invoke({ type: "positional", args });
@@ -224,13 +247,50 @@ function makeLazyCallbackRef(
   });
 }
 
+/** A serialization-preserving tripwire for a ref whose function is in no
+ *  loaded module: params, tool description, preapproval, and originalName
+ *  are rebuilt from the serialized fields so serialize(revive(x)) === x —
+ *  the ref can ride through this process (a parent holding an embedded
+ *  child checkpoint, #652) and revive intact in the process that owns the
+ *  module. Unlike callbacks, nothing fires these spontaneously, so the
+ *  body throws instead of resolving lazily: if the direct lookup missed,
+ *  the module genuinely is not loaded here, and a call must surface that.
+ *  Plain `new` on purpose — must NOT self-register under the real name. */
+function makeUnresolvedFunctionStub(
+  name: string,
+  module: string,
+  value: Record<string, unknown>,
+): AgencyFunction {
+  return new AgencyFunction({
+    name,
+    module,
+    originalName:
+      typeof value.originalName === "string" ? value.originalName : name,
+    fn: () => {
+      const msg =
+        `Function "${name}" from module "${module}" crossed a serialization ` +
+        `boundary into a process that never loaded its module, and was ` +
+        `invoked there (or the function was removed since this state was ` +
+        `serialized).`;
+      emitFunctionRefMissError(name, msg);
+      throw new Error(msg);
+    },
+    params: Array.isArray(value.params) ? (value.params as FuncParam[]) : [],
+    toolDefinition:
+      typeof value.toolDescription === "string"
+        ? { name, description: value.toolDescription, schema: null }
+        : null,
+    isPreapproved: value.isPreapproved === true,
+  });
+}
+
 /** Surface an unresolvable fire in the trace, not only the terminal.
  *  fireWithGuard catches the throw and console.errors it, which is
  *  invisible after the fact; the Statelog error event makes the dropped
  *  callback findable. Best-effort: `agencyStore.getStore()` is undefined
  *  outside any runtime frame (e.g. a bare unit test), and no client means
  *  nothing to emit to — the caller throws the real error either way. */
-function emitLazyCallbackMissError(name: string, msg: string): void {
+function emitFunctionRefMissError(name: string, msg: string): void {
   agencyStore.getStore()?.ctx?.statelogClient?.error?.({
     errorType: "runtimeError",
     message: msg,

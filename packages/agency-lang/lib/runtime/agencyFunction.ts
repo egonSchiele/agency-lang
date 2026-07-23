@@ -81,6 +81,7 @@ export type AgencyFunctionOpts = {
   exported?: boolean;
   markers?: ToolMarkers;
   isPreapproved?: boolean;
+  originalName?: string;
 };
 
 export class AgencyFunction {
@@ -98,10 +99,17 @@ export class AgencyFunction {
   readonly exported: boolean;
   readonly markers: ToolMarkers;
   private readonly _isPreapproved: boolean;
+  /** The name this function's registered ancestor carries in the function
+   *  registry. `.rename()` changes `name` but not this, and every other
+   *  derivation (`.partial()`, `.describe()`, `.preapprove()`) carries it
+   *  forward — so a serialized ref to any derived copy can find its
+   *  registry entry again. Equal to `name` for functions never renamed. */
+  readonly originalName: string;
 
   constructor(opts: AgencyFunctionOpts) {
     this.name = opts.name;
     this.module = opts.module;
+    this.originalName = opts.originalName ?? opts.name;
     this._fn = opts.fn;
     this.params = opts.params;
     this.toolDefinition = opts.toolDefinition;
@@ -146,6 +154,7 @@ export class AgencyFunction {
       exported: this.exported,
       markers: this.markers,
       isPreapproved: this._isPreapproved,
+      originalName: this.originalName,
     });
   }
 
@@ -249,6 +258,7 @@ export class AgencyFunction {
       exported: this.exported,
       markers: this.markers,
       isPreapproved: this._isPreapproved,
+      originalName: this.originalName,
     });
   }
 
@@ -295,6 +305,7 @@ export class AgencyFunction {
       exported: this.exported,
       markers: this.markers,
       isPreapproved: true,
+      originalName: this.originalName,
     });
   }
 
@@ -331,6 +342,9 @@ export class AgencyFunction {
       exported: this.exported,
       markers: this.markers,
       isPreapproved: this._isPreapproved,
+      // The registry never learns the new name, so serialization keeps the
+      // registered name for revival (see FunctionRefReviver).
+      originalName: this.originalName,
     });
   }
 

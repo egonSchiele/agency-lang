@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"model-draft\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "save_progress", "args": { "value": "model-draft" } }] },
+        { "return": "never-reached" }
+      ],
+      "description": "A renamed saveDraft still intercepts as the intrinsic; the draft files on the caller frame and the guard salvages it.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

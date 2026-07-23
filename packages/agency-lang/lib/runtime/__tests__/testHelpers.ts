@@ -76,6 +76,7 @@ export function makeMockCtx(opts: {
       handlerDecision: () => {},
       threadCreated: () => {},
       threadResumed: () => {},
+      threadRepaired: () => {},
       agentStart: () => {},
       agentEnd: () => {},
     },

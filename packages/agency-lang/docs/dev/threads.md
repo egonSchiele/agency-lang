@@ -99,6 +99,34 @@ Key distinction: **thread = blank slate; subthread = fork of parent's conversati
 
 ---
 
+## Reopen repair: abandoned turns cannot poison a session
+
+A turn that parks on an unanswered interrupt leaves its thread ending on an
+assistant message with unanswered tool calls. If the turn is resumed, the
+gap closes naturally. If it is abandoned — the user starts a new turn on
+the same session instead of answering — the gap would make the provider
+reject every later request (`tool_use` ids without `tool_result` blocks),
+killing the session permanently.
+
+So reopening a thread for new work repairs it first. The seam is the
+first-execution branch of `Runner.thread()`: on a `session:` second+ entry
+or a `thread(continue: id)`, `repairReopenedThread`
+(`lib/runtime/threadRepair.ts`) appends a synthetic tool result per
+dangling call plus a breadcrumb assistant message, and fires a
+`threadRepaired` statelog event. A checkpoint resume never travels through
+that branch (the frame-locals guard skips the open side effect), so repair
+cannot fire while a parked turn can still be resumed.
+
+Each repair advances the thread's generation (`MessageThread.markRepaired`).
+The prompt restore path (`restoreThreadForResume`) refuses a checkpoint
+taken before a repair — a late answer to an abandoned turn would otherwise
+overwrite the repaired thread and every newer turn, because the restore
+writes the snapshot INTO the live aliased thread.
+
+Design history: `docs/superpowers/specs/2026-07-22-orphaned-tool-use-on-guard-abort-design.md`.
+
+---
+
 ## How are threads passed into prompts?
 
 In `typescriptGenerator.ts` lines 741-748, when generating a prompt function call, the generator determines the thread expression:

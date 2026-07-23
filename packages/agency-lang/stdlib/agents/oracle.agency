@@ -150,7 +150,7 @@ export def oracleAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  return guard(cost: maxCost, time: maxTime) {
+  return guard(cost: maxCost, time: maxTime, label: "oracleAgent") {
     let reply = ""
     thread(label: "oracleAgent", summarize: true, session: session) {
       reply = consider(

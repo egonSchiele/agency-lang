@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "nodeName": "foreignGuardSalvage",
+      "fakeClock": true,
+      "description": "A foreign std::guard trip is rejected by turnBudgetHandler; the inner guard's finalize-as-draft salvage turns the Failure into a success carrying the saved partial.",
+      "input": "",
+      "expectedOutput": "\"salvaged:PARTIAL\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "foreignGuardBare",
+      "fakeClock": true,
+      "description": "A foreign std::guard trip with no salvage is rejected into a plain Failure instead of parking the turn.",
+      "input": "",
+      "expectedOutput": "\"failure:true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "ownLabelReject",
+      "fakeClock": true,
+      "description": "The turn-budget label still routes through the handler's own path: non-interactive runs honor the budget as a hard stop.",
+      "input": "",
+      "expectedOutput": "\"failure:true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [],
+      "llmMocks": []
+    },
+    {
+      "nodeName": "nonGuardPassthrough",
+      "fakeClock": true,
+      "description": "Non-guard interrupts pass through turnBudgetHandler to the outer resolver.",
+      "input": "",
+      "expectedOutput": "\"resolved\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "interruptHandlers": [{ "action": "approve", "expectedMessage": "confirm" }],
+      "llmMocks": []
+    }
+  ]
+}

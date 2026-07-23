@@ -121,7 +121,7 @@ export def agencyReviewAgent(
   if (task == "") {
     return feedback
   }
-  const captured = guard(cost: maxCost, time: maxTime) {
+  const captured = guard(cost: maxCost, time: maxTime, label: "agencyReviewAgent") {
     let judged: Feedback[] = []
     thread(label: "agencyReviewAgent", session: session) {
       judged = judgeAgainstTask(

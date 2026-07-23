@@ -122,7 +122,7 @@ export def codingAgent(
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
 
-  return guard(cost: maxCost, time: maxTime) {
+  return guard(cost: maxCost, time: maxTime, label: "codingAgent") {
     let reply = ""
     thread(label: "codingAgent", session: session) {
       reply = solve(

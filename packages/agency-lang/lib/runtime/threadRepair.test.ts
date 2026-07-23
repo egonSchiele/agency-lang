@@ -1,15 +1,30 @@
 import { describe, it, expect } from "vitest";
 import * as smoltalk from "smoltalk";
 import { makeAbortCause } from "./errors.js";
+import { runInTestContext } from "./asyncContext.js";
+import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { MessageThread } from "./state/messageThread.js";
-import { markThreadCancelled, needsThreadRepair } from "./threadRepair.js";
+import { StateStack } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
+import {
+  ABANDONED_CALL_TEXT,
+  ABANDONED_TURN_TEXT,
+  markThreadCancelled,
+  needsThreadRepair,
+  repairAbandonedTurn,
+  repairReopenedThread,
+  restoreThreadForResume,
+  unansweredToolCalls,
+} from "./threadRepair.js";
 
-/** Convenience builders for the markThreadCancelled repair-shape tests. */
+/** Convenience builders for the repair-shape tests. Real ToolCall
+ *  instances, not plain objects — AssistantMessage.toJSON calls
+ *  tc.toJSON() on each, so the byte-identical assertions need them. */
 const asst = (text: string, toolCalls?: Array<{ id: string; name: string }>) =>
   smoltalk.assistantMessage(
     text,
     toolCalls
-      ? { toolCalls: toolCalls.map((c) => ({ id: c.id, name: c.name, arguments: {} })) }
+      ? { toolCalls: toolCalls.map((c) => new smoltalk.ToolCall(c.id, c.name, {})) }
       : undefined,
   );
 const tool = (id: string) =>
@@ -100,5 +115,200 @@ describe("needsThreadRepair — repair policy", () => {
     ).toBe(false);
     expect(needsThreadRepair(makeAbortCause({ kind: "raceLoser" }))).toBe(false);
     expect(needsThreadRepair(makeAbortCause({ kind: "cleanup" }))).toBe(false);
+  });
+});
+
+describe("unansweredToolCalls", () => {
+  it("returns only the trailing assistant turn's unanswered calls", () => {
+    const t = new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [{ id: "x", name: "f" }]),
+      tool("x"),
+      asst("", [
+        { id: "a", name: "whatIAmDoing" },
+        { id: "b", name: "codeAgent" },
+      ]),
+      tool("a"),
+    ]);
+    expect(unansweredToolCalls(t).map((c) => c.id)).toEqual(["b"]);
+  });
+
+  it("ignores unanswered calls on EARLIER assistant turns — the contract is trailing-turn only", () => {
+    const t = new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [{ id: "old", name: "f" }]), // never answered, but not trailing
+      asst("", [{ id: "new", name: "f" }]),
+    ]);
+    expect(unansweredToolCalls(t).map((c) => c.id)).toEqual(["new"]);
+  });
+
+  it("trailing assistant with no tool calls (an ordinary reply) reports empty", () => {
+    const t = new MessageThread([smoltalk.userMessage("hi"), asst("hello")]);
+    expect(unansweredToolCalls(t)).toEqual([]);
+  });
+
+  it("valid tail and no-assistant threads both report empty", () => {
+    const valid = new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [{ id: "x", name: "f" }]),
+      tool("x"),
+    ]);
+    expect(unansweredToolCalls(valid)).toEqual([]);
+    expect(unansweredToolCalls(new MessageThread([smoltalk.userMessage("hi")]))).toEqual([]);
+  });
+});
+
+describe("markThreadCancelled — label preservation (push, not setMessages)", () => {
+  it("keeps per-message debug labels on the right messages and stays aligned", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.userMessage("go"), "the-user-msg");
+    t.push(asst("", [{ id: "y", name: "f" }]), "the-tool-round");
+    markThreadCancelled(t);
+    expect(t.labelAt(0)).toBe("the-user-msg");
+    expect(t.labelAt(1)).toBe("the-tool-round");
+    expect(roles(t)).toEqual(["user", "assistant", "tool", "assistant"]);
+    // The alignment invariant messageThread.ts warns about: lengths match.
+    expect(t.messageLabels.length).toBe(t.getMessages().length);
+  });
+});
+
+describe("repairAbandonedTurn", () => {
+  const damaged = () =>
+    new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [
+        { id: "a", name: "whatIAmDoing" },
+        { id: "b", name: "codeAgent" },
+        { id: "c", name: "readDocs" },
+      ]),
+      tool("a"),
+    ]);
+
+  it("answers EVERY dangling call, appends the breadcrumb, bumps the generation", () => {
+    const t = damaged();
+    const repaired = repairAbandonedTurn(t);
+    expect(repaired.map((c) => c.id)).toEqual(["b", "c"]);
+    expect(roles(t)).toEqual(["user", "assistant", "tool", "tool", "tool", "assistant"]);
+    const stubs = t
+      .getMessages()
+      .filter((m): m is smoltalk.ToolMessage => m instanceof smoltalk.ToolMessage);
+    expect(stubs.map((m) => m.tool_call_id)).toEqual(["a", "b", "c"]);
+    expect(stubs[1].content).toBe(ABANDONED_CALL_TEXT);
+    expect((t.getMessages().at(-1) as smoltalk.AssistantMessage).content).toBe(
+      ABANDONED_TURN_TEXT,
+    );
+    expect(t.repairs).toBe(1);
+  });
+
+  it("valid thread: byte-identical no-op, generation untouched", () => {
+    const t = new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [{ id: "x", name: "f" }]),
+      tool("x"),
+    ]);
+    const before = JSON.stringify(t.toJSON());
+    expect(repairAbandonedTurn(t)).toEqual([]);
+    expect(JSON.stringify(t.toJSON())).toBe(before);
+    expect(t.repairs).toBe(0);
+  });
+
+  it("repairing twice counts twice — the generation is a counter, not a flag", () => {
+    const t = damaged();
+    repairAbandonedTurn(t);
+    t.push(asst("", [{ id: "z", name: "f" }])); // a second abandoned round
+    repairAbandonedTurn(t);
+    expect(t.repairs).toBe(2);
+  });
+});
+
+describe("repairReopenedThread — the seam helper", () => {
+  it("repairs and emits threadRepaired with the raw thread id and the call ids", () => {
+    const t = new MessageThread([
+      smoltalk.userMessage("go"),
+      asst("", [
+        { id: "a", name: "whatIAmDoing" },
+        { id: "b", name: "codeAgent" },
+      ]),
+      tool("a"),
+    ]);
+    const events: Array<{ threadId: string; toolCallIds: string[] }> = [];
+    repairReopenedThread(t, { threadRepaired: (e) => { events.push(e); } }, "7");
+    // Raw id, matching threadCreated/threadResumed — consumers join on it.
+    expect(events).toEqual([{ threadId: "7", toolCallIds: ["b"] }]);
+    expect(t.repairs).toBe(1);
+  });
+
+  it("healthy thread: NO event, no changes", () => {
+    const t = new MessageThread([smoltalk.userMessage("hi"), asst("hello")]);
+    const events: unknown[] = [];
+    repairReopenedThread(t, { threadRepaired: (e) => { events.push(e); } }, "7");
+    expect(events).toEqual([]);
+    expect(t.repairs).toBe(0);
+  });
+
+  it("tolerates a missing thread and a missing statelog client", () => {
+    expect(() => repairReopenedThread(undefined, undefined, "7")).not.toThrow();
+  });
+});
+
+describe("restoreThreadForResume", () => {
+  it("adopts into the live thread and preserves the alias", () => {
+    const live = new MessageThread([smoltalk.userMessage("hi")]);
+    const out = restoreThreadForResume(live.toJSON(), live);
+    expect(out).toBe(live); // same object — the caller's alias survives
+    expect(roles(out)).toEqual(["user"]);
+  });
+
+  it("no live thread: revives the snapshot", () => {
+    const snap = new MessageThread([smoltalk.userMessage("hi")]).toJSON();
+    expect(roles(restoreThreadForResume(snap, undefined))).toEqual(["user"]);
+  });
+
+  it("refuses a snapshot taken before a repair", () => {
+    const live = new MessageThread([smoltalk.userMessage("hi")]);
+    const snap = live.toJSON(); // generation 0
+    live.markRepaired();
+    expect(() => restoreThreadForResume(snap, live)).toThrow(
+      /repaired after this checkpoint/,
+    );
+    expect(live.repairs).toBe(1); // refusal must not have adopted anything
+  });
+
+  it("legacy bare-array snapshots (implicit generation 0) are refused after a repair", () => {
+    const live = new MessageThread([smoltalk.userMessage("hi")]);
+    live.markRepaired();
+    const legacy = [smoltalk.userMessage("hi").toJSON()];
+    expect(() => restoreThreadForResume(legacy, live)).toThrow(
+      /repaired after this checkpoint/,
+    );
+  });
+
+  it("a snapshot taken AFTER the repair restores fine", () => {
+    const live = new MessageThread([smoltalk.userMessage("hi")]);
+    live.markRepaired();
+    expect(restoreThreadForResume(live.toJSON(), live)).toBe(live);
+  });
+
+  it("emits a statelog runtimeError alongside the refusal throw", () => {
+    // The emit exists so the refusal survives Failure laundering — if it
+    // silently stops firing, that is the exact failure mode it defends
+    // against, so the wiring gets its own assertion (mirrors the
+    // threadRepaired test above).
+    const ctx = makeMockCtx();
+    const errors: Array<Record<string, unknown>> = [];
+    ctx.statelogClient.error = (e: Record<string, unknown>) => {
+      errors.push(e);
+    };
+    const live = new MessageThread([smoltalk.userMessage("hi")]);
+    const snap = live.toJSON();
+    live.markRepaired();
+    runInTestContext(ctx, new StateStack(), new ThreadStore(), () => {
+      expect(() => restoreThreadForResume(snap, live)).toThrow(
+        /repaired after this checkpoint/,
+      );
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0].errorType).toBe("runtimeError");
+    expect(errors[0].functionName).toBe("restoreThreadForResume");
   });
 });

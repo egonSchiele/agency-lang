@@ -17,6 +17,7 @@ export type MessageThreadJSON = {
   label?: string | null;
   summary?: string | null;
   queuedMessages?: QueuedMessage[];
+  repairs?: number;
 };
 
 /** A message waiting on a thread for delivery at the thread's next
@@ -62,6 +63,16 @@ export class MessageThread {
    *  module-level state in TS. `null` until the summary is computed.
    *  Round-tripped through `toJSON`/`fromJSON`. */
   summary: string | null = null;
+  /** Repair generation: how many times `repairAbandonedTurn`
+   *  (threadRepair.ts) has rewritten this thread. A repair answers tool
+   *  calls a parked-then-abandoned turn left dangling, so any checkpoint
+   *  snapshot taken BEFORE it is stale — restoring one would overwrite
+   *  the repair and everything appended since. `isNewerThan` is that
+   *  comparison; `markRepaired` is the ONLY writer outside the
+   *  serialization paths (fromJSON / adoptFrom). Never assign directly.
+   *  Round-tripped through `toJSON`/`fromJSON` so checkpoints record the
+   *  generation they captured. */
+  repairs: number = 0;
   /** Per-message debug labels, aligned with `messages` BY INDEX
    *  (`messageLabels[i]` labels `messages[i]`; the lengths always match).
    *  Observability only: shown in statelog, never sent to the provider.
@@ -79,7 +90,8 @@ export class MessageThread {
    *  Nothing else touches `this.messages`. A desync does not degrade
    *  gracefully — it shifts every later label onto the wrong message — so
    *  keep it that way. A rewrite via `setMessages` with no labels
-   *  (summarization, repair) drops them; that is intended. */
+   *  (summarization) drops them; that is intended. (Thread repair
+   *  appends via `push`, so it keeps them.) */
   messageLabels: (string | null)[];
   /** Messages queued by `queueMessage`, waiting for the thread's next
    *  request-turn. Drained by the turn-boundary machinery in the tool
@@ -150,6 +162,21 @@ export class MessageThread {
     // adoptFrom (its args.messages alias), and a queue that survived
     // toJSON but not adoptFrom would be dropped exactly on resume.
     this.queuedMessages = cloneQueue(other.queuedMessages);
+    this.repairs = other.repairs;
+  }
+
+  /** Record that this thread was repaired. Monotonic on purpose — the
+   *  stale-checkpoint check reads `repairs` as a generation number, so it
+   *  must only ever go up. */
+  markRepaired(): void {
+    this.repairs += 1;
+  }
+
+  /** True when this thread has been repaired since `snapshot` was
+   *  captured — which makes restoring `snapshot` a write over newer
+   *  history. See restoreThreadForResume in threadRepair.ts. */
+  isNewerThan(snapshot: MessageThread): boolean {
+    return this.repairs > snapshot.repairs;
   }
 
   /** The ONLY append. Everything that adds a message goes through here,
@@ -254,6 +281,9 @@ export class MessageThread {
     if (this.queuedMessages.length > 0) {
       json.queuedMessages = cloneQueue(this.queuedMessages);
     }
+    if (this.repairs > 0) {
+      json.repairs = this.repairs;
+    }
     return json;
   }
 
@@ -273,6 +303,7 @@ export class MessageThread {
     let _hidden = false;
     let _label: string | null = null;
     let _summary: string | null = null;
+    let _repairs = 0;
     if (Array.isArray(json)) {
       _messages = json;
     } else if ("messages" in json) {
@@ -291,6 +322,9 @@ export class MessageThread {
       }
       if ("summary" in json && json.summary !== undefined) {
         _summary = json.summary;
+      }
+      if ("repairs" in json && typeof json.repairs === "number") {
+        _repairs = json.repairs;
       }
     } else {
       throw new Error("Invalid input for MessageThread.fromJSON");
@@ -313,6 +347,7 @@ export class MessageThread {
     thread.hidden = _hidden;
     thread.label = _label;
     thread.summary = _summary;
+    thread.repairs = _repairs;
     // Accept only a real array: persisted JSON containing
     // `queuedMessages: null` (or any non-array) must not throw during
     // resume — it revives as an empty queue, same as the absent key.

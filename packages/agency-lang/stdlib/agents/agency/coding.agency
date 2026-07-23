@@ -272,7 +272,7 @@ export def agencyCodingAgent(
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
-  const captured = guard(cost: maxCost, time: maxTime) {
+  const captured = guard(cost: maxCost, time: maxTime, label: "agencyCodingAgent") {
     let outcome: WriteOutcome = { valid: false, source: "", problems: ["generation never ran"] }
     thread(label: "agencyCodingAgent", session: session) {
       outcome = generateLoop(

@@ -143,7 +143,6 @@ export function startServer(): void {
         semanticIndex,
         scopes,
         symbolTable,
-        version: doc.version,
         lintFindings,
         lintBatchEdits,
         lintVersion: doc.version,
@@ -350,11 +349,17 @@ export function startServer(): void {
 
   connection.languages.semanticTokens.on((params) => {
     // Last-good, not current: a document mid-edit often does not parse,
-    // and returning nothing would blank every colour in the file.
+    // and returning nothing would blank every color in the file.
     const state = docStates.getLastGood(params.textDocument.uri);
     if (!state) return { data: [] };
+    // Pass the CURRENT text, not the text the state was built from. When
+    // the two differ — the state is stale by a debounce, or the user just
+    // deleted a block — tokens computed against the old text can point
+    // past the end of a line that has since shrunk. getSemanticTokens
+    // drops those rather than emitting coordinates into empty space.
+    const doc = documents.get(params.textDocument.uri);
     try {
-      return getSemanticTokens(state);
+      return getSemanticTokens(state, doc?.getText());
     } catch (e) {
       // Never let a highlighting bug take down the request — but never
       // swallow it silently either, or it becomes untraceable.

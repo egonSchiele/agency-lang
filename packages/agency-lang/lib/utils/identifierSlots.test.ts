@@ -1,23 +1,94 @@
 import { describe, expect, it } from "vitest";
-import { identifierSlots, REGISTERED_IDENTIFIER_KINDS } from "./identifierSlots.js";
-import { EXPRESSION_NODE_TYPES } from "../types.js";
+import { identifierSlots, IDENTIFIER_BEARING_KINDS } from "./identifierSlots.js";
+import { parseAgency } from "../parser.js";
+import { walkNodes } from "./node.js";
 import type { AgencyNode } from "../types.js";
 
 function slotsFor(node: unknown) {
   return identifierSlots(node as AgencyNode);
 }
 
+/** Synthetic nodes of each identifier-bearing kind, shaped as the parser
+ *  produces them. Used to prove the registry entry still does something. */
+const SAMPLE_NODES: Record<(typeof IDENTIFIER_BEARING_KINDS)[number], unknown> = {
+  variableName: {
+    type: "variableName",
+    value: "helper",
+    loc: { line: 0, col: 0, start: 0, end: 6 },
+  },
+  functionCall: {
+    type: "functionCall",
+    functionName: "helper",
+    arguments: [],
+    loc: { line: 0, col: 0, start: 0, end: 8 },
+  },
+};
+
 describe("identifierSlots completeness", () => {
-  it("registers every expression node kind", () => {
-    // The registry is a Record over AgencyNode["type"], so a missing kind
-    // is a COMPILE error — that is the real enforcement and it fails by
-    // name. This test covers the other direction: it catches a kind that
-    // was added to the language and to the registry, but by someone who
-    // did not think about whether it holds an identifier.
-    const missing = EXPRESSION_NODE_TYPES.filter(
-      (kind) => !REGISTERED_IDENTIFIER_KINDS.includes(kind),
+  // NOTE on what enforces what. The registry is
+  // `{ [K in AgencyNode["type"]]: SlotExtractor<K> }`, so a node kind
+  // added to the language fails to COMPILE until it is registered, and
+  // each extractor sees its own node type so an AST field rename is also
+  // a compile error. Those are the real guarantees; neither needs a test.
+  //
+  // What the compiler cannot catch is an entry that is present but
+  // wrong — flipped to `none`, or reading a field that exists but is not
+  // the name. That is what the two tests below are for.
+
+  it.each(IDENTIFIER_BEARING_KINDS)(
+    "%s still produces a slot",
+    (kind) => {
+      // Fails if someone sets this entry to `none`, which compiles fine
+      // and would silently stop coloring that whole node kind.
+      const slots = slotsFor(SAMPLE_NODES[kind]);
+      expect(slots.length).toBe(1);
+      expect(slots[0].name).toBe("helper");
+    },
+  );
+
+  it("finds every located name in a real parsed file", () => {
+    // The corpus check: parse real code, collect every node the walk
+    // reaches that carries both a name and a position, and assert the
+    // table accounts for all of them. Fails if an extractor starts
+    // dropping nodes it used to handle — a guard the synthetic cases
+    // above cannot give, since they never exercise the walk.
+    const source = [
+      `def helper(x: number): number {`,
+      `  return x + 1`,
+      `}`,
+      ``,
+      `node main() {`,
+      `  const f = helper`,
+      `  const y = f(3)`,
+      `  print("interpolated \${helper(y)}")`,
+      `  for (item in [1, 2]) {`,
+      `    print(item)`,
+      `  }`,
+      `}`,
+    ].join("\n");
+
+    const parsed = parseAgency(source, {}, false);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    const located: string[] = [];
+    for (const { node } of walkNodes(parsed.result.nodes)) {
+      const any = node as { type: string; loc?: unknown; value?: unknown; functionName?: unknown };
+      if (!any.loc) continue;
+      if (any.type === "variableName" && any.value !== "null") {
+        located.push(String(any.value));
+      }
+      if (any.type === "functionCall" && typeof any.functionName === "string") {
+        located.push(any.functionName);
+      }
+    }
+
+    const found = [...walkNodes(parsed.result.nodes)].flatMap(({ node }) =>
+      identifierSlots(node).map((slot) => slot.name),
     );
-    expect(missing).toEqual([]);
+
+    expect(located.length).toBeGreaterThan(5);
+    expect(found.sort()).toEqual(located.sort());
   });
 
   it("returns no slots for an unknown node kind rather than throwing", () => {
@@ -91,7 +162,7 @@ describe("identifierSlots exclusions", () => {
     ).toEqual([]);
   });
 
-  it("skips declaration sites, which the grammar already colours", () => {
+  it("skips declaration sites, which the grammar already colors", () => {
     expect(
       slotsFor({
         type: "function",

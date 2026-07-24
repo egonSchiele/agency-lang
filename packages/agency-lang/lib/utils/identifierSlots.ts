@@ -24,9 +24,9 @@
  * 1. Positions come from `loc.line` / `loc.col`, which are 0-indexed in
  *    the USER'S file whichever parse mode ran. `loc.start` / `loc.end`
  *    are offsets into whatever the parser actually saw, which differs
- *    between the two modes. See docs/dev/locations.md — and note it says
- *    the LSP's choice of mode is historical and could change, which is
- *    exactly why nothing here may depend on it. `scopeOffset` is safe
+ *    between the two modes. See `docs/dev/locations.md` — and note it
+ *    says the LSP's choice of mode is historical and could change, which
+ *    is exactly why nothing here may depend on it. `scopeOffset` is safe
  *    because it is only ever compared with offsets from the same parse.
  * 2. A slot's length is the identifier's own length, taken by the
  *    consumer from `name`. A node's `loc` spans the WHOLE node — a
@@ -40,6 +40,7 @@
  * it fails by name in the same way.
  */
 import type { AgencyNode } from "../types.js";
+import type { SourceLocation } from "../types/base.js";
 import { isNullLiteral } from "./node.js";
 
 export type IdentifierSlot = {
@@ -50,8 +51,7 @@ export type IdentifierSlot = {
   /** 0-based column of the identifier's first character. */
   col: number;
   /** Offset for `findContainingScope`. Only comparable against other
-   *  offsets from the SAME parse — see the parse-mode note in
-   *  docs on Background A. */
+   *  offsets from the SAME parse — see `docs/dev/locations.md`. */
   scopeOffset: number;
   /** True when the source wrote this as a call, `name(...)`. Lets a
    *  consumer distinguish a call site from a bare reference without
@@ -59,10 +59,18 @@ export type IdentifierSlot = {
   isCall: boolean;
 };
 
-/** Extracts the identifier references a node contributes itself. Child
- *  nodes are NOT visited here — `walkNodes` reaches them and asks this
- *  table about each one in turn. */
-type SlotExtractor = (node: any) => IdentifierSlot[];
+/** Extracts the identifier references a node of kind `K` contributes
+ *  itself. Child nodes are NOT visited here — `walkNodes` reaches them
+ *  and asks this table about each one in turn.
+ *
+ *  Parameterised by kind so each extractor receives its OWN node type
+ *  rather than `any`. That is what makes a rename of `functionName` in
+ *  the AST a compile error here instead of a silent zero-slot return —
+ *  which would be the same "missing color nobody reports" failure this
+ *  module exists to prevent, arriving through the back door. */
+type SlotExtractor<K extends AgencyNode["type"]> = (
+  node: Extract<AgencyNode, { type: K }>,
+) => IdentifierSlot[];
 
 /**
  * Nodes reached through a `valueAccess` — its base and the calls in its
@@ -78,10 +86,13 @@ type SlotExtractor = (node: any) => IdentifierSlot[];
  * file. `semanticTokens.test.ts` has a tripwire test that fails at that
  * moment.
  */
-const located = (node: { loc?: { line: number; col: number; start: number } }) =>
-  node.loc !== undefined;
+function located<T extends { loc?: SourceLocation }>(
+  node: T,
+): node is T & { loc: SourceLocation } {
+  return node.loc !== undefined;
+}
 
-const variableNameSlots: SlotExtractor = (node) => {
+const variableNameSlots: SlotExtractor<"variableName"> = (node) => {
   // The parser has no `null` literal node — it represents `null` as a
   // variableName (see isNullLiteral in node.ts). It is a keyword, not a
   // reference to anything.
@@ -98,7 +109,7 @@ const variableNameSlots: SlotExtractor = (node) => {
   ];
 };
 
-const functionCallSlots: SlotExtractor = (node) => {
+const functionCallSlots: SlotExtractor<"functionCall"> = (node) => {
   // In templates `functionName` can be an identifier hole rather than a
   // string. A hole stands for a name it does not yet have.
   if (typeof node.functionName !== "string") return [];
@@ -117,7 +128,9 @@ const functionCallSlots: SlotExtractor = (node) => {
   ];
 };
 
-const none: SlotExtractor = () => [];
+/** Declares a kind as holding no identifier reference of its own.
+ *  Takes no arguments, so it satisfies every `SlotExtractor<K>`. */
+const none = () => [];
 
 /**
  * Every `AgencyNode` kind, mapped to what identifier references it
@@ -133,7 +146,7 @@ const none: SlotExtractor = () => [];
  * the name offset from keyword length. Semantic tokens exist here to
  * cover what the grammar CANNOT know, and declarations are not that.
  */
-const REGISTRY: Record<AgencyNode["type"], SlotExtractor> = {
+const REGISTRY: { [K in AgencyNode["type"]]: SlotExtractor<K> } = {
   variableName: variableNameSlots,
   functionCall: functionCallSlots,
 
@@ -211,12 +224,27 @@ const REGISTRY: Record<AgencyNode["type"], SlotExtractor> = {
 
 /** The identifier references this node contributes itself. */
 export function identifierSlots(node: AgencyNode): IdentifierSlot[] {
-  const extractor = REGISTRY[node.type];
-  // Unreachable while the Record above type-checks; a runtime guard for
-  // AST nodes synthesized outside the union (templates, tests).
+  // The one cast in this file. TypeScript cannot see that REGISTRY[k]
+  // and a node of kind k agree, though the mapped type guarantees it;
+  // the extractors themselves stay fully typed, which is the point.
+  const extractor = REGISTRY[node.type] as
+    | ((node: AgencyNode) => IdentifierSlot[])
+    | undefined;
+  // Unreachable while the registry type-checks. A runtime guard for AST
+  // nodes synthesized outside the union (templates, tests).
   if (!extractor) return [];
   return extractor(node);
 }
 
-/** Exported for the completeness test. */
-export const REGISTERED_IDENTIFIER_KINDS = Object.keys(REGISTRY);
+/**
+ * The kinds that actually yield identifier references. Exported so the
+ * test can assert each one still produces a slot — a registry entry
+ * flipped to `none` compiles fine and would silently stop coloring.
+ *
+ * A new node kind is NOT added here by default, which is the limit of
+ * what this can enforce: the registry forces an author to make a choice,
+ * and the corpus test in identifierSlots.test.ts catches a wrong choice
+ * for the two shapes we know about. Neither can know that some future
+ * node kind carries a name.
+ */
+export const IDENTIFIER_BEARING_KINDS = ["variableName", "functionCall"] as const;

@@ -27,7 +27,7 @@ import type { DocumentState } from "./documentState.js";
  * The wire legend. Indices sent on the wire are positions in these
  * arrays, so the ORDER is part of the protocol contract — an already-open
  * editor holds the legend it was given at initialize time and will
- * re-colour every token if these are reordered. Both the capability
+ * re-color every token if these are reordered. Both the capability
  * announcement and the encoder read these same arrays so no index is
  * ever hand-written. `semanticTokens.test.ts` pins the order.
  */
@@ -41,16 +41,22 @@ export const SEMANTIC_TOKENS_LEGEND = {
   tokenModifiers: [...TOKEN_MODIFIERS],
 };
 
+/** PRELUDE_NAMES is a readonly array, so `includes` is a linear scan.
+ *  This runs per identifier, so the membership test is hoisted once. */
+const PRELUDE_NAME_SET: Record<string, true> = Object.fromEntries(
+  PRELUDE_NAMES.map((name) => [name, true]),
+);
+
 const FUNCTION_TYPE_INDEX = TOKEN_TYPES.indexOf("function");
 const DEFAULT_LIBRARY_BIT = 1 << TOKEN_MODIFIERS.indexOf("defaultLibrary");
 
 /**
  * Which symbol kinds get a function token. `node` shares it because a
- * node call parses as an ordinary `functionCall` — colouring nodes
+ * node call parses as an ordinary `functionCall` — coloring nodes
  * differently would encode a distinction the AST does not make.
  *
  * `type` and `constant` are null: this first version emits function
- * tokens only. Every identifier left uncoloured is one the TextMate
+ * tokens only. Every identifier left uncolored is one the TextMate
  * grammar still handles, so a narrow table means no visible gaps.
  */
 const TOKEN_TYPE_BY_SYMBOL_KIND: Record<SymbolKind, TokenType | null> = {
@@ -122,7 +128,8 @@ function isDeclaredInFile(name: string, state: DocumentState): boolean {
 function isStandardLibrary(name: string, state: DocumentState): boolean {
   if (isDeclaredInFile(name, state)) return false;
   return (
-    Object.hasOwn(BUILTIN_FUNCTION_TYPES, name) || PRELUDE_NAMES.includes(name)
+    Object.hasOwn(BUILTIN_FUNCTION_TYPES, name) ||
+    Object.hasOwn(PRELUDE_NAME_SET, name)
   );
 }
 
@@ -136,6 +143,11 @@ function isStandardLibrary(name: string, state: DocumentState): boolean {
  * 2. The declaration index, for top-level and imported symbols.
  * 3. The call syntax itself. `name(...)` is a call whatever we know
  *    about `name`, which covers builtins and unresolved imports.
+ *
+ * Consequence of (3) worth knowing: in a file with type errors,
+ * `notAFunction()` still gets a function token. The syntax says call, and
+ * guessing otherwise would mean flickering colors while a name is being
+ * typed. Reporting the error is the diagnostics pass's job, not this one.
  */
 function isFunctionReference(
   slot: IdentifierSlot,
@@ -178,7 +190,7 @@ function toToken(
 /**
  * Source order. This is load-bearing, not tidiness: `SemanticTokensBuilder`
  * subtracts from whatever was pushed last and never sorts, so an
- * out-of-order push produces negative deltas and silently garbled colour.
+ * out-of-order push produces negative deltas and silently garbled color.
  * `walkNodes` genuinely yields out of source order — an assignment yields
  * its value before the target's access chain, so `obj[i] = f()` walks `f`
  * before `i`.
@@ -188,7 +200,42 @@ function byPosition(a: Token, b: Token): number {
   return a.col - b.col;
 }
 
-export function getSemanticTokens(state: DocumentState): SemanticTokens {
+/**
+ * Would this token land on text that still exists?
+ *
+ * The state a token is computed from can be older than the buffer it is
+ * being rendered against — that is the deliberate trade in
+ * DocumentStateCache. Usually the difference is a debounce and positions
+ * still line up. After a deletion they do not: a token can name a line
+ * that no longer exists, or a column past the end of a line that shrank.
+ *
+ * Dropping those is better than clamping them. A clamped token paints
+ * whatever text now sits at that position, which is a wrong color on a
+ * real word; a dropped one just leaves the grammar's color in place.
+ */
+function fitsInCurrentText(token: Token, lines: string[] | null): boolean {
+  if (lines === null) return true;
+  const line = lines[token.line];
+  if (line === undefined) return false;
+  return token.col + token.length <= line.length;
+}
+
+/**
+ * `currentText` is the buffer as it is RIGHT NOW, which may differ from
+ * the text `state` was built from. Omit it and no bounds check runs.
+ *
+ * Cost is O(identifiers x scopes): makeScopeFinder builds its definition
+ * map once, but the finder it returns still scans the scope list per
+ * call. Linear in identifiers alone would need the scopes sorted by
+ * range and a binary search. Measured at 0.3-0.7 ms on real stdlib files
+ * and 5.4 ms on a generated 1200-line file, so this is a note for the
+ * next reader rather than a todo.
+ */
+export function getSemanticTokens(
+  state: DocumentState,
+  currentText?: string,
+): SemanticTokens {
+  const lines = currentText === undefined ? null : currentText.split("\n");
   const slots = [...walkNodes(state.program.nodes)].flatMap(({ node }) =>
     identifierSlots(node),
   );
@@ -197,6 +244,7 @@ export function getSemanticTokens(state: DocumentState): SemanticTokens {
   const tokens = slots
     .map((slot) => toToken(slot, state, findScope))
     .filter((token): token is Token => token !== null)
+    .filter((token) => fitsInCurrentText(token, lines))
     .sort(byPosition);
 
   const builder = new SemanticTokensBuilder();

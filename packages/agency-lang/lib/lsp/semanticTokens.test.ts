@@ -28,7 +28,6 @@ function stateFor(source: string): DocumentState {
     semanticIndex: result.semanticIndex,
     scopes: result.scopes,
     symbolTable: new SymbolTable(),
-    version: 1,
     lintFindings: result.lintFindings,
     lintBatchEdits: result.lintBatchEdits,
     lintVersion: 1,
@@ -39,6 +38,11 @@ type DecodedToken = {
   text: string;
   line: number;
   col: number;
+  /** The length the server ENCODED, before source slicing truncates it.
+   *  The stale-position tests need this: a token running past a
+   *  shortened line has an emitted length longer than the text left to
+   *  slice, and only the raw number shows that. */
+  length: number;
   type: string;
   modifiers: string[];
 };
@@ -74,6 +78,7 @@ function decodeTokens(data: number[], source: string): DecodedToken[] {
       text: (lines[line] ?? "").slice(col, col + length),
       line,
       col,
+      length,
       type: TOKEN_TYPES[typeIndex],
       modifiers: TOKEN_MODIFIERS.filter((_, bit) => (modifierBits & (1 << bit)) !== 0),
     });
@@ -91,14 +96,14 @@ function textsFor(source: string): string[] {
 }
 
 describe("semantic tokens legend", () => {
-  it("is a wire contract — reordering re-colours every open editor", () => {
+  it("is a wire contract — reordering re-colors every open editor", () => {
     expect(SEMANTIC_TOKENS_LEGEND.tokenTypes).toEqual(["function"]);
     expect(SEMANTIC_TOKENS_LEGEND.tokenModifiers).toEqual(["defaultLibrary"]);
   });
 });
 
 describe("getSemanticTokens", () => {
-  it("colours a local bound to a function and used bare", () => {
+  it("colors a local bound to a function and used bare", () => {
     // The whole reason this feature exists: no grammar can know `f` is a
     // function, because that needs type inference.
     const tokens = tokensFor(
@@ -110,7 +115,7 @@ describe("getSemanticTokens", () => {
     expect(bare[0].line).toBe(6);
   });
 
-  it("colours a local that shadows a top-level function of the same name", () => {
+  it("colors a local that shadows a top-level function of the same name", () => {
     // If resolution regressed to the name-keyed SemanticIndex, the local
     // and the top-level definition would be indistinguishable.
     const source = `def run(): number {\n  return 1\n}\n\ndef other(): number {\n  return 2\n}\n\nnode main() {\n  const run = other\n  print(run)\n}`;
@@ -120,7 +125,7 @@ describe("getSemanticTokens", () => {
     expect(shadowed[0].type).toBe("function");
   });
 
-  it("colours a function referenced inside a string interpolation", () => {
+  it("colors a function referenced inside a string interpolation", () => {
     // Interpolated expressions are real AST nodes with real positions.
     const source = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  print("value \${helper()} here")\n}`;
     const tokens = tokensFor(source);
@@ -129,7 +134,7 @@ describe("getSemanticTokens", () => {
     expect(interpolated[0].type).toBe("function");
   });
 
-  it("does not colour a function name that only appears in string text", () => {
+  it("does not color a function name that only appears in string text", () => {
     // Paired on purpose. A file containing ONLY the string would pass
     // against an empty slot table, since string text is never an
     // identifier node — it would test the parser, not this code. With a
@@ -230,8 +235,53 @@ describe("getSemanticTokens delta encoding", () => {
   });
 });
 
+describe("getSemanticTokens against a changed document", () => {
+  // The load-bearing assumption behind DocumentStateCache is that
+  // serving stale tokens is safe. It is only safe if positions from the
+  // old text cannot land somewhere meaningless in the new one, and every
+  // other test here builds state and reads tokens from the SAME string,
+  // so none of them exercise this at all.
+
+  const LONG = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  helper()\n  helper()\n}`;
+
+  it("drops tokens on lines the document no longer has", () => {
+    // The deletion case: state built on an 8-line file, buffer is now 3
+    // lines. Tokens for the deleted lines must not be emitted.
+    const short = `def helper(): number {\n  return 1\n}`;
+    const data = getSemanticTokens(stateFor(LONG), short).data;
+    const lineCount = short.split("\n").length;
+
+    for (const token of decodeTokens(data, short)) {
+      expect(token.line).toBeLessThan(lineCount);
+    }
+  });
+
+  it("drops tokens that would run past the end of a shortened line", () => {
+    // The line still exists but is now too short to contain the token.
+    // Emitting it would paint whatever text now sits at that column.
+    const trimmed = LONG.split("\n")
+      .map((line) => (line.includes("helper()") ? "  x" : line))
+      .join("\n");
+    const lines = trimmed.split("\n");
+
+    for (const token of decodeTokens(getSemanticTokens(stateFor(LONG), trimmed).data, trimmed)) {
+      // Emitted length, not sliced text length — an over-long token
+      // slices to a shorter string, which would hide the very bug.
+      expect(token.col + token.length).toBeLessThanOrEqual(lines[token.line].length);
+    }
+  });
+
+  it("emits every token when the text is unchanged", () => {
+    // The bounds check must not cost anything in the normal case.
+    const withCheck = getSemanticTokens(stateFor(LONG), LONG).data;
+    const withoutCheck = getSemanticTokens(stateFor(LONG)).data;
+    expect(withCheck).toEqual(withoutCheck);
+    expect(withCheck.length).toBeGreaterThan(0);
+  });
+});
+
 describe("getSemanticTokens known gaps", () => {
-  it("TRIPWIRE: cannot colour identifiers inside a valueAccess chain", () => {
+  it("TRIPWIRE: cannot color identifiers inside a valueAccess chain", () => {
     // The parser attaches no `loc` to a valueAccess base or to the calls
     // in its chain, so `helper(1).invoke()` has no position to emit.
     //

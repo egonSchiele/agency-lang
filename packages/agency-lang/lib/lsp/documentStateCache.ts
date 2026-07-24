@@ -8,13 +8,13 @@
  *
  * For a feature like go-to-definition that is fine: no state, no answer,
  * and the user sees nothing missing. For semantic tokens it is not, because
- * "no answer" means every colour in the file disappears until the line
+ * "no answer" means every color in the file disappears until the line
  * parses again.
  *
  * So this cache keeps two things per document: the CURRENT state, which
  * goes away when a parse fails, and the LAST GOOD state, which does not.
  * Callers that need an answer on every keystroke read `getLastGood`.
- * Colours lagging the cursor by a debounce are invisible; colours
+ * Colors lagging the cursor by a debounce are invisible; colors
  * vanishing are not.
  *
  * It lives in its own module rather than as two Maps inside `startServer`
@@ -71,6 +71,9 @@ export class DocumentStateCache {
   /** Any current state, for requests that are document-independent
    *  (workspace symbols). */
   anyCurrent(): DocumentState | undefined {
-    return Object.values(this.current)[0];
+    for (const uri in this.current) {
+      return this.current[uri];
+    }
+    return undefined;
   }
 }

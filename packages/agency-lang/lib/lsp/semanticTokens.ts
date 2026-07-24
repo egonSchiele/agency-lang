@@ -20,7 +20,7 @@ import { PRELUDE_NAMES } from "../prelude.js";
 import { walkNodes } from "../utils/node.js";
 import { identifierSlots } from "../utils/identifierSlots.js";
 import type { IdentifierSlot } from "../utils/identifierSlots.js";
-import { findContainingScope } from "./scopeResolution.js";
+import { makeScopeFinder } from "./scopeResolution.js";
 import type { DocumentState } from "./documentState.js";
 
 /**
@@ -68,20 +68,19 @@ type Token = {
   modifiers: number;
 };
 
+/** Resolves an offset to its innermost scope. Built once per document —
+ *  building it per identifier is what made this quadratic. */
+type ScopeFinder = ReturnType<typeof makeScopeFinder>;
+
 /** What the scope says this name is bound to here, if anything. A name
  *  bound to a function infers to `functionRefType`, whose own `name` is
  *  the function it refers to — `const f = helper` resolves to
  *  `functionRefType{ name: "helper" }`. */
 function resolveFunctionRef(
   slot: IdentifierSlot,
-  state: DocumentState,
+  findScope: ScopeFinder,
 ): { name: string } | null {
-  const containingScope = findContainingScope(
-    slot.scopeOffset,
-    state.scopes,
-    state.program,
-  );
-  const inferred = containingScope?.scope.lookup(slot.name);
+  const inferred = findScope(slot.scopeOffset)?.scope.lookup(slot.name);
   if (inferred && (inferred as { type?: string }).type === "functionRefType") {
     return inferred as unknown as { name: string };
   }
@@ -153,8 +152,12 @@ function isFunctionReference(
   return slot.isCall;
 }
 
-function toToken(slot: IdentifierSlot, state: DocumentState): Token | null {
-  const resolved = resolveFunctionRef(slot, state);
+function toToken(
+  slot: IdentifierSlot,
+  state: DocumentState,
+  findScope: ScopeFinder,
+): Token | null {
+  const resolved = resolveFunctionRef(slot, findScope);
   if (!isFunctionReference(slot, state, resolved)) return null;
 
   // The stdlib question is asked of what the name RESOLVES to, not of
@@ -190,8 +193,9 @@ export function getSemanticTokens(state: DocumentState): SemanticTokens {
     identifierSlots(node),
   );
 
+  const findScope = makeScopeFinder(state.scopes, state.program);
   const tokens = slots
-    .map((slot) => toToken(slot, state))
+    .map((slot) => toToken(slot, state, findScope))
     .filter((token): token is Token => token !== null)
     .sort(byPosition);
 

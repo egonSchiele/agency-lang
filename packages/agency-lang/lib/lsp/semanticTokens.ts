@@ -68,6 +68,33 @@ type Token = {
   modifiers: number;
 };
 
+/** What the scope says this name is bound to here, if anything. A name
+ *  bound to a function infers to `functionRefType`, whose own `name` is
+ *  the function it refers to — `const f = helper` resolves to
+ *  `functionRefType{ name: "helper" }`. */
+function resolveFunctionRef(
+  slot: IdentifierSlot,
+  state: DocumentState,
+): { name: string } | null {
+  const containingScope = findContainingScope(
+    slot.scopeOffset,
+    state.scopes,
+    state.program,
+  );
+  const inferred = containingScope?.scope.lookup(slot.name);
+  if (inferred && (inferred as { type?: string }).type === "functionRefType") {
+    return inferred as unknown as { name: string };
+  }
+  return null;
+}
+
+/** Does the file declare or import this name itself? `Object.hasOwn`
+ *  rather than a lookup, because the index is a plain object and a
+ *  name like `constructor` would otherwise read off the prototype. */
+function isDeclaredInFile(name: string, state: DocumentState): boolean {
+  return Object.hasOwn(state.semanticIndex, name);
+}
+
 /**
  * Is this name part of the language rather than the user's code? Two
  * registries, because Agency has two kinds of given-to-you function and
@@ -76,14 +103,27 @@ type Token = {
  * into every file — `print`, `map`, `filter`.
  *
  * Both are existing single sources of truth, so this reads them rather
- * than restating either. A user who defines their own `print` shadows
- * the prelude one, so a locally declared name is never marked.
+ * than restating either.
+ *
+ * Two ways a user can hold a stdlib NAME without meaning the stdlib
+ * function, and each is handled by asking a different question:
+ *
+ *   const print = helper   // an alias — the binding resolves to `helper`
+ *   def print(...)         // their own function — the file declares it
+ *   import { print } from …
+ *
+ * The first is why the check runs on the RESOLVED name: a scope lookup
+ * on that `print` yields `functionRefType{ name: "helper" }`, and a real
+ * prelude call resolves to nothing at all, since the prelude is ambient
+ * rather than a scope binding. The second is why any name the file
+ * declares or imports is excluded outright. Erring toward "not stdlib"
+ * is deliberate: failing to dim library code is a smaller wrong than
+ * dimming the user's own.
  */
 function isStandardLibrary(name: string, state: DocumentState): boolean {
-  if (state.semanticIndex[name]?.source === "local") return false;
+  if (isDeclaredInFile(name, state)) return false;
   return (
-    Object.prototype.hasOwnProperty.call(BUILTIN_FUNCTION_TYPES, name) ||
-    PRELUDE_NAMES.includes(name)
+    Object.hasOwn(BUILTIN_FUNCTION_TYPES, name) || PRELUDE_NAMES.includes(name)
   );
 }
 
@@ -91,23 +131,19 @@ function isStandardLibrary(name: string, state: DocumentState): boolean {
  * Does this name refer to a function here? Three sources, in the order
  * that respects shadowing:
  *
- * 1. The enclosing scope's inferred type. A local bound to a function
- *    infers to `functionRefType`, and a local shadowing a top-level
- *    function wins because scope lookup starts innermost.
+ * 1. The enclosing scope's inferred type, so a local bound to a function
+ *    — and a local shadowing a top-level function — wins, because scope
+ *    lookup starts innermost.
  * 2. The declaration index, for top-level and imported symbols.
  * 3. The call syntax itself. `name(...)` is a call whatever we know
  *    about `name`, which covers builtins and unresolved imports.
  */
-function isFunctionReference(slot: IdentifierSlot, state: DocumentState): boolean {
-  const containingScope = findContainingScope(
-    slot.scopeOffset,
-    state.scopes,
-    state.program,
-  );
-  const inferred = containingScope?.scope.lookup(slot.name);
-  if (inferred && (inferred as { type?: string }).type === "functionRefType") {
-    return true;
-  }
+function isFunctionReference(
+  slot: IdentifierSlot,
+  state: DocumentState,
+  resolved: { name: string } | null,
+): boolean {
+  if (resolved) return true;
 
   const declared = state.semanticIndex[slot.name];
   if (declared && TOKEN_TYPE_BY_SYMBOL_KIND[declared.kind] === "function") {
@@ -118,7 +154,13 @@ function isFunctionReference(slot: IdentifierSlot, state: DocumentState): boolea
 }
 
 function toToken(slot: IdentifierSlot, state: DocumentState): Token | null {
-  if (!isFunctionReference(slot, state)) return null;
+  const resolved = resolveFunctionRef(slot, state);
+  if (!isFunctionReference(slot, state, resolved)) return null;
+
+  // The stdlib question is asked of what the name RESOLVES to, not of
+  // what was typed — see isStandardLibrary.
+  const effectiveName = resolved?.name ?? slot.name;
+
   return {
     line: slot.line,
     col: slot.col,
@@ -126,7 +168,7 @@ function toToken(slot: IdentifierSlot, state: DocumentState): Token | null {
     // `end - start` would paint a call's arguments too.
     length: slot.name.length,
     typeIndex: FUNCTION_TYPE_INDEX,
-    modifiers: isStandardLibrary(slot.name, state) ? DEFAULT_LIBRARY_BIT : 0,
+    modifiers: isStandardLibrary(effectiveName, state) ? DEFAULT_LIBRARY_BIT : 0,
   };
 }
 

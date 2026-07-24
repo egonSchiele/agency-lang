@@ -72,6 +72,25 @@ describe("DocumentStateCache", () => {
     expect(cache.get(URI)).toBeUndefined();
   });
 
+  it("reports a miss for names that live on Object.prototype", () => {
+    // URIs come from the client, so the key space is not ours to
+    // constrain. On a plain object these would resolve off the
+    // prototype chain and hand back a function where a caller expects
+    // either a state or nothing.
+    const cache = new DocumentStateCache();
+    for (const key of ["__proto__", "toString", "constructor", "hasOwnProperty"]) {
+      expect(cache.get(key)).toBeUndefined();
+      expect(cache.getLastGood(key)).toBeUndefined();
+    }
+  });
+
+  it("stores and retrieves a prototype-shaped key like any other", () => {
+    const cache = new DocumentStateCache();
+    cache.set("toString", stateAtVersion(9));
+    expect(cache.get("toString")?.version).toBe(9);
+    expect(cache.get("valueOf")).toBeUndefined();
+  });
+
   it("offers a current state for document-independent requests", () => {
     const cache = new DocumentStateCache();
     expect(cache.anyCurrent()).toBeUndefined();

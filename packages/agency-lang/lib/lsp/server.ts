@@ -216,7 +216,18 @@ export function startServer(): void {
     // Types can change without the user touching the buffer — an import
     // saved elsewhere, an agency.json edit. Nothing prompts the client to
     // re-pull tokens in that case, so ask it to.
-    connection.languages.semanticTokens.refresh();
+    //
+    // The typings say this returns void; it actually returns the
+    // sendRequest promise, which REJECTS on clients that do not support
+    // the request. Unhandled, that becomes a process-level rejection in
+    // a server meant to run for hours, so the promise is caught here
+    // despite the declared type.
+    const refreshed: unknown = connection.languages.semanticTokens.refresh();
+    if (refreshed instanceof Promise) {
+      refreshed.catch((e) => {
+        connection.console.error(`semantic tokens refresh failed: ${String(e)}`);
+      });
+    }
   });
 
   connection.onDefinition((params) => {

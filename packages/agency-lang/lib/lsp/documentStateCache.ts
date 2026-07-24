@@ -25,8 +25,13 @@
 import type { DocumentState } from "./documentState.js";
 
 export class DocumentStateCache {
-  private current: Record<string, DocumentState> = {};
-  private lastGood: Record<string, DocumentState> = {};
+  // Null-prototype: the keys are document URIs, which come from the
+  // client. A plain object would resolve names like `__proto__` or
+  // `toString` off the prototype chain rather than reporting a miss.
+  // No URI can currently collide, but the guard costs nothing and the
+  // keys are not ours to constrain.
+  private current: Record<string, DocumentState> = Object.create(null);
+  private lastGood: Record<string, DocumentState> = Object.create(null);
 
   /** Record a successful build. */
   set(uri: string, state: DocumentState): void {

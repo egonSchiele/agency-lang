@@ -169,6 +169,20 @@ describe("getSemanticTokens", () => {
     expect(call!.modifiers).toEqual([]);
   });
 
+  it("does not mark a local alias that reuses a prelude name", () => {
+    // `const print = helper` binds the name `print` to the user's own
+    // function. The scope resolves it to functionRefType{name:"helper"},
+    // and the stdlib question is asked of THAT name, not of what was
+    // typed. A real prelude call resolves to nothing, so it is
+    // unaffected.
+    const tokens = tokensFor(
+      `def helper(): number {\n  return 1\n}\n\nnode main() {\n  const print = helper\n  print()\n}`,
+    );
+    const aliased = tokens.find((t) => t.text === "print" && t.line === 6);
+    expect(aliased).toBeDefined();
+    expect(aliased!.modifiers).toEqual([]);
+  });
+
   it("leaves user functions without the defaultLibrary modifier", () => {
     const tokens = tokensFor(
       `def helper(): number {\n  return 1\n}\n\nnode main() {\n  helper()\n}`,

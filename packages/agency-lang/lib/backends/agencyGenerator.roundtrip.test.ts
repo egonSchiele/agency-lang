@@ -162,3 +162,63 @@ describe("formatter gate: pinned repros", () => {
     expect(twice).toBe(once);
   });
 });
+
+// ── Code literals join the gate: in-memory sources covering each kind,
+// the end-scan corners, and formatting behavior. The corpus above picks
+// up file-based literals as fixtures land in tests/.
+describe("formatter gate: code literals", () => {
+  const literalSources = [
+    `node main() {\n  const t = [| 1 + 2 |]\n  return t\n}\n`,
+    `node main() {\n  const t = [|\n    const a = 1\n    print(a)\n  |]\n}\n`,
+    `node main() {\n  const t = [|\n    def g(): number {\n      return 1\n    }\n  |]\n}\n`,
+    `node main() {\n  const t = [|\n    const x: number = #n\n    #steps\n  |]\n}\n`,
+    `node main() {\n  const t = [| return "Pick: [x|y|]" |]\n}\n`,
+  ];
+
+  it("round-trips and prints idempotently", () => {
+    for (const source of literalSources) {
+      const first = parseTemplateMode(source);
+      const printed = generateAgency(parseTemplateMode(source));
+      const second = parseTemplateMode(printed);
+      expect(normalized(second.nodes), source).toEqual(normalized(first.nodes));
+      const twice = generateAgency(parseTemplateMode(printed));
+      expect(twice, source).toBe(printed);
+    }
+  });
+
+  it("golden: a mis-indented body comes out canonically formatted", () => {
+    // Byte-for-byte, written by hand from the formatting rules: body one
+    // indent level deeper than the statement, |] aligned with it. The
+    // structural gate cannot catch a text-level regression; this can.
+    const messy = `node main() {\n  const t = [|\n      def g(): number {\n            return 1\n      }\n  |]\n}\n`;
+    const expected = [
+      "node main() {",
+      "  const t = [|",
+      "    def g(): number {",
+      "      return 1",
+      "    }",
+      "  |]",
+      "}",
+      "",
+    ].join("\n");
+    expect(generateAgency(parseTemplateMode(messy))).toBe(expected);
+  });
+
+  it("golden: a one-line expr literal prints inline", () => {
+    const source = `node main() {\n  const t = [|   1   +   2   |]\n  return t\n}\n`;
+    const expected = [
+      "node main() {",
+      "  const t = [| 1 + 2 |]",
+      "  return t",
+      "}",
+      "",
+    ].join("\n");
+    expect(generateAgency(parseTemplateMode(source))).toBe(expected);
+  });
+
+  it("a body comment survives printing", () => {
+    const source = `node main() {\n  const t = [|\n    // keep me\n    print(1)\n  |]\n}\n`;
+    const printed = generateAgency(parseTemplateMode(source));
+    expect(printed).toContain("// keep me");
+  });
+});

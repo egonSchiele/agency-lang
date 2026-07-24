@@ -26,6 +26,7 @@ import {
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import { declaredName } from "../types/hole.js";
+import { CodeLiteral } from "../types/codeLiteral.js";
 import { LEGAL_IDENTIFIER } from "../parsers/parsers.js";
 import { comprehensionPrefixString } from "../types/comprehension.js";
 import { BlockArgument } from "../types/blockArgument.js";
@@ -585,6 +586,8 @@ export class AgencyGenerator {
         return this.processSeqBlock(node);
       case "hole":
         return this.formatHole(node);
+      case "codeLiteral":
+        return this.processCodeLiteral(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -1321,6 +1324,27 @@ export class AgencyGenerator {
     return this.indentStr(this.asyncAwaitPrefix(code, node.async));
   }
 
+  /** Print `[| ... |]`. An expr-kind body that fits one line prints
+   *  inline; everything else prints multi-line with the body one indent
+   *  level deeper and `|]` aligned with the statement. The body text is
+   *  the SHARED canonical print (printCodeLiteralBody), so what fmt
+   *  shows and what codegen embeds are the same text — and yes, fmt
+   *  REFORMATS bodies deliberately: a literal body is held to the same
+   *  standard a template file is. */
+  protected processCodeLiteral(node: CodeLiteral): string {
+    const body = printCodeLiteralBody(node);
+    if (node.kind === "expr" && !body.includes("\n")) {
+      return this.indentStr(`[| ${body} |]`);
+    }
+    this.increaseIndent();
+    const indented = body
+      .split("\n")
+      .map((line) => (line === "" ? "" : this.indentStr(line)))
+      .join("\n");
+    this.decreaseIndent();
+    return `${this.indentStr("[|")}\n${indented}\n${this.indentStr("|]")}`;
+  }
+
   protected asyncAwaitPrefix(code: string, async?: boolean): string {
     if (async === true) {
       return `async ${code}`;
@@ -1938,6 +1962,14 @@ export class AgencyGenerator {
   protected processKeyword(node: Keyword): string {
     return this.indentStr(`${node.value}`);
   }
+}
+
+/** The canonical printed body of a code literal, WITHOUT the brackets.
+ *  Shared by the formatter (which wraps it in `[| |]`) and codegen
+ *  (which embeds it for runtime reconstruction), so what fmt shows and
+ *  what the generated program reconstructs are the same text. */
+export function printCodeLiteralBody(node: CodeLiteral): string {
+  return generateAgency({ type: "agencyProgram", nodes: node.nodes }).trimEnd();
 }
 
 export function generateAgency(

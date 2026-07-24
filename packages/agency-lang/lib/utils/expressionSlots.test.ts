@@ -394,18 +394,18 @@ const WALKER_EXCLUDED_FIELDS: Record<string, string> = {
 // its own PR and review.
 const KNOWN_WALKER_GAPS: Record<string, string> = {
   "functionParameter.defaultValue":
-    "follow-up issue TBD: parameter default expressions are never walked",
+    "#668: parameter default expressions are never walked",
   "function.docString":
-    "follow-up issue TBD: docstring interpolations are evaluated by the builder " +
+    "#668: docstring interpolations are evaluated by the builder " +
     "(hasDocStringInterpolation) but the segments are never walked",
   "assignment.accessChain":
-    "follow-up issue TBD: slice-assignment bounds (arr[a:b] = x) are not walked; " +
+    "#668: slice-assignment bounds (arr[a:b] = x) are not walked; " +
     "index and methodCall chain entries are",
   "matchBlockCase.guard":
-    "follow-up issue TBD: unlowered match-arm guard expressions are not walked " +
+    "#668: unlowered match-arm guard expressions are not walked " +
     "(the lowered if-chain form is)",
   "tag.arguments":
-    "follow-up issue TBD: @validate/@tag annotation arguments reference validator " +
+    "#668: @validate/@tag annotation arguments reference validator " +
     "functions and values but are never walked",
 };
 

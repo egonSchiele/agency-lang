@@ -380,11 +380,14 @@ describe("lint diagnostics", () => {
 });
 
 describe("lint snapshot is isolated from prunePreludeShadows", () => {
-  it("produces identical lint findings on a second run of the same document", () => {
+  it("lints the import as written even though prune strips the shadowed name", () => {
     // `def map` shadows the prelude's map, so prunePreludeShadows strips
     // `map` from EVERY std::index import statement in place — including
-    // this user-written one. Without the clone, the second run sees an
-    // already-emptied import object.
+    // this user-written one. Without cloneForLint the linter would see an
+    // already-emptied import and report nothing; the AL0003 finding is
+    // direct proof the snapshot kept the name. (Each runDiagnostics call
+    // re-parses, so a re-run-equality assertion alone would pass with or
+    // without the clone.)
     const source = [
       `import { map } from "std::index"`,
       `def map(x: number): number { return x }`,
@@ -392,9 +395,8 @@ describe("lint snapshot is isolated from prunePreludeShadows", () => {
       ``,
     ].join("\n");
     const doc = makeDoc(source);
-    const first = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
-    const second = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
-    expect(second.lintFindings).toEqual(first.lintFindings);
+    const { lintFindings } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+    expect(lintFindings.map((f) => f.code)).toContain("AL0003");
   });
 });
 

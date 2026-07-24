@@ -47,6 +47,12 @@ export const redundantPreludeImportRule: LintRule = {
     return redundantNamesIn(ctx).map(({ stmt, name }) => {
       const span = statementSpan(ctx.source, stmt);
       const range = nameRange(ctx.source, span.start, span.end, name);
+      // Each fix regenerates the WHOLE statement minus one name, so two
+      // findings on the same statement carry overlapping edits. Safe for
+      // one-at-a-time quick fixes (the editor re-lints between them), but
+      // a future batch/fix-all action must group per statement and
+      // regenerate once, the way unusedImportsBatchEdits does — never
+      // concatenate these per-name fixes.
       const fix: LintFix = {
         title: `Remove redundant import '${name}'`,
         edits: [removalEdit(ctx.source, stmt, [name])],

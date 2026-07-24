@@ -52,8 +52,8 @@ Return the planner's tools: read-only access to the project it is planning
 planCodePrompt(task: string, planText: string): string
 ```
 
-Build the code-generation instruction: emit a program whose `node main` composes
-  the building blocks to carry out `planText` for `task`.
+Build the code-generation instruction: emit a program whose node main
+  composes the building blocks to carry out planText for task.
 
 **Parameters:**
 
@@ -64,7 +64,7 @@ Build the code-generation instruction: emit a program whose `node main` composes
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L67))
 
 ### renderEffects
 
@@ -72,8 +72,8 @@ Build the code-generation instruction: emit a program whose `node main` composes
 renderEffects(effects: Result<EffectsByExport>): string
 ```
 
-Human-readable capability envelope for the approval prompt, or an honest
-  note when the effects could not be computed.
+Human-readable capability envelope for the approval prompt, or an
+  honest note when the effects could not be computed.
 
 **Parameters:**
 
@@ -83,7 +83,7 @@ Human-readable capability envelope for the approval prompt, or an honest
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L95))
 
 ### runApproved
 
@@ -95,6 +95,10 @@ runApproved(
   state: PlanState,
 ): PlanState raises <std::agents::planApprove>
 ```
+
+Gate generated code behind user approval, then run it: shows the plan,
+  source, and capability envelope, and returns a rejected state instead of
+  running when approval is declined.
 
 **Parameters:**
 
@@ -161,4 +165,4 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 
 **Throws:** `std::agents::planApprove`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L221))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L224))

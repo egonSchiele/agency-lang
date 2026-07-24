@@ -104,6 +104,7 @@ export def repl(
 }
 
 export def clearScreen() {
+  """Clear the terminal screen."""
   _clearScreen()
 }
 
@@ -119,6 +120,8 @@ def termWidth(): number {
 }
 
 export def hline(char: string = "─", width: number = null): string {
+  """Return a horizontal rule: `char` repeated `width` times (terminal
+  width when `width` is omitted)."""
   let _width = width || termWidth()
   return char.repeat(_width)
 }

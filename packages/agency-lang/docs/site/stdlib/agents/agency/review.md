@@ -19,8 +19,8 @@ an optional LLM judgment of whether the code accomplishes a task.
 reportFeedback(report: TypeCheckReport): Feedback[]
 ```
 
-Convert a typecheck report into findings: one error item per error, one
-  advisory item per warning.
+Convert a typecheck report into findings: one error item per error,
+  one advisory item per warning.
 
 **Parameters:**
 
@@ -30,7 +30,7 @@ Convert a typecheck report into findings: one error item per error, one
 
 **Returns:** `Feedback[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/review.agency#L19))
 
 ### buildTools
 

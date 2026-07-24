@@ -95,10 +95,10 @@ export def getAgentCwd(): string {
   return _agentCwd
 }
 
-/** Used by read, write, and other functions to resolve
-relative paths against the agent working directory.
-*/
 export def applyAgentCwd(dir: string): string {
+  """Resolve a relative path against the agent working directory (set with
+  setAgentCwd). Absolute paths and an unset working directory pass through
+  unchanged. read, write, and the other file tools already call this."""
   const base = getAgentCwd()
   if (base == "") {
     return dir

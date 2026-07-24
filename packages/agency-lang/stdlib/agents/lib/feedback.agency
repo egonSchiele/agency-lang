@@ -78,10 +78,10 @@ export def feedbackHasErrors(feedback: Result<Feedback[]>): boolean {
   return true
 }
 
-/** Pass a successful feedback list through unchanged; map any failure to no
-  findings. Use this to make a checker fail open: a checker that could not run
-  reports nothing rather than a blocking error. */
 export def failOpenFeedback(feedback: Result<Feedback[]>): Result<Feedback[]> {
+  """Pass a successful feedback list through unchanged; map any failure to
+  no findings, so a checker that could not run reports nothing rather than
+  a blocking error."""
   return match(feedback) {
     success(items) => success(items)
     failure(_) => success([])

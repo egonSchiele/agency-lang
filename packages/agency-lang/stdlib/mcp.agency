@@ -26,28 +26,28 @@ effect mcp::call {
   args: Record<string, any>
 }
 
-/// True when the @agency-lang/mcp package is installed and reachable.
 export def isMcpAvailable(): boolean {
+  """True when the @agency-lang/mcp package is installed and reachable."""
   return _isMcpAvailable()
 }
 
-/// Read the mcpServers block from the project agency.json under `dir`.
 export def readProjectMcpConfig(dir: string): Record<string, any> {
+  """Read the mcpServers block from the project agency.json under `dir`."""
   return _readProjectMcpConfig(dir)
 }
 
-/// Merge global and project mcpServers configs (project wins on collision).
 export def mergeMcpServers(global: Record<string, any>, project: Record<string, any>): Record<string, any> {
+  """Merge global and project mcpServers configs (project wins on collision)."""
   return _mergeMcpServers(global, project)
 }
 
-/// Load gated MCP tools for every server in `merged`. Returns [] when the
-/// package is absent, incompatible, or no servers are configured.
 export def loadMcpTools(merged: Record<string, any>, onOAuthRequired?): any[] {
+  """Load gated MCP tools for every server in `merged`. Returns [] when the
+  package is absent, incompatible, or no servers are configured."""
   return _loadMcpTools(merged, onOAuthRequired)
 }
 
-/// Like loadMcpTools, but also returns a per-server status map for /mcp.
 export def loadMcpToolsWithStatus(merged: Record<string, any>, onOAuthRequired?): McpLoadResult {
+  """Like loadMcpTools, but also returns a per-server status map for /mcp."""
   return _loadMcpToolsWithStatus(merged, onOAuthRequired)
 }

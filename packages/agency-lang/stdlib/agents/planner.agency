@@ -64,9 +64,9 @@ node main(): string {
   return result.value
 }"""
 
-/** Build the code-generation instruction: emit a program whose `node main` composes
-  the building blocks to carry out `planText` for `task`. */
 export def planCodePrompt(task: string, planText: string): string {
+  """Build the code-generation instruction: emit a program whose node main
+  composes the building blocks to carry out planText for task."""
   return """Write a complete Agency program (a node main) that carries out this plan, composing the building blocks below.
 
 Task:
@@ -92,9 +92,9 @@ def renderEffectLines(byExport: Record<string, string[]>): string {
   return lines.join("\n")
 }
 
-/** Human-readable capability envelope for the approval prompt, or an honest
-  note when the effects could not be computed. */
 export def renderEffects(effects: Result<EffectsByExport>): string {
+  """Human-readable capability envelope for the approval prompt, or an
+  honest note when the effects could not be computed."""
   return match(effects) {
     failure(_) => "(capabilities could not be computed)"
     success(byExport) => renderEffectLines(byExport)
@@ -189,6 +189,9 @@ export def runApproved(
   src: string,
   state: PlanState,
 ): PlanState raises <std::agents::planApprove> {
+  """Gate generated code behind user approval, then run it: shows the plan,
+  source, and capability envelope, and returns a rejected state instead of
+  running when approval is declined."""
   const eff = getEffects(src)
   // Show the plan alongside the generated source and capability envelope, so the
   // approval prompt reflects what the user is actually approving.

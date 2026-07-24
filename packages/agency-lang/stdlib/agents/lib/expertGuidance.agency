@@ -19,10 +19,9 @@ export static const emptyGuidance: ExpertGuidance = {
   checklist: []
 }
 
-// Fold expert guidance into a context block the coding agent reads before it
-// starts. An empty consult (no rules, no checklist) yields an empty string, so
-// the coding agent runs exactly as it would without a consult.
 export def renderGuidance(guidance: ExpertGuidance): string {
+  """Fold expert guidance into a context block the coding agent reads
+  before it starts. Empty guidance yields an empty string."""
   if (guidance.rules.length == 0 && guidance.checklist.length == 0) {
     return ""
   }
@@ -31,10 +30,9 @@ export def renderGuidance(guidance: ExpertGuidance): string {
   return "Domain expertise for this task (${guidance.domain}):\n\nKey rules and conventions:\n${rules}\n\nAcceptance checklist — your finished work MUST satisfy every item:\n${checks}"
 }
 
-/** Unwrap a consult Result, failing open: a consult that errored yields empty
-  guidance, so the caller proceeds exactly as it would without a consult.
-  Guidance can only help, never block. */
 export def guidanceOrEmpty(result: Result<ExpertGuidance>): ExpertGuidance {
+  """Unwrap a consult Result, failing open: a consult that errored yields
+  empty guidance, so the caller proceeds as if no consult happened."""
   return match(result) {
     success(guidance) => guidance
     failure(_) => emptyGuidance

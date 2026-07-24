@@ -39,15 +39,19 @@ effect mcp::call {
 isMcpAvailable(): boolean
 ```
 
+True when the @agency-lang/mcp package is installed and reachable.
+
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L29))
 
 ### readProjectMcpConfig
 
 ```ts
 readProjectMcpConfig(dir: string): Record<string, any>
 ```
+
+Read the mcpServers block from the project agency.json under `dir`.
 
 **Parameters:**
 
@@ -57,7 +61,7 @@ readProjectMcpConfig(dir: string): Record<string, any>
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L34))
 
 ### mergeMcpServers
 
@@ -68,6 +72,8 @@ mergeMcpServers(
 ): Record<string, any>
 ```
 
+Merge global and project mcpServers configs (project wins on collision).
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -77,13 +83,16 @@ mergeMcpServers(
 
 **Returns:** `Record<string, any>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L40))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L39))
 
 ### loadMcpTools
 
 ```ts
 loadMcpTools(merged: Record<string, any>, onOAuthRequired = null): any[]
 ```
+
+Load gated MCP tools for every server in `merged`. Returns [] when the
+  package is absent, incompatible, or no servers are configured.
 
 **Parameters:**
 
@@ -94,7 +103,7 @@ loadMcpTools(merged: Record<string, any>, onOAuthRequired = null): any[]
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L46))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L44))
 
 ### loadMcpToolsWithStatus
 
@@ -105,6 +114,8 @@ loadMcpToolsWithStatus(
 ): McpLoadResult
 ```
 
+Like loadMcpTools, but also returns a per-server status map for /mcp.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -114,4 +125,4 @@ loadMcpToolsWithStatus(
 
 **Returns:** [McpLoadResult](#mcploadresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/mcp.agency#L50))

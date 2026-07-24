@@ -16,9 +16,9 @@ import { systemMessage, threadIsNew } from "std::thread"
 
 static const systemPrompt = """You review Agency-language code. Return a list of feedback items. Set error=true only if the code does not accomplish the task. Keep feedback brief and concrete."""
 
-/** Convert a typecheck report into findings: one error item per error, one
-  advisory item per warning. */
 export def reportFeedback(report: TypeCheckReport): Feedback[] {
+  """Convert a typecheck report into findings: one error item per error,
+  one advisory item per warning."""
   const feedback: Feedback[] = []
   for (error in report.errors) {
     feedback.push({ error: true, feedback: "Error: ${error.message}" })

@@ -54,6 +54,9 @@ export static const emptyGuidance: ExpertGuidance = {
 renderGuidance(guidance: ExpertGuidance): string
 ```
 
+Fold expert guidance into a context block the coding agent reads
+  before it starts. Empty guidance yields an empty string.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -62,7 +65,7 @@ renderGuidance(guidance: ExpertGuidance): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L22))
 
 ### guidanceOrEmpty
 
@@ -70,9 +73,8 @@ renderGuidance(guidance: ExpertGuidance): string
 guidanceOrEmpty(result: Result<ExpertGuidance>): ExpertGuidance
 ```
 
-Unwrap a consult Result, failing open: a consult that errored yields empty
-  guidance, so the caller proceeds exactly as it would without a consult.
-  Guidance can only help, never block.
+Unwrap a consult Result, failing open: a consult that errored yields
+  empty guidance, so the caller proceeds as if no consult happened.
 
 **Parameters:**
 
@@ -82,4 +84,4 @@ Unwrap a consult Result, failing open: a consult that errored yields empty
 
 **Returns:** [ExpertGuidance](#expertguidance)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/expertGuidance.agency#L33))

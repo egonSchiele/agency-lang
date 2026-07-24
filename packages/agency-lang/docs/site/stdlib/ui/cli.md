@@ -78,6 +78,8 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
 clearScreen()
 ```
 
+Clear the terminal screen.
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L106))
 
 ### clearHistory
@@ -90,13 +92,16 @@ Clear the input history of the currently running `repl()` session: both
   its in-session up-arrow recall and the `historyFile` that session was started
   with. A no-op when called outside an interactive `repl()`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L111))
 
 ### hline
 
 ```ts
 hline(char: string = "─", width: number = null): string
 ```
+
+Return a horizontal rule: `char` repeated `width` times (terminal
+  width when `width` is omitted).
 
 **Parameters:**
 
@@ -107,7 +112,7 @@ hline(char: string = "─", width: number = null): string
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L122))
 
 ### interruptChoice
 
@@ -146,4 +151,4 @@ Approval prompt for line mode: renders a sticky footer pinned to the
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L126))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/cli.agency#L129))

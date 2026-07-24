@@ -112,10 +112,40 @@ describe("fillHoles: fragment kinds", () => {
     expect(out).toContain("print(2)");
   });
 
-  it("rejects an expr fragment in a statements hole", () => {
-    expect(() => fillHoles(load(stmtTemplate), { setup: _parseExpr("42") })).toThrow(
-      /statements.*expr|expr.*statements/,
-    );
+  // INVERTED deliberately by the expr-fills-statements relaxation: this
+  // case used to assert a throw. An expression IS a legal statement (an
+  // expression statement is the expression node itself in the body
+  // array), and the relaxation is what makes code-literal kind
+  // inference lossless.
+  it("an expr fragment fills a statements hole as an expression statement", () => {
+    const filled = fillHoles(load(stmtTemplate), { setup: _parseExpr("print(99)") });
+    const main = filled.nodes.find((n: any) => n.type === "graphNode") as any;
+    expect(
+      main.body.some((n: any) => n.type === "functionCall" && n.functionName === "print"),
+    ).toBe(true);
+  });
+
+  it("an odd expr-statement grafts fine; the generated programs compile judges it", () => {
+    const filled = fillHoles(load(stmtTemplate), { setup: _parseExpr("1 + 2") });
+    const main = filled.nodes.find((n: any) => n.type === "graphNode") as any;
+    expect(main.body.some((n: any) => n.type === "binOpExpression")).toBe(true);
+  });
+
+  // Guards on the rows the relaxation must PRESERVE: an append that
+  // became a replace would break these silently otherwise.
+  it("a program fragment still fills a statements hole", () => {
+    const out = fillAndPrint(stmtTemplate, {
+      setup: _loadTemplateFromString("def g(): number {\n  return 1\n}\n"),
+    });
+    expect(out).toContain("def g(): number");
+  });
+
+  it("decl holes still reject expr and statements fragments", () => {
+    const declTemplate = `#helpers\n\nnode main() {\n  return 1\n}\n`;
+    expect(() => fillHoles(load(declTemplate), { helpers: _parseExpr("1") })).toThrow(/decl/);
+    expect(() =>
+      fillHoles(load(declTemplate), { helpers: _parseStatements("print(1)") }),
+    ).toThrow(/decl/);
   });
 
   it("rejects a statements fragment in an expr hole", () => {

@@ -63,7 +63,7 @@ type Code = { type: "agencyProgram"; kind?: "program" | "statements" | "expr"; n
 
 `Code` is the pre-existing `AST` shape plus a fragment kind, because a bare expression is not a parseable program — `AST` alone cannot represent "one expression", and an expr hole must be fillable with `Code`. A missing `kind` means `"program"` (that is what `parseAST`, the escape hatch, produces). `kindOf` normalizes; `isCode` checks the `type` tag **and** `Array.isArray(nodes)` — the array check is load-bearing, since `Code` is a plain record an Agency caller can hand-build, and without it `{ type: "agencyProgram" }` would crash in `nodes.map` instead of lifting as data.
 
-Kind-versus-sort admissibility (`assertKindMatchesSort`): expr ← expr; statements ← statements or program; decl ← program; identifier ← never (strings only).
+Kind-versus-sort admissibility (`assertKindMatchesSort`): expr ← expr; statements ← statements, program, or expr (an expression IS a legal statement — the expression statement is the expression node itself in the body array, so the graft is the identity; a nonsense bare-expression statement is judged at the completed program's compile, the right stage); decl ← program; identifier ← never (strings only).
 
 `_parseExpr` and `_parseStatements` reuse the real grammar (`exprParser`, `bodyParser`) — never a second grammar — and reject trailing input, which is what makes `parseExpr("const x = 1")` fail instead of silently parsing a prefix.
 

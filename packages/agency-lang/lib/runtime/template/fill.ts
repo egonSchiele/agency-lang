@@ -245,7 +245,14 @@ function assertKindMatchesSort(code: Code, hole: Hole): void {
   const kind = kindOf(code);
   const allowed: Record<Hole["sort"], string[]> = {
     expr: ["expr"],
-    statements: ["statements", "program"],
+    // "expr" is admissible because an expression IS a legal statement in
+    // Agency: an expression statement is the expression node itself in
+    // the body array, so the graft is the identity. Whether a particular
+    // bare expression is a MEANINGFUL statement is judged at the
+    // completed program's compile — the right stage. statements already
+    // accepted "program", so this closes the only gap smallest-first
+    // kind inference for code literals leaves.
+    statements: ["statements", "program", "expr"],
     decl: ["program"],
     identifier: [],
   };

@@ -422,6 +422,13 @@ function isKnownGap(ownerType: string, key: string): boolean {
 
 type StructuralVia = "clear" | "excluded" | "knownGap";
 
+function childViaFor(current: StructuralVia, ownerType: string, key: string): StructuralVia {
+  if (current !== "clear") return current;
+  if (isExcluded(ownerType, key)) return "excluded";
+  if (isKnownGap(ownerType, key)) return "knownGap";
+  return "clear";
+}
+
 function* structuralNodes(
   value: any,
   ownerType: string,
@@ -435,15 +442,7 @@ function* structuralNodes(
   const selfType = typeof value.type === "string" ? value.type : ownerType;
   if (typeof value.type === "string") yield { node: value, via };
   for (const key of Object.keys(value)) {
-    const childVia: StructuralVia =
-      via !== "clear"
-        ? via
-        : isExcluded(selfType, key)
-          ? "excluded"
-          : isKnownGap(selfType, key)
-            ? "knownGap"
-            : "clear";
-    yield* structuralNodes(value[key], selfType, childVia);
+    yield* structuralNodes(value[key], selfType, childViaFor(via, selfType, key));
   }
 }
 
@@ -496,18 +495,17 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
       }
     });
 
-    it(`${label}: known gaps are still gaps (staleness guard)`, () => {
-      // Each KNOWN_WALKER_GAPS entry must still shield at least one
-      // unwalked expression node somewhere in this corpus mode. When the
-      // follow-up PR fixes walkNodes, this fails until the entry is
-      // deleted — the gap cannot be forgotten in either direction. (An
-      // entry only one mode exercises is fine: the guard requires each
-      // entry to be live in at least one mode, checked jointly below.)
-      const entries = Object.keys(KNOWN_WALKER_GAPS);
-      if (entries.length === 0) return;
-      for (const key of entries) {
-        let stillAGap = false;
-        const [ownerType, field] = key.split(".");
+  }
+
+  it("known gaps are still gaps (staleness guard, both modes)", () => {
+    // Each KNOWN_WALKER_GAPS entry must still shield at least one
+    // unwalked expression node in AT LEAST one parse mode. When the
+    // follow-up PR fixes walkNodes, this fails until the entry is
+    // deleted — the gap cannot be forgotten in either direction.
+    for (const [key, issue] of Object.entries(KNOWN_WALKER_GAPS)) {
+      let stillAGap = false;
+      const [ownerType, field] = key.split(".");
+      for (const lower of [true, false]) {
         for (const { nodes } of corpusPrograms(lower)) {
           const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
           // Find owner nodes STRUCTURALLY — a gap's owner may itself be
@@ -530,24 +528,15 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
             }
           }
         }
-        gapLiveness[key] ??= false;
-        gapLiveness[key] = gapLiveness[key] || stillAGap;
-        if (!lower) {
-          // Final mode: judge each entry across both modes.
-          expect(
-            gapLiveness[key],
-            `KNOWN_WALKER_GAPS entry "${key}" no longer shields anything in either corpus mode — ` +
-              `the walker gap it recorded is fixed (or the corpus lost the shape). Delete the entry ` +
-              `(and close ${KNOWN_WALKER_GAPS[key]}) or restore corpus coverage.`,
-          ).toBe(true);
-        }
       }
-    });
-  }
-
-  // Cross-mode liveness accumulator for the staleness guard: an entry is
-  // healthy if it shields something in AT LEAST one parse mode.
-  const gapLiveness: Record<string, boolean> = {};
+      expect(
+        stillAGap,
+        `KNOWN_WALKER_GAPS entry "${key}" no longer shields anything in either corpus mode — ` +
+          `the walker gap it recorded is fixed (or the corpus lost the shape). Delete the entry ` +
+          `(and close ${issue}) or restore corpus coverage.`,
+      ).toBe(true);
+    }
+  });
 
   it("liveness: the corpus actually exercises the historically-missed positions", () => {
     // A coverage invariant over kinds the corpus never contains proves

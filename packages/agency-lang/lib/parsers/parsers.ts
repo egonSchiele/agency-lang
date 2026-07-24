@@ -3151,8 +3151,12 @@ function shiftLiteralLocs(value: unknown, lineDelta: number, offsetDelta: number
   const loc = record.loc as { line?: number; start?: number; end?: number } | undefined;
   if (loc && typeof loc === "object" && typeof loc.line === "number") {
     loc.line += lineDelta;
-    if (typeof loc.start === "number") loc.start += offsetDelta;
-    if (typeof loc.end === "number") loc.end += offsetDelta;
+    if (typeof loc.start === "number") {
+      loc.start += offsetDelta;
+    }
+    if (typeof loc.end === "number") {
+      loc.end += offsetDelta;
+    }
   }
   for (const key of Object.keys(record)) {
     if (key === "loc") continue;

@@ -16,6 +16,7 @@ import {
   setInputStr,
   success,
   TarsecError,
+  getParseState,
   trace,
 } from "tarsec";
 
@@ -66,8 +67,6 @@ import {
   AGENCY_TEMPLATE_OFFSET,
   setTemplateOffset,
   registerProgramParserForLiterals,
-  resetCodeLiteralError,
-  getCodeLiteralError,
 } from "./parsers/parsers.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
 
@@ -185,7 +184,6 @@ export function _parseAgency(
   // Clear memo caches so loc info derived from `setInputStr` in a previous
   // parse (which may have used a different source) doesn't leak through.
   resetMemos();
-  resetCodeLiteralError();
   // NOTE (parse cache): the parse path reads NO field of `config`, so
   // lib/parseCache.ts can key entries without config. If you ever add
   // config-driven parse behavior here, you MUST add that field to the
@@ -194,18 +192,6 @@ export function _parseAgency(
   if (!result.success) {
     const betterMessage = getErrorMessage();
     const rightmost = getRightmostFailure();
-    // A failed code literal reports through its own channel (tarsec's
-    // label() scrubs deep rightmost records); prefer it when it is at
-    // least as deep as the rightmost generic failure.
-    const literalError = getCodeLiteralError();
-    if (literalError !== null && literalError.pos >= (rightmost?.pos ?? -1)) {
-      return {
-        success: false,
-        message: literalError.message,
-        rest: normalized,
-        rightmostPos: literalError.pos,
-      };
-    }
     if (betterMessage) {
       return {
         success: false,
@@ -339,30 +325,23 @@ export function parseAgency(
     return { success: false, message: result.message, rest: result.rest };
   } catch (error) {
     if (error instanceof TarsecError) {
-      // A failed code literal reports through its own channel (tarsec's
-      // label() scrubs deep rightmost records, and some grammar paths
-      // THROW rather than return failure); prefer the literal's mapped,
-      // directive message when it is at least as deep as the rightmost
-      // generic failure.
-      const literalError = getCodeLiteralError();
-      const rightmostForLiteral = getRightmostFailure();
-      if (
-        literalError !== null &&
-        literalError.pos >= (rightmostForLiteral?.pos ?? -1)
-      ) {
-        return {
-          success: false,
-          message: literalError.message,
-          rest: input,
-          errorData: buildErrorData(
-            input,
-            literalError.pos,
-            offset,
-            { line: 0, column: 0, length: 1 },
-            literalError.message,
-            literalError.message,
-          ),
-        };
+      // A committed failure (tarsec `committed`, e.g. a malformed code
+      // literal body) may have been swallowed by a later parseError
+      // throw with a generic message — but it survives in the parse
+      // state, and getErrorMessage() prefers it, position-mapped. Only
+      // when one exists: for ordinary TarsecErrors the thrown message
+      // is the targeted one and stays authoritative.
+      if (getParseState().committedFailure !== null) {
+        const committedMessage = getErrorMessage();
+        if (committedMessage !== null) {
+          const rightmostCommitted = getRightmostFailure();
+          return {
+            success: false,
+            message: committedMessage,
+            rest: input,
+            ...(rightmostCommitted ? { rightmostPos: rightmostCommitted.pos } : {}),
+          };
+        }
       }
       const rightmost = getRightmostFailure();
       return {
@@ -428,9 +407,16 @@ export function parseAgency(
 // entry point from this file (cycle), so it is injected here at module
 // init. Unlowered on purpose: literal bodies are template-mode code.
 registerProgramParserForLiterals((source: string) => {
-  const result = _parseAgency(source, {});
+  // Raw grammar, not _parseAgency: this runs INSIDE runNested, which
+  // already owns input-string/rightmost/memo state (and offsets every
+  // position by basePosition) — so getErrorMessage here formats the
+  // failure in enclosing-file coordinates for free.
+  const result = agencyParser(source);
   if (result.success) {
     return { ok: true as const, nodes: result.result.nodes };
   }
-  return { ok: false as const, error: result.message ?? "failed to parse code literal body" };
+  return {
+    ok: false as const,
+    error: getErrorMessage() ?? result.message ?? "failed to parse code literal body",
+  };
 });

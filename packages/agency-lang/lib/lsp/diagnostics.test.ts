@@ -377,3 +377,22 @@ describe("lint diagnostics", () => {
     expect(diagnostics.filter((d) => d.code === "AL0001")).toEqual([]);
   });
 });
+
+describe("lint snapshot is isolated from prunePreludeShadows", () => {
+  it("produces identical lint findings on a second run of the same document", () => {
+    // `def map` shadows the prelude's map, so prunePreludeShadows strips
+    // `map` from EVERY std::index import statement in place — including
+    // this user-written one. Without the clone, the second run sees an
+    // already-emptied import object.
+    const source = [
+      `import { map } from "std::index"`,
+      `def map(x: number): number { return x }`,
+      `node main() { return map(1) }`,
+      ``,
+    ].join("\n");
+    const doc = makeDoc(source);
+    const first = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+    const second = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+    expect(second.lintFindings).toEqual(first.lintFindings);
+  });
+});

@@ -1038,11 +1038,26 @@ export class AgencyGenerator {
     );
   }
 
-  /** The signature of a `def`/`node` with no keyword and no body — just
-   *  `name(params): ReturnType raises <...>` — used by `agency doc`. Params
-   *  wrap onto their own lines the same way the formatter wraps source, and
-   *  the declared `raises` clause is included. */
-  signatureOf(node: FunctionDefinition | GraphNodeDefinition): string {
+  /** The signature of a `def`/`node`/`type` with no export keyword, no
+   *  markers, no docs, and no body — used by `agency doc` and by
+   *  `std::agency`'s `describe`. For defs/nodes this is
+   *  `name(params): ReturnType raises <...>` (params wrap the way the
+   *  formatter wraps source); for type aliases it is the declaration line
+   *  `type Name<...> = ...`, produced here rather than by printing the
+   *  node and stripping keywords, so all three kinds share one canonical
+   *  signature path. */
+  signatureOf(node: FunctionDefinition | GraphNodeDefinition | TypeAlias): string {
+    if (node.type === "typeAlias") {
+      // Mirror processTypeAlias' registration so alias-typed members
+      // referenced later print consistently.
+      this.typeAliases[node.aliasName] = node.aliasedType;
+      if (node.isEffectSet) {
+        return `effectSet ${node.aliasName} = ${this.effectSetTypeToString(node.aliasedType)}`;
+      }
+      const typeParamsStr = this.formatTypeParams(node.typeParams);
+      const valueParamsStr = this.formatValueParams(node.valueParams);
+      return `type ${node.aliasName}${typeParamsStr}${valueParamsStr} = ${this.aliasedTypeToString(node.aliasedType)}`;
+    }
     const name = declaredName(node.type === "function" ? node.functionName : node.nodeName);
     return this.buildSignature(name, node, "");
   }

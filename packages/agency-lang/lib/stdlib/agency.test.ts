@@ -655,3 +655,74 @@ describe("_describe (reify)", () => {
     expect(info).toEqual({ description: null, exports: [] });
   });
 });
+
+describe("_describe (reify): re-exports, consts, module summary", () => {
+  it("resolves std:: re-exports to real entries with reexportedFrom", () => {
+    const info = _describe('export { map, filter as keep } from "std::index"\n');
+    expect(info.exports.map((e) => [e.name, e.kind, e.reexportedFrom])).toEqual([
+      ["map", "def", "std::index"],
+      ["keep", "def", "std::index"],
+    ]);
+    expect(info.exports[0].signature).toContain("map(");
+  });
+
+  it("star re-exports from std:: enumerate the source module, outermost path winning", () => {
+    // std::array is nothing but a re-export block over std::index — the
+    // module shape that motivated re-export support (it used to describe
+    // as an empty surface).
+    const info = _describe('export * from "std::array"\n');
+    expect(info.exports.length).toBeGreaterThan(3);
+    expect(info.exports.every((e) => e.reexportedFrom === "std::array")).toBe(true);
+    expect(info.exports.some((e) => e.name === "map" && e.kind === "def")).toBe(true);
+  });
+
+  it("unresolvable re-exports come back thin with the unknown sentinel, markers applied", () => {
+    const info = _describe(
+      'export { helper, destructive rmrf } from "./local.agency"\n',
+    );
+    expect(info.exports.map((e) => [e.name, e.kind])).toEqual([
+      ["helper", "reexport"],
+      ["rmrf", "reexport"],
+    ]);
+    expect(info.exports[0].effects).toEqual(["unknown"]);
+    expect(info.exports[0].reexportedFrom).toBe("./local.agency");
+    expect(info.exports[1].destructive).toBe(true);
+  });
+
+  it("exported consts are surface, one entry per bound name", () => {
+    const src = [
+      'export const version: string = "1.0"',
+      "",
+      "def pair(): { a: number, b: number } {",
+      "  return { a: 1, b: 2 }",
+      "}",
+      "",
+      "export const { a, b } = pair()",
+      "",
+      "node main() {",
+      "  return version",
+      "}",
+      "",
+    ].join("\n");
+    const info = _describe(src);
+    const consts = info.exports.filter((e) => e.kind === "const");
+    expect(consts.map((e) => e.name)).toEqual(["version", "a", "b"]);
+    expect(consts[0].signature).toBe("const version: string");
+    expect(consts[1].signature).toBe("const a");
+  });
+
+  it("description is the summary line only, never glued to the body prose", () => {
+    const src = [
+      "/** @module",
+      "@summary News tools.",
+      "Longer prose about the news tools that must not be glued on.",
+      "*/",
+      "",
+      "node main() {",
+      "  return 1",
+      "}",
+      "",
+    ].join("\n");
+    expect(_describe(src).description).toBe("News tools.");
+  });
+});

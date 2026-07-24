@@ -54,3 +54,11 @@ export function docStringText(
     )
     .join("");
 }
+
+/** Canonical doc-comment → plain text, the doc-comment sibling of
+ *  docStringText above: trimmed content, no markers. Doc comments cannot
+ *  interpolate, so this is simple — the helper exists so every consumer
+ *  normalizes the same way. */
+export function docCommentText(comment: { content: string }): string {
+  return comment.content.trim();
+}

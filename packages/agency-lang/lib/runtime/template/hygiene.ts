@@ -50,7 +50,7 @@ function chainKeysOf(scopes: Scope[]): string[] {
  *  these unions (literals, wildcards, resultPattern) bind nothing here —
  *  note that skipping resultPattern is also why `is success(v)` binders
  *  stay untracked (recorded known limit, see the templates guide). */
-function patternBinders(pattern: BindingPattern): string[] {
+export function patternBinders(pattern: BindingPattern): string[] {
   if (pattern.type === "variableName") return [pattern.value];
   if (pattern.type === "restPattern") return [pattern.identifier];
   if (pattern.type === "wildcardPattern") return [];

@@ -345,7 +345,14 @@ function isNameField(source: Record<string, unknown>, key: string): boolean {
     (source.type === "functionParameter" && key === "name") ||
     (source.type === "forLoop" && (key === "itemVar" || key === "indexVar")) ||
     (source.type === "comprehension" && (key === "itemVar" || key === "indexVar")) ||
-    (source.type === "restPattern" && key === "identifier")
+    (source.type === "restPattern" && key === "identifier") ||
+    // A result-pattern binding (`is success(v)` binds `v`) must move WITH
+    // the arm uses the walkers already rename — leaving it behind
+    // silently retargets the arm's reads to the renamed outer variable.
+    // Renaming binder and uses together preserves the shadowing
+    // relationship exactly. (Collision DETECTION for these binders is
+    // still out — a recorded limit — but renames stay consistent.)
+    (source.type === "resultPattern" && key === "binding")
   );
 }
 

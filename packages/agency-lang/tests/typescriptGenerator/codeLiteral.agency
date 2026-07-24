@@ -1,0 +1,20 @@
+node main() {
+  const exprKind = [| 1 + 2 |]
+  const stmtsKind = [|
+    const a = 1
+    print(a)
+  |]
+  const programKind = [|
+    def g(n: number): number {
+      return n * 2
+    }
+  |]
+  const holed = [|
+    const x: number = #count
+    #steps
+  |]
+  print(exprKind)
+  print(stmtsKind)
+  print(programKind)
+  print(holed)
+}

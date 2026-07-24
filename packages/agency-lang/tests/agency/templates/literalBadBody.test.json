@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "code literal body",
+  "description": "A malformed literal body fails COMPILATION with the mapped body error, through the real compile path"
+}

@@ -378,6 +378,9 @@ const WALKER_EXCLUDED_FIELDS: Record<string, string> = {
   "objectPatternProperty.value":
     "pattern property content: a literal matcher or a binder, not a use",
   "typePattern.pattern": "type-pattern binder, not a use",
+  "codeLiteral.nodes":
+    "quoted code: names belong to the generated program, not the host scope; " +
+    "hygiene for them runs at fill time on the runtime Code value",
 };
 
 // Node TYPES the walker does not yield as nodes, ruled on as types — NOT

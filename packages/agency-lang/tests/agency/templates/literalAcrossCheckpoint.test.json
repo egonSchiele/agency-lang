@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A literal-built Code value survives an interrupt checkpoint and fills after resume",
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "pause" }
+      ]
+    }
+  ]
+}

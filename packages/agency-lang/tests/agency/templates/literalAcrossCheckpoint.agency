@@ -1,0 +1,22 @@
+import { fill, toSource } from "std::agency"
+
+// A literal-built Code value held across an interrupt checkpoint: the
+// state stack must serialize and restore it (Code serializes as printed
+// source; a literal-built value is indistinguishable from a file-loaded
+// one), then it fills AFTER resume. Asserts on printed content — a hole
+// count alone could be satisfied by a destroyed value.
+node main(): string {
+  const tpl = [|
+    const v: number = #value
+  |]
+  const _pause = interrupt("pause")
+  const filled = fill(tpl, { value: 42 })
+  if (isFailure(filled)) {
+    return "fill failed: ${filled.error}"
+  }
+  const source = toSource(filled.value)
+  if (source.includes("const v: number = 42")) {
+    return "ok"
+  }
+  return "unexpected: ${source}"
+}

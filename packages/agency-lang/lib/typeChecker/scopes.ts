@@ -194,6 +194,9 @@ export function declareVariable(
     );
   }
   const inferred = synthType(node.value, scope, ctx);
+  // Code-shaped types survive widening inside widenType itself (see
+  // isCodeShape there) — covering literals bound directly AND wrapped
+  // in arrays/branches, which a syntactic guard here could not.
   scope.declare(node.variableName, widenType(inferred), isConst);
 }
 

@@ -359,7 +359,28 @@ function collectLiteralKeys(keyType: VariableType): string[] | null {
   return null;
 }
 
+/** True for the structural Code shape (a record whose `type` field is
+ *  the literal "agencyProgram" — Code's discriminant). Widening exists
+ *  to relax literal-EXPRESSION types for rebinding; a Code-shaped record
+ *  is a fixed structural type whose literal discriminant is load-bearing
+ *  for assignability into fill(template: Code), so it must survive
+ *  widening WHEREVER it appears — direct binding, array elements,
+ *  branches, inferred returns (review finding: a declare-site syntactic
+ *  guard covered only the direct case). */
+function isCodeShape(vt: VariableType): boolean {
+  if (vt.type !== "objectType") return false;
+  return vt.properties.some(
+    (property) =>
+      property.key === "type" &&
+      property.value.type === "stringLiteralType" &&
+      property.value.value === "agencyProgram",
+  );
+}
+
 export function widenType(vt: VariableType): VariableType {
+  if (isCodeShape(vt)) {
+    return vt;
+  }
   switch (vt.type) {
     case "stringLiteralType":
       return STRING_T;

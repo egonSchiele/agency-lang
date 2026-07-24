@@ -210,7 +210,12 @@ describe("parseAgency structured errors", () => {
     if (result.success) return;
     expect(result.errorData).toBeDefined();
     expect(result.errorData!.line).toBe(1);
-    expect(result.errorData!.column).toBe(0);
+    // Column 3, not 0, since tarsec 0.5.1: label() keeps failure records
+    // that are strictly deeper than its own position instead of scrubbing
+    // them, so the record here is the DEEPEST real failure — the unary
+    // `!` parsers consume the three bangs and die at end of input — not
+    // the start of the offending token.
+    expect(result.errorData!.column).toBe(3);
   });
 
   it("subtracts the template offset from recoverable-failure line numbers", () => {
@@ -222,7 +227,8 @@ describe("parseAgency structured errors", () => {
     // Same source, but rendered through the template — line should
     // still be 1 in the user's coordinates (where `!!!` lives).
     expect(result.errorData!.line).toBe(1);
-    expect(result.errorData!.column).toBe(0);
+    // See the sibling test for why column is 3 since tarsec 0.5.1.
+    expect(result.errorData!.column).toBe(3);
   });
 
   // Pins the targeted message produced by the `parseError` wrapper

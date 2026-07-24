@@ -1,0 +1,16 @@
+// A program-kind literal in a program that never imports std::agency:
+// the runtime constructor must reach the registered program grammar
+// through its own import graph, not through the stdlib template bridge
+// (review finding: the registration used to be an import-order accident).
+node main(): number {
+  const t = [|
+    def g(): number {
+      return 1
+    }
+  |]
+  const kindIsProgram = t.kind == "program"
+  if (kindIsProgram) {
+    return 1
+  }
+  return 0
+}

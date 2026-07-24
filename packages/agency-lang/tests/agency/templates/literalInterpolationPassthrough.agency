@@ -1,0 +1,38 @@
+import { fill, holesOf, toSource, runCode } from "std::agency"
+
+// The no-splice guarantee end to end: ${x} in a literal body belongs to
+// the GENERATED program. holesOf must not see an x hole, toSource must
+// carry the interpolation verbatim, and the generated program must run
+// its own interpolation.
+node main(): string {
+  const tpl = [|
+    def greet(x: string): string {
+      return "got ${x}"
+    }
+
+    export node main(): string {
+      return greet("news")
+    }
+  |]
+  if (holesOf(tpl).length != 0) {
+    return "unexpected holes"
+  }
+  const source = toSource(tpl)
+  // NOTE the escape: this is a HOST string, where ${x} would interpolate
+  // host scope. Inside the literal above it needed none — the body is
+  // quoted, and its interpolations belong to the generated program.
+  if (!source.includes("got \${x}")) {
+    return "interpolation not verbatim: ${source}"
+  }
+  handle {
+    const result = runCode(source)
+    if (isFailure(result)) {
+      return "run failed: ${result.error}"
+    }
+    return result.value
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

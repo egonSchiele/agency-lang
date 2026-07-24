@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"lit-ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Inline literals compose with a hole still open; the grafted hole carries origin and the completed program runs"
+    }
+  ]
+}

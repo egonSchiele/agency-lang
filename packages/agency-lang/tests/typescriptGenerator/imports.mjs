@@ -26,6 +26,7 @@ import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
+  __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
   rewindFrom as _rewindFrom,

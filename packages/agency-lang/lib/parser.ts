@@ -16,6 +16,8 @@ import {
   setInputStr,
   success,
   TarsecError,
+  getParseState,
+  getInputStr,
   trace,
 } from "tarsec";
 
@@ -65,6 +67,7 @@ import {
   reservedClassParser,
   AGENCY_TEMPLATE_OFFSET,
   setTemplateOffset,
+  registerProgramParserForLiterals,
 } from "./parsers/parsers.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
 
@@ -132,11 +135,7 @@ export const normalizeCode = (code: string) => {
   return code;
 };
 
-export function replaceBlankLines(input: string): string {
-  return input.replace(/(\r?\n)(\r?\n)+/g, (match) =>
-    BLANK_LINE_SENTINEL.repeat(match.length - 1) + "\n"
-  );
-}
+export { replaceBlankLines } from "./parsers/parsers.js";
 
 /** Failure result enriched with the tarsec rightmost-failure position so
  *  the LSP can surface a real squiggle range instead of falling back to
@@ -194,12 +193,20 @@ export function _parseAgency(
   if (!result.success) {
     const betterMessage = getErrorMessage();
     const rightmost = getRightmostFailure();
+    // getErrorMessage prefers a committed failure; when one exists the
+    // position must come from it too, or the squiggle lands away from
+    // the message it accompanies.
+    const committedReturned = getParseState().committedFailure;
     if (betterMessage) {
       return {
         success: false,
         message: betterMessage,
         rest: normalized,
-        ...(rightmost ? { rightmostPos: rightmost.pos } : {}),
+        ...(committedReturned !== null
+          ? { rightmostPos: getInputStr().length - committedReturned.rest.length }
+          : rightmost
+            ? { rightmostPos: rightmost.pos }
+            : {}),
       };
     }
     if (rightmost) {
@@ -327,6 +334,34 @@ export function parseAgency(
     return { success: false, message: result.message, rest: result.rest };
   } catch (error) {
     if (error instanceof TarsecError) {
+      // A committed failure (tarsec `committed`, e.g. a malformed code
+      // literal body) may have been swallowed by a later parseError
+      // throw with a generic message — but it survives in the parse
+      // state, and getErrorMessage() prefers it, position-mapped. Only
+      // when one exists: for ordinary TarsecErrors the thrown message
+      // is the targeted one and stays authoritative.
+      const committedCaught = getParseState().committedFailure;
+      if (committedCaught !== null) {
+        const committedMessage = getErrorMessage();
+        if (committedMessage !== null) {
+          // Position from the COMMITTED failure, not the rightmost
+          // record — the record is the misleading one here, and the LSP
+          // squiggle must land where the message points (review finding).
+          return {
+            success: false,
+            message: committedMessage,
+            rest: input,
+            errorData: buildErrorData(
+              input,
+              getInputStr().length - committedCaught.rest.length,
+              offset,
+              { line: 0, column: 0, length: 1 },
+              committedMessage,
+              committedMessage,
+            ),
+          };
+        }
+      }
       const rightmost = getRightmostFailure();
       return {
         success: false,
@@ -385,3 +420,22 @@ export function parseAgency(
     setTemplateOffset(0);
   }
 }
+
+// Code literals ([| ... |]) sometimes hold whole programs. The literal
+// parser lives in parsers.ts, which cannot import the program grammar
+// entry point from this file (cycle), so it is injected here at module
+// init. Unlowered on purpose: literal bodies are template-mode code.
+registerProgramParserForLiterals((source: string) => {
+  // Raw grammar, not _parseAgency: this runs INSIDE runNested, which
+  // already owns input-string/rightmost/memo state (and offsets every
+  // position by basePosition) — so getErrorMessage here formats the
+  // failure in enclosing-file coordinates for free.
+  const result = agencyParser(source);
+  if (result.success) {
+    return { ok: true as const, nodes: result.result.nodes };
+  }
+  return {
+    ok: false as const,
+    error: getErrorMessage() ?? result.message ?? "failed to parse code literal body",
+  };
+});

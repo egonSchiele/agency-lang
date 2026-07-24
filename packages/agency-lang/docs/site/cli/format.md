@@ -12,6 +12,8 @@ agency format foo.agency
 agency fmt src/
 ```
 
+Formatting normalizes vertical whitespace: runs of blank lines collapse to a single blank line, and the sorted import block is followed by exactly one. Code literal bodies (`[| ... |]`) are reformatted like any other code.
+
 By default, the formatted output is printed to stdout. If no input is given, the formatter reads from stdin, which makes it easy to wire up to an editor or a pipeline:
 
 ```

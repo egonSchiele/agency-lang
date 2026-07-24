@@ -91,6 +91,10 @@ export const NO_EXPRESSION_SLOTS: Record<string, true> = {
   // none. Programs with holes refuse to compile (AG8001), so hoistCalls
   // only meets one via the LSP/template paths, where a leaf is correct.
   hole: true,
+  // A code literal is a leaf like `hole`: it STANDS FOR a value; its
+  // body is quoted code whose names belong to the generated program.
+  // Host rewriters must never enter it.
+  codeLiteral: true,
 };
 
 /** Every kind the switch below enumerates — expression kinds AND the

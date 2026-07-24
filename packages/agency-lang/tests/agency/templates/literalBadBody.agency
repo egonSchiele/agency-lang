@@ -1,0 +1,6 @@
+node main(): string {
+  const t = [|
+    const = broken
+  |]
+  return "unreachable"
+}

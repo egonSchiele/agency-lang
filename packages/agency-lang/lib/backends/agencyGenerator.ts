@@ -253,6 +253,15 @@ export class AgencyGenerator {
     for (const node of program.nodes) {
       const result = this.processNode(node);
       if (result !== "" || node.type === "newLine") {
+        // Collapse runs of blank lines to one. Import hoisting can leave
+        // two newLine nodes adjacent (the hoisted import sat between
+        // them), and re-parsing sees a different blank count than the
+        // one printed — each fmt pass would then shift blank lines
+        // instead of converging. One blank is the canonical form.
+        const prev = stmtPairs[stmtPairs.length - 1];
+        if (node.type === "newLine" && prev !== undefined && prev.type === "newLine") {
+          continue;
+        }
         stmtPairs.push({ type: node.type, code: result });
       }
     }
@@ -280,7 +289,14 @@ export class AgencyGenerator {
     // and the sorted import block.
     if (!this.preserveOrder) {
       this.addIfNonEmpty(this.renderImportHeader(), output);
-      this.addIfNonEmpty(this.sortAndRenderImports(), output);
+      const importsBlock = this.sortAndRenderImports();
+      if (importsBlock.trim() !== "") {
+        output.push(importsBlock);
+        // Exactly one blank line after the import block. partitionImports
+        // swallowed the import-region newLine nodes, so this is the only
+        // source of that separation — one per pass, convergent.
+        output.push("");
+      }
     }
     this.addIfNonEmpty(this.generatedTypeAliases.join("\n"), output);
     this.addIfNonEmpty(stmtLines.join("\n"), output);
@@ -357,6 +373,16 @@ export class AgencyGenerator {
     //    by a blank line stay in the stream.
     const rest: AgencyNode[] = [];
     let commentBuf: AgencyNode[] = [];
+    // Whitespace inside the import REGION (between imports, and between
+    // the last import and the first real statement) belongs to the
+    // sorted-block renderer, which emits its own group separators and
+    // exactly one blank line after the block. Keeping those newLine
+    // nodes in `rest` double-counts them with the renderer's — and
+    // since the group separators re-parse as newLine nodes, each fmt
+    // pass would add one more blank line. Swallowing them here is what
+    // makes formatting CONVERGE (the round-trip gate's idempotence
+    // invariant pins this).
+    let inImportRegion = true;
     while (i < nodes.length) {
       const n = nodes[i];
       if (isComment(n)) {
@@ -365,10 +391,15 @@ export class AgencyGenerator {
         continue;
       }
       if (n.type === "newLine") {
+        if (inImportRegion && commentBuf.length === 0) {
+          i++;
+          continue;
+        }
         // Blank line — any buffered comments are not "attached" to a
         // following import; flush them back into the stream.
         rest.push(...commentBuf, n);
         commentBuf = [];
+        inImportRegion = false;
         i++;
         continue;
       }
@@ -385,6 +416,7 @@ export class AgencyGenerator {
       // Other code — comment buffer wasn't attached to an import.
       rest.push(...commentBuf, n);
       commentBuf = [];
+      inImportRegion = false;
       i++;
     }
     rest.push(...commentBuf);
@@ -486,7 +518,13 @@ export class AgencyGenerator {
         return "";
       case "importNodeStatement":
         if (this.preserveOrder) return this.processImportNodeStatement(node);
-        this.importedNodes.push(node);
+        // Pass 3 (build) already collected node imports from
+        // program.nodes; without this guard each one renders TWICE in
+        // the sorted block, and the duplicates compound on every fmt
+        // pass (found by the round-trip gate on imports.agency).
+        if (!this.importedNodes.includes(node)) {
+          this.importedNodes.push(node);
+        }
         return "";
       case "exportFromStatement":
         return this.processExportFromStatement(node);
@@ -639,6 +677,11 @@ export class AgencyGenerator {
     suffix: string = "",
   ): string {
     const inline = `${prefix}${open}${items.join(", ")}${close}${suffix}`;
+    // An empty list never wraps: wrapping zero items prints `(\n\n)`,
+    // which the parser rejects (found by the round-trip gate on a
+    // zero-param def with a long return+raises clause). Length overflow
+    // on an empty list has nothing to move to another line anyway.
+    if (items.length === 0) return inline;
     if (this.indentStr(inline).length <= 80) return inline;
     this.increaseIndent();
     const lines = items.map((item) => this.indentStr(`${item},`));
@@ -1260,6 +1303,18 @@ export class AgencyGenerator {
 
   protected processValueAccess(node: ValueAccess): string {
     let code = this.processNode(node.base).trim();
+    // A compound base only exists because the source parenthesized it
+    // (`(a ?? b).toUpperCase()` parses via parenAccess). Printing it bare
+    // re-associates the chain onto the base's RIGHT OPERAND — semantic
+    // corruption, caught by the round-trip gate on edgar.agency. Any base
+    // that binds looser than member access gets its parens back.
+    if (
+      node.base.type === "binOpExpression" ||
+      node.base.type === "typeTestExpression" ||
+      node.base.type === "isExpression"
+    ) {
+      code = `(${code})`;
+    }
     for (const element of node.chain) {
       code += this.processAccessChainElement(element);
     }

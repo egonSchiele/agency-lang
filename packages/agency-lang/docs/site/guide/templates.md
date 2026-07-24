@@ -147,7 +147,9 @@ node main() {
 
 If a filler happens to mention `tmp`, plain substitution would silently hand it the API key. Instead, `fill` renames the colliding template binder to a fresh name with the reserved `__hyg` prefix, so the filler's `tmp` means whatever it meant where the filler was written. Renaming is selective — non-colliding names are left exactly as written — and scope-aware: a `tmp` in some other function is not touched. A filler that *declares* a name the template already declares gets its own binder renamed the same way. Renamed names use the reserved `__hyg<n>_` prefix, and each fill picks fresh names above any `__hyg` index already present — so filling the output of a previous fill (the composition workflow) never collides with its renames.
 
-One current limit: destructuring-pattern binders are not tracked for collisions. If a filler destructures into a name the template also uses, rename one of them yourself.
+Destructuring binders are tracked like any other name: `const { key } = …`, array and rest patterns, and for-loop and comprehension binders all participate in collision detection. One wrinkle worth knowing: renaming a shorthand `{ key }` in place would change which property is *read*, so a renamed shorthand expands to `{ key: __hyg1_key }` — same read, fresh binder.
+
+Two binder forms are not yet tracked for collisions: names bound by result patterns (`if (r is success(v)) { … }` binds `v`) and names bound inside match arms. If a filler or template uses one of those names on the other side, rename it yourself.
 
 ## What is checked, and when
 

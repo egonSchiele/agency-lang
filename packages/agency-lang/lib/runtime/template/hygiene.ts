@@ -1,4 +1,4 @@
-import { AgencyNode, Hole, Scope } from "../../types.js";
+import { AgencyNode, BindingPattern, Hole, Scope } from "../../types.js";
 import { declaredName } from "../../types/hole.js";
 import { walkNodesArray } from "../../utils/node.js";
 import { Code, isCode } from "./code.js";
@@ -44,20 +44,54 @@ function chainKeysOf(scopes: Scope[]): string[] {
   return keys;
 }
 
-/** Names a single node binds, if any: `let`/`const` targets, function and
- *  node parameters, for-loop binders. Destructuring patterns are not
- *  covered in v1 — a pattern binder that collides is missed; the templates
- *  guide notes it. */
+/** Names a binding pattern introduces. Fed only from binding positions
+ *  (let/const, for-loop and comprehension binders), where the parser
+ *  produces binding patterns only. Match-position kinds that can share
+ *  these unions (literals, wildcards, resultPattern) bind nothing here —
+ *  note that skipping resultPattern is also why `is success(v)` binders
+ *  stay untracked (recorded known limit, see the templates guide). */
+function patternBinders(pattern: BindingPattern): string[] {
+  if (pattern.type === "variableName") return [pattern.value];
+  if (pattern.type === "restPattern") return [pattern.identifier];
+  if (pattern.type === "wildcardPattern") return [];
+  if (pattern.type === "arrayPattern") {
+    return pattern.elements.flatMap((element) =>
+      isBindingPattern(element) ? patternBinders(element) : [],
+    );
+  }
+  return pattern.properties.flatMap((property) => {
+    if (property.type === "objectPatternShorthand") return [property.name];
+    if (property.type === "restPattern") return [property.identifier];
+    return isBindingPattern(property.value) ? patternBinders(property.value) : [];
+  });
+}
+
+function isBindingPattern(value: { type: string }): value is BindingPattern {
+  return (
+    value.type === "variableName" ||
+    value.type === "objectPattern" ||
+    value.type === "arrayPattern" ||
+    value.type === "restPattern" ||
+    value.type === "wildcardPattern"
+  );
+}
+
+/** Names a single node binds, if any: `let`/`const` targets (plain or
+ *  destructuring), function and node parameters, for-loop and
+ *  comprehension binders. */
 function bindersOfNode(node: AgencyNode): string[] {
   if (node.type === "assignment" && node.declKind && !node.accessChain) {
+    // A destructuring assignment holds the sentinel "__destructured" in
+    // variableName; the real binders live in `pattern`.
+    if (node.pattern) return patternBinders(node.pattern);
     return [node.variableName];
   }
   if (node.type === "function" || node.type === "graphNode") {
     return node.parameters.map((param) => param.name);
   }
-  if (node.type === "forLoop") {
-    const names: string[] = [];
-    if (typeof node.itemVar === "string") names.push(node.itemVar);
+  if (node.type === "forLoop" || node.type === "comprehension") {
+    const names =
+      typeof node.itemVar === "string" ? [node.itemVar] : patternBinders(node.itemVar);
     if (node.indexVar) names.push(node.indexVar);
     return names;
   }
@@ -309,14 +343,38 @@ function isNameField(source: Record<string, unknown>, key: string): boolean {
     (source.type === "variableName" && key === "value") ||
     (source.type === "assignment" && key === "variableName") ||
     (source.type === "functionParameter" && key === "name") ||
-    (source.type === "forLoop" && (key === "itemVar" || key === "indexVar"))
+    (source.type === "forLoop" && (key === "itemVar" || key === "indexVar")) ||
+    (source.type === "comprehension" && (key === "itemVar" || key === "indexVar")) ||
+    (source.type === "restPattern" && key === "identifier")
   );
+}
+
+/** A shorthand `{ tmp }` binds `tmp` FROM the object key `tmp`. Renaming
+ *  in place would read a different property, so a renamed shorthand
+ *  expands to `key: freshName` instead. The generator collapses back to
+ *  shorthand only when key and name match, so the expansion prints as
+ *  `{ tmp: __hygN_tmp }`. (Neither pattern-property node type carries a
+ *  loc — lib/types/pattern.ts — so none is constructed here.) */
+function expandShorthand(
+  source: Record<string, unknown>,
+  map: Record<string, string>,
+): Record<string, unknown> | null {
+  if (source.type !== "objectPatternShorthand") return null;
+  const name = source.name as string;
+  if (!(name in map)) return null;
+  return {
+    type: "objectPatternProperty",
+    key: name,
+    value: { type: "variableName", value: map[name] },
+  };
 }
 
 function renameNode(value: unknown, renames: Record<string, string>): unknown {
   if (Array.isArray(value)) return value.map((item) => renameNode(item, renames));
   if (value === null || typeof value !== "object") return value;
   const source = value as Record<string, unknown>;
+  const expanded = expandShorthand(source, renames);
+  if (expanded) return expanded;
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(source)) {
     const field = source[key];
@@ -345,7 +403,7 @@ function directBinders(node: AgencyNode): string[] {
   const names = node.parameters.map((param) => param.name);
   for (const stmt of node.body) {
     if (stmt.type === "assignment" && stmt.declKind && !stmt.accessChain) {
-      names.push(stmt.variableName);
+      names.push(...(stmt.pattern ? patternBinders(stmt.pattern) : [stmt.variableName]));
     }
   }
   return names;
@@ -382,6 +440,9 @@ export function applyScopedRenames(code: Code, renames: ScopedRename[]): Code {
 
     const map: Record<string, string> = Object.create(null);
     for (const rename of scopedActive) map[rename.from] = rename.to;
+
+    const expanded = expandShorthand(source, map);
+    if (expanded) return expanded;
 
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(source)) {

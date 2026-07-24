@@ -1,0 +1,44 @@
+import { describe } from "std::agency"
+
+// Reify: exports-as-data. The generator-facing fields — kind, effects,
+// markers, docstring — come back as a record a program can loop over,
+// which is what makes "one handler per effect" computable.
+node main() {
+  const src = """
+/** @module
+  @summary News tools.
+*/
+
+/** Fetches one article. */
+export idempotent def fetchArticle(url: string): string {
+  return "body"
+}
+
+export destructive def saveNote(text: string) {
+  write("notes.txt", text)
+}
+
+def helper(): number {
+  return 1
+}
+
+export type Article = {
+  title: string
+}
+"""
+  const info = describe(src)
+  if (info is failure(err)) {
+    return "failed: ${err}"
+  }
+  const names = [e.name for e in info.value.exports]
+  const save = info.value.exports[1]
+  if (save == null) {
+    return "missing saveNote"
+  }
+  return {
+    description: info.value.description,
+    names: names,
+    saveEffects: save.effects,
+    saveDestructive: save.destructive,
+  }
+}

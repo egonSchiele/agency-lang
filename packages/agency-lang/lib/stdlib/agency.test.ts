@@ -12,6 +12,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import {
   _compileFile,
+  _describe,
   _parseAST,
   _writeAST,
   _format,
@@ -564,5 +565,93 @@ node main() { return 1 }`;
     const result = _filterImports(src, [], [], ["stdlib"], []);
     expect(result.filtered).toBe(false);
     expect(result.source).toBe(_format(src));
+  });
+});
+
+describe("_describe (reify)", () => {
+  const source = [
+    "/** @module",
+    "  @summary Tools for the news agent.",
+    "*/",
+    "",
+    "/** Fetches one article. */",
+    "export idempotent def fetchArticle(url: string): string {",
+    "  \"\"\"",
+    "  Fetch one article body by URL.",
+    "  \"\"\"",
+    "  return \"body\"",
+    "}",
+    "",
+    "export destructive def saveNote(text: string) {",
+    "  write(\"notes.txt\", text)",
+    "}",
+    "",
+    "def helper(): number {",
+    "  return 1",
+    "}",
+    "",
+    "export def _plumbing(): number {",
+    "  return 2",
+    "}",
+    "",
+    "/** One extracted article. */",
+    "export type Article = {",
+    "  title: string,",
+    "  words: number",
+    "}",
+    "",
+    "export node main(): string {",
+    "  return fetchArticle(\"x\")",
+    "}",
+    "",
+  ].join("\n");
+
+  it("lists exported defs, nodes, and types in source order, skipping non-exports and underscore plumbing", () => {
+    const info = _describe(source);
+    expect(info.exports.map((e) => [e.name, e.kind])).toEqual([
+      ["fetchArticle", "def"],
+      ["saveNote", "def"],
+      ["Article", "type"],
+      ["main", "node"],
+    ]);
+  });
+
+  it("carries signatures, docstrings, and tool markers", () => {
+    const info = _describe(source);
+    const fetch = info.exports.find((e) => e.name === "fetchArticle");
+    expect(fetch?.signature).toContain("fetchArticle(url: string): string");
+    expect(fetch?.signature).not.toContain("export");
+    expect(fetch?.docstring).toContain("Fetch one article body");
+    expect(fetch?.idempotent).toBe(true);
+    expect(fetch?.destructive).toBe(false);
+    const save = info.exports.find((e) => e.name === "saveNote");
+    expect(save?.destructive).toBe(true);
+    expect(save?.docstring).toBe(null);
+  });
+
+  it("reports transitive effects with the same names getEffects uses", () => {
+    const info = _describe(source);
+    const save = info.exports.find((e) => e.name === "saveNote");
+    expect(save?.effects).toEqual(["std::write"]);
+    const article = info.exports.find((e) => e.name === "Article");
+    expect(article?.effects).toEqual([]);
+  });
+
+  it("prints a type alias signature without the export keyword", () => {
+    const info = _describe(source);
+    const article = info.exports.find((e) => e.name === "Article");
+    expect(article?.signature).toMatch(/^type Article = \{/);
+    expect(article?.signature).toContain("title: string");
+    expect(article?.docstring).toContain("One extracted article");
+  });
+
+  it("surfaces the module doc comment as the description", () => {
+    const info = _describe(source);
+    expect(info.description).toContain("Tools for the news agent");
+  });
+
+  it("returns no description and no exports for a bare program", () => {
+    const info = _describe("node main() {\n  return 1\n}\n");
+    expect(info).toEqual({ description: null, exports: [] });
   });
 });

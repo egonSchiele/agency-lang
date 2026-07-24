@@ -7,6 +7,7 @@ import {
   _typecheck,
   _typecheckFile,
   _getEffects,
+  _describe,
   _parseAST,
   _writeAST,
   _format,
@@ -398,6 +399,38 @@ export idempotent def getEffects(source: string): Result<EffectsByExport> {
   @param source - Agency source code as a string
   """
   return try _getEffects(source)
+}
+
+/** What describe reports for one exported symbol. `signature` is the
+printed declaration with no keywords or docs; `docstring` is the symbol's
+docstring (defs and nodes) or doc comment (types); `effects` uses the same
+names and "unknown" sentinel as getEffects, and is empty for types. */
+export type ExportInfo = {
+  name: string,
+  kind: "def" | "node" | "type",
+  signature: string,
+  docstring: string | null,
+  effects: string[],
+  destructive: boolean,
+  idempotent: boolean
+}
+
+export type ModuleInfo = {
+  description: string | null,
+  exports: ExportInfo[]
+}
+
+/** The reify primitive: exports-as-data, so generators can be shaped by
+what a module contains instead of hand-maintained lists. Underscore-prefixed
+exports are omitted, matching the `agency doc` rule — they are lowering
+targets, not caller surface. */
+export idempotent def describe(source: string): Result<ModuleInfo> {
+  """
+  Describe what an Agency module exports: each exported function, node, and type, in source order, with its signature, docstring, transitive effect list, and destructive/idempotent markers. Use this instead of reading source when generating code shaped by a module - for example, one handler per effect its tools can raise.
+
+  @param source - Agency source code as a string
+  """
+  return try _describe(source)
 }
 
 

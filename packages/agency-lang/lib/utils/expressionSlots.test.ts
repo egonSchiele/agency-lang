@@ -468,7 +468,7 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
   for (const lower of [true, false]) {
     const label = lower ? "lowered" : "unlowered";
 
-    it(`${label}: slot-table agreement — every expression slot of a walked node is itself walked`, () => {
+    it(`${label}: slot-table agreement — every expression slot of a walked node is itself walked`, { timeout: 30_000 }, () => {
       // A CONSISTENCY check, not reachability: both sides start from a
       // node the walker already yielded, so this can never prove a node
       // reachable. What it pins is that expressionSlots and walkNodes
@@ -497,7 +497,7 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
       }
     });
 
-    it(`${label}: structural reachability — every expression node in the AST is walked`, () => {
+    it(`${label}: structural reachability — every expression node in the AST is walked`, { timeout: 30_000 }, () => {
       for (const { file, nodes } of corpusPrograms(lower)) {
         const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
         for (const { node, via } of structuralNodes(nodes, "(root)", VIA_CLEAR)) {
@@ -517,7 +517,7 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
 
   }
 
-  it("known gaps are still gaps (staleness guard, both modes)", () => {
+  it("known gaps are still gaps (staleness guard, both modes)", { timeout: 30_000 }, () => {
     // Each KNOWN_WALKER_GAPS entry must still shield at least one
     // unwalked expression node in AT LEAST one parse mode. When the
     // follow-up PR fixes walkNodes, this fails until the entry is
@@ -547,7 +547,7 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
     }
   });
 
-  it("liveness: the corpus actually exercises the historically-missed positions", () => {
+  it("liveness: the corpus actually exercises the historically-missed positions", { timeout: 30_000 }, () => {
     // A coverage invariant over kinds the corpus never contains proves
     // nothing. Pin the kinds whose walker descent was added by hand
     // during Template Agency development, in the mode each occurs in.

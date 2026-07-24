@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "description": "describe returns exports-as-data: names in source order, effects, markers, module description",
+      "input": "",
+      "expectedOutput": "{\"description\":\"News tools.\",\"names\":[\"fetchArticle\",\"saveNote\",\"Article\"],\"saveEffects\":[\"std::write\"],\"saveDestructive\":true}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

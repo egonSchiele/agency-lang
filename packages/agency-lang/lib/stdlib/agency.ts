@@ -2,15 +2,18 @@ import { compileSource, typeCheckSource, getEffectsFromSource, TypeCheckReport }
 import { writeFileSync, readFileSync, realpathSync, existsSync } from "fs";
 import { resolve, sep } from "path";
 import { parseAgency, replaceBlankLines } from "../parser.js";
-import { generateAgency } from "../backends/agencyGenerator.js";
+import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js";
+import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
 import { walkNodesArray } from "../utils/node.js";
+import { docStringText } from "../utils/docStringText.js";
+import { declaredName } from "../types/hole.js";
 import { deepCopy } from "../utils.js";
 import {
   ImportKind,
   ImportPolicy,
   isImportAllowed,
 } from "../importPaths.js";
-import type { AgencyProgram, AgencyNode } from "../types.js";
+import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types.js";
 import type { ImportStatement } from "../types/importStatement.js";
 import { _write } from "./builtins.js";
 import {
@@ -175,6 +178,113 @@ export function _typecheck(source: string): TypeCheckReport {
 
 export function _getEffects(source: string): Record<string, string[]> {
   return getEffectsFromSource(source);
+}
+
+// ---------------------------------------------------------------------------
+// Reify: describe a module's exports as data
+// ---------------------------------------------------------------------------
+
+export type ExportInfo = {
+  name: string;
+  kind: "def" | "node" | "type";
+  signature: string;
+  docstring: string | null;
+  effects: string[];
+  destructive: boolean;
+  idempotent: boolean;
+};
+
+export type ModuleInfo = {
+  description: string | null;
+  exports: ExportInfo[];
+};
+
+/** One ExportInfo per EXPORTED top-level def, node, and type alias, in
+ *  source order. Underscore-prefixed exports are omitted — the same rule
+ *  `agency doc` applies: they are exported for the compiler's sake
+ *  (lowering targets like `_guard`), not for callers. Effects come from
+ *  the same transitive analysis as _getEffects, sentinel included. */
+export function _describe(source: string): ModuleInfo {
+  const program = parseSource(source);
+  // Doc comments live as loose comment nodes until attachment — the same
+  // pass `agency doc` runs. It hoists the @module comment onto
+  // program.docComment and pins each doc comment to its declaration.
+  new TypescriptPreprocessor(program, {}).attachDocComments();
+  const effects = getEffectsFromSource(source);
+  const generator = new AgencyGenerator();
+  const exports: ExportInfo[] = [];
+  for (const node of program.nodes) {
+    const info = exportInfoFor(node, generator, effects);
+    if (info) exports.push(info);
+  }
+  return {
+    description: moduleDocText(program.docComment),
+    exports,
+  };
+}
+
+/** The module doc comment's text, with the doc-generator @summary marker
+ *  dropped — the marker structures `agency doc` pages, not prose. */
+function moduleDocText(comment: AgencyMultiLineComment | undefined): string | null {
+  if (!comment) return null;
+  const text = comment.content.trim().replace(/^@summary\s+/, "");
+  return text === "" ? null : text;
+}
+
+function exportInfoFor(
+  node: AgencyNode,
+  generator: AgencyGenerator,
+  effects: Record<string, string[]>,
+): ExportInfo | null {
+  if (node.type === "function" && node.exported) {
+    const name = declaredName(node.functionName);
+    if (name.startsWith("_")) return null;
+    return {
+      name,
+      kind: "def",
+      signature: generator.signatureOf(node),
+      docstring: node.docString ? docStringText(node.docString) : null,
+      effects: effects[name] ?? [],
+      destructive: node.markers?.destructive === true,
+      idempotent: node.markers?.idempotent === true,
+    };
+  }
+  if (node.type === "graphNode" && node.exported) {
+    const name = declaredName(node.nodeName);
+    if (name.startsWith("_")) return null;
+    return {
+      name,
+      kind: "node",
+      signature: generator.signatureOf(node),
+      docstring: node.docString ? docStringText(node.docString) : null,
+      effects: effects[name] ?? [],
+      // Nodes carry no tool markers; only defs can be declared
+      // destructive or idempotent.
+      destructive: false,
+      idempotent: false,
+    };
+  }
+  if (node.type === "typeAlias" && node.exported) {
+    if (node.aliasName.startsWith("_")) return null;
+    // The canonical printer emits the full declaration. The doc comment
+    // is already carried in `docstring` and the export keyword is
+    // caller-visible noise, so both are kept out of the signature — the
+    // same shape def/node signatures have (no keywords, no docs).
+    const bare = { ...node, docComment: undefined };
+    const printed = generateAgency({ type: "agencyProgram", nodes: [bare] })
+      .trim()
+      .replace(/^export\s+/, "");
+    return {
+      name: node.aliasName,
+      kind: "type",
+      signature: printed,
+      docstring: node.docComment?.content.trim() || null,
+      effects: [],
+      destructive: false,
+      idempotent: false,
+    };
+  }
+  return null;
 }
 
 // The real file path is handed to the type-checker so relative imports in

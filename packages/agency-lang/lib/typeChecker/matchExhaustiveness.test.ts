@@ -443,3 +443,36 @@ def f(b: boolean): number {
 }`, ERROR).some((m) => /not exhaustive/i.test(m))).toBe(false);
   });
 });
+
+const NESTED_UNION = `
+type A = { tag: "a", x: number }
+type B = { tag: "b", y: string }
+type AB = A | B
+type C = { tag: "c", z: boolean }
+type Node = AB | C
+`;
+
+describe("match exhaustiveness — a union member that is itself a union", () => {
+  it("counts the tags of an inner union alias as members to cover", () => {
+    const errs = check(`${NESTED_UNION}
+def f(n: Node): any {
+  return match (n.tag) {
+    "a" => 1
+    "c" => 3
+  }
+}`, ERROR);
+    expect(errs.some((e) => /not exhaustive/i.test(e) && /"b"/.test(e))).toBe(true);
+  });
+
+  it("covering every inner tag is exhaustive", () => {
+    const errs = check(`${NESTED_UNION}
+def f(n: Node): any {
+  return match (n.tag) {
+    "a" => 1
+    "b" => 2
+    "c" => 3
+  }
+}`, ERROR);
+    expect(errs).toEqual([]);
+  });
+});

@@ -337,3 +337,33 @@ def g(): string {
     expect(errors.length).toBeGreaterThan(0);
   });
 });
+
+describe("strict member access — a union member that is itself a union", () => {
+  const NESTED_UNION = `
+type A = { tag: "a", x: number }
+type B = { tag: "b", y: string }
+type AB = A | B
+type C = { tag: "c", z: boolean }
+type Node = AB | C
+`;
+
+  it("reads a discriminant shared by every tag of an inner union alias", () => {
+    const errs = check(`${NESTED_UNION}
+def f(n: Node): any {
+  return n.tag
+}`);
+    expect(errs.errors).toEqual([]);
+  });
+
+  it("narrows through an inner union alias, so the arm can read its own field", () => {
+    const errs = check(`${NESTED_UNION}
+def f(n: Node): any {
+  return match (n.tag) {
+    "a" => n.x
+    "b" => n.y
+    "c" => n.z
+  }
+}`);
+    expect(errs.errors).toEqual([]);
+  });
+});

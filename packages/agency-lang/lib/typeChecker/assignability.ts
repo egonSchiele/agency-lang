@@ -194,6 +194,38 @@ function resolveTypeWithGuard(
     return attachAliasTags(resolved, valueSubstituted.tags);
   }
 
+  if (vt.type === "unionType") {
+    // A member of a union can itself be a union, usually through an alias:
+    //
+    //   type WordPart = { tag: "literal", ... } | { tag: "variable", ... }
+    //   type BashNode = WordPart | BashWord | ...
+    //
+    // Splice those inner members into the outer list. Everything that walks a
+    // union member by member — property access, discriminant narrowing, match
+    // exhaustiveness — only knows what to do with an object member, so an
+    // unspliced `WordPart` member looks like a member with no `tag` property
+    // and blocks all three.
+    //
+    // Members that aren't unions are kept exactly as written (not resolved), so
+    // error messages still name the alias instead of printing its whole body.
+    const flattened: VariableType[] = [];
+    let spliced = false;
+    for (const member of vt.types) {
+      const resolvedMember = resolveTypeWithGuard(member, typeAliases, inProgress);
+      if (resolvedMember.type !== "unionType") {
+        flattened.push(member);
+        continue;
+      }
+      spliced = true;
+      // The inner union's tags (from `@validate type AB = A | B`) describe its
+      // values, so each member it contributes carries them.
+      for (const inner of resolvedMember.types) {
+        flattened.push(attachAliasTags(inner, resolvedMember.tags));
+      }
+    }
+    return spliced ? { ...vt, types: flattened } : vt;
+  }
+
   return vt;
 }
 

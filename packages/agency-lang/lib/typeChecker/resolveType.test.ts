@@ -623,3 +623,58 @@ describe("resolveTypeDeep: nested generic resolution", () => {
     expect(resolveTypeDeep(numberType, {})).toEqual(numberType);
   });
 });
+
+describe("resolveType: nested unions", () => {
+  const alias = (aliasName: string): VariableType => ({
+    type: "typeAliasVariable",
+    aliasName,
+  });
+
+  it("splices a union alias used as a member of another union", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      AB: { body: { type: "unionType", types: [alias("A"), alias("B")] } },
+      A: { body: { type: "objectType", properties: [{ key: "x", value: numberType }] } },
+      B: { body: { type: "objectType", properties: [{ key: "y", value: stringType }] } },
+      C: { body: { type: "objectType", properties: [{ key: "z", value: booleanType }] } },
+    };
+    const result = resolveType(
+      { type: "unionType", types: [alias("AB"), alias("C")] },
+      aliases,
+    );
+    // Members stay unresolved, so error messages keep saying `A`, not `{x: number}`.
+    expect(result).toEqual({
+      type: "unionType",
+      types: [alias("A"), alias("B"), alias("C")],
+    });
+  });
+
+  it("splices unions nested more than one level deep", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Outer: { body: { type: "unionType", types: [alias("Inner"), stringType] } },
+      Inner: { body: { type: "unionType", types: [numberType, booleanType] } },
+    };
+    const result = resolveType(
+      { type: "unionType", types: [alias("Outer"), anyType] },
+      aliases,
+    );
+    expect(result).toEqual({
+      type: "unionType",
+      types: [numberType, booleanType, stringType, anyType],
+    });
+  });
+
+  it("leaves a union with no union members untouched", () => {
+    const input: VariableType = { type: "unionType", types: [numberType, stringType] };
+    expect(resolveType(input, {})).toBe(input);
+  });
+
+  it("terminates on a self-referential union alias", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      T: { body: { type: "unionType", types: [alias("T"), numberType] } },
+    };
+    expect(resolveType(alias("T"), aliases)).toEqual({
+      type: "unionType",
+      types: [alias("T"), numberType],
+    });
+  });
+});

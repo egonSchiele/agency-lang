@@ -19,7 +19,19 @@ import {
 export function liftValue(value: unknown, loc: SourceLocation): AgencyNode {
   if (value === null || value === undefined) return nullLiteral(loc);
   if (typeof value === "string") return stringLiteral(value, loc);
-  if (typeof value === "number") return numberLiteral(value, loc);
+  if (typeof value === "number") {
+    // No Agency literal exists for non-finite numbers: `Infinity` and
+    // `NaN` would print as bare identifier tokens and re-parse as NAME
+    // REFERENCES, silently binding to whatever those names mean in the
+    // generated program. Reachable from ordinary model output —
+    // JSON.parse("1e400") is Infinity — so reject loudly.
+    if (!Number.isFinite(value)) {
+      throw new Error(
+        `Cannot lift the non-finite number ${value} into a template — Agency has no literal for it.`,
+      );
+    }
+    return numberLiteral(value, loc);
+  }
   if (typeof value === "boolean") return booleanLiteral(value, loc);
   if (Array.isArray(value)) {
     return arrayLiteral(value.map((item) => liftValue(item, loc)), loc);

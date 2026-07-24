@@ -91,7 +91,7 @@ import {
 // `parsers.ts`. Only the *same* delimiter is escaped — the other two
 // quote characters are left literal because Agency strings allow them
 // to appear unescaped inside.
-function escapeStringText(s: string, delim: '"' | "'" | "`"): string {
+export function escapeStringText(s: string, delim: '"' | "'" | "`"): string {
   let out = "";
   for (let i = 0; i < s.length; i++) {
     const c = s[i];

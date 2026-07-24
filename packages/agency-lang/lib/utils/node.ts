@@ -430,6 +430,14 @@ export function* walkNodes(
       }
     } else if (node.type === "typeTestExpression") {
       yield* walkNodes([node.expression], [...ancestors, node], scopes);
+    } else if (node.type === "isExpression") {
+      // Symmetric with typeTestExpression above. Found missing by the
+      // hole-position battery: `tmp is string` hid its operand from this
+      // walk, so template hygiene could not see the free name and a
+      // filler captured a template binder through an `is` expression.
+      // (expressionChildren's deliberate emptiness for is/typeTest is a
+      // FLOW-view decision and is untouched — see the comment there.)
+      yield* walkNodes([node.expression], [...ancestors, node], scopes);
     } else if (node.type === "valueAccess") {
       yield* walkNodes([node.base], [...ancestors, node], scopes);
       for (const element of node.chain) {

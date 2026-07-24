@@ -10,6 +10,7 @@ import {
   StringLiteral,
 } from "../../types.js";
 import { SourceLocation } from "../../types/base.js";
+import { escapeStringText } from "../../backends/agencyGenerator.js";
 
 /**
  * Typed constructors for literal AST nodes, so the node shapes have one
@@ -50,7 +51,17 @@ export function objectLiteral(
   return {
     type: "agencyObject",
     entries: entries.map(
-      ({ key, value }): AgencyObjectKV => ({ key, value: value as Expression }),
+      ({ key, value }): AgencyObjectKV => ({
+        // The AST stores object keys in SOURCE form, escapes intact (the
+        // parser keeps them that way and the printer wraps them verbatim
+        // — verified: `{ "a\"b": 1 }` stores the key as `a\"b`). This
+        // constructor is the first place raw runtime strings become keys,
+        // so escaping happens HERE: an unescaped `"` in a model-supplied
+        // key would otherwise break out of the printed literal and turn
+        // data into code.
+        key: escapeStringText(key, '"'),
+        value: value as Expression,
+      }),
     ),
     loc,
   };

@@ -1,4 +1,4 @@
-# Code Templates
+# Template Agency
 
 A template is an Agency file with gaps in it. You write the skeleton of a program, mark the gaps with `#name`, and fill them later — usually with values a model chose. The result is a program whose structure a human wrote and whose details are checked before anything runs.
 
@@ -145,7 +145,7 @@ node main() {
 }
 ```
 
-If a filler happens to mention `tmp`, plain substitution would silently hand it the API key. Instead, `fill` renames the colliding template binder to a fresh name with the reserved `__hyg` prefix, so the filler's `tmp` means whatever it meant where the filler was written. Renaming is selective — non-colliding names are left exactly as written — and scope-aware: a `tmp` in some other function is not touched. A filler that *declares* a name the template already declares gets its own binder renamed the same way. Because `__hyg` makes this scheme work, `fill` rejects any template or filler that already uses it.
+If a filler happens to mention `tmp`, plain substitution would silently hand it the API key. Instead, `fill` renames the colliding template binder to a fresh name with the reserved `__hyg` prefix, so the filler's `tmp` means whatever it meant where the filler was written. Renaming is selective — non-colliding names are left exactly as written — and scope-aware: a `tmp` in some other function is not touched. A filler that *declares* a name the template already declares gets its own binder renamed the same way. Renamed names use the reserved `__hyg<n>_` prefix, and each fill picks fresh names above any `__hyg` index already present — so filling the output of a previous fill (the composition workflow) never collides with its renames.
 
 One current limit: destructuring-pattern binders are not tracked for collisions. If a filler destructures into a name the template also uses, rename one of them yourself.
 

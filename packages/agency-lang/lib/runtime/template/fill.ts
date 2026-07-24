@@ -9,7 +9,6 @@ import {
   RESERVED_PREFIX,
   applyRenames,
   applyScopedRenames,
-  assertNoReservedPrefix,
   computeRenames,
 } from "./hygiene.js";
 
@@ -40,21 +39,15 @@ export function fillHoles(code: Code, values: Record<string, unknown>): Code {
     }
   }
 
-  // Hygiene, one declarative sequence: reject reserved-prefix input,
-  // compute the rename plan, rename the template within the affected
-  // scopes, rename each filler within itself, then substitute.
-  assertNoReservedPrefix(code, "template");
-  for (const value of Object.values(values)) {
-    if (isCode(value)) assertNoReservedPrefix(value, "filler");
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        if (isCode(item)) assertNoReservedPrefix(item, "filler");
-      }
-    }
-  }
+  // Hygiene, one declarative sequence: compute the rename plan (whose
+  // fresh-name counter is seeded above every __hyg index already present,
+  // so a re-fill of previously renamed output composes instead of
+  // colliding), rename the template within the affected scopes, rename
+  // each filler within itself, then substitute.
   const plan = computeRenames(code, values);
   const renamedTemplate = applyScopedRenames(code, plan.template);
-  const renamedValues: Record<string, unknown> = {};
+  // Null-prototype: keyed by user-controlled hole names.
+  const renamedValues: Record<string, unknown> = Object.create(null);
   for (const [name, value] of Object.entries(values)) {
     if (isCode(value)) {
       renamedValues[name] = applyRenames(value, plan.fillers[name] ?? {});
@@ -82,7 +75,9 @@ function isFillableHole(value: unknown, values: Record<string, unknown>): value 
     typeof value === "object" &&
     value !== null &&
     (value as { type?: string }).type === "hole" &&
-    (value as Hole).name in values
+    // Own-property check: a hole named "toString" or "constructor" must
+    // not read Object.prototype through `in`.
+    Object.hasOwn(values, (value as Hole).name)
   );
 }
 
@@ -253,6 +248,10 @@ function identifierFillFor(hole: Hole, value: unknown): string {
       `\`${value}\` is a reserved word, so it cannot fill \`#${hole.name}\`.`,
     );
   }
+  // Identifier fillers are caller-supplied strings by definition — the
+  // renamer only rewrites trees, never routes through this path — so a
+  // reserved-prefix name here is always the caller's, and the fresh-name
+  // counter seeding cannot see plain-string values. Reject.
   if (value.startsWith(RESERVED_PREFIX)) {
     throw new Error(
       `\`${value}\` uses the reserved prefix \`${RESERVED_PREFIX}\`, so it cannot fill \`#${hole.name}\`.`,

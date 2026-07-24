@@ -1,4 +1,4 @@
-import { AgencyNode } from "../../types.js";
+import { AgencyMultiLineComment, AgencyNode } from "../../types.js";
 
 /**
  * A first-class piece of Agency code: the existing `AST` shape plus a
@@ -11,7 +11,7 @@ export type Code = {
   type: "agencyProgram";
   kind?: "program" | "statements" | "expr";
   nodes: AgencyNode[];
-  docComment?: unknown;
+  docComment?: AgencyMultiLineComment;
 };
 
 /** The fragment kind, with the parseAST escape hatch normalized. */

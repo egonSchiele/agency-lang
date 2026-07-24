@@ -32,7 +32,9 @@ export function findHoles(nodes: AgencyNode[]): Hole[] {
 /** Distinct hole names, in first-appearance order. Internal — fill's
  *  arity checks need only names; the public surface is holeInfos. */
 export function holeNames(nodes: AgencyNode[]): string[] {
-  const seen: Record<string, true> = {};
+  // Null-prototype: hole names are user-controlled keys ("__proto__",
+  // "constructor", ...) — house pattern, see lib/optimize/registry.ts.
+  const seen: Record<string, true> = Object.create(null);
   const names: string[] = [];
   for (const hole of findHoles(nodes)) {
     if (seen[hole.name]) continue;
@@ -50,7 +52,8 @@ export function holeNames(nodes: AgencyNode[]): string[] {
  *  checks against the first only, and a mismatch at the second position
  *  falls through to the completed program's run-time check. */
 export function positionInferredTypes(nodes: AgencyNode[]): Record<string, string> {
-  const inferred: Record<string, string> = {};
+  // Null-prototype: keyed by user-controlled hole names.
+  const inferred: Record<string, string> = Object.create(null);
   for (const visit of walkNodesArray(nodes)) {
     if (visit.node.type !== "hole") continue;
     const hole = visit.node as Hole;

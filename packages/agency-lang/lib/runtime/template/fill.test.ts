@@ -195,6 +195,44 @@ describe("fill-time type checking", () => {
       "getGreeting()",
     );
   });
+
+  it("treats an interpolated string literal as unknowable, not as string", () => {
+    // `"${x}"` could evaluate to anything a formatter renders; the guard
+    // in certainTypeOf must return null for it in BOTH directions.
+    const numberHole = `node main() {\n  const n: number = #v\n  return n\n}\n`;
+    expect(() =>
+      fillHoles(load(numberHole), { v: _parseExpr('"${getCount()}"') }),
+    ).not.toThrow();
+  });
+
+  it("validates against the FIRST position when a name appears twice", () => {
+    const src = `node main() {\n  const a: string = #v\n  const b: number = #v\n  return b\n}\n`;
+    expect(() => fillHoles(load(src), { v: "hello" })).not.toThrow(); // string wins
+    expect(() => fillHoles(load(src), { v: 42 })).toThrow(/string/);
+  });
+
+  // Code is a plain record an Agency caller can build by hand, so the
+  // structural guards are load-bearing, not dead code.
+  it("rejects an expr fragment carrying more than one node", () => {
+    const t2 = `node main() {\n  const x = #v: number\n}\n`;
+    const bad = {
+      type: "agencyProgram" as const,
+      kind: "expr" as const,
+      nodes: [_parseExpr("1").nodes[0], _parseExpr("2").nodes[0]],
+    };
+    expect(() => fillHoles(load(t2), { v: bad })).toThrow();
+  });
+
+  it("a nodes-less object lifts as data, not as Code", () => {
+    const t2 = `node main() {\n  const x = #v\n}\n`;
+    expect(fillAndPrint(t2, { v: { type: "agencyProgram" } })).toContain("agencyProgram");
+  });
+
+  it("rejects a non-finite number — no Agency literal exists for it", () => {
+    const t2 = `node main() {\n  const x = #v\n}\n`;
+    expect(() => fillHoles(load(t2), { v: JSON.parse("1e400") })).toThrow(/non-finite/);
+    expect(() => fillHoles(load(t2), { v: Number.NaN })).toThrow(/non-finite/);
+  });
 });
 
 describe("fillHoles: origin stamping", () => {

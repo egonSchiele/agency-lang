@@ -6,8 +6,10 @@ import { Code, isCode } from "./code.js";
 /** Reserved identifier prefix for hygienic renames. ASCII on purpose:
  *  renamed names get printed to source and re-parsed by a subprocess, so
  *  they must stay legal identifiers (`lib/parsers/parsers.ts` varNameChar).
- *  `fill` rejects input that already uses the prefix, which is what makes
- *  collisions with renamed names impossible by construction. */
+ *  Collisions with renamed names are impossible by construction because
+ *  the fresh-name counter seeds ABOVE every `__hyg<n>` already present in
+ *  the template and the fillers (see maxHygieneIndex) — which is also what
+ *  lets previously renamed output be filled again. */
 export const RESERVED_PREFIX = "__hyg";
 
 /** A rename that applies only within one scope of the template. The scope
@@ -25,8 +27,8 @@ export type RenamePlan = {
 };
 
 function scopeKeyOfChain(scopes: Scope[]): string {
-  for (let i = scopes.length - 1; i >= 0; i -= 1) {
-    const scope = scopes[i];
+  // Innermost frame wins, so walk a reversed copy.
+  for (const scope of [...scopes].reverse()) {
     if (scope.type === "function") return `fn:${scope.functionName}`;
     if (scope.type === "node") return `node:${scope.nodeName}`;
   }
@@ -109,16 +111,25 @@ function allNamesOfNode(node: AgencyNode): string[] {
   return names;
 }
 
-export function assertNoReservedPrefix(code: Code, what: string): void {
+/**
+ * The highest `__hyg<n>` index appearing anywhere in a fragment's names —
+ * binders, uses, and declaration names alike. Fresh renames start ABOVE
+ * the max across the template and every filler, which is what makes a
+ * rename collision impossible by construction. This replaced an earlier
+ * reject-any-`__hyg`-input rule: rejection cannot tell a renamer-produced
+ * name from a caller-supplied one, so it broke the compose workflow — a
+ * second fill rejected the first fill's own output.
+ */
+export function maxHygieneIndex(code: Code): number {
+  let max = 0;
+  const pattern = new RegExp(`^${RESERVED_PREFIX}(\\d+)_`);
   for (const { node } of walkNodesArray(code.nodes)) {
     for (const name of allNamesOfNode(node)) {
-      if (name.startsWith(RESERVED_PREFIX)) {
-        throw new Error(
-          `\`${name}\` uses the reserved prefix \`${RESERVED_PREFIX}\`, which templates keep for hygiene. Rename it in the ${what}.`,
-        );
-      }
+      const match = pattern.exec(name);
+      if (match) max = Math.max(max, Number(match[1]));
     }
   }
+  return max;
 }
 
 type GraftSite = {
@@ -129,6 +140,12 @@ type GraftSite = {
   chainKeys: string[];
   /** Innermost scope key — where the graft lands. */
   landingKey: string;
+  /** Hoisted here so the collision loops below are set intersections
+   *  over precomputed arrays instead of O(n^2) re-walks of every sibling
+   *  fragment — the non-colliding (normal) case paid the full quadratic
+   *  cost because nothing short-circuited. */
+  binders: string[];
+  freeNames: string[];
 };
 
 /** Every Code graft the fill will perform, with the scope context of the
@@ -138,12 +155,19 @@ function graftSites(template: Code, values: Record<string, unknown>): GraftSite[
   for (const visit of walkNodesArray(template.nodes)) {
     if (visit.node.type !== "hole") continue;
     const hole = visit.node as Hole;
-    if (!(hole.name in values)) continue;
+    if (!Object.hasOwn(values, hole.name)) continue;
     const value = values[hole.name];
     const chainKeys = chainKeysOf(visit.scopes);
     const landingKey = scopeKeyOfChain(visit.scopes);
     if (isCode(value)) {
-      sites.push({ fillerKey: hole.name, code: value, chainKeys, landingKey });
+      sites.push({
+        fillerKey: hole.name,
+        code: value,
+        chainKeys,
+        landingKey,
+        binders: bindersOf(value),
+        freeNames: freeNamesOf(value),
+      });
     } else if (Array.isArray(value)) {
       value.forEach((item, index) => {
         if (isCode(item)) {
@@ -152,6 +176,8 @@ function graftSites(template: Code, values: Record<string, unknown>): GraftSite[
             code: item,
             chainKeys,
             landingKey,
+            binders: bindersOf(item),
+            freeNames: freeNamesOf(item),
           });
         }
       });
@@ -179,12 +205,28 @@ export function computeRenames(
   template: Code,
   values: Record<string, unknown>,
 ): RenamePlan {
-  let counter = 0;
+  // Seed the counter above every __hyg<n> already present — in the
+  // template (a previous fill's renames) and in every Code filler (a
+  // previously filled fragment) — so fresh names cannot collide with
+  // them. See maxHygieneIndex for why this is seeding, not rejection.
+  let counter = maxHygieneIndex(template);
+  for (const value of Object.values(values)) {
+    if (isCode(value)) counter = Math.max(counter, maxHygieneIndex(value));
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (isCode(item)) counter = Math.max(counter, maxHygieneIndex(item));
+      }
+    }
+  }
   const fresh = (name: string): string => `${RESERVED_PREFIX}${(counter += 1)}_${name}`;
 
   // One walk of the template: which binders live in which scope. A def or
   // node's parameters belong to ITS scope, not the enclosing one.
-  const bindersByScope: Record<string, { name: string; scopeKey: string }[]> = {};
+  // Null-prototype dictionaries throughout: scope keys and filler keys
+  // derive from user-controlled names ("__proto__" is a legal hole or
+  // function name) — house pattern, see lib/optimize/registry.ts.
+  const bindersByScope: Record<string, { name: string; scopeKey: string }[]> =
+    Object.create(null);
   for (const visit of walkNodesArray(template.nodes)) {
     for (const name of bindersOfNode(visit.node)) {
       const owner =
@@ -199,13 +241,13 @@ export function computeRenames(
 
   const sites = graftSites(template, values);
   const templateRenames: ScopedRename[] = [];
-  const fillerRenames: Record<string, Record<string, string>> = {};
+  const fillerRenames: Record<string, Record<string, string>> = Object.create(null);
 
   for (const site of sites) {
     const visible = site.chainKeys.flatMap((key) => bindersByScope[key] ?? []);
     const visibleNames = visible.map((binder) => binder.name);
-    const free = freeNamesOf(site.code);
-    const own = bindersOf(site.code);
+    const free = site.freeNames;
+    const own = site.binders;
 
     // Case 1.
     for (const binder of visible) {
@@ -223,7 +265,7 @@ export function computeRenames(
     }
 
     // Case 2.
-    const map: Record<string, string> = {};
+    const map: Record<string, string> = Object.create(null);
     for (const name of own) {
       if (visibleNames.includes(name)) map[name] = fresh(name);
     }
@@ -237,9 +279,9 @@ export function computeRenames(
     );
     if (siblings.length === 0) continue;
     const map = fillerRenames[site.fillerKey];
-    for (const name of bindersOf(site.code)) {
+    for (const name of site.binders) {
       if (map[name]) continue;
-      const shared = siblings.some((other) => bindersOf(other.code).includes(name));
+      const shared = siblings.some((other) => other.binders.includes(name));
       if (shared) map[name] = fresh(name);
     }
   }
@@ -334,7 +376,7 @@ export function applyScopedRenames(code: Code, renames: ScopedRename[]): Code {
       ];
     }
 
-    const map: Record<string, string> = {};
+    const map: Record<string, string> = Object.create(null);
     for (const rename of scopedActive) map[rename.from] = rename.to;
 
     const out: Record<string, unknown> = {};

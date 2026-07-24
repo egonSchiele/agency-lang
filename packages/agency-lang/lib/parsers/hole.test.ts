@@ -168,6 +168,9 @@ describe("hole positions are reachable by the walker", () => {
     ["for-loop iterable", `node main() {\n  for (item in #h) {\n    print(item)\n  }\n}\n`],
     ["match scrutinee", `node main() {\n  const x = match (#h) {\n    1 => "a"\n    _ => "b"\n  }\n}\n`],
     ["try expression", `node main() {\n  const x = try f(#h)\n}\n`],
+    // typeTestExpression needs no entry: it is a lowering artifact
+    // (lib/types/pattern.ts) and templates parse with lower: false.
+    ["is-expression operand", `node main() {\n  const x: boolean = #h is string\n}\n`],
   ];
 
   for (const [label, source] of positions) {

@@ -230,6 +230,11 @@ export function bodySlots(node: AgencyNode): BodySlot[] {
       return [statementField(node as WithModifier)];
     case "staticStatement":
       return [statementField(node as StaticStatement)];
+    // codeLiteral is deliberately ABSENT from this table. Its `nodes`
+    // field looks like a statement body but is QUOTED code — registering
+    // it would send walkNodes (and every consumer of the generic body
+    // descent) into the generated program's names. See
+    // docs/dev/template-agency.md, "host-side leaf".
     default:
       return [];
   }

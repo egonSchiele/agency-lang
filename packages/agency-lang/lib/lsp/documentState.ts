@@ -11,6 +11,10 @@ export type DocumentState = {
   semanticIndex: SemanticIndex;
   scopes: ScopeInfo[];
   symbolTable: SymbolTable;
+  /** The document version this state was built from. Lets a consumer
+   *  tell a fresh state from one the debounce has left behind — see
+   *  DocumentStateCache, which serves stale state on purpose. */
+  version: number;
   /** Lint results computed by the diagnostics pass, reused by the
    *  code-action path so a lightbulb request does not re-parse and re-lint
    *  the document. Valid only while the document is still at

@@ -32,7 +32,8 @@ import { handleRename, handlePrepareRename } from "./rename.js";
 import { handleTypeDefinition } from "./typeDefinition.js";
 import { getCodeActions, REMOVE_UNUSED_IMPORTS_KIND } from "./codeAction.js";
 import { getWorkspaceSymbols } from "./workspaceSymbol.js";
-import type { DocumentState } from "./documentState.js";
+import { getSemanticTokens, SEMANTIC_TOKENS_LEGEND } from "./semanticTokens.js";
+import { DocumentStateCache } from "./documentStateCache.js";
 
 // eslint-disable-next-line max-lines-per-function -- LSP server wiring; refactor tracked separately
 export function startServer(): void {
@@ -42,8 +43,10 @@ export function startServer(): void {
   );
   const documents = new TextDocuments(TextDocument);
 
-  // Per-document state: parsed program, compilation info, semantic index, scopes, symbol table
-  const docStates = new Map<string, DocumentState>();
+  // Per-document state: parsed program, compilation info, semantic index,
+  // scopes, symbol table. Keeps a last-good copy so highlighting survives
+  // the half-typed lines that fail to parse — see DocumentStateCache.
+  const docStates = new DocumentStateCache();
 
   // Debounce timers for diagnostics (per URI)
   const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -81,6 +84,10 @@ export function startServer(): void {
         },
         workspaceSymbolProvider: true,
         documentLinkProvider: {},
+        semanticTokensProvider: {
+          legend: SEMANTIC_TOKENS_LEGEND,
+          full: true,
+        },
       },
     };
   });
@@ -141,7 +148,7 @@ export function startServer(): void {
         lintVersion: doc.version,
       });
     } else {
-      docStates.delete(doc.uri);
+      docStates.clearCurrent(doc.uri);
     }
   }
 
@@ -172,7 +179,7 @@ export function startServer(): void {
 
   documents.onDidClose((event) => {
     connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
-    docStates.delete(event.document.uri);
+    docStates.remove(event.document.uri);
   });
 
   connection.onDidChangeWatchedFiles((params) => {
@@ -204,6 +211,21 @@ export function startServer(): void {
       for (const doc of documents.all()) {
         updateDocument(doc);
       }
+    }
+    // Types can change without the user touching the buffer — an import
+    // saved elsewhere, an agency.json edit. Nothing prompts the client to
+    // re-pull tokens in that case, so ask it to.
+    //
+    // The typings say this returns void; it actually returns the
+    // sendRequest promise, which REJECTS on clients that do not support
+    // the request. Unhandled, that becomes a process-level rejection in
+    // a server meant to run for hours, so the promise is caught here
+    // despite the declared type.
+    const refreshed: unknown = connection.languages.semanticTokens.refresh();
+    if (refreshed instanceof Promise) {
+      refreshed.catch((e) => {
+        connection.console.error(`semantic tokens refresh failed: ${String(e)}`);
+      });
     }
   });
 
@@ -320,9 +342,30 @@ export function startServer(): void {
   });
 
   connection.onWorkspaceSymbol((params) => {
-    const firstState = docStates.values().next().value;
+    const firstState = docStates.anyCurrent();
     if (!firstState) return [];
     return getWorkspaceSymbols(params.query, firstState.symbolTable);
+  });
+
+  connection.languages.semanticTokens.on((params) => {
+    // Last-good, not current: a document mid-edit often does not parse,
+    // and returning nothing would blank every color in the file.
+    const state = docStates.getLastGood(params.textDocument.uri);
+    if (!state) return { data: [] };
+    // Pass the CURRENT text, not the text the state was built from. When
+    // the two differ — the state is stale by a debounce, or the user just
+    // deleted a block — tokens computed against the old text can point
+    // past the end of a line that has since shrunk. getSemanticTokens
+    // drops those rather than emitting coordinates into empty space.
+    const doc = documents.get(params.textDocument.uri);
+    try {
+      return getSemanticTokens(state, doc?.getText());
+    } catch (e) {
+      // Never let a highlighting bug take down the request — but never
+      // swallow it silently either, or it becomes untraceable.
+      connection.console.error(`semantic tokens failed: ${String(e)}`);
+      return { data: [] };
+    }
   });
 
   documents.listen(connection);

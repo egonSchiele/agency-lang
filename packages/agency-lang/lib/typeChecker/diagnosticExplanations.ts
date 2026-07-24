@@ -482,4 +482,20 @@ def f(): string {
   conflictingMarkers: `A function was marked both \`destructive\` and \`idempotent\`, but those markers contradict each other: destructive means a retry can cause additional effects, while idempotent means a retry is safe to repeat. A function cannot be both.
 
 **How to fix:** keep the one marker that describes the function and remove the other.`,
+
+  // ---- AG8: code templates and holes ----
+  unfilledHoles: `This file contains template holes (\`#name\`), which mark gaps for code or values to be filled in later. A file with unfilled holes is a template, not a program, so it cannot be compiled or run directly.
+
+**How to fix:** load the file with \`loadTemplate\`, fill every hole with \`fill\`, and run the completed program (for example with \`runCode(toSource(filled))\`). Use \`holesOf\` to list what still needs filling.`,
+
+  holeNeedsTypeAnnotation: `An expression hole normally takes its type from its position — in \`const x: string = #text\`, the hole is a string. This hole sits in a position that supplies no type, so nothing constrains what may fill it.
+
+**How to fix:** annotate the hole inline:
+
+\`\`\`agency
+node main() {
+  const x = #mystery: string
+  return x
+}
+\`\`\``,
 };

@@ -58,6 +58,7 @@ import {
   typeAliasParser,
   effectSetDeclParser,
   effectDeclParser,
+  topLevelHoleParser,
   valueAccessParser,
   whileLoopParser,
   withModifierParser,
@@ -90,6 +91,9 @@ const nodeParser = or(
   gotoStatementParser,
   raiseStatementParser,
   interruptStatementParser,
+  // Top level only, deliberately — this is what keeps `decl` sort out of
+  // block bodies (those go through statementHoleParser instead).
+  topLevelHoleParser,
   tagParser,
   withModifierParser,
   modifiedAssignmentParser,

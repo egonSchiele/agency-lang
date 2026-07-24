@@ -7,6 +7,7 @@ import {
   Assignment,
   Comprehension,
   DebuggerStatement,
+  Hole,
   InterruptStatement,
   Literal,
   MultiLineStringLiteral,
@@ -24,6 +25,8 @@ import {
 } from "../types.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
+import { declaredName } from "../types/hole.js";
+import { LEGAL_IDENTIFIER } from "../parsers/parsers.js";
 import { comprehensionPrefixString } from "../types/comprehension.js";
 import { BlockArgument } from "../types/blockArgument.js";
 import {
@@ -88,7 +91,7 @@ import {
 // `parsers.ts`. Only the *same* delimiter is escaped — the other two
 // quote characters are left literal because Agency strings allow them
 // to appear unescaped inside.
-function escapeStringText(s: string, delim: '"' | "'" | "`"): string {
+export function escapeStringText(s: string, delim: '"' | "'" | "`"): string {
   let out = "";
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
@@ -427,7 +430,7 @@ export class AgencyGenerator {
   }
 
   protected collectFunctionSignature(node: FunctionDefinition): void {
-    this.functionDefinitions[node.functionName] = node;
+    this.functionDefinitions[declaredName(node.functionName)] = node;
   }
 
   protected processGraphNodeName(node: GraphNodeDefinition): void {}
@@ -542,9 +545,22 @@ export class AgencyGenerator {
         return this.processParallelBlock(node);
       case "seqBlock":
         return this.processSeqBlock(node);
+      case "hole":
+        return this.formatHole(node);
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
+  }
+
+  protected formatHole(node: Hole): string {
+    const sigil = node.splice ? "#..." : "#";
+    // A name outside the identifier grammar must print back with quotes
+    // or the round trip breaks.
+    const name = LEGAL_IDENTIFIER.test(node.name) ? node.name : `"${node.name}"`;
+    const annotation = node.typeAnnotation
+      ? `: ${variableTypeToString(node.typeAnnotation, this.typeAliases, true)}`
+      : "";
+    return `${sigil}${name}${annotation}`;
   }
 
   protected processInterruptStatement(node: InterruptStatement): string {
@@ -1027,7 +1043,7 @@ export class AgencyGenerator {
    *  wrap onto their own lines the same way the formatter wraps source, and
    *  the declared `raises` clause is included. */
   signatureOf(node: FunctionDefinition | GraphNodeDefinition): string {
-    const name = node.type === "function" ? node.functionName : node.nodeName;
+    const name = declaredName(node.type === "function" ? node.functionName : node.nodeName);
     return this.buildSignature(name, node, "");
   }
 
@@ -1040,7 +1056,7 @@ export class AgencyGenerator {
     if (node.markers?.destructive) prefixes.push("destructive");
     if (node.markers?.idempotent) prefixes.push("idempotent");
     prefixes.push("def");
-    const prefix = `${prefixes.join(" ")} ${node.functionName}`;
+    const prefix = `${prefixes.join(" ")} ${declaredName(node.functionName)}`;
     const signature = this.buildSignature(prefix, node, " {");
 
     let result = this.indentStr(`${signature}\n`);
@@ -1132,7 +1148,7 @@ export class AgencyGenerator {
     const rendered = this.renderArgs(node.arguments, inlineBlock);
     let result = this.wrapList(
       rendered,
-      `${asyncPrefix}${node.functionName}`,
+      `${asyncPrefix}${declaredName(node.functionName)}`,
       "(",
       ")",
       "",
@@ -1430,7 +1446,8 @@ export class AgencyGenerator {
       node.importedNames[0].type === "namedImport"
     ) {
       const namedImport = node.importedNames[0];
-      const names = namedImport.importedNames.map((name) => {
+      const names = namedImport.importedNames.map((entry) => {
+        const name = declaredName(entry);
         const alias = namedImport.aliases[name];
         const base = alias ? `${name} as ${alias}` : name;
         return this.prefixMarkedName(
@@ -1455,7 +1472,8 @@ export class AgencyGenerator {
   protected processImportNameType(node: ImportNameType): string {
     switch (node.type) {
       case "namedImport": {
-        const names = node.importedNames.map((name) => {
+        const names = node.importedNames.map((entry) => {
+          const name = declaredName(entry);
           const alias = node.aliases[name];
           const base = alias ? `${name} as ${alias}` : name;
           return this.prefixMarkedName(
@@ -1570,7 +1588,7 @@ export class AgencyGenerator {
   protected processGraphNode(node: GraphNodeDefinition): string {
     const tags = this.formatAttachedTags(node);
     const { body } = node;
-    const prefix = `${node.exported ? "export " : ""}node ${node.nodeName}`;
+    const prefix = `${node.exported ? "export " : ""}node ${declaredName(node.nodeName)}`;
     const signature = this.buildSignature(prefix, node, " {");
 
     let result = this.indentStr(`${signature}\n`);

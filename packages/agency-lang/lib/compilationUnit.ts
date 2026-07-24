@@ -1,3 +1,4 @@
+import { declaredName } from "./types/hole.js";
 import type {
   AgencyProgram,
   FunctionDefinition,
@@ -211,10 +212,10 @@ export function buildCompilationUnit(
   for (const node of program.nodes) {
     switch (node.type) {
       case "function":
-        unit.functionDefinitions[node.functionName] = node;
+        unit.functionDefinitions[declaredName(node.functionName)] = node;
         registerMarkers(
           unit,
-          node.functionName,
+          declaredName(node.functionName),
           node.markers,
           functionContainsDestructiveBlock(node.body),
         );

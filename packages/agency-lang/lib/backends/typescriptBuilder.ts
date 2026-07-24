@@ -1,4 +1,7 @@
 /* eslint-disable max-lines -- legacy file slated for incremental refactor */
+import { declaredName } from "../types/hole.js";
+import { holeNames } from "../utils/holes.js";
+import { DIAGNOSTICS, renderMessage } from "../typeChecker/diagnostics.js";
 import {
   AgencyComment,
   AgencyNode,
@@ -494,6 +497,17 @@ export class TypeScriptBuilder {
   // ------- Main entry point -------
 
   build(program: AgencyProgram): TsNode {
+    // A template is not a program. Refuse before generating anything, and
+    // name every unfilled hole — not just the first one met — so the
+    // message tells the user the full fill they owe.
+    const unfilled = holeNames(program.nodes);
+    if (unfilled.length > 0) {
+      const rendered = renderMessage(DIAGNOSTICS.unfilledHoles.message, {
+        names: unfilled.map((name) => `#${name}`).join(", "),
+      });
+      throw new Error(`${DIAGNOSTICS.unfilledHoles.code}: ${rendered}`);
+    }
+
     // Plain top-level aliases in source order — the basis for the derived
     // pending-alias computation (see pendingAliasesFor). Captured once;
     // partitionProgram keeps top-level declarations in source order, so
@@ -699,6 +713,13 @@ export class TypeScriptBuilder {
         return ts.raw(`/${node.pattern}/${node.flags}`);
       case "blockArgument":
         return this.processBlockAsExpression(node);
+      case "hole":
+        // Unreachable in a correct build: the pre-pass in build() refuses
+        // any program containing holes. Reaching here is a bug in that
+        // pre-pass, not a user error.
+        throw new Error(
+          `Internal error: hole #${node.name} reached codegen; the unfilled-holes pre-pass should have refused this program.`,
+        );
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }
@@ -1735,9 +1756,9 @@ export class TypeScriptBuilder {
     const imports = node.importedNames.map((nameType) => {
       switch (nameType.type) {
         case "namedImport": {
-          const keptNames = nameType.importedNames.filter(
-            (name) => !isInlinedAlias(name),
-          );
+          const keptNames = nameType.importedNames
+            .map(declaredName)
+            .filter((name) => !isInlinedAlias(name));
           if (keptNames.length === 0) return ts.empty();
           return ts.importDecl({
             importKind: "named",
@@ -1770,7 +1791,7 @@ export class TypeScriptBuilder {
       for (const nameType of node.importedNames) {
         switch (nameType.type) {
           case "namedImport":
-            for (const name of nameType.importedNames) {
+            for (const name of nameType.importedNames.map(declaredName)) {
               if (isInlinedAlias(name)) continue;
               const vpEntry = aliasesFull[name];
               // A value-param alias imports as a descriptor factory, not an
@@ -2011,7 +2032,8 @@ export class TypeScriptBuilder {
    * spec's discipline rule (§4.6 rule #3) is enforced by code review.
    */
   private buildToolDefinition(node: FunctionDefinition): TsNode {
-    const { functionName, parameters } = node;
+    const functionName = declaredName(node.functionName);
+    const { parameters } = node;
     if (
       this.compilationUnit.graphNodes
         .map((n) => n.nodeName)
@@ -2375,9 +2397,10 @@ export class TypeScriptBuilder {
   }
 
   private processFunctionDefinition(node: FunctionDefinition): TsNode {
-    this.scopes.push({ type: "function", functionName: node.functionName });
-    this._sourceMapBuilder.enterScope(this.moduleId, node.functionName);
-    const { functionName, parameters } = node;
+    this.scopes.push({ type: "function", functionName: declaredName(node.functionName) });
+    this._sourceMapBuilder.enterScope(this.moduleId, declaredName(node.functionName));
+    const functionName = declaredName(node.functionName);
+    const { parameters } = node;
 
     const prevDestructive = this.scopes.inDestructiveFunction;
     this.scopes.inDestructiveFunction = !!node.markers?.destructive;
@@ -3011,9 +3034,10 @@ export class TypeScriptBuilder {
   }
 
   private processGraphNode(node: GraphNodeDefinition): TsNode {
-    this.scopes.push({ type: "node", nodeName: node.nodeName });
-    this._sourceMapBuilder.enterScope(this.moduleId, node.nodeName);
-    const { nodeName, body, parameters } = node;
+    this.scopes.push({ type: "node", nodeName: declaredName(node.nodeName) });
+    this._sourceMapBuilder.enterScope(this.moduleId, declaredName(node.nodeName));
+    const nodeName = declaredName(node.nodeName);
+    const { body, parameters } = node;
     this.adjacentNodes[nodeName] = [];
     this.currentAdjacentNodes = [];
     this.isInsideGraphNode = true;
@@ -4584,14 +4608,14 @@ export class TypeScriptBuilder {
       }
       result.push(
         ts.functionDecl(
-          node.nodeName,
+          declaredName(node.nodeName),
           fnParams,
           ts.return(
             $(ts.id("runNode"))
               .call([
                 ts.obj({
                   ctx: ts.runtime.globalCtx,
-                  nodeName: ts.str(node.nodeName),
+                  nodeName: ts.str(declaredName(node.nodeName)),
                   data: ts.obj(dataObj),
                   messages: ts.id("messages"),
                   callbacks: ts.id("callbacks"),
@@ -4611,7 +4635,7 @@ export class TypeScriptBuilder {
         ts.export(
           ts.varDecl(
             "const",
-            `__${node.nodeName}NodeParams`,
+            `__${declaredName(node.nodeName)}NodeParams`,
             ts.arr(args.map((arg) => ts.str(arg.name))),
           ),
         ),

@@ -141,6 +141,13 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG7005](static-init.md#ag7005) | Cannot mutate static `&#123;name&#125;` via `.&#123;method&#125;(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value. |
 | [AG7006](static-init.md#ag7006) | Function '&#123;name&#125;' cannot be both destructive and idempotent — those markers are contradictory. Pick one. |
 
+## Code templates and holes
+
+| Code | Message |
+| --- | --- |
+| [AG8001](templates.md#ag8001) | This file is a template with unfilled holes (&#123;names&#125;) and cannot be run directly. Load it with `loadTemplate` and fill it first. |
+| [AG8002](templates.md#ag8002) | The hole `#&#123;name&#125;` is in a position that gives it no expected type. Annotate it, for example `#&#123;name&#125;: string`. |
+
 ## Lint
 
 | Code | Message |

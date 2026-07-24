@@ -45,12 +45,14 @@ const response: Response = llm("What is the capital of France?")
 print(response.capital)
 ```
 
-You can also annotate properties on the type using `#` to give the LLM more guidance on what to return.
+You can also add a description to a property with `@jsonSchema` to give the LLM more guidance on what to return.
 
 ```ts
 type Response = {
-  capital: string # the capital city of the country
-  population: number # the population of the capital city
+  @jsonSchema({ description: "the capital city of the country" })
+  capital: string,
+  @jsonSchema({ description: "the population of the capital city" })
+  population: number
 }
 const response: Response = llm("What is the capital of France?")
 ```

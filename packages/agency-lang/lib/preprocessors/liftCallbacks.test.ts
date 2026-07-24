@@ -90,7 +90,7 @@ describe("liftCallbackBlocks", () => {
     // No lifted def beyond the user's `myCb`.
     const liftedDefs = out.nodes.filter(
       (n): n is FunctionDefinition =>
-        n.type === "function" && n.functionName.startsWith("__cb_"),
+        n.type === "function" && typeof n.functionName === "string" && n.functionName.startsWith("__cb_"),
     );
     expect(liftedDefs).toHaveLength(0);
 

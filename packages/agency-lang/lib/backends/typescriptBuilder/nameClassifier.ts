@@ -1,3 +1,4 @@
+import { declaredName } from "../../types/hole.js";
 import type { AgencyNode } from "../../types.js";
 import type { CompilationUnit } from "../../compilationUnit.js";
 import { getImportedNames } from "../../types/importStatement.js";
@@ -60,7 +61,7 @@ export class NameClassifier {
 
     this.graphNodeNames = new Set<string>();
     for (const n of compilationUnit.graphNodes) {
-      this.graphNodeNames.add(n.nodeName);
+      this.graphNodeNames.add(declaredName(n.nodeName));
     }
     for (const group of compilationUnit.importedNodes) {
       for (const name of group.importedNodes) {

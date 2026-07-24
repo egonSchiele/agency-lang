@@ -1,0 +1,4 @@
+node main(): string {
+  const prompt: string = #text
+  return prompt
+}

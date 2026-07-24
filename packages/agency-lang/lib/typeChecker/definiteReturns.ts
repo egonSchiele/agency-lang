@@ -1,6 +1,7 @@
 import { diagnostic } from "./diagnostics.js";
 import type { ScopeInfo, TypeCheckerContext } from "./types.js";
 import type { VariableType } from "../types.js";
+import { findHoles } from "../utils/holes.js";
 
 type Severity = "silent" | "warn" | "error";
 
@@ -43,6 +44,14 @@ export function checkDefiniteReturns(
     if (!info.name || info.name === "top-level") continue;
     if (ctx.nodeDefs[info.name]) continue; // nodes are exempt (bare-keyed — index.ts:88)
     if (!requiresReturn(info.returnType)) continue;
+    // A template's function may get its only `return` from a statements
+    // hole. The completed program is checked in full when it runs, so a
+    // genuinely missing return is caught there rather than here.
+    if (
+      findHoles(info.body).some((hole) => hole.sort === "statements")
+    ) {
+      continue;
+    }
     const terminal = terminals[info.scopeKey];
     if (terminal && terminal.kind !== "exit") {
       // Point at the signature, not the first statement in the body.

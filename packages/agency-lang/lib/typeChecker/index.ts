@@ -46,6 +46,7 @@ import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
 import { computeMatchExprTypes } from "./matchExprTypes.js";
 import { checkDefiniteReturns } from "./definiteReturns.js";
 import { checkConflictingMarkers } from "./conflictingMarkers.js";
+import { checkTemplateHoles } from "./templateHoles.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { declareFinalizeBinders } from "./finalizeBinder.js";
 import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
@@ -362,6 +363,10 @@ export class TypeChecker {
 
     // A function cannot be both destructive and idempotent.
     checkConflictingMarkers(ctx);
+
+    // Template holes: an expression hole in a position that supplies no
+    // type must carry an inline annotation (AG8002).
+    checkTemplateHoles(ctx);
 
     // Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);

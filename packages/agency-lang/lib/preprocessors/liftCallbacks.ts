@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import type { AgencyNode, AgencyProgram, Expression } from "@/types.js";
 import type { FunctionCall, FunctionDefinition } from "@/types/function.js";
 import type { VariableNameLiteral } from "@/types/literals.js";
@@ -140,11 +141,11 @@ function transformTopLevel(
   nextName: NameGen,
 ): AgencyNode {
   if (node.type === "function") {
-    node.body = transformBody(node.body, node.functionName, lifted, nextName);
+    node.body = transformBody(node.body, declaredName(node.functionName), lifted, nextName);
     return node;
   }
   if (node.type === "graphNode") {
-    node.body = transformBody(node.body, node.nodeName, lifted, nextName);
+    node.body = transformBody(node.body, declaredName(node.nodeName), lifted, nextName);
     return node;
   }
   // Statements at module top level (assignments, top-level callback calls).

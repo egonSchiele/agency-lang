@@ -107,6 +107,8 @@ runApproved(
 
 **Returns:** [PlanState](#planstate)
 
+**Throws:** `std::agents::planApprove`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L186))
 
 ### plannerAgent
@@ -156,5 +158,7 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 | extraTools | `any[]` | [] |
 
 **Returns:** `Result<string>`
+
+**Throws:** `std::agents::planApprove`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L221))

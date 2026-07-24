@@ -105,6 +105,7 @@ import {
   ValueParam,
 } from "../types.js";
 import { EffectDeclaration } from "../types/effectDeclaration.js";
+import { Hole } from "../types/hole.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
 import {
@@ -184,6 +185,26 @@ export const commaWithNewline = seqR(
 export const varNameChar: Parser<string> = oneOf(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_",
 );
+
+/** The identifier grammar as a regex: the leading `letter | "_"` of
+ *  variableNameParser, then varNameChar. Single source — the generator and
+ *  the template filler import this rather than restating it. */
+export const LEGAL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** The language's keywords: names that parse but cannot be declared. Used
+ *  by identifier-hole filling — `fill(t, { name: "if" })` must be rejected
+ *  here, not explode at re-parse far from its cause. Mirrors the keyword
+ *  strings this grammar consumes (`def`, `node`, statement keywords,
+ *  modifiers, literal words); extend it when a new keyword lands. */
+export const RESERVED_WORDS: readonly string[] = [
+  "def", "node", "return", "goto", "raise", "interrupt", "import", "export",
+  "type", "effect", "effectSet", "if", "else", "for", "while", "in",
+  "match", "thread", "subthread", "handle", "finalize", "guard", "debugger",
+  "skills", "skill", "static", "const", "let", "async", "sync", "await",
+  "fork", "race", "try", "catch", "is", "as", "from", "with",
+  "destructive", "idempotent", "optimize", "class", "true", "false",
+  "null", "new", "typeof", "void", "instanceof", "test",
+];
 
 // =============================================================================
 // loc.ts
@@ -859,6 +880,170 @@ export const variableNameParser: Parser<VariableNameLiteral> = label("an identif
   return parser(input);
 }));
 
+/** A quoted hole name (`#"field-name"`): any characters except whitespace
+ *  and the quote. The quotes are around the NAME only — quoting changes
+ *  neither the sort nor what may fill the hole. */
+const quotedHoleNameParser: Parser<string> = map(
+  seqC(
+    char('"'),
+    capture(many1WithJoin(noneOf(" \t\n\r\"")), "quoted"),
+    char('"'),
+  ),
+  (r: unknown) => (r as { quoted: string }).quoted,
+);
+
+/** A template hole: `#name`, `#...name` (splice), `#"quoted name"`, each
+ *  optionally `: type`. No whitespace is allowed between `#` and the name —
+ *  that is what makes `# prompt` fail. Produces sort "expr";
+ *  position-specific wrappers override the sort. */
+export const holeParser: Parser<Hole> = label(
+  "a hole",
+  memo("holeParser", withLoc((input: string) => {
+    const parser = seqC(
+      char("#"),
+      capture(optional(str("...")), "splice"),
+      capture(
+        or(
+          quotedHoleNameParser,
+          map(variableNameParser, (name) => name.value),
+        ),
+        "name",
+      ),
+      optional(
+        captureCaptures(
+          seqC(
+            optionalSpaces,
+            char(":"),
+            optionalSpaces,
+            capture(lazy(() => variableTypeParser), "typeAnnotation"),
+          ),
+        ),
+      ),
+    );
+    const result = parser(input);
+    if (!result.success) return result;
+    const captures = result.result as unknown as {
+      name: string;
+      splice: string | null;
+      typeAnnotation?: VariableType;
+    };
+    return success(
+      {
+        type: "hole" as const,
+        name: captures.name,
+        sort: "expr" as const,
+        splice: !!captures.splice,
+        ...(captures.typeAnnotation !== undefined
+          ? { typeAnnotation: captures.typeAnnotation }
+          : {}),
+      } as Hole,
+      result.rest,
+    );
+  })),
+);
+
+/** An expression-position hole: splices are rejected here because a splice
+ *  expands to a sequence, which is meaningless where one value is needed.
+ *  Argument lists, statements, and top level get their own wiring. */
+export const exprHoleParser: Parser<Hole> = (input: string) => {
+  const result = holeParser(input);
+  if (!result.success) return result;
+  if (result.result.splice) {
+    return failure("a splice cannot appear in expression position", input);
+  }
+  return result;
+};
+
+/** An argument-list splice (`f(#...args)`). Non-splice holes reach argument
+ *  lists through the expression parser; this alternative exists because the
+ *  expression path deliberately rejects splices. */
+export const spliceHoleParser: Parser<Hole> = (input: string) => {
+  const result = holeParser(input);
+  if (!result.success) return result;
+  if (!result.result.splice) {
+    return failure("expected a splice hole", input);
+  }
+  return result;
+};
+
+/** The tie-break rule: a bare hole occupying an entire statement has sort
+ *  "statements"; a hole inside a larger expression keeps sort "expr". The
+ *  boundary check is what stops this parser from eating the `#a` prefix of
+ *  an expression statement like `#a + 1`. */
+export const statementHoleParser: Parser<Hole> = memo(
+  "statementHoleParser",
+  (input: string) => {
+    const result = holeParser(input);
+    if (!result.success) return result;
+    const ws = optionalSpaces(result.rest);
+    const after = ws.success ? ws.rest : result.rest;
+    const atStatementEnd =
+      after === "" ||
+      after.startsWith("\n") ||
+      after.startsWith("\r") ||
+      after.startsWith("}") ||
+      after.startsWith("//") ||
+      // A blank line following the hole arrives as the sentinel, not "\n"
+      // (replaceBlankLines runs before parsing).
+      after.startsWith(BLANK_LINE_SENTINEL);
+    if (!atStatementEnd) {
+      return failure("a statement hole must occupy the whole statement", input);
+    }
+    return success({ ...result.result, sort: "statements" as const }, result.rest);
+  },
+);
+
+export const identifierHoleParser: Parser<Hole> = memo(
+  "identifierHoleParser",
+  (input: string) => {
+    const result = holeParser(input);
+    if (!result.success) return result;
+    // A name position holds exactly one name; a splice has no meaning
+    // here. Rejecting at parse time keeps fill's identifier branch total
+    // (a splice flag reaching it would otherwise be silently dropped).
+    if (result.result.splice) {
+      return failure("a splice cannot appear in a name position", input);
+    }
+    return success({ ...result.result, sort: "identifier" as const }, result.rest);
+  },
+);
+
+export const declHoleParser: Parser<Hole> = memo(
+  "declHoleParser",
+  map(lazy(() => holeParser), (hole) => ({ ...hole, sort: "decl" as const })),
+);
+
+/** A top-level hole is a decl hole: it stands for whole declarations
+ *  (functions, nodes, types, imports). Reuses statementHoleParser's
+ *  whole-statement boundary check so `#a + 1` at top level stays an
+ *  expression statement. */
+export const topLevelHoleParser: Parser<Hole> = memo(
+  "topLevelHoleParser",
+  (input: string) => {
+    const result = statementHoleParser(input);
+    if (!result.success) return result;
+    return success({ ...result.result, sort: "decl" as const }, result.rest);
+  },
+);
+
+/** A declaration-name position (`def #name(`, `node #name(`): the hole plus
+ *  any trailing spaces before the paren the surrounding parser expects. */
+const declNameHoleParser: Parser<Hole> = map(
+  seqC(capture(lazy(() => identifierHoleParser), "hole"), optionalSpaces),
+  (r: unknown) => (r as { hole: Hole }).hole,
+);
+
+/** A declaration name: an identifier hole or a raw name. When the input
+ *  starts with `#` there is NO raw-name fallback — otherwise a rejected
+ *  hole form (`def #...name`) would be swallowed as the literal string
+ *  "#...name" instead of failing the parse. */
+const declNameParser: Parser<string | Hole> = (input: string) => {
+  if (input.startsWith("#")) {
+    return declNameHoleParser(input) as ParserResult<string | Hole>;
+  }
+  return many1Till(char("("))(input) as ParserResult<string | Hole>;
+};
+
 export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: string): ParserResult<BooleanLiteral> => {
   const parser = seqC(
     set("type", "boolean"),
@@ -1221,26 +1406,6 @@ export const objectPropertyParser: Parser<ObjectProperty> = memo(
   },
 );
 
-export const objectPropertyDescriptionParser: Parser<{ description: string }> =
-  memo(
-    "objectPropertyDescriptionParser",
-    seqC(
-      char("#"),
-      optionalSpaces,
-      capture(many1Till(oneOf(",;\n")), "description"),
-    ),
-  );
-
-export const objectPropertyWithDescriptionParser: Parser<ObjectProperty> =
-  memo(
-    "objectPropertyWithDescriptionParser",
-    seqC(
-      captureCaptures(objectPropertyParser),
-      spaces,
-      captureCaptures(objectPropertyDescriptionParser),
-    ),
-  );
-
 /**
  * Parses one or more `@tag(...)` lines, then a property, attaching the
  * tags to that property's `tags` field. Used inside `objectTypeParser`
@@ -1265,13 +1430,7 @@ export const taggedObjectPropertyParser: Parser<ObjectProperty> = memo(
         ),
         "tagWrappers",
       ),
-      capture(
-        or(
-          lazy(() => objectPropertyWithDescriptionParser),
-          lazy(() => objectPropertyParser),
-        ),
-        "prop",
-      ),
+      capture(lazy(() => objectPropertyParser), "prop"),
     );
     const result = parser(input);
     if (!result.success) return result;
@@ -1356,7 +1515,6 @@ function partitionTrivia<T>(
 const objectMember = itemEntry(
   or(
     taggedObjectPropertyParser,
-    objectPropertyWithDescriptionParser,
     objectPropertyParser,
   ),
   optional(objectPropertyDelimiter),
@@ -2304,6 +2462,9 @@ const argumentListParser = memo("argumentListParser", seqC(
       or(
         namedArgumentParser,
         splatParser,
+        // Before exprParser: the expression path rejects splices, so
+        // `f(#...args)` needs its own alternative here.
+        lazy(() => spliceHoleParser),
         lazy(() => inlineBlockParser),
         lazy(() => exprParser),
       ),
@@ -2774,6 +2935,10 @@ export const schemaAccessParser: Parser<ValueAccess> = memo(
 );
 
 const baseAtom: Parser<Expression> = or(
+  // First: `#` cannot start any other expression, so this is a cheap
+  // early exit. Being an operand alternative covers every expression
+  // position at once — binop operands, conditions, call and named args.
+  lazy(() => exprHoleParser),
   unaryTypeofParser,
   unaryVoidParser,
   unaryNotParser,
@@ -3562,14 +3727,20 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = withLoc(mem
   ),
 ));
 
-const nameWithOptionalAlias = or(
+const nameWithOptionalAlias: Parser<{ name: string | Hole; alias: string | undefined }> = or(
+  // A hole specifier (`import { #tool } from ...`) — templates only. No
+  // alias: the filler decides the real name, so there is nothing to bind.
+  map(lazy(() => identifierHoleParser), (hole) => ({
+    name: hole as string | Hole,
+    alias: undefined as string | undefined,
+  })),
   map(
     seqC(capture(many1WithJoin(varNameChar), "name"), spaces, str("as"), spaces, capture(many1WithJoin(varNameChar), "alias")),
-    (r) => ({ name: r.name, alias: r.alias as string }),
+    (r) => ({ name: r.name as string | Hole, alias: r.alias as string }),
   ),
   map(
     seqC(capture(many1WithJoin(varNameChar), "name")),
-    (r) => ({ name: r.name, alias: undefined as string | undefined }),
+    (r) => ({ name: r.name as string | Hole, alias: undefined as string | undefined }),
   ),
 );
 
@@ -3619,12 +3790,15 @@ const namedImportParser: Parser<NamedImport> = memo(
       char("}"),
     ),
     (result) => {
-      const importedNames: string[] = [];
+      const importedNames: (string | Hole)[] = [];
       const destructiveNames: string[] = [];
       const idempotentNames: string[] = [];
       const aliases: Record<string, string> = {};
       for (const item of result.items) {
         importedNames.push(item.name);
+        // Aliases and retry-safety markers only attach to real names; the
+        // hole path never produces them.
+        if (typeof item.name !== "string") continue;
         if (item.alias) {
           aliases[item.name] = item.alias;
         }
@@ -3743,6 +3917,9 @@ const namedExportBodyParser = map(
     const idempotentNames: string[] = [];
     const aliases: Record<string, string> = {};
     for (const item of result.items) {
+      // Hole specifiers are an import-only feature; an export-from list
+      // carries real names.
+      if (typeof item.name !== "string") continue;
       names.push(item.name);
       if (item.alias) aliases[item.name] = item.alias;
       if (item.isDestructive) destructiveNames.push(item.name);
@@ -4175,6 +4352,12 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   skillParser,
   bodyOptimizeAssignmentParser,
   assignmentParser,
+  // Ahead of binOpParser deliberately: order IS the sort tie-break. A bare
+  // hole occupying the whole statement gets sort "statements" here; a hole
+  // inside a larger expression fails statementHoleParser's boundary check
+  // and reaches binOpParser, whose operand path assigns sort "expr". (The
+  // parser-ordering exemption in docs/dev/anti-patterns.md covers this.)
+  lazy(() => statementHoleParser),
   binOpParser,
   booleanParser,
   valueAccessParser,
@@ -5111,7 +5294,7 @@ const _baseFunctionParser: Parser<any> = memo(
     set("type", "function"),
     capture(str("def"), "keyword"),
     many1(space),
-    capture(many1Till(char("(")), "functionName"),
+    capture(declNameParser, "functionName"),
     char("("),
     optionalSpacesOrNewline,
     capture(
@@ -5280,7 +5463,7 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
       optionalSpaces,
       str("node"),
       many1(space),
-      capture(many1Till(char("(")), "nodeName"),
+      capture(declNameParser, "nodeName"),
       char("("),
       optionalSpacesOrNewline,
       capture(

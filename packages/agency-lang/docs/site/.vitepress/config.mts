@@ -83,6 +83,7 @@ export default defineConfig({
               text: "Compiling and Running Code",
               link: "/guide/compiling-and-running",
             },
+            { text: "Template Agency", link: "/guide/templates" },
             { text: "Agency Config File", link: "/guide/agency-config-file" },
             { text: "Testing", link: "/guide/testing" },
           ],

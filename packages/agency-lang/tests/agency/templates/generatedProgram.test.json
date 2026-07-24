@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"generated:readFile(\\\"/etc/passwd\\\")\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A filler that looks like code becomes data in the generated program, not a call",
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "Can I read this template?" }
+      ]
+    }
+  ]
+}

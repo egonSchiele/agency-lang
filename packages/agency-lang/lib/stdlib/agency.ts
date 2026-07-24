@@ -122,7 +122,7 @@ export function _compile(source: string): { moduleId: string; code: string } {
 // so if you let the user create a symlink and then write to it, that's
 // on you. For overwrite of an EXISTING symlink the realpath check still
 // applies because we hit the existing-target branch.
-function resolveInSandbox(
+export function resolveInSandbox(
   dir: string,
   filename: string,
   opts: { mustExist?: boolean } = {},

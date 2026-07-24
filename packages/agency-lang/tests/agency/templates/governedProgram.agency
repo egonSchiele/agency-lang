@@ -1,0 +1,35 @@
+import { loadTemplate, fill, parseExpr, toSource, runCode } from "std::agency"
+
+// The feature's premise: a generated program's guarded actions stay
+// governed by the PARENT's handlers. The template picks its tool via an
+// identifier hole; the call itself is author-parsed Code (the documented
+// parseExpr escape hatch). The parent rejects the child's read, and the
+// child must come back refused.
+node main(): string {
+  const tpl = loadTemplate(__dirname, "governedTemplate.agency")
+  if (isFailure(tpl)) {
+    return "load failed"
+  }
+  const call = parseExpr("try read(\"/etc/passwd\", \"/\")")
+  if (isFailure(call)) {
+    return "parse failed: ${call.error}"
+  }
+  const filled = fill(tpl.value, { tool: "read", call: call.value })
+  if (isFailure(filled)) {
+    return "fill failed: ${filled.error}"
+  }
+  handle {
+    const result = runCode(toSource(filled.value))
+    if (isFailure(result)) {
+      return "run failed: ${result.error}"
+    }
+    return result.value
+  } with (e) {
+    if (e.effect == "std::read") {
+      return reject("no file reads from generated programs")
+    }
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

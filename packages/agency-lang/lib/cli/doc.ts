@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import { AgencyConfig } from "@/config.js";
 import { AgencyGenerator, generateAgency } from "@/backends/agencyGenerator.js";
 import { parse, readFile } from "./commands.js";
@@ -67,7 +68,7 @@ export function generateDoc(
         symbolRegistry[name] = mdRelPath;
       }
       for (const node of info.graphNodes) {
-        symbolRegistry[node.nodeName] = mdRelPath;
+        symbolRegistry[declaredName(node.nodeName)] = mdRelPath;
       }
       for (const name of Object.keys(
         info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {},
@@ -485,10 +486,10 @@ function generateFunctionSection(
     // Underscore-prefixed exports are internal plumbing (e.g. `_guard`,
     // the guard construct's lowering target) — exported for the
     // compiler's sake, not the user's. Their story belongs in docs/dev.
-    if (fn.functionName.startsWith("_")) return null;
+    if (declaredName(fn.functionName).startsWith("_")) return null;
     const sig = generator.signatureOf(fn);
     return section(
-      heading(3, fn.functionName),
+      heading(3, declaredName(fn.functionName)),
       codeFence(sig),
       fn.docString ? docStringText(fn.docString) : null,
       fn.docComment ? formatDocComment(fn.docComment) : null,
@@ -496,7 +497,7 @@ function generateFunctionSection(
       fn.returnType
         ? `${bold("Returns:")} ${formatTypeLinked(fn.returnType, ctx)}`
         : null,
-      formatThrows(interruptEffectsByFunction[fn.functionName]),
+      formatThrows(interruptEffectsByFunction[declaredName(fn.functionName)]),
       sourceLink(fn.loc, ctx),
     );
   });
@@ -513,7 +514,7 @@ function generateNodeSection(
   const parts = nodes.map((node) => {
     const sig = generator.signatureOf(node);
     return section(
-      heading(3, node.nodeName),
+      heading(3, declaredName(node.nodeName)),
       codeFence(sig),
       node.docString ? docStringText(node.docString) : null,
       node.docComment ? formatDocComment(node.docComment) : null,
@@ -521,7 +522,7 @@ function generateNodeSection(
       node.returnType
         ? `${bold("Returns:")} ${formatTypeLinked(node.returnType, ctx)}`
         : null,
-      formatThrows(interruptEffectsByFunction[node.nodeName]),
+      formatThrows(interruptEffectsByFunction[declaredName(node.nodeName)]),
       sourceLink(node.loc, ctx),
     );
   });

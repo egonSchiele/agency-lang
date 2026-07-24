@@ -7,6 +7,7 @@ import {
   VariableType,
 } from "../types.js";
 import { BaseNode } from "./base.js";
+import { Hole } from "./hole.js";
 import { BlockArgument } from "./blockArgument.js";
 import { AgencyArray, AgencyObject, NamedArgument, SplatExpression } from "./dataStructures.js";
 import { MultiLineStringLiteral } from "./literals.js";
@@ -58,7 +59,9 @@ export type FunctionMarkers = {
 
 export type FunctionDefinition = BaseNode & {
   type: "function";
-  functionName: string;
+  /** A Hole only inside a template (`def #name(...)`); always a string in
+   *  a compilable program. */
+  functionName: string | Hole;
   parameters: FunctionParameter[];
   body: AgencyNode[];
   returnType?: VariableType | null;

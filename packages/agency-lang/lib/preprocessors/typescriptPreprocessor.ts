@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import { AgencyConfig, BUILTIN_FUNCTIONS } from "@/config.js";
 import type { CompilationUnit, ImportedFunctionSignature } from "@/compilationUnit.js";
 import {
@@ -397,7 +398,7 @@ export class TypescriptPreprocessor {
   protected getFunctionDefinitions() {
     for (const node of this.program.nodes) {
       if (node.type === "function") {
-        this.functionDefinitions[node.functionName] = node;
+        this.functionDefinitions[declaredName(node.functionName)] = node;
       }
     }
   }
@@ -405,7 +406,7 @@ export class TypescriptPreprocessor {
   protected getGraphNodeDefinitions() {
     for (const node of this.program.nodes) {
       if (node.type === "graphNode") {
-        this.graphNodeDefinitions[node.nodeName] = node;
+        this.graphNodeDefinitions[declaredName(node.nodeName)] = node;
       }
     }
   }
@@ -961,8 +962,8 @@ export class TypescriptPreprocessor {
    * Get the scope name for a function-like node (function or graphNode).
    */
   private getScopeName(node: AgencyNode): string {
-    if (node.type === "function") return node.functionName;
-    if (node.type === "graphNode") return node.nodeName;
+    if (node.type === "function") return declaredName(node.functionName);
+    if (node.type === "graphNode") return declaredName(node.nodeName);
     return "unknown";
   }
 

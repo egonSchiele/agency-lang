@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import { getWordAtPosition } from "../cli/definition.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import type { FileSymbols, InterruptEffect, SymbolInfo, SymbolKind, SymbolTable } from "../symbolTable.js";
@@ -45,28 +46,28 @@ function addLocalDefinition(
   switch (node.type) {
     case "function":
       addSymbol(index, {
-        name: node.functionName,
-        originalName: node.functionName,
+        name: declaredName(node.functionName),
+        originalName: declaredName(node.functionName),
         kind: "function",
         source: "local",
         filePath: fsPath,
         loc: node.loc,
         parameters: node.parameters,
         returnType: node.returnType,
-        interruptEffects: interruptEffectsFor(fileSymbols, node.functionName),
+        interruptEffects: interruptEffectsFor(fileSymbols, declaredName(node.functionName)),
       });
       break;
     case "graphNode":
       addSymbol(index, {
-        name: node.nodeName,
-        originalName: node.nodeName,
+        name: declaredName(node.nodeName),
+        originalName: declaredName(node.nodeName),
         kind: "node",
         source: "local",
         filePath: fsPath,
         loc: node.loc,
         parameters: node.parameters,
         returnType: node.returnType,
-        interruptEffects: interruptEffectsFor(fileSymbols, node.nodeName),
+        interruptEffects: interruptEffectsFor(fileSymbols, declaredName(node.nodeName)),
       });
       break;
     case "typeAlias":

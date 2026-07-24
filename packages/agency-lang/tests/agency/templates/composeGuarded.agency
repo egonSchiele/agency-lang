@@ -1,0 +1,53 @@
+import { loadTemplate, fill, parseStatements, holesOf, toSource, runCode } from "std::agency"
+
+// The workflow the feature exists for, proven at the user level: two
+// template files, composed while one hole is still open, filled at the
+// end, run in a subprocess. Build the shape first, parameterize last.
+node main(): string {
+  const guardTpl = loadTemplate(__dirname, "composeGuardedGuard.agency")
+  if (isFailure(guardTpl)) {
+    return "guard load failed"
+  }
+  const mainTpl = loadTemplate(__dirname, "composeGuardedMain.agency")
+  if (isFailure(mainTpl)) {
+    return "main load failed"
+  }
+  const body = parseStatements("return \"news-ok\"")
+  if (isFailure(body)) {
+    return "parse failed: ${body.error}"
+  }
+  const guardedFn = fill(guardTpl.value, { body: body.value })
+  if (isFailure(guardedFn)) {
+    return "guard fill failed: ${guardedFn.error}"
+  }
+  const program = fill(mainTpl.value, { helpers: guardedFn.value })
+  if (isFailure(program)) {
+    return "compose fill failed: ${program.error}"
+  }
+
+  // The grafted #minutes hole must still be open on the composed program.
+  const remaining = holesOf(program.value)
+  if (remaining.length != 1) {
+    return "wrong hole count: ${remaining.length}"
+  }
+  if (remaining[0].name != "minutes") {
+    return "wrong hole: ${remaining[0].name}"
+  }
+
+  const done = fill(program.value, { minutes: 120000 })
+  if (isFailure(done)) {
+    return "final fill failed: ${done.error}"
+  }
+  handle {
+    const result = runCode(toSource(done.value))
+    if (isFailure(result)) {
+      return "run failed: ${result.error}"
+    }
+    return result.value
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+    return pass()
+  }
+}

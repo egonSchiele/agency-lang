@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import {
   AccessChainElement,
   AgencyNode,
@@ -203,13 +204,13 @@ export function* getAllVariablesInBody(
       yield { name: node.variableName, node };
       yield* getAllVariablesInBody([node.value as AgencyNode]);
     } else if (node.type === "function") {
-      yield { name: node.functionName, node };
+      yield { name: declaredName(node.functionName), node };
       for (const param of node.parameters) {
         yield { name: param.name, node };
       }
       yield* getAllVariablesInBody(node.body);
     } else if (node.type === "graphNode") {
-      yield { name: node.nodeName, node };
+      yield { name: declaredName(node.nodeName), node };
       for (const param of node.parameters) {
         yield { name: param.name, node };
       }
@@ -429,6 +430,14 @@ export function* walkNodes(
       }
     } else if (node.type === "typeTestExpression") {
       yield* walkNodes([node.expression], [...ancestors, node], scopes);
+    } else if (node.type === "isExpression") {
+      // Symmetric with typeTestExpression above. Found missing by the
+      // hole-position battery: `tmp is string` hid its operand from this
+      // walk, so template hygiene could not see the free name and a
+      // filler captured a template binder through an `is` expression.
+      // (expressionChildren's deliberate emptiness for is/typeTest is a
+      // FLOW-view decision and is untouched — see the comment there.)
+      yield* walkNodes([node.expression], [...ancestors, node], scopes);
     } else if (node.type === "valueAccess") {
       yield* walkNodes([node.base], [...ancestors, node], scopes);
       for (const element of node.chain) {
@@ -486,6 +495,36 @@ export function* walkNodes(
       for (const arg of node.arguments) {
         yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
       }
+    } else if (node.type === "guardBlock") {
+      // The head's argument expressions (`guard(time: <expr>) { ... }`).
+      // The body is statement territory, owned by bodySlots.
+      for (const arg of node.arguments) {
+        yield* walkNodes([unwrapCallArg(arg) as AgencyNode], [...ancestors, node], scopes);
+      }
+    } else if (node.type === "tryExpression") {
+      // `try expr` — found by the hole-position battery in hole.test.ts,
+      // which exists because free-name analysis (template hygiene) is
+      // only as complete as this descent.
+      yield* walkNodes([node.call as AgencyNode], [...ancestors, node], scopes);
+    } else if (node.type === "importStatement") {
+      // Template import specifiers may be identifier holes; real names are
+      // plain strings with nothing to walk.
+      for (const nameType of node.importedNames) {
+        if (nameType.type !== "namedImport") continue;
+        for (const entry of nameType.importedNames) {
+          if (typeof entry !== "string") {
+            yield* walkNodes([entry], [...ancestors, node], scopes);
+          }
+        }
+      }
+    }
+    // Declaration names are plain strings except in templates, where
+    // `def #name(...)` / `node #name(...)` store an identifier hole.
+    if (node.type === "function" && typeof node.functionName !== "string") {
+      yield* walkNodes([node.functionName], [...ancestors, node], scopes);
+    }
+    if (node.type === "graphNode" && typeof node.nodeName !== "string") {
+      yield* walkNodes([node.nodeName], [...ancestors, node], scopes);
     }
     // Generic statement-body descent, driven by the shared `bodySlots`
     // table. Function/node definitions push their own scope; a
@@ -495,9 +534,9 @@ export function* walkNodes(
     for (const slot of bodySlots(node)) {
       let childScopes = scopes;
       if (node.type === "function") {
-        childScopes = [...scopes, functionScope(node.functionName)];
+        childScopes = [...scopes, functionScope(declaredName(node.functionName))];
       } else if (node.type === "graphNode") {
-        childScopes = [...scopes, nodeScope(node.nodeName)];
+        childScopes = [...scopes, nodeScope(declaredName(node.nodeName))];
       }
       const childAncestors: WalkAncestor[] = slot.blockAncestor
         ? [...ancestors, node, slot.blockAncestor]

@@ -1,3 +1,4 @@
+import { declaredName } from "../types/hole.js";
 import { DocumentSymbol, SymbolKind } from "vscode-languageserver-protocol";
 import { AgencyProgram } from "../types.js";
 import { SourceLocation } from "../types/base.js";
@@ -15,14 +16,14 @@ export function getDocumentSymbols(program: AgencyProgram): DocumentSymbol[] {
   for (const node of program.nodes) {
     if (node.type === "function" && node.loc) {
       symbols.push({
-        name: node.functionName,
+        name: declaredName(node.functionName),
         kind: SymbolKind.Function,
         range: locToRange(node.loc),
         selectionRange: locToRange(node.loc),
       });
     } else if (node.type === "graphNode" && node.loc) {
       symbols.push({
-        name: node.nodeName,
+        name: declaredName(node.nodeName),
         kind: SymbolKind.Module,
         range: locToRange(node.loc),
         selectionRange: locToRange(node.loc),

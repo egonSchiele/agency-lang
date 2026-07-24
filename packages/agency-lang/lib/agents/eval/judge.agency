@@ -1,6 +1,8 @@
 type JudgeResult = {
-  score: number # a score from 0 to 100 where 100 means perfect match;
-  reasoning: string # brief explanation for the score
+  @jsonSchema({ description: "a score from 0 to 100 where 100 means perfect match" })
+  score: number,
+  @jsonSchema({ description: "brief explanation for the score" })
+  reasoning: string
 }
 
 node judge(actualOutput: string, expectedOutput: string, judgePrompt: string): JudgeResult {

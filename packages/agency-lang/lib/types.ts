@@ -42,6 +42,7 @@ import { NewExpression } from "./types/newExpression.js";
 import { InterruptStatement } from "./types/interruptStatement.js";
 import { SchemaExpression } from "./types/schemaExpression.js";
 import { BlockArgument } from "./types/blockArgument.js";
+import { Hole } from "./types/hole.js";
 import {
   ArrayPattern,
   BindingPattern,
@@ -54,6 +55,7 @@ import {
   WildcardPattern,
 } from "./types/pattern.js";
 export * from "./types/pattern.js";
+export * from "./types/hole.js";
 export * from "./types/access.js";
 export * from "./types/awaitPending.js";
 export * from "./types/dataStructures.js";
@@ -108,7 +110,10 @@ export type Expression =
   // into map/filter/fork calls inside parseAgency's `lower` block, so
   // stages after the parser only meet one on a `lower: false` parse
   // (formatter, std::agency AST walks).
-  | Comprehension;
+  | Comprehension
+  // Templates only: a hole is legal wherever an expression is, but a
+  // program containing one refuses to compile (AG8001) until filled.
+  | Hole;
 
 /**
  * Runtime set of every `type` string in the `Expression` union above. Kept
@@ -138,6 +143,7 @@ export const EXPRESSION_NODE_TYPES: readonly string[] = [
   "regex",
   "schemaExpression",
   "interruptStatement",
+  "hole",
   "blockArgument",
   "isExpression",
   "typeTestExpression",
@@ -368,7 +374,8 @@ export type AgencyNode =
   | RestPattern
   | WildcardPattern
   | ResultPattern
-  | TypePattern;
+  | TypePattern
+  | Hole;
 
 export type AgencyProgram = {
   type: "agencyProgram";

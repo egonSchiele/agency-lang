@@ -12,6 +12,20 @@ import {
   computeRenames,
 } from "./hygiene.js";
 
+/** Attribution for errors that anchor to a node carried in by a graft:
+ *  its loc.origin (stamped by stampOrigin) names the fill the node most
+ *  recently arrived through — re-grafting overwrites the stamp, so in a
+ *  nested composition the OUTERMOST graft wins, which is the one the
+ *  current caller performed and can act on. Best-effort: loc-less inner
+ *  nodes carry no stamp and get no suffix. Only the fill path can read
+ *  this — toSource/runCode re-parse from text, which drops loc entirely;
+ *  compile-side attribution needs the fragment-checker entry point
+ *  (recorded follow-up). */
+function originSuffix(loc: SourceLocation | undefined): string {
+  if (!loc?.origin || loc.origin.kind !== "filler") return "";
+  return ` (in code grafted by the fill for \`#${loc.origin.name}\`)`;
+}
+
 /**
  * Substituting values into a template's holes. The rules, in order of how
  * much damage getting them wrong would do:
@@ -29,25 +43,13 @@ import {
  *   Build the shape first, parameterize last — this is the feature's core
  *   workflow, so nothing here may reject Code containing holes.
  */
-/** Attribution for errors that anchor to a node carried in by a graft:
- *  its loc.origin (stamped by stampOrigin) names the fill the node most
- *  recently arrived through — re-grafting overwrites the stamp, so in a
- *  nested composition the OUTERMOST graft wins, which is the one the
- *  current caller performed and can act on. Best-effort: loc-less inner
- *  nodes carry no stamp and get no suffix. Only the fill path can read
- *  this — toSource/runCode re-parse from text, which drops loc entirely;
- *  compile-side attribution needs the fragment-checker entry point
- *  (recorded follow-up). */
-function originSuffix(loc: SourceLocation | undefined): string {
-  if (!loc?.origin || loc.origin.kind !== "filler") return "";
-  return ` (in code grafted by the fill for \`#${loc.origin.name}\`)`;
-}
-
 export function fillHoles(code: Code, values: Record<string, unknown>): Code {
-  const holes = findHoles(code.nodes);
   const present = holeNames(code.nodes);
   for (const name of Object.keys(values)) {
     if (!present.includes(name)) {
+      // Only the error message needs per-hole origin, so the second walk
+      // happens on the failure path only.
+      const holes = findHoles(code.nodes);
       const listed = present
         .map((holeName) => {
           const hole = holes.find((candidate) => candidate.name === holeName) as Hole;

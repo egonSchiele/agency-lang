@@ -378,10 +378,17 @@ const WALKER_EXCLUDED_FIELDS: Record<string, string> = {
   "objectPatternProperty.value":
     "pattern property content: a literal matcher or a binder, not a use",
   "typePattern.pattern": "type-pattern binder, not a use",
-  "functionCall.block":
-    "the blockArgument wrapper node is not itself yielded; its BODY is walked through " +
-    "bodySlots (blockAncestor) and its params are binders. Body coverage rides on the " +
-    "generic bodySlots descent, not on this exclusion",
+};
+
+// Node TYPES the walker does not yield as nodes, ruled on as types — NOT
+// field exclusions, because a field exclusion shields the whole subtree
+// and these rulings are only about the wrapper itself (measured: keying
+// blockArgument by its field hid 755 walked descendants from the
+// reachability check). The subtree stays under full coverage.
+const WALKER_EXCLUDED_TYPES: Record<string, string> = {
+  blockArgument:
+    "the wrapper node is not itself yielded; its BODY is walked through bodySlots " +
+    "(blockAncestor) and its params are binders",
 };
 
 // Temporary entries: reachability gaps found by the invariants below,
@@ -398,9 +405,12 @@ const KNOWN_WALKER_GAPS: Record<string, string> = {
   "function.docString":
     "#668: docstring interpolations are evaluated by the builder " +
     "(hasDocStringInterpolation) but the segments are never walked",
-  "assignment.accessChain":
-    "#668: slice-assignment bounds (arr[a:b] = x) are not walked; " +
-    "index and methodCall chain entries are",
+  // Slice-bound fields precisely: chain entries are untyped records, so
+  // ownerType stays "assignment" and the bound fields key directly.
+  // Keying the whole accessChain would shield the walked index and
+  // methodCall entries too (measured: 20 of 24 nodes lost coverage).
+  "assignment.start": "#668: slice-assignment bounds (arr[a:b] = x) are not walked",
+  "assignment.end": "#668: slice-assignment bounds (arr[a:b] = x) are not walked",
   "matchBlockCase.guard":
     "#668: unlowered match-arm guard expressions are not walked " +
     "(the lowered if-chain form is)",
@@ -420,13 +430,21 @@ function isKnownGap(ownerType: string, key: string): boolean {
   return Object.hasOwn(KNOWN_WALKER_GAPS, `${ownerType}.${key}`);
 }
 
-type StructuralVia = "clear" | "excluded" | "knownGap";
+// How a crawled node relates to the exclusion tables: unshielded, under
+// a permanent field ruling, or under a known gap (which one, by key, so
+// the staleness guard can attribute liveness per entry).
+type StructuralVia =
+  | { kind: "clear" }
+  | { kind: "excluded" }
+  | { kind: "knownGap"; gapKey: string };
+
+const VIA_CLEAR: StructuralVia = { kind: "clear" };
 
 function childViaFor(current: StructuralVia, ownerType: string, key: string): StructuralVia {
-  if (current !== "clear") return current;
-  if (isExcluded(ownerType, key)) return "excluded";
-  if (isKnownGap(ownerType, key)) return "knownGap";
-  return "clear";
+  if (current.kind !== "clear") return current;
+  if (isExcluded(ownerType, key)) return { kind: "excluded" };
+  if (isKnownGap(ownerType, key)) return { kind: "knownGap", gapKey: `${ownerType}.${key}` };
+  return VIA_CLEAR;
 }
 
 function* structuralNodes(
@@ -462,8 +480,8 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
       for (const { file, nodes } of corpusPrograms(lower)) {
         const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
         const shielded = new Set(
-          [...structuralNodes(nodes, "(root)", "clear")]
-            .filter((entry) => entry.via === "knownGap")
+          [...structuralNodes(nodes, "(root)", VIA_CLEAR)]
+            .filter((entry) => entry.via.kind === "knownGap")
             .map((entry) => entry.node),
         );
         for (const node of walked) {
@@ -482,14 +500,16 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
     it(`${label}: structural reachability — every expression node in the AST is walked`, () => {
       for (const { file, nodes } of corpusPrograms(lower)) {
         const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
-        for (const { node, via } of structuralNodes(nodes, "(root)", "clear")) {
-          if (via !== "clear") continue;
+        for (const { node, via } of structuralNodes(nodes, "(root)", VIA_CLEAR)) {
+          if (via.kind !== "clear") continue;
+          if (Object.hasOwn(WALKER_EXCLUDED_TYPES, node.type)) continue;
           if (!EXPRESSION_NODE_TYPES.includes(node.type)) continue;
           expect(
             walked.has(node),
             `${file}: a ${node.type} node is reachable in the AST but never yielded by walkNodes. ` +
               `Do NOT fix walkNodes in this PR — add a KNOWN_WALKER_GAPS entry naming a follow-up ` +
-              `issue, or, if the non-walk is deliberate, a WALKER_EXCLUDED_FIELDS ruling.`,
+              `issue, or, if the non-walk is deliberate, a WALKER_EXCLUDED_FIELDS or ` +
+              `WALKER_EXCLUDED_TYPES ruling.`,
           ).toBe(true);
         }
       }
@@ -501,36 +521,25 @@ describe("walker coverage: walkNodes reaches every expression position", () => {
     // Each KNOWN_WALKER_GAPS entry must still shield at least one
     // unwalked expression node in AT LEAST one parse mode. When the
     // follow-up PR fixes walkNodes, this fails until the entry is
-    // deleted — the gap cannot be forgotten in either direction.
-    for (const [key, issue] of Object.entries(KNOWN_WALKER_GAPS)) {
-      let stillAGap = false;
-      const [ownerType, field] = key.split(".");
-      for (const lower of [true, false]) {
-        for (const { nodes } of corpusPrograms(lower)) {
-          const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
-          // Find owner nodes STRUCTURALLY — a gap's owner may itself be
-          // a node the walker never yields (functionParameter is).
-          for (const owner of walkEveryNode(nodes)) {
-            if ((owner as any).type !== ownerType) continue;
-            for (const { node, via } of structuralNodes(
-              (owner as any)[field],
-              ownerType,
-              "clear",
-            )) {
-              // Only nodes THIS entry uniquely shields count — a node
-              // under a nested excluded field (via !== "clear") is
-              // already ruled on and would not be flagged without the
-              // entry either.
-              if (via !== "clear") continue;
-              if (EXPRESSION_NODE_TYPES.includes(node.type) && !walked.has(node)) {
-                stillAGap = true;
-              }
-            }
-          }
+    // deleted — the gap cannot be forgotten in either direction. One
+    // attribution crawl per program: every shielded node knows which
+    // entry shields it (via.gapKey), so entries on untyped-wrapper
+    // fields (assignment.start under a chain entry) attribute correctly.
+    const live: Record<string, boolean> = {};
+    for (const lower of [true, false]) {
+      for (const { nodes } of corpusPrograms(lower)) {
+        const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
+        for (const { node, via } of structuralNodes(nodes, "(root)", VIA_CLEAR)) {
+          if (via.kind !== "knownGap") continue;
+          if (Object.hasOwn(WALKER_EXCLUDED_TYPES, node.type)) continue;
+          if (!EXPRESSION_NODE_TYPES.includes(node.type)) continue;
+          if (!walked.has(node)) live[via.gapKey] = true;
         }
       }
+    }
+    for (const [key, issue] of Object.entries(KNOWN_WALKER_GAPS)) {
       expect(
-        stillAGap,
+        live[key] === true,
         `KNOWN_WALKER_GAPS entry "${key}" no longer shields anything in either corpus mode — ` +
           `the walker gap it recorded is fixed (or the corpus lost the shape). Delete the entry ` +
           `(and close ${issue}) or restore corpus coverage.`,

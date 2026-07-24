@@ -241,3 +241,51 @@ describe("pattern binders", () => {
     expect(out).toMatch(/const __hyg\d+_tmp = 1/);
   });
 });
+
+describe("branch-scoped binders rename consistently", () => {
+  it("a result-pattern binding renames together with its arm uses (no silent retarget)", () => {
+    // Repro from the #669 review: renaming the outer `v` used to rewrite
+    // the arm's `print(v)` but NOT the `success(v)` binding, so the arm
+    // silently started reading the outer variable. All three occurrences
+    // must move together, preserving the shadowing relationship.
+    const source = [
+      "node main() {",
+      "  const v = 1",
+      "  const r = getResult()",
+      "  if (r is success(v)) {",
+      "    print(v)",
+      "  }",
+      "  const out = #userExpr",
+      "  print(out)",
+      "}",
+      "",
+    ].join("\n");
+    const out = fillAndPrint(source, { userExpr: _parseExpr("v + 1") });
+    expect(out).toMatch(/const __hyg\d+_v = 1/);
+    expect(out).toMatch(/is success\(__hyg\d+_v\)/);
+    expect(out).toMatch(/print\(__hyg\d+_v\)/);
+    expect(out).toMatch(/const out = v \+ 1/);
+  });
+
+  it("a match-arm shorthand pattern renames together with its arm uses", () => {
+    const source = [
+      "node main() {",
+      "  const name = \"outer\"",
+      "  const r = getUser()",
+      "  const label = match (r) {",
+      "    { name } => name",
+      "    _ => \"none\"",
+      "  }",
+      "  const out = #userExpr",
+      "  print(label)",
+      "  print(name)",
+      "}",
+      "",
+    ].join("\n");
+    const out = fillAndPrint(source, { userExpr: _parseExpr("name") });
+    // The arm pattern expands so the PROPERTY read is unchanged while the
+    // binder and the arm body move together.
+    expect(out).toMatch(/\{ name: __hyg\d+_name \} => __hyg\d+_name/);
+    expect(out).toMatch(/const out = name\b/);
+  });
+});

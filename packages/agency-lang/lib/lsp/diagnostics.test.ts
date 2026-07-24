@@ -5,6 +5,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { runDiagnostics } from "./diagnostics.js";
+import { lintSource } from "../linter/registry.js";
 import { SymbolTable } from "../symbolTable.js";
 
 function makeDoc(content: string, uri = "file:///test.agency") {
@@ -395,4 +396,20 @@ describe("lint snapshot is isolated from prunePreludeShadows", () => {
     const second = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
     expect(second.lintFindings).toEqual(first.lintFindings);
   });
+});
+
+it("CLI and LSP agree on AL0003 when a prelude name is shadowed", () => {
+  // Without the cloneForLint snapshot, prunePreludeShadows strips `map` from
+  // the user's import before the LSP linter runs, and only the CLI reports it.
+  const source = [
+    `import { map } from "std::index"`,
+    `def map(x: number): number { return x }`,
+    `node main() { return map(1) }`,
+    ``,
+  ].join("\n");
+  const cliFindings = lintSource(source, "/test.agency", {}).map((f) => f.code);
+  const doc = makeDoc(source);
+  const { lintFindings } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+  expect(lintFindings.map((f) => f.code)).toEqual(cliFindings);
+  expect(cliFindings).toContain("AL0003");
 });

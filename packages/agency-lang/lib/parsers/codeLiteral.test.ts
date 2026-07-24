@@ -202,3 +202,43 @@ describe("code literals: location mapping", () => {
     expect(call.loc?.line).toBe(2);
   });
 });
+
+// Review round: regex inertness, sentinel symmetry, squiggle position.
+describe("code literals: review-round pins", () => {
+  it("re/[|]/ in a body is a regex, not nesting", () => {
+    const lit = firstLiteral(`node main() {\n  const t = [| const p = re/[|]/ |]\n}\n`);
+    const regex = walkNodesArray(lit.nodes)
+      .map((visit) => visit.node)
+      .find((node) => node.type === "regex") as { pattern?: string };
+    expect(regex?.pattern).toBe("[|]");
+  });
+
+  it("re/a|]b/ in a body does not end the literal early", () => {
+    const lit = firstLiteral(`node main() {\n  const t = [| const p = re/a|]b/ |]\n}\n`);
+    const regex = walkNodesArray(lit.nodes)
+      .map((visit) => visit.node)
+      .find((node) => node.type === "regex") as { pattern?: string };
+    expect(regex?.pattern).toBe("a|]b");
+  });
+
+  it("a leading blank line does not flip an expr body to statements", () => {
+    const lit = firstLiteral(`node main() {\n  const t = [|\n\n    1 + 2\n  |]\n}\n`);
+    expect(lit.kind).toBe("expr");
+  });
+
+  it("a malformed body's error position lands inside the literal", () => {
+    // The message comes from the committed failure; the structured
+    // position must come from the SAME failure, not the shallower
+    // rightmost record, or the LSP squiggle lands away from the message.
+    const source = `node main() {\n  const t = [|\n    const = broken\n  |]\n}\n`;
+    const result = parseAgency(source, {}, false, false);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const errorData = (result as { errorData?: { line: number } }).errorData;
+    expect(errorData).toBeDefined();
+    // The literal spans file lines 1-3 (0-indexed); the reported line
+    // must be inside it, not at the assignment or file start.
+    expect(errorData!.line).toBeGreaterThanOrEqual(1);
+    expect(errorData!.line).toBeLessThanOrEqual(3);
+  });
+});

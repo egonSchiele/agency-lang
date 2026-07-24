@@ -194,13 +194,10 @@ export function declareVariable(
     );
   }
   const inferred = synthType(node.value, scope, ctx);
-  // A code literal's synthesized type IS the fixed structural Code shape;
-  // widening its literal discriminants (type: "agencyProgram" → string)
-  // would break assignability into fill(template: Code). Widening exists
-  // to relax literal-EXPRESSION types for rebinding; a variable holding a
-  // literal always holds a Code value, so there is nothing to relax.
-  const declared = node.value.type === "codeLiteral" ? inferred : widenType(inferred);
-  scope.declare(node.variableName, declared, isConst);
+  // Code-shaped types survive widening inside widenType itself (see
+  // isCodeShape there) — covering literals bound directly AND wrapped
+  // in arrays/branches, which a syntactic guard here could not.
+  scope.declare(node.variableName, widenType(inferred), isConst);
 }
 
 /**

@@ -55,6 +55,8 @@ import {
   trace,
   withSpan,
   runNested,
+  saveRightmostFailure,
+  restoreRightmostFailure,
   committed,
   committedFailure,
   repeatTill,
@@ -2971,10 +2973,14 @@ const NESTED_LITERAL_ERROR =
  *  error. The bulk alternative swallows runs of text containing no
  *  trigger characters in one step (see repeatTill's docs). */
 const codeLiteralBodyChunk: Parser<unknown> = or(
-  many1TillOneOf(['"', "'", "`", "/", "[", "|"]),
+  many1TillOneOf(['"', "'", "`", "/", "[", "|", "r"]),
   _stringParser,
   commentParser,
   multiLineCommentParser,
+  // Regex literals are inert too — `re/a|]b/` must not end the literal
+  // and `re/[|]/` must not read as nesting (review finding; "r" above
+  // is its trigger char, recovered by anyChar when it starts nothing).
+  lazy(() => regexLiteralParser),
   (input: string) =>
     input.startsWith(CODE_LITERAL_OPEN)
       ? committedFailure(NESTED_LITERAL_ERROR, input)
@@ -3009,12 +3015,15 @@ export type ParsedLiteralBody =
 /** Advance a tarsec position over `text` — the whitespace stripped off a
  *  body before the expr/statements attempts still occupies lines. */
 function advancePositionOver(base: Position, text: string): Position {
-  const newlines = (text.match(/\n/g) ?? []).length;
-  const lastBreak = text.lastIndexOf("\n");
+  // BLANK_LINE_SENTINEL characters REPLACED newlines (replaceBlankLines),
+  // so they count as line breaks here or stripped blank lines would
+  // shift every mapped position.
+  const breaks = text.match(new RegExp(`\\n|${BLANK_LINE_SENTINEL}`, "g")) ?? [];
+  const lastBreak = Math.max(text.lastIndexOf("\n"), text.lastIndexOf(BLANK_LINE_SENTINEL));
   return {
     offset: base.offset + text.length,
-    line: base.line + newlines,
-    column: newlines === 0 ? base.column + text.length : text.length - lastBreak - 1,
+    line: base.line + breaks.length,
+    column: breaks.length === 0 ? base.column + text.length : text.length - lastBreak - 1,
   };
 }
 
@@ -3032,15 +3041,21 @@ function advancePositionOver(base: Position, text: string): Position {
  *  nested parses so withLoc does not subtract it a second time. */
 export function parseCodeLiteralBody(body: string, base?: Position): ParsedLiteralBody {
   const sentineled = replaceBlankLines(body);
-  const trimmedStart = sentineled.trimStart();
-  const strippedPrefix = sentineled.slice(0, sentineled.length - trimmedStart.length);
-  const trimmed = trimmedStart.trimEnd();
+  // Strip whitespace AND blank-line sentinels: a sentinel is not JS
+  // whitespace, and a leading one (a blank first line) would kill the
+  // expr attempt and silently flip the inferred kind to statements
+  // (review finding). The prefix keeps its full character count so
+  // advancePositionOver maps lines correctly.
+  const leadingTrivia = new RegExp(`^[\\s${BLANK_LINE_SENTINEL}]+`);
+  const trailingTrivia = new RegExp(`[\\s${BLANK_LINE_SENTINEL}]+$`);
+  const strippedPrefix = sentineled.match(leadingTrivia)?.[0] ?? "";
+  const trimmed = sentineled.slice(strippedPrefix.length).replace(trailingTrivia, "");
   const trimmedBase = base === undefined ? undefined : advancePositionOver(base, strippedPrefix);
   const savedOffset = currentTemplateOffset;
   setTemplateOffset(0);
   try {
     const asExpr = runNested(exprParser, trimmed, { basePosition: trimmedBase });
-    if (asExpr.success && asExpr.rest.trim() === "") {
+    if (asExpr.success && stripSentinels(asExpr.rest).trim() === "") {
       return { ok: true, nodes: [asExpr.result as AgencyNode], kind: "expr" };
     }
     const asStatements = runNested(bodyParser, trimmed, { basePosition: trimmedBase });
@@ -3079,7 +3094,15 @@ const codeLiteralRest: Parser<Omit<CodeLiteral, "loc">> = (input: string) => {
   if (!position.success) {
     return position as never;
   }
+  // The scan probes with the real string/comment/regex parsers against
+  // the ENCLOSING input; their internal failed alternatives would
+  // otherwise leak onto the enclosing rightmost record (review note —
+  // consistency with the runNested insulation below). restore does not
+  // touch the committed-failure slot, so the nested-[| directive
+  // survives it.
+  const savedRightmost = saveRightmostFailure();
   const scanned = codeLiteralBodyText(input);
+  restoreRightmostFailure(savedRightmost);
   if (!scanned.success) {
     if (isCommittedFailure(scanned)) {
       return scanned; // the nested-[| directive, already committed

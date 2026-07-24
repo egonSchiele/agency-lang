@@ -178,7 +178,7 @@ What kind of fragment a literal holds is inferred from its body, smallest first:
 Three things worth knowing:
 
 - **`${...}` in a body belongs to the generated program.** There is no host interpolation inside a literal — holes are the only way values get in. If you know Template Haskell: these are TH's quotation brackets *without* its `$( )` splices, on purpose. `[| return "Summarize ${topic}" |]` produces a program whose own string interpolates its own `topic`.
-- **Nothing needs escaping.** A `|]` inside one of the body's strings or comments does not end the literal — the scanner reads them with the language's own string and comment rules. A `|]` in code position is not legal Agency, so the closing delimiter is unambiguous.
+- **Nothing needs escaping.** A `|]` inside one of the body's strings, comments, or regex literals does not end the literal — the scanner reads them with the language's own rules for each. A `|]` in code position is not legal Agency, so the closing delimiter is unambiguous.
 - **Literals do not nest.** A `[|` inside a body is an error. Build the inner piece as its own value and graft it into a hole — composition replaces nesting, without Template Haskell's stage errors.
 
 `fmt` reformats literal bodies the same way it formats files — a template body is held to the same standard a template file is.

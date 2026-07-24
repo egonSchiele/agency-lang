@@ -6,17 +6,30 @@ import { visitTypes } from "./typeWalker.js";
 import { parseMatchValId } from "../matchVal.js";
 import { typeAliasParser } from "../parsers/parsers.js";
 
-/** The structural equivalent of stdlib Code (stdlib/agency.agency), built
- *  once through the TYPE-ALIAS production — the same grammar Code's own
- *  declaration goes through — so field encodings (optional-field flags,
- *  string-literal types) match by construction; the bare
- *  variableTypeParser encodes optionality differently and the record
- *  comparison rejects the mismatch. The `type` and `kind` fields are the
- *  EXACT literal and union from Code: structural assignability into a
- *  literal-typed field is directional, so a widened `string` here would
- *  fail fill(template: Code). Structural typing is what lets the literal
- *  flow into std::agency's fill/holesOf/toSource without any mechanism
- *  for naming a stdlib alias from the checker. */
+/** The structural equivalent of stdlib Code (stdlib/agency.agency).
+ *
+ *  Why write a STRING and parse it, rather than hand-building the node
+ *  tree: the checker's encoding of a record type is a grammar decision —
+ *  `kind?:` becomes a null-union, quoted literals become
+ *  stringLiteralType nodes — and hand-encoding those choices is exactly
+ *  what went wrong the first time (a variableTypeParser-built tree
+ *  encoded the fields differently from the alias grammar and record
+ *  assignability rejected the mismatch). Parsing through the TYPE-ALIAS
+ *  production — the same one Code's own declaration goes through — makes
+ *  the encodings equal by construction, with one source of truth: the
+ *  type text. The drift test in codeLiteral.test.ts pins this against
+ *  the real stdlib alias.
+ *
+ *  The `type`/`kind` fields are the EXACT literal and union from Code:
+ *  structural assignability into a literal-typed field is directional,
+ *  so a widened `string` here would fail fill(template: Code).
+ *
+ *  Deep-frozen: every codeLiteral expression synthesizes this SAME
+ *  object. Nothing in the checker mutates VariableTypes today, but a
+ *  future in-place pass corrupting the type for every literal in the
+ *  program should be an immediate TypeError here, not a spooky failure
+ *  elsewhere (review finding). ESM import hoisting guarantees
+ *  typeAliasParser is initialized before this module-init runs. */
 function parseCodeLiteralType(): VariableType {
   const source = [
     "type __CodeLiteralValue = {",
@@ -30,10 +43,26 @@ function parseCodeLiteralType(): VariableType {
   if (!parsed.success) {
     throw new Error("internal: the Code structural type failed to parse");
   }
-  return parsed.result.aliasedType;
+  return deepFreeze(parsed.result.aliasedType);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === "object") {
+    for (const key of Object.keys(value as Record<string, unknown>)) {
+      deepFreeze((value as Record<string, unknown>)[key]);
+    }
+    Object.freeze(value);
+  }
+  return value;
 }
 
 const CODE_LITERAL_TYPE: VariableType = parseCodeLiteralType();
+
+/** Exported for the drift test only: the synthesized literal type must
+ *  stay structurally equal to the real stdlib Code alias. */
+export function codeLiteralTypeForTests(): VariableType {
+  return CODE_LITERAL_TYPE;
+}
 import { recordLikeKeyValue } from "./recordLike.js";
 import type { ResultType, UnionType, TypeAliasEntry } from "../types/typeHints.js";
 import type { SourceLocation } from "../types/base.js";

@@ -1308,14 +1308,29 @@ export class AgencyGenerator {
     let code = this.processNode(node.base).trim();
     // A compound base only exists because the source parenthesized it
     // (`(a ?? b).toUpperCase()` parses via parenAccess). Printing it bare
-    // re-associates the chain onto the base's RIGHT OPERAND — semantic
-    // corruption, caught by the round-trip gate on edgar.agency. Any base
-    // that binds looser than member access gets its parens back.
-    if (
-      node.base.type === "binOpExpression" ||
-      node.base.type === "typeTestExpression" ||
-      node.base.type === "isExpression"
-    ) {
+    // re-associates the chain onto the base — semantic corruption (the
+    // edgar `??` case) or unparseable output (`(new Foo()).bump()`
+    // prints as `new Foo().bump()`, which newExpressionParser cannot
+    // re-parse). This is an ALLOWLIST of self-delimiting primaries that
+    // are safe bare, so a future looser-binding expression kind fails
+    // CLOSED (a redundant pair of parens) instead of open (corrupted
+    // output) — review finding on the original deny-list version.
+    const SAFE_BARE_BASES = [
+      "variableName",
+      "functionCall",
+      "valueAccess",
+      "number",
+      "string",
+      "multiLineString",
+      "boolean",
+      "regex",
+      "unitLiteral",
+      "agencyArray",
+      "agencyObject",
+      "schemaExpression",
+      "hole",
+    ];
+    if (!SAFE_BARE_BASES.includes(node.base.type)) {
       code = `(${code})`;
     }
     for (const element of node.chain) {

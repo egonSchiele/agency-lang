@@ -8,6 +8,7 @@ import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
 import type { AgencyConfig } from "../config.js";
 import type { TypeCheckError } from "./types.js";
+import { codeLiteralTypeForTests } from "./synthesizer.js";
 
 // Explicit-severity harness, per holes.test.ts / definiteReturns.test.ts:
 // several checks are config-gated (undefinedVariables ships silent), so a
@@ -112,5 +113,69 @@ describe("code literals: typechecking", () => {
       "",
     ].join("\n");
     expect(codesOf(source)).toEqual([]);
+  });
+});
+
+// Review round: widening survives WRAPPED literals (the syntactic
+// declare-site guard could not cover these; the fix moved into widenType
+// as isCodeShape), and the synthesized type cannot drift from stdlib.
+describe("code literals: wrapped-literal widening (review round)", () => {
+  it("a literal from an array element still fills a Code parameter", () => {
+    const source = [
+      'import { toSource } from "std::agency"',
+      "",
+      "node main(): string {",
+      "  const templates = [[| 1 + 2 |], [| 3 + 4 |]]",
+      "  const first = templates[0]",
+      "  if (first == null) {",
+      '    return "none"',
+      "  }",
+      "  return toSource(first)",
+      "}",
+      "",
+    ].join("\n");
+    expect(codesOf(source)).toEqual([]);
+  });
+
+  it("a literal reassigned across branches still fills a Code parameter", () => {
+    const source = [
+      'import { toSource } from "std::agency"',
+      "",
+      "node main(): string {",
+      "  let tpl = [| 1 |]",
+      "  if (true) {",
+      "    tpl = [| 2 |]",
+      "  }",
+      "  return toSource(tpl)",
+      "}",
+      "",
+    ].join("\n");
+    expect(codesOf(source)).toEqual([]);
+  });
+});
+
+describe("code literals: the synthesized type tracks stdlib Code", () => {
+  it("is structurally equal to the real stdlib alias (drift guard)", () => {
+    // The synthesized type is a hand-kept copy of stdlib Code's shape.
+    // The fill() compatibility test catches a NEW REQUIRED field; this
+    // catches renames and retyped optionals too, by comparing against
+    // the alias as actually declared in stdlib/agency.agency.
+    const stdlibSource = fs.readFileSync(
+      path.join(__dirname, "../../stdlib/agency.agency"),
+      "utf8",
+    );
+    const parsed = parseAgency(stdlibSource, {}, false, false);
+    if (!parsed.success) throw new Error(parsed.message);
+    const codeAlias = parsed.result.nodes.find(
+      (node) => node.type === "typeAlias" && node.aliasName === "Code",
+    ) as { aliasedType?: unknown };
+    expect(codeAlias).toBeDefined();
+    const strip = (value: unknown): unknown =>
+      JSON.parse(
+        JSON.stringify(value, (key, val) =>
+          key === "loc" || key === "tags" ? undefined : val,
+        ),
+      );
+    expect(strip(codeLiteralTypeForTests())).toEqual(strip(codeAlias.aliasedType));
   });
 });

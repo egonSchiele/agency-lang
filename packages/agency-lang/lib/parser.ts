@@ -17,6 +17,7 @@ import {
   success,
   TarsecError,
   getParseState,
+  getInputStr,
   trace,
 } from "tarsec";
 
@@ -192,12 +193,20 @@ export function _parseAgency(
   if (!result.success) {
     const betterMessage = getErrorMessage();
     const rightmost = getRightmostFailure();
+    // getErrorMessage prefers a committed failure; when one exists the
+    // position must come from it too, or the squiggle lands away from
+    // the message it accompanies.
+    const committedReturned = getParseState().committedFailure;
     if (betterMessage) {
       return {
         success: false,
         message: betterMessage,
         rest: normalized,
-        ...(rightmost ? { rightmostPos: rightmost.pos } : {}),
+        ...(committedReturned !== null
+          ? { rightmostPos: getInputStr().length - committedReturned.rest.length }
+          : rightmost
+            ? { rightmostPos: rightmost.pos }
+            : {}),
       };
     }
     if (rightmost) {
@@ -331,15 +340,25 @@ export function parseAgency(
       // state, and getErrorMessage() prefers it, position-mapped. Only
       // when one exists: for ordinary TarsecErrors the thrown message
       // is the targeted one and stays authoritative.
-      if (getParseState().committedFailure !== null) {
+      const committedCaught = getParseState().committedFailure;
+      if (committedCaught !== null) {
         const committedMessage = getErrorMessage();
         if (committedMessage !== null) {
-          const rightmostCommitted = getRightmostFailure();
+          // Position from the COMMITTED failure, not the rightmost
+          // record — the record is the misleading one here, and the LSP
+          // squiggle must land where the message points (review finding).
           return {
             success: false,
             message: committedMessage,
             rest: input,
-            ...(rightmostCommitted ? { rightmostPos: rightmostCommitted.pos } : {}),
+            errorData: buildErrorData(
+              input,
+              getInputStr().length - committedCaught.rest.length,
+              offset,
+              { line: 0, column: 0, length: 1 },
+              committedMessage,
+              committedMessage,
+            ),
           };
         }
       }

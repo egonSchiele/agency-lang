@@ -257,3 +257,35 @@ describe("formatter gate: literal/file equivalence", () => {
     expect(literalPrinted).toBe(filePrinted);
   });
 });
+
+// Review-round repros: parenthesized bases the corpus does not reach.
+describe("formatter gate: parenthesized-base repros (review round)", () => {
+  it("(new Foo()).bump() keeps its parens (bare form is unparseable)", () => {
+    const src = `node main() {\n  const x = (new Foo()).bump()\n}\n`;
+    const printed = generateAgency(parseTemplateMode(src));
+    expect(printed).toContain("(new Foo()).bump()");
+    expect(parseAgency(replaceBlankLines(printed), {}, false, false).success).toBe(true);
+  });
+
+  it("(try f()).value keeps its parens (bare form is a different program)", () => {
+    const src = `def g(): any {\n  return (try f()).value\n}\n`;
+    const printed = generateAgency(parseTemplateMode(src));
+    expect(printed).toContain("(try f()).value");
+    expect(normalized(parseTemplateMode(printed).nodes)).toEqual(
+      normalized(parseTemplateMode(src).nodes),
+    );
+  });
+});
+
+// Formatter POLICY, stated and pinned directly (the round-trip gate
+// cannot see it — normalized() skips newLine nodes by design): runs of
+// blank lines collapse to one, file-wide.
+describe("formatter policy: blank-line runs collapse to one", () => {
+  it("two blank lines between defs become one", () => {
+    const src = `def a(): number {\n  return 1\n}\n\n\n\ndef b(): number {\n  return 2\n}\n`;
+    const printed = generateAgency(parseTemplateMode(src));
+    expect(printed).not.toContain("\n\n\n");
+    const twice = generateAgency(parseTemplateMode(printed));
+    expect(twice).toBe(printed);
+  });
+});

@@ -1333,9 +1333,14 @@ export class TypescriptPreprocessor {
     }
 
     // Resolve scope on expressions inside function/node doc string
-    // interpolations. These execute at module load time when the tool
-    // definition is constructed, so they only see top-level (global /
-    // static / imported) names, never function parameters or locals.
+    // interpolations. A FUNCTION docstring executes at module load time
+    // when its tool definition is constructed (typescriptBuilder emits it
+    // as the tool description), so it only sees top-level (global /
+    // static / imported) names, never parameters or locals. A NODE
+    // docstring never reaches generated code — its only consumers are
+    // `agency doc` and the interpolation-presence check in
+    // typescriptBuilder — but it gets the same resolution so those
+    // renderers see consistent scopes.
     for (const node of this.program.nodes) {
       if (node.type !== "function" && node.type !== "graphNode") continue;
       if (!node.docString) continue;

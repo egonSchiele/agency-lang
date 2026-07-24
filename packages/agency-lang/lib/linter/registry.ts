@@ -2,9 +2,15 @@ import { parseAgency } from "../parser.js";
 import type { AgencyConfig } from "../config.js";
 import type { LintContext, LintFinding, LintRule } from "./types.js";
 import { unusedImportsRule } from "./rules/unusedImports.js";
+import { missingDocstringRule } from "./rules/missingDocstring.js";
+import { redundantPreludeImportRule } from "./rules/redundantPreludeImport.js";
 
 /** Every enabled rule. Append a rule here to enable it. */
-export const LINT_RULES: LintRule[] = [unusedImportsRule];
+export const LINT_RULES: LintRule[] = [
+  unusedImportsRule,
+  missingDocstringRule,
+  redundantPreludeImportRule,
+];
 
 /** Run every rule over the context and concatenate their findings. */
 export function runLinter(ctx: LintContext): LintFinding[] {

@@ -17,6 +17,12 @@ export type HoleInfo = {
   /** The hole's printed type ("number", "string[] | null"), or null when no
    *  type applies (statements/decl/identifier holes) or none is known. */
   type: string | null;
+  /** When this hole arrived inside a grafted fragment: the name of the hole
+   *  that fragment was most recently filled into (loc.origin, stamped by
+   *  fill; re-grafting overwrites, so the outermost graft wins). Null for
+   *  holes written directly in the template, and best-effort null when the
+   *  hole node carries no loc. */
+  origin: string | null;
 };
 
 /** Every hole in the tree, in source order, including duplicates. Built on
@@ -83,6 +89,7 @@ export function holeInfos(nodes: AgencyNode[]): HoleInfo[] {
       sort: hole.sort,
       splice: hole.splice,
       type: annotated ?? inferred[name] ?? null,
+      origin: hole.loc?.origin?.kind === "filler" ? hole.loc.origin.name : null,
     };
   });
 }

@@ -1,0 +1,3 @@
+node main() {
+  const x: number = #minutes
+}

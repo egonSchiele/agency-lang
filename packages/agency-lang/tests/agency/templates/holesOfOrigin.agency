@@ -1,0 +1,27 @@
+import { loadTemplate, fill, holesOf } from "std::agency"
+
+// A grafted fragment's still-open holes must say which fill they arrived
+// through: holesOf reports origin so a model composing templates knows
+// which sub-template each remaining hole came from.
+node main(): string {
+  const inner = loadTemplate(__dirname, "holesOfOriginInner.agency")
+  if (isFailure(inner)) {
+    return "inner load failed"
+  }
+  const outer = loadTemplate(__dirname, "holesOfOriginOuter.agency")
+  if (isFailure(outer)) {
+    return "outer load failed"
+  }
+  const program = fill(outer.value, { helpers: inner.value })
+  if (isFailure(program)) {
+    return "fill failed: ${program.error}"
+  }
+  const holes = holesOf(program.value)
+  if (holes.length != 1) {
+    return "wrong hole count: ${holes.length}"
+  }
+  if (holes[0].origin == "helpers") {
+    return "origin-ok"
+  }
+  return "origin missing"
+}

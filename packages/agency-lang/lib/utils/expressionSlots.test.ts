@@ -10,7 +10,7 @@ import {
   HANDLED_KINDS,
   NO_EXPRESSION_SLOTS,
 } from "./expressionSlots.js";
-import { expressionChildren } from "./node.js";
+import { expressionChildren, walkNodesArray } from "./node.js";
 import { bodySlots } from "./bodySlots.js";
 import {
   EXTRACTED_STATEMENT_KINDS,
@@ -186,20 +186,38 @@ function* walkEveryNode(value: any): Generator<any> {
   }
 }
 
-function corpusNodes(): { file: string; node: any }[] {
+// Parsed once per mode and cached — the walker-coverage invariants below
+// re-read the corpus several times, and re-parsing hundreds of files per
+// test would make this the slowest file in the repo.
+const corpusCache: Record<string, { file: string; nodes: AgencyNode[] }[]> = {};
+
+function corpusPrograms(lower: boolean): { file: string; nodes: AgencyNode[] }[] {
+  const cacheKey = lower ? "lowered" : "unlowered";
+  if (corpusCache[cacheKey]) return corpusCache[cacheKey];
   const root = join(__dirname, "../..");
   const files = [
     ...collectAgencyFiles(join(root, "stdlib")),
     ...collectAgencyFiles(join(root, "tests/typescriptGenerator")),
   ];
   expect(files.length).toBeGreaterThan(50);
-  const out: { file: string; node: any }[] = [];
+  const out: { file: string; nodes: AgencyNode[] }[] = [];
   for (const file of files) {
-    const parsed = parseAgency(readFileSync(file, "utf8"), {}, true);
+    const parsed = parseAgency(readFileSync(file, "utf8"), {}, true, lower);
     if (!parsed.success) {
-      throw new Error(`corpus file failed to parse: ${file}: ${parsed.message}`);
+      throw new Error(
+        `corpus file failed to parse (lower: ${lower}): ${file}: ${parsed.message}`,
+      );
     }
-    for (const node of walkEveryNode(parsed.result.nodes)) out.push({ file, node });
+    out.push({ file, nodes: parsed.result.nodes as AgencyNode[] });
+  }
+  corpusCache[cacheKey] = out;
+  return out;
+}
+
+function corpusNodes(): { file: string; node: any }[] {
+  const out: { file: string; node: any }[] = [];
+  for (const { file, nodes } of corpusPrograms(true)) {
+    for (const node of walkEveryNode(nodes)) out.push({ file, node });
   }
   return out;
 }
@@ -321,6 +339,223 @@ describe("expressionSlots: corpus invariants", () => {
           `dispatch case (and STATEMENT_CASE_KINDS), or record it in ` +
           `NON_EXTRACTED_STATEMENT_KINDS with a justification`,
       ).toBe(true);
+    }
+  });
+});
+
+// ── Walker coverage ─────────────────────────────────────────────────
+// Template hygiene's free-name analysis (freeNamesOf, hygiene.ts) is
+// exactly as complete as walkNodes' descent: a position the walker
+// misses under-reports free names, no test fails, and a filler silently
+// captures a template binder — capture avoidance failing OPEN. walkNodes
+// also backs the symbol table, codegen scope resolution, and the LSP, so
+// these invariants guard far more than templates. They run in BOTH parse
+// modes: lowered (the compile pipeline's view) and unlowered (the
+// template/hygiene view, with patterns and comprehensions intact).
+//
+// POLICY: fixing walkNodes is never done in the same PR that discovers a
+// gap — its consumers (scope resolution → codegen) make every descent
+// change a compiler change. A discovered gap gets a KNOWN_WALKER_GAPS
+// entry naming a follow-up issue; the fix PR must delete the entry or
+// the staleness guard below fails, so the gap cannot be silently
+// forgotten in either direction.
+
+// Fields whose expression-typed contents the walker deliberately does
+// not yield, keyed "ownerType.field" — a bare field name would silently
+// cover every node kind sharing the spelling ("pattern" is also a field
+// of isExpression and typePattern). Every entry is a recorded ruling.
+const WALKER_EXCLUDED_FIELDS: Record<string, string> = {
+  "*.loc": "positions, not nodes",
+  "assignment.matchSource":
+    "cloned, body-free arm snapshot for the type checker (lib/types.ts) — not live AST; " +
+    "the executable guard/arm expressions are walked in their lowered if-chain form",
+  "assignment.pattern": "binding pattern: variableName members are binders, not uses",
+  "forLoop.itemVar": "for-loop binder (string or pattern), not a use",
+  "comprehension.itemVar": "comprehension binder, same shape and ruling as forLoop.itemVar",
+  "matchYield.typeSource":
+    "type-checker view of the arm expression (lib/types/matchYield.ts); the executable " +
+    "copy flows through the hoisted temp assignment, which is walked",
+  "objectPatternProperty.value":
+    "pattern property content: a literal matcher or a binder, not a use",
+  "typePattern.pattern": "type-pattern binder, not a use",
+  "functionCall.block":
+    "the blockArgument wrapper node is not itself yielded; its BODY is walked through " +
+    "bodySlots (blockAncestor) and its params are binders. Body coverage rides on the " +
+    "generic bodySlots descent, not on this exclusion",
+};
+
+// Temporary entries: reachability gaps found by the invariants below,
+// awaiting their own walker-fix PR. Keyed like WALKER_EXCLUDED_FIELDS;
+// the value names the follow-up issue. The staleness guard asserts each
+// entry still IS a gap, so the fix PR cannot land without deleting it.
+// Every entry is a place template hygiene currently under-reports free
+// names (capture avoidance fails open there) and the symbol table never
+// visits — which is exactly why the fix is a compiler change that gets
+// its own PR and review.
+const KNOWN_WALKER_GAPS: Record<string, string> = {
+  "functionParameter.defaultValue":
+    "#668: parameter default expressions are never walked",
+  "function.docString":
+    "#668: docstring interpolations are evaluated by the builder " +
+    "(hasDocStringInterpolation) but the segments are never walked",
+  "assignment.accessChain":
+    "#668: slice-assignment bounds (arr[a:b] = x) are not walked; " +
+    "index and methodCall chain entries are",
+  "matchBlockCase.guard":
+    "#668: unlowered match-arm guard expressions are not walked " +
+    "(the lowered if-chain form is)",
+  "tag.arguments":
+    "#668: @validate/@tag annotation arguments reference validator " +
+    "functions and values but are never walked",
+};
+
+function isExcluded(ownerType: string, key: string): boolean {
+  return (
+    Object.hasOwn(WALKER_EXCLUDED_FIELDS, `*.${key}`) ||
+    Object.hasOwn(WALKER_EXCLUDED_FIELDS, `${ownerType}.${key}`)
+  );
+}
+
+function isKnownGap(ownerType: string, key: string): boolean {
+  return Object.hasOwn(KNOWN_WALKER_GAPS, `${ownerType}.${key}`);
+}
+
+type StructuralVia = "clear" | "excluded" | "knownGap";
+
+function childViaFor(current: StructuralVia, ownerType: string, key: string): StructuralVia {
+  if (current !== "clear") return current;
+  if (isExcluded(ownerType, key)) return "excluded";
+  if (isKnownGap(ownerType, key)) return "knownGap";
+  return "clear";
+}
+
+function* structuralNodes(
+  value: any,
+  ownerType: string,
+  via: StructuralVia,
+): Generator<{ node: any; via: StructuralVia }> {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) yield* structuralNodes(item, ownerType, via);
+    return;
+  }
+  const selfType = typeof value.type === "string" ? value.type : ownerType;
+  if (typeof value.type === "string") yield { node: value, via };
+  for (const key of Object.keys(value)) {
+    yield* structuralNodes(value[key], selfType, childViaFor(via, selfType, key));
+  }
+}
+
+describe("walker coverage: walkNodes reaches every expression position", () => {
+  for (const lower of [true, false]) {
+    const label = lower ? "lowered" : "unlowered";
+
+    it(`${label}: slot-table agreement — every expression slot of a walked node is itself walked`, () => {
+      // A CONSISTENCY check, not reachability: both sides start from a
+      // node the walker already yielded, so this can never prove a node
+      // reachable. What it pins is that expressionSlots and walkNodes
+      // agree about the children of everything walked. Reachability is
+      // the structural invariant below. Slot exprs sitting inside a
+      // KNOWN_WALKER_GAPS field are skipped for the same reason the
+      // structural invariant shields them: the fix is a deferred walker
+      // change, and the staleness guard keeps the entry honest.
+      for (const { file, nodes } of corpusPrograms(lower)) {
+        const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
+        const shielded = new Set(
+          [...structuralNodes(nodes, "(root)", "clear")]
+            .filter((entry) => entry.via === "knownGap")
+            .map((entry) => entry.node),
+        );
+        for (const node of walked) {
+          for (const slot of expressionSlots(node as AgencyNode)) {
+            if (shielded.has(slot.expr)) continue;
+            expect(
+              walked.has(slot.expr),
+              `${file}: walkNodes does not descend into a ${(node as any).type} expression slot ` +
+                `(slot expr type: ${(slot.expr as any).type}) — template hygiene cannot see names there`,
+            ).toBe(true);
+          }
+        }
+      }
+    });
+
+    it(`${label}: structural reachability — every expression node in the AST is walked`, () => {
+      for (const { file, nodes } of corpusPrograms(lower)) {
+        const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
+        for (const { node, via } of structuralNodes(nodes, "(root)", "clear")) {
+          if (via !== "clear") continue;
+          if (!EXPRESSION_NODE_TYPES.includes(node.type)) continue;
+          expect(
+            walked.has(node),
+            `${file}: a ${node.type} node is reachable in the AST but never yielded by walkNodes. ` +
+              `Do NOT fix walkNodes in this PR — add a KNOWN_WALKER_GAPS entry naming a follow-up ` +
+              `issue, or, if the non-walk is deliberate, a WALKER_EXCLUDED_FIELDS ruling.`,
+          ).toBe(true);
+        }
+      }
+    });
+
+  }
+
+  it("known gaps are still gaps (staleness guard, both modes)", () => {
+    // Each KNOWN_WALKER_GAPS entry must still shield at least one
+    // unwalked expression node in AT LEAST one parse mode. When the
+    // follow-up PR fixes walkNodes, this fails until the entry is
+    // deleted — the gap cannot be forgotten in either direction.
+    for (const [key, issue] of Object.entries(KNOWN_WALKER_GAPS)) {
+      let stillAGap = false;
+      const [ownerType, field] = key.split(".");
+      for (const lower of [true, false]) {
+        for (const { nodes } of corpusPrograms(lower)) {
+          const walked = new Set(walkNodesArray(nodes).map((v) => v.node));
+          // Find owner nodes STRUCTURALLY — a gap's owner may itself be
+          // a node the walker never yields (functionParameter is).
+          for (const owner of walkEveryNode(nodes)) {
+            if ((owner as any).type !== ownerType) continue;
+            for (const { node, via } of structuralNodes(
+              (owner as any)[field],
+              ownerType,
+              "clear",
+            )) {
+              // Only nodes THIS entry uniquely shields count — a node
+              // under a nested excluded field (via !== "clear") is
+              // already ruled on and would not be flagged without the
+              // entry either.
+              if (via !== "clear") continue;
+              if (EXPRESSION_NODE_TYPES.includes(node.type) && !walked.has(node)) {
+                stillAGap = true;
+              }
+            }
+          }
+        }
+      }
+      expect(
+        stillAGap,
+        `KNOWN_WALKER_GAPS entry "${key}" no longer shields anything in either corpus mode — ` +
+          `the walker gap it recorded is fixed (or the corpus lost the shape). Delete the entry ` +
+          `(and close ${issue}) or restore corpus coverage.`,
+      ).toBe(true);
+    }
+  });
+
+  it("liveness: the corpus actually exercises the historically-missed positions", () => {
+    // A coverage invariant over kinds the corpus never contains proves
+    // nothing. Pin the kinds whose walker descent was added by hand
+    // during Template Agency development, in the mode each occurs in.
+    const walkedKinds = (lower: boolean): Record<string, true> => {
+      const seen: Record<string, true> = {};
+      for (const { nodes } of corpusPrograms(lower)) {
+        for (const v of walkNodesArray(nodes)) seen[(v.node as any).type] = true;
+      }
+      return seen;
+    };
+    const lowered = walkedKinds(true);
+    const unlowered = walkedKinds(false);
+    for (const kind of ["guardBlock", "tryExpression"]) {
+      expect(lowered[kind], `corpus (lowered) never contains a ${kind}`).toBe(true);
+    }
+    for (const kind of ["isExpression", "comprehension"]) {
+      expect(unlowered[kind], `corpus (unlowered) never contains a ${kind}`).toBe(true);
     }
   });
 });

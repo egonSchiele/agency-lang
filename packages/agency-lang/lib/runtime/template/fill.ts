@@ -1,7 +1,7 @@
 import { AgencyNode, Hole, StringLiteral } from "../../types.js";
 import { SourceLocation } from "../../types/base.js";
 import { LEGAL_IDENTIFIER, RESERVED_WORDS } from "../../parsers/parsers.js";
-import { holeNames, positionInferredTypes } from "../../utils/holes.js";
+import { findHoles, holeNames, positionInferredTypes } from "../../utils/holes.js";
 import { variableTypeToString } from "../../backends/typescriptGenerator/typeToString.js";
 import { Code, isCode, kindOf } from "./code.js";
 import { liftValue } from "./lift.js";
@@ -29,12 +29,36 @@ import {
  *   Build the shape first, parameterize last — this is the feature's core
  *   workflow, so nothing here may reject Code containing holes.
  */
+/** Attribution for errors that anchor to a node carried in by a graft:
+ *  its loc.origin (stamped by stampOrigin) names the fill the node most
+ *  recently arrived through — re-grafting overwrites the stamp, so in a
+ *  nested composition the OUTERMOST graft wins, which is the one the
+ *  current caller performed and can act on. Best-effort: loc-less inner
+ *  nodes carry no stamp and get no suffix. Only the fill path can read
+ *  this — toSource/runCode re-parse from text, which drops loc entirely;
+ *  compile-side attribution needs the fragment-checker entry point
+ *  (recorded follow-up). */
+function originSuffix(loc: SourceLocation | undefined): string {
+  if (!loc?.origin || loc.origin.kind !== "filler") return "";
+  return ` (in code grafted by the fill for \`#${loc.origin.name}\`)`;
+}
+
 export function fillHoles(code: Code, values: Record<string, unknown>): Code {
+  const holes = findHoles(code.nodes);
   const present = holeNames(code.nodes);
   for (const name of Object.keys(values)) {
     if (!present.includes(name)) {
+      const listed = present
+        .map((holeName) => {
+          const hole = holes.find((candidate) => candidate.name === holeName) as Hole;
+          const origin = hole.loc?.origin;
+          return origin && origin.kind === "filler"
+            ? `#${holeName} (from the fill for \`#${origin.name}\`)`
+            : `#${holeName}`;
+        })
+        .join(", ");
       throw new Error(
-        `\`${name}\` is not a hole in this template. Its holes are: ${present.join(", ") || "(none)"}.`,
+        `\`${name}\` is not a hole in this template. Its holes are: ${listed || "(none)"}.`,
       );
     }
   }
@@ -115,7 +139,7 @@ function substituteAny(
     if (Array.isArray(replacement)) {
       if (replacement.length === 1) return replacement[0];
       throw new Error(
-        `The hole \`#${value.name}\` takes a single item, but the fill produced ${replacement.length}.`,
+        `The hole \`#${value.name}\` takes a single item, but the fill produced ${replacement.length}${originSuffix(value.loc)}.`,
       );
     }
     return replacement;
@@ -140,7 +164,7 @@ function fillOne(
       : expected[hole.name];
   if (hole.splice) {
     if (!Array.isArray(value)) {
-      throw new Error(`The splice \`#...${hole.name}\` needs an array.`);
+      throw new Error(`The splice \`#...${hole.name}\` needs an array${originSuffix(hole.loc)}.`);
     }
     return value.flatMap((item) => nodesFor(hole, item, expectedType));
   }
@@ -148,7 +172,7 @@ function fillOne(
   if (hole.sort === "expr") {
     if (nodes.length !== 1) {
       throw new Error(
-        `The hole \`#${hole.name}\` takes a single expression, but got ${nodes.length} items.`,
+        `The hole \`#${hole.name}\` takes a single expression, but got ${nodes.length} items${originSuffix(hole.loc)}.`,
       );
     }
     return nodes[0];
@@ -192,7 +216,7 @@ function assertFillerType(hole: Hole, value: unknown, expectedType: string): voi
   if (!primitives.includes(expectedType)) return;
   if (actual !== expectedType) {
     throw new Error(
-      `The hole \`#${hole.name}\` expects \`${expectedType}\`, but the fill supplies \`${actual}\` (in the fill for \`#${hole.name}\`).`,
+      `The hole \`#${hole.name}\` expects \`${expectedType}\`, but the fill supplies \`${actual}\`${originSuffix(hole.loc)}.`,
     );
   }
 }
@@ -225,7 +249,7 @@ function assertKindMatchesSort(code: Code, hole: Hole): void {
   };
   if (!allowed[hole.sort].includes(kind)) {
     throw new Error(
-      `The hole \`#${hole.name}\` has sort \`${hole.sort}\`, which a \`${kind}\` Code fragment cannot fill.`,
+      `The hole \`#${hole.name}\` has sort \`${hole.sort}\`, which a \`${kind}\` Code fragment cannot fill${originSuffix(hole.loc)}.`,
     );
   }
 }
@@ -240,12 +264,12 @@ function assertKindMatchesSort(code: Code, hole: Hole): void {
 function identifierFillFor(hole: Hole, value: unknown): string {
   if (typeof value !== "string" || !LEGAL_IDENTIFIER.test(value)) {
     throw new Error(
-      `\`${String(value)}\` is not a legal identifier, so it cannot fill \`#${hole.name}\`.`,
+      `\`${String(value)}\` is not a legal identifier, so it cannot fill \`#${hole.name}\`${originSuffix(hole.loc)}.`,
     );
   }
   if (RESERVED_WORDS.includes(value)) {
     throw new Error(
-      `\`${value}\` is a reserved word, so it cannot fill \`#${hole.name}\`.`,
+      `\`${value}\` is a reserved word, so it cannot fill \`#${hole.name}\`${originSuffix(hole.loc)}.`,
     );
   }
   // Identifier fillers are caller-supplied strings by definition — the
@@ -254,7 +278,7 @@ function identifierFillFor(hole: Hole, value: unknown): string {
   // counter seeding cannot see plain-string values. Reject.
   if (value.startsWith(RESERVED_PREFIX)) {
     throw new Error(
-      `\`${value}\` uses the reserved prefix \`${RESERVED_PREFIX}\`, so it cannot fill \`#${hole.name}\`.`,
+      `\`${value}\` uses the reserved prefix \`${RESERVED_PREFIX}\`, so it cannot fill \`#${hole.name}\`${originSuffix(hole.loc)}.`,
     );
   }
   return value;

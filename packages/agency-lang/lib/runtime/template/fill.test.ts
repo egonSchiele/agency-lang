@@ -359,3 +359,36 @@ describe("filling splices", () => {
     expect(out).toContain("f(1, 2)");
   });
 });
+
+describe("origin attribution", () => {
+  it("a type error on a grafted hole names the graft it arrived through", () => {
+    // The guard template routes #minutes through an annotated assignment
+    // because fill-time type validation reads the hole annotation or the
+    // annotated-assignment parent only; a bare named-argument hole would
+    // supply no expected type and validation would silently pass.
+    const guardTpl = load(
+      `def guarded(): string {\n  const ms: number = #minutes\n  #body\n  return "done"\n}\n`,
+    );
+    const mainTpl = load(`#helpers\n\nnode main(): string {\n  return guarded()\n}\n`);
+    const partial = fillHoles(guardTpl, { body: _parseStatements("print(1)") });
+    const program = fillHoles(mainTpl, { helpers: partial });
+    expect(() => fillHoles(program, { minutes: "two" })).toThrow(
+      /in code grafted by the fill for `#helpers`/,
+    );
+  });
+
+  it("an author-written hole gets no origin suffix", () => {
+    const tpl = load(`node main() {\n  const x: number = #count\n}\n`);
+    expect(() => fillHoles(tpl, { count: "two" })).toThrow(/expects `number`/);
+    expect(() => fillHoles(tpl, { count: "two" })).not.toThrow(/grafted by the fill/);
+  });
+
+  it("the unknown-name error annotates grafted holes with their origin", () => {
+    const inner = load(`node main() {\n  const x: number = #minutes\n}\n`);
+    const outer = load(`#helpers\n`);
+    const program = fillHoles(outer, { helpers: inner });
+    expect(() => fillHoles(program, { nope: 1 })).toThrow(
+      /#minutes \(from the fill for `#helpers`\)/,
+    );
+  });
+});

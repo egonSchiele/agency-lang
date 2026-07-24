@@ -7,6 +7,7 @@ import {
 } from "../../stdlib/template.js";
 import { _parseAST } from "../../stdlib/agency.js";
 import { fillHoles } from "./fill.js";
+import { maxHygieneIndex } from "./hygiene.js";
 
 const load = _loadTemplateFromString;
 
@@ -167,5 +168,76 @@ describe("hygiene", () => {
         name: "__hyg1_x",
       }),
     ).toThrow(/reserved/);
+  });
+});
+
+describe("pattern binders", () => {
+  it("a template destructuring binder colliding with a filler free name is renamed, shorthand expanded", () => {
+    // Template binds `key` via shorthand destructuring; filler uses a free
+    // `key`. Renaming the shorthand in place would change which property
+    // is read, so it must expand to `key: freshName`.
+    const source = `node main() {\n  const { key } = getSecrets()\n  const result = #userExpr\n  print(key)\n}\n`;
+    const out = fillAndPrint(source, { userExpr: _parseExpr("key + 1") });
+    expect(out).toMatch(/const \{ key: __hyg\d+_key \} = getSecrets\(\)/);
+    expect(out).toMatch(/const result = key \+ 1/);
+    expect(out).toMatch(/print\(__hyg\d+_key\)/);
+  });
+
+  it("a filler destructuring binder colliding with a visible template binder is renamed", () => {
+    const source = `node main() {\n  const tmp = 1\n  #steps\n  print(tmp)\n}\n`;
+    const out = fillAndPrint(source, {
+      steps: _parseStatements("const { tmp } = load()\nprint(tmp)"),
+    });
+    // Filler binder renamed (with shorthand expansion); template untouched.
+    expect(out).toMatch(/const \{ tmp: __hyg\d+_tmp \} = load\(\)/);
+    expect(out).toContain("const tmp = 1");
+  });
+
+  it("array-pattern and rest binders participate in collisions", () => {
+    const source = `node main() {\n  const [a, ...rest] = items()\n  const x = #v\n  print(rest)\n}\n`;
+    const out = fillAndPrint(source, { v: _parseExpr("rest") });
+    expect(out).toMatch(/const \[a, \.\.\.__hyg\d+_rest\] = items\(\)/);
+    expect(out).toMatch(/const x = rest\b/);
+    expect(out).toMatch(/print\(__hyg\d+_rest\)/);
+  });
+
+  it("a for-loop destructuring binder participates in collisions", () => {
+    const source = `node main() {\n  for ({ name } in people()) {\n    const x = #v\n    print(name)\n  }\n}\n`;
+    const out = fillAndPrint(source, { v: _parseExpr("name") });
+    expect(out).toMatch(/for \(\{ name: __hyg\d+_name \} in people\(\)\)/);
+    expect(out).toMatch(/const x = name\b/);
+  });
+
+  it("a comprehension binder participates in collisions", () => {
+    const source = `node main() {\n  const doubled = [n * 2 for n in nums()]\n  const x = #v\n  print(doubled)\n}\n`;
+    const out = fillAndPrint(source, { v: _parseExpr("n") });
+    expect(out).toMatch(/__hyg\d+_n \* 2 for __hyg\d+_n in nums\(\)/);
+    expect(out).toMatch(/const x = n\b/);
+  });
+
+  it("maxHygieneIndex sees __hyg names inside patterns (seeding)", () => {
+    const code = load(`node main() {\n  const { k: __hyg7_k } = load()\n  return __hyg7_k\n}\n`);
+    expect(maxHygieneIndex(code)).toBe(7);
+  });
+
+  it("an inner def that destructures a name stops an outer rename at its door (shadowing)", () => {
+    const source = [
+      "const tmp = 1",
+      "",
+      "def inner(): number {",
+      "  const { tmp } = load()",
+      "  return tmp",
+      "}",
+      "",
+      "node main() {",
+      "  const x = #v",
+      "  return tmp",
+      "}",
+      "",
+    ].join("\n");
+    const out = fillAndPrint(source, { v: _parseExpr("tmp") });
+    // The global tmp is renamed; inner destructured tmp shadows and stays.
+    expect(out).toContain("const { tmp } = load()");
+    expect(out).toMatch(/const __hyg\d+_tmp = 1/);
   });
 });

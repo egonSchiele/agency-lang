@@ -147,11 +147,12 @@ describe("splices and quoted names", () => {
   });
 });
 
-// The tripwire for hygiene's walker dependency (see freeNamesOf in
-// lib/runtime/template/hygiene.ts): every expression position a hole can
-// occupy must be REACHED by walkNodes' descent, or free-name analysis
-// under-reports and capture avoidance fails open. Each entry pins one
-// position; add one when a node kind gains an expression child.
+// Parser coverage: a hole must PARSE in each of these positions. Walker
+// reachability — the half of this list that used to guard template
+// hygiene's free-name analysis (freeNamesOf, hygiene.ts) — is now
+// enforced structurally by the walker-coverage corpus invariants in
+// lib/utils/expressionSlots.test.ts, so a position missing from this
+// list is a parser-coverage gap only.
 describe("hole positions are reachable by the walker", () => {
   const positions: [string, string][] = [
     ["assignment value", `node main() {\n  const x = #h\n}\n`],

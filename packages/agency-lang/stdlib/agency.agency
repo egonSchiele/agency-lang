@@ -490,7 +490,8 @@ export type HoleInfo = {
   name: string,
   sort: "expr" | "statements" | "identifier" | "decl",
   splice: boolean,
-  type: string | null
+  type: string | null,
+  origin: string | null
 }
 
 export def loadTemplate(dir: string, filename: string): Result<Code> {
@@ -509,7 +510,7 @@ export def loadTemplate(dir: string, filename: string): Result<Code> {
 
 export idempotent def holesOf(template: Code): HoleInfo[] {
   """
-  The unfilled holes in a template, in the order they appear. Each entry has the hole's name, its sort (what category of thing fills it), whether it is a splice, and its type when one is known.
+  The unfilled holes in a template, in the order they appear. Each entry has the hole's name, its sort (what category of thing fills it), whether it is a splice, and its type when one is known. origin names the fill this hole most recently arrived through when it came in via a grafted fragment (best-effort; null for holes written directly in the template).
 
   @param template - A template loaded with loadTemplate
   """

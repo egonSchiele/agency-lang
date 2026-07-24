@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { resolveType, resolveTypeDeep } from "./assignability.js";
-import type { TypeAliasEntry, VariableType } from "../types.js";
+import type { Tag, TypeAliasEntry, VariableType } from "../types.js";
 
 const stringType: VariableType = { type: "primitiveType", value: "string" };
 const numberType: VariableType = { type: "primitiveType", value: "number" };
@@ -675,6 +675,38 @@ describe("resolveType: nested unions", () => {
     expect(resolveType(alias("T"), aliases)).toEqual({
       type: "unionType",
       types: [alias("T"), numberType],
+    });
+  });
+
+  it("carries an inner union's validators onto every member it contributes", () => {
+    // `@validate(isPositive) type AB = A | B` means values of A and of B are
+    // both validated. Splicing must not drop that, or a value that arrives as
+    // an `A` would skip the validator the alias declared.
+    const isPositive: Tag = {
+      type: "tag",
+      name: "validate",
+      arguments: [{ type: "variableName", value: "isPositive" }],
+    };
+    const aliases: Record<string, TypeAliasEntry> = {
+      AB: {
+        body: { type: "unionType", types: [alias("A"), alias("B")] },
+        tags: [isPositive],
+      },
+      A: { body: numberType },
+      B: { body: stringType },
+      C: { body: booleanType },
+    };
+    const result = resolveType(
+      { type: "unionType", types: [alias("AB"), alias("C")] },
+      aliases,
+    );
+    expect(result).toEqual({
+      type: "unionType",
+      types: [
+        { ...alias("A"), tags: [isPositive] },
+        { ...alias("B"), tags: [isPositive] },
+        alias("C"), // outside the tagged alias — untouched
+      ],
     });
   });
 });

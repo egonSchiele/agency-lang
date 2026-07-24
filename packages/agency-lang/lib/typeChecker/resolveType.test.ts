@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { resolveType, resolveTypeDeep } from "./assignability.js";
-import type { TypeAliasEntry, VariableType } from "../types.js";
+import type { Tag, TypeAliasEntry, VariableType } from "../types.js";
 
 const stringType: VariableType = { type: "primitiveType", value: "string" };
 const numberType: VariableType = { type: "primitiveType", value: "number" };
@@ -621,5 +621,92 @@ describe("resolveTypeDeep: nested generic resolution", () => {
 
   it("returns primitives unchanged", () => {
     expect(resolveTypeDeep(numberType, {})).toEqual(numberType);
+  });
+});
+
+describe("resolveType: nested unions", () => {
+  const alias = (aliasName: string): VariableType => ({
+    type: "typeAliasVariable",
+    aliasName,
+  });
+
+  it("splices a union alias used as a member of another union", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      AB: { body: { type: "unionType", types: [alias("A"), alias("B")] } },
+      A: { body: { type: "objectType", properties: [{ key: "x", value: numberType }] } },
+      B: { body: { type: "objectType", properties: [{ key: "y", value: stringType }] } },
+      C: { body: { type: "objectType", properties: [{ key: "z", value: booleanType }] } },
+    };
+    const result = resolveType(
+      { type: "unionType", types: [alias("AB"), alias("C")] },
+      aliases,
+    );
+    // Members stay unresolved, so error messages keep saying `A`, not `{x: number}`.
+    expect(result).toEqual({
+      type: "unionType",
+      types: [alias("A"), alias("B"), alias("C")],
+    });
+  });
+
+  it("splices unions nested more than one level deep", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      Outer: { body: { type: "unionType", types: [alias("Inner"), stringType] } },
+      Inner: { body: { type: "unionType", types: [numberType, booleanType] } },
+    };
+    const result = resolveType(
+      { type: "unionType", types: [alias("Outer"), anyType] },
+      aliases,
+    );
+    expect(result).toEqual({
+      type: "unionType",
+      types: [numberType, booleanType, stringType, anyType],
+    });
+  });
+
+  it("leaves a union with no union members untouched", () => {
+    const input: VariableType = { type: "unionType", types: [numberType, stringType] };
+    expect(resolveType(input, {})).toBe(input);
+  });
+
+  it("terminates on a self-referential union alias", () => {
+    const aliases: Record<string, TypeAliasEntry> = {
+      T: { body: { type: "unionType", types: [alias("T"), numberType] } },
+    };
+    expect(resolveType(alias("T"), aliases)).toEqual({
+      type: "unionType",
+      types: [alias("T"), numberType],
+    });
+  });
+
+  it("carries an inner union's validators onto every member it contributes", () => {
+    // `@validate(isPositive) type AB = A | B` means values of A and of B are
+    // both validated. Splicing must not drop that, or a value that arrives as
+    // an `A` would skip the validator the alias declared.
+    const isPositive: Tag = {
+      type: "tag",
+      name: "validate",
+      arguments: [{ type: "variableName", value: "isPositive" }],
+    };
+    const aliases: Record<string, TypeAliasEntry> = {
+      AB: {
+        body: { type: "unionType", types: [alias("A"), alias("B")] },
+        tags: [isPositive],
+      },
+      A: { body: numberType },
+      B: { body: stringType },
+      C: { body: booleanType },
+    };
+    const result = resolveType(
+      { type: "unionType", types: [alias("AB"), alias("C")] },
+      aliases,
+    );
+    expect(result).toEqual({
+      type: "unionType",
+      types: [
+        { ...alias("A"), tags: [isPositive] },
+        { ...alias("B"), tags: [isPositive] },
+        alias("C"), // outside the tagged alias — untouched
+      ],
+    });
   });
 });

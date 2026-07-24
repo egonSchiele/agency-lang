@@ -2,7 +2,7 @@ import type { ImportStatement, NamedImport } from "../../types/importStatement.j
 import { PRELUDE_NAMES } from "../../prelude.js";
 import type { LintContext, LintFinding, LintFix, LintRule } from "../types.js";
 import { lintDiagnostic } from "../diagnostics.js";
-import { nameRange, statementSpan } from "./util.js";
+import { buildLineIndex, nameRange, statementSpan } from "./util.js";
 import { removalEdit } from "./importFixes.js";
 
 /** A name is redundant only when it is completely plain: provided by the
@@ -44,9 +44,10 @@ function redundantNamesIn(ctx: LintContext): { stmt: ImportStatement; name: stri
 export const redundantPreludeImportRule: LintRule = {
   name: "redundantPreludeImport",
   run(ctx: LintContext): LintFinding[] {
+    const lineIndex = buildLineIndex(ctx.source);
     return redundantNamesIn(ctx).map(({ stmt, name }) => {
       const span = statementSpan(ctx.source, stmt);
-      const range = nameRange(ctx.source, span.start, span.end, name);
+      const range = nameRange(ctx.source, span.start, span.end, name, lineIndex);
       // Each fix regenerates the WHOLE statement minus one name, so two
       // findings on the same statement carry overlapping edits. Safe for
       // one-at-a-time quick fixes (the editor re-lints between them), but

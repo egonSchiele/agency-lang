@@ -1,7 +1,7 @@
 import type { FunctionDefinition } from "../../types/function.js";
 import type { LintContext, LintFinding, LintRule } from "../types.js";
 import { lintDiagnostic } from "../diagnostics.js";
-import { nameRange, statementSpan } from "./util.js";
+import { buildLineIndex, nameRange, statementSpan } from "./util.js";
 
 /** Exported functions with no docstring. Functions only: a function's
  *  docstring becomes its tool description in the generated JS
@@ -26,9 +26,10 @@ function undocumentedExports(
 export const missingDocstringRule: LintRule = {
   name: "missingDocstring",
   run(ctx: LintContext): LintFinding[] {
+    const lineIndex = buildLineIndex(ctx.source);
     return undocumentedExports(ctx).map((fn) => {
       const span = statementSpan(ctx.source, fn);
-      const range = nameRange(ctx.source, span.start, span.end, fn.functionName);
+      const range = nameRange(ctx.source, span.start, span.end, fn.functionName, lineIndex);
       return lintDiagnostic("missingDocstring", { name: fn.functionName }, range);
     });
   },

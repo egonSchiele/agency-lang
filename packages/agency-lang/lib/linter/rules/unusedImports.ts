@@ -6,7 +6,8 @@ import type {
 import { getImportedNames } from "../../types/importStatement.js";
 import type { LintContext, LintEdit, LintFinding, LintFix, LintRule } from "../types.js";
 import { lintDiagnostic } from "../diagnostics.js";
-import { nameRange, statementSpan, walkValues } from "./util.js";
+import { buildLineIndex, nameRange, statementSpan, walkValues } from "./util.js";
+import type { LineIndex } from "./util.js";
 import { removalEdit } from "./importFixes.js";
 
 /** Names referenced anywhere in the file body. Conservative: an imported name
@@ -69,9 +70,10 @@ function findingFor(
   ctx: LintContext,
   stmt: ImportStatement | ImportNodeStatement,
   localName: string,
+  lineIndex: LineIndex,
 ): LintFinding {
   const span = statementSpan(ctx.source, stmt);
-  const range = nameRange(ctx.source, span.start, span.end, localName);
+  const range = nameRange(ctx.source, span.start, span.end, localName, lineIndex);
   const fix: LintFix = {
     title: `Remove unused import '${localName}'`,
     edits: [removalEdit(ctx.source, stmt, [localName])],
@@ -114,8 +116,9 @@ function unusedByStatement(
 export const unusedImportsRule: LintRule = {
   name: "unusedImport",
   run(ctx: LintContext): LintFinding[] {
+    const lineIndex = buildLineIndex(ctx.source);
     return unusedByStatement(ctx).flatMap(({ stmt, unusedNames }) =>
-      unusedNames.map((localName) => findingFor(ctx, stmt, localName)),
+      unusedNames.map((localName) => findingFor(ctx, stmt, localName, lineIndex)),
     );
   },
 };

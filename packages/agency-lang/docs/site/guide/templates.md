@@ -155,6 +155,50 @@ Destructuring binders are tracked like any other name: `const { key } = …`, ar
 
 Two binder forms are not yet tracked for collisions: names bound by result patterns (`if (r is success(v)) { … }` binds `v`) and names bound inside match arms. If a filler or template uses one of those names on the other side, rename it yourself.
 
+## Asking a module what it exports
+
+Generators get much more interesting when they can ask questions instead of being handed lists. `describe(source)` returns a module's exported surface as data — each exported function, node, type, const, and re-export, with its signature, docstring, transitive effect list, and `destructive`/`idempotent` markers:
+
+```ts
+const info = describe(toolsSource)
+// info.value.exports:
+// [{ name: "fetchArticle", kind: "def",
+//    signature: "fetchArticle(url: string): string",
+//    docstring: "Fetch one article body by URL.",
+//    effects: [], destructive: false, idempotent: true, reexportedFrom: null },
+//  { name: "saveNote", kind: "def", effects: ["std::write"], destructive: true, ... }]
+```
+
+The template payoff is that safety checks become loops. To supervise a set of tools, generate one handler arm per effect any of them can raise and splice the arms into a supervisor template — an effect with no handler cannot exist, because the loop is the completeness proof:
+
+```ts
+import { describe, loadTemplate, fill, parseStatements, toSource, runCode } from "std::agency"
+
+def superviseTools(toolsSource: string, task: string): Result {
+  const info = describe(toolsSource)
+  if (isFailure(info)) {
+    return info
+  }
+  let arms = []
+  for (exp in info.value.exports) {
+    for (effect in exp.effects) {
+      const arm = parseStatements("reject ${effect}")
+      if (isSuccess(arm)) {
+        arms = [...arms, arm.value]
+      }
+    }
+  }
+  const tpl = loadTemplate(__dirname, "supervisor.agency")   // contains #...handlerArms
+  const program = fill(tpl.value, { handlerArms: arms, task: task })
+  if (isFailure(program)) {
+    return program
+  }
+  return runCode(toSource(program.value))
+}
+```
+
+Effects use the same names and `"unknown"` sentinel as `getEffects`, so a bare `interrupt(...)` in a tool never disappears from the handler list. Re-exports resolve when the source module is a `std::` path; a re-export from a relative path cannot be read from a source string, so its entry reports `effects: ["unknown"]` rather than pretending to know.
+
 ## What is checked, and when
 
 Three checkpoints, from weakest to strongest:

@@ -2,15 +2,23 @@ import { compileSource, typeCheckSource, getEffectsFromSource, TypeCheckReport }
 import { writeFileSync, readFileSync, realpathSync, existsSync } from "fs";
 import { resolve, sep } from "path";
 import { parseAgency, replaceBlankLines } from "../parser.js";
-import { generateAgency } from "../backends/agencyGenerator.js";
+import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js";
+import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
 import { walkNodesArray } from "../utils/node.js";
+import { docCommentText, docStringText } from "../utils/docStringText.js";
+import { moduleDescription } from "../utils/moduleDoc.js";
+import { patternBinders } from "../runtime/template/hygiene.js";
+import { resolveAgencyImportPath, isStdlibImport } from "../importPaths.js";
+import type { ExportFromStatement, NamedExportBody } from "../types.js";
+import { variableTypeToString } from "../backends/typescriptGenerator/typeToString.js";
+import { declaredName } from "../types/hole.js";
 import { deepCopy } from "../utils.js";
 import {
   ImportKind,
   ImportPolicy,
   isImportAllowed,
 } from "../importPaths.js";
-import type { AgencyProgram, AgencyNode } from "../types.js";
+import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types.js";
 import type { ImportStatement } from "../types/importStatement.js";
 import { _write } from "./builtins.js";
 import {
@@ -175,6 +183,247 @@ export function _typecheck(source: string): TypeCheckReport {
 
 export function _getEffects(source: string): Record<string, string[]> {
   return getEffectsFromSource(source);
+}
+
+// ---------------------------------------------------------------------------
+// Reify: describe a module's exports as data
+// ---------------------------------------------------------------------------
+
+export type ExportKind = "def" | "node" | "type" | "const" | "reexport";
+
+export type ExportInfo = {
+  name: string;
+  kind: ExportKind;
+  signature: string;
+  docstring: string | null;
+  effects: string[];
+  destructive: boolean;
+  idempotent: boolean;
+  /** The module path this export was re-exported from, else null. */
+  reexportedFrom: string | null;
+};
+
+export type ModuleInfo = {
+  description: string | null;
+  exports: ExportInfo[];
+};
+
+/** The `agency doc` visibility rule, applied here for the same reason:
+ *  underscore-prefixed exports are lowering targets (`_guard`) and
+ *  compiler plumbing, exported for the compiler's sake, not for callers
+ *  — so they are not part of the surface describe reports. */
+function isInternalExport(name: string): boolean {
+  return name.startsWith("_");
+}
+
+/** One ExportInfo per EXPORTED top-level def, node, type alias, const,
+ *  and re-exported name, in source order. Effects come from the same
+ *  transitive analysis as _getEffects, sentinel included. Re-exports
+ *  from std:: modules resolve by describing the source module; other
+ *  re-exports (relative paths cannot resolve from a bare source string)
+ *  come back as thin "reexport" entries whose effects carry the
+ *  "unknown" sentinel — never a silent omission. */
+export function _describe(source: string): ModuleInfo {
+  return describeSource(source, []);
+}
+
+/** True when the re-export's source module can be read from a bare
+ *  source string: std:: paths resolve without an importing file;
+ *  relative and pkg:: paths do not. */
+function isResolvableReExport(node: ExportFromStatement): boolean {
+  return node.isAgencyImport && isStdlibImport(node.modulePath);
+}
+
+function describeSource(source: string, visited: string[]): ModuleInfo {
+  const program = parseSource(source);
+  // Doc comments live as loose comment nodes until attachment — the same
+  // pass `agency doc` runs. It hoists the @module comment onto
+  // program.docComment and pins each doc comment to its declaration.
+  new TypescriptPreprocessor(program, {}).attachDocComments();
+  // The effects pipeline REQUIRES every re-export to resolve, and
+  // relative/pkg paths cannot resolve from a bare string — so effects
+  // run on a copy with unresolvable re-exports stripped. They are
+  // surface plumbing, not behavior; a local call to a stripped name
+  // degrades to the "unknown" sentinel, which is the honest answer.
+  const unresolvable = program.nodes.some(
+    (node) => node.type === "exportFromStatement" && !isResolvableReExport(node),
+  );
+  const effectsSource = unresolvable
+    ? generateAgency({
+        ...deepCopy(program),
+        nodes: deepCopy(program).nodes.filter(
+          (node) => node.type !== "exportFromStatement" || isResolvableReExport(node),
+        ),
+      })
+    : source;
+  const effects = getEffectsFromSource(effectsSource);
+  const generator = new AgencyGenerator();
+  const exports: ExportInfo[] = [];
+  for (const node of program.nodes) {
+    if (node.type === "exportFromStatement") {
+      exports.push(...reExportInfos(node, visited));
+      continue;
+    }
+    exports.push(...localExportInfos(node, generator, effects));
+  }
+  return {
+    description: moduleDescription(program.docComment),
+    exports,
+  };
+}
+
+function localExportInfos(
+  node: AgencyNode,
+  generator: AgencyGenerator,
+  effects: Record<string, string[]>,
+): ExportInfo[] {
+  if (node.type === "function" && node.exported) {
+    const name = declaredName(node.functionName);
+    if (isInternalExport(name)) return [];
+    return [
+      {
+        name,
+        kind: "def",
+        signature: generator.signatureOf(node),
+        docstring: node.docString ? docStringText(node.docString) : null,
+        effects: effects[name] ?? [],
+        destructive: node.markers?.destructive === true,
+        idempotent: node.markers?.idempotent === true,
+        reexportedFrom: null,
+      },
+    ];
+  }
+  if (node.type === "graphNode" && node.exported) {
+    const name = declaredName(node.nodeName);
+    if (isInternalExport(name)) return [];
+    return [
+      {
+        name,
+        kind: "node",
+        signature: generator.signatureOf(node),
+        docstring: node.docString ? docStringText(node.docString) : null,
+        effects: effects[name] ?? [],
+        // Nodes carry no tool markers; only defs can be declared
+        // destructive or idempotent.
+        destructive: false,
+        idempotent: false,
+        reexportedFrom: null,
+      },
+    ];
+  }
+  if (node.type === "typeAlias" && node.exported) {
+    if (isInternalExport(node.aliasName)) return [];
+    return [
+      {
+        name: node.aliasName,
+        kind: "type",
+        signature: generator.signatureOf(node),
+        docstring: node.docComment ? docCommentText(node.docComment) : null,
+        effects: [],
+        destructive: false,
+        idempotent: false,
+        reexportedFrom: null,
+      },
+    ];
+  }
+  if (node.type === "assignment" && node.exported && node.declKind) {
+    // `export const version: string = ...` — one entry per bound name
+    // (destructuring exports bind several). The signature stays to the
+    // declaration shape (`const name: type`); values can be arbitrarily
+    // large and belong to the source, not the surface.
+    const names = node.pattern ? patternBinders(node.pattern) : [node.variableName];
+    const typeStr = node.typeHint ? `: ${variableTypeToString(node.typeHint, {}, true)}` : "";
+    return names
+      .filter((name) => !isInternalExport(name))
+      .map((name) => ({
+        name,
+        kind: "const" as const,
+        signature: `${node.declKind} ${name}${node.pattern ? "" : typeStr}`,
+        docstring: null,
+        effects: [],
+        destructive: false,
+        idempotent: false,
+        reexportedFrom: null,
+      }));
+  }
+  // Fail LOUDLY on any exported declaration kind this dispatch does not
+  // know: a silent `return []` here is how a whole class of exports
+  // vanishes from the reported surface without any test noticing (the
+  // exact failure mode re-exports had before they were handled). The
+  // throw surfaces through `try _describe(...)` as a Result failure.
+  if ((node as { exported?: boolean }).exported === true) {
+    throw new Error(
+      `describe does not handle exported "${node.type}" declarations yet — add a branch to localExportInfos`,
+    );
+  }
+  return [];
+}
+
+function reExportInfos(node: ExportFromStatement, visited: string[]): ExportInfo[] {
+  const from = node.modulePath;
+  if (isResolvableReExport(node)) {
+    const abs = resolveAgencyImportPath(from, "");
+    if (!visited.includes(abs) && existsSync(abs)) {
+      const inner = describeSource(readFileSync(abs, "utf-8"), [...visited, abs]);
+      if (node.body.kind === "starExport") {
+        return inner.exports.map((info) => ({ ...info, reexportedFrom: from }));
+      }
+      const byName: Record<string, ExportInfo> = Object.create(null);
+      for (const info of inner.exports) byName[info.name] = info;
+      return resolveNamedReExports(node.body, from, byName);
+    }
+  }
+  if (node.body.kind === "starExport") {
+    return [thinReExport("*", "*", from)];
+  }
+  return resolveNamedReExports(node.body, from, Object.create(null));
+}
+
+function resolveNamedReExports(
+  body: NamedExportBody,
+  from: string,
+  byName: Record<string, ExportInfo>,
+): ExportInfo[] {
+  return body.names.flatMap((sourceName) => {
+    const localName = body.aliases[sourceName] ?? sourceName;
+    if (isInternalExport(localName)) return [];
+    const found = Object.hasOwn(byName, sourceName) ? byName[sourceName] : null;
+    const base = found ?? thinReExport(sourceName, localName, from);
+    return [
+      {
+        ...base,
+        name: localName,
+        reexportedFrom: from,
+        // Re-export sites may add tool markers the source did not have.
+        destructive:
+          base.destructive || (body.destructiveNames ?? []).includes(sourceName),
+        idempotent:
+          base.idempotent || (body.idempotentNames ?? []).includes(sourceName),
+      },
+    ];
+  });
+}
+
+/** What is reportable about a re-export whose source module cannot be
+ *  read here. Effects carry the "unknown" sentinel — same philosophy as
+ *  getEffects: never silently under-report what code might do. */
+function thinReExport(sourceName: string, localName: string, from: string): ExportInfo {
+  const spelled =
+    sourceName === "*"
+      ? `export * from "${from}"`
+      : sourceName === localName
+        ? `export { ${sourceName} } from "${from}"`
+        : `export { ${sourceName} as ${localName} } from "${from}"`;
+  return {
+    name: localName,
+    kind: "reexport",
+    signature: spelled,
+    docstring: null,
+    effects: ["unknown"],
+    destructive: false,
+    idempotent: false,
+    reexportedFrom: from,
+  };
 }
 
 // The real file path is handed to the type-checker so relative imports in

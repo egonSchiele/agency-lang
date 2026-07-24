@@ -108,7 +108,9 @@ Deliberately **validation, not a guarantee**: it rejects only when both sides ar
 
 ### Origin stamping
 
-Every node of a grafted fragment gets `loc.origin = { kind: "filler", name }` — recursively, because inner nodes carry positions into a fragment source string that no longer exists. Only objects that already have a `loc` are stamped (loc-less sub-records like text segments keep their exact shape, which formatter invariants depend on); a loc-less *top* node falls back to the hole's own position. Nothing user-facing reads `origin` yet — surfacing "in the fill for `#body`" in compile/runtime errors is a follow-up.
+Every node of a grafted fragment gets `loc.origin = { kind: "filler", name }` — recursively, because inner nodes carry positions into a fragment source string that no longer exists. Only objects that already have a `loc` are stamped (loc-less sub-records like text segments keep their exact shape, which formatter invariants depend on); a loc-less *top* node falls back to the hole's own position.
+
+Two readers consume the stamp. Fill-path errors append ``(in code grafted by the fill for `#helpers`)`` when the offending hole carries a filler origin (`originSuffix` in fill.ts), and `holesOf` reports it as `HoleInfo.origin` so a model composing templates sees which sub-template each remaining hole came from. Two boundaries are deliberate: re-grafting **overwrites** the stamp, so in a nested composition origin means "the fill this node *most recently* arrived through" — the outermost graft, which is the one the current caller performed; and attribution is **best-effort** — a loc-less inner node carries no stamp and yields `origin: null` with no error suffix. Compile-side and run-time attribution stay impossible until an AST-in compile entry point exists: `toSource` prints and `runCode` re-parses, and `loc` does not survive that boundary (the fragment-checker follow-up).
 
 ## Hygiene
 

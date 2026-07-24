@@ -38,9 +38,11 @@ node main(): string {
 
 ```ts
 holesOf(tpl.value)
-// [{ name: "topic", sort: "expr", splice: false, type: "string" },
-//  { name: "maxWords", sort: "expr", splice: false, type: "number" }]
+// [{ name: "topic", sort: "expr", splice: false, type: "string", origin: null },
+//  { name: "maxWords", sort: "expr", splice: false, type: "number", origin: null }]
 ```
+
+`origin` is null for holes you wrote yourself. A hole that arrived inside a grafted fragment instead carries the name of the hole it most recently came through — see the composition section below.
 
 ## The rule everything rests on: fillers are never parsed
 
@@ -125,9 +127,11 @@ The fragment kind is checked against the hole's sort: an expression fragment can
 ```ts
 const guarded = fill(guardTpl.value, { body: body.value })   // #minutes still open
 const program = fill(mainTpl.value, { helpers: guarded.value })
-holesOf(program.value)   // [{ name: "minutes", ... }]
+holesOf(program.value)   // [{ name: "minutes", origin: "helpers", ... }]
 const done = fill(program.value, { minutes: 120000 })        // now complete
 ```
+
+The `origin` field says which fill the still-open hole most recently arrived through — here, `#minutes` rode in when `#helpers` was filled. (In a deeper composition each re-graft re-stamps, so the outermost graft is the one reported.) Errors from a later fill say the same thing: filling `minutes` with a string fails with ``expects `number` … (in code grafted by the fill for `#helpers`)``, so a model juggling several templates knows which one the complaint is about.
 
 **The escape hatch is explicit.** `parseExpr` and `parseStatements` do parse their input — that is their job. Writing `fill(t, { v: parseExpr(modelOutput).value })` lets model-written code into the program, and a template author who writes that has chosen to. The generated program still runs in a subprocess under your `handle` blocks, so what it can *do* stays governed either way.
 

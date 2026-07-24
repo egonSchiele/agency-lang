@@ -89,7 +89,7 @@ describe("holesOf reports position-inferred types", () => {
       `node main() {\n  const prompt: string = #text\n  return prompt\n}\n`,
     );
     expect(_holesOf(code)).toEqual([
-      { name: "text", sort: "expr", splice: false, type: "string" },
+      { name: "text", sort: "expr", splice: false, type: "string", origin: null },
     ]);
   });
 });

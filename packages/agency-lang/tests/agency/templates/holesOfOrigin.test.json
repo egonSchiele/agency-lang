@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"origin-ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "holesOf reports which graft a still-open hole most recently arrived through",
+      "interruptHandlers": [
+        { "action": "approve", "expectedMessage": "Can I read this template?" },
+        { "action": "approve", "expectedMessage": "Can I read this template?" }
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  _fill,
   _loadTemplate,
   _loadTemplateFromString,
   _holesOf,
@@ -53,8 +54,8 @@ describe("_loadTemplate / _holesOf", () => {
       `node main() {\n  #setup\n  const x = #value: number\n}\n`,
     );
     expect(_holesOf(_loadTemplate(dir, filename))).toEqual([
-      { name: "setup", sort: "statements", splice: false, type: null },
-      { name: "value", sort: "expr", splice: false, type: "number" },
+      { name: "setup", sort: "statements", splice: false, type: null, origin: null },
+      { name: "value", sort: "expr", splice: false, type: "number", origin: null },
     ]);
   });
 
@@ -68,7 +69,7 @@ describe("_loadTemplate / _holesOf", () => {
       `node main() {\n  const a = #x: number\n  const b = #x\n}\n`,
     );
     expect(_holesOf(code)).toEqual([
-      { name: "x", sort: "expr", splice: false, type: "number" },
+      { name: "x", sort: "expr", splice: false, type: "number", origin: null },
     ]);
   });
 
@@ -81,4 +82,15 @@ describe("_loadTemplate / _holesOf", () => {
     const { dir } = withTemplate(`node main() {\n  return 1\n}\n`);
     expect(() => _loadTemplate(dir, "missing.agency")).toThrow();
   });
+});
+
+it("holesOf reports which graft contributed each remaining hole", () => {
+  const inner = _loadTemplateFromString(`node main() {\n  const x: number = #minutes\n}\n`);
+  const outer = _loadTemplateFromString(`#helpers\n\n#direct\n`);
+  const program = _fill(outer, { helpers: inner });
+  const infos = _holesOf(program);
+  const minutes = infos.find((info) => info.name === "minutes");
+  const direct = infos.find((info) => info.name === "direct");
+  expect(minutes?.origin).toBe("helpers");
+  expect(direct?.origin).toBe(null);
 });

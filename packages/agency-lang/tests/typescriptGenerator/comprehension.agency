@@ -1,0 +1,7 @@
+node main() {
+  const nums = [1, 2, 3, 4]
+  const doubled = [n * 2 for n in nums]
+  const evens = [n for n in nums if n % 2 == 0]
+  print(doubled)
+  print(evens)
+}

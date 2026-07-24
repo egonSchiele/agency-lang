@@ -82,10 +82,14 @@ export function bindersOf(code: Code): string[] {
  *  walker misses under-reports free names here, no test fails, and a
  *  filler silently captures a template binder — the precise bug hygiene
  *  exists to prevent, failing open. (The guardBlock head-argument gap
- *  fixed in this feature's PR is the historical example.) If you add a
- *  node kind with expression children, audit the walker's descent AND add
- *  that position to the hole-position battery in
- *  lib/parsers/hole.test.ts, which is the tripwire for this path. */
+ *  fixed in this feature's PR is the historical example.) The tripwire
+ *  for this path is the walker-coverage corpus invariants in
+ *  lib/utils/expressionSlots.test.ts ("walker coverage" describe block):
+ *  they check, structurally and in both parse modes, that walkNodes
+ *  reaches every expression position — no hand enumeration to forget.
+ *  Gaps they have found but not yet fixed are listed there in
+ *  KNOWN_WALKER_GAPS; hygiene inherits each one until its walker-fix PR
+ *  lands. */
 export function freeNamesOf(code: Code): string[] {
   const bound = bindersOf(code);
   const used: string[] = [];

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"got news\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Interpolation in a literal body passes through untouched and runs in the generated program"
+    }
+  ]
+}

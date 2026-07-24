@@ -136,6 +136,19 @@ Rename application is a bespoke rewriting walk, and that is documented rather th
 
 **Proto-safety:** hole names, filler keys, and scope keys are user-controlled strings (`__proto__` is a legal hole name), so every dictionary keyed by them is null-prototype and every membership test is `Object.hasOwn` — the house pattern from `lib/optimize/registry.ts`.
 
+## Code literals (`[| ... |]`)
+
+An inline template is a `codeLiteral` expression node: `{ nodes, kind }`, where the body was parsed at parse time of the enclosing file (unlowered template mode) and `kind` is inferred smallest-first (`expr` → `statements` → `program`) by `parseCodeLiteralBody` (parsers.ts). Load-bearing internals, each with its enforcement:
+
+- **End-scan** (`scanCodeLiteralBody`): finds `|]` in code position by REUSING the real string/comment parsers via `consumeWith` — not a second lexer — so the scan and the grammar agree by construction and no escaping rules exist. Nested `[|` is a directive error.
+- **Nested-parse insulation**: tarsec keeps three module-global states (position input string, rightmost-failure record, memo caches) plus this codebase's template offset; `parseCodeLiteralBody` saves/restores all four or the ENCLOSING parse's error formatter computes positions against the body string and crashes.
+- **Error channel**: tarsec's `label()` saves/restores the rightmost-failure record around every labeled region, scrubbing any deep record made inside a literal. Failed literals report through `pendingCodeLiteralError` instead; `_parseAgency` and the `TarsecError` catch prefer it when it is at least as deep as the generic rightmost failure. Body-error lines are mapped into enclosing-file coordinates (literal start + stripped prefix, additive under the prelude offset).
+- **Host-side leaf, four levers**: no `walkNodes` case (per-type enumeration = leaf for free); `codeLiteral.nodes` deliberately NOT in `bodySlots` (the generic tail descent — the one lever that is an absence, pinned by a test); `NO_EXPRESSION_SLOTS` registration (forced by the completeness test); `WALKER_EXCLUDED_FIELDS["codeLiteral.nodes"]` tripwire ruling. Quoted names are invisible to the host symbol table and hygiene; their hygiene runs at fill time on the runtime value.
+- **Typechecking**: the literal synthesizes the STRUCTURAL equivalent of stdlib `Code`, built once through the type-alias production so field encodings match, with the exact `"agencyProgram"` literal and kind union (assignability into literal-typed fields is directional). One guard in `scopes.ts`: a variable bound to a literal keeps the UNWIDENED type — `widenType` deep-widens record fields, which would break `const tpl = [| ... |]; fill(tpl, ...)`.
+- **Codegen/runtime**: the builder embeds `printCodeLiteralBody(node)` — the same text `fmt` shows between the brackets — and `__codeLiteral` (runtime) reconstructs through the SAME `parseCodeLiteralBody`, asserting the recorded kind, so compile and runtime cannot diverge by drift. This reuses Code-serializes-as-source; there is no second representation.
+- **Empty body** `[| |]` is an empty `statements` fragment, matching `parseStatements("")` (bodyParser accepts empty input) — pinned so the literal and the runtime parser cannot disagree about the same text.
+- **fmt reformats bodies** (the ambitious v1 promise): guarded by the round-trip gate in `agencyGenerator.roundtrip.test.ts` — whole-corpus unlowered print/re-parse structural identity plus print idempotence, with byte-exact goldens for literal formatting.
+
 ## Refusals and pipeline tolerance
 
 A template flows through the normal pipeline, so every stage before codegen must tolerate holes and exactly one stage refuses:

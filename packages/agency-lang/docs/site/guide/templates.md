@@ -155,6 +155,34 @@ Destructuring binders are tracked like any other name: `const { key } = …`, ar
 
 Two binder forms are not yet tracked for collisions: names bound by result patterns (`if (r is success(v)) { … }` binds `v`) and names bound inside match arms. If a filler or template uses one of those names on the other side, rename it yourself.
 
+## Writing templates inline
+
+For short fragments, a separate template file puts the shape being generated out of the reader's sight. A **code literal** is a template written inline, between `[|` and `|]`:
+
+```ts
+const guardTpl = [|
+  def guarded(): string {
+    const ms: number = #minutes
+    #body
+    return "done"
+  }
+|]
+
+const partial = fill(guardTpl, { body: [| print("step") |] })
+```
+
+The body is real Agency code — holes, splices, everything a template file can hold — and it is parsed **when the enclosing file compiles**, so a typo'd template is a compile error with a real location, not a runtime failure in whoever calls your generator. A literal evaluates directly to a `Code` value (not a `Result` — nothing can fail at runtime), indistinguishable from a `loadTemplate` result everywhere downstream: `fill`, `holesOf`, `toSource`, composition, checkpoints.
+
+What kind of fragment a literal holds is inferred from its body, smallest first: a lone expression, else a statement list, else a whole program (it contains `def`/`node`/`type`/imports). An expression fragment also fills a `statements` hole — an expression is a legal statement — so the inference never blocks a legal use.
+
+Three things worth knowing:
+
+- **`${...}` in a body belongs to the generated program.** There is no host interpolation inside a literal — holes are the only way values get in. If you know Template Haskell: these are TH's quotation brackets *without* its `$( )` splices, on purpose. `[| return "Summarize ${topic}" |]` produces a program whose own string interpolates its own `topic`.
+- **Nothing needs escaping.** A `|]` inside one of the body's strings or comments does not end the literal — the scanner reads them with the language's own string and comment rules. A `|]` in code position is not legal Agency, so the closing delimiter is unambiguous.
+- **Literals do not nest.** A `[|` inside a body is an error. Build the inner piece as its own value and graft it into a hole — composition replaces nesting, without Template Haskell's stage errors.
+
+`fmt` reformats literal bodies the same way it formats files — a template body is held to the same standard a template file is.
+
 ## Asking a module what it exports
 
 Generators get much more interesting when they can ask questions instead of being handed lists. `describe(source)` returns a module's exported surface as data — each exported function, node, type, const, and re-export, with its signature, docstring, transitive effect list, and `destructive`/`idempotent` markers:

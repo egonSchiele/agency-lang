@@ -95,11 +95,17 @@ function normalizePolicyFields(value: unknown): void {
 
 describe("formatter gate: unlowered template-mode round-trip", () => {
   const root = join(__dirname, "../..");
+  // Fixtures that are INTENTIONALLY unparseable (expectedCompileError
+  // tests) cannot round-trip by definition. Each exclusion names its
+  // reason; an unexplained entry here is how the corpus quietly shrinks.
+  const INTENTIONALLY_UNPARSEABLE = [
+    "literalBadBody.agency", // expectedCompileError: malformed literal body
+  ];
   const files = [
     ...collectAgencyFiles(join(root, "stdlib")),
     ...collectAgencyFiles(join(root, "tests/typescriptGenerator")),
     ...collectAgencyFiles(join(root, "tests/agency/templates")),
-  ];
+  ].filter((file) => !INTENTIONALLY_UNPARSEABLE.some((name) => file.endsWith(name)));
   expect(files.length).toBeGreaterThan(50);
 
   it("print -> re-parse is structurally identity on the whole corpus", { timeout: 120_000 }, () => {
@@ -220,5 +226,34 @@ describe("formatter gate: code literals", () => {
     const source = `node main() {\n  const t = [|\n    // keep me\n    print(1)\n  |]\n}\n`;
     const printed = generateAgency(parseTemplateMode(source));
     expect(printed).toContain("// keep me");
+  });
+});
+
+// The "indistinguishable from file-loaded" property, pinned as a tested
+// equality rather than a claim. One printer, not two: _toSource IS
+// generateAgency (lib/stdlib/template.ts), so equality here proves a
+// literal-built value and a file-parsed template print identically.
+describe("formatter gate: literal/file equivalence", () => {
+  it("toSource of a literal-built body equals the file-template print", () => {
+    const bodyText = `def g(n: number): number {\n  return n * 2\n}\n`;
+    const viaLiteral = parseTemplateMode(
+      `node main() {\n  const t = [|\n    def g(n: number): number {\n      return n * 2\n    }\n  |]\n}\n`,
+    );
+    const literal = ((): { nodes: unknown[] } => {
+      const main = (viaLiteral.nodes as { type: string; body?: { type: string }[] }[]).find(
+        (node) => node.type === "graphNode",
+      );
+      const assignment = (main?.body ?? []).find((node) => node.type === "assignment") as {
+        value?: { type: string; nodes: unknown[] };
+      };
+      if (assignment.value?.type !== "codeLiteral") throw new Error("no literal");
+      return assignment.value;
+    })();
+    const literalPrinted = generateAgency({
+      type: "agencyProgram",
+      nodes: literal.nodes,
+    } as never);
+    const filePrinted = generateAgency(parseTemplateMode(bodyText));
+    expect(literalPrinted).toBe(filePrinted);
   });
 });

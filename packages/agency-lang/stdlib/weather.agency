@@ -63,10 +63,12 @@ export def weather(location: string, units: "imperial" | "metric" = "imperial"):
 }
 
 export def celsiusToFahrenheit(celsius: number): number {
+  """Convert a temperature from Celsius to Fahrenheit."""
   return celsius * 9 / 5 + 32
 }
 
 export def fahrenheitToCelsius(fahrenheit: number): number {
+  """Convert a temperature from Fahrenheit to Celsius."""
   let diff = fahrenheit - 32
   return diff * 5 / 9
 }

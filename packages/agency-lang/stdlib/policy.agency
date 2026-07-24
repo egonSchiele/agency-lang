@@ -107,14 +107,19 @@ export static const approveAllPolicy = _approveAllPolicy
 export static const BUILTIN_POLICIES = _BUILTIN_POLICIES
 
 export def withWritesPolicy(baseDir: string) {
+  """The recommended policy plus file-system and git-write effects, each
+  scoped to `baseDir` and its children."""
   return _withWritesPolicy(baseDir)
 }
 
 export def builtinPolicy(name: string, baseDir: string): Policy | null {
+  """Resolve a built-in policy name to a concrete Policy, scoping
+  cwd-relative variants to `baseDir`. Returns null for an unknown name."""
   return _builtinPolicy(name, baseDir)
 }
 
 export def builtinPolicyNames(): string[] {
+  """The names accepted by builtinPolicy, e.g. for an approval prompt."""
   return _builtinPolicyNames()
 }
 
@@ -440,6 +445,7 @@ export def parsePolicyFile(path: string): Result<Policy, ParsePolicyFailure> {
   * with `parsePolicyFile` or constructing one by hand.
   */
 export def setPolicy(path: string, policy: Policy) {
+  """Install `policy` as the active policy and persist it to `path`."""
   _policy = policy
   _policyLoaded = true
   writePolicyFile(path, policy, []) with approve
@@ -521,6 +527,7 @@ def maybeFlush() {
  * handler).
  */
 export def flushPolicy() {
+  """Write any pending always-rule additions to the policy file now."""
   if (_pendingSave) {
     _pendingSave = false
     if (_policy != null) {

@@ -21,6 +21,16 @@ export const LINT_DIAGNOSTICS = {
     severity: "hint",
     message: "'{name}' is imported but never used.",
   },
+  missingDocstring: {
+    code: "AL0002",
+    severity: "hint",
+    message: "'{name}' is exported but has no docstring.",
+  },
+  redundantPreludeImport: {
+    code: "AL0003",
+    severity: "hint",
+    message: "'{name}' is already available without an import.",
+  },
 } as const;
 
 export type LintDiagnosticName = keyof typeof LINT_DIAGNOSTICS;

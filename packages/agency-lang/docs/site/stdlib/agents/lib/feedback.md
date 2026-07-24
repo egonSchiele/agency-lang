@@ -112,9 +112,9 @@ True when any finding is an error, or when the feedback Result itself
 failOpenFeedback(feedback: Result<Feedback[]>): Result<Feedback[]>
 ```
 
-Pass a successful feedback list through unchanged; map any failure to no
-  findings. Use this to make a checker fail open: a checker that could not run
-  reports nothing rather than a blocking error.
+Pass a successful feedback list through unchanged; map any failure to
+  no findings, so a checker that could not run reports nothing rather than
+  a blocking error.
 
 **Parameters:**
 
@@ -124,4 +124,4 @@ Pass a successful feedback list through unchanged; map any failure to no
 
 **Returns:** `Result<Feedback[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L84))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/feedback.agency#L81))

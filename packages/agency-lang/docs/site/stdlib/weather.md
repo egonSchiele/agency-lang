@@ -78,6 +78,8 @@ Usage from Agency code:
 celsiusToFahrenheit(celsius: number): number
 ```
 
+Convert a temperature from Celsius to Fahrenheit.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -94,6 +96,8 @@ celsiusToFahrenheit(celsius: number): number
 fahrenheitToCelsius(fahrenheit: number): number
 ```
 
+Convert a temperature from Fahrenheit to Celsius.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -102,4 +106,4 @@ fahrenheitToCelsius(fahrenheit: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/weather.agency#L70))

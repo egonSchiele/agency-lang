@@ -124,8 +124,9 @@ Return the agent working directory, or an empty string if none is set.
 applyAgentCwd(dir: string): string
 ```
 
-Used by read, write, and other functions to resolve
-relative paths against the agent working directory.
+Resolve a relative path against the agent working directory (set with
+  setAgentCwd). Absolute paths and an unset working directory pass through
+  unchanged. read, write, and the other file tools already call this.
 
 **Parameters:**
 
@@ -135,7 +136,7 @@ relative paths against the agent working directory.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/index.agency#L98))
 
 ### printJSON
 

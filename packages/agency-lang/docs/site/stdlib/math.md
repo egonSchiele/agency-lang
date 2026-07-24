@@ -38,6 +38,8 @@ Round a number to a given number of decimal places.
 add(a: number, b: number): number
 ```
 
+Add two numbers.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -55,6 +57,8 @@ add(a: number, b: number): number
 subtract(a: number, b: number): number
 ```
 
+Subtract b from a.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -64,7 +68,7 @@ subtract(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L21))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L22))
 
 ### multiply
 
@@ -72,6 +76,8 @@ subtract(a: number, b: number): number
 multiply(a: number, b: number): number
 ```
 
+Multiply two numbers.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -81,13 +87,15 @@ multiply(a: number, b: number): number
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L27))
 
 ### divide
 
 ```ts
 divide(a: number, b: number): Result<number>
 ```
+
+Divide a by b. Fails when b is zero.
 
 **Parameters:**
 
@@ -98,4 +106,4 @@ divide(a: number, b: number): Result<number>
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L32))

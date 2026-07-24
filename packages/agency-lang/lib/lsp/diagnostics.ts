@@ -64,6 +64,22 @@ function ensureStdlibImport(
   return { ...program, nodes: [synthetic, ...program.nodes] };
 }
 
+/** The lint snapshot must be the parse as written. prunePreludeShadows
+ *  (below) mutates std::index import statements IN PLACE — including
+ *  user-written ones — so those few nodes are deep-copied. Everything
+ *  else is shared: no other pass mutates nodes before runLinter today,
+ *  and the CLI/LSP agreement test is the tripwire if one starts. */
+function cloneForLint(program: AgencyProgram): AgencyProgram {
+  return {
+    ...program,
+    nodes: program.nodes.map((node) =>
+      node.type === "importStatement" && node.modulePath === "std::index"
+        ? structuredClone(node)
+        : node,
+    ),
+  };
+}
+
 type DiagnosticsResult = {
   diagnostics: Diagnostic[];
   program: AgencyProgram | null;
@@ -109,12 +125,12 @@ export function runDiagnostics(
   }
 
   let program = parseResult.result;
-  // The linter needs the pristine parse: later passes (resolveReExports,
-  // resolveImports) return rewritten programs whose import statements are
-  // replaced or dropped. The pipeline below reassigns `program`, so this
-  // alias keeps pointing at the original. Parsed with applyTemplate=false,
-  // so finding offsets index straight into `source`.
-  const lintProgram = parseResult.result;
+  // The linter needs the parse as written. Later passes (resolveReExports,
+  // resolveImports) return rewritten programs, which reassigning `program`
+  // handles — but prunePreludeShadows mutates std::index import statements
+  // IN PLACE, so cloneForLint deep-copies those few nodes. Parsed with
+  // applyTemplate=false, so finding offsets index straight into `source`.
+  const lintProgram = cloneForLint(parseResult.result);
 
   // The CLI parses source through a template that auto-injects an
   // `import { ... } from "std::index"` statement. The LSP path uses

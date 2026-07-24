@@ -31,10 +31,11 @@ The linter reports style and hygiene notices — things worth cleaning up, not t
 
 Because of that, `agency lint` **exits 0 on hint-level findings**, so putting it in CI reports findings without failing the build. If a future rule ships at `warning` severity or above, findings at that level will fail the run.
 
-## What the rules skip
+## The rules
 
-- **Auto-imported prelude names.** Every Agency file gets the `std::index` prelude (`print`, `map`, `range`, …) without importing it, so `std::index` imports are never reported.
-- **Test-only imports.** `import test { … }` exists for the test harness; its names are expected to look unused in a normal compile.
+- **AL0001 — unused import.** A named import (or `import node`) the file never references. Conservative on purpose: if the name appears anywhere — even where a shadowing local is the real target — the import is kept. Never examines `std::index` imports (every file gets the prelude names without importing them) or `import test { … }` imports (their names are expected to look unused in a normal compile).
+- **AL0002 — missing docstring.** An exported function without a docstring. In Agency, functions are tools, and the docstring becomes the tool description the LLM reads — an exported function without one hands every agent that imports it a tool with no description. A comment above the function does not count; only a docstring reaches the LLM. See the [documentation guide](/cli/doc) for docstring conventions.
+- **AL0003 — redundant prelude import.** An explicit `import { map } from "std::index"` of a name the prelude already provides. Aliased imports (`map as arrMap`) and imports carrying a `destructive`/`idempotent` marker do real work and are never reported — and `std::index` exports that are not in the prelude (types like `WriteMode`) must be imported, so they are never reported either.
 
 ## The same findings in your editor
 

@@ -63,7 +63,7 @@ type Code = { type: "agencyProgram"; kind?: "program" | "statements" | "expr"; n
 
 `Code` is the pre-existing `AST` shape plus a fragment kind, because a bare expression is not a parseable program — `AST` alone cannot represent "one expression", and an expr hole must be fillable with `Code`. A missing `kind` means `"program"` (that is what `parseAST`, the escape hatch, produces). `kindOf` normalizes; `isCode` checks the `type` tag **and** `Array.isArray(nodes)` — the array check is load-bearing, since `Code` is a plain record an Agency caller can hand-build, and without it `{ type: "agencyProgram" }` would crash in `nodes.map` instead of lifting as data.
 
-Kind-versus-sort admissibility (`assertKindMatchesSort`): expr ← expr; statements ← statements or program; decl ← program; identifier ← never (strings only).
+Kind-versus-sort admissibility (`assertKindMatchesSort`): expr ← expr; statements ← statements, program, or expr (an expression IS a legal statement — the expression statement is the expression node itself in the body array, so the graft is the identity; a nonsense bare-expression statement is judged at the completed program's compile, the right stage); decl ← program; identifier ← never (strings only).
 
 `_parseExpr` and `_parseStatements` reuse the real grammar (`exprParser`, `bodyParser`) — never a second grammar — and reject trailing input, which is what makes `parseExpr("const x = 1")` fail instead of silently parsing a prefix.
 
@@ -135,6 +135,19 @@ Rename application is a bespoke rewriting walk, and that is documented rather th
 **Known limits:** result-pattern bindings (`is success(v)` binds `v`) and match-arm pattern binders are not tracked for collision *detection* — both are branch-scoped bindings, which need flow-aware rename planning; the guide documents them. Renames stay *consistent* through them, though: `resultPattern.binding` is a name field (`isNameField`), so a scope-wide rename moves the arm binding together with the arm's uses instead of silently retargeting the arm at the renamed outer variable, and match-arm shorthand patterns go through the same `expandShorthand` as binding-position ones.
 
 **Proto-safety:** hole names, filler keys, and scope keys are user-controlled strings (`__proto__` is a legal hole name), so every dictionary keyed by them is null-prototype and every membership test is `Object.hasOwn` — the house pattern from `lib/optimize/registry.ts`.
+
+## Code literals (`[| ... |]`)
+
+An inline template is a `codeLiteral` expression node: `{ nodes, kind }`, where the body was parsed at parse time of the enclosing file (unlowered template mode) and `kind` is inferred smallest-first (`expr` → `statements` → `program`) by `parseCodeLiteralBody` (parsers.ts). Load-bearing internals, each with its enforcement:
+
+- **End-scan** (`scanCodeLiteralBody`): finds `|]` in code position by REUSING the real string/comment parsers via `consumeWith` — not a second lexer — so the scan and the grammar agree by construction and no escaping rules exist. Nested `[|` is a directive error.
+- **Nested-parse insulation**: tarsec keeps three module-global states (position input string, rightmost-failure record, memo caches) plus this codebase's template offset; `parseCodeLiteralBody` saves/restores all four or the ENCLOSING parse's error formatter computes positions against the body string and crashes.
+- **Error channel**: tarsec's `label()` saves/restores the rightmost-failure record around every labeled region, scrubbing any deep record made inside a literal. Failed literals report through `pendingCodeLiteralError` instead; `_parseAgency` and the `TarsecError` catch prefer it when it is at least as deep as the generic rightmost failure. Body-error lines are mapped into enclosing-file coordinates (literal start + stripped prefix, additive under the prelude offset).
+- **Host-side leaf, four levers**: no `walkNodes` case (per-type enumeration = leaf for free); `codeLiteral.nodes` deliberately NOT in `bodySlots` (the generic tail descent — the one lever that is an absence, pinned by a test); `NO_EXPRESSION_SLOTS` registration (forced by the completeness test); `WALKER_EXCLUDED_FIELDS["codeLiteral.nodes"]` tripwire ruling. Quoted names are invisible to the host symbol table and hygiene; their hygiene runs at fill time on the runtime value.
+- **Typechecking**: the literal synthesizes the STRUCTURAL equivalent of stdlib `Code`, built once through the type-alias production so field encodings match, with the exact `"agencyProgram"` literal and kind union (assignability into literal-typed fields is directional). One guard in `scopes.ts`: a variable bound to a literal keeps the UNWIDENED type — `widenType` deep-widens record fields, which would break `const tpl = [| ... |]; fill(tpl, ...)`.
+- **Codegen/runtime**: the builder embeds `printCodeLiteralBody(node)` — the same text `fmt` shows between the brackets — and `__codeLiteral` (runtime) reconstructs through the SAME `parseCodeLiteralBody`, asserting the recorded kind, so compile and runtime cannot diverge by drift. This reuses Code-serializes-as-source; there is no second representation.
+- **Empty body** `[| |]` is an empty `statements` fragment, matching `parseStatements("")` (bodyParser accepts empty input) — pinned so the literal and the runtime parser cannot disagree about the same text.
+- **fmt reformats bodies** (the ambitious v1 promise): guarded by the round-trip gate in `agencyGenerator.roundtrip.test.ts` — whole-corpus unlowered print/re-parse structural identity plus print idempotence, with byte-exact goldens for literal formatting.
 
 ## Refusals and pipeline tolerance
 

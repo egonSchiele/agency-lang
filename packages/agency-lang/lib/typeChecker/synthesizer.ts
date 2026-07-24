@@ -4,6 +4,36 @@ import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } 
 import type { TypeTestExpression } from "../types/pattern.js";
 import { visitTypes } from "./typeWalker.js";
 import { parseMatchValId } from "../matchVal.js";
+import { typeAliasParser } from "../parsers/parsers.js";
+
+/** The structural equivalent of stdlib Code (stdlib/agency.agency), built
+ *  once through the TYPE-ALIAS production — the same grammar Code's own
+ *  declaration goes through — so field encodings (optional-field flags,
+ *  string-literal types) match by construction; the bare
+ *  variableTypeParser encodes optionality differently and the record
+ *  comparison rejects the mismatch. The `type` and `kind` fields are the
+ *  EXACT literal and union from Code: structural assignability into a
+ *  literal-typed field is directional, so a widened `string` here would
+ *  fail fill(template: Code). Structural typing is what lets the literal
+ *  flow into std::agency's fill/holesOf/toSource without any mechanism
+ *  for naming a stdlib alias from the checker. */
+function parseCodeLiteralType(): VariableType {
+  const source = [
+    "type __CodeLiteralValue = {",
+    '  type: "agencyProgram";',
+    '  kind?: "program" | "statements" | "expr";',
+    "  nodes: any[];",
+    "  docComment?: any",
+    "}",
+  ].join("\n");
+  const parsed = typeAliasParser(source);
+  if (!parsed.success) {
+    throw new Error("internal: the Code structural type failed to parse");
+  }
+  return parsed.result.aliasedType;
+}
+
+const CODE_LITERAL_TYPE: VariableType = parseCodeLiteralType();
 import { recordLikeKeyValue } from "./recordLike.js";
 import type { ResultType, UnionType, TypeAliasEntry } from "../types/typeHints.js";
 import type { SourceLocation } from "../types/base.js";
@@ -383,6 +413,12 @@ export function synthType(
       // Without one it synthesizes as `any`; positions that supply no
       // expected type either are flagged by checkTemplateHoles (AG8002).
       return expr.typeAnnotation ?? ANY_T;
+    case "codeLiteral":
+      // A literal IS a Code value. The body is quoted — never checked
+      // here; the completed program is checked in full at its own
+      // compile. See CODE_LITERAL_TYPE for why the fields match stdlib
+      // Code exactly.
+      return CODE_LITERAL_TYPE;
     default:
       return ANY_T;
   }

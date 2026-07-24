@@ -28,6 +28,7 @@ export {
   type AgencyStore,
 } from "./asyncContext.js";
 export { StateStack, State, claimFrameForScope } from "./state/stateStack.js";
+export { __codeLiteral } from "./template/literal.js";
 export { GlobalStore } from "./state/globalStore.js";
 export { MessageThread } from "./state/messageThread.js";
 export { ThreadStore } from "./state/threadStore.js";

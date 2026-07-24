@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- legacy file slated for incremental refactor */
 import { declaredName } from "../types/hole.js";
+import { printCodeLiteralBody } from "./agencyGenerator.js";
 import { holeNames } from "../utils/holes.js";
 import { DIAGNOSTICS, renderMessage } from "../typeChecker/diagnostics.js";
 import {
@@ -713,6 +714,18 @@ export class TypeScriptBuilder {
         return ts.raw(`/${node.pattern}/${node.flags}`);
       case "blockArgument":
         return this.processBlockAsExpression(node);
+      case "codeLiteral": {
+        // The literal evaluates to an ordinary Code value, reconstructed
+        // at runtime from its canonical printed body through the same
+        // per-kind parse the compiler ran (see __codeLiteral). Embedding
+        // printed source reuses the Code-serializes-as-source decision —
+        // no second representation. printCodeLiteralBody is the SAME
+        // text the formatter shows between the brackets.
+        const body = printCodeLiteralBody(node);
+        return ts.raw(
+          `__codeLiteral(${JSON.stringify(body)}, ${JSON.stringify(node.kind)})`,
+        );
+      }
       case "hole":
         // Unreachable in a correct build: the pre-pass in build() refuses
         // any program containing holes. Reaching here is a bug in that

@@ -54,6 +54,11 @@ import {
   success,
   trace,
   withSpan,
+  setInputStr,
+  getInputStr,
+  saveRightmostFailure,
+  restoreRightmostFailure,
+  resetMemos,
 } from "tarsec";
 
 // --- Type imports (combined from all parser files) ---
@@ -106,6 +111,7 @@ import {
 } from "../types.js";
 import { EffectDeclaration } from "../types/effectDeclaration.js";
 import { Hole } from "../types/hole.js";
+import { CodeLiteral } from "../types/codeLiteral.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
 import {
@@ -279,6 +285,16 @@ export const newLineParser: Parser<NewLine> = seqC(
 );
 
 export const BLANK_LINE_SENTINEL = "\uE000";
+
+/** Blank lines become sentinel characters before parsing (statement
+ *  boundaries depend on it). Lives here, next to the sentinel it emits;
+ *  lib/parser.ts re-exports it for existing importers. Idempotent: a
+ *  sentinel line is not blank, so already-processed input passes through. */
+export function replaceBlankLines(input: string): string {
+  return input.replace(/(\r?\n)(\r?\n)+/g, (match) =>
+    BLANK_LINE_SENTINEL.repeat(match.length - 1) + "\n"
+  );
+}
 
 export const stripSentinels = (s: string) => s.replaceAll(BLANK_LINE_SENTINEL, "\n");
 
@@ -2934,6 +2950,301 @@ export const schemaAccessParser: Parser<ValueAccess> = memo(
   )),
 );
 
+// =============================================================================
+// Code literals: [| ... |]
+// =============================================================================
+
+const CODE_LITERAL_OPEN = "[|";
+const CODE_LITERAL_CLOSE = "|]";
+
+/** Run a parser at input[from...] purely to measure how much it
+ *  consumes. Returns the index after the consumed region, or -1. */
+function consumeWith(parser: Parser<unknown>, input: string, from: number): number {
+  const result = parser(input.slice(from));
+  if (!result.success) {
+    return -1;
+  }
+  return from + (input.length - from - result.rest.length);
+}
+
+/** Scan from just after `[|` to the matching `|]` in CODE position.
+ *  Strings and comments are skipped by the SAME parsers the grammar uses
+ *  (escapes, all three delimiters, `${...}` interpolations — nested
+ *  strings included), so `|]` inside them is inert; that is what makes
+ *  code literals need zero escaping rules, and reusing the real parsers
+ *  is what makes the scan and the grammar agree by construction. Nested
+ *  `[|` in code position is a hard error with a directive message.
+ *  BLANK_LINE_SENTINEL characters pass through as body text — the body
+ *  parse handles them exactly as the template path does. */
+function scanCodeLiteralBody(
+  input: string,
+):
+  | { ok: true; body: string; consumed: number }
+  | { ok: false; error: string; at: number } {
+  let i = 0;
+  while (i < input.length) {
+    if (input.startsWith(CODE_LITERAL_CLOSE, i)) {
+      return { ok: true, body: input.slice(0, i), consumed: i + CODE_LITERAL_CLOSE.length };
+    }
+    if (input.startsWith(CODE_LITERAL_OPEN, i)) {
+      return {
+        ok: false,
+        error:
+          "nested code literals are not supported; build the inner piece as its own value and graft it into a hole",
+        at: i,
+      };
+    }
+    const ch = input[i];
+    if (ch === '"' || ch === "'" || ch === "`") {
+      const skipped = consumeWith(_stringParser, input, i);
+      if (skipped === -1) {
+        return { ok: false, error: "unclosed string inside code literal", at: i };
+      }
+      i = skipped;
+      continue;
+    }
+    if (ch === "/" && input[i + 1] === "/") {
+      const skipped = consumeWith(commentParser, input, i);
+      i = skipped === -1 ? i + 1 : skipped;
+      continue;
+    }
+    if (ch === "/" && input[i + 1] === "*") {
+      const skipped = consumeWith(multiLineCommentParser, input, i);
+      if (skipped === -1) {
+        return { ok: false, error: "unclosed comment inside code literal", at: i };
+      }
+      i = skipped;
+      continue;
+    }
+    i += 1;
+  }
+  return { ok: false, error: "unclosed code literal: expected |] before end of input", at: input.length };
+}
+
+/** A failed code literal's error, carried OUTSIDE tarsec's
+ *  rightmost-failure machinery: `label(...)` saves and restores the
+ *  rightmost record around every labeled region, so a deep
+ *  `recordFailure` from inside the literal is scrubbed before it can
+ *  win. This channel survives; _parseAgency consults it on overall
+ *  failure and prefers it when it is at least as deep as the rightmost
+ *  record. Reset at each top-level parse; saved/restored around the
+ *  literal's own nested parses. */
+let pendingCodeLiteralError: { message: string; pos: number } | null = null;
+
+export function resetCodeLiteralError(): void {
+  pendingCodeLiteralError = null;
+}
+
+export function getCodeLiteralError(): { message: string; pos: number } | null {
+  return pendingCodeLiteralError;
+}
+
+function reportCodeLiteralError(message: string, restAtFailure: string): void {
+  const pos = getInputStr().length - restAtFailure.length;
+  if (pendingCodeLiteralError === null || pos > pendingCodeLiteralError.pos) {
+    pendingCodeLiteralError = { message, pos };
+  }
+}
+
+/** The program-grammar entry point, injected by lib/parser.ts at module
+ *  init — a direct import here would be the parser.ts → parsers.ts
+ *  cycle. See registerProgramParserForLiterals. */
+let programParserForLiterals:
+  | ((source: string) => { ok: true; nodes: AgencyNode[] } | { ok: false; error: string })
+  | null = null;
+
+export function registerProgramParserForLiterals(
+  fn: (source: string) => { ok: true; nodes: AgencyNode[] } | { ok: false; error: string },
+): void {
+  programParserForLiterals = fn;
+}
+
+export type ParsedLiteralBody =
+  | {
+      ok: true;
+      nodes: AgencyNode[];
+      kind: CodeLiteral["kind"];
+      /** Leading whitespace stripped before the expr/statements attempts —
+       *  its line count feeds the caller's loc shift; dropping it would map
+       *  every node in a multi-line body early. Empty for program kind
+       *  (parsed untrimmed). */
+      strippedPrefix: string;
+    }
+  | { ok: false; error: string };
+
+/** Smallest-first kind inference over a literal body: a lone expression,
+ *  else a statement list, else a program. Each attempt must consume the
+ *  whole body. EXPORTED and shared with the runtime constructor
+ *  (__codeLiteral), so compile-time and runtime reconstruction cannot
+ *  diverge by drift. The template offset is zeroed around the nested
+ *  parses (it is module-global, set for the ENCLOSING parse) so body
+ *  locs come out body-relative; callers shift them additively. */
+export function parseCodeLiteralBody(body: string): ParsedLiteralBody {
+  const sentineled = replaceBlankLines(body);
+  const trimmedStart = sentineled.trimStart();
+  const strippedPrefix = sentineled.slice(0, sentineled.length - trimmedStart.length);
+  const trimmed = trimmedStart.trimEnd();
+  // Tarsec keeps THREE pieces of module-global state a nested parse
+  // clobbers: the input string positions are computed against, the
+  // rightmost-failure record (error messages), and the memo caches
+  // (keyed against the input string). All three are saved and restored,
+  // plus this file's own template offset — without this, the ENCLOSING
+  // parse's error formatting computes positions against the body string
+  // and crashes with negative offsets.
+  const savedInput = getInputStr();
+  const savedRightmost = saveRightmostFailure();
+  const savedPending = pendingCodeLiteralError;
+  const savedOffset = currentTemplateOffset;
+  setTemplateOffset(0);
+  try {
+    setInputStr(trimmed);
+    const asExpr = exprParser(trimmed);
+    if (asExpr.success && asExpr.rest.trim() === "") {
+      return { ok: true, nodes: [asExpr.result as AgencyNode], kind: "expr", strippedPrefix };
+    }
+    const asStatements = bodyParser(trimmed);
+    if (asStatements.success && stripSentinels(asStatements.rest).trim() === "") {
+      return {
+        ok: true,
+        nodes: asStatements.result as AgencyNode[],
+        kind: "statements",
+        strippedPrefix,
+      };
+    }
+    if (programParserForLiterals === null) {
+      return { ok: false, error: "internal: program parser for code literals not registered" };
+    }
+    const asProgram = programParserForLiterals(sentineled);
+    if (asProgram.ok) {
+      return { ok: true, nodes: asProgram.nodes, kind: "program", strippedPrefix: "" };
+    }
+    return { ok: false, error: asProgram.error };
+  } finally {
+    setInputStr(savedInput);
+    restoreRightmostFailure(savedRightmost);
+    pendingCodeLiteralError = savedPending;
+    setTemplateOffset(savedOffset);
+    // Memo entries computed against the body input are poison for the
+    // enclosing parse; the enclosing parse re-derives its own.
+    resetMemos();
+  }
+}
+
+/** Shift body-relative locs into enclosing-file coordinates. A generic
+ *  recursion over every object carrying a `loc` — deliberately NOT
+ *  walkNodesArray: the walker skips positions on purpose (patterns,
+ *  parameter defaults — the #668 gap list), and locs in skipped positions
+ *  still need shifting. Column offsets are left body-relative: the first
+ *  body line after `[|` is virtually always empty, and nothing host-side
+ *  reads a quoted node's column. */
+function shiftLiteralLocs(value: unknown, lineDelta: number, offsetDelta: number): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      shiftLiteralLocs(item, lineDelta, offsetDelta);
+    }
+    return;
+  }
+  if (value === null || typeof value !== "object") {
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  const loc = record.loc as { line?: number; start?: number; end?: number } | undefined;
+  if (loc && typeof loc === "object" && typeof loc.line === "number") {
+    loc.line += lineDelta;
+    if (typeof loc.start === "number") {
+      loc.start += offsetDelta;
+    }
+    if (typeof loc.end === "number") {
+      loc.end += offsetDelta;
+    }
+  }
+  for (const key of Object.keys(record)) {
+    if (key === "loc") continue;
+    shiftLiteralLocs(record[key], lineDelta, offsetDelta);
+  }
+}
+
+function countNewlines(text: string): number {
+  return (text.match(/\n/g) ?? []).length;
+}
+
+const rawCodeLiteralParser: Parser<{
+  nodes: AgencyNode[];
+  kind: CodeLiteral["kind"];
+  strippedPrefix: string;
+  bodyError: string | null;
+}> = (input: string) => {
+  if (!input.startsWith(CODE_LITERAL_OPEN)) {
+    return failure("expected [|", input);
+  }
+  const scanned = scanCodeLiteralBody(input.slice(CODE_LITERAL_OPEN.length));
+  if (!scanned.ok) {
+    // Report at the failure's depth, through the literal-error channel:
+    // the literal is committed once `[|` is seen, and the labeled
+    // grammar would otherwise surface some fallback parser's shallower
+    // complaint instead of this directive message.
+    reportCodeLiteralError(scanned.error, input.slice(CODE_LITERAL_OPEN.length + scanned.at));
+    return failure(scanned.error, input);
+  }
+  const parsed = parseCodeLiteralBody(scanned.body);
+  if (!parsed.ok) {
+    // Defer the failure so the outer parser can map the body error's line
+    // into enclosing-file coordinates (it knows the literal's span).
+    return {
+      success: true,
+      result: { nodes: [], kind: "expr", strippedPrefix: "", bodyError: parsed.error },
+      rest: input.slice(CODE_LITERAL_OPEN.length + scanned.consumed),
+    };
+  }
+  return {
+    success: true,
+    result: { ...parsed, bodyError: null },
+    rest: input.slice(CODE_LITERAL_OPEN.length + scanned.consumed),
+  };
+};
+
+export const codeLiteralParser: Parser<CodeLiteral> = (input: string) => {
+  const spanned = withSpan(rawCodeLiteralParser)(input);
+  if (!spanned.success) {
+    return spanned;
+  }
+  const { value, span } = spanned.result;
+  // User-coordinate start line of the literal: withSpan lines are absolute
+  // in the current parse; the module-global offset converts to user
+  // coordinates. Using user coordinates HERE is what makes the mapping
+  // additive under the prelude-template offset.
+  const literalStartLine = span.start.line - currentTemplateOffset;
+  if (value.bodyError !== null) {
+    const mapped = value.bodyError.replace(
+      /Line (\d+), col (\d+)/,
+      (match, lineText: string, colText: string) =>
+        `Line ${Number(lineText) + literalStartLine}, col ${colText}`,
+    );
+    // Report just past the literal's extent: deeper than any position a
+    // fallback parser can reach inside the body, so THIS message — with
+    // its body line mapped into enclosing-file coordinates — is the one
+    // _parseAgency surfaces.
+    reportCodeLiteralError(`code literal body: ${mapped}`, spanned.rest);
+    return failure(`code literal body: ${mapped}`, input);
+  }
+  const lineDelta = literalStartLine + countNewlines(value.strippedPrefix);
+  const offsetDelta =
+    span.start.offset + CODE_LITERAL_OPEN.length + value.strippedPrefix.length;
+  shiftLiteralLocs(value.nodes, lineDelta, offsetDelta);
+  const literal: CodeLiteral = {
+    type: "codeLiteral",
+    nodes: value.nodes,
+    kind: value.kind,
+    loc: {
+      line: literalStartLine,
+      col: span.start.column,
+      start: span.start.offset,
+      end: span.end.offset,
+    },
+  };
+  return { success: true, result: literal, rest: spanned.rest };
+};
+
 const baseAtom: Parser<Expression> = or(
   // First: `#` cannot start any other expression, so this is a cheap
   // early exit. Being an operand alternative covers every expression
@@ -2947,6 +3258,12 @@ const baseAtom: Parser<Expression> = or(
   schemaAccessParser,
   schemaExpressionParser,
   lazy(() => interruptExprParser),
+  // MUST precede every other `[`-led parser (bracketAccessParser,
+  // comprehensionParser, agencyArrayParser): `[|` is unambiguous after
+  // two characters, and agencyArrayParser would otherwise consume `[`
+  // and die inside the body. Same discipline as the comprehension/array
+  // ordering documented below.
+  lazy(() => codeLiteralParser),
   // MUST precede comprehensionParser and agencyArrayParser: a chained
   // bracket literal like `[...].join(...)` must be consumed whole, else the
   // bare parser wins and strands the trailing chain ("expected node body").

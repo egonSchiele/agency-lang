@@ -1,0 +1,53 @@
+import { fill, holesOf, toSource, runCode } from "std::agency"
+
+// The flagship inline workflow: three literals (expr body via the
+// relaxation, program-kind templates), partial fill, composition with a
+// hole still open, origin on the grafted hole, and the generated program
+// actually running. No template files, no loadTemplate interrupts.
+node main(): string {
+  const guardTpl = [|
+    def guarded(): string {
+      const ms: number = #minutes
+      #body
+      return "lit-ok"
+    }
+  |]
+  const mainTpl = [|
+    #helpers
+
+    export node main(): string {
+      return guarded()
+    }
+  |]
+  const body = [| print("step") |]
+  const partial = fill(guardTpl, { body: body })
+  if (isFailure(partial)) {
+    return "guard fill failed: ${partial.error}"
+  }
+  const program = fill(mainTpl, { helpers: partial.value })
+  if (isFailure(program)) {
+    return "compose failed: ${program.error}"
+  }
+  const remaining = holesOf(program.value)
+  if (remaining.length != 1) {
+    return "wrong hole count: ${remaining.length}"
+  }
+  if (remaining[0].origin != "helpers") {
+    return "origin missing"
+  }
+  const done = fill(program.value, { minutes: 120000 })
+  if (isFailure(done)) {
+    return "final fill failed: ${done.error}"
+  }
+  handle {
+    const result = runCode(toSource(done.value))
+    if (isFailure(result)) {
+      return "run failed: ${result.error}"
+    }
+    return result.value
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

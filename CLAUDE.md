@@ -130,6 +130,7 @@ Pipeline and architecture:
 - `docs/dev/async-context.md` — `agencyStore` AsyncLocalStorage frame and `getRuntimeContext()` pattern for stdlib TS helpers
 - `docs/dev/local-models.md` — Local-model support: provider, name resolution, catalog refresh, and SHA-256 download verification
 - `docs/dev/incremental-builds.md` — The build manifest: schema, invalidation fields, the ManifestTracker policy object, --force
+- `docs/dev/template-agency.md` — Template Agency internals: the Hole node and per-position parsing, `Code` fragment kinds, the never-parse lifting rule and its two escaping conventions, scope-keyed hygiene with `__hyg` seeding, AG8001/AG8002 refusals, and the walker-completeness tripwire
 
 Other references:
 - `docs/misc/TESTING.md` — Full testing guide (unit tests, fixtures, execution tests, agency-js tests)

@@ -105,6 +105,80 @@ Each of those gets a co-located `.test.ts`.
 
 ---
 
+---
+
+## Simplification round (2026-07-25, after review)
+
+The plan below describes the feature as originally scoped. Review found it
+larger than the step warranted, and four decisions were reversed. Tasks 11
+through 14 record what changed; read them before the tasks above, which are
+now partly historical.
+
+**Why.** Most of the size came from two choices, neither inherent to splices:
+generated declarations being exportable, and checking generator safety
+statically instead of relying on the unhandled-interrupt backstop. Template
+Haskell does neither of those things and has shipped compile-time code
+execution for two decades.
+
+### Task 11: generated declarations become file-local
+
+Remove expansion from `SymbolTable.build`. That crawl exists to record what a
+file exports for cross-file resolution, so expanding there is exactly what
+made generated declarations importable, and it is also what put generator
+execution behind twelve entry points including `agency doc`, `pack`, and the
+editor.
+
+Expansion stays only where a file's own code is compiled or typechecked:
+`compile.ts`, `buildSession.ts`, `typecheck.ts`, `lsp/diagnostics.ts`,
+`scripts/agency.ts` (the `tc` command), and `analysis/interrupts.ts`.
+
+Add a diagnostic refusing `export` on a generated declaration, pointing at
+issue #687. Without it the failure is a confusing "not defined" in the
+importing file.
+
+Delete the `exportedGeneratedDecl` fixture pair.
+
+### Task 12: drop the static eligibility layer
+
+Delete `checkImportGraph`, `checkEffects`, and the argument-module vetting
+that reuses them, with diagnostics AG8003 and AG8006 and their explanations.
+The unhandled-interrupt backstop already stops an effectful generator, and
+because of #680 the static version was coarse enough to produce false
+positives it could not justify. Tracked as #691, blocked on #680. The import
+restriction returns as a user-chosen `--only-stdlib` flag, #690.
+
+Keep the structural checks, which are correctness rather than safety:
+AG8005 (stage restriction), AG8007 (fragment kind), AG8008 (generator
+failed), AG8009 (no splice inside a generator), AG8010 (capture), AG8011
+(argument staging), AG8012 (redeclaration).
+
+AG8009 shrinks to scanning the generator's own file rather than its whole
+closure. It exists to stop unbounded recursion, and one level is enough for
+that.
+
+Delete the `refuseEffects` and `refuseNonAgency` fixtures.
+
+### Task 13: delete the environment allowlist
+
+`CHILD_ENV_ALLOWED` and `childEnv()` were a workaround for `env` not raising
+an interrupt. Fixing that in the stdlib is the right answer and is filed as
+#688. Keep the piped stdin, which is one line and stops a generator
+consuming the build's input.
+
+### Task 14: keep expansion in the typechecker, and say so
+
+`tc` and the LSP continue to run generators, matching GHC, which runs splices
+before typechecking, and Haskell Language Server, which does the same in the
+editor. The cache therefore stays: without it the editor forks a process per
+keystroke.
+
+This must be documented prominently rather than left as an implementation
+detail, and the cost must be measured. Benchmark `tc` and an LSP-shaped
+symbol-table build with and without a splice, and record the numbers in
+`docs/dev/splices.md`.
+
+---
+
 ### Task 0: Spike the generator execution mechanism
 
 **Files:**

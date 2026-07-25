@@ -51,4 +51,51 @@ export function _fill(code: Code, values: Record<string, unknown>): Code {
   return fillHoles(code, values);
 }
 
+/**
+ * Merge several fragments into one.
+ *
+ * Merging is concatenating nodes; the only real question is what kind
+ * comes out, and every answer here follows from behavior that already
+ * exists rather than being decided fresh.
+ *
+ * An empty merge is an empty `statements` fragment, matching
+ * `parseStatements("")` and the empty code literal — the literal and the
+ * runtime parser must not disagree about the same thing. A single input is
+ * returned unchanged, so `combine` around a loop that ran once behaves
+ * like no `combine` at all, keeping both its kind and its doc comment.
+ *
+ * Beyond that the rule is smaller than the case list suggests, so it is
+ * written as a rule: a `program` fragment may not merge with anything
+ * else, and what comes out is `program` only when everything going in was.
+ * Widening an expression to a statement is not a new decision either —
+ * `fill` already accepts an `expr` fragment wherever statements go,
+ * because an expression IS a legal statement in Agency.
+ *
+ * `program` mixed with anything is refused rather than widened. A
+ * declaration and a bare statement have different placement rules, and a
+ * silent merge produces a fragment that fails much later, at the completed
+ * program's compile, with no useful position.
+ */
+export function _combine(codes: Code[]): Code {
+  if (codes.length === 0) {
+    return { type: "agencyProgram", kind: "statements", nodes: [] };
+  }
+  if (codes.length === 1) {
+    return codes[0];
+  }
+  const kinds = codes.map(kindOf);
+  const distinct = kinds.filter((kind, index) => kinds.indexOf(kind) === index);
+  if (distinct.includes("program") && distinct.length > 1) {
+    throw new Error(
+      `A whole-program fragment cannot merge with loose statements or expressions (got ${distinct.sort().join(" and ")}).`,
+    );
+  }
+  return {
+    type: "agencyProgram",
+    // A merged fragment has no single doc comment, so it carries none.
+    kind: distinct[0] === "program" ? "program" : "statements",
+    nodes: codes.flatMap((code) => code.nodes),
+  };
+}
+
 export { holeNames };

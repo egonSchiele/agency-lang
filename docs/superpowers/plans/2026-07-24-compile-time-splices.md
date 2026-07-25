@@ -75,6 +75,7 @@ Settled since the spec:
 | `lib/compiler/splice/runGenerator.ts` | Run one generator, synchronously, return its `Code` |
 | `lib/compiler/splice/cache.ts` | Memoize generator output by expression + module content |
 | `lib/preprocessors/expandSplices.ts` | The pass itself |
+| `lib/runtime/template/combine.test.ts` | Tests for `combine`, whose implementation joins the existing template stdlib |
 | `tests/agency/splices/*` | End-to-end fixtures |
 
 Each of those gets a co-located `.test.ts`.
@@ -94,6 +95,8 @@ Each of those gets a co-located `.test.ts`.
 | `lib/backends/agencyGenerator.ts` | Print a splice |
 | `lib/typeChecker/diagnostics.ts` | AG8003–AG8011 |
 | `lib/cli/diagnosticsDocs.ts` | Explain prose |
+| `lib/stdlib/template.ts` | `_combine` |
+| `stdlib/agency.agency` | `combine` |
 | `lib/symbolTable.ts:180` | Call the expansion pass before `classifySymbols` |
 | `lib/compiler/typecheck.ts` | A path-taking effects entry point |
 | `lib/compiler/compileClosure.ts` | Export `agencyImportTarget` |
@@ -365,11 +368,11 @@ Subject: `Splices: the Splice AST node and its parser`.
 
 **Background.** `generateAgency` is at `lib/backends/agencyGenerator.ts:1990` and `generateExpression` — the nested-expression printer — at `:2008`. Use those names; do not invent `formatExpression`.
 
-The previous draft asserted only `toContain` on printed substrings. Substring presence is not fidelity. What later tasks need is that print → re-parse gives back the same tree, so assert that directly here rather than deferring to the corpus gate, which contains no splice-bearing file until Task 9.
+The previous draft asserted only `toContain` on printed substrings. Substring presence is not fidelity. What later tasks need is that print → re-parse gives back the same tree, so assert that directly here rather than deferring to the corpus gate, which contains no splice-bearing file until Task 10.
 
 - [ ] **Step 1: Write the failing tests**
 
-Cover: a declaration splice prints and re-parses to a structurally equal program; the same for an expression splice; printing is idempotent; a splice whose argument is a **multi-line code literal** round-trips, since that is where a printer is most likely to mangle something and Task 9's `builtWithFill` fixture depends on it.
+Cover: a declaration splice prints and re-parses to a structurally equal program; the same for an expression splice; printing is idempotent; a splice whose argument is a **multi-line code literal** round-trips, since that is where a printer is most likely to mangle something and Task 10's `builtWithFill` fixture depends on it.
 
 Write the round-trip assertion as parse → print → re-parse → `toEqual` on the two programs, not as a substring check.
 
@@ -801,7 +804,121 @@ Subject: `Splices: generated code may not reference splice-site names`.
 
 ---
 
-### Task 9: End-to-end fixtures and incremental rebuild
+### Task 9: `combine` — turning `Code[]` into one fragment
+
+**Files:**
+- Modify: `lib/stdlib/template.ts` (add `_combine`)
+- Modify: `stdlib/agency.agency` (add `combine`)
+- Create: `lib/runtime/template/combine.test.ts`
+
+**Interfaces:**
+- Produces: `combine(codes: Code[]): Result<Code>` in `std::agency`, and `_combine(codes: Code[]): Code` in `lib/stdlib/template.ts`.
+
+**Background.** The spec's motivating example is a loop that builds one `Code` value per item and merges them:
+
+```ts
+for (name in names) {
+  const one = fill(tpl, { ... })
+  out = [...out, one.value]
+}
+return combine(out)
+```
+
+There is no `def combine` in `stdlib/` today. Without it the feature's headline shape — stop writing N near-identical functions — cannot be written at all, so this is not optional polish.
+
+`Code` is `{ type: "agencyProgram"; kind?: "program" | "statements" | "expr"; nodes: AgencyNode[]; docComment?: ... }` (`lib/runtime/template/code.ts`). Merging is concatenating `nodes`; the interesting part is what `kind` comes out, which the spec left open.
+
+**The merge rules, and why each one.** Not arbitrary — each follows from behavior that already exists:
+
+| Input | Result | Reason |
+| --- | --- | --- |
+| `[]` | empty `statements` | Matches `parseStatements("")` and the `[\| \|]` empty-body ruling. The literal and the runtime parser must never disagree about the same thing. |
+| one element | that element, unchanged | Identity. Preserves `kind` and `docComment`, so `combine` in a loop that ran once behaves like no `combine` at all. |
+| all `program` | `program` | The motivating case: N generated `def`s become one program fragment for a declaration splice. |
+| all `statements` | `statements` | Same shape, one level down. |
+| 2+ all `expr` | `statements` | Two expressions cannot be one expression. An expression **is** a legal statement — this is the same relaxation `assertKindMatchesSort` already makes ("statements ← expr"), so nothing new is being decided. |
+| mixed `expr` + `statements` | `statements` | Same reason: `expr` widens to statement. |
+| `program` mixed with anything | **failure** | A declaration and a bare statement have different placement rules. Merging them silently produces a fragment that only fails much later, at the completed program's compile, with no useful location. |
+
+`docComment` on a multi-element merge is dropped, since a merged fragment has no single doc comment. The single-element identity case keeps it.
+
+**Docstrings are LLM tool descriptions.** `combine` is callable by a model, so the docstring must be terse and actionable, not explanatory. Read neighbouring entries in `stdlib/agency.agency` for register.
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `lib/runtime/template/combine.test.ts`, one test per row of the table above plus:
+
+- combining two `program` fragments yields a fragment whose `nodes` is the concatenation, in order
+- combining preserves node identity — nothing is cloned into a different shape
+- the failure case returns a useful message naming the mismatched kinds
+- a combined fragment is accepted by `fill` where a single fragment of that kind would be, which is the property that makes `combine` useful rather than merely present
+
+Build inputs with `_parseStatements`, `_parseExpr`, and `_loadTemplateFromString`, all already exported from `lib/stdlib/template.ts`.
+
+- [ ] **Step 2: Run to verify they fail**
+
+```bash
+pnpm test:run lib/runtime/template/combine.test.ts 2>&1 | tee /tmp/splice-combine-1.log
+```
+
+Expected: FAIL, `_combine` is not exported.
+
+- [ ] **Step 3: Implement `_combine`**
+
+In `lib/stdlib/template.ts`, beside `_fill` (line 50). Follow the file's convention: the `_`-prefixed function **throws**, and the `.agency` wrapper turns that into a `Result` with `try`.
+
+Resolve each input's kind through `kindOf` rather than reading `code.kind` directly, because a missing `kind` means `"program"` and `kindOf` is the one place that normalizes it.
+
+- [ ] **Step 4: Add the Agency-level `combine`**
+
+In `stdlib/agency.agency`, beside `toSource` (line 570). Mark it `idempotent`, matching `toSource`, `holesOf`, and `fill`, since it is a pure transformation:
+
+```ts
+export idempotent def combine(codes: Code[]): Result<Code> {
+  """
+  Merge several Code fragments into one. Use this to build a single
+  fragment from a loop, for example one function per item in a list.
+  Fragments of the same kind merge into that kind; expressions merge
+  into a statement list. A whole-program fragment cannot merge with
+  loose statements or expressions.
+
+  @param codes - The fragments to merge, in order
+  """
+  return try _combine(codes)
+}
+```
+
+Add `_combine` to the import list at the top of the file, beside `_toSource` (line 26).
+
+- [ ] **Step 5: Rebuild and regenerate docs**
+
+```bash
+make 2>&1 | tail -20 | tee /tmp/splice-combine-make.log
+make doc 2>&1 | tail -10 | tee /tmp/splice-combine-doc.log
+```
+
+`make`, not `pnpm run build`, because a stdlib file changed. `make doc` because a docstring was added and plain `make` leaves `docs/site/stdlib/*.md` stale.
+
+No `PRELUDE_NAMES` entry is needed: `std::agency`'s template functions are not re-exported from `stdlib/index.agency`, so `combine` is reached by explicit import like `fill` and `toSource`.
+
+- [ ] **Step 6: Run to verify they pass**
+
+```bash
+pnpm test:run lib/runtime/template/combine.test.ts 2>&1 | tee /tmp/splice-combine-2.log
+```
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/stdlib/template.ts stdlib/agency.agency lib/runtime/template/combine.test.ts docs/site/stdlib/
+git commit -F /tmp/commit-splice-9.txt
+```
+
+Subject: `Splices: combine() merges Code fragments into one`.
+
+---
+
+### Task 10: End-to-end fixtures and incremental rebuild
 
 **Files:**
 - Create: `tests/agency/splices/*.agency` and `.test.json`
@@ -813,6 +930,7 @@ Subject: `Splices: generated code may not reference splice-site names`.
 1. `declarationSplice` — generator returns a program fragment declaring `greet`; main splices and calls it
 2. `expressionSplice` — generator returns an expression fragment used in a `const`
 3. `builtWithFill` — generator builds its result with a code literal plus `fill`, proving splices consume what Template Agency already produces
+3b. `loopedBoilerplate` — the spec's motivating shape end to end: a generator loops over a list, builds one fragment per item with `fill`, merges them with `combine` from Task 9, and the host calls each generated function. Nothing else exercises `combine` under real conditions.
 4. `exportedGeneratedDecl` — a generated `export def` imported and called from a **second file**. This is the owner's reason for expanding during symbol-table construction, and nothing else tests it.
 5. `twoSplices` — two declaration splices in one file, both used
 
@@ -865,19 +983,8 @@ Subject: `Splices: end-to-end, refusal, attribution, and rebuild fixtures`.
 Folded into the tasks that create the behavior, because docs written separately go stale.
 
 - **Task 7** — a "Compile-time splices" section in `docs/site/guide/templates.md`. Lead with the difference from code literals: literals make code, splices install it. Use the today-versus-proposed pair from the spec's summary.
-- **Task 9** — `docs/dev/splices.md`: why expansion lives in `SymbolTable.build`, the cache and why it is mandatory, the import restriction and why it carries the safety argument, and the cycle guard. Link from `CLAUDE.md`.
-- **Task 9** — update the spec's caching section, which is now wrong.
-
-## Open item: `combine`
-
-The spec's motivating example ends with `return combine(out)`, turning `Code[]` into one fragment. **There is no `def combine` in `stdlib/` today.**
-
-Decide before Task 9, because `builtWithFill` runs straight into it:
-
-- **Add it** — `combine(codes: Code[]): Result<Code>` in `stdlib/agency.agency`, with a docstring, merge rules per kind pair (the spec left those open), a `PRELUDE_NAMES` entry if exported from `stdlib/index.agency`, and `make` afterwards.
-- **Or exclude it** — state that v1 generators return a single fragment, and write the fixtures accordingly.
-
-Adding it is the better answer, since the boilerplate loop is the feature's motivating shape, but it is a real task and should be sized as one rather than discovered mid-fixture.
+- **Task 10** — `docs/dev/splices.md`: why expansion lives in `SymbolTable.build`, the cache and why it is mandatory, the import restriction and why it carries the safety argument, and the cycle guard. Link from `CLAUDE.md`.
+- **Task 10** — update the spec's caching section, which is now wrong, and its open question 1, which `combine` now answers.
 
 ## Notes for whoever executes this
 

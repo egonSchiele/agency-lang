@@ -1,9 +1,7 @@
 /**
- * Synthesized fixtures for the perf suite. Each string generator produces
- * Agency source of controlled size so scaling tests can pick exact N and 8N.
- * Every generator's output MUST parse — a fixture that silently fails to parse
- * makes the thing under test return nothing and the perf number becomes
- * meaningless (fixtures.test.ts pins this).
+ * Size-controlled fixtures for the perf suite. Every generator's output must
+ * parse (fixtures.test.ts pins this) — a fixture that silently fails to parse
+ * measures nothing and the perf number becomes meaningless.
  */
 import * as fs from "fs";
 import * as os from "os";
@@ -92,12 +90,8 @@ export function oneHugeFunction(n: number): string {
   return `${lines.join("\n")}\n`;
 }
 
-/**
- * Materializes a temp directory of n interdependent `.agency` files and returns
- * its PATH (not a string) — bundle and the build manifest read files from disk.
- * File i imports a name from file i-1, so the project has a real dependency
- * chain. Caller is responsible for cleanup.
- */
+/** A temp directory of n chained `.agency` files (each imports the previous),
+ *  returned as a PATH — bundle and the manifest read from disk. Caller cleans up. */
 export function multiFileProject(n: number): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "perf-project-"));
   for (let i = 0; i < n; i++) {

@@ -1,11 +1,9 @@
 import { defineConfig } from "vitest/config";
 import path from "path";
 
-// The performance suite. Kept apart from the default unit run (which excludes
-// `**/*.perf.test.ts`) because these tests are slow by nature and must not run
-// concurrently: parallel test files contend for CPU and poison the timings the
-// whole suite depends on. Mirrors vitest.integration.config.ts's separate-config
-// pattern.
+// The performance suite (mirrors vitest.integration.config.ts). Kept apart from
+// the default unit run because it is slow and must run serially — parallel tests
+// contend for CPU and poison the timings.
 export default defineConfig({
   test: {
     globals: true,

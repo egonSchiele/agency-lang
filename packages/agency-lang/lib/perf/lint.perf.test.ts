@@ -23,10 +23,8 @@ function ctxFor(source: string): LintContext {
   return { program: parsed.result, source, filePath: "/perf.agency" };
 }
 
-// Each rule paired with a findings-dense fixture that makes it emit one finding
-// per declaration. A single fixture cannot feed all three (missing-docstring
-// wants undocumented functions, unused-import wants unused imports,
-// redundant-prelude wants std::index imports), so each rule brings its own.
+// Each rule needs its own findings-dense fixture (one finding per declaration);
+// no single fixture feeds all three rules.
 const cases: { name: string; rule: LintRule; fixture: (n: number) => string }[] = [
   {
     name: "missingDocstring",
@@ -44,16 +42,14 @@ const cases: { name: string; rule: LintRule; fixture: (n: number) => string }[] 
 describe("lint rule scaling (per rule)", () => {
   for (const { name, rule, fixture } of cases) {
     it(`${name} scales linearly in file size`, () => {
-      // Parse each size once (untimed); the closure runs only rule.run.
-      // `rule.run` on a parsed string is cache-free (no parseAgencyFileCached).
+      // Parse each size once (untimed); the closure runs only the cache-free
+      // rule.run.
       const ctxBySize: Record<number, LintContext> = {
         [SMALL]: ctxFor(fixture(SMALL)),
         [LARGE]: ctxFor(fixture(LARGE)),
       };
 
-      // Work-happened assertion: the rule must actually emit one finding per
-      // declaration on the large input, or a silently-empty fixture would make
-      // the ratio meaningless and pass forever (the bogus-benchmark trap).
+      // Work-happened: a silently-empty fixture would measure nothing and pass.
       expect(rule.run(ctxBySize[LARGE]).length).toBe(LARGE);
 
       const build = (n: number) => () => rule.run(ctxBySize[n]);
@@ -84,8 +80,7 @@ describe("lint stdlib smoke (Layer 2, coarse)", () => {
       },
       { warmup: 1, runs: 3 },
     );
-    // Deliberately loose: this is a smoke alarm for catastrophic (5-10x)
-    // breakage, not a precise detector. Calibrate the ceiling from data.
+    // Loose on purpose: a smoke alarm for catastrophic breakage, not precise.
     expectPerf("lint:stdlib-smoke-ms", ms, 5000);
   });
 });

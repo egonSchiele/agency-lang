@@ -1,27 +1,15 @@
 /**
- * Performance-test harness. The "how" of measuring, so the perf tests state only
- * the "what" ("does lint scale under the growth bound?").
- *
- * Why a custom harness and not vitest's `bench` (tinybench): `bench` is
- * mean-based and comparison-shaped, and gives no clean seam for a normalized
- * growth-factor assertion or the informational-vs-gating `PERF_ENFORCE` gate.
- * Both of those are the point here, so we own the loop.
- *
- * The core idea (see docs/superpowers/specs/2026-07-24-ci-performance-tests-design.md):
- * assert how work GROWS with input size, not absolute milliseconds. A ratio of
- * two measurements from the same run cancels steady-state machine speed, which
- * is what makes it robust on a noisy CI runner. `growthFactor` normalizes that
- * ratio by the size step so a perfectly linear algorithm reads 1.0 regardless of
- * the step, and a quadratic reads ~step.
+ * Performance-test harness: the measuring "how" so perf tests state only the
+ * "what". We assert how work grows with input size, not absolute ms, so the
+ * check survives noisy CI. Not vitest `bench`: it is mean-based with no seam
+ * for a normalized ratio or the PERF_ENFORCE gate. Rationale in
+ * docs/superpowers/specs/2026-07-24-ci-performance-tests-design.md.
  */
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-/** Normalized growth bound: 1.0 = perfectly linear. Above this trips the check.
- *  Start loose and tighten from the informational data; a quadratic reads ~8 at
- *  an 8x step, so 2.0 leaves generous room above linear while catching genuine
- *  super-linear growth. */
+/** Normalized: 1.0 = linear, ~step = quadratic. Start loose, calibrate from data. */
 export const GROWTH_BOUND = 2.0;
 export const WARMUP = 2;
 export const RUNS = 7;
@@ -32,8 +20,7 @@ function median(xs: number[]): number {
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-// A sink the timed closures write into, so V8 cannot dead-code-eliminate the
-// work under measurement when its result would otherwise be unused.
+// Written by every timed closure so V8 can't dead-code-eliminate the work.
 let sink: unknown;
 
 function timeOnce(fn: () => unknown): number {
@@ -42,10 +29,9 @@ function timeOnce(fn: () => unknown): number {
   return performance.now() - start;
 }
 
-/** Median elapsed ms over `runs` timed calls after `warmup` untimed ones. For
- *  the Layer-2 absolute smoke checks (a single closure, no ratio). Not used
- *  inside `growthFactor` — nesting a median there would make one size's runs
- *  contiguous again and defeat the interleave. */
+/** Median ms over `runs` timed calls after `warmup` untimed ones. For the
+ *  absolute smoke checks; growthFactor times differently (a nested median
+ *  would defeat its interleave). */
 export function measureMs(
   fn: () => unknown,
   opts: { warmup?: number; runs?: number } = {},
@@ -59,17 +45,13 @@ export function measureMs(
 }
 
 /**
- * The normalized growth number: 1.0 = linear, `large/small` (the step) =
- * quadratic. `build(n)` does all untimed setup and returns the timed closure.
+ * Normalized growth: 1.0 = linear, ~step = quadratic. `build(n)` does untimed
+ * setup and returns the timed closure.
  *
- * Schedule (this is the load-bearing correctness code):
- *  - Warm up BOTH sizes up front, or round 1 times cold-JIT code for one size.
- *  - One raw timing per size per round (no nested median).
- *  - Alternate the within-round order across rounds (even: small→large, odd:
- *    large→small). Interleaving cancels random second-to-second noise;
- *    alternating also cancels monotonic drift (a runner getting steadily busier
- *    would otherwise bias the always-later size the same way every round, and a
- *    median can't remove a bias present in every round).
+ * The schedule is load-bearing: warm both sizes first, one timing per size per
+ * round, and alternate the within-round order. Interleaving cancels random
+ * noise; alternating also cancels monotonic drift (a fixed order would bias the
+ * always-later size every round, which a median can't remove).
  */
 export function growthFactor(
   build: (n: number) => () => unknown,
@@ -114,14 +96,8 @@ function recordResult(rec: PerfRecord): void {
   }
 }
 
-/**
- * Record a measurement, then gate on it. With `PERF_ENFORCE` unset (the
- * informational default) a breach is logged but does NOT throw, so nothing
- * blocks a merge while thresholds are being calibrated. With `PERF_ENFORCE`
- * set, a breach throws like a normal assertion. Tests never branch on the env
- * or write the summary themselves — that "how" lives here, which is why the
- * flip to gating is a one-line change.
- */
+/** Record, then gate: with PERF_ENFORCE unset a breach only logs (informational);
+ *  set, it throws. Tests never touch the env, so the flip to gating is one line. */
 export function expectPerf(label: string, actual: number, bound: number): void {
   const pass = actual < bound;
   recordResult({ label, value: actual, bound, pass });
@@ -134,17 +110,11 @@ export function expectPerf(label: string, actual: number, bound: number): void {
   console.log(`[perf] ${line}${enforce ? "" : " (informational)"}`);
 }
 
-// A counter so two calls in the same millisecond still get distinct paths.
 let cacheFreeCounter = 0;
 
-/**
- * The single home for parse-cache neutralization. Writes `source` to a fresh
- * unique temp path and returns it. The process-wide `parseAgencyFileCached`
- * keys on the file PATH (`${t|r}:${absPath}`), so a never-repeated path
- * guarantees a cache miss — while the CONTENT stays fixed, so the measured
- * workload does not vary run to run. Used only by the file-based compile /
- * incremental-build tests; the string-level tests never touch that cache.
- */
+/** Writes `source` to a fresh unique temp path so the process-wide parse cache
+ *  (keyed on path) always misses, with content fixed so the workload stays
+ *  constant. Only the file-based compile/build tests need this. */
 export function cacheFreePath(source: string, ext = ".agency"): string {
   const p = path.join(
     os.tmpdir(),

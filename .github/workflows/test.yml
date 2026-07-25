@@ -71,14 +71,11 @@ jobs:
       run: pnpm run docs
     - run: pnpm test:run
 
-  # Performance regression suite. INFORMATIONAL ONLY for now: PERF_ENFORCE is
-  # unset, so a slow-scaling measurement records a breach but does not throw,
-  # and continue-on-error keeps even an unexpected failure from blocking a
-  # merge while thresholds are calibrated from the uploaded results. Flip to
-  # gating later by setting PERF_ENFORCE=1 and removing continue-on-error —
-  # the tests do not change. Single node version (not the 22/23 matrix) so the
-  # numbers come from one machine class. No `make`: these tests all run from
-  # source through vitest; add it only when dist-dependent perf tests land.
+  # Performance regression suite, INFORMATIONAL ONLY: PERF_ENFORCE is unset (a
+  # breach records but does not throw) and continue-on-error means nothing here
+  # blocks a merge while thresholds are calibrated. Flip to gating by setting
+  # PERF_ENFORCE=1 and dropping continue-on-error. Single node (numbers from one
+  # machine class); no `make` (these tests run from source via vitest).
   perf:
     runs-on: ubuntu-latest
     continue-on-error: true

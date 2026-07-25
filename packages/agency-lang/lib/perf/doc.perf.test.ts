@@ -11,7 +11,9 @@ const LARGE = 800;
 
 // generateDoc reads the input file and writes markdown to an output dir each
 // call, so it is re-runnable (it re-reads and overwrites). File I/O is part of
-// the doc command's real cost.
+// the doc command's real cost — this is the one test here whose timing isn't
+// pure CPU, so if any line proves flaky during the informational period, the
+// disk write is the likely reason.
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "perf-doc-"));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 

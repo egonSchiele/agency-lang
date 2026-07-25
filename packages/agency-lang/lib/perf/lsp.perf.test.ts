@@ -22,6 +22,10 @@ describe("lsp scaling", () => {
     // runDiagnostics is the debounced-keystroke hot path: parse + resolve +
     // typecheck + lint + semantic index in one call. (There is no incremental
     // fast-path today, so a "re-diagnose after an edit" case would equal this.)
+    // The empty SymbolTable is a deliberate simplification — a real editor
+    // passes a populated one, so import resolution is skipped here; immaterial
+    // for manyFunctions (no imports) and for a scaling ratio, but this is not
+    // the full keystroke cost.
     const doc = docOf(manyFunctions(LARGE, { docstrings: false }));
     expect(runDiagnostics(doc, "/t.agency", {}, new SymbolTable()).diagnostics.length).toBeGreaterThan(0);
 
@@ -32,18 +36,31 @@ describe("lsp scaling", () => {
     expectPerf("lsp:runDiagnostics", growthFactor(build, SMALL, LARGE), GROWTH_BOUND);
   });
 
-  it("getCodeActions (fix-all) scales linearly in finding count", () => {
+  it("getCodeActions packages fix-all edits in time linear in finding count", () => {
+    // Measure the REAL on-save fix-all path: the server reuses the lint that
+    // runDiagnostics already computed (server.ts) and passes it as cachedLint,
+    // so getCodeActions only packages the batch edits into text edits. Passing
+    // cachedLint here isolates that packaging — without it, getCodeActions
+    // re-runs parse+lint, which the lint tests already cover.
     const params: CodeActionParams = {
       textDocument: { uri: "file:///t.agency" },
       range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
       context: { diagnostics: [], only: [CodeActionKind.SourceFixAll] },
     };
+    const cachedLintFor = (source: string) => {
+      const diag = runDiagnostics(docOf(source), "/t.agency", {}, new SymbolTable());
+      return { findings: diag.lintFindings, batchEdits: diag.lintBatchEdits };
+    };
+
     const doc = docOf(manyUnusedImports(LARGE));
-    expect(getCodeActions(params, doc, new SymbolTable()).length).toBeGreaterThan(0);
+    expect(getCodeActions(params, doc, new SymbolTable(), cachedLintFor(manyUnusedImports(LARGE))).length)
+      .toBeGreaterThan(0);
 
     const build = (n: number) => {
-      const d = docOf(manyUnusedImports(n));
-      return () => getCodeActions(params, d, new SymbolTable());
+      const src = manyUnusedImports(n);
+      const d = docOf(src);
+      const cached = cachedLintFor(src);
+      return () => getCodeActions(params, d, new SymbolTable(), cached);
     };
     expectPerf("lsp:codeActions", growthFactor(build, SMALL, LARGE), GROWTH_BOUND);
   });

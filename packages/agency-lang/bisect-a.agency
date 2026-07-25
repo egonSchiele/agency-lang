@@ -1,7 +1,0 @@
-import { searchTools } from "std::agents/lib/search"
-
-node main() {
-  const answer = llm("What are the top news stories today? Use a search tool.", { tools: [...searchTools()] })
-  print(answer)
-  return answer
-}

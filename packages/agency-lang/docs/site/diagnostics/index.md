@@ -147,15 +147,14 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | --- | --- |
 | [AG8001](templates.md#ag8001) | This file is a template with unfilled holes (&#123;names&#125;) and cannot be run directly. Load it with `loadTemplate` and fill it first. |
 | [AG8002](templates.md#ag8002) | The hole `#&#123;name&#125;` is in a position that gives it no expected type. Annotate it, for example `#&#123;name&#125;: string`. |
-| [AG8003](templates.md#ag8003) | The generator `&#123;name&#125;` raises &#123;effects&#125; and cannot run at compile time. Compile-time generators must be effect-free. |
 | [AG8005](templates.md#ag8005) | `&#123;name&#125;` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first. |
-| [AG8006](templates.md#ag8006) | The generator `&#123;name&#125;` reaches non-Agency code through `&#123;importPath&#125;`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript and TypeScript raise no effects and cannot be checked. |
 | [AG8007](templates.md#ag8007) | The generator `&#123;name&#125;` returned a `&#123;actual&#125;` fragment, but this splice is in &#123;position&#125; position and needs a `&#123;expected&#125;` fragment. |
 | [AG8008](templates.md#ag8008) | The generator `&#123;name&#125;` failed while running: &#123;reason&#125; |
 | [AG8009](templates.md#ag8009) | A generator module cannot itself contain a splice. Move the inner generation into a separate module. |
 | [AG8010](templates.md#ag8010) | Generated code refers to `&#123;name&#125;`, which it neither declares nor imports. Generated code may use only names it declares itself and names it imports. |
 | [AG8011](templates.md#ag8011) | The splice argument `&#123;name&#125;` is declared in this file, so it does not exist yet when the generator runs. Splice arguments may be literals, code literals, or imported names. |
 | [AG8012](templates.md#ag8012) | The generator `&#123;name&#125;` declares `&#123;declared&#125;`, which this file already declares. Generated declarations may not replace existing ones. |
+| [AG8013](templates.md#ag8013) | The generator `&#123;name&#125;` produced an exported declaration (`&#123;declared&#125;`). Generated declarations cannot be exported yet, because other files resolve imports without running generators. Remove the `export`. |
 
 ## Lint
 

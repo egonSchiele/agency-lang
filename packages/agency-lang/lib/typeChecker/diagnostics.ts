@@ -590,23 +590,11 @@ export const DIAGNOSTICS = {
     message:
       "The hole `#{name}` is in a position that gives it no expected type. Annotate it, for example `#{name}: string`.",
   },
-  spliceGeneratorHasEffects: {
-    code: "AG8003",
-    severity: "error",
-    message:
-      "The generator `{name}` raises {effects} and cannot run at compile time. Compile-time generators must be effect-free.",
-  },
   spliceGeneratorNotImported: {
     code: "AG8005",
     severity: "error",
     message:
       "`{name}` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first.",
-  },
-  spliceGeneratorReachesNonAgency: {
-    code: "AG8006",
-    severity: "error",
-    message:
-      "The generator `{name}` reaches non-Agency code through `{importPath}`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript and TypeScript raise no effects and cannot be checked.",
   },
   spliceFragmentKindMismatch: {
     code: "AG8007",
@@ -630,6 +618,12 @@ export const DIAGNOSTICS = {
     severity: "error",
     message:
       "Generated code refers to `{name}`, which it neither declares nor imports. Generated code may use only names it declares itself and names it imports.",
+  },
+  spliceGeneratedExport: {
+    code: "AG8013",
+    severity: "error",
+    message:
+      "The generator `{name}` produced an exported declaration (`{declared}`). Generated declarations cannot be exported yet, because other files resolve imports without running generators. Remove the `export`.",
   },
   spliceRedeclaresHostName: {
     code: "AG8012",

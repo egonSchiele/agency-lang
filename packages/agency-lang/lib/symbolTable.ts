@@ -22,8 +22,6 @@ import type {
 import type { ExportFromStatement } from "./types/exportFromStatement.js";
 import type { EffectDeclaration } from "./types/effectDeclaration.js";
 import { walkNodes } from "./utils/node.js";
-import { expandSplices } from "./preprocessors/expandSplices.js";
-import { formatSpliceDiagnostic } from "./compiler/splice/report.js";
 import {
   resolveAgencyImportPath,
   isAgencyImport,
@@ -179,24 +177,18 @@ export class SymbolTable {
         return;
       }
 
-      // Expand `$( ... )` before classifying. classifySymbols records a
-      // file's declarations, so expanding first is what makes a generated
-      // declaration visible to every file that imports it.
+      // Splices are deliberately NOT expanded here.
       //
-      // A failure must not abort the crawl. Symbol discovery is
-      // best-effort, and the compile paths report the same failure with a
-      // position.
-      const expanded = expandSplices(parseResult.result, absPath, config);
-      if (!expanded.ok) {
-        // Logged, not swallowed. The compile and LSP paths both report this
-        // properly with a position, but this crawl also runs under `doc`,
-        // `pack`, `bundle`, and `serve`, where a silent drop leaves a
-        // broken generator with no visible cause at all.
-        console.error(
-          `${absPath}: ${formatSpliceDiagnostic(expanded.diagnostic, absPath)}`,
-        );
-      }
-      const program = expanded.ok ? expanded.value : parseResult.result;
+      // This crawl records what each file exports so other files can
+      // resolve against it. Expanding here is what would make a generated
+      // declaration importable, and it is also what would put generator
+      // execution behind all twelve callers of this function, including
+      // `agency doc`, `pack`, and the editor. Generated declarations are
+      // file-local instead; see issue #687.
+      //
+      // The paths that compile or typecheck a file's own code expand it
+      // there, which is where a generated name needs to resolve.
+      const program = parseResult.result;
       parsed[absPath] = { symbols: classifySymbols(program), program };
 
       // Following an import may throw before it can be visited — e.g. a

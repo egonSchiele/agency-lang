@@ -155,7 +155,9 @@ Requiring a separate file makes the cycle impossible instead of solvable. It is 
 
 The ceremony cost is real but small, because generators are rare and tend to be reused across files.
 
-### Rule 3: the generator must be effect-free, checked before it runs
+### Rule 3: the generator must be effect-free, enforced at runtime
+
+> **Corrected twice during implementation.** This rule originally also required determinism, enforced as `AG8004`; that half was dropped because a hardcoded name list cannot be complete. The *static* effect check, `AG8003`, was then dropped too. The unhandled-interrupt backstop already stops an effectful generator, and the static version could not be made precise while #680 stands — to fail closed it had to refuse a generator whenever any export anywhere in its closure raised. Filed as #691, blocked on #680. The import restriction, `AG8006`, returns as a user-chosen `--only-stdlib` flag in #690. See `docs/dev/splices.md`.
 
 > **Corrected during implementation.** This rule also required determinism, enforced as `AG8004`. That half was dropped and the code retired unused. The check was a hardcoded list of `llm` plus `std::date`, which missed anything one wrapper away through a `std::` module (eleven stdlib files reach `llm` while declaring no interrupts), missed everything nondeterministic that was not on the list, and would have missed every function added later. Determinism was never a safety property — safety rests on the effect check and the import restriction — and a partial check that reads like a guarantee is worse than none. See `docs/dev/splices.md`.
 

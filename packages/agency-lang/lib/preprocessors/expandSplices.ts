@@ -10,10 +10,7 @@ import { BUILTIN_FUNCTION_TYPES } from "../typeChecker/builtins.js";
 import { KINDS_FOR_SORT, stampOrigin } from "../runtime/template/graft.js";
 import { kindOf } from "../runtime/template/code.js";
 import {
-  checkEffects,
   checkGeneratorEligible,
-  checkImportGraph,
-  checkNoNestedSplice,
   resolveGeneratorModule,
   resolveImportedName,
 } from "../compiler/splice/eligibility.js";
@@ -293,51 +290,7 @@ function checkArgumentsAvailable({
       loc: splice.loc ?? ORIGIN_UNKNOWN,
     };
   }
-  // Each module supplying an argument gets compiled and evaluated to
-  // produce that value, so it has to clear the same bar the generator
-  // does. Without this, `$( gen(THING) )` would run a module the generator
-  // rules never saw.
-  for (const { source } of argumentSources) {
-    if (source === null || source.modulePath === null) {
-      continue;
-    }
-    const found = checkArgumentModule(source.modulePath);
-    if (found !== null) {
-      return { ...found, loc: splice.loc ?? ORIGIN_UNKNOWN };
-    }
-  }
   return null;
-}
-
-/**
- * A module that supplies a splice argument runs at compile time exactly as
- * a generator does, so it faces the generator's import and effect rules.
- * It is not itself a generator, so it is checked as a whole rather than by
- * the name of one export.
- */
-function checkArgumentModule(modulePath: string): SpliceDiagnostic | null {
-  // Named for what it is to the reader: the module a splice argument came
-  // from, not a generator. The diagnostics say "the generator `{name}`",
-  // so a bare filename here would misdescribe the file it names.
-  const role = `the argument module ${path.basename(modulePath)}`;
-  const checks = [
-    () => checkImportGraph(modulePath, role),
-    () => checkNoNestedSplice(modulePath, role),
-    () => checkArgumentModuleEffects(modulePath, role),
-  ];
-  return checks.reduce<SpliceDiagnostic | null>(
-    (found, check) => found ?? check(),
-    null,
-  );
-}
-
-/** An argument module is not a generator, so every export it has is
- *  checked rather than one named one. */
-function checkArgumentModuleEffects(
-  modulePath: string,
-  role: string,
-): SpliceDiagnostic | null {
-  return checkEffects(modulePath, role, {}, true);
 }
 
 /** Every free name a splice's arguments use, with where it comes from. */
@@ -486,6 +439,33 @@ const KINDS_FOR_POSITION: Record<Splice["position"], string[]> = {
   expr: KINDS_FOR_SORT.expr,
 };
 
+/**
+ * Generated declarations may not be exported.
+ *
+ * Other files learn what a module exports by reading its source, not by
+ * compiling it, so an exported generated name would only resolve for
+ * callers willing to run the generator. Refused here rather than left to
+ * surface as "not defined" in the importing file. Tracked as #687.
+ */
+function checkNoGeneratedExport(
+  splice: Splice,
+  code: Code,
+  generatorName: string,
+): SpliceDiagnostic | null {
+  const exported = code.nodes.find(
+    (node) => (node as { exported?: boolean }).exported === true,
+  );
+  if (exported === undefined) {
+    return null;
+  }
+  const named = declaredNamesIn({ type: "agencyProgram", nodes: [exported] });
+  return {
+    diagnostic: "spliceGeneratedExport",
+    params: { name: generatorName, declared: named[0] ?? "a declaration" },
+    loc: splice.loc ?? ORIGIN_UNKNOWN,
+  };
+}
+
 function graft(
   splice: Splice,
   code: Code,
@@ -508,6 +488,10 @@ function graft(
         loc: splice.loc ?? ORIGIN_UNKNOWN,
       },
     };
+  }
+  const exported = checkNoGeneratedExport(splice, code, generatorName);
+  if (exported !== null) {
+    return { ok: false, diagnostic: exported };
   }
   const captured = checkNoCapture(splice, code, generatorName);
   if (captured !== null) {

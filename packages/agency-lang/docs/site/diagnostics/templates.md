@@ -31,18 +31,6 @@ node main() {
 }
 ```
 
-<a id="ag8003"></a>
-
-## AG8003 — The generator `&#123;name&#125;` raises &#123;effects&#125; and cannot run at compile time. Compile-time generators must be effect-free.
-
-*Default severity: error.*
-
-A compile-time generator ran, or would have run, code that raises an interrupt effect — reading a file, writing one, hitting the network.
-
-Compilation refuses to run effectful code. Unlike a normal program run, no handlers are installed while compiling, so there is nothing to approve or reject an effect against, and a build that quietly touched the filesystem would be a surprise.
-
-**How to fix:** move the effectful work out of the generator. If it needs data from a file, read the file at run time instead, or pass the data in as a plain argument to the splice.
-
 <a id="ag8005"></a>
 
 ## AG8005 — `&#123;name&#125;` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first.
@@ -54,18 +42,6 @@ A splice called a function that is not imported from another file.
 The generator has to be compiled before the file that splices it can be compiled, so it cannot live in that same file — there would be no order that works. This is the same restriction Template Haskell calls the stage restriction.
 
 **How to fix:** move the generator into its own `.agency` file and import it.
-
-<a id="ag8006"></a>
-
-## AG8006 — The generator `&#123;name&#125;` reaches non-Agency code through `&#123;importPath&#125;`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript and TypeScript raise no effects and cannot be checked.
-
-*Default severity: error.*
-
-A compile-time generator can reach JavaScript or TypeScript, either by importing it directly or through another Agency file that does.
-
-The whole safety argument for running generators at compile time is that dangerous operations in Agency raise effects, and effects can be checked before anything runs. JavaScript raises no effects, so nothing can be checked about it. A generator that can reach JavaScript can do anything.
-
-**How to fix:** a generator and everything it imports, however indirectly, may use only `std::` modules and relative `.agency` files. `pkg::` imports are not allowed in a generator either, since a package can itself reach JavaScript.
 
 <a id="ag8007"></a>
 
@@ -140,3 +116,17 @@ Agency does not catch this on its own. Two functions with the same name is a har
 The same rule covers two splices in one file generating the same name.
 
 **How to fix:** rename one of them. If the generator picks names from data you pass in, prefix them so they cannot collide with hand-written ones.
+
+<a id="ag8013"></a>
+
+## AG8013 — The generator `&#123;name&#125;` produced an exported declaration (`&#123;declared&#125;`). Generated declarations cannot be exported yet, because other files resolve imports without running generators. Remove the `export`.
+
+*Default severity: error.*
+
+A splice generated a declaration marked `export`, and generated declarations cannot be exported yet.
+
+Other files find out what a module exports by reading its source, not by compiling it. For a generated declaration to be importable, every file that resolved an import would have to run the generator that produced it — including `agency doc`, `agency pack`, and your editor. That is a much bigger promise than compiling one file, so for now generated declarations are visible only inside the file that spliced them.
+
+**How to fix:** drop the `export` from the generated declaration. If the name needs to be shared, write a hand-authored wrapper that calls it and export that.
+
+Lifting this restriction is tracked as issue #687.

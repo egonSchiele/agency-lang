@@ -187,36 +187,6 @@ describe("expandSplices", () => {
     expect(grafted.loc?.origin).toEqual({ kind: "splice", name: "makeGreet" });
   }, 60_000);
 
-  it("refuses a generator that reaches non-Agency code", () => {
-    write("side.agency", `import { z } from "zod"\n\nexport def s(): number {\n  return 1\n}\n`);
-    write(
-      "gen.agency",
-      `import { Code } from "std::agency"\nimport { s } from "./side.agency"\n\nexport def g(): Code {\n  return [| 1 |]\n}\n`,
-    );
-    const result = expand(
-      `import { g } from "./gen.agency"\n\ndef f(): number {\n  return $( g() )\n}\n`,
-    );
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.diagnostic.diagnostic).toBe("spliceGeneratorReachesNonAgency");
-  });
-
-  it("refuses a generator whose closure reaches back to the splicing file", () => {
-    // The cycle case. Running this generator would compile it, which walks
-    // back to host.agency, which has a splice. The nested-splice check
-    // catches it before anything compiles.
-    const source = `import { g } from "./gen.agency"\n\nconst seed = 1\n\ndef f(): number {\n  return $( g() )\n}\n`;
-    const hostPath = write("host.agency", source);
-    write(
-      "gen.agency",
-      `import { Code } from "std::agency"\nimport { f } from "./host.agency"\n\nexport def g(): Code {\n  return [| 1 |]\n}\n`,
-    );
-    const result = expandSplices(parse(source), hostPath, {});
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.diagnostic.diagnostic).toBe("spliceNested");
-  });
-
   it("refuses generated code that reads a name from the splice site", () => {
     // Pasted into a body with its own `tmp`, this would silently read the
     // local one.
@@ -278,6 +248,20 @@ describe("expandSplices", () => {
     if (result.ok) return;
     expect(result.diagnostic.diagnostic).toBe("spliceReferencesOuterName");
     expect(result.diagnostic.params.name).toBe("dep");
+  }, 60_000);
+
+  it("refuses a generated declaration marked export", () => {
+    // Other files learn what a module exports by reading its source, so an
+    // exported generated name would only resolve for callers willing to
+    // run the generator. Tracked as #687.
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    export def shared(): string {\n      return "x"\n    }\n  |]\n}\n`,
+    );
+    const result = expand(`import { g } from "./gen.agency"\n\n$( g() )\n`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostic.diagnostic).toBe("spliceGeneratedExport");
   }, 60_000);
 
   it("refuses a generated declaration that redeclares a host name", () => {

@@ -1,7 +1,0 @@
-import { Code } from "std::agency"
-import { read } from "std::file"
-
-export def makeFromDisk(): Code {
-  const contents = read("this-file-does-not-exist.txt")
-  return [| 1 |]
-}

@@ -10,27 +10,39 @@ User-facing documentation is in `docs/site/guide/templates.md`. This file covers
 parse → expandSplices → SymbolTable.build / buildCompilationUnit → typecheck → codegen
 ```
 
-Expansion happens immediately after parsing and before anything looks at what a file declares. That ordering is forced by one requirement: generated declarations must be visible both inside their own file and to files that import it.
+Expansion happens immediately after parsing and before anything reads what the file declares, so a generated name resolves like any other.
 
-The place that makes the second half true is `lib/symbolTable.ts`, inside `SymbolTable.build`:
+**`SymbolTable.build` deliberately does not expand.** That crawl records what each file exports so other files can resolve against it, and expanding there is what would make a generated declaration importable. It would also put generator execution behind all twelve of its callers, including `agency doc`, `pack`, `bundle`, `serve`, the MCP tools, and the editor's symbol table.
 
-```ts
-const expanded = expandSplices(parseResult.result, absPath, config);
-const program = expanded.ok ? expanded.value : parseResult.result;
-parsed[absPath] = { symbols: classifySymbols(program), program };
-```
+Generated declarations are therefore **file-local**: usable in the file that spliced them, invisible to importers. A generated declaration marked `export` is refused outright (`AG8013`) rather than left to fail as a confusing "not defined" in the importing file. Lifting this is issue #687, and the shape of the fix is an interface artifact like the one GHC writes, so a module's exports can be read without re-deriving them from source.
 
-`classifySymbols` is what records a file's declarations. Expanding before it means a generated `export def` is an ordinary export as far as every other file is concerned.
+## Typechecking runs your generator
+
+Worth stating plainly, because it surprises people: **`agency tc` and the language server execute generator code.**
+
+They have to. The typechecker needs to know that `greet` exists, and the only way to find that out is to run `makeGreeter`. GHC does the same thing for Template Haskell, running splices before typechecking, and Haskell Language Server evaluates them in the editor for the same reason.
+
+Measured on this machine, one splice whose generator returns a small fragment:
+
+| | Time |
+| --- | --- |
+| `agency tc` on a file with no splice | ~0.7s |
+| `agency tc` on a file with one splice | ~2.7s |
+| First expansion inside a running process | ~660ms |
+| Later expansions, cache hit | ~0.1ms |
+
+So a splice costs about **two seconds per `tc` invocation**, every time, because each invocation is a fresh process and the cache does not survive it. Inside the language server the cache does survive, so the cost lands once per generator edit rather than once per keystroke.
+
+Two consequences worth keeping in mind when changing this code. The cache is what makes the editor usable, so anything that weakens its key makes the editor forkstorm. And `execFileSync` blocks a single-threaded server, which is why the editor path passes a 3-second wall clock instead of the build's 30.
 
 ## Every path that must expand
 
-Seven, and missing one is the failure mode to worry about. It produces a file that works through one entry point and misbehaves through another.
+Six, and missing one is the failure mode to worry about. It produces a file that works through one entry point and misbehaves through another.
 
 The list below was originally derived from where `liftCallbackBlocks` runs, and that was the wrong oracle: `agency tc` calls neither. Anything that parses a file and then reads what it declares needs expansion, so the honest way to find them all is to check every caller of `buildCompilationUnit`.
 
 | Where | On failure |
 | --- | --- |
-| `lib/symbolTable.ts` (`SymbolTable.build`) | Keep the unexpanded program and carry on. Symbol discovery is best-effort by design, exactly as for unresolvable imports. |
 | `lib/compiler/buildSession.ts` (`compileEntry`) | Print and `process.exit(1)`, matching how this path already reports parse and typecheck failures. |
 | `lib/compiler/compile.ts` (`compileSource`) | Return a `CompileFailure`. This module returns errors as data and never exits. |
 | `lib/compiler/typecheck.ts` (`runCheckerPipeline`) | Keep the unexpanded program. This pipeline answers "what does this check as"; reporting belongs to the compile paths. |
@@ -79,13 +91,21 @@ Things that are easy to get wrong here:
 
 ## Blast radius
 
-Expansion runs inside `SymbolTable.build`, which has twelve non-test callers. So "compiling runs your code" understates it. Generator code also runs under `agency doc`, `pack`, `bundle`, `serve/metadata`, `mcp/tools`, `policy`, and the LSP, which rebuilds on every keystroke.
+Six paths run generator code: the two compile paths, the two typecheck paths, the editor, and interrupt analysis. Everything that only builds a symbol table or reads metadata does not, which covers `agency doc`, `pack`, `bundle`, `serve`, `policy`, and the MCP tools.
 
-That is a real widening and it should be read as part of the safety story below, not separately from it. The calibration argument holds well for compiling, since compiling already runs your code. It is weaker for generating docs, and weakest for opening a folder in an editor. The import restriction and effect check are what keep it acceptable: whatever runs is Agency source, effect-free, and reachable only through `std::` and relative `.agency` files.
+"Compiling runs your code" is therefore close to accurate, with typechecking as the honest addition. That was not true of an earlier draft, which expanded inside `SymbolTable.build`; see the section above for why that changed.
 
-## Determinism is not enforced
+## What is not checked
 
-An earlier draft refused a generator that could reach `llm()` or the clock, as `AG8004`. That check is gone and the code is retired, unused.
+Two things a reader might expect and should not.
+
+**Effects are not checked before the generator runs.** An earlier draft refused an effectful generator statically, as `AG8003`, and refused one reaching non-Agency code as `AG8006`. Both are gone. The backstop does the work instead: compilation installs no handlers, so an operation that raises cannot complete, and the failure arrives as `AG8008` naming the generator.
+
+The static version could not be made precise while #680 stands, because effects do not cross a module boundary. To fail closed it had to refuse a generator when *any* export anywhere in its closure raised, which rejects a generator that uses one harmless function from a file that happens to contain an effectful one. A coarse check is defensible when it is the only protection; it is hard to justify as an earlier version of an error the runtime already produces. Filed as **#691**, blocked on #680. The import restriction returns as a user-chosen `--only-stdlib` flag in **#690**.
+
+**Determinism is not enforced.**
+
+An earlier draft refused a generator that could reach `llm()` or the clock, as `AG8004`. That check is gone and the code is unused.
 
 It was a hardcoded name list, and a name list cannot be made complete. It missed anything one wrapper away through a `std::` module, and eleven stdlib files reach `llm` while declaring no interrupts. It missed everything nondeterministic that was not `llm` or `std::date`, and it would have missed every function added afterwards. A check that reads like a guarantee and is not one is worse than no check.
 
@@ -97,19 +117,21 @@ If this needs to be enforced properly one day, the complete version is to track 
 
 ## The safety argument, and what carries it
 
-Agency can do compile-time codegen more safely than Haskell. GHC cannot distinguish `makeLenses` walking a datatype from a splice that exfiltrates your source, because `runIO` is opaque. Agency routes dangerous operations through interrupts and computes transitive effect lists statically, so the compiler can refuse an effectful generator before running a line of it.
+Agency can do compile-time codegen more safely than Haskell, though this version does not yet cash that in. GHC cannot distinguish `makeLenses` walking a datatype from a splice that exfiltrates your source, because `runIO` is opaque. Agency routes dangerous operations through interrupts, and compilation installs no handlers, so an effectful generator cannot complete — it fails partway with `AG8008` instead of finishing its work.
 
-That only holds if a generator cannot reach code with no effects to check. A plain JS/TS package passes through untouched when imported (`docs/dev/pkg-imports.md`), so **a generator's transitive import graph may contain only `std::` and relative `.agency` files**. Transitive is load-bearing: a clean-looking local file can import `zod` one level down while the generator itself looks spotless. `tests/agency/splices/refuseNonAgency.agency` is exactly that case and is the test that decides whether this argument is real.
+That is the whole mechanism today. It is enforcement without foresight: the operation is stopped, but only once attempted.
+
+That only holds for Agency code. A plain JS/TS package passes through untouched when imported (`docs/dev/pkg-imports.md`), and JavaScript raises nothing, so a generator that reaches one is unchecked. That restriction is not enforced in this version; it returns as `--only-stdlib` in #690.
 
 Unhandled interrupts are the backstop rather than the mechanism. Compilation installs no handlers, so an operation that somehow passed eligibility still cannot complete.
 
-### The gap inside this claim: interrupt-free ambient reads
+### The gap: interrupt-free ambient reads
 
-Some stdlib functions read process state and raise nothing, so the effect check cannot see them. `std::system` exports `env`, `args`, `cwd`, and `isTTY` this way. `setEnv` right below `env` raises an interrupt; reading does not.
+Some stdlib functions read process state and raise nothing, so nothing sees them. `std::system` exports `env`, `args`, `cwd`, and `isTTY` this way, while `setEnv` right below `env` does raise.
 
-`env` is the one that matters, because a generator could bake a secret into the emitted JavaScript as a string literal, and that artifact gets committed. The child therefore receives an allowlisted environment holding only what Node needs to start (`CHILD_ENV_ALLOWED` in `runGenerator.ts`), and its stdin is a pipe so `readStdin` gets EOF instead of consuming or blocking the build's input.
+`env` is the one that matters: a generator could bake a secret into the emitted JavaScript as a string literal, and that artifact gets committed. The fix is to make `env` raise like its neighbour, which puts it back inside the mechanism that already works. Filed as **#688**.
 
-That closes the confidentiality half. The general answer is to make these functions raise, or to name them as compile-time-forbidden, and it has not been done.
+The child's stdin is a pipe, so `readStdin` gets EOF instead of consuming or blocking the build's input. That is one line and stays regardless.
 
 For calibration, this is closer to the npm `postinstall` problem than to a new hole. The generator is code already in your project, and compiling already runs your code. npm, Template Haskell, and Rust proc macros check nothing at all.
 
@@ -124,7 +146,7 @@ gen.agency, calling h()  →  { g: [] }
 
 A generator that delegates its effectful work one file away reports an empty effect list, which reads as "safe to run at compile time". Tracked as **#680**.
 
-Until that is fixed, `checkEffects` walks the generator's whole transitive closure: the generator's own file is checked by name, and across an import boundary *any* effectful export refuses. Coarse and deliberately so. It fails closed, and generators are small and effect-free by rule anyway. When #680 lands, `lib/compiler/splice/eligibility.ts` can go back to a direct lookup, and its comment says so.
+This is why the static effect check was removed rather than kept coarse. See "What is not checked" above, and #691.
 
 ## Two claims that were tested and did not hold
 
@@ -138,7 +160,7 @@ Recorded because both were load-bearing and both were wrong.
 
 Running a generator compiles it, which builds a symbol table, which walks files and can arrive back at a file with a splice.
 
-Two things stop that. `checkNoNestedSplice` refuses a generator whose closure contains any splice at all (`AG8009`), which catches the cycle before anything is compiled. Behind it, `expandSplices` tracks an in-progress set keyed by resolved host path and refuses re-entry.
+Two things stop that. `checkNoNestedSplice` refuses a generator whose own file contains a splice (`AG8009`). Behind it, `expandSplices` tracks an in-progress set keyed by resolved host path and refuses re-entry.
 
 ## Shared with template fills
 

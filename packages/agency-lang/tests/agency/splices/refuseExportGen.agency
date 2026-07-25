@@ -3,7 +3,7 @@ import { Code } from "std::agency"
 export def makeExported(): Code {
   return [|
     export def sharedHelper(): string {
-      return "generated and exported"
+      return "generated"
     }
   |]
 }

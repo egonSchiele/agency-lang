@@ -1,5 +1,0 @@
-import { z } from "zod"
-
-export def looksHarmless(): number {
-  return 1
-}

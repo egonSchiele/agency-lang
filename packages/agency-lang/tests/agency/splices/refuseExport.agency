@@ -1,0 +1,7 @@
+import { makeExported } from "./refuseExportGen.agency"
+
+$( makeExported() )
+
+node main(): string {
+  return sharedHelper()
+}

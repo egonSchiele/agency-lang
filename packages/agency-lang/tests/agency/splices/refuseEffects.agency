@@ -1,5 +1,0 @@
-import { makeFromDisk } from "./refuseEffectsGen.agency"
-
-node main(): number {
-  return $( makeFromDisk() )
-}

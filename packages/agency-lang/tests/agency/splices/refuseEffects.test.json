@@ -1,4 +1,0 @@
-{
-  "expectedCompileError": "AG8003",
-  "description": "A generator that raises an interrupt effect cannot run at compile time"
-}

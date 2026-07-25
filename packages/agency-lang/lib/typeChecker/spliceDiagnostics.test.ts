@@ -12,9 +12,7 @@ import { DIAGNOSTICS, renderMessage, type DiagnosticName } from "./diagnostics.j
  * through 8 a spec for what to pass.
  */
 const SPLICE_DIAGNOSTIC_PARAMS: Record<string, Record<string, string>> = {
-  spliceGeneratorHasEffects: { name: "makeGetters", effects: "std::read" },
   spliceGeneratorNotImported: { name: "makeGetters" },
-  spliceGeneratorReachesNonAgency: { name: "makeGetters", importPath: "zod" },
   spliceFragmentKindMismatch: {
     name: "makeGetters",
     actual: "program",
@@ -24,6 +22,7 @@ const SPLICE_DIAGNOSTIC_PARAMS: Record<string, Record<string, string>> = {
   spliceGeneratorFailed: { name: "makeGetters", reason: "timed out after 30s" },
   spliceNested: {},
   spliceReferencesOuterName: { name: "tmp" },
+  spliceGeneratedExport: { name: "makeGetters", declared: "greet" },
   spliceRedeclaresHostName: { name: "makeGetters", declared: "config" },
   spliceArgumentNotAvailable: { name: "SOME_CONST" },
 };
@@ -37,20 +36,19 @@ describe("splice diagnostics", () => {
     expect(spliceCodes).toEqual(Object.keys(SPLICE_DIAGNOSTIC_PARAMS).sort());
   });
 
-  it("assigns the splice codes, with AG8004 left unused", () => {
+  it("assigns the splice codes; AG8003, AG8004 and AG8006 are unused", () => {
     const codes = Object.keys(SPLICE_DIAGNOSTIC_PARAMS)
       .map((diagnosticName) => DIAGNOSTICS[diagnosticName as DiagnosticName].code)
       .sort();
     expect(codes).toEqual([
-      "AG8003",
       "AG8005",
-      "AG8006",
       "AG8007",
       "AG8008",
       "AG8009",
       "AG8010",
       "AG8011",
       "AG8012",
+      "AG8013",
     ]);
   });
 

@@ -320,11 +320,9 @@ $( makeLookups(["red", "blue"]) )   // get_red() and get_blue() now exist
 
 **A generator lives in another file.** It has to be compiled before the file that splices it can be, and a generator in the same file would need to be compiled after itself. Template Haskell calls this the stage restriction and pays the same cost. (`AG8005`)
 
-**A generator may not raise effects.** Reading a file, making a network call, and running a command all raise interrupts in Agency. Compilation installs no handlers, so there is nowhere for one to be answered. The compiler checks this before running anything. (`AG8003`)
+**A generator may not raise effects.** Reading a file, making a network call, and running a command all raise interrupts in Agency, and compilation installs no handlers, so there is nowhere for one to be answered. The generator stops partway and you get an error naming it. (`AG8008`)
 
 One consequence worth knowing: a generator cannot use `loadTemplate`, because loading a template reads a file. Write the template inline with `[| ... |]` instead.
-
-**A generator may import only `std::` modules and relative `.agency` files.** That covers its whole transitive import graph, not just its own imports. This rule is what makes the effect check mean anything. JavaScript raises no effects, so a generator that could reach an npm package could do anything with nothing to check. (`AG8006`)
 
 **Splice arguments may use only literals, code literals, and imported names.** The generator runs while your file is still being compiled, so anything declared in it does not exist yet. An imported name works, and the module it comes from faces the same rules the generator does. (`AG8011`)
 
@@ -336,11 +334,15 @@ $( makeFieldGetters(FIELDS) )   // fine: FIELDS is imported
 
 **Generated code may use only names it declares or imports.** A generated expression lands next to whatever locals are at the splice site, and a generated mention of `tmp` must not silently read the local `tmp`. Generated code that needs a helper imports it itself. (`AG8010`)
 
+**Generated declarations cannot be exported.** They are usable in the file that spliced them and invisible to other files. Other files work out what a module exports by reading its source, so an exported generated name would only resolve for anyone willing to run your generator first. (`AG8013`)
+
 **Generated declarations may not take a name already in use.** Two functions with the same name is an error in Agency. Two top-level constants is not, and the later one silently wins, so a generator could otherwise replace one of your constants with nothing said. (`AG8012`)
 
 ### How type checking sees generated code
 
-Exactly the way it sees everything else. Expansion runs right after parsing and before anything looks at what the file declares, so by the time the type checker starts, `greet` is an ordinary function in an ordinary file. It gets checked, it shows up in autocomplete, and calling it with the wrong arguments is a normal error.
+Exactly the way it sees everything else, and this has a cost worth knowing about: **`agency tc` and your editor run your generator.** They have to, because the only way to learn that `greet` exists is to run `makeGreeter`. Template Haskell works the same way.
+
+In practice a splice adds roughly two seconds to each `agency tc` run. Your editor caches the result, so it pays that once per change to a generator rather than once per keystroke. Expansion runs right after parsing and before anything looks at what the file declares, so by the time the type checker starts, `greet` is an ordinary function in an ordinary file. It gets checked, it shows up in autocomplete, and calling it with the wrong arguments is a normal error.
 
 That is also why a generated declaration can be exported and imported from another file. Nothing downstream knows the code was generated, except for one thing: if a type error lands inside generated code, the message says which generator produced it.
 
@@ -348,7 +350,7 @@ That is also why a generated declaration can be exported and imported from anoth
 
 Nothing stops a generator being nondeterministic. If it reaches an LLM or the clock, two builds of the same source produce different code, and that is your problem rather than the compiler's. There is no complete way to check it today, and a partial check that reads like a guarantee would be worse than none.
 
-A generator also cannot read your environment. The child gets only what Node needs to start, so `env("ANTHROPIC_API_KEY")` inside a generator returns null rather than something that would end up in your compiled output.
+A generator can also read your environment today, because `env` raises no interrupt. Do not put secrets in generated code: they land in the compiled JavaScript as plain text.
 
 Worth knowing alongside that: generator code runs whenever something builds a symbol table, which includes `agency doc`, `agency pack`, and your editor, not only `agency compile`.
 

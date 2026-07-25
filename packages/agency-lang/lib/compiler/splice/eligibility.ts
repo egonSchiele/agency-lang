@@ -2,34 +2,19 @@ import path from "node:path";
 import fs from "node:fs";
 import { parseAgencyFileCached } from "../../parseCache.js";
 import { agencyImportTarget } from "../compileClosure.js";
-import { getEffectsFromFile } from "../typecheck.js";
-import { isStdlibImport } from "../../importPaths.js";
 import { walkNodesArray } from "../../utils/node.js";
 import type { AgencyConfig } from "../../config.js";
 import type { AgencyProgram, AgencyNode } from "../../types.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
 
 /**
- * Splice eligibility: may this generator run at compile time?
+ * Resolving a splice's generator, and the one structural rule left on it.
  *
- * The import-graph check carries the whole safety argument. Dangerous
- * operations raise effects and effects are statically checkable, but only
- * for Agency code. TypeScript raises nothing, and a plain JS package like
- * `zod` passes through untouched when imported. A generator that can reach
- * `zod` makes the effect check meaningless.
+ * Safety is the unhandled-interrupt backstop's job: compilation installs no
+ * handlers, so a generator that reaches a dangerous operation cannot
+ * complete. The static effect and import-graph checks that used to live
+ * here were removed; see `checkGeneratorEligible` for why.
  */
-
-/**
- * Which import edges a generator may have. One line on purpose, since this
- * is the rule a reader checks against the spec.
- *
- * `std::` is allowed but not followed, because it is verified elsewhere. A
- * relative `.agency` file is allowed and followed, which is what makes the
- * check transitive. Everything else leaves Agency, including `pkg::`,
- * which can reach JavaScript one level down.
- */
-const isAllowedEdge = (specifier: string): boolean =>
-  isStdlibImport(specifier) || isAgencyFilePath(specifier);
 
 /**
  * A path to an Agency source file, relative or absolute.
@@ -107,155 +92,54 @@ export function closureFiles(
 }
 
 /**
- * The first import edge that leaves Agency code, or null when every edge is
- * allowed.
- *
- * Transitive is the operative word. A local `.agency` file the generator
- * imports can pull in `zod` one level down while the generator itself
- * looks clean.
- */
-export function checkImportGraph(
-  entryPath: string,
-  generatorName: string,
-  config: AgencyConfig = {},
-): SpliceDiagnostic | null {
-  for (const file of closureFiles(entryPath, config)) {
-    const program = parseFileOrNull(file, config);
-    if (program === null) {
-      continue;
-    }
-    const escaping = importEdgesOf(program).find(
-      (specifier) => !isAllowedEdge(specifier),
-    );
-    if (escaping !== undefined) {
-      return {
-        diagnostic: "spliceGeneratorReachesNonAgency",
-        params: { name: generatorName, importPath: escaping },
-        loc: { line: 0, col: 0, start: 0, end: 0 },
-      };
-    }
-  }
-  return null;
-}
-
-/**
- * Refuse a generator that can reach any interrupt effect.
- *
- * Two things stop this from being a lookup. It must take a path, never a
- * source string, because `getEffectsFromSource` writes to an empty temp
- * dir where relative imports throw. Worse, effects do not propagate across
- * a module boundary even with a real path (#680):
- *
- *     helper.agency alone      → { h: ["std::read"] }
- *     gen.agency, calling h()  → { g: [] }
- *
- * A generator that delegates its effectful work one file away therefore
- * reports an empty effect list, which reads as safe.
- *
- * So the check walks the closure instead. The generator's own file has an
- * accurate map and is checked by name. Across an import boundary nothing
- * says which exports are reachable, so any effectful export refuses.
- * Replace this with a direct lookup once #680 lands.
- *
- * `everyExport` drops the by-name part for a module that supplies a splice
- * argument. Such a module is not a generator, so there is no single export
- * to name, and every export it has runs when the module is evaluated.
- */
-export function checkEffects(
-  generatorPath: string,
-  generatorName: string,
-  config: AgencyConfig = {},
-  everyExport: boolean = false,
-): SpliceDiagnostic | null {
-  const files = closureFiles(generatorPath, config);
-  for (const file of files) {
-    // The generator's own file is checked by name. Across an import
-    // boundary nothing says which exports are reachable, so any effectful
-    // export refuses.
-    const named = file === files[0] && !everyExport ? generatorName : null;
-    const found = effectsInFile(file, named);
-    if (found !== null) {
-      return {
-        diagnostic: "spliceGeneratorHasEffects",
-        params: { name: generatorName, effects: found },
-        loc: { line: 0, col: 0, start: 0, end: 0 },
-      };
-    }
-  }
-  return null;
-}
-
-/**
- * Effects declared by one file, as a printable list or null for none.
- *
- * `only` names a single export to check; null means every export. Passing
- * a name that the file does not export would silently report nothing, so
- * the all-exports case is its own value rather than an empty string.
- */
-function effectsInFile(filePath: string, only: string | null): string | null {
-  let byExport: Record<string, string[]>;
-  try {
-    byExport = getEffectsFromFile(filePath);
-  } catch (err) {
-    // An unresolvable import or a type error means the effect list cannot
-    // be trusted. Fail closed: an unknown answer is not a safe one.
-    console.error(`splice eligibility: cannot read effects of ${filePath}:`, err);
-    return "unknown";
-  }
-  const effects =
-    only === null ? Object.values(byExport).flat() : (byExport[only] ?? []);
-  const unique = effects.filter((name, index) => effects.indexOf(name) === index);
-  return unique.length === 0 ? null : unique.sort().join(", ");
-}
-
-/**
- * Refuse a generator whose closure contains a splice.
+ * Refuse a generator whose own file contains a splice.
  *
  * Running a generator compiles it, which expands any splice it contains,
  * which runs another generator. That recursion has no floor. Template
  * Haskell forbids the same thing for the same reason.
  *
- * Scanning the closure refuses before anything is compiled, rather than
- * partway into a recursion.
+ * Only the generator's own file is scanned. This exists to stop runaway
+ * recursion, and one level is enough: a file one import away gets the same
+ * check when it is itself used as a generator.
  */
 export function checkNoNestedSplice(
   generatorPath: string,
   generatorName: string,
   config: AgencyConfig = {},
 ): SpliceDiagnostic | null {
-  for (const file of closureFiles(generatorPath, config)) {
-    const program = parseFileOrNull(file, config);
-    const hasSplice =
-      program !== null &&
-      [...walkNodesArray(program.nodes)].some((visit) => visit.node.type === "splice");
-    if (hasSplice) {
-      return {
+  const program = parseFileOrNull(path.resolve(generatorPath), config);
+  const hasSplice =
+    program !== null &&
+    [...walkNodesArray(program.nodes)].some((visit) => visit.node.type === "splice");
+  return hasSplice
+    ? {
         diagnostic: "spliceNested",
-        params: { name: generatorName, path: file },
+        params: { name: generatorName, path: generatorPath },
         loc: { line: 0, col: 0, start: 0, end: 0 },
-      };
-    }
-  }
-  return null;
+      }
+    : null;
 }
 
-/** All four checks, composed. The expansion pass never names an individual
- *  rule, so adding one means adding an entry here. */
+/**
+ * What still gates a generator, now that effect and import-graph checking
+ * are gone.
+ *
+ * Both were removed deliberately. The unhandled-interrupt backstop already
+ * stops an effectful generator: compilation installs no handlers, so the
+ * operation cannot complete. The static version could not be made precise
+ * while #680 stands, and a check that refuses a generator over an
+ * unrelated export in a helper file is hard to justify when the runtime
+ * already covers the case. Tracked as #691; the import restriction returns
+ * as `--only-stdlib` in #690.
+ */
 export function checkGeneratorEligible(
   generatorPath: string,
   generatorName: string,
   config: AgencyConfig = {},
 ): SpliceDiagnostic | null {
-  const checks = [
-    () => checkImportGraph(generatorPath, generatorName, config),
-    () => checkNoNestedSplice(generatorPath, generatorName, config),
-    () => checkEffects(generatorPath, generatorName, config),
-  ];
-  return checks.reduce<SpliceDiagnostic | null>(
-    (found, check) => found ?? check(),
-    null,
-  );
+  return checkNoNestedSplice(generatorPath, generatorName, config);
 }
+
 
 /**
  * Which module supplies a splice's generator, and under what name.

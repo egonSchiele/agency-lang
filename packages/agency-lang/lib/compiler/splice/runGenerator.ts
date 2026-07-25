@@ -44,50 +44,6 @@ export const EDITOR_WALL_CLOCK_MS = 3_000;
  *  with anything the generator module exports. */
 const RUNNER_NODE = "__splice";
 
-/**
- * The only environment variables the child gets.
- *
- * A generator can read the environment and nothing stops it: `env` in
- * `std::system` raises no interrupt, unlike `setEnv` right below it. So a
- * generator could bake `ANTHROPIC_API_KEY` into the emitted JavaScript as
- * a string literal, and that artifact gets committed and shipped.
- *
- * An allowlist rather than a blocklist of secret-looking names, because
- * the failure directions are not symmetric. A missed entry here breaks a
- * build loudly; a missed pattern in a blocklist leaks a secret silently.
- * A generator is effect-free Agency code, so it needs nothing beyond what
- * Node itself needs to start.
- */
-const CHILD_ENV_ALLOWED: readonly string[] = [
-  "PATH",
-  "HOME",
-  "TMPDIR",
-  "TEMP",
-  "TMP",
-  "LANG",
-  "LC_ALL",
-  // Windows needs these to resolve and launch anything at all.
-  "SystemRoot",
-  "SystemDrive",
-  "WINDIR",
-  "COMSPEC",
-  "PATHEXT",
-  "APPDATA",
-  "LOCALAPPDATA",
-  "USERPROFILE",
-];
-
-function childEnv(): Record<string, string> {
-  const out: Record<string, string> = Object.create(null);
-  for (const name of CHILD_ENV_ALLOWED) {
-    const value = process.env[name];
-    if (value !== undefined) {
-      out[name] = value;
-    }
-  }
-  return out;
-}
-
 /** Limits are overridable so a test can prove the timeout works without
  *  waiting 30 seconds for it. */
 export type RunGeneratorOptions = {
@@ -287,10 +243,9 @@ function execute(
       timeout: wallClockMs,
       cwd,
       encoding: "utf-8",
-      // "pipe" for stdin too, so a generator calling readStdin gets EOF
-      // rather than consuming or blocking the build's own input.
+      // "pipe" for stdin so a generator calling readStdin gets EOF rather
+      // than consuming or blocking the build's own input.
       stdio: ["pipe", "pipe", "pipe"],
-      env: childEnv(),
     });
     return null;
   } catch (err) {

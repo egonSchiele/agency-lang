@@ -499,23 +499,11 @@ node main() {
 }
 \`\`\``,
 
-  spliceGeneratorHasEffects: `A compile-time generator ran, or would have run, code that raises an interrupt effect — reading a file, writing one, hitting the network.
-
-Compilation refuses to run effectful code. Unlike a normal program run, no handlers are installed while compiling, so there is nothing to approve or reject an effect against, and a build that quietly touched the filesystem would be a surprise.
-
-**How to fix:** move the effectful work out of the generator. If it needs data from a file, read the file at run time instead, or pass the data in as a plain argument to the splice.`,
-
   spliceGeneratorNotImported: `A splice called a function that is not imported from another file.
 
 The generator has to be compiled before the file that splices it can be compiled, so it cannot live in that same file — there would be no order that works. This is the same restriction Template Haskell calls the stage restriction.
 
 **How to fix:** move the generator into its own \`.agency\` file and import it.`,
-
-  spliceGeneratorReachesNonAgency: `A compile-time generator can reach JavaScript or TypeScript, either by importing it directly or through another Agency file that does.
-
-The whole safety argument for running generators at compile time is that dangerous operations in Agency raise effects, and effects can be checked before anything runs. JavaScript raises no effects, so nothing can be checked about it. A generator that can reach JavaScript can do anything.
-
-**How to fix:** a generator and everything it imports, however indirectly, may use only \`std::\` modules and relative \`.agency\` files. \`pkg::\` imports are not allowed in a generator either, since a package can itself reach JavaScript.`,
 
   spliceFragmentKindMismatch: `A generator returned a piece of code that does not fit where the splice sits.
 
@@ -546,6 +534,14 @@ Pasting code into a file puts it next to whatever names are already there, so a 
 The generator runs while that file is still being compiled, so nothing declared in it exists yet. Only values that already exist can be passed in.
 
 **How to fix:** use a literal, a code literal, or a name imported from another module.`,
+
+  spliceGeneratedExport: `A splice generated a declaration marked \`export\`, and generated declarations cannot be exported yet.
+
+Other files find out what a module exports by reading its source, not by compiling it. For a generated declaration to be importable, every file that resolved an import would have to run the generator that produced it — including \`agency doc\`, \`agency pack\`, and your editor. That is a much bigger promise than compiling one file, so for now generated declarations are visible only inside the file that spliced them.
+
+**How to fix:** drop the \`export\` from the generated declaration. If the name needs to be shared, write a hand-authored wrapper that calls it and export that.
+
+Lifting this restriction is tracked as issue #687.`,
 
   spliceRedeclaresHostName: `A splice generated a declaration whose name the file already uses.
 

@@ -1,6 +1,0 @@
-import { makeExported } from "./exportedGeneratedDeclGen.agency"
-
-// The generated declaration is EXPORTED, so another file can import it.
-// This is why expansion happens inside SymbolTable.build: classifySymbols
-// is what records a file's declarations, and it has to see this one.
-$( makeExported() )

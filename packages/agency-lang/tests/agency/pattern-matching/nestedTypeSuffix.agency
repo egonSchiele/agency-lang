@@ -1,0 +1,74 @@
+// A `: Type` suffix attaches to a whole pattern — a binder, an object pattern,
+// or an array pattern. It already worked at the top of an arm; these are the
+// same shapes nested inside another pattern.
+
+def notEmpty(v: string): Result<string> {
+  if (v == "") {
+    return failure("empty path")
+  }
+  return success(v)
+}
+
+@validate(notEmpty)
+type SafePath = string
+
+type Word = { cmd: string }
+
+def describe(words: any[]): string {
+  return match (words) {
+    ["echo", s: string] => "echo string: ${s}"
+    ["echo", n: number] => "echo number: ${n}"
+    _ => "other"
+  }
+}
+
+def readPath(words: any[]): string {
+  return match (words) {
+    ["cat", p: SafePath] => "read ${p}"
+    _ => "cannot map"
+  }
+}
+
+def firstWord(items: any[]): string {
+  return match (items) {
+    [{ cmd: "echo" }: Word, ...rest] => "echo word, ${rest.length} more"
+    _ => "other"
+  }
+}
+
+def deep(cmd: any): string {
+  // object > array > binder-with-suffix, which is the shape a lowered bash
+  // command matcher wants.
+  return match (cmd) {
+    { words: ["cat", p: SafePath], redirect: null } => "read ${p}"
+    _ => "other"
+  }
+}
+
+node binderSuffix() {
+  // The suffix decides which arm matches, on element type alone.
+  return [describe(["echo", "hi"]), describe(["echo", 42]), describe(["ls"])]
+}
+
+node validatedSuffix() {
+  // A named type runs its validator: a path that fails validation does not
+  // match, and falls through.
+  return [readPath(["cat", "f.txt"]), readPath(["cat", ""])]
+}
+
+node nestedObjectSuffix() {
+  return [firstWord([{ cmd: "echo" }, "x"]), firstWord([{ cmd: "ls" }, "x"])]
+}
+
+node deeplyNested() {
+  return [
+    deep({ words: ["cat", "f.txt"], redirect: null }),
+    deep({ words: ["cat", ""], redirect: null }),
+  ]
+}
+
+node bindsTheOriginal() {
+  // Rule 1 from the type-patterns spec still holds nested: the binder gets the
+  // value as it arrived, not whatever the validator returned.
+  return readPath(["cat", "f.txt"])
+}

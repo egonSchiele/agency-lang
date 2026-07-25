@@ -1,0 +1,59 @@
+{
+  "tests": [
+    {
+      "nodeName": "binderSuffix",
+      "description": "A type suffix on a binder nested in an array pattern decides the arm: the same shape dispatches on element type.",
+      "input": "",
+      "expectedOutput": "[\"echo string: hi\",\"echo number: 42\",\"other\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "validatedSuffix",
+      "description": "A named type nested in a pattern runs its validator, so a value that fails validation does not match and falls through.",
+      "input": "",
+      "expectedOutput": "[\"read f.txt\",\"cannot map\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nestedObjectSuffix",
+      "description": "An object pattern nested in an array can carry its own type suffix.",
+      "input": "",
+      "expectedOutput": "[\"echo word, 1 more\",\"other\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "deeplyNested",
+      "description": "Object containing an array containing a validated binder — the shape a lowered bash command matcher uses.",
+      "input": "",
+      "expectedOutput": "[\"read f.txt\",\"other\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bindsTheOriginal",
+      "description": "A nested type suffix binds the value as it arrived; validators decide whether the arm matches, they never rewrite what is bound.",
+      "input": "",
+      "expectedOutput": "\"read f.txt\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

@@ -144,6 +144,31 @@ describe("formatSource", () => {
     expect(formatted).toBe(input.trimEnd() + "\n");
   });
 
+  it("prints a `: Type` suffix nested inside a pattern, and round-trips it", () => {
+    // The suffix used to be arm-level only, so the printer never met one in
+    // element or property position. A printer that dropped it would silently
+    // turn a validated rule into an unvalidated one.
+    const input = [
+      "node main() {",
+      "  const w = [\"cat\", \"f.txt\"]",
+      "  const r = match (w) {",
+      "    [\"echo\", s: string] => s",
+      "    [\"cat\", p: SafePath] => p",
+      "    [{ cmd: \"echo\" }: Word, ...rest] => \"word\"",
+      "    _ => \"other\"",
+      "  }",
+      "  print(r)",
+      "}",
+      "",
+    ].join("\n");
+    const formatted = formatSource(input);
+    expect(formatted).toContain("[\"echo\", s: string] =>");
+    expect(formatted).toContain("[\"cat\", p: SafePath] =>");
+    expect(formatted).toContain("[{ cmd: \"echo\" }: Word, ...rest] =>");
+    // Formatting the output again changes nothing.
+    expect(formatSource(formatted)).toBe(formatted);
+  });
+
   it("round-trips a generics fixture (type params + Record) unchanged", () => {
     const fixturePath = path.join(__dirname, "../tests/formatter/generics.agency");
     const input = fs.readFileSync(fixturePath, "utf-8");

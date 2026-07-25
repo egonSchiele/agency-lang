@@ -441,6 +441,57 @@ object types (`p: {tag: string} => ...`). It is match-arm only: in `let` /
 `const` declarations, `: Type` stays a static annotation with no runtime
 check (use the bang, `Person!`, for validated declarations).
 
+#### The suffix nests
+
+`: Type` attaches to a whole pattern, so it works anywhere a pattern
+appears — not only at the top of an arm:
+
+```ts
+match (words) {
+  ["echo", s: string]          => print(s)
+  ["cat",  p: SafePath]        => read(p)
+  [{ cmd: "echo" }: Word, ...rest] => handle(rest)
+  _                            => fallback()
+}
+```
+
+That matters when a piece of the value needs validating rather than the
+whole thing. `["cat", p: SafePath]` says the second word must pass
+`SafePath`'s validators for the arm to match at all, so the rule cannot be
+written without its own precondition.
+
+The type always attaches to a **pattern**, never to an object field. To
+constrain fields, type the object:
+
+```ts
+{ name: "Ada" }: { name: string, age: number }  => ...   // yes
+{ name, age }: Person                            => ...   // yes
+```
+
+Remember that inside an object pattern `{ name: string }` binds the `name`
+field to a variable *called* `string` — it does not test the field's type
+(the checker warns with AG5004). Type the whole object instead.
+
+#### Cost
+
+Coarse types — `string`, `number`, `boolean`, `null`, `object`, `any[]` —
+compile to a single `typeof`-style check and are effectively free (a few
+nanoseconds, about the same as comparing two literals).
+
+Every other type validates against the type's schema and runs its
+`@validate` chain, which is roughly **50x** the cost of a coarse check.
+Arms are tried in order and a failing arm pays for its check before the
+next arm runs, so a match whose early arms use named types pays for each
+one it tries. Two things follow:
+
+- Put cheap discriminating checks first. Conditions within an arm are
+  joined with `&&` and short-circuit, so `["cat", p: SafePath]` never runs
+  the validator unless the first word was already `"cat"`.
+- Order arms so common cases match early.
+
+This is nothing next to any real I/O, but it is worth knowing before
+putting a validated type in a hot loop.
+
 ### What a test checks
 
 Coarse types compile to cheap JavaScript checks: `string`, `number`,

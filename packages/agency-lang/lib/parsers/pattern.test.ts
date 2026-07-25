@@ -924,3 +924,78 @@ describe("type patterns after `is`", () => {
     });
   });
 });
+
+describe("a `: Type` suffix nested inside a pattern", () => {
+  it("parses a suffixed binder as an array element", () => {
+    const result = matchPatternParser('["echo", s: string]');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "arrayPattern",
+      elements: [
+        { type: "string" },
+        {
+          type: "typePattern",
+          pattern: { type: "variableName", value: "s" },
+          typeHint: { type: "primitiveType", value: "string" },
+        },
+      ],
+    });
+  });
+
+  it("parses a suffixed object pattern as an array element", () => {
+    const result = matchPatternParser('[{ cmd: "echo" }: Word, ...rest]');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const elements = (result.result as any).elements;
+    expect(elements[0]).toMatchObject({
+      type: "typePattern",
+      pattern: { type: "objectPattern" },
+    });
+    expect(elements[1]).toMatchObject({ type: "restPattern" });
+  });
+
+  it("parses a suffix on a binder nested two levels deep", () => {
+    const result = matchPatternParser('{ words: ["cat", p: SafePath], redirect: null }');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const words = (result.result as any).properties[0].value;
+    expect(words.type).toBe("arrayPattern");
+    expect(words.elements[1]).toMatchObject({
+      type: "typePattern",
+      pattern: { type: "variableName", value: "p" },
+    });
+  });
+
+  it("leaves a pattern with no suffix alone", () => {
+    const result = matchPatternParser('["echo", s]');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).elements[1]).toMatchObject({
+      type: "variableName",
+      value: "s",
+    });
+  });
+
+  it("does not consume the object-pattern colon as a suffix", () => {
+    // `{ name: n }` is a field match, not a suffix on anything. The value
+    // parser must stop at `}` rather than treating the field colon as ours.
+    const result = matchPatternParser("{ name: n }");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).properties[0]).toMatchObject({
+      type: "objectPatternProperty",
+      key: "name",
+      value: { type: "variableName", value: "n" },
+    });
+  });
+
+  it("does not take a suffix on a pattern kind that cannot carry one", () => {
+    // A literal is not suffixable, so this must not silently become a
+    // typePattern wrapping a string literal.
+    const result = matchPatternParser('["echo", "hi"]');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).elements[1].type).toBe("string");
+  });
+});

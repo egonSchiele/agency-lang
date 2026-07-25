@@ -116,6 +116,7 @@ export const HANDLED_KINDS: readonly string[] = [
   "staticStatement",
   "binOpExpression",
   "tryExpression",
+  "splice",
   "valueAccess",
   "agencyArray",
   "agencyObject",
@@ -321,6 +322,12 @@ export function expressionSlots(node: AgencyNode): ExpressionSlot[] {
       // The whole operand compiles into the __tryCall thunk; moving
       // anything out moves the error boundary.
       return [slot(n.call, "opaque", (o, e) => ({ ...o, call: e }) as AgencyNode)];
+    case "splice":
+      // A splice is NOT a leaf, unlike codeLiteral below. Its expression is
+      // ordinary HOST code — the generator call — and the eligibility check
+      // and expansion pass both need the walker to descend into it. Every
+      // splice is removed before codegen, so no lowering concern applies.
+      return [slot(n.expression, "opaque", (o, e) => ({ ...o, expression: e }) as AgencyNode)];
     case "valueAccess": {
       const out: ExpressionSlot[] = [];
       if (n.base && typeof n.base === "object") {

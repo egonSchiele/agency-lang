@@ -44,6 +44,7 @@ import { SchemaExpression } from "./types/schemaExpression.js";
 import { BlockArgument } from "./types/blockArgument.js";
 import { Hole } from "./types/hole.js";
 import { CodeLiteral } from "./types/codeLiteral.js";
+import { Splice } from "./types/splice.js";
 import {
   ArrayPattern,
   BindingPattern,
@@ -66,6 +67,7 @@ export * from "./types/ifElse.js";
 export * from "./types/importStatement.js";
 export * from "./types/exportFromStatement.js";
 export * from "./types/codeLiteral.js";
+export * from "./types/splice.js";
 export * from "./types/literals.js";
 export * from "./types/matchBlock.js";
 export * from "./types/matchYield.js";
@@ -118,7 +120,11 @@ export type Expression =
   | Hole
   // Templates only: an inline `[| ... |]` template. A host-side leaf —
   // its body is quoted code for the GENERATED program.
-  | CodeLiteral;
+  | CodeLiteral
+  // Templates only: a compile-time splice `$( gen() )`. NOT a leaf — its
+  // expression is host code the walker must descend into. Removed by the
+  // expansion pass before codegen.
+  | Splice;
 
 /**
  * Runtime set of every `type` string in the `Expression` union above. Kept
@@ -150,6 +156,7 @@ export const EXPRESSION_NODE_TYPES: readonly string[] = [
   "interruptStatement",
   "hole",
   "codeLiteral",
+  "splice",
   "blockArgument",
   "isExpression",
   "typeTestExpression",
@@ -382,7 +389,8 @@ export type AgencyNode =
   | ResultPattern
   | TypePattern
   | Hole
-  | CodeLiteral;
+  | CodeLiteral
+  | Splice;
 
 export type AgencyProgram = {
   type: "agencyProgram";

@@ -61,6 +61,7 @@ import {
   effectSetDeclParser,
   effectDeclParser,
   topLevelHoleParser,
+  topLevelSpliceParser,
   valueAccessParser,
   whileLoopParser,
   withModifierParser,
@@ -97,6 +98,9 @@ const nodeParser = or(
   // Top level only, deliberately — this is what keeps `decl` sort out of
   // block bodies (those go through statementHoleParser instead).
   topLevelHoleParser,
+  // Top level only, same reasoning. The expression form is reached through
+  // baseAtom; this entry exists solely to stamp `position: "decl"`.
+  topLevelSpliceParser,
   tagParser,
   withModifierParser,
   modifiedAssignmentParser,

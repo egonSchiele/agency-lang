@@ -24,6 +24,7 @@ import type {
   MatchBlock,
   MatchBlockCase,
   ReturnStatement,
+  VariableType,
   WhileLoop,
 } from "../types.js";
 import { isExpressionNode } from "../types.js";
@@ -1039,9 +1040,51 @@ function patternToCondition(pattern: MatchPattern, source: Expression): Expressi
   return checks.reduce((a, b) => makeBinOp(a, "&&", b, undefined));
 }
 
+/** `is object` — non-null, non-array (lib/runtime/typeTest.ts). */
+const OBJECT_HINT: VariableType = { type: "primitiveType", value: "object" };
+/** `is any[]` — the coarse "is an array" check. */
+const ARRAY_HINT: VariableType = {
+  type: "arrayType",
+  elementType: { type: "primitiveType", value: "any" },
+};
+
+/**
+ * The shape check an object or array pattern emits before reading into a
+ * value: `source != null && __coarseTypeTest(source, kind)`.
+ *
+ * The coarse test alone is enough at runtime — it already rejects null. The
+ * `!= null` in front is there for the TYPE CHECKER: narrowing by `is object`
+ * lands on the opaque `object` type, which has no fields, so
+ * `{ redirect: { op: ">" } }` against a `Redirect | null` field would report
+ * "Property 'op' does not exist on type 'object'". Narrowing by `!= null`
+ * filters the union properly and leaves `Redirect`, and the coarse test that
+ * follows does not clobber that. Two cheap comparisons buy a pattern that
+ * both runs right and typechecks.
+ */
+function shapeCheck(
+  source: Expression,
+  typeHint: VariableType,
+  loc: SourceLocation | undefined,
+): Expression[] {
+  const notNull = makeBinOp(cloneExpr(source), "!=", nullLit(loc), loc);
+  const coarse = {
+    type: "typeTestExpression",
+    expression: cloneExpr(source),
+    typeHint,
+    loc,
+  } as Expression;
+  return [notNull, coarse];
+}
+
 function collectChecks(pattern: MatchPattern, source: Expression, checks: Expression[]): void {
   switch (pattern.type) {
     case "objectPattern":
+      // Shape check FIRST: everything below reads a field off `source`, and a
+      // pattern's job is to answer "does this match", so a value of the wrong
+      // shape has to fail the arm rather than throw on `null.a` — or match by
+      // reading `undefined` off a number. `&&` short-circuits, so this also
+      // makes the reads below safe.
+      checks.push(...shapeCheck(source, OBJECT_HINT, pattern.loc));
       for (const prop of pattern.properties) {
         if (prop.type === "objectPatternProperty") {
           collectChecks(prop.value as MatchPattern, fieldAccess(source, prop.key, pattern.loc), checks);
@@ -1050,6 +1093,10 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       }
       break;
     case "arrayPattern": {
+      // Shape check FIRST, for the same reason — and because `.length` alone
+      // does not distinguish an array from a string: `"abc"` has length 3 and
+      // would otherwise match `[a, b]`, binding characters.
+      checks.push(...shapeCheck(source, ARRAY_HINT, pattern.loc));
       // Length check — at least as many elements as named (excluding rest).
       const hasRest = pattern.elements.some((e) => e.type === "restPattern");
       const namedCount = pattern.elements.filter((e) => e.type !== "restPattern").length;
@@ -1403,6 +1450,14 @@ function boolLit(value: boolean, loc: SourceLocation | undefined): Literal {
   return { type: "boolean", value, loc: loc as SourceLocation };
 }
 
-// Note: no explicit null/undefined checks are emitted. Native JS already throws
-// `TypeError: Cannot read properties of null (reading 'foo')` on `__tmp.foo`,
-// which is sufficient for users to diagnose destructuring failures.
+function nullLit(loc: SourceLocation | undefined): Expression {
+  return { type: "null", loc: loc as SourceLocation } as Expression;
+}
+
+// Note: BINDING extraction emits no null/undefined checks. Native JS already
+// throws `TypeError: Cannot read properties of null (reading 'foo')` on
+// `__tmp.foo`, which is sufficient for users to diagnose a failed
+// destructuring — and `const { name } = null` producing a failure Result is
+// the documented behavior. MATCHING is different: a value that does not match
+// must fail the arm, not throw, so `collectChecks` guards its reads. See
+// `shapeCheck`.

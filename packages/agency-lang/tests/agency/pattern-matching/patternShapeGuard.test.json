@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "nodeName": "nullScrutinee",
+      "description": "An object or array pattern matched against null falls through instead of crashing on a field read.",
+      "input": "",
+      "expectedOutput": "[\"fell through\",\"fell through\",\"fell through\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nullIntermediate",
+      "description": "A nested object pattern whose intermediate field is null falls through. The arm is first, so no earlier check short-circuits the null read away.",
+      "input": "",
+      "expectedOutput": "\"fell through\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "wrongShape",
+      "description": "An object pattern does not match a number and an array pattern does not match a string, even when the pattern is binders only and has no literal to disagree with.",
+      "input": "",
+      "expectedOutput": "[\"fell through\",\"fell through\",\"fell through\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rightShape",
+      "description": "Values of the correct shape still match and still bind.",
+      "input": "",
+      "expectedOutput": "[\"matched\",\"matched 7\",\"matched 12\",\"write out.txt\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

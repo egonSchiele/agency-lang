@@ -180,15 +180,27 @@ describe("object destructuring", () => {
 // ---------------------------------------------------------------------------
 
 describe("`is` operator in boolean context", () => {
-  it("lowers `const r = x is { type: \"foo\" }` to equality check", () => {
+  it("lowers `const r = x is { type: \"foo\" }` to a shape check AND an equality check", () => {
     const lowered = lower(`let x = { type: "foo" }\nconst r = x is { type: "foo" }`);
-    // [x, r = (x.type == "foo")]
+    // [x, r = (isObject(x) && x.type == "foo")]
     expect(lowered).toHaveLength(2);
     const rAssign = lowered[1] as Assignment;
     expect(rAssign.variableName).toBe("r");
     const value = rAssign.value as BinOpExpression;
     expect(value.type).toBe("binOpExpression");
-    expect(value.operator).toBe("==");
+    expect(value.operator).toBe("&&");
+    // The shape check comes first, so the field read on the right is only
+    // reached for a value that has fields — `3 is {type:"foo"}` and
+    // `null is {type:"foo"}` both answer false instead of reading `.type`.
+    // Left is the shape check pair `(x != null && isObject(x))`.
+    const shape = value.left as BinOpExpression;
+    expect(shape.operator).toBe("&&");
+    expect(shape.left).toMatchObject({ type: "binOpExpression", operator: "!=" });
+    expect(shape.right).toMatchObject({
+      type: "typeTestExpression",
+      typeHint: { type: "primitiveType", value: "object" },
+    });
+    expect(value.right).toMatchObject({ type: "binOpExpression", operator: "==" });
   });
 
   it("throws on shorthand binder in pure-boolean `is` context", () => {
@@ -349,12 +361,31 @@ describe("match block lowering", () => {
       ],
     } as MatchBlock;
     const lowered = lowerPatterns([matchBlock]);
-    // [scrutinee, assert (object pattern), s = __scrutinee.s, b = __scrutinee.b, ifElse]
-    const sIdx = lowered.findIndex((n) => n.type === "assignment" && (n as Assignment).variableName === "s");
-    const bIdx = lowered.findIndex((n) => n.type === "assignment" && (n as Assignment).variableName === "b");
+    // [scrutinee,
+    //  if (__scrutinee != null && isObject(__scrutinee)) { s = …, b = …, ifElse }
+    //  else return failure(…)]
+    //
+    // Even a binder-only head pattern carries a shape check now, so the
+    // bindings sit inside the head-pattern guard rather than at the top level.
+    // `match (3 is { s, b })` therefore reports the head mismatch as a failure
+    // instead of binding `undefined` and running an arm.
+    expect(lowered).toHaveLength(2);
+    const headGuard = lowered[1] as IfElse;
+    expect(headGuard.type).toBe("ifElse");
+    const shape = headGuard.condition as BinOpExpression;
+    expect(shape.operator).toBe("&&");
+    expect(shape.left).toMatchObject({ type: "binOpExpression", operator: "!=" });
+    expect(shape.right).toMatchObject({
+      type: "typeTestExpression",
+      typeHint: { type: "primitiveType", value: "object" },
+    });
+
+    const inside = headGuard.thenBody;
+    const sIdx = inside.findIndex((n) => n.type === "assignment" && (n as Assignment).variableName === "s");
+    const bIdx = inside.findIndex((n) => n.type === "assignment" && (n as Assignment).variableName === "b");
     expect(sIdx).toBeGreaterThan(-1);
     expect(bIdx).toBeGreaterThan(sIdx);
-    const ifNode = lowered[lowered.length - 1] as IfElse;
+    const ifNode = inside[inside.length - 1] as IfElse;
     expect(ifNode.type).toBe("ifElse");
     // The first arm condition is the guard `s > 5`
     expect((ifNode.condition as BinOpExpression).operator).toBe(">");

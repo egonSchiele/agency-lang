@@ -1,0 +1,61 @@
+// An object or array pattern must check the value's shape before reading
+// into it. A value of the wrong shape does not match; it must never crash,
+// and must never match by reading `undefined` off something that isn't an
+// object.
+
+type Redirect = { op: string, path: string }
+type Cmd = { words: string[], redirect: Redirect | null }
+
+def objLiteral(x: any): string {
+  return match (x) {
+    { a: 1 } => "matched"
+    _ => "fell through"
+  }
+}
+
+def objBinder(x: any): string {
+  return match (x) {
+    { a } => "matched ${a}"
+    _ => "fell through"
+  }
+}
+
+def arrBinder(x: any): string {
+  return match (x) {
+    [a, b] => "matched ${a}${b}"
+    _ => "fell through"
+  }
+}
+
+def nested(c: Cmd): string {
+  return match (c) {
+    { words: ["echo", ...rest], redirect: { op: ">", path } } => "write ${path}"
+    _ => "fell through"
+  }
+}
+
+node nullScrutinee() {
+  // A null value must fall through, not crash reading a field off null.
+  return [objLiteral(null), objBinder(null), arrBinder(null)]
+}
+
+node nullIntermediate() {
+  // The redirected arm is FIRST, so no earlier `&&` can short-circuit the
+  // null read away. This is the case that crashes today.
+  return nested({ words: ["echo", "hi"], redirect: null })
+}
+
+node wrongShape() {
+  // A number is not an object; a string is not an array. Neither matches.
+  return [objBinder(3), arrBinder("abc"), objLiteral("hello")]
+}
+
+node rightShape() {
+  // Positive controls: correct shapes still match and still bind.
+  return [
+    objLiteral({ a: 1 }),
+    objBinder({ a: 7 }),
+    arrBinder([1, 2]),
+    nested({ words: ["echo", "hi"], redirect: { op: ">", path: "out.txt" } }),
+  ]
+}

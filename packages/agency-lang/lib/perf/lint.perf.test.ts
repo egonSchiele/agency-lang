@@ -49,7 +49,9 @@ describe("lint rule scaling (per rule)", () => {
         [LARGE]: ctxFor(fixture(LARGE)),
       };
 
-      // Work-happened: a silently-empty fixture would measure nothing and pass.
+      // Work-happened, both measurement points: a silently-degenerate fixture
+      // at either size would make the ratio meaningless.
+      expect(rule.run(ctxBySize[SMALL]).length).toBe(SMALL);
       expect(rule.run(ctxBySize[LARGE]).length).toBe(LARGE);
 
       const build = (n: number) => () => rule.run(ctxBySize[n]);

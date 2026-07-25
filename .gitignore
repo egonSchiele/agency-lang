@@ -6,6 +6,8 @@
 # so the intent survives if the broad dot-rule is ever narrowed.
 .agency-build/
 **/index.mts
+# Perf suite output (written to cwd by the harness recorder).
+**/perf-results.jsonl
 **/__evaluate.*
 **/__judge*
 **/tests/**/*.evaluate.js

@@ -2,60 +2,17 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import {
-  measureMs,
-  growthFactor,
-  expectPerf,
-  GROWTH_BOUND,
-} from "./harness.js";
+import { growthFactor, expectPerf } from "./harness.js";
 
-// A linear closure: O(n) work whose result is returned (so it is not
-// dead-code-eliminated). Sized so a single call is comfortably measurable.
-function linearWork(n: number): () => number {
-  const arr = Array.from({ length: n }, (_, i) => i);
-  return () => {
-    let sum = 0;
-    for (let i = 0; i < arr.length; i++) sum += arr[i];
-    return sum;
-  };
-}
+// Only the deterministic (timing-independent) harness tests live here, in the
+// default unit suite. The timing-dependent ones (measureMs, canary,
+// self-consistency) are in harness.perf.test.ts — the default suite runs files
+// in parallel, and a `< GROWTH_BOUND` assertion on real timings could flake
+// under that contention and block a merge. The serialized perf suite runs them
+// safely.
 
-// A quadratic closure: O(n^2) work. At an 8x step this grows ~64x, so its
-// normalized growth factor is ~8 — far above the bound.
-function quadraticWork(n: number): () => number {
-  return () => {
-    let sum = 0;
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) sum += i ^ j;
-    }
-    return sum;
-  };
-}
-
-describe("perf harness", () => {
-  it("measureMs returns a positive, roughly stable time", () => {
-    const fn = linearWork(200_000);
-    const a = measureMs(fn);
-    const b = measureMs(fn);
-    expect(a).toBeGreaterThan(0);
-    // Same closure twice: within a wide tolerance (CI noise), not identical.
-    expect(Math.max(a, b) / Math.min(a, b)).toBeLessThan(5);
-  });
-
-  it("canary: a quadratic algorithm's growth factor is well above the bound", () => {
-    const factor = growthFactor(quadraticWork, 500, 4000);
-    // Normalized quadratic ≈ 8 at an 8x step; assert it clears the bound with room.
-    expect(factor).toBeGreaterThan(GROWTH_BOUND * 1.5);
-  });
-
-  it("self-consistency: a linear algorithm's growth factor is below the bound", () => {
-    // This is the test the old RATIO_BOUND=8-vs-8x-step design would have failed
-    // on correct code: a raw ratio of ~8 is not < 8. Normalization makes it ~1.
-    const factor = growthFactor(linearWork, 500_000, 4_000_000);
-    expect(factor).toBeLessThan(GROWTH_BOUND);
-  });
-
-  it("schedule: samples are interleaved, order-alternated, and warmed up front", () => {
+describe("growthFactor schedule", () => {
+  it("interleaves, order-alternates, and warms both sizes up front", () => {
     const log: number[] = [];
     const build = (n: number) => () => {
       log.push(n);
@@ -65,17 +22,14 @@ describe("perf harness", () => {
     const rounds = 4;
     growthFactor(build, 1, 8, { warmup, rounds });
 
-    // Warmup prefix: `warmup` calls of small, then `warmup` of large — both
-    // sizes warmed before any timed round.
-    const prefix = log.slice(0, 2 * warmup);
-    expect(prefix).toEqual([1, 1, 8, 8]);
+    // Warmup prefix: `warmup` calls of small, then `warmup` of large.
+    expect(log.slice(0, 2 * warmup)).toEqual([1, 1, 8, 8]);
 
     // Timed portion: `rounds` pairs, order alternating small→large, large→small.
     const timed = log.slice(2 * warmup);
     expect(timed).toHaveLength(2 * rounds);
     for (let r = 0; r < rounds; r++) {
-      const pair = timed.slice(2 * r, 2 * r + 2);
-      expect(pair).toEqual(r % 2 === 0 ? [1, 8] : [8, 1]);
+      expect(timed.slice(2 * r, 2 * r + 2)).toEqual(r % 2 === 0 ? [1, 8] : [8, 1]);
     }
   });
 });
@@ -118,6 +72,11 @@ describe("expectPerf recorder and gate", () => {
   it("throws on a breach when PERF_ENFORCE is set", () => {
     process.env.PERF_ENFORCE = "1";
     expect(() => expectPerf("test:breach", 9.0, 2.0)).toThrow(/perf regression/);
+  });
+
+  it("treats PERF_ENFORCE=0 as OFF (does not gate)", () => {
+    process.env.PERF_ENFORCE = "0";
+    expect(() => expectPerf("test:breach", 9.0, 2.0)).not.toThrow();
   });
 
   it("does not throw when under bound even with PERF_ENFORCE set", () => {

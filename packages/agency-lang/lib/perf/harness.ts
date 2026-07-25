@@ -14,6 +14,17 @@ export const GROWTH_BOUND = 2.0;
 export const WARMUP = 2;
 export const RUNS = 7;
 
+// Floor for a single timing before it goes into a ratio (guards divide-by-zero).
+const MIN_MS = 1e-4;
+
+/** Gating is on only when PERF_ENFORCE is set to a real truthy value. Treats
+ *  "0"/"false"/"" as off so `PERF_ENFORCE=0` doesn't accidentally enable it
+ *  (plain `Boolean("0")` is true). */
+function perfEnforceEnabled(): boolean {
+  const v = process.env.PERF_ENFORCE;
+  return v !== undefined && v !== "" && v !== "0" && v.toLowerCase() !== "false";
+}
+
 function median(xs: number[]): number {
   const sorted = [...xs].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -76,7 +87,9 @@ export function growthFactor(
       tLarge = timeOnce(largeFn);
       tSmall = timeOnce(smallFn);
     }
-    ratios.push(tLarge / tSmall);
+    // Floor each timing so a sample that measures as 0ms degrades to a finite
+    // ratio instead of Infinity/NaN poisoning the median.
+    ratios.push(Math.max(tLarge, MIN_MS) / Math.max(tSmall, MIN_MS));
   }
   return median(ratios) / (large / small);
 }
@@ -101,7 +114,7 @@ function recordResult(rec: PerfRecord): void {
 export function expectPerf(label: string, actual: number, bound: number): void {
   const pass = actual < bound;
   recordResult({ label, value: actual, bound, pass });
-  const enforce = Boolean(process.env.PERF_ENFORCE);
+  const enforce = perfEnforceEnabled();
   const line = `${pass ? "PASS" : "BREACH"} ${label}: ${actual.toFixed(3)} (bound ${bound})`;
   if (enforce && !pass) {
     throw new Error(`perf regression: ${line}`);

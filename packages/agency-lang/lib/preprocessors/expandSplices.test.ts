@@ -323,6 +323,20 @@ describe("expandSplices", () => {
     expect(result.diagnostic.params.name).toBe("size");
   });
 
+  it("allows a builtin as an argument", () => {
+    // Builtins come from the language, not the file, so they exist before
+    // it does. Refusing them made `$( gen(__dirname) )` fail with a
+    // message saying __dirname was declared in this file.
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def here(d: string): Code {\n  return [| 1 |]\n}\n`,
+    );
+    const result = expand(
+      `import { here } from "./gen.agency"\n\ndef f(): number {\n  return $( here(__dirname) )\n}\n`,
+    );
+    expect(result.ok).toBe(true);
+  }, 60_000);
+
   it("allows an argument naming something the host imported", () => {
     write("data.agency", `export static const LIMIT = 4\n`);
     write(

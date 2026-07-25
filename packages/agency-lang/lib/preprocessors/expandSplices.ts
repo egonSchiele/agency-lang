@@ -275,12 +275,17 @@ function calleeName(splice: Splice): string | null {
  * `size` is not a top-level name, so a blocklist lets it through, and the
  * user gets a ReferenceError from a program they never wrote instead of
  * the AG8011 that exists to explain this.
+ *
+ * Builtins are allowed alongside imports. They are supplied by the
+ * language rather than by the file, so they exist before it does.
  */
 function checkArgumentsAvailable({
   splice,
   argumentSources,
 }: DecisionContext): SpliceDiagnostic | null {
-  const unresolved = argumentSources.find((source) => source.source === null);
+  const unresolved = argumentSources.find(
+    (entry) => entry.source === null && !BUILTIN_VARIABLES.includes(entry.name),
+  );
   if (unresolved !== undefined) {
     return {
       diagnostic: "spliceArgumentNotAvailable",
@@ -311,10 +316,14 @@ function checkArgumentsAvailable({
  * the name of one export.
  */
 function checkArgumentModule(modulePath: string): SpliceDiagnostic | null {
+  // Named for what it is to the reader: the module a splice argument came
+  // from, not a generator. The diagnostics say "the generator `{name}`",
+  // so a bare filename here would misdescribe the file it names.
+  const role = `the argument module ${path.basename(modulePath)}`;
   const checks = [
-    () => checkImportGraph(modulePath, path.basename(modulePath)),
-    () => checkNoNestedSplice(modulePath, path.basename(modulePath)),
-    () => checkArgumentModuleEffects(modulePath),
+    () => checkImportGraph(modulePath, role),
+    () => checkNoNestedSplice(modulePath, role),
+    () => checkArgumentModuleEffects(modulePath, role),
   ];
   return checks.reduce<SpliceDiagnostic | null>(
     (found, check) => found ?? check(),
@@ -324,8 +333,11 @@ function checkArgumentModule(modulePath: string): SpliceDiagnostic | null {
 
 /** An argument module is not a generator, so every export it has is
  *  checked rather than one named one. */
-function checkArgumentModuleEffects(modulePath: string): SpliceDiagnostic | null {
-  return checkEffects(modulePath, path.basename(modulePath), {}, true);
+function checkArgumentModuleEffects(
+  modulePath: string,
+  role: string,
+): SpliceDiagnostic | null {
+  return checkEffects(modulePath, role, {}, true);
 }
 
 /** Every free name a splice's arguments use, with where it comes from. */

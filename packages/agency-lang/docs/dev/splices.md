@@ -24,7 +24,9 @@ parsed[absPath] = { symbols: classifySymbols(program), program };
 
 ## Every path that must expand
 
-Six, and missing one is the failure mode to worry about. It produces a file that compiles fine through one entry point and crashes through another.
+Seven, and missing one is the failure mode to worry about. It produces a file that works through one entry point and misbehaves through another.
+
+The list below was originally derived from where `liftCallbackBlocks` runs, and that was the wrong oracle: `agency tc` calls neither. Anything that parses a file and then reads what it declares needs expansion, so the honest way to find them all is to check every caller of `buildCompilationUnit`.
 
 | Where | On failure |
 | --- | --- |
@@ -34,6 +36,7 @@ Six, and missing one is the failure mode to worry about. It produces a file that
 | `lib/compiler/typecheck.ts` (`runCheckerPipeline`) | Keep the unexpanded program. This pipeline answers "what does this check as"; reporting belongs to the compile paths. |
 | `lib/analysis/interrupts.ts` (`analyzeOneFile`) | Keep the unexpanded program. Refusing to analyze interrupts because a splice failed would be worse than analyzing what is there. |
 | `lib/lsp/diagnostics.ts` (`computeDiagnostics`) | Report it as an editor diagnostic. This is the only path where the user is looking at the file while the generator is broken. |
+| `scripts/agency.ts` (the `typecheck`/`tc` command) | Print and mark the run failed. Has its own pipeline and reaches none of the shared ones. Skipped for stdin, which has no path to resolve a generator against. |
 
 The map of paths is the same one `liftCallbackBlocks` marks. If a sixth appears, it will need both.
 

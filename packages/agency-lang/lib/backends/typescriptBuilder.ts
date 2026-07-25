@@ -511,7 +511,7 @@ export class TypeScriptBuilder {
     }
 
     // A tripwire. Expansion removes every splice before codegen, so one
-    // reaching here means a compile path skipped expandSplices, and six
+    // reaching here means a compile path skipped expandSplices, and seven
     // must run it. Without this the symptom is a raw "Unhandled Agency
     // node type" stack trace that says nothing about the real mistake.
     const unexpanded = [...walkNodesArray(program.nodes)].filter(

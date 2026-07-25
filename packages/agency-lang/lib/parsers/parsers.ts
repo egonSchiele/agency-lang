@@ -3073,8 +3073,14 @@ export function parseCodeLiteralBody(body: string, base?: Position): ParsedLiter
           ? { success: true, result: { nodes: result.nodes }, rest: "" }
           : failure(result.error, input);
       },
-      sentineled,
-      { basePosition: base },
+      // `trimmed`, like the two attempts above, not the raw body. The
+      // program grammar ends in `eof` and does not skip leading spaces, so
+      // a one-line body such as `[| def f(): string { } |]` handed it
+      // " def f(): string { } " and failed on the leading space alone. A
+      // leading NEWLINE was fine, which is why multi-line bodies worked
+      // and single-line ones did not.
+      trimmed,
+      { basePosition: trimmedBase },
     );
     if (asProgram.success) {
       return { ok: true, nodes: asProgram.result.nodes, kind: "program" };

@@ -29,6 +29,70 @@ function stringTextOf(node: AgencyNode): string {
     .join("");
 }
 
+describe("code literals: single-line bodies", () => {
+  // The program grammar ends in `eof` and does not skip leading spaces,
+  // and the body of `[| ... |]` on one line begins with one. A leading
+  // newline was fine, so multi-line bodies worked and single-line ones
+  // did not, which made the difference look like a rule about
+  // definitions rather than about whitespace.
+  it("parses a one-line def, which needs the program grammar", () => {
+    const lit = firstLiteral(`def f(): Code {\n  return [| def greet(): string { return "hi" } |]\n}\n`);
+    expect(lit.kind).toBe("program");
+    expect(lit.nodes.map((node) => node.type)).toContain("function");
+  });
+
+  it("parses a one-line def with an empty body", () => {
+    const lit = firstLiteral(`def f(): Code {\n  return [| def greet(): string { } |]\n}\n`);
+    expect(lit.kind).toBe("program");
+  });
+
+  it("parses a one-line node", () => {
+    const lit = firstLiteral(`def f(): Code {\n  return [| node main(): number { return 1 } |]\n}\n`);
+    expect(lit.nodes.map((node) => node.type)).toContain("graphNode");
+  });
+
+  it("agrees with the same text written across lines", () => {
+    const oneLine = firstLiteral(`def f(): Code {\n  return [| def greet(): string { return "hi" } |]\n}\n`);
+    const multiLine = firstLiteral(
+      `def f(): Code {\n  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]\n}\n`,
+    );
+    expect(oneLine.kind).toBe(multiLine.kind);
+    expect(oneLine.nodes.map((node) => node.type)).toEqual(
+      multiLine.nodes.map((node) => node.type),
+    );
+  });
+
+  it("keeps node positions in enclosing-file coordinates", () => {
+    // Trimming the body before the program attempt moves what the parser
+    // sees, so the base position moves with it. Splices stamp loc.origin
+    // on grafted nodes and error attribution rides on these numbers, so a
+    // silent shift here would misplace every error inside generated code.
+    //
+    // Both point at the `d` of `def` in the enclosing file. Line and
+    // column are 0-indexed (docs/dev/locations.md).
+    const multiLine = firstLiteral(
+      `def f(): Code {\n  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]\n}\n`,
+    );
+    expect(multiLine.nodes[0].loc).toMatchObject({ line: 2, col: 4 });
+
+    const oneLine = firstLiteral(
+      `def f(): Code {\n  return [| def greet(): string { return "hi" } |]\n}\n`,
+    );
+    expect(oneLine.nodes[0].loc).toMatchObject({ line: 1, col: 12 });
+  });
+
+  it("does not emit a leading newline node for a multi-line body", () => {
+    // The one behaviour that did change. The program attempt used to see
+    // the untrimmed body, so `[|\n  def ... |]` produced a `newLine` node
+    // ahead of the definition. The expr and statements attempts always
+    // trimmed; this makes the third agree with them.
+    const multiLine = firstLiteral(
+      `def f(): Code {\n  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]\n}\n`,
+    );
+    expect(multiLine.nodes.map((node) => node.type)).toEqual(["function"]);
+  });
+});
+
 describe("code literals: kind inference", () => {
   it("a lone expression infers expr", () => {
     const lit = firstLiteral(`node main() {\n  const t = [| 1 + 2 |]\n}\n`);

@@ -2,6 +2,7 @@
 import { declaredName } from "../types/hole.js";
 import { printCodeLiteralBody } from "./agencyGenerator.js";
 import { holeNames } from "../utils/holes.js";
+import { walkNodesArray } from "../utils/node.js";
 import { DIAGNOSTICS, renderMessage } from "../typeChecker/diagnostics.js";
 import {
   AgencyComment,
@@ -507,6 +508,27 @@ export class TypeScriptBuilder {
         names: unfilled.map((name) => `#${name}`).join(", "),
       });
       throw new Error(`${DIAGNOSTICS.unfilledHoles.code}: ${rendered}`);
+    }
+
+    // Same shape as the hole refusal above, for the same reason. Every
+    // splice is removed by the expansion pass before codegen, so reaching
+    // one here means expansion did not run. Without this guard that lands
+    // as a raw "Unhandled Agency node type" stack trace from processNode.
+    //
+    // Until the expansion pass ships (Task 7 of the compile-time-splices
+    // plan) this is the ONLY thing a splice does, which is deliberate: a
+    // clean refusal is a safe intermediate state, an internal crash is not.
+    const spliceCount = [...walkNodesArray(program.nodes)].filter(
+      (visit) => visit.node.type === "splice",
+    ).length;
+    if (spliceCount > 0) {
+      // Deliberately NOT an AG code. The registry is append-only and its
+      // explanations are exhaustive by type, so a code minted here would
+      // outlive the scaffolding it describes. Task 7 deletes this block.
+      throw new Error(
+        "This file contains a compile-time splice `$( ... )`, which cannot be " +
+          "compiled yet: splice expansion is not implemented. Remove the splice.",
+      );
     }
 
     // Plain top-level aliases in source order — the basis for the derived

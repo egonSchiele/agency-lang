@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
-import { collectBodyFacts, propagateToFixpoint } from "./effects.js";
+import { collectBodyFacts } from "./bodyFacts.js";
+import { propagateToFixpoint } from "./effects.js";
 import type { FunctionDefinition } from "../types/function.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -13,17 +14,47 @@ import { safeDeleteDirectory } from "../utils.js";
  *  not walkNodes: the point is a second opinion about what is in the tree, so
  *  that a gap in walkNodes's hand-written descent shows up as a disagreement
  *  rather than as silence. */
-function scanRaw(value: unknown, types: string[], found: string[]): void {
+/**
+ * Nodes of the given types, found by walking raw object properties.
+ *
+ * `matchYield.typeSource` is skipped, because `walkNodes` does not descend
+ * into it — a pre-existing gap in the walker that hides 83 calls in the
+ * standard library from EVERY analysis in the compiler, not only this one.
+ * Excluding it here keeps this tripwire strict about everything else instead
+ * of failing permanently on a gap this branch did not introduce. Removing the
+ * exclusion is the test for a fix.
+ */
+const WALKER_GAPS = ["matchYield.typeSource"];
+
+function scanRaw(
+  value: unknown,
+  types: string[],
+  found: Record<string, unknown>[],
+  slot = "",
+): void {
+  if (WALKER_GAPS.includes(slot)) return;
   if (Array.isArray(value)) {
-    for (const item of value) scanRaw(item, types, found);
+    for (const item of value) scanRaw(item, types, found, slot);
     return;
   }
   if (value === null || typeof value !== "object") return;
   const node = value as Record<string, unknown>;
   if (typeof node.type === "string" && types.includes(node.type)) {
-    found.push(node.type);
+    found.push(node);
   }
-  for (const child of Object.values(node)) scanRaw(child, types, found);
+  for (const [key, child] of Object.entries(node)) {
+    scanRaw(child, types, found, `${String(node.type ?? "?")}.${key}`);
+  }
+}
+
+/** Every .agency file under a directory, recursively. The interesting
+ *  constructs live in stdlib/agents/ and stdlib/data/, not at the top level. */
+function agencyFilesUnder(dir: string): string[] {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return agencyFilesUnder(full);
+    return entry.name.endsWith(".agency") ? [path.resolve(full)] : [];
+  });
 }
 
 /** Parse with applyTemplate false so the injected prelude import stays out of
@@ -165,58 +196,64 @@ describe("propagateToFixpoint", () => {
 });
 
 describe("the walk sees everything a raw scan sees", () => {
-  it("finds calls and interrupts in every standard library body that has them", () => {
-    const types = ["functionCall", "interruptStatement", "guardBlock"];
-    const files = fs
-      .readdirSync("stdlib")
-      .filter((name) => name.endsWith(".agency"))
-      .map((name) => path.resolve("stdlib", name));
+  it("finds every call and interrupt the standard library contains", () => {
+    // Identity comparison, not a count: both readings walk the same tree, so
+    // every node the raw scan finds must be the very node the walk reports. A
+    // "non-empty" assertion would pass for a body with ten calls where the
+    // walk found one, which is exactly the drift this has to catch.
+    const files = agencyFilesUnder("stdlib");
+    const missed: string[] = [];
 
-    const disagreements: string[] = [];
     for (const file of files) {
       const parsed = parseAgencyFileCached(file, {}, false);
       if (!parsed.success) continue;
       for (const decl of parsed.result.nodes) {
         if (decl.type !== "function" && decl.type !== "graphNode") continue;
-        const raw: string[] = [];
-        scanRaw(decl.body, types, raw);
-        if (raw.length === 0) continue;
         const facts = collectBodyFacts(decl.body);
-        if (facts.calls.length + facts.effects.length === 0) {
-          disagreements.push(
-            `${path.basename(file)}: a body with ${raw.length} call-bearing nodes read as empty`,
-          );
+
+        const rawCalls: Record<string, unknown>[] = [];
+        scanRaw(decl.body, ["functionCall"], rawCalls);
+        for (const call of rawCalls) {
+          if (!(facts.calls as unknown[]).includes(call)) {
+            missed.push(`${path.basename(file)}: call '${String(call.functionName)}'`);
+          }
+        }
+
+        const rawInterrupts: Record<string, unknown>[] = [];
+        scanRaw(decl.body, ["interruptStatement"], rawInterrupts);
+        for (const site of rawInterrupts) {
+          if (!facts.effects.includes(String(site.effect))) {
+            missed.push(`${path.basename(file)}: effect '${String(site.effect)}'`);
+          }
         }
       }
     }
-    expect(disagreements).toEqual([]);
+    expect(missed).toEqual([]);
   });
 });
 
-describe("the .invoke() call form", () => {
-  it("records the receiver, not the method name", () => {
+describe("method calls in an access chain", () => {
+  it("records no callee for a method call", () => {
+    // `partial` is a method on a function value, not a global. Recording it
+    // would attribute any same-named function's effects to this call site.
     const facts = collectBodyFacts(
-      bodyOf(`def f(): string { return read.invoke("x") }`),
-    );
-    expect(facts.callees).toEqual(["read"]);
-  });
-
-  it("records the receiver when invoke follows another chain link", () => {
-    // `f.partial(...)` and `f.rename(...)` are ordinary Agency, so invoke is
-    // often not the first link. tests/agency-js/http-post/agent.agency:28
-    const facts = collectBodyFacts(
-      bodyOf(`def f(): string { return fetchJSON.partial(method: "GET").invoke() }`),
-    );
-    expect(facts.callees).toEqual(["fetchJSON"]);
-  });
-
-  it("attributes nothing when the receiver is not a plain variable", () => {
-    // obj.handler.invoke() calls whatever obj.handler holds, which needs types.
-    // Attributing it to obj would be wrong, not merely imprecise.
-    const facts = collectBodyFacts(
-      bodyOf(`def f(): string { return obj.handler.invoke("x") }`),
+      bodyOf(`def f(): string { return fetchJSON.partial(method: "GET") }`),
     );
     expect(facts.callees).toEqual([]);
+  });
+
+  it("records no callee for a method call on a property path", () => {
+    const facts = collectBodyFacts(
+      bodyOf(`def f(): string { return obj.handler.rename("x") }`),
+    );
+    expect(facts.callees).toEqual([]);
+  });
+
+  it("still records a plain call in the same body", () => {
+    const facts = collectBodyFacts(
+      bodyOf(`def f(): string {\n  const t = fetchJSON.rename("x")\n  return g()\n}`),
+    );
+    expect(facts.callees).toEqual(["g"]);
   });
 });
 

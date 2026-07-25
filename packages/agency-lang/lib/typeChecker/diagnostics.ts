@@ -600,7 +600,7 @@ export const DIAGNOSTICS = {
     code: "AG8003",
     severity: "error",
     message:
-      "Generator '{name}' may raise '{effect}', so it cannot run at compile time. Compilation installs no interrupt handlers, so the operation could not complete anyway. Move the effectful work out of the generator.",
+      "Generator '{name}' may raise {effects}, so it cannot run at compile time. Compilation installs no interrupt handlers, so those operations could not complete anyway. Move the effectful work out of the generator.",
   },
   spliceGeneratorUnreadable: {
     code: "AG8004",

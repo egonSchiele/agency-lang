@@ -1,18 +1,13 @@
 /**
- * How an interrupt-effect list is computed. One module, because two copies of
- * this drifted apart and an effect came to mean different things on either
- * side of an import — GitHub issue 680.
+ * Propagating effects along call edges, across files.
  *
- * Two things live here: reading one body, and propagating along call edges.
- * The type checker adds type-aware work on top of the first and must never
- * subtract from it.
+ * Runs once at the end of SymbolTable.build over the parse trees the crawl
+ * already produced. Reading a single body lives in ./bodyFacts.js; this module
+ * is about what travels between bodies.
  */
-import { walkNodes, type WalkAncestor } from "../utils/node.js";
+import { walkNodes } from "../utils/node.js";
 import type { AgencyNode } from "../types.js";
-import type { FunctionCall } from "../types/function.js";
-import type { ValueAccess } from "../types/access.js";
-import type { InterruptStatement } from "../types/interruptStatement.js";
-import type { GotoStatement } from "../types/gotoStatement.js";
+import { collectBodyFacts, unique } from "./bodyFacts.js";
 import { declaredName } from "../types/hole.js";
 import type { AgencyProgram } from "../types.js";
 import type { FunctionDefinition } from "../types/function.js";
@@ -23,120 +18,6 @@ import type {
   ResolvedImport,
   SymbolTable,
 } from "../symbolTable.js";
-
-export type BodyFacts = {
-  /** Effect labels raised by a literal `interrupt` in this body. */
-  effects: string[];
-  /** Local names of everything this body calls, unresolved. */
-  callees: string[];
-  /** Every call node seen. Handed back so the type checker can read call
-   *  arguments without walking the body a second time. */
-  calls: FunctionCall[];
-};
-
-/** One yielded step of the walk. walkNodes also hands back `scopes`, which
- *  nothing here needs. */
-type Visit = { node: AgencyNode; ancestors: WalkAncestor[] };
-
-const isInterrupt = (
-  visit: Visit,
-): visit is Visit & { node: InterruptStatement } =>
-  visit.node.type === "interruptStatement";
-
-const isCall = (visit: Visit): visit is Visit & { node: FunctionCall } =>
-  visit.node.type === "functionCall";
-
-const isGoto = (visit: Visit): visit is Visit & { node: GotoStatement } =>
-  visit.node.type === "gotoStatement";
-
-/** A guard becomes a `_guard` call in the TypeChecker constructor. The symbol
- *  table walks the tree before that, so the call is not there yet. */
-const isGuard = (visit: Visit): boolean => visit.node.type === "guardBlock";
-
-export function collectBodyFacts(body: AgencyNode[]): BodyFacts {
-  const visits: Visit[] = [...walkNodes(body)];
-  const calls = visits.filter(isCall);
-  return {
-    effects: unique(
-      visits.filter(isInterrupt).map((visit) => visit.node.effect),
-    ),
-    callees: unique([
-      ...visits.filter(isGuard).map(() => "_guard"),
-      ...calls
-        .map((visit) => calledName(visit.node, visit.ancestors))
-        .filter((name): name is string => name !== null),
-      ...visits.filter(isGoto).map((visit) => visit.node.nodeCall.functionName),
-    ]),
-    calls: calls.map((visit) => visit.node),
-  };
-}
-
-/**
- * The name a call site names, or null when it names nothing this analysis can
- * use.
- *
- * A plain `g(...)` names `g`. A method call inside an access chain does not
- * name a global function at all — `xs.map(...)` calls a method on a value, and
- * recording `map` would collide with any global of that name. The type checker
- * excludes these for the same reason (functionTypeRaises.ts:106).
- *
- * `.invoke()` is the exception, because it means "call the receiver", and it
- * is the call form this project's style prefers. See invokeReceiver.
- */
-export function calledName(
-  node: FunctionCall,
-  ancestors: WalkAncestor[],
-): string | null {
-  const access = enclosingAccess(node, ancestors);
-  if (!access) return node.functionName;
-  return node.functionName === "invoke" ? invokeReceiver(node, access) : null;
-}
-
-/**
- * The function `x.invoke(...)` actually calls.
- *
- * Attributes to the base only when every chain link before `invoke` is itself a
- * method call. `f.partial(method: "GET").invoke()` still calls `f`, because
- * `partial` and `rename` return a derived version of the same function. But
- * `obj.handler.invoke()` calls whatever `obj.handler` holds, and a `property`
- * link in the chain means the receiver is a path this analysis cannot resolve
- * without types.
- */
-function invokeReceiver(node: FunctionCall, access: ValueAccess): string | null {
-  if (access.base.type !== "variableName") return null;
-  const index = access.chain.findIndex(
-    (link) => link.kind === "methodCall" && link.functionCall === node,
-  );
-  const reachesBase = access.chain
-    .slice(0, index)
-    .every((link) => link.kind === "methodCall");
-  return reachesBase ? access.base.value : null;
-}
-
-/**
- * The access chain this call is a link of, or null when the call stands alone.
- *
- * Scans the ancestors backwards rather than trusting the last one, because
- * walkNodes descends an assignment's own access chain passing the assignment as
- * the ancestor, so the access is not always adjacent. Identity of the call node
- * is what distinguishes the link we are standing on from its neighbours.
- */
-function enclosingAccess(
-  node: FunctionCall,
-  ancestors: WalkAncestor[],
-): ValueAccess | null {
-  const access = [...ancestors]
-    .reverse()
-    .filter(
-      (ancestor): ancestor is ValueAccess => ancestor.type === "valueAccess",
-    )
-    .find((candidate) =>
-      candidate.chain.some(
-        (link) => link.kind === "methodCall" && link.functionCall === node,
-      ),
-    );
-  return access ?? null;
-}
 
 export type PropagationNode = {
   effects: string[];
@@ -201,17 +82,6 @@ function callerIndex(
   return callers;
 }
 
-/** Deduplicate, preserving first-seen order. The declarative counterpart to
- *  addUnique, for code that builds a list rather than growing one. */
-export function unique(values: string[]): string[] {
-  return values.filter((value, index) => values.indexOf(value) === index);
-}
-
-/** Grow a list in place. Kept for the fixpoint and for the type checker's
- *  handler analysis, which accumulate rather than build. */
-export function addUnique(arr: string[], value: string): void {
-  if (!arr.includes(value)) arr.push(value);
-}
 
 /** Where a name is really defined, after renaming and re-export. */
 export type Origin = { file: string; name: string };
@@ -219,10 +89,12 @@ export type Origin = { file: string; name: string };
 type EffectSummary = PropagationNode & Origin;
 
 /** Two files can define the same top-level name and an import can rename one,
- *  so a bare name is not an identity. The key is never parsed back apart —
- *  every summary carries its own file and name. */
+ *  so a bare name is not an identity. NUL separates because it cannot occur in
+ *  a path or an identifier; a space can, and would let distinct pairs collide.
+ *  The key is never parsed back apart — every summary carries its own file and
+ *  name. */
 function keyOf(origin: Origin): string {
-  return `${origin.file} ${origin.name}`;
+  return `${origin.file}\u0000${origin.name}`;
 }
 
 function summaryAt(
@@ -411,6 +283,31 @@ export function originOf(table: SymbolTable, at: Origin): Origin {
   return from
     ? originOf(table, { file: from.sourceFile, name: from.originalName })
     : at;
+}
+
+/**
+ * Every name this file can call: the functions and nodes it declares, plus
+ * every imported name that resolves to one.
+ *
+ * The file's own symbols are not enough — `read` reaches a file through the
+ * injected prelude import, so a check that only looked locally would decide
+ * `read` is not callable.
+ */
+export function callableNamesIn(
+  table: SymbolTable,
+  program: AgencyProgram,
+  file: string,
+): string[] {
+  const local = Object.entries(table.getFile(file) ?? {})
+    .filter(([, sym]) => sym.kind === "function" || sym.kind === "node")
+    .map(([name]) => name);
+  const imported = importsOf(table, program, file)
+    .filter(
+      (resolved) =>
+        resolved.symbol.kind === "function" || resolved.symbol.kind === "node",
+    )
+    .map((resolved) => resolved.localName);
+  return unique([...local, ...imported]);
 }
 
 /**

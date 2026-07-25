@@ -33,7 +33,7 @@ node main() {
 
 <a id="ag8003"></a>
 
-## AG8003 — Generator '&#123;name&#125;' may raise '&#123;effect&#125;', so it cannot run at compile time. Compilation installs no interrupt handlers, so the operation could not complete anyway. Move the effectful work out of the generator.
+## AG8003 — Generator '&#123;name&#125;' may raise &#123;effects&#125;, so it cannot run at compile time. Compilation installs no interrupt handlers, so those operations could not complete anyway. Move the effectful work out of the generator.
 
 *Default severity: error.*
 

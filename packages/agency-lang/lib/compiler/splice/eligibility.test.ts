@@ -6,9 +6,9 @@ import { safeDeleteDirectory } from "../../utils.js";
 import { parseAgency } from "../../parser.js";
 import {
   checkImportGraph,
-  resolveGeneratorModule,
-  checkGeneratorEffects
+  resolveGeneratorModule
 } from "./eligibility.js";
+import { checkGeneratorEffects } from "./generatorEffects.js";
 import type { AgencyProgram } from "../../types.js";
 
 let dir: string;
@@ -152,7 +152,7 @@ describe("checkGeneratorEffects", () => {
     );
     const result = checkGeneratorEffects(gen, "makeThing", {});
     expect(result?.diagnostic).toBe("spliceGeneratorRaises");
-    expect(result?.params.effect).toBe("std::read");
+    expect(result?.params.effects).toBe("std::read");
   });
 
   it("allows a clean generator that imports from a messy file", () => {
@@ -214,5 +214,47 @@ describe("checkGeneratorEffects", () => {
     const result = checkGeneratorEffects(gen, "makeThing", {});
     expect(result?.diagnostic).toBe("spliceGeneratorUnreadable");
     expect(String(result?.params.reason)).toMatch(/does not parse/);
+  });
+});
+
+describe("checkGeneratorEffects narrowing", () => {
+  it("allows a generator that renames an ordinary value", () => {
+    // `title` and `label` are strings. Treating any alias as a held function
+    // reference refused this, which defeats the point of scoping blind spots
+    // to the call graph rather than to files.
+    const gen = write(
+      "gen.agency",
+      `export def build(x: string): string {\n  return x\n}\n\n` +
+        `export def makeThing(title: string): string {\n  const label = title\n  return build(label)\n}\n`,
+    );
+    expect(checkGeneratorEffects(gen, "makeThing", {})).toBeNull();
+  });
+
+  it("refuses a reference passed as a named argument", () => {
+    write(
+      "helper.agency",
+      `export def clean(): string {\n  const fn = read\n  return runIt(cb: fn)\n}\n`,
+    );
+    const gen = write(
+      "gen.agency",
+      `import { clean } from "./helper.agency"\n\nexport def makeThing(): string {\n  return clean()\n}\n`,
+    );
+    expect(checkGeneratorEffects(gen, "makeThing", {})?.diagnostic).toBe(
+      "spliceGeneratorUnreadable",
+    );
+  });
+
+  it("refuses a reference passed through a splat", () => {
+    write(
+      "helper.agency",
+      `export def clean(): string {\n  const fn = read\n  return runIt(...fn)\n}\n`,
+    );
+    const gen = write(
+      "gen.agency",
+      `import { clean } from "./helper.agency"\n\nexport def makeThing(): string {\n  return clean()\n}\n`,
+    );
+    expect(checkGeneratorEffects(gen, "makeThing", {})?.diagnostic).toBe(
+      "spliceGeneratorUnreadable",
+    );
   });
 });

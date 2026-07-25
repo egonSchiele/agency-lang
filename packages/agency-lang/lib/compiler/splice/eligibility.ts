@@ -7,12 +7,8 @@ import { walkNodesArray } from "../../utils/node.js";
 import type { AgencyConfig } from "../../config.js";
 import type { AgencyProgram, AgencyNode } from "../../types.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
-import { SymbolTable } from "../../symbolTable.js";
-import { collectBodyFacts, reachableFrom } from "../../analysis/effects.js";
-import { declaredName } from "../../types/hole.js";
-import type { Hole } from "../../types/hole.js";
-import type { FunctionDefinition } from "../../types/function.js";
-import type { GraphNodeDefinition } from "../../types/graphNode.js";
+import { checkGeneratorEffects } from "./generatorEffects.js";
+import type { SymbolTable } from "../../symbolTable.js";
 
 /**
  * Working out which module supplies a splice's generator, and deciding
@@ -35,12 +31,12 @@ import type { GraphNodeDefinition } from "../../types/graphNode.js";
  * The name says "file path" rather than "relative" so it does not promise
  * a narrowness it has never had.
  */
-function isAgencyFilePath(specifier: string): boolean {
+export function isAgencyFilePath(specifier: string): boolean {
   return specifier.endsWith(".agency") && !specifier.includes("::");
 }
 
 /** Every import edge declared by one file, unfiltered. */
-function importEdgesOf(program: AgencyProgram): string[] {
+export function importEdgesOf(program: AgencyProgram): string[] {
   return program.nodes
     .map((node: AgencyNode) => agencyImportTarget(node))
     .filter((target): target is string => target !== null);
@@ -49,7 +45,7 @@ function importEdgesOf(program: AgencyProgram): string[] {
 /** Through the shared parse cache, like every other closure walker in the
  *  codebase. These files get parsed several times per splice: once per
  *  check, plus again for the cache fingerprint. */
-function parseFileOrNull(absPath: string, config: AgencyConfig): AgencyProgram | null {
+export function parseFileOrNull(absPath: string, config: AgencyConfig): AgencyProgram | null {
   if (!fs.existsSync(absPath)) {
     return null;
   }
@@ -199,189 +195,6 @@ export function checkNoNestedSplice(
  * closure raised, which rejects a generator that uses one harmless helper
  * from a file that happens to contain an effectful one. Tracked as #691.
  */
-/**
- * Refuse a generator that can reach a risky operation, and refuse one whose
- * effects cannot be read at all.
- *
- * The second half carries the weight. The effect walk reads syntax, so it
- * cannot see through a compile-time splice, a function received as a parameter,
- * a function reference held in a variable, or a file that did not parse. An
- * empty list from a reading that saw none of those is not evidence of safety.
- *
- * Scoped to what the generator reaches BY CALLING. Every file reaches the
- * prelude and passing a function as a value is ordinary Agency, so a
- * file-scoped rule would refuse every generator, which is the same objection
- * the comment on checkGeneratorEligible raises against a whole-closure test.
- */
-export function checkGeneratorEffects(
-  generatorPath: string,
-  generatorName: string,
-  config: AgencyConfig = {},
-  symbolTable?: SymbolTable,
-): SpliceDiagnostic | null {
-  const absolute = path.resolve(generatorPath);
-  const table = symbolTable ?? SymbolTable.build(absolute, config);
-  const symbol = table.getFile(absolute)?.[generatorName];
-  if (!symbol || (symbol.kind !== "function" && symbol.kind !== "node")) {
-    return refusal(generatorName, "its definition could not be found");
-  }
-
-  const effect = (symbol.interruptEffects ?? [])[0]?.effect;
-  if (effect !== undefined) {
-    return {
-      diagnostic: "spliceGeneratorRaises",
-      params: { name: generatorName, effect },
-      loc: { line: 0, col: 0, start: 0, end: 0 },
-    };
-  }
-
-  const blindSpot = firstBlindSpot(table, absolute, generatorName, config);
-  return blindSpot === null ? null : refusal(generatorName, blindSpot);
-}
-
-function refusal(name: string, reason: string): SpliceDiagnostic {
-  return {
-    diagnostic: "spliceGeneratorUnreadable",
-    params: { name, reason },
-    loc: { line: 0, col: 0, start: 0, end: 0 },
-  };
-}
-
-/** The first relative `.agency` file the generator can reach that does not
- *  parse. closureFiles cannot answer this: it drops a file it cannot parse
- *  rather than reporting it, which is right for its own callers and wrong
- *  here, where an unreadable file is the whole point. */
-function firstUnparseableImport(
-  generatorFile: string,
-  config: AgencyConfig,
-): string | null {
-  const reachable = [path.resolve(generatorFile), ...closureFiles(generatorFile, config)];
-  for (const file of reachable) {
-    const program = parseFileOrNull(file, config);
-    if (program === null) return file;
-    const broken = importEdgesOf(program)
-      .filter(isAgencyFilePath)
-      .map((specifier) => path.resolve(path.dirname(file), specifier))
-      .find((target) => parseFileOrNull(target, config) === null);
-    if (broken !== undefined) return broken;
-  }
-  return null;
-}
-
-/** The first reason the effect reading is incomplete, or null when the whole
- *  call graph could be read. Each reason names the file or function so the
- *  user can go and look. */
-function firstBlindSpot(
-  table: SymbolTable,
-  generatorFile: string,
-  generatorName: string,
-  config: AgencyConfig,
-): string | null {
-  const programs = programsFor(table, config);
-  const unreadable = firstUnparseableImport(generatorFile, config);
-  if (unreadable !== null) {
-    return `it reaches ${path.basename(unreadable)}, which does not parse`;
-  }
-  for (const reached of reachableFrom(table, programs, {
-    file: generatorFile,
-    name: generatorName,
-  })) {
-    const program = programs[reached.file];
-    const declaration = program && declarationOf(program, reached.name);
-    if (!declaration) continue;
-    const reason = blindSpotIn(declaration, path.basename(reached.file));
-    if (reason !== null) return reason;
-  }
-  return null;
-}
-
-/** What this one declaration hides from a syntax-only reading. */
-function blindSpotIn(
-  declaration: FunctionDefinition | GraphNodeDefinition,
-  fileLabel: string,
-): string | null {
-  const nodes = [...walkNodesArray(declaration.body)].map((visit) => visit.node);
-  if (nodes.some((node) => node.type === "splice")) {
-    return `it reaches ${fileLabel}, which contains a compile-time splice`;
-  }
-  const parameterNames = (declaration.parameters ?? []).map(
-    (parameter) => parameter.name,
-  );
-  const facts = collectBodyFacts(declaration.body);
-  const throughParameter = facts.callees.find((callee) =>
-    parameterNames.includes(callee),
-  );
-  if (throughParameter !== undefined) {
-    return `it reaches ${declaredName(nameOf(declaration))}, which calls '${throughParameter}', a function it received as a parameter`;
-  }
-  const held = heldFunctionReference(declaration, facts.callees);
-  if (held !== null) {
-    return `it reaches ${declaredName(nameOf(declaration))}, which passes '${held}' through a variable`;
-  }
-  return null;
-}
-
-function nameOf(
-  declaration: FunctionDefinition | GraphNodeDefinition,
-): string | Hole {
-  return declaration.type === "function"
-    ? declaration.functionName
-    : declaration.nodeName;
-}
-
-/** A local that is assigned a bare name and then handed to a call. The walk
- *  cannot tell whether that name is a function, so what the call does is
- *  unknown. */
-function heldFunctionReference(
-  declaration: FunctionDefinition | GraphNodeDefinition,
-  callees: string[],
-): string | null {
-  const assignedNames: Record<string, string> = Object.create(null);
-  for (const { node } of walkNodesArray(declaration.body)) {
-    if (node.type !== "assignment") continue;
-    const value = node.value;
-    if (value && value.type === "variableName" && !callees.includes(value.value)) {
-      assignedNames[node.variableName] = value.value;
-    }
-  }
-  for (const { node } of walkNodesArray(declaration.body)) {
-    if (node.type !== "functionCall") continue;
-    for (const argument of node.arguments) {
-      if (
-        argument.type === "variableName" &&
-        Object.hasOwn(assignedNames, argument.value)
-      ) {
-        return argument.value;
-      }
-    }
-  }
-  return null;
-}
-
-function declarationOf(
-  program: AgencyProgram,
-  name: string,
-): FunctionDefinition | GraphNodeDefinition | null {
-  for (const { node } of walkNodesArray(program.nodes)) {
-    if (node.type !== "function" && node.type !== "graphNode") continue;
-    if (declaredName(nameOf(node)) === name) return node;
-  }
-  return null;
-}
-
-/** The parse tree of every file the table crawled, keyed by path. */
-function programsFor(
-  table: SymbolTable,
-  config: AgencyConfig,
-): Record<string, AgencyProgram> {
-  const programs: Record<string, AgencyProgram> = Object.create(null);
-  for (const file of table.filePaths()) {
-    const program = parseFileOrNull(file, config);
-    if (program !== null) programs[file] = program;
-  }
-  return programs;
-}
-
 export function checkGeneratorEligible(
   generatorPath: string,
   generatorName: string,

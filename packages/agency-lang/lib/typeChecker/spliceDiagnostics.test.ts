@@ -26,7 +26,7 @@ const SPLICE_DIAGNOSTIC_PARAMS: Record<string, Record<string, string>> = {
   spliceGeneratedExport: { name: "makeGetters", declared: "greet" },
   spliceRedeclaresHostName: { name: "makeGetters", declared: "config" },
   spliceArgumentNotAvailable: { name: "SOME_CONST" },
-  spliceGeneratorRaises: { name: "makeGetters", effect: "std::read" },
+  spliceGeneratorRaises: { name: "makeGetters", effects: "std::read, std::write" },
   spliceGeneratorUnreadable: {
     name: "makeGetters",
     reason: "it reaches helper.agency, which does not parse",

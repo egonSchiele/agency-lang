@@ -66,14 +66,6 @@ describe("effect propagation across files", () => {
     expect(effectsOf(main, "caller")).toEqual(["std::read"]);
   });
 
-  it("carries an effect through the .invoke() call form", () => {
-    write("helper.agency", RISKY);
-    const main = write(
-      "main.agency",
-      `import { h } from "./helper.agency"\nexport def caller(): string {\n  return h.invoke()\n}\n`,
-    );
-    expect(effectsOf(main, "caller")).toEqual(["std::read"]);
-  });
 
   it("carries std::guard out of a helper that uses a guard block", () => {
     write(

@@ -39,8 +39,8 @@ describe("the two analyses agree on effects that arise in one file", () => {
       source: `export def helper(): string {\n  return read("x")\n}\nexport def caller(): string {\n  return helper()\n}\n`,
     },
     {
-      label: "a local helper reached via .invoke()",
-      source: `export def helper(): string {\n  return read("x")\n}\nexport def caller(): string {\n  return helper.invoke()\n}\n`,
+      label: "a helper called inside a loop",
+      source: `export def helper(): string {\n  return read("x")\n}\nexport def caller(): string {\n  for (i in [1, 2]) {\n    helper()\n  }\n  return "done"\n}\n`,
     },
     {
       label: "a guard block in the same file",

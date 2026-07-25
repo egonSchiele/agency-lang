@@ -59,48 +59,28 @@ library is written with a literal `interrupt` in its body, so the first step's
 answer happens to be right for all of them. The gap opens the moment somebody
 writes their own function that wraps one.
 
-## The `.invoke()` blind spot
+## Method calls in a chain
 
-Agency lets you call a function two ways, and the project's own style prefers
-the second:
+`f.partial(method: "GET")`, `f.rename("x")` and `xs.map(...)` all parse as a
+method-call link inside an access chain. The name on the call node is
+`partial`, `rename` or `map`, none of which is a global function.
 
-```
-read("a.txt")
-read.invoke("a.txt")
-```
+So a walk that reads the name off the call node records a phantom callee, and
+if any function in the program happens to share that name, its effects get
+attributed to a call site that never touches it. `calledName` returns null for
+these. The type checker excludes them for the same reason
+(`lib/typeChecker/functionTypeRaises.ts`).
 
-They parse into different shapes. The first is one call node whose name is
-`read`. The second is an access chain whose method-call link is named `invoke`.
-Every effect walk in the compiler read the name off the call node, so for the
-second form it recorded a call to something named `invoke`, found nothing, and
-moved on.
+What a method call actually reaches needs the receiver's type, which this walk
+does not have. That makes it one of the blind spots the splice eligibility
+check refuses on.
 
-That produced the same damage as the cross-file bug, in a single file with no
-imports at all:
-
-```
-export def plain(): string     { return read("a.txt") }
-export def viaInvoke(): string { return read.invoke("a.txt") }
-
-→ { plain: ["std::read"], viaInvoke: [] }
-```
-
-`calledName` in `lib/analysis/effects.ts` resolves this. Two details matter.
-
-A method call that is *not* `invoke` now contributes no callee at all. `xs.map(...)`
-calls a method on a value, not a global function, so recording `map` would
-collide with any global of that name. The type checker excludes these for the
-same reason (`lib/typeChecker/functionTypeRaises.ts`).
-
-And `invoke` attributes to the base of the chain only when every earlier link is
-itself a method call. `f.partial(method: "GET").invoke()` still calls `f`,
-because `partial` and `rename` return a derived version of the same function.
-But `obj.handler.invoke()` calls whatever `obj.handler` holds, and working that
-out needs types.
-
-Two walks needed teaching, not one. `checkUnhandledInterruptWarnings` does not
-go through the shared walk — it reads the call site directly — so the AG3009
-warning stayed silent until it got its own fix.
+A note for anyone who finds `.invoke()` in the runtime and assumes it is a call
+form: it is not. `AgencyFunction.invoke(descriptor)` is a TypeScript method that
+generated code calls, and it takes a `CallType` descriptor. Writing
+`f.invoke(x)` in Agency source type-checks and then crashes at runtime, because
+`__callMethod` has no `invoke` branch and hands the raw argument to
+`resolveArgs`. No `.agency` file in the repo uses it.
 
 ## Why `_guard` is read, not walked
 
@@ -132,12 +112,16 @@ becomes a file-and-name pair. Imports resolve through the symbol table, and the
 result is followed through `reExportedFrom` to wherever the name is really
 defined — repeatedly, because a barrel file can re-export a barrel.
 
-Then it repeats "give every entry the effects of everything it calls" until a
-full round changes nothing, and writes the result back onto every symbol. The
-loop terminates because effect lists only grow and the label set is finite, so
-an import cycle just costs one more round.
+Then it runs a worklist: give every entry the effects of everything it calls,
+and whenever an entry grows, re-queue only its callers. Sweeping the whole set
+until it stops changing was measurably quadratic, because on a chain of N
+functions where only the last one raises, each sweep moves the effect one link.
+`lib/perf/symbolTable.perf.test.ts` measures that shape on purpose.
 
-It costs about two milliseconds, because it reuses trees already in memory.
+It terminates because effect lists only grow and the label set is finite, so an
+entry can be re-queued only finitely often. An import cycle costs nothing
+special. The result is written back onto every symbol, resolved through
+re-exports so a barrel's own copy is correct too.
 
 ## Which tree each side sees
 
@@ -149,7 +133,7 @@ creates, moves, or renames a call is somewhere the two can disagree.
 |---|---|---|
 | comprehensions | in the parser | nothing needed, both sides see the same tree |
 | pattern lowering | in the parser | nothing needed |
-| splice expansion | before the symbol table, in memory | cannot see it; a blind spot, below |
+| splice expansion | before the symbol table, in memory | cannot see it; one of the blind spots |
 | lifting callbacks | after imports resolve | nothing needed, measured: both sides agree |
 | `guard` lowering | in the TypeChecker constructor | treats a `guardBlock` node as a call to `_guard` |
 | parallel blocks | in the TypescriptPreprocessor | runs after every effect analysis |
@@ -170,7 +154,9 @@ pinning it in `lib/analysis/effects.test.ts`.
 
 ## What the walk cannot see
 
-Four things, and they all under-report.
+Five things, and they all under-report.
+
+A method call in an access chain, per the section above.
 
 A file that does not parse. The crawl is deliberately best-effort, because the
 editor hits half-typed files constantly.

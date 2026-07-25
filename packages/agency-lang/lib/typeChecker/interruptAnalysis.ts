@@ -12,11 +12,12 @@ import type { Scope } from "./scope.js";
 import { isInsideHandler } from "./checker.js";
 import {
   addUnique,
+  argumentExpression,
   calledName,
   collectBodyFacts,
-  propagateToFixpoint,
   unique,
-} from "../analysis/effects.js";
+} from "../analysis/bodyFacts.js";
+import { propagateToFixpoint } from "../analysis/effects.js";
 import type { HandleBlock } from "../types/handleBlock.js";
 import type { InterruptStatement } from "../types/interruptStatement.js";
 
@@ -194,10 +195,7 @@ function functionRefsInArgs(
 ): string[] {
   const names: string[] = [];
   for (const arg of args) {
-    const expr = arg.type === "splat" ? arg.value
-      : arg.type === "namedArgument" ? arg.value
-      : arg;
-    functionNamesFromType(synthType(expr, scope, ctx), names);
+    functionNamesFromType(synthType(argumentExpression(arg), scope, ctx), names);
   }
   return names;
 }
@@ -366,8 +364,8 @@ export function checkUnhandledInterruptWarnings(
     for (const { node, ancestors } of walkNodes(info.body)) {
       if (node.type !== "functionCall") continue;
       // This walk reads the call site directly rather than going through
-      // collectFromBody, so it needs its own receiver resolution: for
-      // `read.invoke(...)` the node's own name is `invoke`.
+      // collectFromBody, so it needs the same rule: a method call in an access
+      // chain names a method on a value, not a global function.
       const called = calledName(node, ancestors);
       if (called === null) continue;
       const kinds = interruptEffectsByFunction[called];

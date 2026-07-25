@@ -29,6 +29,40 @@ function stringTextOf(node: AgencyNode): string {
     .join("");
 }
 
+describe("code literals: single-line bodies", () => {
+  // The program grammar ends in `eof` and does not skip leading spaces,
+  // and the body of `[| ... |]` on one line begins with one. A leading
+  // newline was fine, so multi-line bodies worked and single-line ones
+  // did not, which made the difference look like a rule about
+  // definitions rather than about whitespace.
+  it("parses a one-line def, which needs the program grammar", () => {
+    const lit = firstLiteral(`def f(): Code {\n  return [| def greet(): string { return "hi" } |]\n}\n`);
+    expect(lit.kind).toBe("program");
+    expect(lit.nodes.map((node) => node.type)).toContain("function");
+  });
+
+  it("parses a one-line def with an empty body", () => {
+    const lit = firstLiteral(`def f(): Code {\n  return [| def greet(): string { } |]\n}\n`);
+    expect(lit.kind).toBe("program");
+  });
+
+  it("parses a one-line node", () => {
+    const lit = firstLiteral(`def f(): Code {\n  return [| node main(): number { return 1 } |]\n}\n`);
+    expect(lit.nodes.map((node) => node.type)).toContain("graphNode");
+  });
+
+  it("agrees with the same text written across lines", () => {
+    const oneLine = firstLiteral(`def f(): Code {\n  return [| def greet(): string { return "hi" } |]\n}\n`);
+    const multiLine = firstLiteral(
+      `def f(): Code {\n  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]\n}\n`,
+    );
+    expect(oneLine.kind).toBe(multiLine.kind);
+    expect(oneLine.nodes.map((node) => node.type)).toEqual(
+      multiLine.nodes.map((node) => node.type),
+    );
+  });
+});
+
 describe("code literals: kind inference", () => {
   it("a lone expression infers expr", () => {
     const lit = firstLiteral(`node main() {\n  const t = [| 1 + 2 |]\n}\n`);

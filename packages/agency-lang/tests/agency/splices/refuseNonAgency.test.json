@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8006",
+  "description": "A generator reaching JavaScript one import away is refused: JS raises no effects, so nothing about it can be checked"
+}

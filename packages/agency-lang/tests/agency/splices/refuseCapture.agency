@@ -1,0 +1,6 @@
+import { makeCapturing } from "./refuseCaptureGen.agency"
+
+node main(): number {
+  const tmp = 41
+  return $( makeCapturing() )
+}

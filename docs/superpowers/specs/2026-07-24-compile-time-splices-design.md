@@ -299,19 +299,15 @@ The cost is speed. Forking a process per splice is not free, and this needs a ca
 
 Splices paste an AST directly rather than printing it, so origin stamps survive into the compile. That means "this generated line failed to compile, and it came from generator X" is achievable here in a way it is not for `runCode`. It also means this feature builds the AST-in entry point that the fragment-checker follow-up has been waiting on.
 
-### Caching and incremental builds: nothing new is needed
+### Caching and incremental builds
 
-The obvious worry is that a file containing a splice depends on the generator's module, and that if the build manifest does not know about that edge, editing a generator will silently fail to rebuild its consumers. That worry is already handled.
+> **Corrected during implementation.** This section originally argued that caching needed nothing new, because the build manifest already tracks the generator as an ordinary relative Agency import. That reasoning assumed expansion would sit inside the manifest-guarded per-file compile. It does not: the owner's decision that generated declarations may be exported puts expansion inside `SymbolTable.build`, which has twelve non-test callers and no manifest guard — one of them the LSP server, which rebuilds on every keystroke. A dedicated cache is therefore mandatory, not optional. What follows is what shipped.
 
-The generator arrives as an **ordinary relative Agency import**. The manifest records `deps` plus `depsHash`, covering transitive Agency imports (`docs/dev/incremental-builds.md:21`). So editing `gen.agency` changes `depsHash` on `main.agency`, which invalidates it, which re-runs the splice. No new manifest field, no new edge type.
+The manifest half of the original argument still holds and is still doing work. The generator arrives as an ordinary relative Agency import, and the manifest records `deps` plus `depsHash` over transitive Agency imports (`docs/dev/incremental-builds.md:21`), so editing `gen.agency` invalidates `main.agency` and the build path recompiles it.
 
-Caching falls out of the same place. If nothing relevant changed, `main.agency` is skipped entirely, so the splice never re-runs and its expanded output is already baked into the emitted JavaScript. There is no separate splice-output cache and no cache key to design, because the unit being cached is the compiled file and the existing machinery already caches that.
+What the manifest does not cover is every other caller of `SymbolTable.build`. Those parse and expand outside any manifest guard, so splices need a cache of their own. The key is the printed splice expression plus a content hash of the generator's whole transitive closure of relative `.agency` files. Hashing the closure rather than one file is what makes editing a helper one import away invalidate the memo.
 
-A splice's inputs are exactly two things, and both are covered: the arguments, which are written in the file's own source and therefore in `sourceHash`, and the generator's behavior, which is in `depsHash`.
-
-This works **because of Rule 3**. A generator that could call `llm()` or read the clock would produce different output from identical inputs, and caching it would be silently wrong. Determinism is not only a safety property here; it is the thing that makes the cache free.
-
-One constraint follows for the implementation: splice expansion must happen inside the normal per-file compile that the manifest guards. Hoisting expansion somewhere outside that path would break the guarantee.
+Both halves rest on **Rule 3**. A generator that could call `llm()` or read the clock would produce different output from identical inputs, and caching it would be silently wrong. Determinism is not only a safety property here; it is what makes caching possible at all.
 
 ## Out of scope for v1
 
@@ -342,7 +338,7 @@ These are genuinely unsettled and should be resolved while writing the plan.
 
    Settled shape: a function in `std::agency`, `combine(codes: Code[]): Result<Code>`, rather than an overloaded `+`. Combining can fail, because an expression fragment and a program fragment cannot merge, and a function returning `Result` has somewhere to report that while an operator would have to throw or silently guess. Agency also has no operator overloading today, and introducing it for one stdlib type is a larger language change than this feature needs.
 
-   Remaining: the exact name, and the merge rules for each kind pair.
+   **Settled during implementation.** The name is `combine`. The merge rules: an empty merge is an empty `statements` fragment, matching `parseStatements("")` and the empty code literal; a single input is returned unchanged; a `program` fragment may not merge with anything that is not also `program`; everything else merges to `statements`, since an expression is a legal statement and `fill` already makes that widening. See `lib/stdlib/template.ts`.
 
 2. **Nested splices.** May a generator module itself contain splices? Haskell allows this. Allowing it means recursion and needs a depth cap; forbidding it in v1 is simpler and additive to relax.
 

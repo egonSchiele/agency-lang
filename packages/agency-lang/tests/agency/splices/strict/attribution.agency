@@ -1,0 +1,7 @@
+import { makeBadCode } from "./attributionGen.agency"
+
+$( makeBadCode() )
+
+node main(): number {
+  return broken()
+}

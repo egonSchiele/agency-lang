@@ -1,0 +1,6 @@
+import { maxRetries } from "./expressionSpliceGen.agency"
+
+node main(): number {
+  const limit = $( maxRetries() )
+  return limit
+}

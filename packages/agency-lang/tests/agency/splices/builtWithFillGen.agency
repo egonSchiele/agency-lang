@@ -1,0 +1,22 @@
+import { Code, fill } from "std::agency"
+
+/** Splices consume what Template Agency already produces: this builds its
+    result by filling a code literal's holes rather than returning a fixed
+    literal.
+
+    Note the template is INLINE. A generator cannot use `loadTemplate`,
+    because reading a file raises `std::read` and compile-time generators
+    must be effect-free. Inline literals are the template source available
+    to a generator. */
+export def makeNamed(): Code {
+  const tpl = [|
+    def #fnName(): string {
+      return #greeting: string
+    }
+  |]
+  const filled = fill(tpl, { fnName: "describe", greeting: "filled then spliced" })
+  if (isFailure(filled)) {
+    return [| 0 |]
+  }
+  return filled.value
+}

@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8009",
+  "description": "A generator module containing its own splice is refused: running it would recurse with no floor"
+}

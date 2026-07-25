@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"hello from generated code\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A declaration splice pastes a function that the same file can call"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"AB\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Two declaration splices in one file both expand and both are callable"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8011",
+  "description": "A splice argument naming something this file declares is refused: it does not exist yet when the generator runs"
+}

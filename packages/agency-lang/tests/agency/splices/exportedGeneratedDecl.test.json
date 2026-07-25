@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"generated and exported\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A generated export is importable from a second file"
+    }
+  ]
+}

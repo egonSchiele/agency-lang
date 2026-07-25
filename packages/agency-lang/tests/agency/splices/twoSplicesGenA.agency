@@ -1,0 +1,9 @@
+import { Code } from "std::agency"
+
+export def makeAlpha(): Code {
+  return [|
+    def alpha(): string {
+      return "A"
+    }
+  |]
+}

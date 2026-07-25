@@ -1,0 +1,5 @@
+import { makeFromModel } from "./refuseNondeterministicGen.agency"
+
+node main(): number {
+  return $( makeFromModel() )
+}

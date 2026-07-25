@@ -1,0 +1,5 @@
+import { sharedHelper } from "./exportedGeneratedDeclProvider.agency"
+
+node main(): string {
+  return sharedHelper()
+}

@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"filled then spliced\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "A generator fills a code literal's holes and the splice installs the result"
+    }
+  ]
+}

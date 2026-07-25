@@ -1,0 +1,5 @@
+import { Code } from "std::agency"
+
+export def innermost(): Code {
+  return [| 1 |]
+}

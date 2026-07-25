@@ -1,0 +1,5 @@
+import { Code } from "std::agency"
+
+export def makeSized(size: number): Code {
+  return [| 1 |]
+}

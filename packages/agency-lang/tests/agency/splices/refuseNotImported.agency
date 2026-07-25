@@ -1,0 +1,7 @@
+def localGenerator(): number {
+  return 1
+}
+
+node main(): number {
+  return $( localGenerator() )
+}

@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8004",
+  "description": "A generator that can reach an LLM call is refused, because it could produce different code on different builds"
+}

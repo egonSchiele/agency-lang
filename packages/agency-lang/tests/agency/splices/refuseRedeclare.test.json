@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8012",
+  "description": "A generated declaration may not take a name the file already uses: duplicate top-level consts silently last-win, so this is enforced rather than assumed"
+}

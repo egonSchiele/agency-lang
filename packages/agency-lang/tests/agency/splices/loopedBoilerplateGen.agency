@@ -1,0 +1,23 @@
+import { Code, combine, fill } from "std::agency"
+
+/** The motivating shape: stop writing N near-identical functions by hand.
+    One fragment per item, merged into one program fragment. */
+export def makeLookups(names: string[]): Code {
+  let parts = []
+  for (name in names) {
+    const one = fill([|
+      def #fnName(): string {
+        return #label: string
+      }
+    |], { fnName: "get_${name}", label: name })
+    if (isFailure(one)) {
+      return [| 0 |]
+    }
+    parts = [...parts, one.value]
+  }
+  const merged = combine(parts)
+  if (isFailure(merged)) {
+    return [| 0 |]
+  }
+  return merged.value
+}

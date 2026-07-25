@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8005",
+  "description": "A generator defined in the file that splices it is refused: it has to be compiled first"
+}

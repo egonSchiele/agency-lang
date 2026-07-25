@@ -1,0 +1,5 @@
+import { makeThing } from "./refuseNonAgencyGen.agency"
+
+node main(): number {
+  return $( makeThing() )
+}

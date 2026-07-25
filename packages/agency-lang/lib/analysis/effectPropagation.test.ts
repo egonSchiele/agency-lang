@@ -184,3 +184,74 @@ describe("effect propagation across files", () => {
     expect(effectsOf(main, "caller")).toEqual(["std::read"]);
   });
 });
+
+describe("imports that cannot be resolved", () => {
+  it("keeps propagating the rest of a file alongside an uninstalled pkg import", () => {
+    // resolveAgencyImportPath throws for an uninstalled package. The crawl
+    // skips that import and keeps going, so the pass must too, or one missing
+    // dependency would blank out every other import in the same file.
+    write("helper.agency", RISKY);
+    const main = write(
+      "main.agency",
+      `import { h } from "./helper.agency"\n` +
+        `import { thing } from "pkg::@definitely/not-installed-xyz"\n` +
+        `export def caller(): string {\n  return h()\n}\n`,
+    );
+    expect(effectsOf(main, "caller")).toEqual(["std::read"]);
+  });
+});
+
+describe("re-exported names", () => {
+  const barrels: { label: string; barrel: string; importName: string }[] = [
+    {
+      label: "a named re-export",
+      barrel: `export { h } from "./helper.agency"\n`,
+      importName: "h",
+    },
+    {
+      label: "a renamed re-export",
+      barrel: `export { h as g } from "./helper.agency"\n`,
+      importName: "g",
+    },
+    {
+      label: "a star re-export",
+      barrel: `export * from "./helper.agency"\n`,
+      importName: "h",
+    },
+  ];
+
+  for (const { label, barrel, importName } of barrels) {
+    it(`follows ${label}`, () => {
+      write("helper.agency", RISKY);
+      write("barrel.agency", barrel);
+      const main = write(
+        "main.agency",
+        `import { ${importName} } from "./barrel.agency"\n` +
+          `export def caller(): string {\n  return ${importName}()\n}\n`,
+      );
+      expect(effectsOf(main, "caller")).toEqual(["std::read"]);
+    });
+  }
+
+  it("follows two re-export hops", () => {
+    write("helper.agency", RISKY);
+    write("inner.agency", `export { h } from "./helper.agency"\n`);
+    write("outer.agency", `export { h } from "./inner.agency"\n`);
+    const main = write(
+      "main.agency",
+      `import { h } from "./outer.agency"\nexport def caller(): string {\n  return h()\n}\n`,
+    );
+    expect(effectsOf(main, "caller")).toEqual(["std::read"]);
+  });
+
+  it("records the effect on the barrel's own symbol too", () => {
+    // buildCompilationUnit seeds from the barrel's symbols when a file imports
+    // from it, so the barrel's copy has to be right, not only the origin's.
+    write("helper.agency", RISKY);
+    const barrel = write(
+      "barrel.agency",
+      `export { h } from "./helper.agency"\n`,
+    );
+    expect(effectsOf(barrel, "h")).toEqual(["std::read"]);
+  });
+});

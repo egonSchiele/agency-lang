@@ -13,6 +13,16 @@ import type { FunctionCall } from "../types/function.js";
 import type { ValueAccess } from "../types/access.js";
 import type { InterruptStatement } from "../types/interruptStatement.js";
 import type { GotoStatement } from "../types/gotoStatement.js";
+import { declaredName } from "../types/hole.js";
+import type { AgencyProgram } from "../types.js";
+import type { FunctionDefinition } from "../types/function.js";
+import type { GraphNodeDefinition } from "../types/graphNode.js";
+import type {
+  FunctionSymbol,
+  NodeSymbol,
+  ResolvedImport,
+  SymbolTable,
+} from "../symbolTable.js";
 
 export type BodyFacts = {
   /** Effect labels raised by a literal `interrupt` in this body. */
@@ -175,4 +185,204 @@ export function unique(values: string[]): string[] {
  *  handler analysis, which accumulate rather than build. */
 export function addUnique(arr: string[], value: string): void {
   if (!arr.includes(value)) arr.push(value);
+}
+
+/** Where a name is really defined, after renaming and re-export. */
+export type Origin = { file: string; name: string };
+
+type EffectSummary = PropagationNode & Origin;
+
+/** Two files can define the same top-level name and an import can rename one,
+ *  so a bare name is not an identity. The key is never parsed back apart —
+ *  every summary carries its own file and name. */
+function keyOf(origin: Origin): string {
+  return `${origin.file} ${origin.name}`;
+}
+
+function summaryAt(
+  summaries: Record<string, EffectSummary>,
+  origin: Origin,
+): EffectSummary | undefined {
+  const key = keyOf(origin);
+  return Object.hasOwn(summaries, key) ? summaries[key] : undefined;
+}
+
+/**
+ * Make each callable's recorded effects include everything it can reach by
+ * calling, not just what its own body raises.
+ *
+ * Runs once at the end of SymbolTable.build, over the parse trees the crawl
+ * already produced. Before this existed, an imported function arrived at the
+ * type checker as a leaf: `h` wrapping `read` reported nothing, and so did
+ * `agency policy gen` for a program that reads your filesystem through it.
+ * GitHub issue 680.
+ */
+export function propagateEffects(
+  table: SymbolTable,
+  programs: Record<string, AgencyProgram>,
+): void {
+  writeBack(table, propagateToFixpoint(buildSummaries(table, programs)));
+}
+
+function buildSummaries(
+  table: SymbolTable,
+  programs: Record<string, AgencyProgram>,
+): Record<string, EffectSummary> {
+  // Null prototype and Object.hasOwn on read: keys are user-controlled file
+  // paths and symbol names. House pattern, as in TS_SIDE_EFFECT_SEEDS.
+  return Object.assign(
+    Object.create(null),
+    Object.fromEntries(
+      Object.entries(programs)
+        .flatMap(([file, program]) => summariesForFile(table, program, file))
+        .map((summary) => [keyOf(summary), summary]),
+    ),
+  );
+}
+
+type CallableDeclaration = FunctionDefinition | GraphNodeDefinition;
+
+const isCallableDeclaration = (node: AgencyNode): node is CallableDeclaration =>
+  node.type === "function" || node.type === "graphNode";
+
+/**
+ * One summary per callable declaration in one file.
+ *
+ * Agency has no nested `def`, so top-level functions and graph nodes are the
+ * whole set. The type checker additionally has scopes for block arguments and
+ * inline handler bodies; those are file-local and can never be imported, so
+ * they need no entry here.
+ */
+function summariesForFile(
+  table: SymbolTable,
+  program: AgencyProgram,
+  file: string,
+): EffectSummary[] {
+  const resolve = makeResolver(table, program, file);
+  return [...walkNodes(program.nodes)]
+    .map((visit) => visit.node)
+    .filter(isCallableDeclaration)
+    .map((declaration) => {
+      const name = declaredName(
+        declaration.type === "function"
+          ? declaration.functionName
+          : declaration.nodeName,
+      );
+      return {
+        file,
+        name,
+        effects: directEffectsOf(table, file, name),
+        calleeKeys: collectBodyFacts(declaration.body).callees.map((callee) =>
+          keyOf(resolve(callee)),
+        ),
+      };
+    });
+}
+
+/** What classifySymbols already worked out, including the seed table. Read
+ *  rather than recomputed: _guard raises on the TypeScript side and has no
+ *  `interrupt` in its body, so a body walk would report nothing for it. */
+function directEffectsOf(
+  table: SymbolTable,
+  file: string,
+  name: string,
+): string[] {
+  const sym = table.getFile(file)?.[name];
+  if (!sym || (sym.kind !== "function" && sym.kind !== "node")) return [];
+  return (sym.interruptEffects ?? []).map((entry) => entry.effect);
+}
+
+function writeBack(
+  table: SymbolTable,
+  summaries: Record<string, EffectSummary>,
+): void {
+  for (const { file, name, sym } of callableSymbols(table)) {
+    // Resolve through re-exports so a barrel's own copy of a name gets the
+    // origin's answer rather than an empty one.
+    const summary = summaryAt(summaries, originOf(table, { file, name }));
+    if (!summary) continue;
+    sym.interruptEffects = summary.effects.map((effect) => ({ effect }));
+  }
+}
+
+type CallableSymbol = Origin & { sym: FunctionSymbol | NodeSymbol };
+
+/** Every function and node symbol in the table, tagged with where it lives. */
+function callableSymbols(table: SymbolTable): CallableSymbol[] {
+  return table.filePaths().flatMap((file) =>
+    Object.entries(table.getFile(file) ?? {})
+      .filter(
+        (entry): entry is [string, FunctionSymbol | NodeSymbol] =>
+          entry[1].kind === "function" || entry[1].kind === "node",
+      )
+      .map(([name, sym]) => ({ file, name, sym })),
+  );
+}
+
+/** Map a local callee name, as written at a call site in `fromFile`, to where it
+ *  is really defined. Falls back to the current file for builtins and unknown
+ *  names, which then find no summary. */
+function makeResolver(
+  table: SymbolTable,
+  program: AgencyProgram,
+  fromFile: string,
+): (localName: string) => Origin {
+  const imported: Record<string, Origin> = Object.assign(
+    Object.create(null),
+    Object.fromEntries(
+      importsOf(table, program, fromFile).map((resolved) => [
+        resolved.localName,
+        originOf(table, { file: resolved.file, name: resolved.originalName }),
+      ]),
+    ),
+  );
+  return (localName) =>
+    Object.hasOwn(imported, localName)
+      ? imported[localName]
+      : { file: fromFile, name: localName };
+}
+
+/**
+ * Every named symbol this file imports, from both import forms.
+ *
+ * Resolution can throw — an uninstalled `pkg::` module makes
+ * `resolveAgencyImportPath` fail. The crawl that produced these parse trees
+ * skips such an import and keeps going (SymbolTable.build's `visitImport`),
+ * so this must too, or a program with one uninstalled package would lose the
+ * effects of every other import in the same file.
+ */
+function importsOf(
+  table: SymbolTable,
+  program: AgencyProgram,
+  fromFile: string,
+): ResolvedImport[] {
+  return [...walkNodes(program.nodes)].flatMap(({ node }) => {
+    try {
+      if (node.type === "importStatement") {
+        return table.resolveImport(node, fromFile);
+      }
+      if (node.type === "importNodeStatement") {
+        return table.resolveImportedNodes(node, fromFile);
+      }
+    } catch {
+      /* unresolvable import path — reported downstream by resolveImports and
+         the type checker's checkMissingImports, with a location, not here */
+    }
+    return [];
+  });
+}
+
+/**
+ * Follow `reExportedFrom` to where a name is really defined. A barrel can
+ * re-export a barrel, so this repeats.
+ *
+ * No depth guard: SymbolTable.build already detects a re-export cycle and
+ * throws with the chain in the message, before this runs.
+ */
+export function originOf(table: SymbolTable, at: Origin): Origin {
+  const sym = table.getFile(at.file)?.[at.name];
+  const from = sym && "reExportedFrom" in sym ? sym.reExportedFrom : undefined;
+  return from
+    ? originOf(table, { file: from.sourceFile, name: from.originalName })
+    : at;
 }

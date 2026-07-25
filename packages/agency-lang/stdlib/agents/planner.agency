@@ -188,7 +188,7 @@ export def runApproved(
   plan: string,
   src: string,
   state: PlanState,
-): PlanState raises <std::agents::planApprove> {
+): PlanState raises <std::agents::planApprove, std::guard, std::run> {
   """Gate generated code behind user approval, then run it: shows the plan,
   source, and capability envelope, and returns a rejected state instead of
   running when approval is declined."""
@@ -206,7 +206,7 @@ def planStep(
   task: string,
   planText: string,
   state: PlanState,
-): PlanState raises <std::agents::planApprove> {
+): PlanState raises <std::agents::planApprove, std::guard, std::run> {
   // Capped for the same reason: one attempt of many, inside the planner's
   // budget rather than alongside it.
   const gen = agencyCodingAgent(
@@ -231,7 +231,7 @@ export def plannerAgent(
   provider: string = "",
   session: string = "",
   extraTools: any[] = [],
-): Result<string> raises <std::agents::planApprove, std::guard> {
+): Result<string> raises <std::agents::planApprove, std::guard, std::run> {
   """
   Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
   task, show the plan/source/effects for approval, run it in a sandboxed

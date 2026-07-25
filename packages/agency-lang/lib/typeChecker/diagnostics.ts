@@ -596,6 +596,12 @@ export const DIAGNOSTICS = {
     message:
       "`{name}` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first.",
   },
+  spliceGeneratorReachesNonAgency: {
+    code: "AG8006",
+    severity: "error",
+    message:
+      "The generator `{name}` reaches non-Agency code through `{importPath}`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript raises no interrupts and cannot be checked. Set `allowNonAgencyGenerators` in your config to permit it.",
+  },
   spliceFragmentKindMismatch: {
     code: "AG8007",
     severity: "error",

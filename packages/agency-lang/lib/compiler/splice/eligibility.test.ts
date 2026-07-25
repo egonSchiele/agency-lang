@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { safeDeleteDirectory } from "../../utils.js";
 import { parseAgency } from "../../parser.js";
 import {
+  checkImportGraph,
   resolveGeneratorModule,
 } from "./eligibility.js";
 import type { AgencyProgram } from "../../types.js";
@@ -84,5 +85,59 @@ describe("resolveGeneratorModule", () => {
       path.join(dir, "main.agency"),
     );
     expect(resolved.ok).toBe(false);
+  });
+});
+
+describe("checkImportGraph", () => {
+  it("allows a generator importing only std::", () => {
+    const generator = write(
+      "gen.agency",
+      `import { fill } from "std::agency"\n\nexport def g(): number {\n  return 1\n}\n`,
+    );
+    expect(checkImportGraph(generator, "g")).toBeNull();
+  });
+
+  it("allows a generator importing a relative .agency file", () => {
+    write("helper.agency", `export def h(): number {\n  return 2\n}\n`);
+    const generator = write(
+      "gen.agency",
+      `import { h } from "./helper.agency"\n\nexport def g(): number {\n  return h()\n}\n`,
+    );
+    expect(checkImportGraph(generator, "g")).toBeNull();
+  });
+
+  it("refuses a generator importing an npm package directly", () => {
+    const generator = write(
+      "gen.agency",
+      `import { z } from "zod"\n\nexport def g(): number {\n  return 1\n}\n`,
+    );
+    expect(checkImportGraph(generator, "g")?.diagnostic).toBe(
+      "spliceGeneratorReachesNonAgency",
+    );
+  });
+
+  it("refuses a generator reaching npm one file away", () => {
+    // The case that decides whether this check means anything. The
+    // generator's own imports look spotless.
+    write("side.agency", `import { z } from "zod"\n\nexport def s(): number {\n  return 1\n}\n`);
+    const generator = write(
+      "gen.agency",
+      `import { s } from "./side.agency"\n\nexport def g(): number {\n  return s()\n}\n`,
+    );
+    expect(checkImportGraph(generator, "g")?.diagnostic).toBe(
+      "spliceGeneratorReachesNonAgency",
+    );
+  });
+
+  it("refuses an `export from` that leaves Agency", () => {
+    // An import-only scan would miss this, which is why the shared
+    // agencyImportTarget extractor is used rather than a local scan.
+    const generator = write(
+      "gen.agency",
+      `export { z } from "zod"\n\nexport def g(): number {\n  return 1\n}\n`,
+    );
+    expect(checkImportGraph(generator, "g")?.diagnostic).toBe(
+      "spliceGeneratorReachesNonAgency",
+    );
   });
 });

@@ -2,18 +2,22 @@ import path from "node:path";
 import fs from "node:fs";
 import { parseAgencyFileCached } from "../../parseCache.js";
 import { agencyImportTarget } from "../compileClosure.js";
+import { isStdlibImport } from "../../importPaths.js";
 import { walkNodesArray } from "../../utils/node.js";
 import type { AgencyConfig } from "../../config.js";
 import type { AgencyProgram, AgencyNode } from "../../types.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
 
 /**
- * Resolving a splice's generator, and the one structural rule left on it.
+ * Working out which module supplies a splice's generator, and deciding
+ * whether that generator may run.
  *
- * Safety is the unhandled-interrupt backstop's job: compilation installs no
- * handlers, so a generator that reaches a dangerous operation cannot
- * complete. The static effect and import-graph checks that used to live
- * here were removed; see `checkGeneratorEligible` for why.
+ * Two rules gate it: a generator may not contain a splice of its own, and
+ * its imports must stay inside Agency. See `checkGeneratorEligible`.
+ *
+ * Effects are not checked here. A generator that reaches a dangerous
+ * operation is stopped while running instead, because compilation installs
+ * no interrupt handlers and the operation cannot complete without one.
  */
 
 /**
@@ -92,6 +96,60 @@ export function closureFiles(
 }
 
 /**
+ * Which import edges a generator may have, by default.
+ *
+ * One line on purpose, because it is the rule a reader checks against the
+ * documentation. `std::` is Agency and is verified elsewhere, so it is
+ * allowed but not followed. A relative `.agency` file is Agency code, so
+ * it is allowed and followed, which is what makes the check transitive.
+ * Everything else leaves Agency: npm packages, and `pkg::`, which is
+ * Agency source but can reach JavaScript one level down.
+ */
+const isAllowedEdge = (specifier: string): boolean =>
+  isStdlibImport(specifier) || isAgencyFilePath(specifier);
+
+/**
+ * The first import that leaves Agency code, or null when every edge is
+ * allowed.
+ *
+ * This is what makes the safety story mean anything. Dangerous operations
+ * raise interrupts, compilation installs no handlers, so an operation
+ * cannot complete. That reasoning holds only for Agency code. JavaScript
+ * raises nothing, so a generator that reaches an npm package is neither
+ * checked before it runs nor stopped while running.
+ *
+ * Transitive is the operative word. A local `.agency` file the generator
+ * imports can pull in `zod` one level down while the generator itself
+ * looks spotless.
+ *
+ * Users who need a generator to reach JavaScript can turn this off with
+ * `allowNonAgencyGenerators` in their config.
+ */
+export function checkImportGraph(
+  entryPath: string,
+  generatorName: string,
+  config: AgencyConfig = {},
+): SpliceDiagnostic | null {
+  for (const file of closureFiles(entryPath, config)) {
+    const program = parseFileOrNull(file, config);
+    if (program === null) {
+      continue;
+    }
+    const escaping = importEdgesOf(program).find(
+      (specifier) => !isAllowedEdge(specifier),
+    );
+    if (escaping !== undefined) {
+      return {
+        diagnostic: "spliceGeneratorReachesNonAgency",
+        params: { name: generatorName, importPath: escaping },
+        loc: { line: 0, col: 0, start: 0, end: 0 },
+      };
+    }
+  }
+  return null;
+}
+
+/**
  * Refuse a generator whose own file contains a splice.
  *
  * Running a generator compiles it, which expands any splice it contains,
@@ -121,23 +179,36 @@ export function checkNoNestedSplice(
 }
 
 /**
- * What still gates a generator, now that effect and import-graph checking
- * are gone.
+ * Everything that gates a generator before it runs.
  *
- * Both were removed deliberately. The unhandled-interrupt backstop already
- * stops an effectful generator: compilation installs no handlers, so the
- * operation cannot complete. The static version could not be made precise
- * while #680 stands, and a check that refuses a generator over an
- * unrelated export in a helper file is hard to justify when the runtime
- * already covers the case. Tracked as #691; the import restriction returns
- * as `--only-stdlib` in #690.
+ * Two rules. A generator may not contain a splice of its own, or running
+ * it would recurse without a floor. And its imports must stay inside
+ * Agency, unless the user opts out.
+ *
+ * There is deliberately no static effect check here. The
+ * unhandled-interrupt backstop already stops an effectful generator, and
+ * a static version cannot be precise while issue #680 stands, because
+ * effects do not propagate across a module boundary. To fail closed it
+ * would have to refuse a generator whenever any export anywhere in its
+ * closure raised, which rejects a generator that uses one harmless helper
+ * from a file that happens to contain an effectful one. Tracked as #691.
  */
 export function checkGeneratorEligible(
   generatorPath: string,
   generatorName: string,
   config: AgencyConfig = {},
 ): SpliceDiagnostic | null {
-  return checkNoNestedSplice(generatorPath, generatorName, config);
+  const checks = [
+    () => checkNoNestedSplice(generatorPath, generatorName, config),
+    () =>
+      config.allowNonAgencyGenerators === true
+        ? null
+        : checkImportGraph(generatorPath, generatorName, config),
+  ];
+  return checks.reduce<SpliceDiagnostic | null>(
+    (found, check) => found ?? check(),
+    null,
+  );
 }
 
 

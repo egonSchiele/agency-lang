@@ -505,6 +505,14 @@ The generator has to be compiled before the file that splices it can be compiled
 
 **How to fix:** move the generator into its own \`.agency\` file and import it.`,
 
+  spliceGeneratorReachesNonAgency: `A compile-time generator, or something it imports, reaches code that is not Agency.
+
+Splices are safe to run during compilation because dangerous operations in Agency ask permission first, and compilation has nobody to ask, so they cannot complete. That reasoning covers Agency code only. JavaScript and TypeScript ask nothing, so a generator that can reach an npm package can do anything at all, with nothing to stop it.
+
+The rule covers everything a generator can reach, not just what it imports directly. A local \`.agency\` file that looks harmless can import an npm package one step further down.
+
+**How to fix:** move the work into Agency, or set \`allowNonAgencyGenerators: true\` in your config if the generator genuinely needs a JavaScript library. Turning it off means the generator can do whatever that library can.`,
+
   spliceFragmentKindMismatch: `A generator returned a piece of code that does not fit where the splice sits.
 
 A splice at the top level of a file needs whole declarations — functions, nodes, types. A splice in expression position needs a single expression. Returning a whole program where a value belongs, or the reverse, cannot be pasted in.

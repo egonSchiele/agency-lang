@@ -7,7 +7,7 @@ import { bindersOf, freeNamesOf } from "../runtime/template/hygiene.js";
 import { BUILTIN_VARIABLES } from "../config.js";
 import { PRELUDE_NAMES } from "../prelude.js";
 import { BUILTIN_FUNCTION_TYPES } from "../typeChecker/builtins.js";
-import { KINDS_FOR_SORT, stampOrigin } from "../runtime/template/graft.js";
+import { KINDS_FOR_SORT, stampOrigin } from "../runtime/template/origin.js";
 import { kindOf } from "../runtime/template/code.js";
 import {
   checkGeneratorEligible,
@@ -452,18 +452,38 @@ function checkNoGeneratedExport(
   code: Code,
   generatorName: string,
 ): SpliceDiagnostic | null {
-  const exported = code.nodes.find(
-    (node) => (node as { exported?: boolean }).exported === true,
-  );
+  const exported = code.nodes.find(isExporting);
   if (exported === undefined) {
     return null;
   }
-  const named = declaredNamesIn({ type: "agencyProgram", nodes: [exported] });
   return {
     diagnostic: "spliceGeneratedExport",
-    params: { name: generatorName, declared: named[0] ?? "a declaration" },
+    params: { name: generatorName, declared: exportedNameOf(exported) },
     loc: splice.loc ?? ORIGIN_UNKNOWN,
   };
+}
+
+/**
+ * Agency exports two ways, and only one sets a flag.
+ *
+ * `export def greet()` marks the declaration with `exported: true`.
+ * `export { greet } from "./other.agency"` is its own node type carrying
+ * no such flag, and a code literal can hold one, so checking the flag
+ * alone let a generated re-export through.
+ */
+function isExporting(node: AgencyNode): boolean {
+  return (
+    (node as { exported?: boolean }).exported === true ||
+    node.type === "exportFromStatement"
+  );
+}
+
+function exportedNameOf(node: AgencyNode): string {
+  if (node.type === "exportFromStatement") {
+    const body = (node as { body?: { names?: string[] } }).body;
+    return body?.names?.[0] ?? "a re-export";
+  }
+  return declaredNamesIn({ type: "agencyProgram", nodes: [node] })[0] ?? "a declaration";
 }
 
 function graft(

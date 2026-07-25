@@ -103,9 +103,11 @@ Six paths run generator code: the two compile paths, the two typecheck paths, th
 
 Two things a reader might expect and should not.
 
-**Effects are not checked before the generator runs.** An earlier draft refused an effectful generator statically, as `AG8003`, and refused one reaching non-Agency code as `AG8006`. Both are gone. The backstop does the work instead: compilation installs no handlers, so an operation that raises cannot complete, and the failure arrives as `AG8008` naming the generator.
+**Effects are not checked before the generator runs.** An earlier draft refused an effectful generator statically, as `AG8003`. That is gone. The backstop does the work instead: compilation installs no handlers, so an operation that raises cannot complete, and the failure arrives as `AG8008` naming the generator.
 
-The static version could not be made precise while #680 stands, because effects do not cross a module boundary. To fail closed it had to refuse a generator when *any* export anywhere in its closure raised, which rejects a generator that uses one harmless function from a file that happens to contain an effectful one. A coarse check is defensible when it is the only protection; it is hard to justify as an earlier version of an error the runtime already produces. Filed as **#691**, blocked on #680. The import restriction returns as a user-chosen `--only-stdlib` flag in **#690**.
+The static version could not be made precise while #680 stands, because effects do not cross a module boundary. To fail closed it had to refuse a generator when *any* export anywhere in its closure raised, which rejects a generator that uses one harmless function from a file that happens to contain an effectful one. A coarse check is defensible when it is the only protection; it is hard to justify as an earlier version of an error the runtime already produces. Filed as **#691**, blocked on #680.
+
+The import restriction, `AG8006`, was removed at the same time and then restored. It does not share the imprecision: "does this generator reach a non-Agency import" has an exact answer, and it is the precondition that makes the backstop mean anything rather than a duplicate of it. It is on by default, with `allowNonAgencyGenerators` in the config to opt out.
 
 **Determinism is not enforced.**
 
@@ -121,11 +123,15 @@ If this needs to be enforced properly one day, the complete version is to track 
 
 ## The safety argument, and what carries it
 
-Agency can do compile-time codegen more safely than Haskell, though this version does not yet cash that in. GHC cannot distinguish `makeLenses` walking a datatype from a splice that exfiltrates your source, because `runIO` is opaque. Agency routes dangerous operations through interrupts, and compilation installs no handlers, so an effectful generator cannot complete — it fails partway with `AG8008` instead of finishing its work.
+Agency can do compile-time codegen more safely than Haskell. GHC cannot distinguish `makeLenses` walking a datatype from a splice that exfiltrates your source, because `runIO` is opaque. Agency routes dangerous operations through interrupts, and compilation installs no handlers, so an effectful generator cannot complete — it fails partway with `AG8008` instead of finishing its work.
 
-That is the whole mechanism today. It is enforcement without foresight: the operation is stopped, but only once attempted.
+That is enforcement without foresight: the operation is stopped, but only once attempted. The import restriction below is what keeps that enforcement applicable at all.
 
-That only holds for Agency code. A plain JS/TS package passes through untouched when imported (`docs/dev/pkg-imports.md`), and JavaScript raises nothing, so a generator that reaches one is unchecked. That restriction is not enforced in this version; it returns as `--only-stdlib` in #690.
+That only holds for Agency code. A plain JS/TS package passes through untouched when imported (`docs/dev/pkg-imports.md`), and JavaScript raises nothing, so a generator that reaches one is neither checked before it runs nor stopped while running.
+
+`checkImportGraph` is therefore not an optional extra. It is the precondition: a generator's transitive import graph may contain only `std::` and relative `.agency` files. Transitive is load-bearing, because a clean-looking local file can import `zod` one level down. `tests/agency/splices/refuseNonAgency.agency` is exactly that case.
+
+`allowNonAgencyGenerators` turns it off for users who need it, and turns off the guarantee with it.
 
 Unhandled interrupts are the backstop rather than the mechanism. Compilation installs no handlers, so an operation that somehow passed eligibility still cannot complete.
 
@@ -133,9 +139,9 @@ Unhandled interrupts are the backstop rather than the mechanism. Compilation ins
 
 Some stdlib functions read process state and raise nothing, so nothing sees them. `std::system` exports `env`, `args`, `cwd`, and `isTTY` this way, while `setEnv` right below `env` does raise.
 
-`env` is the one that matters: a generator could bake a secret into the emitted JavaScript as a string literal, and that artifact gets committed. The fix is to make `env` raise like its neighbour, which puts it back inside the mechanism that already works. Filed as **#688**.
+`env` is the one that matters: a generator could bake a secret into the emitted JavaScript as a string literal, and that artifact gets committed.
 
-The child's stdin is a pipe, so `readStdin` gets EOF instead of consuming or blocking the build's input. That is one line and stays regardless.
+Two mitigations, because there are two routes. Making `env` raise like its neighbour closes the Agency route and is filed as **#688**. It cannot close the JavaScript route, where an imported package reads `process.env` with no interrupt involved anywhere. So the child process receives an allowlisted environment holding only what Node needs to start (`CHILD_ENV_ALLOWED` in `runGenerator.ts`), which covers both. Its stdin is a pipe, so `readStdin` gets EOF rather than consuming the build's input.
 
 For calibration, this is closer to the npm `postinstall` problem than to a new hole. The generator is code already in your project, and compiling already runs your code. npm, Template Haskell, and Rust proc macros check nothing at all.
 

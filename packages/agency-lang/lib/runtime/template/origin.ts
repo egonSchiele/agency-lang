@@ -3,13 +3,17 @@ import type { Code } from "./code.js";
 import type { SourceLocation } from "../../types/base.js";
 
 /**
- * What filling a hole (`fill.ts`) and expanding a splice
- * (`expandSplices.ts`) must agree about.
+ * Recording where a piece of generated code came from, so errors can name
+ * it, plus the one table that says what shape of code fits where.
  *
- * The two run at different times against different node types, but they
- * answer the same two questions, and the answers must not drift apart.
- * Origin stamping is what makes an error inside generated code
- * attributable, and it is the first thing to go stale in a second copy.
+ * Two features generate code: filling a hole in a template (`fill.ts`) and
+ * expanding a compile-time splice (`expandSplices.ts`). They run at
+ * different times against different node types, but they answer the same
+ * two questions, and the answers must not drift apart.
+ *
+ * Without the origin stamp, a type error inside generated code points at
+ * the user's file at code they never wrote, with nothing saying where it
+ * came from.
  */
 
 /** Who a grafted node came from. */

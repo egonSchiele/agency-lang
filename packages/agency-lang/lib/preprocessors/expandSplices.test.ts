@@ -264,6 +264,21 @@ describe("expandSplices", () => {
     expect(result.diagnostic.diagnostic).toBe("spliceGeneratedExport");
   }, 60_000);
 
+  it("refuses a generated re-export, which carries no exported flag", () => {
+    // `export def x` sets `exported: true`; `export { x } from "..."` is a
+    // different node type with no such flag. Checking the flag alone let
+    // this through.
+    write("other.agency", `export def x(): number {\n  return 1\n}\n`);
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    export { x } from "./other.agency"\n  |]\n}\n`,
+    );
+    const result = expand(`import { g } from "./gen.agency"\n\n$( g() )\n`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostic.diagnostic).toBe("spliceGeneratedExport");
+  }, 60_000);
+
   it("refuses a generated declaration that redeclares a host name", () => {
     // Agency catches this for `def` but not for top-level `const`, where
     // the later one silently wins. So the rule is enforced here.

@@ -14,6 +14,7 @@ import { nanoid } from "nanoid";
 import * as fs from "fs";
 import * as path from "path";
 import { parseAgency } from "@/parser.js";
+import { makeAgencyTempDir } from "@/utils/agencyTempDir.js";
 import { safeDeleteDirectory } from "../utils.js";
 
 export type TypeCheckDiagnostic = {
@@ -58,12 +59,8 @@ function withSourcePath<T>(
   fn: (syntheticPath: string) => T,
 ): T {
   if (sourcePath) return fn(sourcePath);
-  // Place the tempdir under cwd's .agency-tmp/ (same location _run's
-  // materializeCompiledScript uses) so safeDeleteDirectory's project-containment check
-  // accepts it on cleanup. os.tmpdir() would be outside the project.
   const moduleId = `agency_${nanoid()}`;
-  const tempDir = path.join(process.cwd(), ".agency-tmp", `typecheck-${nanoid()}`);
-  fs.mkdirSync(tempDir, { recursive: true });
+  const tempDir = makeAgencyTempDir("typecheck");
   const syntheticPath = path.join(tempDir, `${moduleId}.agency`);
   fs.writeFileSync(syntheticPath, source, "utf-8");
   try {

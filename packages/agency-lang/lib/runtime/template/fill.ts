@@ -4,7 +4,7 @@ import { LEGAL_IDENTIFIER, RESERVED_WORDS } from "../../parsers/parsers.js";
 import { findHoles, holeNames, positionInferredTypes } from "../../utils/holes.js";
 import { variableTypeToString } from "../../backends/typescriptGenerator/typeToString.js";
 import { Code, isCode, kindOf } from "./code.js";
-import { kindFitsSort, stampOrigin } from "./graft.js";
+import { kindFitsSort, stampOrigin } from "./origin.js";
 import { liftValue } from "./lift.js";
 import {
   RESERVED_PREFIX,

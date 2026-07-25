@@ -1,12 +1,12 @@
 import path from "node:path";
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
-import { nanoid } from "nanoid";
 import { createBuildSession } from "../buildSession.js";
 import { RunStrategy } from "../../importStrategy.js";
 import { generateExpression } from "../../backends/agencyGenerator.js";
 import { isCode } from "../../runtime/template/code.js";
 import { safeDeleteDirectory } from "../../utils.js";
+import { makeAgencyTempDir } from "../../utils/agencyTempDir.js";
 import type { Code } from "../../runtime/template/code.js";
 import type { AgencyConfig } from "../../config.js";
 import type { Splice } from "../../types/splice.js";
@@ -44,6 +44,56 @@ export const EDITOR_WALL_CLOCK_MS = 3_000;
  *  with anything the generator module exports. */
 const RUNNER_NODE = "__splice";
 
+/**
+ * The only environment variables the child gets.
+ *
+ * A generator can read the environment two ways, and they need different
+ * answers. Through Agency, `env` in `std::system` raises no interrupt, so
+ * nothing asks permission; issue #688 fixes that in the stdlib. Through
+ * JavaScript, an imported npm package can read `process.env` directly and
+ * no interrupt is involved at any point, so #688 cannot help. Withholding
+ * the environment here is the only thing that covers both.
+ *
+ * It matters because whatever a generator reads can be written into the
+ * code it produces, and that code becomes a committed file. A secret read
+ * here would be a string literal in the emitted JavaScript.
+ *
+ * An allowlist rather than a blocklist of secret-looking names, because
+ * the failure directions are not symmetric. A missed entry here breaks a
+ * build loudly; a missed pattern in a blocklist leaks a secret silently.
+ * A generator is Agency code doing AST work, so it needs nothing beyond
+ * what Node itself needs to start.
+ */
+const CHILD_ENV_ALLOWED: readonly string[] = [
+  "PATH",
+  "HOME",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  "LANG",
+  "LC_ALL",
+  // Windows needs these to resolve and launch anything at all.
+  "SystemRoot",
+  "SystemDrive",
+  "WINDIR",
+  "COMSPEC",
+  "PATHEXT",
+  "APPDATA",
+  "LOCALAPPDATA",
+  "USERPROFILE",
+];
+
+function childEnv(): Record<string, string> {
+  const out: Record<string, string> = Object.create(null);
+  for (const name of CHILD_ENV_ALLOWED) {
+    const value = process.env[name];
+    if (value !== undefined) {
+      out[name] = value;
+    }
+  }
+  return out;
+}
+
 /** Limits are overridable so a test can prove the timeout works without
  *  waiting 30 seconds for it. */
 export type RunGeneratorOptions = {
@@ -62,8 +112,7 @@ export function runGenerator(
   cwd: string,
   options: RunGeneratorOptions = {},
 ): SpliceResult<Code> {
-  const tempDir = path.join(cwd, ".agency-tmp", `splice-${nanoid()}`);
-  fs.mkdirSync(tempDir, { recursive: true });
+  const tempDir = makeAgencyTempDir("splice", cwd);
   try {
     return runInTempDir(splice, generator, tempDir, options);
   } finally {
@@ -106,8 +155,21 @@ function runInTempDir(
 }
 
 /**
- * The program that runs the generator: the generator's import, whatever
- * the arguments need, and one node.
+ * The tiny Agency program that calls the generator.
+ *
+ * Agency code runs inside a `node`, which is Agency's unit of execution. A
+ * generator is an ordinary function, so there is nothing to run directly.
+ * This wraps the call in a node so there is:
+ *
+ *     import { makeGreeter } from "../../greeter.agency"
+ *
+ *     export node __splice() {
+ *       return makeGreeter()
+ *     }
+ *
+ * The import path points back at the user's real file, computed with
+ * `path.relative` from this temporary directory. That is what lets the
+ * generator's own relative imports resolve.
  *
  * Never copy the host's import lines wholesale. They would drag in the npm
  * and `pkg::` imports the eligibility check just banned. The argument
@@ -246,6 +308,7 @@ function execute(
       // "pipe" for stdin so a generator calling readStdin gets EOF rather
       // than consuming or blocking the build's own input.
       stdio: ["pipe", "pipe", "pipe"],
+      env: childEnv(),
     });
     return null;
   } catch (err) {
@@ -374,12 +437,40 @@ function interruptNames(interrupts: Array<{ name?: string }>): string {
   return names.filter((name, index) => names.indexOf(name) === index).join(", ");
 }
 
-/** A short, non-leaking description of an unexpected return value. */
+/**
+ * Describe an unexpected return value, including what it actually was.
+ *
+ * "an array" tells the author nothing about which of their return paths
+ * fired. Showing the value does, and it is their own data, so there is
+ * nothing to withhold. Truncated because a generator can return something
+ * large.
+ */
+const SHOWN_VALUE_LIMIT = 200;
+
 function describe(value: unknown): string {
-  if (value === null) return "null";
-  if (Array.isArray(value)) return "an array";
-  if (typeof value === "object") return "an object";
-  return `a ${typeof value}`;
+  const kind =
+    value === null
+      ? "null"
+      : Array.isArray(value)
+        ? "an array"
+        : typeof value === "object"
+          ? "an object"
+          : `a ${typeof value}`;
+  const shown = show(value);
+  return shown === null ? kind : `${kind}, ${shown}`;
+}
+
+function show(value: unknown): string | null {
+  let text: string;
+  try {
+    text = JSON.stringify(value) ?? String(value);
+  } catch {
+    // Circular, or something else JSON cannot walk. The kind alone stands.
+    return null;
+  }
+  return text.length > SHOWN_VALUE_LIMIT
+    ? `${text.slice(0, SHOWN_VALUE_LIMIT)}… (truncated)`
+    : text;
 }
 
 function failed(

@@ -229,6 +229,30 @@ describe("runGenerator", () => {
   }, 60_000);
 });
 
+describe("the child's environment", () => {
+  it("does not hand the generator the parent's secrets", () => {
+    // Whatever a generator reads can end up written into the code it
+    // produces, and that code becomes a committed file.
+    process.env.SPLICE_TEST_FAKE_SECRET = "sk-do-not-leak";
+    try {
+      const modulePath = write(
+        "gen.agency",
+        `import { Code, fill } from "std::agency"\nimport { env } from "std::system"\n\nexport def g(): Code {\n  const secret = env("SPLICE_TEST_FAKE_SECRET")\n  const filled = fill([| #v: string |], { v: secret })\n  if (isFailure(filled)) {\n    return [| "fill failed" |]\n  }\n  return filled.value\n}\n`,
+      );
+      const splice = spliceIn(`import { g } from "./gen.agency"\n\n$( g() )\n`);
+      const result = runGenerator(splice, { modulePath, exportedName: "g" }, dir);
+      expect(JSON.stringify(result)).not.toContain("sk-do-not-leak");
+    } finally {
+      delete process.env.SPLICE_TEST_FAKE_SECRET;
+    }
+  }, 60_000);
+
+  it("still gives the child enough to run", () => {
+    const { splice, generator } = generatorReturning(`  return [| 1 |]`);
+    expect(runGenerator(splice, generator, dir).ok).toBe(true);
+  }, 60_000);
+});
+
 describe("checkNoNestedSplice", () => {
   it("allows a generator with no splice anywhere in its closure", () => {
     write("helper.agency", `export def h(): number {\n  return 2\n}\n`);

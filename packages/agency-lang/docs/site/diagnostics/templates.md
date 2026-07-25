@@ -43,6 +43,20 @@ The generator has to be compiled before the file that splices it can be compiled
 
 **How to fix:** move the generator into its own `.agency` file and import it.
 
+<a id="ag8006"></a>
+
+## AG8006 — The generator `&#123;name&#125;` reaches non-Agency code through `&#123;importPath&#125;`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript raises no interrupts and cannot be checked. Set `allowNonAgencyGenerators` in your config to permit it.
+
+*Default severity: error.*
+
+A compile-time generator, or something it imports, reaches code that is not Agency.
+
+Splices are safe to run during compilation because dangerous operations in Agency ask permission first, and compilation has nobody to ask, so they cannot complete. That reasoning covers Agency code only. JavaScript and TypeScript ask nothing, so a generator that can reach an npm package can do anything at all, with nothing to stop it.
+
+The rule covers everything a generator can reach, not just what it imports directly. A local `.agency` file that looks harmless can import an npm package one step further down.
+
+**How to fix:** move the work into Agency, or set `allowNonAgencyGenerators: true` in your config if the generator genuinely needs a JavaScript library. Turning it off means the generator can do whatever that library can.
+
 <a id="ag8007"></a>
 
 ## AG8007 — The generator `&#123;name&#125;` returned a `&#123;actual&#125;` fragment, but this splice is in &#123;position&#125; position and needs a `&#123;expected&#125;` fragment.

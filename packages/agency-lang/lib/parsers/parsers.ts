@@ -3145,35 +3145,22 @@ const spliceInnerWhitespace = many(oneOf(" \t\n\r"));
 /** Far simpler than `codeLiteralRest` and deliberately so. A code literal
  *  needs an end-scan grammar because its body is arbitrary text; a splice
  *  holds one Agency EXPRESSION, so `exprParser` already knows where it
- *  ends. Do not add an end-scan here. */
-const spliceRest: Parser<Splice> = (input: string) => {
-  const beforeExpr = spliceInnerWhitespace(input);
-  const expression = exprParser(beforeExpr.rest);
-  if (!expression.success) {
-    return failure(`splice: ${expression.message}`, input);
-  }
-  const afterExpr = spliceInnerWhitespace(expression.rest);
-  const closed = str(")")(afterExpr.rest);
-  if (!closed.success) {
-    return failure("splice: expected `)` to close `$(`", afterExpr.rest);
-  }
-  return {
-    success: true,
-    result: {
-      type: "splice",
-      expression: expression.result,
-      // Rewritten to "decl" by topLevelSpliceParser. Everything reached
-      // through baseAtom — including a top-level `const x = $( … )` — is
-      // an expression splice.
-      position: "expr",
-    },
-    rest: closed.rest,
-  };
-};
+ *  ends. Do not add an end-scan here.
+ *
+ *  `position` is set to "expr" here and rewritten to "decl" by
+ *  `topLevelSpliceParser`. Everything reached through `baseAtom` is in
+ *  expression position by construction. */
+const spliceRest: Parser<Splice> = seqC(
+  set("type", "splice"),
+  set("position", "expr"),
+  spliceInnerWhitespace,
+  // `exprParser` is declared further down this file, so the reference
+  // has to be deferred past module init.
+  capture(lazy(() => exprParser), "expression"),
+  spliceInnerWhitespace,
+  str(")"),
+);
 
-/** Committed after `$(`, following codeLiteralParser: once the opener is
- *  seen no fallback may reinterpret the text, so a failure inside wins
- *  error reporting instead of degrading to a generic grammar message. */
 export const spliceParser: Parser<Splice> = withLoc(
   committed(str(SPLICE_OPEN), spliceRest),
 );
@@ -3911,7 +3898,9 @@ export const matchBlockExprParser = label("a match expression", withLoc(seqC(
   str("match"),
   optionalSpaces,
   char("("),
-  capture(exprParser, "expression"),
+  // `exprParser` is declared further down this file, so the reference
+  // has to be deferred past module init.
+  capture(lazy(() => exprParser), "expression"),
   char(")"),
   optionalSpaces,
   char("{"),

@@ -74,22 +74,22 @@ function runInTempDir(
     "utf-8",
   );
 
-  const compiled = compileRunner(runnerPath, options.config ?? {});
+  const compiled = compileRunner(runnerPath, options.config ?? {}, splice, generator);
   if (!compiled.ok) {
-    return { ok: false, diagnostic: failed(splice, generator, compiled.reason) };
+    return compiled;
   }
 
   const resultsPath = path.join(tempDir, "result.json");
   const scriptPath = path.join(tempDir, "run.mjs");
   fs.writeFileSync(
     scriptPath,
-    childScript(importSpecifier(tempDir, compiled.outputFile), resultsPath),
+    childScript(importSpecifier(tempDir, compiled.value), resultsPath),
     "utf-8",
   );
 
-  const executed = execute(scriptPath, tempDir, options);
-  if (!executed.ok) {
-    return { ok: false, diagnostic: failed(splice, generator, executed.reason) };
+  const failure = execute(scriptPath, tempDir, options, splice, generator);
+  if (failure !== null) {
+    return { ok: false, diagnostic: failure };
   }
 
   return readResult(resultsPath, splice, generator);
@@ -175,7 +175,9 @@ function importSpecifier(fromDir: string, target: string): string {
 function compileRunner(
   runnerPath: string,
   config: AgencyConfig,
-): { ok: true; outputFile: string } | { ok: false; reason: string } {
+  splice: Splice,
+  generator: { modulePath: string; exportedName: string },
+): SpliceResult<string> {
   try {
     const outputFile = createBuildSession().compile(
       { ...config, typechecker: { enabled: false } },
@@ -186,11 +188,18 @@ function compileRunner(
       },
     );
     if (outputFile === null) {
-      return { ok: false, reason: "the generator module could not be compiled" };
+      return {
+        ok: false,
+        diagnostic: failed(
+          splice,
+          generator,
+          "the generator module could not be compiled",
+        ),
+      };
     }
-    return { ok: true, outputFile };
+    return { ok: true, value: outputFile };
   } catch (err) {
-    return { ok: false, reason: messageOf(err) };
+    return { ok: false, diagnostic: failed(splice, generator, messageOf(err)) };
   }
 }
 
@@ -207,13 +216,16 @@ function childScript(moduleSpecifier: string, resultsPath: string): string {
   ].join("\n");
 }
 
-/** Run the child under both limits. Read `err.signal` to tell them apart.
- *  `err.killed` is `undefined` even on a timeout kill. */
+/** Run the child under both limits, returning what went wrong or null.
+ *  Read `err.signal` to tell the limits apart; `err.killed` is `undefined`
+ *  even on a timeout kill. */
 function execute(
   scriptPath: string,
   cwd: string,
   options: RunGeneratorOptions,
-): { ok: true } | { ok: false; reason: string } {
+  splice: Splice,
+  generator: { modulePath: string; exportedName: string },
+): SpliceDiagnostic | null {
   const wallClockMs = options.wallClockMs ?? WALL_CLOCK_MS;
   const memoryMb = options.memoryMb ?? MEMORY_MB;
   try {
@@ -223,19 +235,20 @@ function execute(
       encoding: "utf-8",
       stdio: "pipe",
     });
-    return { ok: true };
+    return null;
   } catch (err) {
     const signal = (err as { signal?: string }).signal;
     if (signal === "SIGTERM") {
-      return {
-        ok: false,
-        reason: `it did not finish within ${wallClockMs / 1000} seconds`,
-      };
+      return failed(
+        splice,
+        generator,
+        `it did not finish within ${wallClockMs / 1000} seconds`,
+      );
     }
     if (signal === "SIGABRT") {
-      return { ok: false, reason: `it exceeded the ${memoryMb}mb memory limit` };
+      return failed(splice, generator, `it exceeded the ${memoryMb}mb memory limit`);
     }
-    return { ok: false, reason: stderrOf(err) };
+    return failed(splice, generator, stderrOf(err));
   }
 }
 

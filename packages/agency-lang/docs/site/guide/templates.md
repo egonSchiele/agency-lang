@@ -338,6 +338,12 @@ $( makeFieldGetters(FIELDS) )   // fine: FIELDS is imported
 
 **Generated declarations may not take a name already in use.** Two functions with the same name is an error in Agency. Two top-level constants is not, and the later one silently wins, so a generator could otherwise replace one of your constants with nothing said. (`AG8012`)
 
+### How type checking sees generated code
+
+Exactly the way it sees everything else. Expansion runs right after parsing and before anything looks at what the file declares, so by the time the type checker starts, `greet` is an ordinary function in an ordinary file. It gets checked, it shows up in autocomplete, and calling it with the wrong arguments is a normal error.
+
+That is also why a generated declaration can be exported and imported from another file. Nothing downstream knows the code was generated, except for one thing: if a type error lands inside generated code, the message says which generator produced it.
+
 ### One thing it does not check
 
 Nothing stops a generator being nondeterministic. If it reaches an LLM or the clock, two builds of the same source produce different code, and that is your problem rather than the compiler's. There is no complete way to check it today, and a partial check that reads like a guarantee would be worse than none.

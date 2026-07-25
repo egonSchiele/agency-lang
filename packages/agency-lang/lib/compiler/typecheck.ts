@@ -169,22 +169,13 @@ export function getEffectsFromSource(source: string): EffectsByExport {
 }
 
 /**
- * The same map, for a file that exists on disk.
+ * The same map, for a file that exists on disk. Prefer this whenever a real
+ * path is available.
  *
- * This exists because the string-taking form above is FAIL-OPEN for any
- * module with a relative import. It passes `undefined` as `sourcePath`, so
- * `withSourcePath` writes the source to a fresh temp dir and builds the
- * symbol table from there — where `./helper.agency` does not exist. The
- * import silently does not resolve, its effects never propagate, and the
- * reported list comes back EMPTY.
- *
- * That is fine for `std::agency`'s `getEffects`, whose docstring says
- * relative imports cannot be resolved from a source string. It is not fine
- * for splice eligibility, where an empty list means "safe to run at
- * compile time". Always prefer this form when a real path is available.
- *
- * `_typecheckFile` (lib/stdlib/agency.ts) is the precedent for a
- * file-based sibling of a string-based checker.
+ * The string form above cannot resolve relative imports, so their effects
+ * never propagate and the list comes back short. That is documented
+ * behavior for `getEffects`, but wrong for splice eligibility, where an
+ * empty list reads as "safe to run at compile time".
  */
 export function getEffectsFromFile(filePath: string): EffectsByExport {
   const absolute = path.resolve(filePath);

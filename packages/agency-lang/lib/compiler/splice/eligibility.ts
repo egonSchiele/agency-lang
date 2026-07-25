@@ -2,7 +2,9 @@ import path from "node:path";
 import fs from "node:fs";
 import { parseAgency } from "../../parser.js";
 import { agencyImportTarget } from "../compileClosure.js";
+import { getEffectsFromFile } from "../typecheck.js";
 import { isStdlibImport } from "../../importPaths.js";
+import { walkNodesArray } from "../../utils/node.js";
 import type { AgencyConfig } from "../../config.js";
 import type { AgencyProgram, AgencyNode } from "../../types.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
@@ -96,6 +98,235 @@ export function checkImportGraph(
     }
   }
   return null;
+}
+
+/**
+ * Sources of nondeterminism a generator may not reach.
+ *
+ * The effect system gates things that are DANGEROUS. It does not gate
+ * things that are merely UNREPEATABLE, and at build time those are
+ * different problems. `llm()` raises no interrupt at all — stdlib/llm.agency
+ * contains zero interrupt sites and `llm` is a language builtin — so it
+ * sails through the effect check while making a network call, spending
+ * money, and producing a different program on every build.
+ *
+ * `llm` is a builtin (see resolveCall.ts's builtin list), so a bare name
+ * match is unambiguous. The clock arrives through `std::date`, so it is
+ * matched by what a file actually imports rather than by spelling, which
+ * would false-positive on a user's own `now()`.
+ *
+ * There is no randomness in the stdlib's exported surface today. If one is
+ * added, it belongs here.
+ */
+const NONDETERMINISTIC_BUILTINS: readonly string[] = ["llm"];
+const NONDETERMINISTIC_STDLIB: Record<string, readonly string[]> = {
+  "std::date": ["now", "today"],
+};
+
+/** Local names in one file that resolve to a nondeterministic function. */
+function nondeterministicNamesIn(program: AgencyProgram): string[] {
+  const names = [...NONDETERMINISTIC_BUILTINS];
+  for (const node of program.nodes) {
+    if (node.type !== "importStatement") {
+      continue;
+    }
+    const flagged = NONDETERMINISTIC_STDLIB[node.modulePath];
+    if (flagged === undefined) {
+      continue;
+    }
+    for (const nameGroup of node.importedNames) {
+      if (nameGroup.type !== "namedImport") {
+        continue;
+      }
+      const aliases = nameGroup.aliases ?? {};
+      for (const entry of nameGroup.importedNames) {
+        if (typeof entry === "string" && flagged.includes(entry)) {
+          names.push(Object.hasOwn(aliases, entry) ? aliases[entry] : entry);
+        }
+      }
+    }
+  }
+  return names;
+}
+
+/** The first nondeterministic call in one file, or null. */
+function nondeterministicCallIn(program: AgencyProgram): string | null {
+  const flagged = nondeterministicNamesIn(program);
+  const call = [...walkNodesArray(program.nodes)]
+    .map((visit) => visit.node)
+    .find(
+      (node) => node.type === "functionCall" && flagged.includes(node.functionName),
+    );
+  return call === undefined ? null : `${(call as { functionName: string }).functionName}()`;
+}
+
+/**
+ * Refuse a generator that can reach an LLM call or the clock.
+ *
+ * Scope is the generator's transitive closure of RELATIVE `.agency` files,
+ * the same set `checkImportGraph` walks. `std::` modules are trusted and
+ * not scanned — otherwise importing `std::agent`, which certainly calls
+ * `llm`, would refuse every generator that touched it.
+ *
+ * Deliberately coarse: a file anywhere in the closure containing a
+ * nondeterministic call is enough, even if the generator never calls the
+ * function that makes it. Per-function transitive analysis would be
+ * sharper, but generators are small and effect-free by rule already, and
+ * being conservative here fails closed. If false positives show up in
+ * practice, this is the place to narrow.
+ */
+export function checkDeterminism(
+  generatorPath: string,
+  generatorName: string,
+  config: AgencyConfig = {},
+): SpliceDiagnostic | null {
+  const visited: Record<string, true> = Object.create(null);
+  const queue: string[] = [path.resolve(generatorPath)];
+
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    if (Object.hasOwn(visited, current)) {
+      continue;
+    }
+    visited[current] = true;
+
+    const program = parseFileOrNull(current, config);
+    if (program === null) {
+      continue;
+    }
+
+    const found = nondeterministicCallIn(program);
+    if (found !== null) {
+      return {
+        diagnostic: "spliceGeneratorNondeterministic",
+        params: { name: generatorName, source: found },
+        loc: { line: 0, col: 0, start: 0, end: 0 },
+      };
+    }
+
+    for (const specifier of importEdgesOf(program)) {
+      if (isRelativeAgencyPath(specifier)) {
+        queue.push(path.resolve(path.dirname(current), specifier));
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Refuse a generator that can reach any interrupt effect.
+ *
+ * Two things make this more than a lookup, and both were found by testing
+ * rather than by reading.
+ *
+ * First, take a PATH, never a source string. `getEffectsFromSource` passes
+ * `undefined` as `sourcePath`, so `withSourcePath` writes to a fresh temp
+ * dir where `./helper.agency` does not exist — and import resolution then
+ * THROWS rather than returning a short answer.
+ *
+ * Second, and worse: the effect map does not propagate across a module
+ * boundary even with a real path. Measured directly —
+ *
+ *     helper.agency alone      → { h: ["std::read"] }
+ *     gen.agency, calling h()  → { g: [] }
+ *
+ * So a generator that delegates its effectful work one file away reports
+ * an EMPTY effect list, which reads as "safe to run at compile time". The
+ * spec and the plan review both assumed the path fix was sufficient. It is
+ * not.
+ *
+ * Until cross-module propagation exists in the checker, scope the check to
+ * the generator's transitive closure of relative `.agency` files, the same
+ * set the import-graph and determinism checks walk. Within the generator's
+ * OWN file the map is accurate, so check the generator by name there;
+ * across an import boundary nothing says which exports are reachable, so
+ * ANY effectful export refuses. Coarse, and deliberately so: generators
+ * are small and effect-free by rule already, and this fails closed.
+ */
+export function checkEffects(
+  generatorPath: string,
+  generatorName: string,
+  config: AgencyConfig = {},
+): SpliceDiagnostic | null {
+  const entry = path.resolve(generatorPath);
+  const visited: Record<string, true> = Object.create(null);
+  const queue: string[] = [entry];
+
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    if (Object.hasOwn(visited, current)) {
+      continue;
+    }
+    visited[current] = true;
+
+    const program = parseFileOrNull(current, config);
+    if (program === null) {
+      continue;
+    }
+
+    const found = effectsInFile(current, generatorName, current === entry);
+    if (found !== null) {
+      return {
+        diagnostic: "spliceGeneratorHasEffects",
+        params: { name: generatorName, effects: found },
+        loc: { line: 0, col: 0, start: 0, end: 0 },
+      };
+    }
+
+    for (const specifier of importEdgesOf(program)) {
+      if (isRelativeAgencyPath(specifier)) {
+        queue.push(path.resolve(path.dirname(current), specifier));
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Effects declared by one file: the named generator when this is its own
+ * file, otherwise any export. Returns a printable list, or null for none.
+ */
+function effectsInFile(
+  filePath: string,
+  generatorName: string,
+  isEntry: boolean,
+): string | null {
+  let byExport: Record<string, string[]>;
+  try {
+    byExport = getEffectsFromFile(filePath);
+  } catch (err) {
+    // An unresolvable import or a type error in the closure means the
+    // effect list cannot be trusted. Fail CLOSED: an unknown answer is not
+    // a safe one when the question is "may this run at compile time".
+    console.error(`splice eligibility: cannot read effects of ${filePath}:`, err);
+    return "unknown";
+  }
+  const effects = isEntry
+    ? (byExport[generatorName] ?? [])
+    : Object.values(byExport).flat();
+  const unique = effects.filter((name, index) => effects.indexOf(name) === index);
+  return unique.length === 0 ? null : unique.sort().join(", ");
+}
+
+/**
+ * All three checks, composed. The expansion pass calls this and never names
+ * an individual rule, so adding a rule later is an entry in this array
+ * rather than an edit to the pass.
+ */
+export function checkGeneratorEligible(
+  generatorPath: string,
+  generatorName: string,
+  config: AgencyConfig = {},
+): SpliceDiagnostic | null {
+  const checks = [
+    () => checkImportGraph(generatorPath, generatorName, config),
+    () => checkEffects(generatorPath, generatorName),
+    () => checkDeterminism(generatorPath, generatorName, config),
+  ];
+  return checks.reduce<SpliceDiagnostic | null>(
+    (found, check) => found ?? check(),
+    null,
+  );
 }
 
 /**

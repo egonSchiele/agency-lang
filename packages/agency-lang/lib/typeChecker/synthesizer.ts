@@ -229,6 +229,15 @@ function accessUnionField(
   ctx: TypeCheckerContext,
   loc: SourceLocation | undefined,
 ): VariableType | null {
+  // `any` absorbs. A union with an `any` member permits no less than `any`
+  // alone would, so reporting a field as missing from it is backwards: the
+  // member that accepts everything is the reason the read is already
+  // unchecked. Reached when an effect with no declared payload is handled
+  // alongside one that has a payload, which is ordinary in a handler that
+  // covers several effects.
+  if (union.types.some((member) => isAnyType(safeResolveType(member, aliases)))) {
+    return ANY_T;
+  }
   const { type, missing } = unionPropertyAccess(union.types, fieldName, aliases);
   if (type === null) {
     return null;

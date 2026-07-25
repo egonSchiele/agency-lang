@@ -7,6 +7,8 @@ import { walkNodesArray } from "../../utils/node.js";
 import type { AgencyConfig } from "../../config.js";
 import type { AgencyProgram, AgencyNode } from "../../types.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
+import { checkGeneratorEffects } from "./generatorEffects.js";
+import type { SymbolTable } from "../../symbolTable.js";
 
 /**
  * Working out which module supplies a splice's generator, and deciding
@@ -29,12 +31,12 @@ import type { SpliceDiagnostic, SpliceResult } from "./types.js";
  * The name says "file path" rather than "relative" so it does not promise
  * a narrowness it has never had.
  */
-function isAgencyFilePath(specifier: string): boolean {
+export function isAgencyFilePath(specifier: string): boolean {
   return specifier.endsWith(".agency") && !specifier.includes("::");
 }
 
 /** Every import edge declared by one file, unfiltered. */
-function importEdgesOf(program: AgencyProgram): string[] {
+export function importEdgesOf(program: AgencyProgram): string[] {
   return program.nodes
     .map((node: AgencyNode) => agencyImportTarget(node))
     .filter((target): target is string => target !== null);
@@ -43,7 +45,7 @@ function importEdgesOf(program: AgencyProgram): string[] {
 /** Through the shared parse cache, like every other closure walker in the
  *  codebase. These files get parsed several times per splice: once per
  *  check, plus again for the cache fingerprint. */
-function parseFileOrNull(absPath: string, config: AgencyConfig): AgencyProgram | null {
+export function parseFileOrNull(absPath: string, config: AgencyConfig): AgencyProgram | null {
   if (!fs.existsSync(absPath)) {
     return null;
   }
@@ -197,6 +199,7 @@ export function checkGeneratorEligible(
   generatorPath: string,
   generatorName: string,
   config: AgencyConfig = {},
+  symbolTable?: SymbolTable,
 ): SpliceDiagnostic | null {
   const checks = [
     () => checkNoNestedSplice(generatorPath, generatorName, config),
@@ -204,6 +207,8 @@ export function checkGeneratorEligible(
       config.allowNonAgencyGenerators === true
         ? null
         : checkImportGraph(generatorPath, generatorName, config),
+    () =>
+      checkGeneratorEffects(generatorPath, generatorName, config, symbolTable),
   ];
   return checks.reduce<SpliceDiagnostic | null>(
     (found, check) => found ?? check(),

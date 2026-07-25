@@ -70,4 +70,6 @@ Answer a question from structured public-data APIs, naming the source and
 
 **Returns:** `Result<string>`
 
+**Throws:** `std::guard`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/data.agency#L107))

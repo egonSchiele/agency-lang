@@ -113,4 +113,6 @@ Write an Agency program for the task. Iterates until the source parses,
 
 **Returns:** `Result<string, WriteFailure>`
 
+**Throws:** `std::guard`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L251))

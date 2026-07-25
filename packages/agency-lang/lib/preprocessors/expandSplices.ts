@@ -22,6 +22,7 @@ import {
   spliceCacheKey,
   spliceCacheSlot,
 } from "../compiler/splice/cache.js";
+import type { SymbolTable } from "@/symbolTable.js";
 import type { AgencyConfig } from "../config.js";
 import type { AgencyNode, AgencyProgram } from "../types.js";
 import type { Splice } from "../types/splice.js";
@@ -49,7 +50,13 @@ const inProgress: Record<string, true> = Object.create(null);
 
 /** Per-call overrides. Only the editor sets these, to keep a runaway
  *  generator from freezing a single-threaded language server. */
-export type ExpandOptions = { wallClockMs?: number };
+export type ExpandOptions = {
+  wallClockMs?: number;
+  /** The caller's symbol table, so the effect check does not crawl and parse
+   *  every reachable file again at each splice site. Callers that have one
+   *  should pass it; the check builds its own when they do not. */
+  symbolTable?: SymbolTable;
+};
 
 export function expandSplices(
   program: AgencyProgram,
@@ -136,7 +143,7 @@ function expandOne(
   config: AgencyConfig,
   options: ExpandOptions,
 ): SpliceResult<AgencyNode[]> {
-  const decided = decide(splice, program, hostPath, config);
+  const decided = decide(splice, program, hostPath, config, options);
   if (!decided.ok) {
     return decided;
   }
@@ -209,6 +216,7 @@ type DecisionContext = {
   config: AgencyConfig;
   /** Every free name the arguments use, and where each comes from. */
   argumentSources: Array<{ name: string; source: ImportSource | null }>;
+  symbolTable?: SymbolTable;
 };
 
 /** The eligibility rules, in order, applied by a short-circuiting reduce
@@ -216,8 +224,13 @@ type DecisionContext = {
  *  adding an entry here rather than editing the pass. */
 const CHECKS: ReadonlyArray<(ctx: DecisionContext) => SpliceDiagnostic | null> = [
   checkArgumentsAvailable,
-  ({ generator, config }) =>
-    checkGeneratorEligible(generator.modulePath, generator.exportedName, config),
+  ({ generator, config, symbolTable }) =>
+    checkGeneratorEligible(
+      generator.modulePath,
+      generator.exportedName,
+      config,
+      symbolTable,
+    ),
 ];
 
 function decide(
@@ -225,6 +238,7 @@ function decide(
   program: AgencyProgram,
   hostPath: string,
   config: AgencyConfig,
+  options: ExpandOptions,
 ): SpliceResult<DecisionContext> {
   const localName = calleeName(splice);
   if (localName === null) {
@@ -254,6 +268,7 @@ function decide(
       localName,
       generator: resolved.value,
       config,
+      symbolTable: options.symbolTable,
       argumentSources: argumentSourcesFor(splice, program, hostPath).filter(
         (entry) => entry.name !== localName,
       ),

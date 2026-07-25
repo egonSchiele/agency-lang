@@ -108,8 +108,8 @@ type NumberInRange(low: number, high: number) = number
   });
 });
 
-describe("SymbolTable direct interrupt collection", () => {
-  it("populates direct interruptEffects on function and node symbols", () => {
+describe("SymbolTable interrupt collection", () => {
+  it("populates transitive interruptEffects on function and node symbols", () => {
     const file = path.join(os.tmpdir(), `st-int-${Date.now()}-${Math.random().toString(36).slice(2)}.agency`);
     writeFileSync(
       file,
@@ -129,25 +129,26 @@ describe("SymbolTable direct interrupt collection", () => {
       const st = SymbolTable.build(file);
       const symbols = st.getFile(path.resolve(file))!;
       expect(symbols).toBeDefined();
-      // Only direct interrupt kinds — no transitive propagation
+      // Effects follow calls: orchestrate and main reach the interrupt only
+      // through deploy, and both report it (GitHub issue 680).
       expect(symbols["deploy"]).toMatchObject({
         kind: "function",
         interruptEffects: [{ effect: "myapp::deploy" }],
       });
       expect(symbols["orchestrate"]).toMatchObject({
         kind: "function",
-        interruptEffects: [],
+        interruptEffects: [{ effect: "myapp::deploy" }],
       });
       expect(symbols["main"]).toMatchObject({
         kind: "node",
-        interruptEffects: [],
+        interruptEffects: [{ effect: "myapp::deploy" }],
       });
     } finally {
       unlinkSync(file);
     }
   });
 
-  it("collects direct interrupt kinds from imported files", () => {
+  it("collects interrupt kinds from imported files", () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const libFile = path.join(os.tmpdir(), `st-lib-${suffix}.agency`);
     const mainFile = path.join(os.tmpdir(), `st-main-${suffix}.agency`);
@@ -173,10 +174,13 @@ describe("SymbolTable direct interrupt collection", () => {
       const libSymbols = st.getFile(path.resolve(libFile))!;
       expect(libSymbols["deploy"].kind).toBe("function");
       expect((libSymbols["deploy"] as any).interruptEffects).toEqual([{ effect: "myapp::deploy" }]);
-      // main has no direct interrupts — transitive propagation happens in type checker
+      // main has no `interrupt` of its own; it reaches one by calling an
+      // imported function, and the symbol table follows that call.
       const mainSymbols = st.getFile(path.resolve(mainFile))!;
       expect(mainSymbols["main"].kind).toBe("node");
-      expect((mainSymbols["main"] as any).interruptEffects).toEqual([]);
+      expect((mainSymbols["main"] as any).interruptEffects).toEqual([
+        { effect: "myapp::deploy" },
+      ]);
     } finally {
       unlinkSync(mainFile);
       unlinkSync(libFile);

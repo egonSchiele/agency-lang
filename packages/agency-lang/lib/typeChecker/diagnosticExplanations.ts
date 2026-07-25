@@ -558,4 +558,20 @@ Agency does not catch this on its own. Two functions with the same name is a har
 The same rule covers two splices in one file generating the same name.
 
 **How to fix:** rename one of them. If the generator picks names from data you pass in, prefix them so they cannot collide with hand-written ones.`,
+
+  spliceGeneratorRaises: `A generator can reach an operation that asks for permission.
+
+Compilation installs no interrupt handlers, so an operation that stops to ask a question can never finish while a generator runs. Catching it before the generator starts means you get told which effect, and where, instead of a failure part-way through.
+
+The effect does not have to be in the generator itself. It counts if the generator can reach it by calling, however many files away that is.
+
+**How to fix:** move the effectful work out of the generator. Read the file at runtime and pass the contents in as a splice argument, or generate code that does the reading when the program runs rather than when it compiles.`,
+
+  spliceGeneratorUnreadable: `A generator could not be checked for effects, so it was refused rather than run.
+
+Working out what a generator can reach means reading source code. Four things cannot be read that way: a file that does not parse, a compile-time splice that has not expanded yet, a function received as a parameter and then called, and a function reference stored in a variable before being passed on.
+
+An empty effect list from a reading that could not see one of those is not evidence of safety, so it fails closed. The message names which one it hit and where.
+
+**How to fix:** fix the file that does not parse, or rewrite the reached function so the call is direct rather than through a parameter or a variable. If the generator does not need that helper at all, stop calling it — the check follows calls, so an unused helper in the same file is not a problem.`,
 };

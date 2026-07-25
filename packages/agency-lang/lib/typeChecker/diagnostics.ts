@@ -596,6 +596,18 @@ export const DIAGNOSTICS = {
     message:
       "`{name}` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first.",
   },
+  spliceGeneratorRaises: {
+    code: "AG8003",
+    severity: "error",
+    message:
+      "Generator '{name}' may raise {effects}, so it cannot run at compile time. Compilation installs no interrupt handlers, so those operations could not complete anyway. Move the effectful work out of the generator.",
+  },
+  spliceGeneratorUnreadable: {
+    code: "AG8004",
+    severity: "error",
+    message:
+      "Generator '{name}' cannot be checked for effects: {reason}. An empty effect list from an incomplete reading means nothing, so it is refused rather than run.",
+  },
   spliceGeneratorReachesNonAgency: {
     code: "AG8006",
     severity: "error",

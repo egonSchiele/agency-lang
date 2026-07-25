@@ -70,4 +70,6 @@ Run an Agency program and judge its result against the task. A program that
 
 **Returns:** `Result<Feedback[]>`
 
+**Throws:** `std::guard`, `std::run`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/verifier.agency#L94))

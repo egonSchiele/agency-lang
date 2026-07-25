@@ -94,7 +94,7 @@ List recent SEC filings for a company by its CIK (Central Index Key). Returns fi
 
 **Returns:** `Result<Filing[]>`
 
-**Throws:** `std::edgar`
+**Throws:** `std::edgar`, `std::http::fetchJSON`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L132))
 
@@ -128,6 +128,6 @@ List recent SEC filings for a U.S.-listed company by its ticker symbol (e.g. "AA
 
 **Returns:** `Result<Filing[]>`
 
-**Throws:** `std::edgar`
+**Throws:** `std::edgar`, `std::http::fetchJSON`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/edgar.agency#L150))

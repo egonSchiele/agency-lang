@@ -131,6 +131,7 @@ Pipeline and architecture:
 - `docs/dev/local-models.md` — Local-model support: provider, name resolution, catalog refresh, and SHA-256 download verification
 - `docs/dev/incremental-builds.md` — The build manifest: schema, invalidation fields, the ManifestTracker policy object, --force
 - `docs/dev/splices.md` — Compile-time splices `$( ... )`: where expansion sits in the pipeline, the five paths that must run it, why the cache is mandatory, the import restriction that carries the safety argument, and the cycle guard
+- `docs/dev/effect-propagation.md` — How a function's interrupt effects are computed: the shared walk in lib/analysis/effects.ts, the fixpoint at the end of SymbolTable.build, following re-exports, the `.invoke()` shape, why `_guard` is seeded rather than walked, and the four things the walk cannot see
 - `docs/dev/template-agency.md` — Template Agency internals: the Hole node and per-position parsing, `Code` fragment kinds, the never-parse lifting rule and its two escaping conventions, scope-keyed hygiene with `__hyg` seeding, AG8001/AG8002 refusals, and the walker-completeness tripwire
 
 Other references:

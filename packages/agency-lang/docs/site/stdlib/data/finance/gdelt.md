@@ -94,6 +94,6 @@ Search worldwide online news coverage for a query via GDELT DOC 2.0. Returns rec
 
 **Returns:** `Result<NewsArticle[]>`
 
-**Throws:** `std::gdelt`
+**Throws:** `std::gdelt`, `std::http::fetchJSON`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/gdelt.agency#L82))

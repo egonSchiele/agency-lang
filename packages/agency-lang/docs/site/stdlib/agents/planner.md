@@ -93,7 +93,7 @@ runApproved(
   plan: string,
   src: string,
   state: PlanState,
-): PlanState raises <std::agents::planApprove>
+): PlanState raises <std::agents::planApprove, std::guard, std::run>
 ```
 
 Gate generated code behind user approval, then run it: shows the plan,
@@ -111,7 +111,7 @@ Gate generated code behind user approval, then run it: shows the plan,
 
 **Returns:** [PlanState](#planstate)
 
-**Throws:** `std::agents::planApprove`
+**Throws:** `std::agents::planApprove`, `std::run`, `std::guard`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L186))
 
@@ -128,7 +128,7 @@ plannerAgent(
   provider: string = "",
   session: string = "",
   extraTools: any[] = [],
-): Result<string> raises <std::agents::planApprove, std::guard>
+): Result<string> raises <std::agents::planApprove, std::guard, std::run>
 ```
 
 Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
@@ -163,6 +163,6 @@ Plan-as-code: draft (or use a seed) plan, generate an agent that solves the
 
 **Returns:** `Result<string>`
 
-**Throws:** `std::agents::planApprove`
+**Throws:** `std::guard`, `std::agents::planApprove`, `std::run`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/planner.agency#L224))

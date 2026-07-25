@@ -1,3 +1,5 @@
+import { SymbolTable } from "@/symbolTable.js";
+import type { CompilationUnit } from "@/compilationUnit.js";
 import { declaredName } from "../types/hole.js";
 import { AgencyConfig } from "@/config.js";
 import { AgencyGenerator, generateAgency } from "@/backends/agencyGenerator.js";
@@ -34,6 +36,8 @@ type DocContext = {
   symbolRegistry: SymbolRegistry;
   currentMdPath?: string;
   config: AgencyConfig;
+  /** Built on first use and reused for every file in the run. */
+  symbolTable?: SymbolTable;
 };
 
 export function generateDoc(
@@ -135,18 +139,42 @@ function preprocessProgram(
   return program;
 }
 
+/**
+ * One symbol table per doc run, not per file.
+ *
+ * generateDocForFile runs for every file, and `agency doc stdlib` covers the
+ * whole standard library. The crawl result is the same for every file in one
+ * run once the entry has been crawled, so building it per file would clone the
+ * reachable set dozens of times for no new information.
+ */
+function symbolTableFor(filePath: string, ctx: DocContext): SymbolTable {
+  if (!ctx.symbolTable) {
+    ctx.symbolTable = SymbolTable.build(filePath, ctx.config);
+  }
+  return ctx.symbolTable;
+}
+
 function generateDocForFile(
   filePath: string,
   outputPath: string,
   ctx: DocContext,
   program: AgencyProgram,
 ): void {
-  const info = buildCompilationUnit(program);
+  // A symbol table is what makes an imported function's effects visible. The
+  // Throws column understated everything reached through an import without it
+  // — a guard block in another module never showed up (GitHub issue 680).
+  // Building it can throw on an unresolvable import, and the doc command
+  // should still produce output for a file it cannot fully resolve.
+  let info: CompilationUnit;
+  try {
+    info = buildCompilationUnit(program, symbolTableFor(filePath, ctx), filePath);
+  } catch (e) {
+    console.error(`[doc] no symbol table for ${filePath}; Throws may be short:`, e);
+    info = buildCompilationUnit(program);
+  }
 
-  // Run the type checker (without a SymbolTable) to compute the
-  // transitive interrupt effects each function/node may throw. We
-  // intentionally ignore type errors here — the doc command should
-  // produce output even for files that don't fully type-check.
+  // We intentionally ignore type errors here — the doc command should produce
+  // output even for files that don't fully type-check.
   let interruptEffectsByFunction: Record<string, InterruptEffect[]> = {};
   try {
     const result = typeCheck(program, ctx.config, info);

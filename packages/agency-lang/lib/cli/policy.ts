@@ -9,7 +9,7 @@ import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "../typeChecker/index.js";
 import path from "path";
 
-function uniqueInterruptEffects(
+export function uniqueInterruptEffects(
   fileSymbols: FileSymbols | undefined,
   interruptEffectsByFunction: Record<string, InterruptEffect[]>,
 ): string[] {

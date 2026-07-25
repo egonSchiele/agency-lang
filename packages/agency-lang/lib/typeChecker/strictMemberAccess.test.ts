@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { typeCheckSource } from "../compiler/typecheck.js";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
@@ -385,5 +386,24 @@ def f(c: Cmd): string {
   }
 }`);
     expect(errs.errors).toEqual([]);
+  });
+});
+
+describe("a union containing any", () => {
+  it("permits any field, because any absorbs", () => {
+    // A handler covering two effects where only one declares a payload gives
+    // `e.data` the type `{...} | any`. Reporting a field as missing from that
+    // is backwards: the `any` member is why the read is already unchecked.
+    // Reached in practice once effects propagate across files, since a stdlib
+    // function can now report both std::run and std::guard.
+    const report = typeCheckSource(
+      `effect mytest::typed { }\n` +
+        `type Payload = { depth: number }\n` +
+        `def risky() {\n  raise mytest::typed("a", {})\n  interrupt std::read("?", {})\n}\n` +
+        `node main() {\n` +
+        `  handle {\n    risky()\n  } with (e) {\n` +
+        `    const d = e.data.depth\n    return approve()\n  }\n}\n`,
+    );
+    expect(report.errors.map((error) => error.code)).not.toContain("AG2008");
   });
 });

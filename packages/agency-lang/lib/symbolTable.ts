@@ -2,6 +2,7 @@ import { declaredName } from "./types/hole.js";
 import * as fs from "fs";
 import * as path from "path";
 import { parseAgencyFileCached } from "./parseCache.js";
+import { propagateEffects } from "./analysis/effects.js";
 import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config.js";
 import type {
@@ -278,7 +279,16 @@ export class SymbolTable {
       resolveReExports(filePath, []);
     }
 
-    return new SymbolTable(files, effectDecls);
+    const table = new SymbolTable(files, effectDecls);
+    const programs: Record<string, AgencyProgram> = Object.create(null);
+    for (const [filePath, { program }] of Object.entries(parsed)) {
+      programs[filePath] = program;
+    }
+    // classifySymbols records direct effects only. Follow calls now, while every
+    // reachable file's parse tree is still in hand, so that interruptEffects
+    // means the same thing on both sides of an import.
+    propagateEffects(table, programs);
+    return table;
   }
 
   has(absPath: string): boolean {

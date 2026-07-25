@@ -32,6 +32,28 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "restInNestedPattern",
+      "description": "extractBindings recurses, so the synthetic call is emitted at depth as well.",
+      "input": "",
+      "expectedOutput": "[1,2,3]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "restInForLoopBinder",
+      "description": "The loop variable is a pattern too, which is the third lowering site.",
+      "input": "",
+      "expectedOutput": "\"Ada/NY\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

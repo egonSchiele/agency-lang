@@ -25,6 +25,26 @@ node restInBinding() {
   return "${name} lives in ${rest.city}"
 }
 
+def firstOf(people: any[]): string {
+  // Loop binder: a third lowering site, and the one most likely to be missed.
+  let out = "none"
+  for ({ name, ...rest } in people) {
+    out = "${name}/${rest.city}"
+  }
+  return out
+}
+
+node restInNestedPattern() {
+  // extractBindings recurses, so the synthetic call is emitted at depth too.
+  const o = { outer: { a: 1, b: 2, c: 3 } }
+  const { outer: { a, ...inner } } = o
+  return [a, inner.b, inner.c]
+}
+
+node restInForLoopBinder() {
+  return firstOf([{ name: "Ada", city: "NY" }])
+}
+
 node restExcludesNamedKeys() {
   // The rest binder holds the keys the pattern did not name, and not the ones
   // it did.

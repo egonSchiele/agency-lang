@@ -10,7 +10,6 @@ import {
   isJsGlobalBase,
 } from "./resolveCall.js";
 import { collectProgramShadowing } from "./shadowing.js";
-import { OBJECT_REST_FN } from "../constants.js";
 
 /**
  * Emit a diagnostic for every call site that doesn't resolve to a known
@@ -86,11 +85,6 @@ function hasFunctionOrNodeAncestor(ancestors: readonly unknown[]): boolean {
 // this is just the set of keywords that trigger it.
 const RESERVED_BLOCK_KEYWORDS = ["thread", "subthread"];
 
-// Calls the pattern lowerer synthesizes. They are not user code and have no
-// declaration to find — the TypeScript builder compiles them away — but this
-// pass runs after lowering, so it sees them and would report every one as an
-// undefined function.
-const SYNTHETIC_CALLS: readonly string[] = [OBJECT_REST_FN];
 
 function checkBareCall(
   call: FunctionCall,
@@ -99,7 +93,9 @@ function checkBareCall(
   mode: "warn" | "error",
   importedNodeNames: readonly string[],
 ): void {
-  if (SYNTHETIC_CALLS.includes(call.functionName)) return;
+  // A call the lowerer synthesized, not one the user wrote. It has no
+  // declaration to find, and the builder compiles it away before runtime.
+  if (call.synthetic) return;
   const resolution = resolveCall(call.functionName, {
     functionDefs: ctx.functionDefs,
     nodeDefs: ctx.nodeDefs,

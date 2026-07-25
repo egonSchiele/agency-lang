@@ -1474,6 +1474,8 @@ function makeObjectRestCall(
   return {
     type: "functionCall",
     functionName: OBJECT_REST_FN,
+    // Not user code: no declaration exists to resolve it to.
+    synthetic: true,
     arguments: [cloneExpr(source), keysArray],
     loc: loc as SourceLocation,
   };

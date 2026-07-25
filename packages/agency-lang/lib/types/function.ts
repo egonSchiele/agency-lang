@@ -88,6 +88,17 @@ export type FunctionCall = BaseNode & {
   block?: BlockArgument;
   async?: boolean;
   tags?: Tag[];
+  /** Set by pattern lowering on a call it synthesizes rather than one the user
+   *  wrote (`__objectRest`). Such a call has no declaration to resolve — the
+   *  TypeScript builder compiles it away — but the typechecker runs between
+   *  the two passes and would report every one as undefined.
+   *
+   *  A field rather than a name check, matching how the lowerer already marks
+   *  what it creates (`matchExprId`, `matchArmValueTemp`, `matchSource`): user
+   *  code that happens to define `__objectRest` cannot spoof it, and the next
+   *  synthesized call is covered without its author having to discover a
+   *  registry in the diagnostic. */
+  synthetic?: boolean;
 };
 
 

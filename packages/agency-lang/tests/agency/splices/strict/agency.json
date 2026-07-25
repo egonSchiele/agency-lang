@@ -1,0 +1,6 @@
+{
+  "typechecker": {
+    "enabled": true,
+    "strict": true
+  }
+}

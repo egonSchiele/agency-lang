@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- legacy file slated for incremental refactor */
 import { declaredName } from "../types/hole.js";
 import { printCodeLiteralBody } from "./agencyGenerator.js";
+import { walkNodesArray } from "../utils/node.js";
 import { holeNames } from "../utils/holes.js";
 import { DIAGNOSTICS, renderMessage } from "../typeChecker/diagnostics.js";
 import {
@@ -507,6 +508,20 @@ export class TypeScriptBuilder {
         names: unfilled.map((name) => `#${name}`).join(", "),
       });
       throw new Error(`${DIAGNOSTICS.unfilledHoles.code}: ${rendered}`);
+    }
+
+    // A tripwire. Expansion removes every splice before codegen, so one
+    // reaching here means a compile path skipped expandSplices, and seven
+    // must run it. Without this the symptom is a raw "Unhandled Agency
+    // node type" stack trace that says nothing about the real mistake.
+    const unexpanded = [...walkNodesArray(program.nodes)].filter(
+      (visit) => visit.node.type === "splice",
+    );
+    if (unexpanded.length > 0) {
+      throw new Error(
+        "Internal error: a compile-time splice `$( ... )` reached code " +
+          "generation. Splice expansion did not run on this compile path.",
+      );
     }
 
     // Plain top-level aliases in source order — the basis for the derived

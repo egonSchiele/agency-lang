@@ -1,0 +1,8 @@
+import { makeSized } from "./refuseArgumentGen.agency"
+
+const localSize = 4
+
+node main(): number {
+  // localSize does not exist yet when the generator runs.
+  return $( makeSized(localSize) )
+}

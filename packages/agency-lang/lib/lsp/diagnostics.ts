@@ -22,6 +22,9 @@ import { ImportStatement } from "../types/importStatement.js";
 import { resolveAgencyImportPath } from "../importPaths.js";
 import { PRELUDE_NAMES } from "../prelude.js";
 import { prunePreludeShadows } from "../preprocessors/prunePreludeShadows.js";
+import { expandSplices } from "../preprocessors/expandSplices.js";
+import { EDITOR_WALL_CLOCK_MS } from "../compiler/splice/runGenerator.js";
+import { toTypeCheckError } from "../compiler/splice/report.js";
 
 /**
  * Inject a synthetic `import { ... } from "std::index"` so the LSP sees the
@@ -125,6 +128,33 @@ export function runDiagnostics(
   }
 
   let program = parseResult.result;
+
+  // Expand `$( ... )` before anything reads the program. Without this a
+  // splice node survives into the editor's typecheck, and the user sees
+  // downstream noise from code that has not been generated yet.
+  //
+  // A failure is reported rather than dropped. This is the only path where
+  // the user is looking at the file while the generator is broken, so it
+  // is the path where AG8003 through AG8012 matter most.
+  const expanded = expandSplices(program, fsPath, config, {
+    wallClockMs: EDITOR_WALL_CLOCK_MS,
+  });
+  if (expanded.ok) {
+    program = expanded.value;
+  } else {
+    const loc = expanded.diagnostic.loc;
+    const error = toTypeCheckError(expanded.diagnostic);
+    diagnostics.push({
+      severity: DiagnosticSeverity.Error,
+      range: {
+        start: { line: loc.line, character: loc.col },
+        end: { line: loc.line, character: loc.col + 1 },
+      },
+      message: `${error.code}: ${error.message}`,
+      source: "agency",
+    });
+  }
+
   // The linter needs the parse as written. Later passes (resolveReExports,
   // resolveImports) return rewritten programs, which reassigning `program`
   // handles — but prunePreludeShadows mutates std::index import statements

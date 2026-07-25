@@ -1,0 +1,14 @@
+import { Code } from "std::agency"
+
+/** Emits code with a type error in it, on purpose. The point of the
+    fixture is not the error but the attribution: the user is reading a
+    complaint about code they never wrote, so the message has to say where
+    it came from. */
+export def makeBadCode(): Code {
+  return [|
+    def broken(): number {
+      const wrong: number = "a string, not a number"
+      return wrong
+    }
+  |]
+}

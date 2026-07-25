@@ -4,6 +4,7 @@ import { parseAgency } from "@/parser.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
+import { expandSplices } from "@/preprocessors/expandSplices.js";
 import { typeCheck } from "@/typeChecker/index.js";
 import { getStdlibDir } from "@/importPaths.js";
 import type { AgencyConfig } from "@/config.js";
@@ -103,7 +104,11 @@ function analyzeOneFile(
   if (!parseResult.success) {
     throw new Error(`Failed to parse ${filePath}`);
   }
-  const lifted = liftCallbackBlocks(parseResult.result);
+  // Best-effort, matching this analysis. The compile paths report a splice
+  // that will not expand; refusing to analyze interrupts over it would be
+  // worse than analyzing what is there.
+  const spliced = expandSplices(parseResult.result, filePath, config);
+  const lifted = liftCallbackBlocks(spliced.ok ? spliced.value : parseResult.result);
   const info = buildCompilationUnit(lifted, symbolTable, filePath, source);
   return typeCheck(lifted, config, info).interruptCallGraph;
 }

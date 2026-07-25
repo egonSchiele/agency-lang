@@ -1,0 +1,7 @@
+import { makeLookups } from "./loopedBoilerplateGen.agency"
+
+$( makeLookups(["red", "blue"]) )
+
+node main(): string {
+  return "${get_red()}/${get_blue()}"
+}

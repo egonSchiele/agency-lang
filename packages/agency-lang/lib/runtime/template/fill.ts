@@ -4,6 +4,7 @@ import { LEGAL_IDENTIFIER, RESERVED_WORDS } from "../../parsers/parsers.js";
 import { findHoles, holeNames, positionInferredTypes } from "../../utils/holes.js";
 import { variableTypeToString } from "../../backends/typescriptGenerator/typeToString.js";
 import { Code, isCode, kindOf } from "./code.js";
+import { kindFitsSort, stampOrigin } from "./origin.js";
 import { liftValue } from "./lift.js";
 import {
   RESERVED_PREFIX,
@@ -191,7 +192,7 @@ function nodesFor(hole: Hole, value: unknown, expectedType?: string): AgencyNode
     // (small literals parse loc-less) — the hole's own position is the
     // honest fallback.
     return value.nodes.map((node) => {
-      const stamped = stampOrigin(node, hole) as AgencyNode & {
+      const stamped = stampOrigin(node, { kind: "filler", name: hole.name }) as AgencyNode & {
         loc?: SourceLocation;
       };
       if (stamped.loc === undefined) stamped.loc = fillerLoc(hole);
@@ -242,23 +243,9 @@ function certainTypeOf(value: unknown): string | null {
 }
 
 function assertKindMatchesSort(code: Code, hole: Hole): void {
-  const kind = kindOf(code);
-  const allowed: Record<Hole["sort"], string[]> = {
-    expr: ["expr"],
-    // "expr" is admissible because an expression IS a legal statement in
-    // Agency: an expression statement is the expression node itself in
-    // the body array, so the graft is the identity. Whether a particular
-    // bare expression is a MEANINGFUL statement is judged at the
-    // completed program's compile — the right stage. statements already
-    // accepted "program", so this closes the only gap smallest-first
-    // kind inference for code literals leaves.
-    statements: ["statements", "program", "expr"],
-    decl: ["program"],
-    identifier: [],
-  };
-  if (!allowed[hole.sort].includes(kind)) {
+  if (!kindFitsSort(code, hole.sort)) {
     throw new Error(
-      `The hole \`#${hole.name}\` has sort \`${hole.sort}\`, which a \`${kind}\` Code fragment cannot fill${originSuffix(hole.loc)}.`,
+      `The hole \`#${hole.name}\` has sort \`${hole.sort}\`, which a \`${kindOf(code)}\` Code fragment cannot fill${originSuffix(hole.loc)}.`,
     );
   }
 }
@@ -297,31 +284,3 @@ function fillerLoc(hole: Hole): SourceLocation {
   return { ...hole.loc, origin: { kind: "filler", name: hole.name } };
 }
 
-/**
- * Stamp `origin` onto EVERY node of a grafted fragment, not just the top
- * — a fragment's inner nodes carry positions into a source string that no
- * longer exists, and an error there must still say which fill it came
- * from. Recurses the whole tree (deep-cloning as it goes, which also
- * protects against aliasing the caller's value); any object carrying a
- * `loc` gets the stamp.
- */
-function stampOrigin(node: unknown, hole: Hole): unknown {
-  if (Array.isArray(node)) return node.map((item) => stampOrigin(item, hole));
-  if (node === null || typeof node !== "object") return node;
-  const source = node as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
-  for (const key of Object.keys(source)) {
-    out[key] = key === "loc" ? source[key] : stampOrigin(source[key], hole);
-  }
-  // Only nodes that already carry a position get the stamp — their loc
-  // points into a fragment source string that no longer exists, so the
-  // origin marker is what keeps an error there attributable. Loc-less
-  // sub-records (text segments and the like) keep their exact shape.
-  if (source.loc !== undefined) {
-    out.loc = {
-      ...(source.loc as SourceLocation),
-      origin: { kind: "filler" as const, name: hole.name },
-    };
-  }
-  return out;
-}

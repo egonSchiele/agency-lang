@@ -1,0 +1,9 @@
+import { Code } from "std::agency"
+
+export def makeProgram(): Code {
+  return [|
+    def someFunction(): number {
+      return 1
+    }
+  |]
+}

@@ -1,0 +1,11 @@
+import { Code } from "std::agency"
+
+/** A generator: it runs during compilation and returns code, which the
+    compiler pastes into the file that spliced it. */
+export def makeGreeter(): Code {
+  return [|
+    def greet(): string {
+      return "hello from generated code"
+    }
+  |]
+}

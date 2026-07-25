@@ -1,0 +1,7 @@
+import { makeNamed } from "./builtWithFillGen.agency"
+
+$( makeNamed() )
+
+node main(): string {
+  return describe()
+}

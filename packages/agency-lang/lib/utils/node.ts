@@ -506,6 +506,12 @@ export function* walkNodes(
       // which exists because free-name analysis (template hygiene) is
       // only as complete as this descent.
       yield* walkNodes([node.call as AgencyNode], [...ancestors, node], scopes);
+    } else if (node.type === "splice") {
+      // `$( gen(...) )` — the generator call is HOST code, unlike a code
+      // literal's quoted body. Splice eligibility reads the callee and the
+      // argument names from in here, so this descent is load-bearing: skip
+      // it and those checks silently see nothing.
+      yield* walkNodes([node.expression as AgencyNode], [...ancestors, node], scopes);
     } else if (node.type === "importStatement") {
       // Template import specifiers may be identifier holes; real names are
       // plain strings with nothing to walk.

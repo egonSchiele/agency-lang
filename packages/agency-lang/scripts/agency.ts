@@ -40,6 +40,8 @@ import * as path from "path";
 import { _parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
+import { expandSplices } from "@/preprocessors/expandSplices.js";
+import { formatSpliceDiagnostic } from "@/compiler/splice/report.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { Command, InvalidArgumentError } from "commander";
@@ -902,8 +904,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
         filePath?: string,
         symbolTable?: SymbolTable,
       ) => {
-        const parsedProgram = parse(contents, config);
+        const parsed = parse(contents, config);
         const absPath = filePath ? path.resolve(filePath) : undefined;
+        // Expand `$( ... )` first, or every name a splice generates checks
+        // as undefined. This command has its own pipeline and does not go
+        // through runCheckerPipeline. Stdin has no path to resolve a
+        // generator against, so splices are left alone there.
+        const expanded =
+          absPath === undefined ? null : expandSplices(parsed, absPath, config);
+        if (expanded !== null && !expanded.ok) {
+          console.error(formatSpliceDiagnostic(expanded.diagnostic, absPath));
+          hasErrors = true;
+          return;
+        }
+        const parsedProgram = expanded?.ok ? expanded.value : parsed;
         const info = buildCompilationUnit(parsedProgram, symbolTable, absPath, contents);
         const { errors } = typeCheck(parsedProgram, config, info);
         if (errors.length > 0) {

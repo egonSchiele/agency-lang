@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8010",
+  "description": "Generated code may not reference a name from the splice site"
+}

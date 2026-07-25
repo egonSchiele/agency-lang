@@ -1,0 +1,7 @@
+import { Code } from "std::agency"
+import { innermost } from "./refuseNestedInner.agency"
+
+export def makeNested(): Code {
+  const n = $( innermost() )
+  return [| 1 |]
+}

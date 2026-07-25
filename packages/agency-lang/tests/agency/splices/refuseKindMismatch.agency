@@ -1,0 +1,6 @@
+import { makeProgram } from "./refuseKindMismatchGen.agency"
+
+node main(): number {
+  // A whole program cannot stand where one expression belongs.
+  return $( makeProgram() )
+}

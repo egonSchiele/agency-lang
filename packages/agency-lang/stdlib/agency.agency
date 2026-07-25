@@ -24,6 +24,7 @@ import {
   _parseExpr,
   _parseStatements,
   _toSource,
+  _combine,
 } from "agency-lang/stdlib-lib/template.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
@@ -565,6 +566,19 @@ export idempotent def fill(template: Code, values: Record<string, Json | Code>):
   @param values - A record mapping hole names to values
   """
   return try _fill(template, values)
+}
+
+export idempotent def combine(codes: Code[]): Result<Code> {
+  """
+  Merge several Code fragments into one, in order. Use this to build one
+  fragment from a loop, for example one function per item in a list.
+  Fragments of the same kind merge into that kind. Expressions merge into
+  a statement list. A whole-program fragment cannot merge with loose
+  statements or expressions.
+
+  @param codes - The fragments to merge, in order
+  """
+  return try _combine(codes)
 }
 
 export idempotent def toSource(code: Code): string {

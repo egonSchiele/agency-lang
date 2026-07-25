@@ -1,0 +1,5 @@
+import { Code } from "std::agency"
+
+export def makeBroken(): Code {
+  return failure("this generator cannot do its job")
+}

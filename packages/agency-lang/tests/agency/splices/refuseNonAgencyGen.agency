@@ -1,0 +1,8 @@
+import { Code } from "std::agency"
+import { looksHarmless } from "./refuseNonAgencyDeep.agency"
+
+// Nothing suspicious here. The npm import is one file away, which is why
+// the check has to follow imports to mean anything.
+export def makeThing(): Code {
+  return [| 1 |]
+}

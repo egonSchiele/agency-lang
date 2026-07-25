@@ -1,0 +1,7 @@
+import { Code } from "std::agency"
+
+export def makeConfig(): Code {
+  return [|
+    const config = "generated"
+  |]
+}

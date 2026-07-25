@@ -1,0 +1,7 @@
+import { Code } from "std::agency"
+
+export def makeCapturing(): Code {
+  // `tmp` is not declared or imported by this fragment, so once pasted it
+  // would silently read whatever `tmp` happens to be at the splice site.
+  return [| tmp |]
+}

@@ -8,6 +8,8 @@ import { initPlanForModule } from "@/backends/typescriptGenerator.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
+import { expandSplices } from "@/preprocessors/expandSplices.js";
+import { formatSpliceDiagnostic } from "./splice/report.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
@@ -113,9 +115,31 @@ export function compileSource(
         errors: [parseResult.message ?? "Failed to parse Agency source"],
       };
     }
-    const program: AgencyProgram = parseResult.result;
+    const parsedProgram: AgencyProgram = parseResult.result;
 
     // 2. Check imports against policy.
+    if (config.imports) {
+      const failure = checkImportPolicy(parsedProgram, config.imports);
+      if (failure) return failure;
+    }
+
+    // 2b. Expand compile-time splices. After the policy check, since the
+    // policy judges what the author wrote. Before everything else, since
+    // generated declarations must reach the symbol table.
+    const expanded = expandSplices(parsedProgram, syntheticPath, config);
+    if (!expanded.ok) {
+      return {
+        success: false,
+        errors: [formatSpliceDiagnostic(expanded.diagnostic, syntheticPath)],
+      };
+    }
+    const program = expanded.value;
+
+    // 2c. Re-check the policy against the EXPANDED program. A generator can
+    // emit its own import lines, and those never went through the check
+    // above. Checking twice is deliberate: the first pass refuses
+    // disallowed source without running a generator at all, and this one
+    // covers what the generator added.
     if (config.imports) {
       const failure = checkImportPolicy(program, config.imports);
       if (failure) return failure;

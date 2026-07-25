@@ -1,0 +1,12 @@
+import { makeAlpha } from "./twoSplicesGenA.agency"
+import { makeBeta } from "./twoSplicesGenB.agency"
+
+// The first splice spreads its nodes and shifts everything below it, so
+// two splices in one file is where naive index-based grafting breaks.
+$( makeAlpha() )
+
+$( makeBeta() )
+
+node main(): string {
+  return "${alpha()}${beta()}"
+}

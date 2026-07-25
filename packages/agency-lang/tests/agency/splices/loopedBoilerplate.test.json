@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"red/blue\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A generator loops, fills one fragment per item, combines them, and the host calls each generated function"
+    }
+  ]
+}

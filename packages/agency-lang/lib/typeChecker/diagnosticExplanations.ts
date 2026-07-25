@@ -498,4 +498,64 @@ node main() {
   return x
 }
 \`\`\``,
+
+  spliceGeneratorNotImported: `A splice called a function that is not imported from another file.
+
+The generator has to be compiled before the file that splices it can be compiled, so it cannot live in that same file — there would be no order that works. This is the same restriction Template Haskell calls the stage restriction.
+
+**How to fix:** move the generator into its own \`.agency\` file and import it.`,
+
+  spliceGeneratorReachesNonAgency: `A compile-time generator, or something it imports, reaches code that is not Agency.
+
+Splices are safe to run during compilation because dangerous operations in Agency ask permission first, and compilation has nobody to ask, so they cannot complete. That reasoning covers Agency code only. JavaScript and TypeScript ask nothing, so a generator that can reach an npm package can do anything at all, with nothing to stop it.
+
+The rule covers everything a generator can reach, not just what it imports directly. A local \`.agency\` file that looks harmless can import an npm package one step further down.
+
+**How to fix:** move the work into Agency, or set \`allowNonAgencyGenerators: true\` in your config if the generator genuinely needs a JavaScript library. Turning it off means the generator can do whatever that library can.`,
+
+  spliceFragmentKindMismatch: `A generator returned a piece of code that does not fit where the splice sits.
+
+A splice at the top level of a file needs whole declarations — functions, nodes, types. A splice in expression position needs a single expression. Returning a whole program where a value belongs, or the reverse, cannot be pasted in.
+
+**How to fix:** check what the generator builds. A code literal holding a \`def\` is a program fragment; one holding a bare value is an expression fragment.`,
+
+  spliceGeneratorFailed: `The generator itself failed while running: it threw, exceeded its time limit, or ran out of memory.
+
+Generators run in a separate process with a wall-clock and a memory cap, so a runaway generator becomes a compile error rather than a hung compiler.
+
+**How to fix:** read the reported reason. A timeout usually means an unbounded loop; a thrown error is an ordinary bug in the generator, which you can test directly by calling it from a normal program.`,
+
+  spliceNested: `A generator module contains a splice of its own.
+
+Expanding it would mean compiling a generator in order to compile a generator, with no obvious place for that to stop.
+
+**How to fix:** move the inner generation into a third module that neither of the other two splices.`,
+
+  spliceReferencesOuterName: `Generated code refers to a name it did not declare and did not import — most likely a variable that happens to exist where the splice was written.
+
+Pasting code into a file puts it next to whatever names are already there, so a generated reference to \`tmp\` would silently pick up a local \`tmp\` at the splice site. Refusing is the only way to keep a generator from depending on the accident of what its caller named things.
+
+**How to fix:** have the generator declare or import everything it uses, or pass the value in as a splice argument.`,
+
+  spliceArgumentNotAvailable: `A splice passed an argument that is declared in the file being compiled.
+
+The generator runs while that file is still being compiled, so nothing declared in it exists yet. Only values that already exist can be passed in.
+
+**How to fix:** use a literal, a code literal, or a name imported from another module.`,
+
+  spliceGeneratedExport: `A splice generated a declaration marked \`export\`, and generated declarations cannot be exported yet.
+
+Other files find out what a module exports by reading its source, not by compiling it. For a generated declaration to be importable, every file that resolved an import would have to run the generator that produced it — including \`agency doc\`, \`agency pack\`, and your editor. That is a much bigger promise than compiling one file, so for now generated declarations are visible only inside the file that spliced them.
+
+**How to fix:** drop the \`export\` from the generated declaration. If the name needs to be shared, write a hand-authored wrapper that calls it and export that.
+
+Lifting this restriction is tracked as issue #687.`,
+
+  spliceRedeclaresHostName: `A splice generated a declaration whose name the file already uses.
+
+Agency does not catch this on its own. Two functions with the same name is a hard error. Two top-level constants with the same name is not, and the later one silently wins. A generator that picked the name of one of your constants would quietly replace it, and nothing would say so.
+
+The same rule covers two splices in one file generating the same name.
+
+**How to fix:** rename one of them. If the generator picks names from data you pass in, prefix them so they cannot collide with hand-written ones.`,
 };

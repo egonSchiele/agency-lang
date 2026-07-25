@@ -1,0 +1,9 @@
+import { makeGreeter } from "./declarationSpliceGen.agency"
+
+// `$( ... )` runs makeGreeter at COMPILE time and pastes what it returns
+// here. By the time this file runs, `greet` is an ordinary function.
+$( makeGreeter() )
+
+node main(): string {
+  return greet()
+}

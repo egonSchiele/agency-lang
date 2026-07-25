@@ -6,6 +6,7 @@ import { AgencyProgram } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
+import { expandSplices } from "@/preprocessors/expandSplices.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { typeCheck } from "@/typeChecker/index.js";
@@ -13,6 +14,7 @@ import { nanoid } from "nanoid";
 import * as fs from "fs";
 import * as path from "path";
 import { parseAgency } from "@/parser.js";
+import { makeAgencyTempDir } from "@/utils/agencyTempDir.js";
 import { safeDeleteDirectory } from "../utils.js";
 
 export type TypeCheckDiagnostic = {
@@ -57,12 +59,8 @@ function withSourcePath<T>(
   fn: (syntheticPath: string) => T,
 ): T {
   if (sourcePath) return fn(sourcePath);
-  // Place the tempdir under cwd's .agency-tmp/ (same location _run's
-  // materializeCompiledScript uses) so safeDeleteDirectory's project-containment check
-  // accepts it on cleanup. os.tmpdir() would be outside the project.
   const moduleId = `agency_${nanoid()}`;
-  const tempDir = path.join(process.cwd(), ".agency-tmp", `typecheck-${nanoid()}`);
-  fs.mkdirSync(tempDir, { recursive: true });
+  const tempDir = makeAgencyTempDir("typecheck");
   const syntheticPath = path.join(tempDir, `${moduleId}.agency`);
   fs.writeFileSync(syntheticPath, source, "utf-8");
   try {
@@ -114,7 +112,12 @@ function runCheckerPipeline<T>(
 
   return withSourcePath(source, sourcePath, (syntheticPath) => {
     const symbolTable = SymbolTable.build(syntheticPath, {});
-    const reExported = resolveReExports(program, symbolTable, syntheticPath);
+    // A splice that cannot expand is left in place rather than reported.
+    // This pipeline answers what the code checks as; the compile paths
+    // report splice failures with a position.
+    const spliced = expandSplices(program, syntheticPath, {});
+    const expanded = spliced.ok ? spliced.value : program;
+    const reExported = resolveReExports(expanded, symbolTable, syntheticPath);
     // This pipeline is agent-reachable (std::agency typecheck/getEffects),
     // not just an editor path — so it must agree with execution: code that
     // run()/compileSource would reject should not check as valid. Deny
@@ -159,7 +162,25 @@ export type EffectsByExport = Record<string, string[]>;
  * errors in `source` do not prevent extraction; parse failures throw.
  */
 export function getEffectsFromSource(source: string): EffectsByExport {
-  return runCheckerPipeline(source, undefined, ({ checkResult, symbolTable, syntheticPath }) => {
+  return effectsVia(source, undefined);
+}
+
+/**
+ * The same map, for a file that exists on disk. Prefer this whenever a real
+ * path is available.
+ *
+ * The string form above cannot resolve relative imports, so their effects
+ * never propagate and the list comes back short. That is documented
+ * behavior for `getEffects`, but wrong for splice eligibility, where an
+ * empty list reads as "safe to run at compile time".
+ */
+export function getEffectsFromFile(filePath: string): EffectsByExport {
+  const absolute = path.resolve(filePath);
+  return effectsVia(fs.readFileSync(absolute, "utf-8"), absolute);
+}
+
+function effectsVia(source: string, sourcePath: string | undefined): EffectsByExport {
+  return runCheckerPipeline(source, sourcePath, ({ checkResult, symbolTable, syntheticPath }) => {
     const { interruptEffectsByFunction } = checkResult;
     const out: EffectsByExport = {};
     const fileSymbols = symbolTable.getFile(syntheticPath) ?? {};

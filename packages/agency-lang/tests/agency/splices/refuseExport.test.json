@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8013",
+  "description": "A generated declaration cannot be exported, because other files resolve imports without running generators"
+}

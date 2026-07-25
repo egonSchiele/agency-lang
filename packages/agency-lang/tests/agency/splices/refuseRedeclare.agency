@@ -1,0 +1,9 @@
+import { makeConfig } from "./refuseRedeclareGen.agency"
+
+const config = "hand written"
+
+$( makeConfig() )
+
+node main(): string {
+  return config
+}

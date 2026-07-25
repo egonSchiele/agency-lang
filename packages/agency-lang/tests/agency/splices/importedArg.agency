@@ -1,0 +1,10 @@
+import { makeFieldGetters } from "./importedArgGen.agency"
+import { FIELDS } from "./importedArgFields.agency"
+
+// The list is shared: the generator reads it at compile time, and it stays
+// available at runtime. Passing it inline would mean writing it twice.
+$( makeFieldGetters(FIELDS) )
+
+node main(): string {
+  return "${field_name()}/${field_email()}"
+}

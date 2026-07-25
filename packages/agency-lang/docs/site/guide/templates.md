@@ -236,3 +236,149 @@ Three checkpoints, from weakest to strongest:
 3. **Run time.** The completed program goes through the ordinary compile pipeline, in full, when you hand it to `runCode`. Anything the earlier checkpoints could not see is caught here.
 
 And one refusal: a program that still has holes cannot compile or run (`AG8001` names every unfilled hole).
+
+## Compile-time splices: installing generated code
+
+Everything above makes code. None of it *installs* code. A `Code` value is data. You can print it, ship it to a subprocess with `runCode`, or fill more holes in it, but it never becomes part of the file you are writing.
+
+`$( ... )` is the other half. It runs a function during compilation and pastes what that function returns into the file being compiled:
+
+```ts
+// getters.agency: the generator
+import { Code } from "std::agency"
+
+export def makeGreeter(): Code {
+  return [|
+    def greet(): string {
+      return "hello"
+    }
+  |]
+}
+```
+
+```ts
+// main.agency: the file that uses it
+import { makeGreeter } from "./getters.agency"
+
+$( makeGreeter() )
+
+node main(): string {
+  return greet()      // greet exists. It was generated a moment ago.
+}
+```
+
+The difference from a code literal in one line: `[| ... |]` *makes* code, `$( ... )` *installs* it.
+
+Here is the same idea side by side. Before splices, generated code could only run somewhere else:
+
+| What you want | Without splices | With splices |
+| --- | --- | --- |
+| Generate a function and call it | `toSource` it, `runCode` it in a subprocess, get the answer back | It is a function in your file |
+| Generate constants from data | Not possible in the same file | `$( makeConstants() )` |
+| Stop writing N near-identical functions | Not possible | Loop, `combine`, one splice |
+
+### Where a splice may go
+
+Two positions:
+
+- **Declaration position**, at the top level of a file. The generator returns a fragment holding declarations, and they become declarations of your file. They may be exported, and another file may import them.
+- **Expression position**, anywhere a value goes. The generator returns a single expression, which replaces the splice.
+
+### Building more than one thing
+
+The shape that motivates the feature is a loop. Build one fragment per item and merge them with `combine`:
+
+```ts
+import { Code, combine, fill } from "std::agency"
+
+export def makeLookups(names: string[]): Code {
+  let parts = []
+  for (name in names) {
+    const one = fill([|
+      def #fnName(): string {
+        return #label: string
+      }
+    |], { fnName: "get_${name}", label: name })
+    if (isFailure(one)) {
+      return [| 0 |]
+    }
+    parts = [...parts, one.value]
+  }
+  const merged = combine(parts)
+  if (isFailure(merged)) {
+    return [| 0 |]
+  }
+  return merged.value
+}
+```
+
+```ts
+$( makeLookups(["red", "blue"]) )   // get_red() and get_blue() now exist
+```
+
+### The rules, and why each exists
+
+**A generator may import only Agency code.** That means the standard library and other `.agency` files in your project. No npm packages, and nothing they reach either.
+
+This is the rule the rest of the safety story rests on. Risky operations in Agency ask permission first, and there is nobody to ask during compilation, so they cannot go ahead. That reasoning only covers Agency. JavaScript asks nothing, so a generator that could reach an npm package could do anything at all.
+
+The rule follows imports all the way down. A local file that looks harmless can import an npm package one step further on.
+
+If a generator genuinely needs a JavaScript library, set `allowNonAgencyGenerators: true` in your `agency.json`. Understand what that buys: the generator can then do whatever that library can. (`AG8006`)
+
+**A generator lives in another file.** It has to be compiled before the file that splices it can be, and a generator in the same file would need to be compiled after itself. Template Haskell calls this the stage restriction and pays the same cost. (`AG8005`)
+
+**A generator may not raise effects.** Reading a file, making a network call, and running a command all raise interrupts in Agency, and compilation installs no handlers, so there is nowhere for one to be answered. The generator stops partway and you get an error naming it. (`AG8008`)
+
+One consequence worth knowing: a generator cannot use `loadTemplate`, because loading a template reads a file. Write the template inline with `[| ... |]` instead.
+
+**Splice arguments may use only literals, code literals, and imported names.** The generator runs while your file is still being compiled, so anything declared in it does not exist yet. An imported name works, and the module it comes from faces the same rules the generator does. (`AG8011`)
+
+```ts
+import { FIELDS } from "./schema.agency"
+
+$( makeFieldGetters(FIELDS) )   // fine: FIELDS is imported
+```
+
+**Generated code may use only names it declares or imports.** A generated expression lands next to whatever locals are at the splice site, and a generated mention of `tmp` must not silently read the local `tmp`. Generated code that needs a helper imports it itself. (`AG8010`)
+
+**Generated declarations cannot be exported.** They work in the file that spliced them and are invisible everywhere else. Other files work out what a module exports by reading its source, so an exported generated name would only resolve for anyone willing to run your generator first.
+
+```ts
+// This is refused (AG8013):
+export def makeThing(): Code {
+  return [|
+    export def shared(): string {    // no `export` allowed in generated code
+      return "x"
+    }
+  |]
+}
+```
+
+**Generated declarations may not take a name already in use.** Two functions with the same name is an error in Agency. Two top-level constants is not, and the later one silently wins, so a generator could otherwise replace one of your constants with nothing said. (`AG8012`)
+
+### How type checking sees generated code
+
+Exactly the way it sees everything else, and this has a cost worth knowing about: **`agency tc` and your editor run your generator.** They have to, because the only way to learn that `greet` exists is to run `makeGreeter`. Template Haskell works the same way.
+
+In practice a splice adds roughly two seconds to each `agency tc` run. Your editor caches the result, so it pays that once per change to a generator rather than once per keystroke. Expansion runs right after parsing and before anything looks at what the file declares, so by the time the type checker starts, `greet` is an ordinary function in an ordinary file. It gets checked, it shows up in autocomplete, and calling it with the wrong arguments is a normal error.
+
+Nothing downstream knows the code was generated, with one exception: if a type error lands inside generated code, the message says which generator produced it.
+
+### One thing it does not check
+
+Nothing stops a generator being nondeterministic. If it reaches an LLM or the clock, two builds of the same source produce different code, and that is your problem rather than the compiler's. There is no complete way to check it today, and a partial check that reads like a guarantee would be worse than none.
+
+A generator cannot read your environment. Its process is given only what Node needs to start, so `env("ANTHROPIC_API_KEY")` comes back empty. That matters because anything a generator reads can be written into the code it produces, and that code becomes a file you commit.
+
+Generator code runs when you compile, when you type check, and in your editor. It does not run for `agency doc`, `agency pack`, or `agency bundle`, which read your file without needing to know what a splice would produce.
+
+### What it costs
+
+A generator runs in a child process with a 30-second and 512mb ceiling, so one that loops forever becomes an error rather than a hung compiler. Results are cached against the generator's content and the exact call, so an unchanged generator does not re-run. That matters most in an editor, where the symbol table is rebuilt on every keystroke.
+
+Because the code is pasted as a tree rather than printed and re-parsed, positions survive. A type error inside generated code says which generator produced it:
+
+```
+main.agency:2:3 - error AG2001: Type '"a string"' is not assignable to type 'number'. (in code generated by `makeBadCode`)
+```

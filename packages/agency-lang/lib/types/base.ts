@@ -3,10 +3,11 @@ export type SourceLocation = {
   col: number;
   start: number;
   end: number;
-  /** Set by template filling so an error in generated code can name
-   *  whether the template author or a filler is responsible. `name` is
-   *  the hole the content came through. */
-  origin?: { kind: "template" | "filler"; name: string };
+  /** Set when a node was grafted in rather than written by hand, so an
+   *  error in generated code can name who is responsible. For a template
+   *  fill, `name` is the hole the content came through; for a compile-time
+   *  splice, it is the generator that produced it. */
+  origin?: { kind: "template" | "filler" | "splice"; name: string };
 };
 
 export type BaseNode = {

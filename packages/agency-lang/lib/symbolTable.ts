@@ -177,6 +177,17 @@ export class SymbolTable {
         return;
       }
 
+      // Splices are deliberately NOT expanded here.
+      //
+      // This crawl records what each file exports so other files can
+      // resolve against it. Expanding here is what would make a generated
+      // declaration importable, and it is also what would put generator
+      // execution behind all twelve callers of this function, including
+      // `agency doc`, `pack`, and the editor. Generated declarations are
+      // file-local instead; see issue #687.
+      //
+      // The paths that compile or typecheck a file's own code expand it
+      // there, which is where a generated name needs to resolve.
       const program = parseResult.result;
       parsed[absPath] = { symbols: classifySymbols(program), program };
 

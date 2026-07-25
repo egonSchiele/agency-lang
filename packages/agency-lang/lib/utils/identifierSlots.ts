@@ -215,6 +215,9 @@ const REGISTRY: { [K in AgencyNode["type"]]: SlotExtractor<K> } = {
   // Quoted code: names inside a literal body belong to the GENERATED
   // program, so the host emits no semantic tokens for them.
   codeLiteral: none,
+  // A splice declares no identifiers of its own. The generator call inside
+  // it is reached through the expression slot, not from here.
+  splice: none,
 
   // Patterns bind names, they do not reference them.
   objectPattern: none,

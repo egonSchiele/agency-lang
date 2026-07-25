@@ -118,6 +118,7 @@ import {
 import { EffectDeclaration } from "../types/effectDeclaration.js";
 import { Hole } from "../types/hole.js";
 import { CodeLiteral } from "../types/codeLiteral.js";
+import { Splice } from "../types/splice.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { ForLoop } from "../types/forLoop.js";
 import {
@@ -3135,11 +3136,51 @@ export const codeLiteralParser: Parser<CodeLiteral> = withLoc(
   committed(str(CODE_LITERAL_OPEN), codeLiteralRest),
 );
 
+const SPLICE_OPEN = "$(";
+
+/** Newlines included, unlike `optionalSpaces`: a splice call with several
+ *  arguments may wrap across lines. */
+const spliceInnerWhitespace = many(oneOf(" \t\n\r"));
+
+/** Far simpler than `codeLiteralRest` and deliberately so. A code literal
+ *  needs an end-scan grammar because its body is arbitrary text; a splice
+ *  holds one Agency EXPRESSION, so `exprParser` already knows where it
+ *  ends. Do not add an end-scan here.
+ *
+ *  `position` is set to "expr" here and rewritten to "decl" by
+ *  `topLevelSpliceParser`. Everything reached through `baseAtom` is in
+ *  expression position by construction. */
+const spliceRest: Parser<Splice> = seqC(
+  set("type", "splice"),
+  set("position", "expr"),
+  spliceInnerWhitespace,
+  // `exprParser` is declared further down this file, so the reference
+  // has to be deferred past module init.
+  capture(lazy(() => exprParser), "expression"),
+  spliceInnerWhitespace,
+  str(")"),
+);
+
+export const spliceParser: Parser<Splice> = withLoc(
+  committed(str(SPLICE_OPEN), spliceRest),
+);
+
+/** Top-level form. Reuses spliceParser and rewrites the position, the same
+ *  way topLevelHoleParser rewrites a hole's sort. */
+export const topLevelSpliceParser: Parser<Splice> = map(
+  lazy(() => spliceParser),
+  (splice) => ({ ...splice, position: "decl" as const }),
+);
+
 const baseAtom: Parser<Expression> = or(
   // First: `#` cannot start any other expression, so this is a cheap
   // early exit. Being an operand alternative covers every expression
   // position at once — binop operands, conditions, call and named args.
   lazy(() => exprHoleParser),
+  // `$(` cannot start any other expression, so this is a cheap early exit
+  // like the hole parser above it. Being a baseAtom alternative covers
+  // every expression position at once.
+  lazy(() => spliceParser),
   unaryTypeofParser,
   unaryVoidParser,
   unaryNotParser,
@@ -3857,7 +3898,9 @@ export const matchBlockExprParser = label("a match expression", withLoc(seqC(
   str("match"),
   optionalSpaces,
   char("("),
-  capture(exprParser, "expression"),
+  // `exprParser` is declared further down this file, so the reference
+  // has to be deferred past module init.
+  capture(lazy(() => exprParser), "expression"),
   char(")"),
   optionalSpaces,
   char("{"),
@@ -4565,6 +4608,12 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   // and reaches binOpParser, whose operand path assigns sort "expr". (The
   // parser-ordering exemption in docs/dev/anti-patterns.md covers this.)
   lazy(() => statementHoleParser),
+  // A bare `$( gen() )` occupying a whole statement needs its own entry:
+  // binOpParser below rejects anything that is not a binOpExpression, and
+  // the remaining alternatives (valueAccess, literal) do not start at `$`.
+  // So statement position never reaches baseAtom's spliceParser. Position
+  // stays "expr" — only the top-level parser stamps "decl".
+  lazy(() => spliceParser),
   binOpParser,
   booleanParser,
   valueAccessParser,

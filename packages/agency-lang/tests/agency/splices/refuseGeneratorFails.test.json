@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8008",
+  "description": "A generator that fails while running is reported with its own message"
+}

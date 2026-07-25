@@ -590,6 +590,59 @@ export const DIAGNOSTICS = {
     message:
       "The hole `#{name}` is in a position that gives it no expected type. Annotate it, for example `#{name}: string`.",
   },
+  spliceGeneratorNotImported: {
+    code: "AG8005",
+    severity: "error",
+    message:
+      "`{name}` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first.",
+  },
+  spliceGeneratorReachesNonAgency: {
+    code: "AG8006",
+    severity: "error",
+    message:
+      "The generator `{name}` reaches non-Agency code through `{importPath}`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript raises no interrupts and cannot be checked. Set `allowNonAgencyGenerators` in your config to permit it.",
+  },
+  spliceFragmentKindMismatch: {
+    code: "AG8007",
+    severity: "error",
+    message:
+      "The generator `{name}` returned a `{actual}` fragment, but this splice is in {position} position and needs a `{expected}` fragment.",
+  },
+  spliceGeneratorFailed: {
+    code: "AG8008",
+    severity: "error",
+    message: "The generator `{name}` failed while running: {reason}",
+  },
+  spliceNested: {
+    code: "AG8009",
+    severity: "error",
+    message:
+      "A generator module cannot itself contain a splice. Move the inner generation into a separate module.",
+  },
+  spliceReferencesOuterName: {
+    code: "AG8010",
+    severity: "error",
+    message:
+      "Generated code refers to `{name}`, which it neither declares nor imports. Generated code may use only names it declares itself and names it imports.",
+  },
+  spliceGeneratedExport: {
+    code: "AG8013",
+    severity: "error",
+    message:
+      "The generator `{name}` produced an exported declaration (`{declared}`). Generated declarations cannot be exported yet, because other files resolve imports without running generators. Remove the `export`.",
+  },
+  spliceRedeclaresHostName: {
+    code: "AG8012",
+    severity: "error",
+    message:
+      "The generator `{name}` declares `{declared}`, which this file already declares. Generated declarations may not replace existing ones.",
+  },
+  spliceArgumentNotAvailable: {
+    code: "AG8011",
+    severity: "error",
+    message:
+      "The splice argument `{name}` is declared in this file, so it does not exist yet when the generator runs. Splice arguments may be literals, code literals, or imported names.",
+  },
 } as const;
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;

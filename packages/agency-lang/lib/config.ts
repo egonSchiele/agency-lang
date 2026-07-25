@@ -36,6 +36,20 @@ export const MAX_REPLY_ATTACHMENT_BYTES = 20 * 1024 * 1024;
  */
 export interface AgencyConfig {
   verbose?: boolean;
+
+  /**
+   * Let a compile-time splice run a generator that imports JavaScript.
+   *
+   * By default a generator may import only `std::` modules and other
+   * `.agency` files in your project. That restriction is what makes the
+   * safety story work: dangerous operations in Agency ask permission, and
+   * compilation answers nothing, so they cannot complete. JavaScript asks
+   * nothing, so a generator that reaches an npm package is unchecked.
+   *
+   * Turn this on if a generator genuinely needs a JavaScript library, and
+   * know that the generator can then do anything that library can.
+   */
+  allowNonAgencyGenerators?: boolean;
   logLevel?: LogLevel;
   outDir?: string;
 
@@ -353,6 +367,7 @@ export interface AgencyConfig {
 export const AgencyConfigSchema = z
   .object({
     verbose: z.boolean(),
+    allowNonAgencyGenerators: z.boolean(),
     logLevel: z.enum(["debug", "info", "warn", "error"]),
     outDir: z.string(),
     // Positive integer: the generated code does `maxToolCallRounds || 10`, so a

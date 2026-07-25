@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "AG8007",
+  "description": "A program fragment in expression position is refused"
+}

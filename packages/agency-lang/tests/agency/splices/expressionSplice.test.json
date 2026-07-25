@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "An expression splice pastes one expression into a const"
+    }
+  ]
+}

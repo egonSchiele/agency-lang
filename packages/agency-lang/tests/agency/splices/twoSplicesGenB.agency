@@ -1,0 +1,9 @@
+import { Code } from "std::agency"
+
+export def makeBeta(): Code {
+  return [|
+    def beta(): string {
+      return "B"
+    }
+  |]
+}

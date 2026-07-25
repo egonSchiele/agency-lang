@@ -47,7 +47,20 @@ node nullIntermediate() {
 
 node wrongShape() {
   // A number is not an object; a string is not an array. Neither matches.
-  return [objBinder(3), arrBinder("abc"), objLiteral("hello")]
+  //
+  // The last two are the cross cases. An object pattern does not match an
+  // array, because Agency's `object` is non-null and non-array — the least
+  // predictable consequence of the shape check, so it is pinned here. An array
+  // pattern against an object failed before this change too, but only by
+  // accident: `({a:1}).length` is undefined and `undefined >= 2` is false.
+  // Now it fails because the check says so.
+  return [
+    objBinder(3),
+    arrBinder("abc"),
+    objLiteral("hello"),
+    objBinder([1, 2]),
+    arrBinder({ a: 1 }),
+  ]
 }
 
 node rightShape() {

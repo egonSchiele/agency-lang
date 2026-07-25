@@ -1060,6 +1060,9 @@ const ARRAY_HINT: VariableType = {
  * filters the union properly and leaves `Redirect`, and the coarse test that
  * follows does not clobber that. Two cheap comparisons buy a pattern that
  * both runs right and typechecks.
+ *
+ * The `!= null` half can be dropped once that narrowing gap is fixed:
+ * docs/superpowers/ideas/2026-07-24-is-object-narrowing-loses-union-members.md
  */
 function shapeCheck(
   source: Expression,
@@ -1084,6 +1087,11 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       // shape has to fail the arm rather than throw on `null.a` — or match by
       // reading `undefined` off a number. `&&` short-circuits, so this also
       // makes the reads below safe.
+      //
+      // Note this rejects ARRAYS too, not only null and non-objects: Agency's
+      // `object` is non-null and non-array (lib/runtime/typeTest.ts). So
+      // `{ length: 2 }` no longer matches an array — `[a, b]` is the spelling
+      // for that. One definition of `object`, not two.
       checks.push(...shapeCheck(source, OBJECT_HINT, pattern.loc));
       for (const prop of pattern.properties) {
         if (prop.type === "objectPatternProperty") {

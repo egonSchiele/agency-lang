@@ -182,7 +182,7 @@ describe("object destructuring", () => {
 describe("`is` operator in boolean context", () => {
   it("lowers `const r = x is { type: \"foo\" }` to a shape check AND an equality check", () => {
     const lowered = lower(`let x = { type: "foo" }\nconst r = x is { type: "foo" }`);
-    // [x, r = (isObject(x) && x.type == "foo")]
+    // [x, r = ((x != null && isObject(x)) && x.type == "foo")]
     expect(lowered).toHaveLength(2);
     const rAssign = lowered[1] as Assignment;
     expect(rAssign.variableName).toBe("r");

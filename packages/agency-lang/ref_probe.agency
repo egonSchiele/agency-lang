@@ -1,0 +1,6 @@
+node main(): string {
+  let obj = { a: [1, 2, 3] }
+  const rules = obj["a"]
+  rules.splice(1, 1)
+  return "len=${obj["a"].length} first=${obj["a"][0]} second=${obj["a"][1]}"
+}

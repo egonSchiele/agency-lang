@@ -1,0 +1,71 @@
+> I want to publish a new version of this package. Please update changelog.md with all of the changes since the last version. Follow the current pattern in the changelog: keep updates short, one to two sentences per update, grouped into sections
+ User: I want to publish a new version of this package. Please update changelog.md with all of the changes since the last version. Follow the current pattern in the changelog: keep updates short, one to two sentences per update, grouped into sections
+Looking at the current changelog.md and git history to figure out what's changed since the last published version.
+⏺ codeAgent(userMsg: "I need to update changelog.md in this repo (agenc..., agencyTask: true)
+⏺ agencyStdlib(filename: "shell.md", offset: 0, limit: 0)
+⏺ agencyStdlib(filename: "index.md", offset: 0, limit: 0)
+⏺ agencyGuide(filename: "handlers.md", offset: 0, limit: 0)
+⏺ agencyGuide(filename: "interrupts.md", offset: 0, limit: 0)
+⏺ agencyGuide(filename: "error-handling.md", offset: 0, limit: 0)
+⏺ ls(dir: ".", recursive: false, maxResults: 200, allowedPaths: [])
+⏺ agencyGuide(filename: "basic-syntax.md", offset: 0, limit: 0)
+⏺ agencyGuide(filename: "pattern-matching.md", offset: 0, limit: 0)
+⏺ glob(pattern: "**/package.json", dir: ".", maxResults: 50, allowedPaths: [])
+⏺ glob(pattern: "**/CHANGELOG.md", dir: ".", maxResults: 50, allowedPaths: [])
+⏺ read(filename: "package.json", dir: ".", offset: 0, limit: 0)
+⏺ read(filename: "CHANGELOG.md", dir: ".", offset: 0, limit: 0)
+⏺ glob(pattern: "packages", dir: ".", maxResults: 10, allowedPaths: [])
+⏺ ls(dir: ".git", recursive: false, maxResults: 50, allowedPaths: [])
+⏺ ls(dir: "..", recursive: false, maxResults: 50, allowedPaths: [])
+⏺ ls(dir: "../..", recursive: false, maxResults: 50, allowedPaths: [])
+⏺ agencyGuide(filename: "builtins.md", offset: 0, limit: 0)
+⏺ agencyGuide(filename: "common-functions.md", offset: 0, limit: 0)
+⏺ bash(command: "find / -iname 'changelog.md' 2>/dev/null; echo \"...)
+⏺ bash(command: "pwd; ls -la", timeout: 15000)
+⏺ ls(dir: ".", recursive: false, maxResults: 200, allowedPaths: [])
+⏳ The time budget for std::supervise#1 ran out; stopping that step with its best result so far.
+⏺ read(filename: "__result.json", dir: ".", offset: 0, limit: 0)
+⏳ The time budget for std::supervise#1 ran out; stopping that step with its best result so far.
+⏺ read(filename: "__evaluate.json", dir: ".", offset: 0, limit: 0)
+⏳ The time budget for std::supervise#1 ran out; stopping that step with its best result so far.
+⏺ bash(command: "cd /Users/adityabhargava/agency-lang 2>/dev/null ..., timeout: 20000)
+⏺ exec(command: "pwd", args: [], cwd: ".", timeout: 10000, stdin: "</antmlःparameter>\n")
+[2026-07-23 14:11:38.945] ERROR Function render threw an exception (converted to Failure): std::ui/layout.table: at least one of header / body / footer must be set
+[2026-07-23 14:11:38.945] ERROR Error: std::ui/layout.table: at least one of header / body / footer must be set
+    at _validateTable (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/table.js:79:15)
+    at _resolveTableWidths (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/table.js:153:51)
+    at Object.sizeTable [as size] (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/table.js:458:12)
+    at resolveNode (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:98:34)
+    at resolveSizes (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:91:12)
+    at render (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:101:22)
+    at _render (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:112:17)
+    at __call (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/runtime/call.js:110:12)
+    at file:///Users/adityabhargava/agency-lang/packages/agency-lang/stdlib/ui/layout.js:3793:28
+    at file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/runtime/runner.js:434:41
+⏳ The time budget for std::supervise#1 ran out; stopping that step with its best result so far.
+⏺ exec(command: "pwd", args: [], cwd: ".", timeout: 10000, stdin: "</antml_parameter>\n")
+[2026-07-23 14:11:53.030] ERROR Function render threw an exception (converted to Failure): std::ui/layout.table: at least one of header / body / footer must be set
+[2026-07-23 14:11:53.030] ERROR Error: std::ui/layout.table: at least one of header / body / footer must be set
+    at _validateTable (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/table.js:79:15)
+    at _resolveTableWidths (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/table.js:153:51)
+    at Object.sizeTable [as size] (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/table.js:458:12)
+    at resolveNode (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:98:34)
+    at resolveSizes (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:91:12)
+    at render (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:101:22)
+    at _render (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:112:17)
+    at __call (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/runtime/call.js:110:12)
+    at file:///Users/adityabhargava/agency-lang/packages/agency-lang/stdlib/ui/layout.js:3793:28
+    at file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/runtime/runner.js:434:41
+⏺ exec(command: "pwd", args: [], cwd: ".", timeout: 10000, stdin: "</antml_parameter>\n")
+[2026-07-23 14:12:07.962] ERROR Function render threw an exception (converted to Failure): std::ui/layout.table: at least one of header / body / footer must be set
+[2026-07-23 14:12:07.962] ERROR Error: std::ui/layout.table: at least one of header / body / footer must be set
+    at _validateTable (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/table.js:79:15)
+    at _resolveTableWidths (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/table.js:153:51)
+    at Object.sizeTable [as size] (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/table.js:458:12)
+    at resolveNode (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:98:34)
+    at resolveSizes (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:91:12)
+    at render (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:101:22)
+    at _render (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/stdlib/layout/render.js:112:17)
+    at __call (file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/runtime/call.js:110:12)
+    at file:///Users/adityabhargava/agency-lang/packages/agency-lang/stdlib/ui/layout.js:3793:28
+    at file:///Users/adityabhargava/agency-lang/packages/agency-lang/dist/lib/runtime/runner.js:434:41

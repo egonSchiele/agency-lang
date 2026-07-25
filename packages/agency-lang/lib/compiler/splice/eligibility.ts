@@ -309,7 +309,61 @@ function effectsInFile(
 }
 
 /**
- * All three checks, composed. The expansion pass calls this and never names
+ * Refuse a generator whose own closure contains a splice.
+ *
+ * Running a generator compiles it, and compiling it expands any splice it
+ * contains, which runs another generator. That recursion has no natural
+ * floor, and a generator that spliced itself would not terminate. Template
+ * Haskell forbids the same thing for the same reason.
+ *
+ * The plan proposed detecting this by threading a "this compile is a
+ * generator" flag through the runner's compile. A closure scan does the
+ * same job without plumbing a flag through `SymbolTable.build`'s twelve
+ * callers, and it refuses BEFORE anything is compiled rather than partway
+ * into a recursion.
+ */
+export function checkNoNestedSplice(
+  generatorPath: string,
+  generatorName: string,
+  config: AgencyConfig = {},
+): SpliceDiagnostic | null {
+  const visited: Record<string, true> = Object.create(null);
+  const queue: string[] = [path.resolve(generatorPath)];
+
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    if (Object.hasOwn(visited, current)) {
+      continue;
+    }
+    visited[current] = true;
+
+    const program = parseFileOrNull(current, config);
+    if (program === null) {
+      continue;
+    }
+
+    const hasSplice = [...walkNodesArray(program.nodes)].some(
+      (visit) => visit.node.type === "splice",
+    );
+    if (hasSplice) {
+      return {
+        diagnostic: "spliceNested",
+        params: { name: generatorName, path: current },
+        loc: { line: 0, col: 0, start: 0, end: 0 },
+      };
+    }
+
+    for (const specifier of importEdgesOf(program)) {
+      if (isRelativeAgencyPath(specifier)) {
+        queue.push(path.resolve(path.dirname(current), specifier));
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * All four checks, composed. The expansion pass calls this and never names
  * an individual rule, so adding a rule later is an entry in this array
  * rather than an edit to the pass.
  */
@@ -320,6 +374,7 @@ export function checkGeneratorEligible(
 ): SpliceDiagnostic | null {
   const checks = [
     () => checkImportGraph(generatorPath, generatorName, config),
+    () => checkNoNestedSplice(generatorPath, generatorName, config),
     () => checkEffects(generatorPath, generatorName),
     () => checkDeterminism(generatorPath, generatorName, config),
   ];

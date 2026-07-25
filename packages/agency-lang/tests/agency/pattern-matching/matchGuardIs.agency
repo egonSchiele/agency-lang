@@ -66,3 +66,65 @@ def label(obj: any): string {
 node guardOnlyForm() {
   return [label({ v: 1, name: "one" }), label({ v: 2, name: 7 })]
 }
+
+// --- An `is` as an arm's caseValue, not as a guard ------------------------
+// Two routes reach this, and neither lowered the caseValue. With no pattern
+// arms the match takes the early "no pattern arms" return; with one, it goes
+// through collectChecks, whose literal case pushes the caseValue in raw.
+
+def bareIsArm(flag: boolean, name: any): string {
+  let out = "none"
+  match (flag) {
+    (name is string) => out = "string name"
+    _ => out = "other"
+  }
+  return out
+}
+
+def bareIsArmBesidePattern(flag: boolean, name: any): string {
+  let out = "none"
+  match (flag) {
+    (name is string) => out = "string name"
+    [p, q] => out = "pair"
+    _ => out = "other"
+  }
+  return out
+}
+
+node isAsCaseValue() {
+  return [bareIsArm(true, "hi"), bareIsArmBesidePattern(true, "hi")]
+}
+
+// --- A guard on the `_` arm ----------------------------------------------
+// `_` is only a catch-all when unguarded — the exhaustiveness checker already
+// models it that way (isCatchAll returns false for a guarded arm), so the
+// guard has to actually run.
+
+def guardedDefault(n: number): string {
+  let out = "none"
+  match (n) {
+    2 => out = "two"
+    _ if (n > 100) => out = "big"
+  }
+  return out
+}
+
+node guardOnDefaultArm() {
+  return [guardedDefault(2), guardedDefault(500), guardedDefault(7)]
+}
+
+// --- A guard on an arm that binds nothing ---------------------------------
+// Arms that bind take the nested-if branch; an arm whose pattern is all
+// literals takes the `&&` fold instead, which is a separate line.
+
+def literalArmGuard(words: any[], flag: any): string {
+  return match (words) {
+    ["echo", "hi"] if (flag is string) => "literal arm, guard held"
+    ["echo", "hi"] => "literal arm, guard failed"
+    _ => "other"
+  }
+}
+
+node guardWithNoBindings() {
+  return [literalArmGuard(["echo", "hi"], "s"), literalArmGuard(["echo", "hi"], 42)]
+}

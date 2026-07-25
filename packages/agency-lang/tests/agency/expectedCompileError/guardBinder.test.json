@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "has nowhere to bind",
+  "description": "A shorthand binder inside a match-arm guard is a compile error, not a crash and not a silent binding"
+}

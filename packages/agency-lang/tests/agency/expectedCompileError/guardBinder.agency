@@ -1,0 +1,14 @@
+// A match-arm guard is a pure-boolean context: there is nowhere for a binder
+// to land, because the arm's bindings come from its pattern. Reaching this
+// error at all depends on the guard being routed through lowerExpression — if
+// a refactor stops doing that, the binder becomes a silent no-op instead.
+def f(words: any[]): string {
+  return match (words) {
+    ["echo", str] if (str is { policy }) => "bound ${policy}"
+    _ => "no"
+  }
+}
+
+node main() {
+  return f(["echo", "hi"])
+}

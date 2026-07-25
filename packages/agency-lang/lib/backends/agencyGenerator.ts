@@ -588,6 +588,13 @@ export class AgencyGenerator {
         return this.formatHole(node);
       case "codeLiteral":
         return this.processCodeLiteral(node);
+      case "splice":
+        // Spaces inside the parens are the canonical form: `$( f(x) )`.
+        // The expression prints through the ordinary node printer, so
+        // nested calls and code-literal arguments format normally. Trimmed
+        // because processNode applies the enclosing indentation, which in
+        // body position would land inside the parens as `$(   f(x) )`.
+        return `$( ${this.processNode(node.expression).trim()} )`;
       default:
         throw new Error(`Unhandled Agency node type: ${(node as any).type}`);
     }

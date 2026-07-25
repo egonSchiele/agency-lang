@@ -72,7 +72,18 @@ Grafting matches splices by object identity rather than by index. A declaration 
 
 Not an optimization. `SymbolTable.build` has twelve non-test callers, and `lib/lsp/server.ts` calls it from `onDidChangeContent`, once per keystroke. Without a memo, every splice in an open file forks a child process every time the user types a character.
 
-The key is the printed splice expression plus a content hash of the generator's whole transitive closure of relative `.agency` files. Hashing the closure rather than one file is what makes editing a helper one import away invalidate the memo.
+The key has two parts. The **slot** identifies the call: the generator's path and the printed expression. The **fingerprint** says whether a remembered answer is still good: a hash over every file that can change what the generator returns. One entry per slot, so an editing session replaces rather than accumulates.
+
+The fingerprint covers every module the runner imports, not just the generator. A splice may pass an imported value as an argument, and that module is imported by the *host*, so it need not appear in the generator's closure at all:
+
+```ts
+import { makeFieldGetters } from "./gen.agency"    // imports only std::
+import { FIELDS } from "./fields.agency"           // not in gen's closure
+
+$( makeFieldGetters(FIELDS) )
+```
+
+Hashing only the generator meant that adding a field served the old expansion. A fresh `agency compile` hid it, because that process starts with an empty cache; the editor, `agency serve`, and watch mode did not. `rebuild.test.ts` pins it.
 
 The key is a fingerprint over inputs, not a claim about the generator. Generators are not required to be deterministic (see below), so a nondeterministic one is answered once per slot within a process and re-run by the next fresh compile. Two builds of the same source can still differ.
 

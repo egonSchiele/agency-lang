@@ -144,7 +144,20 @@ function expandOne(
 
   const expression = generateExpression(splice.expression);
   const slot = spliceCacheSlot(expression, generator.modulePath);
-  const fingerprint = spliceCacheKey(expression, generator.modulePath, config);
+  // Every module the runner will import, not just the generator. A module
+  // supplying an argument is imported by the HOST, so it can be absent
+  // from the generator's own closure while still deciding what the
+  // generator returns.
+  const fingerprint = spliceCacheKey(
+    expression,
+    [
+      generator.modulePath,
+      ...argumentSources
+        .map((entry) => entry.source?.modulePath)
+        .filter((modulePath): modulePath is string => typeof modulePath === "string"),
+    ],
+    config,
+  );
 
   // Eligibility is memoized on the same fingerprint as the result. It runs
   // before the generator, so it sits outside cachedGeneratorRun and would

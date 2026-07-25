@@ -106,6 +106,33 @@ describe("rebuilding a file with a splice", () => {
     expect(after).not.toContain("old");
   }, 60_000);
 
+  it("picks up an edited module that supplies an argument", () => {
+    // Nearly the same as the test above, and the difference is the whole
+    // point: this module is imported by the HOST, not by the generator, so
+    // it does not appear in the generator's closure. Hashing only the
+    // generator served a stale expansion, and a fresh compile hid it
+    // because that process starts with an empty cache.
+    write("fields.agency", `export static const FIELDS = ["name"]\n`);
+    write(
+      "gen.agency",
+      `import { Code, combine, fill } from "std::agency"\n\nexport def g(names: string[]): Code {\n  let parts = []\n  for (name in names) {\n    const one = fill([|\n      def #fn(): string {\n        return #label: string\n      }\n    |], { fn: "get_\${name}", label: name })\n    if (isFailure(one)) {\n      return [| 0 |]\n    }\n    parts = [...parts, one.value]\n  }\n  const merged = combine(parts)\n  if (isFailure(merged)) {\n    return [| 0 |]\n  }\n  return merged.value\n}\n`,
+    );
+    const source = `import { g } from "./gen.agency"\nimport { FIELDS } from "./fields.agency"\n\n$( g(FIELDS) )\n`;
+    const hostPath = write("host.agency", source);
+    const expand = (): string => {
+      const parsed = parseAgency(source, {}, false, false);
+      if (!parsed.success) throw new Error("parse failed");
+      const result = expandSplices(parsed.result, hostPath, {});
+      if (!result.ok) throw new Error(`expansion failed: ${result.diagnostic.diagnostic}`);
+      return JSON.stringify(result.value);
+    };
+
+    expect(expand()).toContain("get_name");
+
+    write("fields.agency", `export static const FIELDS = ["name", "phone"]\n`);
+    expect(expand()).toContain("get_phone");
+  }, 60_000);
+
   it("does not re-run the generator when nothing changed", () => {
     // The point of the cache. The LSP rebuilds on every keystroke, so a
     // second expansion of unchanged input must cost nothing.

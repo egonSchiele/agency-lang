@@ -6,7 +6,7 @@ import type { Code } from "../../runtime/template/code.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
 
 /**
- * Memoized generator results.
+ * Memoized generator results and eligibility verdicts.
  *
  * Not an optimization. `SymbolTable.build` has twelve non-test callers,
  * and the LSP server calls it on every keystroke. Without a cache, each
@@ -17,50 +17,88 @@ import type { SpliceDiagnostic, SpliceResult } from "./types.js";
  */
 
 /**
- * One splice call, remembered.
+ * One remembered answer.
  *
- * The slot and the fingerprint do different jobs, which is why an entry
- * carries both. The slot identifies the call, so a later answer for the
- * same call replaces the earlier one. The fingerprint says whether the
- * answer is still good.
+ * The slot and the fingerprint do different jobs. The slot identifies the
+ * call, so a newer answer for the same call replaces the older one and a
+ * long editing session cannot accumulate entries. The fingerprint says
+ * whether the answer is still good.
+ *
+ * Both stores use this shape so neither needs a composite key or a prune
+ * pass over the whole store.
  */
-type Entry = { fingerprint: string; result: SpliceResult<Code> };
+type Entry<T> = { fingerprint: string; value: T };
 
-const results: Record<string, Entry> = Object.create(null);
+const results: Record<string, Entry<SpliceResult<Code>>> = Object.create(null);
+const verdicts: Record<string, Entry<SpliceDiagnostic | null>> = Object.create(null);
 
 /** Which call this is: the generator being called, and how. Stable across
- *  edits to the generator, which is what makes an entry replaceable. */
+ *  edits to any of the files involved, which is what makes an entry
+ *  replaceable rather than additive. */
 export function spliceCacheSlot(expression: string, generatorPath: string): string {
   return `${generatorPath}\0${expression}`;
 }
 
 /**
- * Whether the answer is still good: a hash over every file the call can
- * reach. Hashing the whole closure is what makes editing a helper one
- * import away invalidate the memo.
+ * Whether a remembered answer is still good: a hash over every file that
+ * can change what the generator returns.
+ *
+ * `roots` is every module the runner will import, not just the generator.
+ * A splice may pass an imported value as an argument, and the module
+ * supplying it is imported by the HOST, so it need not appear anywhere in
+ * the generator's own closure:
+ *
+ *     import { makeFieldGetters } from "./gen.agency"    // imports only std::
+ *     import { FIELDS } from "./fields.agency"           // not in gen's closure
+ *
+ *     $( makeFieldGetters(FIELDS) )
+ *
+ * Adding a field to `fields.agency` changes what the generator returns
+ * while leaving the expression text and the generator's closure untouched.
+ * Hashing only the generator meant the memo served the old expansion, and
+ * a fresh `agency compile` hid it because that process starts empty. The
+ * editor, `agency serve`, and watch mode do not.
  */
 export function spliceCacheKey(
   expression: string,
-  generatorPath: string,
+  roots: readonly string[],
   config: AgencyConfig = {},
 ): string {
   const hash = createHash("sha256");
-  hash.update(expression);
-  for (const file of closureFiles(generatorPath, config).sort()) {
-    hash.update(" ");
-    hash.update(file);
-    hash.update(" ");
-    hash.update(readOrEmpty(file));
+  feed(hash, expression);
+  const files = roots
+    .flatMap((root) => closureFiles(root, config))
+    .filter((file, index, all) => all.indexOf(file) === index)
+    .sort();
+  for (const file of files) {
+    feed(hash, file);
+    feed(hash, readOrEmpty(file));
   }
   return hash.digest("hex");
+}
+
+/**
+ * Add one piece to the hash, length first.
+ *
+ * Without the length, concatenation is ambiguous: a file named `a` holding
+ * `b c` hashes the same as a file named `a b` holding `c`. It takes a
+ * crafted path to reach, but this hash decides whether to re-run generated
+ * code, so it should not be ambiguous at all.
+ */
+function feed(hash: ReturnType<typeof createHash>, chunk: string): void {
+  hash.update(String(Buffer.byteLength(chunk)));
+  hash.update(":");
+  hash.update(chunk);
 }
 
 function readOrEmpty(file: string): string {
   try {
     return fs.readFileSync(file, "utf-8");
   } catch {
-    // A file that vanished between the walk and the read contributes
-    // nothing. The eligibility checks refuse an unreadable closure.
+    // A file that cannot be read contributes nothing, and no check refuses
+    // the generator over it. That is deliberate rather than an oversight:
+    // a closure file that is missing or unparseable also fails to compile,
+    // so the generator cannot run successfully either way.
     return "";
   }
 }
@@ -68,11 +106,6 @@ function readOrEmpty(file: string): string {
 /**
  * Run `produce` unless this call has already been answered for exactly
  * this content.
- *
- * A slot holds one entry. Keying the store by content hash alone would
- * leak: an editor session that edits a generator fifty times would keep
- * fifty `Code` values alive, one per intermediate version, with no way to
- * reach any but the last.
  *
  * Failures are cached too. A broken generator is the case the editor hits
  * hardest, because the user is reading the error while still typing. The
@@ -86,11 +119,41 @@ export function cachedGeneratorRun(
 ): SpliceResult<Code> {
   const found = results[slot];
   if (found !== undefined && found.fingerprint === fingerprint) {
-    return found.result;
+    return found.value;
   }
-  const result = produce();
-  results[slot] = { fingerprint, result };
-  return result;
+  const value = produce();
+  results[slot] = { fingerprint, value };
+  return value;
+}
+
+/**
+ * Remember whether a generator may run, against the same fingerprint the
+ * result uses.
+ *
+ * Eligibility is decided before the generator runs, so it sits outside
+ * `cachedGeneratorRun` and used to re-run on every call. That is a closure
+ * walk per check, per splice, per keystroke once the editor is involved.
+ *
+ * Sound on the same fingerprint because that fingerprint now covers every
+ * file the checks read: the generator's closure and every argument
+ * module's closure.
+ *
+ * Note `null` is a real verdict here, meaning eligible. Wrapping it in an
+ * `Entry` is what lets an ordinary `undefined` check distinguish "not
+ * cached" from "cached as fine".
+ */
+export function cachedEligibility(
+  slot: string,
+  fingerprint: string,
+  judge: () => SpliceDiagnostic | null,
+): SpliceDiagnostic | null {
+  const found = verdicts[slot];
+  if (found !== undefined && found.fingerprint === fingerprint) {
+    return found.value;
+  }
+  const value = judge();
+  verdicts[slot] = { fingerprint, value };
+  return value;
 }
 
 /** Tests only: the cache outlives a single compile by design. */
@@ -103,44 +166,8 @@ export function clearSpliceCache(): void {
   }
 }
 
-/**
- * Remember an eligibility verdict against the same fingerprint the result
- * uses.
- *
- * Eligibility is decided BEFORE the generator runs, so it sits outside
- * `cachedGeneratorRun` and was re-running on every call. That is four
- * closure walks per splice, and one of them calls `getEffectsFromFile` per
- * file, which is a full checker pipeline. Since `SymbolTable.build` now
- * expands, all of it ran on every keystroke for every splice in every
- * crawled file.
- *
- * Safe on the same key: the fingerprint hashes every file the call can
- * reach, which is exactly what the checks read.
- */
-const verdicts: Record<string, SpliceDiagnostic | null> = Object.create(null);
-
-export function cachedEligibility(
-  slot: string,
-  fingerprint: string,
-  judge: () => SpliceDiagnostic | null,
-): SpliceDiagnostic | null {
-  const key = `${slot} ${fingerprint}`;
-  if (Object.hasOwn(verdicts, key)) {
-    return verdicts[key];
-  }
-  const verdict = judge();
-  // One entry per call, like the results store: drop any older fingerprint
-  // for this slot so an editing session does not accumulate verdicts.
-  for (const existing of Object.keys(verdicts)) {
-    if (existing.startsWith(`${slot} `)) {
-      delete verdicts[existing];
-    }
-  }
-  verdicts[key] = verdict;
-  return verdict;
-}
-
-/** Tests only: how many calls are remembered. */
+/** Tests only: total remembered entries across both stores, so a test
+ *  asserting the cache does not grow can see either one leaking. */
 export function spliceCacheSize(): number {
-  return Object.keys(results).length;
+  return Object.keys(results).length + Object.keys(verdicts).length;
 }

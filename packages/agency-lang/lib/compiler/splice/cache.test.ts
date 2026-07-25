@@ -48,19 +48,38 @@ function counting(): { produce: () => SpliceResult<Code>; runs: () => number } {
 describe("spliceCacheKey", () => {
   it("is stable when nothing changed", () => {
     const generator = write("gen.agency", `export def g(): number {\n  return 1\n}\n`);
-    expect(spliceCacheKey("g()", generator)).toBe(spliceCacheKey("g()", generator));
+    expect(spliceCacheKey("g()", [generator])).toBe(spliceCacheKey("g()", [generator]));
   });
 
   it("changes when the splice expression changes", () => {
     const generator = write("gen.agency", `export def g(): number {\n  return 1\n}\n`);
-    expect(spliceCacheKey("g(1)", generator)).not.toBe(spliceCacheKey("g(2)", generator));
+    expect(spliceCacheKey("g(1)", [generator])).not.toBe(spliceCacheKey("g(2)", [generator]));
   });
 
   it("changes when the generator's own content changes", () => {
     const generator = write("gen.agency", `export def g(): number {\n  return 1\n}\n`);
-    const before = spliceCacheKey("g()", generator);
+    const before = spliceCacheKey("g()", [generator]);
     write("gen.agency", `export def g(): number {\n  return 2\n}\n`);
-    expect(spliceCacheKey("g()", generator)).not.toBe(before);
+    expect(spliceCacheKey("g()", [generator])).not.toBe(before);
+  });
+
+  it("changes when a module supplying an argument changes", () => {
+    // The bug this exists to stop. A module supplying a splice argument is
+    // imported by the HOST, so it need not appear in the generator's own
+    // closure at all. Hashing only the generator served a stale expansion.
+    const generator = write("gen.agency", `export def g(n: any): number {\n  return 1\n}\n`);
+    const fields = write("fields.agency", `export static const FIELDS = ["a"]\n`);
+    const before = spliceCacheKey("g(FIELDS)", [generator, fields]);
+    write("fields.agency", `export static const FIELDS = ["a", "b"]\n`);
+    expect(spliceCacheKey("g(FIELDS)", [generator, fields])).not.toBe(before);
+  });
+
+  it("is unambiguous about where a path ends and its contents begin", () => {
+    // Without a length prefix, file `a` holding `b c` hashes the same as
+    // file `a b` holding `c`.
+    const one = write("a", "b c");
+    const two = write("a b", "c");
+    expect(spliceCacheKey("x", [one])).not.toBe(spliceCacheKey("x", [two]));
   });
 
   it("changes when a transitively imported helper changes", () => {
@@ -75,9 +94,9 @@ describe("spliceCacheKey", () => {
       "gen.agency",
       `import { h } from "./helper.agency"\n\nexport def g(): number {\n  return h()\n}\n`,
     );
-    const before = spliceCacheKey("g()", generator);
+    const before = spliceCacheKey("g()", [generator]);
     write("deep.agency", `export def d(): number {\n  return 99\n}\n`);
-    expect(spliceCacheKey("g()", generator)).not.toBe(before);
+    expect(spliceCacheKey("g()", [generator])).not.toBe(before);
   });
 });
 

@@ -162,11 +162,14 @@ describe("formatSource", () => {
       "",
     ].join("\n");
     const formatted = formatSource(input);
-    expect(formatted).toContain("[\"echo\", s: string] =>");
-    expect(formatted).toContain("[\"cat\", p: SafePath] =>");
-    expect(formatted).toContain("[{ cmd: \"echo\" }: Word, ...rest] =>");
+    // formatSource returns null when the source does not parse, so a parse
+    // failure must not read as a silently-skipped assertion.
+    expect(formatted).not.toBeNull();
+    expect(formatted!).toContain("[\"echo\", s: string] =>");
+    expect(formatted!).toContain("[\"cat\", p: SafePath] =>");
+    expect(formatted!).toContain("[{ cmd: \"echo\" }: Word, ...rest] =>");
     // Formatting the output again changes nothing.
-    expect(formatSource(formatted)).toBe(formatted);
+    expect(formatSource(formatted!)).toBe(formatted);
   });
 
   it("round-trips a generics fixture (type params + Record) unchanged", () => {

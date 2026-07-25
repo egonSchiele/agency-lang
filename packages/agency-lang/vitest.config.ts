@@ -14,7 +14,10 @@ export default defineConfig({
     // gated integration suite uses vitest.integration.config.ts), and a bare
     // denylist of subdirs would silently sweep any newly-added tests/<dir>
     // into this run.
-    exclude: ['**/node_modules/**', '**/dist/**', 'tests', '.worktrees/**', 'runs/**'],
+    // `*.perf.test.ts` is the performance suite — slow, timing-sensitive, and
+    // run apart via vitest.perf.config.ts (the `test:perf` script). Excluding it
+    // here keeps it out of the default unit run and watch mode.
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests', '.worktrees/**', 'runs/**', '**/*.perf.test.ts'],
     setupFiles: ['./lib/parsers/vitest.setup.ts'],
   },
   resolve: {

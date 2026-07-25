@@ -71,6 +71,55 @@ jobs:
       run: pnpm run docs
     - run: pnpm test:run
 
+  # Performance regression suite, INFORMATIONAL ONLY: PERF_ENFORCE is unset (a
+  # breach records but does not throw) and continue-on-error means nothing here
+  # blocks a merge while thresholds are calibrated. Flip to gating by setting
+  # PERF_ENFORCE=1 and dropping continue-on-error. Single node (numbers from one
+  # machine class); no `make` (these tests run from source via vitest).
+  perf:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        version: 9
+        run_install: false
+
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 22.x
+        cache: 'pnpm'
+    - run: pnpm install
+    - name: Perf summary header
+      run: |
+        {
+          echo "### Performance measurements (informational)"
+          echo ""
+          echo "| test | growth factor / ms | bound | status |"
+          echo "| --- | --- | --- | --- |"
+        } >> "$GITHUB_STEP_SUMMARY"
+    - name: Run performance suite (informational)
+      working-directory: packages/agency-lang
+      run: pnpm test:perf
+
+    # Upload the per-measurement records so a p95 can be aggregated across many
+    # runs during the informational period — step summaries alone can't do that.
+    - name: Upload perf results
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: perf-results
+        path: packages/agency-lang/perf-results.jsonl
+        if-no-files-found: warn
+
   # Integration tests (tarball install, bundlers, CLI, StateLog, stdlib
   # sandbox). These are node-22-only and independent of the unit suite, so
   # they run in parallel with `build` rather than serially behind it.

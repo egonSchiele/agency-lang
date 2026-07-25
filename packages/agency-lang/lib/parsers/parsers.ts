@@ -3817,7 +3817,7 @@ const caseLhsParser: Parser<unknown> = (input: string) => {
     armGated(patternSuffixParser),
     armGated(defaultCaseParser),
     // withLoc so every pattern caseValue carries its own span — the
-    // binder-shadow warnings (AG5003/AG5004) anchor diagnostics to the arm,
+    // binder-shadow warnings (AG5003) anchor diagnostics to the arm,
     // not the match head, and bare variableName patterns otherwise have no
     // loc of their own.
     armGated(withLoc(lazy(() => matchPatternParser))),
@@ -5924,11 +5924,40 @@ const propertyWithValueParser = (
   return parser(input);
 };
 
+/**
+ * `key as name` — bind the field to a different name.
+ *
+ * Renaming used to be spelled `key: name`, which collided with the `: Type`
+ * suffix: `{ name: string }` bound a variable CALLED string instead of testing
+ * the field, one bracket away from `[name: string]` meaning the opposite.
+ * `as` is the language's existing rename keyword (`import { foo as bar }`), so
+ * `:` is free to always introduce a type.
+ *
+ * The result is an ordinary `objectPatternProperty` whose value is a binder —
+ * the same node the old spelling produced — so binding, lowering and hygiene
+ * need no changes. Only the surface syntax moved.
+ */
+const propertyWithRenameParser: Parser<ObjectPatternProperty> = (input: string) => {
+  const parser = seqC(
+    set("type", "objectPatternProperty"),
+    capture(many1WithJoin(varNameChar), "key"),
+    spaces,
+    str("as"),
+    not(varNameChar),
+    spaces,
+    capture(variableNameParser, "value"),
+  );
+  return parser(input) as ParserResult<ObjectPatternProperty>;
+};
+
 const objectPatternPropertyParser = (
   valueParser: Parser<ObjectPatternProperty["value"]>,
 ): Parser<ObjectPatternProperty | ObjectPatternShorthand | RestPattern> =>
   or(
     restPatternParser,
+    // rename MUST be tried before shorthand, which would otherwise take `key`
+    // and leave `as name` stranded
+    propertyWithRenameParser,
     // propertyWithValue MUST be tried before shorthand — the ':' disambiguates
     propertyWithValueParser(valueParser),
     _objectPatternShorthandParser,
@@ -6158,9 +6187,11 @@ export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
   },
 );
 
+// A property value uses the is-RHS rule: a bare identifier is a TYPE, not a
+// binder. `{ name: string }` tests the field; `{ name as n }` renames it.
 const _matchObjectPropertyParser: Parser<
   ObjectPatternProperty | ObjectPatternShorthand | RestPattern
-> = objectPatternPropertyParser(lazy(() => matchPatternParser));
+> = objectPatternPropertyParser(lazy(() => isRhsParser));
 
 export const objectMatchPatternParser: Parser<ObjectPattern> = label(
   "an object match pattern",

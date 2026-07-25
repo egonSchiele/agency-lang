@@ -468,9 +468,12 @@ constrain fields, type the object:
 { name, age }: Person                            => ...   // yes
 ```
 
-Remember that inside an object pattern `{ name: string }` binds the `name`
-field to a variable *called* `string` — it does not test the field's type
-(the checker warns with AG5004). Type the whole object instead.
+Inside an object pattern in a **match** the same rule applies — `{ name: string }`
+tests the field. Use `as` to bind a field to a different name: `{ name as n }`.
+
+In `let` / `const` / `for`, where no type test is possible, `:` still renames:
+`const { name: n } = person` binds `n`. `as` works there too, and reads the
+same in both places.
 
 #### Cost
 
@@ -553,11 +556,19 @@ if (x is Json) {
 classes, not Agency types, and type patterns never mean `instanceof`. Use
 `is object`, a shape test, or a helper function.
 
-### One footgun
+### Renaming a field
 
-Inside an object *pattern*, `{name: string}` does not test that `name` is a
-string — it binds the field to a new variable called `string` (pattern
-semantics predating type patterns). The checker warns (AG5004) when a binder
-name shadows a type; test the whole value instead: `p: Person =>` or
-`p: {name: string} =>` (the colon *after the closing brace* is the type
-position).
+Inside an object pattern, `:` always introduces a **type**, so `{name: string}`
+tests that the `name` field is a string. To bind a field to a different name,
+use `as` — the same keyword imports use:
+
+```ts
+match (event) {
+    { type: "click", x as posX, y as posY } => handleClick(posX, posY)
+    { type: "scroll", delta }               => handleScroll(delta)
+    _                                       => ignore()
+}
+```
+
+`as` is only needed when the field name is already taken; `{ delta }` shorthand
+is the usual form.

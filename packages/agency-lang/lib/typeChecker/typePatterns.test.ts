@@ -174,19 +174,6 @@ def f(x: any): string {
     ).toBe(true);
   });
 
-  it("property-position binder named like a type warns AG5004", () => {
-    // In pattern position, {name: string} binds the name field to a variable
-    // called "string" — it does NOT test the field type. Warn.
-    const errors = check(`
-def f(x: any): string {
-  return match (x) {
-    {name: string} => string
-    _ => "no"
-  }
-}
-`);
-    expect(errors.some((e) => e.code === "AG5004")).toBe(true);
-  });
 
   it("negatives: ordinary binders and guarded arms do not warn", () => {
     const errors = check(`
@@ -217,30 +204,7 @@ def f(x: "a" | "b"): "a" | "b" {
     expect(errors).toEqual([]);
   });
 
-  it("typed arms warn AG5004 for property binders named like types", () => {
-    const errors = check(`
-type Person = { name: string }
-def f(x: any): string {
-  return match (x) {
-    {name: string}: Person => "typed"
-    _ => "no"
-  }
-}
-`);
-    expect(errors.some((e) => e.code === "AG5004")).toBe(true);
-  });
 
-  it("nested object patterns warn AG5004", () => {
-    const errors = check(`
-def f(x: any): string {
-  return match (x) {
-    {a: {name: string}} => "nested"
-    _ => "no"
-  }
-}
-`);
-    expect(errors.some((e) => e.code === "AG5004")).toBe(true);
-  });
 
   it("shadow warnings anchor to the arm, not the match head", () => {
     // The offending arm is the LAST of three; its loc must sit below the

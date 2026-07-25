@@ -125,7 +125,7 @@ def buildEntityPath(id: number): string {
 def buildRelationshipsPath(id: number, filter: CategoryFilter, sort: string): string {
   const base = "/entities/${id}/relationships"
   let params: string[] = []
-  if (filter is { type: "category", id: catId }) {
+  if (filter is { type: "category", id as catId }) {
     params.push("category_id=${catId}")
   }
   if (sort != "") {
@@ -139,7 +139,7 @@ def buildRelationshipsPath(id: number, filter: CategoryFilter, sort: string): st
 
 /** Build the connections path from a category filter. Pure. */
 def buildConnectionsPath(id: number, filter: CategoryFilter): string {
-  if (filter is { type: "category", id: catId }) {
+  if (filter is { type: "category", id as catId }) {
     return "/entities/${id}/connections?category_id=${catId}"
   }
   return "/entities/${id}/connections"

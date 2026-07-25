@@ -492,7 +492,7 @@ function synthTypeTestExpression(
     if (t.type === "typeAliasVariable" && !aliases[t.aliasName]) {
       const hint = JS_CLASS_NAMES.includes(t.aliasName)
         ? `\`${t.aliasName}\` is a JavaScript class, and type patterns only test Agency types. Use \`is object\` or a helper function.`
-        : `to bind the value write \`const ${t.aliasName} = x\`.`;
+        : `to bind the value write \`const ${t.aliasName} = x\`, or inside an object pattern \`{ field as ${t.aliasName} }\`.`;
       ctx.errors.push(
         diagnostic(
           "typePatternUnknownType",

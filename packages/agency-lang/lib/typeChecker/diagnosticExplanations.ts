@@ -51,9 +51,6 @@ export const DIAGNOSTIC_EXPLANATIONS: Record<DiagnosticName, string> = {
 
 **How to fix:** to test the type and bind, write \`p: Person => ...\`; to test only, write \`is Person => ...\`; to genuinely bind whatever arrives, pick a name that is not a type.`,
 
-  propertyBinderShadowsType: `Inside an object pattern, \`{field: name}\` binds the field to a new variable called \`name\` — it does not test the field's type, even when the name is a type in scope. \`{name: string}\` binds the \`name\` field to a variable called \`string\`.
-
-**How to fix:** field-level type tests are not supported; test the whole value against a typed shape instead (\`p: Person => ...\` or an inline object type), or pick a binder name that is not a type.`,
 
   typePatternUnknownType: `A type pattern (\`x is T\`, or a match arm \`p: T\`) named something that is not a type. After \`is\`, a bare identifier is always read as a type reference — the old always-true binder form was retired — so a variable name or a JavaScript class name (like \`Date\`) in that position is an error rather than a silent match-anything.
 

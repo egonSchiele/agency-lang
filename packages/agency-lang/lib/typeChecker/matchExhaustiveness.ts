@@ -252,9 +252,11 @@ const SHADOWABLE_PRIMITIVE_NAMES: readonly string[] = [
  * Warn when a binder is named like a type, because with type patterns in the
  * language it READS like a type test but binds instead:
  *   - an un-guarded bare-binder arm (`Person => ...` matches anything and
- *     binds it to `Person`) → AG5003;
- *   - a property-position binder (`{name: string}` binds the `name` field to
- *     a variable called `string`) → AG5004, guarded or not.
+ *     binds it to `Person`) → AG5003.
+ *
+ * The property-position case (AG5004) is gone: `{name: string}` now TESTS the
+ * field, because renaming moved to `as`. The trap it warned about no longer
+ * exists.
  * This pass already sits on every match site with the alias table in hand,
  * which is why the warning lives here rather than in the synthesizer.
  */
@@ -262,25 +264,6 @@ function warnTypeShadowingBinders(site: MatchSite, ctx: TypeCheckerContext): voi
   const aliases = ctx.getTypeAliases();
   const isTypeName = (name: string): boolean =>
     aliases[name] !== undefined || SHADOWABLE_PRIMITIVE_NAMES.includes(name);
-
-  // Recursive so nested object patterns ({a: {name: string}}) warn too.
-  // Diagnostics anchor to the binder node itself, not the whole match.
-  const warnObjectPatternProps = (pattern: ObjectPattern): void => {
-    for (const prop of pattern.properties) {
-      if (prop.type !== "objectPatternProperty") continue;
-      if (prop.value.type === "variableName" && isTypeName(prop.value.value)) {
-        ctx.errors.push(
-          diagnostic(
-            "propertyBinderShadowsType",
-            { field: prop.key, name: prop.value.value },
-            prop.value.loc ?? pattern.loc ?? site.loc ?? null,
-          ),
-        );
-      } else if (prop.value.type === "objectPattern") {
-        warnObjectPatternProps(prop.value);
-      }
-    }
-  };
 
   for (const arm of site.arms) {
     if (arm.caseValue === "_") continue;
@@ -293,13 +276,6 @@ function warnTypeShadowingBinders(site: MatchSite, ctx: TypeCheckerContext): voi
           cv.loc ?? site.loc ?? null,
         ),
       );
-    }
-    // A typed arm ({name: string}: Person =>) wraps its pattern in a
-    // typePattern; the shadow trap applies to the INNER pattern — and a
-    // typed arm is exactly where a user is thinking in types.
-    const inner = cv.type === "typePattern" ? cv.pattern : cv;
-    if (inner !== null && inner.type === "objectPattern") {
-      warnObjectPatternProps(inner);
     }
   }
 }

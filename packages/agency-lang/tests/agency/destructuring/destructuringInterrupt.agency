@@ -30,7 +30,7 @@ node main() {
   // Pattern-match binders before the interrupt
   let event = { type: "click", x: 10, y: 20 }
   let clickX = 0
-  if (event is { type: "click", x: ex, y: ey }) {
+  if (event is { type: "click", x as ex, y as ey }) {
     clickX = ex
   }
 

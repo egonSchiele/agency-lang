@@ -194,7 +194,7 @@ Fetch a U.S. macroeconomic time-series from FRED by its series id (e.g. "UNRATE"
 
 **Returns:** `Result<FredSeries>`
 
-**Throws:** `std::fred`
+**Throws:** `std::fred`, `std::http::fetchJSON`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L174))
 
@@ -219,6 +219,6 @@ Fetch metadata about a FRED series by its id: its human title, display units, fr
 
 **Returns:** `Result<FredSeriesInfo>`
 
-**Throws:** `std::fred`
+**Throws:** `std::fred`, `std::http::fetchJSON`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/finance/fred.agency#L201))

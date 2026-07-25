@@ -1,3 +1,4 @@
+import { SymbolTable } from "@/symbolTable.js";
 import { declaredName } from "../types/hole.js";
 import { AgencyConfig } from "@/config.js";
 import { AgencyGenerator, generateAgency } from "@/backends/agencyGenerator.js";
@@ -141,12 +142,25 @@ function generateDocForFile(
   ctx: DocContext,
   program: AgencyProgram,
 ): void {
-  const info = buildCompilationUnit(program);
+  // A symbol table is what makes an imported function's effects visible. The
+  // Throws column understated everything reached through an import without it
+  // — a guard block in another module never showed up (GitHub issue 680).
+  // Building it can throw on an unresolvable import, and the doc command
+  // should still produce output for a file it cannot fully resolve.
+  let info;
+  try {
+    info = buildCompilationUnit(
+      program,
+      SymbolTable.build(filePath, ctx.config),
+      filePath,
+    );
+  } catch (e) {
+    console.error(`[doc] no symbol table for ${filePath}; Throws may be short:`, e);
+    info = buildCompilationUnit(program);
+  }
 
-  // Run the type checker (without a SymbolTable) to compute the
-  // transitive interrupt effects each function/node may throw. We
-  // intentionally ignore type errors here — the doc command should
-  // produce output even for files that don't fully type-check.
+  // We intentionally ignore type errors here — the doc command should produce
+  // output even for files that don't fully type-check.
   let interruptEffectsByFunction: Record<string, InterruptEffect[]> = {};
   try {
     const result = typeCheck(program, ctx.config, info);

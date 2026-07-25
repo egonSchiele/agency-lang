@@ -82,4 +82,6 @@ Run a block, pausing it every interval to check progress and steer it.
 
 **Returns:** `Result<any>`
 
+**Throws:** `std::guard`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/supervise.agency#L46))

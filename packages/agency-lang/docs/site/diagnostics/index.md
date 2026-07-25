@@ -147,6 +147,8 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | --- | --- |
 | [AG8001](templates.md#ag8001) | This file is a template with unfilled holes (&#123;names&#125;) and cannot be run directly. Load it with `loadTemplate` and fill it first. |
 | [AG8002](templates.md#ag8002) | The hole `#&#123;name&#125;` is in a position that gives it no expected type. Annotate it, for example `#&#123;name&#125;: string`. |
+| [AG8003](templates.md#ag8003) | Generator '&#123;name&#125;' may raise '&#123;effect&#125;', so it cannot run at compile time. Compilation installs no interrupt handlers, so the operation could not complete anyway. Move the effectful work out of the generator. |
+| [AG8004](templates.md#ag8004) | Generator '&#123;name&#125;' cannot be checked for effects: &#123;reason&#125;. An empty effect list from an incomplete reading means nothing, so it is refused rather than run. |
 | [AG8005](templates.md#ag8005) | `&#123;name&#125;` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first. |
 | [AG8006](templates.md#ag8006) | The generator `&#123;name&#125;` reaches non-Agency code through `&#123;importPath&#125;`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript raises no interrupts and cannot be checked. Set `allowNonAgencyGenerators` in your config to permit it. |
 | [AG8007](templates.md#ag8007) | The generator `&#123;name&#125;` returned a `&#123;actual&#125;` fragment, but this splice is in &#123;position&#125; position and needs a `&#123;expected&#125;` fragment. |

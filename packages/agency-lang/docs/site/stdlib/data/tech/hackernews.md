@@ -132,7 +132,7 @@ Fetch a Hacker News story list and hydrate the top items into full stories (titl
 
 **Returns:** `Result<Story[]>`
 
-**Throws:** `std::hackernews`
+**Throws:** `std::hackernews`, `std::http::fetchJSON`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L283))
 
@@ -155,7 +155,7 @@ Fetch one Hacker News item by id — a story, comment, job, or poll. Returns its
 
 **Returns:** `Result<Item>`
 
-**Throws:** `std::hackernews`
+**Throws:** `std::hackernews`, `std::http::fetchJSON`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L302))
 
@@ -180,7 +180,7 @@ Fetch a Hacker News user's public profile: karma, account age, about text, and s
 
 **Returns:** `Result<User>`
 
-**Throws:** `std::hackernews`
+**Throws:** `std::hackernews`, `std::http::fetchJSON`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L314))
 
@@ -214,6 +214,6 @@ Search Hacker News stories by keyword via the Algolia index. Returns matching st
 
 **Returns:** `Result<Story[]>`
 
-**Throws:** `std::hackernews`
+**Throws:** `std::hackernews`, `std::http::fetchJSON`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/data/tech/hackernews.agency#L326))

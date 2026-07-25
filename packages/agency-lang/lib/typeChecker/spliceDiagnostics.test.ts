@@ -26,6 +26,11 @@ const SPLICE_DIAGNOSTIC_PARAMS: Record<string, Record<string, string>> = {
   spliceGeneratedExport: { name: "makeGetters", declared: "greet" },
   spliceRedeclaresHostName: { name: "makeGetters", declared: "config" },
   spliceArgumentNotAvailable: { name: "SOME_CONST" },
+  spliceGeneratorRaises: { name: "makeGetters", effect: "std::read" },
+  spliceGeneratorUnreadable: {
+    name: "makeGetters",
+    reason: "it reaches helper.agency, which does not parse",
+  },
 };
 
 describe("splice diagnostics", () => {
@@ -37,11 +42,13 @@ describe("splice diagnostics", () => {
     expect(spliceCodes).toEqual(Object.keys(SPLICE_DIAGNOSTIC_PARAMS).sort());
   });
 
-  it("assigns the splice codes; AG8003 and AG8004 are unused", () => {
+  it("assigns the splice codes", () => {
     const codes = Object.keys(SPLICE_DIAGNOSTIC_PARAMS)
       .map((diagnosticName) => DIAGNOSTICS[diagnosticName as DiagnosticName].code)
       .sort();
     expect(codes).toEqual([
+      "AG8003",
+      "AG8004",
       "AG8005",
       "AG8006",
       "AG8007",

@@ -115,7 +115,9 @@ function runCheckerPipeline<T>(
     // A splice that cannot expand is left in place rather than reported.
     // This pipeline answers what the code checks as; the compile paths
     // report splice failures with a position.
-    const spliced = expandSplices(program, syntheticPath, {});
+    // Hand over the table we just built: the generator effect check would
+    // otherwise crawl and parse every reachable file again, once per splice.
+    const spliced = expandSplices(program, syntheticPath, {}, { symbolTable });
     const expanded = spliced.ok ? spliced.value : program;
     const reExported = resolveReExports(expanded, symbolTable, syntheticPath);
     // This pipeline is agent-reachable (std::agency typecheck/getEffects),

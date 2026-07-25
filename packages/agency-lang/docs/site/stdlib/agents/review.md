@@ -72,4 +72,6 @@ Review a work product against a task and return findings. error=true marks
 
 **Returns:** `Result<Feedback[]>`
 
+**Throws:** `std::guard`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L70))

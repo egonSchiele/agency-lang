@@ -5,6 +5,9 @@ import type { FunctionDefinition } from "../types/function.js";
 import * as fs from "fs";
 import * as path from "path";
 import { parseAgencyFileCached } from "../parseCache.js";
+import { getEffectsFromFile } from "../compiler/typecheck.js";
+import { makeAgencyTempDir } from "../utils/agencyTempDir.js";
+import { safeDeleteDirectory } from "../utils.js";
 
 /** Find nodes of the given types by walking raw object properties. Deliberately
  *  not walkNodes: the point is a second opinion about what is in the tree, so
@@ -214,5 +217,26 @@ describe("the .invoke() call form", () => {
       bodyOf(`def f(): string { return obj.handler.invoke("x") }`),
     );
     expect(facts.callees).toEqual([]);
+  });
+});
+
+describe("the type checker finds more than the shared walk, never fewer", () => {
+  it("reads a raises clause off a function-typed parameter", () => {
+    // The shared walk has no types, so it cannot see this. The type checker
+    // can, and must keep doing so after the extraction — deleting the
+    // type-aware half of collectFromBody would otherwise break nothing.
+    const source =
+      `export def runIt(cb: () -> string raises <std::read>): string {\n` +
+      `  return cb()\n}\n`;
+    expect(collectBodyFacts(bodyOf(source)).effects).toEqual([]);
+
+    const dir = makeAgencyTempDir("invariant");
+    try {
+      const entry = path.join(dir, "main.agency");
+      fs.writeFileSync(entry, source, "utf-8");
+      expect(getEffectsFromFile(entry)["runIt"]).toContain("std::read");
+    } finally {
+      safeDeleteDirectory(dir, false);
+    }
   });
 });

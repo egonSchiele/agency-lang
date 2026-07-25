@@ -338,6 +338,8 @@ Subprocess execution goes through the std::agency run primitive, so caller
 
 **Returns:** [EvalRunResult](#evalrunresult)
 
+**Throws:** `std::run`, `std::guard`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L106))
 
 ### evalExtract

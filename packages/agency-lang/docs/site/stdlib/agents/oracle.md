@@ -78,4 +78,6 @@ Ask for a second opinion on a hard problem: whether a plan is sound,
 
 **Returns:** `Result<string>`
 
+**Throws:** `std::guard`
+
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L123))

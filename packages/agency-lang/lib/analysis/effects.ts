@@ -147,32 +147,58 @@ export type PropagationNode = {
 };
 
 /**
- * Give every entry the effects of everything it calls, repeatedly, until a full
- * round changes nothing.
+ * Give every entry the effects of everything it calls, until nothing more can
+ * be learned.
  *
- * Terminates because effect lists only grow and the label set is finite. A
- * cycle just costs one extra round. Returns the same object it was given, so a
- * caller can read the result as a value rather than relying on call order.
+ * Worklist rather than repeated full sweeps. Sweeping was measurably quadratic:
+ * on a chain of N functions where only the last one raises, each sweep moves
+ * the effect one link, so it takes N sweeps of N entries. Re-queueing only the
+ * callers of an entry that grew makes the work proportional to the call edges
+ * instead. See lib/perf/symbolTable.perf.test.ts, which measures the chained
+ * shape specifically because that is where the difference shows.
+ *
+ * Terminates because effect lists only grow and the label set is finite, so an
+ * entry can be re-queued only finitely often. Returns the object it was given,
+ * so a caller can read the result as a value rather than relying on call order.
  */
 export function propagateToFixpoint<T extends PropagationNode>(
   nodes: Record<string, T>,
 ): Record<string, T> {
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const node of Object.values(nodes)) {
-      for (const key of node.calleeKeys) {
-        const callee = Object.hasOwn(nodes, key) ? nodes[key] : undefined;
-        for (const effect of callee?.effects ?? []) {
-          if (!node.effects.includes(effect)) {
-            node.effects.push(effect);
-            changed = true;
-          }
+  const callers = callerIndex(nodes);
+  const queue = Object.keys(nodes);
+  while (queue.length > 0) {
+    const key = queue.pop() as string;
+    const node = nodes[key];
+    if (!node) continue;
+    let grew = false;
+    for (const calleeKey of node.calleeKeys) {
+      const callee = Object.hasOwn(nodes, calleeKey) ? nodes[calleeKey] : undefined;
+      for (const effect of callee?.effects ?? []) {
+        if (!node.effects.includes(effect)) {
+          node.effects.push(effect);
+          grew = true;
         }
       }
     }
+    if (grew && Object.hasOwn(callers, key)) {
+      queue.push(...callers[key]);
+    }
   }
   return nodes;
+}
+
+/** Reverse of the call edges: for each entry, who calls it. */
+function callerIndex(
+  nodes: Record<string, PropagationNode>,
+): Record<string, string[]> {
+  const callers: Record<string, string[]> = Object.create(null);
+  for (const [key, node] of Object.entries(nodes)) {
+    for (const calleeKey of node.calleeKeys) {
+      if (!Object.hasOwn(callers, calleeKey)) callers[calleeKey] = [];
+      callers[calleeKey].push(key);
+    }
+  }
+  return callers;
 }
 
 /** Deduplicate, preserving first-seen order. The declarative counterpart to
@@ -385,4 +411,33 @@ export function originOf(table: SymbolTable, at: Origin): Origin {
   return from
     ? originOf(table, { file: from.sourceFile, name: from.originalName })
     : at;
+}
+
+/**
+ * Every function the given one can reach by calling, itself included.
+ *
+ * Scoped by call graph rather than by file on purpose. Every file reaches the
+ * prelude and passing a function as a value is ordinary Agency, so a
+ * file-scoped rule would refuse every generator ever written.
+ */
+export function reachableFrom(
+  table: SymbolTable,
+  programs: Record<string, AgencyProgram>,
+  start: Origin,
+): Origin[] {
+  const summaries = buildSummaries(table, programs);
+  const seen: Record<string, true> = Object.create(null);
+  const found: Origin[] = [];
+  const queue: string[] = [keyOf(originOf(table, start))];
+
+  while (queue.length > 0) {
+    const key = queue.shift() as string;
+    if (Object.hasOwn(seen, key)) continue;
+    seen[key] = true;
+    const summary = Object.hasOwn(summaries, key) ? summaries[key] : undefined;
+    if (!summary) continue;
+    found.push({ file: summary.file, name: summary.name });
+    queue.push(...summary.calleeKeys);
+  }
+  return found;
 }

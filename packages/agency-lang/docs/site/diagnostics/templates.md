@@ -31,6 +31,34 @@ node main() {
 }
 ```
 
+<a id="ag8003"></a>
+
+## AG8003 — Generator '&#123;name&#125;' may raise '&#123;effect&#125;', so it cannot run at compile time. Compilation installs no interrupt handlers, so the operation could not complete anyway. Move the effectful work out of the generator.
+
+*Default severity: error.*
+
+A generator can reach an operation that asks for permission.
+
+Compilation installs no interrupt handlers, so an operation that stops to ask a question can never finish while a generator runs. Catching it before the generator starts means you get told which effect, and where, instead of a failure part-way through.
+
+The effect does not have to be in the generator itself. It counts if the generator can reach it by calling, however many files away that is.
+
+**How to fix:** move the effectful work out of the generator. Read the file at runtime and pass the contents in as a splice argument, or generate code that does the reading when the program runs rather than when it compiles.
+
+<a id="ag8004"></a>
+
+## AG8004 — Generator '&#123;name&#125;' cannot be checked for effects: &#123;reason&#125;. An empty effect list from an incomplete reading means nothing, so it is refused rather than run.
+
+*Default severity: error.*
+
+A generator could not be checked for effects, so it was refused rather than run.
+
+Working out what a generator can reach means reading source code. Four things cannot be read that way: a file that does not parse, a compile-time splice that has not expanded yet, a function received as a parameter and then called, and a function reference stored in a variable before being passed on.
+
+An empty effect list from a reading that could not see one of those is not evidence of safety, so it fails closed. The message names which one it hit and where.
+
+**How to fix:** fix the file that does not parse, or rewrite the reached function so the call is direct rather than through a parameter or a variable. If the generator does not need that helper at all, stop calling it — the check follows calls, so an unused helper in the same file is not a problem.
+
 <a id="ag8005"></a>
 
 ## AG8005 — `&#123;name&#125;` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first.

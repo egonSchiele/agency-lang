@@ -21,7 +21,14 @@ describe("typecheck scaling", () => {
       const p = parseAgency(manyFunctions(n), {}, false);
       if (!p.success) throw new Error("fixture did not parse");
       const prog = p.result;
-      return () => typeCheck(prog, {}, buildCompilationUnit(prog));
+      // typeCheck mutates program.nodes (desugarGuardsInBody), so each timed
+      // call gets a fresh clone to measure cold work, not a warm re-run. (For
+      // this fixture the desugar is a no-op, but the clone stops that from
+      // being a silent correctness dependency on the fixture.)
+      return () => {
+        const c = structuredClone(prog);
+        return typeCheck(c, {}, buildCompilationUnit(c));
+      };
     };
     expectPerf("typecheck:manyFunctions", growthFactor(build, 500, 4000), GROWTH_BOUND);
   });

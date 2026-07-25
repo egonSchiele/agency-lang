@@ -11,11 +11,22 @@ import { growthFactor, expectPerf, GROWTH_BOUND } from "./harness.js";
 
 // Compile is measured PER STAGE on in-memory strings, not just end to end: a
 // quadratic in preprocess or codegen would hide inside a single "compile" number
-// (the lesson of the AL0002 bug, applied to the pipeline). Strings never touch
-// the file-based parse cache, so no cache neutralization is needed here.
+// (the AL0002 lesson applied to the pipeline). Strings never touch the file-based
+// parse cache, so no cache neutralization is needed.
 //
-// Every stage was verified re-runnable: buildCompilationUnit does not mutate the
-// program, and preprocess/build produce identical output on a repeated call.
+// Re-runnability matters because growthFactor runs each closure 9x on the same
+// setup. `parse`, `bind`, and `generate` are genuinely re-runnable: parse yields
+// a fresh program each call; buildCompilationUnit does not mutate the program;
+// TypeScriptBuilder.build does not mutate the preprocessed program (all verified).
+// But `preprocess` reassigns program.nodes in place (and so does the internal
+// preprocess in `postParse`/generateTypeScript), so those two clone the program
+// per call — otherwise calls 2..9 would preprocess an already-preprocessed
+// program and measure a warm re-run, not cold work. The clone is ~1% of the
+// stage cost here, so it does not mask a regression.
+//
+// LARGE is kept modest (the full pipeline at 800 functions already emits ~5MB of
+// TS per call). Revisit during calibration if any stage's baseline sits well
+// above 1.0 — that would mean N is too small to separate its regressions.
 
 const SMALL = 100;
 const LARGE = 800;
@@ -39,8 +50,10 @@ const stages: Record<string, (n: number) => () => unknown> = {
   },
   preprocess: (n) => {
     const program = parse(n);
-    const unit = buildCompilationUnit(program);
-    return () => new TypescriptPreprocessor(program, {}, unit).preprocess();
+    return () => {
+      const p = structuredClone(program);
+      return new TypescriptPreprocessor(p, {}, buildCompilationUnit(p)).preprocess();
+    };
   },
   generate: (n) => {
     const program = parse(n);
@@ -48,9 +61,11 @@ const stages: Record<string, (n: number) => () => unknown> = {
     const preprocessed = new TypescriptPreprocessor(program, {}, unit).preprocess();
     return () => printTs(new TypeScriptBuilder({}, unit, "m").build(preprocessed));
   },
-  full: (n) => {
+  // Post-parse pipeline (bind → preprocess → build → print); parse is its own
+  // stage above, so this deliberately excludes it.
+  postParse: (n) => {
     const program = parse(n);
-    return () => generateTypeScript(program, {}, undefined, "m");
+    return () => generateTypeScript(structuredClone(program), {}, undefined, "m");
   },
 };
 

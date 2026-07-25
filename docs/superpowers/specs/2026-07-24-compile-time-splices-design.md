@@ -163,6 +163,28 @@ Two checks, in this order:
 
 **Dynamic, as a backstop.** The compile phase installs no handlers, so anything that slips past the static check hits an unhandled interrupt and fails loudly.
 
+#### The import restriction that makes this hold
+
+The effect check is only meaningful if every dangerous operation actually goes through an interrupt. That is true of Agency code and false of TypeScript, which raises nothing. And there is a live path to TypeScript today: a plain JS or TS package like `zod` "passes through untouched" when imported (`docs/dev/pkg-imports.md:14`).
+
+So the rule that makes the guarantee hold is a restriction on what a generator may import:
+
+**A generator's transitive import graph may contain only `std::` imports and relative `.agency` files.**
+
+Transitive is the operative word. Checking the generator's own file is not enough, because a local `.agency` file it imports could pull in `zod` one level down.
+
+`pkg::` imports are excluded from v1. They are Agency code, so effects are tracked, but they are third-party and can themselves reach JavaScript. Allowing them later is additive.
+
+This converts the safety argument from "audit an invariant" into a graph check with a definite answer.
+
+#### How much this needs to worry us
+
+Worth stating plainly, because it is easy to over-weight. Compile-time code execution is a real escalation, but a modest one. The generator is code already in your project, and both compiling and running a program already execute your code. The genuinely new exposure is that code runs at *build* time, when a user might expect only analysis. That is the npm `postinstall` problem: real, old, and well understood.
+
+The comparison is favorable. npm `postinstall` has no check at all. Template Haskell's `runIO` has no check at all. Rust proc macros have no check at all. With the static effect check plus the import restriction above, Agency would be the strictest of the group by a wide margin.
+
+The right response is therefore this one rule plus a test, not a standing risk item.
+
 The static check is the primary one because it is better in every way that matters: it fires before any code runs, it fires even when the dangerous branch would not have been taken on this particular input, and it can point at the generator rather than at a stack.
 
 The `"unknown"` sentinel makes this fail-closed. A generator containing a bare `interrupt(...)` reports `"unknown"` in its effect list, which is non-empty, which is a refusal.
@@ -288,7 +310,11 @@ There is also a wrinkle any introspection design must handle. `describe` takes a
 
 These are genuinely unsettled and should be resolved while writing the plan.
 
-1. **Combining fragments.** The boilerplate example needs to turn `Code[]` into one `program` fragment. Does a primitive for this exist, and if not, what is it called and where does it live? This is small but it is on the critical path for the motivating example.
+1. **Combining fragments.** The boilerplate example needs to turn `Code[]` into one `program` fragment, and no primitive does this today.
+
+   Settled shape: a function in `std::agency`, `combine(codes: Code[]): Result<Code>`, rather than an overloaded `+`. Combining can fail, because an expression fragment and a program fragment cannot merge, and a function returning `Result` has somewhere to report that while an operator would have to throw or silently guess. Agency also has no operator overloading today, and introducing it for one stdlib type is a larger language change than this feature needs.
+
+   Remaining: the exact name, and the merge rules for each kind pair.
 
 2. **Hygiene for expression splices.** Declaration splices are mostly safe by accident: if a generator emits a top-level `const config` and the file already has one, that is a duplicate-declaration error, which is a loud correct failure. Expression splices are different. Pasting an expression into a function body puts it next to local variables, and if the generated expression mentions `tmp`, it captures the local `tmp`.
 
@@ -304,11 +330,23 @@ These are genuinely unsettled and should be resolved while writing the plan.
 
 6. **Detecting nondeterminism.** The effect half is free via `getEffectsFromSource`. The `llm()`/clock/randomness half needs new tracking. All transitive effect propagation runs through `analyzeInterruptsFromScopes` (`lib/typeChecker/index.ts:300`), which is a single chokepoint, so an internal marker riding that existing propagation looks plausible. Needs confirming by reading it.
 
-7. **Holes in property-name position.** A hole cannot currently appear where a field name goes, so a generator cannot emit `p.#field`. Identifier holes are wired to exactly three sites: def names, node names, and import specifiers (`identifierHoleParser` in `lib/parsers/parsers.ts`).
+7. **Which positions holes cannot reach.** This does not block v1, since v1 generators take hand-supplied arguments, but it shapes what the introspection follow-up can deliver and is worth recording accurately.
 
-   This does not block v1, since v1 generators take hand-supplied arguments and the worked example above avoids it. It does block the `makeLenses` use case, which is the entire point of the introspection follow-up: seeing that `Person` has a field called `name` is useless if you cannot then generate `p.name`. So this should be resolved as part of the introspection work rather than left implicit.
+   Where holes **do** work is broad. The battery at `lib/parsers/hole.test.ts:157-175` pins fifteen expression positions: assignment value, binop operand, if and while conditions, call argument, named argument, guard head argument, return value, array element, object value, string interpolation, for-loop iterable, match scrutinee, try expression, and is-expression operand. That breadth comes from a single wiring point, `exprHoleParser` as the first alternative in `baseAtom`. Statement holes, top-level declaration holes, and splices in statement and argument positions work too. Anywhere a value goes, a hole goes.
 
-   Two candidate approaches: widen identifier holes to property-name position, or generate `p[#field]` index access instead, which likely parses today but changes typing and goes through `__nn` null-normalization. Neither is verified; both need checking.
+   The gaps are in the other categories:
+
+   - **Names**: only three sites (def names, node names, import specifiers). Not property names, so a generator cannot emit `p.#field`. Not parameter names. Not object-literal keys.
+   - **Types**: none. There is no type sort, so `const x: #T = ...` is impossible.
+   - **Patterns**: none, in match arms or destructuring.
+
+   Template Haskell parameterizes all four categories, since it has expression, declaration, type, and pattern quotes and nested splices work in each. So relative to TH we are missing types and patterns. Notably TH has no name holes either.
+
+   The sharper difference is that **TH always has a fallback**: build the syntax tree by hand. `makeLenses` constructs `Dec` values programmatically and quotes only small pieces. Quotes are a convenience there, not the only road. We have no typed equivalent. If a position has no hole, templates cannot reach it, and the only escape is `parseStatements` on a string, which is exactly the injection surface the feature exists to avoid. (`Code` is a plain record a caller can hand-build, which `isCode` validates for, but no typed API exists for doing so.)
+
+   So each missing position is a hard wall rather than an inconvenience. The property-name gap in particular blocks `makeLenses`, since seeing that `Person` has a field called `name` is useless if you cannot then generate `p.name`. Resolve it with the introspection work rather than leaving it implicit.
+
+   Two candidate approaches for property names: widen identifier holes to that position, or generate `p[#field]` index access, which may parse today but changes typing and routes through `__nn` null-normalization. Neither is verified.
 
 8. **Diagnostic codes.** `AG8001` and `AG8002` are taken by templates, so splices start at `AG8003`. Note that `diagnosticExplanations.ts` is exhaustive by type, so every new code needs prose or the build fails (`docs/dev/template-agency.md`). Codes needed, at minimum: generator has effects, generator is nondeterministic, generator not imported from another file, returned fragment kind does not match splice position, generator failed at runtime.
 
@@ -317,7 +355,7 @@ These are genuinely unsettled and should be resolved while writing the plan.
 Mirroring how #665 was tested.
 
 - **Parser tests** for `$( )` in both positions, and for the positions where it is rejected.
-- **Refusal tests** via `compileSource`, asserting the `code` field rather than thrown text, covering: a generator that raises an effect, one that calls `llm()`, one defined in the same file, and one returning the wrong fragment kind.
+- **Refusal tests** via `compileSource`, asserting the `code` field rather than thrown text, covering: a generator that raises an effect, one that calls `llm()`, one defined in the same file, one returning the wrong fragment kind, one that imports a JS/TS package directly, and one that imports a local `.agency` file which in turn imports a JS/TS package. The last is the one that proves the import check is transitive rather than shallow.
 - **Execution fixtures** in `tests/agency/templates/` for the end-to-end cases: declaration splice producing a callable function, expression splice producing a value, and a generator built with `fill` and code literals.
 - **A resource-limit test** proving a looping generator produces a bounded error rather than hanging.
 - **An error-attribution test** proving that when generated code fails to compile, the message names the generator.
@@ -325,8 +363,6 @@ Mirroring how #665 was tested.
 Per project convention these need no LLM calls.
 
 ## Risks
-
-**Compile-time code execution is a genuine escalation**, even effect-checked. The static check is only as good as the effect analysis, and the analysis is only as good as the invariant that dangerous operations go through interrupts. Anything that reaches a `_`-prefixed TypeScript builtin without an interrupt wrapper is outside the guarantee. This should be audited during planning rather than assumed, since the whole safety argument rests on it.
 
 **Build times.** A subprocess per splice is slow, and without caching this could be very slow. Caching is listed as an open question but should probably be in v1 rather than a follow-up.
 

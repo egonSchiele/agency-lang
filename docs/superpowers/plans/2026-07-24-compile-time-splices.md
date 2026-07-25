@@ -4,37 +4,63 @@
 
 **Goal:** Add `$( ... )` to Agency, which runs a generator function during compilation and pastes the `Code` value it returns into the file being compiled.
 
-**Architecture:** A new `Splice` AST node parses in both declaration and expression position. A new expansion pass runs between parse and symbol-table construction: for each splice it checks the generator is eligible (imported from another file, effect-free, deterministic, and reachable only through Agency code), runs it in a subprocess via the existing `run` machinery, and grafts the returned nodes into the AST. Because `SymbolTable.build` reads from disk rather than from the AST, the pass writes expanded source back to the temp file while keeping the origin-stamped AST in memory for typecheck and codegen.
+**Architecture:** A new `Splice` AST node parses in both declaration and expression position. Expansion runs inside `SymbolTable.build`, immediately before `classifySymbols`, so generated declarations are visible both in their own file and to any file that imports them. Because that call site is hot — twelve non-test callers including the LSP on every keystroke — expansion is a cached pure function of the splice expression plus the generator module's content, which Rule 3's determinism requirement is what licenses. Generators run in a **synchronous** child process, because the whole compile pipeline is synchronous and the existing `_run` is not.
 
-**Tech Stack:** TypeScript, tarsec parser combinators, vitest, existing Agency compile/run pipeline.
+**Tech Stack:** TypeScript, tarsec parser combinators, vitest, existing Agency compile pipeline.
+
+> **Revision note.** This plan was rewritten after review (`2026-07-24-compile-time-splices-REVIEW.md`). Four blocking findings were verified and fixed: expansion was wired into the sandbox-only path, generator execution was assumed synchronous when `_run` is async, the effect check was fail-open for relative imports, and generated declarations were invisible across files. The owner chose to expand during symbol-table construction so generated declarations can be exported.
 
 ## Global Constraints
 
-- **No dynamic imports.** Use static imports only.
-- **Objects not maps, arrays not sets, types not interfaces.** House style, enforced by the structural linter (`pnpm run lint:structure`).
-- **Dictionaries keyed by user-controlled strings must be null-prototype**, membership tested with `Object.hasOwn`. Splice names and generator names are user-controlled.
-- **Never inline validators cross-module.**
-- **Save test output to a file.** Tests here are slow and expensive; never re-run just to see what failed.
-- **Do not run the full agency test suite locally.** Run specific fixtures only; CI runs the rest.
-- **Diagnostic codes are append-only.** Splices use AG8003–AG8010. `diagnosticExplanations.ts` is exhaustive by type, so a code without prose fails the build.
-- **Run `make` (not `pnpm run build`) after changing any stdlib file.**
-- Commit messages and PR bodies go in a **file** passed to git, never inline on the command line.
+- **No dynamic imports.** Static imports only.
+- **Objects not maps, arrays not sets, types not interfaces** — except where you are editing a file that already uses the other, in which case follow the file.
+- **Dictionaries keyed by user-controlled strings must be null-prototype**, membership via `Object.hasOwn`. Splice names, generator names, and cache keys are all user-controlled.
+- **No one-line `if` statements.** Braces always. This is in the anti-patterns catalog and the previous draft of this plan violated it in sample code.
+- **No single-character variable names** in non-test code.
+- **Use `safeDeleteDirectory`, never `fs.rmSync`.** Test temp dirs go under the project's `.agency-tmp/`, not `os.tmpdir()`, because `safeDeleteDirectory` has a project-containment check that rejects anything outside the project. See `lib/compiler/typecheck.ts:60-62`, which explains exactly this.
+- **Save test output to a file.** Tests here are slow; never re-run just to see what failed.
+- **Do not run the full agency test suite locally.** Run specific fixtures; CI runs the rest.
+- **Diagnostic codes are append-only.** Splices use AG8003–AG8011. `diagnosticExplanations.ts` is exhaustive by type, so a code without prose fails the build.
+- **Run `make` (not `pnpm run build`) after changing any stdlib file.** Run `make doc` if you change a docstring.
+- Commit messages and PR bodies go in a **file** passed to git, never inline.
+
+## One failure shape, used everywhere
+
+The previous draft invented three conventions for one idea. There is now one. Define it in Task 0 and use it in every later task:
+
+```ts
+/** Every way a splice can fail, from eligibility through execution to
+ *  grafting. Named for what it is — a diagnostic — not for eligibility,
+ *  because it also carries runtime failures (AG8008) and post-graft name
+ *  errors (AG8010). */
+export type SpliceDiagnostic = {
+  diagnostic: DiagnosticName;
+  params: Record<string, string>;
+  loc: SourceLocation;
+};
+
+/** Checks return null on success. Producers return a discriminated union. */
+export type SpliceResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; diagnostic: SpliceDiagnostic };
+```
 
 ## Decisions carried in from the spec
 
-Read `/Users/adityabhargava/agency-lang/docs/superpowers/specs/2026-07-24-compile-time-splices-design.md` before starting. The four rules:
+Read `/Users/adityabhargava/agency-lang/docs/superpowers/specs/2026-07-24-compile-time-splices-design.md` first. The four rules:
 
 1. `$( expr )` goes anywhere a declaration or an expression goes.
 2. The generator must be imported from another file.
 3. The generator's transitive effect list must be empty, it must not reach `llm()`/clock/randomness, and its transitive import graph may contain only `std::` imports and relative `.agency` files.
 4. The returned `Code` value is pasted in and compiled as part of the file.
 
-Four open questions the spec left for this plan, now settled:
+Settled since the spec:
 
-- **Nested splices:** forbidden in v1 (AG8009). Additive to relax.
-- **Legal argument expressions:** literals, code literals, and references to imported names only (AG8005 covers same-file references).
-- **Detecting nondeterminism:** an internal marker riding `analyzeInterruptsFromScopes`. Task 5 begins by reading that function, because the approach is unverified.
-- **Diagnostic codes:** AG8003–AG8010, assigned in Task 3.
+- **Generated declarations may be exported** (owner decision, 2026-07-24). This is why expansion runs inside `SymbolTable.build`.
+- **The spec's "caching needs nothing new" section is now obsolete.** It assumed expansion sat inside the manifest-guarded per-file compile. It does not. A cache is mandatory; Task 7 builds it.
+- **Nested splices:** forbidden (AG8009), enforced by a flag threaded into the generator's own compile.
+- **Splice arguments:** literals, code literals, and imported names only. Its own code, AG8011.
+- **Splices inside code literals:** a splice inside `[| ... |]` is ordinary template text belonging to the generated program. The expansion pass does not descend into a code literal. Pinned by a parser test in Task 1.
 
 ## File Structure
 
@@ -43,52 +69,96 @@ Four open questions the spec left for this plan, now settled:
 | File | Responsibility |
 | --- | --- |
 | `lib/types/splice.ts` | The `Splice` node type |
-| `lib/parsers/splice.test.ts` | Parser tests for both positions |
-| `lib/compiler/splice/eligibility.ts` | Is this generator allowed to run? Import graph, effects, determinism |
-| `lib/compiler/splice/eligibility.test.ts` | Eligibility tests |
-| `lib/compiler/splice/runGenerator.ts` | Synthesize a program, run it, return the `Code` value |
-| `lib/compiler/splice/runGenerator.test.ts` | Generator execution tests |
-| `lib/compiler/splice/expand.ts` | The expansion pass: find splices, run generators, graft results |
-| `lib/compiler/splice/expand.test.ts` | Expansion tests |
-| `tests/agency/splices/*.agency` + `.test.json` | End-to-end fixtures |
+| `lib/parsers/splice.test.ts` | Parser tests, both positions |
+| `lib/compiler/splice/types.ts` | `SpliceDiagnostic`, `SpliceResult` |
+| `lib/compiler/splice/eligibility.ts` | May this generator run? Imports, effects, determinism |
+| `lib/compiler/splice/runGenerator.ts` | Run one generator, synchronously, return its `Code` |
+| `lib/compiler/splice/cache.ts` | Memoize generator output by expression + module content |
+| `lib/preprocessors/expandSplices.ts` | The pass itself |
+| `tests/agency/splices/*` | End-to-end fixtures |
+
+Each of those gets a co-located `.test.ts`.
+
+`expandSplices.ts` lives in `lib/preprocessors/` alongside `liftCallbacks.ts` and `resolveReExports.ts`, which run in the same pipeline slot and are the pattern to follow. The checks stay under `lib/compiler/splice/` because they are policy, not transformation, and they change for different reasons.
 
 **Modified:**
 
 | File | Change |
 | --- | --- |
-| `lib/types.ts` | Add `Splice` to the `AgencyNode` and `Expression` unions and to `EXPRESSION_NODE_TYPES` |
-| `lib/parsers/parsers.ts` | `spliceParser`; wire into `baseAtom` |
-| `lib/parser.ts` | Wire `spliceParser` into the top-level alternation |
-| `lib/utils/expressionSlots.ts` | Register `splice` |
-| `lib/utils/identifierSlots.ts` | Register `splice` |
-| `lib/utils/bodySlots.ts` | Comment recording deliberate absence |
-| `lib/backends/agencyGenerator.ts` | Format a splice so it round-trips |
-| `lib/typeChecker/diagnostics.ts` | AG8003–AG8010 |
-| `lib/cli/diagnosticsDocs.ts` | Explain prose for each new code |
-| `lib/compiler/compile.ts` | Call the expansion pass between parse and `SymbolTable.build` |
+| `lib/types.ts` | `Splice` into the `AgencyNode` and `Expression` unions and `EXPRESSION_NODE_TYPES` |
+| `lib/parsers/parsers.ts` | `spliceParser`, wired into `baseAtom` |
+| `lib/parser.ts` | `topLevelSpliceParser` into the top-level alternation |
+| `lib/utils/expressionSlots.ts` | Register `splice` **with a real expression slot** |
+| `lib/utils/identifierSlots.ts` | `splice: none` |
+| `lib/utils/bodySlots.ts` | Deliberate-absence comment |
+| `lib/backends/agencyGenerator.ts` | Print a splice |
+| `lib/typeChecker/diagnostics.ts` | AG8003–AG8011 |
+| `lib/cli/diagnosticsDocs.ts` | Explain prose |
+| `lib/symbolTable.ts:180` | Call the expansion pass before `classifySymbols` |
+| `lib/compiler/typecheck.ts` | A path-taking effects entry point |
+| `lib/compiler/compileClosure.ts` | Export `agencyImportTarget` |
 
-The `lib/compiler/splice/` directory keeps the four concerns separate: deciding whether to run, running, expanding, and the node itself. Each is independently testable, and only `expand.ts` touches the pipeline.
+---
+
+### Task 0: Spike the generator execution mechanism
+
+**Files:**
+- Create: `lib/compiler/splice/types.ts`
+- Create: `lib/compiler/splice/spike.md` (delete before the PR)
+
+**Why this is Task 0.** `runGenerator` must be synchronous. `compileEntry` (`lib/compiler/buildSession.ts`) and `SymbolTable.build` are both synchronous, and `SymbolTable.build` is called from twelve places. The obvious delegate is not available: `_run` is `export async function _run(...)` (`lib/runtime/ipc.ts:1296`) and returns a Promise because it forks a child.
+
+Making the compile pipeline async would reach `compileSource`, `BuildSession`, the CLI, the LSP, `runCheckerPipeline`, and all twelve `SymbolTable.build` callers. That is a far larger change than this feature and is out of scope.
+
+So the answer is almost certainly a synchronous child process. But "almost certainly" is why this is a spike and not a task: if it does not work, every interface below changes shape.
+
+- [ ] **Step 1: Define the shared failure types**
+
+Create `lib/compiler/splice/types.ts` with `SpliceDiagnostic` and `SpliceResult<T>` exactly as given in the "One failure shape" section above. Every later task imports from here.
+
+- [ ] **Step 2: Prove a Code value round-trips through a synchronous child process**
+
+Write a throwaway script that:
+
+1. writes a trivial generator module to `.agency-tmp/`, exporting `def g(): Code { return [| def greet(): string { return "hi" } |] }`
+2. writes a runner module importing it and returning `g()`
+3. compiles the runner with the existing compile path
+4. executes the compiled JavaScript with `execFileSync` or `spawnSync`, capturing stdout
+5. parses the result and asserts `isCode` accepts it
+
+Record in `spike.md`: which function compiled it, how the value came back across the process boundary, whether `timeout` on `spawnSync` reliably kills a runaway child, and how to cap memory (likely `--max-old-space-size` in `execArgv`).
+
+- [ ] **Step 3: Decide and write it down**
+
+In `spike.md`, state the chosen mechanism and the exact signature `runGenerator` will have. If synchronous execution proves impossible, **stop and escalate** rather than proceeding — Tasks 6 and 7 are unbuildable without it, and the fallback (an async pipeline) is a different project.
+
+- [ ] **Step 4: Commit the types only**
+
+```bash
+git add lib/compiler/splice/types.ts
+git commit -F /tmp/commit-splice-0.txt
+```
+
+Subject: `Splices: shared diagnostic types`. Keep `spike.md` out of the commit or delete it first.
 
 ---
 
 ### Task 1: The `Splice` AST node and its parser
 
 **Files:**
-- Create: `lib/types/splice.ts`
-- Modify: `lib/types.ts` (union members and `EXPRESSION_NODE_TYPES`)
-- Modify: `lib/parsers/parsers.ts` (`spliceParser`, `baseAtom` wiring)
-- Modify: `lib/parser.ts` (top-level alternation)
-- Modify: `lib/utils/expressionSlots.ts`, `lib/utils/identifierSlots.ts`, `lib/utils/bodySlots.ts`
-- Test: `lib/parsers/splice.test.ts`
+- Create: `lib/types/splice.ts`, `lib/parsers/splice.test.ts`
+- Modify: `lib/types.ts`, `lib/parsers/parsers.ts`, `lib/parser.ts`, `lib/utils/expressionSlots.ts`, `lib/utils/identifierSlots.ts`, `lib/utils/bodySlots.ts`
 
 **Interfaces:**
-- Produces: `type Splice = BaseNode & { type: "splice"; expression: Expression; position: "decl" | "expr" }` and `export const spliceParser: Parser<Splice>`.
+- Produces: `type Splice = BaseNode & { type: "splice"; expression: Expression; position: "decl" | "expr" }`, `spliceParser`, `topLevelSpliceParser`.
 
-**Background you need.** `CodeLiteral` (`lib/types/codeLiteral.ts`) is the closest precedent, and its parser is far harder than this one. A code literal needs an end-scan grammar because its body is arbitrary text and `|]` must not terminate early. A splice does not: its content is a single Agency **expression**, so `exprParser` already knows exactly where it ends. Use `exprParser` then expect `)`. Do not build an end-scan.
+**Background.** `CodeLiteral` (`lib/types/codeLiteral.ts`) is the nearest precedent but its parser is much harder than this one. A code literal needs an end-scan grammar because its body is arbitrary text. A splice's content is a single Agency **expression**, so `exprParser` already knows where it ends. Use `exprParser`, then expect `)`. Do not build an end-scan.
+
+**A splice is NOT a walker leaf.** This is the one thing in this task that later tasks depend on and that is easy to get wrong. `codeLiteral` is a leaf because its body belongs to the generated program. A splice's `expression` is ordinary host code, and Tasks 4, 7, and 8 all need the walker to descend into it. Do not copy `codeLiteral`'s registrations.
 
 The `position` field mirrors `Hole.sort`: derived from which parser matched, never written by the user.
 
-Read `docs/dev/template-agency.md` section "Code literals" for the leaf-ness levers. A splice is **not** a leaf: its `expression` is a real host expression that the walker must descend into, because Task 4 needs to see which names it references. This is the opposite of `codeLiteral`, so do not copy its registrations blindly.
+**Statement position.** A bare `$( makeGreeters(names) )` on its own line inside a node body parses through `baseAtom` as an expression splice and will then be required to produce an `expr` fragment. That is almost certainly not what someone writing it means. The v1 rule: this is legal and means an expression splice, exactly as the parse implies. Pinned by a test so the behavior is deliberate rather than accidental.
 
 - [ ] **Step 1: Write the failing parser tests**
 
@@ -97,68 +167,116 @@ Create `lib/parsers/splice.test.ts`:
 ```ts
 import { describe, expect, it } from "vitest";
 import { parseAgency } from "../parser.js";
-import { findNodesOfType } from "../utils/walkNodes.js";
-import type { Splice } from "../types.js";
+import { walkNodesArray } from "../utils/walkNodes.js";
+import type { AgencyNode, Splice } from "../types.js";
 
 function parseTemplate(source: string) {
   const result = parseAgency(source, {}, false, false);
-  if (!result.success) throw new Error(result.message ?? "parse failed");
+  if (!result.success) {
+    throw new Error(result.message ?? "parse failed");
+  }
   return result.result;
 }
 
-function firstSplice(source: string): Splice {
-  const found = findNodesOfType(parseTemplate(source).nodes, "splice");
-  expect(found.length).toBeGreaterThan(0);
-  return found[0] as Splice;
+/** Mirrors how lib/utils/holes.ts filters over walkNodesArray. There is
+ *  no findNodesOfType helper in this codebase. */
+function nodesOfType(nodes: AgencyNode[], type: string): AgencyNode[] {
+  const found: AgencyNode[] = [];
+  for (const { node } of walkNodesArray(nodes)) {
+    if (node.type === type) {
+      found.push(node);
+    }
+  }
+  return found;
+}
+
+function splicesIn(source: string): Splice[] {
+  return nodesOfType(parseTemplate(source).nodes, "splice") as Splice[];
 }
 
 describe("splice parsing", () => {
   it("parses a splice in declaration position", () => {
-    const s = firstSplice(`$( makeGetters(["a"]) )\n\nnode main() {\n  return 1\n}\n`);
-    expect(s.position).toBe("decl");
-    expect(s.expression.type).toBe("functionCall");
+    const [splice] = splicesIn(`$( makeGetters(["a"]) )\n\nnode main() {\n  return 1\n}\n`);
+    expect(splice.position).toBe("decl");
+    expect(splice.expression.type).toBe("functionCall");
   });
 
   it("parses a splice in expression position", () => {
-    const s = firstSplice(`node main() {\n  const x = $( buildTable(3) )\n  return x\n}\n`);
-    expect(s.position).toBe("expr");
-    expect(s.expression.type).toBe("functionCall");
+    const [splice] = splicesIn(`node main() {\n  const x = $( buildTable(3) )\n  return x\n}\n`);
+    expect(splice.position).toBe("expr");
+  });
+
+  it("treats a top-level const assignment as an expression splice", () => {
+    // Reaches the splice through baseAtom, not topLevelSpliceParser.
+    const [splice] = splicesIn(`const routes = $( build() )\n`);
+    expect(splice.position).toBe("expr");
+  });
+
+  it("treats a bare splice inside a node body as an expression splice", () => {
+    const [splice] = splicesIn(`node main() {\n  $( makeThings() )\n  return 1\n}\n`);
+    expect(splice.position).toBe("expr");
   });
 
   it("parses a splice whose argument is a code literal", () => {
-    const s = firstSplice(`$( wrap([| def f(): number { return 1 } |]) )\n`);
-    expect(s.position).toBe("decl");
+    const [splice] = splicesIn(`$( wrap([| def f(): number { return 1 } |]) )\n`);
+    expect(splice.position).toBe("decl");
   });
 
   it("parses nested parentheses in the spliced expression", () => {
-    const s = firstSplice(`node main() {\n  const x = $( f(g(1), h(2)) )\n  return x\n}\n`);
-    expect(s.expression.type).toBe("functionCall");
+    const [splice] = splicesIn(`node main() {\n  const x = $( f(g(1), h(2)) )\n  return x\n}\n`);
+    expect(splice.expression.type).toBe("functionCall");
+  });
+
+  it("finds two splices in one file", () => {
+    // Multiple splices are the normal case for the motivating use, and
+    // they are where grafting breaks: a decl splice spreads N nodes and
+    // shifts the index of every splice after it.
+    const found = splicesIn(`$( first() )\n\n$( second() )\n\nnode main() {\n  return 1\n}\n`);
+    expect(found).toHaveLength(2);
+  });
+
+  it("populates loc, which error attribution depends on", () => {
+    const [splice] = splicesIn(`$( makeGetters(["a"]) )\n`);
+    expect(splice.loc).toBeDefined();
+    expect(typeof splice.loc.line).toBe("number");
   });
 
   it("rejects an empty splice", () => {
-    const result = parseAgency(`$( )\n`, {}, false, false);
-    expect(result.success).toBe(false);
+    expect(parseAgency(`$( )\n`, {}, false, false).success).toBe(false);
   });
 
   it("leaves a dollar-paren inside a string alone", () => {
-    const found = findNodesOfType(
-      parseTemplate(`node main() {\n  return "cost: $( 5 )"\n}\n`).nodes,
-      "splice",
-    );
-    expect(found).toEqual([]);
+    expect(splicesIn(`node main() {\n  return "cost: $( 5 )"\n}\n`)).toEqual([]);
+  });
+
+  it("does not treat a splice inside a code literal as a host splice", () => {
+    // A splice inside [| |] is template text belonging to the generated
+    // program. codeLiteral is a walker leaf, so the host walk must not
+    // yield it.
+    expect(splicesIn(`const tpl = [| $( f() ) |]\n`)).toEqual([]);
+  });
+
+  it("descends into the spliced expression", () => {
+    // THE leaf-ness test. Every other test above finds the splice
+    // through its PARENT's slot and passes identically whether the
+    // splice is a leaf or not. Tasks 4, 7, and 8 all need the walker to
+    // see inside. This fails immediately on a `splice: true` leaf ruling.
+    const calls = nodesOfType(parseTemplate(`$( f(g(1)) )\n`).nodes, "functionCall");
+    const names = calls.map((call) => JSON.stringify(call));
+    expect(names.join(" ")).toContain("g");
   });
 });
 ```
 
-If `findNodesOfType` does not exist under that name, read `lib/utils/holes.ts` — it filters over `walkNodesArray` — and use the same construction inline rather than inventing a helper.
+Tighten the last test's assertion once you know the `functionCall` shape; assert on the callee name field rather than stringified JSON.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [ ] **Step 2: Run to verify they fail**
 
 ```bash
 pnpm test:run lib/parsers/splice.test.ts 2>&1 | tee /tmp/splice-parse-1.log
 ```
 
-Expected: FAIL, because `"splice"` is not a known node type.
+Expected: FAIL — `"splice"` is not a known node type.
 
 - [ ] **Step 3: Define the node type**
 
@@ -170,11 +288,16 @@ import type { Expression } from "../types.js";
 
 /** A compile-time splice: `$( generatorCall(...) )`. The expression is
  *  evaluated DURING compilation and the `Code` value it returns is
- *  grafted in at this position. Unlike `CodeLiteral`, a splice is NOT a
- *  host-side leaf — `expression` is ordinary host code and the walker
- *  must descend into it, because the eligibility check needs to see
- *  which names it references. Every splice is removed by the expansion
- *  pass before codegen; reaching codegen with one is an internal error. */
+ *  grafted in at this position.
+ *
+ *  Unlike `CodeLiteral`, a splice is NOT a host-side leaf. `expression`
+ *  is ordinary host code and the walker MUST descend into it: the
+ *  eligibility check reads the names it references, and the expansion
+ *  pass reads its callee. Registering it as a leaf compiles fine and
+ *  fails much later as a check that mysteriously sees nothing.
+ *
+ *  Every splice is removed by the expansion pass before codegen;
+ *  reaching codegen with one is an internal error. */
 export type Splice = BaseNode & {
   type: "splice";
   expression: Expression;
@@ -185,87 +308,43 @@ export type Splice = BaseNode & {
 
 - [ ] **Step 4: Register the type in `lib/types.ts`**
 
-Mirror how `CodeLiteral` is registered at lines 46, 68, 121, 152, and 385. Add `Splice` to the same five places: the import, the re-export, the `Expression` union, `EXPRESSION_NODE_TYPES` (add the string `"splice"`), and the `AgencyNode` union.
+`CodeLiteral` is registered at lines 46, 68, 121, 152, and 385. Add `Splice` to the same five: the import, the re-export, the `Expression` union, `EXPRESSION_NODE_TYPES` (the string `"splice"`), and the `AgencyNode` union.
 
 - [ ] **Step 5: Write the parser**
 
-In `lib/parsers/parsers.ts`, next to `codeLiteralParser` (around line 3134):
+In `lib/parsers/parsers.ts`, beside `codeLiteralParser` (around line 3134). Read the neighbouring parsers for tarsec's exact combinator spellings before writing; the structure below is what to build, not a literal transcription of the API.
 
-```ts
-const SPLICE_OPEN = "$(";
+Build `spliceParser` as `withLoc(committed(str("$("), rest))`, where `rest` runs optional spaces, captures `exprParser`, runs optional spaces, and requires `")"`. Committing after `$(` follows `codeLiteralParser` and means a failure inside wins error reporting rather than degrading to a generic grammar message.
 
-const spliceRest: Parser<Splice> = (input: string) => {
-  const inner = seq(
-    optionalSpaces,
-    capture(lazy(() => exprParser), "expression"),
-    optionalSpaces,
-    str(")"),
-  )(input);
-  if (!inner.success) {
-    return failure(`splice: ${inner.error}`, input);
-  }
-  return {
-    success: true,
-    result: {
-      type: "splice",
-      expression: inner.result.expression,
-      position: "expr",
-    },
-    rest: inner.rest,
-  };
-};
+Then `topLevelSpliceParser` maps over `spliceParser` and rewrites `position` to `"decl"`, the same way `topLevelHoleParser` rewrites a hole's sort.
 
-/** Committed after `$(`, following codeLiteralParser: once the opener is
- *  seen no fallback may reinterpret the text, so failures inside win
- *  error reporting instead of degrading to a generic grammar message. */
-export const spliceParser: Parser<Splice> = withLoc(
-  committed(str(SPLICE_OPEN), spliceRest),
-);
+- [ ] **Step 6: Wire into both positions**
 
-/** Top-level form. Reuses spliceParser and rewrites the position, the
- *  same way topLevelHoleParser rewrites a hole's sort. */
-export const topLevelSpliceParser: Parser<Splice> = map(
-  lazy(() => spliceParser),
-  (s) => ({ ...s, position: "decl" as const }),
-);
-```
-
-Match the exact `seq`/`capture`/`failure` spellings used by the neighbouring parsers in that file; the shapes above are illustrative of structure, not of tarsec's exact API surface.
-
-- [ ] **Step 6: Wire the parser into both positions**
-
-In `lib/parsers/parsers.ts`, add to `baseAtom` (line 3138). Place it immediately after `exprHoleParser`, with this comment:
+In `baseAtom` (line 3138), immediately after `exprHoleParser`:
 
 ```ts
   // `$(` cannot start any other expression, so this is a cheap early
-  // exit like the hole parser above it. Being a baseAtom alternative
-  // covers every expression position at once.
+  // exit like the hole parser above. Being a baseAtom alternative covers
+  // every expression position at once.
   lazy(() => spliceParser),
 ```
 
-In `lib/parser.ts`, add `topLevelSpliceParser` to the top-level alternation directly after `topLevelHoleParser` (line 99), with a comment noting that the expression form is reached through `baseAtom` and this entry exists only to stamp `position: "decl"`.
+In `lib/parser.ts`, add `topLevelSpliceParser` directly after `topLevelHoleParser` (line 99), commenting that the expression form arrives via `baseAtom` and this entry exists only to stamp `position: "decl"`.
 
-- [ ] **Step 7: Register in the tripwire tables**
+- [ ] **Step 7: Register in the three tables**
 
-Three tables fail the build or a completeness test if a new node kind is missing:
+- `lib/utils/expressionSlots.ts` — a splice **has** one expression slot, `expression`. Do **not** add `splice: true` beside `codeLiteral: true`; that is the leaf table. Follow a single-expression node such as `tryExpression`.
+- `lib/utils/identifierSlots.ts:217` — `splice: none`.
+- `lib/utils/bodySlots.ts` — no body slots; add a comment recording the deliberate absence, mirroring the `codeLiteral` comment at line 233.
 
-- `lib/utils/expressionSlots.ts` — a splice **has** one expression slot, `expression`. Do NOT add it to the leaf table alongside `codeLiteral: true`; add a real slot entry so the walker descends. Read the file's switch and follow the shape used by a single-expression node such as `tryExpression`.
-- `lib/utils/identifierSlots.ts:217` — add `splice: none`. A splice declares no identifiers of its own.
-- `lib/utils/bodySlots.ts` — a splice has no body slots. Add a comment recording the deliberate absence, mirroring the `codeLiteral` comment at line 233.
-
-- [ ] **Step 8: Run the tests to verify they pass**
+- [ ] **Step 8: Run to verify they pass**
 
 ```bash
 pnpm test:run lib/parsers/splice.test.ts 2>&1 | tee /tmp/splice-parse-2.log
-```
-
-Expected: PASS. Then run the walker completeness invariants, which will fail loudly if Step 7 was incomplete:
-
-```bash
 pnpm test:run lib/utils/expressionSlots.test.ts 2>&1 | tee /tmp/splice-slots.log
 ```
 
-Expected: PASS.
+Expected: both PASS. Note the slot completeness test at `expressionSlots.test.ts:143` asserts each kind is "enumerated **or** explicitly empty, never both" — it passes on a wrong leaf ruling. The descend test from Step 1 is what actually catches that.
 
 - [ ] **Step 9: Commit**
 
@@ -274,176 +353,87 @@ git add lib/types/splice.ts lib/types.ts lib/parsers/parsers.ts lib/parsers/spli
 git commit -F /tmp/commit-splice-1.txt
 ```
 
-Write the message to `/tmp/commit-splice-1.txt` first. Subject: `Splices: the Splice AST node and its parser`.
+Subject: `Splices: the Splice AST node and its parser`.
 
 ---
 
-### Task 2: Formatter support and the round-trip gate
+### Task 2: Formatter support and print fidelity
 
 **Files:**
 - Modify: `lib/backends/agencyGenerator.ts`
-- Test: `lib/backends/agencyGenerator.splice.test.ts` (create)
+- Create: `lib/backends/agencyGenerator.splice.test.ts`
 
-**Interfaces:**
-- Consumes: `Splice` from Task 1.
-- Produces: nothing new; makes the existing round-trip gate pass.
+**Background.** `generateAgency` is at `lib/backends/agencyGenerator.ts:1990` and `generateExpression` — the nested-expression printer — at `:2008`. Use those names; do not invent `formatExpression`.
 
-**Background.** `lib/backends/agencyGenerator.roundtrip.test.ts` runs the whole corpus through print → re-parse and asserts structural identity plus print idempotence. A node type the formatter cannot print will fail that gate as soon as any fixture contains one. Handle formatting now rather than discovering it in Task 9.
+The previous draft asserted only `toContain` on printed substrings. Substring presence is not fidelity. What later tasks need is that print → re-parse gives back the same tree, so assert that directly here rather than deferring to the corpus gate, which contains no splice-bearing file until Task 9.
 
-The formatter has a `codeLiteral` case at `lib/backends/agencyGenerator.ts:589`. Read it for the surrounding conventions before adding yours.
+- [ ] **Step 1: Write the failing tests**
 
-- [ ] **Step 1: Write the failing round-trip test**
+Cover: a declaration splice prints and re-parses to a structurally equal program; the same for an expression splice; printing is idempotent; a splice whose argument is a **multi-line code literal** round-trips, since that is where a printer is most likely to mangle something and Task 9's `builtWithFill` fixture depends on it.
 
-Create `lib/backends/agencyGenerator.splice.test.ts`:
+Write the round-trip assertion as parse → print → re-parse → `toEqual` on the two programs, not as a substring check.
 
-```ts
-import { describe, expect, it } from "vitest";
-import { parseAgency } from "../parser.js";
-import { generateAgency } from "./agencyGenerator.js";
-
-function roundTrip(source: string): string {
-  const parsed = parseAgency(source, {}, false, false);
-  if (!parsed.success) throw new Error(parsed.message ?? "parse failed");
-  return generateAgency(parsed.result);
-}
-
-describe("formatting splices", () => {
-  it("prints a declaration splice", () => {
-    const out = roundTrip(`$( makeGetters(["a", "b"]) )\n`);
-    expect(out).toContain(`$( makeGetters(["a", "b"]) )`);
-  });
-
-  it("prints an expression splice", () => {
-    const out = roundTrip(`node main() {\n  const x = $( build(3) )\n  return x\n}\n`);
-    expect(out).toContain(`$( build(3) )`);
-  });
-
-  it("is idempotent", () => {
-    const once = roundTrip(`$( makeGetters(["a"]) )\n`);
-    const twice = roundTrip(once);
-    expect(twice).toBe(once);
-  });
-});
-```
-
-Confirm the real export name of the printer entry point before running; if it is not `generateAgency`, read the top of `lib/backends/agencyGenerator.ts` and use the actual name.
-
-- [ ] **Step 2: Run to verify it fails**
+- [ ] **Step 2: Run to verify they fail**
 
 ```bash
 pnpm test:run lib/backends/agencyGenerator.splice.test.ts 2>&1 | tee /tmp/splice-fmt-1.log
 ```
 
-Expected: FAIL, with an unhandled node type.
+Expected: FAIL, unhandled node type.
 
 - [ ] **Step 3: Add the formatter case**
 
-In `lib/backends/agencyGenerator.ts`, beside the `codeLiteral` case:
+Beside the `codeLiteral` case at `lib/backends/agencyGenerator.ts:589`:
 
 ```ts
       case "splice":
         // Spaces inside the parens are the canonical form: `$( f(x) )`.
-        // The expression prints through the ordinary expression printer,
-        // so nested calls and code-literal arguments format normally.
-        return `$( ${formatExpression(node.expression)} )`;
+        return `$( ${this.generateExpression(node.expression)} )`;
 ```
 
-Use whatever the surrounding cases call to print a nested expression; `formatExpression` is a placeholder for that real function name.
+Match how neighbouring cases call the nested printer; it may be a method or a free function.
 
-- [ ] **Step 4: Run to verify it passes**
+- [ ] **Step 4: Run to verify they pass**
 
 ```bash
 pnpm test:run lib/backends/agencyGenerator.splice.test.ts 2>&1 | tee /tmp/splice-fmt-2.log
-```
-
-Expected: PASS.
-
-- [ ] **Step 5: Run the round-trip gate**
-
-```bash
 pnpm test:run lib/backends/agencyGenerator.roundtrip.test.ts 2>&1 | tee /tmp/splice-roundtrip.log
 ```
 
-Expected: PASS, unchanged from before this task.
+Expected: both PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
-```bash
-git add lib/backends/agencyGenerator.ts lib/backends/agencyGenerator.splice.test.ts
-git commit -F /tmp/commit-splice-2.txt
-```
-
-Subject: `Splices: formatter support so splices round-trip`.
+Subject: `Splices: formatter support and print fidelity`.
 
 ---
 
-### Task 3: Diagnostic codes AG8003–AG8010
+### Task 3: Diagnostic codes AG8003–AG8011
 
 **Files:**
-- Modify: `lib/typeChecker/diagnostics.ts`
-- Modify: `lib/cli/diagnosticsDocs.ts`
-- Test: `lib/typeChecker/diagnosticExplanations.test.ts` (existing; it enforces exhaustiveness)
+- Modify: `lib/typeChecker/diagnostics.ts`, `lib/cli/diagnosticsDocs.ts`
+- Test: `lib/typeChecker/diagnosticExplanations.test.ts`, plus a new placeholder test
 
-**Interfaces:**
-- Produces: eight `DiagnosticName` keys that every later task refers to by name.
+**Background.** `DIAGNOSTICS` maps a name to `{ code, severity, message }`. `unfilledHoles` (AG8001) and `holeNeedsTypeAnnotation` (AG8002) at lines 581-591 are the shape to follow. Explanations are exhaustive by type, so a code without prose is a compile error.
 
-**Background.** `DIAGNOSTICS` in `lib/typeChecker/diagnostics.ts` maps a name to `{ code, severity, message }`. The template entries `unfilledHoles` (AG8001) and `holeNeedsTypeAnnotation` (AG8002) are at lines 581-591; read them for the message conventions, especially `{name}`-style placeholders. Codes are append-only. Explanations are exhaustive by type, so adding a code without prose in `lib/cli/diagnosticsDocs.ts` is a compile error, which is the forcing function keeping them in sync.
+Doing this before the checks that raise them means no later task invents a code inline.
 
-Doing this before the checks that raise them means later tasks never invent a code inline.
+- [ ] **Step 1: Add the entries**
 
-- [ ] **Step 1: Add the diagnostic entries**
+After `holeNeedsTypeAnnotation`, add nine: `spliceGeneratorHasEffects` (AG8003), `spliceGeneratorNondeterministic` (AG8004), `spliceGeneratorNotImported` (AG8005), `spliceGeneratorReachesNonAgency` (AG8006), `spliceFragmentKindMismatch` (AG8007), `spliceGeneratorFailed` (AG8008), `spliceNested` (AG8009), `spliceReferencesOuterName` (AG8010), `spliceArgumentNotAvailable` (AG8011).
 
-In `lib/typeChecker/diagnostics.ts`, after `holeNeedsTypeAnnotation`:
+AG8011 is new since the review: the previous draft made AG8005 cover both "generator is not imported" and "splice argument references a host-file name", which are different mistakes and cannot share explain prose. AG8011's message is about arguments:
 
 ```ts
-  spliceGeneratorHasEffects: {
-    code: "AG8003",
+  spliceArgumentNotAvailable: {
+    code: "AG8011",
     severity: "error",
     message:
-      "The generator `{name}` raises {effects} and cannot run at compile time. Compile-time generators must be effect-free.",
-  },
-  spliceGeneratorNondeterministic: {
-    code: "AG8004",
-    severity: "error",
-    message:
-      "The generator `{name}` reaches {source}, so it could produce different code on different builds. Compile-time generators must be deterministic.",
-  },
-  spliceGeneratorNotImported: {
-    code: "AG8005",
-    severity: "error",
-    message:
-      "`{name}` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first.",
-  },
-  spliceGeneratorReachesNonAgency: {
-    code: "AG8006",
-    severity: "error",
-    message:
-      "The generator `{name}` reaches non-Agency code through `{importPath}`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript and TypeScript raise no effects and cannot be checked.",
-  },
-  spliceFragmentKindMismatch: {
-    code: "AG8007",
-    severity: "error",
-    message:
-      "The generator `{name}` returned a `{actual}` fragment, but this splice is in {position} position and needs a `{expected}` fragment.",
-  },
-  spliceGeneratorFailed: {
-    code: "AG8008",
-    severity: "error",
-    message: "The generator `{name}` failed while running: {reason}",
-  },
-  spliceNested: {
-    code: "AG8009",
-    severity: "error",
-    message:
-      "A generator module cannot itself contain a splice. Move the inner generation into a separate module.",
-  },
-  spliceReferencesOuterName: {
-    code: "AG8010",
-    severity: "error",
-    message:
-      "Generated code refers to `{name}`, which it neither declares nor imports. Generated code may use only names it declares itself and names it imports.",
+      "The splice argument `{name}` is declared in this file, so it does not exist yet when the generator runs. Splice arguments may be literals, code literals, or imported names.",
   },
 ```
+
+For AG8006, pass the **generator's name** as `{name}`, not a filename. The previous draft passed `path.basename(entryPath)`, so the message promised a function and showed a file.
 
 - [ ] **Step 2: Run the exhaustiveness test to verify it fails**
 
@@ -451,180 +441,96 @@ In `lib/typeChecker/diagnostics.ts`, after `holeNeedsTypeAnnotation`:
 pnpm test:run lib/typeChecker/diagnosticExplanations.test.ts 2>&1 | tee /tmp/splice-diag-1.log
 ```
 
-Expected: FAIL or a TypeScript compile error naming the eight codes with no explanation prose.
+Expected: FAIL or a TypeScript error naming the nine codes.
 
 - [ ] **Step 3: Add explanation prose**
 
-In `lib/cli/diagnosticsDocs.ts`, add an entry per code. Read an existing AG8xxx entry first for the house shape. Each explanation should say what happened, why the rule exists, and what to do. For example, for AG8003:
+One entry per code in `lib/cli/diagnosticsDocs.ts`. Read an existing AG8xxx entry for the house register. Each says what happened, why the rule exists, and what to do. For AG8003:
 
-> A compile-time generator ran, or would have run, code that raises an interrupt effect — reading a file, writing one, hitting the network, and so on.
+> A compile-time generator ran, or would have run, code that raises an interrupt effect — reading a file, writing one, hitting the network.
 >
-> Compilation refuses to run effectful code. Unlike a normal program run, there are no handlers installed while compiling, so there is nothing to approve or reject an effect against, and a build that quietly touched the filesystem would be a surprise.
+> Compilation refuses to run effectful code. Unlike a normal program run, no handlers are installed while compiling, so there is nothing to approve or reject an effect against, and a build that quietly touched the filesystem would be a surprise.
 >
-> Move the effectful work out of the generator. If the generator needs data from a file, read the file in your program at run time instead, or pass the data in as a plain argument to the splice.
+> Move the effectful work out of the generator. If it needs data from a file, read the file at run time instead, or pass the data in as a plain argument to the splice.
 
-Write the other seven in the same register.
+- [ ] **Step 4: Add a placeholder-rendering test**
 
-- [ ] **Step 4: Run to verify it passes**
+Every message uses `{name}`, `{effects}`, `{importPath}`, `{actual}`, `{expected}`, `{position}`, or `{reason}`. If a check supplies `params: { effect }` where the message wants `effects`, the user sees a literal `{effects}` and every other test in this plan still passes, because Task 9's fixtures assert the `code` field.
+
+Write one test that loops the nine diagnostics, renders each with the params its raiser actually supplies, and asserts the rendered string contains no `{`.
+
+- [ ] **Step 5: Run to verify they pass**
 
 ```bash
 pnpm test:run lib/typeChecker/diagnosticExplanations.test.ts 2>&1 | tee /tmp/splice-diag-2.log
-```
-
-Expected: PASS.
-
-- [ ] **Step 5: Verify explain renders them**
-
-```bash
 pnpm run agency explain AG8003 2>&1 | tee /tmp/splice-explain.log
 ```
 
-Expected: the prose from Step 3.
+Expected: PASS, and the prose from Step 3. The `explain` call is a smoke check, not coverage.
 
 - [ ] **Step 6: Commit**
 
-```bash
-git add lib/typeChecker/diagnostics.ts lib/cli/diagnosticsDocs.ts
-git commit -F /tmp/commit-splice-3.txt
-```
-
-Subject: `Splices: diagnostic codes AG8003-AG8010`.
+Subject: `Splices: diagnostic codes AG8003-AG8011`.
 
 ---
 
-### Task 4: The import-graph eligibility check
+### Task 4: Generator eligibility — the import graph
 
 **Files:**
-- Create: `lib/compiler/splice/eligibility.ts`
-- Test: `lib/compiler/splice/eligibility.test.ts`
+- Create: `lib/compiler/splice/eligibility.ts` and its test
+- Modify: `lib/compiler/compileClosure.ts` (export `agencyImportTarget`)
 
 **Interfaces:**
-- Consumes: AG8005, AG8006 from Task 3.
+- Consumes: `SpliceDiagnostic` from Task 0; AG8005, AG8006 from Task 3.
 - Produces:
 
 ```ts
-export type EligibilityFailure = { diagnostic: DiagnosticName; params: Record<string, string> };
+export function checkImportGraph(entryPath: string, config: AgencyConfig): SpliceDiagnostic | null;
 
-/** Walk the generator module's transitive Agency import graph. Returns a
- *  failure if any edge leaves Agency code. */
-export function checkImportGraph(entryPath: string, config: AgencyConfig): EligibilityFailure | null;
-
-/** Find which module a splice's generator comes from. Returns the
- *  resolved absolute path, or AG8005 when the name is not imported —
- *  which covers both a generator defined in the host file and one that
- *  does not exist at all. Rule 2 lives here. */
+/** Which module supplies this generator, and under what name. Returns
+ *  the alias-resolved original name so runGenerator can print exactly
+ *  one import line. */
 export function resolveGeneratorModule(
   program: AgencyProgram,
-  generatorName: string,
+  localName: string,
   hostPath: string,
-): { path: string } | { failure: EligibilityFailure };
+): SpliceResult<{ modulePath: string; exportedName: string }>;
 ```
 
-**Background.** This is the check that makes the whole safety argument hold, so it deserves care. TypeScript raises no interrupts, and there is a live path to it: a plain JS/TS package like `zod` "passes through untouched" when imported (`docs/dev/pkg-imports.md:14`). If a generator can reach `zod`, the effect check in Task 5 means nothing.
+**Background — this check carries the whole safety argument.** TypeScript raises no interrupts, and a plain JS/TS package "passes through untouched" when imported (`docs/dev/pkg-imports.md:14`). If a generator reaches `zod`, the effect check in Task 5 means nothing.
 
-**Transitive is the operative word.** Checking only the generator's own file is not enough, because a local `.agency` file it imports could pull in `zod` one level down. The test for that case exists specifically to prove the check is not shallow.
+**Reuse the existing edge extractor.** `lib/compiler/compileClosure.ts:283` has `agencyImportTarget`, and its neighbour carries a doc comment written as a warning against exactly what a hand-rolled scan does: it recognizes `importStatement`, `importNodeStatement`, **and** `exportFromStatement`, and an import-only scan lets `export { x } from "pkg::…"` escape. A hand-rolled version here has that bug with a worse consequence — a generator with `export { z } from "zod"` would pass eligibility and reach JavaScript at compile time.
 
-Allowed edges: `std::` imports, and relative paths ending in `.agency`. Everything else fails, including `pkg::`, which is excluded from v1 because a package can itself reach JavaScript.
+`agencyImportTarget` is module-private, and `loadModule` beside it says it is "kept inside `compileClosure.ts` until a second caller appears". Splices are that second caller; exporting it is the intended move.
 
-Before writing, read `lib/compiler/compileClosure.ts` — it already walks the import closure for the build manifest, and reusing its edge extraction is better than writing a second walker that can drift from it.
+Do **not** use the exported plural `agencyImportTargets`. It filters out `std::`, `pkg::`, and non-Agency targets before returning — precisely the edges this check must see.
+
+**Keep the rule declarative.** The previous draft handed the worker a hand-written breadth-first search with a mutable queue, burying the actual rule three levels deep. The rule is one line:
+
+```ts
+const isAllowedEdge = (specifier: string): boolean =>
+  specifier.startsWith("std::") || isRelativeAgencyPath(specifier);
+```
+
+The walk that produces edges and the rule that judges them are separate things that change for different reasons. Structure it that way.
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `lib/compiler/splice/eligibility.test.ts`:
+Temp dirs go under `.agency-tmp/` and are cleaned with `safeDeleteDirectory`, per Global Constraints.
 
-```ts
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { checkImportGraph } from "./eligibility.js";
+Cases:
 
-let dir: string;
+1. generator importing only `std::` → allowed
+2. generator importing a relative `.agency` file → allowed
+3. generator importing a JS/TS package directly → AG8006, `params.importPath === "zod"`
+4. **a JS/TS package reached one level down** — `gen.agency` imports `./helper.agency`, which imports `zod`. The check must be transitive. **Do not drop this test.**
+5. **a re-export edge** — `export { z } from "zod"` inside the generator. This is the case `compileClosure.ts`'s own doc comment warns about, and it is the one a hand-rolled scan misses.
+6. the `import node` form, which `agencyImportTarget` also recognizes
+7. `pkg::` → AG8006
+8. an import cycle terminates. **Give this test an explicit vitest timeout.** Without a visited set it does not go red, it hangs, and a hanging test teaches nobody anything.
+9. an import that does not resolve produces a diagnostic, not a crash
 
-beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "splice-elig-"));
-});
-afterEach(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
-});
-
-function write(name: string, source: string): string {
-  const p = path.join(dir, name);
-  fs.writeFileSync(p, source, "utf-8");
-  return p;
-}
-
-describe("checkImportGraph", () => {
-  it("allows a generator importing only std::", () => {
-    const gen = write("gen.agency", `import { fill } from "std::agency"\n\nexport def g(): number {\n  return 1\n}\n`);
-    expect(checkImportGraph(gen, {})).toBeNull();
-  });
-
-  it("allows a generator importing a relative .agency file", () => {
-    write("helper.agency", `export def h(): number {\n  return 2\n}\n`);
-    const gen = write("gen.agency", `import { h } from "./helper.agency"\n\nexport def g(): number {\n  return h()\n}\n`);
-    expect(checkImportGraph(gen, {})).toBeNull();
-  });
-
-  it("rejects a generator importing a JS/TS package directly", () => {
-    const gen = write("gen.agency", `import { z } from "zod"\n\nexport def g(): number {\n  return 1\n}\n`);
-    const failure = checkImportGraph(gen, {});
-    expect(failure?.diagnostic).toBe("spliceGeneratorReachesNonAgency");
-    expect(failure?.params.importPath).toBe("zod");
-  });
-
-  it("rejects a JS/TS package reached one level down", () => {
-    // The check must be TRANSITIVE. gen.agency itself looks clean.
-    write("helper.agency", `import { z } from "zod"\n\nexport def h(): number {\n  return 1\n}\n`);
-    const gen = write("gen.agency", `import { h } from "./helper.agency"\n\nexport def g(): number {\n  return h()\n}\n`);
-    const failure = checkImportGraph(gen, {});
-    expect(failure?.diagnostic).toBe("spliceGeneratorReachesNonAgency");
-    expect(failure?.params.importPath).toBe("zod");
-  });
-
-  it("rejects pkg:: imports in v1", () => {
-    const gen = write("gen.agency", `import { t } from "pkg::toolbox"\n\nexport def g(): number {\n  return 1\n}\n`);
-    expect(checkImportGraph(gen, {})?.diagnostic).toBe("spliceGeneratorReachesNonAgency");
-  });
-
-  it("terminates on an import cycle", () => {
-    write("a.agency", `import { b } from "./b.agency"\n\nexport def a(): number {\n  return b()\n}\n`);
-    const gen = write("b.agency", `import { a } from "./a.agency"\n\nexport def b(): number {\n  return 1\n}\n`);
-    expect(checkImportGraph(gen, {})).toBeNull();
-  });
-});
-
-describe("resolveGeneratorModule", () => {
-  function hostProgram(source: string) {
-    const parsed = parseAgency(source, {}, false, false);
-    if (!parsed.success) throw new Error(parsed.message ?? "parse failed");
-    return parsed.result;
-  }
-
-  it("resolves a generator imported from a relative file", () => {
-    write("gen.agency", `export def g(): number {\n  return 1\n}\n`);
-    const host = hostProgram(`import { g } from "./gen.agency"\n\n$( g() )\n`);
-    const resolved = resolveGeneratorModule(host, "g", path.join(dir, "main.agency"));
-    expect("path" in resolved && resolved.path).toContain("gen.agency");
-  });
-
-  it("rejects a generator defined in the host file", () => {
-    const host = hostProgram(`def g(): number {\n  return 1\n}\n\n$( g() )\n`);
-    const resolved = resolveGeneratorModule(host, "g", path.join(dir, "main.agency"));
-    expect("failure" in resolved && resolved.failure.diagnostic).toBe("spliceGeneratorNotImported");
-  });
-
-  it("rejects a generator that is not imported at all", () => {
-    const host = hostProgram(`$( nowhere() )\n`);
-    const resolved = resolveGeneratorModule(host, "nowhere", path.join(dir, "main.agency"));
-    expect("failure" in resolved && resolved.failure.diagnostic).toBe("spliceGeneratorNotImported");
-  });
-});
-```
-
-Add `import { parseAgency } from "../../parser.js"` to the test file's imports.
-
-The second case is Rule 2 — the stage restriction — and it is the reason this function exists rather than being inlined into the expansion pass.
+Then for `resolveGeneratorModule`: a direct import resolves; a generator defined in the host file → AG8005; a name imported nowhere → AG8005; an **aliased** import (`import { makeGetters as gen }`) resolves to the original name; a generator reached through a **re-export chain** resolves, since `resolveReExports` exists because those are common.
 
 - [ ] **Step 2: Run to verify they fail**
 
@@ -632,59 +538,11 @@ The second case is Rule 2 — the stage restriction — and it is the reason thi
 pnpm test:run lib/compiler/splice/eligibility.test.ts 2>&1 | tee /tmp/splice-elig-1.log
 ```
 
-Expected: FAIL, module not found.
+- [ ] **Step 3: Implement**
 
-- [ ] **Step 3: Implement both functions**
+Export `agencyImportTarget` from `compileClosure.ts`. Build the closure of the generator's module using it, then apply `isAllowedEdge` to find the first offending specifier. Whatever walk you use must visit each file once, and the cycle test is what forces that.
 
-Create `lib/compiler/splice/eligibility.ts`. A breadth-first walk over the import graph, visiting each file once:
-
-```ts
-export function checkImportGraph(
-  entryPath: string,
-  config: AgencyConfig,
-): EligibilityFailure | null {
-  // Paths are user-controlled, so the visited dictionary is
-  // null-prototype and membership is Object.hasOwn (house pattern, see
-  // lib/optimize/registry.ts).
-  const visited: Record<string, true> = Object.create(null);
-  const queue: string[] = [entryPath];
-
-  while (queue.length > 0) {
-    const current = queue.shift() as string;
-    const resolved = path.resolve(current);
-    if (Object.hasOwn(visited, resolved)) continue;
-    visited[resolved] = true;
-
-    for (const specifier of importSpecifiersOf(resolved, config)) {
-      // std:: is Agency and is verified as a whole elsewhere, so it is
-      // allowed but not followed.
-      if (specifier.startsWith("std::")) continue;
-
-      // Relative .agency files are Agency code: allowed AND followed,
-      // which is what makes this check transitive.
-      if (isRelativeAgencyPath(specifier)) {
-        queue.push(path.resolve(path.dirname(resolved), specifier));
-        continue;
-      }
-
-      // Everything else leaves Agency: bare npm packages (which pass
-      // through untouched, see docs/dev/pkg-imports.md:14) and pkg::,
-      // which is Agency but can itself reach JavaScript.
-      return {
-        diagnostic: "spliceGeneratorReachesNonAgency",
-        params: { name: path.basename(entryPath), importPath: specifier },
-      };
-    }
-  }
-  return null;
-}
-```
-
-Write `importSpecifiersOf` and `isRelativeAgencyPath` as small local helpers. For the first, read `lib/compiler/compileClosure.ts` — it already extracts import edges for the build manifest, covering plain imports, node imports, and re-exports. Reuse its extraction rather than writing a second walker that can drift from it.
-
-`resolveGeneratorModule` reads the host program's import nodes, finds the one whose specifier list contains `generatorName`, and resolves it against `hostPath`. No match means AG8005, which correctly covers both a same-file generator and a name that does not exist.
-
-The cycle test is what forces the `visited` set, so do not skip it.
+`resolveGeneratorModule` reads the host program's import nodes for one binding `localName`, resolves the module path against `hostPath`, and returns the original exported name so aliases work.
 
 - [ ] **Step 4: Run to verify they pass**
 
@@ -692,91 +550,58 @@ The cycle test is what forces the `visited` set, so do not skip it.
 pnpm test:run lib/compiler/splice/eligibility.test.ts 2>&1 | tee /tmp/splice-elig-2.log
 ```
 
-Expected: PASS, all nine.
-
 - [ ] **Step 5: Commit**
 
-```bash
-git add lib/compiler/splice/eligibility.ts lib/compiler/splice/eligibility.test.ts
-git commit -F /tmp/commit-splice-4.txt
-```
-
-Subject: `Splices: transitive import-graph check for generators`.
+Subject: `Splices: transitive import-graph check via the shared edge extractor`.
 
 ---
 
-### Task 5: The effect and determinism checks
+### Task 5: Generator eligibility — effects and determinism
 
 **Files:**
-- Modify: `lib/compiler/splice/eligibility.ts`
-- Modify: `lib/compiler/splice/eligibility.test.ts`
-- Possibly modify: `lib/typeChecker/index.ts` and whatever `analyzeInterruptsFromScopes` lives in
+- Modify: `lib/compiler/splice/eligibility.ts` and its test
+- Modify: `lib/compiler/typecheck.ts` (path-taking effects entry point)
 
 **Interfaces:**
-- Consumes: AG8003, AG8004 from Task 3; `getEffectsFromSource` from `lib/compiler/typecheck.ts:161`.
+- Consumes: AG8003, AG8004.
 - Produces:
 
 ```ts
-export function checkEffects(source: string, generatorName: string): EligibilityFailure | null;
-export function checkDeterminism(source: string, generatorName: string): EligibilityFailure | null;
+export function checkEffects(generatorPath: string, name: string): SpliceDiagnostic | null;
+export function checkDeterminism(generatorPath: string, name: string): SpliceDiagnostic | null;
+
+/** Composes Tasks 4 and 5 so the expansion pass never names individual
+ *  rules. Adding a rule later is a list entry, not a pass edit. */
+export function checkGeneratorEligible(
+  generatorPath: string,
+  name: string,
+  config: AgencyConfig,
+): SpliceDiagnostic | null;
 ```
 
-**Background.** The effect half is nearly free. `getEffectsFromSource` returns `Record<string, string[]>` mapping each exported callable to its transitive effect list, and `"unknown"` is the fail-closed sentinel for a bare `interrupt(...)`. A non-empty list is a refusal.
+**Background — the fail-open bug this task exists to avoid.** The previous draft had `checkEffects(source, name)` calling `getEffectsFromSource(source)`. That function passes `undefined` as `sourcePath` (`lib/compiler/typecheck.ts:163`), and `withSourcePath` then writes the source to a fresh temp dir (`:58-67`). Relative imports resolve against the temp dir, which is empty. The stdlib docs for the neighbouring function say it outright: "Relative imports (./foo.agency) cannot be resolved from a source string."
 
-The determinism half needs new work and its approach is **unverified**, which is why Step 1 is research rather than code. `llm()` is a language builtin and raises no interrupt (`stdlib/llm.agency` contains zero `interrupt` sites), so it is invisible to the effect map. The spec's hypothesis is that `analyzeInterruptsFromScopes` (`lib/typeChecker/index.ts:300`) is a single chokepoint for transitive propagation, so an internal marker could ride it rather than needing a separate call-graph pass.
+So a generator whose effectful work lives in `./helper.agency` reports an **empty** effect list and passes. The generator then runs and reads the file. This is worse than the transitive-import hole because the generator contains no suspicious import at all.
 
-- [ ] **Step 1: Read the propagation code and decide the approach**
+The fix: `runCheckerPipeline` already takes a `sourcePath` and short-circuits the temp file when given one (`typecheck.ts:59`). Add a path-taking variant of `getEffectsFromSource`; `_typecheckFile` at `lib/stdlib/agency.ts:432` is the precedent for a file-based sibling of a string-based checker. Both checks take a **path**, never a source string.
 
-Read `analyzeInterruptsFromScopes` and the type it populates. Answer in a comment at the top of your implementation: can a non-interrupt marker ride this propagation, or does determinism need its own pass? If it needs its own pass, say so and write the simpler thing — a transitive walk over the call graph looking for `llm`, the clock, and randomness. Do not force the marker approach if the code does not support it.
+**A trap that will otherwise cost an afternoon:** `getEffectsFromSource` reports only **exported** callables (`typecheck.ts:167`). The transitive tests below deliberately use a non-exported helper, which is the right test, but you need to know about the filter before you start.
 
-Also determine the actual names to look for. `llm` is a builtin; find the clock and randomness entry points by reading `stdlib/date.agency` and `stdlib/math.agency`.
+- [ ] **Step 1: Read the propagation code and decide the determinism approach**
+
+Read `analyzeInterruptsFromScopes` (`lib/typeChecker/index.ts:300`) and whatever it populates. Answer in a comment at the top of your implementation: can a non-interrupt marker ride this propagation, or does determinism need its own transitive walk? Write the simpler thing if the marker does not fit. **This approach is unverified; do not force it.**
+
+Also find the real entry points for the clock and randomness by reading `stdlib/date.agency` and `stdlib/math.agency`. `llm()` is a language builtin.
 
 - [ ] **Step 2: Write the failing tests**
 
-Append to `lib/compiler/splice/eligibility.test.ts`:
+For `checkEffects`: a pure generator is allowed; one that calls `read` is refused with AG8003; one with a bare `interrupt(...)` is refused via the `"unknown"` sentinel; and — **do not drop this** — **a generator whose relative helper calls `read` is refused.** That last is the fail-open case and it is the most important test in the task.
 
-```ts
-describe("checkEffects", () => {
-  it("allows a pure generator", () => {
-    const src = `export def g(): number {\n  return 1\n}\n`;
-    expect(checkEffects(src, "g")).toBeNull();
-  });
+For `checkDeterminism`: a pure generator is allowed; one calling `llm()` is refused; one reaching `llm()` through a non-exported helper is refused; **one whose relative helper calls `llm()` is refused**; one using the clock is refused; one using randomness is refused.
 
-  it("rejects a generator that reads a file", () => {
-    const src = `import { read } from "std::index"\n\nexport def g(): number {\n  const c = read("x.txt")\n  return 1\n}\n`;
-    const failure = checkEffects(src, "g");
-    expect(failure?.diagnostic).toBe("spliceGeneratorHasEffects");
-    expect(failure?.params.effects).toContain("std::read");
-  });
+And a **negative control**, which the previous draft lacked entirely: a generator calling an ordinary pure stdlib function must be **allowed**. Without it, an implementation that flags every stdlib call passes every other test in the task.
 
-  it("rejects a generator with a bare interrupt via the unknown sentinel", () => {
-    const src = `export def g(): number {\n  return interrupt someEffect("hi", {})\n}\n`;
-    const failure = checkEffects(src, "g");
-    expect(failure?.diagnostic).toBe("spliceGeneratorHasEffects");
-    expect(failure?.params.effects).toContain("unknown");
-  });
-});
-
-describe("checkDeterminism", () => {
-  it("allows a pure generator", () => {
-    expect(checkDeterminism(`export def g(): number {\n  return 1\n}\n`, "g")).toBeNull();
-  });
-
-  it("rejects a generator that calls llm()", () => {
-    const src = `export def g(): string {\n  return llm("write something")\n}\n`;
-    const failure = checkDeterminism(src, "g");
-    expect(failure?.diagnostic).toBe("spliceGeneratorNondeterministic");
-    expect(failure?.params.source).toContain("llm");
-  });
-
-  it("rejects a generator that reaches llm() through a helper", () => {
-    const src = `def helper(): string {\n  return llm("x")\n}\n\nexport def g(): string {\n  return helper()\n}\n`;
-    expect(checkDeterminism(src, "g")?.diagnostic).toBe("spliceGeneratorNondeterministic");
-  });
-});
-```
-
-The third determinism test is the one that proves the check is transitive rather than a single-file grep. Do not drop it.
+Do not assert on the exact spelling of effect names (`"std::read"` versus `"read"`) until you have confirmed the format; check first rather than loosening the assertion later.
 
 - [ ] **Step 3: Run to verify they fail**
 
@@ -784,13 +609,9 @@ The third determinism test is the one that proves the check is transitive rather
 pnpm test:run lib/compiler/splice/eligibility.test.ts 2>&1 | tee /tmp/splice-effects-1.log
 ```
 
-Expected: FAIL on the new describes only; the Task 4 tests still pass.
+- [ ] **Step 4: Implement**
 
-- [ ] **Step 4: Implement both checks**
-
-`checkEffects` calls `getEffectsFromSource(source)`, looks up `generatorName`, and returns a failure when the list is non-empty, joining the effect names into `params.effects`.
-
-`checkDeterminism` implements whatever Step 1 concluded.
+Add the path-taking effects function to `typecheck.ts`. Write both checks against it. Compose all three checks into `checkGeneratorEligible` as an ordered array of `(context) => SpliceDiagnostic | null` applied by a single `.find()`, so the expansion pass never names an individual rule.
 
 - [ ] **Step 5: Run to verify they pass**
 
@@ -798,415 +619,268 @@ Expected: FAIL on the new describes only; the Task 4 tests still pass.
 pnpm test:run lib/compiler/splice/eligibility.test.ts 2>&1 | tee /tmp/splice-effects-2.log
 ```
 
-Expected: PASS, all tests including Task 4's.
+Expected: PASS, including every Task 4 test.
 
 - [ ] **Step 6: Commit**
 
-```bash
-git add lib/compiler/splice/eligibility.ts lib/compiler/splice/eligibility.test.ts
-git commit -F /tmp/commit-splice-5.txt
-```
-
-Subject: `Splices: effect and determinism checks for generators`.
+Subject: `Splices: path-based effect and determinism checks`.
 
 ---
 
 ### Task 6: Running a generator
 
 **Files:**
-- Create: `lib/compiler/splice/runGenerator.ts`
-- Test: `lib/compiler/splice/runGenerator.test.ts`
+- Create: `lib/compiler/splice/runGenerator.ts` and its test
 
 **Interfaces:**
-- Consumes: AG8008 from Task 3; `Splice` from Task 1.
+- Consumes: Task 0's mechanism and signature; AG8008.
 - Produces:
 
 ```ts
-export type GeneratorResult =
-  | { ok: true; code: Code }
-  | { ok: false; failure: EligibilityFailure };
-
-/** Build a one-node program that evaluates `splice.expression`, run it in
- *  a subprocess, and return the Code value it produced. */
 export function runGenerator(
   splice: Splice,
-  importsFromHost: string,
+  generator: { modulePath: string; exportedName: string },
   cwd: string,
-): GeneratorResult;
+): SpliceResult<Code>;
 ```
 
-**Background.** The compiler evaluates a splice by synthesizing a tiny program and running it through the existing compile-and-run-in-a-subprocess path, the same one `runCode` uses (`stdlib/agency.agency:318-373`).
+**Background.** Take the **resolved module path and exported name**, not the host's import lines. The previous draft passed `importsFromHost`, a blob of source text, which is a leaky interface and a correctness bug: it drags along every other import the host has, including the npm and `pkg::` imports Task 4 just banned, and trips the test-import denial in `resolveImports` if the host uses `import test`.
 
-For `$( makeGetters(["name", "age"]) )` in a file that imports `makeGetters` from `./gen.agency`, the synthesized program is:
+Emit exactly one import line, reconstructed from what `resolveGeneratorModule` returned.
 
-```ts
-import { makeGetters } from "./gen.agency"
+Thread a **generator flag** into this compile. A splice inside a generator module is AG8009, and the only place that can be detected is here, where the generator is compiled — `expandSplices` has no way to know a file is a generator, since from its own point of view it is an ordinary compile.
 
-node __splice(): Code {
-  return makeGetters(["name", "age"])
-}
-```
-
-`importsFromHost` is the host file's import lines, carried over so the generator name resolves. Print the expression with the same formatter Task 2 used, so what runs is exactly what the user wrote.
-
-Three properties make this fit. `Code` is plain JSON, so it crosses the IPC boundary with nothing new written. `run` already takes `wallClock` and `memory`, so a looping generator becomes a bounded error rather than a hung compiler. And the unhandled-interrupt backstop is already implemented on that path.
-
-Set conservative limits: 30 seconds and 512mb. A generator is supposed to be a pure transformation and should not need more.
+Limits: 30 seconds wall clock and 512mb, both named constants.
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `lib/compiler/splice/runGenerator.test.ts` with four cases: a generator returning a program fragment (assert `kind === "program"` and that `nodes` is non-empty); a generator returning an expression fragment; a generator that throws, asserting `ok: false` and `spliceGeneratorFailed`; and a generator that loops forever, asserting it returns a failure rather than hanging (give the test a 60-second timeout so a regression fails rather than stalls CI).
+Cover: a generator returning a `program` fragment; one returning an `expr` fragment; one that throws → AG8008; one that loops forever → a failure, **with a 60-second vitest timeout** so a broken limit fails rather than wedging CI; one exceeding the memory limit; one returning a non-`Code` value such as a number; one returning `{ type: "agencyProgram" }` with a malformed `nodes` field, which is exactly what the `Array.isArray` half of `isCode` exists for; and one whose splice expression contains a **code literal**, since this task synthesizes source by printing the expression and printing a code literal is the likeliest thing to go wrong.
 
-Write real `.agency` generator files into a temp dir, as Task 4's tests do.
+Also: a generator module that itself contains a splice → AG8009. This test belongs **here**, where the flag is set, not in the expansion tests.
 
 - [ ] **Step 2: Run to verify they fail**
 
-```bash
-pnpm test:run lib/compiler/splice/runGenerator.test.ts 2>&1 | tee /tmp/splice-run-1.log
-```
+- [ ] **Step 3: Implement**
 
-Expected: FAIL, module not found.
-
-- [ ] **Step 3: Implement `runGenerator`**
-
-```ts
-const GENERATOR_WALL_CLOCK_MS = 30_000;
-const GENERATOR_MEMORY_BYTES = 512 * 1024 * 1024;
-
-export function runGenerator(
-  splice: Splice,
-  importsFromHost: string,
-  cwd: string,
-): GeneratorResult {
-  // Print the expression with the SAME formatter the file round-trips
-  // through, so what runs is exactly what the user wrote.
-  const call = formatExpressionForSplice(splice.expression);
-  const source =
-    `${importsFromHost}\n\n` +
-    `node __splice() {\n  return ${call}\n}\n`;
-
-  const outcome = compileAndRunInSubprocess(source, {
-    node: "__splice",
-    wallClock: GENERATOR_WALL_CLOCK_MS,
-    memory: GENERATOR_MEMORY_BYTES,
-    cwd,
-  });
-
-  if (!outcome.ok) {
-    return {
-      ok: false,
-      failure: {
-        diagnostic: "spliceGeneratorFailed",
-        params: { name: call, reason: outcome.reason },
-      },
-    };
-  }
-
-  // isCode checks the type tag AND Array.isArray(nodes). The array half
-  // is load-bearing: Code is a plain record an Agency caller can
-  // hand-build, and without it a malformed value crashes in nodes.map
-  // instead of failing here. See lib/runtime/template/code.ts.
-  if (!isCode(outcome.value)) {
-    return {
-      ok: false,
-      failure: {
-        diagnostic: "spliceGeneratorFailed",
-        params: { name: call, reason: "did not return a Code value" },
-      },
-    };
-  }
-
-  return { ok: true, code: outcome.value };
-}
-```
-
-`compileAndRunInSubprocess` stands for the real entry point on the path `runCode` takes. Read `stdlib/agency.agency:318-373` and follow it into `lib/stdlib/agency.ts` to find the actual function and its option names before writing this; do not invent a wrapper if one already exists.
+Follow Task 0's `spike.md`. Print the splice expression with `generateExpression` so what runs is exactly what the user wrote. Validate the returned value with `isCode` before trusting it — read `lib/runtime/template/code.ts` for why the array check is load-bearing.
 
 - [ ] **Step 4: Run to verify they pass**
 
-```bash
-pnpm test:run lib/compiler/splice/runGenerator.test.ts 2>&1 | tee /tmp/splice-run-2.log
-```
-
-Expected: PASS, all four.
-
 - [ ] **Step 5: Commit**
 
-```bash
-git add lib/compiler/splice/runGenerator.ts lib/compiler/splice/runGenerator.test.ts
-git commit -F /tmp/commit-splice-6.txt
-```
-
-Subject: `Splices: run a generator in a subprocess and return its Code`.
+Subject: `Splices: run a generator in a synchronous child process`.
 
 ---
 
-### Task 7: The expansion pass and pipeline wiring
+### Task 7: The expansion pass, its cache, and symbol-table wiring
 
 **Files:**
-- Create: `lib/compiler/splice/expand.ts`
-- Test: `lib/compiler/splice/expand.test.ts`
-- Modify: `lib/compiler/compile.ts:107-125`
+- Create: `lib/preprocessors/expandSplices.ts`, `lib/compiler/splice/cache.ts`, and their tests
+- Modify: `lib/symbolTable.ts:180`
 
 **Interfaces:**
-- Consumes: everything from Tasks 1, 4, 5, 6.
+- Consumes: Tasks 1, 4, 5, 6.
 - Produces:
 
 ```ts
-export type ExpandResult =
-  | { ok: true; program: AgencyProgram; source: string }
-  | { ok: false; failure: EligibilityFailure };
-
-/** Replace every splice in `program` with the nodes its generator
- *  returned. `source` is the expanded program printed back out, which
- *  the caller must write to the path SymbolTable.build will read. */
 export function expandSplices(
   program: AgencyProgram,
   hostPath: string,
   config: AgencyConfig,
-): ExpandResult;
+): SpliceResult<AgencyProgram>;
 ```
 
-**Background — the part that is easy to get wrong.** `compileSource` writes the source to a temp file at line 105 and `SymbolTable.build(syntheticPath, config)` at line 125 reads that file **from disk**, not from the parsed AST. The symbol table records the file's own declared symbols, which is how `getEffectsFromSource` can call `symbolTable.getFile(syntheticPath)`.
+Note what is **absent**: no `source` field. The previous draft returned printed source with an obligation on the caller to write it to disk, which was a leaked pipeline quirk, rewrote the user's file in the `buildSession` path, and destroyed every source position below the splice. Expansion is now AST-in, AST-out.
 
-So generated declarations must reach disk, or `SymbolTable` will not know that `greet` exists and name resolution will fail on every call to it.
-
-The pass therefore produces two things that must agree:
-
-- the expanded **AST**, which keeps `loc.origin` stamps and flows on to `buildCompilationUnit` and the typechecker
-- the expanded **source**, printed from that AST, which gets written over the temp file so `SymbolTable.build` sees the new names
-
-Print → re-parse fidelity is what makes those two agree, and the whole-corpus round-trip gate is what guarantees it. This is also why Task 2 came first.
-
-Expansion order: expand innermost-last. A splice's own expression may contain a code literal but may **not** contain another splice, and the generator module may not contain one either (AG8009). Check for that and refuse rather than recursing.
-
-- [ ] **Step 1: Write the failing tests**
-
-Create `lib/compiler/splice/expand.test.ts` covering:
-
-1. a declaration splice replaced by the generator's declarations
-2. an expression splice replaced by one expression
-3. a generator returning a `program` fragment into expression position → `spliceFragmentKindMismatch`
-4. a splice inside a generator module → `spliceNested`
-5. a splice argument referencing a host-file constant → `spliceGeneratorNotImported`
-6. a splice argument that is a literal, and one that is a code literal → both allowed
-7. the returned `source` re-parses to a program structurally equal to the returned `program`
-
-Case 7 is the guard on the two-outputs-must-agree invariant. Write it as an explicit assertion, not as a side effect of another test. Cases 5 and 6 together pin the argument rule: 6 is what stops an over-strict implementation from rejecting every useful splice.
-
-- [ ] **Step 2: Run to verify they fail**
-
-```bash
-pnpm test:run lib/compiler/splice/expand.test.ts 2>&1 | tee /tmp/splice-expand-1.log
-```
-
-Expected: FAIL, module not found.
-
-- [ ] **Step 3: Implement `expandSplices`**
-
-Find splices via the walker. For each, in this order:
-
-1. Reject if the splice sits inside a generator module (AG8009).
-2. Read the callee name off `splice.expression` and call `resolveGeneratorModule` (AG8005 if it is not imported).
-3. Check the splice expression's **arguments**. Their free names must all be imported names or builtins. A reference to something declared in the host file is AG8005, for the same staging reason: the host file is not compiled yet, so its values do not exist when the generator runs. Literals and code literals are always fine. `lib/runtime/template/hygiene.ts`'s `freeNamesOf` computes what you need.
-4. Run `checkImportGraph`, `checkEffects`, and `checkDeterminism` against the resolved module.
-5. Run it via `runGenerator`, passing the host file's import lines and the host's directory as `cwd`.
-6. Check the returned fragment kind against the splice's `position` using the same admissibility rule `fill` applies. Read `assertKindMatchesSort` in `lib/runtime/template/fill.ts` and reuse it rather than restating the rule. Mismatch is AG8007.
-7. Graft.
-
-Grafting mirrors `fill`'s two substitution modes: a declaration splice **spreads** its nodes into the top-level array, an expression splice requires exactly one node. Stamp `loc.origin` on grafted nodes the way `fill` does, so error attribution survives.
-
-Print the result with the Task 2 formatter to produce `source`.
-
-- [ ] **Step 4: Run to verify they pass**
-
-```bash
-pnpm test:run lib/compiler/splice/expand.test.ts 2>&1 | tee /tmp/splice-expand-2.log
-```
-
-Expected: PASS, all seven.
-
-- [ ] **Step 5: Wire into the pipeline**
-
-In `lib/compiler/compile.ts`, between the parse block ending at line 116 and the import-policy check at line 118:
+**Where this runs, and why.** `SymbolTable.build` walks the filesystem parsing each file to record what it declares. At `lib/symbolTable.ts:180-181`:
 
 ```ts
-    // 1a. Expand compile-time splices. Runs BEFORE SymbolTable.build,
-    // because generated declarations introduce names the rest of the
-    // file resolves against. The expanded source is written back over
-    // the temp file since SymbolTable.build reads from disk, while the
-    // expanded AST (which keeps loc.origin stamps) flows on from here.
-    const expanded = expandSplices(program, syntheticPath, config);
-    if (!expanded.ok) {
-      return { success: false, errors: [formatDiagnostic(expanded.failure)] };
-    }
-    fs.writeFileSync(syntheticPath, expanded.source, "utf-8");
-    const program: AgencyProgram = expanded.program;
+      const program = parseResult.result;
+      parsed[absPath] = { symbols: classifySymbols(program), program };
 ```
 
-Rename the existing `const program` at line 116 so this reads cleanly; do not shadow. Use the codebase's real diagnostic-formatting helper instead of `formatDiagnostic` — read how the AG8001 refusal surfaces through `compileSource`'s catch for the pattern.
+Expansion goes between those two lines. `classifySymbols` is what records a file's declarations, so expanding first makes generated declarations visible **both** in their own file and to every file that imports it — which is the owner's requirement that generated declarations be exportable.
 
-- [ ] **Step 6: Verify no splices means no behavior change**
+The compile paths still parse independently, so each also calls `expandSplices`. That is safe and cheap because expansion is cached and deterministic: Rule 3 is what guarantees the symbol-table walk and the compile walk cannot disagree.
+
+**The cache is mandatory, not an optimization.** `SymbolTable.build` has twelve non-test callers, including `lib/lsp/server.ts:130`, and `onDidChangeContent` fires on every edit (`server.ts:164`). Also `lib/mcp/tools.ts:54`, `lib/cli/policy.ts:48`, `lib/cli/bundle.ts`, `lib/cli/pack.ts`, `lib/serve/metadata.ts:35`, `lib/optimize/targets.ts:156`, `lib/analysis/interrupts.ts:87`. Without a cache, every one of those forks a child process per splice, on every keystroke in the editor's case.
+
+The spec's "caching needs nothing new" section is obsolete; it assumed expansion sat inside the manifest-guarded per-file compile.
+
+Cache key: the printed splice expression plus a content hash of the generator module's transitive closure. Determinism is what makes that key sound.
+
+**Cycle guard.** Compiling a generator builds its own symbol table, which walks files, which may reach a file with a splice. Track an in-progress set and refuse re-entry for a file already being expanded.
+
+- [ ] **Step 1: Write the failing cache tests**
+
+A second call with the same expression and unchanged generator does not re-run the generator (spy on the runner). Changing the generator's content invalidates. Changing the splice expression invalidates. A change in a **transitively imported** helper of the generator invalidates.
+
+- [ ] **Step 2: Write the failing expansion tests**
+
+1. a declaration splice is replaced by the generator's declarations
+2. an expression splice is replaced by one expression
+3. **two splices in one file both expand correctly** — a decl splice spreads N nodes and shifts the index of every splice after it, which is where naive grafting breaks
+4. a `program` fragment into expression position → AG8007
+5. a splice argument referencing a host-file constant → AG8011
+6. a literal argument and a code-literal argument are both allowed — without this, an over-strict implementation rejects every useful splice and still passes case 5
+7. **a file with no splices comes back identical** — assert identity explicitly
+8. a splice inside a code literal is left alone
+9. **`loc.origin` is present on grafted nodes.** This is the feature's distinguishing claim over `runCode` and the spec asks for it by name.
+10. re-entry on the same file is refused rather than looping
+
+- [ ] **Step 3: Run to verify they fail**
+
+- [ ] **Step 4: Implement**
+
+Structure the pass as: an ordered list of checks with the uniform shape `(context) => SpliceDiagnostic | null`, applied by one `.find()`, then a separate `graft` step that assumes eligibility passed. Policy and mechanics change for different reasons and should not interleave.
+
+The checks, in order: argument availability (AG8011), `resolveGeneratorModule` (AG8005), `checkGeneratorEligible` (AG8003/4/6), then run, then fragment kind (AG8007).
+
+For argument availability, `freeNamesOf` in `lib/runtime/template/hygiene.ts` computes what you need; a free name that is neither imported nor a builtin is AG8011.
+
+For fragment kind, reuse `assertKindMatchesSort` from `lib/runtime/template/fill.ts` rather than restating the rule.
+
+For grafting and origin stamping: **extract the shared helpers out of `fill.ts` and call them from both places.** The previous draft said to "mirror" `fill`'s substitution modes and stamp origins "the way `fill` does", which is duplication with a friendly name, and origin stamping is exactly the detail that drifts once there are two copies. Task 8's reuse of `freeNamesOf` while explicitly declining the rename planner is the model.
+
+- [ ] **Step 5: Wire into `SymbolTable.build`**
+
+At `lib/symbolTable.ts:180`, expand before `classifySymbols`. A failure here must not abort the crawl — symbol discovery is deliberately best-effort, as the comment at `:183-188` explains for unresolvable imports. Record the diagnostic and continue.
+
+- [ ] **Step 6: Wire into the compile paths**
+
+The four places `liftCallbackBlocks` runs are the map: `lib/compiler/compile.ts:137`, `lib/compiler/buildSession.ts:470`, `lib/compiler/typecheck.ts:126`, `lib/analysis/interrupts.ts:106`. Expansion runs before each, since generated declarations must reach `buildCompilationUnit`. Check `lib/lsp/diagnostics.ts` for a fifth.
+
+- [ ] **Step 7: Verify no behavior change without splices**
 
 ```bash
 pnpm test:run lib/compiler/compile.test.ts 2>&1 | tee /tmp/splice-compile.log
+pnpm test:run lib/symbolTable.test.ts 2>&1 | tee /tmp/splice-symtab.log
 ```
 
-Expected: PASS, unchanged. A file with no splices must take exactly the path it took before.
+Expected: both PASS, unchanged.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
-```bash
-git add lib/compiler/splice/expand.ts lib/compiler/splice/expand.test.ts lib/compiler/compile.ts
-git commit -F /tmp/commit-splice-7.txt
-```
-
-Subject: `Splices: expansion pass wired into the compile pipeline`.
+Subject: `Splices: cached expansion pass wired into symbol-table construction`.
 
 ---
 
 ### Task 8: Generated code may not reach into the splice site
 
 **Files:**
-- Modify: `lib/compiler/splice/expand.ts`
-- Modify: `lib/compiler/splice/expand.test.ts`
+- Modify: `lib/preprocessors/expandSplices.ts` and its test
 
-**Interfaces:**
-- Consumes: AG8010 from Task 3.
-
-**Background.** Pasting code into a file raises a capture question, and it bites hardest in expression position. A declaration splice is mostly safe by accident: a generated top-level `const config` colliding with an existing one is a duplicate declaration, which is a loud correct failure. But pasting an **expression** into a function body drops it next to local variables, and if the generated expression mentions `tmp`, it silently reads the local `tmp`.
+**Background.** Pasting code raises a capture question, worst in expression position: dropping a generated expression into a function body puts it next to locals, and a generated mention of `tmp` silently reads the local `tmp`.
 
 The rule: generated code may reference only names it declares itself and names it imports. Anything else is AG8010.
 
-`lib/runtime/template/hygiene.ts` solves a related but different problem and is the **wrong tool here**. That machinery renames to dodge collisions. Renaming would break declaration splices, whose entire point is that `greet` keeps the name the generator gave it. This rule refuses where that one renames. Read `hygiene.ts` for its `freeNamesOf` and `bindersOf` helpers, which are directly reusable, but do not reuse its rename planner.
+`lib/runtime/template/hygiene.ts` is the **wrong tool** here. It renames to dodge collisions, and renaming would break declaration splices, whose whole point is that `greet` keeps its name. Reuse its `freeNamesOf` and `bindersOf`; do not reuse the rename planner.
 
-This is a **checking** rule, not runtime isolation, exactly as it is for holes. A generated `const` genuinely shares the enclosing scope once pasted. What the rule prevents is a generator reaching *into* the splice site, which is the direction the capture bug runs.
+This is a **checking** rule, not runtime isolation, exactly as for holes. A generated `const` shares the enclosing scope once pasted. What the rule prevents is a generator reaching *into* the splice site.
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `lib/compiler/splice/expand.test.ts`:
-
-- generated code referencing a local at the splice site → `spliceReferencesOuterName` with `params.name` naming it
-- generated code referencing a name it declares itself → allowed
-- generated code referencing a name it imports → allowed
-- generated code calling a builtin such as `print` → allowed (builtins are not splice-site names; confirm against `BUILTIN_VARIABLES`)
-
-The fourth case is the one that catches an over-strict implementation, which would otherwise reject every useful generator. Do not drop it.
+1. generated code referencing a local at the splice site → AG8010 naming it
+2. generated code referencing a name it declares itself → allowed
+3. generated code referencing a name **it** imports → allowed
+4. generated code calling a builtin such as `print` → allowed. **Do not drop this**; without it an over-strict implementation passes every other case while rejecting every useful generator.
+5. generated code referencing a name the **host** imported but the generator did not → refused. This is the subtle inverse of case 3, and an implementation checking against the wrong import list gets it backwards.
+6. **duplicate top-level declarations are a loud failure.** The rationale for treating declaration splices as safe rests on a generated `const config` colliding with an existing one being a duplicate-declaration error. That claim is asserted in the spec and the plan and verified nowhere. If Agency is actually last-wins, the safety story for declaration splices is wrong and needs a real rule. Test it before relying on it.
 
 - [ ] **Step 2: Run to verify they fail**
 
-```bash
-pnpm test:run lib/compiler/splice/expand.test.ts 2>&1 | tee /tmp/splice-names-1.log
-```
+- [ ] **Step 3: Implement**
 
-Expected: FAIL on the new cases only.
-
-- [ ] **Step 3: Implement the check**
-
-After a fragment comes back and before grafting, compute its free names, subtract the names it declares, the names it imports, and the builtins. Anything left is AG8010.
+After a fragment returns and before grafting, compute free names, subtract what it declares, what it imports, and the builtins (`BUILTIN_VARIABLES`). Anything left is AG8010.
 
 - [ ] **Step 4: Run to verify they pass**
 
-```bash
-pnpm test:run lib/compiler/splice/expand.test.ts 2>&1 | tee /tmp/splice-names-2.log
-```
-
-Expected: PASS.
-
 - [ ] **Step 5: Commit**
-
-```bash
-git add lib/compiler/splice/expand.ts lib/compiler/splice/expand.test.ts
-git commit -F /tmp/commit-splice-8.txt
-```
 
 Subject: `Splices: generated code may not reference splice-site names`.
 
 ---
 
-### Task 9: End-to-end execution fixtures
+### Task 9: End-to-end fixtures and incremental rebuild
 
 **Files:**
-- Create: `tests/agency/splices/*.agency` and matching `.test.json`
+- Create: `tests/agency/splices/*.agency` and `.test.json`
 
-**Background.** Read `docs/misc/TESTING.md` and copy the shape of an existing fixture pair from `tests/agency/templates/`. These need **no LLM calls**. Refusal fixtures use the `expectedCompileError` mode, which runs the compile in a child process; read how `tests/agency/templates/unfilledHoles.agency` and its `.test.json` are set up.
+**Background.** Read `docs/misc/TESTING.md` and copy a fixture pair from `tests/agency/templates/`. **No LLM calls.** Refusal fixtures use `expectedCompileError` (`lib/cli/expectedCompileError.ts`), which runs the compile in a child process.
 
-- [ ] **Step 1: Write the happy-path fixtures**
+- [ ] **Step 1: Happy-path fixtures**
 
-Three pairs:
-
-1. `declarationSplice` — a generator module exporting a function that returns a program fragment declaring `greet`; a main module that splices it and calls `greet()`. Asserts the returned string.
-2. `expressionSplice` — a generator returning an expression fragment; main uses it in a `const` and returns a value derived from it.
-3. `builtWithFill` — a generator that builds its result with a code literal plus `fill`, proving splices consume what Template Agency already produces.
+1. `declarationSplice` — generator returns a program fragment declaring `greet`; main splices and calls it
+2. `expressionSplice` — generator returns an expression fragment used in a `const`
+3. `builtWithFill` — generator builds its result with a code literal plus `fill`, proving splices consume what Template Agency already produces
+4. `exportedGeneratedDecl` — a generated `export def` imported and called from a **second file**. This is the owner's reason for expanding during symbol-table construction, and nothing else tests it.
+5. `twoSplices` — two declaration splices in one file, both used
 
 - [ ] **Step 2: Run them**
 
 ```bash
-pnpm run agency test tests/agency/splices/declarationSplice.agency 2>&1 | tee /tmp/splice-e2e-1.log
-pnpm run agency test tests/agency/splices/expressionSplice.agency 2>&1 | tee /tmp/splice-e2e-2.log
-pnpm run agency test tests/agency/splices/builtWithFill.agency 2>&1 | tee /tmp/splice-e2e-3.log
+for f in tests/agency/splices/declarationSplice tests/agency/splices/expressionSplice tests/agency/splices/builtWithFill tests/agency/splices/exportedGeneratedDecl tests/agency/splices/twoSplices; do
+  pnpm run agency test "$f.agency" 2>&1 | tee -a /tmp/splice-e2e.log
+done
 ```
 
-Expected: PASS. Do not run the full suite.
+- [ ] **Step 3: Refusal fixtures**
 
-- [ ] **Step 3: Write the refusal fixtures**
+One per code, asserting the **code** field rather than message text: AG8003 through AG8011, nine in total. The previous draft covered only AG8003–AG8007; a diagnostic with no test is one that may never fire.
 
-Six `expectedCompileError` pairs, one per rule, asserting the **code** field rather than message text:
+For AG8003, use a **harmless** effect — reading a file that does not exist. If the check ever fails to fire, the fixture runs the generator for real, and one written with `write` or a shell command would do the damage it exists to prevent.
 
-1. generator raises an effect → AG8003
-2. generator calls `llm()` → AG8004
-3. generator defined in the same file → AG8005
-4. generator imports a JS/TS package directly → AG8006
-5. generator imports a local `.agency` file that imports a JS/TS package → AG8006 (the transitive case)
-6. generator returns the wrong fragment kind → AG8007
+Fixture for AG8006 must be the **transitive** case: a generator importing a clean-looking local `.agency` file that itself imports a JS package. **This is the single most important test in the plan.** It is what decides whether the safety argument holds or is decorative.
 
-Fixture 5 is the one that proves the import check is not shallow. It is the single most important test in this plan.
+- [ ] **Step 4: Error-attribution fixture**
 
-- [ ] **Step 4: Run the refusal fixtures**
+Generated code that fails to compile must produce a message naming the generator. The spec asks for this by name, and it is the payoff for pasting an AST rather than printing and re-parsing.
+
+- [ ] **Step 5: Incremental rebuild test**
+
+Compile a project with a splice, edit the generator so it emits a different body, compile again, assert the output changed. Then compile again unchanged and assert the generator did **not** re-run.
+
+This is the highest-value missing test from the previous draft. It is what would have caught the wrong-compile-path bug, and it is the only thing that exercises the cache under real conditions.
+
+- [ ] **Step 6: Run everything and audit**
 
 ```bash
 for f in tests/agency/splices/refuse*.agency; do
   pnpm run agency test "$f" 2>&1 | tee -a /tmp/splice-refuse.log
 done
-```
-
-Expected: all PASS, meaning each compile failed with the expected code.
-
-- [ ] **Step 5: Run the structural linter and the round-trip gate**
-
-```bash
 pnpm run lint:structure 2>&1 | tee /tmp/splice-lint.log
 pnpm test:run lib/backends/agencyGenerator.roundtrip.test.ts 2>&1 | tee /tmp/splice-roundtrip-final.log
 ```
 
-Expected: both PASS. The round-trip gate now has splice-bearing fixtures in its corpus.
-
-- [ ] **Step 6: Audit the diff against the anti-patterns doc**
-
-Read `docs/dev/anti-patterns.md` and check the whole diff against it. This is required before opening a PR, not optional.
+Then read `docs/dev/anti-patterns.md` and audit the whole diff against it. Required before the PR, not optional.
 
 - [ ] **Step 7: Commit**
 
-```bash
-git add tests/agency/splices/
-git commit -F /tmp/commit-splice-9.txt
-```
-
-Subject: `Splices: end-to-end execution and refusal fixtures`.
+Subject: `Splices: end-to-end, refusal, attribution, and rebuild fixtures`.
 
 ---
 
 ## Documentation
 
-Not a separate task, because docs written apart from the code they describe go stale. Fold these into the tasks that create the behavior:
+Folded into the tasks that create the behavior, because docs written separately go stale.
 
-- **Task 7** — add a "Compile-time splices" section to `docs/site/guide/templates.md`. Lead with the difference from code literals: literals make code, splices install it. Use the today-versus-proposed pair from the spec's summary; it was written for a reader who has not read the TH literature.
-- **Task 9** — create `docs/dev/splices.md` covering the pipeline position and why it must be there, the two-outputs-must-agree invariant, the import restriction and why it carries the safety argument, and the caching story. Link it from the deep-docs list in `CLAUDE.md`.
+- **Task 7** — a "Compile-time splices" section in `docs/site/guide/templates.md`. Lead with the difference from code literals: literals make code, splices install it. Use the today-versus-proposed pair from the spec's summary.
+- **Task 9** — `docs/dev/splices.md`: why expansion lives in `SymbolTable.build`, the cache and why it is mandatory, the import restriction and why it carries the safety argument, and the cycle guard. Link from `CLAUDE.md`.
+- **Task 9** — update the spec's caching section, which is now wrong.
+
+## Open item: `combine`
+
+The spec's motivating example ends with `return combine(out)`, turning `Code[]` into one fragment. **There is no `def combine` in `stdlib/` today.**
+
+Decide before Task 9, because `builtWithFill` runs straight into it:
+
+- **Add it** — `combine(codes: Code[]): Result<Code>` in `stdlib/agency.agency`, with a docstring, merge rules per kind pair (the spec left those open), a `PRELUDE_NAMES` entry if exported from `stdlib/index.agency`, and `make` afterwards.
+- **Or exclude it** — state that v1 generators return a single fragment, and write the fixtures accordingly.
+
+Adding it is the better answer, since the boilerplate loop is the feature's motivating shape, but it is a real task and should be sized as one rather than discovered mid-fixture.
 
 ## Notes for whoever executes this
 
-**What the spec says about caching, so nobody adds a cache.** There is no cache key to design. The generator arrives as an ordinary relative Agency import, and the manifest already records `deps` plus `depsHash` over transitive Agency imports (`docs/dev/incremental-builds.md:21`), so editing a generator invalidates its consumers for free. An unchanged file is skipped whole, so the splice never re-runs and its expansion is already in the emitted JavaScript. This works *because* of the determinism rule from Task 5: a generator that could call `llm()` would make caching silently wrong. The constraint that follows is already encoded in Task 7 — expansion must happen inside the per-file compile the manifest guards.
+**Known limitation, deliberately shipped.** Holes cannot appear in property-name position, so a generator cannot emit `p.#field`. Tracked as #678. Does not block anything here; do not work around it.
 
-**Known limitation, deliberately shipped.** Holes cannot appear in property-name position, so a generator cannot emit `p.#field`. Tracked as #678. It does not block anything here because v1 generators take hand-supplied arguments, but do not try to work around it in this plan.
-
-**Not in scope.** Introspection of any kind. No `reify`, no compiler-supplied module info, no seeing inside types. Generators take arguments. If a task starts to feel like it needs introspection, that is a signal the task has drifted.
+**Not in scope.** Introspection of any kind. No `reify`, no compiler-supplied module info, no seeing inside types. Generators take arguments. If a task starts to feel like it needs introspection, it has drifted.

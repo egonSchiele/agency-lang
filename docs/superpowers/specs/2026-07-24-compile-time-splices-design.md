@@ -309,7 +309,7 @@ The manifest half of the original argument still holds and is still doing work. 
 
 What the manifest does not cover is every other caller of `SymbolTable.build`. Those parse and expand outside any manifest guard, so splices need a cache of their own. The key is the printed splice expression plus a content hash of the generator's whole transitive closure of relative `.agency` files. Hashing the closure rather than one file is what makes editing a helper one import away invalidate the memo.
 
-The original argument here leaned on determinism, which is no longer enforced. The cache tolerates its absence: a slot holds one entry, so a nondeterministic generator gets one answer pinned per fingerprint rather than a fresh roll on every compile. That is more reproducible than re-running, not less.
+The original argument here leaned on determinism, which is no longer enforced. The cache tolerates its absence without repairing it: a slot holds one entry, so a nondeterministic generator's answer is pinned for the life of a process, which stops it varying inside one editor session. The cache is module-level, so a fresh compile re-runs the generator. Two builds of the same source can still differ.
 
 ## Out of scope for v1
 

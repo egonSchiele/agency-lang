@@ -348,6 +348,8 @@ That is also why a generated declaration can be exported and imported from anoth
 
 Nothing stops a generator being nondeterministic. If it reaches an LLM or the clock, two builds of the same source produce different code, and that is your problem rather than the compiler's. There is no complete way to check it today, and a partial check that reads like a guarantee would be worse than none.
 
+A generator also cannot read your environment. The child gets only what Node needs to start, so `env("ANTHROPIC_API_KEY")` inside a generator returns null rather than something that would end up in your compiled output.
+
 Worth knowing alongside that: generator code runs whenever something builds a symbol table, which includes `agency doc`, `agency pack`, and your editor, not only `agency compile`.
 
 ### What it costs

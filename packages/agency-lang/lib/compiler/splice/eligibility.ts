@@ -1,9 +1,9 @@
 import path from "node:path";
 import fs from "node:fs";
-import { parseAgency } from "../../parser.js";
+import { parseAgencyFileCached } from "../../parseCache.js";
 import { agencyImportTarget } from "../compileClosure.js";
 import { getEffectsFromFile } from "../typecheck.js";
-import { isStdlibImport, resolveAgencyImportPath } from "../../importPaths.js";
+import { isStdlibImport } from "../../importPaths.js";
 import { walkNodesArray } from "../../utils/node.js";
 import type { AgencyConfig } from "../../config.js";
 import type { AgencyProgram, AgencyNode } from "../../types.js";
@@ -51,11 +51,14 @@ function importEdgesOf(program: AgencyProgram): string[] {
     .filter((target): target is string => target !== null);
 }
 
+/** Through the shared parse cache, like every other closure walker in the
+ *  codebase. These files get parsed several times per splice: once per
+ *  check, plus again for the cache fingerprint. */
 function parseFileOrNull(absPath: string, config: AgencyConfig): AgencyProgram | null {
   if (!fs.existsSync(absPath)) {
     return null;
   }
-  const result = parseAgency(fs.readFileSync(absPath, "utf-8"), config, true, false);
+  const result = parseAgencyFileCached(absPath, config, true);
   return result.success ? result.result : null;
 }
 
@@ -73,7 +76,6 @@ function parseFileOrNull(absPath: string, config: AgencyConfig): AgencyProgram |
 export function closureFiles(
   entryPath: string,
   config: AgencyConfig = {},
-  followStdlib: boolean = false,
 ): string[] {
   // Paths are user-controlled, so the visited dictionary is null-prototype
   // and membership goes through Object.hasOwn (house pattern, see
@@ -96,32 +98,12 @@ export function closureFiles(
     found.push(current);
 
     for (const specifier of importEdgesOf(program)) {
-      const next = followedTarget(specifier, current, followStdlib);
-      if (next !== null) {
-        queue.push(next);
+      if (isAgencyFilePath(specifier)) {
+        queue.push(path.resolve(path.dirname(current), specifier));
       }
     }
   }
   return found;
-}
-
-/** Where an import edge leads, or null when this walk does not follow it. */
-function followedTarget(
-  specifier: string,
-  fromFile: string,
-  followStdlib: boolean,
-): string | null {
-  if (isAgencyFilePath(specifier)) {
-    return path.resolve(path.dirname(fromFile), specifier);
-  }
-  if (!followStdlib || !isStdlibImport(specifier)) {
-    return null;
-  }
-  try {
-    return resolveAgencyImportPath(specifier, fromFile);
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -174,15 +156,24 @@ export function checkImportGraph(
  * accurate map and is checked by name. Across an import boundary nothing
  * says which exports are reachable, so any effectful export refuses.
  * Replace this with a direct lookup once #680 lands.
+ *
+ * `everyExport` drops the by-name part for a module that supplies a splice
+ * argument. Such a module is not a generator, so there is no single export
+ * to name, and every export it has runs when the module is evaluated.
  */
 export function checkEffects(
   generatorPath: string,
   generatorName: string,
   config: AgencyConfig = {},
+  everyExport: boolean = false,
 ): SpliceDiagnostic | null {
   const files = closureFiles(generatorPath, config);
   for (const file of files) {
-    const found = effectsInFile(file, generatorName, file === files[0]);
+    // The generator's own file is checked by name. Across an import
+    // boundary nothing says which exports are reachable, so any effectful
+    // export refuses.
+    const named = file === files[0] && !everyExport ? generatorName : null;
+    const found = effectsInFile(file, named);
     if (found !== null) {
       return {
         diagnostic: "spliceGeneratorHasEffects",
@@ -194,13 +185,14 @@ export function checkEffects(
   return null;
 }
 
-/** Effects declared by one file: the named generator in its own file,
- *  otherwise any export. Returns a printable list, or null for none. */
-function effectsInFile(
-  filePath: string,
-  generatorName: string,
-  isEntry: boolean,
-): string | null {
+/**
+ * Effects declared by one file, as a printable list or null for none.
+ *
+ * `only` names a single export to check; null means every export. Passing
+ * a name that the file does not export would silently report nothing, so
+ * the all-exports case is its own value rather than an empty string.
+ */
+function effectsInFile(filePath: string, only: string | null): string | null {
   let byExport: Record<string, string[]>;
   try {
     byExport = getEffectsFromFile(filePath);
@@ -210,9 +202,8 @@ function effectsInFile(
     console.error(`splice eligibility: cannot read effects of ${filePath}:`, err);
     return "unknown";
   }
-  const effects = isEntry
-    ? (byExport[generatorName] ?? [])
-    : Object.values(byExport).flat();
+  const effects =
+    only === null ? Object.values(byExport).flat() : (byExport[only] ?? []);
   const unique = effects.filter((name, index) => effects.indexOf(name) === index);
   return unique.length === 0 ? null : unique.sort().join(", ");
 }

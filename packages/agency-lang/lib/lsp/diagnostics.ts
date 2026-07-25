@@ -23,6 +23,7 @@ import { resolveAgencyImportPath } from "../importPaths.js";
 import { PRELUDE_NAMES } from "../prelude.js";
 import { prunePreludeShadows } from "../preprocessors/prunePreludeShadows.js";
 import { expandSplices } from "../preprocessors/expandSplices.js";
+import { EDITOR_WALL_CLOCK_MS } from "../compiler/splice/runGenerator.js";
 import { toTypeCheckError } from "../compiler/splice/report.js";
 
 /**
@@ -135,7 +136,9 @@ export function runDiagnostics(
   // A failure is reported rather than dropped. This is the only path where
   // the user is looking at the file while the generator is broken, so it
   // is the path where AG8003 through AG8012 matter most.
-  const expanded = expandSplices(program, fsPath, config);
+  const expanded = expandSplices(program, fsPath, config, {
+    wallClockMs: EDITOR_WALL_CLOCK_MS,
+  });
   if (expanded.ok) {
     program = expanded.value;
   } else {

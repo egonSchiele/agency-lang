@@ -55,7 +55,7 @@ Not an optimization. `SymbolTable.build` has twelve non-test callers, and `lib/l
 
 The key is the printed splice expression plus a content hash of the generator's whole transitive closure of relative `.agency` files. Hashing the closure rather than one file is what makes editing a helper one import away invalidate the memo.
 
-The key is only sound because generators are required to be deterministic. That is the strongest practical argument for the determinism rule, beyond reproducible builds: a generator that could call `llm()` would make the cache silently wrong.
+The key is a fingerprint over inputs, not a claim about the generator. Generators are not required to be deterministic (see below), so a nondeterministic one is answered once per slot within a process and re-run by the next fresh compile. Two builds of the same source can still differ.
 
 Failures are cached too. A currently-broken generator is the case an editor hits hardest, since the user is staring at the error while typing. The caller re-anchors the diagnostic to the splice at hand, because a cached failure carries the position of whichever splice ran first.
 
@@ -88,7 +88,7 @@ It was a hardcoded name list, and a name list cannot be made complete. It missed
 
 Nondeterminism was never a safety property in any case. Safety comes from the effect system and the import restriction. A generator that calls an LLM produces a strange build, not a compromised one, and the author wrote that generator.
 
-The cache tolerates it. A slot holds one entry, so a nondeterministic generator gets one answer pinned per fingerprint rather than a fresh roll per compile. That is more reproducible than re-running, not less.
+The cache tolerates it without fixing it. A slot holds one entry, so a nondeterministic generator's answer is pinned for the life of the process, which stops it varying inside one editor session. The cache is module-level, so a fresh compile re-runs the generator and can get a different answer. Two builds of the same source still differ.
 
 If this needs to be enforced properly one day, the complete version is to track `llm` through `analyzeInterruptsFromScopes`, the chokepoint effects already flow through. That is transitive by construction and needs no lists.
 
@@ -99,6 +99,14 @@ Agency can do compile-time codegen more safely than Haskell. GHC cannot distingu
 That only holds if a generator cannot reach code with no effects to check. A plain JS/TS package passes through untouched when imported (`docs/dev/pkg-imports.md`), so **a generator's transitive import graph may contain only `std::` and relative `.agency` files**. Transitive is load-bearing: a clean-looking local file can import `zod` one level down while the generator itself looks spotless. `tests/agency/splices/refuseNonAgency.agency` is exactly that case and is the test that decides whether this argument is real.
 
 Unhandled interrupts are the backstop rather than the mechanism. Compilation installs no handlers, so an operation that somehow passed eligibility still cannot complete.
+
+### The gap inside this claim: interrupt-free ambient reads
+
+Some stdlib functions read process state and raise nothing, so the effect check cannot see them. `std::system` exports `env`, `args`, `cwd`, and `isTTY` this way. `setEnv` right below `env` raises an interrupt; reading does not.
+
+`env` is the one that matters, because a generator could bake a secret into the emitted JavaScript as a string literal, and that artifact gets committed. The child therefore receives an allowlisted environment holding only what Node needs to start (`CHILD_ENV_ALLOWED` in `runGenerator.ts`), and its stdin is a pipe so `readStdin` gets EOF instead of consuming or blocking the build's input.
+
+That closes the confidentiality half. The general answer is to make these functions raise, or to name them as compile-time-forbidden, and it has not been done.
 
 For calibration, this is closer to the npm `postinstall` problem than to a new hole. The generator is code already in your project, and compiling already runs your code. npm, Template Haskell, and Rust proc macros check nothing at all.
 
@@ -113,7 +121,7 @@ gen.agency, calling h()  →  { g: [] }
 
 A generator that delegates its effectful work one file away reports an empty effect list, which reads as "safe to run at compile time". Tracked as **#680**.
 
-Until that is fixed, `checkEffects` and `checkDeterminism` walk the generator's whole transitive closure: the generator's own file is checked by name, and across an import boundary *any* effectful export refuses. Coarse and deliberately so. It fails closed, and generators are small and effect-free by rule anyway. When #680 lands, `lib/compiler/splice/eligibility.ts` can go back to a direct lookup, and its comment says so.
+Until that is fixed, `checkEffects` walks the generator's whole transitive closure: the generator's own file is checked by name, and across an import boundary *any* effectful export refuses. Coarse and deliberately so. It fails closed, and generators are small and effect-free by rule anyway. When #680 lands, `lib/compiler/splice/eligibility.ts` can go back to a direct lookup, and its comment says so.
 
 ## Two claims that were tested and did not hold
 

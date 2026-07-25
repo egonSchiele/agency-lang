@@ -2,6 +2,7 @@ import path from "node:path";
 import { walkNodesArray } from "../utils/node.js";
 import { generateExpression } from "../backends/agencyGenerator.js";
 import { declaredName } from "../types/hole.js";
+import { getImportedNames } from "../types/importStatement.js";
 import { bindersOf, freeNamesOf } from "../runtime/template/hygiene.js";
 import { BUILTIN_VARIABLES } from "../config.js";
 import { PRELUDE_NAMES } from "../prelude.js";
@@ -19,6 +20,7 @@ import {
 import type { ImportSource } from "../compiler/splice/eligibility.js";
 import { runGenerator } from "../compiler/splice/runGenerator.js";
 import {
+  cachedEligibility,
   cachedGeneratorRun,
   spliceCacheKey,
   spliceCacheSlot,
@@ -48,10 +50,15 @@ import type {
 /** Files currently being expanded, for the re-entry guard below. */
 const inProgress: Record<string, true> = Object.create(null);
 
+/** Per-call overrides. Only the editor sets these, to keep a runaway
+ *  generator from freezing a single-threaded language server. */
+export type ExpandOptions = { wallClockMs?: number };
+
 export function expandSplices(
   program: AgencyProgram,
   hostPath: string,
   config: AgencyConfig = {},
+  options: ExpandOptions = {},
 ): SpliceResult<AgencyProgram> {
   const splices = splicesIn(program);
   if (splices.length === 0) {
@@ -75,7 +82,7 @@ export function expandSplices(
   }
   inProgress[key] = true;
   try {
-    return expandAll(program, splices, hostPath, config);
+    return expandAll(program, splices, hostPath, config, options);
   } finally {
     delete inProgress[key];
   }
@@ -101,6 +108,7 @@ function expandAll(
   splices: Splice[],
   hostPath: string,
   config: AgencyConfig,
+  options: ExpandOptions,
 ): SpliceResult<AgencyProgram> {
   // Imported names count as taken. A generated `def greet` collides with an
   // imported `greet` exactly as it would with a declared one.
@@ -110,7 +118,7 @@ function expandAll(
   const expansions = new Map<Splice, AgencyNode[]>();
 
   for (const splice of splices) {
-    const expanded = expandOne(splice, program, hostPath, config);
+    const expanded = expandOne(splice, program, hostPath, config, options);
     if (!expanded.ok) {
       return expanded;
     }
@@ -129,6 +137,7 @@ function expandOne(
   program: AgencyProgram,
   hostPath: string,
   config: AgencyConfig,
+  options: ExpandOptions,
 ): SpliceResult<AgencyNode[]> {
   const decided = decide(splice, program, hostPath, config);
   if (!decided.ok) {
@@ -137,12 +146,32 @@ function expandOne(
   const { generator, argumentSources } = decided.value;
 
   const expression = generateExpression(splice.expression);
+  const slot = spliceCacheSlot(expression, generator.modulePath);
+  const fingerprint = spliceCacheKey(expression, generator.modulePath, config);
+
+  // Eligibility is memoized on the same fingerprint as the result. It runs
+  // before the generator, so it sits outside cachedGeneratorRun and would
+  // otherwise re-walk the closure on every call.
+  const ineligible = cachedEligibility(slot, fingerprint, () =>
+    CHECKS.reduce<SpliceDiagnostic | null>(
+      (found, check) => found ?? check(decided.value),
+      null,
+    ),
+  );
+  if (ineligible !== null) {
+    return {
+      ok: false,
+      diagnostic: { ...ineligible, loc: splice.loc ?? ORIGIN_UNKNOWN },
+    };
+  }
+
   const produced = cachedGeneratorRun(
-    spliceCacheSlot(expression, generator.modulePath),
-    spliceCacheKey(expression, generator.modulePath, config),
+    slot,
+    fingerprint,
     () =>
       runGenerator(splice, generator, path.dirname(path.resolve(hostPath)), {
         config,
+        wallClockMs: options.wallClockMs,
         argumentSources: argumentSources
           .map((entry) => entry.source)
           .filter((source): source is ImportSource => source !== null),
@@ -160,7 +189,7 @@ function expandOne(
 }
 
 // ---------------------------------------------------------------------------
-// Phase 1: decide
+// Phase 1: decide (resolve the generator, then apply CHECKS)
 // ---------------------------------------------------------------------------
 
 type DecisionContext = {
@@ -172,8 +201,9 @@ type DecisionContext = {
   argumentSources: Array<{ name: string; source: ImportSource | null }>;
 };
 
-/** The eligibility rules, in order. Adding one later means adding an entry
- *  here rather than editing the pass. */
+/** The eligibility rules, in order, applied by a short-circuiting reduce
+ *  so a later rule never pays for an earlier refusal. Adding one means
+ *  adding an entry here rather than editing the pass. */
 const CHECKS: ReadonlyArray<(ctx: DecisionContext) => SpliceDiagnostic | null> = [
   checkArgumentsAvailable,
   ({ generator, config }) =>
@@ -207,24 +237,18 @@ function decide(
     };
   }
 
-  const ctx: DecisionContext = {
-    splice,
-    localName,
-    generator: resolved.value,
-    config,
-    argumentSources: argumentSourcesFor(splice, program, hostPath).filter(
-      (entry) => entry.name !== localName,
-    ),
+  return {
+    ok: true,
+    value: {
+      splice,
+      localName,
+      generator: resolved.value,
+      config,
+      argumentSources: argumentSourcesFor(splice, program, hostPath).filter(
+        (entry) => entry.name !== localName,
+      ),
+    },
   };
-  // Short-circuiting, not `.map().find()`. Each check parses the
-  // generator's whole import closure.
-  const failure = CHECKS.reduce<SpliceDiagnostic | null>(
-    (found, check) => found ?? check(ctx),
-    null,
-  );
-  return failure === null
-    ? { ok: true, value: ctx }
-    : { ok: false, diagnostic: { ...failure, loc: splice.loc ?? ORIGIN_UNKNOWN } };
 }
 
 /** A splice calls its generator; anything else has no generator to name. */
@@ -290,12 +314,18 @@ function checkArgumentModule(modulePath: string): SpliceDiagnostic | null {
   const checks = [
     () => checkImportGraph(modulePath, path.basename(modulePath)),
     () => checkNoNestedSplice(modulePath, path.basename(modulePath)),
-    () => checkEffects(modulePath, "", {}),
+    () => checkArgumentModuleEffects(modulePath),
   ];
   return checks.reduce<SpliceDiagnostic | null>(
     (found, check) => found ?? check(),
     null,
   );
+}
+
+/** An argument module is not a generator, so every export it has is
+ *  checked rather than one named one. */
+function checkArgumentModuleEffects(modulePath: string): SpliceDiagnostic | null {
+  return checkEffects(modulePath, path.basename(modulePath), {}, true);
 }
 
 /** Every free name a splice's arguments use, with where it comes from. */
@@ -409,17 +439,24 @@ function calledNamesIn(nodes: AgencyNode[]): string[] {
     .map((node) => (node as { functionName: string }).functionName);
 }
 
-/** Local names a fragment's own import lines bind. */
+/**
+ * Every local name a fragment's import lines bind.
+ *
+ * Through `getImportedNames`, which already handles all three import
+ * forms. Handling only `namedImport` would make AG8010 reject generated
+ * code that imports a namespace or a default and then uses it, which is
+ * legal and has nothing to do with capture. `import node { ... }` binds
+ * its names directly.
+ */
 function importedNamesIn(nodes: AgencyNode[]): string[] {
   return nodes.flatMap((node) => {
-    if (node.type !== "importStatement") return [];
-    return node.importedNames.flatMap((group) => {
-      if (group.type !== "namedImport") return [];
-      const aliases = group.aliases ?? {};
-      return group.importedNames
-        .filter((entry): entry is string => typeof entry === "string")
-        .map((entry) => (Object.hasOwn(aliases, entry) ? aliases[entry] : entry));
-    });
+    if (node.type === "importNodeStatement") {
+      return node.importedNodes;
+    }
+    if (node.type !== "importStatement") {
+      return [];
+    }
+    return node.importedNames.flatMap(getImportedNames);
   });
 }
 

@@ -468,8 +468,12 @@ constrain fields, type the object:
 { name, age }: Person                            => ...   // yes
 ```
 
-Inside an object pattern the same rule applies — `{ name: string }` tests the
-field. Use `as` to bind a field to a different name: `{ name as n }`.
+Inside an object pattern in a **match** the same rule applies — `{ name: string }`
+tests the field. Use `as` to bind a field to a different name: `{ name as n }`.
+
+In `let` / `const` / `for`, where no type test is possible, `:` still renames:
+`const { name: n } = person` binds `n`. `as` works there too, and reads the
+same in both places.
 
 #### Cost
 

@@ -85,7 +85,6 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | --- | --- |
 | [AG5002](match.md#ag5002) | match is not exhaustive: missing &#123;missing&#125;. |
 | [AG5003](match.md#ag5003) | `&#123;name&#125;` here binds the value; it does not test the type. Did you mean `p: &#123;name&#125;` or `is &#123;name&#125;`? |
-| [AG5004](match.md#ag5004) | `&#123;field&#125;: &#123;name&#125;` here binds the `&#123;field&#125;` field to a variable called `&#123;name&#125;`; it does not test the field type. Field-level type tests are not supported — test the whole value with a typed pattern instead. |
 
 ## Calls, tools, and LLM usage
 

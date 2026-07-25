@@ -280,7 +280,19 @@ export function agencyImportTargets(
   return out;
 }
 
-function agencyImportTarget(node: AgencyNode): string | null {
+/**
+ * The one source of truth for "what is an import edge". Recognizes
+ * importStatement, importNodeStatement, AND exportFromStatement — a
+ * hand-rolled importStatement-only scan lets `export { x } from "zod"`
+ * escape, which for splice eligibility means a generator reaching
+ * JavaScript at compile time.
+ *
+ * Exported for `lib/compiler/splice/eligibility.ts`, the second caller
+ * `loadModule`'s comment below anticipated. Note this is the SINGULAR
+ * extractor: `agencyImportTargets` (plural) pre-filters std::, pkg::, and
+ * non-Agency targets, which is exactly the set eligibility must inspect.
+ */
+export function agencyImportTarget(node: AgencyNode): string | null {
   if (node.type === "importStatement") return node.modulePath;
   if (node.type === "importNodeStatement") return node.agencyFile;
   if (node.type === "exportFromStatement") return node.modulePath;

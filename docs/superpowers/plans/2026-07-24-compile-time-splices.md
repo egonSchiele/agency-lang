@@ -45,6 +45,8 @@ export type SpliceResult<T> =
   | { ok: false; diagnostic: SpliceDiagnostic };
 ```
 
+Two shapes, not one, and deliberately so: a check has no value to report on success, and forcing it into `SpliceResult<void>` would be worse than the split. The rule is mechanical — **if it judges, it returns `SpliceDiagnostic | null`; if it produces, it returns `SpliceResult<T>`.** Do not add a third.
+
 ## Decisions carried in from the spec
 
 Read `/Users/adityabhargava/agency-lang/docs/superpowers/specs/2026-07-24-compile-time-splices-design.md` first. The four rules:
@@ -181,16 +183,13 @@ function parseTemplate(source: string) {
   return result.result;
 }
 
-/** Mirrors how lib/utils/holes.ts filters over walkNodesArray. There is
- *  no findNodesOfType helper in this codebase. */
+/** There is no findNodesOfType helper in this codebase. This is the same
+ *  construction lib/utils/holes.ts:findHoles uses — spread, map, filter.
+ *  Copy that shape, not a for-loop with an accumulator. */
 function nodesOfType(nodes: AgencyNode[], type: string): AgencyNode[] {
-  const found: AgencyNode[] = [];
-  for (const { node } of walkNodesArray(nodes)) {
-    if (node.type === type) {
-      found.push(node);
-    }
-  }
-  return found;
+  return [...walkNodesArray(nodes)]
+    .map((visit) => visit.node)
+    .filter((node) => node.type === type);
 }
 
 function splicesIn(source: string): Splice[] {
@@ -735,9 +734,13 @@ A second call with the same expression and unchanged generator does not re-run t
 
 - [ ] **Step 4: Implement**
 
-Structure the pass as: an ordered list of checks with the uniform shape `(context) => SpliceDiagnostic | null`, applied by one `.find()`, then a separate `graft` step that assumes eligibility passed. Policy and mechanics change for different reasons and should not interleave.
+**Three phases, kept separate.** Policy and mechanics change for different reasons and must not interleave:
 
-The checks, in order: argument availability (AG8011), `resolveGeneratorModule` (AG8005), `checkGeneratorEligible` (AG8003/4/6), then run, then fragment kind (AG8007).
+1. **Decide.** An ordered array of checks, each with the shape `(context) => SpliceDiagnostic | null`, applied by a single `.find()`. In order: argument availability (AG8011), `resolveGeneratorModule` (AG8005), `checkGeneratorEligible` (AG8003/4/6). Adding a rule later — say a cap on generated output size — is an entry in this array, never an edit to the pass.
+2. **Run.** `runGenerator`. This is not a check and does not belong in the array: it produces a value rather than judging one.
+3. **Graft.** Validate the returned fragment kind against the splice's position (AG8007), then splice the nodes in. The kind check lives here rather than in phase 1 because it needs the result, which is exactly why phase 1 cannot be "all the checks".
+
+Do not collapse these into one function that interleaves judging, running, and pasting.
 
 For argument availability, `freeNamesOf` in `lib/runtime/template/hygiene.ts` computes what you need; a free name that is neither imported nor a builtin is AG8011.
 
@@ -869,6 +872,13 @@ In `lib/stdlib/template.ts`, beside `_fill` (line 50). Follow the file's convent
 
 Resolve each input's kind through `kindOf` rather than reading `code.kind` directly, because a missing `kind` means `"program"` and `kindOf` is the one place that normalizes it.
 
+**The table has seven rows; the implementation does not need seven branches.** Writing it as a branch per row is the imperative version of a rule that is much smaller than it looks. Two early returns handle the degenerate rows — empty array yields an empty `statements` fragment, one element is returned unchanged — and everything else falls out of the set of distinct kinds present:
+
+- if `program` is in that set and is not the only member, fail
+- otherwise the result kind is `program` when every input is `program`, and `statements` in every other case
+
+That is the whole rule. Derive it from the distinct-kinds set rather than enumerating pairs, so adding a fourth fragment kind later changes one line instead of seven.
+
 - [ ] **Step 4: Add the Agency-level `combine`**
 
 In `stdlib/agency.agency`, beside `toSource` (line 570). Mark it `idempotent`, matching `toSource`, `holesOf`, and `fill`, since it is a pure transformation:
@@ -946,7 +956,11 @@ done
 
 One per code, asserting the **code** field rather than message text: AG8003 through AG8011, nine in total. The previous draft covered only AG8003–AG8007; a diagnostic with no test is one that may never fire.
 
-For AG8003, use a **harmless** effect — reading a file that does not exist. If the check ever fails to fire, the fixture runs the generator for real, and one written with `write` or a shell command would do the damage it exists to prevent.
+Two fixtures need care, because a refusal fixture runs the generator for real if the check fails to fire. Ask of each one: what happens if this test fails?
+
+For **AG8003**, use a harmless effect — reading a file that does not exist. A fixture written with `write` or a shell command would do the damage it exists to prevent.
+
+For **AG8004**, the generator calls `llm()`. If the determinism check fails to fire, that fixture makes a **real, billed LLM call** — and per project convention these tests make no LLM calls at all. Point it at a mock or a nonexistent provider so a failure costs an error rather than money and an API key in CI.
 
 Fixture for AG8006 must be the **transitive** case: a generator importing a clean-looking local `.agency` file that itself imports a JS package. **This is the single most important test in the plan.** It is what decides whether the safety argument holds or is decorative.
 

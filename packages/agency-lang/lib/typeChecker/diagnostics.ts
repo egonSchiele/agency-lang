@@ -590,6 +590,59 @@ export const DIAGNOSTICS = {
     message:
       "The hole `#{name}` is in a position that gives it no expected type. Annotate it, for example `#{name}: string`.",
   },
+  spliceGeneratorHasEffects: {
+    code: "AG8003",
+    severity: "error",
+    message:
+      "The generator `{name}` raises {effects} and cannot run at compile time. Compile-time generators must be effect-free.",
+  },
+  spliceGeneratorNondeterministic: {
+    code: "AG8004",
+    severity: "error",
+    message:
+      "The generator `{name}` reaches {source}, so it could produce different code on different builds. Compile-time generators must be deterministic.",
+  },
+  spliceGeneratorNotImported: {
+    code: "AG8005",
+    severity: "error",
+    message:
+      "`{name}` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first.",
+  },
+  spliceGeneratorReachesNonAgency: {
+    code: "AG8006",
+    severity: "error",
+    message:
+      "The generator `{name}` reaches non-Agency code through `{importPath}`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript and TypeScript raise no effects and cannot be checked.",
+  },
+  spliceFragmentKindMismatch: {
+    code: "AG8007",
+    severity: "error",
+    message:
+      "The generator `{name}` returned a `{actual}` fragment, but this splice is in {position} position and needs a `{expected}` fragment.",
+  },
+  spliceGeneratorFailed: {
+    code: "AG8008",
+    severity: "error",
+    message: "The generator `{name}` failed while running: {reason}",
+  },
+  spliceNested: {
+    code: "AG8009",
+    severity: "error",
+    message:
+      "A generator module cannot itself contain a splice. Move the inner generation into a separate module.",
+  },
+  spliceReferencesOuterName: {
+    code: "AG8010",
+    severity: "error",
+    message:
+      "Generated code refers to `{name}`, which it neither declares nor imports. Generated code may use only names it declares itself and names it imports.",
+  },
+  spliceArgumentNotAvailable: {
+    code: "AG8011",
+    severity: "error",
+    message:
+      "The splice argument `{name}` is declared in this file, so it does not exist yet when the generator runs. Splice arguments may be literals, code literals, or imported names.",
+  },
 } as const;
 
 export type DiagnosticName = keyof typeof DIAGNOSTICS;

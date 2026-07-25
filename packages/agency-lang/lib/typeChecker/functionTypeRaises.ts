@@ -105,6 +105,9 @@ function callFlows(
   ancestors: WalkAncestor[],
   ctx: TypeCheckerContext,
 ): Flow[] {
+  // Also excludes `h.invoke(cb)` from the raises checks below, because the
+  // walked call is named `invoke`. Narrowing this to real method calls means
+  // resolving the receiver first; tracked separately.
   if (ancestors[ancestors.length - 1]?.type === "valueAccess") return [];
   const params = calleeParams(node.functionName, ctx);
   if (!params) return [];

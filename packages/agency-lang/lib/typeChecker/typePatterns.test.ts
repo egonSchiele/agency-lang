@@ -262,3 +262,39 @@ def f(x: any): string {
     expect(warning!.loc?.line).toBeGreaterThan(firstArmLine);
   });
 });
+
+describe("type patterns: narrowing at arm level vs nested", () => {
+  const SRC = `
+def takesString(s: string): string { return s }
+`;
+
+  it("an arm-level suffix narrows the binder", () => {
+    const errs = check(`${SRC}
+def f(x: string | number): string {
+  return match (x) {
+    v: string => takesString(v)
+    _ => "none"
+  }
+}`);
+    expect(errs.filter((e) => (e.severity ?? "error") === "error")).toEqual([]);
+  });
+
+  it("a NESTED suffix does not narrow the binder (known gap)", () => {
+    // Pins current behavior rather than endorsing it. At runtime the arm only
+    // matches when the element IS a string, so the checker is more conservative
+    // than reality — it rejects a valid program rather than accepting an
+    // invalid one, which is the safe direction to be wrong in. Lifting this
+    // means teaching arm narrowing to walk into nested pattern positions.
+    const errs = check(`${SRC}
+def f(xs: (string | number)[]): string {
+  return match (xs) {
+    ["k", v: string] => takesString(v)
+    _ => "none"
+  }
+}`);
+    const hard = errs.filter((e) => (e.severity ?? "error") === "error");
+    expect(hard.map((e) => e.message).join("\n")).toMatch(
+      /'string \| number' is not assignable to parameter type 'string'/,
+    );
+  });
+});

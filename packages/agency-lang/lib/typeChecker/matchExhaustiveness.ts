@@ -59,6 +59,31 @@ function objectPatternDiscriminantValue(
   return null;
 }
 
+/**
+ * True when a pattern contains a type test somewhere INSIDE it — an element or
+ * property carrying a `: Type` suffix.
+ *
+ * Such an arm can fail at runtime even though its shape matched: a coarse test
+ * can reject the value, and a named type runs validators that can reject it
+ * too. So it cannot stand in for the case its shape pins, exactly like a
+ * guarded arm. A typePattern at the TOP of an arm needs no special handling —
+ * it is neither a literal, a result pattern, nor a bare binder, so it already
+ * contributes nothing to coverage and is not a catch-all.
+ */
+function hasNestedTypeTest(caseValue: CaseValue): boolean {
+  if (caseValue === "_") return false;
+  const top = caseValue.type === "typePattern" ? caseValue.pattern : caseValue;
+  return top !== null && containsTypePattern(top as unknown);
+}
+
+function containsTypePattern(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(containsTypePattern);
+  const record = value as Record<string, unknown>;
+  if (record.type === "typePattern") return true;
+  return Object.keys(record).some((k) => k !== "loc" && containsTypePattern(record[k]));
+}
+
 /** True for a catch-all arm: the `_` default, or an un-guarded bare binding. */
 function isCatchAll(arm: NormalizedArm): boolean {
   if (arm.guarded) return false;
@@ -294,7 +319,10 @@ function normalizeSite(
     const scrutineeType = synthType(node.value as Expression, scope, ctx);
     const arms = node.matchSource.map((a) => ({
       caseValue: a.caseValue,
-      guarded: a.guard !== undefined,
+      // `guarded` means "this arm can fail for a reason coverage cannot see".
+      // A nested type test is one of those reasons, so it rides the same flag
+      // rather than adding a parallel concept every decision point must learn.
+      guarded: a.guard !== undefined || hasNestedTypeTest(a.caseValue),
     }));
     return { scrutineeType, arms, loc: node.loc, isExpression: node.matchExprId !== undefined };
   }
@@ -303,7 +331,10 @@ function normalizeSite(
     const scrutineeType = synthType(node.expression as Expression, scope, ctx);
     const arms = node.cases
       .filter((c): c is MatchBlockCase => c.type === "matchBlockCase")
-      .map((c) => ({ caseValue: c.caseValue, guarded: c.guard !== undefined }));
+      .map((c) => ({
+        caseValue: c.caseValue,
+        guarded: c.guard !== undefined || hasNestedTypeTest(c.caseValue),
+      }));
     return { scrutineeType, arms, loc: node.loc, isExpression: node.matchExprId !== undefined };
   }
   return null;

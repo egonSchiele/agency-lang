@@ -155,6 +155,13 @@ describe("formatSource", () => {
       "    [\"echo\", s: string] => s",
       "    [\"cat\", p: SafePath] => p",
       "    [{ cmd: \"echo\" }: Word, ...rest] => \"word\"",
+      // A wildcard with a suffix has no binder, so it takes formatPattern's
+      // `pattern === null` branch — the branch written for after-`is`, where
+      // the operator is already on the page. Printed bare in element position
+      // it would come back as a BINDER named SafePath that matches anything,
+      // silently turning a validated rule into an unvalidated one.
+      "    [\"cat\", _: SafePath] => \"anon\"",
+      "    { path: _: SafePath } => \"anon obj\"",
       "    _ => \"other\"",
       "  }",
       "  print(r)",
@@ -168,6 +175,8 @@ describe("formatSource", () => {
     expect(formatted!).toContain("[\"echo\", s: string] =>");
     expect(formatted!).toContain("[\"cat\", p: SafePath] =>");
     expect(formatted!).toContain("[{ cmd: \"echo\" }: Word, ...rest] =>");
+    expect(formatted!).toContain("[\"cat\", _: SafePath] =>");
+    expect(formatted!).toContain("{ path: _: SafePath } =>");
     // Formatting the output again changes nothing.
     expect(formatSource(formatted!)).toBe(formatted);
   });

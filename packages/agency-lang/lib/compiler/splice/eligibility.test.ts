@@ -5,7 +5,6 @@ import { nanoid } from "nanoid";
 import { safeDeleteDirectory } from "../../utils.js";
 import { parseAgency } from "../../parser.js";
 import {
-  checkDeterminism,
   checkEffects,
   checkGeneratorEligible,
   checkImportGraph,
@@ -160,83 +159,6 @@ describe("checkEffects", () => {
       `import { h } from "./helper.agency"\n\nexport def g(): Result {\n  return h()\n}\n`,
     );
     expect(checkEffects(generator, "g")?.diagnostic).toBe("spliceGeneratorHasEffects");
-  });
-});
-
-describe("checkDeterminism", () => {
-  it("allows a pure generator", () => {
-    const generator = write("gen.agency", `export def g(): number {\n  return 1\n}\n`);
-    expect(checkDeterminism(generator, "g")).toBeNull();
-  });
-
-  it("allows a generator calling ordinary stdlib functions", () => {
-    // NEGATIVE CONTROL. Without it, an implementation that flags every
-    // stdlib call passes every other test in this block while making the
-    // feature useless.
-    const generator = write(
-      "gen.agency",
-      `import { fill } from "std::agency"\n\nexport def g(): number {\n  return 1\n}\n`,
-    );
-    expect(checkDeterminism(generator, "g")).toBeNull();
-  });
-
-  it("rejects a generator that calls llm()", () => {
-    const generator = write(
-      "gen.agency",
-      `export def g(): string {\n  return llm("write something")\n}\n`,
-    );
-    const failure = checkDeterminism(generator, "g");
-    expect(failure?.diagnostic).toBe("spliceGeneratorNondeterministic");
-    expect(failure?.params.source).toContain("llm");
-  });
-
-  it("rejects a generator reaching llm() through a same-file helper", () => {
-    const generator = write(
-      "gen.agency",
-      `def helper(): string {\n  return llm("x")\n}\n\nexport def g(): string {\n  return helper()\n}\n`,
-    );
-    expect(checkDeterminism(generator, "g")?.diagnostic).toBe(
-      "spliceGeneratorNondeterministic",
-    );
-  });
-
-  it("rejects a generator whose relative helper calls llm()", () => {
-    write("helper.agency", `export def h(): string {\n  return llm("x")\n}\n`);
-    const generator = write(
-      "gen.agency",
-      `import { h } from "./helper.agency"\n\nexport def g(): string {\n  return h()\n}\n`,
-    );
-    expect(checkDeterminism(generator, "g")?.diagnostic).toBe(
-      "spliceGeneratorNondeterministic",
-    );
-  });
-
-  it("rejects a generator that reads the clock", () => {
-    const generator = write(
-      "gen.agency",
-      `import { now } from "std::date"\n\nexport def g(): number {\n  return now()\n}\n`,
-    );
-    expect(checkDeterminism(generator, "g")?.diagnostic).toBe(
-      "spliceGeneratorNondeterministic",
-    );
-  });
-
-  it("follows the clock through an alias", () => {
-    const generator = write(
-      "gen.agency",
-      `import { now as rightNow } from "std::date"\n\nexport def g(): number {\n  return rightNow()\n}\n`,
-    );
-    expect(checkDeterminism(generator, "g")?.diagnostic).toBe(
-      "spliceGeneratorNondeterministic",
-    );
-  });
-
-  it("does not flag a user's own now() that is not the clock", () => {
-    const generator = write(
-      "gen.agency",
-      `def now(): number {\n  return 7\n}\n\nexport def g(): number {\n  return now()\n}\n`,
-    );
-    expect(checkDeterminism(generator, "g")).toBeNull();
   });
 });
 

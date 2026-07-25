@@ -13,7 +13,6 @@ import { DIAGNOSTICS, renderMessage, type DiagnosticName } from "./diagnostics.j
  */
 const SPLICE_DIAGNOSTIC_PARAMS: Record<string, Record<string, string>> = {
   spliceGeneratorHasEffects: { name: "makeGetters", effects: "std::read" },
-  spliceGeneratorNondeterministic: { name: "makeGetters", source: "llm()" },
   spliceGeneratorNotImported: { name: "makeGetters" },
   spliceGeneratorReachesNonAgency: { name: "makeGetters", importPath: "zod" },
   spliceFragmentKindMismatch: {
@@ -38,13 +37,12 @@ describe("splice diagnostics", () => {
     expect(spliceCodes).toEqual(Object.keys(SPLICE_DIAGNOSTIC_PARAMS).sort());
   });
 
-  it("assigns codes AG8003 through AG8012", () => {
+  it("assigns the splice codes, with AG8004 left unused", () => {
     const codes = Object.keys(SPLICE_DIAGNOSTIC_PARAMS)
       .map((diagnosticName) => DIAGNOSTICS[diagnosticName as DiagnosticName].code)
       .sort();
     expect(codes).toEqual([
       "AG8003",
-      "AG8004",
       "AG8005",
       "AG8006",
       "AG8007",

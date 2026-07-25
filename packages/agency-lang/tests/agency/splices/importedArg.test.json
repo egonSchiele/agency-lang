@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"name/email\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A splice argument may name something the host imported, and the runner resolves it"
+    }
+  ]
+}

@@ -135,6 +135,16 @@ export function compileSource(
     }
     const program = expanded.value;
 
+    // 2c. Re-check the policy against the EXPANDED program. A generator can
+    // emit its own import lines, and those never went through the check
+    // above. Checking twice is deliberate: the first pass refuses
+    // disallowed source without running a generator at all, and this one
+    // covers what the generator added.
+    if (config.imports) {
+      const failure = checkImportPolicy(program, config.imports);
+      if (failure) return failure;
+    }
+
     // 3. Build symbol table and resolve imports
     const symbolTable = SymbolTable.build(syntheticPath, config);
     const reExportedProgram = resolveReExports(program, symbolTable, syntheticPath);

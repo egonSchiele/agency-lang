@@ -1,0 +1,1 @@
+export static const FIELDS = ["name", "email"]

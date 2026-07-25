@@ -3,7 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { safeDeleteDirectory } from "../../utils.js";
-import { cachedGeneratorRun, clearSpliceCache, spliceCacheKey } from "./cache.js";
+import {
+  cachedGeneratorRun,
+  clearSpliceCache,
+  spliceCacheKey,
+  spliceCacheSize,
+} from "./cache.js";
 import type { Code } from "../../runtime/template/code.js";
 import type { SpliceResult } from "./types.js";
 
@@ -77,18 +82,36 @@ describe("spliceCacheKey", () => {
 });
 
 describe("cachedGeneratorRun", () => {
+  it("replaces a slot's entry rather than growing when content changes", () => {
+    // Without this the cache leaks: an editor session that edits a
+    // generator fifty times would hold fifty Code values, one per
+    // intermediate version, with no way to reach any but the last.
+    const { produce } = counting();
+    for (const fingerprint of ["v1", "v2", "v3", "v4"]) {
+      cachedGeneratorRun("slot", fingerprint, produce);
+    }
+    expect(spliceCacheSize()).toBe(1);
+  });
+
+  it("re-runs when the fingerprint changes", () => {
+    const { produce, runs } = counting();
+    cachedGeneratorRun("slot", "v1", produce);
+    cachedGeneratorRun("slot", "v2", produce);
+    expect(runs()).toBe(2);
+  });
+
   it("runs a generator once for repeated identical calls", () => {
     const { produce, runs } = counting();
-    cachedGeneratorRun("k", produce);
-    cachedGeneratorRun("k", produce);
-    cachedGeneratorRun("k", produce);
+    cachedGeneratorRun("slot", "fp", produce);
+    cachedGeneratorRun("slot", "fp", produce);
+    cachedGeneratorRun("slot", "fp", produce);
     expect(runs()).toBe(1);
   });
 
   it("runs again under a different key", () => {
     const { produce, runs } = counting();
-    cachedGeneratorRun("k1", produce);
-    cachedGeneratorRun("k2", produce);
+    cachedGeneratorRun("slot1", "fp", produce);
+    cachedGeneratorRun("slot2", "fp", produce);
     expect(runs()).toBe(2);
   });
 
@@ -105,8 +128,8 @@ describe("cachedGeneratorRun", () => {
         },
       };
     };
-    cachedGeneratorRun("broken", produce);
-    cachedGeneratorRun("broken", produce);
+    cachedGeneratorRun("slot", "fp", produce);
+    cachedGeneratorRun("slot", "fp", produce);
     expect(runs).toBe(1);
   });
 });

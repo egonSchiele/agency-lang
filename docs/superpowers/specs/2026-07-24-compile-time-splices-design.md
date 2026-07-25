@@ -104,7 +104,7 @@ The effect system gates things that are **dangerous**. It does not gate things t
 
 Clock and randomness have the same shape with smaller stakes.
 
-So the v1 rule is stricter than "no effects." It is **no effects and no nondeterminism**.
+An earlier draft therefore made the v1 rule "no effects and no nondeterminism." The second half did not survive implementation: it can only be approximated by a name list, and a partial guarantee is worse than an honest gap. The shipped rule is **no effects**, with nondeterminism documented as the author's problem.
 
 One rejected alternative, recorded because it looks attractive: make `llm()` raise a `std::llm` effect so the existing machinery covers it. This is much worse than it sounds. Unhandled interrupts surface to the user and exit nonzero, so every existing program would prompt on every LLM call. That is a language-wide breaking change wearing a compile-time-feature costume. The useful half survives without it: track `llm()` in the effect analysis for *checking* purposes without making it *raise*.
 
@@ -155,7 +155,9 @@ Requiring a separate file makes the cycle impossible instead of solvable. It is 
 
 The ceremony cost is real but small, because generators are rare and tend to be reused across files.
 
-### Rule 3: the generator must be effect-free and deterministic, checked before it runs
+### Rule 3: the generator must be effect-free, checked before it runs
+
+> **Corrected during implementation.** This rule also required determinism, enforced as `AG8004`. That half was dropped and the code retired unused. The check was a hardcoded list of `llm` plus `std::date`, which missed anything one wrapper away through a `std::` module (eleven stdlib files reach `llm` while declaring no interrupts), missed everything nondeterministic that was not on the list, and would have missed every function added later. Determinism was never a safety property — safety rests on the effect check and the import restriction — and a partial check that reads like a guarantee is worse than none. See `docs/dev/splices.md`.
 
 Two checks, in this order:
 
@@ -307,7 +309,7 @@ The manifest half of the original argument still holds and is still doing work. 
 
 What the manifest does not cover is every other caller of `SymbolTable.build`. Those parse and expand outside any manifest guard, so splices need a cache of their own. The key is the printed splice expression plus a content hash of the generator's whole transitive closure of relative `.agency` files. Hashing the closure rather than one file is what makes editing a helper one import away invalidate the memo.
 
-Both halves rest on **Rule 3**. A generator that could call `llm()` or read the clock would produce different output from identical inputs, and caching it would be silently wrong. Determinism is not only a safety property here; it is what makes caching possible at all.
+The original argument here leaned on determinism, which is no longer enforced. The cache tolerates its absence: a slot holds one entry, so a nondeterministic generator gets one answer pinned per fingerprint rather than a fresh roll on every compile. That is more reproducible than re-running, not less.
 
 ## Out of scope for v1
 
@@ -344,7 +346,7 @@ These are genuinely unsettled and should be resolved while writing the plan.
 
 3. **Which argument expressions are legal.** `$( gen(["a"]) )` is clearly fine. Is `$( gen(SOME_CONST) )` fine, where `SOME_CONST` is defined in the file being compiled? That reintroduces the staging cycle. Simplest v1 rule: arguments may be literals, code literals, and references to imported names only.
 
-4. **Detecting nondeterminism.** The effect half is free via `getEffectsFromSource`. The `llm()`/clock/randomness half needs new tracking. All transitive effect propagation runs through `analyzeInterruptsFromScopes` (`lib/typeChecker/index.ts:300`), which is a single chokepoint, so an internal marker riding that existing propagation looks plausible. Needs confirming by reading it.
+4. **Detecting nondeterminism.** **Settled during implementation: not detected at all.** A name-list check shipped, was found to have a hole a generator could walk through, and was removed rather than patched, because no list can be complete. If this is ever enforced properly, the chokepoint named here is still the right lever: `analyzeInterruptsFromScopes` propagates transitively, so a marker riding it needs no lists.
 
 5. **Which positions holes cannot reach.** Filed as #678. Does not block v1, since v1 generators take hand-supplied arguments, but it shapes what the introspection follow-up can deliver. Summarized here because it was found during this design work.
 

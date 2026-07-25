@@ -9,11 +9,20 @@ import { BUILTIN_FUNCTION_TYPES } from "../typeChecker/builtins.js";
 import { KINDS_FOR_SORT, stampOrigin } from "../runtime/template/graft.js";
 import { kindOf } from "../runtime/template/code.js";
 import {
+  checkEffects,
   checkGeneratorEligible,
+  checkImportGraph,
+  checkNoNestedSplice,
   resolveGeneratorModule,
+  resolveImportedName,
 } from "../compiler/splice/eligibility.js";
+import type { ImportSource } from "../compiler/splice/eligibility.js";
 import { runGenerator } from "../compiler/splice/runGenerator.js";
-import { cachedGeneratorRun, spliceCacheKey } from "../compiler/splice/cache.js";
+import {
+  cachedGeneratorRun,
+  spliceCacheKey,
+  spliceCacheSlot,
+} from "../compiler/splice/cache.js";
 import type { AgencyConfig } from "../config.js";
 import type { AgencyNode, AgencyProgram } from "../types.js";
 import type { Splice } from "../types/splice.js";
@@ -93,16 +102,15 @@ function expandAll(
   hostPath: string,
   config: AgencyConfig,
 ): SpliceResult<AgencyProgram> {
-  const hostNames = declaredNamesIn(program);
+  // Imported names count as taken. A generated `def greet` collides with an
+  // imported `greet` exactly as it would with a declared one.
+  const taken = [...declaredNamesIn(program), ...importedNamesIn(program.nodes)];
   // Keyed by object identity, not position. A declaration splice spreads N
   // nodes and shifts the index of every splice after it.
   const expansions = new Map<Splice, AgencyNode[]>();
-  // Grows as splices expand, so one splice cannot redeclare what an
-  // earlier one generated.
-  const taken = [...hostNames];
 
   for (const splice of splices) {
-    const expanded = expandOne(splice, program, hostPath, config, hostNames);
+    const expanded = expandOne(splice, program, hostPath, config);
     if (!expanded.ok) {
       return expanded;
     }
@@ -121,20 +129,23 @@ function expandOne(
   program: AgencyProgram,
   hostPath: string,
   config: AgencyConfig,
-  hostNames: string[],
 ): SpliceResult<AgencyNode[]> {
-  const decided = decide(splice, program, hostPath, config, hostNames);
+  const decided = decide(splice, program, hostPath, config);
   if (!decided.ok) {
     return decided;
   }
-  const { generator } = decided.value;
+  const { generator, argumentSources } = decided.value;
 
   const expression = generateExpression(splice.expression);
   const produced = cachedGeneratorRun(
+    spliceCacheSlot(expression, generator.modulePath),
     spliceCacheKey(expression, generator.modulePath, config),
     () =>
       runGenerator(splice, generator, path.dirname(path.resolve(hostPath)), {
         config,
+        argumentSources: argumentSources
+          .map((entry) => entry.source)
+          .filter((source): source is ImportSource => source !== null),
       }),
   );
   if (!produced.ok) {
@@ -157,7 +168,8 @@ type DecisionContext = {
   localName: string;
   generator: { modulePath: string; exportedName: string };
   config: AgencyConfig;
-  hostNames: string[];
+  /** Every free name the arguments use, and where each comes from. */
+  argumentSources: Array<{ name: string; source: ImportSource | null }>;
 };
 
 /** The eligibility rules, in order. Adding one later means adding an entry
@@ -173,7 +185,6 @@ function decide(
   program: AgencyProgram,
   hostPath: string,
   config: AgencyConfig,
-  hostNames: string[],
 ): SpliceResult<DecisionContext> {
   const localName = calleeName(splice);
   if (localName === null) {
@@ -201,7 +212,9 @@ function decide(
     localName,
     generator: resolved.value,
     config,
-    hostNames,
+    argumentSources: argumentSourcesFor(splice, program, hostPath).filter(
+      (entry) => entry.name !== localName,
+    ),
   };
   // Short-circuiting, not `.map().find()`. Each check parses the
   // generator's whole import closure.
@@ -223,27 +236,83 @@ function calleeName(splice: Splice): string | null {
 }
 
 /**
- * A splice's arguments run before this file exists, so they cannot mention
- * anything it declares. Literals, code literals, and imported names are
- * all fine.
+ * A splice's arguments run before this file exists, so they may name only
+ * things that already exist: literals, code literals, and imported names.
+ *
+ * This is a safelist. Refusing only names that collide with the file's
+ * top-level declarations would miss an enclosing local, because a splice
+ * in expression position sits inside a function body:
+ *
+ *     node main(): number {
+ *       const size = 3
+ *       return $( buildTable(size) )
+ *     }
+ *
+ * `size` is not a top-level name, so a blocklist lets it through, and the
+ * user gets a ReferenceError from a program they never wrote instead of
+ * the AG8011 that exists to explain this.
  */
 function checkArgumentsAvailable({
   splice,
-  hostNames,
+  argumentSources,
 }: DecisionContext): SpliceDiagnostic | null {
+  const unresolved = argumentSources.find((source) => source.source === null);
+  if (unresolved !== undefined) {
+    return {
+      diagnostic: "spliceArgumentNotAvailable",
+      params: { name: unresolved.name },
+      loc: splice.loc ?? ORIGIN_UNKNOWN,
+    };
+  }
+  // Each module supplying an argument gets compiled and evaluated to
+  // produce that value, so it has to clear the same bar the generator
+  // does. Without this, `$( gen(THING) )` would run a module the generator
+  // rules never saw.
+  for (const { source } of argumentSources) {
+    if (source === null || source.modulePath === null) {
+      continue;
+    }
+    const found = checkArgumentModule(source.modulePath);
+    if (found !== null) {
+      return { ...found, loc: splice.loc ?? ORIGIN_UNKNOWN };
+    }
+  }
+  return null;
+}
+
+/**
+ * A module that supplies a splice argument runs at compile time exactly as
+ * a generator does, so it faces the generator's import and effect rules.
+ * It is not itself a generator, so it is checked as a whole rather than by
+ * the name of one export.
+ */
+function checkArgumentModule(modulePath: string): SpliceDiagnostic | null {
+  const checks = [
+    () => checkImportGraph(modulePath, path.basename(modulePath)),
+    () => checkNoNestedSplice(modulePath, path.basename(modulePath)),
+    () => checkEffects(modulePath, "", {}),
+  ];
+  return checks.reduce<SpliceDiagnostic | null>(
+    (found, check) => found ?? check(),
+    null,
+  );
+}
+
+/** Every free name a splice's arguments use, with where it comes from. */
+function argumentSourcesFor(
+  splice: Splice,
+  program: AgencyProgram,
+  hostPath: string,
+): Array<{ name: string; source: ImportSource | null }> {
   const free = freeNamesOf({
     type: "agencyProgram",
     kind: "expr",
     nodes: [splice.expression as AgencyNode],
   });
-  const clash = free.find((name) => hostNames.includes(name));
-  return clash === undefined
-    ? null
-    : {
-        diagnostic: "spliceArgumentNotAvailable",
-        params: { name: clash },
-        loc: splice.loc ?? ORIGIN_UNKNOWN,
-      };
+  return free.map((name) => ({
+    name,
+    source: resolveImportedName(program, name, hostPath),
+  }));
 }
 
 /**
@@ -373,6 +442,24 @@ function graft(
   code: Code,
   generatorName: string,
 ): SpliceResult<AgencyNode[]> {
+  // Splices are expressions, so a generator can return a fragment holding
+  // one. This pass enumerates the host's splices once, so a generated
+  // splice would survive to the codegen tripwire and surface as an
+  // internal error. Refuse it here, where the message can name the
+  // generator.
+  const nested = [...walkNodesArray(code.nodes)].some(
+    (visit) => visit.node.type === "splice",
+  );
+  if (nested) {
+    return {
+      ok: false,
+      diagnostic: {
+        diagnostic: "spliceNested",
+        params: { name: generatorName, path: "the code it returned" },
+        loc: splice.loc ?? ORIGIN_UNKNOWN,
+      },
+    };
+  }
   const captured = checkNoCapture(splice, code, generatorName);
   if (captured !== null) {
     return { ok: false, diagnostic: captured };

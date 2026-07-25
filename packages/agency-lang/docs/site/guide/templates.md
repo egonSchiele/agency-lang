@@ -324,15 +324,25 @@ $( makeLookups(["red", "blue"]) )   // get_red() and get_blue() now exist
 
 One consequence worth knowing: a generator cannot use `loadTemplate`, because loading a template reads a file. Write the template inline with `[| ... |]` instead.
 
-**A generator may not be nondeterministic.** No `llm()`, no clock. A build that produces different code each time is not a build, and it would also make caching silently wrong. (`AG8004`)
-
 **A generator may import only `std::` modules and relative `.agency` files.** That covers its whole transitive import graph, not just its own imports. This rule is what makes the effect check mean anything. JavaScript raises no effects, so a generator that could reach an npm package could do anything with nothing to check. (`AG8006`)
 
-**Splice arguments cannot name things the file declares.** The generator runs while your file is still being compiled, so a constant in it does not exist yet. Pass literals, code literals, or imported names. (`AG8011`)
+**Splice arguments may use only literals, code literals, and imported names.** The generator runs while your file is still being compiled, so anything declared in it does not exist yet. An imported name works, and the module it comes from faces the same rules the generator does. (`AG8011`)
+
+```ts
+import { FIELDS } from "./schema.agency"
+
+$( makeFieldGetters(FIELDS) )   // fine: FIELDS is imported
+```
 
 **Generated code may use only names it declares or imports.** A generated expression lands next to whatever locals are at the splice site, and a generated mention of `tmp` must not silently read the local `tmp`. Generated code that needs a helper imports it itself. (`AG8010`)
 
 **Generated declarations may not take a name already in use.** Two functions with the same name is an error in Agency. Two top-level constants is not, and the later one silently wins, so a generator could otherwise replace one of your constants with nothing said. (`AG8012`)
+
+### One thing it does not check
+
+Nothing stops a generator being nondeterministic. If it reaches an LLM or the clock, two builds of the same source produce different code, and that is your problem rather than the compiler's. There is no complete way to check it today, and a partial check that reads like a guarantee would be worse than none.
+
+Worth knowing alongside that: generator code runs whenever something builds a symbol table, which includes `agency doc`, `agency pack`, and your editor, not only `agency compile`.
 
 ### What it costs
 

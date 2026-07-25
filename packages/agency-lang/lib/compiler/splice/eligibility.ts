@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { parseAgency } from "../../parser.js";
 import { agencyImportTarget } from "../compileClosure.js";
 import { getEffectsFromFile } from "../typecheck.js";
-import { isStdlibImport } from "../../importPaths.js";
+import { isStdlibImport, resolveAgencyImportPath } from "../../importPaths.js";
 import { walkNodesArray } from "../../utils/node.js";
 import type { AgencyConfig } from "../../config.js";
 import type { AgencyProgram, AgencyNode } from "../../types.js";
@@ -29,9 +29,18 @@ import type { SpliceDiagnostic, SpliceResult } from "./types.js";
  * which can reach JavaScript one level down.
  */
 const isAllowedEdge = (specifier: string): boolean =>
-  isStdlibImport(specifier) || isRelativeAgencyPath(specifier);
+  isStdlibImport(specifier) || isAgencyFilePath(specifier);
 
-function isRelativeAgencyPath(specifier: string): boolean {
+/**
+ * A path to an Agency source file, relative or absolute.
+ *
+ * Absolute paths and `../` escapes out of the project both qualify, which
+ * is deliberate rather than incidental: anything this accepts is still
+ * Agency source, so it still gets walked and checked by everything here.
+ * The name says "file path" rather than "relative" so it does not promise
+ * a narrowness it has never had.
+ */
+function isAgencyFilePath(specifier: string): boolean {
   return specifier.endsWith(".agency") && !specifier.includes("::");
 }
 
@@ -64,6 +73,7 @@ function parseFileOrNull(absPath: string, config: AgencyConfig): AgencyProgram |
 export function closureFiles(
   entryPath: string,
   config: AgencyConfig = {},
+  followStdlib: boolean = false,
 ): string[] {
   // Paths are user-controlled, so the visited dictionary is null-prototype
   // and membership goes through Object.hasOwn (house pattern, see
@@ -86,12 +96,32 @@ export function closureFiles(
     found.push(current);
 
     for (const specifier of importEdgesOf(program)) {
-      if (isRelativeAgencyPath(specifier)) {
-        queue.push(path.resolve(path.dirname(current), specifier));
+      const next = followedTarget(specifier, current, followStdlib);
+      if (next !== null) {
+        queue.push(next);
       }
     }
   }
   return found;
+}
+
+/** Where an import edge leads, or null when this walk does not follow it. */
+function followedTarget(
+  specifier: string,
+  fromFile: string,
+  followStdlib: boolean,
+): string | null {
+  if (isAgencyFilePath(specifier)) {
+    return path.resolve(path.dirname(fromFile), specifier);
+  }
+  if (!followStdlib || !isStdlibImport(specifier)) {
+    return null;
+  }
+  try {
+    return resolveAgencyImportPath(specifier, fromFile);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -107,120 +137,18 @@ export function checkImportGraph(
   generatorName: string,
   config: AgencyConfig = {},
 ): SpliceDiagnostic | null {
-  // Paths are user-controlled, so the visited dictionary is null-prototype
-  // and membership goes through Object.hasOwn (house pattern, see
-  // lib/optimize/registry.ts). Without it an import cycle loops forever.
-  const visited: Record<string, true> = Object.create(null);
-  const queue: string[] = [path.resolve(entryPath)];
-
-  while (queue.length > 0) {
-    const current = queue.shift() as string;
-    if (Object.hasOwn(visited, current)) {
-      continue;
-    }
-    visited[current] = true;
-
-    const program = parseFileOrNull(current, config);
+  for (const file of closureFiles(entryPath, config)) {
+    const program = parseFileOrNull(file, config);
     if (program === null) {
       continue;
     }
-
-    for (const specifier of importEdgesOf(program)) {
-      if (!isAllowedEdge(specifier)) {
-        return {
-          diagnostic: "spliceGeneratorReachesNonAgency",
-          params: { name: generatorName, importPath: specifier },
-          loc: { line: 0, col: 0, start: 0, end: 0 },
-        };
-      }
-      if (isRelativeAgencyPath(specifier)) {
-        queue.push(path.resolve(path.dirname(current), specifier));
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Sources of nondeterminism a generator may not reach.
- *
- * The effect system gates dangerous operations, not unrepeatable ones. At
- * build time those are different problems. `llm()` raises no interrupt at
- * all, so it sails through the effect check while making a network call
- * and producing a different program on every build.
- *
- * `llm` is a builtin, so matching the bare name is unambiguous. The clock
- * arrives through `std::date`, so it is matched by what a file imports.
- * Matching on spelling would false-positive on a user's own `now()`.
- *
- * The stdlib exports no randomness today. If it gains some, it belongs
- * here.
- */
-const NONDETERMINISTIC_BUILTINS: readonly string[] = ["llm"];
-const NONDETERMINISTIC_STDLIB: Record<string, readonly string[]> = {
-  "std::date": ["now", "today"],
-};
-
-/** Local names in one file that resolve to a nondeterministic function. */
-function nondeterministicNamesIn(program: AgencyProgram): string[] {
-  const names = [...NONDETERMINISTIC_BUILTINS];
-  for (const node of program.nodes) {
-    if (node.type !== "importStatement") {
-      continue;
-    }
-    const flagged = NONDETERMINISTIC_STDLIB[node.modulePath];
-    if (flagged === undefined) {
-      continue;
-    }
-    for (const nameGroup of node.importedNames) {
-      if (nameGroup.type !== "namedImport") {
-        continue;
-      }
-      const aliases = nameGroup.aliases ?? {};
-      for (const entry of nameGroup.importedNames) {
-        if (typeof entry === "string" && flagged.includes(entry)) {
-          names.push(Object.hasOwn(aliases, entry) ? aliases[entry] : entry);
-        }
-      }
-    }
-  }
-  return names;
-}
-
-/** The first nondeterministic call in one file, or null. */
-function nondeterministicCallIn(program: AgencyProgram): string | null {
-  const flagged = nondeterministicNamesIn(program);
-  const call = [...walkNodesArray(program.nodes)]
-    .map((visit) => visit.node)
-    .find(
-      (node) => node.type === "functionCall" && flagged.includes(node.functionName),
+    const escaping = importEdgesOf(program).find(
+      (specifier) => !isAllowedEdge(specifier),
     );
-  return call === undefined ? null : `${(call as { functionName: string }).functionName}()`;
-}
-
-/**
- * Refuse a generator that can reach an LLM call or the clock.
- *
- * Scoped to the closure of relative `.agency` files. `std::` modules are
- * trusted and not scanned, or importing `std::agent` would refuse every
- * generator that touched it.
- *
- * Coarse on purpose: one nondeterministic call anywhere in the closure is
- * enough, even if the generator never reaches it. Narrow this if the false
- * positives become a nuisance.
- */
-export function checkDeterminism(
-  generatorPath: string,
-  generatorName: string,
-  config: AgencyConfig = {},
-): SpliceDiagnostic | null {
-  for (const file of closureFiles(generatorPath, config)) {
-    const program = parseFileOrNull(file, config);
-    const found = program === null ? null : nondeterministicCallIn(program);
-    if (found !== null) {
+    if (escaping !== undefined) {
       return {
-        diagnostic: "spliceGeneratorNondeterministic",
-        params: { name: generatorName, source: found },
+        diagnostic: "spliceGeneratorReachesNonAgency",
+        params: { name: generatorName, importPath: escaping },
         loc: { line: 0, col: 0, start: 0, end: 0 },
       };
     }
@@ -331,7 +259,6 @@ export function checkGeneratorEligible(
     () => checkImportGraph(generatorPath, generatorName, config),
     () => checkNoNestedSplice(generatorPath, generatorName, config),
     () => checkEffects(generatorPath, generatorName, config),
-    () => checkDeterminism(generatorPath, generatorName, config),
   ];
   return checks.reduce<SpliceDiagnostic | null>(
     (found, check) => found ?? check(),
@@ -354,6 +281,39 @@ export function resolveGeneratorModule(
   localName: string,
   hostPath: string,
 ): SpliceResult<{ modulePath: string; exportedName: string }> {
+  const found = resolveImportedName(program, localName, hostPath);
+  if (found === null || found.modulePath === null) {
+    return {
+      ok: false,
+      diagnostic: {
+        diagnostic: "spliceGeneratorNotImported",
+        params: { name: localName },
+        loc: { line: 0, col: 0, start: 0, end: 0 },
+      },
+    };
+  }
+  return {
+    ok: true,
+    value: { modulePath: found.modulePath, exportedName: found.exportedName },
+  };
+}
+
+/** One name the host file imports, and where it comes from. */
+export type ImportSource = {
+  /** The specifier as written: `./data.agency` or `std::math`. */
+  specifier: string;
+  /** Absolute path for a file specifier, null for `std::`. */
+  modulePath: string | null;
+  exportedName: string;
+  localName: string;
+};
+
+/** Where a name in the host file comes from, or null when nothing imports it. */
+export function resolveImportedName(
+  program: AgencyProgram,
+  localName: string,
+  hostPath: string,
+): ImportSource | null {
   for (const node of program.nodes) {
     if (node.type !== "importStatement") {
       continue;
@@ -365,23 +325,17 @@ export function resolveGeneratorModule(
       const exportedName = exportedNameBoundTo(nameGroup, localName);
       if (exportedName !== null) {
         return {
-          ok: true,
-          value: {
-            modulePath: path.resolve(path.dirname(hostPath), node.modulePath),
-            exportedName,
-          },
+          specifier: node.modulePath,
+          modulePath: isAgencyFilePath(node.modulePath)
+            ? path.resolve(path.dirname(hostPath), node.modulePath)
+            : null,
+          exportedName,
+          localName,
         };
       }
     }
   }
-  return {
-    ok: false,
-    diagnostic: {
-      diagnostic: "spliceGeneratorNotImported",
-      params: { name: localName },
-      loc: { line: 0, col: 0, start: 0, end: 0 },
-    },
-  };
+  return null;
 }
 
 /**

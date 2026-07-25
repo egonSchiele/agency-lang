@@ -596,12 +596,6 @@ export const DIAGNOSTICS = {
     message:
       "The generator `{name}` raises {effects} and cannot run at compile time. Compile-time generators must be effect-free.",
   },
-  spliceGeneratorNondeterministic: {
-    code: "AG8004",
-    severity: "error",
-    message:
-      "The generator `{name}` reaches {source}, so it could produce different code on different builds. Compile-time generators must be deterministic.",
-  },
   spliceGeneratorNotImported: {
     code: "AG8005",
     severity: "error",

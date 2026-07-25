@@ -309,6 +309,59 @@ describe("expandSplices", () => {
     expect(result.diagnostic.diagnostic).toBe("spliceRedeclaresHostName");
   }, 60_000);
 
+  it("refuses an argument naming a local at the splice site", () => {
+    // `size` is not a top-level declaration, so a blocklist keyed on the
+    // file's own declarations lets this through and the user gets a
+    // ReferenceError from a program they never wrote.
+    writeExprGenerator();
+    const result = expand(
+      `import { two } from "./gen.agency"\n\ndef f(): number {\n  const size = 3\n  return $( two(size) )\n}\n`,
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostic.diagnostic).toBe("spliceArgumentNotAvailable");
+    expect(result.diagnostic.params.name).toBe("size");
+  });
+
+  it("allows an argument naming something the host imported", () => {
+    write("data.agency", `export static const LIMIT = 4\n`);
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def sized(n: number): Code {\n  return [| 1 |]\n}\n`,
+    );
+    const result = expand(
+      `import { sized } from "./gen.agency"\nimport { LIMIT } from "./data.agency"\n\ndef f(): number {\n  return $( sized(LIMIT) )\n}\n`,
+    );
+    expect(result.ok).toBe(true);
+  }, 60_000);
+
+  it("refuses a generated declaration that collides with an imported name", () => {
+    write("helpers.agency", `export def greet(): string {\n  return "imported"\n}\n`);
+    writeDeclGenerator();
+    const result = expand(
+      `import { makeGreet } from "./gen.agency"\nimport { greet } from "./helpers.agency"\n\n$( makeGreet() )\n`,
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostic.diagnostic).toBe("spliceRedeclaresHostName");
+    expect(result.diagnostic.params.declared).toBe("greet");
+  }, 60_000);
+
+  it("refuses generator output that itself contains a splice", () => {
+    // Splices are expressions, so a generator can return one. This pass
+    // enumerates the host's splices once, so a generated splice would
+    // survive to the codegen tripwire and surface as an internal error.
+    write("inner.agency", `import { Code } from "std::agency"\n\nexport def i(): Code {\n  return [| 1 |]\n}\n`);
+    write(
+      "gen.agency",
+      `import { Code, parseStatements } from "std::agency"\n\nexport def g(): Code {\n  const parsed = parseStatements("const x = $( i() )")\n  if (isFailure(parsed)) {\n    return [| 0 |]\n  }\n  return parsed.value\n}\n`,
+    );
+    const result = expand(`import { g } from "./gen.agency"\n\n$( g() )\n`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostic.diagnostic).toBe("spliceNested");
+  }, 60_000);
+
   it("anchors the diagnostic at the splice", () => {
     writeExprGenerator();
     const result = expand(

@@ -505,12 +505,6 @@ Compilation refuses to run effectful code. Unlike a normal program run, no handl
 
 **How to fix:** move the effectful work out of the generator. If it needs data from a file, read the file at run time instead, or pass the data in as a plain argument to the splice.`,
 
-  spliceGeneratorNondeterministic: `A compile-time generator reaches something that can return a different answer each time it is called — an LLM call, the clock, or randomness.
-
-Generators must be deterministic because their output is cached and because a build should produce the same program from the same source. A generator that asked a model to write its output would give you a different program on every build.
-
-**How to fix:** compute the varying part at run time instead, or pass it into the splice as a fixed argument.`,
-
   spliceGeneratorNotImported: `A splice called a function that is not imported from another file.
 
 The generator has to be compiled before the file that splices it can be compiled, so it cannot live in that same file — there would be no order that works. This is the same restriction Template Haskell calls the stage restriction.

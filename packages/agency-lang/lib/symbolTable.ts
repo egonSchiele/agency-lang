@@ -23,6 +23,7 @@ import type { ExportFromStatement } from "./types/exportFromStatement.js";
 import type { EffectDeclaration } from "./types/effectDeclaration.js";
 import { walkNodes } from "./utils/node.js";
 import { expandSplices } from "./preprocessors/expandSplices.js";
+import { formatSpliceDiagnostic } from "./compiler/splice/report.js";
 import {
   resolveAgencyImportPath,
   isAgencyImport,
@@ -186,6 +187,15 @@ export class SymbolTable {
       // best-effort, and the compile paths report the same failure with a
       // position.
       const expanded = expandSplices(parseResult.result, absPath, config);
+      if (!expanded.ok) {
+        // Logged, not swallowed. The compile and LSP paths both report this
+        // properly with a position, but this crawl also runs under `doc`,
+        // `pack`, `bundle`, and `serve`, where a silent drop leaves a
+        // broken generator with no visible cause at all.
+        console.error(
+          `${absPath}: ${formatSpliceDiagnostic(expanded.diagnostic, absPath)}`,
+        );
+      }
       const program = expanded.ok ? expanded.value : parseResult.result;
       parsed[absPath] = { symbols: classifySymbols(program), program };
 

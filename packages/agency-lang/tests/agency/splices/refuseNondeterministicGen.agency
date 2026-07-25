@@ -1,6 +1,0 @@
-import { Code } from "std::agency"
-
-export def makeFromModel(): Code {
-  const answer = llm("pick a number", model: "no-such-provider::no-such-model")
-  return [| 1 |]
-}

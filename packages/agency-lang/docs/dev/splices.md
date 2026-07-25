@@ -24,7 +24,7 @@ parsed[absPath] = { symbols: classifySymbols(program), program };
 
 ## Every path that must expand
 
-Five, and missing one is the failure mode to worry about. It produces a file that compiles fine through one entry point and crashes through another.
+Six, and missing one is the failure mode to worry about. It produces a file that compiles fine through one entry point and crashes through another.
 
 | Where | On failure |
 | --- | --- |
@@ -33,6 +33,7 @@ Five, and missing one is the failure mode to worry about. It produces a file tha
 | `lib/compiler/compile.ts` (`compileSource`) | Return a `CompileFailure`. This module returns errors as data and never exits. |
 | `lib/compiler/typecheck.ts` (`runCheckerPipeline`) | Keep the unexpanded program. This pipeline answers "what does this check as"; reporting belongs to the compile paths. |
 | `lib/analysis/interrupts.ts` (`analyzeOneFile`) | Keep the unexpanded program. Refusing to analyze interrupts because a splice failed would be worse than analyzing what is there. |
+| `lib/lsp/diagnostics.ts` (`computeDiagnostics`) | Report it as an editor diagnostic. This is the only path where the user is looking at the file while the generator is broken. |
 
 The map of paths is the same one `liftCallbackBlocks` marks. If a sixth appears, it will need both.
 
@@ -72,6 +73,24 @@ Things that are easy to get wrong here:
 - **A node returns an envelope**, `{ messages, data, tokens }`. The generator's value is under `data`.
 - **Detect a timeout kill with `err.signal === "SIGTERM"`**, not `err.killed`, which comes back `undefined`. The memory limit surfaces as `SIGABRT`.
 - **The runner compiles with the typechecker off.** `compileEntry` reports a type error with `process.exit(1)`, which would take the user's whole build down instead of reporting AG8008.
+
+## Blast radius
+
+Expansion runs inside `SymbolTable.build`, which has twelve non-test callers. So "compiling runs your code" understates it. Generator code also runs under `agency doc`, `pack`, `bundle`, `serve/metadata`, `mcp/tools`, `policy`, and the LSP, which rebuilds on every keystroke.
+
+That is a real widening and it should be read as part of the safety story below, not separately from it. The calibration argument holds well for compiling, since compiling already runs your code. It is weaker for generating docs, and weakest for opening a folder in an editor. The import restriction and effect check are what keep it acceptable: whatever runs is Agency source, effect-free, and reachable only through `std::` and relative `.agency` files.
+
+## Determinism is not enforced
+
+An earlier draft refused a generator that could reach `llm()` or the clock, as `AG8004`. That check is gone and the code is retired, unused.
+
+It was a hardcoded name list, and a name list cannot be made complete. It missed anything one wrapper away through a `std::` module, and eleven stdlib files reach `llm` while declaring no interrupts. It missed everything nondeterministic that was not `llm` or `std::date`, and it would have missed every function added afterwards. A check that reads like a guarantee and is not one is worse than no check.
+
+Nondeterminism was never a safety property in any case. Safety comes from the effect system and the import restriction. A generator that calls an LLM produces a strange build, not a compromised one, and the author wrote that generator.
+
+The cache tolerates it. A slot holds one entry, so a nondeterministic generator gets one answer pinned per fingerprint rather than a fresh roll per compile. That is more reproducible than re-running, not less.
+
+If this needs to be enforced properly one day, the complete version is to track `llm` through `analyzeInterruptsFromScopes`, the chokepoint effects already flow through. That is transitive by construction and needs no lists.
 
 ## The safety argument, and what carries it
 

@@ -11,6 +11,7 @@ import type { Code } from "../../runtime/template/code.js";
 import type { AgencyConfig } from "../../config.js";
 import type { Splice } from "../../types/splice.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
+import type { ImportSource } from "./eligibility.js";
 
 /**
  * Run one generator and bring back the `Code` value it produced.
@@ -39,6 +40,10 @@ export type RunGeneratorOptions = {
   config?: AgencyConfig;
   wallClockMs?: number;
   memoryMb?: number;
+  /** Where each name the splice arguments use comes from. Resolved and
+   *  checked by the expansion pass; the specifiers are rewritten here,
+   *  because only this file knows where the runner ends up. */
+  argumentSources?: ImportSource[];
 };
 
 export function runGenerator(
@@ -63,7 +68,11 @@ function runInTempDir(
   options: RunGeneratorOptions,
 ): SpliceResult<Code> {
   const runnerPath = path.join(tempDir, "runner.agency");
-  fs.writeFileSync(runnerPath, runnerSource(splice, generator, tempDir), "utf-8");
+  fs.writeFileSync(
+    runnerPath,
+    runnerSource(splice, generator, tempDir, options.argumentSources ?? []),
+    "utf-8",
+  );
 
   const compiled = compileRunner(runnerPath, options.config ?? {});
   if (!compiled.ok) {
@@ -87,15 +96,18 @@ function runInTempDir(
 }
 
 /**
- * The program that runs the generator: one import and one node.
+ * The program that runs the generator: the generator's import, whatever
+ * the arguments need, and one node.
  *
- * Never copy the host's import lines. They would drag in the npm and
- * `pkg::` imports the eligibility check just banned.
+ * Never copy the host's import lines wholesale. They would drag in the npm
+ * and `pkg::` imports the eligibility check just banned. The argument
+ * imports are the specific ones the expansion pass resolved and checked.
  */
 function runnerSource(
   splice: Splice,
   generator: { modulePath: string; exportedName: string },
   tempDir: string,
+  argumentSources: ImportSource[],
 ): string {
   const local = localName(splice, generator.exportedName);
   const binding =
@@ -105,6 +117,7 @@ function runnerSource(
   const specifier = importSpecifier(tempDir, generator.modulePath);
   return [
     `import { ${binding} } from "${specifier}"`,
+    ...argumentSources.map((source) => argumentImportLine(source, tempDir)),
     "",
     `export node ${RUNNER_NODE}() {`,
     `  return ${generateExpression(splice.expression)}`,
@@ -123,6 +136,26 @@ function localName(splice: Splice, exportedName: string): string {
   return expression.type === "functionCall" && expression.functionName !== undefined
     ? expression.functionName
     : exportedName;
+}
+
+/**
+ * One import line for a name an argument uses.
+ *
+ * A file specifier is rewritten relative to the runner's own directory,
+ * since the host's `./data.agency` does not resolve from a temp dir. A
+ * `std::` specifier is already absolute in Agency's terms and passes
+ * through.
+ */
+function argumentImportLine(source: ImportSource, tempDir: string): string {
+  const specifier =
+    source.modulePath === null
+      ? source.specifier
+      : importSpecifier(tempDir, source.modulePath);
+  const binding =
+    source.exportedName === source.localName
+      ? source.exportedName
+      : `${source.exportedName} as ${source.localName}`;
+  return `import { ${binding} } from "${specifier}"`;
 }
 
 /** A relative ESM/Agency specifier from `fromDir` to `target`. */
@@ -220,7 +253,19 @@ function readResult(
   }
   // A node returns an envelope, not the value: `{ messages, data, tokens }`.
   // The generator's own return value is under `data`.
-  const envelope = JSON.parse(fs.readFileSync(resultsPath, "utf-8"));
+  //
+  // Parsing can fail on a partially flushed file: a large payload being
+  // written when the wall-clock SIGTERM lands leaves valid-looking bytes
+  // that `existsSync` accepts and `JSON.parse` rejects.
+  let envelope: { data?: unknown };
+  try {
+    envelope = JSON.parse(fs.readFileSync(resultsPath, "utf-8"));
+  } catch {
+    return {
+      ok: false,
+      diagnostic: failed(splice, generator, "it produced an unreadable result"),
+    };
+  }
   const data = envelope?.data;
 
   // A generator rarely crashes the child. The runtime turns an exception

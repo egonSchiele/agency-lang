@@ -43,18 +43,6 @@ Compilation refuses to run effectful code. Unlike a normal program run, no handl
 
 **How to fix:** move the effectful work out of the generator. If it needs data from a file, read the file at run time instead, or pass the data in as a plain argument to the splice.
 
-<a id="ag8004"></a>
-
-## AG8004 — The generator `&#123;name&#125;` reaches &#123;source&#125;, so it could produce different code on different builds. Compile-time generators must be deterministic.
-
-*Default severity: error.*
-
-A compile-time generator reaches something that can return a different answer each time it is called — an LLM call, the clock, or randomness.
-
-Generators must be deterministic because their output is cached and because a build should produce the same program from the same source. A generator that asked a model to write its output would give you a different program on every build.
-
-**How to fix:** compute the varying part at run time instead, or pass it into the splice as a fixed argument.
-
 <a id="ag8005"></a>
 
 ## AG8005 — `&#123;name&#125;` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first.

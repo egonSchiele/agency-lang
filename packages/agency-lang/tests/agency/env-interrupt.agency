@@ -1,0 +1,20 @@
+import { env } from "std::system"
+
+// Reading an environment variable asks permission, the same as setting one
+// does. A secret read without asking can be written into a log, a prompt,
+// or generated code, and none of that is visible to the person whose
+// secret it is.
+node main(): string {
+  let effect = "none"
+  let readSucceeded = false
+
+  handle {
+    const value = env("PATH")
+    readSucceeded = value != null
+  } with (e) {
+    effect = e.effect
+    return approve()
+  }
+
+  return "${effect} readSucceeded=${readSucceeded}"
+}

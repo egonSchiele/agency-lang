@@ -48,11 +48,11 @@ const RUNNER_NODE = "__splice";
  * The only environment variables the child gets.
  *
  * A generator can read the environment two ways, and they need different
- * answers. Through Agency, `env` in `std::system` raises no interrupt, so
- * nothing asks permission; issue #688 fixes that in the stdlib. Through
- * JavaScript, an imported npm package can read `process.env` directly and
- * no interrupt is involved at any point, so #688 cannot help. Withholding
- * the environment here is the only thing that covers both.
+ * answers. Through Agency, `env` in `std::system` now raises `std::env`,
+ * and compilation installs no handlers, so the read cannot complete.
+ * Through JavaScript, an imported npm package reads `process.env` directly
+ * with no interrupt involved anywhere, so that fix does not reach it.
+ * Withholding the environment here is what covers the second route.
  *
  * It matters because whatever a generator reads can be written into the
  * code it produces, and that code becomes a committed file. A secret read

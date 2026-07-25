@@ -148,11 +148,11 @@ Unhandled interrupts are the backstop rather than the mechanism. Compilation ins
 
 ### The gap: interrupt-free ambient reads
 
-Some stdlib functions read process state and raise nothing, so nothing sees them. `std::system` exports `env`, `args`, `cwd`, and `isTTY` this way, while `setEnv` right below `env` does raise.
+Some stdlib functions read process state and raise nothing, so nothing sees them. `std::system` exports `args`, `cwd`, `isTTY`, and `readStdin` this way. `env` used to be among them and now raises `std::env`.
 
-`env` is the one that matters: a generator could bake a secret into the emitted JavaScript as a string literal, and that artifact gets committed.
+`env` was the one that mattered: a generator could bake a secret into the emitted JavaScript as a string literal, and that artifact gets committed.
 
-Two mitigations, because there are two routes. Making `env` raise like its neighbour closes the Agency route and is filed as **#688**. It cannot close the JavaScript route, where an imported package reads `process.env` with no interrupt involved anywhere. So the child process receives an allowlisted environment holding only what Node needs to start (`CHILD_ENV_ALLOWED` in `runGenerator.ts`), which covers both. Its stdin is a pipe, so `readStdin` gets EOF rather than consuming the build's input.
+Two mitigations, because there are two routes. `env` now raises `std::env`, and compilation installs no handlers, so the Agency route cannot complete. That does not reach the JavaScript route, where an imported package reads `process.env` with no interrupt involved anywhere, so the child process also receives an allowlisted environment holding only what Node needs to start (`CHILD_ENV_ALLOWED` in `runGenerator.ts`). Its stdin is a pipe, so `readStdin` gets EOF rather than consuming the build's input.
 
 For calibration, this is closer to the npm `postinstall` problem than to a new hole. The generator is code already in your project, and compiling already runs your code. npm, Template Haskell, and Rust proc macros check nothing at all.
 

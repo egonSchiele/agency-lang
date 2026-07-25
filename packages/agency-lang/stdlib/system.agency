@@ -101,7 +101,12 @@ export def cwd(): string {
 export def env(name: string): string | null {
   """
   Read an environment variable. Returns null if the variable is not set.
+
+  @param name - The environment variable name
   """
+  return interrupt std::env("Are you sure you want to read this environment variable?", {
+    name: name
+  })
   return _env(name)
 }
 

@@ -10,6 +10,13 @@ import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { SplatExpression, NamedArgument } from "../types/dataStructures.js";
 import type { Scope } from "./scope.js";
 import { isInsideHandler } from "./checker.js";
+import {
+  addUnique,
+  calledName,
+  collectBodyFacts,
+  propagateToFixpoint,
+  unique,
+} from "../analysis/effects.js";
 import type { HandleBlock } from "../types/handleBlock.js";
 import type { InterruptStatement } from "../types/interruptStatement.js";
 
@@ -62,10 +69,11 @@ export type CallGraphFunction = {
  *  the merge collision-free). */
 export type InterruptCallGraph = Record<QualifiedKey, CallGraphFunction>;
 
-/** Per-function analysis: what it directly interrupts and what it calls. */
+/** Per-function analysis: what it directly interrupts and what it calls. Field
+ *  names match PropagationNode so the shared fixpoint runs over it unchanged. */
 type FunctionProfile = {
-  kinds: string[];
-  callees: string[];
+  effects: string[];
+  calleeKeys: string[];
 };
 
 /**
@@ -75,9 +83,7 @@ export function analyzeInterruptsFromScopes(
   scopes: ScopeInfo[],
   ctx: TypeCheckerContext,
 ): Record<string, InterruptEffect[]> {
-  const profiles = collectProfiles(scopes, ctx);
-  propagateTransitively(profiles);
-  return formatResult(profiles);
+  return formatResult(propagateToFixpoint(collectProfiles(scopes, ctx)));
 }
 
 // -- Phase 1: Collect --
@@ -90,7 +96,10 @@ function collectProfiles(
 
   // Seed imported functions' direct kinds
   for (const [name, importedKinds] of Object.entries(ctx.interruptEffectsByFunction)) {
-    profiles[name] = { kinds: importedKinds.map((ik) => ik.effect), callees: [] };
+    profiles[name] = {
+      effects: importedKinds.map((entry) => entry.effect),
+      calleeKeys: [],
+    };
   }
 
   // Analyze each scope (skip the top-level scope — it has no function name
@@ -106,7 +115,7 @@ function collectProfiles(
 function collectFromScope(info: ScopeInfo, ctx: TypeCheckerContext): FunctionProfile {
   // Set the typechecker's current scope so synthType (called via
   // functionRefsInArgs) can resolve scope-local type aliases.
-  let profile: FunctionProfile = { kinds: [], callees: [] };
+  let profile: FunctionProfile = { effects: [], calleeKeys: [] };
   ctx.withScope(info.scopeKey, () => {
     profile = collectFromBody(info.body, info.scope, ctx);
   });
@@ -143,56 +152,22 @@ function collectFromBody(
   scope: Scope,
   ctx: TypeCheckerContext,
 ): FunctionProfile {
-  const kinds: string[] = [];
-  const callees: string[] = [];
-  for (const { node } of walkNodes(body)) {
-    if (node.type === "interruptStatement") {
-      addUnique(kinds, node.effect);
-    } else if (node.type === "functionCall") {
-      addUnique(callees, node.functionName);
+  const facts = collectBodyFacts(body);
+  return {
+    effects: unique([
+      ...facts.effects,
       // A call THROUGH a function-typed variable (a callback) contributes the
-      // variable's declared effects. Named-def callees resolve via the callee
-      // lookup above and are skipped here (they aren't blockTypes).
-      for (const label of calleeDeclaredEffects(node.functionName, scope, ctx)) {
-        addUnique(kinds, label);
-      }
-      for (const name of functionRefsInArgs(node.arguments, scope, ctx)) {
-        addUnique(callees, name);
-      }
-    } else if (node.type === "gotoStatement") {
-      addUnique(callees, node.nodeCall.functionName);
-    }
-  }
-  return { kinds, callees };
-}
-
-// -- Phase 2: Propagate --
-
-function propagateTransitively(profiles: Record<string, FunctionProfile>): void {
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const profile of Object.values(profiles)) {
-      if (propagateFromCallees(profile, profiles)) changed = true;
-    }
-  }
-}
-
-function propagateFromCallees(
-  profile: FunctionProfile,
-  profiles: Record<string, FunctionProfile>,
-): boolean {
-  let grew = false;
-  for (const callee of profile.callees) {
-    const calleeKinds = profiles[callee]?.kinds ?? [];
-    for (const kind of calleeKinds) {
-      if (!profile.kinds.includes(kind)) {
-        profile.kinds.push(kind);
-        grew = true;
-      }
-    }
-  }
-  return grew;
+      // variable's declared effects. Named defs resolve via the callee lookup
+      // instead; they aren't blockTypes, so this adds nothing for them.
+      ...facts.callees.flatMap((name) => calleeDeclaredEffects(name, scope, ctx)),
+    ]),
+    calleeKeys: unique([
+      ...facts.callees,
+      ...facts.calls.flatMap((call) =>
+        functionRefsInArgs(call.arguments, scope, ctx),
+      ),
+    ]),
+  };
 }
 
 // -- Phase 3: Format --
@@ -202,8 +177,8 @@ function formatResult(
 ): Record<string, InterruptEffect[]> {
   const result: Record<string, InterruptEffect[]> = {};
   for (const [name, profile] of Object.entries(profiles)) {
-    if (profile.kinds.length > 0) {
-      result[name] = profile.kinds.map((k) => ({ effect: k }));
+    if (profile.effects.length > 0) {
+      result[name] = profile.effects.map((effect) => ({ effect }));
     }
   }
   return result;
@@ -244,10 +219,6 @@ function functionNamesFromType(t: VariableType, out: string[]): void {
       for (const member of t.types) functionNamesFromType(member, out);
       break;
   }
-}
-
-function addUnique(arr: string[], value: string): void {
-  if (!arr.includes(value)) arr.push(value);
 }
 
 /**
@@ -394,15 +365,19 @@ export function checkUnhandledInterruptWarnings(
     if (!ctx.nodeDefs[info.name]) continue;
     for (const { node, ancestors } of walkNodes(info.body)) {
       if (node.type !== "functionCall") continue;
-      const kinds = interruptEffectsByFunction[node.functionName];
+      // This walk reads the call site directly rather than going through
+      // collectFromBody, so it needs its own receiver resolution: for
+      // `read.invoke(...)` the node's own name is `invoke`.
+      const called = calledName(node, ancestors);
+      if (called === null) continue;
+      const kinds = interruptEffectsByFunction[called];
       if (!kinds || kinds.length === 0) continue;
       if (isInsideHandler(ancestors)) continue;
-      const kindList = kinds.map((ik) => ik.effect).join(", ");
+      const kindList = kinds.map((entry) => entry.effect).join(", ");
       // The guard construct desugars to a `_guard` call before this
       // walk (guardDesugar.ts); users wrote `guard(...) { }`, so the
       // warning names the construct, not the internal impl.
-      const displayName =
-        node.functionName === "_guard" ? "guard" : node.functionName;
+      const displayName = called === "_guard" ? "guard" : called;
       ctx.errors.push(
         diagnostic(
           "unhandledInterrupts",
@@ -434,8 +409,8 @@ export function collectRaisableEffects(
   ctx: TypeCheckerContext,
 ): string[] {
   const profile = collectFromBody(body, info.scope, ctx);
-  const kinds = [...profile.kinds];
-  for (const callee of profile.callees) {
+  const kinds = [...profile.effects];
+  for (const callee of profile.calleeKeys) {
     for (const k of interruptEffectsByFunction[callee] ?? []) {
       addUnique(kinds, k.effect);
     }

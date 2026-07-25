@@ -420,6 +420,12 @@ class PatternLowerer {
       this.assertNoStatementArmReturns(node);
     }
 
+    // Lower every arm's expression slots ONCE, before any of the three paths
+    // below reads them. `node.cases` stays un-lowered for the `matchSource`
+    // snapshot, which the exhaustiveness pass reads and which wants the arms
+    // as written.
+    const cases = this.lowerArmExpressionsIn(node.cases);
+
     // Check if any arm uses patterns or has a guard.
     const hasPatternArms = node.cases.some(
       (c) =>
@@ -438,7 +444,7 @@ class PatternLowerer {
       return [
         {
           ...node,
-          cases: node.cases.map((c) => (c.type === "matchBlockCase" ? this.lowerMatchCase(c) : c)),
+          cases: cases.map((c) => (c.type === "matchBlockCase" ? this.lowerMatchCase(c) : c)),
           ...(matchExprId !== undefined ? { matchExprId } : {}),
         },
       ];
@@ -471,7 +477,7 @@ class PatternLowerer {
     };
     const scrutineeRef = varRef(scrutineeName, node.loc);
 
-    const ifChain = this.buildIfChainFromArms(node.cases, scrutineeRef, node.loc);
+    const ifChain = this.buildIfChainFromArms(cases, scrutineeRef, node.loc);
     if (!ifChain) return [scrutineeAssign];
     // Tag the root of the lowered if-chain: it is the node that OWNS the
     // matchExprId (yields unwind to it). Attached at construction.
@@ -750,8 +756,12 @@ class PatternLowerer {
     const scrutineeRef = varRef(scrutineeName, node.loc);
     const bindings = this.extractBindings(isExpr.pattern, scrutineeRef, "const", node.loc);
 
-    // Each arm's caseValue is now a guard expression; build if/else chain over them.
-    const ifChain = this.buildIfChainFromGuardArms(node.cases, node.loc);
+    // Each arm's caseValue is now a guard expression; build if/else chain over
+    // them. Lowered up front, same as the pattern-arm form.
+    const ifChain = this.buildIfChainFromGuardArms(
+      this.lowerArmExpressionsIn(node.cases),
+      node.loc,
+    );
     const inside: AgencyNode[] = [...bindings];
     if (ifChain) inside.push(ifChain);
 
@@ -826,6 +836,35 @@ class PatternLowerer {
     return { ...c, body };
   }
 
+  /**
+   * Lower an arm's two EXPRESSION slots — its `caseValue` when that is an
+   * expression rather than a pattern, and its `guard`.
+   *
+   * The single funnel for both, on purpose. Lowering is opt-in per field, so
+   * every consumer that reads one of these slots is a chance to forget:
+   * `foldArms` used the guard raw, `lowerMatchCase` passes the caseValue
+   * through untouched by design, and `collectChecks`'s literal case pushes the
+   * caseValue straight into a comparison. Three readers, one of which can
+   * always be missed. Normalizing at the two entry points instead means a
+   * reader cannot receive an un-lowered arm no matter what it does with it.
+   *
+   * A pattern caseValue is left alone — a pattern is not an expression, and
+   * `patternToCondition` is what turns it into one. `_` is a bare string.
+   */
+  private lowerArmExpressions(c: MatchBlockCase): MatchBlockCase {
+    const caseValue =
+      c.caseValue !== "_" && isExpressionNode(c.caseValue)
+        ? this.lowerExpression(c.caseValue as Expression)
+        : c.caseValue;
+    const guard = c.guard ? this.lowerExpression(c.guard) : c.guard;
+    return { ...c, caseValue, guard } as MatchBlockCase;
+  }
+
+  /** Apply `lowerArmExpressions` to every arm of a match. */
+  private lowerArmExpressionsIn(cases: MatchBlock["cases"]): MatchBlock["cases"] {
+    return cases.map((c) => (c.type === "matchBlockCase" ? this.lowerArmExpressions(c) : c));
+  }
+
   /** Build an if/else chain from arms with patterns/guards/literals. */
   private buildIfChainFromArms(
     cases: MatchBlock["cases"],
@@ -864,7 +903,7 @@ class PatternLowerer {
       const arm = arms[i];
       const armBody = this.lowerBody(arm.body);
 
-      if (arm.caseValue === "_") {
+      if (arm.caseValue === "_" && !arm.guard) {
         // Default case: becomes an else-body. If we already have an `if`, attach as elseBody.
         if (result) {
           result = { ...result, elseBody: armBody };
@@ -880,12 +919,35 @@ class PatternLowerer {
         continue;
       }
 
+      if (arm.caseValue === "_") {
+        // `_ if (cond)`: a conditional arm, not a default. `_` matches
+        // anything, so the guard IS the whole condition, and a failing guard
+        // falls through like any other arm — which for a trailing `_` means
+        // the match matches nothing.
+        //
+        // Dropping the guard here (the previous behavior) made the arm fire
+        // unconditionally, silently. The exhaustiveness checker already models
+        // it the right way round: `isCatchAll` returns false for a guarded arm
+        // (lib/typeChecker/matchExhaustiveness.ts), so a guarded `_` is
+        // reported as NOT covering the remaining cases. Honoring the guard
+        // makes the two halves agree.
+        result = {
+          type: "ifElse",
+          condition: arm.guard!,
+          thenBody: armBody,
+          elseBody: result ? [result] : undefined,
+          loc,
+        };
+        continue;
+      }
+
       // Build the condition for this arm
       let condition: Expression;
       let bindings: Assignment[] = [];
 
       if (guardOnly) {
-        // The caseValue IS the guard expression in match(... is ...) form
+        // The caseValue IS the guard expression in match(... is ...) form.
+        // Already lowered by lowerArmExpressions at the entry point.
         condition = arm.caseValue as Expression;
       } else {
         const matchPat = arm.caseValue as MatchPattern;
@@ -896,6 +958,10 @@ class PatternLowerer {
 
       // Apply guard if present (for non-guardOnly arms)
       if (!guardOnly && arm.guard) {
+        // Already lowered by lowerArmExpressions, so an `is` here is a
+        // boolean test by now and a shorthand binder inside one has already
+        // been rejected.
+        const guard = arm.guard;
         // Guard may reference bindings, so we need bindings in scope first.
         // Strategy: emit `if (patCond) { let bindings; if (guard) { body } else <next-arm> }
         //                  else <next-arm>`
@@ -906,11 +972,11 @@ class PatternLowerer {
         // outer and inner else branches so guard failure falls through to the
         // next arm (it would otherwise exit the match entirely).
         if (bindings.length === 0) {
-          condition = makeBinOp(condition, "&&", arm.guard, loc);
+          condition = makeBinOp(condition, "&&", guard, loc);
         } else {
           const innerIf: IfElse = {
             type: "ifElse",
-            condition: arm.guard,
+            condition: guard,
             thenBody: armBody,
             elseBody: result ? [result] : undefined,
             loc,
@@ -1181,19 +1247,19 @@ function assertNoBindersInBoolIs(pattern: MatchPattern): void {
     const loc = "loc" in p ? p.loc : undefined;
     if (p.type === "objectPatternShorthand") {
       throw new PatternLoweringError(
-        "shorthand binder in pure-boolean `is` context has nowhere to bind; use `if (x is { ... })` to introduce variables",
+        "shorthand binder in pure-boolean `is` context has nowhere to bind; binders are introduced by an `if` or `while` CONDITION, or by a match arm pattern — a match-arm guard is a pure-boolean context even though it is spelled with `if`",
         loc,
       );
     }
     if (p.type === "restPattern") {
       throw new PatternLoweringError(
-        "rest binder in pure-boolean `is` context has nowhere to bind; use `if (x is { ... })` to introduce variables",
+        "rest binder in pure-boolean `is` context has nowhere to bind; binders are introduced by an `if` or `while` CONDITION, or by a match arm pattern — a match-arm guard is a pure-boolean context even though it is spelled with `if`",
         loc,
       );
     }
     if (p.type === "variableName") {
       throw new PatternLoweringError(
-        `bare identifier binder \`${p.value}\` in pure-boolean \`is\` context has nowhere to bind; use \`if (x is pattern)\` to introduce variables`,
+        `bare identifier binder \`${p.value}\` in pure-boolean \`is\` context has nowhere to bind; binders are introduced by an \`if\` or \`while\` CONDITION, or by a match arm pattern — a match-arm guard is a pure-boolean context even though it is spelled with \`if\``,
         loc,
       );
     }
@@ -1202,7 +1268,7 @@ function assertNoBindersInBoolIs(pattern: MatchPattern): void {
       (p as ResultPattern).binding !== null
     ) {
       throw new PatternLoweringError(
-        `result pattern binder in pure-boolean \`is\` context has nowhere to bind; use \`if (x is ${(p as ResultPattern).kind}(...))\` to introduce variables`,
+        `result pattern binder in pure-boolean \`is\` context has nowhere to bind; binders are introduced by an \`if\` or \`while\` CONDITION, or by a match arm pattern — a match-arm guard is a pure-boolean context even though it is spelled with \`if\``,
         loc,
       );
     }

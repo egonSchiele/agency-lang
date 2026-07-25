@@ -1,0 +1,130 @@
+// The `is` operator inside a match-arm guard. The guard is an ordinary
+// boolean expression, so an `is` in it must be lowered to its boolean
+// condition form like every other expression — not survive raw into codegen.
+
+def isAdult(value: any): Result<any> {
+  if (value.age >= 18) {
+    return success(value)
+  }
+  return failure("not an adult")
+}
+
+@validate(isAdult)
+type Adult = { name: string, age: number }
+
+def describe(words: any[]): string {
+  return match (words) {
+    ["echo", str] if (str is string) => "echo string: ${str}"
+    ["echo", n] if (n is number) => "echo number: ${n}"
+    _ => "other"
+  }
+}
+
+def classify(p: any): string {
+  return match (p) {
+    { name } if (p is Adult) => "adult ${name}"
+    { name } => "minor ${name}"
+    _ => "unknown"
+  }
+}
+
+node stringGuard() {
+  // The guard holds, so the arm matches and the binding is usable.
+  return describe(["echo", "hi"])
+}
+
+node guardFallsThrough() {
+  // Same pattern, first guard fails on a number; control reaches the second
+  // arm rather than exiting the match.
+  return describe(["echo", 42])
+}
+
+node noArmMatches() {
+  return describe(["ls", "-la"])
+}
+
+node namedTypeGuard() {
+  // A named type in a guard routes through schema validation, not a coarse
+  // check: the validator decides whether the arm matches.
+  return [
+    classify({ name: "Ada", age: 36 }),
+    classify({ name: "Kid", age: 9 }),
+  ]
+}
+
+def label(obj: any): string {
+  // The `match(x is pattern)` form: each arm's condition IS the guard, so an
+  // `is` there needs lowering too.
+  let out = "none"
+  match (obj is { v, name }) {
+    name is string => out = "named ${name}"
+    _ => out = "unnamed"
+  }
+  return out
+}
+
+node guardOnlyForm() {
+  return [label({ v: 1, name: "one" }), label({ v: 2, name: 7 })]
+}
+
+// --- An `is` as an arm's caseValue, not as a guard ------------------------
+// Two routes reach this, and neither lowered the caseValue. With no pattern
+// arms the match takes the early "no pattern arms" return; with one, it goes
+// through collectChecks, whose literal case pushes the caseValue in raw.
+
+def bareIsArm(flag: boolean, name: any): string {
+  let out = "none"
+  match (flag) {
+    (name is string) => out = "string name"
+    _ => out = "other"
+  }
+  return out
+}
+
+def bareIsArmBesidePattern(flag: boolean, name: any): string {
+  let out = "none"
+  match (flag) {
+    (name is string) => out = "string name"
+    [p, q] => out = "pair"
+    _ => out = "other"
+  }
+  return out
+}
+
+node isAsCaseValue() {
+  return [bareIsArm(true, "hi"), bareIsArmBesidePattern(true, "hi")]
+}
+
+// --- A guard on the `_` arm ----------------------------------------------
+// `_` is only a catch-all when unguarded — the exhaustiveness checker already
+// models it that way (isCatchAll returns false for a guarded arm), so the
+// guard has to actually run.
+
+def guardedDefault(n: number): string {
+  let out = "none"
+  match (n) {
+    2 => out = "two"
+    _ if (n > 100) => out = "big"
+  }
+  return out
+}
+
+node guardOnDefaultArm() {
+  return [guardedDefault(2), guardedDefault(500), guardedDefault(7)]
+}
+
+// --- A guard on an arm that binds nothing ---------------------------------
+// Arms that bind take the nested-if branch; an arm whose pattern is all
+// literals takes the `&&` fold instead, which is a separate line.
+
+def literalArmGuard(words: any[], flag: any): string {
+  return match (words) {
+    ["echo", "hi"] if (flag is string) => "literal arm, guard held"
+    ["echo", "hi"] => "literal arm, guard failed"
+    _ => "other"
+  }
+}
+
+node guardWithNoBindings() {
+  return [literalArmGuard(["echo", "hi"], "s"), literalArmGuard(["echo", "hi"], 42)]
+}

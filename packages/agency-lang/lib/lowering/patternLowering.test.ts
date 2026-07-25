@@ -760,6 +760,39 @@ match ((r is success) && y) {
     expect(survived).toBe(false);
   });
 
+  it("lowers an `is` in a match-arm guard — no isExpression survives", () => {
+    // Regression: foldArms lowered the arm body and the pattern but used
+    // `arm.guard` raw, so the isExpression reached codegen and crashed with
+    // "Unhandled Agency node type: isExpression".
+    const lowered = lower(`
+let words = ["echo", "hi"]
+match (words) {
+  ["echo", str] if (str is string) => print(str)
+  _ => print("no")
+}
+`);
+    const survived = walkNodesArray(lowered).some(
+      ({ node }) => node.type === "isExpression",
+    );
+    expect(survived).toBe(false);
+  });
+
+  it("lowers an `is` in a match(x is pattern) arm condition — no isExpression survives", () => {
+    // The guardOnly branch of foldArms: each arm's caseValue IS the guard, and
+    // it was used raw for the same reason.
+    const lowered = lower(`
+let obj = { v: 1, name: "one" }
+match (obj is { v, name }) {
+  name is string => print(name)
+  _ => print("no")
+}
+`);
+    const survived = walkNodesArray(lowered).some(
+      ({ node }) => node.type === "isExpression",
+    );
+    expect(survived).toBe(false);
+  });
+
   it("survives liftCallbackBlocks (match nested in a callback block)", () => {
     // Uses parseAgency + lowerPatterns directly rather than the `lower(...)`
     // helper: `lower` wraps its input in a `node main()` body, but we want the

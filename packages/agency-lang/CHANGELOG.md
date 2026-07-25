@@ -1,5 +1,31 @@
 ## Unreleased
 
+### Breaking: an array pattern without `...rest` now requires an exact length
+
+`["a", "b"]` used to match any array *starting* with `a`, `b` — every array
+pattern was a prefix match, and there was no way to say "exactly these two":
+
+```ts
+match (["a", "b", "c"]) {
+  ["a", "b"] => "matched"      // before: matched. now: falls through.
+  _          => "fell through"
+}
+```
+
+A pattern with no rest binder now names the whole array. Add `...rest` to get
+the old reading, which is what it always meant:
+
+```ts
+["a", "b", ...rest]    // matches ["a","b","c"], rest = ["c"]
+```
+
+This affects every construct that matches a pattern — `match` arms, the `is`
+operator, `while` conditions — but **not** destructuring: `const [a, b] = xs`
+never checked length and still does not.
+
+The change is silent. Code relying on the old prefix behavior stops matching
+with no diagnostic, because the pattern now means what it says.
+
 ### Breaking: relative paths now resolve against the working directory
 
 Every path-taking function (`read`, `write`, `edit`, `ls`, `grep`, `glob`,

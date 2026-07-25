@@ -1,0 +1,65 @@
+// An array pattern with no rest binder requires an EXACT length. It used to
+// require only "at least this many", so `["a", "b"]` accepted any array
+// starting with a, b — there was no way to say "exactly these two".
+
+def arm(xs: any[]): string {
+  return match (xs) {
+    ["a", "b"] => "two"
+    _ => "fell through"
+  }
+}
+
+def withRest(xs: any[]): string {
+  return match (xs) {
+    ["a", "b", ...rest] => "two plus ${rest.length}"
+    _ => "fell through"
+  }
+}
+
+def nested(xs: any[]): string {
+  return match (xs) {
+    [["a", "b"], "z"] => "nested exact"
+    _ => "fell through"
+  }
+}
+
+def isPosition(xs: any[]): string {
+  // The `is` operator routes through the same lowering, so it changes too.
+  if (xs is ["a", "b"]) {
+    return "is matched"
+  }
+  return "is fell through"
+}
+
+def whilePosition(xs: any[]): string {
+  // So does a `while` condition. One iteration is enough to tell.
+  let seen = "never"
+  while (xs is ["a", "b"]) {
+    seen = "while matched"
+    return seen
+  }
+  return "while fell through"
+}
+
+node exactLength() {
+  // Longer no longer matches; the exact length still does.
+  return [arm(["a", "b", "c"]), arm(["a", "b"]), arm(["a"])]
+}
+
+node restStillMatchesLonger() {
+  // A rest binder keeps the "at least" reading, and still binds zero.
+  return [withRest(["a", "b", "c"]), withRest(["a", "b"]), withRest(["a"])]
+}
+
+node nestedIsExactToo() {
+  return [nested([["a", "b"], "z"]), nested([["a", "b", "c"], "z"])]
+}
+
+node isAndWhileChangeToo() {
+  return [
+    isPosition(["a", "b", "c"]),
+    isPosition(["a", "b"]),
+    whilePosition(["a", "b", "c"]),
+    whilePosition(["a", "b"]),
+  ]
+}

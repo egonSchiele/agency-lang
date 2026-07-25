@@ -1172,11 +1172,14 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       // does not distinguish an array from a string: `"abc"` has length 3 and
       // would otherwise match `[a, b]`, binding characters.
       checks.push(...shapeCheck(source, ARRAY_HINT, pattern.loc));
-      // Length check — at least as many elements as named (excluding rest).
+      // Length check. With a rest binder the pattern names a minimum; without
+      // one it names the whole array, so the length must match exactly.
+      // `["a", "b"]` used to accept ["a","b","c"] — every array pattern was a
+      // prefix match, and there was no way to say "exactly these two".
       const hasRest = pattern.elements.some((e) => e.type === "restPattern");
       const namedCount = pattern.elements.filter((e) => e.type !== "restPattern").length;
       const lenAccess = fieldAccess(source, "length", pattern.loc);
-      const op: Operator = hasRest ? ">=" : ">=";
+      const op: Operator = hasRest ? ">=" : "==";
       checks.push(makeBinOp(lenAccess, op, numberLit(namedCount, pattern.loc), pattern.loc));
       pattern.elements.forEach((el, i) => {
         if (

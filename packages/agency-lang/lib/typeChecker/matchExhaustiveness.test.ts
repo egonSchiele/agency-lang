@@ -476,3 +476,48 @@ def f(n: Node): any {
     expect(errs).toEqual([]);
   });
 });
+
+describe("match exhaustiveness — a nested type suffix can fail", () => {
+  const UNION = `
+type A = { tag: "a", v: any }
+type B = { tag: "b", v: any }
+`;
+
+  it("an arm with a nested type suffix does not cover its case", () => {
+    // `{ tag: "a", v: _: string }` matches only when v is a string, so it
+    // cannot stand in for the whole `A` case. Without this the match looks
+    // exhaustive while a runtime value can fall through every arm — which for
+    // an expression match means no value at all.
+    const errs = check(`${UNION}
+def f(x: A | B): string {
+  return match (x) {
+    { tag: "a", v: _: string } => "a"
+    { tag: "b" } => "b"
+  }
+}`, ERROR);
+    expect(errs.some((e) => /not exhaustive/i.test(e))).toBe(true);
+  });
+
+  it("the same arms without the suffix are exhaustive", () => {
+    const errs = check(`${UNION}
+def f(x: A | B): string {
+  return match (x) {
+    { tag: "a" } => "a"
+    { tag: "b" } => "b"
+  }
+}`, ERROR);
+    expect(errs).toEqual([]);
+  });
+
+  it("adding a wildcard arm makes the suffixed version exhaustive again", () => {
+    const errs = check(`${UNION}
+def f(x: A | B): string {
+  return match (x) {
+    { tag: "a", v: _: string } => "a"
+    { tag: "b" } => "b"
+    _ => "other"
+  }
+}`, ERROR);
+    expect(errs).toEqual([]);
+  });
+});

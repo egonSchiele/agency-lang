@@ -5907,10 +5907,9 @@ const _objectPatternShorthandParser: Parser<ObjectPatternShorthand> = (
 
 // Shared helpers for binding and match object-property parsers. The two
 // only differ by the inner value parser (bindingPatternParser vs
-// matchPatternParser). The value type is narrower than MatchPattern:
-// typePattern is top-level-only (is-RHS and arm position), so nested
-// property values never carry one — the parsers wired in here cannot
-// produce it, which is what makes the seam cast at the match call site safe.
+// matchPatternParser). Both produce a subset of MatchPattern; the binding
+// parser cannot produce a resultPattern or a typePattern, which is why
+// binding position keeps `: Type` as a static annotation.
 const propertyWithValueParser = (
   valueParser: Parser<ObjectPatternProperty["value"]>,
 ): Parser<ObjectPatternProperty> => (input: string) => {
@@ -6059,7 +6058,7 @@ const _isRhsParser = (input: string): ParserResult<MatchPattern> => {
 };
 export const isRhsParser: Parser<MatchPattern> = _isRhsParser;
 
-const _matchPatternParser = (input: string): ParserResult<MatchPattern> => {
+const _matchPatternBase = (input: string): ParserResult<MatchPattern> => {
   // NOTE: cannot reuse simpleLiteralParser directly because it tries
   // numberParser before variableNameParser, and numberParser is greedy on `_`
   // (e.g. `_foo` would parse as `{type: "number", value: ""}` with rest `foo`).
@@ -6082,6 +6081,52 @@ const _matchPatternParser = (input: string): ParserResult<MatchPattern> => {
   );
   return parser(input) as ParserResult<MatchPattern>;
 };
+
+/** Pattern shapes a `: Type` suffix may follow. The suffix attaches to a whole
+ *  pattern, never to an object field — `{ name: n }: {name: string}` is the
+ *  spelling, and there is no per-field form. */
+function takesTypeSuffix(pattern: MatchPattern): boolean {
+  return (
+    pattern.type === "variableName" ||
+    pattern.type === "objectPattern" ||
+    pattern.type === "arrayPattern" ||
+    pattern.type === "wildcardPattern"
+  );
+}
+
+/**
+ * A match pattern, plus an optional `: Type` suffix.
+ *
+ * The suffix used to be arm-level only, which meant `["cat", p: SafePath]` did
+ * not parse — you could type the whole arm but not a piece of it. Wiring it in
+ * HERE makes it available wherever a pattern appears, at any depth, because
+ * nested elements and property values both come through this parser.
+ *
+ * Written as parse-base-then-peek rather than as another `or` alternative on
+ * purpose. An alternative that began by parsing a pattern would left-recurse
+ * (this parser calling itself at the same position), and even guarded against
+ * that it would re-parse every nested element twice — once speculatively for
+ * the suffix form, once for the plain one. Peeking costs one optional parse of
+ * `:` and nothing else.
+ */
+const _matchPatternParser = (input: string): ParserResult<MatchPattern> => {
+  const base = _matchPatternBase(input);
+  if (!base.success) return base;
+  const pattern = base.result as MatchPattern;
+  if (!takesTypeSuffix(pattern)) return base;
+  const suffix = armTypeSuffixParser(base.rest);
+  if (!suffix.success) return base;
+  return success(
+    {
+      type: "typePattern" as const,
+      // `_: Type` is a test with nothing to bind, matching wildcardSuffixParser.
+      pattern: pattern.type === "wildcardPattern" ? null : (pattern as BindingPattern),
+      typeHint: (suffix.result as { typeHint: VariableType }).typeHint,
+      loc: "loc" in pattern ? pattern.loc : undefined,
+    } as MatchPattern,
+    suffix.rest,
+  );
+};
 export const matchPatternParser: Parser<MatchPattern> = _matchPatternParser;
 
 export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
@@ -6096,8 +6141,6 @@ export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
           or(
             sepBy(
               commaWithNewline,
-              // Safe narrowing: nested array elements never carry a
-              // typePattern (top-level-only; see ArrayPattern in pattern.ts).
               lazy(() => matchPatternParser) as Parser<ArrayPattern["elements"][number]>,
             ),
             succeed([]),
@@ -6117,12 +6160,7 @@ export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
 
 const _matchObjectPropertyParser: Parser<
   ObjectPatternProperty | ObjectPatternShorthand | RestPattern
-> = objectPatternPropertyParser(
-  // Safe narrowing: matchPatternParser only produces typePattern where
-  // typePatternParser is wired (is-RHS and arm top level), never in nested
-  // property position.
-  lazy(() => matchPatternParser) as Parser<ObjectPatternProperty["value"]>,
-);
+> = objectPatternPropertyParser(lazy(() => matchPatternParser));
 
 export const objectMatchPatternParser: Parser<ObjectPattern> = label(
   "an object match pattern",

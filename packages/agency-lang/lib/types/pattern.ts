@@ -5,9 +5,9 @@ import type { Expression, VariableType } from "../types.js";
 export type ObjectPatternProperty = {
   type: "objectPatternProperty";
   key: string;
-  // ResultPattern is only valid in match-position use; the parser does not
-  // produce it in binding-position contexts.
-  value: BindingPattern | Literal | ResultPattern;
+  // ResultPattern and TypePattern are only valid in match-position use; the
+  // parser does not produce either in binding-position contexts.
+  value: BindingPattern | Literal | ResultPattern | TypePattern;
 };
 
 export type ObjectPatternShorthand = {
@@ -22,9 +22,16 @@ export type ObjectPattern = BaseNode & {
 
 export type ArrayPattern = BaseNode & {
   type: "arrayPattern";
-  // ResultPattern is only valid in match-position use; the parser does not
-  // produce it in binding-position contexts.
-  elements: (BindingPattern | Literal | WildcardPattern | RestPattern | ResultPattern)[];
+  // ResultPattern and TypePattern are only valid in match-position use; the
+  // parser does not produce either in binding-position contexts.
+  elements: (
+    | BindingPattern
+    | Literal
+    | WildcardPattern
+    | RestPattern
+    | ResultPattern
+    | TypePattern
+  )[];
 };
 
 export type RestPattern = BaseNode & {
@@ -49,7 +56,13 @@ export type ResultPattern = BaseNode & {
 };
 
 // A runtime type test in pattern position. Two spellings share this node:
-// `is Type` (pattern: null) and the match-arm bind-and-test `pattern: Type`.
+// `is Type` (pattern: null) and the bind-and-test `pattern: Type`.
+//
+// The suffix attaches to a whole PATTERN — a binder, an object pattern, or an
+// array pattern — never to an object field. `{ name: n }: {name: string}` is
+// the spelling; there is no per-field form. It is legal wherever a match
+// pattern appears, at any depth.
+//
 // Deliberately NOT part of BindingPattern — type patterns are illegal in
 // let/const/for, where `: Type` must stay a static annotation.
 export type TypePattern = BaseNode & {

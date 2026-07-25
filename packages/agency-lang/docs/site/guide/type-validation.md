@@ -181,6 +181,25 @@ export function isPalindrome(value) {
 }
 ```
 
+## What validation costs
+
+Validating a value is not free. It parses the value against the type's
+schema and then runs every validator in the chain, and it is roughly **50x**
+the cost of a built-in check like `is string` — a few hundred nanoseconds
+against a few. Most of that is the schema parse, not your validator, so a
+type with no validators at all costs nearly the same as one with them.
+
+That is irrelevant next to anything that touches a disk or a network, and
+you should not think about it for ordinary code. It starts to matter in two
+places:
+
+- **Inside a loop over a large collection.** Validating once, outside the
+  loop, beats validating per element.
+- **In [pattern matching](/guide/pattern-matching).** A match tries its arms
+  in order, and an arm that fails still paid for its check. Ordering arms so
+  the common case comes first, and putting cheap literal checks before
+  validated ones inside an arm, avoids most of it — conditions short-circuit.
+
 ## References
 - [minimum](https://json-schema.org/draft/2020-12/draft-bhutton-json-schema-validation-00#rfc.section.6.2.4)
 - [JSON Schema object](https://json-schema.org/understanding-json-schema/reference/object)

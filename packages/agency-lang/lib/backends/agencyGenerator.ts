@@ -579,7 +579,7 @@ export class AgencyGenerator {
       case "resultPattern":
         return this.formatPattern(node);
       case "isExpression":
-        return `${this.processNode(node.expression).trim()} is ${this.formatPattern(node.pattern)}`;
+        return `${this.processNode(node.expression).trim()} is ${this.formatIsRhs(node.pattern)}`;
       case "parallelBlock":
         return this.processParallelBlock(node);
       case "seqBlock":
@@ -920,19 +920,44 @@ export class AgencyGenerator {
         return rp.binding === null ? rp.kind : `${rp.kind}(${rp.binding})`;
       }
       case "typePattern": {
-        // After `is` the surrounding printer already wrote the operator, so
-        // the test-only form is just the type. The bind-and-test form only
-        // occurs in match arms, printed by formatArmCaseValue.
+        // A test-only type pattern (no binder) has THREE spellings, one per
+        // context, and this is the general one:
+        //
+        //   after `is`   -> the bare type; the caller wrote the operator
+        //                   (formatIsRhs)
+        //   an arm       -> `is Type`, the canonical arm spelling
+        //                   (formatArmCaseValue)
+        //   nested       -> `_: Type`, here
+        //
+        // The bare form is only safe where an operator precedes it. Printed
+        // bare inside an array or object pattern it re-parses as a BINDER
+        // named after the type, which matches anything — a formatter pass
+        // would quietly turn a validated rule into an unvalidated one.
         const tp = pattern as TypePattern;
         const typeStr = variableTypeToString(tp.typeHint, this.typeAliases, true);
         return tp.pattern === null
-          ? typeStr
+          ? `_: ${typeStr}`
           : `${this.formatPattern(tp.pattern)}: ${typeStr}`;
       }
       default:
         // variableName / literals — defer to existing rendering
         return this.processNode(pattern as AgencyNode).trim();
     }
+  }
+
+  /**
+   * The right side of the `is` operator. A test-only type pattern prints as
+   * the bare type here, because the operator is already on the page —
+   * `x is string`, not `x is _: string`.
+   */
+  private formatIsRhs(pattern: MatchPattern): string {
+    if (pattern.type === "typePattern") {
+      const tp = pattern as TypePattern;
+      if (tp.pattern === null) {
+        return variableTypeToString(tp.typeHint, this.typeAliases, true);
+      }
+    }
+    return this.formatPattern(pattern);
   }
 
   /**

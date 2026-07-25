@@ -219,6 +219,102 @@ describe("expandSplices", () => {
     expect(result.diagnostic.diagnostic).toBe("spliceNested");
   });
 
+  it("refuses generated code that reads a name from the splice site", () => {
+    // The capture case, and the reason the rule exists. `tmp` here is the
+    // generator author's guess at a name; pasted into a body that has its
+    // own `tmp`, it would silently read the local one.
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [| tmp |]\n}\n`,
+    );
+    const result = expand(
+      `import { g } from "./gen.agency"\n\ndef f(): number {\n  const tmp = 1\n  return $( g() )\n}\n`,
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostic.diagnostic).toBe("spliceReferencesOuterName");
+    expect(result.diagnostic.params.name).toBe("tmp");
+  }, 60_000);
+
+  it("allows generated code that references a name it declares itself", () => {
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    def helper(): number {\n      return 1\n    }\n\n    def caller(): number {\n      return helper()\n    }\n  |]\n}\n`,
+    );
+    const result = expand(`import { g } from "./gen.agency"\n\n$( g() )\n`);
+    expect(result.ok).toBe(true);
+  }, 60_000);
+
+  it("allows generated code that imports what it uses", () => {
+    write("dep.agency", `export def dep(): number {\n  return 1\n}\n`);
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    import { dep } from "./dep.agency"\n\n    def uses(): number {\n      return dep()\n    }\n  |]\n}\n`,
+    );
+    const result = expand(`import { g } from "./gen.agency"\n\n$( g() )\n`);
+    expect(result.ok).toBe(true);
+  }, 60_000);
+
+  it("allows generated code that calls a builtin", () => {
+    // Do not drop this. Without it, an over-strict implementation passes
+    // every other case here while rejecting every generator anyone would
+    // actually write.
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    def shout(): string {\n      print("hi")\n      return "hi"\n    }\n  |]\n}\n`,
+    );
+    const result = expand(`import { g } from "./gen.agency"\n\n$( g() )\n`);
+    expect(result.ok).toBe(true);
+  }, 60_000);
+
+  it("refuses generated code leaning on an import the HOST made", () => {
+    // The subtle inverse of the case above: an implementation checking
+    // against the wrong import list gets this backwards and allows it.
+    write("dep.agency", `export def dep(): number {\n  return 1\n}\n`);
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    def uses(): number {\n      return dep()\n    }\n  |]\n}\n`,
+    );
+    const result = expand(
+      `import { g } from "./gen.agency"\nimport { dep } from "./dep.agency"\n\n$( g() )\n`,
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostic.diagnostic).toBe("spliceReferencesOuterName");
+    expect(result.diagnostic.params.name).toBe("dep");
+  }, 60_000);
+
+  it("refuses a generated declaration that redeclares a host name", () => {
+    // The design assumed a collision here would be caught by Agency's own
+    // duplicate-declaration error. Measured: true for `def`, FALSE for
+    // top-level `const`, where the later one silently wins. So the rule is
+    // enforced rather than assumed.
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    const config = "generated"\n  |]\n}\n`,
+    );
+    const result = expand(
+      `import { g } from "./gen.agency"\n\nconst config = "hand written"\n\n$( g() )\n`,
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostic.diagnostic).toBe("spliceRedeclaresHostName");
+    expect(result.diagnostic.params.declared).toBe("config");
+  }, 60_000);
+
+  it("refuses two splices generating the same name", () => {
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    def dup(): number {\n      return 1\n    }\n  |]\n}\n`,
+    );
+    const result = expand(
+      `import { g } from "./gen.agency"\n\n$( g() )\n\n$( g() )\n`,
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostic.diagnostic).toBe("spliceRedeclaresHostName");
+  }, 60_000);
+
   it("anchors the diagnostic at the splice", () => {
     writeExprGenerator();
     const result = expand(

@@ -637,6 +637,12 @@ export const DIAGNOSTICS = {
     message:
       "Generated code refers to `{name}`, which it neither declares nor imports. Generated code may use only names it declares itself and names it imports.",
   },
+  spliceRedeclaresHostName: {
+    code: "AG8012",
+    severity: "error",
+    message:
+      "The generator `{name}` declares `{declared}`, which this file already declares. Generated declarations may not replace existing ones.",
+  },
   spliceArgumentNotAvailable: {
     code: "AG8011",
     severity: "error",

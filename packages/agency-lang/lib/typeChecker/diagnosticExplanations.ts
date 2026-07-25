@@ -552,4 +552,12 @@ Pasting code into a file puts it next to whatever names are already there, so a 
 The generator runs while that file is still being compiled, so nothing declared in it exists yet. Only values that already exist can be passed in.
 
 **How to fix:** use a literal, a code literal, or a name imported from another module.`,
+
+  spliceRedeclaresHostName: `A splice generated a declaration whose name the file already uses.
+
+Agency is not consistent about what happens next, which is why this is refused rather than left alone. Two functions with the same name is a hard error, but two top-level constants with the same name is not: the later one silently wins. A generator that happened to pick the name of one of your constants would quietly replace it, and nothing would say so.
+
+The same rule covers two splices in one file generating the same name.
+
+**How to fix:** rename one of them. If the generator picks names from data you pass in, prefix them so they cannot collide with hand-written ones.`,
 };

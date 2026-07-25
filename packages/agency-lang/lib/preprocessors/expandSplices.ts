@@ -2,8 +2,11 @@ import path from "node:path";
 import { walkNodesArray } from "../utils/node.js";
 import { generateExpression } from "../backends/agencyGenerator.js";
 import { declaredName } from "../types/hole.js";
-import { freeNamesOf } from "../runtime/template/hygiene.js";
-import { kindFitsSort, stampOrigin } from "../runtime/template/graft.js";
+import { bindersOf, freeNamesOf } from "../runtime/template/hygiene.js";
+import { BUILTIN_VARIABLES } from "../config.js";
+import { PRELUDE_NAMES } from "../prelude.js";
+import { BUILTIN_FUNCTION_TYPES } from "../typeChecker/builtins.js";
+import { KINDS_FOR_SORT, stampOrigin } from "../runtime/template/graft.js";
 import { kindOf } from "../runtime/template/code.js";
 import {
   checkGeneratorEligible,
@@ -106,12 +109,20 @@ function expandAll(
   // node rather than by its position — which is what survives a decl
   // splice spreading N nodes and shifting every index after it.
   const expansions = new Map<Splice, AgencyNode[]>();
+  // Grows as splices expand, so the second splice in a file cannot
+  // redeclare what the first one generated either.
+  const taken = [...hostNames];
 
   for (const splice of splices) {
     const expanded = expandOne(splice, program, hostPath, config, hostNames);
     if (!expanded.ok) {
       return expanded;
     }
+    const collision = checkNoRedeclaration(splice, expanded.value, taken);
+    if (collision !== null) {
+      return { ok: false, diagnostic: collision };
+    }
+    taken.push(...declaredNamesIn({ type: "agencyProgram", nodes: expanded.value }));
     expansions.set(splice, expanded.value);
   }
   return { ok: true, value: rewrite(program, expansions) as AgencyProgram };
@@ -258,6 +269,38 @@ function checkArgumentsAvailable({
       };
 }
 
+/**
+ * A splice may not generate a declaration whose name is already taken.
+ *
+ * This rule exists because a claim the design rested on turned out to be
+ * false. The argument for declaration splices being safe was that a
+ * generated `const config` colliding with an existing one would be a
+ * duplicate-declaration error, so a collision could not pass unnoticed.
+ * Measured against the real compiler, that is true for functions and NOT
+ * true for constants: two top-level `const config` declarations compile
+ * fine and the later one silently wins.
+ *
+ * So the guarantee is enforced here instead of assumed. Refusing costs a
+ * generator nothing — it can pick another name — while last-wins would let
+ * generated code quietly replace something the author wrote.
+ */
+function checkNoRedeclaration(
+  splice: Splice,
+  nodes: AgencyNode[],
+  taken: string[],
+): SpliceDiagnostic | null {
+  const clash = declaredNamesIn({ type: "agencyProgram", nodes }).find((name) =>
+    taken.includes(name),
+  );
+  return clash === undefined
+    ? null
+    : {
+        diagnostic: "spliceRedeclaresHostName",
+        params: { name: calleeName(splice) ?? "the generator", declared: clash },
+        loc: splice.loc ?? ORIGIN_UNKNOWN,
+      };
+}
+
 /** Top-level names the host file declares. */
 function declaredNamesIn(program: AgencyProgram): string[] {
   return program.nodes.flatMap((node) => {
@@ -280,12 +323,112 @@ function declaredNamesIn(program: AgencyProgram): string[] {
  * The position/kind rule is the shared one from `graft.ts`, so a splice
  * and a template hole cannot disagree about what fits where.
  */
+/**
+ * Generated code may reference only names it declares itself and names it
+ * imports. Anything else is AG8010.
+ *
+ * The problem this closes is worst in expression position: dropping a
+ * generated expression into a function body puts it next to that
+ * function's locals, and a generated mention of `tmp` would silently read
+ * the local `tmp` — a name the generator's author never saw.
+ *
+ * Renaming, which is what `hygiene.ts` does for template fills, is the
+ * WRONG fix here. A declaration splice exists so that `greet` keeps its
+ * name; renaming it away would defeat the whole point. So this is a
+ * checking rule, and it fails closed: a generated `const` does share the
+ * enclosing scope once pasted, and what the rule prevents is a generator
+ * reaching INTO the splice site rather than sharing a scope with it.
+ *
+ * Names the fragment imports come from the FRAGMENT's own import lines,
+ * never the host's. A generator that wants `z` must emit `import { z }`
+ * itself; inheriting the host's imports would make generated code depend
+ * on the file it happens to land in.
+ */
+function checkNoCapture(
+  splice: Splice,
+  code: Code,
+  generatorName: string,
+): SpliceDiagnostic | null {
+  const allowed = [
+    ...bindersOf(code),
+    ...declaredNamesIn({ type: "agencyProgram", nodes: code.nodes }),
+    ...importedNamesIn(code.nodes),
+    ...BUILTIN_VARIABLES,
+    ...PRELUDE_NAMES,
+    ...Object.keys(BUILTIN_FUNCTION_TYPES),
+  ];
+  const reached = [...freeNamesOf(code), ...calledNamesIn(code.nodes)].find(
+    (name) => !allowed.includes(name),
+  );
+  return reached === undefined
+    ? null
+    : {
+        diagnostic: "spliceReferencesOuterName",
+        params: { name: reached, generator: generatorName },
+        loc: splice.loc ?? ORIGIN_UNKNOWN,
+      };
+}
+
+/**
+ * Names a fragment calls.
+ *
+ * `freeNamesOf` sees `variableName` nodes only, and a call holds its
+ * callee as a plain string on `functionCall`, so calls are invisible to
+ * it. Without this the rule would let generated code call anything at the
+ * splice site while carefully refusing to read a variable there — half a
+ * rule, and the wrong half, since calling a host helper is the more
+ * natural mistake.
+ */
+function calledNamesIn(nodes: AgencyNode[]): string[] {
+  return [...walkNodesArray(nodes)]
+    .map((visit) => visit.node)
+    .filter((node) => node.type === "functionCall")
+    .map((node) => (node as { functionName: string }).functionName);
+}
+
+/** Local names a fragment's own import lines bind. */
+function importedNamesIn(nodes: AgencyNode[]): string[] {
+  return nodes.flatMap((node) => {
+    if (node.type !== "importStatement") return [];
+    return node.importedNames.flatMap((group) => {
+      if (group.type !== "namedImport") return [];
+      const aliases = group.aliases ?? {};
+      return group.importedNames
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => (Object.hasOwn(aliases, entry) ? aliases[entry] : entry));
+    });
+  });
+}
+
+/**
+ * Which fragment kinds fit each splice position.
+ *
+ * This is the shared hole table from `graft.ts` with one deliberate
+ * difference: a declaration splice also accepts a `statements` fragment.
+ *
+ * Kind inference for code literals is smallest-first, so a literal holding
+ * only `const config = "x"` stops at `statements` and never reaches
+ * `program`. Requiring `program` would therefore make generating top-level
+ * constants impossible — the most obvious thing a declaration splice is
+ * for. At the top level of a program a statement IS a declaration, so
+ * accepting it costs nothing. A template hole keeps the stricter rule,
+ * where `decl` means a declaration position specifically.
+ */
+const KINDS_FOR_POSITION: Record<Splice["position"], string[]> = {
+  decl: [...KINDS_FOR_SORT.decl, "statements"],
+  expr: KINDS_FOR_SORT.expr,
+};
+
 function graft(
   splice: Splice,
   code: Code,
   generatorName: string,
 ): SpliceResult<AgencyNode[]> {
-  if (!kindFitsSort(code, splice.position)) {
+  const captured = checkNoCapture(splice, code, generatorName);
+  if (captured !== null) {
+    return { ok: false, diagnostic: captured };
+  }
+  if (!KINDS_FOR_POSITION[splice.position].includes(kindOf(code))) {
     return {
       ok: false,
       diagnostic: {

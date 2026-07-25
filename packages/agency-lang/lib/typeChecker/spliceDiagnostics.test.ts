@@ -25,6 +25,7 @@ const SPLICE_DIAGNOSTIC_PARAMS: Record<string, Record<string, string>> = {
   spliceGeneratorFailed: { name: "makeGetters", reason: "timed out after 30s" },
   spliceNested: {},
   spliceReferencesOuterName: { name: "tmp" },
+  spliceRedeclaresHostName: { name: "makeGetters", declared: "config" },
   spliceArgumentNotAvailable: { name: "SOME_CONST" },
 };
 
@@ -37,7 +38,7 @@ describe("splice diagnostics", () => {
     expect(spliceCodes).toEqual(Object.keys(SPLICE_DIAGNOSTIC_PARAMS).sort());
   });
 
-  it("assigns codes AG8003 through AG8011", () => {
+  it("assigns codes AG8003 through AG8012", () => {
     const codes = Object.keys(SPLICE_DIAGNOSTIC_PARAMS)
       .map((diagnosticName) => DIAGNOSTICS[diagnosticName as DiagnosticName].code)
       .sort();
@@ -51,6 +52,7 @@ describe("splice diagnostics", () => {
       "AG8009",
       "AG8010",
       "AG8011",
+      "AG8012",
     ]);
   });
 

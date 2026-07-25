@@ -116,6 +116,31 @@ match (request) {
 }
 ```
 
+The guard runs only when the arm's pattern matched, and it can use anything
+the pattern bound. If the guard is false the match falls through to the next
+arm — it doesn't leave the match.
+
+A guard is an ordinary boolean expression, so [the `is`
+operator](#type-patterns) works inside one:
+
+```ts
+match (words) {
+    ["echo", str] if (str is string) => print(str)
+    ["echo", n]   if (n is number)   => print("number: ${n}")
+    _                                => unknown()
+}
+```
+
+Two things to know about guards:
+
+- **A guard cannot introduce bindings.** `if (x is { policy })` is a compile
+  error, because the arm's variables come from its pattern. Match on the value
+  in the pattern instead.
+- **A guard on `_` makes it stop being a catch-all.** `_ if (cond)` is a
+  conditional arm: when `cond` is false it falls through like any other arm,
+  and if it was the last arm the match matches nothing. For a match expression
+  that means no value, so an exhaustive match still needs an unguarded `_`.
+
 ### `match(expr is pattern)` form
 
 When you want to destructure once and then dispatch on guards, write:

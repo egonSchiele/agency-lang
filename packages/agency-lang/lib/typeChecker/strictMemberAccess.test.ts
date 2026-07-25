@@ -367,3 +367,23 @@ def f(n: Node): any {
     expect(errs.errors).toEqual([]);
   });
 });
+
+describe("strict member access — a pattern that reads through a nullable field", () => {
+  const NULLABLE = `
+type Redirect = { op: string, path: string }
+type Cmd = { words: string[], redirect: Redirect | null }
+`;
+
+  it("reports nothing for a nested object pattern on a nullable field", () => {
+    // The lowered condition guards the read, so the checker should see the
+    // narrowed `Redirect`, not `Redirect | null` and not an opaque `object`.
+    const errs = check(`${NULLABLE}
+def f(c: Cmd): string {
+  return match (c) {
+    { words: ["echo"], redirect: { op: ">", path } } => path
+    _ => "none"
+  }
+}`);
+    expect(errs.errors).toEqual([]);
+  });
+});

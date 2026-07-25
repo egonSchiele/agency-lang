@@ -175,10 +175,10 @@ describe("pattern binders", () => {
   it("a template destructuring binder colliding with a filler free name is renamed, shorthand expanded", () => {
     // Template binds `key` via shorthand destructuring; filler uses a free
     // `key`. Renaming the shorthand in place would change which property
-    // is read, so it must expand to `key: freshName`.
+    // is read, so it must expand to `key as freshName` — the rename spelling.
     const source = `node main() {\n  const { key } = getSecrets()\n  const result = #userExpr\n  print(key)\n}\n`;
     const out = fillAndPrint(source, { userExpr: _parseExpr("key + 1") });
-    expect(out).toMatch(/const \{ key: __hyg\d+_key \} = getSecrets\(\)/);
+    expect(out).toMatch(/const \{ key as __hyg\d+_key \} = getSecrets\(\)/);
     expect(out).toMatch(/const result = key \+ 1/);
     expect(out).toMatch(/print\(__hyg\d+_key\)/);
   });
@@ -189,7 +189,7 @@ describe("pattern binders", () => {
       steps: _parseStatements("const { tmp } = load()\nprint(tmp)"),
     });
     // Filler binder renamed (with shorthand expansion); template untouched.
-    expect(out).toMatch(/const \{ tmp: __hyg\d+_tmp \} = load\(\)/);
+    expect(out).toMatch(/const \{ tmp as __hyg\d+_tmp \} = load\(\)/);
     expect(out).toContain("const tmp = 1");
   });
 
@@ -204,7 +204,7 @@ describe("pattern binders", () => {
   it("a for-loop destructuring binder participates in collisions", () => {
     const source = `node main() {\n  for ({ name } in people()) {\n    const x = #v\n    print(name)\n  }\n}\n`;
     const out = fillAndPrint(source, { v: _parseExpr("name") });
-    expect(out).toMatch(/for \(\{ name: __hyg\d+_name \} in people\(\)\)/);
+    expect(out).toMatch(/for \(\{ name as __hyg\d+_name \} in people\(\)\)/);
     expect(out).toMatch(/const x = name\b/);
   });
 
@@ -283,9 +283,13 @@ describe("branch-scoped binders rename consistently", () => {
       "",
     ].join("\n");
     const out = fillAndPrint(source, { userExpr: _parseExpr("name") });
+    // Renaming expands to `key as freshName`, NOT `key: freshName`. In a match
+    // pattern a colon introduces a TYPE, so the colon form would silently turn
+    // this rename into a test against a type named `__hygN_name` — capture
+    // avoidance failing open, which is the bug hygiene exists to prevent.
     // The arm pattern expands so the PROPERTY read is unchanged while the
     // binder and the arm body move together.
-    expect(out).toMatch(/\{ name: __hyg\d+_name \} => __hyg\d+_name/);
+    expect(out).toMatch(/\{ name as __hyg\d+_name \} => __hyg\d+_name/);
     expect(out).toMatch(/const out = name\b/);
   });
 });

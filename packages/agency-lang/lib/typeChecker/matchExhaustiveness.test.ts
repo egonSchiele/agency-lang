@@ -484,14 +484,14 @@ type B = { tag: "b", v: any }
 `;
 
   it("an arm with a nested type suffix does not cover its case", () => {
-    // `{ tag: "a", v: _: string }` matches only when v is a string, so it
+    // `{ tag: "a", v: string }` matches only when v is a string, so it
     // cannot stand in for the whole `A` case. Without this the match looks
     // exhaustive while a runtime value can fall through every arm — which for
     // an expression match means no value at all.
     const errs = check(`${UNION}
 def f(x: A | B): string {
   return match (x) {
-    { tag: "a", v: _: string } => "a"
+    { tag: "a", v: string } => "a"
     { tag: "b" } => "b"
   }
 }`, ERROR);
@@ -513,7 +513,7 @@ def f(x: A | B): string {
     const errs = check(`${UNION}
 def f(x: A | B): string {
   return match (x) {
-    { tag: "a", v: _: string } => "a"
+    { tag: "a", v: string } => "a"
     { tag: "b" } => "b"
     _ => "other"
   }

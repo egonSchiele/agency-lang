@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "typeTest",
+      "description": "A property value is a type test: the field's type picks the arm, and nothing binds a variable named after the type.",
+      "input": "",
+      "expectedOutput": "[\"string\",\"number\",\"other\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "validatorRuns",
+      "description": "A named type in property position runs its validators, so a value of the right shape can still fail to match.",
+      "input": "",
+      "expectedOutput": "[\"ok\",\"rejected\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "renames",
+      "description": "`key as name` binds the field to a different name.",
+      "input": "",
+      "expectedOutput": "\"Ada/36\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "nestedTypeTest",
+      "description": "A type test inside a nested object pattern.",
+      "input": "",
+      "expectedOutput": "[\"nested string\",\"other\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "mixedForms",
+      "description": "A literal, a type test and a rename in one pattern: the type test still decides the match and the rename still binds.",
+      "input": "",
+      "expectedOutput": "[\"user 7\",\"other\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

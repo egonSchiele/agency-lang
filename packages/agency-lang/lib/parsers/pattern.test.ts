@@ -977,16 +977,63 @@ describe("a `: Type` suffix nested inside a pattern", () => {
     });
   });
 
-  it("does not consume the object-pattern colon as a suffix", () => {
-    // `{ name: n }` is a field match, not a suffix on anything. The value
-    // parser must stop at `}` rather than treating the field colon as ours.
-    const result = matchPatternParser("{ name: n }");
+  it("reads a property value as a TYPE, not a binder", () => {
+    // The field colon separates key from pattern; the value that follows is a
+    // type test. `{ name: string }` tests the field — it does not bind a
+    // variable called `string`, which is what it used to do.
+    const result = matchPatternParser("{ name: string }");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).properties[0]).toMatchObject({
+      type: "objectPatternProperty",
+      key: "name",
+      value: {
+        type: "typePattern",
+        pattern: null,
+        typeHint: { type: "primitiveType", value: "string" },
+      },
+    });
+  });
+
+  it("parses `key as name` as a rename", () => {
+    const result = matchPatternParser("{ name as n }");
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect((result.result as any).properties[0]).toMatchObject({
       type: "objectPatternProperty",
       key: "name",
       value: { type: "variableName", value: "n" },
+    });
+  });
+
+  it("still reads shorthand and literal properties unchanged", () => {
+    const shorthand = matchPatternParser("{ name }");
+    expect(shorthand.success).toBe(true);
+    if (!shorthand.success) return;
+    expect((shorthand.result as any).properties[0]).toMatchObject({
+      type: "objectPatternShorthand",
+      name: "name",
+    });
+
+    const literal = matchPatternParser('{ type: "click" }');
+    expect(literal.success).toBe(true);
+    if (!literal.success) return;
+    expect((literal.result as any).properties[0]).toMatchObject({
+      key: "type",
+      value: { type: "string" },
+    });
+  });
+
+  it("handles a field actually named `as`", () => {
+    // `{ as as v }` — the rename parser must not mistake the field name for
+    // its own keyword, and the shorthand parser must not take `as` and leave
+    // `as v` stranded.
+    const result = matchPatternParser("{ as as v }");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect((result.result as any).properties[0]).toMatchObject({
+      key: "as",
+      value: { type: "variableName", value: "v" },
     });
   });
 

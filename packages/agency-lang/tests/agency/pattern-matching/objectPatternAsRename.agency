@@ -1,0 +1,78 @@
+// Inside an object pattern `:` introduces a TYPE and `as` renames. These used
+// to be the same character, with "binder wins" as the tiebreak — so
+// `{ name: string }` bound a variable called `string` while `[name: string]`
+// one bracket away tested the type.
+
+def notEmpty(v: string): Result<string> {
+  if (v == "") {
+    return failure("empty")
+  }
+  return success(v)
+}
+
+@validate(notEmpty)
+type SafePath = string
+
+def typed(p: any): string {
+  return match (p) {
+    { name: string } => "string"
+    { name: number } => "number"
+    _ => "other"
+  }
+}
+
+def validated(c: any): string {
+  return match (c) {
+    { path: SafePath } => "ok"
+    _ => "rejected"
+  }
+}
+
+def renamed(p: any): string {
+  return match (p) {
+    { name as n, age as a } => "${n}/${a}"
+    _ => "other"
+  }
+}
+
+def nested(c: any): string {
+  return match (c) {
+    { outer: { name: string } } => "nested string"
+    _ => "other"
+  }
+}
+
+def mixed(c: any): string {
+  // A literal, a type test and a rename in one pattern — the three property
+  // forms have to coexist.
+  return match (c) {
+    { tag: "user", name: string, id as userId } => "user ${userId}"
+    _ => "other"
+  }
+}
+
+node typeTest() {
+  // The field's type decides the arm; nothing binds a variable called `string`.
+  return [typed({ name: "Ada" }), typed({ name: 42 }), typed({ name: true })]
+}
+
+node validatorRuns() {
+  // A named type runs its validators, so a value of the right shape can still
+  // fail to match. This is what makes a validated type usable as a rule.
+  return [validated({ path: "f.txt" }), validated({ path: "" })]
+}
+
+node renames() {
+  return renamed({ name: "Ada", age: 36 })
+}
+
+node nestedTypeTest() {
+  return [nested({ outer: { name: "Ada" } }), nested({ outer: { name: 1 } })]
+}
+
+node mixedForms() {
+  return [
+    mixed({ tag: "user", name: "Ada", id: 7 }),
+    mixed({ tag: "user", name: 42, id: 7 }),
+  ]
+}

@@ -884,8 +884,11 @@ class PatternLowerer {
       let bindings: Assignment[] = [];
 
       if (guardOnly) {
-        // The caseValue IS the guard expression in match(... is ...) form
-        condition = arm.caseValue as Expression;
+        // The caseValue IS the guard expression in match(... is ...) form.
+        // Lower it: an arm condition is an ordinary boolean expression, so an
+        // `is` in it must become its condition form rather than reach codegen,
+        // which has no isExpression handler.
+        condition = this.lowerExpression(arm.caseValue as Expression);
       } else {
         const matchPat = arm.caseValue as MatchPattern;
         const patCond = patternToCondition(matchPat, scrutinee!);
@@ -895,6 +898,11 @@ class PatternLowerer {
 
       // Apply guard if present (for non-guardOnly arms)
       if (!guardOnly && arm.guard) {
+        // A guard is a pure-boolean context, so lower it like any other
+        // expression — `if (str is string)` becomes the boolean test, and a
+        // shorthand binder inside it stays the existing compile error rather
+        // than silently introducing a binding.
+        const guard = this.lowerExpression(arm.guard);
         // Guard may reference bindings, so we need bindings in scope first.
         // Strategy: emit `if (patCond) { let bindings; if (guard) { body } else <next-arm> }
         //                  else <next-arm>`
@@ -905,11 +913,11 @@ class PatternLowerer {
         // outer and inner else branches so guard failure falls through to the
         // next arm (it would otherwise exit the match entirely).
         if (bindings.length === 0) {
-          condition = makeBinOp(condition, "&&", arm.guard, loc);
+          condition = makeBinOp(condition, "&&", guard, loc);
         } else {
           const innerIf: IfElse = {
             type: "ifElse",
-            condition: arm.guard,
+            condition: guard,
             thenBody: armBody,
             elseBody: result ? [result] : undefined,
             loc,

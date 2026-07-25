@@ -1,0 +1,59 @@
+{
+  "tests": [
+    {
+      "nodeName": "stringGuard",
+      "description": "An `is` test in an arm guard holds, so the arm matches and its binding is usable.",
+      "input": "",
+      "expectedOutput": "\"echo string: hi\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "guardFallsThrough",
+      "description": "The first arm's `is` guard fails, so control reaches the next arm instead of exiting the match.",
+      "input": "",
+      "expectedOutput": "\"echo number: 42\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noArmMatches",
+      "description": "No pattern matches, so the wildcard arm runs.",
+      "input": "",
+      "expectedOutput": "\"other\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "namedTypeGuard",
+      "description": "A named type in a guard runs the type's validator: the adult matches the first arm, the minor falls through to the second.",
+      "input": "",
+      "expectedOutput": "[\"adult Ada\",\"minor Kid\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "guardOnlyForm",
+      "description": "In the match(x is pattern) form each arm condition is itself the guard, so an `is` there is lowered too.",
+      "input": "",
+      "expectedOutput": "[\"named one\",\"unnamed\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

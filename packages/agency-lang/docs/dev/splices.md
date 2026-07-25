@@ -39,7 +39,11 @@ Two consequences worth keeping in mind when changing this code. The cache is wha
 
 Six, and missing one is the failure mode to worry about. It produces a file that works through one entry point and misbehaves through another.
 
-The list below was originally derived from where `liftCallbackBlocks` runs, and that was the wrong oracle: `agency tc` calls neither. Anything that parses a file and then reads what it declares needs expansion, so the honest way to find them all is to check every caller of `buildCompilationUnit`.
+The list below was originally found by searching for another preprocessing step, `liftCallbackBlocks`, on the assumption that anything running one should run the other. `agency tc` runs neither, so it was missed, and `agency tc` on a file with a splice reported the generated function as undefined.
+
+Search instead for callers of `buildCompilationUnit`. That is the step which inventories what a file declares, so it is the one that needs the splice already expanded. It returns seventeen call sites; most only want metadata and are listed under "Blast radius" as deliberately not expanding.
+
+That six copies of this sequence exist at all is the real problem, and it is filed as #692.
 
 | Where | On failure |
 | --- | --- |

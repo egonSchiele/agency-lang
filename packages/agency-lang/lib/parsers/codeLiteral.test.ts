@@ -61,6 +61,36 @@ describe("code literals: single-line bodies", () => {
       multiLine.nodes.map((node) => node.type),
     );
   });
+
+  it("keeps node positions in enclosing-file coordinates", () => {
+    // Trimming the body before the program attempt moves what the parser
+    // sees, so the base position moves with it. Splices stamp loc.origin
+    // on grafted nodes and error attribution rides on these numbers, so a
+    // silent shift here would misplace every error inside generated code.
+    //
+    // Both point at the `d` of `def` in the enclosing file. Line and
+    // column are 0-indexed (docs/dev/locations.md).
+    const multiLine = firstLiteral(
+      `def f(): Code {\n  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]\n}\n`,
+    );
+    expect(multiLine.nodes[0].loc).toMatchObject({ line: 2, col: 4 });
+
+    const oneLine = firstLiteral(
+      `def f(): Code {\n  return [| def greet(): string { return "hi" } |]\n}\n`,
+    );
+    expect(oneLine.nodes[0].loc).toMatchObject({ line: 1, col: 12 });
+  });
+
+  it("does not emit a leading newline node for a multi-line body", () => {
+    // The one behaviour that did change. The program attempt used to see
+    // the untrimmed body, so `[|\n  def ... |]` produced a `newLine` node
+    // ahead of the definition. The expr and statements attempts always
+    // trimmed; this makes the third agree with them.
+    const multiLine = firstLiteral(
+      `def f(): Code {\n  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]\n}\n`,
+    );
+    expect(multiLine.nodes.map((node) => node.type)).toEqual(["function"]);
+  });
 });
 
 describe("code literals: kind inference", () => {

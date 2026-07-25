@@ -989,7 +989,16 @@ export class AgencyGenerator {
       if (prop.value.type === "variableName" && prop.value.value === prop.key) {
         return prop.key;
       }
-      return `${prop.key}: ${this.formatPattern(prop.value)}`;
+      // A binder value is a RENAME, and renames are spelled with `as`. Printed
+      // with a colon it would come back as a type test against a type named
+      // after the binder.
+      if (prop.value.type === "variableName") {
+        return `${prop.key} as ${prop.value.value}`;
+      }
+      // A property value follows the is-RHS rule: the `key:` is already the
+      // separator, so a test-only type prints bare — `{ name: string }`, not
+      // `{ name: _: string }`.
+      return `${prop.key}: ${this.formatIsRhs(prop.value)}`;
     });
     return `{ ${parts.join(", ")} }`;
   }

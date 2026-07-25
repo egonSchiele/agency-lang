@@ -317,7 +317,7 @@ return;
   },
 
   {
-    condition: async () => isSuccess(__validateType(__stack.locals.__scrutinee_7, Person)),
+    condition: async () => isSuccess(__validateType(__stack.locals.__scrutinee_7, Person)) && !__eq(__stack.locals.__scrutinee_7, null) && __coarseTypeTest(__stack.locals.__scrutinee_7, "object"),
     body: async (runner) => {
 await runner.step(5, async (runner) => {
 __stack.locals.name = __stack.locals.__scrutinee_7.name;

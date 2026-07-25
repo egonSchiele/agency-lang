@@ -27,22 +27,13 @@ import type {
  * Expand every `$( ... )` in a program: run its generator and paste the
  * `Code` value back in its place.
  *
- * AST in, AST out. An earlier design returned printed source with an
- * obligation on the caller to write it to disk, which rewrote the user's
- * own file on the build path and destroyed every source position below the
- * splice. Pasting nodes keeps positions intact and keeps `loc.origin`
- * stamps alive, which is the thing splices have that `toSource` →
- * `runCode` does not.
+ * AST in, AST out. Pasting nodes keeps source positions intact and keeps
+ * `loc.origin` stamps alive, which printing and re-parsing would lose.
  *
- * The work happens in three phases that must not interleave, because they
- * change for different reasons:
- *
- *   1. DECIDE — may this generator run at all? An ordered list of checks.
- *   2. RUN — produce the fragment. Not a check; it returns a value.
- *   3. GRAFT — does the fragment fit this position, and paste it in.
- *
- * The kind check lives in phase 3 rather than phase 1 precisely because it
- * needs the result, which is why phase 1 cannot simply be "all the checks".
+ * Three phases, kept separate because they change for different reasons:
+ * decide whether the generator may run, run it, then check the fragment
+ * fits this position and paste it. The kind check belongs in the third
+ * phase because it needs the result.
  */
 
 /** Files currently being expanded, for the re-entry guard below. */
@@ -60,8 +51,8 @@ export function expandSplices(
   }
 
   // Running a generator compiles it, which builds a symbol table, which
-  // walks files and may arrive back here. Without this guard a file that
-  // reached itself would recurse until the stack ran out.
+  // walks files and can arrive back here. A file that reached itself would
+  // recurse until the stack ran out.
   const key = path.resolve(hostPath);
   if (Object.hasOwn(inProgress, key)) {
     return {
@@ -86,11 +77,9 @@ const ORIGIN_UNKNOWN = { line: 0, col: 0, start: 0, end: 0 };
 /**
  * Every splice the host file owns.
  *
- * `walkNodesArray` does not descend into a code literal, and that is what
- * leaves a splice inside `[| ... |]` alone. The literal's body belongs to
- * the program being GENERATED, not to this one, so a splice in there is
- * the generated program's business — the same leaf-ness rule that keeps
- * quoted names out of the host scope.
+ * `walkNodesArray` does not descend into a code literal, which is what
+ * leaves a splice inside `[| ... |]` alone. That body belongs to the
+ * program being generated, so its splices are that program's business.
  */
 function splicesIn(program: AgencyProgram): Splice[] {
   return [...walkNodesArray(program.nodes)]
@@ -105,12 +94,11 @@ function expandAll(
   config: AgencyConfig,
 ): SpliceResult<AgencyProgram> {
   const hostNames = declaredNamesIn(program);
-  // Object identity is the map key, so a splice is matched by BEING the
-  // node rather than by its position — which is what survives a decl
-  // splice spreading N nodes and shifting every index after it.
+  // Keyed by object identity, not position. A declaration splice spreads N
+  // nodes and shifts the index of every splice after it.
   const expansions = new Map<Splice, AgencyNode[]>();
-  // Grows as splices expand, so the second splice in a file cannot
-  // redeclare what the first one generated either.
+  // Grows as splices expand, so one splice cannot redeclare what an
+  // earlier one generated.
   const taken = [...hostNames];
 
   for (const splice of splices) {
@@ -150,8 +138,8 @@ function expandOne(
       }),
   );
   if (!produced.ok) {
-    // A cached failure carries the position of whichever splice ran first.
-    // Re-anchor it, or the editor underlines the wrong line.
+    // A cached failure carries the position of whichever splice ran first,
+    // so re-anchor it or the editor underlines the wrong line.
     return {
       ok: false,
       diagnostic: { ...produced.diagnostic, loc: splice.loc ?? ORIGIN_UNKNOWN },
@@ -172,12 +160,8 @@ type DecisionContext = {
   hostNames: string[];
 };
 
-/**
- * The eligibility rules, in order, each answering the same question shape:
- * is there a reason this may not run? Adding a rule later — a cap on
- * generated output size, say — is an entry in this array rather than an
- * edit to the pass.
- */
+/** The eligibility rules, in order. Adding one later means adding an entry
+ *  here rather than editing the pass. */
 const CHECKS: ReadonlyArray<(ctx: DecisionContext) => SpliceDiagnostic | null> = [
   checkArgumentsAvailable,
   ({ generator, config }) =>
@@ -202,9 +186,8 @@ function decide(
       },
     };
   }
-  // Resolving PRODUCES the module and name, so it is not one of the checks
-  // above even though it can fail. Its result is what they are checked
-  // against.
+  // Resolving produces the module and name, so it is not one of the checks
+  // above even though it can fail. They are checked against its result.
   const resolved = resolveGeneratorModule(program, localName, hostPath);
   if (!resolved.ok) {
     return {
@@ -220,9 +203,8 @@ function decide(
     config,
     hostNames,
   };
-  // Short-circuiting reduce, not `.map().find()`: each check parses the
-  // generator's whole import closure, so running them all would multiply
-  // that cost by the number of rules.
+  // Short-circuiting, not `.map().find()`. Each check parses the
+  // generator's whole import closure.
   const failure = CHECKS.reduce<SpliceDiagnostic | null>(
     (found, check) => found ?? check(ctx),
     null,
@@ -241,14 +223,9 @@ function calleeName(splice: Splice): string | null {
 }
 
 /**
- * A splice's arguments are evaluated before this file exists, so they
- * cannot mention anything this file declares.
- *
- * The generator runs in a separate compile of a separate program. A
- * constant defined in the host has not been compiled, let alone
- * evaluated, when that happens. Literals and code literals are fine, and
- * so is an imported name — a code literal contributes no free names at
- * all, since `walkNodesArray` treats it as a leaf.
+ * A splice's arguments run before this file exists, so they cannot mention
+ * anything it declares. Literals, code literals, and imported names are
+ * all fine.
  */
 function checkArgumentsAvailable({
   splice,
@@ -272,17 +249,10 @@ function checkArgumentsAvailable({
 /**
  * A splice may not generate a declaration whose name is already taken.
  *
- * This rule exists because a claim the design rested on turned out to be
- * false. The argument for declaration splices being safe was that a
- * generated `const config` colliding with an existing one would be a
- * duplicate-declaration error, so a collision could not pass unnoticed.
- * Measured against the real compiler, that is true for functions and NOT
- * true for constants: two top-level `const config` declarations compile
- * fine and the later one silently wins.
- *
- * So the guarantee is enforced here instead of assumed. Refusing costs a
- * generator nothing — it can pick another name — while last-wins would let
- * generated code quietly replace something the author wrote.
+ * Agency does not catch this on its own. Two `def`s with one name is a
+ * hard error, but two top-level `const`s is not, and the later one
+ * silently wins. Without this rule a generator could quietly replace one
+ * of the author's constants.
  */
 function checkNoRedeclaration(
   splice: Splice,
@@ -316,33 +286,19 @@ function declaredNamesIn(program: AgencyProgram): string[] {
 // Phase 3: graft
 // ---------------------------------------------------------------------------
 
-/**
- * Check the fragment fits this position, then stamp and hand back the
- * nodes to paste.
- *
- * The position/kind rule is the shared one from `graft.ts`, so a splice
- * and a template hole cannot disagree about what fits where.
- */
+/** Check the fragment fits this position, then stamp and hand back the
+ *  nodes to paste. */
 /**
  * Generated code may reference only names it declares itself and names it
  * imports. Anything else is AG8010.
  *
- * The problem this closes is worst in expression position: dropping a
- * generated expression into a function body puts it next to that
- * function's locals, and a generated mention of `tmp` would silently read
- * the local `tmp` — a name the generator's author never saw.
+ * A generated expression lands next to the locals at the splice site, so a
+ * generated mention of `tmp` would silently read the local `tmp`.
  *
- * Renaming, which is what `hygiene.ts` does for template fills, is the
- * WRONG fix here. A declaration splice exists so that `greet` keeps its
- * name; renaming it away would defeat the whole point. So this is a
- * checking rule, and it fails closed: a generated `const` does share the
- * enclosing scope once pasted, and what the rule prevents is a generator
- * reaching INTO the splice site rather than sharing a scope with it.
- *
- * Names the fragment imports come from the FRAGMENT's own import lines,
- * never the host's. A generator that wants `z` must emit `import { z }`
- * itself; inheriting the host's imports would make generated code depend
- * on the file it happens to land in.
+ * Renaming, the way `hygiene.ts` does for fills, would be wrong here: a
+ * declaration splice exists so that `greet` keeps its name. This checks
+ * instead, and it reads the fragment's own import lines rather than the
+ * host's, so generated code never depends on where it lands.
  */
 function checkNoCapture(
   splice: Splice,
@@ -373,11 +329,9 @@ function checkNoCapture(
  * Names a fragment calls.
  *
  * `freeNamesOf` sees `variableName` nodes only, and a call holds its
- * callee as a plain string on `functionCall`, so calls are invisible to
- * it. Without this the rule would let generated code call anything at the
- * splice site while carefully refusing to read a variable there — half a
- * rule, and the wrong half, since calling a host helper is the more
- * natural mistake.
+ * callee as a plain string, so calls are invisible to it. Without this the
+ * rule would refuse to read a host variable while happily calling a host
+ * function.
  */
 function calledNamesIn(nodes: AgencyNode[]): string[] {
   return [...walkNodesArray(nodes)]
@@ -403,16 +357,11 @@ function importedNamesIn(nodes: AgencyNode[]): string[] {
 /**
  * Which fragment kinds fit each splice position.
  *
- * This is the shared hole table from `graft.ts` with one deliberate
- * difference: a declaration splice also accepts a `statements` fragment.
- *
- * Kind inference for code literals is smallest-first, so a literal holding
- * only `const config = "x"` stops at `statements` and never reaches
- * `program`. Requiring `program` would therefore make generating top-level
- * constants impossible — the most obvious thing a declaration splice is
- * for. At the top level of a program a statement IS a declaration, so
- * accepting it costs nothing. A template hole keeps the stricter rule,
- * where `decl` means a declaration position specifically.
+ * The shared hole table from `graft.ts`, plus `statements` in declaration
+ * position. Kind inference is smallest-first, so a literal holding only
+ * `const config = "x"` stops at `statements` and never reaches `program`.
+ * Requiring `program` would make generated constants impossible. At the
+ * top level a statement is a declaration, so this costs nothing.
  */
 const KINDS_FOR_POSITION: Record<Splice["position"], string[]> = {
   decl: [...KINDS_FOR_SORT.decl, "statements"],
@@ -452,13 +401,9 @@ function graft(
 /**
  * Replace each splice with the nodes it expanded to.
  *
- * In an array a splice spreads — a declaration splice can produce several
- * declarations. Everywhere else it must be exactly one node, which the
- * kind check has already guaranteed by requiring an `expr` fragment, and
- * an `expr` fragment holds one node.
- *
- * Code literals are copied through untouched: their contents belong to the
- * generated program, not this one.
+ * In an array a splice spreads, since a declaration splice can produce
+ * several declarations. Everywhere else the kind check has already
+ * guaranteed exactly one node. Code literals pass through untouched.
  */
 function rewrite(node: unknown, expansions: Map<Splice, AgencyNode[]>): unknown {
   if (Array.isArray(node)) {

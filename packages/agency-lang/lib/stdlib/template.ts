@@ -54,27 +54,21 @@ export function _fill(code: Code, values: Record<string, unknown>): Code {
 /**
  * Merge several fragments into one.
  *
- * Merging is concatenating nodes; the only real question is what kind
- * comes out, and every answer here follows from behavior that already
- * exists rather than being decided fresh.
+ * Merging concatenates nodes. The only real question is what kind comes
+ * out, and every answer follows from behavior that already exists.
  *
- * An empty merge is an empty `statements` fragment, matching
- * `parseStatements("")` and the empty code literal — the literal and the
- * runtime parser must not disagree about the same thing. A single input is
- * returned unchanged, so `combine` around a loop that ran once behaves
- * like no `combine` at all, keeping both its kind and its doc comment.
+ * An empty merge gives an empty `statements` fragment, matching
+ * `parseStatements("")` and the empty code literal. A single input comes
+ * back unchanged, keeping its kind and doc comment.
  *
- * Beyond that the rule is smaller than the case list suggests, so it is
- * written as a rule: a `program` fragment may not merge with anything
- * else, and what comes out is `program` only when everything going in was.
- * Widening an expression to a statement is not a new decision either —
- * `fill` already accepts an `expr` fragment wherever statements go,
- * because an expression IS a legal statement in Agency.
+ * Beyond that: a `program` fragment may not merge with anything else, and
+ * the result is `program` only when every input was. Widening an
+ * expression to a statement is not a new decision, since `fill` already
+ * accepts an `expr` fragment wherever statements go.
  *
- * `program` mixed with anything is refused rather than widened. A
- * declaration and a bare statement have different placement rules, and a
- * silent merge produces a fragment that fails much later, at the completed
- * program's compile, with no useful position.
+ * Refusing to widen `program` matters because a declaration and a bare
+ * statement have different placement rules. A silent merge would fail much
+ * later, at the completed program's compile, with no useful position.
  */
 export function _combine(codes: Code[]): Code {
   if (codes.length === 0) {
@@ -92,7 +86,7 @@ export function _combine(codes: Code[]): Code {
   }
   return {
     type: "agencyProgram",
-    // A merged fragment has no single doc comment, so it carries none.
+    // A merged fragment has no single doc comment.
     kind: distinct[0] === "program" ? "program" : "statements",
     nodes: codes.flatMap((code) => code.nodes),
   };

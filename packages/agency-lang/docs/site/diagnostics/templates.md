@@ -147,7 +147,7 @@ The generator runs while that file is still being compiled, so nothing declared 
 
 A splice generated a declaration whose name the file already uses.
 
-Agency is not consistent about what happens next, which is why this is refused rather than left alone. Two functions with the same name is a hard error, but two top-level constants with the same name is not: the later one silently wins. A generator that happened to pick the name of one of your constants would quietly replace it, and nothing would say so.
+Agency does not catch this on its own. Two functions with the same name is a hard error. Two top-level constants with the same name is not, and the later one silently wins. A generator that picked the name of one of your constants would quietly replace it, and nothing would say so.
 
 The same rule covers two splices in one file generating the same name.
 

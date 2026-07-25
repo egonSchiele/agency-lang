@@ -1,6 +1,10 @@
-import { now } from "std::date"
-node main() {
-  const start = now()
-  sleep(4)
-  print(elapsedTime(since: start))
+import { env } from "std::system"
+
+import { makeGreeter } from "./greeter.agency"
+
+$( makeGreeter() )
+
+node main(): string {
+  const res = greet()
+  print(res)
 }

@@ -636,13 +636,9 @@ function parseFileOrExit(
   return parseResult.result;
 }
 
-/**
- * Expand compile-time splices, or stop the build.
- *
- * A splice that cannot expand is as fatal as a parse error and reported
- * the same way — this path already exits on parse and typecheck failures,
- * and a splice failure leaves a program that cannot be compiled at all.
- */
+/** Expand compile-time splices, or stop the build. A splice that cannot
+ *  expand leaves a program that cannot compile, so it exits the way a
+ *  parse failure does. */
 function expandSplicesOrExit(
   program: AgencyProgram,
   absPath: string,

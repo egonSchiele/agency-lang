@@ -10,26 +10,23 @@ import type { AgencyProgram, AgencyNode } from "../../types.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
 
 /**
- * Splice eligibility: may this generator be run at compile time?
+ * Splice eligibility: may this generator run at compile time?
  *
- * The import-graph check is what the whole safety argument rests on.
- * Dangerous operations in Agency raise effects and effects are statically
- * checkable — but only for Agency code. TypeScript raises nothing, and
- * there is a live path to it: a plain JS/TS package like `zod` passes
- * through untouched when imported (docs/dev/pkg-imports.md). A generator
- * that can reach `zod` makes the effect check meaningless.
+ * The import-graph check carries the whole safety argument. Dangerous
+ * operations raise effects and effects are statically checkable, but only
+ * for Agency code. TypeScript raises nothing, and a plain JS package like
+ * `zod` passes through untouched when imported. A generator that can reach
+ * `zod` makes the effect check meaningless.
  */
 
 /**
- * Which import edges a generator may have. The rule is one line on
- * purpose: it is the thing a reader checks against the spec, so it must
- * not be buried inside a traversal.
+ * Which import edges a generator may have. One line on purpose, since this
+ * is the rule a reader checks against the spec.
  *
- * `std::` is Agency and is verified as a whole elsewhere, so it is allowed
- * but not followed. A relative `.agency` file is Agency code: allowed AND
- * followed, which is what makes the check transitive. Everything else
- * leaves Agency — bare npm packages, and `pkg::`, which is Agency source
- * but can itself reach JavaScript one level down.
+ * `std::` is allowed but not followed, because it is verified elsewhere. A
+ * relative `.agency` file is allowed and followed, which is what makes the
+ * check transitive. Everything else leaves Agency, including `pkg::`,
+ * which can reach JavaScript one level down.
  */
 const isAllowedEdge = (specifier: string): boolean =>
   isStdlibImport(specifier) || isRelativeAgencyPath(specifier);
@@ -57,16 +54,12 @@ function parseFileOrNull(absPath: string, config: AgencyConfig): AgencyProgram |
  * Every file a generator can reach through relative `.agency` imports,
  * entry first.
  *
- * Three checks and the expansion cache all need this same set, and each
- * asks a different question of each file, so the walk is here once and the
- * question is the caller's. `std::` modules are deliberately NOT followed:
- * they are Agency, verified as a whole elsewhere, and walking them would
- * drag most of the standard library into every check.
+ * Three checks and the cache need this same set and ask different
+ * questions of it, so the walk lives here once. `std::` modules are not
+ * followed, or every check would drag in most of the standard library.
  *
- * A file that does not exist or does not parse is skipped rather than
- * reported. Whether that is fatal depends on the caller — the effect check
- * treats an unreadable file as a refusal, while the cache simply has less
- * to hash.
+ * A file that does not exist or does not parse is skipped. Whether that
+ * matters is the caller's business.
  */
 export function closureFiles(
   entryPath: string,
@@ -102,12 +95,12 @@ export function closureFiles(
 }
 
 /**
- * Walk the generator module's transitive Agency import graph and return the
- * first edge that leaves Agency code, or null when every edge is allowed.
+ * The first import edge that leaves Agency code, or null when every edge is
+ * allowed.
  *
- * Transitive is the operative word: checking only the generator's own file
- * is not enough, because a local `.agency` file it imports can pull in
- * `zod` one level down and the generator itself looks clean.
+ * Transitive is the operative word. A local `.agency` file the generator
+ * imports can pull in `zod` one level down while the generator itself
+ * looks clean.
  */
 export function checkImportGraph(
   entryPath: string,
@@ -151,20 +144,17 @@ export function checkImportGraph(
 /**
  * Sources of nondeterminism a generator may not reach.
  *
- * The effect system gates things that are DANGEROUS. It does not gate
- * things that are merely UNREPEATABLE, and at build time those are
- * different problems. `llm()` raises no interrupt at all — stdlib/llm.agency
- * contains zero interrupt sites and `llm` is a language builtin — so it
- * sails through the effect check while making a network call, spending
- * money, and producing a different program on every build.
+ * The effect system gates dangerous operations, not unrepeatable ones. At
+ * build time those are different problems. `llm()` raises no interrupt at
+ * all, so it sails through the effect check while making a network call
+ * and producing a different program on every build.
  *
- * `llm` is a builtin (see resolveCall.ts's builtin list), so a bare name
- * match is unambiguous. The clock arrives through `std::date`, so it is
- * matched by what a file actually imports rather than by spelling, which
- * would false-positive on a user's own `now()`.
+ * `llm` is a builtin, so matching the bare name is unambiguous. The clock
+ * arrives through `std::date`, so it is matched by what a file imports.
+ * Matching on spelling would false-positive on a user's own `now()`.
  *
- * There is no randomness in the stdlib's exported surface today. If one is
- * added, it belongs here.
+ * The stdlib exports no randomness today. If it gains some, it belongs
+ * here.
  */
 const NONDETERMINISTIC_BUILTINS: readonly string[] = ["llm"];
 const NONDETERMINISTIC_STDLIB: Record<string, readonly string[]> = {
@@ -211,17 +201,13 @@ function nondeterministicCallIn(program: AgencyProgram): string | null {
 /**
  * Refuse a generator that can reach an LLM call or the clock.
  *
- * Scope is the generator's transitive closure of RELATIVE `.agency` files,
- * the same set `checkImportGraph` walks. `std::` modules are trusted and
- * not scanned — otherwise importing `std::agent`, which certainly calls
- * `llm`, would refuse every generator that touched it.
+ * Scoped to the closure of relative `.agency` files. `std::` modules are
+ * trusted and not scanned, or importing `std::agent` would refuse every
+ * generator that touched it.
  *
- * Deliberately coarse: a file anywhere in the closure containing a
- * nondeterministic call is enough, even if the generator never calls the
- * function that makes it. Per-function transitive analysis would be
- * sharper, but generators are small and effect-free by rule already, and
- * being conservative here fails closed. If false positives show up in
- * practice, this is the place to narrow.
+ * Coarse on purpose: one nondeterministic call anywhere in the closure is
+ * enough, even if the generator never reaches it. Narrow this if the false
+ * positives become a nuisance.
  */
 export function checkDeterminism(
   generatorPath: string,
@@ -245,32 +231,21 @@ export function checkDeterminism(
 /**
  * Refuse a generator that can reach any interrupt effect.
  *
- * Two things make this more than a lookup, and both were found by testing
- * rather than by reading.
- *
- * First, take a PATH, never a source string. `getEffectsFromSource` passes
- * `undefined` as `sourcePath`, so `withSourcePath` writes to a fresh temp
- * dir where `./helper.agency` does not exist — and import resolution then
- * THROWS rather than returning a short answer.
- *
- * Second, and worse: the effect map does not propagate across a module
- * boundary even with a real path. Measured directly —
+ * Two things stop this from being a lookup. It must take a path, never a
+ * source string, because `getEffectsFromSource` writes to an empty temp
+ * dir where relative imports throw. Worse, effects do not propagate across
+ * a module boundary even with a real path (#680):
  *
  *     helper.agency alone      → { h: ["std::read"] }
  *     gen.agency, calling h()  → { g: [] }
  *
- * So a generator that delegates its effectful work one file away reports
- * an EMPTY effect list, which reads as "safe to run at compile time". The
- * spec and the plan review both assumed the path fix was sufficient. It is
- * not.
+ * A generator that delegates its effectful work one file away therefore
+ * reports an empty effect list, which reads as safe.
  *
- * Until cross-module propagation exists in the checker, scope the check to
- * the generator's transitive closure of relative `.agency` files, the same
- * set the import-graph and determinism checks walk. Within the generator's
- * OWN file the map is accurate, so check the generator by name there;
- * across an import boundary nothing says which exports are reachable, so
- * ANY effectful export refuses. Coarse, and deliberately so: generators
- * are small and effect-free by rule already, and this fails closed.
+ * So the check walks the closure instead. The generator's own file has an
+ * accurate map and is checked by name. Across an import boundary nothing
+ * says which exports are reachable, so any effectful export refuses.
+ * Replace this with a direct lookup once #680 lands.
  */
 export function checkEffects(
   generatorPath: string,
@@ -291,10 +266,8 @@ export function checkEffects(
   return null;
 }
 
-/**
- * Effects declared by one file: the named generator when this is its own
- * file, otherwise any export. Returns a printable list, or null for none.
- */
+/** Effects declared by one file: the named generator in its own file,
+ *  otherwise any export. Returns a printable list, or null for none. */
 function effectsInFile(
   filePath: string,
   generatorName: string,
@@ -304,9 +277,8 @@ function effectsInFile(
   try {
     byExport = getEffectsFromFile(filePath);
   } catch (err) {
-    // An unresolvable import or a type error in the closure means the
-    // effect list cannot be trusted. Fail CLOSED: an unknown answer is not
-    // a safe one when the question is "may this run at compile time".
+    // An unresolvable import or a type error means the effect list cannot
+    // be trusted. Fail closed: an unknown answer is not a safe one.
     console.error(`splice eligibility: cannot read effects of ${filePath}:`, err);
     return "unknown";
   }
@@ -318,18 +290,14 @@ function effectsInFile(
 }
 
 /**
- * Refuse a generator whose own closure contains a splice.
+ * Refuse a generator whose closure contains a splice.
  *
- * Running a generator compiles it, and compiling it expands any splice it
- * contains, which runs another generator. That recursion has no natural
- * floor, and a generator that spliced itself would not terminate. Template
+ * Running a generator compiles it, which expands any splice it contains,
+ * which runs another generator. That recursion has no floor. Template
  * Haskell forbids the same thing for the same reason.
  *
- * The plan proposed detecting this by threading a "this compile is a
- * generator" flag through the runner's compile. A closure scan does the
- * same job without plumbing a flag through `SymbolTable.build`'s twelve
- * callers, and it refuses BEFORE anything is compiled rather than partway
- * into a recursion.
+ * Scanning the closure refuses before anything is compiled, rather than
+ * partway into a recursion.
  */
 export function checkNoNestedSplice(
   generatorPath: string,
@@ -352,11 +320,8 @@ export function checkNoNestedSplice(
   return null;
 }
 
-/**
- * All four checks, composed. The expansion pass calls this and never names
- * an individual rule, so adding a rule later is an entry in this array
- * rather than an edit to the pass.
- */
+/** All four checks, composed. The expansion pass never names an individual
+ *  rule, so adding one means adding an entry here. */
 export function checkGeneratorEligible(
   generatorPath: string,
   generatorName: string,
@@ -377,14 +342,12 @@ export function checkGeneratorEligible(
 /**
  * Which module supplies a splice's generator, and under what name.
  *
- * Rule 2 lives here: a generator must be imported from another file. It
- * has to be compiled before the file that splices it can be, so it cannot
- * live in that same file — there is no order that works. Template Haskell
- * calls this the stage restriction and pays the same cost.
+ * A generator must be imported from another file. It has to be compiled
+ * before the file that splices it, so no order works if they share a file.
+ * Template Haskell calls this the stage restriction.
  *
  * Returns the module's original exported name, so an aliased import
- * (`import { makeGetters as gen }`) resolves to what the module actually
- * exports rather than to the local spelling.
+ * resolves to what the module exports rather than the local spelling.
  */
 export function resolveGeneratorModule(
   program: AgencyProgram,
@@ -424,15 +387,13 @@ export function resolveGeneratorModule(
 /**
  * Which exported name does this import group bind to `localName`?
  *
- * `importedNames` holds the ORIGINAL exported names; an alias lives
- * separately in `aliases`, mapping original to local binding. So
- * `import { makeGetters as gen }` stores `["makeGetters"]` plus
- * `{ makeGetters: "gen" }`, and looking only at the specifier list would
- * match the wrong spelling.
+ * `importedNames` holds the original exported names, and `aliases` maps
+ * original to local separately. `import { makeGetters as gen }` stores
+ * `["makeGetters"]` plus `{ makeGetters: "gen" }`, so reading the
+ * specifier list alone matches the wrong spelling.
  *
- * Specifiers are plain strings, except in templates where an identifier
- * hole can occupy a specifier position; a hole binds no real name, so it
- * never matches.
+ * A specifier is a plain string unless a template put an identifier hole
+ * there. A hole binds no real name, so it never matches.
  */
 function exportedNameBoundTo(
   nameGroup: { importedNames: unknown[]; aliases?: Record<string, string> },

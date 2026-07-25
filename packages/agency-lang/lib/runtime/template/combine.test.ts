@@ -23,16 +23,14 @@ function program(source: string): Code {
 
 describe("_combine", () => {
   it("merges nothing into an empty statement list", () => {
-    // Matches parseStatements("") and the empty code literal. The literal
-    // and the runtime parser must not disagree about the same thing.
+    // Matches parseStatements("") and the empty code literal.
     const merged = _combine([]);
     expect(kindOf(merged)).toBe("statements");
     expect(merged.nodes).toHaveLength(0);
   });
 
   it("returns a single fragment unchanged", () => {
-    // Identity, so combine around a loop that ran once behaves like no
-    // combine at all.
+    // So combine around a loop that ran once behaves like no combine.
     const one = program(`def f(): number {\n  return 1\n}\n`);
     expect(_combine([one])).toBe(one);
   });
@@ -76,9 +74,8 @@ describe("_combine", () => {
   });
 
   it("merges several expressions into a statement list", () => {
-    // Two expressions cannot be one expression. Widening expr to statement
-    // is not a new decision — fill already accepts an expr fragment
-    // wherever statements go, because an expression IS a legal statement.
+    // Two expressions cannot be one expression. Widening is not a new
+    // decision, since fill already accepts expr wherever statements go.
     const merged = _combine([expr(`1 + 1`), expr(`2 + 2`)]);
     expect(kindOf(merged)).toBe("statements");
     expect(merged.nodes).toHaveLength(2);
@@ -90,9 +87,8 @@ describe("_combine", () => {
   });
 
   it("refuses to merge a program fragment with loose statements", () => {
-    // A declaration and a bare statement have different placement rules.
-    // Merging them silently produces a fragment that only fails much
-    // later, at the completed program's compile, with no useful position.
+    // A declaration and a bare statement have different placement rules,
+    // so a silent merge would fail much later with no useful position.
     expect(() =>
       _combine([program(`def a(): number {\n  return 1\n}\n`), statements(`const b = 2`)]),
     ).toThrow(/whole-program fragment cannot merge/);

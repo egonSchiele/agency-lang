@@ -8,14 +8,8 @@ import { clearSpliceCache } from "./cache.js";
 import { expandSplices } from "../../preprocessors/expandSplices.js";
 import type { AgencyProgram } from "../../types.js";
 
-/**
- * Count real generator runs.
- *
- * The cache's whole job is to not do the expensive thing, so the test has
- * to observe the expensive thing directly. Timing would be indirect and
- * flaky; watching for temp directories cannot work at all, since expansion
- * is synchronous and nothing else gets to look while it runs.
- */
+/** Count real generator runs. Timing would be flaky, and watching for temp
+ *  directories cannot work, since expansion is synchronous. */
 const spy = vi.hoisted(() => ({ runs: 0 }));
 
 vi.mock("./runGenerator.js", async (importOriginal) => {
@@ -30,14 +24,8 @@ vi.mock("./runGenerator.js", async (importOriginal) => {
 });
 
 /**
- * What happens on the SECOND compile.
- *
- * Everything else about splices is tested on a cold cache, which is the
- * easy half. The questions that only a rebuild answers are whether editing
- * a generator actually changes the output, and whether leaving it alone
- * actually skips the work — and the second one matters most, since twelve
- * callers build symbol tables and one of them fires on every keystroke in
- * the editor.
+ * What happens on the second compile. Every other splice test runs on a
+ * cold cache, which is the easy half.
  */
 
 let dir: string;
@@ -102,10 +90,8 @@ describe("rebuilding a file with a splice", () => {
   }, 60_000);
 
   it("picks up an edited helper one import away", () => {
-    // The reason the cache key hashes a whole closure rather than one
-    // file. The generator delegates to a helper and fills what it gets
-    // back into the code it returns, so editing the helper has to change
-    // the generated program.
+    // Why the cache key hashes a whole closure. The generator fills what
+    // the helper returns into the code it produces.
     const hostPath = write("host.agency", HOST);
     write("helper.agency", `export def label(): string {\n  return "old"\n}\n`);
     write(
@@ -121,9 +107,8 @@ describe("rebuilding a file with a splice", () => {
   }, 60_000);
 
   it("does not re-run the generator when nothing changed", () => {
-    // The whole point of the cache. Twelve callers build symbol tables and
-    // one of them fires on every keystroke in the editor, so a second
-    // expansion of unchanged input must cost nothing.
+    // The point of the cache. The LSP rebuilds on every keystroke, so a
+    // second expansion of unchanged input must cost nothing.
     const hostPath = write("host.agency", HOST);
     writeGenerator(`"steady"`);
 

@@ -97,8 +97,8 @@ describe("expandSplices", () => {
   }, 60_000);
 
   it("expands two splices in one file", () => {
-    // A declaration splice spreads N nodes and shifts the index of every
-    // splice after it, which is exactly where index-based grafting breaks.
+    // A declaration splice spreads N nodes and shifts every index after
+    // it, which is where index-based grafting breaks.
     writeDeclGenerator();
     write(
       "gen2.agency",
@@ -162,8 +162,8 @@ describe("expandSplices", () => {
   });
 
   it("leaves a splice inside a code literal alone", () => {
-    // The literal's body belongs to the program being generated, so a
-    // splice in there is that program's business, not this one's.
+    // The literal's body belongs to the program being generated, so its
+    // splices are that program's business.
     const source = `import { Code } from "std::agency"\n\nexport def wrap(): Code {\n  return [|\n    def f(): number {\n      return $( inner() )\n    }\n  |]\n}\n`;
     const program = parse(source);
     const result = expandSplices(program, write("host.agency", source), {});
@@ -173,8 +173,8 @@ describe("expandSplices", () => {
   });
 
   it("stamps loc.origin on grafted nodes", () => {
-    // The feature's distinguishing claim over toSource + runCode: an error
-    // inside generated code can still say where the code came from.
+    // What toSource plus runCode cannot do: an error inside generated code
+    // still says where it came from.
     writeDeclGenerator();
     const result = expand(
       `import { makeGreet } from "./gen.agency"\n\n$( makeGreet() )\n`,
@@ -202,11 +202,9 @@ describe("expandSplices", () => {
   });
 
   it("refuses a generator whose closure reaches back to the splicing file", () => {
-    // The cycle case. Running this generator would compile it, which
-    // builds a symbol table, which walks to host.agency, which has a
-    // splice — the loop the in-progress guard exists to stop. It is caught
-    // earlier and more cleanly here, by the nested-splice check, before
-    // anything is compiled at all.
+    // The cycle case. Running this generator would compile it, which walks
+    // back to host.agency, which has a splice. The nested-splice check
+    // catches it before anything compiles.
     const source = `import { g } from "./gen.agency"\n\nconst seed = 1\n\ndef f(): number {\n  return $( g() )\n}\n`;
     const hostPath = write("host.agency", source);
     write(
@@ -220,9 +218,8 @@ describe("expandSplices", () => {
   });
 
   it("refuses generated code that reads a name from the splice site", () => {
-    // The capture case, and the reason the rule exists. `tmp` here is the
-    // generator author's guess at a name; pasted into a body that has its
-    // own `tmp`, it would silently read the local one.
+    // Pasted into a body with its own `tmp`, this would silently read the
+    // local one.
     write(
       "gen.agency",
       `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [| tmp |]\n}\n`,
@@ -256,9 +253,8 @@ describe("expandSplices", () => {
   }, 60_000);
 
   it("allows generated code that calls a builtin", () => {
-    // Do not drop this. Without it, an over-strict implementation passes
-    // every other case here while rejecting every generator anyone would
-    // actually write.
+    // Do not drop this. Without it an over-strict implementation passes
+    // every other case here while rejecting every real generator.
     write(
       "gen.agency",
       `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    def shout(): string {\n      print("hi")\n      return "hi"\n    }\n  |]\n}\n`,
@@ -268,8 +264,8 @@ describe("expandSplices", () => {
   }, 60_000);
 
   it("refuses generated code leaning on an import the HOST made", () => {
-    // The subtle inverse of the case above: an implementation checking
-    // against the wrong import list gets this backwards and allows it.
+    // The inverse of the case above. Checking the wrong import list gets
+    // this backwards and allows it.
     write("dep.agency", `export def dep(): number {\n  return 1\n}\n`);
     write(
       "gen.agency",
@@ -285,10 +281,8 @@ describe("expandSplices", () => {
   }, 60_000);
 
   it("refuses a generated declaration that redeclares a host name", () => {
-    // The design assumed a collision here would be caught by Agency's own
-    // duplicate-declaration error. Measured: true for `def`, FALSE for
-    // top-level `const`, where the later one silently wins. So the rule is
-    // enforced rather than assumed.
+    // Agency catches this for `def` but not for top-level `const`, where
+    // the later one silently wins. So the rule is enforced here.
     write(
       "gen.agency",
       `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    const config = "generated"\n  |]\n}\n`,

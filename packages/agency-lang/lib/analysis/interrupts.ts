@@ -104,9 +104,9 @@ function analyzeOneFile(
   if (!parseResult.success) {
     throw new Error(`Failed to parse ${filePath}`);
   }
-  // Best-effort, matching this analysis's contract: a splice that will not
-  // expand is reported by the compile paths, and refusing to analyze
-  // interrupts because of it would be worse than analyzing what is there.
+  // Best-effort, matching this analysis. The compile paths report a splice
+  // that will not expand; refusing to analyze interrupts over it would be
+  // worse than analyzing what is there.
   const spliced = expandSplices(parseResult.result, filePath, config);
   const lifted = liftCallbackBlocks(spliced.ok ? spliced.value : parseResult.result);
   const info = buildCompilationUnit(lifted, symbolTable, filePath, source);

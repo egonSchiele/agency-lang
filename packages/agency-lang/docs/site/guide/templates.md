@@ -239,12 +239,12 @@ And one refusal: a program that still has holes cannot compile or run (`AG8001` 
 
 ## Compile-time splices: installing generated code
 
-Everything above makes code. None of it *installs* code. A `Code` value is data — you can print it, ship it to a subprocess with `runCode`, or fill more holes in it, but it never becomes part of the file you are writing.
+Everything above makes code. None of it *installs* code. A `Code` value is data. You can print it, ship it to a subprocess with `runCode`, or fill more holes in it, but it never becomes part of the file you are writing.
 
 `$( ... )` is the other half. It runs a function during compilation and pastes what that function returns into the file being compiled:
 
 ```ts
-// getters.agency — the generator
+// getters.agency: the generator
 import { Code } from "std::agency"
 
 export def makeGreeter(): Code {
@@ -257,7 +257,7 @@ export def makeGreeter(): Code {
 ```
 
 ```ts
-// main.agency — the file that uses it
+// main.agency: the file that uses it
 import { makeGreeter } from "./getters.agency"
 
 $( makeGreeter() )
@@ -320,23 +320,23 @@ $( makeLookups(["red", "blue"]) )   // get_red() and get_blue() now exist
 
 **A generator lives in another file.** It has to be compiled before the file that splices it can be, and a generator in the same file would need to be compiled after itself. Template Haskell calls this the stage restriction and pays the same cost. (`AG8005`)
 
-**A generator may not raise effects.** Reading a file, making a network call, running a command — all of these raise interrupts in Agency, and compilation installs no handlers, so there is nowhere for one to be answered. The compiler checks this before running anything. (`AG8003`)
+**A generator may not raise effects.** Reading a file, making a network call, and running a command all raise interrupts in Agency. Compilation installs no handlers, so there is nowhere for one to be answered. The compiler checks this before running anything. (`AG8003`)
 
 One consequence worth knowing: a generator cannot use `loadTemplate`, because loading a template reads a file. Write the template inline with `[| ... |]` instead.
 
 **A generator may not be nondeterministic.** No `llm()`, no clock. A build that produces different code each time is not a build, and it would also make caching silently wrong. (`AG8004`)
 
-**A generator may import only `std::` modules and relative `.agency` files** — its whole transitive import graph, not just its own imports. This is the rule that makes the effect check mean anything. TypeScript and JavaScript raise no effects at all, so a generator that could reach an npm package could do anything at all with nothing to check. (`AG8006`)
+**A generator may import only `std::` modules and relative `.agency` files.** That covers its whole transitive import graph, not just its own imports. This rule is what makes the effect check mean anything. JavaScript raises no effects, so a generator that could reach an npm package could do anything with nothing to check. (`AG8006`)
 
 **Splice arguments cannot name things the file declares.** The generator runs while your file is still being compiled, so a constant in it does not exist yet. Pass literals, code literals, or imported names. (`AG8011`)
 
 **Generated code may use only names it declares or imports.** A generated expression lands next to whatever locals are at the splice site, and a generated mention of `tmp` must not silently read the local `tmp`. Generated code that needs a helper imports it itself. (`AG8010`)
 
-**Generated declarations may not take a name already in use.** Two functions with the same name is an error in Agency, but two top-level constants is not — the later one silently wins — so a generator could otherwise replace one of your constants with nothing said. (`AG8012`)
+**Generated declarations may not take a name already in use.** Two functions with the same name is an error in Agency. Two top-level constants is not, and the later one silently wins, so a generator could otherwise replace one of your constants with nothing said. (`AG8012`)
 
 ### What it costs
 
-A generator runs in a child process with a 30-second and 512mb ceiling, so one that loops forever becomes an error rather than a hung compiler. Results are cached against the generator's content and the exact call, so an unchanged generator does not re-run — which matters most in an editor, where the symbol table is rebuilt on every keystroke.
+A generator runs in a child process with a 30-second and 512mb ceiling, so one that loops forever becomes an error rather than a hung compiler. Results are cached against the generator's content and the exact call, so an unchanged generator does not re-run. That matters most in an editor, where the symbol table is rebuilt on every keystroke.
 
 Because the code is pasted as a tree rather than printed and re-parsed, positions survive. A type error inside generated code says which generator produced it:
 

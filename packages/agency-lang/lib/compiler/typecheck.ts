@@ -115,11 +115,9 @@ function runCheckerPipeline<T>(
 
   return withSourcePath(source, sourcePath, (syntheticPath) => {
     const symbolTable = SymbolTable.build(syntheticPath, {});
-    // Expand splices before checking. A splice that cannot expand is left
-    // in place rather than reported: this pipeline answers "what does this
-    // code check as", and the compile paths are where a splice failure is
-    // reported with a position. An unexpanded splice simply checks as the
-    // unknown thing it is.
+    // A splice that cannot expand is left in place rather than reported.
+    // This pipeline answers what the code checks as; the compile paths
+    // report splice failures with a position.
     const spliced = expandSplices(program, syntheticPath, {});
     const expanded = spliced.ok ? spliced.value : program;
     const reExported = resolveReExports(expanded, symbolTable, syntheticPath);

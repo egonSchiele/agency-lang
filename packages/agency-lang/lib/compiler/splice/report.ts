@@ -4,14 +4,12 @@ import type { TypeCheckError } from "../../typeChecker/types.js";
 import type { SpliceDiagnostic } from "./types.js";
 
 /**
- * Turn a splice failure into the shape the rest of the compiler already
- * reports.
+ * Turn a splice failure into the shape the rest of the compiler reports.
  *
- * Splice failures cannot travel through the type checker the way other
- * AG-coded diagnostics do: expansion happens before checking, and by the
- * time the checker runs the splices are gone. So they arrive here instead,
- * and this is where they rejoin the ordinary path — same codes, same
- * formatting, same `agency explain` prose.
+ * Splice failures cannot travel through the type checker: expansion runs
+ * before checking, and the splices are gone by the time the checker sees
+ * the program. They rejoin the ordinary path here, keeping the same codes,
+ * formatting, and `agency explain` prose.
  */
 
 export function toTypeCheckError(
@@ -20,8 +18,8 @@ export function toTypeCheckError(
 ): TypeCheckError {
   const error = diagnostic(
     found.diagnostic,
-    // SpliceDiagnostic carries plain string params because it crosses
-    // module boundaries where the diagnostic name is not statically known.
+    // SpliceDiagnostic carries plain string params, because the diagnostic
+    // name is not statically known where these are built.
     found.params as never,
     found.loc,
   );

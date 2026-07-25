@@ -61,9 +61,8 @@ function generatorReturning(body: string, params: string = ""): {
 
 describe("runGenerator", () => {
   it("brings back a program fragment", () => {
-    // The literal body is multi-line on purpose: a one-line `def` inside
-    // `[| |]` does not parse (issue #681), which is shipped behavior this
-    // feature has to write around.
+    // Multi-line on purpose: a one-line `def` inside `[| |]` does not
+    // parse. See #681.
     const { splice, generator } = generatorReturning(
       `  return [|\n    def greet(): string {\n      return "hi"\n    }\n  |]`,
     );
@@ -107,8 +106,8 @@ describe("runGenerator", () => {
       "gen.agency",
       `import { Code } from "std::agency"\n\nexport def makeGetters(): Code {\n  return [| 7 |]\n}\n`,
     );
-    // The host renamed it, so the printed expression says `gen`, not
-    // `makeGetters`. The synthesized runner has to bind that spelling.
+    // The host renamed it, so the printed expression says `gen`. The
+    // runner has to bind that spelling.
     const splice = spliceIn(
       `import { makeGetters as gen } from "./gen.agency"\n\n$( gen() )\n`,
     );
@@ -121,8 +120,8 @@ describe("runGenerator", () => {
   }, 60_000);
 
   it("carries a code literal in the splice expression through unharmed", () => {
-    // This task synthesizes source by PRINTING the splice expression, and
-    // a code literal is the likeliest thing to survive that badly.
+    // The splice expression is printed back to source, and a code literal
+    // is the likeliest thing to survive that badly.
     const modulePath = write(
       "gen.agency",
       `import { Code } from "std::agency"\n\nexport def g(piece: Code): Code {\n  return piece\n}\n`,
@@ -137,10 +136,9 @@ describe("runGenerator", () => {
   }, 60_000);
 
   it("reports a generator that blows up at runtime as AG8008", () => {
-    // The runtime converts an exception inside an Agency function into a
-    // Failure Result rather than letting it kill the process, so this is
-    // what "the generator threw" actually looks like from out here. The
-    // generator's own message has to survive into the diagnostic.
+    // The runtime turns an exception inside an Agency function into a
+    // Failure Result, so this is what "the generator threw" looks like
+    // from here. Its message has to survive into the diagnostic.
     const { splice, generator } = generatorReturning(
       `  const x = notDefinedAnywhere(1)\n  return [| 1 |]`,
     );
@@ -165,9 +163,8 @@ describe("runGenerator", () => {
     const { splice, generator } = generatorReturning(
       `  while (true) {\n    let x = 1\n  }\n  return [| 1 |]`,
     );
-    // A short limit on purpose: what could break here is the signal
-    // handling, not the number. `err.killed` is undefined on a timeout
-    // kill, so the code reads `err.signal` instead.
+    // A short limit on purpose. What could break is the signal handling,
+    // not the number.
     const result = runGenerator(splice, generator, dir, { wallClockMs: 3_000 });
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -186,8 +183,8 @@ describe("runGenerator", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.diagnostic.diagnostic).toBe("spliceGeneratorFailed");
-    // Either limit is an acceptable outcome — the point is that an
-    // unbounded generator becomes a diagnostic rather than a hung compiler.
+    // Either limit is fine. The point is that an unbounded generator
+    // becomes a diagnostic rather than a hung compiler.
     expect(result.diagnostic.params.reason).toMatch(/memory limit|did not finish/);
   }, 60_000);
 
@@ -204,8 +201,8 @@ describe("runGenerator", () => {
   }, 60_000);
 
   it("refuses an object shaped like Code whose nodes field is not an array", () => {
-    // This is exactly what the Array.isArray half of isCode exists for: a
-    // value with the right `type` tag that would crash the walker later.
+    // What the Array.isArray half of isCode exists for: a value with the
+    // right `type` tag that would crash the walker later.
     const modulePath = write(
       "gen.agency",
       `export def g(): any {\n  return { type: "agencyProgram", nodes: "not an array" }\n}\n`,
@@ -218,9 +215,8 @@ describe("runGenerator", () => {
   }, 60_000);
 
   it("reports an unhandled interrupt rather than a shapeless failure", () => {
-    // The backstop behind the static effect check. Nothing installs a
-    // handler during compilation, so a dangerous operation that somehow got
-    // past eligibility still cannot complete.
+    // The backstop behind the static effect check. Compilation installs no
+    // handlers, so a dangerous operation cannot complete.
     const modulePath = write(
       "gen.agency",
       `import { Code } from "std::agency"\nimport { read } from "std::file"\n\nexport def g(): Code {\n  const contents = read("nope.txt")\n  return [| 1 |]\n}\n`,

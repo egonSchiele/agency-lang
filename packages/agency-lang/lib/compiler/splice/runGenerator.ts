@@ -15,17 +15,12 @@ import type { SpliceDiagnostic, SpliceResult } from "./types.js";
 /**
  * Run one generator and bring back the `Code` value it produced.
  *
- * The generator runs in a child process, and the parent BLOCKS on it. That
- * is not a preference, it is forced: `_run` (lib/runtime/ipc.ts) is async
- * because it forks, but the whole compile pipeline including
- * `SymbolTable.build` is synchronous, and expansion has to happen inside
- * it. `execFileSync` is what makes an async child usable from a
- * synchronous caller.
+ * The parent blocks on the child. The compile pipeline is synchronous and
+ * expansion happens inside it, so `execFileSync` is the only way to reach
+ * an async child from here.
  *
- * A child process also buys the two limits this feature needs. A generator
- * that loops forever would otherwise hang the compiler with no way out —
- * the hole Template Haskell has and does not close. Here it becomes an
- * ordinary error message after 30 seconds.
+ * The child also gives us the limits. A generator that loops forever
+ * becomes an error message instead of a hung compiler.
  */
 
 /** Wall clock. A generator does AST manipulation; 30s is enormous for that. */
@@ -38,12 +33,8 @@ export const MEMORY_MB = 512;
  *  with anything the generator module exports. */
 const RUNNER_NODE = "__splice";
 
-/**
- * The limits are overridable so their MECHANISM can be tested without the
- * test paying their real values. A test proving the timeout works should
- * not take 30 seconds; what could plausibly break is the signal handling,
- * not the number.
- */
+/** Limits are overridable so a test can prove the timeout works without
+ *  waiting 30 seconds for it. */
 export type RunGeneratorOptions = {
   config?: AgencyConfig;
   wallClockMs?: number;
@@ -96,17 +87,10 @@ function runInTempDir(
 }
 
 /**
- * The program that runs the generator: exactly one import and one node.
+ * The program that runs the generator: one import and one node.
  *
- * Deliberately NOT the host file's import lines. Copying those was the
- * previous draft's design and it is both leaky and wrong — it drags in
- * every other import the host has, including the npm and `pkg::` imports
- * the eligibility check just banned, and it trips the test-import denial in
- * `resolveImports` when the host uses `import test`.
- *
- * The expression is printed back from the AST rather than sliced out of the
- * source, so what runs is exactly what the parser understood the user to
- * have written.
+ * Never copy the host's import lines. They would drag in the npm and
+ * `pkg::` imports the eligibility check just banned.
  */
 function runnerSource(
   splice: Splice,
@@ -130,12 +114,9 @@ function runnerSource(
 }
 
 /**
- * What the splice expression calls the generator, which is not necessarily
- * what the module exports it as. `import { makeGetters as gen }` followed
- * by `$( gen(3) )` prints an expression mentioning `gen`, so the runner has
- * to bind that spelling. A splice whose expression is not a plain call
- * falls back to the exported name; the expansion pass rejects those before
- * they reach here, so the fallback is only for safety.
+ * What the splice calls the generator, which may differ from what the
+ * module exports. After `import { makeGetters as gen }`, the printed
+ * expression says `gen`, so the runner has to bind that spelling.
  */
 function localName(splice: Splice, exportedName: string): string {
   const expression = splice.expression as { type: string; functionName?: string };
@@ -151,18 +132,12 @@ function importSpecifier(fromDir: string, target: string): string {
 }
 
 /**
- * Compile the runner from a REAL path.
+ * Compile the runner from a real path. `compileSource` writes to its own
+ * temp dir, where the generator's relative import cannot resolve.
  *
- * `compileSource` cannot do this. It writes source to its own temp dir, so
- * a program importing the generator by relative path cannot resolve it —
- * the generator is not in that directory. Same root cause as the fail-open
- * effect check: anything that needs relative imports to resolve must take a
- * path, never a source string.
- *
- * The typechecker is turned off for this compile. `compileEntry` reports a
- * type error by calling `process.exit(1)`, which would take the user's
- * whole build down with no diagnostic instead of reporting AG8008. The
- * generator module's own types are checked when it is compiled normally.
+ * The typechecker is off here because `compileEntry` reports a type error
+ * with `process.exit(1)`, which would kill the user's build instead of
+ * reporting AG8008.
  */
 function compileRunner(
   runnerPath: string,
@@ -186,11 +161,8 @@ function compileRunner(
   }
 }
 
-/**
- * The child. It writes to a file rather than stdout because a generator may
- * legitimately print, and a `console.log` in the middle of the payload
- * would corrupt it.
- */
+/** The child writes to a file, not stdout: a generator may print, and that
+ *  would corrupt the payload. */
 function childScript(moduleSpecifier: string, resultsPath: string): string {
   return [
     `import { ${RUNNER_NODE} } from ${JSON.stringify(moduleSpecifier)};`,
@@ -202,13 +174,8 @@ function childScript(moduleSpecifier: string, resultsPath: string): string {
   ].join("\n");
 }
 
-/**
- * Run the child under both limits.
- *
- * Which signal came back is the only way to tell the two limits apart, and
- * the obvious field does not work: `err.killed` comes back `undefined` on a
- * timeout kill. `err.signal` is the one that is actually set.
- */
+/** Run the child under both limits. Read `err.signal` to tell them apart.
+ *  `err.killed` is `undefined` even on a timeout kill. */
 function execute(
   scriptPath: string,
   cwd: string,
@@ -256,12 +223,9 @@ function readResult(
   const envelope = JSON.parse(fs.readFileSync(resultsPath, "utf-8"));
   const data = envelope?.data;
 
-  // A generator rarely crashes the child process, because the runtime
-  // converts an exception thrown inside an Agency function into a Failure
-  // Result and returns it normally. So the most common way a generator
-  // fails arrives here as an ordinary value, and reading the message out of
-  // it is the difference between "your generator hit a ReferenceError on
-  // line 4" and "it returned an object".
+  // A generator rarely crashes the child. The runtime turns an exception
+  // inside an Agency function into a Failure Result and returns it
+  // normally, so the usual failure arrives here as an ordinary value.
   if (isResultFailure(data)) {
     return {
       ok: false,
@@ -270,10 +234,9 @@ function readResult(
   }
   const value = isResultSuccess(data) ? data.value : data;
 
-  // An interrupt nobody handled comes back as an Interrupt[] in `data`.
-  // That is the backstop behind the static effect check: even if a
-  // dangerous operation slipped past eligibility, it cannot complete here,
-  // because compilation installs no handlers.
+  // An unhandled interrupt comes back as an Interrupt[]. This backs up the
+  // static effect check: compilation installs no handlers, so a dangerous
+  // operation cannot complete even if it slipped past eligibility.
   if (isInterruptList(value)) {
     return {
       ok: false,
@@ -297,9 +260,8 @@ function readResult(
   return { ok: true, value };
 }
 
-/** The Result shapes from `lib/runtime/result.ts`, recognized by their
- *  `__type` tag. Checked here rather than imported because this value
- *  crossed a process boundary as plain JSON and carries no class identity. */
+/** The Result shapes from `lib/runtime/result.ts`. Matched on the `__type`
+ *  tag because this value arrived as plain JSON. */
 function isResultFailure(value: unknown): value is { error: unknown } {
   return isTagged(value) && value.success === false;
 }
@@ -316,16 +278,16 @@ function isTagged(value: unknown): value is { success: unknown } {
   );
 }
 
-/** A Failure's `error` may be a string, an Error-shaped object, or
- *  structured data. Pull out something a person can read. */
+/** Pull something readable out of a Failure's `error`, whatever shape it
+ *  arrived in. */
 function errorText(error: unknown): string {
   if (typeof error === "string") return error;
   const message = (error as { message?: unknown })?.message;
   return typeof message === "string" ? message : JSON.stringify(error);
 }
 
-/** Shaped like `lib/runtime/interrupts.ts`'s `Interrupt`, checked loosely
- *  because this value crossed a process boundary as plain JSON. */
+/** Shaped like `Interrupt` in `lib/runtime/interrupts.ts`, checked loosely
+ *  because this arrived as plain JSON. */
 function isInterruptList(value: unknown): value is Array<{ name?: string }> {
   return (
     Array.isArray(value) &&

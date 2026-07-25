@@ -123,10 +123,9 @@ export function compileSource(
       if (failure) return failure;
     }
 
-    // 2b. Expand compile-time splices. After the policy check, because a
-    // splice cannot introduce an import and the policy is about what the
-    // author wrote. Before everything else, because generated declarations
-    // have to be visible to the symbol table and the compilation unit.
+    // 2b. Expand compile-time splices. After the policy check, since the
+    // policy judges what the author wrote. Before everything else, since
+    // generated declarations must reach the symbol table.
     const expanded = expandSplices(parsedProgram, syntheticPath, config);
     if (!expanded.ok) {
       return {

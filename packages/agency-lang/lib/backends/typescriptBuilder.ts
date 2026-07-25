@@ -510,16 +510,10 @@ export class TypeScriptBuilder {
       throw new Error(`${DIAGNOSTICS.unfilledHoles.code}: ${rendered}`);
     }
 
-    // A tripwire, not a feature. Expansion removes every splice before
-    // codegen, so one reaching here means some compile path does not run
-    // expandSplices — and there are five that must. Without this the
-    // symptom is a raw "Unhandled Agency node type" stack trace out of
-    // processNode, which says nothing about the actual mistake.
-    //
-    // This started as scaffolding while expansion was unwritten. It earns
-    // its keep now for the opposite reason: the wiring is spread across
-    // five call sites and a sixth will be added by someone who has not
-    // read this file.
+    // A tripwire. Expansion removes every splice before codegen, so one
+    // reaching here means a compile path skipped expandSplices, and five
+    // must run it. Without this the symptom is a raw "Unhandled Agency
+    // node type" stack trace that says nothing about the real mistake.
     const unexpanded = [...walkNodesArray(program.nodes)].filter(
       (visit) => visit.node.type === "splice",
     );

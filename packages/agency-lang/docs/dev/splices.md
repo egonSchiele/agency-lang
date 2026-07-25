@@ -1,6 +1,6 @@
 # Compile-time splices
 
-`$( gen(args) )` runs `gen` during compilation and pastes the `Code` value it returns into the file being compiled. This is the half of Template Haskell that code literals (`docs/dev/template-agency.md`) did not ship: literals make code, splices install it.
+`$( gen(args) )` runs `gen` during compilation and pastes the `Code` value it returns into the file being compiled. This is the half of Template Haskell that code literals did not ship: literals make code, splices install it. See `docs/dev/template-agency.md`.
 
 User-facing documentation is in `docs/site/guide/templates.md`. This file covers the parts you only need if you are changing how splices work.
 
@@ -24,7 +24,7 @@ parsed[absPath] = { symbols: classifySymbols(program), program };
 
 ## Every path that must expand
 
-Five, and missing one is the failure mode to worry about — it produces a file that compiles fine through one entry point and crashes through another.
+Five, and missing one is the failure mode to worry about. It produces a file that compiles fine through one entry point and crashes through another.
 
 | Where | On failure |
 | --- | --- |
@@ -34,23 +34,23 @@ Five, and missing one is the failure mode to worry about — it produces a file 
 | `lib/compiler/typecheck.ts` (`runCheckerPipeline`) | Keep the unexpanded program. This pipeline answers "what does this check as"; reporting belongs to the compile paths. |
 | `lib/analysis/interrupts.ts` (`analyzeOneFile`) | Keep the unexpanded program. Refusing to analyze interrupts because a splice failed would be worse than analyzing what is there. |
 
-The map of paths is the same one `liftCallbackBlocks` marks — if a sixth appears, it will need both.
+The map of paths is the same one `liftCallbackBlocks` marks. If a sixth appears, it will need both.
 
-`TypeScriptBuilder.build` has a tripwire for this. A splice reaching code generation means expansion did not run, and without the tripwire the symptom is a raw `Unhandled Agency node type` stack trace that says nothing about the actual mistake.
+`TypeScriptBuilder.build` has a tripwire for this. A splice reaching code generation means expansion did not run. Without the tripwire the symptom is a raw `Unhandled Agency node type` stack trace that says nothing about the actual mistake.
 
 ## The three phases
 
 `expandSplices` keeps decide, run, and graft separate, because they change for different reasons.
 
-1. **Decide** — an ordered list of checks, each `(context) => SpliceDiagnostic | null`, applied by a short-circuiting reduce. Adding a rule is an entry in `CHECKS`, never an edit to the pass. Short-circuiting matters: each eligibility check parses the generator's whole import closure.
-2. **Run** — `runGenerator`. Not a check. It produces a value, so it returns `SpliceResult<Code>`, and it does not belong in the array.
-3. **Graft** — the capture rule, the position/kind rule, then paste. These need the *result*, which is why phase 1 cannot simply be "all the checks".
+1. **Decide.** An ordered list of checks, each `(context) => SpliceDiagnostic | null`, applied by a short-circuiting reduce. Adding a rule means adding an entry to `CHECKS`, never editing the pass. Short-circuiting matters, because each eligibility check parses the generator's whole import closure.
+2. **Run.** `runGenerator`. Not a check. It produces a value, so it returns `SpliceResult<Code>` and does not belong in the array.
+3. **Graft.** The capture rule, the position/kind rule, then paste. These need the *result*, which is why phase 1 cannot simply be "all the checks".
 
 Grafting matches splices by object identity rather than by index. A declaration splice spreads N nodes and shifts the position of every splice after it, so index-based grafting breaks on the second splice in a file.
 
 ## Why the cache is mandatory
 
-Not an optimization. `SymbolTable.build` has twelve non-test callers, and `lib/lsp/server.ts` calls it from `onDidChangeContent` — once per keystroke. Without a memo, every splice in an open file forks a child process every time the user types a character.
+Not an optimization. `SymbolTable.build` has twelve non-test callers, and `lib/lsp/server.ts` calls it from `onDidChangeContent`, once per keystroke. Without a memo, every splice in an open file forks a child process every time the user types a character.
 
 The key is the printed splice expression plus a content hash of the generator's whole transitive closure of relative `.agency` files. Hashing the closure rather than one file is what makes editing a helper one import away invalidate the memo.
 
@@ -64,7 +64,7 @@ Failures are cached too. A currently-broken generator is the case an editor hits
 
 `_run` is async because it forks, but the whole compile pipeline including `SymbolTable.build` is synchronous, and expansion has to happen inside it. `runGenerator` therefore uses `execFileSync`: the parent blocks while the child does async work internally.
 
-It synthesizes a runner with exactly one import and one node, writes it under `.agency-tmp/`, and compiles it **from a real path**. `compileSource` cannot do this — it writes to its own temp directory, so a program importing the generator by relative path cannot resolve it. The same root cause bit the effect check: anything needing relative imports to resolve must take a path, never a source string.
+It synthesizes a runner with exactly one import and one node, writes it under `.agency-tmp/`, and compiles it **from a real path**. `compileSource` cannot do this. It writes to its own temp directory, so a program importing the generator by relative path cannot resolve it. The same root cause bit the effect check: anything needing relative imports to resolve must take a path, never a source string.
 
 Things that are easy to get wrong here:
 
@@ -81,7 +81,7 @@ That only holds if a generator cannot reach code with no effects to check. A pla
 
 Unhandled interrupts are the backstop rather than the mechanism. Compilation installs no handlers, so an operation that somehow passed eligibility still cannot complete.
 
-Calibration: this is closer to the npm `postinstall` problem than to a new hole. The generator is code already in your project, and compiling already runs your code. npm, Template Haskell, and Rust proc macros check nothing at all.
+For calibration, this is closer to the npm `postinstall` problem than to a new hole. The generator is code already in your project, and compiling already runs your code. npm, Template Haskell, and Rust proc macros check nothing at all.
 
 ## Known gap: cross-module effect propagation
 
@@ -94,7 +94,7 @@ gen.agency, calling h()  →  { g: [] }
 
 A generator that delegates its effectful work one file away reports an empty effect list, which reads as "safe to run at compile time". Tracked as **#680**.
 
-Until that is fixed, `checkEffects` and `checkDeterminism` walk the generator's whole transitive closure: the generator's own file is checked by name, and across an import boundary *any* effectful export refuses. Coarse and deliberately so — it fails closed, and generators are small and effect-free by rule anyway. When #680 lands, `lib/compiler/splice/eligibility.ts` can go back to a direct lookup, and its comment says so.
+Until that is fixed, `checkEffects` and `checkDeterminism` walk the generator's whole transitive closure: the generator's own file is checked by name, and across an import boundary *any* effectful export refuses. Coarse and deliberately so. It fails closed, and generators are small and effect-free by rule anyway. When #680 lands, `lib/compiler/splice/eligibility.ts` can go back to a direct lookup, and its comment says so.
 
 ## Two claims that were tested and did not hold
 
@@ -114,10 +114,10 @@ Two things stop that. `checkNoNestedSplice` refuses a generator whose closure co
 
 `lib/runtime/template/graft.ts` holds what filling a hole and expanding a splice must agree about: origin stamping and the position/kind table. Origin stamping is the detail that goes stale first once there are two copies of it, and it is what makes an error inside generated code attributable at all.
 
-`formatErrors` reads that stamp and appends ``(in code generated by `name`)``. This is best-effort: a diagnostic anchored at a node carrying no position of its own has no stamp to read, and attribution for those needs the fragment-checker entry point that `fill.ts` already records as a follow-up.
+`formatErrors` reads that stamp and appends ``(in code generated by `name`)``. This is best-effort. A diagnostic anchored at a node carrying no position of its own has no stamp to read. Attribution for those needs the fragment-checker entry point that `fill.ts` records as a follow-up.
 
 ## Not in scope
 
-No introspection of any kind — no `reify`, no seeing inside types, no asking the compiler about a name. Generators take arguments. Everything hard about splices is independent of introspection, and introspection without splices would have nowhere to put its answers, so the ordering was forced.
+No introspection of any kind: no `reify`, no seeing inside types, no asking the compiler about a name. Generators take arguments. Everything hard about splices is independent of introspection, and introspection without splices would have nowhere to put its answers, so the ordering was forced.
 
 Holes still cannot appear in property-name position, so a generator cannot emit `p.#field`. That blocks a `makeLenses`-shaped use case and is tracked as **#678**.

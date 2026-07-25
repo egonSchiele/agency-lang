@@ -564,19 +564,11 @@ export function formatErrors(errors: TypeCheckError[]): string {
 
 /**
  * Name the generator when the offending code was pasted in rather than
- * written by hand.
+ * written by hand. Otherwise the user reads a type error pointing at code
+ * they never wrote, with nothing saying where it came from.
  *
- * Without this a splice's payoff is invisible: the user reads a type error
- * pointing into their own file at code they never wrote, with nothing
- * saying where it came from. The `origin` stamp that makes this possible
- * survives only because expansion grafts an AST — printing to source and
- * re-parsing, which is what `toSource` plus `runCode` does, drops `loc`
- * entirely.
- *
- * Best-effort by nature. A diagnostic anchored at a node that carries no
- * position of its own (a bare literal, say) has no stamp to read, and
- * attribution for those needs the fragment-checker entry point that
- * `fill.ts` already records as a follow-up.
+ * Best-effort. A diagnostic anchored at a node with no position of its own
+ * has no stamp to read.
  */
 function originSuffix(err: TypeCheckError): string {
   const origin = err.loc?.origin;

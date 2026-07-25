@@ -3,27 +3,20 @@ import type { Code } from "./code.js";
 import type { SourceLocation } from "../../types/base.js";
 
 /**
- * What the two ways of grafting Agency code into other Agency code have in
- * common: filling a hole (`fill.ts`) and expanding a compile-time splice
- * (`expandSplices.ts`).
+ * What filling a hole (`fill.ts`) and expanding a splice
+ * (`expandSplices.ts`) must agree about.
  *
- * They differ in almost everything else — one runs at template-fill time
- * against a `Hole`, the other during compilation against a `Splice` — but
- * they answer the same two questions, and the answers must not drift apart.
- * Origin stamping in particular is the detail that goes stale first once
- * there are two copies of it, and it is what makes an error inside
- * generated code attributable at all.
+ * The two run at different times against different node types, but they
+ * answer the same two questions, and the answers must not drift apart.
+ * Origin stamping is what makes an error inside generated code
+ * attributable, and it is the first thing to go stale in a second copy.
  */
 
 /** Who a grafted node came from. */
 export type CodeOrigin = NonNullable<SourceLocation["origin"]>;
 
-/**
- * Which fragment kinds may fill each syntactic position.
- *
- * A hole's `sort` and a splice's position are the same question asked
- * twice: what shape of code fits here?
- */
+/** Which fragment kinds may fill each syntactic position. A hole's `sort`
+ *  and a splice's position both ask what shape of code fits here. */
 export const KINDS_FOR_SORT: Record<string, string[]> = {
   expr: ["expr"],
   // "expr" is admissible because an expression IS a legal statement in
@@ -44,13 +37,11 @@ export function kindFitsSort(code: Code, sort: string): boolean {
 }
 
 /**
- * Stamp `origin` onto EVERY node of a grafted fragment, not just the top.
+ * Stamp `origin` onto every node of a grafted fragment, not just the top.
  *
- * A fragment's inner nodes carry positions into a source that no longer
- * exists — a template string, or a generator's own file — so an error
- * there must still say where the code came from. Recurses the whole tree,
- * deep-cloning as it goes, which also protects against aliasing the
- * caller's value.
+ * Inner nodes carry positions into a source that no longer exists, so an
+ * error there must still say where the code came from. Deep-clones as it
+ * recurses, which also avoids aliasing the caller's value.
  */
 export function stampOrigin<T>(node: T, origin: CodeOrigin): T {
   return stampAny(node, origin) as T;
@@ -64,10 +55,8 @@ function stampAny(node: unknown, origin: CodeOrigin): unknown {
   for (const key of Object.keys(source)) {
     out[key] = key === "loc" ? source[key] : stampAny(source[key], origin);
   }
-  // Only nodes that already carry a position get the stamp — their loc
-  // points into a source that no longer exists, so the origin marker is
-  // what keeps an error there attributable. Loc-less sub-records (text
-  // segments and the like) keep their exact shape.
+  // Only nodes that already carry a position get the stamp. Loc-less
+  // sub-records like text segments keep their exact shape.
   if (source.loc !== undefined) {
     out.loc = { ...(source.loc as SourceLocation), origin };
   }

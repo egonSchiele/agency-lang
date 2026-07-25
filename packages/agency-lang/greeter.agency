@@ -1,0 +1,11 @@
+// getters.agency — the generator
+import { Code } from "std::agency"
+import { env } from "std::system"
+
+export def makeGreeter(): Code {
+  return [|
+    def greet(): string {
+      return "hello!! ${env("HOME")}"
+    }
+  |]
+}

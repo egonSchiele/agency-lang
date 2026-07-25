@@ -688,7 +688,7 @@ combine(codes: Code[]): Result<Code>
 
 Merge several Code fragments into one, in order. Use this to build one
   fragment from a loop, for example one function per item in a list.
-  Fragments of the same kind merge into that kind; expressions merge into
+  Fragments of the same kind merge into that kind. Expressions merge into
   a statement list. A whole-program fragment cannot merge with loose
   statements or expressions.
 

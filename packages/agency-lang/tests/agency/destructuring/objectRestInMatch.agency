@@ -1,7 +1,12 @@
 // `{ a, ...rest }` lowers to a call to the synthetic `__objectRest`, which the
-// TypeScript builder compiles away. The typechecker runs in between, so it saw
-// a call with no declaration and reported it as an undefined function — object
-// rest was unusable in a pattern, in every position.
+// TypeScript builder compiles away.
+//
+// This file covers the BUILDER half: that the call becomes working code rather
+// than a call to something that does not exist at runtime. It does NOT guard
+// the typechecker half — AG4004 is a warning here, so these nodes run fine
+// even when the diagnostic wrongly fires. That half is pinned by
+// lib/typeChecker/undefinedFunctionDiagnostic.test.ts, which asserts on the
+// diagnostic list directly.
 
 def describe(o: any): string {
   return match (o) {

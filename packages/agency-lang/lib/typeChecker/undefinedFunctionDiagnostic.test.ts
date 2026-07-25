@@ -442,6 +442,19 @@ describe("synthetic calls the lowerer emits", () => {
     expect(errs.filter((e) => e.code === "AG4004")).toEqual([]);
   });
 
+  it("object rest in a for-loop pattern reports no undefined function", () => {
+    // A third lowering site, and the one most likely to be missed: the loop
+    // variable is a pattern too.
+    const errs = errorsFrom(
+      `node main() {
+  const xs = [{ name: "a", age: 1 }]
+  for ({ name, ...rest } in xs) { print(name) }
+}`,
+      REST_CONFIG,
+    );
+    expect(errs.filter((e) => e.code === "AG4004")).toEqual([]);
+  });
+
   it("a genuinely undefined function is still reported", () => {
     const errs = errorsFrom(
       `node main() {

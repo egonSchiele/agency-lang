@@ -2,7 +2,7 @@
   "tests": [
     {
       "nodeName": "restInMatchArm",
-      "description": "An object rest binder inside a match arm compiles and runs; the synthetic __objectRest call is not reported as an undefined function.",
+      "description": "Object rest in a match arm produces working code: the synthetic __objectRest call is compiled away by the builder rather than reaching runtime.",
       "input": "",
       "expectedOutput": "\"Ada lives in NY\"",
       "evaluationCriteria": [

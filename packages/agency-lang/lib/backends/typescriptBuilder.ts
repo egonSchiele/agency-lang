@@ -105,6 +105,7 @@ import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
 import { resolveTypeDeep, safeResolveType } from "../typeChecker/assignability.js";
 import { isAnyType, isFunctionTyped, paramAcceptsFailure } from "../typeChecker/utils.js";
 import { rejectValueParamCycle } from "./valueParamCycle.js";
+import { OBJECT_REST_FN } from "../constants.js";
 
 import { $, ts } from "../ir/builders.js";
 
@@ -2725,7 +2726,7 @@ export class TypeScriptBuilder {
       });
     }
 
-    if (node.functionName === "__objectRest") {
+    if (node.functionName === OBJECT_REST_FN) {
       return ts.raw(this.buildObjectRestIIFE(node));
     }
 

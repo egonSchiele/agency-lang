@@ -405,3 +405,50 @@ describe("undefined function diagnostic — imported nodes", () => {
     expect(hits[0].message).toContain("reserved block keyword");
   });
 });
+
+describe("synthetic calls the lowerer emits", () => {
+  // `{ a, ...rest }` lowers to a call to `__objectRest`, which the TypeScript
+  // builder compiles away. The typechecker runs in between and used to report
+  // it as an undefined function, so object rest in a pattern was unusable in
+  // any position.
+  const REST_CONFIG: AgencyConfig = {
+    typechecker: { enabled: true, undefinedFunctions: "error" },
+  };
+
+  it("object rest in a binding pattern reports no undefined function", () => {
+    const errs = errorsFrom(
+      `node main() {
+  const o = { name: "x", age: 1 }
+  const { name, ...rest } = o
+  print(name)
+}`,
+      REST_CONFIG,
+    );
+    expect(errs.filter((e) => e.code === "AG4004")).toEqual([]);
+  });
+
+  it("object rest in a match pattern reports no undefined function", () => {
+    const errs = errorsFrom(
+      `node main() {
+  const o = { name: "x", age: 1 }
+  const r = match (o) {
+    { name, ...rest } => "a"
+    _ => "b"
+  }
+  print(r)
+}`,
+      REST_CONFIG,
+    );
+    expect(errs.filter((e) => e.code === "AG4004")).toEqual([]);
+  });
+
+  it("a genuinely undefined function is still reported", () => {
+    const errs = errorsFrom(
+      `node main() {
+  print(notARealFunction(1))
+}`,
+      REST_CONFIG,
+    );
+    expect(errs.some((e) => e.code === "AG4004")).toBe(true);
+  });
+});

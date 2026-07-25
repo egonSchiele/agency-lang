@@ -1,0 +1,29 @@
+// `{ a, ...rest }` lowers to a call to the synthetic `__objectRest`, which the
+// TypeScript builder compiles away. The typechecker runs in between, so it saw
+// a call with no declaration and reported it as an undefined function — object
+// rest was unusable in a pattern, in every position.
+
+def describe(o: any): string {
+  return match (o) {
+    { name, ...rest } => "${name} lives in ${rest.city}"
+    _ => "other"
+  }
+}
+
+node restInMatchArm() {
+  return describe({ name: "Ada", age: 36, city: "NY" })
+}
+
+node restInBinding() {
+  const o = { name: "Ada", age: 36, city: "NY" }
+  const { name, ...rest } = o
+  return "${name} lives in ${rest.city}"
+}
+
+node restExcludesNamedKeys() {
+  // The rest binder holds the keys the pattern did not name, and not the ones
+  // it did.
+  const o = { name: "Ada", age: 36, city: "NY" }
+  const { name, ...rest } = o
+  return [rest.age, rest.name == null]
+}

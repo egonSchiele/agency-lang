@@ -1,0 +1,37 @@
+{
+  "tests": [
+    {
+      "nodeName": "restInMatchArm",
+      "description": "An object rest binder inside a match arm compiles and runs; the synthetic __objectRest call is not reported as an undefined function.",
+      "input": "",
+      "expectedOutput": "\"Ada lives in NY\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "restInBinding",
+      "description": "The same binder in let/const position, which was broken identically.",
+      "input": "",
+      "expectedOutput": "\"Ada lives in NY\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "restExcludesNamedKeys",
+      "description": "The rest binder holds the keys the pattern did not name, and not the ones it did.",
+      "input": "",
+      "expectedOutput": "[36,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

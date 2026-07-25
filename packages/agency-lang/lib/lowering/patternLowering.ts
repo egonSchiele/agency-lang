@@ -50,6 +50,7 @@ import type {
 import type { ValueAccess, AccessChainElement } from "../types/access.js";
 import type { SourceLocation } from "../types/base.js";
 import { mapBodies } from "../utils/mapBodies.js";
+import { OBJECT_REST_FN } from "../constants.js";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -1472,7 +1473,7 @@ function makeObjectRestCall(
   };
   return {
     type: "functionCall",
-    functionName: "__objectRest",
+    functionName: OBJECT_REST_FN,
     arguments: [cloneExpr(source), keysArray],
     loc: loc as SourceLocation,
   };

@@ -193,6 +193,20 @@ The `"unknown"` sentinel makes this fail-closed. A generator containing a bare `
 
 The generator returns a `Code` value. The compiler splices that value's nodes into the AST at the splice site and continues compiling. From that point on there is no distinction: the generated `greet` is a function in your file, callable, type-checked, and compiled with everything else.
 
+#### What generated code may refer to
+
+Pasting code into a file raises a capture question, and it bites hardest in expression position. A declaration splice is mostly safe by accident: if a generator emits a top-level `const config` and the file already has one, that is a duplicate declaration, which is a loud and correct failure. But pasting an *expression* into a function body drops it next to local variables, and if the generated expression happens to mention `tmp`, it silently reads the local `tmp`.
+
+The rule:
+
+**Generated code may reference only names it declares itself and names it imports. Referencing a name from the splice site's scope is a name-resolution error.**
+
+This is the templates rule "bindings are local to the hole" (`docs/dev/template-agency.md`) applied to splices. It fails closed: the bad case is a compile error rather than a silent capture.
+
+Note this is a *checking* rule and not runtime isolation, exactly as it is for holes. A generated `const` genuinely shares the enclosing scope once pasted. The rule prevents a generator from *reaching into* the splice site, which is the direction the capture bug runs.
+
+Implementation needs cross-checking against `lib/runtime/template/hygiene.ts`, which solves a related but distinct problem: that machinery renames to avoid collisions, whereas this rule refuses instead of renaming. Renaming would be wrong here, since the whole point of a declaration splice is that `greet` keeps the name the generator gave it.
+
 ## Worked examples
 
 ### Repetitive boilerplate from a list
@@ -285,6 +299,20 @@ The cost is speed. Forking a process per splice is not free, and this needs a ca
 
 Splices paste an AST directly rather than printing it, so origin stamps survive into the compile. That means "this generated line failed to compile, and it came from generator X" is achievable here in a way it is not for `runCode`. It also means this feature builds the AST-in entry point that the fragment-checker follow-up has been waiting on.
 
+### Caching and incremental builds: nothing new is needed
+
+The obvious worry is that a file containing a splice depends on the generator's module, and that if the build manifest does not know about that edge, editing a generator will silently fail to rebuild its consumers. That worry is already handled.
+
+The generator arrives as an **ordinary relative Agency import**. The manifest records `deps` plus `depsHash`, covering transitive Agency imports (`docs/dev/incremental-builds.md:21`). So editing `gen.agency` changes `depsHash` on `main.agency`, which invalidates it, which re-runs the splice. No new manifest field, no new edge type.
+
+Caching falls out of the same place. If nothing relevant changed, `main.agency` is skipped entirely, so the splice never re-runs and its expanded output is already baked into the emitted JavaScript. There is no separate splice-output cache and no cache key to design, because the unit being cached is the compiled file and the existing machinery already caches that.
+
+A splice's inputs are exactly two things, and both are covered: the arguments, which are written in the file's own source and therefore in `sourceHash`, and the generator's behavior, which is in `depsHash`.
+
+This works **because of Rule 3**. A generator that could call `llm()` or read the clock would produce different output from identical inputs, and caching it would be silently wrong. Determinism is not only a safety property here; it is the thing that makes the cache free.
+
+One constraint follows for the implementation: splice expansion must happen inside the normal per-file compile that the manifest guards. Hoisting expansion somewhere outside that path would break the guarantee.
+
 ## Out of scope for v1
 
 Each of these is deliberately excluded, and each is additive later.
@@ -316,21 +344,13 @@ These are genuinely unsettled and should be resolved while writing the plan.
 
    Remaining: the exact name, and the merge rules for each kind pair.
 
-2. **Hygiene for expression splices.** Declaration splices are mostly safe by accident: if a generator emits a top-level `const config` and the file already has one, that is a duplicate-declaration error, which is a loud correct failure. Expression splices are different. Pasting an expression into a function body puts it next to local variables, and if the generated expression mentions `tmp`, it captures the local `tmp`.
+2. **Nested splices.** May a generator module itself contain splices? Haskell allows this. Allowing it means recursion and needs a depth cap; forbidding it in v1 is simpler and additive to relax.
 
-   Proposed answer: generated code may reference only names it declares itself and names it imports. Referencing a name from the splice site's scope is a name-resolution error. This is the templates rule "bindings are local to the hole" (`docs/dev/template-agency.md`) applied to splices, and it fails closed.
+3. **Which argument expressions are legal.** `$( gen(["a"]) )` is clearly fine. Is `$( gen(SOME_CONST) )` fine, where `SOME_CONST` is defined in the file being compiled? That reintroduces the staging cycle. Simplest v1 rule: arguments may be literals, code literals, and references to imported names only.
 
-   Needs checking against the existing hygiene machinery in `lib/runtime/template/hygiene.ts`, which solves a related but distinct problem.
+4. **Detecting nondeterminism.** The effect half is free via `getEffectsFromSource`. The `llm()`/clock/randomness half needs new tracking. All transitive effect propagation runs through `analyzeInterruptsFromScopes` (`lib/typeChecker/index.ts:300`), which is a single chokepoint, so an internal marker riding that existing propagation looks plausible. Needs confirming by reading it.
 
-3. **Caching and incremental builds.** A file containing a splice depends on the generator's module. That edge has to reach the build manifest, or editing a generator will not rebuild its consumers. What is the cache key: generator module content hash plus the splice's evaluated arguments?
-
-4. **Nested splices.** May a generator module itself contain splices? Haskell allows this. Allowing it means recursion and needs a depth cap; forbidding it in v1 is simpler and additive to relax.
-
-5. **Which argument expressions are legal.** `$( gen(["a"]) )` is clearly fine. Is `$( gen(SOME_CONST) )` fine, where `SOME_CONST` is defined in the file being compiled? That reintroduces the staging cycle. Simplest v1 rule: arguments may be literals, code literals, and references to imported names only.
-
-6. **Detecting nondeterminism.** The effect half is free via `getEffectsFromSource`. The `llm()`/clock/randomness half needs new tracking. All transitive effect propagation runs through `analyzeInterruptsFromScopes` (`lib/typeChecker/index.ts:300`), which is a single chokepoint, so an internal marker riding that existing propagation looks plausible. Needs confirming by reading it.
-
-7. **Which positions holes cannot reach.** This does not block v1, since v1 generators take hand-supplied arguments, but it shapes what the introspection follow-up can deliver and is worth recording accurately.
+5. **Which positions holes cannot reach.** Filed as #678. Does not block v1, since v1 generators take hand-supplied arguments, but it shapes what the introspection follow-up can deliver. Summarized here because it was found during this design work.
 
    Where holes **do** work is broad. The battery at `lib/parsers/hole.test.ts:157-175` pins fifteen expression positions: assignment value, binop operand, if and while conditions, call argument, named argument, guard head argument, return value, array element, object value, string interpolation, for-loop iterable, match scrutinee, try expression, and is-expression operand. That breadth comes from a single wiring point, `exprHoleParser` as the first alternative in `baseAtom`. Statement holes, top-level declaration holes, and splices in statement and argument positions work too. Anywhere a value goes, a hole goes.
 
@@ -348,7 +368,7 @@ These are genuinely unsettled and should be resolved while writing the plan.
 
    Two candidate approaches for property names: widen identifier holes to that position, or generate `p[#field]` index access, which may parse today but changes typing and routes through `__nn` null-normalization. Neither is verified.
 
-8. **Diagnostic codes.** `AG8001` and `AG8002` are taken by templates, so splices start at `AG8003`. Note that `diagnosticExplanations.ts` is exhaustive by type, so every new code needs prose or the build fails (`docs/dev/template-agency.md`). Codes needed, at minimum: generator has effects, generator is nondeterministic, generator not imported from another file, returned fragment kind does not match splice position, generator failed at runtime.
+6. **Diagnostic codes.** `AG8001` and `AG8002` are taken by templates, so splices start at `AG8003`. Note that `diagnosticExplanations.ts` is exhaustive by type, so every new code needs prose or the build fails (`docs/dev/template-agency.md`). Codes needed, at minimum: generator has effects, generator is nondeterministic, generator not imported from another file, returned fragment kind does not match splice position, generator failed at runtime.
 
 ## Testing
 

@@ -369,7 +369,7 @@ Nothing downstream knows the code was generated, with one exception: if a type e
 
 Nothing stops a generator being nondeterministic. If it reaches an LLM or the clock, two builds of the same source produce different code, and that is your problem rather than the compiler's. There is no complete way to check it today, and a partial check that reads like a guarantee would be worse than none.
 
-A generator cannot read your environment. `env()` asks permission, and compilation has nobody to ask, so the read never completes. The generator's process is also given only what Node needs to start, which covers a JavaScript library trying the same thing. That matters because anything a generator reads can be written into the code it produces, and that code becomes a file you commit.
+A generator cannot read your environment. Its process is given only what Node needs to start, so `env("ANTHROPIC_API_KEY")` comes back empty. That matters because anything a generator reads can be written into the code it produces, and that code becomes a file you commit.
 
 Generator code runs when you compile, when you type check, and in your editor. It does not run for `agency doc`, `agency pack`, or `agency bundle`, which read your file without needing to know what a splice would produce.
 

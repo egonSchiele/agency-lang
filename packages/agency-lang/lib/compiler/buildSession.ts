@@ -21,6 +21,8 @@ import { initPlanForModule } from "@/backends/typescriptGenerator.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
+import { expandSplices } from "@/preprocessors/expandSplices.js";
+import { formatSpliceDiagnostic } from "./splice/report.js";
 import { buildCompilationUnit, CompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
@@ -447,7 +449,11 @@ export class BuildSession {
 
     const contents = readFile(inputFile);
     const applyTemplate = !isNonTemplatedStdlib(absoluteInputFile);
-    const parsedProgram = parseFileOrExit(absoluteInputFile, config, applyTemplate, contents);
+    const parsedProgram = expandSplicesOrExit(
+      parseFileOrExit(absoluteInputFile, config, applyTemplate, contents),
+      absoluteInputFile,
+      config,
+    );
 
     const symbolTableStartTime = performance.now();
     const symbolTable =
@@ -628,6 +634,26 @@ function parseFileOrExit(
     process.exit(1);
   }
   return parseResult.result;
+}
+
+/**
+ * Expand compile-time splices, or stop the build.
+ *
+ * A splice that cannot expand is as fatal as a parse error and reported
+ * the same way — this path already exits on parse and typecheck failures,
+ * and a splice failure leaves a program that cannot be compiled at all.
+ */
+function expandSplicesOrExit(
+  program: AgencyProgram,
+  absPath: string,
+  config: AgencyConfig,
+): AgencyProgram {
+  const expanded = expandSplices(program, absPath, config);
+  if (!expanded.ok) {
+    console.error(formatSpliceDiagnostic(expanded.diagnostic, absPath));
+    process.exit(1);
+  }
+  return expanded.value;
 }
 
 function runTypecheck(

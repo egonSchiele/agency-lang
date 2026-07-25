@@ -6,6 +6,7 @@ import { AgencyProgram } from "@/index.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
+import { expandSplices } from "@/preprocessors/expandSplices.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { typeCheck } from "@/typeChecker/index.js";
@@ -114,7 +115,14 @@ function runCheckerPipeline<T>(
 
   return withSourcePath(source, sourcePath, (syntheticPath) => {
     const symbolTable = SymbolTable.build(syntheticPath, {});
-    const reExported = resolveReExports(program, symbolTable, syntheticPath);
+    // Expand splices before checking. A splice that cannot expand is left
+    // in place rather than reported: this pipeline answers "what does this
+    // code check as", and the compile paths are where a splice failure is
+    // reported with a position. An unexpanded splice simply checks as the
+    // unknown thing it is.
+    const spliced = expandSplices(program, syntheticPath, {});
+    const expanded = spliced.ok ? spliced.value : program;
+    const reExported = resolveReExports(expanded, symbolTable, syntheticPath);
     // This pipeline is agent-reachable (std::agency typecheck/getEffects),
     // not just an editor path — so it must agree with execution: code that
     // run()/compileSource would reject should not check as valid. Deny

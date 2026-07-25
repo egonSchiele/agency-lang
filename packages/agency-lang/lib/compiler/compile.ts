@@ -8,6 +8,8 @@ import { initPlanForModule } from "@/backends/typescriptGenerator.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
+import { expandSplices } from "@/preprocessors/expandSplices.js";
+import { formatSpliceDiagnostic } from "./splice/report.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
@@ -113,13 +115,26 @@ export function compileSource(
         errors: [parseResult.message ?? "Failed to parse Agency source"],
       };
     }
-    const program: AgencyProgram = parseResult.result;
+    const parsedProgram: AgencyProgram = parseResult.result;
 
     // 2. Check imports against policy.
     if (config.imports) {
-      const failure = checkImportPolicy(program, config.imports);
+      const failure = checkImportPolicy(parsedProgram, config.imports);
       if (failure) return failure;
     }
+
+    // 2b. Expand compile-time splices. After the policy check, because a
+    // splice cannot introduce an import and the policy is about what the
+    // author wrote. Before everything else, because generated declarations
+    // have to be visible to the symbol table and the compilation unit.
+    const expanded = expandSplices(parsedProgram, syntheticPath, config);
+    if (!expanded.ok) {
+      return {
+        success: false,
+        errors: [formatSpliceDiagnostic(expanded.diagnostic, syntheticPath)],
+      };
+    }
+    const program = expanded.value;
 
     // 3. Build symbol table and resolve imports
     const symbolTable = SymbolTable.build(syntheticPath, config);

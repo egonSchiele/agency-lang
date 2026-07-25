@@ -54,6 +54,54 @@ function parseFileOrNull(absPath: string, config: AgencyConfig): AgencyProgram |
 }
 
 /**
+ * Every file a generator can reach through relative `.agency` imports,
+ * entry first.
+ *
+ * Three checks and the expansion cache all need this same set, and each
+ * asks a different question of each file, so the walk is here once and the
+ * question is the caller's. `std::` modules are deliberately NOT followed:
+ * they are Agency, verified as a whole elsewhere, and walking them would
+ * drag most of the standard library into every check.
+ *
+ * A file that does not exist or does not parse is skipped rather than
+ * reported. Whether that is fatal depends on the caller — the effect check
+ * treats an unreadable file as a refusal, while the cache simply has less
+ * to hash.
+ */
+export function closureFiles(
+  entryPath: string,
+  config: AgencyConfig = {},
+): string[] {
+  // Paths are user-controlled, so the visited dictionary is null-prototype
+  // and membership goes through Object.hasOwn (house pattern, see
+  // lib/optimize/registry.ts). Without it an import cycle loops forever.
+  const visited: Record<string, true> = Object.create(null);
+  const found: string[] = [];
+  const queue: string[] = [path.resolve(entryPath)];
+
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    if (Object.hasOwn(visited, current)) {
+      continue;
+    }
+    visited[current] = true;
+
+    const program = parseFileOrNull(current, config);
+    if (program === null) {
+      continue;
+    }
+    found.push(current);
+
+    for (const specifier of importEdgesOf(program)) {
+      if (isRelativeAgencyPath(specifier)) {
+        queue.push(path.resolve(path.dirname(current), specifier));
+      }
+    }
+  }
+  return found;
+}
+
+/**
  * Walk the generator module's transitive Agency import graph and return the
  * first edge that leaves Agency code, or null when every edge is allowed.
  *
@@ -180,34 +228,15 @@ export function checkDeterminism(
   generatorName: string,
   config: AgencyConfig = {},
 ): SpliceDiagnostic | null {
-  const visited: Record<string, true> = Object.create(null);
-  const queue: string[] = [path.resolve(generatorPath)];
-
-  while (queue.length > 0) {
-    const current = queue.shift() as string;
-    if (Object.hasOwn(visited, current)) {
-      continue;
-    }
-    visited[current] = true;
-
-    const program = parseFileOrNull(current, config);
-    if (program === null) {
-      continue;
-    }
-
-    const found = nondeterministicCallIn(program);
+  for (const file of closureFiles(generatorPath, config)) {
+    const program = parseFileOrNull(file, config);
+    const found = program === null ? null : nondeterministicCallIn(program);
     if (found !== null) {
       return {
         diagnostic: "spliceGeneratorNondeterministic",
         params: { name: generatorName, source: found },
         loc: { line: 0, col: 0, start: 0, end: 0 },
       };
-    }
-
-    for (const specifier of importEdgesOf(program)) {
-      if (isRelativeAgencyPath(specifier)) {
-        queue.push(path.resolve(path.dirname(current), specifier));
-      }
     }
   }
   return null;
@@ -248,35 +277,15 @@ export function checkEffects(
   generatorName: string,
   config: AgencyConfig = {},
 ): SpliceDiagnostic | null {
-  const entry = path.resolve(generatorPath);
-  const visited: Record<string, true> = Object.create(null);
-  const queue: string[] = [entry];
-
-  while (queue.length > 0) {
-    const current = queue.shift() as string;
-    if (Object.hasOwn(visited, current)) {
-      continue;
-    }
-    visited[current] = true;
-
-    const program = parseFileOrNull(current, config);
-    if (program === null) {
-      continue;
-    }
-
-    const found = effectsInFile(current, generatorName, current === entry);
+  const files = closureFiles(generatorPath, config);
+  for (const file of files) {
+    const found = effectsInFile(file, generatorName, file === files[0]);
     if (found !== null) {
       return {
         diagnostic: "spliceGeneratorHasEffects",
         params: { name: generatorName, effects: found },
         loc: { line: 0, col: 0, start: 0, end: 0 },
       };
-    }
-
-    for (const specifier of importEdgesOf(program)) {
-      if (isRelativeAgencyPath(specifier)) {
-        queue.push(path.resolve(path.dirname(current), specifier));
-      }
     }
   }
   return null;
@@ -327,36 +336,17 @@ export function checkNoNestedSplice(
   generatorName: string,
   config: AgencyConfig = {},
 ): SpliceDiagnostic | null {
-  const visited: Record<string, true> = Object.create(null);
-  const queue: string[] = [path.resolve(generatorPath)];
-
-  while (queue.length > 0) {
-    const current = queue.shift() as string;
-    if (Object.hasOwn(visited, current)) {
-      continue;
-    }
-    visited[current] = true;
-
-    const program = parseFileOrNull(current, config);
-    if (program === null) {
-      continue;
-    }
-
-    const hasSplice = [...walkNodesArray(program.nodes)].some(
-      (visit) => visit.node.type === "splice",
-    );
+  for (const file of closureFiles(generatorPath, config)) {
+    const program = parseFileOrNull(file, config);
+    const hasSplice =
+      program !== null &&
+      [...walkNodesArray(program.nodes)].some((visit) => visit.node.type === "splice");
     if (hasSplice) {
       return {
         diagnostic: "spliceNested",
-        params: { name: generatorName, path: current },
+        params: { name: generatorName, path: file },
         loc: { line: 0, col: 0, start: 0, end: 0 },
       };
-    }
-
-    for (const specifier of importEdgesOf(program)) {
-      if (isRelativeAgencyPath(specifier)) {
-        queue.push(path.resolve(path.dirname(current), specifier));
-      }
     }
   }
   return null;
@@ -375,7 +365,7 @@ export function checkGeneratorEligible(
   const checks = [
     () => checkImportGraph(generatorPath, generatorName, config),
     () => checkNoNestedSplice(generatorPath, generatorName, config),
-    () => checkEffects(generatorPath, generatorName),
+    () => checkEffects(generatorPath, generatorName, config),
     () => checkDeterminism(generatorPath, generatorName, config),
   ];
   return checks.reduce<SpliceDiagnostic | null>(

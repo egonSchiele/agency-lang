@@ -22,6 +22,7 @@ import type {
 import type { ExportFromStatement } from "./types/exportFromStatement.js";
 import type { EffectDeclaration } from "./types/effectDeclaration.js";
 import { walkNodes } from "./utils/node.js";
+import { expandSplices } from "./preprocessors/expandSplices.js";
 import {
   resolveAgencyImportPath,
   isAgencyImport,
@@ -177,7 +178,17 @@ export class SymbolTable {
         return;
       }
 
-      const program = parseResult.result;
+      // Expand `$( ... )` BEFORE classifying. classifySymbols is what
+      // records a file's declarations, so expanding first is what makes a
+      // generated declaration visible both inside its own file and to
+      // every file that imports it.
+      //
+      // A failure must not abort the crawl, for the same reason an
+      // unresolvable import does not (see the comment below): symbol
+      // discovery is deliberately best-effort. The compile paths run the
+      // same expansion and report it properly there, with a position.
+      const expanded = expandSplices(parseResult.result, absPath, config);
+      const program = expanded.ok ? expanded.value : parseResult.result;
       parsed[absPath] = { symbols: classifySymbols(program), program };
 
       // Following an import may throw before it can be visited — e.g. a

@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- legacy file slated for incremental refactor */
 import { declaredName } from "../types/hole.js";
 import { printCodeLiteralBody } from "./agencyGenerator.js";
-import { holeNames } from "../utils/holes.js";
 import { walkNodesArray } from "../utils/node.js";
+import { holeNames } from "../utils/holes.js";
 import { DIAGNOSTICS, renderMessage } from "../typeChecker/diagnostics.js";
 import {
   AgencyComment,
@@ -510,24 +510,23 @@ export class TypeScriptBuilder {
       throw new Error(`${DIAGNOSTICS.unfilledHoles.code}: ${rendered}`);
     }
 
-    // Same shape as the hole refusal above, for the same reason. Every
-    // splice is removed by the expansion pass before codegen, so reaching
-    // one here means expansion did not run. Without this guard that lands
-    // as a raw "Unhandled Agency node type" stack trace from processNode.
+    // A tripwire, not a feature. Expansion removes every splice before
+    // codegen, so one reaching here means some compile path does not run
+    // expandSplices — and there are five that must. Without this the
+    // symptom is a raw "Unhandled Agency node type" stack trace out of
+    // processNode, which says nothing about the actual mistake.
     //
-    // Until the expansion pass ships (Task 7 of the compile-time-splices
-    // plan) this is the ONLY thing a splice does, which is deliberate: a
-    // clean refusal is a safe intermediate state, an internal crash is not.
-    const spliceCount = [...walkNodesArray(program.nodes)].filter(
+    // This started as scaffolding while expansion was unwritten. It earns
+    // its keep now for the opposite reason: the wiring is spread across
+    // five call sites and a sixth will be added by someone who has not
+    // read this file.
+    const unexpanded = [...walkNodesArray(program.nodes)].filter(
       (visit) => visit.node.type === "splice",
-    ).length;
-    if (spliceCount > 0) {
-      // Deliberately NOT an AG code. The registry is append-only and its
-      // explanations are exhaustive by type, so a code minted here would
-      // outlive the scaffolding it describes. Task 7 deletes this block.
+    );
+    if (unexpanded.length > 0) {
       throw new Error(
-        "This file contains a compile-time splice `$( ... )`, which cannot be " +
-          "compiled yet: splice expansion is not implemented. Remove the splice.",
+        "Internal error: a compile-time splice `$( ... )` reached code " +
+          "generation. Splice expansion did not run on this compile path.",
       );
     }
 

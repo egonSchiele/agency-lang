@@ -1,0 +1,59 @@
+{
+  "tests": [
+    {
+      "nodeName": "restInMatchArm",
+      "description": "Object rest in a match arm produces working code: the synthetic __objectRest call is compiled away by the builder rather than reaching runtime.",
+      "input": "",
+      "expectedOutput": "\"Ada lives in NY\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "restInBinding",
+      "description": "The same binder in let/const position, which was broken identically.",
+      "input": "",
+      "expectedOutput": "\"Ada lives in NY\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "restExcludesNamedKeys",
+      "description": "The rest binder holds the keys the pattern did not name, and not the ones it did.",
+      "input": "",
+      "expectedOutput": "[36,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "restInNestedPattern",
+      "description": "extractBindings recurses, so the synthetic call is emitted at depth as well.",
+      "input": "",
+      "expectedOutput": "[1,2,3]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "restInForLoopBinder",
+      "description": "The loop variable is a pattern too, which is the third lowering site.",
+      "input": "",
+      "expectedOutput": "\"Ada/NY\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

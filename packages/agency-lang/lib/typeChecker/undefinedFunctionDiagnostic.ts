@@ -85,6 +85,7 @@ function hasFunctionOrNodeAncestor(ancestors: readonly unknown[]): boolean {
 // this is just the set of keywords that trigger it.
 const RESERVED_BLOCK_KEYWORDS = ["thread", "subthread"];
 
+
 function checkBareCall(
   call: FunctionCall,
   scope: Scope,
@@ -92,6 +93,9 @@ function checkBareCall(
   mode: "warn" | "error",
   importedNodeNames: readonly string[],
 ): void {
+  // A call the lowerer synthesized, not one the user wrote. It has no
+  // declaration to find, and the builder compiles it away before runtime.
+  if (call.synthetic) return;
   const resolution = resolveCall(call.functionName, {
     functionDefs: ctx.functionDefs,
     nodeDefs: ctx.nodeDefs,

@@ -1,0 +1,54 @@
+// `{ a, ...rest }` lowers to a call to the synthetic `__objectRest`, which the
+// TypeScript builder compiles away.
+//
+// This file covers the BUILDER half: that the call becomes working code rather
+// than a call to something that does not exist at runtime. It does NOT guard
+// the typechecker half — AG4004 is a warning here, so these nodes run fine
+// even when the diagnostic wrongly fires. That half is pinned by
+// lib/typeChecker/undefinedFunctionDiagnostic.test.ts, which asserts on the
+// diagnostic list directly.
+
+def describe(o: any): string {
+  return match (o) {
+    { name, ...rest } => "${name} lives in ${rest.city}"
+    _ => "other"
+  }
+}
+
+node restInMatchArm() {
+  return describe({ name: "Ada", age: 36, city: "NY" })
+}
+
+node restInBinding() {
+  const o = { name: "Ada", age: 36, city: "NY" }
+  const { name, ...rest } = o
+  return "${name} lives in ${rest.city}"
+}
+
+def firstOf(people: any[]): string {
+  // Loop binder: a third lowering site, and the one most likely to be missed.
+  let out = "none"
+  for ({ name, ...rest } in people) {
+    out = "${name}/${rest.city}"
+  }
+  return out
+}
+
+node restInNestedPattern() {
+  // extractBindings recurses, so the synthetic call is emitted at depth too.
+  const o = { outer: { a: 1, b: 2, c: 3 } }
+  const { outer: { a, ...inner } } = o
+  return [a, inner.b, inner.c]
+}
+
+node restInForLoopBinder() {
+  return firstOf([{ name: "Ada", city: "NY" }])
+}
+
+node restExcludesNamedKeys() {
+  // The rest binder holds the keys the pattern did not name, and not the ones
+  // it did.
+  const o = { name: "Ada", age: 36, city: "NY" }
+  const { name, ...rest } = o
+  return [rest.age, rest.name == null]
+}

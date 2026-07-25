@@ -66,3 +66,16 @@ export const AGENCY_MAX_TIME = "AGENCY_MAX_TIME";
 /** Process exit code when a top-level cost/time budget is exceeded. Distinct
  *  from 1 (generic failure) and 2 (usage error). */
 export const EXIT_CODE_BUDGET_EXCEEDED = 3;
+
+/**
+ * The synthetic function pattern lowering emits for an object rest binder:
+ * `{ a, ...rest }` becomes `__objectRest(source, ["a"])`. The TypeScript
+ * builder compiles the call away, so it never reaches runtime.
+ *
+ * Shared because three passes have to agree on it and the typechecker runs
+ * between the two that used to hold it as a literal: the lowerer emits it, the
+ * builder matches it, and the undefined-function check has to know it is not a
+ * user call. When only two of the three knew the name, object rest in any
+ * pattern reported "Function '__objectRest' is not defined".
+ */
+export const OBJECT_REST_FN = "__objectRest";

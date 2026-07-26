@@ -131,8 +131,25 @@ describe("bindingPatternParser", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects rest in non-final position [a, ...b, c]", () => {
-      expect(() => bindingPatternParser("[a, ...b, c]")).toThrow(/rest.*last/i);
+    it("accepts rest in a non-final position [a, ...b, c]", () => {
+      // Was rejected. A rest binder may now sit anywhere: `a` binds from the
+      // front, `c` from the back, `b` takes what is between them.
+      const result = bindingPatternParser("[a, ...b, c]");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect((result.result as any).elements.map((e: any) => e.type)).toEqual([
+        "variableName",
+        "restPattern",
+        "variableName",
+      ]);
+    });
+
+    it("rejects two rest binders [a, ...b, c, ...d]", () => {
+      // The constraint that replaced "rest must be last": nothing would decide
+      // where the split between two rests falls.
+      expect(() => bindingPatternParser("[a, ...b, c, ...d]")).toThrow(
+        /at most one rest binder/i,
+      );
     });
   });
 
@@ -375,8 +392,21 @@ describe("matchPatternParser", () => {
   });
 
   describe("array rest enforcement (match patterns too)", () => {
-    it("rejects rest in non-final position [a, ...b, c]", () => {
-      expect(() => matchPatternParser("[a, ...b, c]")).toThrow(/rest.*last/i);
+    it("accepts rest in a non-final position [a, ...b, c]", () => {
+      const result = matchPatternParser("[a, ...b, c]");
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect((result.result as any).elements.map((e: any) => e.type)).toEqual([
+        "variableName",
+        "restPattern",
+        "variableName",
+      ]);
+    });
+
+    it("rejects two rest binders [a, ...b, c, ...d]", () => {
+      expect(() => matchPatternParser("[a, ...b, c, ...d]")).toThrow(
+        /at most one rest binder/i,
+      );
     });
   });
 });

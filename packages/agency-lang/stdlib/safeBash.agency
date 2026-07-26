@@ -393,15 +393,21 @@ export def safeBash(command: string, cwd: string = ""): ExecResult {
   if (parsed is success(ast)) {
     const simplified = simplify(ast)
     if (simplified is success(cmd)) {
+      // Flags are refused before the table rather than per-arm: `echo -n`
+      // suppresses the trailing newline and `-e` interprets escapes, and
+      // `joinWords` does neither. Up here it is one rule instead of a guard
+      // repeated on every arm — and it keeps calls out of match-arm guards,
+      // which the effects walk does not descend into (#668).
+      if (hasFlags(cmd.words)) {
+        return bash(command, cwd)
+      }
       return match (cmd) {
         // `echo` has no side effect beyond its output, so there is nothing to
         // approve: print it and report what bash wrote to stdout.
-        { words: ["echo", ...rest], redirect: null } if (!hasFlags(rest)) => ok(joinWords(rest))
-
+        { words: ["echo", ...rest], redirect: null } => ok(joinWords(rest))
         // Redirected, it is a file write, which `write` already gates.
-        { words: ["echo", ...rest], redirect: { op: ">", path } } if (!hasFlags(rest)) => writeThrough(path, joinWords(rest), "overwrite", command, cwd)
-        { words: ["echo", ...rest], redirect: { op: ">>", path } } if (!hasFlags(rest)) => writeThrough(path, joinWords(rest), "append", command, cwd)
-
+        { words: ["echo", ...rest], redirect: { op: ">", path } } => writeThrough(path, joinWords(rest), "overwrite", command, cwd)
+        { words: ["echo", ...rest], redirect: { op: ">>", path } } => writeThrough(path, joinWords(rest), "append", command, cwd)
         _ => bash(command, cwd)
       }
     }

@@ -167,6 +167,23 @@ Neither blocks v1 — the scan is correct today. They are noted because the
 workaround is a text scan for shell metacharacters, which is exactly the kind
 of thing that goes subtly wrong as coverage grows.
 
+## Two more found while building
+
+Both pre-existing, both first hit by this file because nothing in stdlib had
+these shapes before.
+
+- **A blank line between match arms fails to parse when lowering is off.**
+  Same file: `agency tc` accepts it, `agency fmt` rejects it with "expected
+  match cases of the form `value => expression`". The formatter parses
+  un-lowered, so a blank line between arms breaks the corpus round-trip gate.
+  Worked around by removing the blank lines; the parser should take them.
+- **A call inside a match-arm guard is invisible to the effects walk**
+  (#668, already recorded as a known walker gap). A call reachable only from a
+  guard contributes no effects, which matters because effects are how the
+  language reasons about what a function may do. Avoided here by refusing
+  flags before the match rather than in a guard on every arm — which reads
+  better anyway — rather than by widening the walker inside this PR.
+
 ## Found while building
 
 `item.command`, where the field is declared `AndOr`, resolves to the type

@@ -411,6 +411,6 @@ Run a shell command, using an equivalent tool where one exists.
 
 **Returns:** [ExecResult](shell.md#execresult)
 
-**Throws:** `std::write`, `std::bash`
+**Throws:** `std::bash`, `std::write`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L376))

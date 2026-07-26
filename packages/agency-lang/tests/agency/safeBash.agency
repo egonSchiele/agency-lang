@@ -1,0 +1,73 @@
+import { safeBash, bashParser, simplify } from "std::safeBash"
+
+def refusalFor(command: string): string {
+  // What `simplify` says about a command it will not map. The reason matters:
+  // a refusal is what sends the command to bash and costs an approval, so a
+  // wrong one is a silently worse experience, not a wrong answer.
+  const parsed = bashParser(command)
+  if (parsed is success(ast)) {
+    const cmd = simplify(ast)
+    if (cmd is failure(why)) {
+      return why
+    }
+    return "mapped"
+  }
+  return "unparseable"
+}
+
+def wordsOf(command: string): any {
+  const parsed = bashParser(command)
+  if (parsed is success(ast)) {
+    const cmd = simplify(ast)
+    if (cmd is success(c)) {
+      return c.words
+    }
+    return ["FAILED"]
+  }
+  return ["UNPARSEABLE"]
+}
+
+node echoRunsWithoutApproval() {
+  // The whole point: this used to need a human. It raises no interrupt now.
+  const r = safeBash("echo hello world")
+  return [r.stdout, r.exitCode]
+}
+
+node echoQuotingIsPreserved() {
+  // Adjacent parts concatenate, and quotes are not part of the value.
+  return [
+    wordsOf("echo 'single quoted'"),
+    wordsOf("echo \"double quoted\""),
+    wordsOf("echo a'b'\"c\""),
+  ]
+}
+
+node commandsItRefuses() {
+  // Each of these could be mapped one day; none can be mapped by collapsing
+  // it to a word list, which is what v1 does.
+  return [
+    refusalFor("cat a.txt | grep x"),
+    refusalFor("a && b"),
+    refusalFor("sleep 1 &"),
+    refusalFor("FOO=1 echo hi"),
+    refusalFor("echo $(date)"),
+    refusalFor("echo hi 2>&1"),
+    refusalFor("echo a; echo b"),
+  ]
+}
+
+node redirectsItUnderstands() {
+  const parsed = bashParser("echo hi > out.txt")
+  if (parsed is success(ast)) {
+    const cmd = simplify(ast)
+    if (cmd is success(c)) {
+      return [c.words, c.redirect.op, c.redirect.path]
+    }
+  }
+  return ["FAILED"]
+}
+
+node unparseableFallsThrough() {
+  // Not a refusal — the parser cannot even read it. Still must not crash.
+  return refusalFor("if [ -f x ]; then")
+}

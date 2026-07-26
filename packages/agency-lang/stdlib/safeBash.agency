@@ -1,0 +1,404 @@
+import { _bashParser } from "agency-lang/stdlib-lib/safeBash.js"
+import { env } from "std::system"
+import { WriteMode } from "std::index"
+import { bash } from "std::shell"
+
+/** One piece of a word. Adjacent parts concatenate: `e'f'"g"$h` is a single
+ * word of four parts. */
+export type WordPart =
+  | { tag: "literal"; text: string }
+  | { tag: "singleQuoted"; text: string }
+  | { tag: "doubleQuoted"; parts: WordPart[] }
+  | { tag: "variable"; name: string }
+  | { tag: "paramExpansion"; expression: string }
+  | { tag: "commandSubstitution"; command: List }
+  | { tag: "arithmeticExpansion"; expression: string }
+
+export type BashWord = {
+  tag: "word";
+  parts: WordPart[]
+}
+
+/** `name=value` (or `name=` with a null value) before a command. */
+export type Assignment = {
+  tag: "assignment";
+  name: string;
+  value?: BashWord
+}
+
+/** A redirect like `> out.txt`, `2>&1`, or `<<< "$str"`. `fd` is the
+ * explicit file descriptor (`2` in `2>`), or null for the default. */
+export type Redirect = {
+  tag: "redirect";
+  fd?: number;
+  op: string;
+  target: BashWord
+}
+
+export type SimpleCommand = {
+  tag: "simpleCommand";
+  assignments: Assignment[];
+  words: BashWord[];
+  redirects: Redirect[]
+}
+
+export type IfCommand = {
+  tag: "if";
+  cond: List;
+  thenBody: List;
+  elifs: { cond: List; thenBody: List }[];
+  elseBody?: List;
+  redirects: Redirect[]
+}
+
+export type LoopCommand = {
+  tag: "loop";
+  kind: "while" | "until";
+  cond: List;
+  body: List;
+  redirects: Redirect[]
+}
+
+export type ForCommand = {
+  tag: "for";
+  variable: string;
+  /** The `in word...` list, or null for the implicit `in "$@"`. */
+  words?: BashWord[];
+  body: List;
+  redirects: Redirect[]
+}
+
+export type CaseItem = {
+  patterns: BashWord[];
+  body: List;
+  /** `;;`, `;&`, `;;&`, or null when the final item ends at `esac`. */
+  terminator?: string
+}
+
+export type CaseCommand = {
+  tag: "case";
+  subject: BashWord;
+  items: CaseItem[];
+  redirects: Redirect[]
+}
+
+export type Subshell = {
+  tag: "subshell";
+  body: List;
+  redirects: Redirect[]
+}
+
+export type Group = {
+  tag: "group";
+  body: List;
+  redirects: Redirect[]
+}
+
+/** `(( expression ))` as a command. The expression is kept as raw text. */
+export type ArithmeticCommand = {
+  tag: "arithmeticCommand";
+  expression: string;
+  redirects: Redirect[]
+}
+
+export type FunctionDef = {
+  tag: "functionDef";
+  name: string;
+  body: Command
+}
+
+export type Command =
+  | SimpleCommand
+  | IfCommand
+  | LoopCommand
+  | ForCommand
+  | CaseCommand
+  | Subshell
+  | Group
+  | ArithmeticCommand
+  | FunctionDef
+
+/** One or more commands joined by `|` (or `|&`), optionally negated. */
+export type Pipeline = {
+  tag: "pipeline";
+  negated: boolean;
+  commands: Command[]
+}
+
+/** Pipelines joined by `&&` / `||`, left to right. */
+export type AndOr = {
+  tag: "andOr";
+  first: Pipeline;
+  rest: { op: "&&" | "||"; pipeline: Pipeline }[]
+}
+
+export type ListItem = {
+  tag: "listItem";
+  command: Command;
+  /** True when the command was followed by `&`. */
+  background: boolean
+}
+
+/** A sequence of commands separated by `;`, `&`, or newlines — the top
+ * level of a script, and the body of every compound command. */
+export type List = {
+  tag: "list";
+  items: ListItem[]
+}
+
+export static const emptyList: List = {
+  tag: "list",
+  items: []
+}
+
+export type BashNode =
+  | WordPart
+  | BashWord
+  | Assignment
+  | Redirect
+  | Command
+  | Pipeline
+  | AndOr
+  | ListItem
+  | List
+
+
+/** A bash command reduced to the only shape v1 can reason about: the words of
+ *  a single command, and an optional output redirect. */
+export type OutputRedirect = {
+  op: string;
+  path: string
+}
+
+export type Cmd = {
+  words: string[];
+  redirect: OutputRedirect | null
+}
+
+export type SafeBashResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number
+}
+
+export def bashParser(code: string): Result<List> {
+  """
+  Parse a string of bash code into an AST.
+  """
+  const res = _bashParser(code)
+  return match(res.success) {
+    true => success(res.result)
+    false => failure(res.error)
+  }
+}
+
+def stringifyWordPart(part: WordPart, insideQuotes: boolean): Result<string> {
+  """
+  Reduce one piece of a word to text, or explain why it cannot be.
+
+  Only the parts that are already text, or that the environment can answer,
+  are resolvable. Anything that would need a shell to evaluate is a failure,
+  because guessing at it is how safeBash and bash would come to disagree
+  about what a command means.
+  """
+  return match (part) {
+    { tag: "literal", text } => success(text)
+    { tag: "singleQuoted", text } => success(text)
+    { tag: "doubleQuoted", parts } => stringifyParts(parts, true)
+    { tag: "variable", name } => expandVariable(name, insideQuotes)
+    _ => failure("`${part.tag}` needs a shell to evaluate")
+  }
+}
+
+def expandVariable(name: string, insideQuotes: boolean): Result<string> {
+  """
+  Look a variable up in the environment. Unset is the empty string, as in bash.
+
+  An UNQUOTED value containing whitespace is refused rather than expanded:
+  bash word-splits it, so `cat $F` with `F="a b"` is two arguments, and
+  expanding it here without splitting would quietly change what the command
+  means. Inside double quotes no splitting happens, so it expands normally.
+  """
+  const value = env(name) ?? ""
+  if (!insideQuotes && value != value.trim()) {
+    return failure("unquoted `${name}` has surrounding whitespace; bash would word-split it")
+  }
+  if (!insideQuotes && value.includes(" ")) {
+    return failure("unquoted `${name}` contains a space; bash would word-split it")
+  }
+  return success(value)
+}
+
+def stringifyParts(parts: WordPart[], insideQuotes: boolean): Result<string> {
+  """
+  Concatenate the parts of a word. Adjacent parts join with no separator:
+  `e'f'"g"` is one word, `efg`.
+  """
+  let out = ""
+  for (part in parts) {
+    const piece = stringifyWordPart(part, insideQuotes)
+    if (piece is success(text)) {
+      out = out + text
+    } else {
+      return failure(piece.error)
+    }
+  }
+  return success(out)
+}
+
+def stringifyWord(word: BashWord): Result<string> {
+  """
+  Reduce a whole word to text.
+  """
+  return stringifyParts(word.parts, false)
+}
+
+def simplifyRedirects(redirects: Redirect[]): Result<OutputRedirect | null> {
+  """
+  Reduce a command's redirects to the one shape v1 handles: a single `>` or
+  `>>` to a file, with no explicit file descriptor. Everything else — `2>&1`,
+  heredocs, input redirects, more than one — is refused.
+  """
+  if (redirects.length == 0) {
+    return success(null)
+  }
+  if (redirects.length > 1) {
+    return failure("more than one redirect")
+  }
+  const only = redirects[0]
+  if (only.fd != null) {
+    return failure("redirect with an explicit file descriptor")
+  }
+  if (only.op != ">" && only.op != ">>") {
+    return failure("`${only.op}` is not an output redirect")
+  }
+  const path = stringifyWord(only.target)
+  if (path is success(text)) {
+    return success({ op: only.op, path: text })
+  }
+  return failure("redirect target: ${path.error}")
+}
+
+export def simplify(node: List): Result<Cmd> {
+  """
+  Reduce a parsed bash AST to a single command's words and output redirect.
+
+  v1 understands one simple command and nothing else. A pipeline, a `&&`
+  chain, a subshell, a loop, a background job or a variable assignment is a
+  failure — not because they are unsafe, but because collapsing them to a
+  word list would lose what makes them different from a single command.
+
+  @param node - The AST from `bashParser`
+  """
+  if (node.items.length != 1) {
+    return failure("expected a single command")
+  }
+  const item = node.items[0]
+  if (item.background) {
+    return failure("background commands are not handled")
+  }
+  // `any` on purpose: the checker resolves `item.command` to the type ALIAS
+  // named `Command` rather than the field's declared type `AndOr`, so every
+  // access below it reports a missing property. Filed separately; the shape
+  // is what the AST types say.
+  const andOr: any = item.command
+  if (andOr.rest.length > 0) {
+    return failure("`&&` and `||` are not handled")
+  }
+  const pipeline: any = andOr.first
+  if (pipeline.negated) {
+    return failure("negated commands are not handled")
+  }
+  if (pipeline.commands.length != 1) {
+    return failure("pipelines are not handled")
+  }
+  const cmd: any = pipeline.commands[0]
+  if (cmd.tag != "simpleCommand") {
+    return failure("`${cmd.tag}` is not a simple command")
+  }
+  if (cmd.assignments.length > 0) {
+    return failure("leading variable assignments are not handled")
+  }
+
+  let words: string[] = []
+  for (word in cmd.words) {
+    const text = stringifyWord(word)
+    if (text is success(value)) {
+      words.push(value)
+    } else {
+      return failure("could not read a word: ${text.error}")
+    }
+  }
+
+  const redirect = simplifyRedirects(cmd.redirects)
+  if (redirect is success(only)) {
+    return success({ words: words, redirect: only })
+  }
+  return failure("could not read the redirect: ${redirect.error}")
+}
+
+def ok(stdout: string): SafeBashResult {
+  """
+  A successful result in the shape `bash` would have returned.
+  """
+  return { stdout: stdout, stderr: "", exitCode: 0 }
+}
+
+export def safeBash(command: string, cwd: string = ""): SafeBashResult {
+  """
+  Run a shell command, using an equivalent tool where one exists.
+
+  `bash` cannot be pre-approved — there is no way to say in advance what an
+  arbitrary command string will do — so every call needs a human. Many of the
+  commands an agent writes have a tool that does the same job and IS
+  pre-approved. This parses the command and uses that tool when it can.
+
+  Anything it cannot parse, or cannot map, runs through `bash` exactly as
+  before, approval and all. Incompleteness costs an approval, never
+  correctness.
+
+  @param command - The shell command to run
+  @param cwd - Working directory, passed through to bash on the fallback path
+  """
+  const parsed = bashParser(command)
+  if (parsed is success(ast)) {
+    const simplified = simplify(ast)
+    if (simplified is success(cmd)) {
+      return match (cmd) {
+        // `echo` has no side effect beyond its output, so there is nothing to
+        // approve: print it and report what bash wrote to stdout.
+        { words: ["echo", ...rest], redirect: null } => ok(joinWords(rest))
+
+        // Redirected, it is a file write, which `write` already gates.
+        { words: ["echo", ...rest], redirect: { op: ">", path } } => writeThrough(path, joinWords(rest), "overwrite", command, cwd)
+        { words: ["echo", ...rest], redirect: { op: ">>", path } } => writeThrough(path, joinWords(rest), "append", command, cwd)
+
+        _ => bash(command, cwd)
+      }
+    }
+  }
+  // Unparseable, or a shape v1 does not map: run it as before, approval and
+  // all. Incompleteness costs an approval, never correctness.
+  return bash(command, cwd)
+}
+
+def joinWords(words: string[]): string {
+  """
+  Rejoin a command's arguments the way echo prints them: single-spaced, with a
+  trailing newline.
+  """
+  return words.join(" ") + "\n"
+}
+
+def writeThrough(path: string, content: string, mode: WriteMode, original: string, cwd: string): SafeBashResult {
+  """
+  Write the file, falling back to bash if the write itself fails so a refusal
+  never silently swallows the command.
+  """
+  const written = write(path, content, cwd, mode)
+  if (written is failure(reason)) {
+    return bash(original, cwd)
+  }
+  return ok("")
+}
+

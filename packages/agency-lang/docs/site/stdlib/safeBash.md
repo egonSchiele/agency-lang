@@ -24,7 +24,7 @@ export type WordPart =
   | { tag: "arithmeticExpansion"; expression: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L5))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L8))
 
 ### BashWord
 
@@ -35,7 +35,7 @@ export type BashWord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L17))
 
 ### Assignment
 
@@ -50,7 +50,7 @@ export type Assignment = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L23))
 
 ### Redirect
 
@@ -68,7 +68,7 @@ export type Redirect = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L31))
 
 ### SimpleCommand
 
@@ -81,7 +81,7 @@ export type SimpleCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L38))
 
 ### IfCommand
 
@@ -96,7 +96,7 @@ export type IfCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L55))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L45))
 
 ### LoopCommand
 
@@ -110,7 +110,7 @@ export type LoopCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L54))
 
 ### ForCommand
 
@@ -125,7 +125,7 @@ export type ForCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L72))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L62))
 
 ### CaseItem
 
@@ -138,7 +138,7 @@ export type CaseItem = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L71))
 
 ### CaseCommand
 
@@ -151,7 +151,7 @@ export type CaseCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L78))
 
 ### Subshell
 
@@ -163,7 +163,7 @@ export type Subshell = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L85))
 
 ### Group
 
@@ -175,7 +175,7 @@ export type Group = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L91))
 
 ### ArithmeticCommand
 
@@ -190,7 +190,7 @@ export type ArithmeticCommand = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L98))
 
 ### FunctionDef
 
@@ -202,7 +202,7 @@ export type FunctionDef = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L114))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L104))
 
 ### Command
 
@@ -219,7 +219,7 @@ export type Command =
   | FunctionDef
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L110))
 
 ### Pipeline
 
@@ -234,7 +234,7 @@ export type Pipeline = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L122))
 
 ### AndOr
 
@@ -249,7 +249,7 @@ export type AndOr = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L129))
 
 ### ListItem
 
@@ -262,7 +262,7 @@ export type ListItem = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L135))
 
 ### List
 
@@ -278,7 +278,7 @@ export type List = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L144))
 
 ### BashNode
 
@@ -295,7 +295,46 @@ export type BashNode =
   | List
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L154))
+
+### OutputRedirect
+
+A bash command reduced to the only shape v1 can reason about: the words of
+ *  a single command, and an optional output redirect.
+
+```ts
+/** A bash command reduced to the only shape v1 can reason about: the words of
+ *  a single command, and an optional output redirect. */
+export type OutputRedirect = {
+  op: string;
+  path: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L168))
+
+### Cmd
+
+```ts
+export type Cmd = {
+  words: string[];
+  redirect?: OutputRedirect
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L173))
+
+### SafeBashResult
+
+```ts
+export type SafeBashResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L178))
 
 ## Constants
 
@@ -310,7 +349,7 @@ export static const emptyList: List = {
 
 **Type:** [List](#list)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L159))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L149))
 
 ## Functions
 
@@ -320,7 +359,7 @@ export static const emptyList: List = {
 bashParser(code: string): Result<List>
 ```
 
-Parse a string of bash code into an AST
+Parse a string of bash code into an AST.
 
 **Parameters:**
 
@@ -330,22 +369,62 @@ Parse a string of bash code into an AST
 
 **Returns:** `Result<List>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L175))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L184))
 
 ### simplify
 
 ```ts
-simplify(node: BashNode): any
+simplify(node: List): Result<Cmd>
 ```
 
-Convert a Bash AST into a simpler JSON representation.
+Reduce a parsed bash AST to a single command's words and output redirect.
+
+  v1 understands one simple command and nothing else. A pipeline, a `&&`
+  chain, a subshell, a loop, a background job or a variable assignment is a
+  failure — not because they are unsafe, but because collapsing them to a
+  word list would lose what makes them different from a single command.
+
+  @param node - The AST from `bashParser`
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| node | [BashNode](#bashnode) |  |
+| node | [List](#list) |  |
 
-**Returns:** `any`
+**Returns:** `Result<Cmd>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L282))
+
+### safeBash
+
+```ts
+safeBash(command: string, cwd: string = ""): SafeBashResult
+```
+
+Run a shell command, using an equivalent tool where one exists.
+
+  `bash` cannot be pre-approved — there is no way to say in advance what an
+  arbitrary command string will do — so every call needs a human. Many of the
+  commands an agent writes have a tool that does the same job and IS
+  pre-approved. This parses the command and uses that tool when it can.
+
+  Anything it cannot parse, or cannot map, runs through `bash` exactly as
+  before, approval and all. Incompleteness costs an approval, never
+  correctness.
+
+  @param command - The shell command to run
+  @param cwd - Working directory, passed through to bash on the fallback path
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| command | `string` |  |
+| cwd | `string` | "" |
+
+**Returns:** [SafeBashResult](#safebashresult)
+
+**Throws:** `std::write`, `std::bash`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L347))

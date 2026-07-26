@@ -1057,14 +1057,37 @@ class PatternLowerer {
           return [makeAssign(prop.identifier, makeObjectRestCall(source, namedKeys, loc), declKind, loc)];
         });
       }
-      case "arrayPattern":
-        return pattern.elements.flatMap((el, i): Assignment[] => {
+      case "arrayPattern": {
+        // Same split as collectChecks: head binders read from the front, the
+        // rest takes the middle, tail binders read from the back.
+        const { head, tail } = splitAtRest(pattern.elements);
+        const headBindings = head.flatMap((el, i): Assignment[] => {
           if (el.type === "wildcardPattern") return [];
-          if (el.type === "restPattern") {
-            return [makeAssign(el.identifier, sliceCall(source, i, loc), declKind, loc)];
-          }
           return this.extractBindings(el, indexAccess(source, i, loc), declKind, loc);
         });
+        const restBindings = pattern.elements.flatMap((el): Assignment[] =>
+          el.type === "restPattern"
+            ? [
+                makeAssign(
+                  el.identifier,
+                  restSlice(source, head.length, tail.length, loc),
+                  declKind,
+                  loc,
+                ),
+              ]
+            : [],
+        );
+        const tailBindings = tail.flatMap((el, i): Assignment[] => {
+          if (el.type === "wildcardPattern") return [];
+          return this.extractBindings(
+            el,
+            indexFromEnd(source, tail.length - i, loc),
+            declKind,
+            loc,
+          );
+        });
+        return [...headBindings, ...restBindings, ...tailBindings];
+      }
       case "variableName":
         return [makeAssign(pattern.value, cloneExpr(source), declKind, loc)];
       case "wildcardPattern":
@@ -1188,13 +1211,28 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       // only equality in the language that skips the helper.
       const op: Operator = hasRest ? ">=" : "==";
       checks.push(makeBinOp(lenAccess, op, numberLit(namedCount, pattern.loc), pattern.loc));
-      pattern.elements.forEach((el, i) => {
-        if (
-          el.type !== "wildcardPattern" &&
-          el.type !== "restPattern" &&
-          el.type !== "variableName"
-        ) {
+
+      // A rest binder may sit anywhere, so elements before it are indexed from
+      // the front and elements after it from the back. With no rest (or a
+      // trailing one) `tail` is empty and this is the original front-indexed
+      // walk.
+      const { head, tail } = splitAtRest(pattern.elements);
+      const needsCheck = (el: { type: string }): boolean =>
+        el.type !== "wildcardPattern" &&
+        el.type !== "restPattern" &&
+        el.type !== "variableName";
+
+      head.forEach((el, i) => {
+        if (needsCheck(el)) {
           collectChecks(el as MatchPattern, indexAccess(source, i, pattern.loc), checks);
+        }
+      });
+      tail.forEach((el, i) => {
+        if (needsCheck(el)) {
+          // 1-based from the end: the last element of `tail` is the last
+          // element of the array.
+          const fromEnd = tail.length - i;
+          collectChecks(el as MatchPattern, indexFromEnd(source, fromEnd, pattern.loc), checks);
         }
       });
       break;
@@ -1418,6 +1456,68 @@ function indexAccess(source: Expression, i: number, loc: SourceLocation | undefi
     [{ kind: "index", index: numberLit(i, loc) }],
     loc,
   );
+}
+
+/**
+ * `source[source.length - fromEnd]` — an element counted from the back, for
+ * the elements that follow a rest binder. `fromEnd` is 1-based: the last
+ * element is 1.
+ */
+function indexFromEnd(
+  source: Expression,
+  fromEnd: number,
+  loc: SourceLocation | undefined,
+): ValueAccess {
+  const offset = makeBinOp(
+    fieldAccess(cloneExpr(source), "length", loc),
+    "-",
+    numberLit(fromEnd, loc),
+    loc,
+  );
+  return chainAccess(source, [{ kind: "index", index: offset }], loc);
+}
+
+/**
+ * The slice a rest binder takes. With nothing after it this is the
+ * one-argument `source.slice(start)` — the same node the prefix case has
+ * always produced, kept deliberately so lifting this restriction does not
+ * churn every existing rest fixture.
+ */
+function restSlice(
+  source: Expression,
+  start: number,
+  tailCount: number,
+  loc: SourceLocation | undefined,
+): ValueAccess {
+  if (tailCount === 0) return sliceCall(source, start, loc);
+  const end = makeBinOp(
+    fieldAccess(cloneExpr(source), "length", loc),
+    "-",
+    numberLit(tailCount, loc),
+    loc,
+  );
+  return chainAccess(
+    source,
+    [{ kind: "slice", start: numberLit(start, loc), end }],
+    loc,
+  );
+}
+
+/**
+ * Split an array pattern at its rest binder. `restIndex` is -1 when there is
+ * none, in which case everything is head and the two halves behave exactly as
+ * they did before rest binders could sit anywhere.
+ */
+function splitAtRest<T extends { type: string }>(
+  elements: readonly T[],
+): { head: readonly T[]; tail: readonly T[]; restIndex: number } {
+  const restIndex = elements.findIndex((e) => e.type === "restPattern");
+  if (restIndex === -1) return { head: elements, tail: [], restIndex };
+  return {
+    head: elements.slice(0, restIndex),
+    tail: elements.slice(restIndex + 1),
+    restIndex,
+  };
 }
 
 function sliceCall(source: Expression, start: number, loc: SourceLocation | undefined): ValueAccess {

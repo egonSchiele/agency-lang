@@ -4,7 +4,8 @@
 
 Spec, reviewed and updated — see
 [the review](2026-07-25-array-pattern-length-and-middle-rest-design-REVIEW.md).
-Ready to implement. Two changes to array patterns that share the same
+Parts 1 and 2 are implemented (#700 and this branch). Part 3 — a type suffix
+on the rest binder itself — remains unbuilt and undecided. Two changes to array patterns that share the same
 arithmetic, so they belong in one design even though the first is a bug fix
 and the second is a feature.
 

@@ -1,5 +1,28 @@
 ## Unreleased
 
+### A rest binder can sit anywhere in an array pattern
+
+`...rest` used to have to be the last element. It can now go in any position,
+with at most one per pattern — elements before it match from the front,
+elements after it from the back:
+
+```ts
+match (words) {
+    ["cat", ...flags, path] => read(path)
+    _                       => fallback()
+}
+
+const [first, ...middle, last] = items
+```
+
+`...rest` binds zero or more, so `["a", ...rest, "c"]` matches `["a", "c"]`
+with `rest = []`. This works in match arms, `is`, `if`/`while` conditions and
+in destructuring.
+
+Two rest binders in one pattern is now a compile error rather than a crash:
+nothing decides where the split between them falls. A misplaced rest
+previously produced a raw stack trace.
+
 ### Breaking: an array pattern without `...rest` now requires an exact length
 
 `["a", "b"]` used to match any array *starting* with `a`, `b` — every array

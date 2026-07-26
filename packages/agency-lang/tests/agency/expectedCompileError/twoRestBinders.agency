@@ -1,0 +1,12 @@
+// Two rest binders have no meaning to give: nothing decides where the split
+// between them falls, so any behavior would be arbitrary. One max.
+def f(xs: any[]): string {
+  return match (xs) {
+    ["a", ...x, "b", ...y] => "ambiguous"
+    _ => "no"
+  }
+}
+
+node main() {
+  return f(["a", "b"])
+}

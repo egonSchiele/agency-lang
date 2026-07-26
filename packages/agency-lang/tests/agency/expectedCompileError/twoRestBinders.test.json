@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "at most one rest binder",
+  "description": "An array pattern with two rest binders is rejected, with a message rather than a stack trace"
+}

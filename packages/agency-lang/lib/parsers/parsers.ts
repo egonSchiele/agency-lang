@@ -5842,17 +5842,32 @@ export const restPatternParser: Parser<RestPattern> = label(
 
 // ---- helpers shared by binding and match array parsers ----
 
-function enforceRestAtEnd<T extends { type: string }>(
+/**
+ * At most ONE rest binder per array pattern. Position is free — `[a, ...m, b]`
+ * is legal, with `a` read from the front and `b` from the back.
+ *
+ * Two rests have no meaning to give: nothing decides where the split between
+ * them falls, so `[a, ...x, b, ...y]` would be arbitrary whichever way we
+ * resolved it. Every language with sequence patterns forbids it for the same
+ * reason.
+ *
+ * The budget is per array pattern, not per arm — a nested array is its own
+ * pattern and gets its own: `[a, ...outer, [b, ...inner]]` is fine.
+ */
+function enforceAtMostOneRest<T extends { type: string }>(
   elements: readonly T[],
 ): void {
-  for (let i = 0; i < elements.length - 1; i++) {
-    if (elements[i].type === "restPattern") {
+  let seen = false;
+  for (const element of elements) {
+    if (element.type !== "restPattern") continue;
+    if (seen) {
       // Throw to surface the message past surrounding `or` combinators,
       // which would otherwise swallow it as "all parsers failed".
       throw new Error(
-        "rest pattern must be the last element of an array pattern",
+        "an array pattern may have at most one rest binder (`...name`)",
       );
     }
+    seen = true;
   }
 }
 
@@ -5889,7 +5904,7 @@ export const arrayBindingPatternParser: Parser<ArrayPattern> = label(
     );
     const result = parser(input);
     if (!result.success) return result;
-    enforceRestAtEnd(result.result.elements);
+    enforceAtMostOneRest(result.result.elements);
     return result;
   },
 );
@@ -6182,7 +6197,7 @@ export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
     );
     const result = parser(input);
     if (!result.success) return result;
-    enforceRestAtEnd(result.result.elements);
+    enforceAtMostOneRest(result.result.elements);
     return result;
   },
 );

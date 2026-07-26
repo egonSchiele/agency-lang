@@ -24,7 +24,15 @@ const [first, _, third] = items   // skip the second element
 const [head, ...rest]   = items   // head = 1, rest = [2,3,4,5]
 ```
 
-The rest binder must be the last element. You can't have `[a, ...m, b]` for example.
+A rest binder can sit anywhere, and there can be at most one. Elements before
+it are matched from the front, elements after it from the back:
+
+```ts
+const [first, ...middle, last] = items   // first = 1, middle = [2,3,4], last = 5
+```
+
+Two rest binders is an error — nothing would decide where the split between
+them falls.
 
 When an array pattern is used to **match** — a `match` arm, the `is` operator,
 an `if` or `while` condition — a pattern without a rest binder names the whole

@@ -1,7 +1,7 @@
 import { _bashParser } from "agency-lang/stdlib-lib/safeBash.js"
 import { env } from "std::system"
 import { WriteMode } from "std::index"
-import { bash } from "std::shell"
+import { bash, ExecResult } from "std::shell"
 
 /** One piece of a word. Adjacent parts concatenate: `e'f'"g"$h` is a single
  * word of four parts. */
@@ -163,8 +163,7 @@ export type BashNode =
   | List
 
 
-/** A bash command reduced to the only shape v1 can reason about: the words of
- *  a single command, and an optional output redirect. */
+/** A bash command reduced to the only shape v1 can reason about: the words of a single command, and an optional output redirect. */
 export type OutputRedirect = {
   op: string;
   path: string
@@ -173,12 +172,6 @@ export type OutputRedirect = {
 export type Cmd = {
   words: string[];
   redirect: OutputRedirect | null
-}
-
-export type SafeBashResult = {
-  stdout: string;
-  stderr: string;
-  exitCode: number
 }
 
 export def bashParser(code: string): Result<List> {
@@ -202,12 +195,33 @@ def stringifyWordPart(part: WordPart, insideQuotes: boolean): Result<string> {
   about what a command means.
   """
   return match (part) {
-    { tag: "literal", text } => success(text)
+    { tag: "literal", text } => literalWord(text, insideQuotes)
     { tag: "singleQuoted", text } => success(text)
     { tag: "doubleQuoted", parts } => stringifyParts(parts, true)
     { tag: "variable", name } => expandVariable(name, insideQuotes)
     _ => failure("`${part.tag}` needs a shell to evaluate")
   }
+}
+
+def literalWord(text: string, insideQuotes: boolean): Result<string> {
+  """
+  Literal text, unless it is something bash would rewrite before the command
+  ever ran.
+
+  Outside quotes, `*`, `?` and `[` are globs and a leading `~` is the home
+  directory — bash replaces them, so passing them through as text would run a
+  different command. Inside quotes bash leaves them alone, so they are text.
+  """
+  if (insideQuotes) {
+    return success(text)
+  }
+  if (text.includes("*") || text.includes("?") || text.includes("[")) {
+    return failure("`${text}` is a glob; bash would expand it")
+  }
+  if (text.startsWith("~")) {
+    return failure("`${text}` is a tilde expansion; bash would expand it")
+  }
+  return success(text)
 }
 
 def expandVariable(name: string, insideQuotes: boolean): Result<string> {
@@ -220,11 +234,17 @@ def expandVariable(name: string, insideQuotes: boolean): Result<string> {
   means. Inside double quotes no splitting happens, so it expands normally.
   """
   const value = env(name) ?? ""
-  if (!insideQuotes && value != value.trim()) {
-    return failure("unquoted `${name}` has surrounding whitespace; bash would word-split it")
+  if (insideQuotes) {
+    return success(value)
   }
-  if (!insideQuotes && value.includes(" ")) {
-    return failure("unquoted `${name}` contains a space; bash would word-split it")
+  // Default IFS is space, TAB and NEWLINE — not just space.
+  if (value.includes(" ") || value.includes("\t") || value.includes("\n")) {
+    return failure("unquoted `${name}` contains whitespace; bash would word-split it")
+  }
+  // An unquoted empty expansion produces ZERO words in bash, where this would
+  // produce one empty one — an argument bash never passed.
+  if (value == "") {
+    return failure("unquoted `${name}` is empty; bash would pass no argument at all")
   }
   return success(value)
 }
@@ -302,10 +322,19 @@ export def simplify(node: List): Result<Cmd> {
   // access below it reports a missing property. Filed separately; the shape
   // is what the AST types say.
   const andOr: any = item.command
+  // The `any` above discards the checking that makes the rest of this
+  // reduction sound, so re-establish it at runtime. A shifted parser shape
+  // should fail here rather than be reduced on unchecked assumptions.
+  if (andOr.tag != "andOr") {
+    return failure("unexpected AST shape: expected an andOr")
+  }
   if (andOr.rest.length > 0) {
     return failure("`&&` and `||` are not handled")
   }
   const pipeline: any = andOr.first
+  if (pipeline.tag != "pipeline") {
+    return failure("unexpected AST shape: expected a pipeline")
+  }
   if (pipeline.negated) {
     return failure("negated commands are not handled")
   }
@@ -337,14 +366,14 @@ export def simplify(node: List): Result<Cmd> {
   return failure("could not read the redirect: ${redirect.error}")
 }
 
-def ok(stdout: string): SafeBashResult {
+def ok(stdout: string): ExecResult {
   """
   A successful result in the shape `bash` would have returned.
   """
   return { stdout: stdout, stderr: "", exitCode: 0 }
 }
 
-export def safeBash(command: string, cwd: string = ""): SafeBashResult {
+export def safeBash(command: string, cwd: string = ""): ExecResult {
   """
   Run a shell command, using an equivalent tool where one exists.
 
@@ -367,11 +396,11 @@ export def safeBash(command: string, cwd: string = ""): SafeBashResult {
       return match (cmd) {
         // `echo` has no side effect beyond its output, so there is nothing to
         // approve: print it and report what bash wrote to stdout.
-        { words: ["echo", ...rest], redirect: null } => ok(joinWords(rest))
+        { words: ["echo", ...rest], redirect: null } if (!hasFlags(rest)) => ok(joinWords(rest))
 
         // Redirected, it is a file write, which `write` already gates.
-        { words: ["echo", ...rest], redirect: { op: ">", path } } => writeThrough(path, joinWords(rest), "overwrite", command, cwd)
-        { words: ["echo", ...rest], redirect: { op: ">>", path } } => writeThrough(path, joinWords(rest), "append", command, cwd)
+        { words: ["echo", ...rest], redirect: { op: ">", path } } if (!hasFlags(rest)) => writeThrough(path, joinWords(rest), "overwrite", command, cwd)
+        { words: ["echo", ...rest], redirect: { op: ">>", path } } if (!hasFlags(rest)) => writeThrough(path, joinWords(rest), "append", command, cwd)
 
         _ => bash(command, cwd)
       }
@@ -382,6 +411,23 @@ export def safeBash(command: string, cwd: string = ""): SafeBashResult {
   return bash(command, cwd)
 }
 
+def hasFlags(words: string[]): boolean {
+  """
+  True when any argument looks like an option.
+
+  `echo -n` suppresses the trailing newline and `echo -e` interprets escapes;
+  `joinWords` does neither, so mapping those would produce different output
+  than bash. Anything starting with `-` falls through and costs an approval,
+  which is the trade this module makes everywhere else.
+  """
+  for (word in words) {
+    if (word.startsWith("-")) {
+      return true
+    }
+  }
+  return false
+}
+
 def joinWords(words: string[]): string {
   """
   Rejoin a command's arguments the way echo prints them: single-spaced, with a
@@ -390,12 +436,24 @@ def joinWords(words: string[]): string {
   return words.join(" ") + "\n"
 }
 
-def writeThrough(path: string, content: string, mode: WriteMode, original: string, cwd: string): SafeBashResult {
+def writeThrough(path: string, content: string, mode: WriteMode, original: string, cwd: string): ExecResult {
   """
   Write the file, falling back to bash if the write itself fails so a refusal
   never silently swallows the command.
+
+  Worth knowing: a user who DENIES the `std::write` approval is then asked to
+  approve `std::bash` for the same effect. That is deliberate — the
+  alternative is a command that silently does nothing — but it is a second
+  prompt for something just declined.
   """
-  const written = write(path, content, cwd, mode)
+  // `write`'s `dir` rejects an empty string, where `safeBash`'s `cwd` uses one
+  // to mean "wherever bash would have run". Normalize, or every redirected
+  // echo falls back to bash and the mapping never fires.
+  let dir = cwd
+  if (dir == "") {
+    dir = "."
+  }
+  const written = write(path, content, dir, mode)
   if (written is failure(reason)) {
     return bash(original, cwd)
   }

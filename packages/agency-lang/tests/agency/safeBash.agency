@@ -56,6 +56,18 @@ node commandsItRefuses() {
   ]
 }
 
+node shellTransformsAreRefused() {
+  // bash rewrites an unquoted word four ways before the command runs. Passing
+  // any of them through as text would run a different command than the user
+  // wrote — the one failure mode this module must not have.
+  return [
+    refusalFor("echo *"),
+    refusalFor("echo x[1]"),
+    refusalFor("echo ~/d"),
+    refusalFor("echo \"a*b\""),
+  ]
+}
+
 node redirectsItUnderstands() {
   const parsed = bashParser("echo hi > out.txt")
   if (parsed is success(ast)) {

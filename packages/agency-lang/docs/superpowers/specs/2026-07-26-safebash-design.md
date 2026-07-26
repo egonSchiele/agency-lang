@@ -146,6 +146,27 @@ correctness.
 - **Should the coding agent's prompt change once this exists?** Probably not —
   safeBash is a safety net, not a license to write bash.
 
+## Parser gaps (separate from this module)
+
+Two of the review findings are arguably the bash parser's, not safeBash's. The
+AST records what was *written* but not the shell's intent to *transform* it,
+so a consumer has to re-derive that by scanning literal text:
+
+- **No node for glob patterns.** `echo *` arrives as `literal "*"`,
+  indistinguishable from ordinary text except by scanning for `*`, `?` and
+  `[`. safeBash now does that scan, which works — the parser does keep quoted
+  and unquoted parts separate within a word, so `"a"*` is
+  `[doubleQuoted "a", literal "*"]` and only the unquoted part is checked —
+  but every consumer that wants "would bash expand this?" has to reimplement
+  it. A `{ tag: "glob", pattern }` part would make it structural.
+- **No node for tilde expansion.** `~/d` arrives as `literal "~/d"`. Same
+  argument, plus tilde has a position rule (only at the start of a word) that
+  a consumer has to know.
+
+Neither blocks v1 — the scan is correct today. They are noted because the
+workaround is a text scan for shell metacharacters, which is exactly the kind
+of thing that goes subtly wrong as coverage grows.
+
 ## Found while building
 
 `item.command`, where the field is declared `AndOr`, resolves to the type

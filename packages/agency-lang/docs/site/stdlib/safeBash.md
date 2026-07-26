@@ -299,19 +299,17 @@ export type BashNode =
 
 ### OutputRedirect
 
-A bash command reduced to the only shape v1 can reason about: the words of
- *  a single command, and an optional output redirect.
+A bash command reduced to the only shape v1 can reason about: the words of a single command, and an optional output redirect.
 
 ```ts
-/** A bash command reduced to the only shape v1 can reason about: the words of
- *  a single command, and an optional output redirect. */
+/** A bash command reduced to the only shape v1 can reason about: the words of a single command, and an optional output redirect. */
 export type OutputRedirect = {
   op: string;
   path: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L168))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L167))
 
 ### Cmd
 
@@ -322,19 +320,7 @@ export type Cmd = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L173))
-
-### SafeBashResult
-
-```ts
-export type SafeBashResult = {
-  stdout: string;
-  stderr: string;
-  exitCode: number
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L172))
 
 ## Constants
 
@@ -369,7 +355,7 @@ Parse a string of bash code into an AST.
 
 **Returns:** `Result<List>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L177))
 
 ### simplify
 
@@ -394,12 +380,12 @@ Reduce a parsed bash AST to a single command's words and output redirect.
 
 **Returns:** `Result<Cmd>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L282))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L302))
 
 ### safeBash
 
 ```ts
-safeBash(command: string, cwd: string = ""): SafeBashResult
+safeBash(command: string, cwd: string = ""): ExecResult
 ```
 
 Run a shell command, using an equivalent tool where one exists.
@@ -423,8 +409,8 @@ Run a shell command, using an equivalent tool where one exists.
 | command | `string` |  |
 | cwd | `string` | "" |
 
-**Returns:** [SafeBashResult](#safebashresult)
+**Returns:** [ExecResult](shell.md#execresult)
 
 **Throws:** `std::write`, `std::bash`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L347))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L376))

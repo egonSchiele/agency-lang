@@ -1,0 +1,4 @@
+{
+  "expectedCompileError": "Failed to parse",
+  "description": "Two rest binders is a normal parse failure. Asserting the `Failed to parse` prefix rather than the message text is deliberate: the message alone also appears inside a stack trace, so it would pass whether or not the error is presented as a diagnostic."
+}

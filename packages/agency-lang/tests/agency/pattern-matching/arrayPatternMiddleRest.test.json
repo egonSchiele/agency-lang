@@ -1,0 +1,103 @@
+{
+  "tests": [
+    {
+      "nodeName": "oneTrailing",
+      "description": "One trailing element after the rest: matches when the last element agrees, binds zero or more in between, and fails when too short.",
+      "input": "",
+      "expectedOutput": "[\"matched, rest=1\",\"matched, rest=0\",\"fell through\",\"fell through\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "twoTrailing",
+      "description": "Two trailing elements, indexed from the end.",
+      "input": "",
+      "expectedOutput": "[\"matched, rest=2\",\"matched, rest=0\",\"fell through\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "emptyHeadAndRestAlone",
+      "description": "An empty head, and a rest with neither head nor tail.",
+      "input": "",
+      "expectedOutput": "[\"matched, rest=2\",\"matched, rest=0\",\"fell through\",\"matched, rest=3\",\"matched, rest=0\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bindingsLandInTheRightPlaces",
+      "description": "The leading binder gets the first element, the trailing binder the last, and the rest exactly what is between them.",
+      "input": "",
+      "expectedOutput": "[\"a\",[\"b\",\"c\"],\"d\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bindingsWithEmptyMiddle",
+      "description": "With nothing between them the rest binds an empty array, and the two named binders do not overlap.",
+      "input": "",
+      "expectedOutput": "[\"a\",[],\"b\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nestedAndTypedTails",
+      "description": "A trailing element that is itself a pattern, and one carrying a type suffix.",
+      "input": "",
+      "expectedOutput": "[\"nested tail\",\"fell through\",\"numeric last\",\"fell through\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bindingPositionToo",
+      "description": "const [a, ...rest, b] = xs is legal; binding position shares the same arithmetic.",
+      "input": "",
+      "expectedOutput": "[\"a\",[\"b\",\"c\"],\"d\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "declarationTooShortIsAFailure",
+      "description": "A declaration whose value cannot fill both ends surfaces a failure rather than aliasing the two binders to the same element.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "declarationLongEnoughStillBinds",
+      "description": "Exactly enough elements: the two named binders take the two elements and the rest is empty.",
+      "input": "",
+      "expectedOutput": "[\"a\",[],\"b\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

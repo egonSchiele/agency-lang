@@ -123,9 +123,16 @@ function corpusPatterns(): { file: string; pattern: MatchPattern }[] {
 
   const out: { file: string; pattern: MatchPattern }[] = [];
   for (const file of files) {
-    const parsed = parseAgency(readFileSync(file, "utf8"), {}, true, false);
-    // Some corpus files are deliberate parse-error fixtures; skip them rather
-    // than fail, the walker corpus does the same for its own reasons.
+    // Some corpus files are deliberate compile-error fixtures
+    // (tests/agency/expectedCompileError). They fail two ways: a returned
+    // failure, and a THROW — the array-pattern arity check throws so its
+    // message survives the surrounding `or` combinators. Skip both.
+    let parsed;
+    try {
+      parsed = parseAgency(readFileSync(file, "utf8"), {}, true, false);
+    } catch {
+      continue;
+    }
     if (!parsed.success) continue;
     for (const node of walkEveryNode(parsed.result.nodes)) {
       if (node.type === "matchBlock") {
@@ -350,7 +357,12 @@ describe("lowering leaves no pattern-specific nodes behind", () => {
     ];
     const failures: string[] = [];
     for (const file of files) {
-      const parsed = parseAgency(readFileSync(file, "utf8"), {}, true, true);
+      let parsed;
+      try {
+        parsed = parseAgency(readFileSync(file, "utf8"), {}, true, true);
+      } catch {
+        continue; // deliberate compile-error fixture; see corpusPatterns
+      }
       if (!parsed.success) continue;
       for (const node of walkSkippingMatchSource(parsed.result.nodes)) {
         if (MUST_NOT_SURVIVE.includes(node.type as string)) {

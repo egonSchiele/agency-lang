@@ -1,0 +1,115 @@
+// A rest binder may sit anywhere in an array pattern, not just last. Leading
+// elements match from the front, trailing ones from the back, and the rest
+// takes what is left in between.
+
+def one(xs: any[]): string {
+  return match (xs) {
+    ["a", ...rest, "c"] => "matched, rest=${rest.length}"
+    _ => "fell through"
+  }
+}
+
+def two(xs: any[]): string {
+  return match (xs) {
+    ["a", ...rest, "d", "e"] => "matched, rest=${rest.length}"
+    _ => "fell through"
+  }
+}
+
+def emptyHead(xs: any[]): string {
+  // No leading elements — the case most likely to expose an off-by-one.
+  return match (xs) {
+    [...rest, "c"] => "matched, rest=${rest.length}"
+    _ => "fell through"
+  }
+}
+
+def restAlone(xs: any[]): string {
+  return match (xs) {
+    [...rest] => "matched, rest=${rest.length}"
+    _ => "fell through"
+  }
+}
+
+def bindings(xs: any[]): any[] {
+  // A trailing element bound from the WRONG end still makes the arm match, so
+  // the assertion has to be on what landed in each binder.
+  return match (xs) {
+    [first, ...mid, last] => [first, mid, last]
+    _ => ["fell through"]
+  }
+}
+
+def nestedTail(xs: any[]): string {
+  // A trailing element that is itself a pattern.
+  return match (xs) {
+    ["cmd", ...rest, { path: string }] => "nested tail"
+    _ => "fell through"
+  }
+}
+
+def typedTail(xs: any[]): string {
+  // A type suffix on a trailing element (on the REST binder is Part 3).
+  return match (xs) {
+    ["cmd", ...rest, last: number] => "numeric last"
+    _ => "fell through"
+  }
+}
+
+node oneTrailing() {
+  // Zero or more between: ["a","c"] gives rest = [].
+  return [one(["a", "b", "c"]), one(["a", "c"]), one(["a", "b", "x"]), one(["a"])]
+}
+
+node twoTrailing() {
+  return [two(["a", "b", "c", "d", "e"]), two(["a", "d", "e"]), two(["a", "d"])]
+}
+
+node emptyHeadAndRestAlone() {
+  return [
+    emptyHead(["a", "b", "c"]),
+    emptyHead(["c"]),
+    emptyHead(["a"]),
+    restAlone(["a", "b", "c"]),
+    restAlone([]),
+  ]
+}
+
+node bindingsLandInTheRightPlaces() {
+  return bindings(["a", "b", "c", "d"])
+}
+
+node bindingsWithEmptyMiddle() {
+  return bindings(["a", "b"])
+}
+
+node nestedAndTypedTails() {
+  return [
+    nestedTail(["cmd", "x", { path: "f.txt" }]),
+    nestedTail(["cmd", { path: 42 }]),
+    typedTail(["cmd", "x", 7]),
+    typedTail(["cmd", "x", "no"]),
+  ]
+}
+
+def tooShortToFillBothEnds(xs: any[]): any {
+  // A declaration binds rather than tests, so nothing stops the two ends from
+  // reading the same element. Matching cannot reach this state — the length
+  // check fails first — which is why the guard belongs here and not there.
+  const [first, ...mid, last] = xs
+  return [first, mid, last]
+}
+
+node declarationTooShortIsAFailure() {
+  return isFailure(tooShortToFillBothEnds(["a"]))
+}
+
+node declarationLongEnoughStillBinds() {
+  return tooShortToFillBothEnds(["a", "b"])
+}
+
+node bindingPositionToo() {
+  // `const [a, ...rest, b] = xs` is legal: binding shares the arithmetic.
+  const [first, ...mid, last] = ["a", "b", "c", "d"]
+  return [first, mid, last]
+}

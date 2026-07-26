@@ -1,0 +1,113 @@
+// An array pattern with no rest binder requires an EXACT length. It used to
+// require only "at least this many", so `["a", "b"]` accepted any array
+// starting with a, b — there was no way to say "exactly these two".
+
+def arm(xs: any[]): string {
+  return match (xs) {
+    ["a", "b"] => "two"
+    _ => "fell through"
+  }
+}
+
+def withRest(xs: any[]): string {
+  return match (xs) {
+    ["a", "b", ...rest] => "two plus ${rest.length}"
+    _ => "fell through"
+  }
+}
+
+def nested(xs: any[]): string {
+  return match (xs) {
+    [["a", "b"], "z"] => "nested exact"
+    _ => "fell through"
+  }
+}
+
+def isPosition(xs: any[]): string {
+  // The `is` operator routes through the same lowering, so it changes too.
+  if (xs is ["a", "b"]) {
+    return "is matched"
+  }
+  return "is fell through"
+}
+
+def whilePosition(xs: any[]): string {
+  // So does a `while` condition. One iteration is enough to tell.
+  //
+  // The `return` is load-bearing for TERMINATION, not just for the result:
+  // `xs` never changes, so the condition is loop-invariant and a matching
+  // value would spin forever without it. A regression here hangs rather than
+  // fails.
+  let seen = "never"
+  while (xs is ["a", "b"]) {
+    seen = "while matched"
+    return seen
+  }
+  return "while fell through"
+}
+
+def headPattern(xs: any[]): string {
+  // `match (x is pattern)` is the one construct whose failure mode is not
+  // "falls through": a head pattern that does not match returns a failure
+  // from the ENCLOSING function. So the exact-length rule changes control
+  // flow here, not just which arm runs.
+  let out = "head did not run"
+  match (xs is ["a", "b"]) {
+    true => out = "head matched"
+    _ => out = "head matched, arm fell through"
+  }
+  return out
+}
+
+def arrayInObject(c: any): string {
+  // The shape this series is building toward: an array inside an object.
+  return match (c) {
+    { words: ["a", "b"] } => "object exact"
+    _ => "fell through"
+  }
+}
+
+node exactLength() {
+  // Longer no longer matches; the exact length still does.
+  return [arm(["a", "b", "c"]), arm(["a", "b"]), arm(["a"])]
+}
+
+node restStillMatchesLonger() {
+  // A rest binder keeps the "at least" reading, and still binds zero.
+  return [withRest(["a", "b", "c"]), withRest(["a", "b"]), withRest(["a"])]
+}
+
+node nestedIsExactToo() {
+  return [nested([["a", "b"], "z"]), nested([["a", "b", "c"], "z"])]
+}
+
+node headPatternReturnsFailure() {
+  // The non-matching case returns a failure from headPattern, so the caller
+  // sees a failure rather than a string. That is the control-flow change.
+  const longer = headPattern(["a", "b", "c"])
+  return isFailure(longer)
+}
+
+node headPatternStillMatchesExact() {
+  return headPattern(["a", "b"])
+}
+
+node arrayInsideObject() {
+  return [arrayInObject({ words: ["a", "b"] }), arrayInObject({ words: ["a", "b", "c"] })]
+}
+
+node destructuringUnchanged() {
+  // A declaration binds rather than tests, so it still takes the first two.
+  // This is the claim a reader most wants backed for a silent breaking change.
+  const [a, b] = ["a", "b", "c"]
+  return "${a}${b}"
+}
+
+node isAndWhileChangeToo() {
+  return [
+    isPosition(["a", "b", "c"]),
+    isPosition(["a", "b"]),
+    whilePosition(["a", "b", "c"]),
+    whilePosition(["a", "b"]),
+  ]
+}

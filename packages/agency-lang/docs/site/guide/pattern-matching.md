@@ -26,6 +26,20 @@ const [head, ...rest]   = items   // head = 1, rest = [2,3,4,5]
 
 The rest binder must be the last element. You can't have `[a, ...m, b]` for example.
 
+When an array pattern is used to **match** — a `match` arm, the `is` operator,
+an `if` or `while` condition — a pattern without a rest binder names the whole
+array, so the length has to match exactly. Add `...rest` when you mean "at least":
+
+```ts
+match (["a", "b", "c"]) {
+    ["a", "b"]          => "no match — the pattern names two elements"
+    ["a", "b", ...rest] => "matches, rest = [\"c\"]"
+}
+```
+
+Destructuring is different: `const [a, b] = items` takes the first two and
+ignores the rest, because a declaration binds rather than tests.
+
 ### Object destructuring
 
 ```ts

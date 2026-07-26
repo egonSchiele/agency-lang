@@ -92,6 +92,22 @@ node nestedAndTypedTails() {
   ]
 }
 
+def tooShortToFillBothEnds(xs: any[]): any {
+  // A declaration binds rather than tests, so nothing stops the two ends from
+  // reading the same element. Matching cannot reach this state — the length
+  // check fails first — which is why the guard belongs here and not there.
+  const [first, ...mid, last] = xs
+  return [first, mid, last]
+}
+
+node declarationTooShortIsAFailure() {
+  return isFailure(tooShortToFillBothEnds(["a"]))
+}
+
+node declarationLongEnoughStillBinds() {
+  return tooShortToFillBothEnds(["a", "b"])
+}
+
 node bindingPositionToo() {
   // `const [a, ...rest, b] = xs` is legal: binding shares the arithmetic.
   const [first, ...mid, last] = ["a", "b", "c", "d"]

@@ -31,8 +31,11 @@ it are matched from the front, elements after it from the back:
 const [first, ...middle, last] = items   // first = 1, middle = [2,3,4], last = 5
 ```
 
-Two rest binders is an error — nothing would decide where the split between
+Two rest binders are an error — nothing would decide where the split between
 them falls.
+
+In a declaration, a value too short to fill both ends surfaces a `failure`:
+`const [a, ...m, b] = ["x"]` cannot give `a` and `b` different elements.
 
 When an array pattern is used to **match** — a `match` arm, the `is` operator,
 an `if` or `while` condition — a pattern without a rest binder names the whole

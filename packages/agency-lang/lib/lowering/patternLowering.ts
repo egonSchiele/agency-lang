@@ -1077,11 +1077,18 @@ class PatternLowerer {
               ]
             : [],
         );
+        // A tail binder reads from the end, which aliases a leading binder when
+        // the value is too short. Matching cannot reach that state (the length
+        // check fails first); a declaration can, so guard the source here.
+        const guardedSource =
+          tail.length > 0
+            ? requireLengthCall(source, head.length + tail.length, loc)
+            : source;
         const tailBindings = tail.flatMap((el, i): Assignment[] => {
           if (el.type === "wildcardPattern") return [];
           return this.extractBindings(
             el,
-            indexFromEnd(source, tail.length - i, loc),
+            indexFromEnd(guardedSource, tail.length - i, loc),
             declKind,
             loc,
           );
@@ -1483,6 +1490,28 @@ function indexFromEnd(
  * always produced, kept deliberately so lifting this restriction does not
  * churn every existing rest fixture.
  */
+/**
+ * `__requireLength(source, min)` — the guard a DECLARATION needs and a match
+ * gets for free. `collectChecks` emits a length check before any element read;
+ * `extractBindings` emits none, because a declaration binds rather than tests.
+ * Without this, `const [a, ...m, b] = ["a"]` binds `a` and `b` to the same
+ * element, silently.
+ */
+function requireLengthCall(
+  source: Expression,
+  min: number,
+  loc: SourceLocation | undefined,
+): Expression {
+  return {
+    type: "functionCall",
+    functionName: "__requireLength",
+    // Lowerer-created, so the undefined-function check skips it.
+    synthetic: true,
+    arguments: [cloneExpr(source), numberLit(min, loc)],
+    loc,
+  } as Expression;
+}
+
 function restSlice(
   source: Expression,
   start: number,

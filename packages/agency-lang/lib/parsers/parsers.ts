@@ -5,6 +5,7 @@
 // =============================================================================
 
 // --- tarsec imports (combined from all parser files) ---
+import { TarsecError } from "tarsec";
 import {
   anyChar,
   between,
@@ -5863,9 +5864,19 @@ function enforceAtMostOneRest<T extends { type: string }>(
     if (seen) {
       // Throw to surface the message past surrounding `or` combinators,
       // which would otherwise swallow it as "all parsers failed".
-      throw new Error(
-        "an array pattern may have at most one rest binder (`...name`)",
-      );
+      //
+      // A TarsecError specifically, not a bare Error: `parseAgency` catches
+      // the former and renders it as an ordinary parse failure, and lets
+      // anything else escape as an uncaught exception. Users got fifteen
+      // frames of tarsec internals and no file or line.
+      const message = "an array pattern may have at most one rest binder (`...name`)";
+      throw new TarsecError({
+        line: 0,
+        column: 0,
+        length: 1,
+        message,
+        prettyMessage: message,
+      });
     }
     seen = true;
   }

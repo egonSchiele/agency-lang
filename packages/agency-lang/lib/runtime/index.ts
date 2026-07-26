@@ -155,6 +155,7 @@ export { acceptsFailures } from "./failurePropagation.js";
 export { Schema, __validateType } from "./schema.js";
 export { __coarseTypeTest } from "./typeTest.js";
 export { __eq } from "./eq.js";
+export { __requireLength } from "./requireLength.js";
 export { __nn } from "./nn.js";
 export {
   __validateChain,

@@ -1,4 +1,4 @@
 {
-  "expectedCompileError": "at most one rest binder",
-  "description": "An array pattern with two rest binders is rejected, with a message rather than a stack trace"
+  "expectedCompileError": "Failed to parse",
+  "description": "Two rest binders is a normal parse failure. Asserting the `Failed to parse` prefix rather than the message text is deliberate: the message alone also appears inside a stack trace, so it would pass whether or not the error is presented as a diagnostic."
 }

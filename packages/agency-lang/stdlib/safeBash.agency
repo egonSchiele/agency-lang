@@ -120,57 +120,63 @@ export type BashNode =
 
 export type BashAST = Command[]
 
-export def bashParser(code: string): Result<List> {
+/** A bash command reduced to the only shape v1 can reason about: a command
+ * name, its arguments as text, and an optional output redirect. */
+export type OutputRedirect = {
+  op: string;
+  path: string
+}
+
+export type Cmd = {
+  command: string;
+  args: string[];
+  redirect?: OutputRedirect
+}
+
+export def bashParser(code: string): Result<BashAST> {
   """
   Parse a string of bash code into an AST.
   """
   const res = _bashParser(code)
   return match(res.success) {
     true => success(res.result)
-    false => failure(res.error)
+    false => failure(res.message)
   }
 }
 
-def stringifyWordPart(part: WordPart, insideQuotes: boolean): Result<string> {
+def stringifyWord(
+  word: Word,
+  insideQuotes: boolean,
+  isWholeWord: boolean,
+): Result<string> {
   """
-  Reduce one piece of a word to text, or explain why it cannot be.
+  Reduce a word to text, or explain why it cannot be.
 
-  Only the parts that are already text, or that the environment can answer,
+  Only the words that are already text, or that the environment can answer,
   are resolvable. Anything that would need a shell to evaluate is a failure,
   because guessing at it is how safeBash and bash would come to disagree
   about what a command means.
+
+  The parser refuses globs, tilde, command substitution and arithmetic
+  outright, so they never arrive here — what is left to decide is what a
+  variable expands to, and whether bash would have split the result.
   """
-  return match(part) {
-    { tag: "literal", text } => literalWord(text, insideQuotes)
+  return match(word) {
+    { tag: "literal", text } => success(text)
+    { tag: "path", text } => success(text)
     { tag: "singleQuoted", text } => success(text)
-    { tag: "doubleQuoted", parts } => stringifyParts(parts, true)
-    { tag: "variable", name } => expandVariable(name, insideQuotes)
-    _ => failure("`${part.tag}` needs a shell to evaluate")
+    { tag: "doubleQuoted", parts } => stringifyParts(parts, true, false)
+    { tag: "variable", name } => expandVariable(name, insideQuotes, isWholeWord)
+    { tag: "interpolatedVariable", parts } => stringifyParts(parts, insideQuotes, false)
+    _ => failure("`${word.tag}` cannot be reduced to text")
   }
 }
 
-def literalWord(text: string, insideQuotes: boolean): Result<string> {
-  """
-  Literal text, unless it is something bash would rewrite before the command
-  ever ran.
-
-  Outside quotes, `*`, `?` and `[` are globs and a leading `~` is the home
-  directory — bash replaces them, so passing them through as text would run a
-  different command. Inside quotes bash leaves them alone, so they are text.
-  """
-  if (insideQuotes) {
-    return success(text)
-  }
-  if (text.includes("*") || text.includes("?") || text.includes("[")) {
-    return failure("`${text}` is a glob; bash would expand it")
-  }
-  if (text.startsWith("~")) {
-    return failure("`${text}` is a tilde expansion; bash would expand it")
-  }
-  return success(text)
-}
-
-def expandVariable(name: string, insideQuotes: boolean): Result<string> {
+def expandVariable(
+  name: string,
+  insideQuotes: boolean,
+  isWholeWord: boolean,
+): Result<string> {
   """
   Look a variable up in the environment. Unset is the empty string, as in bash.
 
@@ -188,21 +194,26 @@ def expandVariable(name: string, insideQuotes: boolean): Result<string> {
     return failure("unquoted `${name}` contains whitespace; bash would word-split it")
   }
   // An unquoted empty expansion produces ZERO words in bash, where this would
-  // produce one empty one — an argument bash never passed.
-  if (value == "") {
+  // produce one empty one — an argument bash never passed. Only when the
+  // variable IS the word: `$EMPTY/bin` is `/bin`, one word, not none.
+  if (value == "" && isWholeWord) {
     return failure("unquoted `${name}` is empty; bash would pass no argument at all")
   }
   return success(value)
 }
 
-def stringifyParts(parts: WordPart[], insideQuotes: boolean): Result<string> {
+def stringifyParts(
+  parts: Word[],
+  insideQuotes: boolean,
+  isWholeWord: boolean,
+): Result<string> {
   """
   Concatenate the parts of a word. Adjacent parts join with no separator:
   `e'f'"g"` is one word, `efg`.
   """
   let out = ""
   for (part in parts) {
-    const piece = stringifyWordPart(part, insideQuotes)
+    const piece = stringifyWord(part, insideQuotes, isWholeWord)
     if (piece is success(text)) {
       out = out + text
     } else {
@@ -210,13 +221,6 @@ def stringifyParts(parts: WordPart[], insideQuotes: boolean): Result<string> {
     }
   }
   return success(out)
-}
-
-def stringifyWord(word: BashWord): Result<string> {
-  """
-  Reduce a whole word to text.
-  """
-  return stringifyParts(word.parts, false)
 }
 
 def simplifyRedirects(redirects: Redirect[]): Result<OutputRedirect | null> {
@@ -238,7 +242,7 @@ def simplifyRedirects(redirects: Redirect[]): Result<OutputRedirect | null> {
   if (only.op != ">" && only.op != ">>") {
     return failure("`${only.op}` is not an output redirect")
   }
-  const path = stringifyWord(only.target)
+  const path = stringifyWord(only.target, false, true)
   if (path is success(text)) {
     return success({
       op: only.op,
@@ -248,74 +252,102 @@ def simplifyRedirects(redirects: Redirect[]): Result<OutputRedirect | null> {
   return failure("redirect target: ${path.error}")
 }
 
-export def simplify(node: List): Result<Cmd> {
+def hasFlags(args: Word[]): boolean {
   """
-  Reduce a parsed bash AST to a single command's words and output redirect.
+  True when any argument is a flag.
 
-  v1 understands one simple command and nothing else. A pipeline, a `&&`
-  chain, a subshell, a loop, a background job or a variable assignment is a
-  failure — not because they are unsafe, but because collapsing them to a
-  word list would lose what makes them different from a single command.
-
-  @param node - The AST from `bashParser`
+  `echo -n` suppresses the trailing newline and `echo -e` interprets escapes;
+  `joinWords` does neither, so mapping those would produce different output
+  than bash. A flag also has no faithful text form to put in `args` — the
+  parser splits `--format=oneline` into a name and a value, and re-joining
+  them is a guess about a syntax that varies per command. Anything with a
+  flag falls through and costs an approval, which is the trade this module
+  makes everywhere else.
   """
-  if (node.items.length != 1) {
+  for (arg in args) {
+    if (arg.tag == "flag") {
+      return true
+    }
+  }
+  return false
+}
+
+export def simplify(ast: BashAST): Result<Cmd> {
+  """
+  Reduce a parsed bash AST to a single command's name, arguments and output
+  redirect.
+
+  v1 understands one simple command and nothing else. A `&&` / `||` chain,
+  a parenthesized group or a leading variable assignment is a failure — not
+  because they are unsafe, but because collapsing them to a command and a
+  list of arguments would lose what makes them different from a single
+  command.
+
+  @param ast - The AST from `bashParser`
+  """
+  if (ast.length != 1) {
     return failure("expected a single command")
   }
-  const item = node.items[0]
-  if (item.background) {
-    return failure("background commands are not handled")
-  }
-  // `any` on purpose: the checker resolves `item.command` to the type ALIAS
-  // named `Command` rather than the field's declared type `AndOr`, so every
-  // access below it reports a missing property. Filed separately; the shape
-  // is what the AST types say.
-  const andOr: any = item.command
-  // The `any` above discards the checking that makes the rest of this
-  // reduction sound, so re-establish it at runtime. A shifted parser shape
-  // should fail here rather than be reduced on unchecked assumptions.
-  if (andOr.tag != "andOr") {
-    return failure("unexpected AST shape: expected an andOr")
-  }
-  if (andOr.rest.length > 0) {
+  const only = ast[0]
+  if (only.tag == "and" || only.tag == "or") {
     return failure("`&&` and `||` are not handled")
   }
-  const pipeline: any = andOr.first
-  if (pipeline.tag != "pipeline") {
-    return failure("unexpected AST shape: expected a pipeline")
+  if (only.tag == "parens") {
+    return failure("`( ... )` grouping is not handled")
   }
-  if (pipeline.negated) {
-    return failure("negated commands are not handled")
+  // The parser's `Command` union is exhausted above, so this is a shifted
+  // parser shape rather than a command shape v1 declined. Fail rather than
+  // reduce on an assumption about fields that may not be there.
+  if (only.tag != "simpleCommand") {
+    return failure("unexpected AST shape: expected a simple command")
   }
-  if (pipeline.commands.length != 1) {
-    return failure("pipelines are not handled")
-  }
-  const cmd: any = pipeline.commands[0]
-  if (cmd.tag != "simpleCommand") {
-    return failure("`${cmd.tag}` is not a simple command")
-  }
-  if (cmd.assignments.length > 0) {
+  if (only.assignments.length > 0) {
     return failure("leading variable assignments are not handled")
   }
+  const name = commandName(only)
+  if (name is failure(why)) {
+    return failure(why)
+  }
+  if (hasFlags(only.args)) {
+    return failure("flags are not handled")
+  }
 
-  let words: string[] = []
-  for (word in cmd.words) {
-    const text = stringifyWord(word)
+  let args: string[] = []
+  for (word in only.args) {
+    const text = stringifyWord(word, false, true)
     if (text is success(value)) {
-      words.push(value)
+      args.push(value)
     } else {
       return failure("could not read a word: ${text.error}")
     }
   }
 
-  const redirect = simplifyRedirects(cmd.redirects)
-  if (redirect is success(only)) {
-    return success({
-      words: words,
-      redirect: only
-    })
+  const redirect = simplifyRedirects(only.redirects)
+  if (redirect is success(target)) {
+    return success(
+      {
+      command: name.value,
+      args: args,
+      redirect: target
+    },
+    )
   }
   return failure("could not read the redirect: ${redirect.error}")
+}
+
+def commandName(cmd: SimpleCommand): Result<string> {
+  """
+  The name of the command being run.
+
+  A line that is only an assignment (`FOO=bar`) has no command name. Bash
+  runs it as a variable assignment and nothing else, which is not a shape
+  any tool maps onto.
+  """
+  const scriptName = cmd.command
+  if (scriptName == null) {
+    return failure("an assignment with no command is not handled")
+  }
+  return success(scriptName.text)
 }
 
 def ok(stdout: string): ExecResult {
@@ -349,21 +381,13 @@ export def safeBash(command: string, cwd: string = ""): ExecResult {
   if (parsed is success(ast)) {
     const simplified = simplify(ast)
     if (simplified is success(cmd)) {
-      // Flags are refused before the table rather than per-arm: `echo -n`
-      // suppresses the trailing newline and `-e` interprets escapes, and
-      // `joinWords` does neither. Up here it is one rule instead of a guard
-      // repeated on every arm — and it keeps calls out of match-arm guards,
-      // which the effects walk does not descend into (#668).
-      if (hasFlags(cmd.words)) {
-        return bash(command, cwd)
-      }
       return match(cmd) {
         // `echo` has no side effect beyond its output, so there is nothing to
         // approve: print it and report what bash wrote to stdout.
-        { words: ["echo", ...rest], redirect: null } => ok(joinWords(rest))
+        { command: "echo", args, redirect: null } => ok(joinWords(args))
         // Redirected, it is a file write, which `write` already gates.
-        { words: ["echo", ...rest], redirect: { op: ">", path } } => writeThrough(path, joinWords(rest), "overwrite", command, cwd)
-        { words: ["echo", ...rest], redirect: { op: ">>", path } } => writeThrough(path, joinWords(rest), "append", command, cwd)
+        { command: "echo", args, redirect: { op: ">", path } } => writeThrough(path, joinWords(args), "overwrite", command, cwd)
+        { command: "echo", args, redirect: { op: ">>", path } } => writeThrough(path, joinWords(args), "append", command, cwd)
         _ => bash(command, cwd)
       }
     }
@@ -371,23 +395,6 @@ export def safeBash(command: string, cwd: string = ""): ExecResult {
   // Unparseable, or a shape v1 does not map: run it as before, approval and
   // all. Incompleteness costs an approval, never correctness.
   return bash(command, cwd)
-}
-
-def hasFlags(words: string[]): boolean {
-  """
-  True when any argument looks like an option.
-
-  `echo -n` suppresses the trailing newline and `echo -e` interprets escapes;
-  `joinWords` does neither, so mapping those would produce different output
-  than bash. Anything starting with `-` falls through and costs an approval,
-  which is the trade this module makes everywhere else.
-  """
-  for (word in words) {
-    if (word.startsWith("-")) {
-      return true
-    }
-  }
-  return false
 }
 
 def joinWords(words: string[]): string {

@@ -20,7 +20,7 @@ def wordsOf(command: string): any {
   if (parsed is success(ast)) {
     const cmd = simplify(ast)
     if (cmd is success(c)) {
-      return c.words
+      return [c.command, ...c.args]
     }
     return ["FAILED"]
   }
@@ -43,29 +43,52 @@ node echoQuotingIsPreserved() {
 }
 
 node commandsItRefuses() {
-  // Each of these could be mapped one day; none can be mapped by collapsing
-  // it to a word list, which is what v1 does.
+  // Parsed, but not a single simple command. Each of these could be mapped
+  // one day; none can be mapped by collapsing it to a command and a list of
+  // arguments, which is what v1 does.
   return [
-    refusalFor("cat a.txt | grep x"),
     refusalFor("a && b"),
-    refusalFor("sleep 1 &"),
+    refusalFor("a || b"),
+    refusalFor("(a && b)"),
     refusalFor("FOO=1 echo hi"),
-    refusalFor("echo $(date)"),
-    refusalFor("echo hi 2>&1"),
+    refusalFor("FOO=1"),
     refusalFor("echo a; echo b"),
+    refusalFor("echo hi 2> err.txt"),
+    refusalFor("echo hi < in.txt"),
   ]
 }
 
-node shellTransformsAreRefused() {
-  // bash rewrites an unquoted word four ways before the command runs. Passing
-  // any of them through as text would run a different command than the user
-  // wrote — the one failure mode this module must not have.
+node flagsAreRefused() {
+  // A flag has no faithful text form to put in `args`, and `echo -n` / `-e`
+  // change what echo prints. Both mean the command belongs to bash.
+  return [
+    refusalFor("echo -n hi"),
+    refusalFor("ls -la"),
+    refusalFor("git log --format=oneline"),
+  ]
+}
+
+node shellTransformsAreUnparseable() {
+  // bash rewrites an unquoted word before the command runs, so passing one
+  // through as text would run a different command than the user wrote — the
+  // one failure mode this module must not have. The parser refuses them
+  // outright, so they never reach `simplify`. Quoted, they are ordinary
+  // text and still map.
   return [
     refusalFor("echo *"),
     refusalFor("echo x[1]"),
     refusalFor("echo ~/d"),
+    refusalFor("echo $(date)"),
+    refusalFor("cat a.txt | grep x"),
+    refusalFor("sleep 1 &"),
+    refusalFor("echo hi 2>&1"),
     refusalFor("echo \"a*b\""),
   ]
+}
+
+node wordsItUnderstands() {
+  // Paths and adjacent-part words are single arguments, not several.
+  return [wordsOf("cat src/main.ts"), wordsOf("echo a.txt")]
 }
 
 node redirectsItUnderstands() {
@@ -73,7 +96,7 @@ node redirectsItUnderstands() {
   if (parsed is success(ast)) {
     const cmd = simplify(ast)
     if (cmd is success(c)) {
-      return [c.words, c.redirect.op, c.redirect.path]
+      return [c.command, c.args, c.redirect.op, c.redirect.path]
     }
   }
   return ["FAILED"]

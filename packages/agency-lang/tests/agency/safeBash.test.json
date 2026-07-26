@@ -23,10 +23,43 @@
       ]
     },
     {
-      "nodeName": "commandsItRefuses",
-      "description": "Every shape v1 cannot collapse to a word list is refused by name, so a fallthrough is explainable rather than mysterious.",
+      "nodeName": "wordsItUnderstands",
+      "description": "A path and a dotted filename are each one argument, not several: the parser hands them over as single words.",
       "input": "",
-      "expectedOutput": "[\"pipelines are not handled\",\"`&&` and `||` are not handled\",\"background commands are not handled\",\"leading variable assignments are not handled\",\"could not read a word: `commandSubstitution` needs a shell to evaluate\",\"could not read the redirect: redirect with an explicit file descriptor\",\"expected a single command\"]",
+      "expectedOutput": "[[\"cat\",\"src/main.ts\"],[\"echo\",\"a.txt\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "commandsItRefuses",
+      "description": "Shapes the parser reads but v1 cannot collapse to a command and a list of arguments are refused by name, so a fallthrough is explainable rather than mysterious.",
+      "input": "",
+      "expectedOutput": "[\"`&&` and `||` are not handled\",\"`&&` and `||` are not handled\",\"`( ... )` grouping is not handled\",\"leading variable assignments are not handled\",\"leading variable assignments are not handled\",\"expected a single command\",\"could not read the redirect: redirect with an explicit file descriptor\",\"could not read the redirect: `<` is not an output redirect\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "flagsAreRefused",
+      "description": "A flag has no faithful text form in `args`, and `echo -n`/`-e` change what echo prints, so any flag sends the command to bash.",
+      "input": "",
+      "expectedOutput": "[\"flags are not handled\",\"flags are not handled\",\"flags are not handled\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellTransformsAreUnparseable",
+      "description": "Anything bash would rewrite before the command runs is rejected by the parser rather than reaching simplify. Quoted, a glob is ordinary text and still maps.",
+      "input": "",
+      "expectedOutput": "[\"unparseable\",\"unparseable\",\"unparseable\",\"unparseable\",\"unparseable\",\"unparseable\",\"unparseable\",\"mapped\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -35,9 +68,9 @@
     },
     {
       "nodeName": "redirectsItUnderstands",
-      "description": "An output redirect is lifted out of the AST into the simplified shape.",
+      "description": "An output redirect is lifted out of the AST into the simplified shape, separately from the command name and its arguments.",
       "input": "",
-      "expectedOutput": "[[\"echo\",\"hi\"],\">\",\"out.txt\"]",
+      "expectedOutput": "[\"echo\",[\"hi\"],\">\",\"out.txt\"]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -49,17 +82,6 @@
       "description": "The parser is deliberately incomplete; input it cannot read falls through rather than crashing.",
       "input": "",
       "expectedOutput": "\"unparseable\"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
-    },
-    {
-      "nodeName": "shellTransformsAreRefused",
-      "description": "Globs, bracket patterns and tilde are refused unquoted because bash would expand them; quoted, they are ordinary text and still map.",
-      "input": "",
-      "expectedOutput": "[\"could not read a word: `*` is a glob; bash would expand it\",\"could not read a word: `x[1]` is a glob; bash would expand it\",\"could not read a word: `~/d` is a tilde expansion; bash would expand it\",\"mapped\"]",
       "evaluationCriteria": [
         {
           "type": "exact"

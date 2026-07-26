@@ -29,7 +29,11 @@ import {
   ```
 */
 
-type ExecResult = {
+/** What a shell command produced. Exported so `std::safeBash` can declare the
+ *  same return type on both its paths — a fast-path result and a real
+ *  `bash()` result have to be the same shape by construction, not by
+ *  coincidence. */
+export type ExecResult = {
   stdout: string;
   stderr: string;
   exitCode: number

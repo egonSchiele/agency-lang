@@ -1,0 +1,70 @@
+{
+  "tests": [
+    {
+      "nodeName": "echoRunsWithoutApproval",
+      "description": "echo maps to print, so the command produces its output without raising the bash interrupt a human would have to approve.",
+      "input": "",
+      "expectedOutput": "[\"hello world\\n\",0]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "echoQuotingIsPreserved",
+      "description": "Quotes delimit a word, they are not part of its value, and adjacent parts concatenate into one word.",
+      "input": "",
+      "expectedOutput": "[[\"echo\",\"single quoted\"],[\"echo\",\"double quoted\"],[\"echo\",\"abc\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "commandsItRefuses",
+      "description": "Every shape v1 cannot collapse to a word list is refused by name, so a fallthrough is explainable rather than mysterious.",
+      "input": "",
+      "expectedOutput": "[\"pipelines are not handled\",\"`&&` and `||` are not handled\",\"background commands are not handled\",\"leading variable assignments are not handled\",\"could not read a word: `commandSubstitution` needs a shell to evaluate\",\"could not read the redirect: redirect with an explicit file descriptor\",\"expected a single command\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "redirectsItUnderstands",
+      "description": "An output redirect is lifted out of the AST into the simplified shape.",
+      "input": "",
+      "expectedOutput": "[[\"echo\",\"hi\"],\">\",\"out.txt\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unparseableFallsThrough",
+      "description": "The parser is deliberately incomplete; input it cannot read falls through rather than crashing.",
+      "input": "",
+      "expectedOutput": "\"unparseable\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellTransformsAreRefused",
+      "description": "Globs, bracket patterns and tilde are refused unquoted because bash would expand them; quoted, they are ordinary text and still map.",
+      "input": "",
+      "expectedOutput": "[\"could not read a word: `*` is a glob; bash would expand it\",\"could not read a word: `x[1]` is a glob; bash would expand it\",\"could not read a word: `~/d` is a tilde expansion; bash would expand it\",\"mapped\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

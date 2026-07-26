@@ -1,6 +1,12 @@
 # safeBash: rewrite a bash command into an equivalent tool call
 
-## Status (2026-07-24)
+## Status (2026-07-26)
+
+Superseded by [the spec](../specs/2026-07-26-safebash-design.md), which
+records what v1 actually shipped. Kept for the reasoning and for the
+decisions as they were made.
+
+## Original status (2026-07-24)
 
 Idea, with the main design decisions already made (see Decisions below).
 Blocked on three pattern-matching items; do them in this order:

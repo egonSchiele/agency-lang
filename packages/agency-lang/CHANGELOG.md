@@ -20,8 +20,17 @@ the old reading, which is what it always meant:
 ```
 
 This affects every construct that matches a pattern — `match` arms, the `is`
-operator, `while` conditions — but **not** destructuring: `const [a, b] = xs`
-never checked length and still does not.
+operator, `if` and `while` conditions — but **not** destructuring:
+`const [a, b] = xs` never checked length and still does not.
+
+One case changes control flow rather than which arm runs. In
+`match (xs is ["a", "b"])`, a head pattern that no longer matches returns a
+`failure` from the enclosing function instead of running an arm:
+
+```ts
+match (xs is ["a", "b"]) { ... }   // xs = ["a","b","c"]
+// before: ran an arm.  now: returns failure("... head pattern did not match")
+```
 
 The change is silent. Code relying on the old prefix behavior stops matching
 with no diagnostic, because the pattern now means what it says.

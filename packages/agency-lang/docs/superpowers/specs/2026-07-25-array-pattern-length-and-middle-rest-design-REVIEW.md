@@ -3,6 +3,15 @@
 Review of [the spec](2026-07-25-array-pattern-length-and-middle-rest-design.md),
 2026-07-25.
 
+## Status: addressed
+
+Items 2, 3, 4, 5 and both Smaller items are folded into the 2026-07-25
+revision of the spec. Item 1 (the rest-binder type suffix) is deferred to
+Part 3, which the revision adds with both semantics readings recorded.
+
+Kept alongside the spec so the reasoning behind those revisions stays
+findable. Nothing here is still open.
+
 ## Verdict
 
 Ready to implement once the gaps below are closed. The diagnosis in Part 1 is

@@ -26,8 +26,9 @@ const [head, ...rest]   = items   // head = 1, rest = [2,3,4,5]
 
 The rest binder must be the last element. You can't have `[a, ...m, b]` for example.
 
-In a **match**, an array pattern without a rest binder names the whole array,
-so the length has to match exactly. Add `...rest` when you mean "at least":
+When an array pattern is used to **match** — a `match` arm, the `is` operator,
+an `if` or `while` condition — a pattern without a rest binder names the whole
+array, so the length has to match exactly. Add `...rest` when you mean "at least":
 
 ```ts
 match (["a", "b", "c"]) {

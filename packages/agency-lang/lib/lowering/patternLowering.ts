@@ -1179,6 +1179,13 @@ function collectChecks(pattern: MatchPattern, source: Expression, checks: Expres
       const hasRest = pattern.elements.some((e) => e.type === "restPattern");
       const namedCount = pattern.elements.filter((e) => e.type !== "restPattern").length;
       const lenAccess = fieldAccess(source, "length", pattern.loc);
+      // `==` emits `__eq(len, n)` where `>=` is native. That asymmetry is
+      // deliberate language-wide, not an oversight here: every equality
+      // operator routes through `__eq` so null and undefined compare equal,
+      // and `===` is documented as a stylistic alias that compiles
+      // identically (typescriptBuilder.ts:1379, docs/dev/null-and-undefined.md).
+      // Emitting a native comparison would make this one generated check the
+      // only equality in the language that skips the helper.
       const op: Operator = hasRest ? ">=" : "==";
       checks.push(makeBinOp(lenAccess, op, numberLit(namedCount, pattern.loc), pattern.loc));
       pattern.elements.forEach((el, i) => {

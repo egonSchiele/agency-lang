@@ -296,6 +296,22 @@ during implementation, but not assumed and not bundled in here.
 Measured at 2M iterations against a 5-element array, at the level the
 lowered condition runs:
 
+Note the exact-length check is not a native comparison. Every equality
+operator in Agency routes through the `__eq` helper so null and undefined
+compare equal, and `===` is a documented stylistic alias that compiles
+identically (`typescriptBuilder.ts:1379`). So `["a","b"]` emits
+`__eq(xs.length, 2)` where the rest path emits a native `xs.length >= 2`.
+Measured, that costs about 1 ns:
+
+| check | ns/op |
+|---|---|
+| native `xs.length === 2` (not what we emit) | 1.5 |
+| `__eq(xs.length, 2)` — the exact-length path | 5.8 |
+| native `xs.length >= 2` — the rest path | 4.7 |
+
+Bypassing the helper would make one generated check the only equality in the
+language that skips it, for ~1 ns. Not worth the exception.
+
 | pattern shape | ns/op |
 |---|---|
 | `["a","b"]` exact | 2.7 |

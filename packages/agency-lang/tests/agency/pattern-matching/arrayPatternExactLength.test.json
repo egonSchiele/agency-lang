@@ -5,28 +5,88 @@
       "description": "An array pattern with no rest requires an exact length: a longer array no longer matches, the exact one still does, a shorter one never did.",
       "input": "",
       "expectedOutput": "[\"fell through\",\"two\",\"fell through\"]",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "restStillMatchesLonger",
       "description": "A rest binder keeps the at-least reading and still binds zero elements.",
       "input": "",
       "expectedOutput": "[\"two plus 1\",\"two plus 0\",\"fell through\"]",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "nestedIsExactToo",
       "description": "A nested array pattern gets the same exact-length rule.",
       "input": "",
       "expectedOutput": "[\"nested exact\",\"fell through\"]",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "isAndWhileChangeToo",
       "description": "The is operator and while conditions route through the same lowering, so they change with match arms.",
       "input": "",
       "expectedOutput": "[\"is fell through\",\"is matched\",\"while fell through\",\"while matched\"]",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "headPatternReturnsFailure",
+      "description": "A match(x is pattern) head that no longer matches returns a failure from the enclosing function \u2014 a control-flow change, not a fall-through.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "headPatternStillMatchesExact",
+      "description": "The same head still matches an exact-length value.",
+      "input": "",
+      "expectedOutput": "\"head matched\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "arrayInsideObject",
+      "description": "An array nested inside an object pattern gets the exact-length rule \u2014 the shape the safeBash matcher uses.",
+      "input": "",
+      "expectedOutput": "[\"object exact\",\"fell through\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "destructuringUnchanged",
+      "description": "Destructuring binds rather than tests, so const [a, b] = xs still takes the first two.",
+      "input": "",
+      "expectedOutput": "\"ab\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

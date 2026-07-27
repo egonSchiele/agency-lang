@@ -189,11 +189,24 @@ Whether to trust it in the approval path is a different question and deserves
 its own review with the risk in isolation. It is a one-line change to
 `shellTools()` when we want it.
 
-One thing that review should settle: when `echo hi > f` maps, the approval
-the user sees is `std::write`, not `std::bash`. That is the intended trade
-— a narrower, more informative gate — but it does mean the effect being
-approved depends on a decision safeBash made, and a user who has approved
-all writes has implicitly approved a class of redirects.
+### The approval changes, and that is the point
+
+When `echo hi > f` maps, the approval the user sees is `std::write`, not
+`std::bash`. This is intended, and it is most of the value of the feature
+rather than a side effect of it.
+
+`std::write` is the more accurate gate. It says a file is being written and
+names which one, where `std::bash` says only that a shell is involved and
+leaves the reader to work out the rest from a command string. A policy is
+written against effects, so a narrower effect is a policy that can be
+written precisely: "writes under this directory are fine, shell commands
+are not" becomes expressible for a command that previously could only be
+described as shell.
+
+The honest consequence is that a blanket approval of `std::write` now
+covers redirects that used to land under `std::bash`. That is the correct
+direction — those redirects really are writes, and were only ever shell
+commands because nothing had looked at them.
 
 ## Next: the command table
 

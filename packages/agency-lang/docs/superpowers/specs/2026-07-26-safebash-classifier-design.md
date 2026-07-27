@@ -228,8 +228,20 @@ v2's `echo` never spawned a shell and v3's does, so a silent `echo` would
 be the one path where an agent reaches a shell with no effect raised. That
 breaks an invariant worth keeping: *every shell spawn was preceded by a
 raised effect*, which is what makes a statelog of effects a complete audit
-of shell invocations. `std::echo` ships blanket-approved in the default
-policy, so it costs a user nothing.
+of shell invocations.
+
+**How `std::echo` costs an unattended run nothing.** There is no default
+policy file — `lib/runtime/builtinPolicies.ts` defines named policies
+(`recommended`, `minimal`, `with-writes`, `approve-all`) but none applies
+unless `--policy` is passed. So "ships approved by default" has to be a
+mechanism, not a file. The mechanism already exists: **an inner
+`with approve` is non-authoritative.** Every handler up the chain runs,
+and any rejection wins, so safeBash raising `std::echo` under
+`with approve` means approved-unless-someone-says-otherwise — an
+unattended run is never prompted, and a policy or handler that wants to
+see echoes still overrides it. `std::echo` should also be added to the
+`recommended` built-in policy, so the effect is discoverable to anyone
+reading what that policy allows.
 
 ## How an effect actually gets raised
 
@@ -285,17 +297,32 @@ type Action = {
   effects: Effect[]      // what this command asks permission for
   outcome: Outcome
 }
+```
 
-type Effect = {
-  name: string           // "std::git::diff"
-  payload: any           // the typed payload that effect's contract requires
-}
+`Effect` and `Outcome` are **discriminated unions, not bags of `any`**.
+The effect set is a closed enum — that is forced by the raise mechanism
+above — so the payloads can be typed, and typing them is what makes the
+raise-site `match` arms check that each payload satisfies its effect's
+contract:
+
+```ts
+type Effect =
+  | { name: "std::echo" }
+  | { name: "std::bash",        payload: { command: string, cwd: string } }
+  | { name: "std::write",       payload: { dir: string, filename: string, content?: string } }
+  | { name: "std::git::status", payload: { cwd: string } }
+  | { name: "std::git::log",    payload: { cwd: string, ref: string, path: string } }
+  | { name: "std::git::diff",   payload: { cwd, ref, ref2, staged, path } }
 
 type Outcome =
-  | { kind: "run" }                                   // bash executes it
-  | { kind: "substitute", tool: string, args: any }   // a tool executes it
+  | { kind: "run" }
+  | { kind: "substitute", tool: "write", args: WriteArgs }
   | { kind: "refuse", reason: string }
 ```
+
+Naming the tool and its arguments in `substitute` is also what keeps the
+testing seam's "look at what comes out" property — an action that said
+only "substitute" would hide the interesting half.
 
 The interrupts alone would not be enough for testing, which answers the
 question directly: an interrupt is raised at run time and is not an
@@ -348,6 +375,90 @@ stating. The handling is to fall back: a sequence that needs shell state
 to persist goes to bash as one string under one `std::bash` approval. Less
 precise gating, correct behavior.
 
+## The return contract
+
+One of the two bugs motivating v3 was that the return *shape* depended on
+which path ran. "Every path returns bash's output" fixes the
+inconsistency, but it does not by itself say what the shape is, and the
+v2 code shows how much is packed into that: `bashAction` returns a JSON
+envelope of `{ command, stdout, stderr, exitCode }` with both streams
+truncated to `MAX_STDOUT_LEN`, while the echo path returned raw text.
+
+The v3 contract:
+
+**On success, the value is bash's stdout, raw.** Nothing added, nothing
+stripped, concatenated across commands in a sequence. That is the whole
+point of the redesign, and it is what makes safeBash's output
+indistinguishable from bash's.
+
+**stderr is discarded on success and reported on failure.** Two captured
+pipes cannot faithfully interleave the way a terminal does, so this is a
+policy either way and the choice should be deliberate. Discarding it on
+success keeps the success value exactly equal to bash's stdout, which is
+the property we are buying; including it on failure is what a model needs
+to debug the command it just ran.
+
+**A non-zero exit is a failure**, carrying the command, the exit code and
+stderr. This is required rather than aesthetic: `&&` and `||` are defined
+in terms of it.
+
+The known cost: **exit status is not the same as "went wrong"** for every
+command. `grep` exits 1 when it finds nothing and `diff` exits 1 when
+files differ, and neither is an error. Both fall back to `std::bash`
+today, so both get the blanket rule, and an agent will see a failure where
+bash would have shown it an empty result. Fixing that means per-command
+exit-code semantics, which is a table this change deliberately does not
+grow.
+
+**Output is capped.** Raw concatenated streams with no bound is a
+context-window hazard that the v2 envelope quietly protected against.
+The cap stays, and truncation is marked in the returned text rather than
+silent — a visible loss of fidelity is a much better failure than an
+invisible one.
+
+**The substituted redirect returns the empty string on success**, which
+is what bash's stdout for `echo hi > f` is. The indistinguishability
+invariant holds there, but by construction rather than by accident, so it
+is worth stating.
+
+## Expansion: bash does it now
+
+v2 expanded variables itself. `expandVariable` read the environment,
+refused an unquoted value containing whitespace because bash would
+word-split it, and `stringifyArg` refused an unquoted expansion that came
+out empty because bash would pass no argument at all. Those rules existed
+because v2 had to reconstruct argv, and each of them was a place where
+safeBash and bash could disagree — one of them shipped as a bug.
+
+**Under v3's relabel path all of that goes away.** The re-rendered command
+contains `$FOO`, and the bash child expands it: real word-splitting, real
+empty-drop, real `IFS`. Fidelity is perfect because the shell is doing its
+own job. A whole class of refusal rules, and the divergence bugs that came
+with them, is deleted rather than fixed.
+
+What it costs is a decision the spec has to record, because it is a safety
+boundary one position to the right of the literal-command-word rule:
+
+> **Classification matches on literal and flag words only.** If any word
+> in a *matched* position is an expansion, the command falls back to
+> `std::bash`.
+
+`git status $X` must not classify as `std::git::status` on the strength of
+us expanding `$X` — for the same reason `$CMD status` must not classify as
+git. An expansion in an *unmatched* argument position is fine to pass
+through untouched, because the effect does not depend on it: `echo $HOME`
+is still `std::echo`, since the approval is of the question, not the
+bytes.
+
+**One edge needs its own rule.** A redirect whose target contains an
+expansion — `echo hi > $F` — cannot be substituted, because `write` needs
+a known filename at approval time and `std::write`'s payload requires
+`filename`. Fall back to `std::bash` and let bash do the redirect.
+
+The one place expansion still gets resolved by us is a redirect target
+that is *not* an expansion, because the filename has to go into the
+`std::write` payload and the `write` call.
+
 ## Working directory
 
 `cwd` reaches everything, resolved once:
@@ -385,6 +496,13 @@ earns a property test: for every command in the corpus, re-parsing the
 rendered string must produce the same tree, and the corpus must include
 every command family in the classification table.
 
+**The substitution path renders a second form**, and it needs the same
+coverage. For `echo hi > f`, bash is handed the command *with the redirect
+stripped* — which is not a new rendering mode in `astToBash`, but a render
+of a modified tree: the same `SimpleCommand` with an empty `redirects`
+list. That rendered string is one of the ones bash actually receives, so
+the round-trip corpus has to include redirect-stripped forms too.
+
 Checked before adopting this design, `astToBash` preserves quoting on
 every hostile input tried:
 
@@ -417,10 +535,18 @@ interrupt gets raised. So v3 **adds** the check, and the test plan pins
 it, because a rule the spec believes already exists is a rule nobody
 implements.
 
-(The one place a path word is still inspected is the refuse wall, which
-checks a path's basename so `/bin/rm` is refused. That is a deliberate
-exception in the safe direction: it can only cause a refusal, never a
-narrower effect.)
+**The wall and the classifier match differently, on purpose.** The refuse
+wall looks at path words (it checks a basename, so `/bin/rm` is refused)
+and at flag and path arguments (`git reset --hard`, `git checkout -- .`).
+Classification refuses to look at anything that is not a literal or a
+flag. The asymmetry is sound because the two matchers can only fail in
+opposite directions: a wall match can only ever cause a *refusal*, so
+looking at more is free, while a classification match causes a *narrower
+effect*, so looking at anything the shell could reinterpret is dangerous.
+
+This is worth stating because the natural implementation instinct is to
+share one matcher between them, and sharing it would either blind the wall
+or widen the classifier.
 
 ## What approval means here
 

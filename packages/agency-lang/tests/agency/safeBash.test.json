@@ -1,10 +1,21 @@
 {
   "tests": [
     {
-      "nodeName": "echoRunsWithoutApproval",
-      "description": "echo maps to print, so the command produces its output without raising the bash interrupt a human would have to approve.",
+      "nodeName": "echoBecomesPrint",
+      "description": "echo maps to print, so a command that used to need a human approval now raises no interrupt at all.",
       "input": "",
-      "expectedOutput": "[\"hello world\\n\",0]",
+      "expectedOutput": "[{\"type\":\"print\",\"content\":\"hello world\\n\"}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "echoRedirectBecomesWrite",
+      "description": "Redirected, the same echo is a file write, which `write` already gates. `dir` is never empty, because `write` rejects an empty one.",
+      "input": "",
+      "expectedOutput": "[[{\"type\":\"writeFile\",\"filename\":\"out.txt\",\"dir\":\".\",\"content\":\"hi\\n\",\"mode\":\"overwrite\"}],[{\"type\":\"writeFile\",\"filename\":\"out.txt\",\"dir\":\".\",\"content\":\"hi\\n\",\"mode\":\"append\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -15,7 +26,7 @@
       "nodeName": "echoQuotingIsPreserved",
       "description": "Quotes delimit a word, they are not part of its value, and adjacent parts concatenate into one word.",
       "input": "",
-      "expectedOutput": "[[\"echo\",\"single quoted\"],[\"echo\",\"double quoted\"],[\"echo\",\"abc\"]]",
+      "expectedOutput": "[[\"print\"],[{\"type\":\"print\",\"content\":\"abc\\n\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -23,10 +34,10 @@
       ]
     },
     {
-      "nodeName": "commandsItRefuses",
-      "description": "Every shape v1 cannot collapse to a word list is refused by name, so a fallthrough is explainable rather than mysterious.",
+      "nodeName": "echoFlagsFallBackToBash",
+      "description": "`echo -n` drops the trailing newline and `-e` interprets escapes; mapping either would print something bash never would, so both go to bash.",
       "input": "",
-      "expectedOutput": "[\"pipelines are not handled\",\"`&&` and `||` are not handled\",\"background commands are not handled\",\"leading variable assignments are not handled\",\"could not read a word: `commandSubstitution` needs a shell to evaluate\",\"could not read the redirect: redirect with an explicit file descriptor\",\"expected a single command\"]",
+      "expectedOutput": "[[{\"type\":\"bash\",\"command\":\"echo -n hi\",\"cwd\":\"\"}],[\"bash\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -34,10 +45,10 @@
       ]
     },
     {
-      "nodeName": "redirectsItUnderstands",
-      "description": "An output redirect is lifted out of the AST into the simplified shape.",
+      "nodeName": "echoWithNoArgs",
+      "description": "Bare `echo` still prints a newline, not nothing.",
       "input": "",
-      "expectedOutput": "[[\"echo\",\"hi\"],\">\",\"out.txt\"]",
+      "expectedOutput": "[{\"type\":\"print\",\"content\":\"\\n\"}]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -45,10 +56,10 @@
       ]
     },
     {
-      "nodeName": "unparseableFallsThrough",
-      "description": "The parser is deliberately incomplete; input it cannot read falls through rather than crashing.",
+      "nodeName": "gitSubcommandsMap",
+      "description": "Each git subcommand maps onto the std::git tool that answers the same question.",
       "input": "",
-      "expectedOutput": "\"unparseable\"",
+      "expectedOutput": "[[\"gitStatus\"],[\"gitDiff\"],[\"gitLog\"]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -56,10 +67,182 @@
       ]
     },
     {
-      "nodeName": "shellTransformsAreRefused",
-      "description": "Globs, bracket patterns and tilde are refused unquoted because bash would expand them; quoted, they are ordinary text and still map.",
+      "nodeName": "gitStagedIsItsOwnAction",
+      "description": "`--staged` is a different question from a bare `git diff`, so the flag has to reach the action rather than being dropped on the way.",
       "input": "",
-      "expectedOutput": "[\"could not read a word: `*` is a glob; bash would expand it\",\"could not read a word: `x[1]` is a glob; bash would expand it\",\"could not read a word: `~/d` is a tilde expansion; bash would expand it\",\"mapped\"]",
+      "expectedOutput": "[{\"type\":\"gitDiff\",\"staged\":true,\"cwd\":\"\"}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unknownGitFlagsFallBackToBash",
+      "description": "An unrecognized flag falls back rather than being ignored: answering `git log --graph` with a plain gitLog() would give the model something other than what it asked for.",
+      "input": "",
+      "expectedOutput": "[[\"bash\"],[\"bash\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unmappedCommandsFallBackToBash",
+      "description": "A command with no equivalent tool still runs, as a bash action, with the approval that implies.",
+      "input": "",
+      "expectedOutput": "[[\"bash\"],[\"bash\"],[\"bash\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "fallbackRendersOnlyItsOwnCommand",
+      "description": "In a sequence, the command handed to bash is the one that fell through, rendered back from its own AST, not the whole string.",
+      "input": "",
+      "expectedOutput": "[{\"type\":\"print\",\"content\":\"hi\\n\"},{\"type\":\"bash\",\"command\":\"ls -la\",\"cwd\":\"\"},{\"type\":\"print\",\"content\":\"bye\\n\"}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sequencesProduceOneActionEach",
+      "description": "Commands separated by `;` each become their own action.",
+      "input": "",
+      "expectedOutput": "[\"print\",\"print\",\"print\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bothSidesOfAChainAreListed",
+      "description": "makeActions reports what each command WOULD do; which side of a `&&` or `||` actually runs is decided at run time.",
+      "input": "",
+      "expectedOutput": "[[\"print\",\"print\"],[\"print\",\"print\"],[\"print\",\"print\",\"print\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "assignmentsFallBackToBash",
+      "description": "Bash scopes a leading assignment to its one command, and handing the original text to bash reproduces that exactly.",
+      "input": "",
+      "expectedOutput": "[[\"bash\"],[\"bash\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "redirectShapesWeDoNotHandle",
+      "description": "An explicit file descriptor, an input redirect, and a redirected git command all fall back rather than being approximated.",
+      "input": "",
+      "expectedOutput": "[[\"bash\"],[\"bash\"],[\"bash\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "shellTransformsAreUnparseable",
+      "description": "Anything bash would rewrite before the command runs is rejected by the parser rather than reaching makeAction. Quoted, a glob is ordinary text and still maps.",
+      "input": "",
+      "expectedOutput": "[[\"REFUSED: Unexpected input after commands: \\\"*\\\"\"],[\"REFUSED: Unexpected input after commands: \\\"~/d\\\"\"],[\"REFUSED: Unexpected input after commands: \\\"$(date)\\\"\"],[\"REFUSED: Unexpected input after commands: \\\"| grep x\\\"\"],[\"REFUSED: Unexpected input after commands: \\\"&\\\"\"],[\"print\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "emptyExpansionsFallBackToBash",
+      "description": "An unset variable passes NO argument in bash where expanding it to \"\" would pass one, so an unquoted empty word falls back. Quoted, it is a real empty argument.",
+      "input": "",
+      "expectedOutput": "[[{\"type\":\"bash\",\"command\":\"echo $NOPE_NOT_SET\",\"cwd\":\"\"}],[\"bash\"],[{\"type\":\"print\",\"content\":\"\\n\"}],[{\"type\":\"print\",\"content\":\"/bin\\n\"}]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "quotedEmptyIsARealArgument",
+      "description": "`echo \"\"` passes one empty argument, so it prints a newline rather than falling back.",
+      "input": "",
+      "expectedOutput": "[{\"type\":\"print\",\"content\":\"\\n\"}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "runningASequenceReportsWhatRan",
+      "description": "A failure stops the sequence and reports which command failed and why, what already ran, the output so far, and what never ran.",
+      "input": "",
+      "expectedOutput": "\"Command `git log --graph --nope` failed: `git log --graph --nope` was not run: interrupt rejected\\n\\nCommands run:\\necho one\\n\\nOutput so far:\\n<results>\\none\\n\\n</results>\\n\\nCommands not run:\\necho three\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "andStopsOnFailure",
+      "description": "`a && b` does not run b when a fails, and the chain fails as a whole.",
+      "input": "",
+      "expectedOutput": "[true,[\"bash\",\"print\"]]",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cwdReachesEveryAction",
+      "description": "The caller's cwd lands on every action a command produces \u2014 a write's dir, a git action's cwd, and a bash fallback's cwd \u2014 not only on the unparseable path.",
+      "input": "",
+      "expectedOutput": "[{\"type\":\"writeFile\",\"filename\":\"out.txt\",\"dir\":\"/tmp/somewhere\",\"content\":\"hi\\n\",\"mode\":\"overwrite\"},{\"type\":\"gitStatus\",\"cwd\":\"/tmp/somewhere\"},{\"type\":\"bash\",\"command\":\"ls\",\"cwd\":\"/tmp/somewhere\"}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chainKeepsTheLeftSidesOutput",
+      "description": "When the left side of `&&` succeeds and the right fails, the left side really ran, so its output stays in the failure report.",
+      "input": "",
+      "expectedOutput": "\"Command `echo kept && git log --graph --nope` failed: `git log --graph --nope` was not run: interrupt rejected\\n\\nOutput before the failure:\\nkept\\n\"",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
       "evaluationCriteria": [
         {
           "type": "exact"

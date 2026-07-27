@@ -377,6 +377,12 @@ const WALKER_EXCLUDED_FIELDS: Record<string, string> = {
     "copy flows through the hoisted temp assignment, which is walked",
   "objectPatternProperty.value":
     "pattern property content: a literal matcher or a binder, not a use",
+  "arrayPattern.elements":
+    "array-pattern content: every element is a literal matcher, a binder, or a nested " +
+    "pattern — a match arm cannot compare against an outer name, so nothing here is a " +
+    "use. Same ruling as objectPatternProperty.value, and reached first by a match on " +
+    "an array pattern (`[\"git\", \"diff\"] => ...`) rather than by a destructuring " +
+    "declaration, whose pattern is already shielded by assignment.pattern",
   "typePattern.pattern": "type-pattern binder, not a use",
   "codeLiteral.nodes":
     "quoted code: names belong to the generated program, not the host scope; " +

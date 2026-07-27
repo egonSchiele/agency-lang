@@ -1,0 +1,141 @@
+/** @module
+  The things a bash command can turn into.
+
+  Every command `safeBash` runs is first translated into an `Action`: a plain
+  data object saying what should happen, with nothing having happened yet.
+  Deciding *what* a command means and *doing* it are separate steps, so the
+  deciding half can be tested by handing in a string and looking at the
+  actions that come out.
+
+  `bash` itself is an action, so a command with no better mapping is still
+  represented here rather than being a hole in the model.
+*/
+import { gitStatus, gitDiff, gitLog } from "std::git"
+import { bash } from "std::shell"
+
+/** How much of a command's output to keep before truncating. */
+export static const MAX_STDOUT_LEN = 2000
+
+export type Action =
+  | PrintAction
+  | WriteFileAction
+  | GitAction
+  | BashAction
+
+export type PrintAction = {
+  type: "print";
+  content: string
+}
+
+export type WriteFileAction = {
+  type: "writeFile";
+  filename: string;
+  dir: string;
+  content: string;
+  mode: "append" | "overwrite"
+}
+
+export type GitAction = GitStatusAction | GitDiffAction | GitLogAction
+
+export type GitStatusAction = {
+  type: "gitStatus";
+  cwd?: string
+}
+
+export type GitDiffAction = {
+  type: "gitDiff";
+  path?: string;
+  staged?: boolean;
+  cwd?: string
+}
+
+export type GitLogAction = {
+  type: "gitLog";
+  path?: string;
+  cwd?: string
+}
+
+/** The fallback: run the command through bash exactly as written.
+ *
+ * `command` is the command re-rendered from its AST, not the caller's
+ * original string, so a sequence that runs three commands and falls back on
+ * the second sends bash only the second one. */
+export type BashAction = {
+  type: "bash";
+  command: string;
+  cwd?: string
+}
+
+export def printAction(action: PrintAction): Result<string> {
+  """
+  Print to stdout. No interrupt: printing has no effect to approve.
+  """
+  print(action.content)
+  return success(action.content)
+}
+
+export def writeAction(action: WriteFileAction): Result<string> {
+  """
+  Write a file. `write` raises the `std::write` interrupt, so this is gated
+  the same way any other write is.
+  """
+  const written = write(
+    filename: action.filename,
+    content: action.content,
+    dir: action.dir,
+    mode: action.mode,
+  )
+  if (written is failure(reason)) {
+    return failure(reason)
+  }
+  return success("")
+}
+
+export def gitStatusAction(action: GitStatusAction): Result<string> {
+  const status = gitStatus(cwd: action.cwd ?? "")
+  return success(JSON.stringify(status))
+}
+
+export def gitDiffAction(action: GitDiffAction): Result<string> {
+  const diff = gitDiff(
+    path: action.path ?? "",
+    staged: action.staged ?? false,
+    cwd: action.cwd ?? "",
+  )
+  return success(JSON.stringify(diff))
+}
+
+export def gitLogAction(action: GitLogAction): Result<string> {
+  const log = gitLog(path: action.path ?? "", cwd: action.cwd ?? "")
+  return success(JSON.stringify(log))
+}
+
+export def bashAction(action: BashAction): Result<string> {
+  """
+  Run the command through bash, approval and all.
+
+  A non-zero exit is a failure rather than a success carrying a bad exit
+  code, so a `&&` chain stops on it the way bash would.
+  """
+  // `any` because `bash` is DECLARED to return an ExecResult, but a rejected
+  // approval halts it and hands back a failure instead, which the declared
+  // type cannot describe.
+  const result: any = bash(action.command, action.cwd ?? "")
+  // Reading an exit code off that failure is a crash on the most ordinary
+  // path there is: a human saying no.
+  if (result is failure(why)) {
+    return failure("`${action.command}` was not run: ${why}")
+  }
+  const data = JSON.stringify(
+    {
+    command: action.command,
+    stdout: result.stdout[:MAX_STDOUT_LEN],
+    stderr: result.stderr[:MAX_STDOUT_LEN],
+    exitCode: result.exitCode
+  },
+  )
+  if (result.exitCode != 0) {
+    return failure(data)
+  }
+  return success(data)
+}

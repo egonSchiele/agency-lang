@@ -267,3 +267,24 @@ This should work in string interpolation:
 ---
 
 Should be able to call methods on comprehensions, like `join`.
+
+---
+
+Can't have periods in type names, so can't reference stuff from a namespace import
+
+```
+export def simplify(ast: act.Command): Result<Cmd> {
+  ```
+
+---
+
+if a var is exported, it should never be marked unused.
+
+---
+
+Can't have rest + type in a match arm:
+
+fails:
+```
+["echo", (...args):PrintArg[], ">", filename] => writeAction(filename, ".", joinWords(args), "overwrite")
+```

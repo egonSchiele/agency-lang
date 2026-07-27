@@ -6,36 +6,118 @@ name: "safeBash"
 
 ## Types
 
-### WordPart
-
-One piece of a word. Adjacent parts concatenate: `e'f'"g"$h` is a single
- * word of four parts.
+### Word
 
 ```ts
-/** One piece of a word. Adjacent parts concatenate: `e'f'"g"$h` is a single
- * word of four parts. */
-export type WordPart =
-  | { tag: "literal"; text: string }
-  | { tag: "singleQuoted"; text: string }
-  | { tag: "doubleQuoted"; parts: WordPart[] }
-  | { tag: "variable"; name: string }
-  | { tag: "paramExpansion"; expression: string }
-  | { tag: "commandSubstitution"; command: List }
-  | { tag: "arithmeticExpansion"; expression: string }
+export type Word =
+  | LiteralWord
+  | PathWord
+  | FlagWord
+  | SingleQuotedWord
+  | DoubleQuotedWord
+  | VariableWord
+  | InterpolatedVariableWord
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L8))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L16))
 
-### BashWord
+### ScriptName
 
 ```ts
-export type BashWord = {
-  tag: "word";
-  parts: WordPart[]
+export type ScriptName = LiteralWord | PathWord
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L25))
+
+### LiteralWord
+
+```ts
+export type LiteralWord = {
+  tag: "literal";
+  text: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L27))
+
+### PathWord
+
+```ts
+export type PathWord = {
+  tag: "path";
+  text: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L32))
+
+### FlagWord
+
+```ts
+export type FlagWord = {
+  tag: "flag";
+  flagName: string;
+  flagValue?: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L37))
+
+### SingleQuotedWord
+
+```ts
+export type SingleQuotedWord = {
+  tag: "singleQuoted";
+  text: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L43))
+
+### DoubleQuotedWord
+
+```ts
+export type DoubleQuotedWord = {
+  tag: "doubleQuoted";
+  parts: Word[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L48))
+
+### VariableWord
+
+```ts
+export type VariableWord = {
+  tag: "variable";
+  name: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L53))
+
+### InterpolatedVariableWord
+
+A word built from two or more adjacent parts: `$HOME.txt`, `"a"b`,
+ * `"$HOME"/x`. These are ONE word in bash; split into separate words they
+ * become separate arguments and the command means something else.
+
+```ts
+/** A word built from two or more adjacent parts: `$HOME.txt`, `"a"b`,
+ * `"$HOME"/x`. These are ONE word in bash; split into separate words they
+ * become separate arguments and the command means something else.
+ */
+export type InterpolatedVariableWord = {
+  tag: "interpolatedVariable";
+  parts: (
+  | LiteralWord
+  | VariableWord
+  | SingleQuotedWord
+  | DoubleQuotedWord)[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L62))
 
 ### Assignment
 
@@ -46,29 +128,33 @@ export type BashWord = {
 export type Assignment = {
   tag: "assignment";
   name: string;
-  value?: BashWord
+  value?: Word
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L23))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L72))
 
 ### Redirect
 
-A redirect like `> out.txt`, `2>&1`, or `<<< "$str"`. `fd` is the
- * explicit file descriptor (`2` in `2>`), or null for the default.
+A redirect like `> out.txt`, `>> log`, `2> err.txt` or `< in.txt`.
+ * `fd` is the explicit file descriptor (`2` in `2>`), or undefined for the
+ * default. Only `>`, `>>`, `<` and `&>` are recognized; `2>&1`, heredocs
+ * and here-strings are rejected rather than parsed.
 
 ```ts
-/** A redirect like `> out.txt`, `2>&1`, or `<<< "$str"`. `fd` is the
- * explicit file descriptor (`2` in `2>`), or null for the default. */
+/** A redirect like `> out.txt`, `>> log`, `2> err.txt` or `< in.txt`.
+ * `fd` is the explicit file descriptor (`2` in `2>`), or undefined for the
+ * default. Only `>`, `>>`, `<` and `&>` are recognized; `2>&1`, heredocs
+ * and here-strings are rejected rather than parsed. */
 export type Redirect = {
   tag: "redirect";
   fd?: number;
   op: string;
-  target: BashWord
+  target: Word
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L82))
 
 ### SimpleCommand
 
@@ -76,273 +162,107 @@ export type Redirect = {
 export type SimpleCommand = {
   tag: "simpleCommand";
   assignments: Assignment[];
-  words: BashWord[];
+  /* The command name, or null for an assignment-only line (`FOO=bar`).
+   *  Bash requires at least one of a command name or an assignment. */
+  command?: ScriptName;
+  /** Every word after the command name, in source order. There is no
+   *  `subcommands` field: no syntactic rule separates `git status` from
+   *  `echo status`, so splitting them would put a command's real
+   *  arguments in whichever bucket the preceding word happened to pick. */
+  args: Word[];
   redirects: Redirect[]
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L38))
-
-### IfCommand
-
-```ts
-export type IfCommand = {
-  tag: "if";
-  cond: List;
-  thenBody: List;
-  elifs: { cond: List; thenBody: List }[];
-  elseBody?: List;
-  redirects: Redirect[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L45))
-
-### LoopCommand
-
-```ts
-export type LoopCommand = {
-  tag: "loop";
-  kind: "while" | "until";
-  cond: List;
-  body: List;
-  redirects: Redirect[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L54))
-
-### ForCommand
-
-```ts
-export type ForCommand = {
-  tag: "for";
-  variable: string;
-  /** The `in word...` list, or null for the implicit `in "$@"`. */
-  words?: BashWord[];
-  body: List;
-  redirects: Redirect[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L62))
-
-### CaseItem
-
-```ts
-export type CaseItem = {
-  patterns: BashWord[];
-  body: List;
-  /** `;;`, `;&`, `;;&`, or null when the final item ends at `esac`. */
-  terminator?: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L71))
-
-### CaseCommand
-
-```ts
-export type CaseCommand = {
-  tag: "case";
-  subject: BashWord;
-  items: CaseItem[];
-  redirects: Redirect[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L78))
-
-### Subshell
-
-```ts
-export type Subshell = {
-  tag: "subshell";
-  body: List;
-  redirects: Redirect[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L85))
-
-### Group
-
-```ts
-export type Group = {
-  tag: "group";
-  body: List;
-  redirects: Redirect[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L91))
-
-### ArithmeticCommand
-
-`(( expression ))` as a command. The expression is kept as raw text.
-
-```ts
-/** `(( expression ))` as a command. The expression is kept as raw text. */
-export type ArithmeticCommand = {
-  tag: "arithmeticCommand";
-  expression: string;
-  redirects: Redirect[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L98))
-
-### FunctionDef
-
-```ts
-export type FunctionDef = {
-  tag: "functionDef";
-  name: string;
-  body: Command
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L89))
 
 ### Command
 
 ```ts
-export type Command =
-  | SimpleCommand
-  | IfCommand
-  | LoopCommand
-  | ForCommand
-  | CaseCommand
-  | Subshell
-  | Group
-  | ArithmeticCommand
-  | FunctionDef
+export type Command = SimpleCommand | And | Or | Parens
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L103))
 
-### Pipeline
-
-One or more commands joined by `|` (or `|&`), optionally negated.
+### And
 
 ```ts
-/** One or more commands joined by `|` (or `|&`), optionally negated. */
-export type Pipeline = {
-  tag: "pipeline";
-  negated: boolean;
-  commands: Command[]
+export type And = {
+  tag: "and";
+  left: Command;
+  right: Command
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L105))
 
-### AndOr
-
-Pipelines joined by `&&` / `||`, left to right.
+### Or
 
 ```ts
-/** Pipelines joined by `&&` / `||`, left to right. */
-export type AndOr = {
-  tag: "andOr";
-  first: Pipeline;
-  rest: { op: "&&" | "||"; pipeline: Pipeline }[]
+export type Or = {
+  tag: "or";
+  left: Command;
+  right: Command
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L111))
 
-### ListItem
+### Parens
 
 ```ts
-export type ListItem = {
-  tag: "listItem";
-  command: Command;
-  /** True when the command was followed by `&`. */
-  background: boolean
+export type Parens = {
+  tag: "parens";
+  command: Command
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L135))
-
-### List
-
-A sequence of commands separated by `;`, `&`, or newlines — the top
- * level of a script, and the body of every compound command.
-
-```ts
-/** A sequence of commands separated by `;`, `&`, or newlines — the top
- * level of a script, and the body of every compound command. */
-export type List = {
-  tag: "list";
-  items: ListItem[]
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L117))
 
 ### BashNode
 
 ```ts
 export type BashNode =
-  | WordPart
-  | BashWord
+  | Command
+  | SimpleCommand
   | Assignment
   | Redirect
-  | Command
-  | Pipeline
-  | AndOr
-  | ListItem
-  | List
+  | Word
+  | ScriptName
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L122))
+
+### BashAST
+
+```ts
+export type BashAST = Command[]
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L130))
 
 ### OutputRedirect
 
-A bash command reduced to the only shape v1 can reason about: the words of a single command, and an optional output redirect.
+An output redirect reduced to the shape v1 handles: `>` or `>>` to a
+ * path, with no explicit file descriptor.
 
 ```ts
-/** A bash command reduced to the only shape v1 can reason about: the words of a single command, and an optional output redirect. */
+/** An output redirect reduced to the shape v1 handles: `>` or `>>` to a
+ * path, with no explicit file descriptor. */
 export type OutputRedirect = {
   op: string;
   path: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L167))
-
-### Cmd
-
-```ts
-export type Cmd = {
-  words: string[];
-  redirect?: OutputRedirect
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L172))
-
-## Constants
-
-### emptyList
-
-```ts
-export static const emptyList: List = {
-  tag: "list",
-  items: []
-}
-```
-
-**Type:** [List](#list)
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L134))
 
 ## Functions
 
 ### bashParser
 
 ```ts
-bashParser(code: string): Result<List>
+bashParser(code: string): Result<BashAST>
 ```
 
 Parse a string of bash code into an AST.
@@ -353,54 +273,174 @@ Parse a string of bash code into an AST.
 |---|---|---|
 | code | `string` |  |
 
-**Returns:** `Result<List>`
+**Returns:** `Result<BashAST>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L177))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L139))
 
-### simplify
+### makeAction
 
 ```ts
-simplify(node: List): Result<Cmd>
+makeAction(command: SimpleCommand, cwd: string = ""): Result<Action>
 ```
 
-Reduce a parsed bash AST to a single command's words and output redirect.
+Decide what a single command means, without doing any of it.
 
-  v1 understands one simple command and nothing else. A pipeline, a `&&`
-  chain, a subshell, a loop, a background job or a variable assignment is a
-  failure — not because they are unsafe, but because collapsing them to a
-  word list would lose what makes them different from a single command.
+  Everything this returns is a plain data object, so the whole mapping can
+  be tested by looking at what comes out. A command with no better mapping
+  becomes a `BashAction`, which is still a decision rather than a hole: it
+  says "this one has to go to bash", and `runAction` is what pays the
+  approval for it.
 
-  @param node - The AST from `bashParser`
+  @param command - One simple command from the parsed AST
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| node | [List](#list) |  |
+| command | [SimpleCommand](#simplecommand) |  |
+| cwd | `string` | "" |
 
-**Returns:** `Result<Cmd>`
+**Returns:** `Result<Action>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L302))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L404))
+
+### runAction
+
+```ts
+runAction(action: Action): Result<string>
+```
+
+Do what the action says. The only step with effects.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| action | [Action](safeBash/actions.md#action) |  |
+
+**Returns:** `Result<string>`
+
+**Throws:** `std::write`, `std::git::status`, `std::git::diff`, `std::git::log`, `std::bash`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L501))
+
+### runCommand
+
+```ts
+runCommand(command: Command, cwd: string = ""): Result<string>
+```
+
+Run one command, whatever shape it is.
+
+  Every branch returns a `Result`, and a failure is never swallowed: the
+  caller has to decide what a failed command means, because `&&` and `||`
+  answer that question differently.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| command | [Command](#command) |  |
+| cwd | `string` | "" |
+
+**Returns:** `Result<string>`
+
+**Throws:** `std::write`, `std::git::status`, `std::git::diff`, `std::git::log`, `std::bash`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L523))
+
+### commandsToStr
+
+```ts
+commandsToStr(commands: Command[]): string
+```
+
+Render commands back to bash source, one per line.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| commands | `Command[]` |  |
+
+**Returns:** `string`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L619))
+
+### runCommands
+
+```ts
+runCommands(commands: Command[], cwd: string = ""): Result<string>
+```
+
+Run a sequence of commands, stopping at the first failure.
+
+  On a failure the model gets the whole picture rather than a bare error:
+  what already ran and what it produced, which command failed and why, and
+  what never ran. There is no falling back to bash for the sequence — some
+  of it has already happened, and re-running the lot would repeat it.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| commands | `Command[]` |  |
+| cwd | `string` | "" |
+
+**Returns:** `Result<string>`
+
+**Throws:** `std::write`, `std::git::status`, `std::git::diff`, `std::git::log`, `std::bash`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L634))
+
+### makeActions
+
+```ts
+makeActions(source: string, cwd: string = ""): Result<Action[]>
+```
+
+Every action a string of bash would turn into, without running any of it.
+
+  This is the whole decision-making half of the module in one call, which
+  is what makes it testable: hand it a string, look at what comes out.
+
+  The list is in source order and includes both halves of a `&&` or `||`,
+  so it says what each command WOULD do, not what will actually run — only
+  running the chain decides that.
+
+  @param source - One or more bash commands
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| source | `string` |  |
+| cwd | `string` | "" |
+
+**Returns:** `Result<Action[]>`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L679))
 
 ### safeBash
 
 ```ts
-safeBash(command: string, cwd: string = ""): ExecResult
+safeBash(command: string, cwd: string = ""): Result<string>
 ```
 
 Run a shell command, using an equivalent tool where one exists.
 
   `bash` cannot be pre-approved — there is no way to say in advance what an
-  arbitrary command string will do — so every call needs a human. Many of the
-  commands an agent writes have a tool that does the same job and IS
+  arbitrary command string will do — so every call needs a human. Many of
+  the commands an agent writes have a tool that does the same job and IS
   pre-approved. This parses the command and uses that tool when it can.
 
-  Anything it cannot parse, or cannot map, runs through `bash` exactly as
-  before, approval and all. Incompleteness costs an approval, never
-  correctness.
+  A command with no equivalent still runs, through bash, approval and all.
+  What is NOT possible is silently doing something other than what was
+  asked: a command that cannot be mapped is handed to bash unchanged, and a
+  sequence that fails partway says exactly how far it got.
 
   @param command - The shell command to run
-  @param cwd - Working directory, passed through to bash on the fallback path
+  @param cwd - Working directory
 
 **Parameters:**
 
@@ -409,8 +449,8 @@ Run a shell command, using an equivalent tool where one exists.
 | command | `string` |  |
 | cwd | `string` | "" |
 
-**Returns:** [ExecResult](shell.md#execresult)
+**Returns:** `Result<string>`
 
-**Throws:** `std::bash`, `std::write`
+**Throws:** `std::bash`, `std::write`, `std::git::status`, `std::git::diff`, `std::git::log`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L376))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L747))

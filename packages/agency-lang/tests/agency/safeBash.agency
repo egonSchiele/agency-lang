@@ -1,85 +1,193 @@
-import { safeBash, bashParser, simplify } from "std::safeBash"
+import { makeActions, bashParser, runCommands } from "std::safeBash"
 
-def refusalFor(command: string): string {
-  // What `simplify` says about a command it will not map. The reason matters:
-  // a refusal is what sends the command to bash and costs an approval, so a
-  // wrong one is a silently worse experience, not a wrong answer.
-  const parsed = bashParser(command)
-  if (parsed is success(ast)) {
-    const cmd = simplify(ast)
-    if (cmd is failure(why)) {
-      return why
-    }
-    return "mapped"
+def actionTypes(command: string): any {
+  // What KIND of action each command becomes. The fallback matters as much
+  // as the mapping: "bash" means safeBash declined to map it and the human
+  // still has to approve it.
+  const actions = makeActions(command)
+  if (actions is success(list)) {
+    return [a.type for a in list]
   }
-  return "unparseable"
+  return ["REFUSED: ${actions.error}"]
 }
 
-def wordsOf(command: string): any {
-  const parsed = bashParser(command)
+def actionsOf(command: string): any {
+  const actions = makeActions(command)
+  if (actions is success(list)) {
+    return list
+  }
+  return "REFUSED: ${actions.error}"
+}
+
+node echoBecomesPrint() {
+  // The whole point: this used to need a human, and now it is a print.
+  return actionsOf("echo hello world")
+}
+
+node echoRedirectBecomesWrite() {
+  // Redirected, the same command is a file write, which `write` gates.
+  return [actionsOf("echo hi > out.txt"), actionsOf("echo hi >> out.txt")]
+}
+
+node echoQuotingIsPreserved() {
+  // Quotes delimit a word, they are not part of its value, and adjacent
+  // parts concatenate into one word.
+  return [actionTypes("echo 'single quoted'"), actionsOf("echo a'b'\"c\"")]
+}
+
+node echoFlagsFallBackToBash() {
+  // `-n` drops the trailing newline and `-e` interprets escapes. Printing
+  // the flag as if it were text would print something bash never would, so
+  // both go to bash instead.
+  return [actionsOf("echo -n hi"), actionTypes("echo -e hi")]
+}
+
+node echoWithNoArgs() {
+  // Still a newline, not nothing.
+  return actionsOf("echo")
+}
+
+node gitSubcommandsMap() {
+  return [actionTypes("git status"), actionTypes("git diff"), actionTypes("git log")]
+}
+
+node gitStagedIsItsOwnAction() {
+  // `--staged` is a different question from a bare `git diff`, so it has to
+  // reach the action rather than being dropped on the way.
+  return actionsOf("git diff --staged")
+}
+
+node unknownGitFlagsFallBackToBash() {
+  // Answering `git log --graph` with a plain gitLog() would silently give
+  // the model something other than what it asked for.
+  return [actionTypes("git log --graph"), actionTypes("git status --short")]
+}
+
+node unmappedCommandsFallBackToBash() {
+  return [
+    actionTypes("ls"),
+    actionTypes("cat src/main.ts"),
+    actionTypes("./script.sh"),
+  ]
+}
+
+node fallbackRendersOnlyItsOwnCommand() {
+  // In a sequence, the command handed to bash must be the one that fell
+  // through, not the whole string.
+  return actionsOf("echo hi; ls -la; echo bye")
+}
+
+node sequencesProduceOneActionEach() {
+  return actionTypes("echo one; echo two; echo three")
+}
+
+node bothSidesOfAChainAreListed() {
+  // makeActions says what each command WOULD do. Which side actually runs
+  // is decided at run time by the exit status.
+  return [
+    actionTypes("echo a && echo b"),
+    actionTypes("echo a || echo b"),
+    actionTypes("(echo a && echo b) || echo c"),
+  ]
+}
+
+node assignmentsFallBackToBash() {
+  // Bash scopes a leading assignment to that one command, and running the
+  // original text through bash reproduces that exactly.
+  return [actionTypes("FOO=1 echo hi"), actionTypes("FOO=1")]
+}
+
+node redirectShapesWeDoNotHandle() {
+  return [
+    actionTypes("echo hi 2> err.txt"),
+    actionTypes("echo hi < in.txt"),
+    actionTypes("git status > out.txt"),
+  ]
+}
+
+node shellTransformsAreUnparseable() {
+  // bash rewrites an unquoted word before the command runs, so passing one
+  // through as text would run a different command than the user wrote — the
+  // one failure mode this module must not have. The parser refuses them
+  // outright. Quoted, they are ordinary text and still map.
+  return [
+    actionTypes("echo *"),
+    actionTypes("echo ~/d"),
+    actionTypes("echo $(date)"),
+    actionTypes("cat a.txt | grep x"),
+    actionTypes("sleep 1 &"),
+    actionTypes("echo \"a*b\""),
+  ]
+}
+
+node emptyExpansionsFallBackToBash() {
+  // An unset variable produces NO argument in bash, where expanding it to
+  // "" here would produce an empty one. True of a whole word and of a word
+  // made only of empty parts.
+  return [
+    actionsOf("echo $NOPE_NOT_SET"),
+    actionTypes("echo $NOPE_A$NOPE_B"),
+    actionsOf("echo \"$NOPE_NOT_SET\""),
+    actionsOf("echo $NOPE_NOT_SET/bin"),
+  ]
+}
+
+node quotedEmptyIsARealArgument() {
+  // `""` is an argument bash really does pass.
+  return actionsOf("echo \"\"")
+}
+
+node runningASequenceReportsWhatRan() {
+  // A failure stops the sequence and says how far it got, what it produced,
+  // and what never ran. There is no falling back for the sequence: some of
+  // it already happened.
+  const parsed = bashParser("echo one; git log --graph --nope; echo three")
   if (parsed is success(ast)) {
-    const cmd = simplify(ast)
-    if (cmd is success(c)) {
-      return c.words
+    const result = runCommands(ast)
+    if (result is failure(why)) {
+      return why
     }
-    return ["FAILED"]
+    return "UNEXPECTEDLY SUCCEEDED"
+  }
+  return "UNPARSEABLE"
+}
+
+node andStopsOnFailure() {
+  // `false && echo b` must not print b.
+  const parsed = bashParser("git log --graph --nope && echo should-not-run")
+  if (parsed is success(ast)) {
+    const result = runCommands(ast)
+    return [
+      result is failure,
+      actionTypes("git log --graph --nope && echo should-not-run"),
+    ]
   }
   return ["UNPARSEABLE"]
 }
 
-node echoRunsWithoutApproval() {
-  // The whole point: this used to need a human. It raises no interrupt now.
-  const r = safeBash("echo hello world")
-  return [r.stdout, r.exitCode]
-}
-
-node echoQuotingIsPreserved() {
-  // Adjacent parts concatenate, and quotes are not part of the value.
-  return [
-    wordsOf("echo 'single quoted'"),
-    wordsOf("echo \"double quoted\""),
-    wordsOf("echo a'b'\"c\""),
-  ]
-}
-
-node commandsItRefuses() {
-  // Each of these could be mapped one day; none can be mapped by collapsing
-  // it to a word list, which is what v1 does.
-  return [
-    refusalFor("cat a.txt | grep x"),
-    refusalFor("a && b"),
-    refusalFor("sleep 1 &"),
-    refusalFor("FOO=1 echo hi"),
-    refusalFor("echo $(date)"),
-    refusalFor("echo hi 2>&1"),
-    refusalFor("echo a; echo b"),
-  ]
-}
-
-node shellTransformsAreRefused() {
-  // bash rewrites an unquoted word four ways before the command runs. Passing
-  // any of them through as text would run a different command than the user
-  // wrote — the one failure mode this module must not have.
-  return [
-    refusalFor("echo *"),
-    refusalFor("echo x[1]"),
-    refusalFor("echo ~/d"),
-    refusalFor("echo \"a*b\""),
-  ]
-}
-
-node redirectsItUnderstands() {
-  const parsed = bashParser("echo hi > out.txt")
-  if (parsed is success(ast)) {
-    const cmd = simplify(ast)
-    if (cmd is success(c)) {
-      return [c.words, c.redirect.op, c.redirect.path]
-    }
+node cwdReachesEveryAction() {
+  // The caller's cwd has to land on EVERY action, not just the unparseable
+  // fallback. The same command in two directories is two different
+  // commands, so an action that did not carry it would run wherever the
+  // process happened to be.
+  const actions = makeActions("echo hi > out.txt; git status; ls", "/tmp/somewhere")
+  if (actions is success(list)) {
+    return list
   }
-  return ["FAILED"]
+  return "REFUSED: ${actions.error}"
 }
 
-node unparseableFallsThrough() {
-  // Not a refusal — the parser cannot even read it. Still must not crash.
-  return refusalFor("if [ -f x ]; then")
+node chainKeepsTheLeftSidesOutput() {
+  // `a && b` where a succeeds and b fails: a really ran, so its output
+  // belongs in the report. Dropping it would make the report claim to show
+  // what already ran while hiding part of it.
+  const parsed = bashParser("echo kept && git log --graph --nope")
+  if (parsed is success(ast)) {
+    const result = runCommands(ast)
+    if (result is failure(why)) {
+      return why
+    }
+    return "UNEXPECTEDLY SUCCEEDED"
+  }
+  return "UNPARSEABLE"
 }

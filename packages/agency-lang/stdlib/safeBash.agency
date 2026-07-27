@@ -370,7 +370,15 @@ export def runCommand(command: Command): Result<string> {
 }
 
 export def commandsToStr(command: Command[]): string {
-  return "not implemented"
+  const results: string[] = []
+  for (command in command) {
+    const result = try _astToBash(command)
+    match(result) {
+      success(text) => results.push(text)
+      failure(err) => results.push(err)
+    }
+  }
+  return results.join("\n")
 }
 
 export def runCommands(commands: Command[]): Result<string> {

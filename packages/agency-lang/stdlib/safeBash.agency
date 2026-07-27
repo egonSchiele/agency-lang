@@ -333,22 +333,39 @@ def echoContent(args: Word[]): Result<string> {
   return success(joinWords(words))
 }
 
-def writeDir(): string {
+def resolveCwd(cwd: string): string {
+  """
+  Which directory a command runs in: the caller's, or the agent's when the
+  caller did not say.
+
+  Resolved once, at the top, and then carried on every action. An action
+  that did not carry it would run wherever the process happened to be,
+  which is the same command doing two different things.
+  """
+  if (cwd != "") {
+    return cwd
+  }
+  return getAgentCwd()
+}
+
+def writeDir(cwd: string): string {
   """
   Where a redirect writes.
 
-  `write` rejects an empty `dir`, and `getAgentCwd()` is empty when nothing
-  set one, so the empty case has to become an explicit "here" or every
-  redirected command fails at write time.
+  `write` rejects an empty `dir`, so the empty case has to become an
+  explicit "here" or every redirected command fails at write time.
   """
-  const cwd = getAgentCwd()
   if (cwd == "") {
     return "."
   }
   return cwd
 }
 
-def echoAction(args: Word[], redirect: OutputRedirect | null): Result<Action> {
+def echoAction(
+  args: Word[],
+  redirect: OutputRedirect | null,
+  cwd: string,
+): Result<Action> {
   """
   `echo` prints, unless it is redirected, in which case it writes a file.
   """
@@ -367,7 +384,7 @@ def echoAction(args: Word[], redirect: OutputRedirect | null): Result<Action> {
       {
       type: "writeFile",
       filename: redirect.path,
-      dir: writeDir(),
+      dir: writeDir(cwd),
       content: content.value,
       mode: "append"
     },
@@ -377,14 +394,17 @@ def echoAction(args: Word[], redirect: OutputRedirect | null): Result<Action> {
     {
     type: "writeFile",
     filename: redirect.path,
-    dir: writeDir(),
+    dir: writeDir(cwd),
     content: content.value,
     mode: "overwrite"
   },
   )
 }
 
-export def makeAction(command: SimpleCommand): Result<Action> {
+export def makeAction(
+  command: SimpleCommand,
+  cwd: string = "",
+): Result<Action> {
   """
   Decide what a single command means, without doing any of it.
 
@@ -396,7 +416,7 @@ export def makeAction(command: SimpleCommand): Result<Action> {
 
   @param command - One simple command from the parsed AST
   """
-  const fallback = bashFallback(command)
+  const fallback = bashFallback(command, cwd)
 
   // Bash applies a leading assignment to that command only, which is
   // exactly what running the original text through bash does. There is
@@ -416,19 +436,26 @@ export def makeAction(command: SimpleCommand): Result<Action> {
   }
 
   const mapped = match(tokens.value) {
-    ["echo", ...rest] => echoAction(command.args, redirect.value)
+    ["echo", ...rest] => echoAction(command.args, redirect.value, cwd)
     ["git", "status"] => gitOnly(redirect.value, {
-      type: "gitStatus"
+      type: "gitStatus",
+      cwd: cwd
     })
     ["git", "diff"] => gitOnly(redirect.value, {
-      type: "gitDiff"
-    })
-    ["git", "diff", "--staged"] => gitOnly(redirect.value, {
       type: "gitDiff",
-      staged: true
+      cwd: cwd
     })
+    ["git", "diff", "--staged"] => gitOnly(
+      redirect.value,
+      {
+      type: "gitDiff",
+      staged: true,
+      cwd: cwd
+    },
+    )
     ["git", "log"] => gitOnly(redirect.value, {
-      type: "gitLog"
+      type: "gitLog",
+      cwd: cwd
     })
     _ => failure("no tool maps onto this command")
   }
@@ -452,7 +479,7 @@ def gitOnly(redirect: OutputRedirect | null, action: Action): Result<Action> {
   return success(action)
 }
 
-def bashFallback(command: SimpleCommand): Result<Action> {
+def bashFallback(command: SimpleCommand, cwd: string): Result<Action> {
   """
   Run this one command through bash, rendered back from its own AST.
 
@@ -464,13 +491,11 @@ def bashFallback(command: SimpleCommand): Result<Action> {
   if (text is failure(why)) {
     return failure("could not render the command back to bash: ${why}")
   }
-  return success(
-    {
+  return success({
     type: "bash",
     command: text.value,
-    cwd: getAgentCwd()
-  },
-  )
+    cwd: cwd
+  })
 }
 
 export def runAction(action: Action): Result<string> {
@@ -495,7 +520,7 @@ export def runAction(action: Action): Result<string> {
   return bashAction(action)
 }
 
-export def runCommand(command: Command): Result<string> {
+export def runCommand(command: Command, cwd: string = ""): Result<string> {
   """
   Run one command, whatever shape it is.
 
@@ -504,50 +529,58 @@ export def runCommand(command: Command): Result<string> {
   answer that question differently.
   """
   if (command.tag == "simpleCommand") {
-    return runSimpleCommand(command)
+    return runSimpleCommand(command, cwd)
   }
   if (command.tag == "and") {
-    return andCommand(command)
+    return andCommand(command, cwd)
   }
   if (command.tag == "or") {
-    return orCommand(command)
+    return orCommand(command, cwd)
   }
   if (command.tag == "parens") {
-    return parensCommand(command)
+    return parensCommand(command, cwd)
   }
   return failure("unexpected AST shape: this is not a command")
 }
 
-def runSimpleCommand(command: SimpleCommand): Result<string> {
+def runSimpleCommand(command: SimpleCommand, cwd: string): Result<string> {
   """
   Decide what the command means, then do it.
   """
-  const action = makeAction(command)
+  const action = makeAction(command, cwd)
   if (action is failure(why)) {
     return failure(why)
   }
   return runAction(action.value)
 }
 
-def andCommand(command: And): Result<string> {
+def andCommand(command: And, cwd: string): Result<string> {
   """
   `a && b` — run the right side only if the left side succeeded.
 
   A failing left side is still a failure of the whole chain, and carries
   its own message, so the report says which half stopped it.
   """
-  const left = runCommand(command.left)
+  const left = runCommand(command.left, cwd)
   if (left is failure) {
     return left
   }
-  const right = runCommand(command.right)
+  const right = runCommand(command.right, cwd)
   if (right is failure(why)) {
-    return failure(why)
+    // The left side really ran, so its output belongs in the report even
+    // though the chain failed. Dropping it makes `runCommands` claim to
+    // show "what already ran" while hiding part of it. It goes AFTER the
+    // reason, and labelled, so the report does not read as though the
+    // output were the error.
+    if (left.value == "") {
+      return failure(why)
+    }
+    return failure("${why}\n\nOutput before the failure:\n${left.value}")
   }
   return success(joinOutput([left.value, right.value]))
 }
 
-def orCommand(command: Or): Result<string> {
+def orCommand(command: Or, cwd: string): Result<string> {
   """
   `a || b` — run the right side only if the left side failed.
 
@@ -555,23 +588,23 @@ def orCommand(command: Or): Result<string> {
   succeeds. If both fail the chain fails, carrying both messages, because
   a report naming only the second would hide why the first was tried.
   """
-  const left = runCommand(command.left)
+  const left = runCommand(command.left, cwd)
   if (left is success(text)) {
     return success(text)
   }
-  const right = runCommand(command.right)
+  const right = runCommand(command.right, cwd)
   if (right is success(text)) {
     return success(text)
   }
   return failure(joinOutput([left.error, right.error]))
 }
 
-def parensCommand(command: Parens): Result<string> {
+def parensCommand(command: Parens, cwd: string): Result<string> {
   """
   `( a && b )` — grouping. The parser rejects `;` inside parens, so there
   is exactly one command in here.
   """
-  return runCommand(command.command)
+  return runCommand(command.command, cwd)
 }
 
 def joinOutput(parts: string[]): string {
@@ -598,7 +631,7 @@ export def commandsToStr(commands: Command[]): string {
   return results.join("\n")
 }
 
-export def runCommands(commands: Command[]): Result<string> {
+export def runCommands(commands: Command[], cwd: string = ""): Result<string> {
   """
   Run a sequence of commands, stopping at the first failure.
 
@@ -609,7 +642,7 @@ export def runCommands(commands: Command[]): Result<string> {
   """
   const results: string[] = []
   for (command, i in commands) {
-    const result = runCommand(command)
+    const result = runCommand(command, cwd)
     if (result is failure(why)) {
       return failure(failureReport(commands, i, results, why))
     }
@@ -643,7 +676,7 @@ def failureReport(
   return report
 }
 
-export def makeActions(source: string): Result<Action[]> {
+export def makeActions(source: string, cwd: string = ""): Result<Action[]> {
   """
   Every action a string of bash would turn into, without running any of it.
 
@@ -661,9 +694,10 @@ export def makeActions(source: string): Result<Action[]> {
     return failure(why)
   }
   const commands: Command[] = parsed.value
+  const dir = resolveCwd(cwd)
   let actions: Action[] = []
   for (command in commands) {
-    const some = actionsFor(command)
+    const some = actionsFor(command, dir)
     if (some is failure(why)) {
       return failure(why)
     }
@@ -672,21 +706,21 @@ export def makeActions(source: string): Result<Action[]> {
   return success(actions)
 }
 
-def actionsFor(command: Command): Result<Action[]> {
+def actionsFor(command: Command, cwd: string): Result<Action[]> {
   """
   Flatten one command into the actions it would produce.
   """
   if (command.tag == "simpleCommand") {
-    return wrapOne(makeAction(command))
+    return wrapOne(makeAction(command, cwd))
   }
   if (command.tag == "and") {
-    return bothSides(command.left, command.right)
+    return bothSides(command.left, command.right, cwd)
   }
   if (command.tag == "or") {
-    return bothSides(command.left, command.right)
+    return bothSides(command.left, command.right, cwd)
   }
   if (command.tag == "parens") {
-    return actionsFor(command.command)
+    return actionsFor(command.command, cwd)
   }
   return failure("unexpected AST shape: this is not a command")
 }
@@ -698,12 +732,12 @@ def wrapOne(action: Result<Action>): Result<Action[]> {
   return success([action.value])
 }
 
-def bothSides(left: Command, right: Command): Result<Action[]> {
-  const first = actionsFor(left)
+def bothSides(left: Command, right: Command, cwd: string): Result<Action[]> {
+  const first = actionsFor(left, cwd)
   if (first is failure(why)) {
     return failure(why)
   }
-  const second = actionsFor(right)
+  const second = actionsFor(right, cwd)
   if (second is failure(why)) {
     return failure(why)
   }

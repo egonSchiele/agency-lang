@@ -70,7 +70,7 @@
       "nodeName": "gitStagedIsItsOwnAction",
       "description": "`--staged` is a different question from a bare `git diff`, so the flag has to reach the action rather than being dropped on the way.",
       "input": "",
-      "expectedOutput": "[{\"type\":\"gitDiff\",\"staged\":true}]",
+      "expectedOutput": "[{\"type\":\"gitDiff\",\"staged\":true,\"cwd\":\"\"}]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -169,7 +169,7 @@
       "nodeName": "emptyExpansionsFallBackToBash",
       "description": "An unset variable passes NO argument in bash where expanding it to \"\" would pass one, so an unquoted empty word falls back. Quoted, it is a real empty argument.",
       "input": "",
-      "expectedOutput": "[[{\"type\":\"bash\",\"command\":\"echo $NOPE_NOT_SET\",\"cwd\":\"\"}],[\"bash\"],[{\"type\":\"print\",\"content\":\"\\n\"}]]",
+      "expectedOutput": "[[{\"type\":\"bash\",\"command\":\"echo $NOPE_NOT_SET\",\"cwd\":\"\"}],[\"bash\"],[{\"type\":\"print\",\"content\":\"\\n\"}],[{\"type\":\"print\",\"content\":\"/bin\\n\"}]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -209,6 +209,34 @@
       "description": "`a && b` does not run b when a fails, and the chain fails as a whole.",
       "input": "",
       "expectedOutput": "[true,[\"bash\",\"print\"]]",
+      "interruptHandlers": [
+        {
+          "action": "reject",
+          "expectedMessage": "Are you sure you want to run this shell command?"
+        }
+      ],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cwdReachesEveryAction",
+      "description": "The caller's cwd lands on every action a command produces \u2014 a write's dir, a git action's cwd, and a bash fallback's cwd \u2014 not only on the unparseable path.",
+      "input": "",
+      "expectedOutput": "[{\"type\":\"writeFile\",\"filename\":\"out.txt\",\"dir\":\"/tmp/somewhere\",\"content\":\"hi\\n\",\"mode\":\"overwrite\"},{\"type\":\"gitStatus\",\"cwd\":\"/tmp/somewhere\"},{\"type\":\"bash\",\"command\":\"ls\",\"cwd\":\"/tmp/somewhere\"}]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chainKeepsTheLeftSidesOutput",
+      "description": "When the left side of `&&` succeeds and the right fails, the left side really ran, so its output stays in the failure report.",
+      "input": "",
+      "expectedOutput": "\"Command `echo kept && git log --graph --nope` failed: `git log --graph --nope` was not run: interrupt rejected\\n\\nOutput before the failure:\\nkept\\n\"",
       "interruptHandlers": [
         {
           "action": "reject",

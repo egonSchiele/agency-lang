@@ -92,25 +92,22 @@ export def writeAction(action: WriteFileAction): Result<string> {
 }
 
 export def gitStatusAction(action: GitStatusAction): Result<string> {
-  return success(JSON.stringify(gitStatus(cwd: action.cwd ?? "")))
+  const status = gitStatus(cwd: action.cwd ?? "")
+  return success(JSON.stringify(status))
 }
 
 export def gitDiffAction(action: GitDiffAction): Result<string> {
-  return success(
-    JSON.stringify(
-    gitDiff(
+  const diff = gitDiff(
     path: action.path ?? "",
     staged: action.staged ?? false,
     cwd: action.cwd ?? "",
-  ),
-  ),
   )
+  return success(JSON.stringify(diff))
 }
 
 export def gitLogAction(action: GitLogAction): Result<string> {
-  return success(
-    JSON.stringify(gitLog(path: action.path ?? "", cwd: action.cwd ?? "")),
-  )
+  const log = gitLog(path: action.path ?? "", cwd: action.cwd ?? "")
+  return success(JSON.stringify(log))
 }
 
 export def bashAction(action: BashAction): Result<string> {

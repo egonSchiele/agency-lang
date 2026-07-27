@@ -128,6 +128,7 @@ node emptyExpansionsFallBackToBash() {
     actionsOf("echo $NOPE_NOT_SET"),
     actionTypes("echo $NOPE_A$NOPE_B"),
     actionsOf("echo \"$NOPE_NOT_SET\""),
+    actionsOf("echo $NOPE_NOT_SET/bin"),
   ]
 }
 
@@ -162,4 +163,31 @@ node andStopsOnFailure() {
     ]
   }
   return ["UNPARSEABLE"]
+}
+
+node cwdReachesEveryAction() {
+  // The caller's cwd has to land on EVERY action, not just the unparseable
+  // fallback. The same command in two directories is two different
+  // commands, so an action that did not carry it would run wherever the
+  // process happened to be.
+  const actions = makeActions("echo hi > out.txt; git status; ls", "/tmp/somewhere")
+  if (actions is success(list)) {
+    return list
+  }
+  return "REFUSED: ${actions.error}"
+}
+
+node chainKeepsTheLeftSidesOutput() {
+  // `a && b` where a succeeds and b fails: a really ran, so its output
+  // belongs in the report. Dropping it would make the report claim to show
+  // what already ran while hiding part of it.
+  const parsed = bashParser("echo kept && git log --graph --nope")
+  if (parsed is success(ast)) {
+    const result = runCommands(ast)
+    if (result is failure(why)) {
+      return why
+    }
+    return "UNEXPECTEDLY SUCCEEDED"
+  }
+  return "UNPARSEABLE"
 }

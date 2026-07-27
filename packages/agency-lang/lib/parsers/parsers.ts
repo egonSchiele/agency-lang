@@ -5065,7 +5065,7 @@ const ifBranchExprParser: Parser<Expression> = (input: string) => {
   if (kw.success) {
     return failure(
       "a branch of `if ... then ... else` cannot itself be an `if` expression " +
-      "(this includes `else if`); use `match` for multi-way or nested branching",
+        "(this includes `else if`); use `match` for multi-way or nested branching",
       input,
     );
   }
@@ -5269,123 +5269,123 @@ export const comprehensionParser: Parser<Comprehension> = label(
       "comprehensionParser",
       map(
         seqC(
-          set("type", "comprehension"),
-          // The concurrency prefix, as a raw keyword; the map() below this
-          // seqC converts it to mode/shared via COMPREHENSION_PREFIXES.
-          // Ordering in the or() is load-bearing: LONGEST FIRST, or
-          // str("fork") would half-match the fork in forkShared and then
-          // die on the required whitespace.
-          capture(
-            map(
-              optional(
-                seqR(
-                  or(
-                    str("forkShared"),
-                    str("raceShared"),
-                    str("fork"),
-                    str("race"),
-                  ),
-                  spaces,
+        set("type", "comprehension"),
+        // The concurrency prefix, as a raw keyword; the map() below this
+        // seqC converts it to mode/shared via COMPREHENSION_PREFIXES.
+        // Ordering in the or() is load-bearing: LONGEST FIRST, or
+        // str("fork") would half-match the fork in forkShared and then
+        // die on the required whitespace.
+        capture(
+          map(
+            optional(
+              seqR(
+                or(
+                  str("forkShared"),
+                  str("raceShared"),
+                  str("fork"),
+                  str("race"),
                 ),
-              ),
-              // seqR returns ALL results as an array; the keyword is [0]
-              (r) => (r === null ? null : (r as unknown[])[0]),
-            ),
-            "prefix",
-          ),
-          char("["),
-          optionalSpacesOrNewline,
-          capture(
-            lazy(() => exprParser),
-            "expression",
-          ),
-          // `optionalSpacesOrNewline` BEFORE each keyword, required `spaces`
-          // AFTER. Before must be optional because exprParser eats trailing
-          // whitespace after a call (`f(x) ` leaves rest `for...`) but not
-          // after a bare name (`x ` leaves rest ` for...`) - requiring
-          // whitespace here broke every call-bodied comprehension. It must
-          // cross newlines (optionalSpaces is spaces/tabs only) or a
-          // comprehension could only break lines after a call, never before
-          // `in`/`if`. `for` stays a whole word via the not(varNameChar)
-          // boundary below: `[format, other]` fails at str("for") because
-          // exprParser greedily consumed the full identifier `format`, and
-          // `forx` fails the boundary.
-          optionalSpacesOrNewline,
-          str("for"),
-          // word boundary, not required whitespace: `[x for]` (an editor
-          // auto-closing a half-typed comprehension) must still reach the
-          // commit and get the binder message, while `forever` must fail
-          // here, BEFORE the commit, and fall through to the array rule
-          not(varNameChar),
-          // COMMIT POINT (#602). Once `[ expr for` has matched as a whole
-          // word, nothing but a comprehension attempt can be on the wire -
-          // arrays, strings containing the word for, and format-style
-          // identifiers all diverge earlier (pinned in
-          // comprehension.test.ts). So from here failures are hard,
-          // targeted parseError throws instead of a silent backtrack into
-          // the array parser, which used to swallow half-typed
-          // comprehensions.
-          captureCaptures(
-            parseError(
-              "expected a binder name or pattern after `for` in this list comprehension",
-              spaces,
-              ...iterationBinderFragment,
-            ),
-          ),
-          captureCaptures(
-            parseError(
-              "expected `in` after the list comprehension binder",
-              optionalSpacesOrNewline,
-              str("in"),
-              // word-bounded (the ifExpressionParser precedent), so
-              // `insomething` reports the missing `in` here instead of
-              // committing past it and blaming the iterable
-              not(varNameChar),
-            ),
-          ),
-          // the required whitespace after `in` lives with the iterable,
-          // so `[x for x in]` reports a missing iterable rather than
-          // blaming the `in` it already has
-          captureCaptures(
-            parseError(
-              "expected an iterable expression after `in` in this list comprehension",
-              spaces,
-              capture(
-                lazy(() => exprParser),
-                "iterable",
+                spaces,
               ),
             ),
+            // seqR returns ALL results as an array; the keyword is [0]
+            (r) => (r === null ? null : (r as unknown[])[0]),
           ),
-          optional(
-            captureCaptures(
-              seqC(
-                optionalSpacesOrNewline,
-                str("if"),
-                // word boundary: `iffy` is an identifier, not a filter
-                // keyword - it must fail here so the optional backtracks
-                // and the close-bracket commit reports instead
-                not(varNameChar),
-                // committed once `if` matched as a whole word: a filter
-                // keyword with no condition is a broken comprehension,
-                // not an array
-                captureCaptures(
-                  parseError(
-                    "expected a filter condition after `if` in this list comprehension",
-                    spaces,
-                    capture(
-                      lazy(() => exprParser),
-                      "condition",
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          "prefix",
+        ),
+        char("["),
+        optionalSpacesOrNewline,
+        capture(
+          lazy(() => exprParser),
+          "expression",
+        ),
+        // `optionalSpacesOrNewline` BEFORE each keyword, required `spaces`
+        // AFTER. Before must be optional because exprParser eats trailing
+        // whitespace after a call (`f(x) ` leaves rest `for...`) but not
+        // after a bare name (`x ` leaves rest ` for...`) - requiring
+        // whitespace here broke every call-bodied comprehension. It must
+        // cross newlines (optionalSpaces is spaces/tabs only) or a
+        // comprehension could only break lines after a call, never before
+        // `in`/`if`. `for` stays a whole word via the not(varNameChar)
+        // boundary below: `[format, other]` fails at str("for") because
+        // exprParser greedily consumed the full identifier `format`, and
+        // `forx` fails the boundary.
+        optionalSpacesOrNewline,
+        str("for"),
+        // word boundary, not required whitespace: `[x for]` (an editor
+        // auto-closing a half-typed comprehension) must still reach the
+        // commit and get the binder message, while `forever` must fail
+        // here, BEFORE the commit, and fall through to the array rule
+        not(varNameChar),
+        // COMMIT POINT (#602). Once `[ expr for` has matched as a whole
+        // word, nothing but a comprehension attempt can be on the wire -
+        // arrays, strings containing the word for, and format-style
+        // identifiers all diverge earlier (pinned in
+        // comprehension.test.ts). So from here failures are hard,
+        // targeted parseError throws instead of a silent backtrack into
+        // the array parser, which used to swallow half-typed
+        // comprehensions.
+        captureCaptures(
           parseError(
-            "expected `]` to close this list comprehension",
-            optionalSpacesOrNewline,
-            char("]"),
+            "expected a binder name or pattern after `for` in this list comprehension",
+            spaces,
+            ...iterationBinderFragment,
           ),
+        ),
+        captureCaptures(
+          parseError(
+            "expected `in` after the list comprehension binder",
+            optionalSpacesOrNewline,
+            str("in"),
+            // word-bounded (the ifExpressionParser precedent), so
+            // `insomething` reports the missing `in` here instead of
+            // committing past it and blaming the iterable
+            not(varNameChar),
+          ),
+        ),
+        // the required whitespace after `in` lives with the iterable,
+        // so `[x for x in]` reports a missing iterable rather than
+        // blaming the `in` it already has
+        captureCaptures(
+          parseError(
+            "expected an iterable expression after `in` in this list comprehension",
+            spaces,
+            capture(
+              lazy(() => exprParser),
+              "iterable",
+            ),
+          ),
+        ),
+        optional(
+          captureCaptures(
+            seqC(
+              optionalSpacesOrNewline,
+              str("if"),
+              // word boundary: `iffy` is an identifier, not a filter
+              // keyword - it must fail here so the optional backtracks
+              // and the close-bracket commit reports instead
+              not(varNameChar),
+              // committed once `if` matched as a whole word: a filter
+              // keyword with no condition is a broken comprehension,
+              // not an array
+              captureCaptures(
+                parseError(
+                  "expected a filter condition after `if` in this list comprehension",
+                  spaces,
+                  capture(
+                    lazy(() => exprParser),
+                    "condition",
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        parseError(
+          "expected `]` to close this list comprehension",
+          optionalSpacesOrNewline,
+          char("]"),
+        ),
         ),
         // Convert the raw prefix keyword into mode/shared by table
         // lookup - one branch, the sequential case being a table row

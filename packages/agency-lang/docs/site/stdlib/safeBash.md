@@ -280,7 +280,7 @@ Parse a string of bash code into an AST.
 ### makeAction
 
 ```ts
-makeAction(command: SimpleCommand): Result<Action>
+makeAction(command: SimpleCommand, cwd: string = ""): Result<Action>
 ```
 
 Decide what a single command means, without doing any of it.
@@ -298,10 +298,11 @@ Decide what a single command means, without doing any of it.
 | Name | Type | Default |
 |---|---|---|
 | command | [SimpleCommand](#simplecommand) |  |
+| cwd | `string` | "" |
 
 **Returns:** `Result<Action>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L387))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L404))
 
 ### runAction
 
@@ -321,12 +322,12 @@ Do what the action says. The only step with effects.
 
 **Throws:** `std::write`, `std::git::status`, `std::git::diff`, `std::git::log`, `std::bash`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L476))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L501))
 
 ### runCommand
 
 ```ts
-runCommand(command: Command): Result<string>
+runCommand(command: Command, cwd: string = ""): Result<string>
 ```
 
 Run one command, whatever shape it is.
@@ -340,12 +341,13 @@ Run one command, whatever shape it is.
 | Name | Type | Default |
 |---|---|---|
 | command | [Command](#command) |  |
+| cwd | `string` | "" |
 
 **Returns:** `Result<string>`
 
 **Throws:** `std::write`, `std::git::status`, `std::git::diff`, `std::git::log`, `std::bash`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L498))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L523))
 
 ### commandsToStr
 
@@ -363,12 +365,12 @@ Render commands back to bash source, one per line.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L586))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L619))
 
 ### runCommands
 
 ```ts
-runCommands(commands: Command[]): Result<string>
+runCommands(commands: Command[], cwd: string = ""): Result<string>
 ```
 
 Run a sequence of commands, stopping at the first failure.
@@ -383,17 +385,18 @@ Run a sequence of commands, stopping at the first failure.
 | Name | Type | Default |
 |---|---|---|
 | commands | `Command[]` |  |
+| cwd | `string` | "" |
 
 **Returns:** `Result<string>`
 
 **Throws:** `std::write`, `std::git::status`, `std::git::diff`, `std::git::log`, `std::bash`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L601))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L634))
 
 ### makeActions
 
 ```ts
-makeActions(source: string): Result<Action[]>
+makeActions(source: string, cwd: string = ""): Result<Action[]>
 ```
 
 Every action a string of bash would turn into, without running any of it.
@@ -412,10 +415,11 @@ Every action a string of bash would turn into, without running any of it.
 | Name | Type | Default |
 |---|---|---|
 | source | `string` |  |
+| cwd | `string` | "" |
 
 **Returns:** `Result<Action[]>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L646))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L679))
 
 ### safeBash
 
@@ -449,4 +453,4 @@ Run a shell command, using an equivalent tool where one exists.
 
 **Throws:** `std::bash`, `std::write`, `std::git::status`, `std::git::diff`, `std::git::log`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L713))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash.agency#L747))

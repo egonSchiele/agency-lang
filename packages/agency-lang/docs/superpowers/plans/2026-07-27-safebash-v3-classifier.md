@@ -20,6 +20,7 @@
 - **Agency test command:** `pnpm run a test <path>` — not `pnpm test:run`, which is the vitest suite.
 - **Format before committing:** `pnpm run a fmt -i <file>` on every `.agency` file touched.
 - **Never edit `CHANGELOG.md`.**
+- **Execute through the non-raising internals.** `bash()` raises `std::bash` itself and `write()` raises `std::write`; calling them after `raiseAll` would ask the question twice and make the narrow path pointless. Use `_bash` (`agency-lang/stdlib-lib/shell.js`) and `_write` (`agency-lang/stdlib-lib/builtins.js`). Bypassing a tool's interrupt is normally forbidden — the reasoning that makes it correct here is in the spec, and it depends on every plan raising at least one effect first.
 
 ## File Structure
 
@@ -71,6 +72,10 @@ node refuseWall() {
     refusedFor("dd if=a of=b"),
     refusedFor("git clean -fd"),
     refusedFor("git reset --hard"),
+    refusedFor("git restore src"),
+    refusedFor("git reset HEAD~1"),
+    refusedFor("git checkout main"),
+    refusedFor("git log reset"),
     refusedFor("git status"),
     refusedFor("echo hi"),
   ]
@@ -82,9 +87,9 @@ Add to `tests/agency/safeBash.test.json` inside `"tests"`:
 ```json
 {
   "nodeName": "refuseWall",
-  "description": "Commands we decline to run even with approval, matched by command word and by the last part of a path.",
+  "description": "Commands we decline to run even with approval, matched by command word and by the last part of a path. Only the destructive spellings of git subcommands are refused, and only in the first argument position.",
   "input": "",
-  "expectedOutput": "[true,true,true,true,true,true,false,false]",
+  "expectedOutput": "[true,true,true,true,true,true,true,false,false,false,false,false]",
   "evaluationCriteria": [{ "type": "exact" }]
 }
 ```
@@ -107,10 +112,8 @@ static const REFUSED_COMMANDS: string[] = [
   "rm", "rmdir", "dd", "shred", "mkfs", "truncate",
 ]
 
-/** `git` subcommands that destroy work, matched on the first argument. */
-static const REFUSED_GIT_SUBCOMMANDS: string[] = [
-  "clean", "reset", "checkout", "restore",
-]
+/** `git` subcommands that always destroy work. */
+static const REFUSED_GIT_ALWAYS: string[] = ["clean", "restore"]
 
 def baseName(text: string): string {
   """
@@ -142,11 +145,59 @@ export def isRefused(command: SimpleCommand): boolean {
   if (word != "git") {
     return false
   }
-  // `git reset --hard` destroys work; `git reset` alone does not, but
-  // telling them apart needs flag inspection, and refusing the whole
-  // subcommand costs a fallback where guessing costs a lost tree.
+  return isDestructiveGit(command)
+}
+
+def isDestructiveGit(command: SimpleCommand): boolean {
+  """
+  The git subcommands that throw work away.
+
+  Only the FIRST argument is the subcommand. `git log reset` is a log,
+  not a reset, and matching a subcommand name anywhere in the arguments
+  would refuse it.
+
+  `clean` and `restore` are destructive by purpose. `reset` and
+  `checkout` are only destructive in particular spellings, and refusing
+  the whole subcommand would refuse `git checkout main`, which agents do
+  constantly. So those two are matched on the spelling that discards
+  work.
+  """
+  if (command.args.length == 0) {
+    return false
+  }
+  const first = command.args[0]
+  if (first.tag != "literal") {
+    return false
+  }
+  if (REFUSED_GIT_ALWAYS.includes(first.text)) {
+    return true
+  }
+  if (first.text == "reset") {
+    return hasFlag(command, "--hard")
+  }
+  if (first.text == "checkout") {
+    // `git checkout -- path` and `git checkout .` discard working-tree
+    // changes. `git checkout branch` does not.
+    if (hasFlag(command, "--")) {
+      return true
+    }
+    return hasLiteralArg(command, ".")
+  }
+  return false
+}
+
+def hasFlag(command: SimpleCommand, name: string): boolean {
   for (arg in command.args) {
-    if (arg.tag == "literal" && REFUSED_GIT_SUBCOMMANDS.includes(arg.text)) {
+    if (arg.tag == "flag" && arg.flagName == name) {
+      return true
+    }
+  }
+  return false
+}
+
+def hasLiteralArg(command: SimpleCommand, text: string): boolean {
+  for (arg in command.args) {
+    if (arg.tag == "literal" && arg.text == text) {
       return true
     }
   }
@@ -220,6 +271,9 @@ node classifyOneCommand() {
     effectNamesFor("ls"),
     effectNamesFor("git log --graph"),
     effectNamesFor("$CMD status"),
+    effectNamesFor("FOO=1 git status"),
+    effectNamesFor("echo -n hi"),
+    effectNamesFor("echo \"quoted\""),
   ]
 }
 ```
@@ -229,9 +283,9 @@ Add to `tests/agency/safeBash.test.json`:
 ```json
 {
   "nodeName": "classifyOneCommand",
-  "description": "Each recognized command contributes its own effects; an unrecognized command, an unknown flag, and a non-literal command word are all unrecognized.",
+  "description": "Each recognized command contributes its own effects. An unrecognized command, an unknown flag, a non-literal command word and a leading assignment are all unrecognized. In a sequence, echo contributes nothing whatever its arguments, because bash runs it.",
   "input": "",
-  "expectedOutput": "[[\"std::git::status\"],[\"std::git::diff\"],[\"std::git::diff\"],[\"std::git::log\"],[],\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\"]",
+  "expectedOutput": "[[\"std::git::status\"],[\"std::git::diff\"],[\"std::git::diff\"],[\"std::git::log\"],[],\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\",[],[]]",
   "evaluationCriteria": [{ "type": "exact" }]
 }
 ```
@@ -289,15 +343,22 @@ Add to `stdlib/safeBash.agency` (import `Effect` from `./safeBash/actions.agency
 ```ts
 def literalArgs(command: SimpleCommand): Result<string[]> {
   """
-  A command's arguments as text, but only when every one is a plain
-  literal.
+  A command's non-flag arguments as text, but only when every one is a
+  plain literal.
 
-  Anything else — a variable, a quoted string, a path, a flag — makes this
-  fail, because classification must never depend on a value we would have
-  to expand or interpret ourselves.
+  Flags are SKIPPED, not rejected: they are collected separately by
+  `flagNames`, and rejecting them here would make `git diff --staged`
+  unrecognized before any rule saw it.
+
+  A variable, a quoted string or a path is a failure, because
+  classification must never depend on a value we would have to expand or
+  interpret ourselves.
   """
   let out: string[] = []
   for (arg in command.args) {
+    if (arg.tag == "flag") {
+      continue
+    }
     if (arg.tag != "literal") {
       return failure("`${arg.tag}` is not a literal argument")
     }
@@ -340,6 +401,13 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
   if (name.tag != "literal") {
     return failure("the command word is not a literal")
   }
+  // `GIT_DIR=/elsewhere git status` reads a DIFFERENT repository than the
+  // payload would claim. Rather than model what each assignment means,
+  // any command carrying one is unrecognized; bash applies it correctly
+  // and the human sees the whole command.
+  if (command.assignments.length > 0) {
+    return failure("a leading assignment changes what the command does")
+  }
   const args = literalArgs(command)
   if (args is failure(why)) {
     return failure(why)
@@ -347,11 +415,14 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
   const flags = flagNames(command)
 
   if (name.text == "echo") {
-    // `echo` contributes nothing on its own. A string of nothing but
-    // echoes still raises `std::bash` — see the audit rule in the caller.
-    if (flags.length > 0) {
-      return failure("`echo` with flags prints differently")
-    }
+    // `echo` contributes nothing on its own, whatever its arguments. Bash
+    // runs it and expands anything in it, so `echo $HOME` and `echo -n hi`
+    // are both fine HERE — the flag and literal-argument restrictions
+    // belong to the shell-free path in Task 5, which computes the output
+    // itself and therefore cannot tolerate either.
+    //
+    // A string of nothing but echoes still raises `std::bash`, by the
+    // audit rule in the caller.
     return success([])
   }
 
@@ -531,9 +602,6 @@ Then in `effectsFor`, compute the redirect contribution first and add it to ever
   }
 
   if (name.text == "echo") {
-    if (flags.length > 0) {
-      return failure("`echo` with flags prints differently")
-    }
     return success(redirect.value)
   }
 
@@ -600,6 +668,10 @@ node wholeStringPlans() {
     planSummary("rm -rf build"),
     planSummary("git status; rm -rf build"),
     planSummary("cat a.txt | grep x"),
+    planSummary("git status && git log"),
+    planSummary("true && rm -rf /tmp/x"),
+    planSummary("(git status && git log)"),
+    planSummary("git status && ls"),
   ]
 }
 ```
@@ -609,9 +681,9 @@ Add to `tests/agency/safeBash.test.json`:
 ```json
 {
   "nodeName": "wholeStringPlans",
-  "description": "The whole string gets one plan: refused if any command is refused, one std::bash if any command is unrecognized, otherwise the union of narrow effects. A shell spawn always raises at least one effect.",
+  "description": "The whole string gets one plan: refused if any command anywhere is refused, one std::bash if any command is unrecognized, otherwise the union of narrow effects. Chains are walked, so `true && rm -rf /tmp/x` is refused rather than approvable, and `git status && git log` keeps its narrow questions.",
   "input": "",
-  "expectedOutput": "[[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]]]",
+  "expectedOutput": "[[\"bash\",[\"std::git::status\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::bash\"]],[\"refuse\",[]],[\"refuse\",[]],[\"bash\",[\"std::bash\"]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"refuse\",[]],[\"bash\",[\"std::git::status\",\"std::git::log\"]],[\"bash\",[\"std::bash\"]]]",
   "evaluationCriteria": [{ "type": "exact" }]
 }
 ```
@@ -651,7 +723,7 @@ export type Plan = {
 Add to `stdlib/safeBash.agency`:
 
 ```ts
-static const BASH_EFFECT: Effect = { name: "std::bash", payload: {} }
+static const BASH_EFFECT: Effect = { name: "std::bash" }
 
 def emptyExecution(): Execution {
   return { kind: "", command: "", content: "", filename: "", dir: "", reason: "" }
@@ -696,27 +768,27 @@ export def planFor(source: string, cwd: string): Plan {
   }
   const commands: Command[] = parsed.value
 
+  // Flatten first. A chain hides its halves inside `and`/`or`/`parens`
+  // nodes, and `true && rm -rf /` has no top-level simple command at all —
+  // without this walk the wall never sees the `rm` and the string plans as
+  // an APPROVABLE std::bash.
+  const simple = flatten(commands)
+
   let narrow: Effect[] = []
   let allRecognized = true
-  for (command in commands) {
-    if (command.tag != "simpleCommand") {
-      // `&&`, `||` and parens: bash runs these, and their halves are not
-      // separately classified in this version.
+  for (command in simple) {
+    if (isRefused(command)) {
+      const name = command.command
+      if (name == null) {
+        return refusePlan("this command is not allowed")
+      }
+      return refusePlan("`${name.text}` is not allowed")
+    }
+    const effects = effectsFor(command, cwd)
+    if (effects is failure(why)) {
       allRecognized = false
     } else {
-      if (isRefused(command)) {
-        const name = command.command
-        if (name == null) {
-          return refusePlan("this command is not allowed")
-        }
-        return refusePlan("`${name.text}` is not allowed")
-      }
-      const effects = effectsFor(command, cwd)
-      if (effects is failure(why)) {
-        allRecognized = false
-      } else {
-        narrow = [...narrow, ...effects.value]
-      }
+      narrow = [...narrow, ...effects.value]
     }
   }
 
@@ -734,10 +806,45 @@ export def planFor(source: string, cwd: string): Plan {
     return bashPlan(source, [BASH_EFFECT])
   }
   // Narrow questions were asked, so run the tree we classified.
-  return bashPlan(rebuild(commands), narrow)
+  const rebuilt = rebuild(commands)
+  if (rebuilt is failure(why)) {
+    return bashPlan(source, [BASH_EFFECT])
+  }
+  return bashPlan(rebuilt.value, narrow)
 }
 
-def rebuild(commands: Command[]): string {
+def flatten(commands: Command[]): SimpleCommand[] {
+  """
+  Every simple command in the string, including the halves of a chain.
+
+  `a && b` and `a || b` contribute both sides; `( a )` contributes its
+  inner command. Used for BOTH the refuse wall and classification, because
+  a wall that only looks at the top level is bypassed by two characters,
+  and a classifier that only looks at the top level demotes every chained
+  invocation to the broad question — and agents chain with `&&`
+  constantly.
+  """
+  let out: SimpleCommand[] = []
+  for (command in commands) {
+    out = [...out, ...flattenOne(command)]
+  }
+  return out
+}
+
+def flattenOne(command: Command): SimpleCommand[] {
+  if (command.tag == "simpleCommand") {
+    return [command]
+  }
+  if (command.tag == "and" || command.tag == "or") {
+    return [...flattenOne(command.left), ...flattenOne(command.right)]
+  }
+  if (command.tag == "parens") {
+    return flattenOne(command.command)
+  }
+  return []
+}
+
+def rebuild(commands: Command[]): Result<string> {
   """
   The command string, rendered back from the tree we classified.
 
@@ -753,15 +860,28 @@ def rebuild(commands: Command[]): string {
   for (command in commands) {
     const text = try _astToBash(command)
     if (text is failure(why)) {
-      return ""
+      return failure("could not render `${why}`")
     }
     parts.push(text.value)
   }
-  return parts.join("; ")
+  return success(parts.join("; "))
 }
 ```
 
-Note: `rebuild` returning `""` on a render failure is handled in Task 7, which treats an empty rebuilt command as a reason to use the original string.
+Then make `planFor` handle a render failure **before anything is raised**:
+
+```ts
+  // Narrow questions were asked, so run the tree we classified.
+  const rebuilt = rebuild(commands)
+  if (rebuilt is failure(why)) {
+    // We cannot produce the text we classified, so we must not ask narrow
+    // questions about it. Demote to the broad question and the original
+    // text. Doing this AFTER raising would break the design's first hard
+    // rule: a narrow approval must never be followed by text we only
+    // assumed matched it.
+    return bashPlan(source, [BASH_EFFECT])
+  }
+  return bashPlan(rebuilt.value, narrow)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1157,6 +1277,22 @@ node refusedNeverRuns() {
   }
   return "UNEXPECTEDLY RAN"
 }
+
+node exactlyOneQuestion() {
+  // The test that actually pins the feature. It APPROVES the narrow
+  // question and asserts the command ran. A test that only ever rejects
+  // the first interrupt passes whether or not a second `std::bash` prompt
+  // would have appeared — which is precisely how calling `bash()` instead
+  // of `_bash()` hides itself.
+  //
+  // The test.json lists exactly one interrupt handler. If execution asks
+  // a second question, the harness fails on the unmatched message.
+  const result = safeBash("git status")
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return "RAN"
+}
 ```
 
 Add to `tests/agency/safeBash.test.json`:
@@ -1176,6 +1312,16 @@ Add to `tests/agency/safeBash.test.json`:
   "expectedOutput": "\"REJECTED\"",
   "interruptHandlers": [
     { "action": "reject", "expectedMessage": "Are you sure you want to run this shell command?" }
+  ],
+  "evaluationCriteria": [{ "type": "exact" }]
+},
+{
+  "nodeName": "exactlyOneQuestion",
+  "description": "The narrow question REPLACES the broad one. Approving std::git::status runs the command; a second std::bash prompt would fail the run on an unmatched interrupt.",
+  "input": "",
+  "expectedOutput": "\"RAN\"",
+  "interruptHandlers": [
+    { "action": "approve", "expectedMessage": "Show git status" }
   ],
   "evaluationCriteria": [{ "type": "exact" }]
 },
@@ -1216,10 +1362,19 @@ export def runBash(command: string, cwd: string): Result<string> {
   differ, and neither is an error, so an agent sees a failure where bash
   would have shown an empty result.
   """
-  // `any` because `bash` is DECLARED to return an ExecResult, but a
-  // rejected approval halts it and hands back a failure instead, which
-  // the declared type cannot describe.
-  const result: any = bash(command, cwd)
+  // `_bash`, NOT `bash`. The `bash` tool raises `std::bash` itself, so
+  // calling it here would ask the broad question again — after the human
+  // already answered a narrower one — and the entire feature would be a
+  // no-op. On the broad path they would be asked twice.
+  //
+  // Bypassing a tool's interrupt is normally forbidden: handlers are
+  // safety infrastructure. It is correct here for one specific reason,
+  // and only while that reason holds: the narrow interrupt REPLACES the
+  // broad one, and the only path into this function runs through a
+  // `raiseAll` that raised every effect in the plan and returned success.
+  // Every plan raises at least one effect, so no classification bug can
+  // turn into an ungated shell call.
+  const result: any = try _bash(command, cwd, 0, "", {})
   if (result is failure(why)) {
     return failure("`${command}` was not run: ${why}")
   }
@@ -1250,18 +1405,24 @@ export def runWrite(exec: Execution): Result<string> {
   """
   Perform the write a redirected echo asked for. Returns the empty string,
   which is what bash's stdout for `echo hi > f` is.
+
+  `_write`, NOT `write`, for the same reason `runBash` uses `_bash`: the
+  `write` tool raises its own `std::write`, and `raiseAll` already raised
+  one carrying the content. Calling the tool would ask twice.
   """
-  const written = write(
-    filename: exec.filename,
-    content: exec.content,
-    dir: exec.dir,
-    mode: exec.mode,
-  )
+  const written = try _write(exec.dir, exec.filename, exec.content, exec.mode)
   if (written is failure(why)) {
     return failure(why)
   }
   return success("")
 }
+```
+
+Add these imports to `stdlib/safeBash/actions.agency`, and remove the now-unused `bash` and `write` imports:
+
+```ts
+import { _bash } from "agency-lang/stdlib-lib/shell.js"
+import { _write } from "agency-lang/stdlib-lib/builtins.js"
 ```
 
 Then replace `safeBash` in `stdlib/safeBash.agency`:
@@ -1304,8 +1465,11 @@ export def safeBash(
   if (plan.execution.kind == "write") {
     return runWrite(plan.execution)
   }
-  const text = if plan.execution.command == "" then command else plan.execution.command
-  return runBash(text, dir)
+  // `planFor` already decided which text to run — rebuilt when it asked
+  // narrow questions, original when it asked the broad one. There is no
+  // fallback here: choosing the original AFTER raising narrow effects
+  // would break the design's first hard rule.
+  return runBash(plan.execution.command, dir)
 }
 
 def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
@@ -1322,7 +1486,7 @@ def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
   fragment.
   """
   for (effect in effects) {
-    const why = raiseOne(effect, fullCommand)
+    const why = raiseOne(effect, fullCommand, cwd)
     if (why is failure(reason)) {
       return failure(reason)
     }
@@ -1330,10 +1494,16 @@ def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
   return success(null)
 }
 
-def raiseOne(effect: Effect, fullCommand: string): Result {
+def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
   if (effect.name == "std::bash") {
+    // The contract is `effect std::bash { command, cwd, timeout, stdin }`
+    // and payload contracts are enforced at the raise site, so all four
+    // fields are required even though we only vary the first two.
     raise std::bash("Are you sure you want to run this shell command?", {
-      command: fullCommand
+      command: fullCommand,
+      cwd: cwd,
+      timeout: 0,
+      stdin: ""
     })
     return success(null)
   }
@@ -1428,7 +1598,29 @@ Remove these definitions from `stdlib/safeBash.agency`. Bash does control flow n
 Remove from `stdlib/safeBash.agency`:
 
 - `stringifyWord`, `expandVariable`, `stringifyParts`, `hasQuotedPart`, `stringifyArg`
-- `simplifyRedirects`, `writeDir`, `joinWords` (replaced by `echoOutput`)
+- `simplifyRedirects`, `joinWords` (replaced by `echoOutput`)
+
+Keep `writeDir`'s behavior by folding it into `resolveCwd`, which must
+never return `""`: `write` rejects an empty `dir`, and `getAgentCwd()` is
+empty whenever nothing set one — which is the case the tests run in.
+
+```ts
+def resolveCwd(cwd: string): string {
+  """
+  Which directory a command runs in: the caller's, or the agent's, or
+  here. Never empty — `write` rejects an empty `dir`, so an empty result
+  would make every redirected echo fail at write time.
+  """
+  if (cwd != "") {
+    return cwd
+  }
+  const agent = getAgentCwd()
+  if (agent != "") {
+    return agent
+  }
+  return "."
+}
+```
 - the `OutputRedirect` type
 - the `env` import from `std::system`, which now has no user
 
@@ -1472,6 +1664,20 @@ Create `lib/stdlib/safeBash.test.ts`:
 import { describe, it, expect } from "vitest";
 import { _bashParser, _astToBash } from "./safeBash.js";
 
+/** Drop `loc` fields so two trees compare on structure, not on where the
+ *  text happened to sit. Rendering re-flows whitespace, so positions
+ *  legitimately differ between the original and the re-parsed form. */
+function strip(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(strip);
+  if (value === null || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (k === "loc") continue;
+    out[k] = strip(v);
+  }
+  return out;
+}
+
 // Every command family the classifier recognizes, plus the hostile
 // quoting cases that would turn one command into two if rendering lost a
 // quote.
@@ -1513,9 +1719,14 @@ describe("astToBash round-trips every command family the classifier sees", () =>
       expect(second.success, `rendered form did not re-parse: ${rendered}`).toBe(true);
       if (!second.success) return;
 
-      // Re-rendering the re-parsed tree must be a fixed point. Comparing
-      // rendered strings rather than trees keeps the failure message
-      // readable, and any tree difference shows up as a text difference.
+      // Compare the TREES, not the rendered strings. A string fixed point
+      // passes on exactly the failure this test exists to catch: if
+      // rendering lost the quotes, `echo "a; b"` renders to `echo a; b`,
+      // which re-parses as TWO commands, which re-render (joined with
+      // "; ") to the same string. Green test, one command became two.
+      expect(strip(second.result)).toEqual(strip(first.result));
+
+      // Kept only as a readability aid on failure.
       const again = second.result.map((c: unknown) => _astToBash(c)).join("; ");
       expect(again).toBe(rendered);
     });

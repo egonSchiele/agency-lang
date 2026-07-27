@@ -533,6 +533,58 @@ caused it is gone.
 The partial-failure report, and with it the "what ran, what didn't"
 message. There is no half-executed state to report on any more.
 
+## Executing without asking twice
+
+There is a trap here that defeats the whole design if it is missed.
+
+`bash()` in `std::shell` raises `std::bash` itself, every time, and then
+calls an internal `_bash`. `write()` does the same with `std::write`. So
+if safeBash raises `std::git::status`, gets approval, and then calls
+`bash()`, the human is asked "are you sure you want to run this shell
+command?" anyway — and the narrow question they just answered bought them
+nothing. On the broad path they would be asked twice.
+
+So after every effect in the plan is approved, safeBash executes through
+the **non-raising internals**: `_bash` from
+`agency-lang/stdlib-lib/shell.js`, and `_write` from
+`agency-lang/stdlib-lib/builtins.js`. These are the same functions
+`shell.agency` and `index.agency` call themselves once their own
+interrupts return.
+
+**This needs saying loudly, because bypassing a tool's interrupt is
+normally forbidden.** Handlers are safety infrastructure and must never be
+skipped by accident. Here it is not an accident, and the reasoning is
+specific:
+
+> The narrow interrupt **replaces** the broad one rather than preceding
+> it. The only path to `_bash` runs through a raise of every effect in the
+> plan, and any rejection returns before execution. So the command is
+> never less gated than `bash()` would have made it — it is gated by a
+> question that describes it better.
+
+Two things have to hold for that argument to be true, and both are
+testable:
+
+1. **Every plan raises at least one effect before reaching `_bash`.** That
+   is the audit rule above, and it is what stops a classification bug
+   turning into an ungated shell call.
+2. **Exactly one question is asked per effect.** A test has to *approve* a
+   narrow effect and assert the command ran, not merely reject it — a test
+   that only ever rejects the first interrupt passes whether or not a
+   second one would have appeared.
+
+## Leading assignments are not recognized
+
+A command may carry variable assignments that apply to it alone:
+`GIT_DIR=/elsewhere git status`. The assignment changes which repository
+git reads, so classifying that as `std::git::status { cwd }` would
+describe one read while bash performs another — the payload would lie.
+
+Rather than model what each assignment might mean, **any command with a
+leading assignment is not recognized** and the string falls to
+`std::bash`. Bash applies the assignment itself, correctly, and the human
+sees the whole command including the assignment.
+
 ## The return contract
 
 One of the two motivating bugs was that the return shape depended on which

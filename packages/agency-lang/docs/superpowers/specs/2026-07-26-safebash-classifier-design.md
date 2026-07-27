@@ -223,7 +223,14 @@ below.
 
 Some commands we decline to run at all, even with approval: `rm`, `rmdir`,
 `dd`, `shred`, `mkfs`, `truncate`, and the destructive git subcommands
-(`git clean`, `git reset --hard`, `git checkout -- .`, `git restore`).
+(`git clean`, `git restore`, `git reset --hard`, `git checkout .`).
+
+An earlier draft listed `git checkout -- .` here. **It cannot be
+refused**, because the parser rejects a bare `--` outright, so that string
+never reaches classification and falls through as unparseable — under an
+approvable `std::bash`. Checked against the parser rather than assumed.
+Only the destructive *spellings* are refused, so `git checkout main` and
+`git reset HEAD~1` are ordinary commands.
 
 A refusal anywhere in the string refuses the **whole string**.
 

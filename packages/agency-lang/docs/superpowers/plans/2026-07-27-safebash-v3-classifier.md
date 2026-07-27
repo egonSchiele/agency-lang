@@ -75,6 +75,7 @@ node refuseWall() {
     refusedFor("git restore src"),
     refusedFor("git reset HEAD~1"),
     refusedFor("git checkout main"),
+    refusedFor("git checkout ."),
     refusedFor("git log reset"),
     refusedFor("git status"),
     refusedFor("echo hi"),
@@ -89,7 +90,7 @@ Add to `tests/agency/safeBash.test.json` inside `"tests"`:
   "nodeName": "refuseWall",
   "description": "Commands we decline to run even with approval, matched by command word and by the last part of a path. Only the destructive spellings of git subcommands are refused, and only in the first argument position.",
   "input": "",
-  "expectedOutput": "[true,true,true,true,true,true,true,false,false,false,false,false]",
+  "expectedOutput": "[true,true,true,true,true,true,true,false,false,true,false,false,false]",
   "evaluationCriteria": [{ "type": "exact" }]
 }
 ```
@@ -176,11 +177,14 @@ def isDestructiveGit(command: SimpleCommand): boolean {
     return hasFlag(command, "--hard")
   }
   if (first.text == "checkout") {
-    // `git checkout -- path` and `git checkout .` discard working-tree
-    // changes. `git checkout branch` does not.
-    if (hasFlag(command, "--")) {
-      return true
-    }
+    // `git checkout .` discards working-tree changes; `git checkout main`
+    // does not.
+    //
+    // `git checkout -- .` is NOT handled here, and cannot be: the parser
+    // rejects a bare `--` ("Unexpected input after commands"), so that
+    // string never reaches classification at all. It falls through as
+    // unparseable and is approvable under `std::bash`. Verified against
+    // the parser; the spec's refuse table is corrected to match.
     return hasLiteralArg(command, ".")
   }
   return false
@@ -270,10 +274,11 @@ node classifyOneCommand() {
     effectNamesFor("echo hi"),
     effectNamesFor("ls"),
     effectNamesFor("git log --graph"),
-    effectNamesFor("$CMD status"),
+    effectNamesFor("/bin/git status"),
     effectNamesFor("FOO=1 git status"),
     effectNamesFor("echo -n hi"),
     effectNamesFor("echo \"quoted\""),
+    effectNamesFor("git diff --staged --stat"),
   ]
 }
 ```
@@ -283,9 +288,9 @@ Add to `tests/agency/safeBash.test.json`:
 ```json
 {
   "nodeName": "classifyOneCommand",
-  "description": "Each recognized command contributes its own effects. An unrecognized command, an unknown flag, a non-literal command word and a leading assignment are all unrecognized. In a sequence, echo contributes nothing whatever its arguments, because bash runs it.",
+  "description": "Each recognized command contributes its own effects. An unrecognized command, an unknown flag, a non-literal command word and a leading assignment are all unrecognized. In a sequence, echo contributes nothing whatever its arguments, because bash runs it.\n\nThe `/bin/git status` row is the one that fails if the literal-command-word rule is deleted: it parses cleanly with a `path` command word and would otherwise classify as a git read. (`$CMD status` does NOT parse, so it cannot cover this rule.)",
   "input": "",
-  "expectedOutput": "[[\"std::git::status\"],[\"std::git::diff\"],[\"std::git::diff\"],[\"std::git::log\"],[],\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\",[],[]]",
+  "expectedOutput": "[[\"std::git::status\"],[\"std::git::diff\"],[\"std::git::diff\"],[\"std::git::log\"],[],\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\",[],[],\"UNRECOGNIZED\"]",
   "evaluationCriteria": [{ "type": "exact" }]
 }
 ```
@@ -408,10 +413,6 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
   if (command.assignments.length > 0) {
     return failure("a leading assignment changes what the command does")
   }
-  const args = literalArgs(command)
-  if (args is failure(why)) {
-    return failure(why)
-  }
   const flags = flagNames(command)
 
   if (name.text == "echo") {
@@ -428,6 +429,14 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
 
   if (name.text != "git") {
     return failure("no rule for `${name.text}`")
+  }
+  // Only the git rules need the arguments as text, so this runs AFTER the
+  // echo branch. Above it, a quoted `echo "hi"` would fail here and be
+  // demoted before the branch that says echo is fine whatever its
+  // arguments ever ran.
+  const args = literalArgs(command)
+  if (args is failure(why)) {
+    return failure(why)
   }
   return gitEffects(args.value, flags, cwd)
 }
@@ -513,6 +522,7 @@ node redirectsContribute() {
     effectNamesFor("echo hi > $F"),
     effectNamesFor("echo hi < in.txt"),
     effectNamesFor("echo hi 2> err.txt"),
+    effectNamesFor("echo hi > a.txt > b.txt"),
   ]
 }
 ```
@@ -524,7 +534,7 @@ Add to `tests/agency/safeBash.test.json`:
   "nodeName": "redirectsContribute",
   "description": "A redirect writes a file whatever the verb is, so it contributes std::write independently. A variable target or any other redirect kind is unrecognized.",
   "input": "",
-  "expectedOutput": "[[\"std::git::status\",\"std::write\"],[\"std::write\"],[\"std::write\"],\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\"]",
+  "expectedOutput": "[[\"std::git::status\",\"std::write\"],[\"std::write\"],[\"std::write\"],\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\",\"UNRECOGNIZED\"]",
   "evaluationCriteria": [{ "type": "exact" }]
 }
 ```
@@ -607,6 +617,10 @@ Then in `effectsFor`, compute the redirect contribution first and add it to ever
 
   if (name.text != "git") {
     return failure("no rule for `${name.text}`")
+  }
+  const args = literalArgs(command)
+  if (args is failure(why)) {
+    return failure(why)
   }
   const git = gitEffects(args.value, flags, cwd)
   if (git is failure(why)) {
@@ -808,6 +822,11 @@ export def planFor(source: string, cwd: string): Plan {
   // Narrow questions were asked, so run the tree we classified.
   const rebuilt = rebuild(commands)
   if (rebuilt is failure(why)) {
+    // We cannot produce the text we classified, so we must not ask narrow
+    // questions about it. Demote to the broad question and the original
+    // text. Doing this AFTER raising would break the design's first hard
+    // rule: a narrow approval must never be followed by text we only
+    // assumed matched it.
     return bashPlan(source, [BASH_EFFECT])
   }
   return bashPlan(rebuilt.value, narrow)
@@ -868,21 +887,6 @@ def rebuild(commands: Command[]): Result<string> {
 }
 ```
 
-Then make `planFor` handle a render failure **before anything is raised**:
-
-```ts
-  // Narrow questions were asked, so run the tree we classified.
-  const rebuilt = rebuild(commands)
-  if (rebuilt is failure(why)) {
-    // We cannot produce the text we classified, so we must not ask narrow
-    // questions about it. Demote to the broad question and the original
-    // text. Doing this AFTER raising would break the design's first hard
-    // rule: a narrow approval must never be followed by text we only
-    // assumed matched it.
-    return bashPlan(source, [BASH_EFFECT])
-  }
-  return bashPlan(rebuilt.value, narrow)
-
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
@@ -927,6 +931,8 @@ node shellFreeEcho() {
     planDetail("echo"),
     planDetail("echo 'a  b'"),
     planDetail("echo $HOME"),
+    planDetail("echo \"$HOME\""),
+    planDetail("echo \"a b\" c"),
     planDetail("echo -n hi"),
     planDetail("echo hi; echo bye"),
   ]
@@ -940,7 +946,7 @@ Add to `tests/agency/safeBash.test.json`:
   "nodeName": "shellFreeEcho",
   "description": "A single fully-literal echo computes its own output and never touches a shell. An expansion, a flag, or a sequence sends it to bash.",
   "input": "",
-  "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
+  "expectedOutput": "[[\"echo\",\"hello world\\n\",[]],[\"echo\",\"\\n\",[]],[\"echo\",\"a  b\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]],[\"echo\",\"a b c\\n\",[]],[\"bash\",\"\",[\"std::bash\"]],[\"bash\",\"\",[\"std::bash\"]]]",
   "evaluationCriteria": [{ "type": "exact" }]
 }
 ```
@@ -1085,7 +1091,10 @@ Add to `tests/agency/safeBash.agency`:
 def writePlanDetail(source: string): any {
   const plan = planFor(source, "/repo")
   const exec = plan.execution
-  return [exec.kind, exec.content, exec.filename, exec.dir, [e.name for e in plan.effects]]
+  // `mode` is in the tuple deliberately. Without it, a `writeMode` that
+  // always returned "overwrite" survives the whole suite, and
+  // `echo hi >> notes.txt` silently TRUNCATES the file.
+  return [exec.kind, exec.content, exec.filename, exec.dir, exec.mode, [e.name for e in plan.effects]]
 }
 
 node shellFreeWrite() {
@@ -1094,6 +1103,36 @@ node shellFreeWrite() {
     writePlanDetail("echo hi >> out.txt"),
     writePlanDetail("echo hi > $F"),
     writePlanDetail("echo $HOME > out.txt"),
+  ]
+}
+
+node payloadValuesAreCorrect() {
+  // Every other classification test asserts effect NAMES. The name of a
+  // staged diff and an unstaged diff is the same, so a dropped
+  // `staged: true` would answer the wrong question with a green suite.
+  // This also pins cwd threading into git payloads.
+  const staged = planFor("git diff --staged", "/repo")
+  const redirected = planFor("git status > out.txt", "/repo")
+  const writeEffect = redirected.effects[1]
+  return [
+    staged.effects[0].payload.staged,
+    staged.effects[0].payload.cwd,
+    writeEffect.name,
+    writeEffect.payload.filename,
+    writeEffect.payload.dir,
+    writeEffect.payload.mode,
+  ]
+}
+
+node rebuiltVersusOriginal() {
+  // Hard rule #1, which nothing else pins. Multi-space input makes it
+  // observable: re-rendering normalizes whitespace, so on the narrow path
+  // `execution.command` must be the NORMALIZED form (the tree we
+  // classified), and on the broad path it must be the caller's text
+  // VERBATIM (what the human read and approved).
+  return [
+    planFor("git    status", "/repo").execution.command,
+    planFor("ls    -la", "/repo").execution.command,
   ]
 }
 
@@ -1112,7 +1151,21 @@ Add to `tests/agency/safeBash.test.json`:
   "nodeName": "shellFreeWrite",
   "description": "A single literal redirected echo computes its content and writes it, with no shell. A variable in the target or the arguments sends it to bash.",
   "input": "",
-  "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",[\"std::write\"]],[\"bash\",\"\",\"\",\"\",[\"std::bash\"]],[\"bash\",\"\",\"\",\"\",[\"std::bash\"]]]",
+  "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"append\",[\"std::write\"]],[\"bash\",\"\",\"\",\"\",\"\",[\"std::bash\"]],[\"bash\",\"\",\"\",\"\",\"\",[\"std::bash\"]]]",
+  "evaluationCriteria": [{ "type": "exact" }]
+},
+{
+  "nodeName": "payloadValuesAreCorrect",
+  "description": "Payload values, not just effect names. A staged diff and an unstaged diff raise the same effect name, so only the payload distinguishes them.",
+  "input": "",
+  "expectedOutput": "[true,\"/repo\",\"std::write\",\"out.txt\",\"/repo\",\"overwrite\"]",
+  "evaluationCriteria": [{ "type": "exact" }]
+},
+{
+  "nodeName": "rebuiltVersusOriginal",
+  "description": "A narrow plan runs the tree it classified (whitespace normalized); a broad plan runs the caller's text verbatim.",
+  "input": "",
+  "expectedOutput": "[\"git status\",\"ls    -la\"]",
   "evaluationCriteria": [{ "type": "exact" }]
 },
 {
@@ -1124,7 +1177,7 @@ Add to `tests/agency/safeBash.test.json`:
 }
 ```
 
-Note the append case plans the same way; `mode` is carried separately in Task 7's executor via the redirect operator, which `writePlanDetail` does not surface.
+The `>` and `>>` rows differ only in `mode`, which is the point: that field is the difference between overwriting a file and appending to it, and nothing else in the suite would notice if it were wrong.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -1278,6 +1331,46 @@ node refusedNeverRuns() {
   return "UNEXPECTEDLY RAN"
 }
 
+node sequenceRunsThroughBash() {
+  // The measured divergence that motivated the whole redesign:
+  // v2 returned "hi\n\nbye\n" where bash returns "hi\nbye\n". Nothing
+  // else in the suite runs a sequence through bash at all.
+  const result = safeBash("echo hi && echo bye")
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
+}
+
+node nonZeroExitIsAFailure() {
+  const result = safeBash("false")
+  if (result is failure(why)) {
+    return "FAILED"
+  }
+  return "UNEXPECTEDLY SUCCEEDED"
+}
+
+node appendReallyAppends() {
+  // The executor is called positionally — `_write(dir, filename, content,
+  // mode)` — and no other test runs it, so a swapped argument order
+  // survives everything else. This also proves `>>` appends rather than
+  // truncating.
+  safeBash("echo one > safebash-append-probe.txt")
+  safeBash("echo two >> safebash-append-probe.txt")
+  const back = read("safebash-append-probe.txt") with approve
+  if (back is failure(why)) {
+    return "READ FAILED"
+  }
+  return back.value
+}
+
+node defaultCwdIsNeverEmpty() {
+  // `resolveCwd`'s "" -> "." mapping exists because `write` rejects an
+  // empty dir, and the tests run in exactly that environment.
+  const plan = planFor("echo hi > out.txt", "")
+  return plan.execution.dir
+}
+
 node exactlyOneQuestion() {
   // The test that actually pins the feature. It APPROVES the narrow
   // question and asserts the command ran. A test that only ever rejects
@@ -1323,6 +1416,45 @@ Add to `tests/agency/safeBash.test.json`:
   "interruptHandlers": [
     { "action": "approve", "expectedMessage": "Show git status" }
   ],
+  "evaluationCriteria": [{ "type": "exact" }]
+},
+{
+  "nodeName": "sequenceRunsThroughBash",
+  "description": "A sequence runs in one bash call, so its output is bash's — including the newline behavior that v2 got wrong.",
+  "input": "",
+  "expectedOutput": "\"hi\\nbye\\n\"",
+  "interruptHandlers": [
+    { "action": "approve", "expectedMessage": "Are you sure you want to run this shell command?" }
+  ],
+  "evaluationCriteria": [{ "type": "exact" }]
+},
+{
+  "nodeName": "nonZeroExitIsAFailure",
+  "description": "A non-zero exit is a failure, which `&&` and `||` semantics depend on.",
+  "input": "",
+  "expectedOutput": "\"FAILED\"",
+  "interruptHandlers": [
+    { "action": "approve", "expectedMessage": "Are you sure you want to run this shell command?" }
+  ],
+  "evaluationCriteria": [{ "type": "exact" }]
+},
+{
+  "nodeName": "appendReallyAppends",
+  "description": "The write executor runs for real: `>` then `>>` leaves both lines, proving the append mode reaches _write and the positional arguments are in the right order.",
+  "input": "",
+  "expectedOutput": "\"one\\ntwo\\n\"",
+  "interruptHandlers": [
+    { "action": "approve", "expectedMessage": "Are you sure you want to write to this file?" },
+    { "action": "approve", "expectedMessage": "Are you sure you want to write to this file?" },
+    { "action": "approve", "expectedMessage": "Are you sure you want to read this file?" }
+  ],
+  "evaluationCriteria": [{ "type": "exact" }]
+},
+{
+  "nodeName": "defaultCwdIsNeverEmpty",
+  "description": "resolveCwd maps an empty caller cwd and an empty agent cwd to \".\", because write rejects an empty dir.",
+  "input": "",
+  "expectedOutput": "\".\"",
   "evaluationCriteria": [{ "type": "exact" }]
 },
 {
@@ -1374,10 +1506,14 @@ export def runBash(command: string, cwd: string): Result<string> {
   // `raiseAll` that raised every effect in the plan and returned success.
   // Every plan raises at least one effect, so no classification bug can
   // turn into an ungated shell call.
-  const result: any = try _bash(command, cwd, 0, "", {})
-  if (result is failure(why)) {
+  const attempt = try _bash(command, cwd, 0, "", {})
+  if (attempt is failure(why)) {
     return failure("`${command}` was not run: ${why}")
   }
+  // `try` WRAPS the call in a Result, so the ExecResult is inside
+  // `.value`. Reading `attempt.stdout` directly is undefined and every
+  // successful run returns garbage.
+  const result: any = attempt.value
   const out = truncate(result.stdout)
   if (result.exitCode != 0) {
     return failure(JSON.stringify({
@@ -1410,19 +1546,48 @@ export def runWrite(exec: Execution): Result<string> {
   `write` tool raises its own `std::write`, and `raiseAll` already raised
   one carrying the content. Calling the tool would ask twice.
   """
-  const written = try _write(exec.dir, exec.filename, exec.content, exec.mode)
-  if (written is failure(why)) {
-    return failure(why)
+  // `destructive { }` because `write()` wraps `_write` in one, and that
+  // marker feeds the tool-loop retry rules. Calling `_write` directly
+  // without it would give this write a different retry classification
+  // from the tool it replaces.
+  destructive {
+    const written = try _write(exec.dir, exec.filename, exec.content, exec.mode)
+    if (written is failure(why)) {
+      return failure(why)
+    }
   }
   return success("")
 }
 ```
 
-Add these imports to `stdlib/safeBash/actions.agency`, and remove the now-unused `bash` and `write` imports:
+Add these imports to `stdlib/safeBash/actions.agency`:
 
 ```ts
 import { _bash } from "agency-lang/stdlib-lib/shell.js"
 import { _write } from "agency-lang/stdlib-lib/builtins.js"
+```
+
+**Keep an import from `std::shell` and `std::git` in
+`stdlib/safeBash.agency`, even though nothing calls them.** Effect
+declarations travel with imports, and without them a raise compiles with
+its payload contract *unenforced* — measured:
+
+```
+raise std::git::status("...", { wrongField: d })   // no std::git import → compiles clean
+raise std::git::status("...", { wrongField: d })   // with std::git import → AG3006: field 'cwd' is missing
+```
+
+`std::write` is enforced through the auto-imported prelude and needs no
+import. `std::bash` and the git effects do. Write the reason next to
+them, or someone removes an unused import and silently loses every
+payload check:
+
+```ts
+// These imports are NOT unused. Effect declarations come with imports,
+// and without them the `raise std::bash(...)` and `raise std::git::*(...)`
+// sites below compile with their payload contracts unenforced.
+import { bash } from "std::shell"
+import { gitStatus } from "std::git"
 ```
 
 Then replace `safeBash` in `stdlib/safeBash.agency`:
@@ -1460,7 +1625,10 @@ export def safeBash(
   }
 
   if (plan.execution.kind == "echo") {
-    return success(plan.execution.content)
+    // Truncated like every other path. A long echo returning in full
+    // while a long `ls` came back capped would be exactly the
+    // distinguishability this design exists to remove.
+    return success(truncate(plan.execution.content))
   }
   if (plan.execution.kind == "write") {
     return runWrite(plan.execution)
@@ -1556,7 +1724,24 @@ make && pnpm run a test tests/agency/safeBash.agency 2>&1 | tail -30
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Prove the payload contracts are actually enforced**
+
+The imports above are load-bearing and invisible. Confirm they work by
+breaking a payload on purpose:
+
+```bash
+# Temporarily change one raise site, e.g. drop `cwd` from the
+# std::git::status payload, then:
+pnpm run a tc stdlib/safeBash.agency 2>&1 | grep AG3006
+```
+
+Expected: `AG3006: Effect 'std::git::status' data field 'cwd' is missing.`
+
+If that error does **not** appear, the effect declaration is not in scope
+and every payload in this task is unchecked. Restore the payload before
+committing.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 pnpm run a fmt -i stdlib/safeBash.agency stdlib/safeBash/actions.agency tests/agency/safeBash.agency
@@ -1800,7 +1985,7 @@ Implemented. See `docs/superpowers/plans/2026-07-27-safebash-v3-classifier.md`.
 git diff main...HEAD --stat
 ```
 
-Read `docs/dev/anti-patterns.md` and check the diff against it. The ones most likely to bite here: comments that restate the code rather than explaining why, and `any` used where a real type would work. The two deliberate `any` uses in this plan — `bash()`'s return, and `Effect.payload` — each have a comment saying why.
+Read `docs/dev/anti-patterns.md` and check the diff against it. The ones most likely to bite here: comments that restate the code rather than explaining why, and `any` used where a real type would work. There is exactly one deliberate `any` in this plan — the unwrapped result of `_bash`, whose declared type cannot describe a rejected approval — and it has a comment saying why. `Effect` is a typed union precisely so payloads are not `any`.
 
 - [ ] **Step 5: Commit**
 
@@ -1810,6 +1995,26 @@ git commit -m "safeBash: regenerate docs and mark the spec implemented"
 ```
 
 ---
+
+## Verified harness behavior
+
+Several tests here prove a negative — "no extra question was asked" — and
+that only works if the harness is strict. It is, in both directions
+(`lib/templates/cli/evaluate.mustache`):
+
+```
+more interrupts than handlers  →  throw "Unexpected interrupt #N ... No handler provided."
+more handlers than interrupts  →  throw "Expected N interrupts but only M occurred."
+```
+
+And a node with **no** `interruptHandlers` at all gets no response loop,
+so an interrupt leaves the raw interrupt array as the result and the
+exact-match comparison fails.
+
+So `exactlyOneQuestion`, `echoRunsWithoutApproval` and `refusedNeverRuns`
+are not vacuous: a second, unlisted prompt fails the run. This was checked
+rather than assumed, because if unlisted interrupts were absorbed silently
+every one of those tests would pass whether or not the feature worked.
 
 ## Notes for the implementer
 

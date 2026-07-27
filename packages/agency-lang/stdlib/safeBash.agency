@@ -10,7 +10,7 @@ import {
   gitDiffAction,
   gitLogAction,
  } from "./safeBash/actions.agency"
-import { _bashParser } from "agency-lang/stdlib-lib/safeBash.js"
+import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 
 export static const MAX_STDOUT_LEN = 2000
 

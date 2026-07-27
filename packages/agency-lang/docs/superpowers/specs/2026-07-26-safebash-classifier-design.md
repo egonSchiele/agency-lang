@@ -123,8 +123,14 @@ not persist, and neither do variable assignments. `cd foo && git status`
 would run `git status` in the wrong directory.
 
 Up front avoids all three. The cost is that we ask about effects that may
-never happen — `false && git status` still raises `std::git::status` — and
-that is a much smaller problem than a half-run sequence.
+never happen: `git status && git log` raises both questions before
+anything runs, even though the second command only runs if the first
+succeeds. That is a much smaller problem than a half-run sequence.
+
+(The example has to be an all-recognized chain to make the point.
+Something like `false && git status` never gets there — `false` is
+unrecognized, so the whole string collapses to one `std::bash` and the
+narrow question is never asked.)
 
 ### Why one bash call
 
@@ -155,44 +161,61 @@ The reasoning: we have to ask the broad question anyway, so asking the
 narrow one first adds a prompt without adding information. And a human
 approving `std::bash` should see the entire command, not a fragment of it.
 
-## The single-command fast paths
+## The two shell-free paths
 
-Two cases skip bash entirely, and both apply **only when the whole input
-is one command.** Once there is a sequence, the whole thing goes to bash.
+Two cases never invoke a shell at all. Both apply **only when the whole
+input is one command**, and both require **every argument to be fully
+literal** — a plain word, a single-quoted string, or a double-quoted
+string with no variables inside.
 
-**A bare `echo`** goes to `print`:
+Both rest on one claim: `echo` prints its arguments joined by single
+spaces followed by a newline, and we can compute that ourselves, exactly.
+That is a small enough behavior to be provable and is already what the
+existing code produces.
+
+**A bare `echo` computes its own output.**
 
 ```
-safeBash("echo hello")     → print("hello\n")   no shell, no interrupt
-safeBash("echo -n hi")     → flags change what echo prints → bash
-safeBash("echo hi; ls")    → a sequence → bash
+safeBash("echo hello")     → returns "hello\n"    no shell, no interrupt
+safeBash("echo -n hi")     → flags change what echo prints  → bash
+safeBash("echo $HOME")     → not fully literal             → bash
+safeBash("echo hi; ls")    → a sequence                    → bash
 ```
 
 This is the one place v2's structural safety was free, and it is worth
-keeping: `print` cannot write a file or reach the network no matter how
-wrong the classifier is. The output is provably identical — `echo a b`
-prints its arguments joined by single spaces plus a newline, which is
-exactly what the existing code produces.
+keeping: nothing here can write a file or reach the network no matter how
+wrong the classifier is, because all it does is build a string.
 
-**A single redirected `echo`** goes to `write`:
+Note it **returns** the text rather than printing it. `bash()` captures
+stdout into its result, so safeBash does too; a shell-free path that wrote
+to the console would be an observable seam between the two paths, and the
+whole point is that an agent cannot tell them apart.
+
+**A single redirected `echo` computes its content, then writes it.**
 
 ```
 safeBash("echo hi > out.txt")
+   compute "hi\n"
+   raise std::write { dir, filename: "out.txt", content: "hi\n" }
+   if approved → write
 ```
 
-We run `echo hi` through bash with the redirect stripped, capture what it
-printed, and hand those bytes to `write`. Bash makes the text so fidelity
-holds; `write` does the writing so it can enforce which directory you
-allowed, and the `std::write` interrupt carries `content`, so a policy
-that inspects what is being written still can.
+No shell is spawned here either. An earlier draft ran `echo hi` through
+bash with the redirect stripped and only then raised `std::write` — a
+shell spawn with nothing raised before it, contradicting the audit rule
+below, and forcing an awkward argument about why running before approval
+was tolerable.
 
-This is only sound because `echo` has no effects of its own — the command
-runs before the write is approved, so a rejected write must not leave
-anything behind. Any other command with a redirect goes to bash.
+Computing the content instead makes the path strictly better: the bytes
+are in the approval payload **before** anyone approves, which is more
+than v2 managed, and nothing runs if the write is rejected. It also
+resolves an inconsistency — if the provable-equivalence claim is good
+enough to generate what `echo` prints, it is good enough to generate what
+`echo` writes. The earlier draft trusted it in one place and not the
+other.
 
-Two exclusions: a redirect whose **target contains a variable**
-(`echo hi > $F`) cannot substitute, because `write` needs a known filename
-at approval time. And any `echo` with flags goes to bash.
+Everything else with a redirect goes to bash, under the redirect rules
+below.
 
 ## Three outcomes
 
@@ -222,7 +245,7 @@ mechanism does not make.
 
 ### Ask, then delegate to bash
 
-Everything recognized that is not refused and not a fast path.
+Everything recognized that is not refused and not shell-free.
 
 | command | effect raised |
 |---|---|
@@ -241,6 +264,39 @@ all.
 The default is always `std::bash`. Classification is an allowlist — a
 command earns a narrower question by matching a rule, and everything else
 gets the broad one.
+
+### Redirects contribute on their own
+
+A command's *verb* is not the only thing that decides what it can do. A
+redirect writes a file whatever the verb is, so it has to contribute
+independently of the table above. Without this rule there is a hole:
+
+```
+echo pwned >> .bashrc; git status
+```
+
+`echo` contributes nothing on its own and `git status` contributes a git
+read, so the string would classify as `{ std::git::status }` — and a
+policy that blanket-approves git reads would have silently approved
+appending to a shell startup file. That must not be a possible reading.
+
+Three rules:
+
+1. **Any `>` or `>>` on any command contributes `std::write`**, with
+   `{ dir, filename }` filled from the parse tree, regardless of what the
+   command itself contributes.
+2. **A redirect whose target contains a variable demotes the whole string
+   to `std::bash`.** `std::write` cannot be raised without a filename, and
+   the filename is not known without expanding the variable ourselves —
+   which is exactly what the classification rule forbids. This is the same
+   restriction the shell-free write path has, one level up.
+3. **Any other redirect demotes the whole string to `std::bash`.** Input
+   redirects (`< in.txt`) and explicit file descriptors (`2> err.txt`,
+   `&>`) both reach classification, because the parser represents them.
+   `< secret.txt` on an otherwise-recognized command is a read that the
+   effect set would never otherwise mention, and rather than growing a
+   table row per redirect kind, anything that is not a plain `>`/`>>`
+   asks the broad question.
 
 ### The rule that closes the audit hole
 
@@ -292,8 +348,9 @@ correctly — which is a much smaller and more reviewable surface.
 This makes `astToBash` security-critical, which it was not before. It
 earns a property test: for every command in the corpus, re-parsing the
 rendered string must produce the same tree, and the corpus must cover
-every command family in the table, plus the redirect-stripped form the
-`write` fast path renders (the same command with an empty redirect list).
+every command family in the table. (An earlier draft also rendered a
+redirect-stripped form, for a write path that ran `echo` through bash.
+That path is gone, and so is the extra rendering mode it needed.)
 
 Checked before adopting this design, `astToBash` preserves quoting on
 every hostile input tried:
@@ -352,9 +409,21 @@ right of the plain-command-word rule:
 pass through untouched — `echo $HOME` is still an echo, because the
 question we are asking does not depend on what it expands to.
 
-The only place we still resolve a variable ourselves is a redirect target
-on the `write` fast path, and a target that *is* a variable disqualifies
-the fast path (above).
+**The shell-free paths need the same rule, more strictly.** They never
+invoke bash, so nothing else is there to expand anything: for
+`safeBash("echo $HOME")` we would have to produce the text ourselves, with
+machinery this section just deleted. So a shell-free path requires every
+argument to be **fully literal** — a plain word, a single-quoted string,
+or a double-quoted string containing no variables. An `echo` with any
+expansion in it is not a shell-free path; as a single command it goes to
+bash, and by the audit rule that raises `std::bash`.
+
+The cost is that a bare `echo $HOME` now needs one broad approval. That is
+honest: we genuinely do not know what it prints without expanding it, and
+expanding it ourselves is where the divergence bugs lived.
+
+We therefore never resolve a variable anywhere. Not for classification,
+not for a payload, not for content.
 
 **The wall and the classifier match differently, on purpose.** The refuse
 wall looks at path words and at flag and path arguments (`git reset
@@ -494,7 +563,7 @@ than silent. Raw output with no bound is a context-window hazard that v2's
 envelope quietly protected against; a visible loss of fidelity is a much
 better failure than an invisible one.
 
-**The `write` fast path returns the empty string on success**, which is
+**The shell-free write path returns the empty string on success**, which is
 what bash's stdout for `echo hi > f` is. The invariant holds there by
 construction, not by accident.
 
@@ -521,9 +590,10 @@ function would ask.
 
 The clearest case is a write. When the `write` function raises
 `std::write`, its payload includes `content`, so a policy can inspect the
-bytes. The `write` fast path preserves that, because we run the command
-first and hand over real bytes. But a `std::write` raised for a redirect
-that goes to bash cannot: the content does not exist yet.
+bytes. The shell-free write path preserves that, because it computes the
+content before raising anything. But a `std::write` raised for a redirect
+that goes to bash cannot: bash has not run, so the content does not exist
+yet.
 
 > A relabeled effect is approval of the **question**, not of the bytes. It
 > says what kind of thing is about to happen and to what target, not what
@@ -540,11 +610,20 @@ blast radius is whatever the string does.
 
 Three things narrow this: the rebuilt-string rule means parser bugs
 degrade safely, the plain-command-word rule stops a variable smuggling in
-a different command, and the single-`echo` fast path keeps the structural
+a different command, and the shell-free `echo` path keeps the structural
 bound exactly where it was free.
 
 The second weakness is the refuse wall, which stops the common spelling of
 a destructive command and not the idea of one.
+
+The third is small but real, and it is the one case where v3 asks a
+*broader* question than v2 did. In v2, `echo a; echo b` was two `print`
+calls and cost nothing. In v3 the shell-free path only covers a single
+command, so a sequence of echoes goes to bash, and the audit rule means it
+raises `std::bash`. Two harmless echoes now need an approval that used to
+be free. That is the right trade — the alternative is a shell spawn with
+no effect raised — but it is a regression and belongs on this list rather
+than being discovered.
 
 The judgment is that both are worth it. v2's structural bound only applied
 to the handful of commands it could faithfully reimplement, and the
@@ -583,7 +662,7 @@ foundation for it.
 - **Does `write` need `allowedPaths`?** It takes `dir` but, unlike
   `mkdir`, `copy` and `applyPatch`, has no path allowlist, so binding
   `dir` sets a base without checking whether `filename` climbs out with
-  `../`. If that is right, the `write` fast path enforces less than it
+  `../`. If that is right, the shell-free write path enforces less than it
   appears to.
 - **A developer-supplied function table** — letting someone route a
   command to *their* bound tool — is deferred. It overlaps an existing

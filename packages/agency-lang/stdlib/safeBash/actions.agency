@@ -1,0 +1,76 @@
+import {
+  gitStatus,
+  gitDiff,
+  gitLog,
+  GitStatus,
+  GitDiff,
+  GitLog,
+ } from "std::git"
+import { bash } from "std::shell"
+
+export type Action = PrintAction | WriteFileAction | GitAction
+
+export type PrintAction = {
+  type: "print";
+  content: string
+}
+
+export type WriteFileAction = {
+  type: "writeFile";
+  filename: string;
+  dir: string;
+  content: string;
+  mode: "append" | "overwrite"
+}
+
+export type GitAction = GitStatusAction | GitDiffAction | GitLogAction
+
+export type GitStatusAction = {
+  type: "gitStatus";
+  cwd?: string
+}
+
+export type GitDiffAction = {
+  type: "gitDiff";
+  path?: string;
+  staged?: boolean;
+  cwd?: string
+}
+
+export type GitLogAction = {
+  type: "gitLog";
+  path?: string;
+  cwd?: string
+}
+
+export def printAction(content: string) {
+  print(content)
+}
+
+export def writeAction(
+  filename: string,
+  dir: string,
+  content: string,
+  mode: "append" | "overwrite",
+): Result {
+  return write(filename: filename, content: content, dir: dir, mode: mode)
+}
+
+export def gitStatusAction(cwd: string = ""): Result<GitStatus> {
+  const result = gitStatus(cwd: cwd)
+  return success(result)
+}
+
+export def gitDiffAction(
+  path: string = "",
+  staged: boolean = false,
+  cwd: string = "",
+): Result<GitDiff> {
+  const result = gitDiff(path: path, staged: staged, cwd: cwd)
+  return success(result)
+}
+
+export def gitLogAction(path: string = "", cwd: string = ""): Result<GitLog> {
+  const result = gitLog(path: path, cwd: cwd)
+  return success(result)
+}

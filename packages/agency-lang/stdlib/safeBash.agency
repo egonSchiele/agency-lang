@@ -1,8 +1,18 @@
 import { WriteMode } from "std::index"
 import { bash, ExecResult } from "std::shell"
-import { env } from "std::system"
+import { env, setEnv } from "std::system"
 
+import {
+  Action,
+  printAction,
+  writeAction,
+  gitStatusAction,
+  gitDiffAction,
+  gitLogAction,
+ } from "./safeBash/actions.agency"
 import { _bashParser } from "agency-lang/stdlib-lib/safeBash.js"
+
+export static const MAX_STDOUT_LEN = 2000
 
 export type Word =
   | LiteralWord
@@ -146,28 +156,22 @@ export def bashParser(code: string): Result<BashAST> {
 
 def stringifyWord(
   word: Word,
-  insideQuotes: boolean,
-  isWholeWord: boolean,
+  insideQuotes: boolean = false,
+  isWholeWord: boolean = true,
 ): Result<string> {
   """
   Reduce a word to text, or explain why it cannot be.
 
-  Only the words that are already text, or that the environment can answer,
-  are resolvable. Anything that would need a shell to evaluate is a failure,
-  because guessing at it is how safeBash and bash would come to disagree
-  about what a command means.
-
   The parser refuses globs, tilde, command substitution and arithmetic
-  outright, so they never arrive here — what is left to decide is what a
-  variable expands to, and whether bash would have split the result.
+  outright, so they never arrive here.
   """
   return match(word) {
     { tag: "literal", text } => success(text)
     { tag: "path", text } => success(text)
     { tag: "singleQuoted", text } => success(text)
-    { tag: "doubleQuoted", parts } => stringifyParts(parts, true, false)
+    { tag: "doubleQuoted", parts } => stringifyParts(parts, insideQuotes: true, isWholeWord: false)
     { tag: "variable", name } => expandVariable(name, insideQuotes, isWholeWord)
-    { tag: "interpolatedVariable", parts } => stringifyParts(parts, insideQuotes, false)
+    { tag: "interpolatedVariable", parts } => stringifyParts(parts, insideQuotes: insideQuotes, isWholeWord: false)
     _ => failure("`${word.tag}` cannot be reduced to text")
   }
 }
@@ -179,23 +183,16 @@ def expandVariable(
 ): Result<string> {
   """
   Look a variable up in the environment. Unset is the empty string, as in bash.
-
-  An UNQUOTED value containing whitespace is refused rather than expanded:
-  bash word-splits it, so `cat $F` with `F="a b"` is two arguments, and
-  expanding it here without splitting would quietly change what the command
-  means. Inside double quotes no splitting happens, so it expands normally.
   """
   const value = env(name) ?? ""
   if (insideQuotes) {
     return success(value)
   }
-  // Default IFS is space, TAB and NEWLINE — not just space.
+
   if (value.includes(" ") || value.includes("\t") || value.includes("\n")) {
     return failure("unquoted `${name}` contains whitespace; bash would word-split it")
   }
-  // An unquoted empty expansion produces ZERO words in bash, where this would
-  // produce one empty one — an argument bash never passed. Only when the
-  // variable IS the word: `$EMPTY/bin` is `/bin`, one word, not none.
+
   if (value == "" && isWholeWord) {
     return failure("unquoted `${name}` is empty; bash would pass no argument at all")
   }
@@ -255,24 +252,24 @@ def simplifyRedirects(redirects: Redirect[]): Result<OutputRedirect | null> {
 def hasFlags(args: Word[]): boolean {
   """
   True when any argument is a flag.
-
-  `echo -n` suppresses the trailing newline and `echo -e` interprets escapes;
-  `joinWords` does neither, so mapping those would produce different output
-  than bash. A flag also has no faithful text form to put in `args` — the
-  parser splits `--format=oneline` into a name and a value, and re-joining
-  them is a guess about a syntax that varies per command. Anything with a
-  flag falls through and costs an approval, which is the trade this module
-  makes everywhere else.
   """
-  for (arg in args) {
-    if (arg.tag == "flag") {
-      return true
-    }
-  }
-  return false
+  return some(args, \a -> a.tag == "flag")
 }
 
-export def simplify(ast: BashAST): Result<Cmd> {
+def tempSetEnv(newEnv: Record<string, string>, block: any) {
+  const oldEnv = {}
+  for (key, value in newEnv) {
+    oldEnv[key] = env(key)
+    setEnv(key, value) with approve
+  }
+  const result = block()
+  for (key, value in oldEnv) {
+    setEnv(key, value) with approve
+  }
+  return result
+}
+
+def makeAction(command: SimpleCommand): Result<Action> {
   """
   Reduce a parsed bash AST to a single command's name, arguments and output
   redirect.
@@ -285,54 +282,143 @@ export def simplify(ast: BashAST): Result<Cmd> {
 
   @param ast - The AST from `bashParser`
   """
-  if (ast.length != 1) {
-    return failure("expected a single command")
-  }
-  const only = ast[0]
-  if (only.tag == "and" || only.tag == "or") {
-    return failure("`&&` and `||` are not handled")
-  }
-  if (only.tag == "parens") {
-    return failure("`( ... )` grouping is not handled")
-  }
-  // The parser's `Command` union is exhausted above, so this is a shifted
-  // parser shape rather than a command shape v1 declined. Fail rather than
-  // reduce on an assumption about fields that may not be there.
-  if (only.tag != "simpleCommand") {
-    return failure("unexpected AST shape: expected a simple command")
-  }
-  if (only.assignments.length > 0) {
-    return failure("leading variable assignments are not handled")
-  }
-  const name = commandName(only)
-  if (name is failure(why)) {
-    return failure(why)
-  }
-  if (hasFlags(only.args)) {
-    return failure("flags are not handled")
+  const newEnv = {}
+  for ({ name, value } in command.assignments) {
+    newEnv[name] = value || ""
   }
 
-  let args: string[] = []
-  for (word in only.args) {
-    const text = stringifyWord(word, false, true)
-    if (text is success(value)) {
-      args.push(value)
-    } else {
-      return failure("could not read a word: ${text.error}")
+  if (command.command == null) {
+    return failure("assignment-only lines are not handled")
+  }
+
+  if (command.command.tag != "literal") {
+    return failure("command name is not a literal")
+  }
+
+  if (command.redirects.length > 1) {
+    return failure("more than one redirect")
+  }
+
+  if (command.redirects.length == 1) {
+    const redirect = command.redirects[0]
+    if (redirect.fd != null) {
+      return failure("redirect with an explicit file descriptor")
+    }
+    if (redirect.op != ">" && redirect.op != ">>") {
+      return failure("`${redirect.op}` is not an output redirect")
     }
   }
 
-  const redirect = simplifyRedirects(only.redirects)
-  if (redirect is success(target)) {
-    return success(
-      {
-      command: name.value,
-      args: args,
-      redirect: target
-    },
-    )
+  const cmdName = command.command.text
+  const full = [cmdName, ...command.args]
+  if (command.redirects.length == 1) {
+    const redirect = command.redirects[0]
+    const path = stringifyWord(redirect.target, false, true)
+    if (path is success(text)) {
+      full.push(redirect.op, text)
+    } else {
+      return failure("redirect target: ${path.error}")
+    }
   }
-  return failure("could not read the redirect: ${redirect.error}")
+
+  match(full) {
+    ["echo", ...args, ">", filename] => writeAction(
+      filename,
+      getAgentCwd(),
+      joinWords([stringifyWord(w) for w in args]),
+      "overwrite",
+    )
+    ["echo", ...args, ">>", filename] => writeAction(
+      filename,
+      getAgentCwd(),
+      joinWords([stringifyWord(w) for w in args]),
+      "append",
+    )
+    ["echo", ...args] => printAction(joinWords([stringifyWord(w) for w in args]))
+    ["git", "status"] => gitStatusAction()
+    ["git", "diff"] => gitDiffAction()
+    ["git", "diff", "--staged"] => gitDiffAction(staged: true)
+    ["git", "log"] => gitLogAction()
+    ["git", "log", "--oneline"] => gitLogAction()
+  }
+}
+
+export def runAction(action: Action): Result<string> {
+  const result = match(action) {
+    { type: "print", content } => printAction(content)
+    { type: "writeFile", filename, dir, content, mode } => writeAction(filename, dir, content, mode)
+    { type: "gitStatus", cwd } => gitStatusAction(cwd || "")
+    { type: "gitDiff", path, staged, cwd } => gitDiffAction(path || "", staged || false, cwd || "")
+    { type: "gitLog", path, cwd } => gitLogAction(path || "", cwd || "")
+  }
+  return result
+}
+
+export def runCommand(command: Command): Result<string> {
+  return match(command.tag) {
+    "simpleCommand" => {
+      const action = makeAction(command)
+      if (action is success(act)) {
+        return runAction(act)
+      }
+      return action
+    }
+    "and" => andCommand(command)
+    "or" => orCommand(command)
+    "parens" => parensCommand(command)
+  }
+}
+
+export def commandsToStr(command: Command[]): string {
+  return "not implemented"
+}
+
+export def runCommands(commands: Command[]): Result<string> {
+  const results: string[] = []
+  for (command, i in commands) {
+    const result = runCommand(command)
+    match(result) {
+      success(text) => results.push(text)
+      failure(err) => results.push(err)
+    }
+    if (result is failure) {
+      const commandsRun = commands[:i]
+      const commandsNotRun = commands[i:]
+      const resultStr = """
+      Command ${commandsToStr([command])} failed.
+
+      Results so far:
+
+      <results>
+      ${results.join("\n")}
+      </results>
+
+      Commands run:
+      ${commandsToStr(commandsRun)}
+
+      Commands not run:
+      ${commandsToStr(commandsNotRun)}
+
+      """
+      return failure(results.join("\n"))
+    }
+  }
+  return success(results.join("\n"))
+}
+
+export def and(commands: Command[]): Result<string> {
+  const results: string[] = []
+  for (command in commands) {
+    const result = runAction(command)
+    match(result) {
+      success(text) => results.push(text)
+      failure(err) => results.push(err)
+    }
+    if (result is failure) {
+      return failure(results.join("\n"))
+    }
+  }
+  return success(results.join("\n"))
 }
 
 def commandName(cmd: SimpleCommand): Result<string> {
@@ -350,18 +436,7 @@ def commandName(cmd: SimpleCommand): Result<string> {
   return success(scriptName.text)
 }
 
-def ok(stdout: string): ExecResult {
-  """
-  A successful result in the shape `bash` would have returned.
-  """
-  return {
-    stdout: stdout,
-    stderr: "",
-    exitCode: 0
-  }
-}
-
-export def safeBash(command: string, cwd: string = ""): ExecResult {
+export def safeBash(command: string, cwd: string = ""): Result {
   """
   Run a shell command, using an equivalent tool where one exists.
 
@@ -394,7 +469,19 @@ export def safeBash(command: string, cwd: string = ""): ExecResult {
   }
   // Unparseable, or a shape v1 does not map: run it as before, approval and
   // all. Incompleteness costs an approval, never correctness.
-  return bash(command, cwd)
+  const result = bash(command, cwd)
+  const data = JSON.stringify(
+    {
+    command: command,
+    stdout: result.stdout[:MAX_STDOUT_LEN],
+    stderr: result.stderr[:MAX_STDOUT_LEN],
+    exitCode: exitCode
+  },
+  )
+  if (result.exitCode > 0) {
+    return failure(`Bash command failed: ${data}`)
+  }
+  return success(`Bash command succeeded: ${data}`)
 }
 
 def joinWords(words: string[]): string {
@@ -403,34 +490,4 @@ def joinWords(words: string[]): string {
   trailing newline.
   """
   return words.join(" ") + "\n"
-}
-
-def writeThrough(
-  path: string,
-  content: string,
-  mode: WriteMode,
-  original: string,
-  cwd: string,
-): ExecResult {
-  """
-  Write the file, falling back to bash if the write itself fails so a refusal
-  never silently swallows the command.
-
-  Worth knowing: a user who DENIES the `std::write` approval is then asked to
-  approve `std::bash` for the same effect. That is deliberate — the
-  alternative is a command that silently does nothing — but it is a second
-  prompt for something just declined.
-  """
-  // `write`'s `dir` rejects an empty string, where `safeBash`'s `cwd` uses one
-  // to mean "wherever bash would have run". Normalize, or every redirected
-  // echo falls back to bash and the mapping never fires.
-  let dir = cwd
-  if (dir == "") {
-    dir = "."
-  }
-  const written = write(path, content, dir, mode)
-  if (written is failure(reason)) {
-    return bash(original, cwd)
-  }
-  return ok("")
 }

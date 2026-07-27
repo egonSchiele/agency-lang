@@ -1,14 +1,26 @@
-import {
-  gitStatus,
-  gitDiff,
-  gitLog,
-  GitStatus,
-  GitDiff,
-  GitLog,
- } from "std::git"
+/** @module
+  The things a bash command can turn into.
+
+  Every command `safeBash` runs is first translated into an `Action`: a plain
+  data object saying what should happen, with nothing having happened yet.
+  Deciding *what* a command means and *doing* it are separate steps, so the
+  deciding half can be tested by handing in a string and looking at the
+  actions that come out.
+
+  `bash` itself is an action, so a command with no better mapping is still
+  represented here rather than being a hole in the model.
+*/
+import { gitStatus, gitDiff, gitLog } from "std::git"
 import { bash } from "std::shell"
 
-export type Action = PrintAction | WriteFileAction | GitAction
+/** How much of a command's output to keep before truncating. */
+export static const MAX_STDOUT_LEN = 2000
+
+export type Action =
+  | PrintAction
+  | WriteFileAction
+  | GitAction
+  | BashAction
 
 export type PrintAction = {
   type: "print";
@@ -43,34 +55,90 @@ export type GitLogAction = {
   cwd?: string
 }
 
-export def printAction(content: string) {
-  print(content)
+/** The fallback: run the command through bash exactly as written.
+ *
+ * `command` is the command re-rendered from its AST, not the caller's
+ * original string, so a sequence that runs three commands and falls back on
+ * the second sends bash only the second one. */
+export type BashAction = {
+  type: "bash";
+  command: string;
+  cwd?: string
 }
 
-export def writeAction(
-  filename: string,
-  dir: string,
-  content: string,
-  mode: "append" | "overwrite",
-): Result {
-  return write(filename: filename, content: content, dir: dir, mode: mode)
+export def printAction(action: PrintAction): Result<string> {
+  """
+  Print to stdout. No interrupt: printing has no effect to approve.
+  """
+  print(action.content)
+  return success(action.content)
 }
 
-export def gitStatusAction(cwd: string = ""): Result<GitStatus> {
-  const result = gitStatus(cwd: cwd)
-  return success(result)
+export def writeAction(action: WriteFileAction): Result<string> {
+  """
+  Write a file. `write` raises the `std::write` interrupt, so this is gated
+  the same way any other write is.
+  """
+  const written = write(
+    filename: action.filename,
+    content: action.content,
+    dir: action.dir,
+    mode: action.mode,
+  )
+  if (written is failure(reason)) {
+    return failure(reason)
+  }
+  return success("")
 }
 
-export def gitDiffAction(
-  path: string = "",
-  staged: boolean = false,
-  cwd: string = "",
-): Result<GitDiff> {
-  const result = gitDiff(path: path, staged: staged, cwd: cwd)
-  return success(result)
+export def gitStatusAction(action: GitStatusAction): Result<string> {
+  return success(JSON.stringify(gitStatus(cwd: action.cwd ?? "")))
 }
 
-export def gitLogAction(path: string = "", cwd: string = ""): Result<GitLog> {
-  const result = gitLog(path: path, cwd: cwd)
-  return success(result)
+export def gitDiffAction(action: GitDiffAction): Result<string> {
+  return success(
+    JSON.stringify(
+    gitDiff(
+    path: action.path ?? "",
+    staged: action.staged ?? false,
+    cwd: action.cwd ?? "",
+  ),
+  ),
+  )
+}
+
+export def gitLogAction(action: GitLogAction): Result<string> {
+  return success(
+    JSON.stringify(gitLog(path: action.path ?? "", cwd: action.cwd ?? "")),
+  )
+}
+
+export def bashAction(action: BashAction): Result<string> {
+  """
+  Run the command through bash, approval and all.
+
+  A non-zero exit is a failure rather than a success carrying a bad exit
+  code, so a `&&` chain stops on it the way bash would.
+  """
+  // `any` because `bash` is DECLARED to return an ExecResult, but a rejected
+  // approval halts it and hands back a failure instead, which the declared
+  // type cannot describe.
+  const result: any = bash(action.command, action.cwd ?? "")
+  // Reading an exit code off that failure is a crash on the most ordinary
+  // path there is: a human saying no.
+  if (result is failure(why)) {
+    return failure("`${action.command}` was not run: ${why}")
+  }
+  const data = JSON.stringify(
+    {
+    command: action.command,
+    stdout: result.stdout[:MAX_STDOUT_LEN],
+    stderr: result.stderr[:MAX_STDOUT_LEN],
+    exitCode: result.exitCode
+  },
+  )
+  if (result.exitCode != 0) {
+    return failure(data)
+  }
+  return success(data)
 }

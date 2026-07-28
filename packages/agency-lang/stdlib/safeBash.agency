@@ -282,18 +282,18 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
   // not be demoted by a check that only git needs.
   return match(name.text) {
     "echo" => success(redirect.value)
-    "git" => literalArgs(command)
-    |> gitEffects.partial(flags: flags, cwd: cwd)
-    |> withRedirect.partial(redirect: redirect.value)
+    "git" => {
+      // Both links can fail, which is what earns the pipe. Appending the
+      // redirect contribution cannot, so it stays inline rather than
+      // becoming a third link that pretends it could.
+      const git = literalArgs(command) |> gitEffects.partial(flags: flags, cwd: cwd)
+      if (git is failure(why)) {
+        return failure(why)
+      }
+      return success([...git.value, ...redirect.value])
+    }
     _ => failure("no rule for `${name.text}`")
   }
-}
-
-def withRedirect(effects: Effect[], redirect: Effect[]): Result<Effect[]> {
-  """
-  A command's own effects with its redirect's contribution appended.
-  """
-  return success([...effects, ...redirect])
 }
 
 def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
@@ -310,7 +310,7 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
   }
   const sub = args[0]
   return match(sub) {
-    "status" if (flags.length == 0) => return success(
+    "status" if (flags.length == 0) => success(
       [
       {
       name: "std::git::status",
@@ -320,7 +320,7 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
     },
     ],
     )
-    "log" if (flags.length == 0) => return success(
+    "log" if (flags.length == 0) => success(
       [
       {
       name: "std::git::log",
@@ -332,7 +332,7 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
     },
     ],
     )
-    "diff" if (flags.length == 0) => return success(
+    "diff" if (flags.length == 0) => success(
       [
       {
       name: "std::git::diff",
@@ -346,7 +346,7 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
     },
     ],
     )
-    "diff" if (flags.length == 1 && flags[0] == "--staged") => return success(
+    "diff" if (flags.length == 1 && flags[0] == "--staged") => success(
       [
       {
       name: "std::git::diff",
@@ -537,16 +537,16 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
   if (flagNames(command).length > 0) {
     return failure("`echo` with flags prints differently")
   }
-  return echoWords(command) |> echoPlanFromWords
-}
-
-def echoPlanFromWords(words: string[]): Result<Plan> {
+  const words = echoWords(command)
+  if (words is failure(why)) {
+    return failure(why)
+  }
   return success(
     {
     effects: [],
     execution: {
       kind: "echo",
-      content: echoOutput(words)
+      content: echoOutput(words.value)
     }
   },
   )
@@ -578,22 +578,17 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   if (target is failure(why)) {
     return failure(why)
   }
-  return echoWords(command)
-  |> writePlanFromWords.partial(filename: target.value, dir: cwd, mode: writeMode(only.op))
-}
-
-def writePlanFromWords(
-  words: string[],
-  filename: string,
-  dir: string,
-  mode: WriteMode,
-): Result<Plan> {
-  const content = echoOutput(words)
+  const words = echoWords(command)
+  if (words is failure(why)) {
+    return failure(why)
+  }
+  const content = echoOutput(words.value)
+  const mode = writeMode(only.op)
   const effect: Effect = {
     name: "std::write",
     payload: {
-      dir: dir,
-      filename: filename,
+      dir: cwd,
+      filename: target.value,
       content: content,
       mode: mode
     }
@@ -603,8 +598,8 @@ def writePlanFromWords(
     effects: [effect],
     execution: {
       kind: "write",
-      filename: filename,
-      dir: dir,
+      filename: target.value,
+      dir: cwd,
       content: content,
       mode: mode
     }
@@ -865,6 +860,15 @@ export def safeBash(
     return failure(why)
   }
 
+  // The write case is an `if` rather than a match arm for the same
+  // reason as `flattenOne`: match arms do not narrow the scrutinee, and
+  // rebuilding a WriteExec from bound fields would silently drop any
+  // field the type gains later. `if` narrowing passes the value through
+  // whole.
+  if (exec.kind == "write") {
+    return runWrite(exec)
+  }
+
   // Echo output is truncated like every other path: a long echo returning
   // in full while a long `ls` came back capped would be exactly the
   // distinguishability this design exists to remove. For bash, `planFor`
@@ -872,21 +876,11 @@ export def safeBash(
   // questions, original when it asked the broad one. There is no fallback
   // here: choosing the original AFTER raising narrow effects would break
   // the design's first hard rule.
-  // The write arm rebuilds a WriteExec from its bindings because match
-  // arms do not narrow the scrutinee: `runWrite(exec)` does not typecheck
-  // inside the arm, but a literal built from the bound fields does.
   return match(exec) {
     { kind: "echo", content } => success(truncate(content))
-    { kind: "write", filename, dir as target, content, mode } => runWrite(
-      {
-      kind: "write",
-      filename: filename,
-      dir: target,
-      content: content,
-      mode: mode
-    },
-    )
     { kind: "bash", command as text } => runBash(text, dir)
+    // Unreachable — the early return above already handled refusal. The
+    // arm exists only to keep the match exhaustive over Execution.
     { kind: "refuse", reason } => failure(reason)
   }
 }

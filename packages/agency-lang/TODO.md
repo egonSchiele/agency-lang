@@ -465,3 +465,12 @@ match cannot. Found in the safeBash match refactor:
 Exhaustiveness (AG5002) works well; arm narrowing is the missing half.
 safeBash's `raiseOne` and `flattenOne` are the motivating cases — both
 carry comments saying they want to be matches when this lands.
+
+---
+
+safeBash test fixtures: the non-write rows in `shellFreeWrite` (and the
+`writePlanDetail` helper) still report the old flat-Execution sentinel
+fields ("", "", "", "overwrite") for bash plans, to keep the match/pipe
+refactor byte-identical. Follow-up: collapse those rows to what a
+BashExec actually carries, so the fixtures stop describing a record that
+no longer exists.

@@ -352,10 +352,17 @@ describe("declarations in a literal infer program", () => {
 
   it("reports a broken declaration instead of silently reading two statements", () => {
     // Before the fix this parsed as statements and produced junk. Now the
-    // statements attempt declines and the parse fails.
+    // statements attempt declines, the program attempt runs, and its own
+    // declaration parser reports the real problem — the unclosed parameter
+    // list. Asserting the message matters as much as asserting the failure:
+    // a future change that keeps the failure but degrades the message to a
+    // generic one would still pass a success-only check while telling the
+    // user nothing.
     const source = `node host() {\n  const t = [|\n    node main( {\n      print(1)\n    }\n  |]\n}\n`;
     const result = parseAgency(source, {}, true, false);
     expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.message).toContain("parameter list");
   });
 });
 

@@ -163,7 +163,6 @@ export class AgencyGenerator {
   > = new Map();
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected currentScope: Scope[] = [{ type: "global" }];
-  protected program: AgencyProgram | null = null;
   protected agencyConfig: AgencyConfig = {};
 
   private indentLevel: number = 0;
@@ -198,7 +197,6 @@ export class AgencyGenerator {
   generate(program: AgencyProgram): {
     output: string;
   } {
-    this.program = program;
     // Pass 1: Collect all type aliases
     for (const node of program.nodes) {
       if (node.type === "typeAlias") {

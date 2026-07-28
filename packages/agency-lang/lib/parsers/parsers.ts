@@ -3083,18 +3083,6 @@ function advancePositionOver(base: Position, text: string): Position {
   };
 }
 
-/** Smallest-first kind inference over a literal body: a lone expression,
- *  else a statement list, else a program. Each attempt must consume the
- *  whole body. EXPORTED and shared with the runtime constructor
- *  (__codeLiteral), so compile-time and runtime reconstruction cannot
- *  diverge by drift.
- *
- *  Each attempt runs in `runNested` — its own input string, rightmost
- *  record, and memo caches, restored on exit — with `basePosition` set
- *  so spans AND error messages come out in enclosing-file coordinates.
- *  `base` is passed in USER coordinates (template offset already
- *  subtracted), and this file's own template offset is zeroed around the
- *  nested parses so withLoc does not subtract it a second time. */
 /**
  * Run one kind attempt, treating a throw as a non-match.
  *
@@ -3126,6 +3114,18 @@ function tryAttempt<T>(run: () => ParserResult<T>): ParserResult<T> {
   }
 }
 
+/** Smallest-first kind inference over a literal body: a lone expression,
+ *  else a statement list, else a program. Each attempt must consume the
+ *  whole body. EXPORTED and shared with the runtime constructor
+ *  (__codeLiteral), so compile-time and runtime reconstruction cannot
+ *  diverge by drift.
+ *
+ *  Each attempt runs in `runNested` — its own input string, rightmost
+ *  record, and memo caches, restored on exit — with `basePosition` set
+ *  so spans AND error messages come out in enclosing-file coordinates.
+ *  `base` is passed in USER coordinates (template offset already
+ *  subtracted), and this file's own template offset is zeroed around the
+ *  nested parses so withLoc does not subtract it a second time. */
 export function parseCodeLiteralBody(body: string, base?: Position): ParsedLiteralBody {
   const sentineled = replaceBlankLines(body);
   // Strip whitespace AND blank-line sentinels: a sentinel is not JS

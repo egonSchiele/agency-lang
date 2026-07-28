@@ -140,6 +140,26 @@ describe("declarations are not legal in a body", () => {
   }
 });
 
+describe("known limitation: a keyword and a call on separate lines", () => {
+  it("declines `node` on one line and a call on the next, which parsed before", () => {
+    // ACCEPTED REGRESSION, pinned so a future probe change that un-declines
+    // it is a deliberate decision rather than an accident.
+    //
+    // Here `node` is an ordinary variable and `helper()` an ordinary call,
+    // and this file compiles on main. The probe's `many1(space)` matches a
+    // newline — the same whitespace the real declaration grammar accepts —
+    // so keyword-newline-name-paren is declined exactly like the one-line
+    // form. That text is indistinguishable from the bug being fixed, and
+    // anyone writing it almost certainly meant a declaration.
+    const source =
+      "def helper(): number {\n  return 1\n}\n\nnode main() {\n  const node = 1\n  node\n  helper()\n}\n";
+    const result = parseAgency(source, {}, false);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.message).toContain("only legal at the top level of a file");
+  });
+});
+
 describe("the body-declaration message reaches a whole-file parse", () => {
   // At this level, not `bodyParser`: a block parser wraps its body in
   // tarsec's `parseError`, which THROWS its own generic message over

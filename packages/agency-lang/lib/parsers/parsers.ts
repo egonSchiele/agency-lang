@@ -2609,8 +2609,32 @@ const bracketParser: Parser<boolean> = or(
   map(char("["), () => false),
 );
 
-/** True when the current parse position sits just after a line break,
- *  looking back across spaces and tabs only.
+/** Offsets that begin a line's content: marks[i] is 1 when source[i] is
+ *  the first character on its line that is not a space or tab. Built in
+ *  ONE pass per parse input and cached by string identity, so the
+ *  boundary check below never re-scans text the parser already
+ *  consumed. */
+let markedSource: string | null = null;
+let lineStartMarks: Uint8Array | null = null;
+
+function lineContentStarts(source: string): Uint8Array {
+  const marks = new Uint8Array(source.length);
+  let atLineStart = true;
+  for (let i = 0; i < source.length; i++) {
+    const c = source.charCodeAt(i);
+    if (c === 10 || c === 13) {
+      atLineStart = true;
+    } else if (atLineStart && c !== 32 && c !== 9) {
+      marks[i] = 1;
+      atLineStart = false;
+    }
+  }
+  return marks;
+}
+
+/** True when the chain element about to be parsed sits at the start of
+ *  its own line (looking past indentation) — meaning the expression it
+ *  would extend ended on the PREVIOUS line.
  *
  *  A bracket chain element (`[i]`, `[a:b]`) must not continue an
  *  expression across a newline. Expression parsers (function calls in
@@ -2627,17 +2651,26 @@ const bracketParser: Parser<boolean> = or(
  *  aligns the two. Dot-method chains are deliberately untouched: a
  *  fluent `.method()` on its own line is an established style; a bare
  *  `[i]` on its own line is an array literal or a pattern, never an
- *  intended index. */
-function newlineBeforePosition(input: string): boolean {
+ *  intended index.
+ *
+ *  Cost: chain elements are attempted after every value access, so the
+ *  common path here must be a single character test. Only when a
+ *  bracket is actually next (`[` or `?.[`) does this consult the marks
+ *  table — one array read against the offset, no text scanning. */
+function bracketStartsOwnLine(input: string): boolean {
+  const c = input.charCodeAt(0);
+  if (c !== 91 /* [ */ && c !== 63 /* ? of ?.[ */) return false;
   const full = getInputStr();
-  if (!full || input.length >= full.length) return false;
-  let i = full.length - input.length - 1;
-  while (i >= 0 && (full[i] === " " || full[i] === "\t")) i--;
-  return i >= 0 && full[i] === "\n";
+  if (!full || input.length > full.length) return false;
+  if (full !== markedSource) {
+    markedSource = full;
+    lineStartMarks = lineContentStarts(full);
+  }
+  return lineStartMarks![full.length - input.length] === 1;
 }
 
 const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
-  if (newlineBeforePosition(input)) {
+  if (bracketStartsOwnLine(input)) {
     return failure("a slice cannot start on a new line", input);
   }
   const parser = seqC(
@@ -2661,7 +2694,7 @@ const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
 };
 
 const indexChainParser: Parser<AccessChainElement> = (input: string) => {
-  if (newlineBeforePosition(input)) {
+  if (bracketStartsOwnLine(input)) {
     return failure("an index cannot start on a new line", input);
   }
   const parser = seqC(

@@ -232,6 +232,19 @@ const statementRules: StatementRuleTable = {
     return { kind: "exit" };
   },
 
+  matchYield: (node, flow, env) => {
+    if (node.value) {
+      attachExpressionsToFlow(node.value as AgencyNode, flow, env);
+    }
+    // Same may-resume convention as returnStatement: lowering carries a
+    // returned interrupt into the yield untouched, and an approved interrupt
+    // falls through to the next statement.
+    if ((node.value as AgencyNode | undefined)?.type === "interruptStatement") {
+      return flow;
+    }
+    return { kind: "exit" };
+  },
+
   ifElse: (node, flow, env) => {
     attachExpressionsToFlow(node.condition as AgencyNode, flow, env);
     const facts = analyzeCondition(node.condition);
@@ -240,6 +253,13 @@ const statementRules: StatementRuleTable = {
     const elseEnd = node.elseBody
       ? buildFlowGraph(node.elseBody, elseStart, env)
       : elseStart;
+    // A matchExprId-tagged node is the root of a lowered expression match:
+    // every arm ends in a matchYield, so the merge below would report all
+    // branches exited — but a yield resumes AFTER the match, so post-match
+    // flow is the pre-match flow (same contract as the matchBlock rule below).
+    if (node.matchExprId !== undefined) {
+      return flow;
+    }
     // Post-guard narrowing falls out: a returning branch ends in `exit`, which
     // mergeFlows drops, leaving the surviving branch's (narrowed) flow.
     return mergeFlows([thenEnd, elseEnd]);

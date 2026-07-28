@@ -70,7 +70,7 @@
       "nodeName": "shellFreeWrite",
       "description": "A single literal redirected echo computes its content and writes it, with no shell. The `>` and `>>` rows differ only in mode, which is the difference between overwriting and appending. A variable TARGET is unrecognized entirely; a variable in the ARGUMENTS is not shell-free but is still recognized, and goes to bash raising std::write with no content \u2014 approval of the destination, not the bytes, because bash has not run yet.",
       "input": "",
-      "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"append\",[\"std::write\"]],[\"bash\",\"\",\"\",\"\",\"\",[\"std::bash\"]],[\"bash\",\"\",\"\",\"\",\"\",[\"std::write\"]]]",
+      "expectedOutput": "[[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"overwrite\",[\"std::write\"]],[\"write\",\"hi\\n\",\"out.txt\",\"/repo\",\"append\",[\"std::write\"]],[\"bash\",\"\",\"\",\"\",\"overwrite\",[\"std::bash\"]],[\"bash\",\"\",\"\",\"\",\"overwrite\",[\"std::write\"]]]",
       "evaluationCriteria": [
         {
           "type": "exact"
@@ -209,6 +209,17 @@
       "description": "A quoted redirect target containing no variable names a real file, so it maps rather than falling back.",
       "input": "",
       "expectedOutput": "[\"write\",\"hi\\n\",\"my file.txt\",\"/repo\",\"overwrite\",[\"std::write\"]]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "longOutputIsTruncated",
+      "description": "Output is capped, and truncation is marked rather than silent. The shell-free echo path truncates too, so a long echo and a long shell command return the same shape.",
+      "input": "",
+      "expectedOutput": "[2012,true]",
       "evaluationCriteria": [
         {
           "type": "exact"

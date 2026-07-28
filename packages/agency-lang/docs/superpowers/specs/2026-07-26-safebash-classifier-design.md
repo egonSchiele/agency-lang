@@ -2,8 +2,9 @@
 
 ## Status
 
-Design, not yet built. Rewritten 2026-07-27 around whole-string execution,
-after two rounds of
+**Implemented.** See
+[the implementation plan](../plans/2026-07-27-safebash-v3-classifier.md).
+Rewritten 2026-07-27 around whole-string execution, after two rounds of
 [review](./2026-07-26-safebash-classifier-design-REVIEW.md) and a design
 discussion that changed the execution model.
 
@@ -657,6 +658,31 @@ yet.
 > A relabeled effect is approval of the **question**, not of the bytes. It
 > says what kind of thing is about to happen and to what target, not what
 > the result will contain, because bash has not run.
+
+### Approving `std::write` can authorize a shell spawn
+
+This one is easy to miss, and policy authors should learn it here rather
+than from a test fixture.
+
+A redirect contributes `std::write` whatever the verb is. So a command
+that is *recognized* but not shell-free raises `std::write` alone — and
+then runs through bash:
+
+```
+echo $HOME > out.txt
+   the variable means this is not shell-free …
+   … but echo is recognized, and the redirect contributes std::write
+   → raises std::write ONLY, then runs the string in bash
+```
+
+That is within the rules, and the audit invariant holds: an effect was
+raised before the shell started. But it means **a policy that
+blanket-approves `std::write` is also approving shell execution of any
+recognized command carrying a redirect.**
+
+If that is not what you want, approve `std::write` conditionally on its
+payload rather than wholesale. The payload names the directory and the
+file, so a rule matching on `dir` is the natural way to bound it.
 
 ## What is weaker than v2
 

@@ -1,3 +1,4 @@
+import { remove } from "std::fs"
 import {
   bashParser,
   isRefused,
@@ -240,6 +241,7 @@ node appendReallyAppends() {
   safeBash("echo one > __safebash_append__.txt")
   safeBash("echo two >> __safebash_append__.txt")
   const back = read("__safebash_append__.txt") with approve
+  remove("__safebash_append__.txt") with approve
   if (back is failure(why)) {
     return "READ FAILED"
   }
@@ -255,4 +257,18 @@ node defaultCwdIsNeverEmpty() {
 node quotedRedirectTarget() {
   // A quoted target with no variable is a real filename, so it maps.
   return writePlanDetail("echo hi > \"my file.txt\"")
+}
+
+node longOutputIsTruncated() {
+  // The only new behavior with no coverage: deleting the cap, or the
+  // marker, survives every other test. A >2000-char literal goes through
+  // the shell-free path, which truncates too — so this also pins the
+  // consistency between that path and the bash path.
+  const chars = ["x" for i in range(2500)]
+  const long = chars.join("")
+  const result = safeBash("echo ${long}")
+  if (result is failure(why)) {
+    return "FAILED"
+  }
+  return [result.value.length, result.value.endsWith("\n[truncated]")]
 }

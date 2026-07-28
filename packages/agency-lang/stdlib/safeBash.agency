@@ -4,6 +4,7 @@
 // dropping them makes `raise std::git::status("...", { wrongField: x })`
 // typecheck clean. `std::write` is covered by the auto-imported prelude.
 import { gitStatus } from "std::git"
+import { WriteMode } from "std::index"
 import { bash } from "std::shell"
 
 import {
@@ -228,9 +229,12 @@ def literalTarget(word: Word): Result<string> {
   return literalWordText(word)
 }
 
-def writeMode(op: string): string {
+def writeMode(op: string): WriteMode {
   """
   `>` truncates, `>>` appends.
+
+  The return type is narrowed rather than `string` so an invalid mode
+  cannot reach the `std::write` payload or the `_write` call.
   """
   if (op == ">>") {
     return "append"
@@ -381,7 +385,7 @@ def emptyExecution(): Execution {
     content: "",
     filename: "",
     dir: "",
-    mode: "",
+    mode: "overwrite",
     reason: ""
   }
 }

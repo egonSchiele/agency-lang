@@ -11,6 +11,8 @@
   interrupts and the caller has already raised a narrower one. See the
   comment on `runBash`.
 */
+import { WriteMode } from "std::index"
+
 import { _write } from "agency-lang/stdlib-lib/builtins.js"
 import { _bash } from "agency-lang/stdlib-lib/shell.js"
 
@@ -33,7 +35,7 @@ export type WritePayload = {
   dir: string;
   filename: string;
   content: string;
-  mode: string
+  mode: WriteMode
 }
 
 export type GitDiffPayload = {
@@ -51,7 +53,7 @@ export type Execution = {
   content: string;
   filename: string;
   dir: string;
-  mode: string;
+  mode: WriteMode;
   reason: string
 }
 

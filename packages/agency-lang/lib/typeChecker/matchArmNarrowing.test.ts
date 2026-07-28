@@ -184,3 +184,120 @@ def f(w: Wrap): number {
     expect(errs).toEqual([]);
   });
 });
+
+// The union deliberately includes a variant WITHOUT the bound field (the
+// stdlib safeBash Effect shape) — binder typing must pick the selected
+// variant, not a structural "some variant that has the field".
+const BINDER_HEAD = `
+type Ev =
+  | { name: "bare" }
+  | { name: "write"; payload: { dir: string; mode: number } }
+  | { name: "log"; payload: { cwd: string; ref: string } }
+def wantString(s: string): string { return s }`;
+
+describe("binder typing from lowered pattern matches (pinned)", () => {
+  it("a binder takes the selected variant's field type", () => {
+    const errs = hardErrors(`${BINDER_HEAD}
+def f(e: Ev): string {
+  return match(e) {
+    { name: "log", payload } => wantString(payload.ref)
+    _ => "x"
+  }
+}
+node main() {}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("reading another variant's field off the binder is an error", () => {
+    const errs = hardErrors(`${BINDER_HEAD}
+def f(e: Ev): string {
+  return match(e) {
+    { name: "log", payload } => wantString(payload.dir)
+    _ => "x"
+  }
+}
+node main() {}`);
+    expect(errs.some((m) => /'dir' does not exist/i.test(m))).toBe(true);
+  });
+});
+
+const SCRUT_HEAD = `
+type Na = { tag: "a", s: string }
+type Nb = { tag: "b", n: number }
+type Nu = Na | Nb
+type Box = { inner: Nu }
+def onlyA(a: Na): string { return a.s }`;
+
+describe("bare-variable scrutinee narrows inside pattern arms (Gap A)", () => {
+  it("the arm body sees the narrowed scrutinee", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def f(u: Nu): string {
+  return match(u) {
+    { tag: "a" } => onlyA(u)
+    _ => "y"
+  }
+}
+node main() {}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("a wildcard arm still narrows nothing", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def f(u: Nu): string {
+  return match(u) {
+    { tag: "b" } => "y"
+    _ => onlyA(u)
+  }
+}
+node main() {}`);
+    expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
+  });
+
+  it("reassignment inside the arm invalidates the narrowing", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def f(u: Nu): string {
+  let v: Nu = u
+  return match(v) {
+    { tag: "a" } => {
+      v = { tag: "b", n: 1 }
+      return onlyA(v)
+    }
+    _ => "y"
+  }
+}
+node main() {}`);
+    expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
+  });
+
+  it("a member-path scrutinee is out of scope (documented limitation)", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def f(b: Box): string {
+  return match(b.inner) {
+    { tag: "a" } => onlyA(b.inner)
+    _ => "y"
+  }
+}
+node main() {}`);
+    expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
+  });
+
+  // An arm-body redeclare of the scrutinee name is treated as an assignment to
+  // the same variable (the checker types it against the outer declaration), so
+  // it invalidates the arm's narrowing — the read after it sees the full
+  // union. The runtime half of this case is tests/agency/match-scrutinee-shadow.
+  it("an arm-body redeclare of the scrutinee name invalidates the narrowing", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def f(u: Nu): string {
+  return match(u) {
+    { tag: "a", s } => {
+      const u: Nu = { tag: "b", n: 1 }
+      print(u)
+      return onlyA(u)
+    }
+    _ => "y"
+  }
+}
+node main() {}`);
+    expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
+  });
+});

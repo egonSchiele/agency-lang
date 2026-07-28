@@ -476,7 +476,7 @@ class PatternLowerer {
       // checker can find the owning match for exhaustiveness / union typing.
       ...(matchExprId !== undefined ? { matchExprId } : {}),
     };
-    const scrutineeRef = varRef(scrutineeName, node.loc);
+    const scrutineeRef = this.narrowableScrutineeRef(node.expression, scrutineeName, node.loc);
 
     const ifChain = this.buildIfChainFromArms(cases, scrutineeRef, node.loc);
     if (!ifChain) return [scrutineeAssign];
@@ -485,6 +485,26 @@ class PatternLowerer {
     const taggedChain: IfElse =
       matchExprId !== undefined ? { ...ifChain, matchExprId } : ifChain;
     return [scrutineeAssign, taggedChain];
+  }
+
+  /** The reference the per-arm conditions and binder reads test against: the
+   *  ORIGINAL variable for a bare-variable scrutinee, so narrowing lands on
+   *  the name the arm bodies reference; otherwise the `__scrutinee` temp.
+   *  An arm body that rebinds the name cannot corrupt the substituted reads:
+   *  they all run before any user statement (conditions precede the body,
+   *  binder assignments are prepended to it — see `foldArms`) and the runner
+   *  memoizes the chosen branch, so nothing re-reads the slot after user code
+   *  writes it. The `null` guard: `null` parses as a variableName (value
+   *  "null" — the quirk narrowing.ts:230 guards) and is not a reference. */
+  private narrowableScrutineeRef(
+    scrutinee: MatchBlock["expression"],
+    scrutineeName: string,
+    loc: SourceLocation | undefined,
+  ): Expression {
+    if (scrutinee.type !== "variableName" || scrutinee.value === "null") {
+      return varRef(scrutineeName, loc);
+    }
+    return varRef(scrutinee.value, scrutinee.loc);
   }
 
   /**

@@ -433,38 +433,3 @@ Where/how is this enforced?
   |]
 ```
 
-Match arms do not narrow the scrutinee or the bound fields of a
-discriminated union, so `if` chains can typecheck where the equivalent
-match cannot. Found in the safeBash match refactor:
-
-- `{ tag: "simpleCommand" } => [command]` types `command` as the full
-  union, where `if (command.tag == "simpleCommand") { return [command] }`
-  narrows.
-- `{ name: "std::git::log", payload } => ...` types `payload` from the
-  WRONG variant (it picked std::write's payload), so the arm body fails
-  to typecheck; `if (effect.name == "std::git::log")` narrows
-  `effect.payload` correctly.
-
-Exhaustiveness (AG5002) works well; arm narrowing is the missing half.
-safeBash's `raiseOne` and `flattenOne` are the motivating cases — both
-carry comments saying they want to be matches when this lands.
----
-
-Flow narrowing does not reach inside a match arm block. The identical
-guard-then-access shape typechecks at function scope but fails inside an
-arm (found in safeBash, CI-only because the fixture typecheck test is
-what catches it):
-
-```
-"git" => {
-  const git = literalArgs(command) |> gitEffects.partial(flags: flags, cwd: cwd)
-  if (git is failure(why)) {
-    return failure(why)
-  }
-  return success([...git.value, ...redirect.value])   // AG2008: git not narrowed
-}
-```
-
-Workaround: match with result patterns (success(v) => ...), which bind
-the value and need no narrowing. Same family as the arm-narrowing gap
-above.

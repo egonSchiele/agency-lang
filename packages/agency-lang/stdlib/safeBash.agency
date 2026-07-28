@@ -286,16 +286,11 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
       // Both links can fail, which is what earns the pipe. Appending the
       // redirect contribution cannot, so it stays inline rather than
       // becoming a third link that pretends it could.
-      // Result patterns rather than an `is failure` guard: flow narrowing
-      // does not reach inside a match arm block, so `git.value` after a
-      // guard fails to typecheck here even though the identical shape
-      // typechecks at function scope. The patterns bind the value
-      // directly and need no narrowing.
       const git: Result<Effect[]> = literalArgs(command) |> gitEffects.partial(flags: flags, cwd: cwd)
-      return match(git) {
-        success(effects) => success([...effects, ...redirect.value])
-        failure(why) => failure(why)
+      if (git is failure(why)) {
+        return failure(why)
       }
+      return success([...git.value, ...redirect.value])
     }
     _ => failure("no rule for `${name.text}`")
   }
@@ -414,17 +409,12 @@ def flattenCommands(commands: Command[]): SimpleCommand[] {
 }
 
 def flattenOne(command: Command): SimpleCommand[] {
-  // The simple case is an `if` rather than a match arm because match arms
-  // do not narrow the scrutinee — `[command]` only types as
-  // SimpleCommand[] under `if` narrowing. The match over what remains is
-  // exhaustive with no catch-all, so a fifth command shape becomes a type
-  // error here instead of silently flattening to nothing — and this feeds
-  // the refuse wall, where silently-empty is the one result that must
-  // never happen.
-  if (command.tag == "simpleCommand") {
-    return [command]
-  }
+  // Exhaustive with no catch-all, so a fifth command shape becomes a type
+  // error here instead of silently flattening to nothing — this feeds the
+  // refuse wall, where silently-empty is the one result that must never
+  // happen.
   return match(command) {
+    { tag: "simpleCommand" } => [command]
     { tag: "and", left, right } => [...flattenOne(left), ...flattenOne(right)]
     { tag: "or", left, right } => [...flattenOne(left), ...flattenOne(right)]
     { tag: "parens", command as inner } => flattenOne(inner)
@@ -865,23 +855,17 @@ export def safeBash(
     return failure(why)
   }
 
-  // The write case is an `if` rather than a match arm for the same
-  // reason as `flattenOne`: match arms do not narrow the scrutinee, and
-  // rebuilding a WriteExec from bound fields would silently drop any
-  // field the type gains later. `if` narrowing passes the value through
-  // whole.
-  if (exec.kind == "write") {
-    return runWrite(exec)
-  }
-
   // Echo output is truncated like every other path: a long echo returning
   // in full while a long `ls` came back capped would be exactly the
   // distinguishability this design exists to remove. For bash, `planFor`
   // already decided which text to run — rebuilt when it asked narrow
   // questions, original when it asked the broad one. There is no fallback
   // here: choosing the original AFTER raising narrow effects would break
-  // the design's first hard rule.
+  // the design's first hard rule. The write arm passes the narrowed exec
+  // through whole, so a field the type gains later cannot be silently
+  // dropped by a rebuild.
   return match(exec) {
+    { kind: "write" } => runWrite(exec)
     { kind: "echo", content } => success(truncate(content))
     { kind: "bash", command as text } => runBash(text, dir)
     // Unreachable — the early return above already handled refusal. The

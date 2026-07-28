@@ -98,6 +98,50 @@ describe("agencyGenerator - match block arm printing", () => {
         "}",
       ].join("\n"),
     ],
+    // A raise is a STATEMENT the single-statement arm grammar does not
+    // accept, so its block must survive formatting — fmt used to collapse
+    // it into `=> raise ...`, which does not re-parse (#708).
+    [
+      "raise-statement arm keeps its block",
+      [
+        "node main() {",
+        "  match(x) {",
+        '    "a" => {',
+        '      raise("careful")',
+        "    }",
+        "    _ => 0",
+        "  }",
+        "}",
+      ].join("\n"),
+    ],
+    [
+      "if-statement arm keeps its block",
+      [
+        "node main() {",
+        "  match(x) {",
+        '    "a" => {',
+        "      if (y) {",
+        '        print("hi")',
+        "      }",
+        "    }",
+        "    _ => 0",
+        "  }",
+        "}",
+      ].join("\n"),
+    ],
+    // The interrupt EXPRESSION form shares the raise statement's node
+    // type but IS accepted inline; it must keep collapsing.
+    [
+      "interrupt-expression arm stays inline",
+      [
+        "node main() {",
+        "  match(x) {",
+        '    "a" => interrupt("ask")',
+        "    _ => 0",
+        "  }",
+        "}",
+      ].join("\n"),
+    ],
   ])("round-trips: %s", (_description, input) => {
     const formatted = formatSource(input + "\n");
     expect(formatted).toBe(input.trimEnd() + "\n");

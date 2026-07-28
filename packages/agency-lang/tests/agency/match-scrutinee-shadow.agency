@@ -1,0 +1,22 @@
+type Sa = { tag: "a"; s: string }
+type Sb = { tag: "b"; n: number }
+type Su = Sa | Sb
+
+def pick(u: Su): string {
+  return match(u) {
+    { tag: "a", s } => {
+      const u: Su = { tag: "b", n: 1 }
+      print(u)
+      return s
+    }
+    _ => "other"
+  }
+}
+
+node shadowedArm() {
+  return pick({ tag: "a", s: "hi" })
+}
+
+node otherArm() {
+  return pick({ tag: "b", n: 2 })
+}

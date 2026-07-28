@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "shadowedArm",
+      "description": "an arm that redeclares the scrutinee name still binds and dispatches correctly",
+      "input": "",
+      "expectedOutput": "\"hi\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "otherArm",
+      "description": "the non-matching arm still dispatches past the shadowing arm",
+      "input": "",
+      "expectedOutput": "\"other\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

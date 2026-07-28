@@ -288,7 +288,7 @@ __stack.locals.__scrutinee_7 = __stack.args.value;
       await runner.ifElse(5, [
 
   {
-    condition: async () => __eq(__stack.locals.__scrutinee_7, null),
+    condition: async () => __eq(__stack.args.value, null),
     body: async (runner) => {
 await runner.step(0, async (runner) => {
 __stack.locals.__armval_2 = `null`;
@@ -301,10 +301,10 @@ return;
   },
 
   {
-    condition: async () => __coarseTypeTest(__stack.locals.__scrutinee_7, "number"),
+    condition: async () => __coarseTypeTest(__stack.args.value, "number"),
     body: async (runner) => {
 await runner.step(2, async (runner) => {
-__stack.locals.n = __stack.locals.__scrutinee_7;
+__stack.locals.n = __stack.args.value;
             });
 await runner.step(3, async (runner) => {
 __stack.locals.__armval_3 = `number`;
@@ -317,10 +317,10 @@ return;
   },
 
   {
-    condition: async () => isSuccess(__validateType(__stack.locals.__scrutinee_7, Person)) && !__eq(__stack.locals.__scrutinee_7, null) && __coarseTypeTest(__stack.locals.__scrutinee_7, "object"),
+    condition: async () => isSuccess(__validateType(__stack.args.value, Person)) && !__eq(__stack.args.value, null) && __coarseTypeTest(__stack.args.value, "object"),
     body: async (runner) => {
 await runner.step(5, async (runner) => {
-__stack.locals.name = __stack.locals.__scrutinee_7.name;
+__stack.locals.name = __stack.args.value.name;
             });
 await runner.step(6, async (runner) => {
 __stack.locals.__armval_4 = `person: ${__stack.locals.name}`;
@@ -333,10 +333,10 @@ return;
   },
 
   {
-    condition: async () => isSuccess(__validateType(__stack.locals.__scrutinee_7, z.object({ "tag": z.string() }))),
+    condition: async () => isSuccess(__validateType(__stack.args.value, z.object({ "tag": z.string() }))),
     body: async (runner) => {
 await runner.step(8, async (runner) => {
-__stack.locals.p = __stack.locals.__scrutinee_7;
+__stack.locals.p = __stack.args.value;
             });
 await runner.step(9, async (runner) => {
 __stack.locals.__armval_5 = `tagged: ${__stack.locals.p.tag}`;

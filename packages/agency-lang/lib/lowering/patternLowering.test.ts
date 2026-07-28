@@ -454,10 +454,12 @@ describe("temp uniqueness", () => {
 
   it("emits a DISTINCT scrutinee node object per occurrence (flow-graph node identity)", () => {
     // The flow checker keys narrowing on AST-node identity, so each lowered
-    // reference to the `__scrutinee` temp (every arm's isSuccess/isFailure guard
-    // and .value/.error binding) MUST be its own node object. Sharing one node
+    // scrutinee reference (every arm's isSuccess/isFailure guard and
+    // .value/.error binding) MUST be its own node object. Sharing one node
     // collapsed all occurrences to a single flow position — see the match-over-
-    // Result regression in narrowing.test.ts.
+    // Result regression in narrowing.test.ts. For a bare-variable scrutinee
+    // those references target the original variable (narrowableScrutineeRef),
+    // so the collector tracks `r`, not the temp.
     const lowered = lower(
       `let r = success(1)\nmatch (r) {\n  success(v) => v\n  failure(e) => e\n}`,
     );
@@ -465,7 +467,7 @@ describe("temp uniqueness", () => {
     const collect = (o: unknown): void => {
       if (!o || typeof o !== "object") return;
       const node = o as Record<string, unknown>;
-      if (node.type === "variableName" && typeof node.value === "string" && node.value.startsWith("__scrutinee")) {
+      if (node.type === "variableName" && node.value === "r") {
         scrutNodes.push(node);
       }
       for (const k of Object.keys(node)) collect(node[k]);
@@ -663,7 +665,11 @@ describe("result patterns", () => {
       expect(lowered).toHaveLength(3);
       const scrutinee = lowered[1] as Assignment;
       expect(scrutinee.variableName).toMatch(/^__scrutinee_/);
-      const scrutineeName = scrutinee.variableName;
+      // Bare-variable scrutinee: conditions and binder reads target the
+      // ORIGINAL variable so narrowing lands on the name arm bodies use
+      // (narrowableScrutineeRef). The temp above still exists — it carries
+      // matchSource for exhaustiveness.
+      const scrutineeName = "r";
 
       const ifNode = lowered[2] as IfElse;
       expect(ifNode.type).toBe("ifElse");

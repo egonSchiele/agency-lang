@@ -83,6 +83,21 @@ argument. To keep them readable they are also deliberately flat: no `else if`,
 and a branch cannot itself be an `if ... then ... else`. For more than two cases,
 or nested conditions, use [`match`](/guide/pattern-matching).
 
+## Match expressions
+
+```ts
+const area = match(shape) {
+    { type: "circle", radius } => 3.14 * radius * radius
+    { type: "square", side } => side * side
+}
+```
+
+Match expressions are like switch statements, but more powerful: they have exhaustiveness checking and great support for pattern matching.
+
+Match expressions are covered in the [section on match expressions](/guide/match-expressions).
+
+Pattern matching is covered in the [section on pattern matching](/guide/pattern-matching).
+
 ## Type annotations
 
 You can add type annotations, just like TypeScript.

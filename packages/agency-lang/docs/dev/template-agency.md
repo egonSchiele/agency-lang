@@ -201,3 +201,14 @@ Needed **no code**. `Code` is plain JSON data, and interrupt checkpoints carry i
 - Tarsec's `parseError` throws past committed failures; the committed failure survives in `getParseState().committedFailure` and both `parseAgency` failure exits prefer it. If a directive literal error ever regresses to a generic grammar message, look there first.
 - In test fixtures, a host string containing `${x}` interpolates HOST scope (escape as `\${x}`); the same text inside a literal body belongs to the generated program and needs no escape. The `literalInterpolationPassthrough` fixture demonstrates both sides.
 - `BLANK_LINE_SENTINEL` characters replaced newlines, so any position math over stripped prefixes must count them as line breaks (`advancePositionOver`).
+
+
+## What is checked, and when
+
+Three checkpoints, from weakest to strongest:
+
+1. **Template-check time.** A template is checkable on its own: `AG8002` catches unconstrained holes, and code after a hole that references a name only a filler could introduce fails ordinary name resolution — the checker cannot see into a hole, so a template cannot depend on what a filler declares.
+2. **Fill time.** Sorts, fragment kinds, identifier validity, and primitive types are validated as each hole is filled — `fill(t, { count: "many" })` fails immediately when the hole expects a number. This is validation, not a full type check.
+3. **Run time.** The completed program goes through the ordinary compile pipeline, in full, when you hand it to `runCode`. Anything the earlier checkpoints could not see is caught here.
+
+And one refusal: a program that still has holes cannot compile or run (`AG8001` names every unfilled hole).

@@ -1,6 +1,7 @@
-import { now } from "std::date"
+import { callFunc } from "greeter.agency"
+
+$( callFunc )
+
 node main() {
-  const start = now()
-  sleep(4)
-  print(elapsedTime(since: start))
+
 }

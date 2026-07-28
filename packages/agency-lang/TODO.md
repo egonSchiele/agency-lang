@@ -288,3 +288,132 @@ fails:
 ```
 ["echo", (...args):PrintArg[], ">", filename] => writeAction(filename, ".", joinWords(args), "overwrite")
 ```
+
+---
+
+Currently users can use the same var many times when destructuring:
+
+```
+const arr = [0, 1, 2]
+
+  match(arr) {
+    [x, x, x] => print("Matched array with three elements: x=${x}")
+    _ => print("Did not match the array")
+  }
+```
+
+---
+
+
+custom validators can return a new value. If validating using the bang syntax, the new value gets assigned. During typechecking in a pattern match, however, it does not:
+
+```ts
+// negative numbers get coerced to 1
+def nonNegative(x: number): Result {
+  if (x < 0) {
+    return success(1)
+  }
+  return success(x)
+}
+
+type Person = {
+  name: string;
+
+  @validate(nonNegative)
+  age: number
+}
+
+node main() {
+  const thing: any = {
+    name: "Alice",
+    // should be coerced to 1 by the validator
+    age: -50
+  }
+
+  match(thing) {
+    // prints age: -50
+    p: Person => print("Matched a Person: ${p.name}, age ${p.age}")
+    _ => print("Not a Person")
+  }
+}
+```
+
+---
+
+Can we get this to fail with a compile-time error instead of run time?
+
+This particular example doesn't even fail at `fill`, it fails at `runCode` because the typechecker doesn't know that the `age` property is required. It should fail at `fill` because the `age` property is required.
+
+```ts
+import { fill, toSource, runCode, holesOf } from "std::agency"
+
+static const template = [|
+  type Person = {
+    name: string;
+    age: number
+  }
+
+  node main(): string {
+    const person: Person = #person
+    return llm(
+      "Write a 10 word story featuring a person named ${person.name} of age ${person.age}.",
+    )
+  }
+|]
+
+node main() {
+  //printJSON(holesOf(template))
+  const filled = fill(template, {
+    person: {
+      name: "Alice"
+    }
+  })
+  if (isFailure(filled)) {
+    print("fill failed: ${filled.error}")
+  } else {
+    const res = runCode(toSource(filled.value)) with approve
+    printJSON(res)
+  }
+}
+```
+
+---
+
+This isn't supposed to work, but it does:
+
+```ts
+
+static const mainNode = [|
+  node main(): string {
+  #mainBody
+    print(res)
+  }
+|]
+
+static const llmCall = [|
+  const res = llm(#prompt)
+|]
+```
+
+---
+
+Keep getting
+
+```
+error AG8005: `callFunc` must be imported from another file to be used in a splice. A generator cannot be defined in the file that splices it, because it has to be compiled first.
+```
+
+Even though the func is in another file
+
+---
+
+Where/how is this enforced?
+
+```
+1. **A generator may import only Agency code.** That means the standard library and other `.agency` files in your project. No npm packages, and nothing they reach either.
+```
+
+---
+
+- allow ability to respond to interrupts during compilation, so generators can use those functions?
+- similarly, Generated declarations cannot be exported, potentially something to relax

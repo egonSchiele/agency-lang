@@ -64,6 +64,7 @@ export default defineConfig({
             { text: "Error Handling", link: "/guide/error-handling" },
             { text: "Blocks", link: "/guide/blocks" },
             { text: "List Comprehensions", link: "/guide/comprehensions" },
+            { text: "Match Expressions", link: "/guide/match-expressions" },
             { text: "Pattern Matching", link: "/guide/pattern-matching" },
             { text: "Concurrency", link: "/guide/concurrency" },
             {
@@ -83,7 +84,6 @@ export default defineConfig({
               text: "Compiling and Running Code",
               link: "/guide/compiling-and-running",
             },
-            { text: "Template Agency", link: "/guide/templates" },
             { text: "Agency Config File", link: "/guide/agency-config-file" },
             { text: "Testing", link: "/guide/testing" },
           ],
@@ -161,8 +161,10 @@ export default defineConfig({
               text: "Value-Parameterized Types",
               link: "/guide/value-parameterized-types",
             },
-            { text: "Memory", link: "/guide/memory" },
             { text: "Tags and Redaction", link: "/guide/tags" },
+            { text: "Template Agency", link: "/guide/template-agency" },
+            { text: "Splices", link: "/guide/splices" },
+            { text: "Memory", link: "/guide/memory" },
           ],
         },
         {

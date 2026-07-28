@@ -9,6 +9,11 @@ export type MatchBlockCase = {
   caseValue: MatchPattern | DefaultCase;
   guard?: Expression;
   body: AgencyNode[];
+  /** Set when the author wrote the arm body as a `{ ... }` block. The
+   *  formatter preserves that choice instead of collapsing one-statement
+   *  blocks to inline arms. Absent for inline arms and for cases built
+   *  programmatically. */
+  blockBody?: true;
 };
 
 export type MatchBlock = BaseNode & {

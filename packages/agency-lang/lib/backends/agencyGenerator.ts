@@ -22,6 +22,7 @@ import {
   TypeAlias,
   VariableType,
   formatUnitLiteral,
+  isExpressionNode,
 } from "../types.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
@@ -141,6 +142,19 @@ export function escapeStringText(s: string, delim: '"' | "'" | "`"): string {
 function escapeMultiLineText(s: string): string {
   return s.split("${").join("\\${");
 }
+
+/** Statement types the single-statement arm grammar accepts in addition
+ *  to expressions — matchBlockParserCase's inline alternation. */
+const INLINE_ARM_STATEMENT_TYPES: readonly string[] = [
+  "returnStatement",
+  "gotoStatement",
+  "assignment",
+];
+
+/** Node types that never print inline even though they are expressions:
+ *  a nested match keeps block form so it re-parses as a match, not an
+ *  arm body. */
+const NEVER_INLINE_ARM_TYPES: readonly string[] = ["matchBlock"];
 
 export class AgencyGenerator {
   protected graphNodes: GraphNodeDefinition[] = [];
@@ -1438,14 +1452,7 @@ export class AgencyGenerator {
         ? ` if (${this.processNode(caseNode.guard).trim()})`
         : "";
 
-      // A one-statement body prints inline UNLESS the statement is itself a
-      // matchBlock: the single-statement arm grammar only accepts
-      // return/assignment/expression, so a nested match statement must print
-      // in block form to re-parse.
-      if (
-        caseNode.body.length === 1 &&
-        caseNode.body[0].type !== "matchBlock"
-      ) {
+      if (this.armPrintsInline(caseNode)) {
         const stmt = caseNode.body[0];
         let stmtCode = this.processNode(stmt).trim();
         // `=> { ... }` is always parsed as a block, never an object literal
@@ -1470,6 +1477,41 @@ export class AgencyGenerator {
     result += this.indentStr(`}`);
 
     return result;
+  }
+
+  /** Whether a one-statement arm body may print inline (`=> stmt`)
+   *  rather than as a `{ ... }` block.
+   *
+   *  The author's form wins: an arm written as a block prints as a block
+   *  (`blockBody`, set by the parser), an arm written inline prints
+   *  inline. The shape tests below only decide for cases with NO
+   *  recorded form — ASTs built programmatically — where inline is only
+   *  safe for the shapes the single-statement arm grammar accepts;
+   *  anything else must take block form or the printed arm will not
+   *  re-parse (#708). */
+  protected armPrintsInline(caseNode: {
+    body: AgencyNode[];
+    blockBody?: true;
+  }): boolean {
+    if (caseNode.body.length !== 1) {
+      return false;
+    }
+    if (caseNode.blockBody === true) {
+      return false;
+    }
+    const stmt = caseNode.body[0];
+    if (NEVER_INLINE_ARM_TYPES.includes(stmt.type)) {
+      return false;
+    }
+    // A raise-form interrupt is a statement, even though the interrupt
+    // EXPRESSION shares its `interruptStatement` node type.
+    if (stmt.type === "interruptStatement" && (stmt as InterruptStatement).viaRaise) {
+      return false;
+    }
+    if (INLINE_ARM_STATEMENT_TYPES.includes(stmt.type)) {
+      return true;
+    }
+    return isExpressionNode(stmt);
   }
 
   protected processForLoop(node: ForLoop): string {

@@ -3925,7 +3925,9 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
     optionalSpaces,
     capture(
       or(
-        matchArmBlockParser,
+        // A block body is remembered as such (`blockBody`), so the
+        // formatter can preserve the author's choice of form.
+        map(matchArmBlockParser, (body: AgencyNode[]) => ({ body, block: true })),
         // `not(char("{"))` prevents falling through to `exprParser`'s
         // object-literal path when `matchArmBlockParser` fails to parse the
         // brace's contents as statements — otherwise `=> { label: "hi" }`
@@ -3939,15 +3941,27 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
               "n",
             ),
           ),
-          (r: { n: AgencyNode }) => [r.n],
+          (r: { n: AgencyNode }) => ({ body: [r.n], block: false }),
         ),
       ),
-      "body",
+      "bodyForm",
     ),
     optionalSemicolon,
     optionalSpacesOrNewline,
   );
-  return parser(input) as ParserResult<MatchBlockCase>;
+  const result = parser(input) as ParserResult<
+    Omit<MatchBlockCase, "body"> & { bodyForm: { body: AgencyNode[]; block: boolean } }
+  >;
+  if (!result.success) return result;
+  const { bodyForm, ...caseRest } = result.result;
+  return success(
+    {
+      ...caseRest,
+      body: bodyForm.body,
+      ...(bodyForm.block && { blockBody: true as const }),
+    },
+    result.rest,
+  );
 };
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);

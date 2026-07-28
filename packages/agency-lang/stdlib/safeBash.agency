@@ -912,62 +912,64 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
   declares them all in its `raises` clause: it is how an agent author
   discovers which handlers to write.
 
-  This stays an `if` chain rather than a match: match arms do not narrow
-  the union, so a `payload` bound in a `{ name: "std::git::log" }` arm
-  does not get that variant's payload type and the raise sites stop
-  typechecking. `if` narrowing on `effect.name` does. When arm narrowing
-  lands, this is the first candidate to become an exhaustive match, which
-  would also turn the trailing runtime failure into a compile error.
+  The match is on `effect.name`, not on `effect` with object patterns:
+  matching a member path narrows its siblings per arm, so `effect.payload`
+  has the right variant type in each body — the same idiom handlers use
+  on `data.effect`. It is exhaustive with no catch-all, so a new Effect
+  variant without a raise site is a type error here, not a runtime
+  failure.
 
   Every payload carries the full command string. A human approving a git
   read inside `echo hi; git status` needs to see the whole thing, not the
   fragment.
   """
-  if (effect.name == "std::bash") {
-    raise std::bash("Are you sure you want to run this shell command?", {
-      command: fullCommand,
-      cwd: cwd,
-      timeout: 0,
-      stdin: ""
-    })
-    return success(null)
+  return match(effect.name) {
+    "std::bash" => {
+      raise std::bash("Are you sure you want to run this shell command?", {
+        command: fullCommand,
+        cwd: cwd,
+        timeout: 0,
+        stdin: ""
+      })
+      return success(null)
+    }
+    "std::write" => {
+      raise std::write("Are you sure you want to write to this file?", {
+        dir: effect.payload.dir,
+        filename: effect.payload.filename,
+        content: effect.payload.content,
+        mode: effect.payload.mode,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::status" => {
+      raise std::git::status("Show git status", {
+        cwd: effect.payload.cwd,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::log" => {
+      raise std::git::log("Show git log", {
+        cwd: effect.payload.cwd,
+        ref: effect.payload.ref,
+        path: effect.payload.path,
+        command: fullCommand
+      })
+      return success(null)
+    }
+    "std::git::diff" => {
+      raise std::git::diff("Show git diff", {
+        cwd: effect.payload.cwd,
+        ref: effect.payload.ref,
+        ref2: effect.payload.ref2,
+        staged: effect.payload.staged,
+        path: effect.payload.path,
+        command: fullCommand
+      })
+      return success(null)
+    }
   }
-  if (effect.name == "std::write") {
-    raise std::write("Are you sure you want to write to this file?", {
-      dir: effect.payload.dir,
-      filename: effect.payload.filename,
-      content: effect.payload.content,
-      mode: effect.payload.mode,
-      command: fullCommand
-    })
-    return success(null)
-  }
-  if (effect.name == "std::git::status") {
-    raise std::git::status("Show git status", {
-      cwd: effect.payload.cwd,
-      command: fullCommand
-    })
-    return success(null)
-  }
-  if (effect.name == "std::git::log") {
-    raise std::git::log("Show git log", {
-      cwd: effect.payload.cwd,
-      ref: effect.payload.ref,
-      path: effect.payload.path,
-      command: fullCommand
-    })
-    return success(null)
-  }
-  if (effect.name == "std::git::diff") {
-    raise std::git::diff("Show git diff", {
-      cwd: effect.payload.cwd,
-      ref: effect.payload.ref,
-      ref2: effect.payload.ref2,
-      staged: effect.payload.staged,
-      path: effect.payload.path,
-      command: fullCommand
-    })
-    return success(null)
-  }
-  return failure("no raise site for `${effect.name}`")
+  return success(null)
 }

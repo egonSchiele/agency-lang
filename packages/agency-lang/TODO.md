@@ -417,3 +417,18 @@ Where/how is this enforced?
 
 - allow ability to respond to interrupts during compilation, so generators can use those functions?
 - similarly, Generated declarations cannot be exported, potentially something to relax
+
+--
+
+`node main` gets funny formatting in a template:
+
+```ts
+  const template = [|
+    node
+    main() {
+      const topic = #topic
+      const res = llm("Research the topic: ${topic} and provide a summary of findings.")
+      return res
+    }
+  |]
+```

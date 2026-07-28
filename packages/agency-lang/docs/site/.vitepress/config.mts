@@ -212,6 +212,7 @@ export default defineConfig({
           items: [
             { text: "Hello World", link: "/examples/helloWorld/" },
             { text: "Layout Demo", link: "/examples/layoutDemo/" },
+            { text: "Generated Agent", link: "/examples/generatedAgent/" },
           ],
         },
       ],

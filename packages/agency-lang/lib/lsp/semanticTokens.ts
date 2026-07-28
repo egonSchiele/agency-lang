@@ -208,17 +208,16 @@ const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
 /**
  * Does this token paint the exact word it names?
  *
- * Two things make the answer no. A token can be STALE — computed from a
- * document older than the buffer it renders against, which is the
- * deliberate trade in DocumentStateCache — and land past the end of a
- * line that shrank. Or it can be SYNTHESIZED: lowering builds calls whose
- * names never appear in the source, like the `isFailure` behind
- * `x is failure(e)`, and length comes from that longer name.
+ * It can fail to for two reasons. The token may be STALE, computed
+ * against an older version of the document than the one being rendered.
+ * Or its name may be SYNTHESIZED: lowering turns `x is failure(e)` into
+ * a call to `isFailure` that keeps the loc of `failure`, and the token's
+ * length comes from the longer name.
  *
- * Dropping beats clamping. A clamped token paints whatever text now sits
- * at that position, which is a wrong color on a real word; a dropped one
- * leaves the grammar's color in place, and the grammar already colors
- * every word this drops.
+ * Either way, drop the token rather than trimming it to fit. A trimmed
+ * token paints a real word the wrong color; a dropped one leaves the
+ * grammar's color in place, and the grammar already colors every word
+ * this drops.
  */
 function paintsItsOwnName(token: Token, lines: string[] | null): boolean {
   if (lines === null) return true;
@@ -226,8 +225,11 @@ function paintsItsOwnName(token: Token, lines: string[] | null): boolean {
   if (line === undefined) return false;
   const end = token.col + token.length;
   if (line.slice(token.col, end) !== token.name) return false;
-  // Equality alone accepts a token that is a PREFIX of the word now at
-  // that position — `helper` against a freshly typed `helperTwo`.
+  // The word must also END where the token does, on both sides. Without
+  // this, `helper` matches inside a `helperTwo` the user has just typed,
+  // or inside an `xhelper` — both real once the buffer is a keystroke
+  // ahead of the state.
+  if (IDENTIFIER_CHAR.test(line[token.col - 1] ?? "")) return false;
   return !IDENTIFIER_CHAR.test(line[end] ?? "");
 }
 

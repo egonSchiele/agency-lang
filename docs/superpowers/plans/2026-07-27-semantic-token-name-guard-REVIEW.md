@@ -1,7 +1,6 @@
 # Review — Semantic Token Name Guard plan (2026-07-27)
 
-Plan reviewed: `/Users/adityabhargava/agency-lang/docs/superpowers/plans/2026-07-27-semantic-token-name-guard.md`
-(An identical copy sits at `/Users/adityabhargava/agency-lang/packages/agency-lang/2026-07-27-semantic-token-name-guard.md`. Two copies of the same plan will drift. Keep the one under `docs/superpowers/plans/` and delete the other.)
+Plan reviewed: `docs/superpowers/plans/2026-07-27-semantic-token-name-guard.md`
 
 **Overall:** the diagnosis is right, the fix is the right size, and the "drop rather than clamp" reasoning holds up. I verified every code claim in the plan against the files, and I ran the current encoder over 1105 Agency files to measure what the proposed guard would actually do. Three things need to change before this is executed. One of them makes Task 1's own tests fail at the step where the plan says they pass.
 

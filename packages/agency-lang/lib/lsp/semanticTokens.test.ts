@@ -327,7 +327,12 @@ describe("getSemanticTokens against synthesized names", () => {
   // becomes `_guard`, a comprehension becomes `map`. Length comes from
   // the name, so those tokens ran past the word they sat on.
 
-  /** Every token must cover exactly one whole identifier. */
+  /**
+   * Every token covers exactly one whole identifier. This states the
+   * invariant, but it says nothing about an empty list, so each caller
+   * also pins the exact tokens it expects — otherwise a guard that
+   * dropped EVERYTHING would pass every test here.
+   */
   function expectWholeWords(source: string): void {
     for (const token of tokensFor(source)) {
       expect(token.text).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/);
@@ -335,56 +340,69 @@ describe("getSemanticTokens against synthesized names", () => {
   }
 
   it("does not overrun the source word for `is failure(binder)`", () => {
-    expectWholeWords(
-      `node main() {\n  const r = pass()\n  if (r is failure(reason)) {\n    print(reason)\n  }\n}`,
-    );
+    const source = `node main() {\n  const r = pass()\n  if (r is failure(reason)) {\n    print(reason)\n  }\n}`;
+    expectWholeWords(source);
+    expect(textsFor(source)).toEqual(["pass", "print"]);
   });
 
   it("does not overrun the source word for `is success(binder)`", () => {
-    expectWholeWords(
-      `node main() {\n  const r = pass()\n  if (r is success(v)) {\n    print(v)\n  }\n}`,
-    );
+    const source = `node main() {\n  const r = pass()\n  if (r is success(v)) {\n    print(v)\n  }\n}`;
+    expectWholeWords(source);
+    expect(textsFor(source)).toEqual(["pass", "print"]);
   });
 
   it("does not paint the paren after `guard`", () => {
     // The biggest case by volume: `_guard` is six characters over the
     // five of `guard`, so the token used to swallow the `(`.
-    expectWholeWords(
-      `node main() {\n  const r = guard(cost: 1) {\n    print("hi")\n  }\n}`,
-    );
+    const source = `node main() {\n  const r = guard(cost: 1) {\n    print("hi")\n  }\n}`;
+    expectWholeWords(source);
+    expect(textsFor(source)).toEqual(["print"]);
   });
 
   it("does not paint the bracket of a comprehension", () => {
     // A comprehension lowers to `map`, hung on the loc of the WHOLE
-    // comprehension, so the token painted `[do`.
-    expectWholeWords(
-      `def double(x: number): number {\n  return x * 2\n}\n\nnode main() {\n  const xs = [1, 2]\n  const doubled = [double(x) for x in xs]\n  print(doubled)\n}`,
-    );
+    // comprehension, so the token painted `[do`. `double` is a genuine
+    // call INSIDE the lowered construct, so pinning it is what catches a
+    // guard that eats the comprehension whole.
+    const source = `def double(x: number): number {\n  return x * 2\n}\n\nnode main() {\n  const xs = [1, 2]\n  const doubled = [double(x) for x in xs]\n  print(doubled)\n}`;
+    expectWholeWords(source);
+    expect(textsFor(source)).toEqual(["double", "print"]);
   });
 
   it("emits no token at all for the object-rest helper", () => {
     // The worst case: the synthesized name is hung on the `if`
     // statement's own loc, so the token painted the `if` keyword.
     const source = `node main() {\n  const o = { a: 1, b: 2 }\n  if (o is { a, ...rest }) {\n    print(a)\n  }\n}`;
-    const onIfLine = tokensFor(source).filter((t) => t.line === 2);
-    expect(onIfLine).toEqual([]);
+    expect(tokensFor(source).filter((t) => t.line === 2)).toEqual([]);
+    expect(textsFor(source)).toEqual(["print"]);
   });
 
-  it("still colors the real calls around a lowered pattern", () => {
-    // The guard must drop the synthetic token WITHOUT taking the
-    // genuine ones with it, or the fix is just "emit nothing".
-    const source = `node main() {\n  const r = pass()\n  if (r is failure(reason)) {\n    print(reason)\n  }\n}`;
-    expect(textsFor(source)).toEqual(["pass", "print"]);
-  });
+  // A stale buffer, mid-edit: state says `helper` at a position where
+  // the user has since typed a LONGER word. The slice still matches the
+  // name, so a bare equality check would paint part of that longer word
+  // — the very failure this guard exists to stop. Both sides matter: the
+  // extra characters can land after the name or before it.
+  const RENAMED = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  helper()\n}`;
+
+  function tokensOnCallLine(after: string): DecodedToken[] {
+    const data = getSemanticTokens(stateFor(RENAMED), after).data;
+    return decodeTokens(data, after).filter((t) => t.line === 5);
+  }
 
   it("drops a token that is only a prefix of the word now at its position", () => {
-    // A stale buffer, mid-rename: state says `helper` at a position
-    // where the user has since typed `helperTwo`. The slice matches the
-    // name, so a bare equality check would paint the first six letters
-    // of a longer word — the very failure this guard exists to stop.
-    const before = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  helper()\n}`;
-    const after = before.replace("  helper()", "  helperTwo()");
-    const data = getSemanticTokens(stateFor(before), after).data;
-    expect(decodeTokens(data, after).filter((t) => t.line === 5)).toEqual([]);
+    expect(tokensOnCallLine(RENAMED.replace("  helper()", "  helperTwo()"))).toEqual([]);
+  });
+
+  it("drops a token that is only a suffix of the word now at its position", () => {
+    // One space deleted, one character inserted, so `helper` still
+    // starts at the recorded column — but it is now the tail of
+    // `xhelper`.
+    expect(tokensOnCallLine(RENAMED.replace("  helper()", " xhelper()"))).toEqual([]);
+  });
+
+  it("treats an underscore as part of the word", () => {
+    // `_` is a legal identifier character in Agency (LEGAL_IDENTIFIER in
+    // lib/parsers/parsers.ts), so `helper_two` is one word, not two.
+    expect(tokensOnCallLine(RENAMED.replace("  helper()", "  helper_two()"))).toEqual([]);
   });
 });

@@ -73,21 +73,70 @@ export type GitDiffPayload = {
 ### Execution
 
 What happens if every effect in the plan is approved.
+ *
+ * One variant per way a plan can be carried out, each carrying only the
+ * fields that way needs. The dispatch in `safeBash` matches over this
+ * union exhaustively, so adding a variant is a type error at the dispatch
+ * rather than a silent fall-through.
 
 ```ts
-/** What happens if every effect in the plan is approved. */
-export type Execution = {
-  kind: string;
-  command: string;
-  content: string;
+/** What happens if every effect in the plan is approved.
+ *
+ * One variant per way a plan can be carried out, each carrying only the
+ * fields that way needs. The dispatch in `safeBash` matches over this
+ * union exhaustively, so adding a variant is a type error at the dispatch
+ * rather than a silent fall-through. */
+export type Execution = BashExec | EchoExec | WriteExec | RefuseExec
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L55))
+
+### BashExec
+
+```ts
+export type BashExec = {
+  kind: "bash";
+  command: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L57))
+
+### EchoExec
+
+```ts
+export type EchoExec = {
+  kind: "echo";
+  content: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L62))
+
+### WriteExec
+
+```ts
+export type WriteExec = {
+  kind: "write";
   filename: string;
   dir: string;
-  mode: WriteMode;
+  content: string;
+  mode: WriteMode
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L67))
+
+### RefuseExec
+
+```ts
+export type RefuseExec = {
+  kind: "refuse";
   reason: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L75))
 
 ### Plan
 
@@ -101,7 +150,7 @@ export type Plan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L81))
 
 ## Constants
 
@@ -142,7 +191,7 @@ Run a command string through bash and return what it printed.
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L86))
 
 ### truncate
 
@@ -161,12 +210,12 @@ Cap output length. Raw output with no bound is a context-window hazard,
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L115))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L135))
 
 ### runWrite
 
 ```ts
-runWrite(exec: Execution): Result<string>
+runWrite(exec: WriteExec): Result<string>
 ```
 
 Perform the write a redirected echo asked for. Returns the empty string,
@@ -180,8 +229,8 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 | Name | Type | Default |
 |---|---|---|
-| exec | [Execution](#execution) |  |
+| exec | [WriteExec](#writeexec) |  |
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L126))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L146))

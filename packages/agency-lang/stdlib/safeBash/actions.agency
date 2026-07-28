@@ -46,14 +46,34 @@ export type GitDiffPayload = {
   path: string
 }
 
-/** What happens if every effect in the plan is approved. */
-export type Execution = {
-  kind: string;
-  command: string;
-  content: string;
+/** What happens if every effect in the plan is approved.
+ *
+ * One variant per way a plan can be carried out, each carrying only the
+ * fields that way needs. The dispatch in `safeBash` matches over this
+ * union exhaustively, so adding a variant is a type error at the dispatch
+ * rather than a silent fall-through. */
+export type Execution = BashExec | EchoExec | WriteExec | RefuseExec
+
+export type BashExec = {
+  kind: "bash";
+  command: string
+}
+
+export type EchoExec = {
+  kind: "echo";
+  content: string
+}
+
+export type WriteExec = {
+  kind: "write";
   filename: string;
   dir: string;
-  mode: WriteMode;
+  content: string;
+  mode: WriteMode
+}
+
+export type RefuseExec = {
+  kind: "refuse";
   reason: string
 }
 
@@ -123,7 +143,7 @@ export def truncate(text: string): string {
   return text[:MAX_STDOUT_LEN] + "\n[truncated]"
 }
 
-export def runWrite(exec: Execution): Result<string> {
+export def runWrite(exec: WriteExec): Result<string> {
   """
   Perform the write a redirected echo asked for. Returns the empty string,
   which is what bash's stdout for `echo hi > f` is.

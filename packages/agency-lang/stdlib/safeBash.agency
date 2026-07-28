@@ -10,7 +10,6 @@ import { bash } from "std::shell"
 import {
   Effect,
   Plan,
-  Execution,
   runBash,
   runWrite,
   truncate,
@@ -236,10 +235,10 @@ def writeMode(op: string): WriteMode {
   The return type is narrowed rather than `string` so an invalid mode
   cannot reach the `std::write` payload or the `_write` call.
   """
-  if (op == ">>") {
-    return "append"
+  return match(op) {
+    ">>" => "append"
+    _ => "overwrite"
   }
-  return "overwrite"
 }
 
 export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
@@ -275,35 +274,37 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
     return failure(why)
   }
 
-  if (name.text == "echo") {
-    // `echo` contributes nothing on its own, whatever its arguments. Bash
-    // runs it and expands anything in it, so `echo $HOME` and `echo -n hi`
-    // are both fine HERE — the flag and literal-argument restrictions
-    // belong to the shell-free path, which computes the output itself.
-    return success(redirect.value)
+  // `echo` contributes nothing on its own, whatever its arguments: bash
+  // runs it and expands anything in it, so `echo $HOME` and `echo -n hi`
+  // are both fine on this path. The flag and literal-argument restrictions
+  // belong to the shell-free path, which computes the output itself. Only
+  // the git arm reads the arguments as text — a quoted `echo "hi"` must
+  // not be demoted by a check that only git needs.
+  return match(name.text) {
+    "echo" => success(redirect.value)
+    "git" => {
+      // Both links can fail, which is what earns the pipe. Appending the
+      // redirect contribution cannot, so it stays inline rather than
+      // becoming a third link that pretends it could.
+      // Result patterns rather than an `is failure` guard: flow narrowing
+      // does not reach inside a match arm block, so `git.value` after a
+      // guard fails to typecheck here even though the identical shape
+      // typechecks at function scope. The patterns bind the value
+      // directly and need no narrowing.
+      const git: Result<Effect[]> = literalArgs(command) |> gitEffects.partial(flags: flags, cwd: cwd)
+      return match(git) {
+        success(effects) => success([...effects, ...redirect.value])
+        failure(why) => failure(why)
+      }
+    }
+    _ => failure("no rule for `${name.text}`")
   }
-
-  if (name.text != "git") {
-    return failure("no rule for `${name.text}`")
-  }
-  // Only the git rules need the arguments as text, so this runs AFTER the
-  // echo branch. Above it, a quoted `echo "hi"` would fail here and be
-  // demoted before the branch that says echo is fine whatever its
-  // arguments ever ran.
-  const args = literalArgs(command)
-  if (args is failure(why)) {
-    return failure(why)
-  }
-  const git = gitEffects(args.value, flags, cwd)
-  if (git is failure(why)) {
-    return failure(why)
-  }
-  return success([...git.value, ...redirect.value])
 }
 
 def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
   """
-  The four git reads we recognize.
+  The four git reads we recognize, one arm per rule, guarded by the flags
+  each rule tolerates.
 
   An unrecognized flag is a failure rather than something to ignore.
   Answering `git log --graph` with a plain `std::git::log` would tell the
@@ -313,8 +314,8 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
     return failure("only a bare git subcommand is recognized")
   }
   const sub = args[0]
-  if (sub == "status" && flags.length == 0) {
-    return success(
+  return match(sub) {
+    "status" if (flags.length == 0) => success(
       [
       {
       name: "std::git::status",
@@ -324,9 +325,7 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
     },
     ],
     )
-  }
-  if (sub == "log" && flags.length == 0) {
-    return success(
+    "log" if (flags.length == 0) => success(
       [
       {
       name: "std::git::log",
@@ -338,9 +337,7 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
     },
     ],
     )
-  }
-  if (sub == "diff" && flags.length == 0) {
-    return success(
+    "diff" if (flags.length == 0) => success(
       [
       {
       name: "std::git::diff",
@@ -354,9 +351,7 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
     },
     ],
     )
-  }
-  if (sub == "diff" && flags.length == 1 && flags[0] == "--staged") {
-    return success(
+    "diff" if (flags.length == 1 && flags[0] == "--staged") => success(
       [
       {
       name: "std::git::diff",
@@ -370,52 +365,35 @@ def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
     },
     ],
     )
+    _ => failure("no rule for `git ${sub}`")
   }
-  return failure("no rule for `git ${sub}`")
 }
 
 static const BASH_EFFECT: Effect = {
   name: "std::bash"
 }
 
-def emptyExecution(): Execution {
-  return {
-    kind: "",
-    command: "",
-    content: "",
-    filename: "",
-    dir: "",
-    mode: "overwrite",
-    reason: ""
-  }
-}
-
 def refusePlan(reason: string): Plan {
-  let exec = emptyExecution()
-  exec.kind = "refuse"
-  exec.reason = reason
   return {
     effects: [],
-    execution: exec
+    execution: {
+      kind: "refuse",
+      reason: reason
+    }
   }
 }
 
 def bashPlan(command: string, effects: Effect[]): Plan {
-  let exec = emptyExecution()
-  exec.kind = "bash"
-  exec.command = command
   // Spawning a shell always raises at least one effect, so a log of
   // effects is a complete audit of shell invocations. A string of nothing
   // but echoes would otherwise raise nothing and still start a shell.
-  if (effects.length == 0) {
-    return {
-      effects: [BASH_EFFECT],
-      execution: exec
-    }
-  }
+  const raised = if effects.length == 0 then [BASH_EFFECT] else effects
   return {
-    effects: effects,
-    execution: exec
+    effects: raised,
+    execution: {
+      kind: "bash",
+      command: command
+    }
   }
 }
 
@@ -436,19 +414,21 @@ def flattenCommands(commands: Command[]): SimpleCommand[] {
 }
 
 def flattenOne(command: Command): SimpleCommand[] {
+  // The simple case is an `if` rather than a match arm because match arms
+  // do not narrow the scrutinee — `[command]` only types as
+  // SimpleCommand[] under `if` narrowing. The match over what remains is
+  // exhaustive with no catch-all, so a fifth command shape becomes a type
+  // error here instead of silently flattening to nothing — and this feeds
+  // the refuse wall, where silently-empty is the one result that must
+  // never happen.
   if (command.tag == "simpleCommand") {
     return [command]
   }
-  if (command.tag == "and") {
-    return [...flattenOne(command.left), ...flattenOne(command.right)]
+  return match(command) {
+    { tag: "and", left, right } => [...flattenOne(left), ...flattenOne(right)]
+    { tag: "or", left, right } => [...flattenOne(left), ...flattenOne(right)]
+    { tag: "parens", command as inner } => flattenOne(inner)
   }
-  if (command.tag == "or") {
-    return [...flattenOne(command.left), ...flattenOne(command.right)]
-  }
-  if (command.tag == "parens") {
-    return flattenOne(command.command)
-  }
-  return []
 }
 
 def rebuild(commands: Command[]): Result<string> {
@@ -517,27 +497,21 @@ def echoWords(command: SimpleCommand): Result<string[]> {
 }
 
 def literalWordText(word: Word): Result<string> {
-  if (word.tag == "literal") {
-    return success(word.text)
+  return match(word) {
+    { tag: "literal", text } => success(text)
+    { tag: "path", text } => success(text)
+    { tag: "singleQuoted", text } => success(text)
+    { tag: "doubleQuoted", parts } => literalParts(parts)
+    _ => failure("`${word.tag}` is not fully literal")
   }
-  if (word.tag == "path") {
-    return success(word.text)
-  }
-  if (word.tag == "singleQuoted") {
-    return success(word.text)
-  }
-  if (word.tag == "doubleQuoted") {
-    return literalDoubleQuoted(word)
-  }
-  return failure("`${word.tag}` is not fully literal")
 }
 
-def literalDoubleQuoted(word: DoubleQuotedWord): Result<string> {
+def literalParts(parts: Word[]): Result<string> {
   """
   The text of a double-quoted word, when it contains no expansions.
   """
   let out = ""
-  for (part in word.parts) {
+  for (part in parts) {
     if (part.tag != "literal") {
       return failure("a double-quoted word contains `${part.tag}`")
     }
@@ -572,13 +546,15 @@ def echoPlan(command: SimpleCommand): Result<Plan> {
   if (words is failure(why)) {
     return failure(why)
   }
-  let exec = emptyExecution()
-  exec.kind = "echo"
-  exec.content = echoOutput(words.value)
-  return success({
+  return success(
+    {
     effects: [],
-    execution: exec
-  })
+    execution: {
+      kind: "echo",
+      content: echoOutput(words.value)
+    }
+  },
+  )
 }
 
 def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
@@ -613,14 +589,6 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
   }
   const content = echoOutput(words.value)
   const mode = writeMode(only.op)
-
-  let exec = emptyExecution()
-  exec.kind = "write"
-  exec.content = content
-  exec.filename = target.value
-  exec.dir = cwd
-  exec.mode = mode
-
   const effect: Effect = {
     name: "std::write",
     payload: {
@@ -630,10 +598,18 @@ def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
       mode: mode
     }
   }
-  return success({
+  return success(
+    {
     effects: [effect],
-    execution: exec
-  })
+    execution: {
+      kind: "write",
+      filename: target.value,
+      dir: cwd,
+      content: content,
+      mode: mode
+    }
+  },
+  )
 }
 
 def shellFreePlan(command: SimpleCommand, cwd: string): Result<Plan> {
@@ -725,9 +701,6 @@ export def planFor(source: string, cwd: string): Plan {
 /** Commands we decline to run even when a human approves. */
 static const REFUSED_COMMANDS: string[] = ["rm", "rmdir", "dd", "shred", "mkfs", "truncate"]
 
-/** `git` subcommands that always destroy work. */
-static const REFUSED_GIT_ALWAYS: string[] = ["clean", "restore"]
-
 def baseName(text: string): string {
   """
   The last part of a path. `/bin/rm` is `rm`.
@@ -780,23 +753,18 @@ def isDestructiveGit(command: SimpleCommand): boolean {
   if (first.tag != "literal") {
     return false
   }
-  if (REFUSED_GIT_ALWAYS.includes(first.text)) {
-    return true
+  // `git checkout .` discards working-tree changes; `git checkout main`
+  // does not. `git checkout -- .` is NOT handled here, and cannot be: the
+  // parser rejects a bare `--`, so that string never reaches
+  // classification at all. It falls through as unparseable and is
+  // approvable under `std::bash`.
+  return match(first.text) {
+    "clean" => true
+    "restore" => true
+    "reset" => hasFlag(command, "--hard")
+    "checkout" => hasLiteralArg(command, ".")
+    _ => false
   }
-  if (first.text == "reset") {
-    return hasFlag(command, "--hard")
-  }
-  if (first.text == "checkout") {
-    // `git checkout .` discards working-tree changes; `git checkout main`
-    // does not.
-    //
-    // `git checkout -- .` is NOT handled here, and cannot be: the parser
-    // rejects a bare `--`, so that string never reaches classification at
-    // all. It falls through as unparseable and is approvable under
-    // `std::bash`.
-    return hasLiteralArg(command, ".")
-  }
-  return false
 }
 
 def hasFlag(command: SimpleCommand, name: string): boolean {
@@ -883,9 +851,13 @@ export def safeBash(
   """
   const dir = resolveCwd(cwd)
   const plan = planFor(command, dir)
+  const exec = plan.execution
 
-  if (plan.execution.kind == "refuse") {
-    return failure(plan.execution.reason)
+  // A refusal returns before anything is raised: there is nothing to
+  // approve. It still has an arm in the match below, because the match is
+  // exhaustive over Execution.
+  if (exec is { kind: "refuse", reason }) {
+    return failure(reason)
   }
 
   const raised = raiseAll(plan.effects, command, dir)
@@ -893,20 +865,29 @@ export def safeBash(
     return failure(why)
   }
 
-  if (plan.execution.kind == "echo") {
-    // Truncated like every other path. A long echo returning in full
-    // while a long `ls` came back capped would be exactly the
-    // distinguishability this design exists to remove.
-    return success(truncate(plan.execution.content))
+  // The write case is an `if` rather than a match arm for the same
+  // reason as `flattenOne`: match arms do not narrow the scrutinee, and
+  // rebuilding a WriteExec from bound fields would silently drop any
+  // field the type gains later. `if` narrowing passes the value through
+  // whole.
+  if (exec.kind == "write") {
+    return runWrite(exec)
   }
-  if (plan.execution.kind == "write") {
-    return runWrite(plan.execution)
+
+  // Echo output is truncated like every other path: a long echo returning
+  // in full while a long `ls` came back capped would be exactly the
+  // distinguishability this design exists to remove. For bash, `planFor`
+  // already decided which text to run — rebuilt when it asked narrow
+  // questions, original when it asked the broad one. There is no fallback
+  // here: choosing the original AFTER raising narrow effects would break
+  // the design's first hard rule.
+  return match(exec) {
+    { kind: "echo", content } => success(truncate(content))
+    { kind: "bash", command as text } => runBash(text, dir)
+    // Unreachable — the early return above already handled refusal. The
+    // arm exists only to keep the match exhaustive over Execution.
+    { kind: "refuse", reason } => failure(reason)
   }
-  // `planFor` already decided which text to run — rebuilt when it asked
-  // narrow questions, original when it asked the broad one. There is no
-  // fallback here: choosing the original AFTER raising narrow effects
-  // would break the design's first hard rule.
-  return runBash(plan.execution.command, dir)
 }
 
 def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
@@ -930,6 +911,13 @@ def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
   closed dispatch with one arm per effect. That is also why safeBash
   declares them all in its `raises` clause: it is how an agent author
   discovers which handlers to write.
+
+  This stays an `if` chain rather than a match: match arms do not narrow
+  the union, so a `payload` bound in a `{ name: "std::git::log" }` arm
+  does not get that variant's payload type and the raise sites stop
+  typechecking. `if` narrowing on `effect.name` does. When arm narrowing
+  lands, this is the first candidate to become an exhaustive match, which
+  would also turn the trailing runtime failure into a compile error.
 
   Every payload carries the full command string. A human approving a git
   read inside `echo hi; git status` needs to see the whole thing, not the

@@ -512,7 +512,9 @@ class PatternLowerer {
     }
     const name = scrutinee.value;
     for (const c of cases) {
-      if (c.type !== "matchBlockCase") continue;
+      if (c.type !== "matchBlockCase") {
+        continue;
+      }
       for (const { node: inner } of walkNodes(c.body)) {
         if (inner.type === "assignment" && inner.declKind && inner.variableName === name) {
           return varRef(scrutineeName, loc);

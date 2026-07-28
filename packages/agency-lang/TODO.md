@@ -432,23 +432,6 @@ Where/how is this enforced?
     }
   |]
 ```
----
-
-A single-element array pattern in a match arm parses as an INDEX on the
-previous arm's expression. Multi-element patterns are immune because
-`expr["a", "b"]` is not valid index syntax, which is why v2 safeBash's
-`["git", "status"]` arms worked. Found in the safeBash match refactor:
-
-fails ("expected match cases..."):
-```
-match (args) {
-  ["status"] => failure("a")
-  [sub] => failure("no rule for ${sub}")
-  _ => failure("nope")
-}
-```
-
----
 
 Match arms do not narrow the scrutinee or the bound fields of a
 discriminated union, so `if` chains can typecheck where the equivalent

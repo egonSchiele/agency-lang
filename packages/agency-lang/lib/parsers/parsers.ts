@@ -65,6 +65,7 @@ import {
   many1TillOneOf,
   isCommittedFailure,
   getPosition,
+  getInputStr,
   type Position,
 } from "tarsec";
 
@@ -2608,8 +2609,59 @@ const bracketParser: Parser<boolean> = or(
   map(char("["), () => false),
 );
 
+/** Zero-width parser: succeeds, consuming nothing, when the parse
+ *  position sits at the start of its line's content — nothing but
+ *  indentation precedes it on the line. This is a lookbehind, through
+ *  tarsec's parse-wide input, because the whitespace that got us here
+ *  was already consumed by whatever parser ran before.
+ *
+ *  PERFORMANCE WARNING: do NOT reach for this parser unless there is no
+ *  other option. It calls `getInputStr` and re-reads source text on
+ *  every attempt, which ordinary parsers never do — combinators look
+ *  forward at the remaining input for free. A lookbehind is only
+ *  justified when the information you need was already consumed by an
+ *  earlier parser and cannot be recovered any other way, which is the
+ *  case for the chain boundary below and almost nowhere else. If you
+ *  can restructure the grammar to test BEFORE the whitespace is
+ *  consumed (`not(...)` lookahead, reordering, a dedicated trivia
+ *  parser), do that instead.
+ *
+ *  Used as `not(startOfLineContent)` to stop a bracket chain element
+ *  from continuing an expression across a newline. Expression parsers
+ *  (function calls in particular) consume trailing whitespace INCLUDING
+ *  newlines, so without that boundary a match arm like
+ *
+ *      ["status"] => failure("a")
+ *      [sub] => failure("b")
+ *
+ *  parses the second arm's pattern as an INDEX on the first arm's value
+ *  — `failure("a")[sub]` — and the match collapses. Multi-element
+ *  patterns were immune only because `expr["a", "b"]` is not index
+ *  syntax. Statement context already refuses the same continuation, so
+ *  the boundary aligns the two. Dot-method chains are deliberately
+ *  unguarded: a fluent `.method()` on its own line is an established
+ *  style; a bare `[i]` on its own line is an array literal or a
+ *  pattern, never an intended index. */
+const startOfLineContent: Parser<null> = (input: string) => {
+  const source = getInputStr();
+  const offset = source.length - input.length;
+  // Lookbehind needs the parse-wide input. When it is missing or does
+  // not correspond to this input (raw parser tests call parsers without
+  // installing it), there is nothing to look behind at — fail, which
+  // DISABLES the boundary rather than misfiring it.
+  if (offset < 0 || source.charCodeAt(offset) !== input.charCodeAt(0)) {
+    return failure("no parse-wide input to look behind at", input);
+  }
+  const lineStart = source.lastIndexOf("\n", offset - 1) + 1;
+  return /^[ \t]*$/.test(source.slice(lineStart, offset))
+    ? success(null, input)
+    : failure("not at the start of a line", input);
+};
+
+
 const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
   const parser = seqC(
+    not(startOfLineContent),
     capture(bracketParser, "optional"),
     optionalSpaces,
     capture(optional(lazy(() => exprParser)), "start"),
@@ -2631,6 +2683,7 @@ const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
 
 const indexChainParser: Parser<AccessChainElement> = (input: string) => {
   const parser = seqC(
+    not(startOfLineContent),
     capture(bracketParser, "optional"),
     optionalSpaces,
     capture(lazy(() => exprParser), "index"),

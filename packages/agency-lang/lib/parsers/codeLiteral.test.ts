@@ -380,3 +380,20 @@ describe("bodies whose kind must not change", () => {
     });
   }
 });
+
+describe("a throwing attempt does not abandon the remaining attempts", () => {
+  // `static const` is rejected inside a function body by a parser that
+  // reports through tarsec's parseError, which THROWS. A literal body may
+  // legitimately be a whole program, where `static const` is correct.
+  it("parses a static const literal as a program", () => {
+    const lit = firstLiteral(`node host() {\n  const t = [|\n    static const x = 1\n  |]\n  print("y")\n}\n`);
+    expect(lit.kind).toBe("program");
+    expect(lit.nodes.map((node) => node.type)).toContain("assignment");
+  });
+
+  it("parses a static const written after another statement", () => {
+    const lit = firstLiteral(`node host() {\n  const t = [|\n    const a = 1\n    static const x = 2\n  |]\n  print("y")\n}\n`);
+    expect(lit.kind).toBe("program");
+    expect(lit.nodes.filter((node) => node.type === "assignment").length).toBe(2);
+  });
+});

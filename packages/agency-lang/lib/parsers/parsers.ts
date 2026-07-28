@@ -3095,6 +3095,37 @@ function advancePositionOver(base: Position, text: string): Position {
  *  `base` is passed in USER coordinates (template offset already
  *  subtracted), and this file's own template offset is zeroed around the
  *  nested parses so withLoc does not subtract it a second time. */
+/**
+ * Run one kind attempt, treating a throw as a non-match.
+ *
+ * A parser reached during an attempt may throw rather than fail: tarsec's
+ * `parseError` does, and `bodyReservedModifierParser` uses it to explain
+ * `static const` written inside a function body. That message is right for a
+ * body and wrong for a literal, whose body may legitimately be a whole
+ * program. An attempt that dies is an attempt that did not match, so the
+ * remaining attempts must still run.
+ *
+ * Safe because `runNested` restores the enclosing parse's state in a
+ * `finally` — success, failure, or throw — so a caught throw leaves no
+ * corrupted state behind, and the committed-failure slot it swaps back is
+ * the enclosing parse's own. Only `TarsecError` is converted; anything else
+ * is a real bug and still propagates.
+ *
+ * Returns a `ParserResult` rather than null, so a caught throw IS a failure:
+ * the call sites keep their ordinary `.success` checks, and the thrown
+ * message survives instead of being discarded.
+ */
+function tryAttempt<T>(run: () => ParserResult<T>): ParserResult<T> {
+  try {
+    return run();
+  } catch (error) {
+    if (error instanceof TarsecError) {
+      return failure(error.message, "") as ParserResult<T>;
+    }
+    throw error;
+  }
+}
+
 export function parseCodeLiteralBody(body: string, base?: Position): ParsedLiteralBody {
   const sentineled = replaceBlankLines(body);
   // Strip whitespace AND blank-line sentinels: a sentinel is not JS
@@ -3110,11 +3141,15 @@ export function parseCodeLiteralBody(body: string, base?: Position): ParsedLiter
   const savedOffset = currentTemplateOffset;
   setTemplateOffset(0);
   try {
-    const asExpr = runNested(exprParser, trimmed, { basePosition: trimmedBase });
+    const asExpr = tryAttempt(() =>
+      runNested(exprParser, trimmed, { basePosition: trimmedBase }),
+    );
     if (asExpr.success && stripSentinels(asExpr.rest).trim() === "") {
       return { ok: true, nodes: [asExpr.result as AgencyNode], kind: "expr" };
     }
-    const asStatements = runNested(bodyParser, trimmed, { basePosition: trimmedBase });
+    const asStatements = tryAttempt(() =>
+      runNested(bodyParser, trimmed, { basePosition: trimmedBase }),
+    );
     if (asStatements.success && stripSentinels(asStatements.rest).trim() === "") {
       return { ok: true, nodes: asStatements.result as AgencyNode[], kind: "statements" };
     }

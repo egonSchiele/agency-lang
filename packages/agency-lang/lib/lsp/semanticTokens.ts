@@ -70,6 +70,8 @@ type Token = {
   line: number;
   col: number;
   length: number;
+  /** The identifier this token claims to paint — see paintsItsOwnName. */
+  name: string;
   typeIndex: number;
   modifiers: number;
 };
@@ -182,6 +184,7 @@ function toToken(
     // The identifier's own length. A node's loc spans the whole node, so
     // `end - start` would paint a call's arguments too.
     length: slot.name.length,
+    name: slot.name,
     typeIndex: FUNCTION_TYPE_INDEX,
     modifiers: isStandardLibrary(effectiveName, state) ? DEFAULT_LIBRARY_BIT : 0,
   };
@@ -200,29 +203,40 @@ function byPosition(a: Token, b: Token): number {
   return a.col - b.col;
 }
 
+const IDENTIFIER_CHAR = /[A-Za-z0-9_$]/;
+
 /**
- * Would this token land on text that still exists?
+ * Does this token paint the exact word it names?
  *
- * The state a token is computed from can be older than the buffer it is
- * being rendered against — that is the deliberate trade in
- * DocumentStateCache. Usually the difference is a debounce and positions
- * still line up. After a deletion they do not: a token can name a line
- * that no longer exists, or a column past the end of a line that shrank.
+ * Two things make the answer no. A token can be STALE — computed from a
+ * document older than the buffer it renders against, which is the
+ * deliberate trade in DocumentStateCache — and land past the end of a
+ * line that shrank. Or it can be SYNTHESIZED: lowering builds calls whose
+ * names never appear in the source, like the `isFailure` behind
+ * `x is failure(e)`, and length comes from that longer name.
  *
- * Dropping those is better than clamping them. A clamped token paints
- * whatever text now sits at that position, which is a wrong color on a
- * real word; a dropped one just leaves the grammar's color in place.
+ * Dropping beats clamping. A clamped token paints whatever text now sits
+ * at that position, which is a wrong color on a real word; a dropped one
+ * leaves the grammar's color in place, and the grammar already colors
+ * every word this drops.
  */
-function fitsInCurrentText(token: Token, lines: string[] | null): boolean {
+function paintsItsOwnName(token: Token, lines: string[] | null): boolean {
   if (lines === null) return true;
   const line = lines[token.line];
   if (line === undefined) return false;
-  return token.col + token.length <= line.length;
+  const end = token.col + token.length;
+  if (line.slice(token.col, end) !== token.name) return false;
+  // Equality alone accepts a token that is a PREFIX of the word now at
+  // that position — `helper` against a freshly typed `helperTwo`.
+  return !IDENTIFIER_CHAR.test(line[end] ?? "");
 }
 
 /**
  * `currentText` is the buffer as it is RIGHT NOW, which may differ from
- * the text `state` was built from. Omit it and no bounds check runs.
+ * the text `state` was built from. Omit it and the check falls back to
+ * `state.info.sourceText` — older, but still the text these positions
+ * were computed against. Only a state assembled with no source text at
+ * all skips the check.
  *
  * Cost is O(identifiers x scopes): makeScopeFinder builds its definition
  * map once, but the finder it returns still scans the scope list per
@@ -235,7 +249,8 @@ export function getSemanticTokens(
   state: DocumentState,
   currentText?: string,
 ): SemanticTokens {
-  const lines = currentText === undefined ? null : currentText.split("\n");
+  const text = currentText ?? state.info.sourceText;
+  const lines = text === undefined ? null : text.split("\n");
   const slots = [...walkNodes(state.program.nodes)].flatMap(({ node }) =>
     identifierSlots(node),
   );
@@ -244,7 +259,7 @@ export function getSemanticTokens(
   const tokens = slots
     .map((slot) => toToken(slot, state, findScope))
     .filter((token): token is Token => token !== null)
-    .filter((token) => fitsInCurrentText(token, lines))
+    .filter((token) => paintsItsOwnName(token, lines))
     .sort(byPosition);
 
   const builder = new SemanticTokensBuilder();

@@ -298,6 +298,18 @@ describe("getSemanticTokens known gaps", () => {
     expect(helperTokens[0].line).toBe(5);
   });
 
+  it("TRIPWIRE: cannot color the callee of an `async` call", () => {
+    // An `async foo()` call node takes its loc.col from the `async`
+    // keyword, not from `foo`. The token would paint `async ` — the
+    // keyword and a space — so paintsItsOwnName drops it and the call
+    // gets no semantic color. The TextMate grammar still colors it.
+    //
+    // WHEN THIS TEST FAILS: someone fixed the loc. That is the good
+    // outcome. Delete this test.
+    const source = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  const a = async helper()\n  print(a)\n}`;
+    expect(textsFor(source).filter((t) => t === "helper")).toEqual([]);
+  });
+
   it.skip("block-scope shadowing is not resolved", () => {
     // findContainingScope only matches scopes named by a top-level
     // function or graphNode definition, so a name shadowed inside an
@@ -305,5 +317,74 @@ describe("getSemanticTokens known gaps", () => {
     // Unskip when findContainingScope learns about block scopes.
     const source = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  if (true) {\n    const helper = 5\n    print(helper)\n  }\n}`;
     expect(textsFor(source)).not.toContain("helper");
+  });
+});
+
+describe("getSemanticTokens against synthesized names", () => {
+  // Lowering builds calls whose names never appear in the source but
+  // which carry a real source loc — `is failure(x)` becomes a call to
+  // `isFailure` sitting on the seven characters `failure`, `guard(...)`
+  // becomes `_guard`, a comprehension becomes `map`. Length comes from
+  // the name, so those tokens ran past the word they sat on.
+
+  /** Every token must cover exactly one whole identifier. */
+  function expectWholeWords(source: string): void {
+    for (const token of tokensFor(source)) {
+      expect(token.text).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/);
+    }
+  }
+
+  it("does not overrun the source word for `is failure(binder)`", () => {
+    expectWholeWords(
+      `node main() {\n  const r = pass()\n  if (r is failure(reason)) {\n    print(reason)\n  }\n}`,
+    );
+  });
+
+  it("does not overrun the source word for `is success(binder)`", () => {
+    expectWholeWords(
+      `node main() {\n  const r = pass()\n  if (r is success(v)) {\n    print(v)\n  }\n}`,
+    );
+  });
+
+  it("does not paint the paren after `guard`", () => {
+    // The biggest case by volume: `_guard` is six characters over the
+    // five of `guard`, so the token used to swallow the `(`.
+    expectWholeWords(
+      `node main() {\n  const r = guard(cost: 1) {\n    print("hi")\n  }\n}`,
+    );
+  });
+
+  it("does not paint the bracket of a comprehension", () => {
+    // A comprehension lowers to `map`, hung on the loc of the WHOLE
+    // comprehension, so the token painted `[do`.
+    expectWholeWords(
+      `def double(x: number): number {\n  return x * 2\n}\n\nnode main() {\n  const xs = [1, 2]\n  const doubled = [double(x) for x in xs]\n  print(doubled)\n}`,
+    );
+  });
+
+  it("emits no token at all for the object-rest helper", () => {
+    // The worst case: the synthesized name is hung on the `if`
+    // statement's own loc, so the token painted the `if` keyword.
+    const source = `node main() {\n  const o = { a: 1, b: 2 }\n  if (o is { a, ...rest }) {\n    print(a)\n  }\n}`;
+    const onIfLine = tokensFor(source).filter((t) => t.line === 2);
+    expect(onIfLine).toEqual([]);
+  });
+
+  it("still colors the real calls around a lowered pattern", () => {
+    // The guard must drop the synthetic token WITHOUT taking the
+    // genuine ones with it, or the fix is just "emit nothing".
+    const source = `node main() {\n  const r = pass()\n  if (r is failure(reason)) {\n    print(reason)\n  }\n}`;
+    expect(textsFor(source)).toEqual(["pass", "print"]);
+  });
+
+  it("drops a token that is only a prefix of the word now at its position", () => {
+    // A stale buffer, mid-rename: state says `helper` at a position
+    // where the user has since typed `helperTwo`. The slice matches the
+    // name, so a bare equality check would paint the first six letters
+    // of a longer word — the very failure this guard exists to stop.
+    const before = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  helper()\n}`;
+    const after = before.replace("  helper()", "  helperTwo()");
+    const data = getSemanticTokens(stateFor(before), after).data;
+    expect(decodeTokens(data, after).filter((t) => t.line === 5)).toEqual([]);
   });
 });

@@ -184,3 +184,39 @@ def f(w: Wrap): number {
     expect(errs).toEqual([]);
   });
 });
+
+// The union deliberately includes a variant WITHOUT the bound field (the
+// stdlib safeBash Effect shape) — binder typing must pick the selected
+// variant, not a structural "some variant that has the field".
+const BINDER_HEAD = `
+type Ev =
+  | { name: "bare" }
+  | { name: "write"; payload: { dir: string; mode: number } }
+  | { name: "log"; payload: { cwd: string; ref: string } }
+def wantString(s: string): string { return s }`;
+
+describe("binder typing from lowered pattern matches (pinned)", () => {
+  it("a binder takes the selected variant's field type", () => {
+    const errs = hardErrors(`${BINDER_HEAD}
+def f(e: Ev): string {
+  return match(e) {
+    { name: "log", payload } => wantString(payload.ref)
+    _ => "x"
+  }
+}
+node main() {}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("reading another variant's field off the binder is an error", () => {
+    const errs = hardErrors(`${BINDER_HEAD}
+def f(e: Ev): string {
+  return match(e) {
+    { name: "log", payload } => wantString(payload.dir)
+    _ => "x"
+  }
+}
+node main() {}`);
+    expect(errs.some((m) => /'dir' does not exist/i.test(m))).toBe(true);
+  });
+});

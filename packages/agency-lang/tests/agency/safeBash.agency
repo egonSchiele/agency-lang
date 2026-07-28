@@ -1,193 +1,258 @@
-import { makeActions, bashParser, runCommands } from "std::safeBash"
+import {
+  bashParser,
+  isRefused,
+  effectsFor,
+  planFor,
+  safeBash,
+  resolveCwd,
+ } from "std::safeBash"
 
-def actionTypes(command: string): any {
-  // What KIND of action each command becomes. The fallback matters as much
-  // as the mapping: "bash" means safeBash declined to map it and the human
-  // still has to approve it.
-  const actions = makeActions(command)
-  if (actions is success(list)) {
-    return [a.type for a in list]
+def refusedFor(source: string): any {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return "UNPARSEABLE"
   }
-  return ["REFUSED: ${actions.error}"]
-}
-
-def actionsOf(command: string): any {
-  const actions = makeActions(command)
-  if (actions is success(list)) {
-    return list
+  const first = parsed.value[0]
+  if (first.tag != "simpleCommand") {
+    return "NOT-SIMPLE"
   }
-  return "REFUSED: ${actions.error}"
+  return isRefused(first)
 }
 
-node echoBecomesPrint() {
-  // The whole point: this used to need a human, and now it is a print.
-  return actionsOf("echo hello world")
-}
-
-node echoRedirectBecomesWrite() {
-  // Redirected, the same command is a file write, which `write` gates.
-  return [actionsOf("echo hi > out.txt"), actionsOf("echo hi >> out.txt")]
-}
-
-node echoQuotingIsPreserved() {
-  // Quotes delimit a word, they are not part of its value, and adjacent
-  // parts concatenate into one word.
-  return [actionTypes("echo 'single quoted'"), actionsOf("echo a'b'\"c\"")]
-}
-
-node echoFlagsFallBackToBash() {
-  // `-n` drops the trailing newline and `-e` interprets escapes. Printing
-  // the flag as if it were text would print something bash never would, so
-  // both go to bash instead.
-  return [actionsOf("echo -n hi"), actionTypes("echo -e hi")]
-}
-
-node echoWithNoArgs() {
-  // Still a newline, not nothing.
-  return actionsOf("echo")
-}
-
-node gitSubcommandsMap() {
-  return [actionTypes("git status"), actionTypes("git diff"), actionTypes("git log")]
-}
-
-node gitStagedIsItsOwnAction() {
-  // `--staged` is a different question from a bare `git diff`, so it has to
-  // reach the action rather than being dropped on the way.
-  return actionsOf("git diff --staged")
-}
-
-node unknownGitFlagsFallBackToBash() {
-  // Answering `git log --graph` with a plain gitLog() would silently give
-  // the model something other than what it asked for.
-  return [actionTypes("git log --graph"), actionTypes("git status --short")]
-}
-
-node unmappedCommandsFallBackToBash() {
+node refuseWall() {
   return [
-    actionTypes("ls"),
-    actionTypes("cat src/main.ts"),
-    actionTypes("./script.sh"),
+    refusedFor("rm -rf build"),
+    refusedFor("/bin/rm -rf build"),
+    refusedFor("./rm thing"),
+    refusedFor("dd if=a of=b"),
+    refusedFor("git clean -fd"),
+    refusedFor("git reset --hard"),
+    refusedFor("git restore src"),
+    refusedFor("git reset HEAD"),
+    refusedFor("git checkout main"),
+    refusedFor("git checkout ."),
+    refusedFor("git log reset"),
+    refusedFor("git status"),
+    refusedFor("echo hi"),
   ]
 }
 
-node fallbackRendersOnlyItsOwnCommand() {
-  // In a sequence, the command handed to bash must be the one that fell
-  // through, not the whole string.
-  return actionsOf("echo hi; ls -la; echo bye")
+def effectNamesFor(source: string): any {
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    return "UNPARSEABLE"
+  }
+  const first = parsed.value[0]
+  if (first.tag != "simpleCommand") {
+    return "NOT-SIMPLE"
+  }
+  const effects = effectsFor(first, "/repo")
+  if (effects is failure(why)) {
+    return "UNRECOGNIZED"
+  }
+  return [e.name for e in effects.value]
 }
 
-node sequencesProduceOneActionEach() {
-  return actionTypes("echo one; echo two; echo three")
-}
-
-node bothSidesOfAChainAreListed() {
-  // makeActions says what each command WOULD do. Which side actually runs
-  // is decided at run time by the exit status.
+node classifyOneCommand() {
   return [
-    actionTypes("echo a && echo b"),
-    actionTypes("echo a || echo b"),
-    actionTypes("(echo a && echo b) || echo c"),
+    effectNamesFor("git status"),
+    effectNamesFor("git diff"),
+    effectNamesFor("git diff --staged"),
+    effectNamesFor("git log"),
+    effectNamesFor("echo hi"),
+    effectNamesFor("ls"),
+    effectNamesFor("git log --graph"),
+    effectNamesFor("/bin/git status"),
+    effectNamesFor("FOO=1 git status"),
+    effectNamesFor("echo -n hi"),
+    effectNamesFor("echo \"quoted\""),
+    effectNamesFor("git diff --staged --stat"),
   ]
 }
 
-node assignmentsFallBackToBash() {
-  // Bash scopes a leading assignment to that one command, and running the
-  // original text through bash reproduces that exactly.
-  return [actionTypes("FOO=1 echo hi"), actionTypes("FOO=1")]
-}
-
-node redirectShapesWeDoNotHandle() {
+node redirectsContribute() {
   return [
-    actionTypes("echo hi 2> err.txt"),
-    actionTypes("echo hi < in.txt"),
-    actionTypes("git status > out.txt"),
+    effectNamesFor("git status > out.txt"),
+    effectNamesFor("echo hi > out.txt"),
+    effectNamesFor("echo hi >> out.txt"),
+    effectNamesFor("echo hi > $F"),
+    effectNamesFor("echo hi < in.txt"),
+    effectNamesFor("echo hi 2> err.txt"),
+    effectNamesFor("echo hi > a.txt > b.txt"),
   ]
 }
 
-node shellTransformsAreUnparseable() {
-  // bash rewrites an unquoted word before the command runs, so passing one
-  // through as text would run a different command than the user wrote — the
-  // one failure mode this module must not have. The parser refuses them
-  // outright. Quoted, they are ordinary text and still map.
+def planSummary(source: string): any {
+  const plan = planFor(source, "/repo")
+  return [plan.execution.kind, [e.name for e in plan.effects]]
+}
+
+node wholeStringPlans() {
   return [
-    actionTypes("echo *"),
-    actionTypes("echo ~/d"),
-    actionTypes("echo $(date)"),
-    actionTypes("cat a.txt | grep x"),
-    actionTypes("sleep 1 &"),
-    actionTypes("echo \"a*b\""),
+    planSummary("git status"),
+    planSummary("git status; git log"),
+    planSummary("git status; ls"),
+    planSummary("ls"),
+    planSummary("echo hi; echo bye"),
+    planSummary("rm -rf build"),
+    planSummary("git status; rm -rf build"),
+    planSummary("cat a.txt | grep x"),
+    planSummary("git status && git log"),
+    planSummary("true && rm -rf /tmp/x"),
+    planSummary("(git status && git log)"),
+    planSummary("git status && ls"),
   ]
 }
 
-node emptyExpansionsFallBackToBash() {
-  // An unset variable produces NO argument in bash, where expanding it to
-  // "" here would produce an empty one. True of a whole word and of a word
-  // made only of empty parts.
+node rebuiltVersusOriginal() {
+  // Hard rule #1. Multi-space input makes it observable: re-rendering
+  // normalizes whitespace, so on the narrow path `execution.command` must
+  // be the NORMALIZED form, and on the broad path it must be the caller's
+  // text VERBATIM.
   return [
-    actionsOf("echo $NOPE_NOT_SET"),
-    actionTypes("echo $NOPE_A$NOPE_B"),
-    actionsOf("echo \"$NOPE_NOT_SET\""),
-    actionsOf("echo $NOPE_NOT_SET/bin"),
+    planFor("git    status", "/repo").execution.command,
+    planFor("ls    -la", "/repo").execution.command,
   ]
 }
 
-node quotedEmptyIsARealArgument() {
-  // `""` is an argument bash really does pass.
-  return actionsOf("echo \"\"")
+def planDetail(source: string): any {
+  const plan = planFor(source, "/repo")
+  return [plan.execution.kind, plan.execution.content, [e.name for e in plan.effects]]
 }
 
-node runningASequenceReportsWhatRan() {
-  // A failure stops the sequence and says how far it got, what it produced,
-  // and what never ran. There is no falling back for the sequence: some of
-  // it already happened.
-  const parsed = bashParser("echo one; git log --graph --nope; echo three")
-  if (parsed is success(ast)) {
-    const result = runCommands(ast)
-    if (result is failure(why)) {
-      return why
-    }
-    return "UNEXPECTEDLY SUCCEEDED"
-  }
-  return "UNPARSEABLE"
+node shellFreeEcho() {
+  return [
+    planDetail("echo hello world"),
+    planDetail("echo"),
+    planDetail("echo 'a  b'"),
+    planDetail("echo $HOME"),
+    planDetail("echo \"$HOME\""),
+    planDetail("echo \"a b\" c"),
+    planDetail("echo -n hi"),
+    planDetail("echo hi; echo bye"),
+  ]
 }
 
-node andStopsOnFailure() {
-  // `false && echo b` must not print b.
-  const parsed = bashParser("git log --graph --nope && echo should-not-run")
-  if (parsed is success(ast)) {
-    const result = runCommands(ast)
-    return [
-      result is failure,
-      actionTypes("git log --graph --nope && echo should-not-run"),
-    ]
-  }
-  return ["UNPARSEABLE"]
+def writePlanDetail(source: string): any {
+  const plan = planFor(source, "/repo")
+  const exec = plan.execution
+  // `mode` is in the tuple deliberately. Without it, a `writeMode` that
+  // always returned "overwrite" survives the whole suite, and
+  // `echo hi >> notes.txt` silently TRUNCATES the file.
+  return [
+    exec.kind,
+    exec.content,
+    exec.filename,
+    exec.dir,
+    exec.mode,
+    [e.name for e in plan.effects],
+  ]
 }
 
-node cwdReachesEveryAction() {
-  // The caller's cwd has to land on EVERY action, not just the unparseable
-  // fallback. The same command in two directories is two different
-  // commands, so an action that did not carry it would run wherever the
-  // process happened to be.
-  const actions = makeActions("echo hi > out.txt; git status; ls", "/tmp/somewhere")
-  if (actions is success(list)) {
-    return list
-  }
-  return "REFUSED: ${actions.error}"
+node shellFreeWrite() {
+  return [
+    writePlanDetail("echo hi > out.txt"),
+    writePlanDetail("echo hi >> out.txt"),
+    writePlanDetail("echo hi > $F"),
+    writePlanDetail("echo $HOME > out.txt"),
+  ]
 }
 
-node chainKeepsTheLeftSidesOutput() {
-  // `a && b` where a succeeds and b fails: a really ran, so its output
-  // belongs in the report. Dropping it would make the report claim to show
-  // what already ran while hiding part of it.
-  const parsed = bashParser("echo kept && git log --graph --nope")
-  if (parsed is success(ast)) {
-    const result = runCommands(ast)
-    if (result is failure(why)) {
-      return why
-    }
-    return "UNEXPECTEDLY SUCCEEDED"
+node payloadValuesAreCorrect() {
+  // Every other classification test asserts effect NAMES. A staged diff
+  // and an unstaged diff share a name, so only the payload tells them
+  // apart. This also pins cwd threading into git payloads.
+  const staged = planFor("git diff --staged", "/repo")
+  const redirected = planFor("git status > out.txt", "/repo")
+  // `any` here only. Effect is a discriminated union so the raise sites in
+  // the module typecheck their payloads; a test reading payloads
+  // generically would have to narrow five times to say nothing extra.
+  const diffPayload: any = staged.effects[0]
+  const writeEffect: any = redirected.effects[1]
+  return [
+    diffPayload.payload.staged,
+    diffPayload.payload.cwd,
+    writeEffect.name,
+    writeEffect.payload.filename,
+    writeEffect.payload.dir,
+    writeEffect.payload.mode,
+  ]
+}
+
+node writeContentIsInThePayload() {
+  const plan = planFor("echo hi > out.txt", "/repo")
+  const effect: any = plan.effects[0]
+  return effect.payload.content
+}
+
+node echoRunsWithoutApproval() {
+  // No interrupt and no shell. If this ever routed through bash, an
+  // unlisted interrupt would leave the raw interrupt array as the result
+  // and this comparison would fail.
+  const result = safeBash("echo hello world")
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
   }
-  return "UNPARSEABLE"
+  return result.value
+}
+
+node exactlyOneQuestion() {
+  // The test that actually pins the feature. It APPROVES the narrow
+  // question and asserts the command ran. A test that only rejects the
+  // first interrupt passes whether or not a second std::bash prompt
+  // appears — which is how calling `bash()` instead of `_bash()` hides.
+  const result = safeBash("git status")
+  if (result is failure(why)) {
+    return "FAILED"
+  }
+  return "RAN"
+}
+
+node refusedNeverRuns() {
+  const result = safeBash("rm -rf build")
+  if (result is failure(why)) {
+    return why
+  }
+  return "UNEXPECTEDLY RAN"
+}
+
+node sequenceRunsThroughBash() {
+  // The measured divergence that motivated the redesign: v2 returned
+  // "hi\n\nbye\n" where bash returns "hi\nbye\n".
+  const result = safeBash("echo hi && echo bye")
+  if (result is failure(why)) {
+    return "FAILED: ${why}"
+  }
+  return result.value
+}
+
+node nonZeroExitIsAFailure() {
+  const result = safeBash("false")
+  if (result is failure(why)) {
+    return "FAILED"
+  }
+  return "UNEXPECTEDLY SUCCEEDED"
+}
+
+node appendReallyAppends() {
+  // The executor is called positionally, and no other test runs it, so a
+  // swapped argument order survives everything else.
+  safeBash("echo one > __safebash_append__.txt")
+  safeBash("echo two >> __safebash_append__.txt")
+  const back = read("__safebash_append__.txt") with approve
+  if (back is failure(why)) {
+    return "READ FAILED"
+  }
+  return back.value
+}
+
+node defaultCwdIsNeverEmpty() {
+  // `write` rejects an empty dir, and `getAgentCwd()` is empty whenever
+  // nothing set one — which is the case these tests run in.
+  return [resolveCwd(""), resolveCwd("/somewhere")]
+}
+
+node quotedRedirectTarget() {
+  // A quoted target with no variable is a real filename, so it maps.
+  return writePlanDetail("echo hi > \"my file.txt\"")
 }

@@ -1,13 +1,18 @@
-import { env } from "std::system"
+// These imports are NOT unused. Effect declarations come with imports,
+// and without them the `raise std::bash(...)` and `raise std::git::*(...)`
+// sites below compile with their payload contracts UNENFORCED. Measured:
+// dropping them makes `raise std::git::status("...", { wrongField: x })`
+// typecheck clean. `std::write` is covered by the auto-imported prelude.
+import { gitStatus } from "std::git"
+import { bash } from "std::shell"
 
 import {
-  Action,
-  printAction,
-  writeAction,
-  gitStatusAction,
-  gitDiffAction,
-  gitLogAction,
-  bashAction,
+  Effect,
+  Plan,
+  Execution,
+  runBash,
+  runWrite,
+  truncate,
  } from "./safeBash/actions.agency"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 
@@ -129,124 +134,57 @@ export type BashNode =
 
 export type BashAST = Command[]
 
-/** An output redirect reduced to the shape v1 handles: `>` or `>>` to a
- * path, with no explicit file descriptor. */
-export type OutputRedirect = {
-  op: string;
-  path: string
-}
+def literalArgs(command: SimpleCommand): Result<string[]> {
+  """
+  A command's non-flag arguments as text, but only when every one is a
+  plain literal.
 
-export def bashParser(code: string): Result<BashAST> {
+  Flags are SKIPPED, not rejected: they are collected separately by
+  `flagNames`, and rejecting them here would make `git diff --staged`
+  unrecognized before any rule saw it.
   """
-  Parse a string of bash code into an AST.
-  """
-  const res = _bashParser(code)
-  return match(res.success) {
-    true => success(res.result)
-    false => failure(res.message)
-  }
-}
-
-def stringifyWord(word: Word, insideQuotes: boolean = false): Result<string> {
-  """
-  Reduce a word to text, or explain why it cannot be.
-
-  The parser refuses globs, tilde, command substitution and arithmetic
-  outright, so they never arrive here.
-  """
-  return match(word) {
-    { tag: "literal", text } => success(text)
-    { tag: "path", text } => success(text)
-    { tag: "singleQuoted", text } => success(text)
-    { tag: "doubleQuoted", parts } => stringifyParts(parts, true)
-    { tag: "variable", name } => expandVariable(name, insideQuotes)
-    { tag: "interpolatedVariable", parts } => stringifyParts(parts, insideQuotes)
-    _ => failure("`${word.tag}` cannot be reduced to text")
-  }
-}
-
-def expandVariable(name: string, insideQuotes: boolean): Result<string> {
-  """
-  Look a variable up in the environment. Unset is the empty string, as in bash.
-
-  An UNQUOTED value containing whitespace is refused rather than expanded:
-  bash word-splits it, so `cat $F` with `F="a b"` is two arguments, and
-  expanding it here without splitting would quietly change what the command
-  means. Inside double quotes no splitting happens, so it expands normally.
-  """
-  const value = env(name) ?? ""
-  if (insideQuotes) {
-    return success(value)
-  }
-  // Default IFS is space, TAB and NEWLINE — not just space.
-  if (value.includes(" ") || value.includes("\t") || value.includes("\n")) {
-    return failure("unquoted `${name}` contains whitespace; bash would word-split it")
-  }
-  return success(value)
-}
-
-def stringifyParts(parts: Word[], insideQuotes: boolean): Result<string> {
-  """
-  Concatenate the parts of a word. Adjacent parts join with no separator:
-  `e'f'"g"` is one word, `efg`.
-  """
-  let out = ""
-  for (part in parts) {
-    const piece = stringifyWord(part, insideQuotes)
-    if (piece is success(text)) {
-      out = out + text
-    } else {
-      return failure(piece.error)
+  let out: string[] = []
+  for (arg in command.args) {
+    if (arg.tag == "flag") {
+      continue
     }
+    if (arg.tag != "literal") {
+      return failure("`${arg.tag}` is not a literal argument")
+    }
+    out.push(arg.text)
   }
   return success(out)
 }
 
-def hasQuotedPart(word: Word): boolean {
+def flagNames(command: SimpleCommand): string[] {
   """
-  True when any part of the word was quoted.
-
-  Quoting is what makes an empty word a real argument: bash passes nothing
-  for an unset `$A`, but passes one empty string for `""`.
+  Every flag on the command, in source form (`--staged`, `-n`).
   """
-  return match(word) {
-    { tag: "singleQuoted" } => true
-    { tag: "doubleQuoted" } => true
-    { tag: "interpolatedVariable", parts } => some(parts, \p -> hasQuotedPart(p))
-    _ => false
+  let out: string[] = []
+  for (arg in command.args) {
+    if (arg.tag == "flag") {
+      out.push(renderFlag(arg))
+    }
   }
+  return out
 }
 
-def stringifyArg(word: Word): Result<string> {
+def redirectEffect(redirects: Redirect[], cwd: string): Result<Effect[]> {
   """
-  Reduce a whole argument to text.
+  What a command's redirects contribute, independently of its verb.
 
-  An unquoted word that comes out empty is refused, because bash drops it
-  and passes no argument at all where this would pass one empty string. The
-  check belongs to the whole word rather than to each expansion inside it:
-  `$A$B` with both unset is empty the same way a bare `$A` is, and `$A/bin`
-  is `/bin` — one argument — even though `$A` alone contributed nothing.
-  """
-  const text = stringifyWord(word, false)
-  if (text is failure(why)) {
-    return failure(why)
-  }
-  if (text.value == "" && !hasQuotedPart(word)) {
-    return failure(
-      "an unquoted expansion is empty; bash would pass no argument at all",
-    )
-  }
-  return text
-}
+  A redirect writes a file whatever the command is, so it has to be
+  accounted for on its own. Without this, `echo pwned >> .bashrc; git
+  status` would classify as a git read and ride along under whatever
+  approves git reads.
 
-def simplifyRedirects(redirects: Redirect[]): Result<OutputRedirect | null> {
-  """
-  Reduce a command's redirects to the one shape v1 handles: a single `>` or
-  `>>` to a file, with no explicit file descriptor. Everything else — `2>&1`,
-  heredocs, input redirects, more than one — is refused.
+  Anything other than a plain `>` or `>>` to a literal target is a
+  failure, which sends the whole string to `std::bash`. An input redirect
+  is a read the effect set would otherwise never mention, and a variable
+  target cannot fill the payload without expanding it ourselves.
   """
   if (redirects.length == 0) {
-    return success(null)
+    return success([])
   }
   if (redirects.length > 1) {
     return failure("more than one redirect")
@@ -258,14 +196,632 @@ def simplifyRedirects(redirects: Redirect[]): Result<OutputRedirect | null> {
   if (only.op != ">" && only.op != ">>") {
     return failure("`${only.op}` is not an output redirect")
   }
-  const path = stringifyArg(only.target)
-  if (path is success(text)) {
-    return success({
-      op: only.op,
-      path: text
-    })
+  const target = literalTarget(only.target)
+  if (target is failure(why)) {
+    return failure(why)
   }
-  return failure("redirect target: ${path.error}")
+  const mode = writeMode(only.op)
+  return success(
+    [
+    {
+    name: "std::write",
+    payload: {
+      dir: cwd,
+      filename: target.value,
+      content: "",
+      mode: mode
+    }
+  },
+  ],
+  )
+}
+
+def literalTarget(word: Word): Result<string> {
+  """
+  A redirect target's text, when the target is fully literal.
+
+  A variable target cannot fill the `std::write` payload without expanding
+  it ourselves, which is the one thing this module never does. A quoted
+  target with no variable in it is fine — `> "my file.txt"` names a real
+  file — so this is the same question `echoWords` asks of an argument.
+  """
+  return literalWordText(word)
+}
+
+def writeMode(op: string): string {
+  """
+  `>` truncates, `>>` appends.
+  """
+  if (op == ">>") {
+    return "append"
+  }
+  return "overwrite"
+}
+
+export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
+  """
+  Which interrupts this one command needs raised.
+
+  A failure means the command is not recognized. The caller turns that
+  into a `std::bash` question for the whole string rather than trying to
+  ask a narrow question about part of it.
+
+  @param command - One simple command from the parsed AST
+  @param cwd - The resolved working directory, for payloads that need it
+  """
+  const name = command.command
+  if (name == null) {
+    return failure("an assignment with no command")
+  }
+  // A path word is never a recognized command: `/bin/git` must not become
+  // a git read. The wall may look at path words, because a wall match can
+  // only ever cause a refusal.
+  if (name.tag != "literal") {
+    return failure("the command word is not a literal")
+  }
+  // `GIT_DIR=/elsewhere git status` reads a DIFFERENT repository than the
+  // payload would claim. Rather than model what each assignment means,
+  // any command carrying one is unrecognized.
+  if (command.assignments.length > 0) {
+    return failure("a leading assignment changes what the command does")
+  }
+  const flags = flagNames(command)
+  const redirect = redirectEffect(command.redirects, cwd)
+  if (redirect is failure(why)) {
+    return failure(why)
+  }
+
+  if (name.text == "echo") {
+    // `echo` contributes nothing on its own, whatever its arguments. Bash
+    // runs it and expands anything in it, so `echo $HOME` and `echo -n hi`
+    // are both fine HERE — the flag and literal-argument restrictions
+    // belong to the shell-free path, which computes the output itself.
+    return success(redirect.value)
+  }
+
+  if (name.text != "git") {
+    return failure("no rule for `${name.text}`")
+  }
+  // Only the git rules need the arguments as text, so this runs AFTER the
+  // echo branch. Above it, a quoted `echo "hi"` would fail here and be
+  // demoted before the branch that says echo is fine whatever its
+  // arguments ever ran.
+  const args = literalArgs(command)
+  if (args is failure(why)) {
+    return failure(why)
+  }
+  const git = gitEffects(args.value, flags, cwd)
+  if (git is failure(why)) {
+    return failure(why)
+  }
+  return success([...git.value, ...redirect.value])
+}
+
+def gitEffects(args: string[], flags: string[], cwd: string): Result<Effect[]> {
+  """
+  The four git reads we recognize.
+
+  An unrecognized flag is a failure rather than something to ignore.
+  Answering `git log --graph` with a plain `std::git::log` would tell the
+  model it asked one question when it asked another.
+  """
+  if (args.length != 1) {
+    return failure("only a bare git subcommand is recognized")
+  }
+  const sub = args[0]
+  if (sub == "status" && flags.length == 0) {
+    return success(
+      [
+      {
+      name: "std::git::status",
+      payload: {
+        cwd: cwd
+      }
+    },
+    ],
+    )
+  }
+  if (sub == "log" && flags.length == 0) {
+    return success(
+      [
+      {
+      name: "std::git::log",
+      payload: {
+        cwd: cwd,
+        ref: "",
+        path: ""
+      }
+    },
+    ],
+    )
+  }
+  if (sub == "diff" && flags.length == 0) {
+    return success(
+      [
+      {
+      name: "std::git::diff",
+      payload: {
+        cwd: cwd,
+        ref: "",
+        ref2: "",
+        staged: false,
+        path: ""
+      }
+    },
+    ],
+    )
+  }
+  if (sub == "diff" && flags.length == 1 && flags[0] == "--staged") {
+    return success(
+      [
+      {
+      name: "std::git::diff",
+      payload: {
+        cwd: cwd,
+        ref: "",
+        ref2: "",
+        staged: true,
+        path: ""
+      }
+    },
+    ],
+    )
+  }
+  return failure("no rule for `git ${sub}`")
+}
+
+static const BASH_EFFECT: Effect = {
+  name: "std::bash"
+}
+
+def emptyExecution(): Execution {
+  return {
+    kind: "",
+    command: "",
+    content: "",
+    filename: "",
+    dir: "",
+    mode: "",
+    reason: ""
+  }
+}
+
+def refusePlan(reason: string): Plan {
+  let exec = emptyExecution()
+  exec.kind = "refuse"
+  exec.reason = reason
+  return {
+    effects: [],
+    execution: exec
+  }
+}
+
+def bashPlan(command: string, effects: Effect[]): Plan {
+  let exec = emptyExecution()
+  exec.kind = "bash"
+  exec.command = command
+  // Spawning a shell always raises at least one effect, so a log of
+  // effects is a complete audit of shell invocations. A string of nothing
+  // but echoes would otherwise raise nothing and still start a shell.
+  if (effects.length == 0) {
+    return {
+      effects: [BASH_EFFECT],
+      execution: exec
+    }
+  }
+  return {
+    effects: effects,
+    execution: exec
+  }
+}
+
+def flattenCommands(commands: Command[]): SimpleCommand[] {
+  """
+  Every simple command in the string, including the halves of a chain.
+
+  Used for BOTH the refuse wall and classification, because a wall that
+  only looks at the top level is bypassed by two characters
+  (`true && rm -rf /`), and a classifier that only looks at the top level
+  demotes every chained invocation to the broad question.
+  """
+  let out: SimpleCommand[] = []
+  for (command in commands) {
+    out = [...out, ...flattenOne(command)]
+  }
+  return out
+}
+
+def flattenOne(command: Command): SimpleCommand[] {
+  if (command.tag == "simpleCommand") {
+    return [command]
+  }
+  if (command.tag == "and") {
+    return [...flattenOne(command.left), ...flattenOne(command.right)]
+  }
+  if (command.tag == "or") {
+    return [...flattenOne(command.left), ...flattenOne(command.right)]
+  }
+  if (command.tag == "parens") {
+    return flattenOne(command.command)
+  }
+  return []
+}
+
+def rebuild(commands: Command[]): Result<string> {
+  """
+  The command string, rendered back from the tree we classified.
+
+  Used only when every command was recognized. We claimed the string is
+  `git status`, so we must run what we classified rather than text we only
+  assumed matched it. A parser bug then degrades to running what we
+  thought we read.
+  """
+  let parts: string[] = []
+  for (command in commands) {
+    const text = try _astToBash(command)
+    if (text is failure(why)) {
+      return failure("could not render `${why}`")
+    }
+    parts.push(text.value)
+  }
+  return success(parts.join("; "))
+}
+
+def trySeeIfShellFree(command: SimpleCommand, cwd: string): Result<Plan> {
+  """
+  A shell-free path applies only to a single `echo`, and only when the
+  wall has nothing to say about it.
+  """
+  if (isRefused(command)) {
+    return failure("refused")
+  }
+  const name = command.command
+  if (name == null) {
+    return failure("no command")
+  }
+  if (name.tag != "literal") {
+    return failure("the command word is not a literal")
+  }
+  if (name.text != "echo") {
+    return failure("not echo")
+  }
+  if (command.assignments.length > 0) {
+    return failure("a leading assignment changes what the command does")
+  }
+  return shellFreePlan(command, cwd)
+}
+
+def echoWords(command: SimpleCommand): Result<string[]> {
+  """
+  `echo`'s arguments as text, but only when every one is fully literal.
+
+  A plain word, a path, or a single-quoted string qualifies. A variable
+  does not, and neither does a double-quoted string containing one: this
+  path never invokes a shell, so there is nothing here to expand a
+  variable, and expanding it ourselves is where v2's divergence bugs
+  lived.
+  """
+  let out: string[] = []
+  for (arg in command.args) {
+    const text = literalWordText(arg)
+    if (text is failure(why)) {
+      return failure(why)
+    }
+    out.push(text.value)
+  }
+  return success(out)
+}
+
+def literalWordText(word: Word): Result<string> {
+  if (word.tag == "literal") {
+    return success(word.text)
+  }
+  if (word.tag == "path") {
+    return success(word.text)
+  }
+  if (word.tag == "singleQuoted") {
+    return success(word.text)
+  }
+  if (word.tag == "doubleQuoted") {
+    return literalDoubleQuoted(word)
+  }
+  return failure("`${word.tag}` is not fully literal")
+}
+
+def literalDoubleQuoted(word: DoubleQuotedWord): Result<string> {
+  """
+  The text of a double-quoted word, when it contains no expansions.
+  """
+  let out = ""
+  for (part in word.parts) {
+    if (part.tag != "literal") {
+      return failure("a double-quoted word contains `${part.tag}`")
+    }
+    out = out + part.text
+  }
+  return success(out)
+}
+
+def echoOutput(words: string[]): string {
+  """
+  What `echo` prints: its arguments joined by single spaces, then a
+  newline. Bare `echo` is still a newline, not nothing.
+  """
+  return words.join(" ") + "\n"
+}
+
+def echoPlan(command: SimpleCommand): Result<Plan> {
+  """
+  A single `echo` with nothing else in the string and no redirect.
+
+  Nothing here can write a file or reach the network no matter how wrong
+  the classifier is, because all it does is build a string. That is the
+  one place v2's structural safety was free.
+  """
+  if (command.redirects.length > 0) {
+    return failure("a redirected echo is handled elsewhere")
+  }
+  if (flagNames(command).length > 0) {
+    return failure("`echo` with flags prints differently")
+  }
+  const words = echoWords(command)
+  if (words is failure(why)) {
+    return failure(why)
+  }
+  let exec = emptyExecution()
+  exec.kind = "echo"
+  exec.content = echoOutput(words.value)
+  return success({
+    effects: [],
+    execution: exec
+  })
+}
+
+def writePlan(command: SimpleCommand, cwd: string): Result<Plan> {
+  """
+  A single `echo` redirected to a literal file.
+
+  The content is computed rather than produced by running anything, so no
+  shell is spawned and the bytes are in the approval payload before anyone
+  approves. If the equivalence claim is good enough to say what `echo`
+  prints, it is good enough to say what `echo` writes.
+  """
+  if (command.redirects.length != 1) {
+    return failure("not a single redirect")
+  }
+  if (flagNames(command).length > 0) {
+    return failure("`echo` with flags prints differently")
+  }
+  const only = command.redirects[0]
+  if (only.fd != null) {
+    return failure("redirect with an explicit file descriptor")
+  }
+  if (only.op != ">" && only.op != ">>") {
+    return failure("`${only.op}` is not an output redirect")
+  }
+  const target = literalTarget(only.target)
+  if (target is failure(why)) {
+    return failure(why)
+  }
+  const words = echoWords(command)
+  if (words is failure(why)) {
+    return failure(why)
+  }
+  const content = echoOutput(words.value)
+  const mode = writeMode(only.op)
+
+  let exec = emptyExecution()
+  exec.kind = "write"
+  exec.content = content
+  exec.filename = target.value
+  exec.dir = cwd
+  exec.mode = mode
+
+  const effect: Effect = {
+    name: "std::write",
+    payload: {
+      dir: cwd,
+      filename: target.value,
+      content: content,
+      mode: mode
+    }
+  }
+  return success({
+    effects: [effect],
+    execution: exec
+  })
+}
+
+def shellFreePlan(command: SimpleCommand, cwd: string): Result<Plan> {
+  """
+  The two paths that never invoke a shell, tried in order.
+  """
+  const bare = echoPlan(command)
+  if (bare is success(plan)) {
+    return bare
+  }
+  return writePlan(command, cwd)
+}
+
+export def planFor(source: string, cwd: string): Plan {
+  """
+  Decide everything about a call before any of it happens.
+
+  Parses the string, classifies every command, and works out which
+  interrupts to raise and what to run. Nothing here has an effect, which
+  is what makes the decision testable: hand in a string, look at the plan.
+
+  @param source - One or more bash commands
+  @param cwd - The resolved working directory
+  """
+  const parsed = bashParser(source)
+  if (parsed is failure(why)) {
+    // Unparseable: nothing was understood, so ask the broad question and
+    // hand bash the text the human will have seen.
+    return bashPlan(source, [])
+  }
+  const commands: Command[] = parsed.value
+
+  if (commands.length == 1) {
+    const only = commands[0]
+    if (only.tag == "simpleCommand") {
+      const shellFree = trySeeIfShellFree(only, cwd)
+      if (shellFree is success(plan)) {
+        return plan
+      }
+    }
+  }
+
+  // Flatten first. A chain hides its halves inside `and`/`or`/`parens`
+  // nodes, and `true && rm -rf /` has no top-level simple command at all —
+  // without this walk the wall never sees the `rm`.
+  const simple = flattenCommands(commands)
+
+  let narrow: Effect[] = []
+  let allRecognized = true
+  for (command in simple) {
+    if (isRefused(command)) {
+      const name = command.command
+      if (name == null) {
+        return refusePlan("this command is not allowed")
+      }
+      return refusePlan("`${name.text}` is not allowed")
+    }
+    const effects = effectsFor(command, cwd)
+    if (effects is failure(why)) {
+      allRecognized = false
+    } else {
+      narrow = [...narrow, ...effects.value]
+    }
+  }
+
+  if (!allRecognized) {
+    // We have to ask the broad question anyway, so asking narrow ones
+    // first adds prompts without adding information. The ORIGINAL text
+    // runs, because that is what the human read.
+    return bashPlan(source, [BASH_EFFECT])
+  }
+  if (narrow.length == 0) {
+    // Everything recognized but nothing contributed an effect — a string
+    // of nothing but echoes. The audit rule makes this a std::bash
+    // question, so by the same rule it runs the original text.
+    return bashPlan(source, [BASH_EFFECT])
+  }
+  // Narrow questions were asked, so run the tree we classified.
+  const rebuilt = rebuild(commands)
+  if (rebuilt is failure(why)) {
+    // We cannot produce the text we classified, so we must not ask narrow
+    // questions about it. Doing this AFTER raising would break the first
+    // hard rule.
+    return bashPlan(source, [BASH_EFFECT])
+  }
+  return bashPlan(rebuilt.value, narrow)
+}
+
+/** Commands we decline to run even when a human approves. */
+static const REFUSED_COMMANDS: string[] = ["rm", "rmdir", "dd", "shred", "mkfs", "truncate"]
+
+/** `git` subcommands that always destroy work. */
+static const REFUSED_GIT_ALWAYS: string[] = ["clean", "restore"]
+
+def baseName(text: string): string {
+  """
+  The last part of a path. `/bin/rm` is `rm`.
+  """
+  const parts = text.split("/")
+  return parts[parts.length - 1]
+}
+
+export def isRefused(command: SimpleCommand): boolean {
+  """
+  True when this command must not run, whatever anyone approves.
+
+  Matches the command word, including the last part of a path, so `rm`,
+  `/bin/rm` and `./rm` are all refused.
+
+  This wall is friction against the obvious spelling, not a guarantee.
+  `find . -delete` and `xargs rm` get past it and are approvable under
+  `std::bash`, which is where the actual control lives.
+  """
+  const name = command.command
+  if (name == null) {
+    return false
+  }
+  const word = baseName(name.text)
+  if (REFUSED_COMMANDS.includes(word)) {
+    return true
+  }
+  if (word != "git") {
+    return false
+  }
+  return isDestructiveGit(command)
+}
+
+def isDestructiveGit(command: SimpleCommand): boolean {
+  """
+  The git subcommands that throw work away.
+
+  Only the FIRST argument is the subcommand. `git log reset` is a log, not
+  a reset, and matching a subcommand name anywhere in the arguments would
+  refuse it.
+
+  `clean` and `restore` are destructive by purpose. `reset` and `checkout`
+  are only destructive in particular spellings, and refusing the whole
+  subcommand would refuse `git checkout main`, which agents do constantly.
+  """
+  if (command.args.length == 0) {
+    return false
+  }
+  const first = command.args[0]
+  if (first.tag != "literal") {
+    return false
+  }
+  if (REFUSED_GIT_ALWAYS.includes(first.text)) {
+    return true
+  }
+  if (first.text == "reset") {
+    return hasFlag(command, "--hard")
+  }
+  if (first.text == "checkout") {
+    // `git checkout .` discards working-tree changes; `git checkout main`
+    // does not.
+    //
+    // `git checkout -- .` is NOT handled here, and cannot be: the parser
+    // rejects a bare `--`, so that string never reaches classification at
+    // all. It falls through as unparseable and is approvable under
+    // `std::bash`.
+    return hasLiteralArg(command, ".")
+  }
+  return false
+}
+
+def hasFlag(command: SimpleCommand, name: string): boolean {
+  for (arg in command.args) {
+    if (arg.tag == "flag" && arg.flagName == name) {
+      return true
+    }
+  }
+  return false
+}
+
+def hasLiteralArg(command: SimpleCommand, text: string): boolean {
+  for (arg in command.args) {
+    if (arg.tag == "literal" && arg.text == text) {
+      return true
+    }
+  }
+  return false
+}
+
+export def bashParser(code: string): Result<BashAST> {
+  """
+  Parse a string of bash code into an AST.
+  """
+  const res = _bashParser(code)
+  return match(res.success) {
+    true => success(res.result)
+    false => failure(res.message)
+  }
 }
 
 def renderFlag(flag: FlagWord): string {
@@ -281,59 +837,7 @@ def renderFlag(flag: FlagWord): string {
   return "${flag.flagName}=${flag.flagValue}"
 }
 
-def tokenize(command: SimpleCommand): Result<string[]> {
-  """
-  A command as a flat list of text tokens: its name, then every argument in
-  source order, with flags rendered back to source form.
-
-  Flags are rendered rather than dropped so a rule can match on them. That
-  matters in both directions: `git diff --staged` is a DIFFERENT tool call
-  from `git diff`, and `echo -n hi` is not `echo hi`. A rule that ignored
-  flags would silently answer one question with the other.
-  """
-  const name = command.command
-  if (name == null) {
-    return failure("an assignment with no command is not handled")
-  }
-  let tokens: string[] = [name.text]
-  for (arg in command.args) {
-    if (arg.tag == "flag") {
-      tokens.push(renderFlag(arg))
-    } else {
-      const text = stringifyArg(arg)
-      if (text is failure(why)) {
-        return failure("could not read a word: ${why}")
-      }
-      tokens.push(text.value)
-    }
-  }
-  return success(tokens)
-}
-
-def echoContent(args: Word[]): Result<string> {
-  """
-  What `echo` would print.
-
-  Any flag refuses: `-n` drops the trailing newline and `-e` interprets
-  backslash escapes, and this does neither, so mapping them would print
-  something different from what bash prints. `echo` with no arguments is
-  still a bare newline, not nothing.
-  """
-  let words: string[] = []
-  for (arg in args) {
-    if (arg.tag == "flag") {
-      return failure("`${renderFlag(arg)}` changes what echo prints")
-    }
-    const text = stringifyArg(arg)
-    if (text is failure(why)) {
-      return failure("could not read a word: ${why}")
-    }
-    words.push(text.value)
-  }
-  return success(joinWords(words))
-}
-
-def resolveCwd(cwd: string): string {
+export def resolveCwd(cwd: string): string {
   """
   Which directory a command runs in: the caller's, or the agent's when the
   caller did not say.
@@ -345,440 +849,133 @@ def resolveCwd(cwd: string): string {
   if (cwd != "") {
     return cwd
   }
-  return getAgentCwd()
+  const agent = getAgentCwd()
+  if (agent != "") {
+    return agent
+  }
+  // `write` rejects an empty dir, and `getAgentCwd()` is empty whenever
+  // nothing set one — which is the case the tests run in.
+  return "."
 }
 
-def writeDir(cwd: string): string {
-  """
-  Where a redirect writes.
-
-  `write` rejects an empty `dir`, so the empty case has to become an
-  explicit "here" or every redirected command fails at write time.
-  """
-  if (cwd == "") {
-    return "."
-  }
-  return cwd
-}
-
-def echoAction(
-  args: Word[],
-  redirect: OutputRedirect | null,
-  cwd: string,
-): Result<Action> {
-  """
-  `echo` prints, unless it is redirected, in which case it writes a file.
-  """
-  const content = echoContent(args)
-  if (content is failure(why)) {
-    return failure(why)
-  }
-  if (redirect == null) {
-    return success({
-      type: "print",
-      content: content.value
-    })
-  }
-  if (redirect.op == ">>") {
-    return success(
-      {
-      type: "writeFile",
-      filename: redirect.path,
-      dir: writeDir(cwd),
-      content: content.value,
-      mode: "append"
-    },
-    )
-  }
-  return success(
-    {
-    type: "writeFile",
-    filename: redirect.path,
-    dir: writeDir(cwd),
-    content: content.value,
-    mode: "overwrite"
-  },
-  )
-}
-
-export def makeAction(
-  command: SimpleCommand,
+export def safeBash(
+  command: string,
   cwd: string = "",
-): Result<Action> {
+): Result<string> raises <std::bash, std::write, std::git::status, std::git::diff, std::git::log> {
   """
-  Decide what a single command means, without doing any of it.
+  Run a shell command, asking the narrowest question that describes it.
 
-  Everything this returns is a plain data object, so the whole mapping can
-  be tested by looking at what comes out. A command with no better mapping
-  becomes a `BashAction`, which is still a decision rather than a hole: it
-  says "this one has to go to bash", and `runAction` is what pays the
-  approval for it.
+  `bash` cannot be pre-approved, because a command is a string and a
+  string could do anything, so every call needs a human. Many of the
+  commands an agent writes can be identified, and for those we ask a more
+  specific question — one a policy can answer in advance.
 
-  @param command - One simple command from the parsed AST
+  Nothing runs until every question is answered. If everything is
+  approved, the whole string goes to bash in one call, so bash does the
+  control flow and produces the output.
+
+  @param command - One or more bash commands
+  @param cwd - Working directory. Defaults to the agent working directory.
   """
-  const fallback = bashFallback(command, cwd)
-
-  // Bash applies a leading assignment to that command only, which is
-  // exactly what running the original text through bash does. There is
-  // nothing to gain by modelling it and a scope bug to be had by trying.
-  if (command.assignments.length > 0) {
-    return fallback
-  }
-
-  const redirect = simplifyRedirects(command.redirects)
-  if (redirect is failure) {
-    return fallback
-  }
-
-  const tokens = tokenize(command)
-  if (tokens is failure) {
-    return fallback
-  }
-
-  const mapped = match(tokens.value) {
-    ["echo", ...rest] => echoAction(command.args, redirect.value, cwd)
-    ["git", "status"] => gitOnly(redirect.value, {
-      type: "gitStatus",
-      cwd: cwd
-    })
-    ["git", "diff"] => gitOnly(redirect.value, {
-      type: "gitDiff",
-      cwd: cwd
-    })
-    ["git", "diff", "--staged"] => gitOnly(
-      redirect.value,
-      {
-      type: "gitDiff",
-      staged: true,
-      cwd: cwd
-    },
-    )
-    ["git", "log"] => gitOnly(redirect.value, {
-      type: "gitLog",
-      cwd: cwd
-    })
-    _ => failure("no tool maps onto this command")
-  }
-  if (mapped is success(action)) {
-    return success(action)
-  }
-  return fallback
-}
-
-def gitOnly(redirect: OutputRedirect | null, action: Action): Result<Action> {
-  """
-  A git action, but only when its output is not being redirected.
-
-  The git tools return their result to us, not to a file. Honouring `>`
-  would mean writing that result ourselves, in a format bash never
-  produces, so a redirected git command goes to bash instead.
-  """
-  if (redirect != null) {
-    return failure("a redirected git command is not handled")
-  }
-  return success(action)
-}
-
-def bashFallback(command: SimpleCommand, cwd: string): Result<Action> {
-  """
-  Run this one command through bash, rendered back from its own AST.
-
-  Rendering from the AST rather than reusing the caller's original string
-  matters in a sequence: if the second of three commands falls back, bash
-  must be given the second command, not all three.
-  """
-  const text = try _astToBash(command)
-  if (text is failure(why)) {
-    return failure("could not render the command back to bash: ${why}")
-  }
-  return success({
-    type: "bash",
-    command: text.value,
-    cwd: cwd
-  })
-}
-
-export def runAction(action: Action): Result<string> {
-  """
-  Do what the action says. The only step with effects.
-  """
-  if (action.type == "print") {
-    return printAction(action)
-  }
-  if (action.type == "writeFile") {
-    return writeAction(action)
-  }
-  if (action.type == "gitStatus") {
-    return gitStatusAction(action)
-  }
-  if (action.type == "gitDiff") {
-    return gitDiffAction(action)
-  }
-  if (action.type == "gitLog") {
-    return gitLogAction(action)
-  }
-  return bashAction(action)
-}
-
-export def runCommand(command: Command, cwd: string = ""): Result<string> {
-  """
-  Run one command, whatever shape it is.
-
-  Every branch returns a `Result`, and a failure is never swallowed: the
-  caller has to decide what a failed command means, because `&&` and `||`
-  answer that question differently.
-  """
-  if (command.tag == "simpleCommand") {
-    return runSimpleCommand(command, cwd)
-  }
-  if (command.tag == "and") {
-    return andCommand(command, cwd)
-  }
-  if (command.tag == "or") {
-    return orCommand(command, cwd)
-  }
-  if (command.tag == "parens") {
-    return parensCommand(command, cwd)
-  }
-  return failure("unexpected AST shape: this is not a command")
-}
-
-def runSimpleCommand(command: SimpleCommand, cwd: string): Result<string> {
-  """
-  Decide what the command means, then do it.
-  """
-  const action = makeAction(command, cwd)
-  if (action is failure(why)) {
-    return failure(why)
-  }
-  return runAction(action.value)
-}
-
-def andCommand(command: And, cwd: string): Result<string> {
-  """
-  `a && b` — run the right side only if the left side succeeded.
-
-  A failing left side is still a failure of the whole chain, and carries
-  its own message, so the report says which half stopped it.
-  """
-  const left = runCommand(command.left, cwd)
-  if (left is failure) {
-    return left
-  }
-  const right = runCommand(command.right, cwd)
-  if (right is failure(why)) {
-    // The left side really ran, so its output belongs in the report even
-    // though the chain failed. Dropping it makes `runCommands` claim to
-    // show "what already ran" while hiding part of it. It goes AFTER the
-    // reason, and labelled, so the report does not read as though the
-    // output were the error.
-    if (left.value == "") {
-      return failure(why)
-    }
-    return failure("${why}\n\nOutput before the failure:\n${left.value}")
-  }
-  return success(joinOutput([left.value, right.value]))
-}
-
-def orCommand(command: Or, cwd: string): Result<string> {
-  """
-  `a || b` — run the right side only if the left side failed.
-
-  A succeeding left side means the right side never runs, and the chain
-  succeeds. If both fail the chain fails, carrying both messages, because
-  a report naming only the second would hide why the first was tried.
-  """
-  const left = runCommand(command.left, cwd)
-  if (left is success(text)) {
-    return success(text)
-  }
-  const right = runCommand(command.right, cwd)
-  if (right is success(text)) {
-    return success(text)
-  }
-  return failure(joinOutput([left.error, right.error]))
-}
-
-def parensCommand(command: Parens, cwd: string): Result<string> {
-  """
-  `( a && b )` — grouping. The parser rejects `;` inside parens, so there
-  is exactly one command in here.
-  """
-  return runCommand(command.command, cwd)
-}
-
-def joinOutput(parts: string[]): string {
-  """
-  Join what several commands produced, dropping the ones that produced
-  nothing so a silent command does not leave a blank line behind.
-  """
-  const kept = [p for p in parts if p != ""]
-  return kept.join("\n")
-}
-
-export def commandsToStr(commands: Command[]): string {
-  """
-  Render commands back to bash source, one per line.
-  """
-  const results: string[] = []
-  for (command in commands) {
-    const result = try _astToBash(command)
-    match(result) {
-      success(text) => results.push(text)
-      failure(err) => results.push("<could not render this command: ${err}>")
-    }
-  }
-  return results.join("\n")
-}
-
-export def runCommands(commands: Command[], cwd: string = ""): Result<string> {
-  """
-  Run a sequence of commands, stopping at the first failure.
-
-  On a failure the model gets the whole picture rather than a bare error:
-  what already ran and what it produced, which command failed and why, and
-  what never ran. There is no falling back to bash for the sequence — some
-  of it has already happened, and re-running the lot would repeat it.
-  """
-  const results: string[] = []
-  for (command, i in commands) {
-    const result = runCommand(command, cwd)
-    if (result is failure(why)) {
-      return failure(failureReport(commands, i, results, why))
-    }
-    results.push(result.value)
-  }
-  return success(joinOutput(results))
-}
-
-def failureReport(
-  commands: Command[],
-  failedAt: number,
-  results: string[],
-  why: string,
-): string {
-  """
-  What the model is told when a sequence stops partway.
-  """
-  const ran = commands[:failedAt]
-  const notRun = commands[failedAt + 1:]
-  let report = "Command `${commandsToStr([commands[failedAt]])}` failed: ${why}"
-  if (ran.length > 0) {
-    report = report + "\n\nCommands run:\n${commandsToStr(ran)}"
-  }
-  const output = joinOutput(results)
-  if (output != "") {
-    report = report + "\n\nOutput so far:\n<results>\n${output}\n</results>"
-  }
-  if (notRun.length > 0) {
-    report = report + "\n\nCommands not run:\n${commandsToStr(notRun)}"
-  }
-  return report
-}
-
-export def makeActions(source: string, cwd: string = ""): Result<Action[]> {
-  """
-  Every action a string of bash would turn into, without running any of it.
-
-  This is the whole decision-making half of the module in one call, which
-  is what makes it testable: hand it a string, look at what comes out.
-
-  The list is in source order and includes both halves of a `&&` or `||`,
-  so it says what each command WOULD do, not what will actually run — only
-  running the chain decides that.
-
-  @param source - One or more bash commands
-  """
-  const parsed = bashParser(source)
-  if (parsed is failure(why)) {
-    return failure(why)
-  }
-  const commands: Command[] = parsed.value
   const dir = resolveCwd(cwd)
-  let actions: Action[] = []
-  for (command in commands) {
-    const some = actionsFor(command, dir)
-    if (some is failure(why)) {
-      return failure(why)
+  const plan = planFor(command, dir)
+
+  if (plan.execution.kind == "refuse") {
+    return failure(plan.execution.reason)
+  }
+
+  const raised = raiseAll(plan.effects, command, dir)
+  if (raised is failure(why)) {
+    return failure(why)
+  }
+
+  if (plan.execution.kind == "echo") {
+    // Truncated like every other path. A long echo returning in full
+    // while a long `ls` came back capped would be exactly the
+    // distinguishability this design exists to remove.
+    return success(truncate(plan.execution.content))
+  }
+  if (plan.execution.kind == "write") {
+    return runWrite(plan.execution)
+  }
+  // `planFor` already decided which text to run — rebuilt when it asked
+  // narrow questions, original when it asked the broad one. There is no
+  // fallback here: choosing the original AFTER raising narrow effects
+  // would break the design's first hard rule.
+  return runBash(plan.execution.command, dir)
+}
+
+def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {
+  """
+  Ask every question the plan needs answered, before anything happens.
+  """
+  for (effect in effects) {
+    const answered = raiseOne(effect, fullCommand, cwd)
+    if (answered is failure(reason)) {
+      return failure(reason)
     }
-    actions = [...actions, ...some.value]
   }
-  return success(actions)
+  return success(null)
 }
 
-def actionsFor(command: Command, cwd: string): Result<Action[]> {
+def raiseOne(effect: Effect, fullCommand: string, cwd: string): Result {
   """
-  Flatten one command into the actions it would produce.
+  Raise one effect.
+
+  An effect is raised at a named site, not by name-as-data, so this is a
+  closed dispatch with one arm per effect. That is also why safeBash
+  declares them all in its `raises` clause: it is how an agent author
+  discovers which handlers to write.
+
+  Every payload carries the full command string. A human approving a git
+  read inside `echo hi; git status` needs to see the whole thing, not the
+  fragment.
   """
-  if (command.tag == "simpleCommand") {
-    return wrapOne(makeAction(command, cwd))
+  if (effect.name == "std::bash") {
+    raise std::bash("Are you sure you want to run this shell command?", {
+      command: fullCommand,
+      cwd: cwd,
+      timeout: 0,
+      stdin: ""
+    })
+    return success(null)
   }
-  if (command.tag == "and") {
-    return bothSides(command.left, command.right, cwd)
+  if (effect.name == "std::write") {
+    raise std::write("Are you sure you want to write to this file?", {
+      dir: effect.payload.dir,
+      filename: effect.payload.filename,
+      content: effect.payload.content,
+      mode: effect.payload.mode,
+      command: fullCommand
+    })
+    return success(null)
   }
-  if (command.tag == "or") {
-    return bothSides(command.left, command.right, cwd)
+  if (effect.name == "std::git::status") {
+    raise std::git::status("Show git status", {
+      cwd: effect.payload.cwd,
+      command: fullCommand
+    })
+    return success(null)
   }
-  if (command.tag == "parens") {
-    return actionsFor(command.command, cwd)
+  if (effect.name == "std::git::log") {
+    raise std::git::log("Show git log", {
+      cwd: effect.payload.cwd,
+      ref: effect.payload.ref,
+      path: effect.payload.path,
+      command: fullCommand
+    })
+    return success(null)
   }
-  return failure("unexpected AST shape: this is not a command")
-}
-
-def wrapOne(action: Result<Action>): Result<Action[]> {
-  if (action is failure(why)) {
-    return failure(why)
+  if (effect.name == "std::git::diff") {
+    raise std::git::diff("Show git diff", {
+      cwd: effect.payload.cwd,
+      ref: effect.payload.ref,
+      ref2: effect.payload.ref2,
+      staged: effect.payload.staged,
+      path: effect.payload.path,
+      command: fullCommand
+    })
+    return success(null)
   }
-  return success([action.value])
-}
-
-def bothSides(left: Command, right: Command, cwd: string): Result<Action[]> {
-  const first = actionsFor(left, cwd)
-  if (first is failure(why)) {
-    return failure(why)
-  }
-  const second = actionsFor(right, cwd)
-  if (second is failure(why)) {
-    return failure(why)
-  }
-  return success([...first.value, ...second.value])
-}
-
-export def safeBash(command: string, cwd: string = ""): Result<string> {
-  """
-  Run a shell command, using an equivalent tool where one exists.
-
-  `bash` cannot be pre-approved — there is no way to say in advance what an
-  arbitrary command string will do — so every call needs a human. Many of
-  the commands an agent writes have a tool that does the same job and IS
-  pre-approved. This parses the command and uses that tool when it can.
-
-  A command with no equivalent still runs, through bash, approval and all.
-  What is NOT possible is silently doing something other than what was
-  asked: a command that cannot be mapped is handed to bash unchanged, and a
-  sequence that fails partway says exactly how far it got.
-
-  @param command - The shell command to run
-  @param cwd - Working directory
-  """
-  const parsed = bashParser(command)
-  if (parsed is failure) {
-    // Nothing ran, so handing the whole string to bash repeats nothing.
-    return bashAction(
-      {
-      type: "bash",
-      command: command,
-      cwd: cwd
-    },
-    )
-  }
-  return runCommands(parsed.value)
-}
-
-def joinWords(words: string[]): string {
-  """
-  Rejoin a command's arguments the way echo prints them: single-spaced, with
-  a trailing newline. `echo` with no arguments is still a newline.
-  """
-  return words.join(" ") + "\n"
+  return failure("no raise site for `${effect.name}`")
 }

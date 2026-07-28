@@ -383,12 +383,12 @@ node main() {
     expect(errs.some((x) => /does not exist/i.test(x.message))).toBe(false);
   });
 
-  it("LIMITATION: a match(e) object-pattern arm does not narrow e.data inside the arm", () => {
-    // Object-pattern match arms match+dispatch but do NOT narrow the scrutinee's
-    // member access within the arm body, so `e.data.n` sees the full payload
-    // union and errors. The supported idiom for per-effect payload access is the
-    // member-path guard `if (e.effect == "...")` (see the tests above). Pinned so
-    // a future reader sees this is a known boundary, not a regression.
+  it("a match(e) object-pattern arm narrows e.data inside the arm", () => {
+    // A bare-variable scrutinee's lowered conditions test the variable itself
+    // (narrowableScrutineeRef), so each arm's discriminant narrows `e` and
+    // `e.data` types as that arm's payload. This was a pinned limitation
+    // before the bare-variable substitution landed; the member-path idiom
+    // `match (e.effect)` (see the tests above) also still works.
     const errs = hardErrorsFrom(`
 effect h3m::a { n: number }
 effect h3m::b { s: string }
@@ -403,7 +403,7 @@ node main() {
     }
   }
 }`);
-    expect(errs.some((x) => /not available on every member/i.test(x.message))).toBe(true);
+    expect(errs).toEqual([]);
   });
 });
 

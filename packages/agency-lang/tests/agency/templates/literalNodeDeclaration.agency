@@ -1,0 +1,34 @@
+import { fill, toSource, runCode } from "std::agency"
+
+// A node declaration written without a return type used to parse as the
+// name `node` followed by a call. Nothing downstream caught it: the tree
+// printed and re-parsed stably, and only the generated program failed. This
+// runs the whole path — parse, fill, print, re-parse, compile, run — so the
+// stages have to agree.
+node main(): string {
+  const tpl = [|
+    export node main() {
+      const who: string = #who
+      return "hello " + who
+    }
+  |]
+  const filled = fill(tpl, { who: "world" })
+  if (isFailure(filled)) {
+    return "fill failed: ${filled.error}"
+  }
+  const source = toSource(filled.value)
+  if (!source.includes("node main() {")) {
+    return "bad source: ${source}"
+  }
+  handle {
+    const result = runCode(source)
+    if (isFailure(result)) {
+      return "run failed: ${result.error}"
+    }
+    return result.value
+  } with (e) {
+    if (e.effect == "std::run") {
+      return approve()
+    }
+  }
+}

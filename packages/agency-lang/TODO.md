@@ -474,3 +474,24 @@ fields ("", "", "", "overwrite") for bash plans, to keep the match/pipe
 refactor byte-identical. Follow-up: collapse those rows to what a
 BashExec actually carries, so the fixtures stop describing a record that
 no longer exists.
+
+---
+
+Flow narrowing does not reach inside a match arm block. The identical
+guard-then-access shape typechecks at function scope but fails inside an
+arm (found in safeBash, CI-only because the fixture typecheck test is
+what catches it):
+
+```
+"git" => {
+  const git = literalArgs(command) |> gitEffects.partial(flags: flags, cwd: cwd)
+  if (git is failure(why)) {
+    return failure(why)
+  }
+  return success([...git.value, ...redirect.value])   // AG2008: git not narrowed
+}
+```
+
+Workaround: match with result patterns (success(v) => ...), which bind
+the value and need no narrowing. Same family as the arm-narrowing gap
+above.

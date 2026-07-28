@@ -286,11 +286,16 @@ export def effectsFor(command: SimpleCommand, cwd: string): Result<Effect[]> {
       // Both links can fail, which is what earns the pipe. Appending the
       // redirect contribution cannot, so it stays inline rather than
       // becoming a third link that pretends it could.
-      const git = literalArgs(command) |> gitEffects.partial(flags: flags, cwd: cwd)
-      if (git is failure(why)) {
-        return failure(why)
+      // Result patterns rather than an `is failure` guard: flow narrowing
+      // does not reach inside a match arm block, so `git.value` after a
+      // guard fails to typecheck here even though the identical shape
+      // typechecks at function scope. The patterns bind the value
+      // directly and need no narrowing.
+      const git: Result<Effect[]> = literalArgs(command) |> gitEffects.partial(flags: flags, cwd: cwd)
+      return match(git) {
+        success(effects) => success([...effects, ...redirect.value])
+        failure(why) => failure(why)
       }
-      return success([...git.value, ...redirect.value])
     }
     _ => failure("no rule for `${name.text}`")
   }

@@ -1439,20 +1439,17 @@ export class AgencyGenerator {
         ? ` if (${this.processNode(caseNode.guard).trim()})`
         : "";
 
-      // A one-statement body prints inline only when the statement is a
-      // shape the single-statement arm grammar accepts: return, goto,
-      // assignment, or an expression (matchArmBlockParser's fallback
-      // alternation). Everything else — a raise statement, an if, a loop —
-      // must keep block form or the printed arm will not re-parse: this
-      // used to collapse `{ raise ... }` into `=> raise ...`, which the
-      // parser rejects (#708). An allowlist, so an unknown statement kind
-      // degrades to block form — more verbose, never unparseable. A nested
-      // match expression also keeps block form (pre-existing rule), and a
-      // raise-form interrupt is a statement even though the interrupt
-      // EXPRESSION shares its node type.
+      // The author's form is preserved: an arm written as a block prints
+      // as a block (`blockBody`, set by the parser), an arm written inline
+      // prints inline. The shape test below only decides for cases with NO
+      // recorded form — ASTs built programmatically — where inline is only
+      // safe for the shapes the single-statement arm grammar accepts;
+      // anything else (a raise statement, an if, a loop) must take block
+      // form or the printed arm will not re-parse (#708).
       const only = caseNode.body.length === 1 ? caseNode.body[0] : null;
       const inlinable =
         only !== null &&
+        caseNode.blockBody !== true &&
         only.type !== "matchBlock" &&
         !(only.type === "interruptStatement" && (only as InterruptStatement).viaRaise) &&
         (only.type === "returnStatement" ||

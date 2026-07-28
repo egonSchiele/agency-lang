@@ -98,6 +98,21 @@ describe("agencyGenerator - match block arm printing", () => {
         "}",
       ].join("\n"),
     ],
+    // The author's choice of form is preserved: a one-statement block
+    // stays a block instead of collapsing to an inline arm.
+    [
+      "single-statement block arm is preserved",
+      [
+        "node main() {",
+        "  match(x) {",
+        '    "a" => {',
+        '      print("hi")',
+        "    }",
+        "    _ => 0",
+        "  }",
+        "}",
+      ].join("\n"),
+    ],
     // A raise is a STATEMENT the single-statement arm grammar does not
     // accept, so its block must survive formatting — fmt used to collapse
     // it into `=> raise ...`, which does not re-parse (#708).

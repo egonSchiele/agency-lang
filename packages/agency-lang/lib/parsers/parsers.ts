@@ -2615,6 +2615,17 @@ const bracketParser: Parser<boolean> = or(
  *  tarsec's parse-wide input, because the whitespace that got us here
  *  was already consumed by whatever parser ran before.
  *
+ *  PERFORMANCE WARNING: do NOT reach for this parser unless there is no
+ *  other option. It calls `getInputStr` and re-reads source text on
+ *  every attempt, which ordinary parsers never do — combinators look
+ *  forward at the remaining input for free. A lookbehind is only
+ *  justified when the information you need was already consumed by an
+ *  earlier parser and cannot be recovered any other way, which is the
+ *  case for the chain boundary below and almost nowhere else. If you
+ *  can restructure the grammar to test BEFORE the whitespace is
+ *  consumed (`not(...)` lookahead, reordering, a dedicated trivia
+ *  parser), do that instead.
+ *
  *  Used as `not(startOfLineContent)` to stop a bracket chain element
  *  from continuing an expression across a newline. Expression parsers
  *  (function calls in particular) consume trailing whitespace INCLUDING

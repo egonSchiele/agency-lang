@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { AgencyGenerator } from "./agencyGenerator.js";
+import { AgencyGenerator, generateAgency } from "./agencyGenerator.js";
 import { parseAgency } from "../parser.js";
+import { deepFreeze } from "../runtime/utils.js";
 import { FunctionDefinition } from "../types.js";
 
 describe("AgencyGenerator - Function Parameter Type Hints", () => {
@@ -1128,5 +1129,53 @@ describe("finalize block formatting", () => {
     if (!reparsed.success) return;
     const regenerated = new AgencyGenerator().generate(reparsed.result).output;
     expect(regenerated).toContain("finalize {");
+  });
+});
+
+describe("AgencyGenerator - does not modify its input", () => {
+  // The import sits BELOW the declaration on purpose. Hoisting is what
+  // makes the printer want to rewrite the node list, so a source where the
+  // import is already at the top cannot tell you whether hoisting still
+  // happens after the fix.
+  const source = [
+    "// a header comment",
+    "node main(): string {",
+    '  return "x"',
+    "}",
+    "",
+    'import { read } from "std::fs"',
+    "",
+  ].join("\n");
+
+  function parseOk(text: string) {
+    const result = parseAgency(text, {}, false);
+    if (!result.success) throw new Error(result.message);
+    return result.result;
+  }
+
+  it("leaves the caller's program untouched", () => {
+    const program = parseOk(source);
+    // Whole-tree comparison, not a list of node types: a type list is
+    // blind to a mutation inside a node, or to a reorder among nodes of
+    // the same type. This asserts the invariant the fix is really about.
+    const before = JSON.stringify(program);
+    generateAgency(program);
+    expect(JSON.stringify(program)).toBe(before);
+  });
+
+  it("prints a deep-frozen program without throwing", () => {
+    // A `static const` Code value is deep-frozen at init, so this is the
+    // exact shape `toSource(someStaticLiteral)` hands the printer.
+    const program = deepFreeze(parseOk(source));
+    expect(() => generateAgency(program)).not.toThrow();
+  });
+
+  it("still hoists imports above declarations", () => {
+    // Order, not presence. A `toContain` pair would stay green if
+    // partitioning were deleted outright, which is the thing this guards.
+    const printed = generateAgency(parseOk(source));
+    expect(printed.indexOf('import { read } from "std::fs"')).toBeLessThan(
+      printed.indexOf("node main(): string {"),
+    );
   });
 });

@@ -148,13 +148,9 @@ def writePlanDetail(source: string): any {
   // `mode` is in the tuple deliberately. Without it, a `writeMode` that
   // always returned "overwrite" survives the whole suite, and
   // `echo hi >> notes.txt` silently TRUNCATES the file.
-  //
-  // The non-write arm reports the same sentinel fields the old flat
-  // Execution record carried, so the fixture rows for bash plans stay
-  // byte-identical across the union refactor.
   return match(plan.execution) {
     { kind: "write", content, filename, dir, mode } => return ["write", content, filename, dir, mode, names]
-    { kind } => [kind, "", "", "", "overwrite", names]
+    { kind } => [kind, names]
   }
 }
 

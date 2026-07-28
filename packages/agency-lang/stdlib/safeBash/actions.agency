@@ -1,141 +1,146 @@
 /** @module
-  The things a bash command can turn into.
+  What safeBash decides, and the three ways it can carry that out.
 
-  Every command `safeBash` runs is first translated into an `Action`: a plain
-  data object saying what should happen, with nothing having happened yet.
-  Deciding *what* a command means and *doing* it are separate steps, so the
-  deciding half can be tested by handing in a string and looking at the
-  actions that come out.
+  A `Plan` is the whole decision about one call, made before anything
+  happens: which interrupts to raise, and what to run if they are all
+  approved. Deciding and doing are separate steps so the deciding half can
+  be tested by handing in a string and looking at the plan.
 
-  `bash` itself is an action, so a command with no better mapping is still
-  represented here rather than being a hole in the model.
+  The executors call the NON-RAISING internals (`_bash`, `_write`) rather
+  than the `bash` and `write` tools, because those raise their own
+  interrupts and the caller has already raised a narrower one. See the
+  comment on `runBash`.
 */
-import { gitStatus, gitDiff, gitLog } from "std::git"
-import { bash } from "std::shell"
+import { WriteMode } from "std::index"
+
+import { _write } from "agency-lang/stdlib-lib/builtins.js"
+import { _bash } from "agency-lang/stdlib-lib/shell.js"
 
 /** How much of a command's output to keep before truncating. */
 export static const MAX_STDOUT_LEN = 2000
 
-export type Action =
-  | PrintAction
-  | WriteFileAction
-  | GitAction
-  | BashAction
+/** One interrupt a command needs raised before it may run.
+ *
+ * A discriminated union rather than a bag of `any`: the effect set is
+ * closed, so each payload can be typed, and typing them is what makes the
+ * raise sites check that every payload satisfies its effect's contract. */
+export type Effect =
+  | { name: "std::bash" }
+  | { name: "std::write"; payload: WritePayload }
+  | { name: "std::git::status"; payload: { cwd: string } }
+  | { name: "std::git::log"; payload: { cwd: string; ref: string; path: string } }
+  | { name: "std::git::diff"; payload: GitDiffPayload }
 
-export type PrintAction = {
-  type: "print";
-  content: string
+export type WritePayload = {
+  dir: string;
+  filename: string;
+  content: string;
+  mode: WriteMode
 }
 
-export type WriteFileAction = {
-  type: "writeFile";
+export type GitDiffPayload = {
+  cwd: string;
+  ref: string;
+  ref2: string;
+  staged: boolean;
+  path: string
+}
+
+/** What happens if every effect in the plan is approved. */
+export type Execution = {
+  kind: string;
+  command: string;
+  content: string;
   filename: string;
   dir: string;
-  content: string;
-  mode: "append" | "overwrite"
+  mode: WriteMode;
+  reason: string
 }
 
-export type GitAction = GitStatusAction | GitDiffAction | GitLogAction
-
-export type GitStatusAction = {
-  type: "gitStatus";
-  cwd?: string
+/** The whole decision about one call to safeBash, made before anything runs. */
+export type Plan = {
+  effects: Effect[];
+  execution: Execution
 }
 
-export type GitDiffAction = {
-  type: "gitDiff";
-  path?: string;
-  staged?: boolean;
-  cwd?: string
-}
-
-export type GitLogAction = {
-  type: "gitLog";
-  path?: string;
-  cwd?: string
-}
-
-/** The fallback: run the command through bash exactly as written.
- *
- * `command` is the command re-rendered from its AST, not the caller's
- * original string, so a sequence that runs three commands and falls back on
- * the second sends bash only the second one. */
-export type BashAction = {
-  type: "bash";
-  command: string;
-  cwd?: string
-}
-
-export def printAction(action: PrintAction): Result<string> {
+export def runBash(command: string, cwd: string): Result<string> {
   """
-  Print to stdout. No interrupt: printing has no effect to approve.
+  Run a command string through bash and return what it printed.
+
+  On success the value is bash's stdout, raw — nothing added, nothing
+  stripped. stderr is discarded on success and reported on failure: two
+  captured pipes cannot interleave the way a terminal does, so this is a
+  policy either way, and discarding on success keeps the value exactly
+  equal to bash's stdout.
+
+  A non-zero exit is a failure, which `&&` and `||` require. The known
+  cost: `grep` exits 1 when it finds nothing and `diff` exits 1 when files
+  differ, and neither is an error.
   """
-  print(action.content)
-  return success(action.content)
+  // `_bash`, NOT `bash`. The `bash` tool raises `std::bash` itself, so
+  // calling it here would ask the broad question again — after the human
+  // already answered a narrower one — and the entire feature would be a
+  // no-op.
+  //
+  // Bypassing a tool's interrupt is normally forbidden: handlers are
+  // safety infrastructure. It is correct here for one specific reason,
+  // and only while that reason holds: the narrow interrupt REPLACES the
+  // broad one, and the only path into this function runs through a
+  // `raiseAll` that raised every effect in the plan and returned success.
+  // Every plan raises at least one effect, so no classification bug can
+  // turn into an ungated shell call.
+  const attempt = try _bash(command, cwd, 0, "", {})
+  if (attempt is failure(why)) {
+    return failure("`${command}` was not run: ${why}")
+  }
+  // `try` WRAPS the call in a Result, so the ExecResult is inside
+  // `.value`. Reading `attempt.stdout` directly is undefined.
+  const result: any = attempt.value
+  const out = truncate(result.stdout)
+  if (result.exitCode != 0) {
+    return failure(
+      JSON.stringify(
+      {
+      command: command,
+      exitCode: result.exitCode,
+      stderr: truncate(result.stderr),
+      stdout: out
+    },
+    ),
+    )
+  }
+  return success(out)
 }
 
-export def writeAction(action: WriteFileAction): Result<string> {
+export def truncate(text: string): string {
   """
-  Write a file. `write` raises the `std::write` interrupt, so this is gated
-  the same way any other write is.
+  Cap output length. Raw output with no bound is a context-window hazard,
+  and a visible loss of fidelity beats an invisible one.
   """
-  const written = write(
-    filename: action.filename,
-    content: action.content,
-    dir: action.dir,
-    mode: action.mode,
-  )
-  if (written is failure(reason)) {
-    return failure(reason)
+  if (text.length <= MAX_STDOUT_LEN) {
+    return text
+  }
+  return text[:MAX_STDOUT_LEN] + "\n[truncated]"
+}
+
+export def runWrite(exec: Execution): Result<string> {
+  """
+  Perform the write a redirected echo asked for. Returns the empty string,
+  which is what bash's stdout for `echo hi > f` is.
+
+  `_write`, NOT `write`, for the same reason `runBash` uses `_bash`: the
+  `write` tool raises its own `std::write`, and the caller already raised
+  one carrying the content.
+  """
+  // `destructive { }` because `write()` wraps `_write` in one, and that
+  // marker feeds the tool-loop retry rules. Calling `_write` directly
+  // without it would give this write a different retry classification
+  // from the tool it replaces.
+  destructive {
+    const written = try _write(exec.dir, exec.filename, exec.content, exec.mode)
+    if (written is failure(why)) {
+      return failure(why)
+    }
   }
   return success("")
-}
-
-export def gitStatusAction(action: GitStatusAction): Result<string> {
-  const status = gitStatus(cwd: action.cwd ?? "")
-  return success(JSON.stringify(status))
-}
-
-export def gitDiffAction(action: GitDiffAction): Result<string> {
-  const diff = gitDiff(
-    path: action.path ?? "",
-    staged: action.staged ?? false,
-    cwd: action.cwd ?? "",
-  )
-  return success(JSON.stringify(diff))
-}
-
-export def gitLogAction(action: GitLogAction): Result<string> {
-  const log = gitLog(path: action.path ?? "", cwd: action.cwd ?? "")
-  return success(JSON.stringify(log))
-}
-
-export def bashAction(action: BashAction): Result<string> {
-  """
-  Run the command through bash, approval and all.
-
-  A non-zero exit is a failure rather than a success carrying a bad exit
-  code, so a `&&` chain stops on it the way bash would.
-  """
-  // `any` because `bash` is DECLARED to return an ExecResult, but a rejected
-  // approval halts it and hands back a failure instead, which the declared
-  // type cannot describe.
-  const result: any = bash(action.command, action.cwd ?? "")
-  // Reading an exit code off that failure is a crash on the most ordinary
-  // path there is: a human saying no.
-  if (result is failure(why)) {
-    return failure("`${action.command}` was not run: ${why}")
-  }
-  const data = JSON.stringify(
-    {
-    command: action.command,
-    stdout: result.stdout[:MAX_STDOUT_LEN],
-    stderr: result.stderr[:MAX_STDOUT_LEN],
-    exitCode: result.exitCode
-  },
-  )
-  if (result.exitCode != 0) {
-    return failure(data)
-  }
-  return success(data)
 }

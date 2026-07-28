@@ -1,126 +1,107 @@
 ---
 name: "actions"
-description: "The things a bash command can turn into."
+description: "What safeBash decides, and the three ways it can carry that out."
 ---
 
 # actions
 
-The things a bash command can turn into.
+What safeBash decides, and the three ways it can carry that out.
 
-  Every command `safeBash` runs is first translated into an `Action`: a plain
-  data object saying what should happen, with nothing having happened yet.
-  Deciding *what* a command means and *doing* it are separate steps, so the
-  deciding half can be tested by handing in a string and looking at the
-  actions that come out.
+  A `Plan` is the whole decision about one call, made before anything
+  happens: which interrupts to raise, and what to run if they are all
+  approved. Deciding and doing are separate steps so the deciding half can
+  be tested by handing in a string and looking at the plan.
 
-  `bash` itself is an action, so a command with no better mapping is still
-  represented here rather than being a hole in the model.
+  The executors call the NON-RAISING internals (`_bash`, `_write`) rather
+  than the `bash` and `write` tools, because those raise their own
+  interrupts and the caller has already raised a narrower one. See the
+  comment on `runBash`.
 
 ## Types
 
-### Action
+### Effect
+
+One interrupt a command needs raised before it may run.
+ *
+ * A discriminated union rather than a bag of `any`: the effect set is
+ * closed, so each payload can be typed, and typing them is what makes the
+ * raise sites check that every payload satisfies its effect's contract.
 
 ```ts
-export type Action =
-  | PrintAction
-  | WriteFileAction
-  | GitAction
-  | BashAction
+/** One interrupt a command needs raised before it may run.
+ *
+ * A discriminated union rather than a bag of `any`: the effect set is
+ * closed, so each payload can be typed, and typing them is what makes the
+ * raise sites check that every payload satisfies its effect's contract. */
+export type Effect =
+  | { name: "std::bash" }
+  | { name: "std::write"; payload: WritePayload }
+  | { name: "std::git::status"; payload: { cwd: string } }
+  | { name: "std::git::log"; payload: { cwd: string; ref: string; path: string } }
+  | { name: "std::git::diff"; payload: GitDiffPayload }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L19))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L27))
 
-### PrintAction
+### WritePayload
 
 ```ts
-export type PrintAction = {
-  type: "print";
-  content: string
+export type WritePayload = {
+  dir: string;
+  filename: string;
+  content: string;
+  mode: WriteMode
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L25))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L34))
 
-### WriteFileAction
+### GitDiffPayload
 
 ```ts
-export type WriteFileAction = {
-  type: "writeFile";
+export type GitDiffPayload = {
+  cwd: string;
+  ref: string;
+  ref2: string;
+  staged: boolean;
+  path: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L41))
+
+### Execution
+
+What happens if every effect in the plan is approved.
+
+```ts
+/** What happens if every effect in the plan is approved. */
+export type Execution = {
+  kind: string;
+  command: string;
+  content: string;
   filename: string;
   dir: string;
-  content: string;
-  mode: "append" | "overwrite"
+  mode: WriteMode;
+  reason: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L30))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L50))
 
-### GitAction
+### Plan
 
-```ts
-export type GitAction = GitStatusAction | GitDiffAction | GitLogAction
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L38))
-
-### GitStatusAction
+The whole decision about one call to safeBash, made before anything runs.
 
 ```ts
-export type GitStatusAction = {
-  type: "gitStatus";
-  cwd?: string
+/** The whole decision about one call to safeBash, made before anything runs. */
+export type Plan = {
+  effects: Effect[];
+  execution: Execution
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L40))
-
-### GitDiffAction
-
-```ts
-export type GitDiffAction = {
-  type: "gitDiff";
-  path?: string;
-  staged?: boolean;
-  cwd?: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L45))
-
-### GitLogAction
-
-```ts
-export type GitLogAction = {
-  type: "gitLog";
-  path?: string;
-  cwd?: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L52))
-
-### BashAction
-
-The fallback: run the command through bash exactly as written.
- *
- * `command` is the command re-rendered from its AST, not the caller's
- * original string, so a sequence that runs three commands and falls back on
- * the second sends bash only the second one.
-
-```ts
-/** The fallback: run the command through bash exactly as written.
- *
- * `command` is the command re-rendered from its AST, not the caller's
- * original string, so a sequence that runs three commands and falls back on
- * the second sends bash only the second one. */
-export type BashAction = {
-  type: "bash";
-  command: string;
-  cwd?: string
-}
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L61))
 
 ## Constants
 
@@ -130,122 +111,77 @@ export type BashAction = {
 export static const MAX_STDOUT_LEN = 2000
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L20))
 
 ## Functions
 
-### printAction
+### runBash
 
 ```ts
-printAction(action: PrintAction): Result<string>
+runBash(command: string, cwd: string): Result<string>
 ```
 
-Print to stdout. No interrupt: printing has no effect to approve.
+Run a command string through bash and return what it printed.
+
+  On success the value is bash's stdout, raw — nothing added, nothing
+  stripped. stderr is discarded on success and reported on failure: two
+  captured pipes cannot interleave the way a terminal does, so this is a
+  policy either way, and discarding on success keeps the value exactly
+  equal to bash's stdout.
+
+  A non-zero exit is a failure, which `&&` and `||` require. The known
+  cost: `grep` exits 1 when it finds nothing and `diff` exits 1 when files
+  differ, and neither is an error.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| action | [PrintAction](#printaction) |  |
+| command | `string` |  |
+| cwd | `string` |  |
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L66))
 
-### writeAction
+### truncate
 
 ```ts
-writeAction(action: WriteFileAction): Result<string>
+truncate(text: string): string
 ```
 
-Write a file. `write` raises the `std::write` interrupt, so this is gated
-  the same way any other write is.
+Cap output length. Raw output with no bound is a context-window hazard,
+  and a visible loss of fidelity beats an invisible one.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| action | [WriteFileAction](#writefileaction) |  |
+| text | `string` |  |
 
-**Returns:** `Result<string>`
+**Returns:** `string`
 
-**Throws:** `std::write`
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L115))
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L77))
-
-### gitStatusAction
+### runWrite
 
 ```ts
-gitStatusAction(action: GitStatusAction): Result<string>
+runWrite(exec: Execution): Result<string>
 ```
+
+Perform the write a redirected echo asked for. Returns the empty string,
+  which is what bash's stdout for `echo hi > f` is.
+
+  `_write`, NOT `write`, for the same reason `runBash` uses `_bash`: the
+  `write` tool raises its own `std::write`, and the caller already raised
+  one carrying the content.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| action | [GitStatusAction](#gitstatusaction) |  |
+| exec | [Execution](#execution) |  |
 
 **Returns:** `Result<string>`
 
-**Throws:** `std::git::status`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L94))
-
-### gitDiffAction
-
-```ts
-gitDiffAction(action: GitDiffAction): Result<string>
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| action | [GitDiffAction](#gitdiffaction) |  |
-
-**Returns:** `Result<string>`
-
-**Throws:** `std::git::diff`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L99))
-
-### gitLogAction
-
-```ts
-gitLogAction(action: GitLogAction): Result<string>
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| action | [GitLogAction](#gitlogaction) |  |
-
-**Returns:** `Result<string>`
-
-**Throws:** `std::git::log`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L108))
-
-### bashAction
-
-```ts
-bashAction(action: BashAction): Result<string>
-```
-
-Run the command through bash, approval and all.
-
-  A non-zero exit is a failure rather than a success carrying a bad exit
-  code, so a `&&` chain stops on it the way bash would.
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| action | [BashAction](#bashaction) |  |
-
-**Returns:** `Result<string>`
-
-**Throws:** `std::bash`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L126))

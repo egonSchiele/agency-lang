@@ -65,6 +65,7 @@ import {
   many1TillOneOf,
   isCommittedFailure,
   getPosition,
+  getInputStr,
   type Position,
 } from "tarsec";
 
@@ -2608,7 +2609,37 @@ const bracketParser: Parser<boolean> = or(
   map(char("["), () => false),
 );
 
+/** True when the current parse position sits just after a line break,
+ *  looking back across spaces and tabs only.
+ *
+ *  A bracket chain element (`[i]`, `[a:b]`) must not continue an
+ *  expression across a newline. Expression parsers (function calls in
+ *  particular) consume trailing whitespace INCLUDING newlines, so without
+ *  this check a match arm like
+ *
+ *      ["status"] => failure("a")
+ *      [sub] => failure("b")
+ *
+ *  parses the second arm's pattern as an INDEX on the first arm's value —
+ *  `failure("a")[sub]` — and the match collapses. Multi-element patterns
+ *  were immune only because `expr["a", "b"]` is not index syntax.
+ *  Statement context already refuses the same continuation, so this
+ *  aligns the two. Dot-method chains are deliberately untouched: a
+ *  fluent `.method()` on its own line is an established style; a bare
+ *  `[i]` on its own line is an array literal or a pattern, never an
+ *  intended index. */
+function newlineBeforePosition(input: string): boolean {
+  const full = getInputStr();
+  if (!full || input.length >= full.length) return false;
+  let i = full.length - input.length - 1;
+  while (i >= 0 && (full[i] === " " || full[i] === "\t")) i--;
+  return i >= 0 && full[i] === "\n";
+}
+
 const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
+  if (newlineBeforePosition(input)) {
+    return failure("a slice cannot start on a new line", input);
+  }
   const parser = seqC(
     capture(bracketParser, "optional"),
     optionalSpaces,
@@ -2630,6 +2661,9 @@ const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
 };
 
 const indexChainParser: Parser<AccessChainElement> = (input: string) => {
+  if (newlineBeforePosition(input)) {
+    return failure("an index cannot start on a new line", input);
+  }
   const parser = seqC(
     capture(bracketParser, "optional"),
     optionalSpaces,

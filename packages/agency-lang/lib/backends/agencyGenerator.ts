@@ -177,7 +177,6 @@ export class AgencyGenerator {
   > = new Map();
   protected functionDefinitions: Record<string, FunctionDefinition> = {};
   protected currentScope: Scope[] = [{ type: "global" }];
-  protected program: AgencyProgram | null = null;
   protected agencyConfig: AgencyConfig = {};
 
   private indentLevel: number = 0;
@@ -212,7 +211,6 @@ export class AgencyGenerator {
   generate(program: AgencyProgram): {
     output: string;
   } {
-    this.program = program;
     // Pass 1: Collect all type aliases
     for (const node of program.nodes) {
       if (node.type === "typeAlias") {
@@ -233,19 +231,23 @@ export class AgencyGenerator {
     // while preserving `// @tc-ignore` / `// @tc-nocheck` placement.
     // Skipped in preserveOrder mode (literate weave) because the whole
     // point there is to leave nodes exactly where the author put them.
-    if (!this.preserveOrder) {
-      program.nodes = this.partitionImports(program.nodes);
-    }
+    // A local, never a write-back. The caller may own this tree — a `Code`
+    // value from a `static const` is deep-frozen, and assigning to
+    // `program.nodes` throws. Passes 3, 4 and 5 below read `nodes`; passes
+    // 1 and 2 above ran before the partition and read `program.nodes`.
+    const nodes = this.preserveOrder
+      ? program.nodes
+      : this.partitionImports(program.nodes);
 
     // Pass 3: Collect all node imports
-    for (const node of program.nodes) {
+    for (const node of nodes) {
       if (node.type === "importNodeStatement") {
         this.importedNodes.push(node);
       }
     }
 
     // Pass 4: Generate code for tools
-    for (const node of program.nodes) {
+    for (const node of nodes) {
       if (node.type === "function") {
         this.generatedStatements.push(this.processTool(node));
         this.collectFunctionSignature(node);
@@ -265,7 +267,7 @@ export class AgencyGenerator {
 
     // Pass 5: Process all nodes and generate code
     const stmtPairs: { type: string; code: string }[] = [];
-    for (const node of program.nodes) {
+    for (const node of nodes) {
       const result = this.processNode(node);
       if (result !== "" || node.type === "newLine") {
         // Collapse runs of blank lines to one. Import hoisting can leave

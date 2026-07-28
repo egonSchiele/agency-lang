@@ -306,3 +306,101 @@ describe("code literals: review-round pins", () => {
     expect(errorData!.line).toBeLessThanOrEqual(3);
   });
 });
+
+describe("declarations in a literal infer program", () => {
+  // `expects` lists node types the literal must hold. Order is not
+  // asserted — a leading comment is kept as a node of its own, so the
+  // declaration is not always first.
+  const cases: { body: string; expects: string[]; label: string }[] = [
+    { label: "un-annotated node", body: "node main() {\n  print(1)\n}", expects: ["graphNode"] },
+    { label: "un-annotated def", body: "def foo() {\n  return 1\n}", expects: ["function"] },
+    { label: "node with parameters", body: "node m(x: number) {\n  print(x)\n}", expects: ["graphNode"] },
+    { label: "two declarations", body: "node a() {\n  print(1)\n}\n\nnode b() {\n  print(2)\n}", expects: ["graphNode"] },
+    { label: "comment first", body: "// hi\nnode main() {\n  print(1)\n}", expects: ["comment", "graphNode"] },
+    { label: "statement then declaration", body: "print(1)\nnode main() {\n  print(2)\n}", expects: ["functionCall", "graphNode"] },
+  ];
+
+  for (const { label, body, expects } of cases) {
+    it(`infers program for a ${label}`, () => {
+      const lit = firstLiteral(`node host() {\n  const t = [|\n${body}\n  |]\n}\n`);
+      expect(lit.kind, label).toBe("program");
+      // The kind alone is not enough: it was already wrong for a reason
+      // only the node types reveal. Under the bug the declaration became a
+      // `variableName` plus a `functionCall`, so both halves of this
+      // matter — the declaration is present, and no stray name is.
+      const types = lit.nodes.map((node) => node.type);
+      for (const expected of expects) {
+        expect(types, `${label}: ${expected}`).toContain(expected);
+      }
+      expect(types, label).not.toContain("variableName");
+    });
+  }
+
+  it("still infers program for an annotated node", () => {
+    const lit = firstLiteral(`node host() {\n  const t = [|\n    node main(): string {\n      return "x"\n    }\n  |]\n}\n`);
+    expect(lit.kind).toBe("program");
+    expect(lit.nodes[0].type).toBe("graphNode");
+  });
+
+  it("still infers program for an annotated def", () => {
+    // `def` takes the other branch of the probe's `or`, so it needs its
+    // own annotated case, not just the un-annotated one above.
+    const lit = firstLiteral(`node host() {\n  const t = [|\n    def foo(): number {\n      return 1\n    }\n  |]\n}\n`);
+    expect(lit.kind).toBe("program");
+    expect(lit.nodes[0].type).toBe("function");
+  });
+
+  it("reports a broken declaration instead of silently reading two statements", () => {
+    // Before the fix this parsed as statements and produced junk. Now the
+    // statements attempt declines, the program attempt runs, and its own
+    // declaration parser reports the real problem — the unclosed parameter
+    // list. Asserting the message matters as much as asserting the failure:
+    // a future change that keeps the failure but degrades the message to a
+    // generic one would still pass a success-only check while telling the
+    // user nothing.
+    const source = `node host() {\n  const t = [|\n    node main( {\n      print(1)\n    }\n  |]\n}\n`;
+    const result = parseAgency(source, {}, true, false);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.message).toContain("parameter list");
+  });
+});
+
+describe("bodies whose kind must not change", () => {
+  // Regression guards. Each begins with a word that a keyword-routing fix
+  // would have misread, and `type` / `effect` are legal in bodies so their
+  // statements answer is the correct one.
+  const cases: { body: string; kind: string }[] = [
+    { body: "node", kind: "expr" },
+    { body: "node.run()", kind: "expr" },
+    { body: "node + 1", kind: "expr" },
+    { body: "const x = 1", kind: "statements" },
+    { body: "print(1)", kind: "expr" },
+    { body: "type P = { n: number }", kind: "statements" },
+    { body: "effect Foo", kind: "statements" },
+  ];
+
+  for (const { body, kind } of cases) {
+    it(`keeps \`${body}\` as ${kind}`, () => {
+      const lit = firstLiteral(`node host() {\n  const node = 1\n  const t = [| ${body} |]\n  print("x")\n}\n`);
+      expect(lit.kind, body).toBe(kind);
+    });
+  }
+});
+
+describe("a throwing attempt does not abandon the remaining attempts", () => {
+  // `static const` is rejected inside a function body by a parser that
+  // reports through tarsec's parseError, which THROWS. A literal body may
+  // legitimately be a whole program, where `static const` is correct.
+  it("parses a static const literal as a program", () => {
+    const lit = firstLiteral(`node host() {\n  const t = [|\n    static const x = 1\n  |]\n  print("y")\n}\n`);
+    expect(lit.kind).toBe("program");
+    expect(lit.nodes.map((node) => node.type)).toContain("assignment");
+  });
+
+  it("parses a static const written after another statement", () => {
+    const lit = firstLiteral(`node host() {\n  const t = [|\n    const a = 1\n    static const x = 2\n  |]\n  print("y")\n}\n`);
+    expect(lit.kind).toBe("program");
+    expect(lit.nodes.filter((node) => node.type === "assignment").length).toBe(2);
+  });
+});

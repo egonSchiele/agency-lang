@@ -19,8 +19,7 @@ Using [Template Agency](/guide/template-agency) to generate the code for a resea
 
 ```ts
   const template = [|
-    node
-    main() {
+    node main() {
       const topic = #topic
       const res = llm("Research the topic: ${topic} and provide a summary of findings.")
       return res

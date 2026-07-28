@@ -222,6 +222,24 @@ describe("formatter gate: code literals", () => {
     expect(generateAgency(parseTemplateMode(source))).toBe(expected);
   });
 
+  it("golden: an un-annotated node in a literal keeps its declaration", () => {
+    // The reported symptom of the mis-parse was formatting: `node` and
+    // `main() {` printed on separate lines, because the tree held a name
+    // and a call. A byte-exact golden is what stops that coming back.
+    const source = `node host() {\n  const t = [|\n    node main() {\n      print(1)\n    }\n  |]\n}\n`;
+    const expected = [
+      "node host() {",
+      "  const t = [|",
+      "    node main() {",
+      "      print(1)",
+      "    }",
+      "  |]",
+      "}",
+      "",
+    ].join("\n");
+    expect(generateAgency(parseTemplateMode(source))).toBe(expected);
+  });
+
   it("a body comment survives printing", () => {
     const source = `node main() {\n  const t = [|\n    // keep me\n    print(1)\n  |]\n}\n`;
     const printed = generateAgency(parseTemplateMode(source));

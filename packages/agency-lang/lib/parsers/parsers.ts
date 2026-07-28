@@ -66,6 +66,7 @@ import {
   isCommittedFailure,
   getPosition,
   getInputStr,
+  getParseState,
   type Position,
 } from "tarsec";
 
@@ -3082,6 +3083,37 @@ function advancePositionOver(base: Position, text: string): Position {
   };
 }
 
+/**
+ * Run one kind attempt, treating a throw as a non-match.
+ *
+ * A parser reached during an attempt may throw rather than fail: tarsec's
+ * `parseError` does, and `bodyReservedModifierParser` uses it to explain
+ * `static const` written inside a function body. That message is right for a
+ * body and wrong for a literal, whose body may legitimately be a whole
+ * program. An attempt that dies is an attempt that did not match, so the
+ * remaining attempts must still run.
+ *
+ * Safe because `runNested` restores the enclosing parse's state in a
+ * `finally` — success, failure, or throw — so a caught throw leaves no
+ * corrupted state behind, and the committed-failure slot it swaps back is
+ * the enclosing parse's own. Only `TarsecError` is converted; anything else
+ * is a real bug and still propagates.
+ *
+ * Returns a `ParserResult` rather than null, so a caught throw IS a failure:
+ * the call sites keep their ordinary `.success` checks, and the thrown
+ * message survives instead of being discarded.
+ */
+function tryAttempt<T>(run: () => ParserResult<T>): ParserResult<T> {
+  try {
+    return run();
+  } catch (error) {
+    if (error instanceof TarsecError) {
+      return failure(error.message, "") as ParserResult<T>;
+    }
+    throw error;
+  }
+}
+
 /** Smallest-first kind inference over a literal body: a lone expression,
  *  else a statement list, else a program. Each attempt must consume the
  *  whole body. EXPORTED and shared with the runtime constructor
@@ -3109,11 +3141,15 @@ export function parseCodeLiteralBody(body: string, base?: Position): ParsedLiter
   const savedOffset = currentTemplateOffset;
   setTemplateOffset(0);
   try {
-    const asExpr = runNested(exprParser, trimmed, { basePosition: trimmedBase });
+    const asExpr = tryAttempt(() =>
+      runNested(exprParser, trimmed, { basePosition: trimmedBase }),
+    );
     if (asExpr.success && stripSentinels(asExpr.rest).trim() === "") {
       return { ok: true, nodes: [asExpr.result as AgencyNode], kind: "expr" };
     }
-    const asStatements = runNested(bodyParser, trimmed, { basePosition: trimmedBase });
+    const asStatements = tryAttempt(() =>
+      runNested(bodyParser, trimmed, { basePosition: trimmedBase }),
+    );
     if (asStatements.success && stripSentinels(asStatements.rest).trim() === "") {
       return { ok: true, nodes: asStatements.result as AgencyNode[], kind: "statements" };
     }
@@ -4504,6 +4540,63 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   return success(out, result.rest);
 });
 
+const BODY_DECLARATION_MESSAGE =
+  "`node` and `def` declarations are only legal at the top level of a file.";
+
+/**
+ * Decline a statement that starts like a `node` or `def` declaration.
+ *
+ * A call may take a trailing block and keywords are not reserved in
+ * expression position, so `node main() { ... }` in a body otherwise parses
+ * as the name `node` followed by a call to `main`. That tree compiles and
+ * fails at run time with `node is not defined`. Declining removes the
+ * reading; inside a code literal it is also what lets kind inference fall
+ * through to the program parser, where a declaration belongs.
+ *
+ * The probe mirrors the real declaration prefix — keyword, whitespace,
+ * name, `(` — the same shape `graphNodeParser` and `_baseFunctionParser`
+ * consume, and it reuses `varNameChar`, this file's single definition of an
+ * identifier character. Requiring the `(` is what keeps ordinary uses of
+ * `node` as a variable out of the decline: `node.run()` and `node + 1` fail
+ * at the whitespace, `node (x)` and `node is string` fail for want of a
+ * name-then-paren, `nodeCount()` fails because `str("node")` is not
+ * followed by whitespace.
+ *
+ * `committedFailure`, never plain `failure` and never `parseError`. A plain
+ * failure means "try the next alternative", and the alternatives below
+ * include the parsers that read `node` as a name — the decline would do
+ * nothing at all. `parseError` throws, which escapes
+ * `parseCodeLiteralBody`'s statements attempt and abandons the program
+ * attempt, the bug `bodyReservedModifierParser` causes for `static const`.
+ * A committed failure stops backtracking without throwing, which is exactly
+ * the job; same pattern as the nested-literal directive above.
+ */
+const bodyDeclarationParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    or(str("node"), str("def")),
+    many1(space),
+    many1WithJoin(varNameChar),
+    optionalSpaces,
+    char("("),
+  );
+  const probed = probe(input);
+  if (!probed.success) {
+    return failure("", input);
+  }
+  const declined = committedFailure(BODY_DECLARATION_MESSAGE, probed.rest);
+  // Record it in the preferred-message slot, which is what `committed()`
+  // does for the failures it produces (tarsec combinators.js:226) and what
+  // both of `parseAgency`'s failure exits read. Marking the RESULT
+  // committed only stops `or` and `many` from backtracking; without the
+  // slot this message loses to the enclosing `parseError` throw — a node
+  // body is wrapped in one, so the user would get "expected node body"
+  // instead of being told what is actually wrong. Position comes from
+  // `probed.rest`, past the declaration name, so the squiggle lands on the
+  // declaration rather than at the start of the statement.
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
 const bodyOptimizeAssignmentParser: Parser<Assignment> = (input: string) => {
   const result = modifiedAssignmentParser(input);
   if (!result.success) return result;
@@ -4647,6 +4740,11 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   typeAliasParser,
   tagParser,
   bodyReservedModifierParser,
+  // Next to bodyReservedModifierParser because it does the same job: both
+  // decline a top-level-only declaration written inside a body. This one
+  // must sit ahead of assignmentParser / binOpParser / valueAccessParser,
+  // which are what would otherwise read `node` as a name.
+  bodyDeclarationParser,
   // withModifierParser must be tried before returnStatementParser/
   // assignmentParser so that `return foo() with approve` and
   // `const x = foo() with approve` don't get partially consumed by

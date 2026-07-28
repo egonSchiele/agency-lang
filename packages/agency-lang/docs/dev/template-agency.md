@@ -1,6 +1,6 @@
 # Template Agency: implementation
 
-How templates (holes, `fill`, hygiene) work under the hood. The user-facing story is in `docs/site/guide/templates.md`; the design history is in `docs/superpowers/specs/2026-07-22-code-templates-design.md`. This doc is for changing the implementation without re-learning it. Shipped in #665.
+How templates (holes, `fill`, hygiene) work under the hood. The user-facing story is in `docs/site/guide/template-agency.md`; the design history is in `docs/superpowers/specs/2026-07-22-code-templates-design.md`. This doc is for changing the implementation without re-learning it. Shipped in #665.
 
 ## The one rule, stated first
 
@@ -141,7 +141,9 @@ Rename application is a bespoke rewriting walk, and that is documented rather th
 
 ## Code literals (`[| ... |]`)
 
-An inline template is a `codeLiteral` expression node — `{ nodes, kind }` — whose body parsed at parse time of the enclosing file (unlowered template mode, holes intact). Kind is inferred smallest-first by `parseCodeLiteralBody`: a lone expression, else a statement list, else a program; each attempt must consume the whole body. The expr-fills-statements admissibility relaxation (see `assertKindMatchesSort`) is what makes this inference lossless — anything inferred `expr` also works wherever statements go.
+An inline template is a `codeLiteral` expression node — `{ nodes, kind }` — whose body parsed at parse time of the enclosing file (unlowered template mode, holes intact). Kind is inferred smallest-first by `parseCodeLiteralBody`: a lone expression, else a statement list, else a program; each attempt must consume the whole body. The expr-fills-statements admissibility relaxation (see `assertKindMatchesSort`) is what makes the expression case lossless — anything inferred `expr` also works wherever statements go.
+
+Smallest-first is only correct because the statement grammar refuses to read a declaration. `node main() { … }` written without a return type is otherwise a legal statement list — the name `node`, then a call to `main` taking a trailing block, because a call may take a block and keywords are not reserved in expression position — so the statements attempt would win and the program attempt would never run. `bodyDeclarationParser` declines that shape in body position, which is what makes the fall-through happen; a return type annotation is what accidentally saved the annotated forms before it existed. Two details of it are load bearing. It returns `committedFailure`, not plain `failure`: `or` treats an ordinary failure as "try the next alternative", and the alternatives after it are the ones that read `node` as a name, so a plain failure makes the whole thing a no-op. And it registers that failure in `getParseState().committedFailure`, the slot `committed()` writes and both of `parseAgency`'s failure exits prefer — without it the message loses to the enclosing `parseError` throw and a user sees "expected node body" instead of what is wrong. Separately, `parseCodeLiteralBody` wraps its expr and statements attempts in `tryAttempt`, because a parser reached during an attempt may throw (`bodyReservedModifierParser` does, for `static const`) and a throw would abandon the attempts after it. Removing any of the three silently restores a mis-parse.
 
 The implementation rides on four tarsec ≥0.5.1 features that exist because this feature needed them (see `docs/superpowers/specs/2026-07-24-tarsec-nested-parsing-and-errors-design.md` for the war stories):
 

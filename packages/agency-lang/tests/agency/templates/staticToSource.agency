@@ -1,0 +1,19 @@
+import { toSource } from "std::agency"
+
+// A `static const` Code value is deep-frozen at init. The printer used to
+// write its reordered node list back over the caller's `nodes` field, so
+// this threw. Every other fixture calls `fill` first, which clones, and so
+// never touched the frozen value.
+static const template = [|
+  node main() {
+    print("hi")
+  }
+|]
+
+node main(): string {
+  const source = toSource(template)
+  if (source.includes("node main() {")) {
+    return "ok"
+  }
+  return "unexpected: ${source}"
+}

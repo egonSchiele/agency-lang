@@ -2609,71 +2609,48 @@ const bracketParser: Parser<boolean> = or(
   map(char("["), () => false),
 );
 
-/** Offsets that begin a line's content: marks[i] is 1 when source[i] is
- *  the first character on its line that is not a space or tab. Built in
- *  ONE pass per parse input and cached by string identity, so the
- *  boundary check below never re-scans text the parser already
- *  consumed. */
-let markedSource: string | null = null;
-let lineStartMarks: Uint8Array | null = null;
-
-function lineContentStarts(source: string): Uint8Array {
-  const marks = new Uint8Array(source.length);
-  let atLineStart = true;
-  for (let i = 0; i < source.length; i++) {
-    const c = source.charCodeAt(i);
-    if (c === 10 || c === 13) {
-      atLineStart = true;
-    } else if (atLineStart && c !== 32 && c !== 9) {
-      marks[i] = 1;
-      atLineStart = false;
-    }
-  }
-  return marks;
-}
-
-/** True when the chain element about to be parsed sits at the start of
- *  its own line (looking past indentation) — meaning the expression it
- *  would extend ended on the PREVIOUS line.
+/** Zero-width parser: succeeds, consuming nothing, when the parse
+ *  position sits at the start of its line's content — nothing but
+ *  indentation precedes it on the line. This is a lookbehind, through
+ *  tarsec's parse-wide input, because the whitespace that got us here
+ *  was already consumed by whatever parser ran before.
  *
- *  A bracket chain element (`[i]`, `[a:b]`) must not continue an
- *  expression across a newline. Expression parsers (function calls in
- *  particular) consume trailing whitespace INCLUDING newlines, so without
- *  this check a match arm like
+ *  Used as `not(startOfLineContent)` to stop a bracket chain element
+ *  from continuing an expression across a newline. Expression parsers
+ *  (function calls in particular) consume trailing whitespace INCLUDING
+ *  newlines, so without that boundary a match arm like
  *
  *      ["status"] => failure("a")
  *      [sub] => failure("b")
  *
- *  parses the second arm's pattern as an INDEX on the first arm's value —
- *  `failure("a")[sub]` — and the match collapses. Multi-element patterns
- *  were immune only because `expr["a", "b"]` is not index syntax.
- *  Statement context already refuses the same continuation, so this
- *  aligns the two. Dot-method chains are deliberately untouched: a
- *  fluent `.method()` on its own line is an established style; a bare
- *  `[i]` on its own line is an array literal or a pattern, never an
- *  intended index.
- *
- *  Cost: chain elements are attempted after every value access, so the
- *  common path here must be a single character test. Only when a
- *  bracket is actually next (`[` or `?.[`) does this consult the marks
- *  table — one array read against the offset, no text scanning. */
-function bracketStartsOwnLine(input: string): boolean {
-  const c = input.charCodeAt(0);
-  if (c !== 91 /* [ */ && c !== 63 /* ? of ?.[ */) return false;
-  const full = getInputStr();
-  if (!full || input.length > full.length) return false;
-  if (full !== markedSource) {
-    markedSource = full;
-    lineStartMarks = lineContentStarts(full);
+ *  parses the second arm's pattern as an INDEX on the first arm's value
+ *  — `failure("a")[sub]` — and the match collapses. Multi-element
+ *  patterns were immune only because `expr["a", "b"]` is not index
+ *  syntax. Statement context already refuses the same continuation, so
+ *  the boundary aligns the two. Dot-method chains are deliberately
+ *  unguarded: a fluent `.method()` on its own line is an established
+ *  style; a bare `[i]` on its own line is an array literal or a
+ *  pattern, never an intended index. */
+const startOfLineContent: Parser<null> = (input: string) => {
+  const source = getInputStr();
+  const offset = source.length - input.length;
+  // Lookbehind needs the parse-wide input. When it is missing or does
+  // not correspond to this input (raw parser tests call parsers without
+  // installing it), there is nothing to look behind at — fail, which
+  // DISABLES the boundary rather than misfiring it.
+  if (offset < 0 || source.charCodeAt(offset) !== input.charCodeAt(0)) {
+    return failure("no parse-wide input to look behind at", input);
   }
-  return lineStartMarks![full.length - input.length] === 1;
-}
+  const lineStart = source.lastIndexOf("\n", offset - 1) + 1;
+  return /^[ \t]*$/.test(source.slice(lineStart, offset))
+    ? success(null, input)
+    : failure("not at the start of a line", input);
+};
+
 
 const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
-  if (bracketStartsOwnLine(input)) {
-    return failure("a slice cannot start on a new line", input);
-  }
   const parser = seqC(
+    not(startOfLineContent),
     capture(bracketParser, "optional"),
     optionalSpaces,
     capture(optional(lazy(() => exprParser)), "start"),
@@ -2694,10 +2671,8 @@ const sliceChainParser: Parser<AccessChainElement> = (input: string) => {
 };
 
 const indexChainParser: Parser<AccessChainElement> = (input: string) => {
-  if (bracketStartsOwnLine(input)) {
-    return failure("an index cannot start on a new line", input);
-  }
   const parser = seqC(
+    not(startOfLineContent),
     capture(bracketParser, "optional"),
     optionalSpaces,
     capture(lazy(() => exprParser), "index"),

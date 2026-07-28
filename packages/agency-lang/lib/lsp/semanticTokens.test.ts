@@ -298,6 +298,18 @@ describe("getSemanticTokens known gaps", () => {
     expect(helperTokens[0].line).toBe(5);
   });
 
+  it("TRIPWIRE: cannot color the callee of an `async` call", () => {
+    // An `async foo()` call node takes its loc.col from the `async`
+    // keyword, not from `foo`. The token would paint `async ` — the
+    // keyword and a space — so paintsItsOwnName drops it and the call
+    // gets no semantic color. The TextMate grammar still colors it.
+    //
+    // WHEN THIS TEST FAILS: someone fixed the loc. That is the good
+    // outcome. Delete this test.
+    const source = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  const a = async helper()\n  print(a)\n}`;
+    expect(textsFor(source).filter((t) => t === "helper")).toEqual([]);
+  });
+
   it.skip("block-scope shadowing is not resolved", () => {
     // findContainingScope only matches scopes named by a top-level
     // function or graphNode definition, so a name shadowed inside an
@@ -305,5 +317,92 @@ describe("getSemanticTokens known gaps", () => {
     // Unskip when findContainingScope learns about block scopes.
     const source = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  if (true) {\n    const helper = 5\n    print(helper)\n  }\n}`;
     expect(textsFor(source)).not.toContain("helper");
+  });
+});
+
+describe("getSemanticTokens against synthesized names", () => {
+  // Lowering builds calls whose names never appear in the source but
+  // which carry a real source loc — `is failure(x)` becomes a call to
+  // `isFailure` sitting on the seven characters `failure`, `guard(...)`
+  // becomes `_guard`, a comprehension becomes `map`. Length comes from
+  // the name, so those tokens ran past the word they sat on.
+
+  /**
+   * Every token covers exactly one whole identifier. This states the
+   * invariant, but it says nothing about an empty list, so each caller
+   * also pins the exact tokens it expects — otherwise a guard that
+   * dropped EVERYTHING would pass every test here.
+   */
+  function expectWholeWords(source: string): void {
+    for (const token of tokensFor(source)) {
+      expect(token.text).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/);
+    }
+  }
+
+  it("does not overrun the source word for `is failure(binder)`", () => {
+    const source = `node main() {\n  const r = pass()\n  if (r is failure(reason)) {\n    print(reason)\n  }\n}`;
+    expectWholeWords(source);
+    expect(textsFor(source)).toEqual(["pass", "print"]);
+  });
+
+  it("does not overrun the source word for `is success(binder)`", () => {
+    const source = `node main() {\n  const r = pass()\n  if (r is success(v)) {\n    print(v)\n  }\n}`;
+    expectWholeWords(source);
+    expect(textsFor(source)).toEqual(["pass", "print"]);
+  });
+
+  it("does not paint the paren after `guard`", () => {
+    // The biggest case by volume: `_guard` is six characters over the
+    // five of `guard`, so the token used to swallow the `(`.
+    const source = `node main() {\n  const r = guard(cost: 1) {\n    print("hi")\n  }\n}`;
+    expectWholeWords(source);
+    expect(textsFor(source)).toEqual(["print"]);
+  });
+
+  it("does not paint the bracket of a comprehension", () => {
+    // A comprehension lowers to `map`, hung on the loc of the WHOLE
+    // comprehension, so the token painted `[do`. `double` is a genuine
+    // call INSIDE the lowered construct, so pinning it is what catches a
+    // guard that eats the comprehension whole.
+    const source = `def double(x: number): number {\n  return x * 2\n}\n\nnode main() {\n  const xs = [1, 2]\n  const doubled = [double(x) for x in xs]\n  print(doubled)\n}`;
+    expectWholeWords(source);
+    expect(textsFor(source)).toEqual(["double", "print"]);
+  });
+
+  it("emits no token at all for the object-rest helper", () => {
+    // The worst case: the synthesized name is hung on the `if`
+    // statement's own loc, so the token painted the `if` keyword.
+    const source = `node main() {\n  const o = { a: 1, b: 2 }\n  if (o is { a, ...rest }) {\n    print(a)\n  }\n}`;
+    expect(tokensFor(source).filter((t) => t.line === 2)).toEqual([]);
+    expect(textsFor(source)).toEqual(["print"]);
+  });
+
+  // A stale buffer, mid-edit: state says `helper` at a position where
+  // the user has since typed a LONGER word. The slice still matches the
+  // name, so a bare equality check would paint part of that longer word
+  // — the very failure this guard exists to stop. Both sides matter: the
+  // extra characters can land after the name or before it.
+  const RENAMED = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  helper()\n}`;
+
+  function tokensOnCallLine(after: string): DecodedToken[] {
+    const data = getSemanticTokens(stateFor(RENAMED), after).data;
+    return decodeTokens(data, after).filter((t) => t.line === 5);
+  }
+
+  it("drops a token that is only a prefix of the word now at its position", () => {
+    expect(tokensOnCallLine(RENAMED.replace("  helper()", "  helperTwo()"))).toEqual([]);
+  });
+
+  it("drops a token that is only a suffix of the word now at its position", () => {
+    // One space deleted, one character inserted, so `helper` still
+    // starts at the recorded column — but it is now the tail of
+    // `xhelper`.
+    expect(tokensOnCallLine(RENAMED.replace("  helper()", " xhelper()"))).toEqual([]);
+  });
+
+  it("treats an underscore as part of the word", () => {
+    // `_` is a legal identifier character in Agency (LEGAL_IDENTIFIER in
+    // lib/parsers/parsers.ts), so `helper_two` is one word, not two.
+    expect(tokensOnCallLine(RENAMED.replace("  helper()", "  helper_two()"))).toEqual([]);
   });
 });

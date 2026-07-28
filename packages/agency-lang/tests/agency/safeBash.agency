@@ -105,20 +105,28 @@ node wholeStringPlans() {
   ]
 }
 
+def executionCommand(source: string): any {
+  return match(planFor(source, "/repo").execution) {
+    { kind: "bash", command } => command
+    _ => "NOT-BASH"
+  }
+}
+
 node rebuiltVersusOriginal() {
   // Hard rule #1. Multi-space input makes it observable: re-rendering
   // normalizes whitespace, so on the narrow path `execution.command` must
   // be the NORMALIZED form, and on the broad path it must be the caller's
   // text VERBATIM.
-  return [
-    planFor("git    status", "/repo").execution.command,
-    planFor("ls    -la", "/repo").execution.command,
-  ]
+  return [executionCommand("git    status"), executionCommand("ls    -la")]
 }
 
 def planDetail(source: string): any {
   const plan = planFor(source, "/repo")
-  return [plan.execution.kind, plan.execution.content, [e.name for e in plan.effects]]
+  const content = match(plan.execution) {
+    { kind: "echo", content as text } => text
+    _ => ""
+  }
+  return [plan.execution.kind, content, [e.name for e in plan.effects]]
 }
 
 node shellFreeEcho() {
@@ -136,18 +144,18 @@ node shellFreeEcho() {
 
 def writePlanDetail(source: string): any {
   const plan = planFor(source, "/repo")
-  const exec = plan.execution
+  const names = [e.name for e in plan.effects]
   // `mode` is in the tuple deliberately. Without it, a `writeMode` that
   // always returned "overwrite" survives the whole suite, and
   // `echo hi >> notes.txt` silently TRUNCATES the file.
-  return [
-    exec.kind,
-    exec.content,
-    exec.filename,
-    exec.dir,
-    exec.mode,
-    [e.name for e in plan.effects],
-  ]
+  //
+  // The non-write arm reports the same sentinel fields the old flat
+  // Execution record carried, so the fixture rows for bash plans stay
+  // byte-identical across the union refactor.
+  return match(plan.execution) {
+    { kind: "write", content, filename, dir, mode } => return ["write", content, filename, dir, mode, names]
+    { kind } => [kind, "", "", "", "overwrite", names]
+  }
 }
 
 node shellFreeWrite() {

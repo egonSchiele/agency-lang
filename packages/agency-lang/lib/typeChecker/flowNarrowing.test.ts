@@ -108,3 +108,68 @@ def f(): void {
     expect(errors).toEqual([]);
   });
 });
+
+describe("strict equality narrows like loose equality (Gap D)", () => {
+  const HEAD = `
+type Sa = { tag: "a", payload: string }
+type Sb = { tag: "b", payload: number }
+type Su = Sa | Sb
+def onlyA(a: Sa): string { return a.payload }
+def wantNum(n: number): number { return n }`;
+
+  // Discriminant path (the keepThen read).
+  it("=== narrows the then-branch", () => {
+    expect(
+      check(`${HEAD}
+def f(u: Su): string {
+  if (u.tag === "a") {
+    return onlyA(u)
+  }
+  return "y"
+}
+node main() {}`),
+    ).toEqual([]);
+  });
+
+  it("!== narrows after an early return", () => {
+    expect(
+      check(`${HEAD}
+def f(u: Su): string {
+  if (u.tag !== "a") {
+    return "y"
+  }
+  return onlyA(u)
+}
+node main() {}`),
+    ).toEqual([]);
+  });
+
+  // Presence path (the presentThen read) — null comparisons take a different
+  // branch inside the equality block, so these are not redundant with the
+  // discriminant rows.
+  it("=== null narrows via early return", () => {
+    expect(
+      check(`${HEAD}
+def g(n: number | null): number {
+  if (n === null) {
+    return 0
+  }
+  return wantNum(n)
+}
+node main() {}`),
+    ).toEqual([]);
+  });
+
+  it("!== null narrows the then-branch", () => {
+    expect(
+      check(`${HEAD}
+def g(n: number | null): number {
+  if (n !== null) {
+    return wantNum(n)
+  }
+  return 0
+}
+node main() {}`),
+    ).toEqual([]);
+  });
+});

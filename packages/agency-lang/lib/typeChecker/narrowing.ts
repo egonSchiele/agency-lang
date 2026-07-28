@@ -173,14 +173,19 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
       const r = analyzeCondition(condition.right);
       return { then: [], else: [...l.else, ...r.else] };
     }
-    if (condition.operator === "==" || condition.operator === "!=") {
+    // `===`/`!==` are documented stylistic aliases of `==`/`!=` — both compile
+    // to the same `__eq` (typescriptBuilder.ts:1379) — so they justify the
+    // exact same narrowing facts.
+    const STRICT_ALIAS: Record<string, "==" | "!="> = { "===": "==", "!==": "!=" };
+    const eqOp = STRICT_ALIAS[condition.operator] ?? condition.operator;
+    if (eqOp === "==" || eqOp === "!=") {
       // Presence test: `x == null` / `x != null` over a single-hop path (either
       // operand order). Narrows by stripping/keeping the `null` member. Disjoint
       // from the discriminant shape below (path-vs-`null`-literal vs `V.prop`).
       const presenceRef = asPresenceTest(condition.left, condition.right);
       if (presenceRef) {
         // `x != null` → then: present (non-null); `x == null` → then: absent.
-        const presentThen = condition.operator === "!=";
+        const presentThen = eqOp === "!=";
         const mkP = (present: boolean): NarrowCandidate => ({
           ref: presenceRef,
           refine: { kind: "presence", present },
@@ -193,7 +198,7 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
       const acc = asDiscriminantAccess(condition.left) ?? asDiscriminantAccess(condition.right);
       const lit = literalToType(condition.right) ?? literalToType(condition.left);
       if (!acc || !lit) return NO_FACTS;
-      const keepThen = condition.operator === "==";
+      const keepThen = eqOp === "==";
       const mk = (keep: boolean): NarrowCandidate => ({
         ref: acc.ref,
         refine: { kind: "discriminant", prop: acc.prop, literal: lit, keep },

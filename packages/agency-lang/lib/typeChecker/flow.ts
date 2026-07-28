@@ -140,6 +140,16 @@ export type FlowEnvironment = {
    * envs in tests.
    */
   matchConsumerAssignFlows?: WeakMap<AgencyNode, FlowNode>;
+  /**
+   * The flow state at every `matchYield`, keyed by matchId. A yield ends its
+   * branch but RESUMES after the match, so the match root merges these as the
+   * post-match predecessors — dropping only the exit-ness while keeping what
+   * the arm did to the flow (assignments must invalidate narrowing established
+   * before the match). Populated by the matchYield rule; consumed by the
+   * matchExprId-tagged root (lowered chain or surviving matchBlock). Optional:
+   * bare envs in tests.
+   */
+  matchYieldFlows?: Record<number, FlowNode[]>;
 };
 
 /**

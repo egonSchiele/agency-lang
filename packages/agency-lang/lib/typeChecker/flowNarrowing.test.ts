@@ -336,3 +336,71 @@ node main() {}`);
     );
   });
 });
+
+describe("arm-body assignments invalidate pre-match narrowing", () => {
+  const HEAD = `
+type Ma = { tag: "a", s: string }
+type Mb = { tag: "b", n: number }
+type Mu = Ma | Mb
+def onlyA(a: Ma): string { return a.s }`;
+
+  // The write is in an ARM and the read is AFTER the match: a post-match flow
+  // that discards what the arms did (an early "return the pre-match flow"
+  // boundary) accepts this even though the arm set u to the other variant.
+  it("a lowered pattern arm that reassigns invalidates post-match narrowing", () => {
+    const errs = check(`${HEAD}
+def f(w: Mu, x: Mu): string {
+  let u: Mu = x
+  if (u.tag != "a") {
+    return "no"
+  }
+  const s = match(w) {
+    { tag: "a" } => {
+      u = { tag: "b", n: 1 }
+      return "x"
+    }
+    _ => "y"
+  }
+  return onlyA(u)
+}
+node main() {}`);
+    expect(errs.some((m) => /not assignable/i.test(m))).toBe(true);
+  });
+
+  it("a literal expression arm that reassigns invalidates post-match narrowing", () => {
+    const errs = check(`${HEAD}
+def f(k: string, x: Mu): string {
+  let u: Mu = x
+  if (u.tag != "a") {
+    return "no"
+  }
+  const s = match(k) {
+    "go" => {
+      u = { tag: "b", n: 1 }
+      return "x"
+    }
+    _ => "y"
+  }
+  return onlyA(u)
+}
+node main() {}`);
+    expect(errs.some((m) => /not assignable/i.test(m))).toBe(true);
+  });
+
+  it("a statement-position literal arm that reassigns invalidates narrowing after the match", () => {
+    const errs = check(`${HEAD}
+def f(k: string, x: Mu): string {
+  let u: Mu = x
+  if (u.tag != "a") {
+    return "no"
+  }
+  match(k) {
+    "go" => { u = { tag: "b", n: 1 } }
+    _ => 0
+  }
+  return onlyA(u)
+}
+node main() {}`);
+    expect(errs.some((m) => /not assignable/i.test(m))).toBe(true);
+  });
+});

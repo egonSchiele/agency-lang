@@ -281,12 +281,11 @@ node main() {}`);
     expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
   });
 
-  // An arm body that redeclares the scrutinee name makes the whole match keep
-  // the temp (conservative fallback): generated locals are frame slots, and a
-  // redeclared name would make substituted reads target the wrong slot. The
-  // observable typecheck consequence is that the scrutinee is NOT narrowed.
-  // The runtime half of this case is tests/agency/match-scrutinee-shadow.
-  it("an arm-body redeclare of the scrutinee name falls back to the temp", () => {
+  // An arm-body redeclare of the scrutinee name is treated as an assignment to
+  // the same variable (the checker types it against the outer declaration), so
+  // it invalidates the arm's narrowing — the read after it sees the full
+  // union. The runtime half of this case is tests/agency/match-scrutinee-shadow.
+  it("an arm-body redeclare of the scrutinee name invalidates the narrowing", () => {
     const errs = hardErrors(`${SCRUT_HEAD}
 def f(u: Nu): string {
   return match(u) {

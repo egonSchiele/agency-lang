@@ -50,7 +50,6 @@ import type {
 import type { ValueAccess, AccessChainElement } from "../types/access.js";
 import type { SourceLocation } from "../types/base.js";
 import { mapBodies } from "../utils/mapBodies.js";
-import { walkNodes } from "../utils/node.js";
 import { OBJECT_REST_FN } from "../constants.js";
 
 // ---------------------------------------------------------------------------
@@ -477,7 +476,7 @@ class PatternLowerer {
       // checker can find the owning match for exhaustiveness / union typing.
       ...(matchExprId !== undefined ? { matchExprId } : {}),
     };
-    const scrutineeRef = this.narrowableScrutineeRef(node.expression, scrutineeName, cases, node.loc);
+    const scrutineeRef = this.narrowableScrutineeRef(node.expression, scrutineeName, node.loc);
 
     const ifChain = this.buildIfChainFromArms(cases, scrutineeRef, node.loc);
     if (!ifChain) return [scrutineeAssign];
@@ -488,40 +487,24 @@ class PatternLowerer {
     return [scrutineeAssign, taggedChain];
   }
 
-  /** The reference the per-arm conditions and binder reads test against:
-   *  the ORIGINAL variable when narrowing can land on the name arm bodies
-   *  reference, otherwise the `__scrutinee` temp.
-   *
-   *  Bare variable only: evaluate-once is trivially satisfied (no user code
-   *  runs between the chain's conditions), and the typechecker's facts then
-   *  attach to the name the body reads. Two carve-outs keep the temp:
-   *  - `null` parses as a variableName (value "null", the same quirk
-   *    narrowing.ts guards for) and is not a narrowable reference;
-   *  - an arm body that redeclares the scrutinee's name, at any depth:
-   *    generated locals are frame slots (__stack.locals vs __stack.args), so
-   *    a substituted read could target the redeclared slot. Falling back for
-   *    the WHOLE match keeps every arm's reads consistent. */
+  /** The reference the per-arm conditions and binder reads test against: the
+   *  ORIGINAL variable for a bare-variable scrutinee, so narrowing lands on
+   *  the name the arm bodies reference; otherwise the `__scrutinee` temp.
+   *  An arm body that rebinds the name cannot corrupt the substituted reads:
+   *  they all run before any user statement (conditions precede the body,
+   *  binder assignments are prepended to it — see `foldArms`) and the runner
+   *  memoizes the chosen branch, so nothing re-reads the slot after user code
+   *  writes it. The `null` guard: `null` parses as a variableName (value
+   *  "null" — the quirk narrowing.ts:230 guards) and is not a reference. */
   private narrowableScrutineeRef(
     scrutinee: MatchBlock["expression"],
     scrutineeName: string,
-    cases: MatchBlock["cases"],
     loc: SourceLocation | undefined,
   ): Expression {
     if (scrutinee.type !== "variableName" || scrutinee.value === "null") {
       return varRef(scrutineeName, loc);
     }
-    const name = scrutinee.value;
-    for (const c of cases) {
-      if (c.type !== "matchBlockCase") {
-        continue;
-      }
-      for (const { node: inner } of walkNodes(c.body)) {
-        if (inner.type === "assignment" && inner.declKind && inner.variableName === name) {
-          return varRef(scrutineeName, loc);
-        }
-      }
-    }
-    return varRef(name, scrutinee.loc);
+    return varRef(scrutinee.value, scrutinee.loc);
   }
 
   /**

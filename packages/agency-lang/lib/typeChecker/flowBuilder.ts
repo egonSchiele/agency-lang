@@ -236,6 +236,14 @@ const statementRules: StatementRuleTable = {
     if (node.value) {
       attachExpressionsToFlow(node.value as AgencyNode, flow, env);
     }
+    // A yield resumes after the match, so record the flow HERE for the match
+    // root to merge as a post-match predecessor — that is how an arm's
+    // assignments keep invalidating narrowing established before the match.
+    if (env.matchYieldFlows) {
+      const yields = env.matchYieldFlows[node.matchId] ?? [];
+      yields.push(flow);
+      env.matchYieldFlows[node.matchId] = yields;
+    }
     // Same may-resume convention as returnStatement: lowering carries a
     // returned interrupt into the yield untouched, and an approved interrupt
     // falls through to the next statement.
@@ -254,11 +262,14 @@ const statementRules: StatementRuleTable = {
       ? buildFlowGraph(node.elseBody, elseStart, env)
       : elseStart;
     // A matchExprId-tagged node is the root of a lowered expression match:
-    // every arm ends in a matchYield, so the merge below would report all
-    // branches exited — but a yield resumes AFTER the match, so post-match
-    // flow is the pre-match flow (same contract as the matchBlock rule below).
+    // every arm ends in a matchYield, which exits its branch but resumes
+    // AFTER the match. Post-match flow is therefore the join of every
+    // yield-point flow (so arm-body assignments keep invalidating pre-match
+    // narrowing), the no-arm-matched fallthrough (in elseEnd), and the
+    // pre-match flow as a sound floor.
     if (node.matchExprId !== undefined) {
-      return flow;
+      const yields = env.matchYieldFlows?.[node.matchExprId] ?? [];
+      return mergeFlows([flow, thenEnd, elseEnd, ...yields]);
     }
     // Post-guard narrowing falls out: a returning branch ends in `exit`, which
     // mergeFlows drops, leaving the surviving branch's (narrowed) flow.
@@ -313,11 +324,14 @@ const statementRules: StatementRuleTable = {
   // `e.data` the matching member's payload inside the arm. Only POSITIVE (.then)
   // facts, each from the base flow (arms are independent — no cross-arm/negative
   // narrowing). Non-literal / `_` arms get the base flow unchanged. Post-match
-  // flow is unchanged. `c.body` is an array of nodes (matchBlock.ts) fed directly
-  // to buildFlowGraph — same shape as walkScopeBody (scopes.ts).
+  // flow joins the base flow with every arm end and (for an expression match)
+  // every yield-point flow, so an arm's assignments invalidate narrowing
+  // established before the match. `c.body` is an array of nodes (matchBlock.ts)
+  // fed directly to buildFlowGraph — same shape as walkScopeBody (scopes.ts).
   matchBlock: (node, flow, env) => {
     attachExpressionsToFlow(node.expression as AgencyNode, flow, env);
     const scrutinee = node.expression as Expression;
+    const armEnds: FlowNode[] = [];
     for (const c of node.cases) {
       if (c.type === "comment" || c.type === "newLine") continue;
       let armFlow = flow;
@@ -338,9 +352,13 @@ const statementRules: StatementRuleTable = {
         };
         armFlow = wrapFacts(flow, analyzeCondition(cond).then);
       }
-      buildFlowGraph(c.body, armFlow, env);
+      armEnds.push(buildFlowGraph(c.body, armFlow, env));
     }
-    return flow;
+    const yields =
+      node.matchExprId !== undefined
+        ? env.matchYieldFlows?.[node.matchExprId] ?? []
+        : [];
+    return mergeFlows([flow, ...armEnds, ...yields]);
   },
 
   functionCall: (node, flow, env) => {
@@ -438,6 +456,9 @@ export function buildFlowGraphs(scopes: ScopeInfo[], ctx: TypeCheckerContext): v
   const flowOf: WeakMap<AgencyNode, FlowNode> = new WeakMap();
   const memo = freshMemo();
   const matchConsumerAssignFlows: WeakMap<AgencyNode, FlowNode> = new WeakMap();
+  // Null-prototype for the same reason as scopeTerminals below; keys here are
+  // numeric matchIds, but keep the discipline uniform.
+  const matchYieldFlows: Record<number, FlowNode[]> = Object.create(null);
   const typeAliases = ctx.getTypeAliases();
   // Null-prototype: scopeKeys derive from user-controlled function/node names, so
   // a reserved key ("__proto__"/"toString"/…) must not collide with
@@ -455,6 +476,7 @@ export function buildFlowGraphs(scopes: ScopeInfo[], ctx: TypeCheckerContext): v
       typeAliases,
       memo,
       matchConsumerAssignFlows,
+      matchYieldFlows,
     };
     scopeTerminals[info.scopeKey] = buildFlowGraph(
       info.body,

@@ -142,6 +142,12 @@ function asPresenceTest(left: Expression, right: Expression): Reference | null {
   return tryOne(left, right) ?? tryOne(right, left);
 }
 
+/** `===`/`!==` are documented stylistic aliases of `==`/`!=` — codegen compiles
+ *  all four to the same `__eq` call (processBinOpExpression,
+ *  lib/backends/typescriptBuilder.ts; docs/dev/null-and-undefined.md) — so they
+ *  justify the exact same narrowing facts. */
+const STRICT_EQUALITY_ALIAS: Record<string, "==" | "!="> = { "===": "==", "!==": "!=" };
+
 /**
  * Inspect a (post-lowering) boolean condition and report the narrowing
  * candidates it implies for the then- and else-branches.
@@ -173,11 +179,7 @@ export function analyzeCondition(condition: Expression): ConditionFacts {
       const r = analyzeCondition(condition.right);
       return { then: [], else: [...l.else, ...r.else] };
     }
-    // `===`/`!==` are documented stylistic aliases of `==`/`!=` — both compile
-    // to the same `__eq` (typescriptBuilder.ts:1379) — so they justify the
-    // exact same narrowing facts.
-    const STRICT_ALIAS: Record<string, "==" | "!="> = { "===": "==", "!==": "!=" };
-    const eqOp = STRICT_ALIAS[condition.operator] ?? condition.operator;
+    const eqOp = STRICT_EQUALITY_ALIAS[condition.operator] ?? condition.operator;
     if (eqOp === "==" || eqOp === "!=") {
       // Presence test: `x == null` / `x != null` over a single-hop path (either
       // operand order). Narrows by stripping/keeping the `null` member. Disjoint

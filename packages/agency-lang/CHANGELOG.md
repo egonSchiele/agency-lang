@@ -1,123 +1,58 @@
-## Unreleased
-
-### A rest binder can sit anywhere in an array pattern
-
-`...rest` used to have to be the last element. It can now go in any position,
-with at most one per pattern — elements before it match from the front,
-elements after it from the back:
-
-```ts
-match (words) {
-    ["cat", ...flags, path] => read(path)
-    _                       => fallback()
-}
-
-const [first, ...middle, last] = items
-```
-
-`...rest` binds zero or more, so `["a", ...rest, "c"]` matches `["a", "c"]`
-with `rest = []`. This works in match arms, `is`, `if`/`while` conditions and
-in destructuring.
-
-Two rest binders in one pattern is now a compile error rather than a crash:
-nothing decides where the split between them falls. A misplaced rest
-previously produced a raw stack trace.
-
-### Breaking: an array pattern without `...rest` now requires an exact length
-
-`["a", "b"]` used to match any array *starting* with `a`, `b` — every array
-pattern was a prefix match, and there was no way to say "exactly these two":
-
-```ts
-match (["a", "b", "c"]) {
-  ["a", "b"] => "matched"      // before: matched. now: falls through.
-  _          => "fell through"
-}
-```
-
-A pattern with no rest binder now names the whole array. Add `...rest` to get
-the old reading, which is what it always meant:
-
-```ts
-["a", "b", ...rest]    // matches ["a","b","c"], rest = ["c"]
-```
-
-This affects every construct that matches a pattern — `match` arms, the `is`
-operator, `if` and `while` conditions — but **not** destructuring:
-`const [a, b] = xs` never checked length and still does not.
-
-One case changes control flow rather than which arm runs. In
-`match (xs is ["a", "b"])`, a head pattern that no longer matches returns a
-`failure` from the enclosing function instead of running an arm:
-
-```ts
-match (xs is ["a", "b"]) { ... }   // xs = ["a","b","c"]
-// before: ran an arm.  now: returns failure("... head pattern did not match")
-```
-
-The change is silent. Code relying on the old prefix behavior stops matching
-with no diagnostic, because the pattern now means what it says.
-
-### Breaking: relative paths now resolve against the working directory
-
-Every path-taking function (`read`, `write`, `edit`, `ls`, `grep`, `glob`,
-`stat`, `exists`, `readSkill`, ...) now resolves relative paths against the
-directory the program was run from, matching how file I/O works in other
-languages. Previously some functions resolved against the entry module's
-directory, some against the cwd, and `stat`/`exists` switched per call.
-
-To read a file relative to the current Agency file, use the new `__dirname`
-builtin: `read("prompts/main.md", __dirname)`. `std::system::dirname()` is
-removed (it could only ever report the entry module's directory); `__dirname`
-replaces it. Upward traversal (`../`) and absolute filenames are now allowed.
-
-Security note: `ls`/`grep`/`glob`/`stat`/`exists` and the fs-mutation
-functions keep their allow-list containment, which still fails closed.
-`read`/`write`/`writeBinary`/`readBinary`/`edit` have never had an
-allow-list; they are gated by the `std::read`/`std::write`/`std::edit`
-interrupts, which are unchanged. What this release removes is their
-internal path containment (no `..`, no absolute filenames), so an
-approved read or write can now reach any path the interrupt policy
-allows.
+## Jul 28 2026 — v0.10.0
 
 ### Language / Typechecker
+- **Template Agency** — a `.agency` file can now have typed holes (`#topic`) that a model fills in. Every hole is checked before the generated program runs.
+- **Breaking — in an object pattern, `:` tests the type and `as` renames.** `{ name: string }` now means "name is a string" (it used to bind a variable called `string`), and `{ name as n }` replaces `{ name: n }`.
+- **Breaking — an array pattern without `...rest` now requires an exact length in match statements.** `["a", "b"]` no longer matches `["a", "b", "c"]`; add `...rest` to get the old prefix behavior. Destructuring is unaffected.
+- **`...rest` can sit anywhere in an array pattern** — `[first, ...middle, last]`, at most one per pattern. Two rest binders is a compile error instead of a crash.
 - **List comprehensions** — `[expr for x in xs if cond]`, with `fork` / `forkShared` / `race` / `raceShared` prefixes for parallel comprehensions.
-- **Type patterns** — `match` can now match on the type of a value (`is Type`, `pattern: Type`), plus a stdlib `Json` type.
-- **fork/race return types** — a `fork` block is typed `T[]` and `race` is `T | null`, derived from the block's returns.
-- Access chains now parse on bracket literals (`[1, 2, 3].map(...)`).
-- Passing a single tool to `tools:` is now a type error instead of a runtime crash.
-- `@validate` validators now run through `Record` values.
-- Literal arrays and objects require commas between items, with targeted parse errors for half-typed comprehensions.
+- **Type patterns** — `match` can match on the type of a value (`is Type`, `pattern: Type`), plus a stdlib `Json` type.
+- **Interrupt effects propagate across file boundaries**, so a `raises` clause now accounts for what imported functions raise.
+- A `fork` block is typed `T[]` and `race` is `T | null`, derived from the block's returns.
+- Passing a single tool to `tools:` is now a type error instead of a runtime crash, `@validate` validators run through `Record` values, and a union whose member is itself a union gets flattened.
+- Parser fixes — access chains parse on bracket literals, literal items require commas (with targeted errors for half-typed comprehensions), and an index or slice cannot start on a new line.
 
 ### Standard Library
-- **Agents rework** — the worker agents moved onto the stdlib and were heavily refactored. Oracle, explorer, and data agents joined; each agent ships its own skill and carries the tools its job requires, including read-only git tools for the writer and verifiers.
-- **Supervision** — long-running solves run under `std::supervise` with periodic verifier check-ins, brainstorming before complex solves, and partial results saved at every milestone.
-- **`std::date` instants** — `now()` returns epoch milliseconds, plus `elapsedTime` and `formatDuration`.
-- **`std::thread`** — `queueMessage` queues a message for the model's next turn; `toolMessage` seeds a synthetic tool exchange.
+- **`std::safeBash`** — tries to parse and understand what the bash command is doing, and for a very narrow set of cases, raises a different type of interrupt instead of std::bash, to try to reduce interrupt fatigue from the agent constantly running bash commands.
+- **Breaking — relative paths resolve against the working directory.** Every path-taking function (`read`, `write`, `edit`, `ls`, `grep`, `glob`, `stat`, `exists`, `readSkill`, ...) now resolves against the directory the program was run from instead of the directory of the file they were called in. Use the new `__dirname` builtin to read relative to the current Agency file. `std::system::dirname()` is removed.
+- **Agents rework** — the worker agents moved onto the stdlib and were heavily refactored. 
+- **Supervision** — `std::supervise` - used to supervise agents that take longer to run, with periodic verifier check-ins, brainstorming before complex solves, and partial results saved.
+- **`std::date`** — `now()` returns epoch milliseconds, plus `elapsedTime` and `formatDuration`.
+- **`std::thread`** — `queueMessage` queues a message for the model's next turn, and `toolMessage` seeds a synthetic tool exchange.
 - Guard `Result<T>` annotations flow into `saveDraft` schemas, so drafts validate against the real return type.
-- An empty `table` renders as nothing instead of throwing mid-display.
+- An empty `table` renders as nothing instead of throwing mid-display
 - AppleScript integrations pass data as argv instead of escaping it into the script source.
-
-### Agent
-- **Per-turn budgets** — a deadline or spend limit stated in your message ("no more than 30 seconds") becomes a real guard around the turn, with a prompt to grant more when it trips.
-- The entry point split into CLI, REPL, and coordinator, and the duplicate subagents collapsed onto the stdlib.
-- Compaction can now run after an assistant message, so a long tool-call chain cannot overflow the context. Summarization extracts only the new messages.
-- `--max-cost` / `--max-time` flags, a sticky interrupt prompt in line mode, and no more crashing on spawn errors.
-- The agent knows the standard library and its own docs via skills, uses the gh CLI, and reports what it is doing as it works.
 
 ### Runtime
 - **Resume desync fixed** — helper calls are hoisted into their own skippable steps, so an in-process resume can no longer replay a completed call and corrupt saved frames.
-- **Abandoned tool calls repaired** — reopening a thread with a dangling tool call inserts a synthetic result instead of failing the next request with a provider 400.
-- Renamed tools now round-trip through checkpoints, and a registry miss no longer crashes checkpoint writes.
-- Handlers can raise interrupts without being triggered by their own interrupt, and a guard trip inside a handler rejects instead of pausing.
-- A guard suspended while its handler deliberates no longer leaks armed clones into tool-call branches (the 1ms-limit trip storm).
-- Scoped block callbacks survive cross-process pause/resume, and imported modules' top-level callbacks now fire.
+- **Abandoned tool calls are repaired** — reopening a thread with a dangling tool call inserts a synthetic result instead of failing the next request with a provider 400.
+- Renamed tools round-trip through checkpoints, and a registry miss no longer crashes checkpoint writes.
+- Handlers can raise interrupts without triggering themselves, and a guard trip inside a handler rejects instead of pausing.
+- Scoped block callbacks survive cross-process pause/resume.
+- top-level callbacks in imported modules now fire.
 - Cache reads and writes are counted in the token/cost breakdown.
 
+### Agent
+- **Per-turn budgets** — a deadline or spend limit stated in your message ("no more than 30 seconds") becomes a real guard around the turn.
+- Compaction can run after an assistant message, so a long tool-call chain cannot overflow the context.
+- summarization extracts only the new messages.
+- `--max-cost` / `--max-time` flags.
+- no more crashing on spawn errors.
+- The agent now knows the standard library and its own docs via skills
+- The coding agent knows how to use the `gh` CLI
+- The agent uses `whatIAmDoing` to tell the user what it is doing.
+
 ### CLI & Editor
-- **`agency lint`** — new command with an unused-imports rule (AL0001), editor gray-out, and remove-on-save.
-- LSP fixes — no more false import errors on unsaved edits, and the prelude has a single definition so its phantom errors are gone.
-- `agency literate` weaves nested comments and takes `--base-url`; the docs gained rendered examples.
+- **`agency lint`** — new command with unused-imports (AL0001), missing-docstring (AL0002), and redundant-prelude-import (AL0003). This now powers the VS Code plugin and shows the user unused imports.
+- **LSP semantic tokens** so function references get a real color, with tokens dropped when they do not match their source text.
+- LSP fixes — no more false import errors on unsaved edits.
+- `agency literate` weaves nested comments and takes `--base-url`.
+
+### Testing
+- The test runner gained `expectedCompileError`, which asserts that a file fails to compile.
+
+### Docs
+- Examples added to docs.
 
 ## Jul 17 2026 — v0.9.0
 

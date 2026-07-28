@@ -129,7 +129,7 @@ doc:
 	fi
 
 examples:
-	pnpm run agency literate weave examples/ -o docs/site/examples/ --lang ts
+	pnpm run agency literate weave examples/ -o docs/site/examples/ --lang ts --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/examples/
 
 # Regenerate docs/site/diagnostics/ from the diagnostics registry. Cheap
 # (one node invocation), so no stamp. Must run BEFORE compile-agency stages

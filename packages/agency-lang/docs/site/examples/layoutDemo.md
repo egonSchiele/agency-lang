@@ -1,3 +1,5 @@
+[View source](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/examples/layoutDemo.agency)
+
 Showcases the terminal layouts you can build with the `std::ui/layout` module.
 
 ```ts

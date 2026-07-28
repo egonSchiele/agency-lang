@@ -1,3 +1,5 @@
+[View source](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/examples/mcp/github-oauth/agent.agency)
+
 ```ts
 import { mcp } from "pkg::@agency-lang/mcp"
 ```

@@ -1,3 +1,5 @@
+[View source](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/examples/generatedAgent.agency)
+
 ```ts
 import { fill, runCode, toSource } from "std::agency"
 ```

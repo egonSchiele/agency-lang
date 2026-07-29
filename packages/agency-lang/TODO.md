@@ -305,40 +305,6 @@ const arr = [0, 1, 2]
 ---
 
 
-custom validators can return a new value. If validating using the bang syntax, the new value gets assigned. During typechecking in a pattern match, however, it does not:
-
-```ts
-// negative numbers get coerced to 1
-def nonNegative(x: number): Result {
-  if (x < 0) {
-    return success(1)
-  }
-  return success(x)
-}
-
-type Person = {
-  name: string;
-
-  @validate(nonNegative)
-  age: number
-}
-
-node main() {
-  const thing: any = {
-    name: "Alice",
-    // should be coerced to 1 by the validator
-    age: -50
-  }
-
-  match(thing) {
-    // prints age: -50
-    p: Person => print("Matched a Person: ${p.name}, age ${p.age}")
-    _ => print("Not a Person")
-  }
-}
-```
-
----
 
 Can we get this to fail with a compile-time error instead of run time?
 

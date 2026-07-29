@@ -1,7 +1,9 @@
-// Execution tests for type patterns (spec 2026-07-20-type-patterns-design.md).
-// Covers: tier-1 coarse checks, tier-2 shape + validator checks, Rule 1
-// (binds the ORIGINAL value: validators decide the match but never rewrite),
-// arm ordering, the is-operator in plain conditions, the match(x is T) guard
+// Execution tests for type patterns (spec 2026-07-20-type-patterns-design.md,
+// validator contract updated by 2026-07-28-validators-are-predicates.md).
+// Covers: tier-1 coarse checks, tier-2 shape + validator checks, the binder
+// contract (validators decide the match; the binder receives the original
+// value; a validator that MODIFIES the value is a runtime error), arm
+// ordering, the is-operator in plain conditions, the match(x is T) guard
 // form, and loose-null agreement with the literal null pattern.
 
 def isAdult(age: number): Result<number> {
@@ -11,9 +13,9 @@ def isAdult(age: number): Result<number> {
   return success(age)
 }
 
-def clampAge(age: number): Result<number> {
+def agePositive(age: number): Result<number> {
   if (age < 0) {
-    return success(1)
+    return failure("age must be non-negative")
   }
   return success(age)
 }
@@ -23,9 +25,9 @@ type Person = {
   @validate(isAdult) age: number,
 }
 
-type Repaired = {
+type Screened = {
   name: string,
-  @validate(clampAge) age: number,
+  @validate(agePositive) age: number,
 }
 
 def describe(value: any): string {
@@ -59,12 +61,22 @@ node validatorRejects() {
   return describe({ name: "Kid", age: 12 })
 }
 
-node bindsOriginal() {
-  // Rule 1 with a transforming validator: clampAge repairs age -5 to 1, so
-  // the match SUCCEEDS, but the bound value must be the ORIGINAL (-5).
+node validatorRejectsMeansNoMatch() {
+  // A failing validator means the arm does not match (transform-and-repair
+  // validators were retired by the predicate contract).
   const u: any = { name: "Neg", age: -5 }
   return match (u) {
-    {age}: Repaired => "matched:${age}"
+    {age}: Screened => "matched:${age}"
+    _ => "no match"
+  }
+}
+
+node validatorPassesBindsValue() {
+  // The binder receives the value the pattern tested. Kept as the
+  // binder-contract pin now that the transforming variant is gone.
+  const u: any = { name: "Ok", age: 5 }
+  return match (u) {
+    {age}: Screened => "matched:${age}"
     _ => "no match"
   }
 }

@@ -23,10 +23,21 @@
       ]
     },
     {
-      "nodeName": "bindsOriginal",
-      "description": "A transforming validator counts as a pass but the bound value is the original, untransformed one (Rule 1).",
+      "nodeName": "validatorRejectsMeansNoMatch",
+      "description": "A failing validator means the arm does not match.",
       "input": "",
-      "expectedOutput": "\"matched:-5\"",
+      "expectedOutput": "\"no match\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "validatorPassesBindsValue",
+      "description": "A passing validator matches and the binder receives the tested value.",
+      "input": "",
+      "expectedOutput": "\"matched:5\"",
       "evaluationCriteria": [
         {
           "type": "exact"

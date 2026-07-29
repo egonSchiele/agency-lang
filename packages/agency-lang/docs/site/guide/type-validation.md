@@ -31,17 +31,7 @@ def isPositive(value: number): Result<number> {
 }
 ```
 
-If successful, the function returns `success` with the value. You can also send a new value to modify the value. So for example, instead of having isPositive fail, we could just have it clamp the value to be above zero.
-
-```ts
-def isPositive(value: number): Result<number> {
-  if (value > 0) {
-    return success(value);
-  }
-  // always succeeds, modifies value
-  return success(1);
-}
-```
+If successful, the function returns `success` with the value it was given. Validators may not modify the value: a validator that returns `success` with a different value is a runtime error naming the validator. If you want to repair a value, do it with an ordinary function call instead.
 
 That's all you need. Now when someone tries to validate an object of type `Person`, your validation will run. Example:
 
@@ -51,10 +41,6 @@ const person: Person! = { name: "Alice", age: -5 }
 
 const person: Person! = { name: "Alice", age: 38 }
 // person is now success({ name: "Alice", age: 38 })
-
-// With the validator that modifies the value, instead of failing:
-const person: Person! = { name: "Alice", age: -5 }
-// person is now success({ name: "Alice", age: 1 })
 ```
 
 ## Creating a reusable type with validation
@@ -106,7 +92,7 @@ print(personSchema.zodSchema.toJSONSchema())
 
 ## Multiple validators and schemas
 
-You can set multiple validators, and they will all run in order. If you transform the value, the transformed value will get handed to the next validator:
+You can set multiple validators, and they will all run in order:
 
 ```ts
 @validate(isPositive, isAdult)

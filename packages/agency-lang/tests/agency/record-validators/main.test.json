@@ -16,9 +16,9 @@
     },
     {
       "nodeName": "transforms",
-      "description": "A transforming validator on the value type writes repaired values back per entry.",
+      "description": "A modifying value-validator errors loudly cross-module (write-back retired with the transform contract).",
       "input": "",
-      "expectedOutput": "\"fixed:1,2\"",
+      "expectedOutput": "\"errored:named\"",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {

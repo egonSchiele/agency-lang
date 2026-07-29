@@ -1,6 +1,10 @@
-// A validator that always succeeds but transforms the value. The
-// success value flows into the bound variable, so `name.value` should
-// equal the upper-cased string.
+// The enforcement pin for the predicate contract: a validator may NOT
+// transform the value. toUpper still returns a new string (and keeps its
+// bare `Result` return type - that signature form must route through the
+// check too), so validating through it errors loudly, naming the validator.
+// If this row ever passes with an un-uppercased value instead of erroring,
+// the check has degraded to silently ignoring returned values - the exact
+// failure mode the loud error was chosen to prevent.
 def toUpper(value: string): Result {
   return success(value.toUpperCase())
 }
@@ -8,10 +12,25 @@ def toUpper(value: string): Result {
 @validate(toUpper)
 type Loud = string
 
-node main() {
-  const name: Loud! = "alice"
-  if (isSuccess(name)) {
-    return name.value
+def viaBang(x: string): string {
+  const name: Loud! = x
+  if (name is failure(why)) {
+    return "failure"
   }
-  return "failed"
+  return name.value
+}
+
+node main() {
+  const outcome = try viaBang("alice")
+  if (outcome is failure(why)) {
+    const reason = "${why}"
+    if (reason.includes("modified the value")) {
+      if (reason.includes("toUpper")) {
+        return "errored:named"
+      }
+      return "errored:unnamed"
+    }
+    return "errored:other"
+  }
+  return outcome.value
 }

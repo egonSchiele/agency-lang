@@ -19,13 +19,30 @@ node passes() {
   return "rejected"
 }
 
-node transforms() {
-  // The record walker must write transformed values back per entry.
+def tryRepair(): string {
   const fixed: Record<string, Repaired>! = { a: -5, b: 2 }
-  if (fixed is success(v)) {
-    return "fixed:${v.a},${v.b}"
+  if (fixed is failure(why)) {
+    return "failure"
   }
-  return "rejected"
+  return "fixed:${fixed.value.a},${fixed.value.b}"
+}
+
+node transforms() {
+  // Was the write-back pin. The predicate contract retires transforms: the
+  // cross-module modifying validator (clampToOne, still routed through the
+  // defining module's descriptor - the #630 point) must error loudly.
+  const outcome = try tryRepair()
+  if (outcome is failure(why)) {
+    const reason = "${why}"
+    if (reason.includes("modified the value")) {
+      if (reason.includes("clampToOne")) {
+        return "errored:named"
+      }
+      return "errored:unnamed"
+    }
+    return "errored:other"
+  }
+  return outcome.value
 }
 
 node patternTest() {

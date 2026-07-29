@@ -1,0 +1,203 @@
+def isPositive(value: number): Result<number> {
+  if (value > 0) {
+    return success(value)
+  }
+  return failure("must be positive")
+}
+
+@validate(isPositive)
+type Positive = number
+
+def clamp(value: number): Result<number> {
+  if (value > 0) {
+    return success(value)
+  }
+  return success(1)
+}
+
+@validate(clamp)
+type Clamped = number
+
+def shiftBy(value: number, n: number): Result<number> {
+  if (n == 0) {
+    return success(value)
+  }
+  return success(value + n)
+}
+
+@validate(shiftBy.partial(n: 0))
+type Shifted = number
+
+@validate(shiftBy.partial(n: 1))
+type Broken = number
+
+def passthrough(p: any): Result<any> {
+  return success(p)
+}
+
+@validate(passthrough)
+type Person = { name: string }
+
+type Plain = { name: string }
+
+def bangPositive(x: number): string {
+  const a: Positive! = x
+  if (a is failure(why)) {
+    return "rejected"
+  }
+  return "ok:${a.value}"
+}
+
+def armPositive(x: any): string {
+  return match(x) {
+    p: Positive => "pos:${p}"
+    _ => "no-match"
+  }
+}
+
+def bangClamped(x: number): string {
+  const a: Clamped! = x
+  if (a is failure(why)) {
+    return "failure"
+  }
+  return "value:${a.value}"
+}
+
+def armClamped(x: any): string {
+  return match(x) {
+    c: Clamped => "arm:${c}"
+    _ => "no-match"
+  }
+}
+
+def isClamped(x: any): string {
+  if (x is Clamped) {
+    return "yes"
+  }
+  return "no"
+}
+
+def bangShifted(x: number): string {
+  const a: Shifted! = x
+  if (a is failure(why)) {
+    return "rejected"
+  }
+  return "ok:${a.value}"
+}
+
+def bangBroken(x: number): string {
+  const a: Broken! = x
+  if (a is failure(why)) {
+    return "failure"
+  }
+  return "value:${a.value}"
+}
+
+def armPlain(x: any): string {
+  return match(x) {
+    p: Plain => "plain:${p.name}"
+    _ => "no-match"
+  }
+}
+
+def makeRaw(): any {
+  return { name: "al", extra: "keep" }
+}
+
+def extraState(o: any): string {
+  if (o.extra == null) {
+    return "stripped"
+  }
+  return "kept"
+}
+
+def classifyContractError(reason: string, validatorName: string): string {
+  if (reason.includes("modified the value")) {
+    if (reason.includes(validatorName)) {
+      return "errored:named"
+    }
+    return "errored:unnamed"
+  }
+  return "errored:other"
+}
+
+node predicateBangAccepts() {
+  return bangPositive(5)
+}
+
+node predicateBangRejects() {
+  return bangPositive(-5)
+}
+
+node predicateArmDispatches() {
+  return armPositive(5)
+}
+
+node predicateArmFallsThrough() {
+  return armPositive(-5)
+}
+
+node partialAppliedAccepts() {
+  return bangShifted(5)
+}
+
+node schemaOnlyArmDispatches() {
+  return armPlain({ name: "al" })
+}
+
+// RED until the contract lands: a modifying validator must error loudly,
+// with the validator's name reaching the user through the failure message.
+node modifyingBangErrors() {
+  const outcome = try bangClamped(-5)
+  if (outcome is failure(why)) {
+    return classifyContractError("${why}", "clamp")
+  }
+  return outcome.value
+}
+
+node modifyingArmErrors() {
+  const outcome = try armClamped(-5)
+  if (outcome is failure(why)) {
+    return classifyContractError("${why}", "clamp")
+  }
+  return outcome.value
+}
+
+node modifyingIsErrors() {
+  const outcome = try isClamped(-5)
+  if (outcome is failure(why)) {
+    return classifyContractError("${why}", "clamp")
+  }
+  return outcome.value
+}
+
+// RED: a partial-applied modifying validator must name its BASE function.
+node modifyingPartialErrorsNamed() {
+  const outcome = try bangBroken(5)
+  if (outcome is failure(why)) {
+    return classifyContractError("${why}", "shiftBy")
+  }
+  return outcome.value
+}
+
+// Residual zod divergence, pinned as documented behavior (spec: "What
+// removal does NOT fix"). DOUBLE DUTY — do not delete as obsolete: if the
+// identity check is ever anchored to the caller's PRE-PARSE value instead of
+// the value callValidator was handed, every object validator throws and
+// zodBangStrips flips from "stripped" to "failure". These rows catch the
+// single most likely implementation error in the contract check.
+node zodBangStrips() {
+  const p: Person! = makeRaw()
+  if (p is failure(why)) {
+    return "failure"
+  }
+  return extraState(p.value)
+}
+
+node zodBinderKeepsOriginal() {
+  const raw: any = makeRaw()
+  return match(raw) {
+    q: Person => extraState(q)
+    _ => "no-match"
+  }
+}

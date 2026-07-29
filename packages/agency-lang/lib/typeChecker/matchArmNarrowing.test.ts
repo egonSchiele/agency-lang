@@ -368,3 +368,35 @@ node main() {}`);
     expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
   });
 });
+
+// Guards are user code evaluated between arm conditions: a guard can mutate
+// the scrutinee, so a substituted re-read could dispatch on a value the
+// one-time evaluation never produced. Any guarded arm keeps the temp for the
+// whole match — dispatch stays a snapshot, and the trade is that guarded
+// matches do not narrow the scrutinee in arm bodies. Runtime half:
+// tests/agency/match-path-scrutinee (guardSnapshot).
+describe("guarded matches keep the temp (snapshot dispatch)", () => {
+  it("bare-variable scrutinee is not narrowed when any arm has a guard", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def f(u: Nu, g: boolean): string {
+  return match(u) {
+    { tag: "a" } if (g) => onlyA(u)
+    _ => "y"
+  }
+}
+node main() {}`);
+    expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
+  });
+
+  it("member-path scrutinee is not narrowed when any arm has a guard", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def f(b: Box, g: boolean): string {
+  return match(b.inner) {
+    { tag: "a" } if (g) => onlyA(b.inner)
+    _ => "y"
+  }
+}
+node main() {}`);
+    expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
+  });
+});

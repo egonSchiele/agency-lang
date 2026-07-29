@@ -50,6 +50,7 @@ import type {
 import type { ValueAccess, AccessChainElement } from "../types/access.js";
 import type { SourceLocation } from "../types/base.js";
 import { mapBodies } from "../utils/mapBodies.js";
+import { chainToSegments } from "../typeChecker/pathSegments.js";
 import { OBJECT_REST_FN } from "../constants.js";
 
 // ---------------------------------------------------------------------------
@@ -476,7 +477,7 @@ class PatternLowerer {
       // checker can find the owning match for exhaustiveness / union typing.
       ...(matchExprId !== undefined ? { matchExprId } : {}),
     };
-    const scrutineeRef = this.narrowableScrutineeRef(node.expression, scrutineeName, node.loc);
+    const scrutineeRef = this.narrowableScrutineeRef(node.expression, scrutineeName, node.cases, node.loc);
 
     const ifChain = this.buildIfChainFromArms(cases, scrutineeRef, node.loc);
     if (!ifChain) return [scrutineeAssign];
@@ -491,17 +492,32 @@ class PatternLowerer {
    *  ORIGINAL scrutinee expression when it is a stable reference — a bare
    *  variable or a stable access path — so narrowing lands on the expression
    *  the arm bodies reference; otherwise the `__scrutinee` temp.
-   *  An arm body that rebinds the name cannot corrupt the substituted reads:
-   *  they all run before any user statement (conditions precede the body,
-   *  binder assignments are prepended to it — see `foldArms`) and the runner
-   *  memoizes the chosen branch, so nothing re-reads the slot after user code
-   *  writes it. The `null` guard: `null` parses as a variableName (value
-   *  "null" — the quirk narrowing.ts:230 guards) and is not a reference. */
+   *
+   *  The substitution must be observationally equivalent to the temp, which
+   *  holds exactly when no user code can run between a condition evaluation
+   *  and the last substituted read: chain conditions run back to back, and
+   *  binder assignments are prepended to the arm body (`foldArms`), so the
+   *  first user code to run is in the chosen arm's body — after every
+   *  substituted read — and the runner memoizes the chosen branch so nothing
+   *  re-reads afterward. A GUARD breaks that: guards are user code evaluated
+   *  between arm conditions, and a guard that mutates the path would make
+   *  later arms test a value the one-time evaluation never produced. Any
+   *  guarded arm therefore keeps the temp for the whole match.
+   *
+   *  The `null` guard: `null` parses as a variableName (value "null" — the
+   *  quirk narrowing.ts:230 guards) and is not a reference. */
   private narrowableScrutineeRef(
     scrutinee: MatchBlock["expression"],
     scrutineeName: string,
+    cases: MatchBlock["cases"],
     loc: SourceLocation | undefined,
   ): Expression {
+    const hasGuard = cases.some(
+      (c) => c.type === "matchBlockCase" && c.guard !== undefined,
+    );
+    if (hasGuard) {
+      return varRef(scrutineeName, loc);
+    }
     if (scrutinee.type === "variableName" && scrutinee.value !== "null") {
       return varRef(scrutinee.value, scrutinee.loc);
     }
@@ -1596,22 +1612,18 @@ function cloneExpr<T extends Expression>(e: T): T {
 }
 
 /** A path the narrowing store can key on and whose re-reads cannot diverge
- *  from what the conditions tested: a variable base with only plain property
- *  and literal-index hops (the same path class flow narrowing supports —
- *  docs/dev/typechecker/narrowing). Calls and method hops could run user code
- *  on every read, and a computed index could hit a different element, so those
- *  keep the evaluate-once temp. Optional hops are excluded because the
- *  narrowing store does not model them — substituting would re-read for no
- *  narrowing gain. */
+ *  from what the conditions tested: a variable base whose chain is stable per
+ *  `toSegment` — property hops and NUMERIC non-negative-integer literal
+ *  indexes (`xs[0]`; not `obj["key"]`, `xs[-1]`, `xs[1.5]`). `chainToSegments`
+ *  is the single source of that rule, so this can never drift from what
+ *  narrowing actually supports. Calls, method hops, computed indexes and
+ *  slices keep the evaluate-once temp: a call re-read runs user code, and a
+ *  computed index can hit a different element. */
 function isStableAccessPath(access: ValueAccess): boolean {
   if (access.base.type !== "variableName" || access.base.value === "null") {
     return false;
   }
-  return access.chain.every(
-    (el) =>
-      (el.kind === "property" && !el.optional) ||
-      (el.kind === "index" && !el.optional && el.index.type === "number"),
-  );
+  return chainToSegments(access.chain) !== null;
 }
 
 function chainAccess(

@@ -116,16 +116,17 @@ describe("extractEvalRecord", () => {
       expect(rec.incomplete).toEqual([]);
     });
 
-    it("evalValues / evalOutputs populated from heuristic", () => {
+    it("infers evalValues heuristically; reports no output without a return value", () => {
       expect(rec.evalValues.at(-1)?.value).toBe("do the thing");
       expect(rec.evalValues.at(-1)?.threadId).toBe("0");
-      expect(rec.evalOutputs.at(-1)?.value).toBe("done.");
-      expect(rec.evalOutputs.at(-1)?.threadId).toBe("0");
+      // This trace has no agentEnd, so there is no return value to grade — the
+      // last LLM completion ("done.") is deliberately not used as a stand-in.
+      expect(rec.evalOutputs).toEqual([]);
       expect(
         rec.warnings.some((w) => w.includes("Call evalValue(prompt)")),
       ).toBe(true);
       expect(
-        rec.warnings.some((w) => w.includes("Call evalOutput(reply)")),
+        rec.warnings.some((w) => w.includes("produced no output")),
       ).toBe(true);
     });
 
@@ -136,10 +137,10 @@ describe("extractEvalRecord", () => {
       expect(rec.recordVersion).toBe(2);
     });
 
-    it("only warns about heuristic eval extraction", () => {
+    it("only warns about eval extraction", () => {
       expect(rec.warnings).toEqual([
         expect.stringContaining("Call evalValue(prompt)"),
-        expect.stringContaining("Call evalOutput(reply)"),
+        expect.stringContaining("produced no output"),
       ]);
     });
   });
@@ -175,9 +176,10 @@ describe("extractEvalRecord", () => {
       expect(rec.metrics.toolEnds).toBe(0);
     });
 
-    it("only warns about the heuristic eval input it can extract", () => {
+    it("warns about the heuristic eval input and the missing output", () => {
       expect(rec.warnings).toEqual([
         expect.stringContaining("Call evalValue(prompt)"),
+        expect.stringContaining("produced no output"),
       ]);
     });
   });
@@ -236,9 +238,9 @@ describe("extractEvalRecord", () => {
       expect(rec.evalValues[0].threadId).toBe("0");
     });
 
-    it("evalOutputs uses the TOP-LEVEL thread's last completion, not the subagent's", () => {
-      expect(rec.evalOutputs[0].value).toBe("delegating");
-      expect(rec.evalOutputs[0].threadId).toBe("0");
+    it("reports no output: neither thread's completion stands in for a return value", () => {
+      expect(rec.evalOutputs).toEqual([]);
+      expect(rec.warnings.some((w) => w.includes("produced no output"))).toBe(true);
     });
   });
 
@@ -265,11 +267,10 @@ describe("extractEvalRecord", () => {
       expect(rec.warnings.some((w) => /no threadId field/i.test(w))).toBe(true);
     });
 
-    it("falls back to all promptCompletions for evalValues / evalOutputs", () => {
+    it("falls back to all promptCompletions for evalValues; no output without a return value", () => {
       expect(rec.evalValues[0].value).toBe("hello");
       expect(rec.evalValues[0].threadId).toBeNull();
-      expect(rec.evalOutputs[0].value).toBe("hi");
-      expect(rec.evalOutputs[0].threadId).toBeNull();
+      expect(rec.evalOutputs).toEqual([]);
     });
 
     it("attributes tool/LLM events with null threadId", () => {
@@ -386,15 +387,16 @@ describe("extractEvalRecord", () => {
       ]);
     });
 
-    it("emits no eval warnings when neither explicit events nor promptCompletions exist", () => {
+    it("reports no output, and does not nag about evalValue, when the trace is empty", () => {
       resetClock();
       const rec = extractEvalRecord([ev("agentStart", { entryNode: "main" })], "test:none");
 
       expect(rec.evalValues).toEqual([]);
       expect(rec.evalOutputs).toEqual([]);
-      expect(rec.warnings).not.toEqual(
-        expect.arrayContaining([expect.stringMatching(/eval(Input|Output)\(\)/)]),
-      );
+      // Nothing to guess an input from, so no evalValue nag. The missing output
+      // is still reported: the agent ran and produced nothing gradable.
+      expect(rec.warnings.some((w) => w.includes("Call evalValue(prompt)"))).toBe(false);
+      expect(rec.warnings.some((w) => w.includes("produced no output"))).toBe(true);
     });
 
     it("mixes explicit output with heuristic input", () => {
@@ -495,8 +497,7 @@ describe("extractEvalRecord", () => {
     });
   });
 });
-
-describe("output fallback + warning options (used by the optimizer)", () => {
+describe("agent output: the node return value", () => {
   function eventsWithReturn(): EventEnvelope[] {
     resetClock();
     return [
@@ -511,39 +512,10 @@ describe("output fallback + warning options (used by the optimizer)", () => {
     ];
   }
 
-  it("defaults to the node return value, not the last LLM completion", () => {
-    const rec = extractEvalRecord(eventsWithReturn(), "src");
-    expect(rec.evalOutputs.map((o) => o.value)).toEqual(["New Delhi"]);
-    expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(false);
-    expect(rec.warnings.some((w) => w.includes("Call evalValue(prompt)"))).toBe(true);
-  });
-
-  it("by default drops to the last LLM completion when the node returns nothing", () => {
+  /** A trace whose node produced a last LLM reply but returned `result`. */
+  function eventsReturning(result: unknown): EventEnvelope[] {
     resetClock();
-    const events: EventEnvelope[] = [
-      ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
-      ev("promptCompletion", {
-        threadId: "0",
-        model: '"gpt-5"',
-        messages: [{ role: "user", content: "capital of India?" }],
-        completion: { output: "New Delhi" },
-      }, "span-llm"),
-      ev("agentEnd", { threadId: "0", entryNode: "main" }),
-    ];
-    const rec = extractEvalRecord(events, "src");
-    expect(rec.evalOutputs.map((o) => o.value)).toEqual(["New Delhi"]);
-    expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(true);
-  });
-
-  it("outputFallback 'llm' still forces the last LLM completion", () => {
-    const rec = extractEvalRecord(eventsWithReturn(), "src", { outputFallback: "llm" });
-    expect(rec.evalOutputs.map((o) => o.value)).toEqual(["Paris"]);
-    expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(true);
-  });
-
-  it("outputFallback 'returnValue' yields no output when the node returns nothing", () => {
-    resetClock();
-    const events: EventEnvelope[] = [
+    return [
       ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
       ev("promptCompletion", {
         threadId: "0",
@@ -551,31 +523,61 @@ describe("output fallback + warning options (used by the optimizer)", () => {
         messages: [{ role: "user", content: "capital of India?" }],
         completion: { output: "Paris" },
       }, "span-llm"),
-      ev("agentEnd", { threadId: "0", entryNode: "main" }),
+      ev("agentEnd", { threadId: "0", entryNode: "main", ...(result === undefined ? {} : { result }) }),
     ];
-    const rec = extractEvalRecord(events, "src", { outputFallback: "returnValue" });
-    expect(rec.evalOutputs).toEqual([]);
-  });
+  }
 
-  it("outputFallback 'returnValue' grades the node return value with no output warning", () => {
-    const rec = extractEvalRecord(eventsWithReturn(), "src", { outputFallback: "returnValue" });
+  it("grades the node return value, never the last LLM completion", () => {
+    const rec = extractEvalRecord(eventsWithReturn(), "src");
     expect(rec.evalOutputs.map((o) => o.value)).toEqual(["New Delhi"]);
-    expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(false);
+    expect(rec.warnings.some((w) => w.includes("produced no output"))).toBe(false);
   });
 
-  it("warnMissingValue false suppresses the evalValue warning", () => {
-    const rec = extractEvalRecord(eventsWithReturn(), "src", { warnMissingValue: false });
-    expect(rec.warnings.some((w) => w.includes("Call evalValue(prompt)"))).toBe(false);
+  it("reports no output when the node returned nothing", () => {
+    const rec = extractEvalRecord(eventsReturning(undefined), "src");
+    expect(rec.evalOutputs).toEqual([]);
+    expect(rec.warnings.some((w) => w.includes("produced no output"))).toBe(true);
   });
 
-  it("explicit evalOutput() still wins over the returnValue fallback", () => {
+  it("treats an explicit null return as no output, not the value null", () => {
+    const rec = extractEvalRecord(eventsReturning(null), "src");
+    expect(rec.evalOutputs).toEqual([]);
+    expect(rec.warnings.some((w) => w.includes("produced no output"))).toBe(true);
+  });
+
+  it("keeps falsy-but-real return values", () => {
+    for (const value of [0, false, ""]) {
+      const rec = extractEvalRecord(eventsReturning(value), "src");
+      expect(rec.evalOutputs.map((o) => o.value)).toEqual([value]);
+      expect(rec.warnings.some((w) => w.includes("produced no output"))).toBe(false);
+    }
+  });
+
+  it("lets evalOutput() stand in for a null return", () => {
+    resetClock();
+    const events: EventEnvelope[] = [
+      ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+      ev("evalOutputRecorded", { threadId: "0", value: "explicit answer" }),
+      ev("agentEnd", { threadId: "0", entryNode: "main", result: null }),
+    ];
+    const rec = extractEvalRecord(events, "src");
+    expect(rec.evalOutputs.map((o) => o.value)).toEqual(["explicit answer"]);
+    expect(rec.warnings.some((w) => w.includes("produced no output"))).toBe(false);
+  });
+
+  it("explicit evalOutput() wins over a return value", () => {
     resetClock();
     const events: EventEnvelope[] = [
       ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
       ev("evalOutputRecorded", { threadId: "0", value: "explicit answer" }),
       ev("agentEnd", { threadId: "0", entryNode: "main", result: "New Delhi" }),
     ];
-    const rec = extractEvalRecord(events, "src", { outputFallback: "returnValue" });
+    const rec = extractEvalRecord(events, "src");
     expect(rec.evalOutputs.map((o) => o.value)).toEqual(["explicit answer"]);
+  });
+
+  it("warnMissingValue false suppresses the evalValue warning", () => {
+    const rec = extractEvalRecord(eventsWithReturn(), "src", { warnMissingValue: false });
+    expect(rec.warnings.some((w) => w.includes("Call evalValue(prompt)"))).toBe(false);
   });
 });

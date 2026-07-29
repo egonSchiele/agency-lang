@@ -256,21 +256,13 @@ const defaultEvalRecordExtractor: EvalRecordExtractor = async ({
   fs.writeFileSync(outPath, JSON.stringify(record, null, 2));
 };
 
-/**
- * Extractor for the optimizer. Two deliberate departures from the default:
- * `"returnValue"` is strict where the default drops to the last LLM completion,
- * so an agent that returns nothing raises "nothing to grade" instead of quietly
- * optimizing its chat replies; and the evalValue warning is off, since the
- * optimizer's inputs come from the input spec rather than `evalValue()`.
- */
+/** Extractor for the optimizer: skips the evalValue warning, since the
+ *  optimizer's inputs come from the input spec rather than `evalValue()`. */
 export const optimizeEvalRecordExtractor: EvalRecordExtractor = async ({
   statelogPath,
   outPath,
 }) => {
-  const record = new StatelogParser(statelogPath, {
-    outputFallback: "returnValue",
-    warnMissingValue: false,
-  }).evalRecord();
+  const record = new StatelogParser(statelogPath, { warnMissingValue: false }).evalRecord();
   fs.writeFileSync(outPath, JSON.stringify(record, null, 2));
 };
 

@@ -141,8 +141,8 @@ You can optionally also provide other values:
 export type Input = {
   /** Unique id. Generated for you if not given.*/
   id?: string;
-  /** What the agent should accomplish — read by the goal judge and the
-   *  pairwise judge suite. This is a per-input goal.*/
+  /** What the agent should accomplish — read by the goal judge. This is a
+   *  per-input goal.*/
   goal?: string;
   /** Entry node to run. Defaults to `main`. */
   node?: string;
@@ -335,4 +335,4 @@ agency optimize foo.agency --inputs inputs.json --optimizer ./myOptimizer.ts
 
 ## Notes
 
-The CLI installs an approval handler for the internal `std::agency.run(...)` calls used by eval execution. The stdlib `agency.eval.optimize(...)` function does **not** install a handler; Agency callers should wrap it in their own handler when they want auto-approval.
+The CLI installs an approval handler for the internal `std::agency.run(...)` calls used by eval execution.

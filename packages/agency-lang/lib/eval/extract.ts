@@ -22,22 +22,10 @@ import type {
   ThreadEntry,
 } from "./types.js";
 
-/** How the agent's output is inferred when `evalOutput()` was not called. */
-export type OutputFallback = "llm" | "returnValue" | "preferReturnValue";
-
 export type ExtractOptions = {
   /** Max characters for tool argsPreview / outputPreview. Default 200.
    *  Pass 0 for "no truncation". */
   previewChars?: number;
-  /** How to infer the agent output when `evalOutput()` was not called:
-   *   - "preferReturnValue" (default): the entry node's return value, dropping to
-   *     the last LLM completion (with a warning) when the node returned nothing.
-   *   - "returnValue": the return value only; no output at all when there is none.
-   *     The optimizer uses this so "nothing to grade" surfaces as an error rather
-   *     than silently optimizing the agent's last LLM reply.
-   *   - "llm": the last LLM completion on the top-level thread, with a warning.
-   *  Explicit `evalOutput()` calls always take precedence. */
-  outputFallback?: OutputFallback;
   /** Emit the "no evalValue()" warning when `evalValue()` was not called. Default true.
    *  The optimizer sets this false: inputs come from the input spec, not evalValue(). */
   warnMissingValue?: boolean;
@@ -50,8 +38,8 @@ const DEFAULT_EVAL_MAX_VALUE_BYTES = 100_000;
 const EVAL_MAX_VALUE_BYTES = parseEvalMaxValueBytes();
 const NO_EVAL_VALUE_WARNING =
   "no evalValue() calls in trace; user input inferred from last user-role message of first promptCompletion on the top-level thread. Call evalValue(prompt) in your agent code to record the actual user input.";
-const NO_EVAL_OUTPUT_WARNING =
-  "no evalOutput() calls in trace; final response inferred from last promptCompletion completion on the top-level thread. Call evalOutput(reply) in your agent code to record the actual user-facing response.";
+const NO_OUTPUT_ERROR =
+  "the agent produced no output: the entry node returned nothing (or null) and evalOutput() was never called. Return a value from the node, or call evalOutput(value) to record what should be graded.";
 
 /** Top-level extractor. Composes pure helpers over the Normalized
  *  form produced by `normalize()`; no shared mutable state, no
@@ -90,8 +78,7 @@ export function extractEvalRecord(
   const topThreadProms = topLevelPromptCompletions(n, threads);
   const evalValues =
     collectExplicit("evalValueRecorded", n) ?? heuristicValues(topThreadProms, opts.warnMissingValue ?? true);
-  const evalOutputs =
-    collectExplicit("evalOutputRecorded", n) ?? fallbackOutputs(n, topThreadProms, opts.outputFallback ?? "preferReturnValue");
+  const evalOutputs = collectExplicit("evalOutputRecorded", n) ?? returnValueOutputs(n);
 
   const last = n.events[n.events.length - 1];
 
@@ -330,17 +317,6 @@ function extractUserMessage(
   return { value: userMessageOf(prompts[0].raw), source: prompts[0] };
 }
 
-function extractFinalResponse(
-  prompts: NormalizedEnvelope[],
-): { value: string | null; source: NormalizedEnvelope | null } {
-  if (prompts.length === 0) return { value: null, source: null };
-  const last = prompts[prompts.length - 1];
-  return {
-    value: completionOf(last.raw),
-    source: last,
-  };
-}
-
 function collectExplicit(
   eventType: string,
   n: Normalized,
@@ -374,45 +350,23 @@ function heuristicValues(prompts: NormalizedEnvelope[], warn: boolean): WithWarn
   };
 }
 
-/** Output fallback when evalOutput() wasn't called. See `ExtractOptions.outputFallback`. */
-function fallbackOutputs(
-  n: Normalized,
-  prompts: NormalizedEnvelope[],
-  mode: OutputFallback,
-): WithWarnings<EvalValue[]> {
-  if (mode === "llm") return heuristicOutputs(prompts);
-  const returned = returnValueOutputs(n);
-  if (mode === "returnValue" || returned.result.length > 0) return returned;
-  return heuristicOutputs(prompts);
-}
-
-/** The entry node's return value, taken from the last `agentEnd` event. */
+/**
+ * The entry node's return value, from the last `agentEnd` event. A `null` return
+ * counts as no output, not as the value `null`: the language normalizes an
+ * unmatched `match` or a missing key to `null`, so grading the string "null"
+ * would silently score a program that produced nothing. Returning `null` means
+ * "my output went through evalOutput()"; when it did not, that is the error.
+ */
 function returnValueOutputs(n: Normalized): WithWarnings<EvalValue[]> {
   const ends = n.byType.agentEnd ?? [];
   const last = ends[ends.length - 1];
-  if (last === undefined || last.raw.data.result === undefined) {
-    return { result: [], warnings: [] };
+  const result = last?.raw.data.result;
+  if (last === undefined || result === undefined || result === null) {
+    return { result: [], warnings: [NO_OUTPUT_ERROR] };
   }
   return {
-    result: [{ value: last.raw.data.result, threadId: last.threadId, tMs: last.tMs }],
+    result: [{ value: result, threadId: last.threadId, tMs: last.tMs }],
     warnings: [],
-  };
-}
-
-function heuristicOutputs(prompts: NormalizedEnvelope[]): WithWarnings<EvalValue[]> {
-  const extracted = extractFinalResponse(prompts);
-  if (extracted.value === null || extracted.source === null) {
-    return { result: [], warnings: [] };
-  }
-  return {
-    result: [
-      {
-        value: extracted.value,
-        threadId: extracted.source.threadId,
-        tMs: extracted.source.tMs,
-      },
-    ],
-    warnings: [NO_EVAL_OUTPUT_WARNING],
   };
 }
 

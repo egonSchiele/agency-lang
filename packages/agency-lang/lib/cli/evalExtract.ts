@@ -1,6 +1,7 @@
 import * as fs from "fs";
 
 import { StatelogParser } from "../eval/statelogParser.js";
+import { color } from "../utils/termcolors.js";
 
 export type EvalExtractOptions = {
   out?: string;
@@ -25,6 +26,16 @@ export async function evalExtract(
       `${record.threads.length} threads, ` +
       `${record.incomplete.length} incomplete)`,
   );
+  // The record is still written — you want to inspect the trace precisely when
+  // the agent produced nothing — but an unusable record shouldn't look like a
+  // clean run, so say so and exit non-zero.
+  if (record.evalOutputs.length === 0) {
+    console.error(color.red("Error: this trace has no gradable output."));
+    for (const warning of record.warnings) {
+      console.error(color.dim(`  ${warning}`));
+    }
+    process.exitCode = 1;
+  }
 }
 
 function defaultOutPath(input: string): string {

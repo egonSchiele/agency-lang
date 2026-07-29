@@ -117,11 +117,13 @@ node main(prompt: string): string {
 }
 ```
 
-Without annotations, `extract` infers both fields.
+`evalOutputs` is **the entry node's return value** — the same thing `agency run` prints and a TypeScript caller receives. An agent that returns its answer needs no annotation at all.
 
-For `evalOutputs` it uses **the entry node's return value** — the same thing `agency run` prints and a TypeScript caller receives. Only when the node returns nothing does it fall back to the last top-level `promptCompletion` completion, and it warns when it does. So an agent that returns its answer needs no annotation at all; one that answers by printing should call `evalOutput(reply)`.
+There is no guessing here. The last LLM completion is never used as a stand-in for a return value, because a plausible-looking chat reply is worse than an honest gap: it makes an agent that produced nothing look like it produced something. If the node returns nothing, or returns `null`, and `evalOutput()` was never called, the record has no output and says so in `warnings`. `agency eval extract` prints an error and exits non-zero.
 
-For `evalValues` it uses the last user-role message of the first top-level `promptCompletion`, and warns. This one is a genuine guess — annotate with `evalValue(prompt)` if you care about it.
+Returning `null` counts as no output rather than as the value `null`. An unmatched `match` or a missing key normalizes to `null` in Agency, so grading the string `"null"` would silently score a program that produced nothing. If your node genuinely has no return value, call `evalOutput(value)` to say what should be graded.
+
+`evalValues` is different: it is inferred from the last user-role message of the first top-level `promptCompletion`, and warns when it does so. That one is a genuine guess — annotate with `evalValue(prompt)` if you care about it.
 
 ## Record shape (overview)
 
@@ -163,7 +165,7 @@ Every entry in `evalValues` and `evalOutputs` has this shape:
 - `tMs` is milliseconds from the trace start, derived from the statelog envelope timestamp.
 - `truncated` is present only when the serialized value exceeded `STATELOG_EVAL_MAX_VALUE_BYTES`. The default cap is 100KB; set that environment variable before running `agency eval extract` to override it. Oversized string values are kept as readable string prefixes; oversized non-string values are converted to JSON-preview strings.
 
-Consumers that need one response typically read `record.evalOutputs.at(-1)?.value`. A pairwise judge compares the last element of `evalOutputs`; without annotations that value is the entry node's return value, or the last LLM completion when the node returned nothing.
+Consumers that need one response typically read `record.evalOutputs.at(-1)?.value`. A pairwise judge compares the last element of `evalOutputs`; without annotations that value is the entry node's return value, and the array is empty when the node returned nothing.
 
 ## Behavioral-flag recipe
 

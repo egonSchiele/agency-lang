@@ -422,3 +422,544 @@ describe("origin attribution", () => {
     );
   });
 });
+
+describe("fill-time type checking: records and aliases", () => {
+  const personTemplate = [
+    "type Person = {",
+    "  name: string;",
+    "  age: number",
+    "}",
+    "",
+    "node main(): string {",
+    "  const person: Person = #person",
+    '  return "ok"',
+    "}",
+    "",
+  ].join("\n");
+
+  // These assert THAT the fill is rejected and which hole is named — not
+  // the wording. Task 2 throws the general two-types message; the messages
+  // that name a property arrive in Task 3, and their assertions live
+  // there. Asserting content here would fail at the end of Task 2 and stop
+  // the executor for the wrong reason.
+
+  it("rejects a record missing a required property", () => {
+    expect(() => fillHoles(load(personTemplate), { person: { name: "Alice" } })).toThrow(
+      /#person.*expects/,
+    );
+  });
+
+  it("rejects a primitive where a record is wanted", () => {
+    expect(() => fillHoles(load(personTemplate), { person: 42 })).toThrow(/expects/);
+  });
+
+  it("accepts a complete record", () => {
+    expect(fillAndPrint(personTemplate, { person: { name: "Alice", age: 30 } })).toContain(
+      "Alice",
+    );
+  });
+
+  it("resolves an alias for a primitive", () => {
+    const aliased = [
+      "type Name = string",
+      "",
+      "node main(): string {",
+      "  const n: Name = #who",
+      "  return n",
+      "}",
+      "",
+    ].join("\n");
+    expect(() => fillHoles(load(aliased), { who: 42 })).toThrow(/expects/);
+    expect(fillAndPrint(aliased, { who: "Alice" })).toContain("Alice");
+  });
+
+  it("checks a nested record", () => {
+    const nested = [
+      "type Address = {",
+      "  city: string",
+      "}",
+      "type Person = {",
+      "  name: string;",
+      "  address: Address",
+      "}",
+      "",
+      "node main(): string {",
+      "  const p: Person = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(() =>
+      fillHoles(load(nested), { person: { name: "A", address: {} } }),
+    ).toThrow(/expects/);
+  });
+
+  it("checks an array of records", () => {
+    const list = [
+      "type Person = {",
+      "  name: string;",
+      "  age: number",
+      "}",
+      "",
+      "node main(): string {",
+      "  const people: Person[] = #people",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(() =>
+      fillHoles(load(list), { people: [{ name: "A", age: 1 }, { name: "B" }] }),
+    ).toThrow(/expects/);
+    expect(fillAndPrint(list, { people: [{ name: "A", age: 1 }] })).toContain("A");
+  });
+
+  it("accepts an absent optional property", () => {
+    const optional = [
+      "type Person = {",
+      "  name: string;",
+      "  nickname?: string",
+      "}",
+      "",
+      "node main(): string {",
+      "  const p: Person = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(optional, { person: { name: "A" } })).toContain("A");
+  });
+
+  it("accepts any arm of a union and rejects something outside it", () => {
+    const union = [
+      "node main(): string {",
+      "  const v: string | number = #v",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(union, { v: "a" })).toContain('"a"');
+    expect(fillAndPrint(union, { v: 1 })).toContain("1");
+    expect(() => fillHoles(load(union), { v: true })).toThrow(/expects/);
+  });
+
+  it("accepts a string against a union of string literals", () => {
+    // THE INVARIANT TEST. `const mode: "fast" | "slow" = "fast"` compiles,
+    // so fill must not refuse it. The widened description does not fit the
+    // union; the literal-accurate second pass does.
+    const literals = [
+      "node main(): string {",
+      '  const mode: "fast" | "slow" = #mode',
+      "  return mode",
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(literals, { mode: "fast" })).toContain('"fast"');
+    expect(() => fillHoles(load(literals), { mode: "medium" })).toThrow(/expects/);
+  });
+
+  it("rejects a number against a union of number literals, as the compile does", () => {
+    // synthType widens numbers, so `const n: 1 | 2 = 1` does NOT compile.
+    // Fill agreeing with that is the invariant working in both directions.
+    const numeric = [
+      "node main(): number {",
+      "  const n: 1 | 2 = #n",
+      "  return n",
+      "}",
+      "",
+    ].join("\n");
+    expect(() => fillHoles(load(numeric), { n: 1 })).toThrow(/expects/);
+  });
+
+  it("accepts an empty array for an array hole", () => {
+    const list = [
+      "node main(): string {",
+      "  const xs: number[] = #xs",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(list, { xs: [] })).toContain("[]");
+  });
+
+  it("does not hang on a recursive alias", () => {
+    const recursive = [
+      "type Tree = {",
+      "  value: number;",
+      "  children: Tree[]",
+      "}",
+      "",
+      "node main(): string {",
+      "  const t: Tree = #tree",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(
+      fillAndPrint(recursive, { tree: { value: 1, children: [{ value: 2, children: [] }] } }),
+    ).toContain("value");
+  });
+
+  it("rejects a bad element inside a recursive alias, and terminates", () => {
+    const recursive = [
+      "type Tree = {",
+      "  value: number;",
+      "  children: Tree[]",
+      "}",
+      "",
+      "node main(): string {",
+      "  const t: Tree = #tree",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(() =>
+      fillHoles(load(recursive), { tree: { value: 1, children: [{ value: 2 }] } }),
+    ).toThrow(/expects/);
+  });
+
+  it("still lets an unknowable fragment through", () => {
+    expect(
+      fillAndPrint(personTemplate, { person: _parseExpr("buildPerson()") }),
+    ).toContain("buildPerson()");
+  });
+
+  it("still rejects a literal fragment of the wrong primitive", () => {
+    const t = `node main() {\n  const prompt: string = #text\n  return prompt\n}\n`;
+    expect(() => fillHoles(load(t), { text: _parseExpr("42") })).toThrow(/string/);
+  });
+
+  it("now rejects a literal fragment against an alias, which it could not before", () => {
+    const aliased = [
+      "type Name = string",
+      "",
+      "node main(): string {",
+      "  const n: Name = #who",
+      "  return n",
+      "}",
+      "",
+    ].join("\n");
+    expect(() => fillHoles(load(aliased), { who: _parseExpr("42") })).toThrow(/expects/);
+  });
+
+  it("checks a hole with an inline record annotation", () => {
+    const inline = [
+      "type Person = {",
+      "  name: string;",
+      "  age: number",
+      "}",
+      "",
+      "node main() {",
+      "  f(#person: Person)",
+      "}",
+      "",
+    ].join("\n");
+    expect(() => fillHoles(load(inline), { person: { name: "A" } })).toThrow(/expects/);
+    expect(fillAndPrint(inline, { person: { name: "A", age: 1 } })).toContain("A");
+  });
+
+  it("rejects null for a non-nullable hole and accepts it for a nullable one", () => {
+    const strict = `node main() {\n  const s: string = #v\n  return s\n}\n`;
+    expect(() => fillHoles(load(strict), { v: null })).toThrow(/expects/);
+    const nullable = `node main() {\n  const s: string | null = #v\n  return "ok"\n}\n`;
+    expect(fillAndPrint(nullable, { v: null })).toContain("null");
+  });
+});
+
+describe("fill-time type checking: a type it cannot resolve is not checked", () => {
+  // The rule that keeps this feature from rejecting ordinary templates.
+  // An unknown alias resolves to itself, and a synthesized record compared
+  // against it is not assignable — so without the guard, every one of
+  // these templates would reject every record fill.
+
+  it("accepts a record when the type comes from an import", () => {
+    const imported = [
+      'import { Person } from "./types.agency"',
+      "",
+      "node main(): string {",
+      "  const p: Person = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(imported, { person: { name: "A" } })).toContain("A");
+  });
+
+  it("accepts a record when the alias is declared inside a body", () => {
+    const bodyAlias = [
+      "node main(): string {",
+      "  type Local = {",
+      "    name: string;",
+      "    age: number",
+      "  }",
+      "  const p: Local = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(bodyAlias, { person: { name: "A" } })).toContain("A");
+  });
+
+  it("accepts a record when an unresolved name is nested deep in the type", () => {
+    const deep = [
+      "type Person = {",
+      "  name: string;",
+      "  pet: Animal",
+      "}",
+      "",
+      "node main(): string {",
+      "  const p: Person = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(deep, { person: { name: "A" } })).toContain("A");
+  });
+});
+
+describe("fill-time type checking: splices check one element at a time", () => {
+  // A splice annotation describes ONE spliced element, not the array. This
+  // is what the code already does; these tests make it deliberate.
+  const spliceTemplate = `node main() {\n  f(#...items: string)\n}\n`;
+
+  it("accepts an array whose every element matches", () => {
+    expect(fillAndPrint(spliceTemplate, { items: ["a", "b"] })).toContain('f("a", "b")');
+  });
+
+  it("rejects the element that does not match", () => {
+    expect(() => fillHoles(load(spliceTemplate), { items: ["a", 1] })).toThrow(/expects/);
+  });
+
+  it("checks record elements property by property", () => {
+    const records = [
+      "type Person = {",
+      "  name: string;",
+      "  age: number",
+      "}",
+      "",
+      "node main() {",
+      "  f(#...people: Person)",
+      "}",
+      "",
+    ].join("\n");
+    expect(() =>
+      fillHoles(load(records), { people: [{ name: "A", age: 1 }, { name: "B" }] }),
+    ).toThrow(/expects/);
+  });
+
+  it("rejects an array-typed splice annotation, which is the easy mistake", () => {
+    const arrayAnnotated = [
+      "type Person = {",
+      "  name: string;",
+      "  age: number",
+      "}",
+      "",
+      "node main() {",
+      "  f(#...people: Person[])",
+      "}",
+      "",
+    ].join("\n");
+    expect(() =>
+      fillHoles(load(arrayAnnotated), { people: [{ name: "A", age: 1 }] }),
+    ).toThrow();
+  });
+});
+
+describe("fill-time type checking: the error says what is wrong", () => {
+  const personTemplate = [
+    "type Person = {",
+    "  name: string;",
+    "  age: number",
+    "}",
+    "",
+    "node main(): string {",
+    "  const person: Person = #person",
+    '  return "ok"',
+    "}",
+    "",
+  ].join("\n");
+
+  it("names the missing property", () => {
+    expect(() => fillHoles(load(personTemplate), { person: { name: "Alice" } })).toThrow(
+      /missing the required property `age`/,
+    );
+  });
+
+  it("names the property whose type is wrong, and both types", () => {
+    // The full phrasing, not just /age/: the general message also happens
+    // to contain "age" when it prints the synthesized record, so a loose
+    // assertion would pass without the explainer existing at all.
+    expect(() =>
+      fillHoles(load(personTemplate), { person: { name: "Alice", age: "thirty" } }),
+    ).toThrow(/has `age` as `"thirty"` where `number` is expected/);
+  });
+
+  it("names a missing property nested one level down, with its path", () => {
+    const nested = [
+      "type Address = {",
+      "  city: string",
+      "}",
+      "type Person = {",
+      "  name: string;",
+      "  address: Address",
+      "}",
+      "",
+      "node main(): string {",
+      "  const p: Person = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(() =>
+      fillHoles(load(nested), { person: { name: "A", address: {} } }),
+    ).toThrow(/address\.city/);
+  });
+
+  it("blames the right property when another one is aliased", () => {
+    // The walk reaches `name` first. Comparing printed types would see
+    // `string` against `Name`, differ, and blame a property that is fine —
+    // while the real problem, the missing `age`, goes unnamed.
+    const aliasedProperty = [
+      "type Name = string",
+      "type Person = {",
+      "  name: Name;",
+      "  age: number",
+      "}",
+      "",
+      "node main(): string {",
+      "  const p: Person = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    const run = () => fillHoles(load(aliasedProperty), { person: { name: "Alice" } });
+    expect(run).toThrow(/age/);
+    expect(run).not.toThrow(/`name`/);
+  });
+
+  it("falls back to the general message when it cannot localize", () => {
+    // A union mismatch has no single property to blame. Assert the general
+    // message's own tail — /expects/ alone would also match a confidently
+    // wrong specific message, which is the failure this test exists for.
+    const union = [
+      "node main(): string {",
+      "  const v: string | number = #v",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(() => fillHoles(load(union), { v: true })).toThrow(/supplies `boolean`/);
+  });
+
+  it("keeps the graft origin on a hole that arrived through a fill", () => {
+    // The origin suffix only appears for a hole that ARRIVED in grafted
+    // code, so this needs two fills. A primitive type on purpose: a named
+    // type would not resolve in the outer template and would be skipped,
+    // so nothing would throw to carry a suffix.
+    const outer = `node main(): string {\n  #body\n}\n`;
+    const inner = _parseStatements(`const p: string = #person\n`);
+    const grafted = fillHoles(load(outer), { body: inner });
+    expect(() => fillHoles(grafted, { person: 42 })).toThrow(
+      /in code grafted by the fill for `#body`/,
+    );
+  });
+
+  it("explains the array-annotated splice instead of just rejecting it", () => {
+    const arrayAnnotated = [
+      "type Person = {",
+      "  name: string;",
+      "  age: number",
+      "}",
+      "",
+      "node main() {",
+      "  f(#...people: Person[])",
+      "}",
+      "",
+    ].join("\n");
+    expect(() =>
+      fillHoles(load(arrayAnnotated), { people: [{ name: "A", age: 1 }] }),
+    ).toThrow(/describes one element/);
+  });
+
+  it("does not give that hint when the array annotation is correct", () => {
+    // `#...rows: number[]` splicing rows of numbers is a legitimate
+    // array-typed splice. A bad element must get the ordinary message, not
+    // advice to change an annotation that is right.
+    const rows = `node main() {\n  f(#...rows: number[])\n}\n`;
+    const run = () => fillHoles(load(rows), { rows: [[1, 2], "x"] });
+    expect(run).toThrow(/expects/);
+    expect(run).not.toThrow(/describes one element/);
+  });
+});
+
+describe("fill-time type checking: review follow-ups", () => {
+  it("accepts a literal fragment against a union of string literals", () => {
+    // Same invariant as the plain-string case, one path over: the graft is
+    // the literal `"fast"`, and the compile infers a string-literal type
+    // for it exactly as it would for a plain-value fill.
+    const literals = [
+      "node main(): string {",
+      '  const mode: "fast" | "slow" = #mode',
+      "  return mode",
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(literals, { mode: _parseExpr('"fast"') })).toContain('"fast"');
+    expect(() => fillHoles(load(literals), { mode: _parseExpr('"medium"') })).toThrow(
+      /expects/,
+    );
+  });
+
+  it("checks a hole typed with a generic alias", () => {
+    // A generic alias refers to its own parameters by name, and those are
+    // not in the alias table. Treating them as unresolved would skip every
+    // generic alias silently.
+    const generic = [
+      "type Box<T> = {",
+      "  item: T",
+      "}",
+      "",
+      "node main(): string {",
+      "  const b: Box<string> = #b",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(generic, { b: { item: "hello" } })).toContain("hello");
+    expect(() => fillHoles(load(generic), { b: { item: 42 } })).toThrow(/expects/);
+  });
+
+  it("gives the splice hint when the element fits only as a literal", () => {
+    // The hint's evidence must use the same inference the acceptance
+    // decision got: `"fast"` fits `"fast" | "slow"` literally, so this is
+    // one-level-off evidence even though the widened description is not.
+    const modes = [
+      "node main() {",
+      '  f(#...modes: ("fast" | "slow")[])',
+      "}",
+      "",
+    ].join("\n");
+    expect(() => fillHoles(load(modes), { modes: ["fast"] })).toThrow(
+      /describes one element/,
+    );
+  });
+
+  it("records what isAssignable does with extra properties", () => {
+    // Not a rule this change invents — whatever the checker decides is
+    // what fill does. Pinned so a change in the checker is noticed here.
+    const person = [
+      "type Person = {",
+      "  name: string;",
+      "  age: number",
+      "}",
+      "",
+      "node main(): string {",
+      "  const p: Person = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(
+      fillAndPrint(person, { person: { name: "A", age: 1, nickname: "Al" } }),
+    ).toContain("nickname");
+  });
+});

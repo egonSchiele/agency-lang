@@ -1,0 +1,27 @@
+import { fill } from "std::agency"
+
+// The guide's own Person example. A record missing a required property
+// used to fill happily and fail later, inside generated source the caller
+// never wrote. It is rejected at the fill now, naming the property.
+static const template = [|
+  type Person = {
+    name: string;
+    age: number
+  }
+
+  node main(): string {
+    const person: Person = #person
+    return "hello ${person.name}"
+  }
+|]
+
+node main(): string {
+  const filled = fill(template, { person: { name: "Alice" } })
+  if (!isFailure(filled)) {
+    return "filled, which is wrong"
+  }
+  if (filled.error.includes("age")) {
+    return "ok"
+  }
+  return "rejected without naming age: ${filled.error}"
+}

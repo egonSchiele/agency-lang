@@ -1,8 +1,24 @@
-import { AgencyNode, Hole, StringLiteral } from "../../types.js";
+import {
+  AgencyNode,
+  ArrayType,
+  Hole,
+  TypeAliasEntry,
+  VariableType,
+} from "../../types.js";
 import { SourceLocation } from "../../types/base.js";
 import { LEGAL_IDENTIFIER, RESERVED_WORDS } from "../../parsers/parsers.js";
-import { findHoles, holeNames, positionInferredTypes } from "../../utils/holes.js";
+import {
+  findHoles,
+  holeNames,
+  positionInferredVariableTypes,
+} from "../../utils/holes.js";
 import { variableTypeToString } from "../../backends/typescriptGenerator/typeToString.js";
+import { isAssignable, safeResolveType } from "../../typeChecker/assignability.js";
+import { visitTypes } from "../../typeChecker/typeWalker.js";
+import { isBuiltinGenericName } from "../../typeChecker/builtinGenerics.js";
+import { aliasTableFrom } from "./aliasTable.js";
+import { synthesizeType } from "./synthesizeType.js";
+import { explainMismatch } from "./explainMismatch.js";
 import { Code, isCode, kindOf } from "./code.js";
 import { kindFitsSort, stampOrigin } from "./origin.js";
 import { liftValue } from "./lift.js";
@@ -87,13 +103,16 @@ export function fillHoles(code: Code, values: Record<string, unknown>): Code {
     }
   }
 
-  // Expected types for fill-time validation: the hole's annotation, or
-  // the type its position supplies.
-  const expected: Record<string, string> = positionInferredTypes(renamedTemplate.nodes);
+  // Everything fill-time validation needs: the type each hole's position
+  // supplies, and the template's own aliases to resolve names against.
+  const types: FillTypes = {
+    expected: positionInferredVariableTypes(renamedTemplate.nodes),
+    aliases: aliasTableFrom(renamedTemplate.nodes),
+  };
 
   return {
     ...renamedTemplate,
-    nodes: substituteInArray(renamedTemplate.nodes, renamedValues, expected) as AgencyNode[],
+    nodes: substituteInArray(renamedTemplate.nodes, renamedValues, types) as AgencyNode[],
   };
 }
 
@@ -113,16 +132,16 @@ function isFillableHole(value: unknown, values: Record<string, unknown>): value 
 function substituteInArray(
   items: unknown[],
   values: Record<string, unknown>,
-  expected: Record<string, string>,
+  types: FillTypes,
 ): unknown[] {
   const out: unknown[] = [];
   for (const item of items) {
     if (isFillableHole(item, values)) {
-      const replacement = fillOne(item, values[item.name], expected);
+      const replacement = fillOne(item, values[item.name], types);
       if (Array.isArray(replacement)) out.push(...replacement);
       else out.push(replacement);
     } else {
-      out.push(substituteAny(item, values, expected));
+      out.push(substituteAny(item, values, types));
     }
   }
   return out;
@@ -133,12 +152,12 @@ function substituteInArray(
 function substituteAny(
   value: unknown,
   values: Record<string, unknown>,
-  expected: Record<string, string>,
+  types: FillTypes,
 ): unknown {
-  if (Array.isArray(value)) return substituteInArray(value, values, expected);
+  if (Array.isArray(value)) return substituteInArray(value, values, types);
   if (value === null || typeof value !== "object") return value;
   if (isFillableHole(value, values)) {
-    const replacement = fillOne(value, values[value.name], expected);
+    const replacement = fillOne(value, values[value.name], types);
     if (Array.isArray(replacement)) {
       if (replacement.length === 1) return replacement[0];
       throw new Error(
@@ -150,7 +169,7 @@ function substituteAny(
   const source = value as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(source)) {
-    out[key] = substituteAny(source[key], values, expected);
+    out[key] = substituteAny(source[key], values, types);
   }
   return out;
 }
@@ -158,20 +177,19 @@ function substituteAny(
 function fillOne(
   hole: Hole,
   value: unknown,
-  expected: Record<string, string>,
+  types: FillTypes,
 ): string | AgencyNode | AgencyNode[] {
   if (hole.sort === "identifier") return identifierFillFor(hole, value);
-  const expectedType =
-    hole.typeAnnotation !== undefined
-      ? variableTypeToString(hole.typeAnnotation, {}, true)
-      : expected[hole.name];
+  // An inline annotation on the hole wins over the type its position
+  // supplies; neither is required.
+  const expectedType = hole.typeAnnotation ?? types.expected[hole.name];
   if (hole.splice) {
     if (!Array.isArray(value)) {
       throw new Error(`The splice \`#...${hole.name}\` needs an array${originSuffix(hole.loc)}.`);
     }
-    return value.flatMap((item) => nodesFor(hole, item, expectedType));
+    return value.flatMap((item) => nodesFor(hole, item, types, expectedType));
   }
-  const nodes = nodesFor(hole, value, expectedType);
+  const nodes = nodesFor(hole, value, types, expectedType);
   if (hole.sort === "expr") {
     if (nodes.length !== 1) {
       throw new Error(
@@ -183,8 +201,15 @@ function fillOne(
   return nodes;
 }
 
-function nodesFor(hole: Hole, value: unknown, expectedType?: string): AgencyNode[] {
-  if (expectedType) assertFillerType(hole, value, expectedType);
+function nodesFor(
+  hole: Hole,
+  value: unknown,
+  types: FillTypes,
+  expectedType?: VariableType,
+): AgencyNode[] {
+  if (expectedType !== undefined) {
+    assertFillerType(hole, value, expectedType, types.aliases);
+  }
   if (isCode(value)) {
     assertKindMatchesSort(value, hole);
     // Deep-stamp the fragment, then guarantee the TOP node of each graft
@@ -202,44 +227,128 @@ function nodesFor(hole: Hole, value: unknown, expectedType?: string): AgencyNode
   return [liftValue(value, fillerLoc(hole))];
 }
 
+/** What fill-time validation needs, threaded as one value so the
+ *  substitution walkers do not grow a parameter per lookup table. */
+type FillTypes = {
+  /** Hole name -> the type its position supplies. An inline annotation on
+   *  the hole itself wins over this; see `fillOne`. */
+  expected: Record<string, VariableType>;
+  /** The template's own type aliases, for resolving a named type. */
+  aliases: Record<string, TypeAliasEntry>;
+};
+
 /**
- * Fill-time type VALIDATION — deliberately not a compile-time guarantee.
- * Rejects only when both sides are certainly-known primitives that differ:
- * a plain JS value's type is immediate, and a literal expression fragment's
- * type is its literal kind. Anything else (calls, names, complex expected
- * types) passes here and is caught by the completed program's full check
- * at run time. Checking fragments against the completed program's module
- * scope needs a checker entry point that does not exist yet; when it does,
- * this narrows.
+ * Fill-time type validation — not a compile-time guarantee.
+ *
+ * THE INVARIANT: fill may only reject what the completed program's compile
+ * would also reject. Missing things is fine. Refusing something that would
+ * have compiled is not — the caller cannot argue with it.
+ *
+ * Both sides must be certainly known, so anything unknowable is skipped:
+ * a value `synthesizeType` cannot describe, or a type that does not fully
+ * resolve. Comparison is the checker's own `isAssignable`, never a local
+ * reimplementation.
  */
-function assertFillerType(hole: Hole, value: unknown, expectedType: string): void {
-  const actual = certainTypeOf(value);
+function assertFillerType(
+  hole: Hole,
+  value: unknown,
+  expectedType: VariableType,
+  aliases: Record<string, TypeAliasEntry>,
+): void {
+  const actual = synthesizeType(value);
   if (actual === null) return;
-  const primitives = ["string", "number", "boolean"];
-  if (!primitives.includes(expectedType)) return;
-  if (actual !== expectedType) {
+  // An unknown alias resolves to itself and compares as "does not match",
+  // so without this a template importing its types rejects every fill.
+  if (hasUnresolvedName(expectedType, aliases)) return;
+  if (isAssignable(actual, expectedType, aliases)) return;
+  // The pass above widens strings, but the checker infers string LITERAL
+  // types, so `"fast"` against `"fast" | "slow"` compiles yet does not fit.
+  // Retrying literal-accurately can only turn a rejection into an
+  // acceptance, and costs nothing on the success path.
+  const literalAccurate = synthesizeType(value, { stringsAsLiterals: true });
+  if (literalAccurate !== null && isAssignable(literalAccurate, expectedType, aliases)) {
+    return;
+  }
+
+  const printedExpected = variableTypeToString(expectedType, {}, true);
+  // safeResolveType: `resolveType` throws on an invalid generic form, which
+  // would turn a validation message into an unhandled TypeError.
+  const resolvedExpected = safeResolveType(expectedType, aliases);
+  // A splice checks each ELEMENT against the annotation, so `#...items:
+  // Person[]` rejects everything. Claim that only when the element fits one
+  // level down — `#...rows: number[]` is legitimate, and a bad element
+  // there deserves the ordinary message.
+  if (
+    hole.splice &&
+    resolvedExpected.type === "arrayType" &&
+    isAssignable(
+      literalAccurate ?? actual,
+      (resolvedExpected as ArrayType).elementType,
+      aliases,
+    )
+  ) {
+    const element = variableTypeToString(
+      (resolvedExpected as ArrayType).elementType,
+      {},
+      true,
+    );
     throw new Error(
-      `The hole \`#${hole.name}\` expects \`${expectedType}\`, but the fill supplies \`${actual}\`${originSuffix(hole.loc)}.`,
+      `The splice \`#...${hole.name}\` describes one element, not the array — its type should be \`${element}\`, not \`${printedExpected}\`${originSuffix(hole.loc)}.`,
     );
   }
+
+  // Runs only after the rejection is decided; it annotates, never decides.
+  const detail = explainMismatch(value, expectedType, aliases);
+  if (detail !== null) {
+    throw new Error(
+      `The hole \`#${hole.name}\` expects \`${printedExpected}\`, but the fill ${detail}${originSuffix(hole.loc)}.`,
+    );
+  }
+
+  const printedActual = variableTypeToString(actual, {}, true);
+  throw new Error(
+    `The hole \`#${hole.name}\` expects \`${printedExpected}\`, but the fill supplies \`${printedActual}\`${originSuffix(hole.loc)}.`,
+  );
 }
 
-/** The value's type when it is knowable without a checker, else null. */
-function certainTypeOf(value: unknown): string | null {
-  if (typeof value === "string") return "string";
-  if (typeof value === "number") return "number";
-  if (typeof value === "boolean") return "boolean";
-  if (isCode(value) && kindOf(value) === "expr" && value.nodes.length === 1) {
-    const node = value.nodes[0];
-    if (node.type === "number") return "number";
-    if (node.type === "boolean") return "boolean";
-    if (node.type === "string") {
-      const literal = node as StringLiteral;
-      const interpolated = literal.segments.some((s) => s.type === "interpolation");
-      return interpolated ? null : "string";
+/**
+ * True when any name in this type is one the alias table cannot resolve —
+ * an imported type, a body-scoped alias, or an undeclared name.
+ *
+ * Over-reporting only means some fills go unchecked; under-reporting would
+ * reject correct programs, so err toward reporting true. Imported types are
+ * therefore never checked at fill: #719.
+ */
+function hasUnresolvedName(
+  type: VariableType,
+  aliases: Record<string, TypeAliasEntry>,
+  seen: Set<string> = new Set(),
+  bound: Set<string> = new Set(),
+): boolean {
+  return visitTypes(type, (inner) => {
+    // Alias names are user-controlled keys, so membership is Object.hasOwn.
+    let name: string | null = null;
+    if (inner.type === "typeAliasVariable") {
+      name = inner.aliasName;
     }
-  }
-  return null;
+    if (inner.type === "genericType" && !isBuiltinGenericName(inner.name)) {
+      name = inner.name;
+    }
+    if (name === null) return false;
+    // `type Box<T>` refers to `T` by name, and `T` is not in the table.
+    // Bound, not unresolved — otherwise every generic alias is skipped.
+    if (bound.has(name)) return false;
+    if (!Object.hasOwn(aliases, name)) return true;
+    // `type Person = { pet: Animal }` resolves only if `Animal` does too.
+    // The seen-set stops a recursive alias walking forever.
+    if (seen.has(name)) return false;
+    seen.add(name);
+    // Bound names REPLACE rather than extend: one alias's parameters are
+    // not in scope inside another's body.
+    const entry = aliases[name];
+    const bodyBound = new Set((entry.typeParams ?? []).map((param) => param.name));
+    return hasUnresolvedName(entry.body, aliases, seen, bodyBound);
+  });
 }
 
 function assertKindMatchesSort(code: Code, hole: Hole): void {

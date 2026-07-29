@@ -3,9 +3,9 @@
     {
       "nodeName": "main",
       "input": "",
-      "expectedOutput": "\"ALICE\"",
+      "expectedOutput": "\"errored:named\"",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Validators may transform the value — the transformed value is what the binding receives"
+      "description": "Validators may NOT transform - a modifying validator errors loudly, naming the validator"
     }
   ]
 }

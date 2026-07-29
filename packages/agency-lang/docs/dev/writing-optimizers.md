@@ -4,6 +4,17 @@ An optimizer searches for better values of the `optimize`-marked declarations in
 
 For the user-facing command, see `docs/site/cli/optimize.md`. The smallest working optimizer is `lib/optimize/optimizers/example.ts` — copy it.
 
+## How optimizing works, end to end
+
+Optimizing is a search over the text of your marked declarations. One iteration looks like this:
+
+1. **Propose.** A model is shown the current target values and some feedback, and returns declarative edit operations.
+2. **Preview.** Those operations are applied to the sources captured at discovery time, producing a candidate: a complete `{ relative path: source }` map. Nothing is written to your project.
+3. **Evaluate.** The candidate's file map is overlaid onto a fresh copy of the project, compiled, and run once per input. Each run is graded, giving a `Scorecard`.
+4. **Compare.** The candidate's objective is compared against the champion's. Better means accepted.
+
+Every candidate is scored to a single number between 0 and 1. There is no pairwise "which of these two is better" comparison anywhere in the optimizer — that path was removed. If you want relative judging, write a grader that produces a scalar.
+
 ## The contract
 
 An optimizer is a class that:
@@ -41,10 +52,11 @@ So inside `optimizeTargets` you already have a discovered `source` and the run `
 
 ## The data you work with
 
-- **`OptimizeTargetSet`** (`targets.ts`): `{ baseDir, entryFile, files, targets }`. `files` maps each relative path to its source; `targets` is the list of discovered `optimize` declarations (`{ id, kind, name, value, … }`). `fileMap(source)` returns the current `{ relpath: source }` map.
+- **`OptimizeTargetSet`** (`targets.ts`): `{ baseDir, entryFile, files, targets, typeAliases }`. `files` maps each relative path to its source and discovery-time sha256; `targets` is the list of discovered `optimize` declarations (`{ id, kind, name, value, valueKind, declaredType, … }`); `typeAliases` is the closure's type registry, used to typecheck proposed values. `fileMap(source)` returns just the `{ relpath: source }` map.
+- **A candidate is a file map.** Everywhere below, `files: Record<string, string>` means a complete relpath→source map for the whole discovered closure, not a diff. `defaultPreview` produces one; you pass it to `evaluate`/`scoreFiles` and it becomes the overlay applied on top of a fresh project copy before compiling.
 - **`Input`** (`@/eval/runTypes.ts`): one agent invocation — `{ id?, args, node?, goal?, expected?, metadata? }`.
-- **`Scorecard`** (`grading/scorecard.ts`): the result of grading a candidate. `objective()` (0..1, weighted mean across inputs), `gatesPassed()` (all `mustPass` gates held), `inputScores()`, and `perInput` (per-input grades, used for reflection feedback).
-- **`OptimizeResult`** (`types.ts`): what you return — champion iteration + files, decision counts, per-iteration records, objectives, and the champion breakdown. Build it with `buildPointwiseResult` (below).
+- **`Scorecard`** (`grading/scorecard.ts`): the result of grading a candidate. See [Grading semantics](#grading-semantics-you-should-know).
+- **`OptimizeResult`** (`types.ts`): what you return — champion iteration + files, decision counts, per-iteration records, objectives, and the champion breakdown. `finishPointwise` builds it for you.
 
 ## Protected helpers
 
@@ -52,58 +64,82 @@ These are the building blocks every optimizer composes (`this.` on `BaseOptimize
 
 | Helper | What it does |
 | --- | --- |
-| `fork(dir)` | Copy a directory into a fresh isolated `Workspace`. Fork from `source.baseDir` for a clean candidate, or from another workspace's `.dir` to build on it. |
-| `workspace.applyFiles(ws, files)` | Write a candidate's `{ relpath: source }` into a forked workspace. |
-| `evaluate(ws, entryFile, inputs)` | Run the agent once per input (cached) and grade each → `Scorecard`. |
-| `scoreFiles(source, files, inputs)` | The common shortcut: `fork(source.baseDir)` + `applyFiles` + `evaluate`. Use it for fresh candidates and for validation scoring. |
-| `proposeValidMutation(propose, preview, maxAttempts?)` | Ask for a mutation and validate it, with bounded retries. Never throws on a malformed LLM response and feeds validation diagnostics back into the next attempt. Returns `{ ok: true, preview, rationale }` or `{ ok: false, rationale, diagnostics }`. |
-| `requireBaselineGatesPass(scorecard)` | Throw a clear error if the baseline fails a `mustPass` gate (the program/suite is broken — don't optimize). |
-| `isMaxObjective(scorecard)` | `objective() >= 1` — nothing left to improve; stop/skip. |
-| `buildPointwiseResult({ championIter, championFiles, attempts })` | Package the `OptimizeResult` (decision counts derived from `attempts`). |
+| `scoreFiles(source, files, inputs)` | The one you want most of the time. Allocates a fresh cache partition and grades `files` on `inputs` → `Scorecard`. |
+| `fork()` | Mint a fresh `Workspace` — a cache-partition token (`{ key }`), nothing on disk. Use it when you want to grade the *same* candidate against several input sets and share cached runs between them (GEPA does this: minibatch first, then the full set). |
+| `evaluate(ws, source, files, inputs)` | Grade `files` on `inputs` inside an existing workspace `ws`. Runs are cached by `(ws.key, inputId)`, so re-evaluating a candidate you already scored on an input is free. |
+| `proposeValidMutation(propose, preview, maxAttempts?)` | Ask for a mutation and validate it, with bounded retries (3 by default). Never throws on a malformed LLM response and feeds validation diagnostics back into the next attempt. Returns `{ ok: true, preview, rationale }` or `{ ok: false, rationale, diagnostics }`. |
+| `finishPointwise(source, candidates, trainChampion, attempts, startedAt)` | The shared tail. Picks the writeback champion (by validation when configured), writes it back if `config.writeback`, assembles the `OptimizeResult` with train/baseline/validation objectives and the champion breakdown, and fires `runFinished`. |
+| `pickValidationChampion(source, candidates, trainChampion)` | Just the champion selection, if you need it without the rest of `finishPointwise`. |
+| `requireBaselineGatesPass(scorecard)` | Throw a clear error if the baseline fails a `mustPass` gate (the program or suite is broken — don't optimize). |
+| `isMaxObjective(scorecard)` | `objective() >= 1` — nothing left to improve; stop or skip the loop. |
+| `buildPointwiseResult({ championIter, championFiles, attempts })` | Lower-level result assembly. `finishPointwise` calls it; you rarely need it directly. |
+| `eachIteration(step)` | `for iter in 1..config.iterations`, awaiting each `step(iter)`. |
 | `reporter` | A `PointwiseReporter` for progress (silent unless the CLI sets verbosity). |
-| `config` | `BaseOptimizerConfig`: `graders`, `iterations`, `seed`, `runId`, `writeback`, `mutatorModel`, `config` (the `AgencyConfig`), … |
+| `graders` | The configured `BaseGrader[]`. |
+| `config` | `BaseOptimizerConfig`: `graders`, `iterations`, `seed`, `runId`, `runsDir`, `writeback`, `mutatorModel`, `verbosity`, `config` (the `AgencyConfig`). |
 | `validationInputs` | Held-out inputs (empty if none). See [Validation](#validation). |
+| `workspace.writeBack(source, files)` | Write a file set back to the real sources, sha-checked. `finishPointwise` already does this — only call it directly if you are not using `finishPointwise`. |
 
-## The shape: fork → apply → evaluate → compare → report → return
+`Workspace` is **not** a directory. It used to be; it is now just `{ key: string }`, a cache-partition token. The real isolation happens per input: `evaluate` hands your `files` map to the eval runner, which copies the project tree into `runs/<runId>/…/workdir/`, overlays those files, compiles, and runs there. You never write to disk yourself.
 
-Here is the entire `example` optimizer — a single round. Real optimizers loop and search more cleverly, but they all follow this shape.
+## The shape: score → propose → score → compare → finish
+
+Here is the whole `example` optimizer — a single round. Real optimizers loop and search more cleverly, but they all follow this shape.
 
 ```ts
 protected async optimizeTargets(source: OptimizeTargetSet, inputs: Input[]): Promise<OptimizeResult> {
   const startedAt = Date.now();
-  this.reporter.runStarted({ optimizer: this.name, runId: this.config.runId, targets: source.targets, inputCount: inputs.length, iterations: 1 });
+  this.reporter.runStarted({
+    optimizer: this.name, runId: this.config.runId,
+    targets: source.targets, inputCount: inputs.length, iterations: 1,
+  });
 
   // 1. Score the unchanged agent.
-  const baseline = await this.score(source, fileMap(source), inputs);
-  this.reporter.baselineScored({ objective: baseline });
+  const baseline = await this.makeCandidate("baseline", fileMap(source), source, inputs);
+  this.reporter.baselineScored({ objective: baseline.scorecard.gatedObjective() });
 
-  // 2. Ask the mutator for one new set of target values.
-  //    proposeValidMutation retries on validation errors and never throws on a bad response.
+  // 2. Ask the built-in mutator for one new set of target values. proposeValidMutation
+  //    retries on validation errors and never throws on a bad response.
   const outcome = await this.proposeValidMutation(
-    (diagnostics) => proposeMutation({ config: this.config.config, targets: source.targets, inputs, history: "", model: this.config.mutatorModel, diagnostics }),
+    (diagnostics) => proposeMutation({
+      config: this.config.config, targets: source.targets, inputs,
+      history: "", model: this.config.mutatorModel, diagnostics,
+    }),
     (operations) => defaultPreview(source, operations),
   );
 
-  // 3. If valid, score it and keep it only if it beats the baseline.
-  if (outcome.ok) {
-    const candidate = await this.score(source, outcome.preview.files, inputs);
-    if (candidate > baseline) {
-      if (this.config.writeback) this.workspace.writeBack(source, outcome.preview.files);
-      this.reporter.iterationDecided({ iter: 1, total: 1, decision: "accepted", objective: candidate, changes: outcome.preview.changes, rationale: outcome.rationale });
-      return this.result(source, 1, outcome.preview.files, "accepted", startedAt);
-    }
-  }
-  // 4. Otherwise keep the original.
-  this.reporter.iterationDecided({ iter: 1, total: 1, decision: "rejected", objective: baseline });
-  return this.result(source, "baseline", fileMap(source), "rejected", startedAt);
+  // 3. Score the proposal (if any) and decide acceptance on the training objective.
+  const candidate = outcome.ok
+    ? await this.makeCandidate(1, outcome.preview.files, outcome.preview.targetSet, inputs)
+    : undefined;
+  const beatsBaseline = candidate !== undefined
+    && candidate.scorecard.gatedObjective() > baseline.scorecard.gatedObjective();
+  const trainChampion = beatsBaseline ? candidate : baseline;
+  const decision = beatsBaseline ? "accepted" : "rejected";
+
+  this.reporter.iterationDecided({
+    iter: 1, total: 1, decision, objective: trainChampion.scorecard.gatedObjective(),
+    ...(beatsBaseline && outcome.ok
+      ? { changes: outcome.preview.changes, rationale: outcome.rationale }
+      : {}),
+  });
+
+  // 4. Pick the writeback champion, write it back, build the result, report.
+  const candidates = beatsBaseline ? [baseline, candidate] : [baseline];
+  return this.finishPointwise(source, candidates, trainChampion, [{ iter: 1, decision }], startedAt);
 }
 
-/** Fork + apply + grade; gate-aware objective (0 if a gate fails). */
-private async score(source: OptimizeTargetSet, files: Record<string, string>, inputs: Input[]): Promise<number> {
-  const sc = await this.scoreFiles(source, files, inputs);
-  return sc.gatesPassed() ? sc.objective() : 0;
+/** Grade one candidate file set. */
+private async makeCandidate(
+  iter: number | "baseline", files: Record<string, string>,
+  targetSet: OptimizeTargetSet, inputs: Input[],
+): Promise<Candidate> {
+  const scorecard = await this.scoreFiles(targetSet, files, inputs);
+  return { iter, files, scorecard, targetSet };
 }
 ```
+
+Note the `targetSet` carried on each candidate. It reflects *that candidate's* target values (`outcome.preview.targetSet` for a mutation), so the final report can show what each variable started and ended as.
 
 ## Proposing mutations
 
@@ -115,7 +151,7 @@ A mutation is proposed by a model and applied to the source. There are two propo
 You hand `proposeValidMutation` two callbacks:
 
 1. **propose(diagnostics)** → call a proposer. `diagnostics` is empty on the first attempt and carries the previous attempt's validation errors on retries, so the model can self-correct.
-2. **preview(operations)** → turn the proposed operations into an `OptimizeMutationPreview` (`{ files, changes, diff, diagnostics, targetSet }`). Use `defaultPreview(source, operations)`. If `preview.diagnostics` is non-empty the proposal is invalid and gets retried.
+2. **preview(operations)** → turn the proposed operations into an `OptimizeMutationPreview` (`{ files, changes, diff, diagnostics, targetSet }`). Use `defaultPreview(targetSet, operations)`. If `preview.diagnostics` is non-empty the proposal is invalid and gets retried.
 
 `proposeValidMutation` returns `{ ok: true, preview, rationale }` once a clean preview is produced, or `{ ok: false, … }` after `maxAttempts`. Treat `ok: false` as a `validation-failed` iteration — never let it abort the run.
 
@@ -133,42 +169,39 @@ This renders, per input, the args, the **output**, the **`expected`** answer (wh
 
 ## Grading semantics you should know
 
-`evaluate`/`scoreFiles` return a `Scorecard`; how it turns grades into a number matters for your accept/reject logic:
+`evaluate`/`scoreFiles` return a `Scorecard`; how it turns grades into a number matters for your accept/reject logic.
 
-- `objective()` is the weighted mean across inputs of each input's weighted-mean grade. A **scalar** grade contributes its value; a **binary** grade contributes `1.0`/`0.0`. So a binary-only grader yields accuracy.
-- `mustPass` is an orthogonal gate: a failed `mustPass` grader makes that input score 0 and `gatesPassed()` false. Most optimizers treat "gates pass AND objective improved" as acceptance (see greedy's `beats`).
+| Method | What it gives you |
+| --- | --- |
+| `objective()` | The raw weighted mean across inputs of each input's weighted-mean grade. A **scalar** grade contributes its value; a **binary** grade contributes `1.0`/`0.0`, so a binary-only grader yields accuracy. |
+| `gatesPassed()` | True when every `mustPass` grader passed on every input. |
+| `gatedObjective()` | **The number to compare candidates on**: `objective()` when gates pass, `0` otherwise. |
+| `inputScores()` | Per-input objectives (a gate-failed input scores 0). GEPA's Pareto pool uses this. |
+| `perInput` | The full per-input grades. Feed it to `renderReflectionFeedback`. |
+
+Prefer `gatedObjective()` over hand-writing `s.gatesPassed() ? s.objective() : 0`. It exists so that a gate-failing candidate with a high raw score can never appear to beat a gate-passing one. (`greedy` and `gepa` still spell out the long form in their accept checks — both carry a `TODO(gated-objective)` to collapse together. New optimizers should just use `gatedObjective()`.)
+
+`mustPass` is an orthogonal gate: it does not change how a grade contributes to the mean, it zeroes the whole input and trips `gatesPassed()`.
 
 ## Validation
 
-`this.validationInputs` is the held-out set (empty if none). Search on `inputs`, then pick the writeback champion by validation with the shared helper:
+`this.validationInputs` is the held-out set (empty if none). Search on `inputs`, then hand every candidate you'd consider shipping to `finishPointwise`, which selects among them by validation score:
 
 ```ts
-const { champion, validationObjective } = await this.pickValidationChampion(source, candidates, trainChampion);
+return this.finishPointwise(source, [baseline, ...accepted], trainChampion, attempts, startedAt);
 ```
 
-`pickValidationChampion` (on `BaseOptimizer`) takes your candidate list (e.g. `[baseline, ...accepted]`) and the train champion; with a validation set it scores each candidate via `scoreFiles(source, files, this.validationInputs)` and returns the best, else returns the train champion. All three built-ins (`greedy`, `gepa`, `example`) use it. If your optimizer deliberately ignores validation it just won't set `result.validationObjective`, and the report notes that a validation set was provided but unused — so the behavior isn't silently dropped.
+With no validation set it returns `trainChampion` unchanged. With one, it scores each candidate via `scoreFiles(source, files, this.validationInputs)` and picks the best, recording `result.validationObjective`.
 
-Record both numbers on the result for the report:
-
-```ts
-result.trainObjective = champion.scorecard.objective();
-if (validationObjective !== undefined) result.validationObjective = validationObjective;
-```
+If your optimizer deliberately ignores validation, it just won't set `validationObjective`, and the generated report notes that a validation set was provided but unused — so the behavior isn't silently dropped.
 
 ## Reporting and the result
 
 Emit progress through `this.reporter` (the CLI renders it; tests capture it):
 
-`runStarted` → `baselineScored` → per iteration `iterationDecided` (and `note` for free-form detail) → `runFinished`. The base class already calls `gradingSetup` for you.
+`runStarted` → `baselineScored` → per iteration `iterationDecided` (and `note(message)` for free-form detail like which parent GEPA sampled) → `runFinished`. The base class calls `gradingSetup` for you, and `finishPointwise` calls `runFinished` for you.
 
-Build the result with `buildPointwiseResult({ championIter, championFiles, attempts })`. To surface the reward-hacking lens in `report.md` / `champion/grades.json`, attach the champion's breakdown:
-
-```ts
-import { breakdown } from "../gradeBreakdown.js";
-result.championBreakdown = breakdown(champion.scorecard);
-```
-
-`writeback` is honored by you: `this.workspace.writeBack(source, championFiles)` writes the champion back to the real source files (it verifies each file is unchanged-on-disk by hash and aborts on a mismatch). Only do this when `this.config.writeback` is true and the champion isn't the baseline.
+`finishPointwise` also sets `trainObjective`, `baselineObjective` (from whichever candidate has `iter === "baseline"`), `validationObjective`, and `championBreakdown` — the per-input reward-hacking lens that shows up in `report.md` and `champion/grades.json`. You do not need to set any of these yourself.
 
 ## Registering and using it
 
@@ -200,14 +233,21 @@ agency optimize foo.agency --inputs inputs.json --optimizer ./myOptimizer.ts
 registerOptimizer("mine", (config) => new MyOptimizer(config));
 ```
 
+Config that only your optimizer needs rides on `BaseOptimizerConfig` and gets cast in the factory — see how `gepa` takes `minibatch`.
+
 ## Testing
 
 `BaseOptimizer`'s constructor takes a `deps` object of seams so you can unit-test without an LLM, real subprocess runs, or file edits:
 
-- `discover` — return a fixed `OptimizeTargetSet` instead of parsing a file.
-- `runInput` — return canned `{ output, recordPath }` instead of running the agent.
-- `reporter` — capture emitted events.
-- your own `propose` / `preview` (as `example`/`greedy`/`gepa` do) — return fixed proposals.
+| Seam | Replaces |
+| --- | --- |
+| `discover` | Target discovery — return a fixed `OptimizeTargetSet` instead of parsing a file. |
+| `runInput` | Running the agent — return a canned `{ output, recordPath }`. |
+| `reporter` | Progress output — capture emitted events. |
+| `agencyRunner` | Running judge/proposer `.agency` files. |
+| `cache` | The per-`(workspace, input)` run cache. |
+
+Your own optimizer should add its own `propose` / `preview` seams the way `example`, `greedy`, and `gepa` do, so a test can hand it a fixed proposal.
 
 See `lib/optimize/optimizers/greedyReflective.test.ts` and `baseOptimizer.test.ts` for the patterns (fake source, fake `runInput`, injected `propose`, asserting accept/reject counts and that feedback reaches the proposer).
 
@@ -215,7 +255,8 @@ See `lib/optimize/optimizers/greedyReflective.test.ts` and `baseOptimizer.test.t
 
 - [ ] Extend `BaseOptimizer`, set `name`, implement `optimizeTargets`.
 - [ ] Use `scoreFiles`/`evaluate` to grade; `proposeValidMutation` to mutate.
-- [ ] Honor `this.config.writeback` and `this.validationInputs` (or `note` that you ignore validation).
-- [ ] Emit reporter events and `buildPointwiseResult` (+ `championBreakdown`).
+- [ ] Compare candidates on `gatedObjective()`, not raw `objective()`.
+- [ ] End with `finishPointwise` so writeback, validation selection, objectives, and the breakdown are handled consistently.
+- [ ] Emit `runStarted` / `baselineScored` / `iterationDecided` through `this.reporter`.
 - [ ] Make it resolvable: a path module (`export default (config) => new …`) used via `--optimizer ./file.ts`, or `registerOptimizer(...)` in `registry.ts`.
 - [ ] Add a test with injected `deps` (no live LLM).

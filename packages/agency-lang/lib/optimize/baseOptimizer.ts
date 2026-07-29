@@ -330,17 +330,14 @@ export abstract class BaseOptimizer {
     );
   }
 
-  /**
-   * Build the pointwise OptimizeResult shared by greedy and GEPA. `winsA`/`winsB`/`ties`
-   * are pairwise-judge artifacts that pointwise optimizers leave at 0.
-   */
+  /** Build the pointwise OptimizeResult shared by greedy and GEPA. */
   protected buildPointwiseResult(args: {
     championIter: number | "baseline";
     championFiles: Record<string, string>;
     attempts: { iter: number; decision: OptimizeDecision; detail?: string }[];
   }): OptimizeResult {
     const count = (decision: OptimizeDecision): number => args.attempts.filter((a) => a.decision === decision).length;
-    const baselineIteration: IterationResult = { iter: 0, decision: "baseline", winsA: 0, winsB: 0, ties: 0 };
+    const baselineIteration: IterationResult = { iter: 0, decision: "baseline" };
     return {
       runId: this.config.runId,
       runDir: path.join(this.config.runsDir, this.config.runId),
@@ -352,7 +349,7 @@ export abstract class BaseOptimizer {
       iterations: [
         baselineIteration,
         ...args.attempts.map((a) => ({
-          iter: a.iter, decision: a.decision, winsA: 0, winsB: 0, ties: 0,
+          iter: a.iter, decision: a.decision,
           ...(a.detail ? { detail: a.detail } : {}),
         })),
       ],

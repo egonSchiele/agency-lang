@@ -35,7 +35,7 @@ export type ExampleDeps = BaseOptimizerDeps & {
  * This one runs a single round: score the agent as-is, ask the built-in mutator
  * for one new set of values, score those, and keep the candidate if it beats the
  * baseline. The real optimizers (greedy, gepa) loop and search more cleverly, but
- * they all follow the same shape — fork → apply → evaluate → compare → report → return.
+ * they all follow the same shape — score → propose → score → compare → finish.
  *
  * Protected helpers available from BaseOptimizer:
  *   - `this.scoreFiles(source, files, inputs)` — fork + apply + grade, returns a Scorecard

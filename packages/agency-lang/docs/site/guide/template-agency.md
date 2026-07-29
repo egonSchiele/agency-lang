@@ -111,6 +111,30 @@ The hole `#topic` expects `string`, but the fill supplies `number`.
 
 This is a runtime failure.
 
+Records are checked the same way. If the hole wants a `Person` and the object you supply is missing a required property, the fill fails and tells you which one:
+
+```
+The hole `#person` expects `Person`, but the fill is missing the required property `age`.
+```
+
+For a property nested inside another, the error gives you the path — `address.city` rather than just "address is wrong".
+
+Type aliases are resolved, so `type Name = string` behaves exactly like `string`.
+
+What is checked is the *shape* of the value. Validators attached with `@validate(...)` do not run at fill time — a value can pass the fill and still fail its validator when the completed program runs.
+
+Fill checks types the template declares itself. A type the template **imports** cannot be resolved while the template is only a value, so a hole using an imported type is not checked at fill — that mistake is caught when the completed program compiles, as it was before. This matters as soon as you keep shared types in their own file, so it is worth knowing which of your templates are actually covered.
+
+### Splice holes describe one element
+
+A splice hole fills several items at once, and its type describes **one of them**, not the list:
+
+```ts
+[| f(#...people: Person) |]
+```
+
+Each element of the array you supply is checked against `Person`. Writing `#...people: Person[]` is the natural mistake and rejects everything, because no single person is a list of people. The error says so when it can.
+
 One more example. This time the hole is an object:
 
 ```ts

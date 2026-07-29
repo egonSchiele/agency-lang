@@ -52,10 +52,50 @@ async function callValidator(
   return (v as (x: unknown) => Promise<ResultValue> | ResultValue)(value);
 }
 
+/** Call a validator AND enforce the predicate contract: a success must carry
+ *  THIS call's input — the parsed value, or the previous link's identical
+ *  hand-through. */
+async function runValidator(
+  v: AgencyValidator,
+  value: unknown,
+): Promise<ResultValue> {
+  const outcome = await callValidator(v, value);
+  assertNotModified(v, value, outcome);
+  return outcome;
+}
+
+/** `Object.is`, not `!==`: a NaN pass-through is obeying the contract and
+ *  must not be punished for it. Identity, not equality: `success(value)`
+ *  passing the same reference through is the stdlib idiom; rebuilding an
+ *  equal object counts as modification — the error is the feature. */
+function assertNotModified(
+  v: AgencyValidator,
+  value: unknown,
+  outcome: ResultValue,
+): void {
+  if (!isSuccess(outcome)) {
+    return;
+  }
+  if (Object.is((outcome as { value: unknown }).value, value)) {
+    return;
+  }
+  throw new Error(
+    `validator '${validatorName(v)}' modified the value; validators may only accept (return the input) or reject (return a failure)`,
+  );
+}
+
+function validatorName(v: AgencyValidator): string {
+  if (AgencyFunction.isAgencyFunction(v)) {
+    return (v as AgencyFunction).name || "(anonymous)";
+  }
+  return (v as { name?: string }).name || "(anonymous)";
+}
+
 /**
- * Run Zod parse then thread the result through validators in order,
- * stopping on the first failure. Validators may transform: the value
- * passed to validator N+1 is whatever validator N returned with success.
+ * Run Zod parse then run validators in order over the PARSED value,
+ * stopping on the first failure. Validators are predicates: a success must
+ * carry the exact input (enforced per validator by `runValidator`), so every
+ * link sees the same parsed value.
  *
  * Why outside Zod? See spec § "Why run validators outside Zod" —
  * keeping validators out of the sync Zod path lets them be async,
@@ -83,7 +123,7 @@ export async function __validateChain(
   let current: ResultValue = success(raw);
   for (const v of validators) {
     if (!isSuccess(current)) return current;
-    current = await callValidator(v, (current as { value: unknown }).value);
+    current = await runValidator(v, (current as { value: unknown }).value);
   }
   return current;
 }

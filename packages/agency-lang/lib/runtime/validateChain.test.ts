@@ -18,6 +18,8 @@ const isEven: AgencyValidator = async (v) =>
   typeof v === "number" && v % 2 === 0 ? success(v) : failure("not even");
 const doubleIt: AgencyValidator = async (v) =>
   typeof v === "number" ? success(v * 2) : failure("not number");
+const halveIt: AgencyValidator = async (v) =>
+  typeof v === "number" ? success(v / 2) : failure("not number");
 
 describe("__validateChain", () => {
   it("Zod parse passes then validators run in order", async () => {
@@ -39,11 +41,13 @@ describe("__validateChain", () => {
     expect(later).not.toHaveBeenCalled();
   });
 
-  it("threads transformed value through the chain", async () => {
-    // 2 -> double -> 4 -> isEven
-    const r = await __validateChain(2, z.number(), [doubleIt, isEven]);
-    expect(isSuccess(r)).toBe(true);
-    expect((r as { value: number }).value).toBe(4);
+  it("a transform-and-back chain throws: the contract check is per-validator", async () => {
+    // 2 -> double -> 4 -> halve -> 2. An end-of-chain identity check would
+    // see the input come back and pass; the per-validator check must throw
+    // at the first link.
+    await expect(
+      __validateChain(2, z.number(), [doubleIt, halveIt]),
+    ).rejects.toThrow(/validator 'doubleIt' modified the value/);
   });
 
   it("forwards an incoming failure unchanged", async () => {
@@ -272,16 +276,20 @@ describe("record descriptor kind (#630)", () => {
     expect(isFailure(bad)).toBe(true);
   });
 
-  it("writes transformed values back into the result", async () => {
+  it("a modifying value-validator throws OUT of the recursive walk", async () => {
+    // Was the write-back pin. The predicate contract retires write-back, and
+    // the throw must escape __validateChainRecursive uncaught: that escape is
+    // what makes the error visible from every caller (bang, patterns, is,
+    // structured LLM output).
     const doublingDesc: TypeValidationDescriptor = {
       kind: "record",
       schema: z.record(z.string(), z.number()),
       validators: [],
       value: { kind: "leaf", schema: z.number(), validators: [doubleIt] },
     };
-    const r = await __validateChainRecursive({ a: 1, b: 2 }, doublingDesc);
-    expect(isSuccess(r)).toBe(true);
-    expect((r as { value: unknown }).value).toEqual({ a: 2, b: 4 });
+    await expect(
+      __validateChainRecursive({ a: 1, b: 2 }, doublingDesc),
+    ).rejects.toThrow(/validator 'doubleIt' modified the value/);
   });
 
   it("nested records validate through both levels", async () => {
@@ -359,5 +367,46 @@ describe("__typeTest", () => {
     // A user validator could legitimately return this exact message; without
     // the marker it is an ordinary no-match.
     expect(await __typeTest(failure("interrupt rejected"))).toBe(false);
+  });
+});
+
+describe("the predicate contract (validators may not modify the value)", () => {
+  it("a pass-through validator is unchanged, same-reference object included", async () => {
+    const passRef: AgencyValidator = async (v) => success(v);
+    const obj = { a: 1 };
+    const r = await __validateChain(obj, z.any(), [passRef]);
+    expect(isSuccess(r)).toBe(true);
+  });
+
+  it("a modifying validator throws, naming it", async () => {
+    await expect(
+      __validateChain(2, z.number(), [doubleIt]),
+    ).rejects.toThrow(/validator 'doubleIt' modified the value/);
+  });
+
+  it("a rebuilt-equal object counts as modification (identity, not equality)", async () => {
+    const rebuild: AgencyValidator = async (v) => success({ ...(v as object) });
+    await expect(
+      __validateChain({ a: 1 }, z.any(), [rebuild]),
+    ).rejects.toThrow(/modified the value/);
+  });
+
+  it("success() with no value counts as modification", async () => {
+    const emptyHanded: AgencyValidator = async () => success(undefined);
+    await expect(
+      __validateChain(1, z.number(), [emptyHanded]),
+    ).rejects.toThrow(/modified the value/);
+  });
+
+  it("a NaN pass-through does NOT throw (Object.is, not !==)", async () => {
+    const passNaN: AgencyValidator = async (v) => success(v);
+    const r = await __validateChain(NaN, z.any(), [passNaN]);
+    expect(isSuccess(r)).toBe(true);
+  });
+
+  it("an anonymous validator reports (anonymous)", async () => {
+    await expect(
+      __validateChain(1, z.number(), [async (v) => success((v as number) + 1)]),
+    ).rejects.toThrow(/validator '\(anonymous\)' modified the value/);
   });
 });

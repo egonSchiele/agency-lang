@@ -1,4 +1,4 @@
-import { AgencyNode, Hole, HoleSort } from "../types.js";
+import { AgencyNode, Hole, HoleSort, VariableType } from "../types.js";
 import { walkNodesArray } from "./node.js";
 import { variableTypeToString } from "../backends/typescriptGenerator/typeToString.js";
 
@@ -57,9 +57,11 @@ export function holeNames(nodes: AgencyNode[]): string[] {
  *  name appears in positions of DIFFERENT types, fill-time validation
  *  checks against the first only, and a mismatch at the second position
  *  falls through to the completed program's run-time check. */
-export function positionInferredTypes(nodes: AgencyNode[]): Record<string, string> {
+export function positionInferredVariableTypes(
+  nodes: AgencyNode[],
+): Record<string, VariableType> {
   // Null-prototype: keyed by user-controlled hole names.
-  const inferred: Record<string, string> = Object.create(null);
+  const inferred: Record<string, VariableType> = Object.create(null);
   for (const visit of walkNodesArray(nodes)) {
     if (visit.node.type !== "hole") continue;
     const hole = visit.node as Hole;
@@ -68,10 +70,20 @@ export function positionInferredTypes(nodes: AgencyNode[]): Record<string, strin
       | AgencyNode
       | undefined;
     if (parent && parent.type === "assignment" && parent.typeHint) {
-      inferred[hole.name] = variableTypeToString(parent.typeHint, {}, true);
+      inferred[hole.name] = parent.typeHint;
     }
   }
   return inferred;
+}
+
+/** The printed form of the above, for `holesOf` and for error messages.
+ *  Derived, never re-derived: one place decides what a position supplies. */
+export function positionInferredTypes(nodes: AgencyNode[]): Record<string, string> {
+  const printed: Record<string, string> = Object.create(null);
+  for (const [name, type] of Object.entries(positionInferredVariableTypes(nodes))) {
+    printed[name] = variableTypeToString(type, {}, true);
+  }
+  return printed;
 }
 
 /** One HoleInfo per distinct name, first occurrence winning. `type` is the

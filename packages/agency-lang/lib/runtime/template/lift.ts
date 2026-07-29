@@ -15,6 +15,13 @@ import {
  * This function must NEVER parse. A string becomes a string literal
  * containing exactly those characters — that is what stops a filler from
  * injecting code into a generated program.
+ *
+ * One of three definitions that have to agree: this decides what a value
+ * BECOMES, `synthesizeType` decides what type fill says it has, and the
+ * checker's `synthType` decides what type the compile infers for what it
+ * became. Changing the shape a value lifts to means checking whether the
+ * other two still describe it the same way — see the longer note on
+ * `synthesizeType`.
  */
 export function liftValue(value: unknown, loc: SourceLocation): AgencyNode {
   if (value === null || value === undefined) return nullLiteral(loc);

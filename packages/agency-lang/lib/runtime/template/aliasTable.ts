@@ -15,7 +15,11 @@ import type { AgencyNode, TypeAlias, TypeAliasEntry } from "../../types.js";
  * `typeParams`, `valueParams` and `tags` are carried, not just `body`:
  * generic and value-parameterized aliases are legal in templates, and
  * dropping those fields would make such an alias resolve WRONGLY rather
- * than not at all — the worse failure.
+ * than not at all — the worse failure. `typeParams` is load-bearing in a
+ * second way: `hasUnresolvedName` reads it to tell an alias's own bound
+ * parameter (`T` in `type Box<T> = { item: T }`) from a name that genuinely
+ * cannot be resolved. Without it every generic alias would look unresolvable
+ * and be skipped.
  */
 export function aliasTableFrom(
   nodes: AgencyNode[],

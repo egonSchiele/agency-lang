@@ -890,3 +890,76 @@ describe("fill-time type checking: the error says what is wrong", () => {
     expect(run).not.toThrow(/describes one element/);
   });
 });
+
+describe("fill-time type checking: review follow-ups", () => {
+  it("accepts a literal fragment against a union of string literals", () => {
+    // Same invariant as the plain-string case, one path over: the graft is
+    // the literal `"fast"`, and the compile infers a string-literal type
+    // for it exactly as it would for a plain-value fill.
+    const literals = [
+      "node main(): string {",
+      '  const mode: "fast" | "slow" = #mode',
+      "  return mode",
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(literals, { mode: _parseExpr('"fast"') })).toContain('"fast"');
+    expect(() => fillHoles(load(literals), { mode: _parseExpr('"medium"') })).toThrow(
+      /expects/,
+    );
+  });
+
+  it("checks a hole typed with a generic alias", () => {
+    // A generic alias refers to its own parameters by name, and those are
+    // not in the alias table. Treating them as unresolved would skip every
+    // generic alias silently.
+    const generic = [
+      "type Box<T> = {",
+      "  item: T",
+      "}",
+      "",
+      "node main(): string {",
+      "  const b: Box<string> = #b",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(fillAndPrint(generic, { b: { item: "hello" } })).toContain("hello");
+    expect(() => fillHoles(load(generic), { b: { item: 42 } })).toThrow(/expects/);
+  });
+
+  it("gives the splice hint when the element fits only as a literal", () => {
+    // The hint's evidence must use the same inference the acceptance
+    // decision got: `"fast"` fits `"fast" | "slow"` literally, so this is
+    // one-level-off evidence even though the widened description is not.
+    const modes = [
+      "node main() {",
+      '  f(#...modes: ("fast" | "slow")[])',
+      "}",
+      "",
+    ].join("\n");
+    expect(() => fillHoles(load(modes), { modes: ["fast"] })).toThrow(
+      /describes one element/,
+    );
+  });
+
+  it("records what isAssignable does with extra properties", () => {
+    // Not a rule this change invents — whatever the checker decides is
+    // what fill does. Pinned so a change in the checker is noticed here.
+    const person = [
+      "type Person = {",
+      "  name: string;",
+      "  age: number",
+      "}",
+      "",
+      "node main(): string {",
+      "  const p: Person = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(
+      fillAndPrint(person, { person: { name: "A", age: 1, nickname: "Al" } }),
+    ).toContain("nickname");
+  });
+});

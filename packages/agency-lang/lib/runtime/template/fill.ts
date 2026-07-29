@@ -13,7 +13,7 @@ import {
   positionInferredVariableTypes,
 } from "../../utils/holes.js";
 import { variableTypeToString } from "../../backends/typescriptGenerator/typeToString.js";
-import { isAssignable, resolveType } from "../../typeChecker/assignability.js";
+import { isAssignable, safeResolveType } from "../../typeChecker/assignability.js";
 import { visitTypes } from "../../typeChecker/typeWalker.js";
 import { isBuiltinGenericName } from "../../typeChecker/builtinGenerics.js";
 import { aliasTableFrom } from "./aliasTable.js";
@@ -285,7 +285,12 @@ function assertFillerType(
   }
 
   const printedExpected = variableTypeToString(expectedType, {}, true);
-  const resolvedExpected = resolveType(expectedType, aliases);
+  // safeResolveType, not resolveType: the latter throws on an invalid
+  // generic form, and the reject decision above survived only because
+  // isAssignable resolves through the safe wrapper internally. Throwing
+  // here would turn a validation message into an unhandled TypeError. A
+  // fallback to `any` just means the hint declines, which is its contract.
+  const resolvedExpected = safeResolveType(expectedType, aliases);
   // `#...items: Person[]` reads naturally and is wrong: each element is
   // checked against the annotation, so an array type rejects every element.
   // Only claim this when the evidence supports it — the element FITS one
@@ -296,7 +301,15 @@ function assertFillerType(
   if (
     hole.splice &&
     resolvedExpected.type === "arrayType" &&
-    isAssignable(actual, (resolvedExpected as ArrayType).elementType, aliases)
+    // The literal-accurate description, matching the acceptance decision
+    // this hint mirrors: an element that fits only as a literal (`"fast"`
+    // under `#...modes: ("fast" | "slow")[]`) is still one-level-off
+    // evidence, and the widened description would miss it.
+    isAssignable(
+      literalAccurate ?? actual,
+      (resolvedExpected as ArrayType).elementType,
+      aliases,
+    )
   ) {
     const element = variableTypeToString(
       (resolvedExpected as ArrayType).elementType,
@@ -343,6 +356,7 @@ function hasUnresolvedName(
   type: VariableType,
   aliases: Record<string, TypeAliasEntry>,
   seen: Set<string> = new Set(),
+  bound: Set<string> = new Set(),
 ): boolean {
   return visitTypes(type, (inner) => {
     // Alias names are user-controlled keys, so membership is Object.hasOwn.
@@ -354,6 +368,11 @@ function hasUnresolvedName(
       name = inner.name;
     }
     if (name === null) return false;
+    // A generic alias refers to its own parameters by name, so `type
+    // Box<T> = { item: T }` holds a `typeAliasVariable "T"` that is not in
+    // the table. Those are bound, not unresolved — without this, every
+    // generic alias would be treated as unknowable and silently skipped.
+    if (bound.has(name)) return false;
     if (!Object.hasOwn(aliases, name)) return true;
     // Follow the alias into its body: `type Person = { pet: Animal }` is
     // only fully resolvable if `Animal` is too, however deep it sits. The
@@ -361,7 +380,12 @@ function hasUnresolvedName(
     // from walking forever.
     if (seen.has(name)) return false;
     seen.add(name);
-    return hasUnresolvedName(aliases[name].body, aliases, seen);
+    // The body's bound names are that alias's own parameters, replacing
+    // rather than extending the caller's: a nested alias's body cannot
+    // refer to an outer alias's parameters.
+    const entry = aliases[name];
+    const bodyBound = new Set((entry.typeParams ?? []).map((param) => param.name));
+    return hasUnresolvedName(entry.body, aliases, seen, bodyBound);
   });
 }
 

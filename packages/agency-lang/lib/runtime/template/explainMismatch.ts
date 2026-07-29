@@ -1,7 +1,7 @@
 import {
   isAssignable,
   isOptionalType,
-  resolveType,
+  safeResolveType,
 } from "../../typeChecker/assignability.js";
 import { variableTypeToString } from "../../backends/typescriptGenerator/typeToString.js";
 import { synthesizeType } from "./synthesizeType.js";
@@ -29,7 +29,7 @@ export function explainMismatch(
   aliases: Record<string, TypeAliasEntry>,
   path: string = "",
 ): string | null {
-  const target = resolveType(expected, aliases);
+  const target = safeResolveType(expected, aliases);
   if (target.type !== "objectType") return null;
   if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
 

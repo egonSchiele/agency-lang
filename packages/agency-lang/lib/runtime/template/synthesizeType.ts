@@ -70,7 +70,7 @@ export function synthesizeType(
   if (typeof value === "boolean") return BOOLEAN_T;
   // Before the object branch: a Code value is an object, and describing it
   // as a record of its own internals would be nonsense.
-  if (isCode(value)) return literalFragmentType(value);
+  if (isCode(value)) return literalFragmentType(value, options);
   if (Array.isArray(value)) return arrayTypeOf(value, options);
   // Plain objects only. A Date, Map, Set or class instance is an object to
   // `typeof`, and describing one as a record of its own enumerable keys
@@ -90,8 +90,17 @@ function isPlainObject(value: unknown): boolean {
 
 /** A fragment holding exactly one uninterpolated literal, and nothing else.
  *  An interpolated string could render anything the generated program's
- *  scope produces, so it stays unknowable in both directions. */
-function literalFragmentType(code: Code): VariableType | null {
+ *  scope produces, so it stays unknowable in both directions.
+ *
+ *  Honors `stringsAsLiterals` for the same reason a plain string does: a
+ *  grafted `[| "fast" |]` becomes the literal `"fast"` in the generated
+ *  program, and the compile infers a string-literal type for it exactly as
+ *  it would for a plain-value fill. Widening here regardless would reject
+ *  `[| "fast" |]` against a `"fast" | "slow"` hole that compiles fine. */
+function literalFragmentType(
+  code: Code,
+  options: SynthesizeOptions,
+): VariableType | null {
   if (kindOf(code) !== "expr" || code.nodes.length !== 1) return null;
   const node = code.nodes[0];
   if (node.type === "number") return NUMBER_T;
@@ -101,7 +110,19 @@ function literalFragmentType(code: Code): VariableType | null {
     const interpolated = literal.segments.some(
       (segment) => segment.type === "interpolation",
     );
-    return interpolated ? null : STRING_T;
+    if (interpolated) return null;
+    // Mirrors `literalToType`'s own eligibility condition (a single text
+    // segment); anything else widens, which is what `synthType` does when
+    // `literalToType` declines.
+    const first = literal.segments[0];
+    if (
+      options.stringsAsLiterals === true &&
+      literal.segments.length === 1 &&
+      first.type === "text"
+    ) {
+      return { type: "stringLiteralType", value: first.value };
+    }
+    return STRING_T;
   }
   return null;
 }

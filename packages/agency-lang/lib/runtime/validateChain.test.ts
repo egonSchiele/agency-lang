@@ -3,9 +3,11 @@ import { z } from "zod";
 import {
   __validateChain,
   __validateChainRecursive,
+  __typeTest,
   type AgencyValidator,
   type TypeValidationDescriptor,
 } from "./validateChain.js";
+import { InterruptRejectedError } from "./errors.js";
 import { success, failure, isFailure, isSuccess } from "./result.js";
 
 const ctx = {};
@@ -333,5 +335,29 @@ describe("record walker prototype safety", () => {
     expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
     expect(Object.getOwnPropertyNames(out).sort()).toEqual(["__proto__", "a"]);
     expect(Object.getOwnPropertyDescriptor(out, "__proto__")?.value).toBe(7);
+  });
+});
+
+describe("__typeTest", () => {
+  it("success means match", async () => {
+    expect(await __typeTest(success(5))).toBe(true);
+  });
+
+  it("a failure the validator returned means no match", async () => {
+    expect(await __typeTest(failure("no"))).toBe(false);
+  });
+
+  it("a refusal-marked failure throws, carrying the refusal itself", async () => {
+    const refusal = failure("interrupt rejected", { interruptRejected: true });
+    await expect(__typeTest(refusal)).rejects.toSatisfy(
+      (thrown: unknown) =>
+        thrown instanceof InterruptRejectedError && thrown.refusal === refusal,
+    );
+  });
+
+  it("the marker decides, never the message string", async () => {
+    // A user validator could legitimately return this exact message; without
+    // the marker it is an ordinary no-match.
+    expect(await __typeTest(failure("interrupt rejected"))).toBe(false);
   });
 });

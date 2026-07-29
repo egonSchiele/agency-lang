@@ -26,7 +26,7 @@ import {
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
+  Schema, __validateType, __validateChain, __validateChainRecursive, __typeTest, InterruptRejectedError, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
@@ -261,6 +261,13 @@ return;
 // any abort to a Failure here would (a) hide a guard trip so the block appears
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
+// A refused validator interrupt unwinding out of a compiled type test.
+// A human answering "no" is a decision, not a crash: return the refusal
+// failure it carries (marker included) with NO error log — it must not
+// read as runtimeError in statelog. See InterruptRejectedError.
+if (__error instanceof InterruptRejectedError) {
+  return __error.refusal;
+}
 if (__error instanceof AgencyAbort) {
   // An abort stopped this function. It does not throw past its own frame:
   // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
@@ -416,6 +423,13 @@ return;
 // any abort to a Failure here would (a) hide a guard trip so the block appears
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
+// A refused validator interrupt unwinding out of a compiled type test.
+// A human answering "no" is a decision, not a crash: return the refusal
+// failure it carries (marker included) with NO error log — it must not
+// read as runtimeError in statelog. See InterruptRejectedError.
+if (__error instanceof InterruptRejectedError) {
+  return __error.refusal;
+}
 if (__error instanceof AgencyAbort) {
   // An abort stopped this function. It does not throw past its own frame:
   // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
@@ -592,6 +606,13 @@ return;
 // any abort to a Failure here would (a) hide a guard trip so the block appears
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
+// A refused validator interrupt unwinding out of a compiled type test.
+// A human answering "no" is a decision, not a crash: return the refusal
+// failure it carries (marker included) with NO error log — it must not
+// read as runtimeError in statelog. See InterruptRejectedError.
+if (__error instanceof InterruptRejectedError) {
+  return __error.refusal;
+}
 if (__error instanceof AgencyAbort) {
   // An abort stopped this function. It does not throw past its own frame:
   // it RETURNS an AbortedResult — a marker plus this frame's saved draft,

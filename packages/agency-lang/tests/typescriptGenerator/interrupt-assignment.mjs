@@ -26,7 +26,7 @@ import {
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
+  Schema, __validateType, __validateChain, __validateChainRecursive, __typeTest, InterruptRejectedError, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
@@ -220,7 +220,7 @@ if (__response) {
   } else if (__response.type === "reject") {
     // reject for tool calls handled separately
     
-    runner.halt({ messages: __threads(), data: failure("interrupt rejected") });
+    runner.halt({ messages: __threads(), data: failure("interrupt rejected", { interruptRejected: true }) });
     
     
     return;
@@ -230,7 +230,7 @@ if (__response) {
   const __handlerResult = await interruptWithHandlers("unknown", `What is your name?`, {}, "./interrupt-assignment.agency", __ctx, __stateStack(), { expectsValue: true });
   if (isRejected(__handlerResult)) {
     
-    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected") });
+    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { interruptRejected: true }) });
     
     
     return;

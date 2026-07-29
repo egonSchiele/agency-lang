@@ -12,7 +12,8 @@
     "destructiveRan": false,
     "functionName": null,
     "args": null,
-    "skippedFunctions": []
+    "skippedFunctions": [],
+    "interruptRejected": true
   },
   "resolve": {
     "x": 77,

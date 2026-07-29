@@ -66,6 +66,11 @@ export type FailureOpts = {
   destructiveRan?: boolean;
   functionName?: string;
   args?: Record<string, any>;
+  /** This failure IS a refused interrupt — a human (or policy) answered no.
+   *  Its only producers are the interrupt reject halts in the codegen
+   *  templates (interruptAssignment/interruptReturn). Consumers must never
+   *  infer refusal from the message string: handlers can replace it. */
+  interruptRejected?: boolean;
   /** The guard ids this `try` boundary OWNS. A `guardTrip` cause is
    *  converted to a Failure ONLY when its `guardId` is in this list;
    *  any other guard's trip (an outer guard, or a plain `try` that owns
@@ -96,6 +101,8 @@ export type ResultFailure = {
   functionName: string | null;
   args: Record<string, any> | null;
   skippedFunctions: SkippedFunction[];
+  /** Present (and true) only on a refused interrupt — see FailureOpts. */
+  interruptRejected?: boolean;
 };
 
 export function success(value: any): ResultSuccess {
@@ -103,7 +110,9 @@ export function success(value: any): ResultSuccess {
 }
 
 export function failure(error: any, opts?: FailureOpts): ResultFailure {
-  return {
+  // The refusal marker is set only when true, so ordinary failures keep
+  // their exact shape (and serialized payloads) unchanged.
+  const result: ResultFailure = {
     __type: "resultType",
     success: false,
     error,
@@ -118,6 +127,10 @@ export function failure(error: any, opts?: FailureOpts): ResultFailure {
     args: opts?.args ?? null,
     skippedFunctions: [],
   };
+  if (opts?.interruptRejected) {
+    result.interruptRejected = true;
+  }
+  return result;
 }
 
 /** Fold an activation's destructive flag into a failure crossing a

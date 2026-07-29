@@ -1485,7 +1485,14 @@ export class TypeScriptBuilder {
     if (coarse !== null) {
       return ts.call(ts.id("__coarseTypeTest"), [value, ts.str(coarse)]);
     }
-    return ts.call(ts.id("isSuccess"), [this.validateExpr(node.typeHint, value)]);
+    // `__typeTest` instead of a bare isSuccess: a failure the validator
+    // RETURNED is "no match", but a refused interrupt propagates — refusal
+    // must never become dispatch (validators-are-predicates spec). The
+    // helper is async, so the call itself is awaited (the chain call inside
+    // carries its own await already; awaiting a settled value is a no-op).
+    return ts.await(
+      ts.call(ts.id("__typeTest"), [this.validateExpr(node.typeHint, value)]),
+    );
   }
 
   /**

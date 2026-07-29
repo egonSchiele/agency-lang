@@ -161,9 +161,8 @@ describe.skipIf(!existsSync(CLI))("validator interrupts (end-to-end)", () => {
   // interrupt never surfaces at all — the question is never asked, and the
   // arm silently reads as no-match. Surfacing pending validator interrupts
   // needs the halt machinery a runtime helper cannot reach (the type-test
-  // call is codegen-synthesized, invisible to hoistCalls). Tracked in the
-  // follow-up issue "validator interrupts never surface when unanswered".
-  // Flip this expectation when that lands.
+  // call is codegen-synthesized, invisible to hoistCalls). Tracked in
+  // issue #724. Flip this expectation when that lands.
   it("PINNED HOLE: an unanswered validator interrupt is silently a no-match", async () => {
     const dir = makeDir(ARM_FIXTURE);
     try {

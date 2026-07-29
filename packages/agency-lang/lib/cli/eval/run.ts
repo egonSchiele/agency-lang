@@ -257,10 +257,11 @@ const defaultEvalRecordExtractor: EvalRecordExtractor = async ({
 };
 
 /**
- * Extractor for the optimizer: grades the entry node's return value (not the
- * last LLM completion) when `evalOutput()` wasn't called, and omits the
- * evalValue/evalOutput "did you forget to call…" warnings — inputs come from
- * the input spec and the graded output is the return value, so neither applies.
+ * Extractor for the optimizer. Two deliberate departures from the default:
+ * `"returnValue"` is strict where the default drops to the last LLM completion,
+ * so an agent that returns nothing raises "nothing to grade" instead of quietly
+ * optimizing its chat replies; and the evalValue warning is off, since the
+ * optimizer's inputs come from the input spec rather than `evalValue()`.
  */
 export const optimizeEvalRecordExtractor: EvalRecordExtractor = async ({
   statelogPath,

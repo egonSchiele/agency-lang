@@ -6,10 +6,7 @@ import { nanoid } from "nanoid";
 import { judgePairwise } from "../eval/judge/pairwise.js";
 import { judgeSuite, type JudgeSuiteArgs } from "../eval/judge/suite.js";
 import type { PairwiseVerdict, SuiteVerdict } from "../eval/judge/types.js";
-import { inputFromGoal } from "../eval/loadInputs.js";
 import { StatelogParser } from "../eval/statelogParser.js";
-import { createOptimizeReporter, type OptimizeVerbosity } from "../optimize/reporter.js";
-import { discoverOptimizeTargets } from "../optimize/targets.js";
 import {
   initializeEvalRun,
   prepareInput,
@@ -27,8 +24,6 @@ import type {
   EvalRunInputResult,
 } from "../eval/runTypes.js";
 import type { EvalRecord } from "../eval/types.js";
-import { optimizeLoop } from "../optimize/loop.js";
-import type { OptimizeLoopConfig, OptimizeResult } from "../optimize/types.js";
 
 /**
  * State carried by the Agency-side `evalRun` loop. Note: this is just the
@@ -195,62 +190,3 @@ export async function _evalJudgeSuite(
     policy: { samples, confidenceThreshold, marginThreshold, positionBias },
   });
 }
-
-/**
- * Stdlib binding for `agency.eval.optimize`. This deliberately does not
- * install any approval handler; callers decide which handlers are in scope.
- *
- * Mirrors the `agency eval optimize` CLI: exactly one of `inputs` or `goal`
- * selects the suite, a goal desugars through `inputFromGoal()`, and a
- * candidate is accepted iff the judge suite returns winner `B`.
- */
-export async function _optimize(
-  config: AgencyConfigLike,
-  entryFile: string,
-  workingDir: string,
-  node: string,
-  inputs: Input[],
-  goal: string,
-  iterations: number,
-  samples: number,
-  confidenceThreshold: number,
-  marginThreshold: number,
-  runsDir: string,
-  runId: string,
-  mutatorModel: string,
-  writeback: boolean,
-  verbosity: string,
-  loop: typeof optimizeLoop = optimizeLoop,
-): Promise<OptimizeResult> {
-  const hasInputs = inputs.length > 0;
-  const hasGoal = goal !== "";
-  if (hasInputs === hasGoal) {
-    throw new Error("Provide exactly one of --inputs or --goal");
-  }
-  if (verbosity !== "silent" && verbosity !== "default") {
-    throw new Error('verbosity must be "silent" or "default"');
-  }
-  const selectedInputs = hasGoal ? [inputFromGoal(goal)] : inputs;
-  const resolvedEntryFile = path.resolve(workingDir || ".", entryFile);
-  const targetSet = discoverOptimizeTargets(resolvedEntryFile);
-  const reporter = createOptimizeReporter(verbosity as OptimizeVerbosity);
-  return loop({
-    runtime: {
-      config,
-      inputs: selectedInputs,
-      inputsSource: hasGoal ? "inline:goal" : "stdlib:inputs",
-    },
-    target: {
-      entryFile: targetSet.entryFile,
-      node,
-      targetSet,
-      workingDir: targetSet.baseDir,
-      writeback,
-    },
-    policy: { iterations, mutatorModel: mutatorModel || undefined },
-    judgePolicy: { samples, confidenceThreshold, marginThreshold, positionBias: "swap" },
-    artifacts: { runsDir: path.resolve(runsDir), runId: runId || nanoid() },
-  }, { reporter });
-}
-
-type AgencyConfigLike = OptimizeLoopConfig["runtime"]["config"];

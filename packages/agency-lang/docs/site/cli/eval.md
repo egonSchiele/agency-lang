@@ -117,7 +117,11 @@ node main(prompt: string): string {
 }
 ```
 
-Without annotations, `extract` falls back to approximate trace-level heuristics: the last user-role message of the first top-level `promptCompletion` for `evalValues`, and the last top-level `promptCompletion` completion for `evalOutputs`. Falling back is supported for backwards compatibility, but the inference is approximate. Annotate your agent for trustworthy evals.
+Without annotations, `extract` infers both fields.
+
+For `evalOutputs` it uses **the entry node's return value** — the same thing `agency run` prints and a TypeScript caller receives. Only when the node returns nothing does it fall back to the last top-level `promptCompletion` completion, and it warns when it does. So an agent that returns its answer needs no annotation at all; one that answers by printing should call `evalOutput(reply)`.
+
+For `evalValues` it uses the last user-role message of the first top-level `promptCompletion`, and warns. This one is a genuine guess — annotate with `evalValue(prompt)` if you care about it.
 
 ## Record shape (overview)
 
@@ -159,7 +163,7 @@ Every entry in `evalValues` and `evalOutputs` has this shape:
 - `tMs` is milliseconds from the trace start, derived from the statelog envelope timestamp.
 - `truncated` is present only when the serialized value exceeded `STATELOG_EVAL_MAX_VALUE_BYTES`. The default cap is 100KB; set that environment variable before running `agency eval extract` to override it. Oversized string values are kept as readable string prefixes; oversized non-string values are converted to JSON-preview strings.
 
-Consumers that need one response typically read `record.evalOutputs.at(-1)?.value`. A pairwise judge compares the last element of `evalOutputs`; without annotations, that value may be the last LLM completion rather than what the user actually saw.
+Consumers that need one response typically read `record.evalOutputs.at(-1)?.value`. A pairwise judge compares the last element of `evalOutputs`; without annotations that value is the entry node's return value, or the last LLM completion when the node returned nothing.
 
 ## Behavioral-flag recipe
 

@@ -7,9 +7,9 @@ const result: OptimizeResult = {
   championFiles: { "agent.agency": "node main() {}\n" },
   acceptedCount: 1, rejectedCount: 1, validationFailedCount: 0,
   iterations: [
-    { iter: 0, decision: "baseline", winsA: 0, winsB: 0, ties: 0 },
-    { iter: 1, decision: "rejected", winsA: 0, winsB: 0, ties: 0, detail: "no improvement" },
-    { iter: 2, decision: "accepted", winsA: 0, winsB: 0, ties: 0 },
+    { iter: 0, decision: "baseline" },
+    { iter: 1, decision: "rejected", detail: "no improvement" },
+    { iter: 2, decision: "accepted" },
   ],
   championBreakdown: [
     { inputId: "brazil", output: "area is 8.5M km²", objective: 0.2, gatesPassed: true,

@@ -22,16 +22,22 @@ import type {
   ThreadEntry,
 } from "./types.js";
 
+/** How the agent's output is inferred when `evalOutput()` was not called. */
+export type OutputFallback = "llm" | "returnValue" | "preferReturnValue";
+
 export type ExtractOptions = {
   /** Max characters for tool argsPreview / outputPreview. Default 200.
    *  Pass 0 for "no truncation". */
   previewChars?: number;
   /** How to infer the agent output when `evalOutput()` was not called:
-   *   - "llm" (default): the last LLM completion on the top-level thread, with a warning.
-   *   - "returnValue": the entry node's return value (from `agentEnd`), with no warning.
-   *  Explicit `evalOutput()` calls always take precedence. The optimizer uses
-   *  "returnValue" because it grades what the node returns, not its last LLM reply. */
-  outputFallback?: "llm" | "returnValue";
+   *   - "preferReturnValue" (default): the entry node's return value, dropping to
+   *     the last LLM completion (with a warning) when the node returned nothing.
+   *   - "returnValue": the return value only; no output at all when there is none.
+   *     The optimizer uses this so "nothing to grade" surfaces as an error rather
+   *     than silently optimizing the agent's last LLM reply.
+   *   - "llm": the last LLM completion on the top-level thread, with a warning.
+   *  Explicit `evalOutput()` calls always take precedence. */
+  outputFallback?: OutputFallback;
   /** Emit the "no evalValue()" warning when `evalValue()` was not called. Default true.
    *  The optimizer sets this false: inputs come from the input spec, not evalValue(). */
   warnMissingValue?: boolean;
@@ -85,7 +91,7 @@ export function extractEvalRecord(
   const evalValues =
     collectExplicit("evalValueRecorded", n) ?? heuristicValues(topThreadProms, opts.warnMissingValue ?? true);
   const evalOutputs =
-    collectExplicit("evalOutputRecorded", n) ?? fallbackOutputs(n, topThreadProms, opts.outputFallback ?? "llm");
+    collectExplicit("evalOutputRecorded", n) ?? fallbackOutputs(n, topThreadProms, opts.outputFallback ?? "preferReturnValue");
 
   const last = n.events[n.events.length - 1];
 
@@ -368,14 +374,16 @@ function heuristicValues(prompts: NormalizedEnvelope[], warn: boolean): WithWarn
   };
 }
 
-/** Output fallback when evalOutput() wasn't called: last LLM completion (default,
- *  warns) or the entry node's return value from `agentEnd` (no warning). */
+/** Output fallback when evalOutput() wasn't called. See `ExtractOptions.outputFallback`. */
 function fallbackOutputs(
   n: Normalized,
   prompts: NormalizedEnvelope[],
-  mode: "llm" | "returnValue",
+  mode: OutputFallback,
 ): WithWarnings<EvalValue[]> {
-  return mode === "returnValue" ? returnValueOutputs(n) : heuristicOutputs(prompts);
+  if (mode === "llm") return heuristicOutputs(prompts);
+  const returned = returnValueOutputs(n);
+  if (mode === "returnValue" || returned.result.length > 0) return returned;
+  return heuristicOutputs(prompts);
 }
 
 /** The entry node's return value, taken from the last `agentEnd` event. */

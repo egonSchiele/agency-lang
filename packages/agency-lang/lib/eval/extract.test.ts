@@ -511,11 +511,50 @@ describe("output fallback + warning options (used by the optimizer)", () => {
     ];
   }
 
-  it("defaults to the last LLM completion and warns (unchanged behavior)", () => {
+  it("defaults to the node return value, not the last LLM completion", () => {
     const rec = extractEvalRecord(eventsWithReturn(), "src");
+    expect(rec.evalOutputs.map((o) => o.value)).toEqual(["New Delhi"]);
+    expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(false);
+    expect(rec.warnings.some((w) => w.includes("Call evalValue(prompt)"))).toBe(true);
+  });
+
+  it("by default drops to the last LLM completion when the node returns nothing", () => {
+    resetClock();
+    const events: EventEnvelope[] = [
+      ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+      ev("promptCompletion", {
+        threadId: "0",
+        model: '"gpt-5"',
+        messages: [{ role: "user", content: "capital of India?" }],
+        completion: { output: "New Delhi" },
+      }, "span-llm"),
+      ev("agentEnd", { threadId: "0", entryNode: "main" }),
+    ];
+    const rec = extractEvalRecord(events, "src");
+    expect(rec.evalOutputs.map((o) => o.value)).toEqual(["New Delhi"]);
+    expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(true);
+  });
+
+  it("outputFallback 'llm' still forces the last LLM completion", () => {
+    const rec = extractEvalRecord(eventsWithReturn(), "src", { outputFallback: "llm" });
     expect(rec.evalOutputs.map((o) => o.value)).toEqual(["Paris"]);
     expect(rec.warnings.some((w) => w.includes("Call evalOutput(reply)"))).toBe(true);
-    expect(rec.warnings.some((w) => w.includes("Call evalValue(prompt)"))).toBe(true);
+  });
+
+  it("outputFallback 'returnValue' yields no output when the node returns nothing", () => {
+    resetClock();
+    const events: EventEnvelope[] = [
+      ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+      ev("promptCompletion", {
+        threadId: "0",
+        model: '"gpt-5"',
+        messages: [{ role: "user", content: "capital of India?" }],
+        completion: { output: "Paris" },
+      }, "span-llm"),
+      ev("agentEnd", { threadId: "0", entryNode: "main" }),
+    ];
+    const rec = extractEvalRecord(events, "src", { outputFallback: "returnValue" });
+    expect(rec.evalOutputs).toEqual([]);
   });
 
   it("outputFallback 'returnValue' grades the node return value with no output warning", () => {

@@ -560,9 +560,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .option("--optimizer <nameOrPath>", "Optimization strategy: a built-in name (greedy, gepa, example) or a path to an optimizer module (.ts/.js/.mjs, or any path containing /)")
       .option("--minibatch <n>", "GEPA minibatch size (gepa optimizer only)", (v) => parseInt(v, 10))
       .option("--seed <n>", "RNG seed for reproducible search (gepa optimizer)", (v) => parseInt(v, 10))
-      .option("--samples <n>", "Judge samples per input", parseInt)
-      .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
-      .option("--margin-threshold <n>", "Suite win margin required", parseInt)
       .option("--silent", "Print nothing; artifacts are still written")
       .action(async (agent: string, opts: {
         goal?: string;
@@ -578,9 +575,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
         optimizer?: string;
         minibatch?: number;
         seed?: number;
-        samples?: number;
-        confidenceThreshold?: number;
-        marginThreshold?: number;
         silent?: boolean;
       }) => {
         const result = await evalOptimize({ ...opts, agent, config: getConfig() });

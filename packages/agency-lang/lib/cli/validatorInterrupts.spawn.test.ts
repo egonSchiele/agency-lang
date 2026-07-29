@@ -155,7 +155,7 @@ describe.skipIf(!existsSync(CLI))("validator interrupts (end-to-end)", () => {
     const dir = makeDir(IS_FIXTURE);
     try {
       const { stdout } = await runCli(dir, ["--reject", "app::confirm"]);
-      expect(stdout).toMatch(/MARK:no\b/);
+      expect(stdout).toMatch(/^MARK:no$/m);
     } finally {
       rmTemp(dir);
     }

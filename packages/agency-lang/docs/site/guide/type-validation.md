@@ -31,32 +31,7 @@ def isPositive(value: number): Result<number> {
 }
 ```
 
-If successful, the function returns `success` with the value it was given. Validators are **predicates**: they accept or reject, and they may not substitute a different value. A validator that returns a changed value is a runtime error naming the validator:
-
-```ts
-def isPositive(value: number): Result<number> {
-  if (value > 0) {
-    return success(value);
-  }
-  // WRONG - a validator may not modify the value. This errors at runtime:
-  // "validator 'isPositive' modified the value; validators may only
-  //  accept (return the input) or reject (return a failure)"
-  return success(1);
-}
-```
-
-If you want to repair a value — clamp it, trim it, normalize it — do it with an ordinary function call, where the rewrite is visible at the call site:
-
-```ts
-def clampAge(x: number): number {
-  if (x > 0) {
-    return x
-  }
-  return 1
-}
-
-const age = clampAge(input)
-```
+If successful, the function returns `success` with the value it was given. Validators may not modify the value: a validator that returns `success` with a different value is a runtime error naming the validator. If you want to repair a value, do it with an ordinary function call instead.
 
 That's all you need. Now when someone tries to validate an object of type `Person`, your validation will run. Example:
 
@@ -67,10 +42,6 @@ const person: Person! = { name: "Alice", age: -5 }
 const person: Person! = { name: "Alice", age: 38 }
 // person is now success({ name: "Alice", age: 38 })
 ```
-
-One more thing worth knowing about how validation routes values:
-
-- Bang validation returns the *parsed* value — object types drop keys not in the type. Pattern matching (`a: Age` in a match arm) tests the parsed value but binds the original. Validators themselves never change values; a validator that returns a different value is a runtime error.
 
 ## Creating a reusable type with validation
 
@@ -121,7 +92,7 @@ print(personSchema.zodSchema.toJSONSchema())
 
 ## Multiple validators and schemas
 
-You can set multiple validators, and they will all run in order. Every validator receives the parsed value:
+You can set multiple validators, and they will all run in order:
 
 ```ts
 @validate(isPositive, isAdult)

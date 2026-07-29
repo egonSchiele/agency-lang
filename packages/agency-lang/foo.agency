@@ -208,12 +208,15 @@ Your name: "The Agency Agent"
 Today's date: ${today()}
 """
 
-// Warning codes that reject a generated program. The typechecker calls
-// AG4004 (calling a name that does not exist) a warning, but in generated
-// code it means the model invented a function, and the program will fail at
-// runtime. Other warnings — like AG3009, which fires on every top-level
-// guard — are advisory and must not block execution.
-static const rejectingWarningCodes = ["AG4004"]
+// Warning codes known to be benign in generated programs. AG3009 fires on
+// every top-level guard (raising an interrupt without a handler is designed
+// behavior — it surfaces to the user). Everything NOT on this list rejects
+// the program: this deliberately fails closed, so a warning code the
+// typechecker grows later gets noticed here rather than silently waved
+// through. The known-fatal example is AG4004 — the typechecker calls
+// "function does not exist" a warning, but in generated code it means the
+// model invented a function and the program dies at runtime.
+static const benignWarningCodes = ["AG3009"]
 
 def review(code: string): Result<string> {
   """
@@ -223,23 +226,17 @@ def review(code: string): Result<string> {
   if (ast is failure) {
     return ast
   }
-  const typeErrors = typecheck(code)
+  const typeErrors = typecheck(code, ignoreCodes: benignWarningCodes)
   if (typeErrors is failure) {
     return typeErrors
   }
   const { errors, warnings } = typeErrors.value
-  const rejectedWarnings = []
-  for (warning in warnings) {
-    if (rejectingWarningCodes.includes(warning.code)) {
-      rejectedWarnings.push(warning)
-    }
-  }
   const parts = []
   if (errors.length > 0) {
     parts.push("Errors:\n${JSON.stringify(errors, null, 2)}")
   }
-  if (rejectedWarnings.length > 0) {
-    parts.push("Errors (reported as warnings by the typechecker, but calling a function that does not exist fails at runtime):\n${JSON.stringify(rejectedWarnings, null, 2)}")
+  if (warnings.length > 0) {
+    parts.push("Warnings (treated as errors for generated code — e.g. calling a function that does not exist is a warning to the typechecker but fails at runtime):\n${JSON.stringify(warnings, null, 2)}")
   }
   if (parts.length > 0) {
     return failure(parts.join("\n"))
@@ -280,7 +277,7 @@ ${criteria}
 </criteria>
 """
 
-  const res = llm(prompt)
+  const res = llm(prompt, model: "claude-sonnet-4-6", provider: "anthropic")
   return res
 }
 
@@ -335,8 +332,12 @@ node main() {
   ${userMessage}
   """
 
+  // The experiment runs on Sonnet. Pinned here per-call rather than in the
+  // repo-wide agency.json so tests and other runs keep the repo default.
   const res = llm(
     prompt,
+    model: "claude-sonnet-4-6",
+    provider: "anthropic",
     tools: [
     execute,
     docSkill.preapprove(),

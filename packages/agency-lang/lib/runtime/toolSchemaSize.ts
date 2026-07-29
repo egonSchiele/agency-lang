@@ -76,3 +76,51 @@ export function oversizedToolMessage(
     `an open object), or set client.maxToolSchemaChars in agency.json.`
   );
 }
+
+/** The slice of RuntimeContext this module needs; typed structurally so the
+ *  runtime's generic context type does not have to be imported here. */
+type SchemaWarnHost = {
+  maxToolSchemaChars?: number;
+  warnedToolSchemas?: Record<string, true>;
+  statelogClient: {
+    warn: (payload: {
+      warnType: "toolSchemaSize";
+      message: string;
+      functionName: string;
+      schemaChars: number;
+      threshold: number;
+    }) => Promise<unknown>;
+  };
+};
+
+/** Report any tool whose JSON schema is over the configured threshold. The
+ *  schema rides along on every request in the run, so this is a standing
+ *  cost the caller usually cannot see: nothing fails, the bill is just
+ *  higher and the context fuller. Warned once per tool name per run —
+ *  repeating it on all 26 calls of a run would bury the signal in the
+ *  statelog it is meant to surface in.
+ *
+ *  Never throws. A tool the runtime cannot measure is skipped, and a
+ *  statelog post that fails is swallowed: a diagnostic must not be able to
+ *  take down the call it is describing. */
+export function warnOnOversizedToolSchemas(
+  ctx: SchemaWarnHost,
+  tools: { name: string; schema?: unknown }[],
+): void {
+  const threshold = ctx.maxToolSchemaChars ?? DEFAULT_MAX_TOOL_SCHEMA_CHARS;
+  if (threshold <= 0) return;
+  const alreadyWarned = (ctx.warnedToolSchemas ??= {});
+  for (const tool of findOversizedTools(tools, threshold)) {
+    if (alreadyWarned[tool.name]) continue;
+    alreadyWarned[tool.name] = true;
+    void ctx.statelogClient
+      .warn({
+        warnType: "toolSchemaSize",
+        message: oversizedToolMessage(tool, threshold),
+        functionName: tool.name,
+        schemaChars: tool.chars,
+        threshold,
+      })
+      .catch(() => {});
+  }
+}

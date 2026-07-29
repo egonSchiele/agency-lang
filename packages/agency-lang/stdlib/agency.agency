@@ -25,7 +25,7 @@ import {
   _parseStatements,
   _toSource,
   _combine,
- } from "agency-lang/stdlib-lib/template.js"
+} from "agency-lang/stdlib-lib/template.js"
 import { VERSION } from "agency-lang/stdlib-lib/version.js"
 
 /** @module
@@ -437,18 +437,18 @@ when re-exports chain); when that module cannot be read from a source
 string (relative paths), the entry has kind "reexport" and its effects
 are ["unknown"] rather than silently missing. */
 export type ExportInfo = {
-  name: string;
-  kind: "def" | "node" | "type" | "const" | "reexport";
-  signature: string;
-  docstring?: string;
-  effects: string[];
-  destructive: boolean;
-  idempotent: boolean;
-  reexportedFrom?: string
+  name: string,
+  kind: "def" | "node" | "type" | "const" | "reexport",
+  signature: string,
+  docstring: string | null,
+  effects: string[],
+  destructive: boolean,
+  idempotent: boolean,
+  reexportedFrom: string | null
 }
 
 export type ModuleInfo = {
-  description?: string;
+  description: string | null,
   exports: ExportInfo[]
 }
 
@@ -465,6 +465,7 @@ export idempotent def describe(source: string): Result<ModuleInfo> {
   """
   return try _describe(source)
 }
+
 
 type FilterImportsResult = {
   source: string;
@@ -552,11 +553,11 @@ export type Code = {
 }
 
 export type HoleInfo = {
-  name: string;
-  sort: "expr" | "statements" | "identifier" | "decl";
-  splice: boolean;
-  type?: string;
-  origin?: string
+  name: string,
+  sort: "expr" | "statements" | "identifier" | "decl",
+  splice: boolean,
+  type: string | null,
+  origin: string | null
 }
 
 export def loadTemplate(dir: string, filename: string): Result<Code> {
@@ -582,10 +583,7 @@ export idempotent def holesOf(template: Code): HoleInfo[] {
   return _holesOf(template)
 }
 
-export idempotent def fill(
-  template: Code,
-  values: Record<string, Json | Code>,
-): Result<Code> {
+export idempotent def fill(template: Code, values: Record<string, Json | Code>): Result<Code> {
   """
   Fill holes in a template. Plain values become literals and are never parsed; Code values are grafted as trees. Filling some holes and not others returns a template with the rest still in it.
 

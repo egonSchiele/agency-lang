@@ -1,17 +1,12 @@
+// `theme` is a ThemeName union: custom ColorScheme objects and unknown
+// scheme names are now compile errors (AG6019), not runtime fallbacks, so
+// this test covers only the named-theme paths.
 import { highlight, diff } from "std::syntax"
 
 node named(): string {
   return highlight("const x = 1", "ts", theme: "monokai")
 }
 
-node custom(): string {
-  return highlight("const x = 1", "ts", theme: { keyword: { color: "#ff0000" } })
-}
-
 node themedDiff(): string {
   return diff("const x = 1", "const x = 2", color: true, language: "ts", theme: "monokai")
-}
-
-node badTheme(): string {
-  return highlight("const x = 1", "ts", theme: "no-such-scheme")
 }

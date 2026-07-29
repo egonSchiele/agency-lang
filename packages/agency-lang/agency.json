@@ -8,8 +8,7 @@
   },
   "client": {
     "logLevel": "warn",
-    "defaultModel": "claude-sonnet-4-6",
-    "defaultProvider": "anthropic"
+    "defaultModel": "gpt-4o-mini"
   },
   "typechecker": {
     "enabled": true

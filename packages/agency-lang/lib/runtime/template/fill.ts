@@ -238,23 +238,16 @@ type FillTypes = {
 };
 
 /**
- * Fill-time type VALIDATION — deliberately not a compile-time guarantee.
+ * Fill-time type validation — not a compile-time guarantee.
  *
- * THE DESIGN INVARIANT: fill may only reject a value the completed
- * program's compile would also reject. Missing things is fine; that is what
- * "validation, not a guarantee" means. Refusing something that would have
- * compiled is not, because the caller has no way to argue with it.
+ * THE INVARIANT: fill may only reject what the completed program's compile
+ * would also reject. Missing things is fine. Refusing something that would
+ * have compiled is not — the caller cannot argue with it.
  *
- * Rejects only when both sides are certainly known: a plain value's type is
- * immediate (`synthesizeType`), and the hole's declared type resolves
- * against the template's own aliases. Anything the synthesizer cannot
- * describe — a real code fragment, a value holding one — passes here and is
- * judged when the completed program compiles. Checking fragments needs a
- * checker entry point that does not exist yet; the seam is this function.
- *
- * The comparison is the type checker's own `isAssignable`, never a local
- * reimplementation: a second comparer would disagree with the checker in
- * exactly the cases nobody writes a test for.
+ * Both sides must be certainly known, so anything unknowable is skipped:
+ * a value `synthesizeType` cannot describe, or a type that does not fully
+ * resolve. Comparison is the checker's own `isAssignable`, never a local
+ * reimplementation.
  */
 function assertFillerType(
   hole: Hole,
@@ -264,47 +257,30 @@ function assertFillerType(
 ): void {
   const actual = synthesizeType(value);
   if (actual === null) return;
-  // A type we cannot fully resolve is as unknowable as a value we cannot
-  // describe. Without this, a template that imports its types or declares
-  // an alias inside a body has EVERY record fill rejected: an unknown alias
-  // resolves to itself, and a synthesized record compared against it is
-  // simply not assignable.
+  // An unknown alias resolves to itself and compares as "does not match",
+  // so without this a template importing its types rejects every fill.
   if (hasUnresolvedName(expectedType, aliases)) return;
   if (isAssignable(actual, expectedType, aliases)) return;
-  // Second chance before rejecting, on the failure path only. The pass
-  // above describes a string as `string`, but the checker infers a string
-  // literal — so `const mode: "fast" | "slow" = #mode` filled with "fast"
-  // compiles while the widened type does not fit. Re-describe
-  // literal-accurately and re-check. This can only ever turn a rejection
-  // into an acceptance (a literal type fits everywhere `string` does), so
-  // it cannot introduce a false accept, and its cost lands only on fills
-  // that were about to throw.
+  // The pass above widens strings, but the checker infers string LITERAL
+  // types, so `"fast"` against `"fast" | "slow"` compiles yet does not fit.
+  // Retrying literal-accurately can only turn a rejection into an
+  // acceptance, and costs nothing on the success path.
   const literalAccurate = synthesizeType(value, { stringsAsLiterals: true });
   if (literalAccurate !== null && isAssignable(literalAccurate, expectedType, aliases)) {
     return;
   }
 
   const printedExpected = variableTypeToString(expectedType, {}, true);
-  // safeResolveType, not resolveType: the latter throws on an invalid
-  // generic form, and the reject decision above survived only because
-  // isAssignable resolves through the safe wrapper internally. Throwing
-  // here would turn a validation message into an unhandled TypeError. A
-  // fallback to `any` just means the hint declines, which is its contract.
+  // safeResolveType: `resolveType` throws on an invalid generic form, which
+  // would turn a validation message into an unhandled TypeError.
   const resolvedExpected = safeResolveType(expectedType, aliases);
-  // `#...items: Person[]` reads naturally and is wrong: each element is
-  // checked against the annotation, so an array type rejects every element.
-  // Only claim this when the evidence supports it — the element FITS one
-  // level down, so the annotation is one level up. An array-typed splice is
-  // sometimes correct (`#...rows: number[]` splicing rows of numbers), and
-  // a genuinely bad element there must get the ordinary message, not advice
-  // to change an annotation that is right.
+  // A splice checks each ELEMENT against the annotation, so `#...items:
+  // Person[]` rejects everything. Claim that only when the element fits one
+  // level down — `#...rows: number[]` is legitimate, and a bad element
+  // there deserves the ordinary message.
   if (
     hole.splice &&
     resolvedExpected.type === "arrayType" &&
-    // The literal-accurate description, matching the acceptance decision
-    // this hint mirrors: an element that fits only as a literal (`"fast"`
-    // under `#...modes: ("fast" | "slow")[]`) is still one-level-off
-    // evidence, and the widened description would miss it.
     isAssignable(
       literalAccurate ?? actual,
       (resolvedExpected as ArrayType).elementType,
@@ -321,8 +297,7 @@ function assertFillerType(
     );
   }
 
-  // Only after isAssignable has decided to reject. The explainer never
-  // participates in that decision — see explainMismatch's contract.
+  // Runs only after the rejection is decided; it annotates, never decides.
   const detail = explainMismatch(value, expectedType, aliases);
   if (detail !== null) {
     throw new Error(
@@ -337,20 +312,12 @@ function assertFillerType(
 }
 
 /**
- * True when any name in this type is one the alias table cannot resolve.
+ * True when any name in this type is one the alias table cannot resolve —
+ * an imported type, a body-scoped alias, or an undeclared name.
  *
- * The template carries its own aliases, so a type whose names all resolve
- * is fully known. A name that does not — because the template imports the
- * type, or declares it inside a body, or it is simply undeclared — makes
- * the whole expected type unknowable, and unknowable means skip.
- *
- * Deliberately fails toward skipping: if this ever over-reports, some fills
- * go unchecked, which is the same weaker-but-safe position the feature
- * started from. Under-reporting would reject correct programs.
- *
- * The cost is that an imported type is never checked at fill. Closing that
- * needs module resolution at fill time — the same capability the deferred
- * fragment checking wants. Tracked as #719.
+ * Over-reporting only means some fills go unchecked; under-reporting would
+ * reject correct programs, so err toward reporting true. Imported types are
+ * therefore never checked at fill: #719.
  */
 function hasUnresolvedName(
   type: VariableType,
@@ -368,21 +335,16 @@ function hasUnresolvedName(
       name = inner.name;
     }
     if (name === null) return false;
-    // A generic alias refers to its own parameters by name, so `type
-    // Box<T> = { item: T }` holds a `typeAliasVariable "T"` that is not in
-    // the table. Those are bound, not unresolved — without this, every
-    // generic alias would be treated as unknowable and silently skipped.
+    // `type Box<T>` refers to `T` by name, and `T` is not in the table.
+    // Bound, not unresolved — otherwise every generic alias is skipped.
     if (bound.has(name)) return false;
     if (!Object.hasOwn(aliases, name)) return true;
-    // Follow the alias into its body: `type Person = { pet: Animal }` is
-    // only fully resolvable if `Animal` is too, however deep it sits. The
-    // seen-set is what stops a recursive alias (`Tree` holding `Tree[]`)
-    // from walking forever.
+    // `type Person = { pet: Animal }` resolves only if `Animal` does too.
+    // The seen-set stops a recursive alias walking forever.
     if (seen.has(name)) return false;
     seen.add(name);
-    // The body's bound names are that alias's own parameters, replacing
-    // rather than extending the caller's: a nested alias's body cannot
-    // refer to an outer alias's parameters.
+    // Bound names REPLACE rather than extend: one alias's parameters are
+    // not in scope inside another's body.
     const entry = aliases[name];
     const bodyBound = new Set((entry.typeParams ?? []).map((param) => param.name));
     return hasUnresolvedName(entry.body, aliases, seen, bodyBound);

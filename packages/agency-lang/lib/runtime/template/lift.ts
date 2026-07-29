@@ -16,12 +16,9 @@ import {
  * containing exactly those characters — that is what stops a filler from
  * injecting code into a generated program.
  *
- * One of three definitions that have to agree: this decides what a value
- * BECOMES, `synthesizeType` decides what type fill says it has, and the
- * checker's `synthType` decides what type the compile infers for what it
- * became. Changing the shape a value lifts to means checking whether the
- * other two still describe it the same way — see the longer note on
- * `synthesizeType`.
+ * One of three definitions that must agree — see `synthesizeType`, which
+ * describes the same values as types. Changing what a value lifts to means
+ * checking that it and the checker's `synthType` still agree.
  */
 export function liftValue(value: unknown, loc: SourceLocation): AgencyNode {
   if (value === null || value === undefined) return nullLiteral(loc);

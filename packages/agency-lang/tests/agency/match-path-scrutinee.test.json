@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "nodeName": "memberPath",
+      "description": "member-path scrutinee dispatches and binds through the substituted path",
+      "input": "",
+      "expectedOutput": "\"a:hi\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "literalIndex",
+      "description": "literal-index scrutinee dispatches and binds through the substituted path",
+      "input": "",
+      "expectedOutput": "\"a:hi\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "emptyIndex",
+      "description": "xs[0] on an empty array normalizes to null and takes the wildcard arm",
+      "input": "",
+      "expectedOutput": "\"none\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "guardKeepsSnapshot",
+      "description": "a guard that mutates the path cannot redirect dispatch — guarded matches keep the evaluate-once temp",
+      "input": "",
+      "expectedOutput": "\"none\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

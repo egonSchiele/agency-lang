@@ -32,20 +32,21 @@ flow-typed checker work and the four narrowing specs at the repo root.
 | Guard / form | Narrows today? | Notes |
 |---|---|---|
 | `isSuccess(r)` / `isFailure(r)` on a bare variable | ✅ | then- and else-branch; `r.value` / `r.error` type precisely |
-| `r.prop == literal` / `!= literal` on a bare variable | ✅ | discriminated-union member filter (either operand order; string/number/boolean literals) |
+| `r.prop == literal` / `!= literal` on a bare variable | ✅ | discriminated-union member filter (either operand order; string/number/boolean literals). `===`/`!==` are stylistic aliases (same `__eq` in codegen) and produce identical facts |
 | Same guards on a **member-path** scrutinee (`b.r`, `o.inner.r`, `arr[0]`) | ✅ | M1 (single-hop) + M2 (multi-hop + literal-index) — `isSuccess(arr[0])`, `o.inner.r.kind == "x"`, `b.r != null` narrow the path; `arr[0].value` then types precisely |
-| `match` arm **bound fields** | ✅ | free via lowering to a `__s` temp — no match-specific code |
+| `match` arm **bound fields** | ✅ | free via lowering — for a stable scrutinee (bare variable, property / numeric literal-index path) in a match with NO guarded arms, the conditions and binder reads target the original expression (`narrowableScrutineeRef`, patternLowering.ts); otherwise the `__scrutinee` temp |
 | `!c`, `a && b`, `a || b` combinators | ✅ | `!` swaps then/else; `&&` unions then-facts; `\|\|` unions else-facts |
 | Post-guard / early-return (`if (isFailure(r)) { return }` ⇒ `r` is Success after) | ✅ | `alwaysExits` counts only `return` (conservative) |
 | Multi-hop + literal-index member paths (`a.b.c`, `arr[0]`) | ✅ | M2 — `Reference.chain` is `PathSegment[]` (property + literal-index hops); `arr[0]` narrows per-index (does not leak to `arr[1]`). Covers **array-nested patterns** (`[success(v), _]`). Computed/dynamic index (`arr[i]`), slices, and method hops stay un-narrowable |
-| The scrutinee *variable* in a `match` arm (vs a bound field) | ❌ | only bound fields narrow; the source var isn't re-typed |
+| The scrutinee *expression* in a `match` arm (vs a bound field) | ✅ | stable references only — a bare variable or a property / numeric literal-index path (`toSegment` is the rule): the lowered conditions test the expression itself, so `{ tag: "a" } => onlyA(u)` and `{ tag: "a" } => onlyA(b.inner)` type the scrutinee as the selected variant. Calls, computed/string/negative indexes and slices keep the evaluate-once temp — and so does any match with a guarded arm, because a guard is user code between conditions and dispatch must stay a one-time evaluation |
+| Early `return` inside an expression-position `match` arm | ✅ | lowering rewrites it to a `matchYield`; the flow builder ends the branch there (interrupt-carrying yields pass through, may-resume). Post-match flow joins every yield-point flow with the base flow, so an arm's assignments invalidate narrowing established before the match |
 | Mixed union with a non-literal discriminant member | ❌ | by design — the `string` member can't be proven disjoint |
 | Narrowing to `never` (dead-branch detection) | ❌ | suppressed today; **planned** with the flow model + `never` |
 | `null` / truthiness (`if (x != null)`, `if (x == null)`, `if (x)`) | ✅ | strips/keeps the `null` member of a `T \| null` optional; bare variable or single-hop member-path scrutinee (`c.timeout`). `x != null` / `x == null` are exact and narrow **both** branches. Bare `if (x)` narrows **only the then-branch** to non-null: the runtime uses JS truthiness, so a falsy `x` may be `""`/`0`/`false` (not just `null`), so the else-branch (and the post-`while` region) is left unnarrowed — narrowing it to `null` would be unsound. `if (x)` is accepted as a condition for optionals (an opt-in carve-out from the boolean-only condition rule — see `checkConditionType`). |
 | `typeof` / value-kind split of plain unions (`number \| string`) | ✅ | type patterns (`x is number`, arm `n: number`) — the `typeTest` Refine narrows the subject to the tested type. **Positive-only**: no else-branch or post-return narrowing, because a Tier 2 test can fail on a `@validate` validator even when the static type matches. Bare-variable and stable member-path subjects. |
 | User-defined type guards (`def isFoo(x): x is Foo`) | ❌ | **planned fast-follow** — needs `x is T` syntax |
 | Aliased condition (`const ok = isSuccess(r); if (ok) …`) | ❌ | **planned** — no new syntax, smarter `analyzeCondition` |
-| `match` exhaustiveness (all cases covered) | ❌ | **planned** — orthogonal to flow; `decomposeCases` + `never` |
+| `match` exhaustiveness (all cases covered) | ✅ | shipped — see the "Match exhaustiveness" section below (`decomposeCases` + `checkMatchExhaustiveness`, AG5002) |
 
 ## Enforced safety: strict member access
 

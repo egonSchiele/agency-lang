@@ -1,0 +1,53 @@
+type Pa = { tag: "a"; s: string }
+type Pb = { tag: "b"; n: number }
+type Pu = Pa | Pb
+type Box = { inner: Pu }
+
+def viaMemberPath(b: Box): string {
+  return match(b.inner) {
+    { tag: "a", s } => "a:${s}"
+    { tag: "b", n } => "b:${n}"
+    _ => "none"
+  }
+}
+
+def viaLiteralIndex(xs: Pu[]): string {
+  return match(xs[0]) {
+    { tag: "a", s } => "a:${s}"
+    _ => "none"
+  }
+}
+
+def mutateInner(b: Box): boolean {
+  b.inner = { tag: "b", n: 9 }
+  return false
+}
+
+def guardSnapshot(b: Box): string {
+  // A guard is user code between arm conditions, so this match keeps the
+  // evaluate-once temp: the mutation in the first arm's guard must NOT make
+  // the second arm match. Dispatch is a snapshot.
+  return match(b.inner) {
+    { tag: "a" } if (mutateInner(b)) => "first"
+    { tag: "b", n } => "second-${n}"
+    _ => "none"
+  }
+}
+
+node memberPath() {
+  return viaMemberPath({ inner: { tag: "a", s: "hi" } })
+}
+
+node literalIndex() {
+  return viaLiteralIndex([{ tag: "a", s: "hi" }])
+}
+
+node emptyIndex() {
+  // xs[0] on an empty array normalizes to null; no arm matches a null, so
+  // the wildcard arm must take it.
+  return viaLiteralIndex([])
+}
+
+node guardKeepsSnapshot() {
+  return guardSnapshot({ inner: { tag: "a", s: "hi" } })
+}

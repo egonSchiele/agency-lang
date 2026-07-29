@@ -24,7 +24,9 @@ export type AgencyValidator =
 /** Boolean type test for compiled type patterns and `is Type`. A failure the
  *  validator RETURNED means "no match"; a refused interrupt must not become
  *  dispatch — a human answering "no" is not "the type did not match". */
-export async function __typeTest(result: ResultValue): Promise<boolean> {
+export async function __typeTest(
+  result: ResultValue | Promise<ResultValue>,
+): Promise<boolean> {
   const outcome = await result;
   if (isRefusedInterrupt(outcome)) {
     throw new InterruptRejectedError(outcome);

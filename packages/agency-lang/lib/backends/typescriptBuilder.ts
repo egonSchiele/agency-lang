@@ -3207,6 +3207,23 @@ export class TypeScriptBuilder {
             ts.raw("__error instanceof RestoreSignal"),
             ts.statements([ts.throw("__error")]),
           ),
+          // A refused validator interrupt unwinding out of a compiled type
+          // test written directly in this node's body. A decision, not a
+          // crash: no error log, no statelog runtimeError, and the refusal
+          // itself (marker and checkpoint intact) is the node's result.
+          // Mirrors the functionCatchFailure template clause; nodes carry no
+          // destructive flag of their own, so there is nothing to stamp here.
+          ts.if(
+            ts.raw("__error instanceof InterruptRejectedError"),
+            ts.statements([
+              ts.return(
+                ts.obj({
+                  messages: ts.runtime.threads,
+                  data: ts.raw("__error.refusal"),
+                }),
+              ),
+            ]),
+          ),
           // All aborts — cancellations (Esc / abort) AND guard trips — are a
           // single AgencyAbort carrying an AbortCause and must propagate
           // untouched rather than be logged + converted to a Failure here.

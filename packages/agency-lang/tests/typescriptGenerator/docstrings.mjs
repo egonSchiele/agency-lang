@@ -268,9 +268,13 @@ await callHook({
 // A refused validator interrupt unwinding out of a compiled type test.
 // A human answering "no" is a decision, not a crash: return the refusal
 // failure it carries (marker included) with NO error log — it must not
-// read as runtimeError in statelog. See InterruptRejectedError.
+// read as runtimeError in statelog. The boundary stamp folds THIS frame's
+// destructive flag in, like every other failure leaving this function
+// (the flag is authoritative for retry gating). functionName stays the
+// refusal's own: the refusal predates this frame, and the marker — not
+// the name — is what consumers key on. See InterruptRejectedError.
 if (__error instanceof InterruptRejectedError) {
-  return __error.refusal;
+  return stampFailureBoundary(__error.refusal, __self.__destructiveRan);
 }
 if (__error instanceof AgencyAbort) {
   // An abort stopped this function. It does not throw past its own frame:
@@ -427,9 +431,13 @@ await callHook({
 // A refused validator interrupt unwinding out of a compiled type test.
 // A human answering "no" is a decision, not a crash: return the refusal
 // failure it carries (marker included) with NO error log — it must not
-// read as runtimeError in statelog. See InterruptRejectedError.
+// read as runtimeError in statelog. The boundary stamp folds THIS frame's
+// destructive flag in, like every other failure leaving this function
+// (the flag is authoritative for retry gating). functionName stays the
+// refusal's own: the refusal predates this frame, and the marker — not
+// the name — is what consumers key on. See InterruptRejectedError.
 if (__error instanceof InterruptRejectedError) {
-  return __error.refusal;
+  return stampFailureBoundary(__error.refusal, __self.__destructiveRan);
 }
 if (__error instanceof AgencyAbort) {
   // An abort stopped this function. It does not throw past its own frame:
@@ -584,9 +592,13 @@ await callHook({
 // A refused validator interrupt unwinding out of a compiled type test.
 // A human answering "no" is a decision, not a crash: return the refusal
 // failure it carries (marker included) with NO error log — it must not
-// read as runtimeError in statelog. See InterruptRejectedError.
+// read as runtimeError in statelog. The boundary stamp folds THIS frame's
+// destructive flag in, like every other failure leaving this function
+// (the flag is authoritative for retry gating). functionName stays the
+// refusal's own: the refusal predates this frame, and the marker — not
+// the name — is what consumers key on. See InterruptRejectedError.
 if (__error instanceof InterruptRejectedError) {
-  return __error.refusal;
+  return stampFailureBoundary(__error.refusal, __self.__destructiveRan);
 }
 if (__error instanceof AgencyAbort) {
   // An abort stopped this function. It does not throw past its own frame:
@@ -741,9 +753,13 @@ await callHook({
 // A refused validator interrupt unwinding out of a compiled type test.
 // A human answering "no" is a decision, not a crash: return the refusal
 // failure it carries (marker included) with NO error log — it must not
-// read as runtimeError in statelog. See InterruptRejectedError.
+// read as runtimeError in statelog. The boundary stamp folds THIS frame's
+// destructive flag in, like every other failure leaving this function
+// (the flag is authoritative for retry gating). functionName stays the
+// refusal's own: the refusal predates this frame, and the marker — not
+// the name — is what consumers key on. See InterruptRejectedError.
 if (__error instanceof InterruptRejectedError) {
-  return __error.refusal;
+  return stampFailureBoundary(__error.refusal, __self.__destructiveRan);
 }
 if (__error instanceof AgencyAbort) {
   // An abort stopped this function. It does not throw past its own frame:
@@ -878,9 +894,13 @@ await callHook({
 // A refused validator interrupt unwinding out of a compiled type test.
 // A human answering "no" is a decision, not a crash: return the refusal
 // failure it carries (marker included) with NO error log — it must not
-// read as runtimeError in statelog. See InterruptRejectedError.
+// read as runtimeError in statelog. The boundary stamp folds THIS frame's
+// destructive flag in, like every other failure leaving this function
+// (the flag is authoritative for retry gating). functionName stays the
+// refusal's own: the refusal predates this frame, and the marker — not
+// the name — is what consumers key on. See InterruptRejectedError.
 if (__error instanceof InterruptRejectedError) {
-  return __error.refusal;
+  return stampFailureBoundary(__error.refusal, __self.__destructiveRan);
 }
 if (__error instanceof AgencyAbort) {
   // An abort stopped this function. It does not throw past its own frame:

@@ -243,6 +243,12 @@ await callHook({
     if (__error instanceof RestoreSignal) {
       throw __error
     }
+    if (__error instanceof InterruptRejectedError) {
+      return {
+        messages: __threads(),
+        data: __error.refusal
+      };
+    }
     if (__error instanceof AgencyAbort) {
       throw __error
     }
@@ -319,6 +325,12 @@ await callHook({
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
+    }
+    if (__error instanceof InterruptRejectedError) {
+      return {
+        messages: __threads(),
+        data: __error.refusal
+      };
     }
     if (__error instanceof AgencyAbort) {
       throw __error

@@ -488,8 +488,9 @@ class PatternLowerer {
   }
 
   /** The reference the per-arm conditions and binder reads test against: the
-   *  ORIGINAL variable for a bare-variable scrutinee, so narrowing lands on
-   *  the name the arm bodies reference; otherwise the `__scrutinee` temp.
+   *  ORIGINAL scrutinee expression when it is a stable reference — a bare
+   *  variable or a stable access path — so narrowing lands on the expression
+   *  the arm bodies reference; otherwise the `__scrutinee` temp.
    *  An arm body that rebinds the name cannot corrupt the substituted reads:
    *  they all run before any user statement (conditions precede the body,
    *  binder assignments are prepended to it — see `foldArms`) and the runner
@@ -501,10 +502,13 @@ class PatternLowerer {
     scrutineeName: string,
     loc: SourceLocation | undefined,
   ): Expression {
-    if (scrutinee.type !== "variableName" || scrutinee.value === "null") {
-      return varRef(scrutineeName, loc);
+    if (scrutinee.type === "variableName" && scrutinee.value !== "null") {
+      return varRef(scrutinee.value, scrutinee.loc);
     }
-    return varRef(scrutinee.value, scrutinee.loc);
+    if (scrutinee.type === "valueAccess" && isStableAccessPath(scrutinee)) {
+      return cloneExpr(scrutinee);
+    }
+    return varRef(scrutineeName, loc);
   }
 
   /**
@@ -1589,6 +1593,25 @@ function sliceCall(source: Expression, start: number, loc: SourceLocation | unde
  */
 function cloneExpr<T extends Expression>(e: T): T {
   return structuredClone(e);
+}
+
+/** A path the narrowing store can key on and whose re-reads cannot diverge
+ *  from what the conditions tested: a variable base with only plain property
+ *  and literal-index hops (the same path class flow narrowing supports —
+ *  docs/dev/typechecker/narrowing). Calls and method hops could run user code
+ *  on every read, and a computed index could hit a different element, so those
+ *  keep the evaluate-once temp. Optional hops are excluded because the
+ *  narrowing store does not model them — substituting would re-read for no
+ *  narrowing gain. */
+function isStableAccessPath(access: ValueAccess): boolean {
+  if (access.base.type !== "variableName" || access.base.value === "null") {
+    return false;
+  }
+  return access.chain.every(
+    (el) =>
+      (el.kind === "property" && !el.optional) ||
+      (el.kind === "index" && !el.optional && el.index.type === "number"),
+  );
 }
 
 function chainAccess(

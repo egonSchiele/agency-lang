@@ -269,7 +269,7 @@ node main() {}`);
     expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
   });
 
-  it("a member-path scrutinee is out of scope (documented limitation)", () => {
+  it("a member-path scrutinee narrows in arm bodies", () => {
     const errs = hardErrors(`${SCRUT_HEAD}
 def f(b: Box): string {
   return match(b.inner) {
@@ -278,7 +278,74 @@ def f(b: Box): string {
   }
 }
 node main() {}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("a multi-hop member-path scrutinee narrows in arm bodies", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+type Crate = { box: Box }
+def f(c: Crate): string {
+  return match(c.box.inner) {
+    { tag: "a" } => onlyA(c.box.inner)
+    _ => "y"
+  }
+}
+node main() {}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("a literal-index scrutinee narrows in arm bodies", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def f(xs: Nu[]): string {
+  return match(xs[0]) {
+    { tag: "a" } => onlyA(xs[0])
+    _ => "y"
+  }
+}
+node main() {}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("a binder on a member-path scrutinee takes the selected variant's field type", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def wantStr(s: string): string { return s }
+def f(b: Box): string {
+  return match(b.inner) {
+    { tag: "a", s } => wantStr(s)
+    _ => "y"
+  }
+}
+node main() {}`);
+    expect(errs).toEqual([]);
+  });
+
+  // Re-reading a computed index could hit a different element than the one the
+  // conditions tested, and the narrowing store cannot key on it anyway — a
+  // computed-index scrutinee keeps the temp and the path stays un-narrowed.
+  it("a computed-index scrutinee keeps the temp (documented limitation)", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def f(xs: Nu[], i: number): string {
+  return match(xs[i]) {
+    { tag: "a" } => onlyA(xs[i])
+    _ => "y"
+  }
+}
+node main() {}`);
     expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
+  });
+
+  // A call scrutinee must evaluate exactly once — it keeps the temp.
+  it("a call scrutinee keeps the temp and still dispatches", () => {
+    const errs = hardErrors(`${SCRUT_HEAD}
+def mk(): Nu { return { tag: "a", s: "hi" } }
+def f(): string {
+  return match(mk()) {
+    { tag: "a", s } => s
+    _ => "y"
+  }
+}
+node main() {}`);
+    expect(errs).toEqual([]);
   });
 
   // An arm-body redeclare of the scrutinee name is treated as an assignment to

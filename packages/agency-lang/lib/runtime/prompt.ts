@@ -43,6 +43,7 @@ import {
   runIntrinsicCall,
 } from "./intrinsicTools.js";
 import type { RunBatchResult } from "./runBatch.js";
+import { warnOnOversizedToolSchemas } from "./toolSchemaSize.js";
 import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
 import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
@@ -949,6 +950,7 @@ export async function runPrompt(args: {
   // where they surface as an opaque 400 with no request payload in the
   // statelog. See assertUniqueToolNames.
   assertUniqueToolNames(tools);
+  warnOnOversizedToolSchemas(ctx, tools);
   let toolFunctions = exposedFunctions;
 
   // Remove agency-only / runtime-only keys from clientConfig before passing

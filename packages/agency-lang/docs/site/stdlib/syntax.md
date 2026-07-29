@@ -119,6 +119,31 @@ export type ColorScheme = {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L54))
 
+### ThemeName
+
+* The name of a built-in color scheme. Naming each one instead of taking a
+ * plain `string` keeps the tool schema small and tells a model which values
+ * are actually accepted.
+
+```ts
+/**
+ * The name of a built-in color scheme. Naming each one instead of taking a
+ * plain `string` keeps the tool schema small and tells a model which values
+ * are actually accepted.
+ */
+export type ThemeName =
+  | "vscode-dark"
+  | "github-dark"
+  | "monokai"
+  | "dracula"
+  | "nord"
+  | "github"
+  | "a11y-dark"
+  | "a11y-light"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L107))
+
 ## Constants
 
 ### colorSchemes
@@ -163,7 +188,7 @@ highlight(
   code: string,
   language: string = "plaintext",
   mode: HighlightMode = "shell",
-  theme: string | ColorScheme = "vscode-dark",
+  theme: ThemeName = "vscode-dark",
 ): string
 ```
 
@@ -172,17 +197,9 @@ Syntax-highlight a code snippet and return the highlighted string.
   @param code - The code snippet to highlight
   @param language - The programming language of the code (e.g. "javascript", "python", "json"). Use "auto" to auto-detect it (heuristic; less reliable on short snippets). Defaults to "plaintext".
   @param mode - Output format: "shell" for terminal output, "web" for web output
-  @param theme - A named color scheme ("vscode-dark", "github-dark", "monokai", "dracula", "nord", "github", "a11y-dark", "a11y-light") or a custom ColorScheme object. An unknown scheme name or an invalid color returns a failure.
+  @param theme - A named color scheme ("vscode-dark", "github-dark", "monokai", "dracula", "nord", "github", "a11y-dark", "a11y-light")
 
-* A custom `theme` maps token classes to colors, merged over "vscode-dark":
- *
- *     highlight(code, "ts", theme: {
- *       keyword: { color: "#C586C0", styles: ["bold"] },
- *       comment: { color: "#6A9955", styles: ["italic"] },
- *       string:  { color: "green" }
- *     })
- *
- * When `language` is "markdown", fenced code blocks use the default palette
+* When `language` is "markdown", fenced code blocks use the default palette
  * regardless of `theme`.
 
 **Parameters:**
@@ -192,11 +209,11 @@ Syntax-highlight a code snippet and return the highlighted string.
 | code | `string` |  |
 | language | `string` | "plaintext" |
 | mode | [HighlightMode](#highlightmode) | "shell" |
-| theme | `string \| ColorScheme` | "vscode-dark" |
+| theme | [ThemeName](#themename) | "vscode-dark" |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L114))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L121))
 
 ### diff
 
@@ -213,7 +230,7 @@ diff(
   hunkHeaders: boolean = false,
   summary: boolean = false,
   language: string = "",
-  theme: string | ColorScheme = "vscode-dark",
+  theme: ThemeName = "vscode-dark",
 ): string
 ```
 
@@ -232,7 +249,7 @@ Produce a human-readable diff of two strings and return it as a string.
   @param hunkHeaders - Emit `@@ -l,c +l,c @@` separators between change regions
   @param summary - Prefix the diff with an "N insertions, M deletions" line
   @param language - When non-empty (e.g. "agency", "ts", "python") and color is on, render changed lines with a dim red/green background and syntax-highlighted code instead of inline `-`/`+` coloring. Use "auto" to auto-detect the language once from the full text (heuristic).
-  @param theme - When `language` is set, the syntax-highlighting color scheme: a named scheme (e.g. "dracula") or a custom ColorScheme object. An unknown scheme or invalid color returns a failure.
+  @param theme - When `language` is set, the syntax-highlighting color scheme using a named scheme (e.g. "dracula")
 
 **Parameters:**
 
@@ -249,11 +266,11 @@ Produce a human-readable diff of two strings and return it as a string.
 | hunkHeaders | `boolean` | false |
 | summary | `boolean` | false |
 | language | `string` | "" |
-| theme | `string \| ColorScheme` | "vscode-dark" |
+| theme | [ThemeName](#themename) | "vscode-dark" |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L138))
 
 ### patch
 
@@ -292,4 +309,4 @@ Produce a standard unified diff and return it as a string, in a format that
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L179))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/syntax.agency#L186))

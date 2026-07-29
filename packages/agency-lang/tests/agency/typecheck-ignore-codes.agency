@@ -1,0 +1,60 @@
+import { typecheck } from "std::agency"
+
+// A node body calling guard() outside a handler always emits the AG3009
+// warning, so it exercises ignoreCodes against a real diagnostic.
+static const warnSource = """
+node main() {
+  const result = guard(time: 1m) {
+    return 1
+  }
+  return result
+}
+"""
+
+// Const type mismatch -> a real error (AG-coded), for the error-side filter.
+static const errorSource = "node main() { const x: number = \"s\"\n  return x }"
+
+def codes(diags: any[]): string[] {
+  const out: string[] = []
+  for (diag in diags) {
+    out.push(diag.code)
+  }
+  return out
+}
+
+// Without ignoreCodes the AG3009 warning is present; with it, gone.
+node ignoreWarning() {
+  const before = typecheck(warnSource)
+  const after = typecheck(warnSource, ignoreCodes: ["AG3009"])
+  if (before is failure) {
+    return "typecheck failed"
+  }
+  if (after is failure) {
+    return "typecheck failed"
+  }
+  return [
+    codes(before.value.warnings).includes("AG3009"),
+    codes(after.value.warnings).includes("AG3009"),
+  ]
+}
+
+// ignoreCodes drops matching errors too, and leaves others alone.
+node ignoreError() {
+  const before = typecheck(errorSource)
+  if (before is failure) {
+    return "typecheck failed"
+  }
+  const errorCodes = codes(before.value.errors)
+  if (errorCodes.length === 0) {
+    return "expected a type error"
+  }
+  const after = typecheck(errorSource, ignoreCodes: errorCodes)
+  if (after is failure) {
+    return "typecheck failed"
+  }
+  const unrelated = typecheck(errorSource, ignoreCodes: ["AG9999"])
+  if (unrelated is failure) {
+    return "typecheck failed"
+  }
+  return [after.value.errors.length, unrelated.value.errors.length === before.value.errors.length]
+}

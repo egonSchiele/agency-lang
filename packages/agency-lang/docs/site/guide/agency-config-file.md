@@ -46,6 +46,7 @@ This is where you set your default model, provider, and API keys.
 | `apiKey` | Keys for `openAi`, `google`, `anthropic`, `ollama`, `openRouter`, `deepInfra`, `liteLlm`, and `openAiCompat`. |
 | `baseUrl` | Needed if you're using a provider that provides an endpoint compatible with the OpenAI API, such as `openRouter`, `deepInfra`, `liteLlm` and others. |
 | `maxToolResultChars` | Caps how much of a single tool result the model sees (the full value still reaches your code). Default `100000`; `0` disables it. Keeps a chatty tool from blowing the context window. |
+| `maxToolSchemaChars` | Warns in the state log when one tool's JSON schema is longer than this. Default `2000`; `0` disables it. A tool's schema is re-sent on every request, so an oversized one quietly raises the cost of the whole run. |
 | `providerModules` | Paths to custom smoltalk provider modules (e.g. a local model via `smoltalk-llama-cpp`). |
 | `modelAliases` / `modelsDir` | Short-name aliases and the cache directory for local models. |
 

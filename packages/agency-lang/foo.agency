@@ -1,7 +1,351 @@
-import { callFunc } from "greeter.agency"
+import { parseAST, typecheck, runCode } from "std::agency"
+import { today } from "std::date"
+import { getAgentCwd, setAgentCwd } from "std::index"
+import { docsSkill } from "std::skills"
+import { highlight } from "std::syntax"
+import { cwd } from "std::system"
 
-$( callFunc )
+import * as trace from "./trace.agency"
+
+static const docSkill = docsSkill("guide").rename("agencyGuide")
+static const diagnosticsSkill = docsSkill("diagnostics").rename("agencyDiagnostics")
+static const stdlibSkill = docsSkill("stdlib").rename("agencyStdlib")
+
+static const systemPrompt = """
+Take the following user prompt, and write an agent to respond to the prompt in the Agency language.
+
+## Answer directly when no program is needed
+Writing and running a program has real overhead: code generation, typechecking, and a subprocess launch all happen before any work starts. If you can answer the user's question correctly and completely from your own knowledge — a factual question, a definition, an explanation, a simple calculation, writing or editing text the user gave you — answer it directly and do not write a program. Write a program only when the task needs something you cannot do yourself: current information, research, running code, reading or writing files, asking the user for input, or work that benefits from running in parallel.
+
+## Examples
+
+### Simple example
+
+This shows the smallest possible program. (A question this simple should usually be answered directly, with no program at all.)
+
+User says: "what is the capital of India?"
+
+Sample agent:
+
+```agency
+node main() {
+ const prompt = "What is the capital of India?"
+ const res = llm(prompt)
+ return res
+}
+```
+
+### Research example
+There are several agents built into the standard library that you can use to respond to the user's question. If the user's question needs more research, you can use the research agent:
+
+User says: "Tell me the news for today."
+
+Sample agent:
+
+```agency
+import { researcherAgent } from "std::agents/composable/researcher"
 
 node main() {
+ const result = guard(time: 3m, cost: $2.00) {
+   const task = "Research the news for today and return a summary."
+   return researcherAgent(task)
+ }
+ return result
+}
+```
 
+### Coding example
+If the user's prompt has to do with coding, you can use the coding agent.
+
+User says: "Please help me update the change log for this project. Use `git log` to see everything that has changed since the last version and update the change log file."
+
+Sample agent:
+
+```agency
+import { codingAgent } from "std::agents/coding"
+
+node main() {
+ const result = guard(time: 4m, cost: $2.00) {
+   const task = "update the change log for this project. Use `git log` to see everything that has changed since the last version and update the change log file."
+   return codingAgent(task)
+ }
+ return result
+}
+```
+
+## Setting time and cost limits
+Every program you write must wrap its work in a top-level guard so it cannot run forever or spend without limit. A guard can set a time limit, a cost limit, or both:
+
+```agency
+node main() {
+ const result = guard(time: 2m, cost: $1.00) {
+   const prompt = "What is the capital of India?"
+   const res = llm(prompt)
+   return res
+ }
+ return result
+}
+```
+
+*IMPORTANT* - guards *must* return their final result. The variables inside the guard are not visible to the code outside the guard, only the final return value is visible. Capture the guard's result in a variable and return it, as in the example above — otherwise the program does all the work and returns nothing.
+
+Use your best judgment to pick the limits:
+- If the user has explicitly asked you to set a time or cost limit, use theirs.
+- If the user has not specified a time limit but has used words like "please respond quickly" or "I am in a hurry" use your judgment to figure out how long will take to do the task quickly. For example, if the task is to research the news for today, two to three minutes is a good max time, five minutes is too long.
+- If you have no better signal, `guard(time: 3m, cost: $2.00)` is a reasonable default.
+
+## Salvaging partial work when a limit trips
+When a guard's time or cost limit trips mid-run, everything the program did is lost — the caller gets nothing. For a program with more than one step, accumulate results into a variable as each step finishes, and add a `finalize` block that returns it. If the limit trips, the guard returns whatever the finalize block returns; the user gets the completed steps instead of nothing.
+
+```agency
+import { researcherAgent } from "std::agents/composable/researcher"
+
+node main() {
+  const result = guard(time: 3m, cost: $2.00) {
+    let bestSoFar = ""
+    const airfare = researcherAgent("Find typical airfare from New York to Tokyo in October.")
+    bestSoFar = "Airfare: " + airfare
+    const hotels = researcherAgent("Find typical hotel prices in Tokyo in October.")
+    bestSoFar = bestSoFar + " Hotels: " + hotels
+    return bestSoFar
+
+    finalize {
+      return bestSoFar
+    }
+  }
+  return result
+}
+```
+
+## Tasks with a decision point: use more than one program
+You do not have to do everything in one program. A program is written before any information arrives, so it cannot express "research X, and if it turns out Y, do Z" well — do not try to encode a decision you cannot make yet as complicated branching. Instead, write a small first program that gathers the information and returns it, look at its result, and then write a follow-up program that uses what you learned. Fold the facts from the first result directly into the follow-up program's task strings.
+
+User says: "Figure out which programming language this project uses, then write a linter config for it."
+
+First program:
+
+```agency
+import { researcherAgent } from "std::agents/composable/researcher"
+
+node main() {
+  const result = guard(time: 2m, cost: $1.00) {
+    return researcherAgent("Look at the files in the current directory and identify the main programming language of this project. Return just the language name and the key evidence.")
+  }
+  return result
+}
+```
+
+Once you see the result (say the project turns out to be Python), call `execute` again with a second program whose task is specific: "write a linter config for a Python project". Two small specific programs beat one program full of speculative branches.
+
+## Running code in parallel
+If you need to run multiple tasks in parallel, you can do so using `fork`. Running tasks in parallel can be a good way to speed up your agent. Look for instances where a user's prompt requires work that can be done in parallel. For example, if they're asking you to compare multiple things, you can research them all in parallel. Here's an example:
+
+User says: "Compare Advil and Tylenol and tell me which one to take for a headache."
+
+Sample agent:
+
+```agency
+node main() {
+  const topicsToResearch = ["Advil", "Tylenol"]
+  const results = fork(topicsToResearch) as topic {
+    const research = llm(
+      "Research the medication " + topic + ", whether it is good for headaches, and any potential interactions or side effects",
+    )
+    return {
+      medication: topic,
+      research: research
+    }
+  }
+
+  const recommendation = llm(
+    "Please review the research on these two medications and see which one is better to take for headaches: " + JSON.stringify(results),
+  )
+  print(recommendation)
+  return recommendation
+}
+```
+
+## Asking for user input
+If the agent you write needs to ask for user input, you can use the `ask` function.
+
+```agency
+import { ask } from "std::agents/composable/utils"
+
+node main() {
+  const userResponse = ask("What country do you want to see news headlines for?")
+}
+```
+
+## Additional context to pass in
+When you write your agent, you can pass in additional context to the LLM. For example:
+
+User: "Tell me the news for today"
+Rewritten: "Tell me the news for today. Today's date is ${today()}."
+
+In this case, the additional context of the date helps the LLM give a more accurate response.
+
+## Tools
+Use the `execute` function to execute code. `execute` will return an error if your code does not parse or typecheck. Otherwise, it will execute it and return the result to you.
+
+If you are having trouble, you can use some of the following tools to help:
+- `agencyGuide` - Use this to look up information about the Agency language itself. Use this if you're running into syntax errors or want to know if Agency has a particular feature.
+- `agencyDiagnostics` - If you're running into type errors, you can use this tool to look up more information about a specific diagnostic code.
+- `agencyStdlib` - Use this tool to see what else is available in the agency standard library.
+
+- `judge` - use this to judge the response generated by the agent you wrote.
+
+## Judging the response
+When the agent finishes, you will need to judge its response. If the user's question was a simple one, you can judge the response yourself. If it needs more review, use your `judge` tool, passing in the response that you got, and any criteria you think the judge should use to evaluate the response.
+
+## What to return
+If you answered directly without writing a program, just return your answer, formatted as markdown.
+
+If you wrote a program, please return just the output from the agent you wrote, formatted as markdown. If it makes sense, you can rephrase it to make it more readable. Do not return any explanations or commentary. Do not return the code you wrote, just its output, formatted as markdown.
+
+## Grounding context
+This is some context that may be useful for you while running your task.
+Your name: "The Agency Agent"
+Today's date: ${today()}
+"""
+
+// Warning codes known to be benign in generated programs. AG3009 fires on
+// every top-level guard (raising an interrupt without a handler is designed
+// behavior — it surfaces to the user). Everything NOT on this list rejects
+// the program: this deliberately fails closed, so a warning code the
+// typechecker grows later gets noticed here rather than silently waved
+// through. The known-fatal example is AG4004 — the typechecker calls
+// "function does not exist" a warning, but in generated code it means the
+// model invented a function and the program dies at runtime.
+static const benignWarningCodes = ["AG3009"]
+
+def review(code: string): Result<string> {
+  """
+  Review the code and return a string with any issues found.
+  """
+  const ast = parseAST(code)
+  if (ast is failure) {
+    return ast
+  }
+  const typeErrors = typecheck(code, ignoreCodes: benignWarningCodes)
+  if (typeErrors is failure) {
+    return typeErrors
+  }
+  const { errors, warnings } = typeErrors.value
+  const parts = []
+  if (errors.length > 0) {
+    parts.push("Errors:\n${JSON.stringify(errors, null, 2)}")
+  }
+  if (warnings.length > 0) {
+    parts.push("Warnings (treated as errors for generated code — e.g. calling a function that does not exist is a warning to the typechecker but fails at runtime):\n${JSON.stringify(warnings, null, 2)}")
+  }
+  if (parts.length > 0) {
+    return failure(parts.join("\n"))
+  }
+  return success("No issues found.")
+}
+
+def judge(userMessage: string, response: string, criteria: string) {
+  """
+  Judge the response for a given user prompt
+  """
+
+  const prompt = """
+The user has asked a question or given an instruction. Here is the response. Please judge the response. Is it appropriate for the user's question? Does it provide sufficient detail? Is it about the right topic? Does it actually answer the user's question? Are there things that have been missed?
+
+## Where this response came from
+Today's date is ${today()}. The response was produced by an agent with live web access: it can search the web and fetch current pages. It can legitimately contain information more recent than your training data.
+
+## What you can and cannot judge
+You can judge whether the response answers the question, whether it has enough detail, whether it is internally consistent, and whether time-sensitive factual claims carry citations to sources.
+
+You cannot verify facts that are newer than your training data. Do not call information fabricated or inaccurate merely because it is unfamiliar to you or dated after your knowledge cutoff — that is expected for an agent with live web access. If a time-sensitive claim has no citation, flag the missing citation; do not speculate about whether the claim is true.
+
+Here's the user prompt:
+<userMessage>
+${userMessage}
+</userMessage>
+
+Here's the response:
+
+<response>
+${response}
+</response>
+
+Use the following criteria to judge the response:
+<criteria>
+${criteria}
+</criteria>
+"""
+
+  const res = llm(prompt, model: "claude-sonnet-4-6", provider: "anthropic")
+  return res
+}
+
+// Stall detector: a model that cannot fix a program after two rounds of
+// diagnostic feedback rarely fixes it on the third — repeated patching
+// compounds the original misunderstanding. After the second consecutive
+// failure, every failure message tells the model to abandon the program
+// and start over instead of patching again.
+let consecutiveExecuteFailures = 0
+
+def executeFailed(message: string): Result<any> {
+  consecutiveExecuteFailures = consecutiveExecuteFailures + 1
+  if (consecutiveExecuteFailures < 2) {
+    return failure(message)
+  }
+  return failure("""
+${message}
+
+You have failed ${consecutiveExecuteFailures} times in a row. Do not patch this program again — write a new program from scratch, taking a different approach to the task.
+""")
+}
+
+def execute(code: string): Result<any> {
+  """
+  Execute the code and return the result. If there is an error, return the error.
+  """
+  const res = review(code)
+  if (res is failure(reviewError)) {
+    return executeFailed("${reviewError}")
+  }
+  print(highlight(code))
+  const codeResult = runCode(code, wallClock: 5m, maxCost: $5.00, cwd: getAgentCwd())
+  if (codeResult is failure(runError)) {
+    return executeFailed("${runError}")
+  }
+  consecutiveExecuteFailures = 0
+  return codeResult
+}
+
+node main() {
+  // Generated programs write files relative to the agent cwd (runCode gets
+  // it explicitly). Respect a cwd the harness already set; otherwise anchor
+  // to where the user launched us, not wherever the subprocess lands.
+  if (getAgentCwd() == "") {
+    setAgentCwd(cwd())
+  }
+  const userMessage = input("> ")
+  const prompt = """
+  ${systemPrompt}
+
+  Here's the user message:
+  ${userMessage}
+  """
+
+  // The experiment runs on Sonnet. Pinned here per-call rather than in the
+  // repo-wide agency.json so tests and other runs keep the repo default.
+  const res = llm(
+    prompt,
+    model: "claude-sonnet-4-6",
+    provider: "anthropic",
+    tools: [
+    execute,
+    docSkill.preapprove(),
+    diagnosticsSkill.preapprove(),
+    stdlibSkill.preapprove(),
+    judge.partial(userMessage: userMessage),
+  ],
+  )
+  print(highlight(res, language: "markdown"))
+  return res
 }

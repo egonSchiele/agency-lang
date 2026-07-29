@@ -138,6 +138,16 @@ export interface AgencyConfig {
      */
     maxToolResultChars: number;
     /**
+     * Warn when one tool's JSON schema serializes to more characters than
+     * this. A tool's schema is re-sent on every request in the run, so a
+     * single oversized one is a standing cost: `std::syntax::highlight`
+     * once carried a nested color-scheme object worth ~17,000 characters
+     * against a ~1,000-character norm for the rest of the stdlib. The
+     * warning goes to the state log and changes nothing else. Default
+     * 2000; `0` disables the check.
+     */
+    maxToolSchemaChars: number;
+    /**
      * Paths to user-authored "provider module" ES files loaded at
      * startup. Each must export `register({ registerProvider })` and call
      * `registerProvider(name, ClientClass)` to register a custom smoltalk
@@ -435,6 +445,7 @@ export const AgencyConfigSchema = z
           })
           .partial(),
         maxToolResultChars: z.number(),
+        maxToolSchemaChars: z.number(),
         providerModules: z.array(z.string()),
         modelAliases: z.record(z.string(), z.string()),
         modelsDir: z.string(),

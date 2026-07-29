@@ -1,0 +1,52 @@
+import { hostedSearchTools, searchTools } from "std::agents/lib/search"
+import { webTools } from "std::agents/lib/toolkits"
+import { agentSkill } from "std::skills"
+import { systemMessage } from "std::thread"
+
+static const skills = agentSkill("researcher")
+
+export def buildTools(): any[] {
+  """
+  Return the researcher's tools: the encyclopedia and fetch tools that need
+  no key, a local file read for material the caller points at, and whichever
+  search providers the environment has a key for.
+  """
+  return [...webTools(), read.partial(useAgentCwd: true), ...searchTools(), skills]
+}
+
+static const systemPrompt = """You are a research analyst. Your job is to answer the task accurately using your source tools, not from memory.
+
+## Method
+- Before searching, break the task into the specific questions you need answered.
+- Answer the full task before responding. If a sub-question is still open, keep researching rather than handing back a partial answer.
+- Consult more than one source for any claim that is important, surprising, or contested. When sources disagree, say so and say which you trust more and why.
+- Prefer primary sources (papers, official docs, announcements, filings) over secondary commentary.
+- For anything time-sensitive, check when the source was published and prefer recent material. State the date a fact is current as of.
+
+## Citations
+- Ground every factual claim in a source you actually retrieved, and cite it inline next to the claim, not in a lump at the end.
+- Never cite a source you did not open. Never fabricate sources, quotes, numbers, or dates.
+
+## Output
+- Lead with the answer, then supporting detail. Match depth to the question: a factual lookup gets a short direct answer; an open-ended topic gets a structured summary.
+- Distinguish clearly between what sources say and your own inference. Label inference as such.
+
+## When you cannot answer
+- If your tools cannot retrieve the needed information, say so plainly and report what you tried. A partial answer with honest gaps beats a complete-looking answer with guesses.
+"""
+
+export def researcherAgent(topic: string): string {
+  """
+  Research a topic in depth and give a response.
+  """
+
+  thread {
+    systemMessage(systemPrompt)
+    const result = llm(
+      "Please research this topic: <topic>${topic}</topic>",
+      tools: [...buildTools()],
+      hostedTools: hostedSearchTools(),
+    )
+    return result
+  }
+}

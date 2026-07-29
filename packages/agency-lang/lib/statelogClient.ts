@@ -1301,18 +1301,24 @@ export class StatelogClient {
     functionName,
     param,
     error,
+    schemaChars,
+    threshold,
   }: {
-    warnType: "failurePropagation";
+    warnType: "failurePropagation" | "toolSchemaSize";
     message: string;
     functionName?: string;
     param?: string;
     error?: unknown;
+    /** toolSchemaSize only: the offending tool's serialized schema length
+     *  and the threshold it crossed. */
+    schemaChars?: number;
+    threshold?: number;
   }): Promise<void> {
     await this.post({
       type: "warn",
       warnType,
       message,
-      data: { functionName, param, error },
+      data: { functionName, param, error, schemaChars, threshold },
     });
   }
 

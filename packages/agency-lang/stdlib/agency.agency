@@ -377,13 +377,33 @@ export def runCode(
 `typecheck` does not restrict imports to the standard library only.
 Relative imports (./foo.agency) cannot be resolved from a source string.
 */
-export idempotent def typecheck(source: string): Result<TypeCheckReport> {
+export idempotent def typecheck(source: string, ignoreCodes: string[] = []): Result<TypeCheckReport> {
   """
   Type-check Agency source code.
 
   @param source - Agency source code as a string
+  @param ignoreCodes - Diagnostic codes (e.g. ["AG3009"]) to drop from the report's errors and warnings
   """
-  return try _typecheck(source)
+  const report = try _typecheck(source)
+  if (report is failure) {
+    return report
+  }
+  if (ignoreCodes.length === 0) {
+    return report
+  }
+  const errors: TypeCheckDiagnostic[] = []
+  for (diag in report.value.errors) {
+    if (!ignoreCodes.includes(diag.code)) {
+      errors.push(diag)
+    }
+  }
+  const warnings: TypeCheckDiagnostic[] = []
+  for (diag in report.value.warnings) {
+    if (!ignoreCodes.includes(diag.code)) {
+      warnings.push(diag)
+    }
+  }
+  return success({ errors: errors, warnings: warnings })
 }
 
 /** Per-exported-symbol effect lists, keyed by node/function name. */

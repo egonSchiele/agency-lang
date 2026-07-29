@@ -28,7 +28,7 @@ Return the web-search tools whose API key is set, or an empty array when
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L52))
 
 ### hostedSearchTools
 
@@ -36,7 +36,8 @@ Return the web-search tools whose API key is set, or an empty array when
 hostedSearchTools(model: string = ""): string[]
 ```
 
-Return the provider-hosted search capabilities to request.
+Return the provider-hosted search capabilities available to the model, or
+  an empty array when its provider offers none (e.g. local models).
 
   @param model - The model that will run the call, or "" for the branch default
 
@@ -48,7 +49,7 @@ Return the provider-hosted search capabilities to request.
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L61))
 
 ### searchProviderNames
 
@@ -61,4 +62,4 @@ Return the names of the web-search providers whose API key is set, for
 
 **Returns:** `string[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/search.agency#L71))

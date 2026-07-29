@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "ignoreWarning",
+      "description": "ignoreCodes drops a warning code from the report; default keeps it",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "ignoreError",
+      "description": "ignoreCodes drops matching error codes and ignores unmatched codes",
+      "input": "",
+      "expectedOutput": "[0,true]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

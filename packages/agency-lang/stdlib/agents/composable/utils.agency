@@ -1,0 +1,7 @@
+export def ask(question: string) {
+  """
+  Ask the user a question and get a response
+  """
+  const response = interrupt(question)
+  return response
+}

@@ -1,0 +1,136 @@
+{
+  "tests": [
+    {
+      "nodeName": "predicateBangAccepts",
+      "description": "a predicate validator accepts through bang unchanged",
+      "input": "",
+      "expectedOutput": "\"ok:5\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "predicateBangRejects",
+      "description": "a predicate validator rejects through bang unchanged",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "predicateArmDispatches",
+      "description": "a predicate validator dispatches a match arm unchanged",
+      "input": "",
+      "expectedOutput": "\"pos:5\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "predicateArmFallsThrough",
+      "description": "a rejecting validator means the arm does not match",
+      "input": "",
+      "expectedOutput": "\"no-match\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "partialAppliedAccepts",
+      "description": "a partial-applied predicate validator accepts unchanged",
+      "input": "",
+      "expectedOutput": "\"ok:5\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "schemaOnlyArmDispatches",
+      "description": "a schema-only (no-validator) type pattern dispatches through the tier-2 path",
+      "input": "",
+      "expectedOutput": "\"plain:al\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modifyingBangErrors",
+      "description": "a modifying validator errors loudly through bang, naming the validator",
+      "input": "",
+      "expectedOutput": "\"errored:named\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modifyingArmErrors",
+      "description": "a modifying validator errors loudly through a match arm, naming the validator",
+      "input": "",
+      "expectedOutput": "\"errored:named\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modifyingIsErrors",
+      "description": "a modifying validator errors loudly through an is test, naming the validator",
+      "input": "",
+      "expectedOutput": "\"errored:named\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modifyingPartialErrorsNamed",
+      "description": "a partial-applied modifying validator names its base function",
+      "input": "",
+      "expectedOutput": "\"errored:named\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "zodBangStrips",
+      "description": "documented divergence: bang returns the zod-parsed object (unknown keys stripped)",
+      "input": "",
+      "expectedOutput": "\"stripped\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "zodBinderKeepsOriginal",
+      "description": "documented divergence: a pattern binder reads the original object (unknown keys kept)",
+      "input": "",
+      "expectedOutput": "\"kept\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

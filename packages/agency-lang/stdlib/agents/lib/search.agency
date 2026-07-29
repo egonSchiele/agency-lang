@@ -8,12 +8,14 @@
   search. Adding a provider means appending one entry to the catalog here,
   and every agent picks it up.
 */
+import { _hostedSearchTools } from "agency-lang/stdlib-lib/llm.js"
 import { env } from "std::system"
 import { search as braveSearch, tavilySearch } from "std::web/search"
 
 type SearchProvider = {
   name: string;
   envKey: string;
+  toolName: string;
   tool: any
 }
 
@@ -21,12 +23,14 @@ static const providers: SearchProvider[] = [
   {
   name: "Tavily",
   envKey: "TAVILY_API_KEY",
-  tool: tavilySearch.rename("web_search_tavily")
+  toolName: "web_search_tavily",
+  tool: tavilySearch
 },
   {
   name: "Brave",
   envKey: "BRAVE_API_KEY",
-  tool: braveSearch.rename("web_search_brave")
+  toolName: "web_search_brave",
+  tool: braveSearch
 },
 ]
 
@@ -35,24 +39,33 @@ def hasKey(provider: SearchProvider): boolean {
   return key != null && key != ""
 }
 
+def boundTool(provider: SearchProvider): any {
+  // The key is bound here rather than left to the tool's own env fallback,
+  // which only applies when `apiKey` arrives empty. Handing the model an
+  // `apiKey` slot means it fills one: a real run had it send
+  // `"</antml_parameter>\n<parameter name=..."` as the key, which reached
+  // the HTTP layer and failed the search outright. A bound argument is not
+  // in the schema at all, so there is nothing to fill.
+  return provider.tool.partial(apiKey: env(provider.envKey)).rename(provider.toolName)
+}
+
 export def searchTools(): any[] {
   """
   Return the web-search tools whose API key is set, or an empty array when
   no search provider is configured.
   """
   const available = filter(providers, hasKey)
-  return map(available, \provider -> provider.tool)
+  return map(available, boundTool)
 }
-
-static const HOSTED_WEB_SEARCH = "web_search"
 
 export def hostedSearchTools(model: string = ""): string[] {
   """
-  Return the provider-hosted search capabilities to request.
+  Return the provider-hosted search capabilities available to the model, or
+  an empty array when its provider offers none (e.g. local models).
 
   @param model - The model that will run the call, or "" for the branch default
   """
-  return [HOSTED_WEB_SEARCH]
+  return _hostedSearchTools(model)
 }
 
 export def searchProviderNames(): string[] {

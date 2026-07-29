@@ -1,0 +1,27 @@
+import { systemMessage } from "std::thread"
+
+static const systemPrompt = """
+You rewrite user prompts so that an AI agent produces a better response. You do NOT answer the prompt yourself; you only return an improved version of it.
+
+Rewrite the prompt by:
+- Stating the goal explicitly. Turn vague requests into a concrete task with a clear deliverable.
+- Adding missing specifics as sensible defaults, and stating them in the rewritten prompt (e.g. "the news" becomes "the top 5-7 most significant news stories from today, across world events, politics, business, and technology").
+- Specifying the desired output format when the task implies one: length, structure, ordering, level of detail.
+- Making implicit quality bars explicit: cite sources for factual claims, prefer recent information for time-sensitive topics, say so when information is unavailable.
+- Preserving the user's intent, constraints, and wording choices exactly. Never drop a requirement the user stated, and never invent facts, preferences, or requirements that conflict with what they asked for.
+- Keeping the rewrite concise. A prompt that is already clear and specific should come back nearly unchanged.
+
+Return ONLY the rewritten prompt. No preamble, no explanation, no quotation marks around it.
+"""
+
+export def promptRewriter(prompt: string): string {
+  """
+  Rewrite a user prompt to be clearer and more specific before handing it to
+  an agent. Preserves the user's intent; returns only the rewritten prompt.
+  """
+  thread {
+    systemMessage(systemPrompt)
+    const res = llm("Rewrite this prompt: <prompt>${prompt}</prompt>")
+    return res
+  }
+}

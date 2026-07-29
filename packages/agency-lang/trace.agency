@@ -1,0 +1,132 @@
+export def formatToolResponse(data: string): string {
+  let _text = ""
+  if (typeof data == "string") {
+    _text = truncate(data)
+  } else if (typeof data == "array") {
+    if (data.length > 15) {
+      _text = truncate(JSON.stringify(data[:15], null, 2)) + "\n... (${data.length} total items)"
+    } else if (data.length > 3) {
+      _text = JSON.stringify(data, null, 2)
+    } else {
+      _text = truncate(JSON.stringify(data))
+    }
+  } else {
+    _text = truncate(JSON.stringify(data))
+  }
+
+  const truncated = _text
+  if (truncated.length < 1) {
+    return ""
+  }
+  const lines = truncated.split("\n")
+  const head = lines[0]
+  const tail = indentStr(lines[1:].join("\n"), 5)
+  const result = ` ⎿  ${head}\n${tail}`
+  return result
+}
+
+export def truncate(str: string, maxLength: number = 100): string {
+  if (str.length <= maxLength) {
+    return str
+  }
+  return str.slice(0, maxLength) + "..."
+}
+
+export def formatArgs(args: Record<string, any>): string {
+  const parts = []
+  for (key in args) {
+    const value = args[key]
+    parts.push("${key}: ${truncate(JSON.stringify(value), 50)}")
+  }
+  return parts.join(", ")
+}
+
+export def indentStr(str: string, amount: number): string {
+  const indent = repeatStr(" ", amount)
+  const lines = str.split("\n")
+  const indentedLines = map(lines) as line {
+    return indent + line
+  }
+  return indentedLines.join("\n")
+}
+
+export def repeatStr(str: string, times: number): string {
+  return Array(times).fill(str).join("")
+}
+
+type ToolCallData = {
+  name: string;
+  arguments: any
+}
+
+type LLMResponse = {
+  output?: string;
+  toolCalls: ToolCallData[];
+  usage: { inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens: number };
+  cost: { inputCost: number; outputCost: number; cachedInputCost: number; totalCost: number; currency: string };
+  model: string
+}
+
+export def renderLLMCallResponse(data: LLMResponse): string {
+  let response = []
+  if (data.output != "" && data.output != null && data.output != undefined) {
+    response.push(data.output)
+  }
+  if (data.toolCalls.length > 0) {
+    for (toolCall in data.toolCalls) {
+      response.push(`${toolCall.name}(${formatArgs(toolCall.arguments)})`)
+    }
+  }
+  return response.join("\n")
+}
+
+def _showTraces(): boolean {
+  return true
+}
+
+callback("onToolCallStart") as data {
+  if (_showTraces()) {
+    print(color.yellow("⏺ ${data.toolName}(${formatArgs(data.args)})"))
+  }
+}
+
+callback("onToolCallEnd") as data {
+  if (_showTraces()) {
+    if (data.result is success(_result)) {
+      print(color.dim.green("${formatToolResponse(_result)}"))
+    } else if (data.result is failure(_error)) {
+      print(color.red(" ⎿  Error: ${_error}"))
+    } else {
+      print(color.dim("${formatToolResponse(data.result)}"))
+    }
+  }
+}
+
+callback("onLLMCallStart") as data {
+  if (_showTraces()) {
+    print(color.green.dim("💬 [${data.model}] ${data.prompt}"))
+  }
+}
+
+callback("onLLMCallEnd") as data {
+  if (data.result.hostedToolResults) {
+    for (result in data.result.hostedToolResults) {
+      match(result.tool) {
+        "web_search" => {
+          const queries = map(result.queries, \q -> "\"${q}\"").join(", ")
+          // there's also result.sources and result.citations
+          print(
+            color.yellow(
+            "⏺ web_search(provider: '${result.provider}', queries: [${queries}])",
+          ),
+          )
+        }
+      }
+    }
+  }
+  if (_showTraces()) {
+    print(
+      color.green.dim("💬 [${data.model}] ${renderLLMCallResponse(data.result)}"),
+    )
+  }
+}

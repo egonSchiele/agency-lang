@@ -1,7 +1,5 @@
+import { ask } from "std::agents/composable/utils"
+
 node main() {
-  raise std::error("This is a test error", {
-    a: 1,
-    b: 2
-  })
-  print("This will not be printed if rejected")
+  const userResponse = ask("What country do you want to see news headlines for?")
 }

@@ -43,6 +43,11 @@ import {
   runIntrinsicCall,
 } from "./intrinsicTools.js";
 import type { RunBatchResult } from "./runBatch.js";
+import {
+  DEFAULT_MAX_TOOL_SCHEMA_CHARS,
+  findOversizedTools,
+  oversizedToolMessage,
+} from "./toolSchemaSize.js";
 import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
 import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
@@ -304,6 +309,38 @@ function assertUniqueToolNames(tools: { name: string }[]): void {
         `the base name. Give each derived tool a distinct name with ` +
         `.rename("...").`,
     );
+  }
+}
+
+/** Report any tool whose JSON schema is over the configured threshold. The
+ *  schema rides along on every request in the run, so this is a standing
+ *  cost the caller usually cannot see: nothing fails, the bill is just
+ *  higher and the context fuller. Warned once per tool name per run —
+ *  repeating it on all 26 calls of a run would bury the signal in the
+ *  statelog it is meant to surface in.
+ *
+ *  Never throws. A tool the runtime cannot measure is skipped, and a
+ *  statelog post that fails is swallowed: a diagnostic must not be able to
+ *  take down the call it is describing. */
+function warnOnOversizedToolSchemas(
+  ctx: RuntimeContext<GraphState>,
+  tools: { name: string; schema?: unknown }[],
+): void {
+  const threshold = ctx.maxToolSchemaChars ?? DEFAULT_MAX_TOOL_SCHEMA_CHARS;
+  if (threshold <= 0) return;
+  const alreadyWarned = (ctx.warnedToolSchemas ??= {});
+  for (const tool of findOversizedTools(tools, threshold)) {
+    if (alreadyWarned[tool.name]) continue;
+    alreadyWarned[tool.name] = true;
+    void ctx.statelogClient
+      .warn({
+        warnType: "toolSchemaSize",
+        message: oversizedToolMessage(tool, threshold),
+        functionName: tool.name,
+        schemaChars: tool.chars,
+        threshold,
+      })
+      .catch(() => {});
   }
 }
 
@@ -949,6 +986,7 @@ export async function runPrompt(args: {
   // where they surface as an opaque 400 with no request payload in the
   // statelog. See assertUniqueToolNames.
   assertUniqueToolNames(tools);
+  warnOnOversizedToolSchemas(ctx, tools);
   let toolFunctions = exposedFunctions;
 
   // Remove agency-only / runtime-only keys from clientConfig before passing

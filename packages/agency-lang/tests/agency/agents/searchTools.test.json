@@ -24,7 +24,7 @@
     },
     {
       "nodeName": "hostedSearchIsRequestedFromOnePlace",
-      "description": "hosted search comes from one helper and is not model-gated",
+      "description": "hosted search comes from one helper, gated by provider family and failing open",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

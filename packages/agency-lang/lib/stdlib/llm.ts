@@ -1,9 +1,10 @@
 import * as fs from "node:fs";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
 import {
   getAllModels,
+  getHostedTools,
   getModel,
   refreshModels,
   registerModelData,
@@ -110,6 +111,49 @@ export function _listHostedModels(): HostedModelInfo[] {
 export function _hostedModelInfo(name: string): HostedModelInfo | null {
   const model = getModel(name as any);
   return model && model.type === "text" ? toHostedInfo(model) : null;
+}
+
+/** Hosted-search capability names to request for `model`, backing
+ *  `std::agents/lib/search.hostedSearchTools`. Every smoltalk client keys the
+ *  request on the literal string "web_search", so that is the only name this
+ *  ever returns (the catalog's per-provider tool names like "google_search"
+ *  are catalog entries, not request keys).
+ *
+ *  The gate errs open by design. Withholding search wrongly makes an agent
+ *  quietly stop searching, which is invisible; requesting it wrongly makes
+ *  the provider return an error, which is visible. So:
+ *  - unknown model (not in the catalog: brand new, local, custom) → request it
+ *  - empty model with no branch default → request it (historical behavior;
+ *    the baked default is a cloud model that supports it)
+ *  - known model → request it if any hosted web_search entry belongs to the
+ *    model's provider family. The catalog keys models by family ("openai")
+ *    but hosted tools by provider API ("openai-responses"), so the family
+ *    rule matches either the exact provider or a "family-" API variant.
+ *  Only a model whose provider family positively offers no hosted search
+ *  (e.g. a registered local provider) gets an empty array. */
+export function _hostedSearchTools(model: string): string[] {
+  let effective = model;
+  if (effective === "") {
+    // agencyStore directly rather than getRuntimeContext(), which throws
+    // outside an execution frame; no frame just means no branch default.
+    const stack = agencyStore.getStore()?.stack;
+    const defaults = (stack?.other.llmDefaults ?? {}) as { model?: string };
+    effective = defaults.model ?? "";
+  }
+  if (effective === "") {
+    return ["web_search"];
+  }
+  const family = getModel(effective as any)?.provider;
+  if (!family) {
+    return ["web_search"];
+  }
+  const entries = getHostedTools({ category: "web_search" });
+  for (const entry of entries) {
+    if (entry.provider === family || entry.provider.startsWith(family + "-")) {
+      return ["web_search"];
+    }
+  }
+  return [];
 }
 
 /** Tri-state modality probe backing `std::llm.modelSupportsInput`. Returns

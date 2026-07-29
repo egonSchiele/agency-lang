@@ -334,6 +334,10 @@ function assertFillerType(
  * Deliberately fails toward skipping: if this ever over-reports, some fills
  * go unchecked, which is the same weaker-but-safe position the feature
  * started from. Under-reporting would reject correct programs.
+ *
+ * The cost is that an imported type is never checked at fill. Closing that
+ * needs module resolution at fill time — the same capability the deferred
+ * fragment checking wants. Tracked as #719.
  */
 function hasUnresolvedName(
   type: VariableType,
@@ -342,14 +346,14 @@ function hasUnresolvedName(
 ): boolean {
   return visitTypes(type, (inner) => {
     // Alias names are user-controlled keys, so membership is Object.hasOwn.
-    const name =
-      inner.type === "typeAliasVariable"
-        ? inner.aliasName
-        : inner.type === "genericType"
-          ? inner.name
-          : null;
+    let name: string | null = null;
+    if (inner.type === "typeAliasVariable") {
+      name = inner.aliasName;
+    }
+    if (inner.type === "genericType" && !isBuiltinGenericName(inner.name)) {
+      name = inner.name;
+    }
     if (name === null) return false;
-    if (inner.type === "genericType" && isBuiltinGenericName(name)) return false;
     if (!Object.hasOwn(aliases, name)) return true;
     // Follow the alias into its body: `type Person = { pet: Animal }` is
     // only fully resolvable if `Animal` is too, however deep it sits. The

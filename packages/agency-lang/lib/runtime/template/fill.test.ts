@@ -763,3 +763,130 @@ describe("fill-time type checking: splices check one element at a time", () => {
     ).toThrow();
   });
 });
+
+describe("fill-time type checking: the error says what is wrong", () => {
+  const personTemplate = [
+    "type Person = {",
+    "  name: string;",
+    "  age: number",
+    "}",
+    "",
+    "node main(): string {",
+    "  const person: Person = #person",
+    '  return "ok"',
+    "}",
+    "",
+  ].join("\n");
+
+  it("names the missing property", () => {
+    expect(() => fillHoles(load(personTemplate), { person: { name: "Alice" } })).toThrow(
+      /missing the required property `age`/,
+    );
+  });
+
+  it("names the property whose type is wrong, and both types", () => {
+    // The full phrasing, not just /age/: the general message also happens
+    // to contain "age" when it prints the synthesized record, so a loose
+    // assertion would pass without the explainer existing at all.
+    expect(() =>
+      fillHoles(load(personTemplate), { person: { name: "Alice", age: "thirty" } }),
+    ).toThrow(/has `age` as `"thirty"` where `number` is expected/);
+  });
+
+  it("names a missing property nested one level down, with its path", () => {
+    const nested = [
+      "type Address = {",
+      "  city: string",
+      "}",
+      "type Person = {",
+      "  name: string;",
+      "  address: Address",
+      "}",
+      "",
+      "node main(): string {",
+      "  const p: Person = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(() =>
+      fillHoles(load(nested), { person: { name: "A", address: {} } }),
+    ).toThrow(/address\.city/);
+  });
+
+  it("blames the right property when another one is aliased", () => {
+    // The walk reaches `name` first. Comparing printed types would see
+    // `string` against `Name`, differ, and blame a property that is fine —
+    // while the real problem, the missing `age`, goes unnamed.
+    const aliasedProperty = [
+      "type Name = string",
+      "type Person = {",
+      "  name: Name;",
+      "  age: number",
+      "}",
+      "",
+      "node main(): string {",
+      "  const p: Person = #person",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    const run = () => fillHoles(load(aliasedProperty), { person: { name: "Alice" } });
+    expect(run).toThrow(/age/);
+    expect(run).not.toThrow(/`name`/);
+  });
+
+  it("falls back to the general message when it cannot localize", () => {
+    // A union mismatch has no single property to blame. Assert the general
+    // message's own tail — /expects/ alone would also match a confidently
+    // wrong specific message, which is the failure this test exists for.
+    const union = [
+      "node main(): string {",
+      "  const v: string | number = #v",
+      '  return "ok"',
+      "}",
+      "",
+    ].join("\n");
+    expect(() => fillHoles(load(union), { v: true })).toThrow(/supplies `boolean`/);
+  });
+
+  it("keeps the graft origin on a hole that arrived through a fill", () => {
+    // The origin suffix only appears for a hole that ARRIVED in grafted
+    // code, so this needs two fills. A primitive type on purpose: a named
+    // type would not resolve in the outer template and would be skipped,
+    // so nothing would throw to carry a suffix.
+    const outer = `node main(): string {\n  #body\n}\n`;
+    const inner = _parseStatements(`const p: string = #person\n`);
+    const grafted = fillHoles(load(outer), { body: inner });
+    expect(() => fillHoles(grafted, { person: 42 })).toThrow(
+      /in code grafted by the fill for `#body`/,
+    );
+  });
+
+  it("explains the array-annotated splice instead of just rejecting it", () => {
+    const arrayAnnotated = [
+      "type Person = {",
+      "  name: string;",
+      "  age: number",
+      "}",
+      "",
+      "node main() {",
+      "  f(#...people: Person[])",
+      "}",
+      "",
+    ].join("\n");
+    expect(() =>
+      fillHoles(load(arrayAnnotated), { people: [{ name: "A", age: 1 }] }),
+    ).toThrow(/describes one element/);
+  });
+
+  it("does not give that hint when the array annotation is correct", () => {
+    // `#...rows: number[]` splicing rows of numbers is a legitimate
+    // array-typed splice. A bad element must get the ordinary message, not
+    // advice to change an annotation that is right.
+    const rows = `node main() {\n  f(#...rows: number[])\n}\n`;
+    const run = () => fillHoles(load(rows), { rows: [[1, 2], "x"] });
+    expect(run).toThrow(/expects/);
+    expect(run).not.toThrow(/describes one element/);
+  });
+});

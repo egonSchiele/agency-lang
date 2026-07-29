@@ -18,6 +18,7 @@ import { visitTypes } from "../../typeChecker/typeWalker.js";
 import { isBuiltinGenericName } from "../../typeChecker/builtinGenerics.js";
 import { aliasTableFrom } from "./aliasTable.js";
 import { synthesizeType } from "./synthesizeType.js";
+import { explainMismatch } from "./explainMismatch.js";
 import { Code, isCode, kindOf } from "./code.js";
 import { kindFitsSort, stampOrigin } from "./origin.js";
 import { liftValue } from "./lift.js";
@@ -304,6 +305,15 @@ function assertFillerType(
     );
     throw new Error(
       `The splice \`#...${hole.name}\` describes one element, not the array — its type should be \`${element}\`, not \`${printedExpected}\`${originSuffix(hole.loc)}.`,
+    );
+  }
+
+  // Only after isAssignable has decided to reject. The explainer never
+  // participates in that decision — see explainMismatch's contract.
+  const detail = explainMismatch(value, expectedType, aliases);
+  if (detail !== null) {
+    throw new Error(
+      `The hole \`#${hole.name}\` expects \`${printedExpected}\`, but the fill ${detail}${originSuffix(hole.loc)}.`,
     );
   }
 

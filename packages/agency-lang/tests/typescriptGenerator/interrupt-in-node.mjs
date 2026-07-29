@@ -26,7 +26,7 @@ import {
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __validateChain, __validateChainRecursive, __typeTest, InterruptRejectedError, __coarseTypeTest,
+  Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
@@ -254,7 +254,7 @@ if (__response) {
     // rejected, halt
     
     
-    runner.halt(failure("interrupt rejected", { checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), interruptRejected: true }));
+    runner.halt(failure("interrupt rejected", { checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
     
     return;
   }
@@ -264,7 +264,7 @@ if (__response) {
   if (isRejected(__handlerResult)) {
     
     
-    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId), interruptRejected: true }));
+    runner.halt(failure(__handlerResult.value ?? "interrupt rejected", { checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
     
     return;
   }
@@ -308,17 +308,6 @@ return;
 // any abort to a Failure here would (a) hide a guard trip so the block appears
 // to succeed over budget, and (b) let a cancel limp onward / surface as a
 // logged ERROR the REPL can't recognize. See lib/runtime/errors.ts (§5).
-// A refused validator interrupt unwinding out of a compiled type test.
-// A human answering "no" is a decision, not a crash: return the refusal
-// failure it carries (marker included) with NO error log — it must not
-// read as runtimeError in statelog. The boundary stamp folds THIS frame's
-// destructive flag in, like every other failure leaving this function
-// (the flag is authoritative for retry gating). functionName stays the
-// refusal's own: the refusal predates this frame, and the marker — not
-// the name — is what consumers key on. See InterruptRejectedError.
-if (__error instanceof InterruptRejectedError) {
-  return stampFailureBoundary(__error.refusal, __self.__destructiveRan);
-}
 if (__error instanceof AgencyAbort) {
   // An abort stopped this function. It does not throw past its own frame:
   // it RETURNS an AbortedResult — a marker plus this frame's saved draft,
@@ -495,12 +484,6 @@ await callHook({
     if (__error instanceof RestoreSignal) {
       throw __error
     }
-    if (__error instanceof InterruptRejectedError) {
-      return {
-        messages: __threads(),
-        data: __error.refusal
-      };
-    }
     if (__error instanceof AgencyAbort) {
       throw __error
     }
@@ -603,12 +586,6 @@ await callHook({
   } catch (__error) {
     if (__error instanceof RestoreSignal) {
       throw __error
-    }
-    if (__error instanceof InterruptRejectedError) {
-      return {
-        messages: __threads(),
-        data: __error.refusal
-      };
     }
     if (__error instanceof AgencyAbort) {
       throw __error

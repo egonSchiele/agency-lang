@@ -1485,14 +1485,7 @@ export class TypeScriptBuilder {
     if (coarse !== null) {
       return ts.call(ts.id("__coarseTypeTest"), [value, ts.str(coarse)]);
     }
-    // `__typeTest` instead of a bare isSuccess: a failure the validator
-    // RETURNED is "no match", but a refused interrupt propagates — refusal
-    // must never become dispatch (validators-are-predicates spec). The
-    // helper is async, so the call itself is awaited (the chain call inside
-    // carries its own await already; awaiting a settled value is a no-op).
-    return ts.await(
-      ts.call(ts.id("__typeTest"), [this.validateExpr(node.typeHint, value)]),
-    );
+    return ts.call(ts.id("isSuccess"), [this.validateExpr(node.typeHint, value)]);
   }
 
   /**
@@ -3206,23 +3199,6 @@ export class TypeScriptBuilder {
           ts.if(
             ts.raw("__error instanceof RestoreSignal"),
             ts.statements([ts.throw("__error")]),
-          ),
-          // A refused validator interrupt unwinding out of a compiled type
-          // test written directly in this node's body. A decision, not a
-          // crash: no error log, no statelog runtimeError, and the refusal
-          // itself (marker and checkpoint intact) is the node's result.
-          // Mirrors the functionCatchFailure template clause; nodes carry no
-          // destructive flag of their own, so there is nothing to stamp here.
-          ts.if(
-            ts.raw("__error instanceof InterruptRejectedError"),
-            ts.statements([
-              ts.return(
-                ts.obj({
-                  messages: ts.runtime.threads,
-                  data: ts.raw("__error.refusal"),
-                }),
-              ),
-            ]),
           ),
           // All aborts — cancellations (Esc / abort) AND guard trips — are a
           // single AgencyAbort carrying an AbortCause and must propagate

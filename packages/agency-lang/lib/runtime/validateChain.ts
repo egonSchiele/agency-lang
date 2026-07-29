@@ -2,7 +2,6 @@ import { z } from "zod";
 import { success, failure, isFailure, isSuccess } from "./result.js";
 import type { ResultValue } from "./result.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { InterruptRejectedError } from "./errors.js";
 
 /**
  * Async validator used by `@validate(...)` chains. May be:
@@ -20,26 +19,6 @@ import { InterruptRejectedError } from "./errors.js";
 export type AgencyValidator =
   | ((value: unknown) => Promise<ResultValue> | ResultValue)
   | AgencyFunction;
-
-/** Boolean type test for compiled type patterns and `is Type`. A failure the
- *  validator RETURNED means "no match"; a refused interrupt must not become
- *  dispatch — a human answering "no" is not "the type did not match". */
-export async function __typeTest(
-  result: ResultValue | Promise<ResultValue>,
-): Promise<boolean> {
-  const outcome = await result;
-  if (isRefusedInterrupt(outcome)) {
-    throw new InterruptRejectedError(outcome);
-  }
-  return isSuccess(outcome);
-}
-
-/** The `interruptRejected` marker is stamped only by the reject halts in the
- *  interrupt codegen templates — never key on the message string, which a
- *  handler can replace. */
-function isRefusedInterrupt(outcome: ResultValue): boolean {
-  return isFailure(outcome) && outcome.interruptRejected === true;
-}
 
 async function callValidator(
   v: AgencyValidator,

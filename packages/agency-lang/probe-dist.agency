@@ -1,0 +1,50 @@
+effect app::confirm { q: string }
+
+def askRaise(value: number): Result<number> {
+  interrupt app::confirm("check this value", { q: "${value}" })
+  return success(value)
+}
+
+def askReturn(value: number): Result<number> {
+  return interrupt app::confirm("check this value", { q: "${value}" })
+}
+
+def plainFail(value: number): Result<number> {
+  return failure("no")
+}
+
+@validate(askRaise)
+type CheckedRaise = number
+
+@validate(askReturn)
+type CheckedReturn = number
+
+@validate(plainFail)
+type PlainFailT = number
+
+def viaRaise(x: any): string {
+  return match(x) {
+    a: CheckedRaise => "raise-match"
+    _ => "raise-other"
+  }
+}
+
+def viaReturn(x: any): string {
+  return match(x) {
+    a: CheckedReturn => "return-match"
+    _ => "return-other"
+  }
+}
+
+def viaPlain(x: any): string {
+  return match(x) {
+    a: PlainFailT => "plain-match"
+    _ => "plain-other"
+  }
+}
+
+node main() {
+  print(viaRaise(1))
+  print(viaReturn(2))
+  print(viaPlain(3))
+}

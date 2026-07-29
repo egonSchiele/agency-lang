@@ -145,27 +145,6 @@ export function readCause(source: unknown): AbortCause | undefined {
  * `guardTrip`, everything else unwinds. `RestoreSignal` stays separate (it is
  * not an abort). See docs/superpowers/specs/2026-06-21-abort-taxonomy-design.md §5.
  */
-/**
- * A refused validator interrupt unwinding out of a boolean type test
- * (`match` arm type patterns, `is Type`). The validator call inside a
- * compiled type test is codegen-synthesized, so it has no `hasInterrupts`
- * call site — this throw is the only channel that crosses it. The generated
- * function catch (functionCatchFailure template) unwraps it back into the
- * refusal failure it carries, with NO error log: a human answering "no" is
- * a decision, not a crash, and must not read as runtimeError in statelog.
- */
-export class InterruptRejectedError extends Error {
-  /** The refusal failure exactly as the reject halt built it (carries the
-   *  `interruptRejected` marker). */
-  readonly refusal: unknown;
-
-  constructor(refusal: unknown) {
-    super("interrupt rejected");
-    this.name = "InterruptRejectedError";
-    this.refusal = refusal;
-  }
-}
-
 export class AgencyAbort extends Error {
   /** Structured intent for this abort. */
   readonly agencyCause: AbortCause;

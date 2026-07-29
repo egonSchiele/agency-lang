@@ -111,7 +111,6 @@ export {
   CheckpointError,
   RestoreSignal,
   AgencyAbort,
-  InterruptRejectedError,
   AgencyCancelledError,
   CallDepthExceededError,
   isAbortError,
@@ -161,7 +160,6 @@ export { __nn } from "./nn.js";
 export {
   __validateChain,
   __validateChainRecursive,
-  __typeTest,
 } from "./validateChain.js";
 export type {
   AgencyValidator,

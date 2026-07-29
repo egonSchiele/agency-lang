@@ -68,10 +68,9 @@ const person: Person! = { name: "Alice", age: 38 }
 // person is now success({ name: "Alice", age: 38 })
 ```
 
-Two more things worth knowing about how validation routes values:
+One more thing worth knowing about how validation routes values:
 
 - Bang validation returns the *parsed* value — object types drop keys not in the type. Pattern matching (`a: Age` in a match arm) tests the parsed value but binds the original. Validators themselves never change values; a validator that returns a different value is a runtime error.
-- A validator may raise an interrupt (to ask a human a question, say). In a boolean type-test position — a match arm's type pattern, or `is Age` — a **refused** interrupt propagates as a failure to the enclosing function instead of quietly counting as "the type did not match." Through bang, the refusal is the failure `Result` you already inspect.
 
 ## Creating a reusable type with validation
 

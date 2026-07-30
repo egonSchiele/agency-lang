@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { EvalCache } from "./evalCache.js";
-import type { AgentRun } from "./grading/types.js";
+import type { AgentRun } from "@/eval/grading/types.js";
 
 describe("EvalCache", () => {
   it("computes each (workspace,input) once and reuses the result", async () => {

@@ -5,7 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { AgencyConfig } from "@/config.js";
-import { BaseGrader } from "./grading/baseGrader.js";
+import { BaseGrader } from "./baseGrader.js";
 import { loadGradingModule } from "./gradingModule.js";
 
 const cfg: AgencyConfig = {};

@@ -1,11 +1,11 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
 import { CandidatePool, type PoolCandidate } from "../candidatePool.js";
-import { breakdown } from "../gradeBreakdown.js";
+import { breakdown } from "@/eval/grading/gradeBreakdown.js";
 import { renderReflectionFeedback } from "../reflectionFeedback.js";
 import { proposeReflective, type ReflectionSections } from "../gepaReflect.js";
-import type { AgencyRunner } from "../grading/agencyRunner.js";
-import { inputObjective, type InputGrades, type Scorecard } from "../grading/scorecard.js";
-import type { Input } from "../grading/types.js";
+import type { AgencyRunner } from "@/eval/grading/agencyRunner.js";
+import { inputObjective, type InputGrades, type Scorecard } from "@/eval/grading/scorecard.js";
+import type { Input } from "@/eval/grading/types.js";
 import { renderTargetsSection } from "../mutator.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import { formatDiagnostics } from "../reporter.js";

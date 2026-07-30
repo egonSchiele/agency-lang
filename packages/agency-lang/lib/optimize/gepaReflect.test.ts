@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AgencyRunner } from "./grading/agencyRunner.js";
+import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
 import { proposeReflective } from "./gepaReflect.js";
 
 describe("proposeReflective", () => {

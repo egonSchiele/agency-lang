@@ -1,17 +1,17 @@
 // The public surface users import in a custom grading module:
 //   import { grader, ExactMatch, LlmJudge, type Grader } from "agency-lang/optimize";
-export { grader, FunctionGrader, toGrader } from "./grading/functionGrader.js";
-export type { Grader, GraderFn, GraderContext } from "./grading/functionGrader.js";
-export { scalar, binary } from "./grading/grade.js";
-export { BaseGrader } from "./grading/baseGrader.js";
+export { grader, FunctionGrader, toGrader } from "@/eval/grading/functionGrader.js";
+export type { Grader, GraderFn, GraderContext } from "@/eval/grading/functionGrader.js";
+export { scalar, binary } from "@/eval/grading/grade.js";
+export { BaseGrader } from "@/eval/grading/baseGrader.js";
 export {
   ExactMatchGrader as ExactMatch,
   ContainsGrader as Contains,
   SimilarityGrader as Similarity,
-} from "./grading/graders/builtinGraders.js";
-export { LlmJudge } from "./grading/graders/llmJudge.js";
-export { goalJudgeFile } from "./goalJudgeFile.js";   // for users who want a custom judge but the bundled prompt
-export type { Grade, GraderOptions, Input, JSON, JSONPath, Score } from "./grading/types.js";
+} from "@/eval/grading/graders/builtinGraders.js";
+export { LlmJudge } from "@/eval/grading/graders/llmJudge.js";
+export { goalJudgeFile } from "@/eval/grading/goalJudgeFile.js";   // for users who want a custom judge but the bundled prompt
+export type { Grade, GraderOptions, Input, JSON, JSONPath, Score } from "@/eval/grading/types.js";
 
 // The surface users import in a custom optimizer module:
 //   import { BaseOptimizer, type BaseOptimizerConfig } from "agency-lang/optimize";
@@ -21,13 +21,13 @@ export type { Optimizer, OptimizerFactory, BaseOptimizerConfig, OptimizeTarget }
 export type { OptimizeResult, MutationProposal } from "./types.js";
 export { fileMap } from "./targets.js";
 export type { OptimizeTargetSet, OptimizeTarget as OptimizeTargetDecl } from "./targets.js";
-export { Scorecard, inputObjective } from "./grading/scorecard.js";
-export type { GraderGrade, InputGrades } from "./grading/scorecard.js";
+export { Scorecard, inputObjective } from "@/eval/grading/scorecard.js";
+export type { GraderGrade, InputGrades } from "@/eval/grading/scorecard.js";
 export { proposeMutation } from "./mutator.js";
 export type { ProposeMutationArgs } from "./mutator.js";
 export { defaultPreview } from "./sourceMutator.js";
 export type { OptimizeMutationOperation, OptimizeMutationPreview, OptimizeMutationDiagnostic, OptimizeAppliedChange } from "./sourceMutator.js";
 export { renderReflectionFeedback, renderInputFeedback } from "./reflectionFeedback.js";
 export { splitInputs } from "./validationSplit.js";
-export { breakdown } from "./gradeBreakdown.js";
-export type { InputBreakdown, GradeRow } from "./gradeBreakdown.js";
+export { breakdown } from "@/eval/grading/gradeBreakdown.js";
+export type { InputBreakdown, GradeRow } from "@/eval/grading/gradeBreakdown.js";

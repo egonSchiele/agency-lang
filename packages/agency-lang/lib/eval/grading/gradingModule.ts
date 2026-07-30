@@ -5,8 +5,8 @@ import { pathToFileURL } from "url";
 import { build } from "esbuild";
 
 import type { AgencyConfig } from "@/config.js";
-import type { BaseGrader } from "./grading/baseGrader.js";
-import { toGrader, type Grader } from "./grading/functionGrader.js";
+import type { BaseGrader } from "./baseGrader.js";
+import { toGrader, type Grader } from "./functionGrader.js";
 
 let counter = 0;
 

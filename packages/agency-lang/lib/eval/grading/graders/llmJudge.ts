@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { asJudgeText, goalJudgeFile, ScalarVerdict } from "../../goalJudgeFile.js";
+import { asJudgeText, goalJudgeFile, ScalarVerdict } from "../goalJudgeFile.js";
 import { BaseGrader } from "../baseGrader.js";
 import { getPath } from "../getPath.js";
 import type { Grade, GraderInput, GraderOptions, JSONPath } from "../types.js";

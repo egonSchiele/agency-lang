@@ -5,8 +5,8 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { RunInput } from "../baseOptimizer.js";
-import { BaseGrader } from "../grading/baseGrader.js";
-import type { Grade, GraderInput } from "../grading/types.js";
+import { BaseGrader } from "@/eval/grading/baseGrader.js";
+import type { Grade, GraderInput } from "@/eval/grading/types.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import type { OptimizeMutationPreview } from "../sourceMutator.js";
 import type { OptimizeTargetSet } from "../targets.js";

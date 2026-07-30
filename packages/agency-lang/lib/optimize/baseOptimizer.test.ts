@@ -4,9 +4,9 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BaseGrader } from "./grading/baseGrader.js";
-import type { Grade, GraderInput, GraderOptions, Input } from "./grading/types.js";
-import type { Scorecard } from "./grading/scorecard.js";
+import { BaseGrader } from "@/eval/grading/baseGrader.js";
+import type { Grade, GraderInput, GraderOptions, Input } from "@/eval/grading/types.js";
+import type { Scorecard } from "@/eval/grading/scorecard.js";
 import { BaseOptimizer, gradedOutput, type MutationOutcome, type RunInput } from "./baseOptimizer.js";
 import type { OptimizeTarget } from "./optimizer.js";
 import type { OptimizeMutationDiagnostic, OptimizeMutationOperation, OptimizeMutationPreview } from "./sourceMutator.js";

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { BaseGrader } from "./baseGrader.js";
-import { asJudgeText, goalJudgeFile, ScalarVerdict } from "../goalJudgeFile.js";
+import { asJudgeText, goalJudgeFile, ScalarVerdict } from "./goalJudgeFile.js";
 import type { Grade, GraderInput, GraderOptions, Input, JSON } from "./types.js";
 
 /** What a metric function receives. `input` is the typed Input; the gold answer is

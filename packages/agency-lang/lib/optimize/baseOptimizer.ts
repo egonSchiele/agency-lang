@@ -4,11 +4,11 @@ import * as path from "path";
 import { evalRunLoadedInputs, optimizeEvalRecordExtractor, resolveEvalRunTarget } from "@/cli/eval/run.js";
 
 import { EvalCache } from "./evalCache.js";
-import { breakdown } from "./gradeBreakdown.js";
-import { AgencyRunner } from "./grading/agencyRunner.js";
-import type { BaseGrader } from "./grading/baseGrader.js";
-import { Scorecard, type GraderGrade, type InputGrades } from "./grading/scorecard.js";
-import type { AgentRun, Input } from "./grading/types.js";
+import { breakdown } from "@/eval/grading/gradeBreakdown.js";
+import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
+import type { BaseGrader } from "@/eval/grading/baseGrader.js";
+import { Scorecard, type GraderGrade, type InputGrades } from "@/eval/grading/scorecard.js";
+import type { AgentRun, Input } from "@/eval/grading/types.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
 import { createPointwiseReporter, type PointwiseReporter } from "./reporter.js";
 import type { OptimizeMutationDiagnostic, OptimizeMutationOperation, OptimizeMutationPreview } from "./sourceMutator.js";

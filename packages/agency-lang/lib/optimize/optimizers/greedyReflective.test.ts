@@ -4,9 +4,9 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BaseGrader } from "../grading/baseGrader.js";
-import { Scorecard } from "../grading/scorecard.js";
-import type { Grade, GraderInput, GraderOptions } from "../grading/types.js";
+import { BaseGrader } from "@/eval/grading/baseGrader.js";
+import { Scorecard } from "@/eval/grading/scorecard.js";
+import type { Grade, GraderInput, GraderOptions } from "@/eval/grading/types.js";
 import { GreedyReflective, type GreedyDeps } from "./greedyReflective.js";
 import type { ProposeMutationArgs } from "../mutator.js";
 import { defaultPreview, type OptimizeMutationPreview } from "../sourceMutator.js";

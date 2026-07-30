@@ -1,6 +1,6 @@
 import * as readline from "readline/promises";
 
-import { asJudgeText } from "../../goalJudgeFile.js";
+import { asJudgeText } from "../goalJudgeFile.js";
 import { BaseGrader } from "../baseGrader.js";
 import type { Grade, GraderInput, GraderOptions } from "../types.js";
 

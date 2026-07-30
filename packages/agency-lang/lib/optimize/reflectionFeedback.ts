@@ -2,8 +2,8 @@ import * as fs from "fs";
 
 import type { EvalRecord, NormalizedEvent } from "@/eval/types.js";
 
-import { inputObjective, type InputGrades } from "./grading/scorecard.js";
-import type { Score } from "./grading/types.js";
+import { inputObjective, type InputGrades } from "@/eval/grading/scorecard.js";
+import type { Score } from "@/eval/grading/types.js";
 
 export type ReflectionRenderOptions = { maxChars?: number };
 

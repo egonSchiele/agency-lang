@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Scorecard } from "./grading/scorecard.js";
-import { BaseGrader } from "./grading/baseGrader.js";
-import type { Grade, GraderInput } from "./grading/types.js";
+import { Scorecard } from "./scorecard.js";
+import { BaseGrader } from "./baseGrader.js";
+import type { Grade, GraderInput } from "./types.js";
 import { breakdown } from "./gradeBreakdown.js";
 
 class Fixed extends BaseGrader {

@@ -5,7 +5,7 @@ import * as path from "path";
 import { describe, expect, it } from "vitest";
 
 import { renderInputFeedback, renderReflectionFeedback } from "./reflectionFeedback.js";
-import type { InputGrades } from "./grading/scorecard.js";
+import type { InputGrades } from "@/eval/grading/scorecard.js";
 
 function writeRecord(record: unknown): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gepa-fb-"));

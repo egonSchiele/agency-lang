@@ -1,4 +1,4 @@
-import type { AgentRun } from "./grading/types.js";
+import type { AgentRun } from "@/eval/grading/types.js";
 
 /**
  * Memoizes one AgentRun per (workspaceKey, inputId). A nested store avoids any

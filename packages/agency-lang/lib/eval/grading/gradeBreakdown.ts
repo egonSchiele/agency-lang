@@ -1,4 +1,4 @@
-import type { GraderGrade, Scorecard } from "./grading/scorecard.js";
+import type { GraderGrade, Scorecard } from "./scorecard.js";
 
 export type GradeRow =
   | { grader: string; kind: "scalar"; value: number; feedback?: string }

@@ -1,7 +1,7 @@
 import type { AgencyConfig } from "@/config.js";
 
-import type { BaseGrader } from "./grading/baseGrader.js";
-import type { Input } from "./grading/types.js";
+import type { BaseGrader } from "@/eval/grading/baseGrader.js";
+import type { Input } from "@/eval/grading/types.js";
 import type { OptimizeResult } from "./types.js";
 
 /** What to optimize: an agent (file[:node]) and the inputs to run it on,

@@ -4,7 +4,10 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { nanoid } from "nanoid";
+
 import { loadInputs, loadInputsFromFile, inputFromGoal } from "./loadInputs.js";
+import { makeRepo } from "./testUtils.js";
 
 describe("eval run input loading", () => {
   let tmpDir: string;
@@ -95,5 +98,168 @@ describe("eval run input loading", () => {
       goal: "do it",
       args: {},
     });
+  });
+});
+
+describe("files field", () => {
+  it("resolves files relative to the inputs file and requires a directory", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    fs.mkdirSync(path.join(suiteDir, "fixtures", "report"), { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, "fixtures", "report", "q3.txt"), "data");
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {}, files: "./fixtures/report" }],
+    }));
+
+    const [input] = loadInputs(inputsFile);
+
+    expect(input.files).toBe(fs.realpathSync(path.join(suiteDir, "fixtures", "report")));
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("rejects a files value that is not a directory", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    fs.writeFileSync(path.join(suiteDir, "not-a-dir.txt"), "x");
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {}, files: "./not-a-dir.txt" }],
+    }));
+
+    expect(() => loadInputs(inputsFile)).toThrow(/files must name a directory/i);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("rejects files combined with working_dir", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    fs.mkdirSync(path.join(suiteDir, "fixture-dir"));
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {}, files: "./fixture-dir", working_dir: "./fixture-dir" }],
+    }));
+
+    expect(() => loadInputs(inputsFile)).toThrow(/files.*working_dir/i);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+});
+
+describe("test directories (heavy form)", () => {
+  function makeSuite(): string {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "suite-"));
+    fs.mkdirSync(path.join(suiteDir, "capital-france"));
+    fs.writeFileSync(path.join(suiteDir, "capital-france", "test.json"),
+      JSON.stringify({ goal: "Return the capital of France", args: {}, expected: "Paris" }));
+    fs.mkdirSync(path.join(suiteDir, "summarize", "files", "data"), { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, "summarize", "test.json"),
+      JSON.stringify({ goal: "Summarize the report", args: {} }));
+    fs.writeFileSync(path.join(suiteDir, "summarize", "files", "data", "report.txt"), "q3");
+    return suiteDir;
+  }
+
+  it("loads a directory of test directories, defaulting id and files", () => {
+    const suiteDir = makeSuite();
+    const inputs = loadInputs(suiteDir);
+
+    const byId = Object.fromEntries(inputs.map((input) => [input.id, input]));
+    expect(Object.keys(byId).sort()).toEqual(["capital-france", "summarize"]);
+    expect(byId["capital-france"].files).toBeUndefined();
+    expect(byId["summarize"].files).toBe(fs.realpathSync(path.join(suiteDir, "summarize", "files")));
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("an explicit id in test.json beats the directory name", () => {
+    const suiteDir = makeSuite();
+    fs.writeFileSync(path.join(suiteDir, "capital-france", "test.json"),
+      JSON.stringify({ id: "france", goal: "g", args: {} }));
+    const inputs = loadInputs(suiteDir);
+    expect(inputs.map((input) => input.id).sort()).toEqual(["france", "summarize"]);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("a lone inputs.json with a top-level inputs array loads as the file form", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "suite-"));
+    fs.writeFileSync(path.join(suiteDir, "inputs.json"), JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {} }, { id: "b", goal: "g", args: {} }],
+    }));
+    const inputs = loadInputs(suiteDir);
+    expect(inputs.map((input) => input.id)).toEqual(["a", "b"]);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("errors when a directory mixes loose input files with test directories", () => {
+    const suiteDir = makeSuite();
+    fs.writeFileSync(path.join(suiteDir, "loose-input.json"), JSON.stringify({ id: "x", goal: "g", args: {} }));
+
+    expect(() => loadInputs(suiteDir)).toThrow(/mixes.*loose-input\.json.*capital-france/s);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("errors when a wrapper inputs file sits beside other json files", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "suite-"));
+    fs.writeFileSync(path.join(suiteDir, "inputs.json"), JSON.stringify({ inputs: [{ id: "a", goal: "g", args: {} }] }));
+    fs.writeFileSync(path.join(suiteDir, "b.json"), JSON.stringify({ id: "b", goal: "g", args: {} }));
+
+    expect(() => loadInputs(suiteDir)).toThrow(/inputs\.json.*b\.json/s);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("subdirectories without test.json are ignored (fixture dirs can sit beside loose inputs)", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "suite-"));
+    fs.writeFileSync(path.join(suiteDir, "a.json"), JSON.stringify({ id: "a", goal: "g", args: {} }));
+    fs.mkdirSync(path.join(suiteDir, "shared-fixtures"));
+    const inputs = loadInputs(suiteDir);
+    expect(inputs.map((input) => input.id)).toEqual(["a"]);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+});
+
+describe("git sources for files", () => {
+  it("resolves a files git source and records provenance", () => {
+    const { repo, first } = makeRepo();
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    const filesSource = `${repo}//tests?ref=${first}`;
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {}, files: filesSource }],
+    }));
+
+    const provenance: Record<string, { source: string; sha?: string }> = {};
+    const [input] = loadInputs(inputsFile, nanoid, {
+      filesProvenance: provenance,
+      sourceCacheRoot: path.join(suiteDir, "cache"),
+    });
+
+    expect(fs.readFileSync(path.join(input.files!, "a.txt"), "utf8")).toBe("v1");
+    expect(provenance["a"]).toEqual({ source: filesSource, sha: first });
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+    fs.rmSync(repo, { recursive: true, force: true });
+  });
+
+  it("records provenance even for an input id of __proto__ (null-prototype accumulator)", () => {
+    const { repo, first } = makeRepo();
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "__proto__", goal: "g", args: {}, files: `${repo}//tests?ref=${first}` }],
+    }));
+
+    const provenance: Record<string, { source: string; sha?: string }> = Object.create(null);
+    loadInputs(inputsFile, nanoid, { filesProvenance: provenance, sourceCacheRoot: path.join(suiteDir, "cache") });
+
+    expect(Object.hasOwn(provenance, "__proto__")).toBe(true);
+    expect(JSON.parse(JSON.stringify(provenance))["__proto__"].sha).toBe(first);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+    fs.rmSync(repo, { recursive: true, force: true });
+  });
+
+  it("forbids git files sources when the suite itself came from git (one-level rule)", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {}, files: "git@github.com:x/y.git" }],
+    }));
+
+    expect(() => loadInputs(inputsFile, nanoid, { forbidGitFiles: true }))
+      .toThrow(/one level|vendor/i);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
   });
 });

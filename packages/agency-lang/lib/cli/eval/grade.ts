@@ -5,6 +5,7 @@ import type { AgencyConfig } from "@/config.js";
 import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
 import { breakdown } from "@/eval/grading/gradeBreakdown.js";
 import { gradeRun } from "@/eval/grading/gradeRun.js";
+import { writeVerifierGrading } from "@/eval/runArtifacts.js";
 import type { EvalRunGrading } from "@/eval/runTypes.js";
 
 import { resolveGraders } from "./run.js";
@@ -58,9 +59,10 @@ export async function evalGrade(
     perInput: breakdown(scorecard),
   };
 
-  fs.writeFileSync(
-    opts.out ?? path.join(resolvedRunDir, "grading.json"),
-    JSON.stringify(grading, null, 2),
-  );
+  if (opts.out !== undefined) {
+    fs.writeFileSync(opts.out, JSON.stringify(grading, null, 2));
+  } else {
+    writeVerifierGrading(resolvedRunDir, grading);
+  }
   return grading;
 }

@@ -282,21 +282,33 @@ export function agencyImportTargets(
   program: AgencyProgram,
   options: AgencyImportTargetsOptions = {},
 ): string[] {
-  const imports: string[] = [];
-  for (const node of program.nodes) {
-    let modulePath: string | null = null;
-    if (node.type === "importStatement") {
-      modulePath = node.modulePath;
-    } else if (node.type === "importNodeStatement") {
-      modulePath = node.agencyFile;
-    } else if (node.type === "exportFromStatement") {
-      modulePath = node.modulePath;
-    }
-    if (!modulePath || !isAgencyImport(modulePath)) continue;
-    if (options.localOnly && !isLocalImportTarget(modulePath)) continue;
-    imports.push(modulePath);
+  return program.nodes
+    .map(importedModulePath)
+    .filter((modulePath): modulePath is string => modulePath !== null && isAgencyImport(modulePath))
+    .filter((modulePath) => !options.localOnly || isLocalImportTarget(modulePath));
+}
+
+/** The module path an import-like node names, or null for everything else. */
+function importedModulePath(node: AgencyProgram["nodes"][number]): string | null {
+  if (node.type === "importStatement") {
+    return node.modulePath;
   }
-  return imports;
+  if (node.type === "importNodeStatement") {
+    return node.agencyFile;
+  }
+  if (node.type === "exportFromStatement") {
+    return node.modulePath;
+  }
+  return null;
+}
+
+/** Relative import specifiers that are NOT agency imports — the local
+ *  TypeScript/JavaScript interop files an .agency module depends on. */
+export function nonAgencyLocalImportTargets(program: AgencyProgram): string[] {
+  return program.nodes
+    .map(importedModulePath)
+    .filter((modulePath): modulePath is string =>
+      modulePath !== null && isLocalImportTarget(modulePath) && !isAgencyImport(modulePath));
 }
 
 function isLocalImportTarget(modulePath: string): boolean {

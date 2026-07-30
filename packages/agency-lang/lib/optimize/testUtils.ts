@@ -13,9 +13,11 @@ export function fakeRun(inputId: string, output: unknown, dir?: string): EvalRun
   const root = dir ?? fs.mkdtempSync(path.join(os.tmpdir(), "optimize-run-"));
   const inputDir = path.join(root, inputId);
   const workdir = path.join(inputDir, "workdir");
+  const agentDir = path.join(inputDir, "agent");
   fs.mkdirSync(workdir, { recursive: true });
+  fs.mkdirSync(agentDir, { recursive: true });
 
-  const recordPath = path.join(inputDir, "eval-record.json");
+  const recordPath = path.join(agentDir, "eval-record.json");
   fs.writeFileSync(recordPath, JSON.stringify({
     traceId: "t",
     recordVersion: 2,
@@ -40,7 +42,7 @@ export function fakeRun(inputId: string, output: unknown, dir?: string): EvalRun
     inputId,
     status: "success",
     evalRecordPath: recordPath,
-    statelogPath: path.join(inputDir, "statelog.jsonl"),
+    statelogPath: path.join(agentDir, "statelog.jsonl"),
     workdirPath: workdir,
   };
 }

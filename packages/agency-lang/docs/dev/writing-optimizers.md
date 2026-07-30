@@ -65,7 +65,7 @@ These are the building blocks every optimizer composes (`this.` on `BaseOptimize
 | Helper | What it does |
 | --- | --- |
 | `scoreFiles(source, files, inputs)` | The one you want most of the time. Allocates a fresh cache partition and grades `files` on `inputs` → `Scorecard`. |
-| `fork()` | Mint a fresh `Workspace` — a cache-partition token (`{ key }`), nothing on disk. Use it when you want to grade the *same* candidate against several input sets and share cached runs between them (GEPA does this: minibatch first, then the full set). |
+| `fork()` | Mint a fresh `CachePartition` — a cache-partition token (`{ key }`), nothing on disk. Use it when you want to grade the *same* candidate against several input sets and share cached runs between them (GEPA does this: minibatch first, then the full set). |
 | `evaluate(ws, source, files, inputs)` | Grade `files` on `inputs` inside an existing workspace `ws`. Runs are cached by `(ws.key, inputId)`, so re-evaluating a candidate you already scored on an input is free. |
 | `proposeValidMutation(propose, preview, maxAttempts?)` | Ask for a mutation and validate it, with bounded retries (3 by default). Never throws on a malformed LLM response and feeds validation diagnostics back into the next attempt. Returns `{ ok: true, preview, rationale }` or `{ ok: false, rationale, diagnostics }`. |
 | `finishPointwise(source, candidates, trainChampion, attempts, startedAt)` | The shared tail. Picks the writeback champion (by validation when configured), writes it back if `config.writeback`, assembles the `OptimizeResult` with train/baseline/validation objectives and the champion breakdown, and fires `runFinished`. |
@@ -80,7 +80,7 @@ These are the building blocks every optimizer composes (`this.` on `BaseOptimize
 | `validationInputs` | Held-out inputs (empty if none). See [Validation](#validation). |
 | `workspace.writeBack(source, files)` | Write a file set back to the real sources, sha-checked. `finishPointwise` already does this — only call it directly if you are not using `finishPointwise`. |
 
-`Workspace` is **not** a directory. It used to be; it is now just `{ key: string }`, a cache-partition token. The real isolation happens per input: `evaluate` hands your `files` map to the eval runner, which copies the project tree into `runs/<runId>/…/workdir/`, overlays those files, compiles, and runs there. You never write to disk yourself.
+`CachePartition` (formerly `Workspace`) is **not** a directory: just `{ key: string }`, a cache-partition token. The real isolation happens per input: `evaluate` hands your `files` map to the eval runner, which copies the project tree into `runs/<runId>/…/workdir/`, overlays those files, compiles, and runs there. You never write to disk yourself.
 
 ## The shape: score → propose → score → compare → finish
 
@@ -242,7 +242,7 @@ Config that only your optimizer needs rides on `BaseOptimizerConfig` and gets ca
 | Seam | Replaces |
 | --- | --- |
 | `discover` | Target discovery — return a fixed `OptimizeTargetSet` instead of parsing a file. |
-| `runInput` | Running the agent — return an `EvalRunInputResult` pointing at an eval record on disk. Grading reads that record, so the file must exist; `fakeRun` in `lib/optimize/testUtils.ts` builds one. |
+| `runInput` | Running the agent — return an `EvalRunInputResult` pointing at an eval record on disk. Grading reads that record, so the file must exist; `fakeRun` in `lib/optimize/testUtils.ts` builds one, under the run layout's `agent/` directory. |
 | `reporter` | Progress output — capture emitted events. |
 | `agencyRunner` | Running judge/proposer `.agency` files. |
 | `cache` | The per-`(workspace, input)` run cache. |

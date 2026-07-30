@@ -3,7 +3,7 @@ import * as path from "path";
 
 import type { AgencyConfig } from "@/config.js";
 
-import { prepareRunDir, type RunWorkdirSpec } from "./runWorkdir.js";
+import { Workspace, type RunSeed } from "./workspace.js";
 import {
   prepareInput,
   recordInputPrepareFailure,
@@ -62,8 +62,8 @@ export type EvalRecordExtractor = (args: {
 export async function runEvalInput(args: {
   state: EvalRunState;
   input: Input;
-  /** The workdir spec for this input: seed dir + agent path within it. */
-  seed: { dir: string; agentRelPath: string };
+  /** The workdir seed for this input: agent closure + optional test files. */
+  seed: RunSeed;
   /** Optional candidate-file overlay applied on top of the seed before compile. */
   overlayFiles?: Record<string, string>;
   config: AgencyConfig;
@@ -81,29 +81,27 @@ export async function runEvalInput(args: {
     return recordInputPrepareFailure(inputId, message);
   }
 
-  let dir: ReturnType<typeof prepareRunDir>;
+  let workspace: Workspace;
   try {
-    const spec: RunWorkdirSpec = {
-      seedDir: args.seed.dir,
-      agentRelPath: args.seed.agentRelPath,
+    workspace = Workspace.create({
+      workdirPath: prepared.workdirPath,
+      seed: args.seed,
       overlayFiles: args.overlayFiles,
-    };
-    dir = prepareRunDir(spec, prepared.workdirPath, args.config);
+      config: args.config,
+    });
   } catch (err) {
     const message = errMessage(err);
-    console.error(`[evalRun] prepareRunDir failed for input ${inputId}: ${message}`);
+    console.error(`[evalRun] workspace seeding failed for input ${inputId}: ${message}`);
     return recordInputRunFailure(prepared, message);
   }
 
-  const runResult = await args.runner({
-    compiledEntryPath: dir.compiledEntryPath,
+  const runResult = await workspace.run(args.runner, {
     node: args.input.node ?? args.defaultNode,
     args: args.input.args,
-    cwd: prepared.workdirPath,
     statelogPath: prepared.statelogPath,
   });
   if (!runResult.ok) {
-    return recordInputRunFailure(prepared, runResult.errorMessage);
+    return recordInputRunFailure(prepared, withSeedListing(runResult.errorMessage, workspace.seededFiles));
   }
 
   const statelogPath = runResult.statelogPath ?? prepared.statelogPath;
@@ -136,4 +134,17 @@ function ensureStatelogAtExpectedPath(prepared: PreparedInput, statelogPath: str
 
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+const MAX_LISTED_SEEDED_FILES = 50;
+
+/** Append what the workdir contained, so "the agent read a file nobody
+ *  seeded" is diagnosable from error.txt alone — and the fix differs by
+ *  what kind of file is missing. */
+function withSeedListing(errorMessage: string, seededFiles: string[]): string {
+  const listed = seededFiles.slice(0, MAX_LISTED_SEEDED_FILES).join(", ");
+  const truncated = seededFiles.length > MAX_LISTED_SEEDED_FILES ? ", …" : "";
+  return `${errorMessage}\n\nWorkdir was seeded with ${seededFiles.length} file(s): ${listed}${truncated}\n` +
+    `If a data file the test needs is missing, add it to the input's "files". ` +
+    `If a file the AGENT imports is missing, the closure scan missed it — that is a bug worth reporting.`;
 }

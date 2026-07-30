@@ -1,7 +1,8 @@
 import { declaredName } from "../types/hole.js";
-import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { walkAgencyClosure, closureBaseDir, type ParsedSourceFile } from "@/analysis/closure.js";
+import { sha256Text } from "@/utils/hash.js";
 import { GLOBAL_SCOPE_KEY, buildCompilationUnit } from "@/compilationUnit.js";
 import { agencyImportTargets, resolveAgencyImportPath } from "@/importPaths.js";
 import { parseAgency } from "@/parser.js";
@@ -60,10 +61,6 @@ export type OptimizeTargetNode = {
   assignment: Assignment;
 };
 
-export function sha256Text(value: string): string {
-  return crypto.createHash("sha256").update(value).digest("hex");
-}
-
 /**
  * Discovers optimize targets across the local Agency import closure of
  * `entryFile`. This is the single parse pass over the closure: when
@@ -77,24 +74,12 @@ export function discoverOptimizeTargets(
   options: DiscoverOptimizeTargetsOptions = {},
 ): OptimizeTargetSet {
   const absoluteEntryFile = fs.realpathSync(path.resolve(entryFile));
-  const parsedFiles: ParsedSourceFile[] = [];
-  visitFile(absoluteEntryFile, {}, parsedFiles);
+  const parsedFiles = walkAgencyClosure(absoluteEntryFile);
 
   const baseDir = options.baseDir
     ? fs.realpathSync(path.resolve(options.baseDir))
-    : defaultBaseDir(parsedFiles.map((parsed) => parsed.absoluteFile));
+    : closureBaseDir(parsedFiles.map((parsed) => parsed.absoluteFile));
   return buildTargetSet(absoluteEntryFile, baseDir, parsedFiles);
-}
-
-/** Absolute base directory of `entryFile`'s local import closure — the seed
- *  directory for a run. Shared by the optimizer (as `source.baseDir`) and by
- *  plain eval, so both compute the same default seed when no explicit one is
- *  given. */
-export function agentClosureBaseDir(entryFile: string): string {
-  const absoluteEntryFile = fs.realpathSync(path.resolve(entryFile));
-  const parsedFiles: ParsedSourceFile[] = [];
-  visitFile(absoluteEntryFile, {}, parsedFiles);
-  return defaultBaseDir(parsedFiles.map((parsed) => parsed.absoluteFile));
 }
 
 function buildTargetSet(
@@ -170,58 +155,6 @@ function collectClosureTypeAliases(
  *  property (same hardening as optimize/registry.ts and evalCache.ts). */
 function nullPrototyped<T>(record: Record<string, T>): Record<string, T> {
   return Object.assign(Object.create(null), record);
-}
-
-type ParsedSourceFile = {
-  absoluteFile: string;
-  source: string;
-  program: AgencyProgram;
-};
-
-function visitFile(
-  absoluteFile: string,
-  visited: Record<string, true>,
-  parsedFiles: ParsedSourceFile[],
-): void {
-  const canonicalFile = fs.realpathSync(absoluteFile);
-  if (visited[canonicalFile]) return;
-  visited[canonicalFile] = true;
-
-  const source = fs.readFileSync(canonicalFile, "utf8");
-  const parseResult = parseAgency(source, {}, false);
-  if (!parseResult.success) {
-    throw new Error(`Failed to parse optimize target file ${canonicalFile}: ${parseResult.message ?? "parse error"}`);
-  }
-
-  parsedFiles.push({ absoluteFile: canonicalFile, source, program: parseResult.result });
-
-  for (const importPath of agencyImportTargets(parseResult.result, { localOnly: true })) {
-    visitFile(resolveAgencyImportPath(importPath, canonicalFile), visited, parsedFiles);
-  }
-}
-
-function defaultBaseDir(absoluteFiles: string[]): string {
-  const ancestor = commonAncestor(absoluteFiles.map((file) => path.dirname(file)));
-  const cwd = fs.realpathSync(process.cwd());
-  return isInsideOrSame(ancestor, cwd) ? cwd : ancestor;
-}
-
-function commonAncestor(paths: string[]): string {
-  if (paths.length === 0) return process.cwd();
-  const [first, ...rest] = paths.map((candidate) => path.resolve(candidate).split(path.sep));
-  const prefix: string[] = [];
-  for (let index = 0; index < first.length; index += 1) {
-    const segment = first[index];
-    if (rest.some((candidate) => candidate[index] !== segment)) break;
-    prefix.push(segment);
-  }
-  const joined = prefix.join(path.sep);
-  return joined === "" ? path.sep : joined;
-}
-
-function isInsideOrSame(candidate: string, parent: string): boolean {
-  const relative = path.relative(parent, path.resolve(candidate));
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 /**

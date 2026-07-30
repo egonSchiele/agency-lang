@@ -4,7 +4,8 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { sha256Text, type OptimizeTargetSet } from "./targets.js";
+import { sha256Text } from "@/utils/hash.js";
+import { type OptimizeTargetSet } from "./targets.js";
 import { WorkspaceManager } from "./workspace.js";
 
 describe("WorkspaceManager", () => {

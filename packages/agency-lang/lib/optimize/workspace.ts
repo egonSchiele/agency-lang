@@ -1,6 +1,7 @@
 import * as fs from "fs";
 
-import { sha256Text, type OptimizeTargetSet } from "./targets.js";
+import { sha256Text } from "@/utils/hash.js";
+import { type OptimizeTargetSet } from "./targets.js";
 
 /** Per-candidate cache-partition token. `EvalCache` keys runs by
  *  `(key, inputId)`; under the new model nothing on-disk lives at the workspace

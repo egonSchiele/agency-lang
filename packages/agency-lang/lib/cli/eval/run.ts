@@ -28,7 +28,7 @@ import type {
   Input,
   EvalRunInputResult,
 } from "@/eval/runTypes.js";
-import { agentClosureBaseDir } from "@/optimize/targets.js";
+import { agentClosureBaseDir } from "@/analysis/closure.js";
 import {
   buildForkOptions,
   buildRunInstruction,

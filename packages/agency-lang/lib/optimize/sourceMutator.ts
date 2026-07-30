@@ -10,10 +10,10 @@ import { formatDiff } from "@/utils/diff.js";
 import { generateExpression } from "@/backends/agencyGenerator.js";
 import { hasInterpolation, isLiteralExpression } from "@/utils/node.js";
 import { checkProposal } from "./constraint.js";
+import { sha256Text } from "@/utils/hash.js";
 import {
   collectTargets,
   promptSegmentsToString,
-  sha256Text,
   type OptimizeSourceFile,
   type OptimizeTarget,
   type OptimizeTargetSet,

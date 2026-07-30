@@ -158,7 +158,7 @@ The check follows calls into functions defined in your own files. It cannot see 
 
 <a id="ag3017"></a>
 
-## AG3017 — &#123;kind&#125; cannot sit at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait — move it inside a node or a function.
+## AG3017 — Cannot use &#123;kind&#125; at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait — move it inside a node or a function.
 
 *Default severity: error.*
 

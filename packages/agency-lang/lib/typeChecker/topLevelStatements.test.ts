@@ -56,6 +56,15 @@ describe("AG3017: statements that cannot sit at the top level", () => {
     });
   }
 
+  it("says nothing about a template's own declaration hole", () => {
+    // A top-level hole is a designed template feature. Reporting it here
+    // told the author to "move it inside a node or a function", which is
+    // wrong advice for a template; AG8001 refuses a holey program at
+    // compile with the right message.
+    const codes = codesOf("#helper\n\nnode main(): string {\n  return greet()\n}\n");
+    expect(codes).not.toContain("AG3017");
+  });
+
   it("names the rule, not just the symptom", () => {
     const found = diagFor("if (true) {\n  print(1)\n}\n\nnode main() { print(2) }\n", "AG3017");
     expect(found?.message).toMatch(/top level/);

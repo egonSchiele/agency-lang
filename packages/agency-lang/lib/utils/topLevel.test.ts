@@ -70,6 +70,31 @@ describe("isLegalAtTopLevel: refused", () => {
   }
 });
 
+describe("isLegalAtTopLevel: template features are legal", () => {
+  // Both are designed top-level features, and both are handled by a better
+  // mechanism than this rule. Saying otherwise reported a template's own
+  // declaration hole as a user error advising "move it inside a node".
+  it("allows a declaration hole, which AG8001 refuses at compile with better advice", () => {
+    const parsed = parseAgency("#helper\n\nnode main(): string {\n  return greet()\n}\n", {}, false, false);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const hole = parsed.result.nodes.find((n) => n.type === "hole");
+    expect(hole).toBeDefined();
+    expect(isLegalAtTopLevel(hole as AgencyNode)).toBe(true);
+  });
+
+  it("allows a splice, which expansion replaces before codegen", () => {
+    // A splice reaching the builder means a compile path skipped
+    // expandSplices — a maintainer bug that must not read as user error.
+    const parsed = parseAgency("$( gen() )\n\nnode main() { print(1) }\n", {}, false, false);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const splice = parsed.result.nodes.find((n) => n.type === "splice");
+    expect(splice).toBeDefined();
+    expect(isLegalAtTopLevel(splice as AgencyNode)).toBe(true);
+  });
+});
+
 describe("isLegalAtTopLevel: goto is not reachable at the top level", () => {
   it("parses as two bare names, so it stays legal", () => {
     // `goto other` at file scope is NOT a gotoStatement — the grammar

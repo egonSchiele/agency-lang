@@ -104,12 +104,43 @@ const LEGAL_AT_TOP_LEVEL: Record<AgencyNode["type"], boolean> = {
   resultPattern: false,
   typePattern: false,
 
-  // Templates. A hole is refused earlier (AG8001); a code literal is a
-  // value, and a splice is replaced before this check runs.
-  hole: false,
+  // Templates. Both ARE legal top-level Agency, and both are handled by a
+  // better mechanism than this rule: a program with holes is refused by
+  // AG8001, which says so; a splice is replaced by expansion, and one that
+  // reaches codegen means a compile path skipped `expandSplices` — a
+  // maintainer bug that must not be reported as user error. Saying `false`
+  // here shadowed both with advice to "move it inside a node".
+  hole: true,
+  splice: true,
+  // A value, so it never appears as a top-level statement.
   codeLiteral: false,
-  splice: false,
 };
+
+/**
+ * How a node reads in a message: `ifElse` means nothing to a user.
+ *
+ * Lives here so the type checker and the splice checker describe the same
+ * node the same way. Lowercase, for use mid-sentence. Unmapped types fall
+ * back to their own name, so this fails ugly rather than wrong.
+ */
+export function describeNodeKind(type: AgencyNode["type"]): string {
+  // Null-prototype: keyed by node type strings (house pattern).
+  const names: Record<string, string> = Object.assign(Object.create(null), {
+    ifElse: "an `if` statement",
+    whileLoop: "a `while` loop",
+    forLoop: "a `for` loop",
+    matchBlock: "a `match` block",
+    messageThread: "a `thread` block",
+    guardBlock: "a `guard` block",
+    finalizeBlock: "a `finalize` block",
+    handleBlock: "a handler",
+    returnStatement: "a `return`",
+    gotoStatement: "a `goto`",
+    interruptStatement: "an interrupt",
+    debuggerStatement: "a `debugger(...)` statement",
+  });
+  return Object.hasOwn(names, type) ? names[type] : `a \`${type}\``;
+}
 
 export function isLegalAtTopLevel(node: AgencyNode): boolean {
   // `static print(1)` is legal and `static interrupt(...)` is not, so the

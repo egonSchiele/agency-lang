@@ -1,6 +1,6 @@
-import { isLegalAtTopLevel } from "../utils/topLevel.js";
+import { describeNodeKind, isLegalAtTopLevel } from "../utils/topLevel.js";
 import { diagnostic } from "./diagnostics.js";
-import type { AgencyNode, StaticStatement } from "../types.js";
+import type { StaticStatement } from "../types.js";
 import type { TypeCheckerContext } from "./types.js";
 
 /**
@@ -21,30 +21,9 @@ export function checkTopLevelStatements(ctx: TypeCheckerContext): void {
         offender.type === "handleBlock"
           ? "topLevelHandlerNotAllowed"
           : "topLevelStatementNotAllowed",
-        { kind: describeKind(offender.type) },
+        { kind: describeNodeKind(offender.type) },
         node.loc ?? null,
       ),
     );
   }
-}
-
-/** `ifElse` reads as "if statement" to a user, not as a node type. Unmapped
- *  types fall back to their own name, so this fails ugly rather than wrong.
- *  Each entry carries its own article so the message reads as English. */
-function describeKind(type: AgencyNode["type"]): string {
-  // Null-prototype: keyed by node type strings (house pattern).
-  const names: Record<string, string> = Object.assign(Object.create(null), {
-    ifElse: "An `if` statement",
-    whileLoop: "A `while` loop",
-    forLoop: "A `for` loop",
-    matchBlock: "A `match` block",
-    messageThread: "A `thread` block",
-    guardBlock: "A `guard` block",
-    finalizeBlock: "A `finalize` block",
-    returnStatement: "A `return`",
-    gotoStatement: "A `goto`",
-    interruptStatement: "An interrupt",
-    debuggerStatement: "A `debugger(...)` statement",
-  });
-  return Object.hasOwn(names, type) ? names[type] : `A \`${type}\``;
 }

@@ -445,7 +445,7 @@ export const DIAGNOSTICS = {
     code: "AG3017",
     severity: "error",
     message:
-      "{kind} cannot sit at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait — move it inside a node or a function.",
+      "Cannot use {kind} at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait — move it inside a node or a function.",
   },
   topLevelHandlerNotAllowed: {
     code: "AG3018",

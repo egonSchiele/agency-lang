@@ -99,53 +99,29 @@ describe("evalJudge", () => {
     }
   });
 
-  it("writes a suite verdict when comparing run directories with a task file", async () => {
+  it("writes a suite verdict when comparing run directories — specs come from the runs, no flags", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-runs-"));
     const runA = writeRun(dir, "a", ["capital-france"]);
     const runB = writeRun(dir, "b", ["capital-france"]);
-    const inputsFile = path.join(dir, "inputs.json");
     const out = path.join(dir, "suite-verdict.json");
-    fs.writeFileSync(inputsFile, JSON.stringify({ inputs: [{ id: "capital-france", goal: "Return Paris", args: {} }] }));
 
-    await evalJudge(runA, runB, { inputs: inputsFile, out });
+    await evalJudge(runA, runB, { out });
 
-    expect(mockedJudgeSuite).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockedJudgeSuite).toHaveBeenCalledWith({
       runA,
       runB,
-      inputs: [{ id: "capital-france", goal: "Return Paris", args: {} }],
       policy: { samples: 3, confidenceThreshold: 50, marginThreshold: 0, positionBias: "swap" },
-    }));
+    });
     expect(JSON.parse(fs.readFileSync(out, "utf-8"))).toMatchObject({ verdictVersion: 2, winner: "A" });
     expect(logSpy).toHaveBeenCalledWith("Suite winner: A (A 1, B 0, ties 0)");
   });
 
-  it("compares single-task run directories with an inline goal", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-inline-"));
+  it("rejects --goal for run directories: they carry their own goals", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-goal-"));
     const runA = writeRun(dir, "a", ["capital-france"]);
     const runB = writeRun(dir, "b", ["capital-france"]);
 
-    await evalJudge(runA, runB, { goal: "Return Paris" });
-
-    expect(mockedJudgeSuite).toHaveBeenCalledWith(expect.objectContaining({
-      inputs: [{ id: "capital-france", goal: "Return Paris", args: {} }],
-    }));
-  });
-
-  it("rejects inline goals when single-task run ids differ", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-mismatch-"));
-    const runA = writeRun(dir, "a", ["capital-france"]);
-    const runB = writeRun(dir, "b", ["capital-germany"]);
-
-    await expect(evalJudge(runA, runB, { goal: "Return Paris" })).rejects.toThrow(/input ids differ/i);
-    expect(mockedJudgeSuite).not.toHaveBeenCalled();
-  });
-
-  it("rejects inline goals for ambiguous multi-task run directories", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-eval-judge-ambiguous-"));
-    const runA = writeRun(dir, "a", ["task-1", "task-2"]);
-    const runB = writeRun(dir, "b", ["task-1"]);
-
-    await expect(evalJudge(runA, runB, { goal: "Return Paris" })).rejects.toThrow(/ambiguous/i);
+    await expect(evalJudge(runA, runB, { goal: "Return Paris" })).rejects.toThrow(/carry their own goals/i);
     expect(mockedJudgeSuite).not.toHaveBeenCalled();
   });
 
@@ -161,9 +137,9 @@ describe("evalJudge", () => {
     const runA = writeRun(dir, "a", ["task-1"]);
     const runB = writeRun(dir, "b", ["task-1"]);
 
-    await expect(evalJudge(runA, runB, { goal: "Return Paris", samples: Number.NaN })).rejects.toThrow(/samples/);
-    await expect(evalJudge(runA, runB, { goal: "Return Paris", confidenceThreshold: Number.NaN })).rejects.toThrow(/confidenceThreshold/);
-    await expect(evalJudge(runA, runB, { goal: "Return Paris", marginThreshold: -1 })).rejects.toThrow(/marginThreshold/);
+    await expect(evalJudge(runA, runB, { samples: Number.NaN })).rejects.toThrow(/samples/);
+    await expect(evalJudge(runA, runB, { confidenceThreshold: Number.NaN })).rejects.toThrow(/confidenceThreshold/);
+    await expect(evalJudge(runA, runB, { marginThreshold: -1 })).rejects.toThrow(/marginThreshold/);
     expect(mockedJudgeSuite).not.toHaveBeenCalled();
   });
 });

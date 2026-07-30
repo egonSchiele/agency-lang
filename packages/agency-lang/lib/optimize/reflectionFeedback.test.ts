@@ -5,7 +5,7 @@ import type { InputGrades } from "@/eval/grading/scorecard.js";
 import type { EvalRecord } from "@/eval/types.js";
 import { EMPTY_RECORD } from "@/eval/grading/testUtils.js";
 
-/** A partial eval record. The record now rides on the AgentRun rather than being
+/** A partial eval record. The record now rides on the LoadedRun rather than being
  *  read from disk, so these tests no longer need a temp file. */
 function partialRecord(fields: Partial<EvalRecord>): EvalRecord {
   return { ...EMPTY_RECORD, ...fields };

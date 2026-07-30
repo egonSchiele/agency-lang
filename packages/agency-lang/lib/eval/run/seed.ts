@@ -1,15 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { agentClosure } from "@/analysis/closure.js";
 import type { AgencyConfig } from "@/config.js";
 import { compile } from "@/cli/commands.js";
 import { RunStrategy } from "@/importStrategy.js";
-import { copyProjectTree } from "@/utils/projectTree.js";
 
-import type { EvalInputRunner } from "./runEvalInput.js";
-
-export type SeededSeed = {
-  kind: "seeded";
+/** Which files a run needs: the agent's own (computed from its imports) and
+ *  the test's (declared). The description only — copying is `copyFiles`. */
+export type AgentSeed = {
   /** Project root the closure paths are relative to. */
   baseDir: string;
   /** Entry .agency file, relative to baseDir. */
@@ -19,21 +18,24 @@ export type SeededSeed = {
   /** Resolved test fixture dir; its contents land at the workdir root. */
   filesDir?: string;
 };
-export type LegacyCloneSeed = {
-  kind: "legacyClone";
-  baseDir: string;
-  agentRelPath: string;
-  /** Deprecated working_dir: full clone, old behavior. */
-  cloneDir: string;
-};
-export type RunSeed = SeededSeed | LegacyCloneSeed;
 
 /** Project files read from cwd at run time; seeded when the project has them. */
 const PROJECT_CONFIG_FILES = ["agency.json", ".env"];
 
-/** One planned seed entry: where the file comes from, and which ingredient
- *  provided it (collision messages name the ingredient). */
-type SeedEntry = { sourceAbs: string; origin: "agent" | "test files" };
+/** One planned copy: where the file comes from, and which ingredient provided
+ *  it (collision messages name the ingredient). */
+export type SeedEntry = { sourceAbs: string; origin: "agent" | "test files" };
+
+/** Walk the agent's imports and build its seed. One closure walk per agent. */
+export function seedFromAgentFile(agentPath: string): AgentSeed {
+  const absoluteAgent = fs.realpathSync(path.resolve(agentPath));
+  const closure = agentClosure(agentPath);
+  return {
+    baseDir: closure.baseDir,
+    agentRelPath: path.relative(closure.baseDir, absoluteAgent),
+    closureFiles: closure.files,
+  };
+}
 
 /** Resolve `rel` against `root`, refusing escapes. Overlay keys come from
  *  optimizer candidates today but may flow in from less-trusted callers
@@ -55,9 +57,10 @@ function listFilesRecursive(dir: string): string[] {
     .sort();
 }
 
-/** The seed as a pure map of workdir-relative path → entry. Throws on a
- *  test-file/agent collision, naming the path and both sources. */
-function planSeed(seed: SeededSeed): Record<string, SeedEntry> {
+/** Which files to copy, and where: destination (workdir-relative) → source.
+ *  Pure — nothing is written. Throws on a test-file/agent collision, naming
+ *  the path and both sources. */
+export function filesToCopy(seed: AgentSeed): Record<string, SeedEntry> {
   const agentEntries: Record<string, SeedEntry> = Object.fromEntries([
     ...seed.closureFiles.map((abs): [string, SeedEntry] =>
       [path.relative(seed.baseDir, abs), { sourceAbs: abs, origin: "agent" }]),
@@ -85,17 +88,19 @@ function planSeed(seed: SeededSeed): Record<string, SeedEntry> {
   return { ...agentEntries, ...testEntries };
 }
 
-/** The only filesystem writes in seeding. */
-function materialize(workdirPath: string, entries: Record<string, SeedEntry>): void {
+/** Copy them. The only filesystem writes in seeding. */
+export function copyFiles(workdirPath: string, files: Record<string, SeedEntry>): void {
   fs.mkdirSync(workdirPath, { recursive: true });
-  for (const [rel, entry] of Object.entries(entries)) {
+  for (const [rel, entry] of Object.entries(files)) {
     const dest = resolveWithin(workdirPath, rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(entry.sourceAbs, dest);
   }
 }
 
-function applyOverlay(workdirPath: string, overlayFiles: Record<string, string> | undefined): void {
+/** Write optimizer candidate edits over the seeded copy. Applied last, so a
+ *  candidate wins over both ingredients. */
+export function applyOverlay(workdirPath: string, overlayFiles: Record<string, string> | undefined): void {
   for (const [rel, source] of Object.entries(overlayFiles ?? {})) {
     const dest = resolveWithin(workdirPath, rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -103,22 +108,9 @@ function applyOverlay(workdirPath: string, overlayFiles: Record<string, string> 
   }
 }
 
-/** Deprecated working_dir path: the old full clone, verbatim — including
- *  copyProjectTree's known self-copy-guard quirk under symlinked temp dirs.
- *  Do not "fix" that here; this whole branch dies with working_dir. */
-function cloneLegacy(workdirPath: string, seed: LegacyCloneSeed): string[] {
-  copyProjectTree(seed.cloneDir, workdirPath);
-  return listFilesRecursive(workdirPath);
-}
-
-/** The two-ingredient seed: plan (pure, collision-checked), then write. */
-function seedFromPlan(workdirPath: string, seed: SeededSeed): string[] {
-  const entries = planSeed(seed);
-  materialize(workdirPath, entries);
-  return Object.keys(entries).sort();
-}
-
-function compileEntry(workdirPath: string, agentRelPath: string, config: AgencyConfig): string {
+/** Compile the seeded agent inside its workdir, so module-dir == cwd ==
+ *  workdir and all resolution stays inside the sandbox. */
+export function compileAgent(workdirPath: string, agentRelPath: string, config: AgencyConfig): string {
   const entryAgency = resolveWithin(workdirPath, agentRelPath);
   const compiledEntryPath = compile(config, entryAgency, undefined, {
     importStrategy: new RunStrategy(),
@@ -128,48 +120,4 @@ function compileEntry(workdirPath: string, agentRelPath: string, config: AgencyC
     throw new Error(`Failed to compile ${entryAgency}`);
   }
   return compiledEntryPath;
-}
-
-/**
- * One isolated run directory: seeded from the test's files plus the agent's
- * closure, compiled in place, executed with cwd = workdir. Replaces the old
- * clone-the-whole-project prepareRunDir.
- */
-export class Workspace {
-  private constructor(
-    readonly workdirPath: string,
-    readonly compiledEntryPath: string,
-    /** Workdir-relative paths that were seeded (sorted). For diagnostics. */
-    readonly seededFiles: string[],
-  ) {}
-
-  static create(args: {
-    workdirPath: string;
-    seed: RunSeed;
-    overlayFiles?: Record<string, string>;
-    config: AgencyConfig;
-  }): Workspace {
-    const seededFiles = args.seed.kind === "legacyClone"
-      ? cloneLegacy(args.workdirPath, args.seed)
-      : seedFromPlan(args.workdirPath, args.seed);
-    applyOverlay(args.workdirPath, args.overlayFiles);
-    return new Workspace(
-      args.workdirPath,
-      compileEntry(args.workdirPath, args.seed.agentRelPath, args.config),
-      seededFiles,
-    );
-  }
-
-  run(
-    runner: EvalInputRunner,
-    args: { node: string; args: Record<string, any>; statelogPath: string },
-  ): ReturnType<EvalInputRunner> {
-    return runner({
-      compiledEntryPath: this.compiledEntryPath,
-      node: args.node,
-      args: args.args,
-      cwd: this.workdirPath,
-      statelogPath: args.statelogPath,
-    });
-  }
 }

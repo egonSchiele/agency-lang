@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { agentRunPaths } from "./run/extract.js";
 import type { EvalRunResult, EvalRunInputResult, Input } from "./runTypes.js";
 
 export type ReadEvalRunInput = {
@@ -26,17 +27,23 @@ export function readEvalRun(runDir: string): ReadEvalRunResult {
     const input = readOptionalJson<Input>(path.join(inputDir, "input.json"));
     const recordPath = result.evalRecordPath
       || firstExisting(
-        path.join(inputDir, "agent", "eval-record.json"),
-        path.join(inputDir, "eval-record.json"),      // pre-layout runs
+        agentRunPaths(inputDir).evalRecordPath,
+        path.join(inputDir, "eval-record.json"),      // pre-#733 layout
       );
     const status = inputStatus(result, recordPath);
     const errorMessage = status === "failed"
       ? readOptionalText(firstExisting(
-          path.join(inputDir, "agent", "error.txt"),
-          path.join(inputDir, "error.txt"),
+          agentRunPaths(inputDir).errorPath,
+          path.join(inputDir, "error.txt"),           // pre-#733 layout
         )) ?? result.errorMessage
       : undefined;
 
+    if (Object.hasOwn(inputsById, result.inputId)) {
+      // The by-id map would silently swallow one of them, changing the mean's
+      // denominator. Unreachable via the CLI (loadInputs rejects duplicate
+      // ids), but programmatic callers skip that validation.
+      console.warn(`readEvalRun: duplicate inputId "${result.inputId}" in ${resolvedRunDir} — keeping the last`);
+    }
     inputsById[result.inputId] = {
       inputId: result.inputId,
       ...(input ? { input } : {}),
@@ -61,12 +68,27 @@ function firstExisting(...candidates: string[]): string {
 }
 
 function readJson<T>(filePath: string): T {
-  return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
+  } catch (error) {
+    throw new Error(`could not read ${filePath}: ${errText(error)}`);
+  }
 }
 
 function readOptionalJson<T>(filePath: string): T | undefined {
   if (!fs.existsSync(filePath)) return undefined;
-  return readJson<T>(filePath);
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
+  } catch (error) {
+    // Degrade, do not throw: grading runs after every agent has been paid for,
+    // and one corrupt per-input file must not take the whole pass down.
+    console.warn(`readEvalRun: could not parse ${filePath}: ${errText(error)}`);
+    return undefined;
+  }
+}
+
+function errText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function readOptionalText(filePath: string): string | undefined {

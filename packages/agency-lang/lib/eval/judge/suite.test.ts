@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   aggregateSuite,
@@ -8,7 +12,15 @@ import {
   reduceSamples,
 } from "./suite.js";
 import type { JudgeAggregationPolicy, InputVerdict } from "./types.js";
-import type { ReadEvalRunResult } from "@/eval/readRun.js";
+
+const dirs: string[] = [];
+afterEach(() => {
+  // Raw rmSync, not safeDelete: mkdtemp paths sit outside any project root,
+  // which safeDelete refuses by design. Same reasoning as runArtifacts.ts.
+  for (const tempDir of dirs.splice(0)) {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
 
 const policy: JudgeAggregationPolicy = {
   samples: 3,
@@ -85,9 +97,8 @@ describe("judge suite pure helpers", () => {
   it("creates deterministic missing-data verdicts without calling the judge", async () => {
     const judgeCalls: string[] = [];
     const verdict = await judgeSuite({
-      runA: readRun({ inputId: "task-1", status: "ok", recordPath: "a.json" }),
-      runB: readRun({ inputId: "task-1", status: "missing", recordPath: "b.json" }),
-      inputs: [{ id: "task-1", goal: "Return Paris", args: {} }],
+      runA: writeRunDir({ inputId: "task-1", status: "ok" }),
+      runB: writeRunDir({ inputId: "task-1", status: "missing" }),
       policy,
       judgePair: async () => {
         judgeCalls.push("called");
@@ -111,9 +122,8 @@ describe("judge suite pure helpers", () => {
 
   it("ties inputs when both sides are missing or failed", async () => {
     const verdict = await judgeSuite({
-      runA: readRun({ inputId: "task-1", status: "failed", errorMessage: "boom" }),
-      runB: readRun({ inputId: "task-1", status: "missing" }),
-      inputs: [{ id: "task-1", goal: "Return Paris", args: {} }],
+      runA: writeRunDir({ inputId: "task-1", status: "failed", errorMessage: "boom" }),
+      runB: writeRunDir({ inputId: "task-1", status: "missing" }),
       policy,
       judgePair: async () => inputVerdict("task-1", "A", 100),
     });
@@ -145,22 +155,35 @@ function inputVerdict(inputId: string, winner: "A" | "B" | "tie", confidence: nu
   };
 }
 
-function readRun(input: {
+/** A one-input run directory on disk in the given state — judgeSuite reads
+ *  directories only, so the fixture is files, not a loaded shape. */
+function writeRunDir(args: {
   inputId: string;
   status: "ok" | "missing" | "failed";
-  recordPath?: string;
   errorMessage?: string;
-}): ReadEvalRunResult {
-  return {
-    runDir: "/run",
-    inputsById: {
-      [input.inputId]: {
-        inputId: input.inputId,
-        input: { id: input.inputId, goal: "Return Paris", args: {} },
-        ...(input.recordPath ? { recordPath: input.recordPath } : {}),
-        status: input.status,
-        ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
-      },
-    },
-  };
+}): string {
+  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "judge-suite-"));
+  dirs.push(runDir);
+  const inputDir = path.join(runDir, "inputs", args.inputId);
+  fs.mkdirSync(path.join(inputDir, "agent"), { recursive: true });
+  fs.writeFileSync(path.join(inputDir, "input.json"),
+    JSON.stringify({ id: args.inputId, goal: "Return Paris", args: {} }));
+  const recordPath = path.join(inputDir, "agent", "eval-record.json");
+  if (args.status === "ok") {
+    fs.writeFileSync(recordPath, JSON.stringify({ evalOutputs: [{ value: "x", tMs: 1 }] }));
+  }
+  fs.writeFileSync(path.join(runDir, "summary.json"), JSON.stringify({
+    runId: "r", runDir, agentLabel: "a:main",
+    inputs: [{
+      inputId: args.inputId,
+      status: args.status === "failed" ? "error" : "success",
+      evalRecordPath: recordPath,
+      statelogPath: "",
+      workdirPath: path.join(inputDir, "workdir"),
+      errorMessage: args.errorMessage,
+    }],
+    okCount: args.status === "ok" ? 1 : 0,
+    errorCount: args.status === "failed" ? 1 : 0,
+  }));
+  return runDir;
 }

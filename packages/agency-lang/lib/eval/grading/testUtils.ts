@@ -1,9 +1,9 @@
 import type { EvalRecord } from "@/eval/types.js";
 
-import type { AgentRun, JSON } from "./types.js";
+import type { LoadedRun, JSON } from "./types.js";
 
 /** An eval record with nothing in it. Graders that only read `output` never
- *  touch this; it exists so an AgentRun in a test is a complete value. */
+ *  touch this; it exists so a LoadedRun in a test is a complete value. */
 export const EMPTY_RECORD: EvalRecord = {
   traceId: "test",
   recordVersion: 2,
@@ -30,7 +30,7 @@ export const EMPTY_RECORD: EvalRecord = {
   warnings: [],
 };
 
-/** An AgentRun carrying just an output — for tests of graders that read nothing else. */
-export function agentRun(output: JSON): AgentRun {
+/** A LoadedRun carrying just an output — for tests of graders that read nothing else. */
+export function loadedRun(output: JSON): LoadedRun {
   return { output, recordPath: "", workdir: "", record: EMPTY_RECORD };
 }

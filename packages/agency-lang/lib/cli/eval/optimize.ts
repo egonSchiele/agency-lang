@@ -18,7 +18,7 @@ import { discoverOptimizeTargets, type OptimizeTargetSet } from "@/optimize/targ
 import type { OptimizeResult } from "@/optimize/types.js";
 import { parseAgency } from "@/parser.js";
 
-import { resolveEvalRunTarget } from "./run.js";
+import { resolveEvalRunTarget } from "@/agentTarget.js";
 
 export type EvalOptimizeOptions = {
   agent: string;

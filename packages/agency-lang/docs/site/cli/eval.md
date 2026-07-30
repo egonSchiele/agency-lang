@@ -30,11 +30,11 @@ Input suites can be either a JSON file with `{ "inputs": [...] }` or a directory
   "goal": "Should produce a typechecking fizzbuzz program.",
   "args": { "prompt": "Write fizzbuzz in Agency" },
   "node": "evalMain",
-  "working_dir": "./fixtures/empty-project"
+  "files": "./fixtures/empty-project"
 }
 ```
 
-`goal` is required (for `eval run` and the default optimize judge; a custom grading module makes it optional — see [Custom graders](#custom-graders)). `args` defaults to `{}`. `id` defaults to a generated id and must be filesystem-safe when supplied. `expected` is an optional gold output (any JSON) read by match graders and surfaced to the optimizer's reflection. `files` names the test's fixture directory (see [Test files and suites](#test-files-and-suites)). `working_dir` is deprecated in favor of `files`.
+`goal` is required (for `eval run` and the default optimize judge; a custom grading module makes it optional — see [Custom graders](#custom-graders)). `args` defaults to `{}`. `id` defaults to a generated id and must be filesystem-safe when supplied. `expected` is an optional gold output (any JSON) read by match graders and surfaced to the optimizer's reflection. `files` names the test's fixture directory (see [Test files and suites](#test-files-and-suites)).
 
 For a single ad-hoc run, use `--goal` instead of `--inputs`:
 
@@ -91,8 +91,7 @@ one level deep).
 
 An agent that reads a project file that was never seeded gets a file-not-found
 error inside the workdir; the run's `error.txt` lists what was seeded and which
-fix applies. The `working_dir` field is deprecated — it fused fixtures and agent
-files into one directory, which tied a test to one agent.
+fix applies.
 
 Each run writes:
 

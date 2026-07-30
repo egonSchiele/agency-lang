@@ -132,14 +132,8 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.node !== undefined && typeof spec.node !== "string") {
     throw new Error("Eval input node must be a string when provided");
   }
-  if (spec.working_dir !== undefined && typeof spec.working_dir !== "string") {
-    throw new Error("Eval input working_dir must be a string when provided");
-  }
   if (spec.files !== undefined && typeof spec.files !== "string") {
     throw new Error("Eval input files must be a string when provided");
-  }
-  if (spec.files !== undefined && spec.working_dir !== undefined) {
-    throw new Error('Eval input cannot specify both "files" and the deprecated "working_dir"');
   }
   if (spec.metadata !== undefined && !isPlainObject(spec.metadata)) {
     throw new Error("Eval input metadata must be an object when provided");
@@ -151,7 +145,6 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   };
   if (typeof spec.goal === "string") out.goal = spec.goal;
   if (typeof spec.node === "string") out.node = spec.node;
-  if (typeof spec.working_dir === "string") out.working_dir = path.resolve(baseDir, spec.working_dir);
   if (typeof spec.files === "string") out.files = resolveFilesDir(spec.files, baseDir, options, out.id ?? "");
   if (isPlainObject(spec.metadata)) out.metadata = spec.metadata as Record<string, any>;
   return out;

@@ -7,7 +7,10 @@ import { agencyImportTargets, nonAgencyLocalImportTargets, resolveAgencyImportPa
 import { parseAgency } from "@/parser.js";
 import type { AgencyProgram } from "@/types.js";
 
-/** One file of an agent's .agency import closure, parsed exactly once. */
+/** One file of an agent's .agency import closure, parsed exactly once.
+ *  Two consumers: seeding reads only `absoluteFile`; the optimizer's target
+ *  discovery reads `source` (content hashes for safe writeback) and
+ *  `program` (finding optimize-marked declarations). */
 export type ParsedSourceFile = {
   absoluteFile: string;
   source: string;
@@ -86,8 +89,7 @@ export function agentClosure(entryFile: string): { baseDir: string; files: strin
   );
   const interopFiles = interopEntries.flatMap((interopEntry) => transitiveTsFiles(interopEntry));
 
-  const allFiles = [...agencyFiles, ...interopFiles].sort();
-  const files = allFiles.filter((file, index) => index === 0 || file !== allFiles[index - 1]);
+  const files = uniqueSorted([...agencyFiles, ...interopFiles].sort());
   return { baseDir: closureBaseDir(agencyFiles), files };
 }
 
@@ -113,6 +115,13 @@ function transitiveTsFiles(interopEntry: string): string[] {
     logLevel: "silent",
   });
   return Object.keys(result.metafile.inputs).map((inputPath) => path.resolve(inputPath));
+}
+
+/** Remove duplicates from a sorted list (equal items are adjacent). Dupes
+ *  arise when two .agency files import the same TS helper, or two TS entries
+ *  share transitive files. */
+function uniqueSorted(sorted: string[]): string[] {
+  return sorted.filter((item, index) => index === 0 || item !== sorted[index - 1]);
 }
 
 export function agentClosureBaseDir(entryFile: string): string {

@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { Workspace, type SeededSeed } from "./workspace.js";
+import { applyOverlay, compileAgent, copyFiles, filesToCopy, type AgentSeed } from "./seed.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -16,25 +16,33 @@ afterEach(() => {
 });
 
 function tmp(): string {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-"));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "seed-"));
   dirs.push(tempDir);
   return tempDir;
 }
 
 /** A project with an entry agent importing one helper, plus junk that must NOT be seeded. */
-function makeProject(): { baseDir: string; seed: SeededSeed } {
+function makeProject(): { baseDir: string; seed: AgentSeed } {
   const baseDir = tmp();
   fs.mkdirSync(path.join(baseDir, "lib"), { recursive: true });
   fs.writeFileSync(path.join(baseDir, "lib", "helper.agency"), "export def helper(): string { return \"hi\" }\n");
   fs.writeFileSync(path.join(baseDir, "agent.agency"), "import { helper } from \"./lib/helper.agency\"\nnode main() {}\n");
   fs.writeFileSync(path.join(baseDir, "junk.bin"), Buffer.alloc(2 * 1024 * 1024));
-  const seed: SeededSeed = {
-    kind: "seeded",
+  const seed: AgentSeed = {
     baseDir,
     agentRelPath: "agent.agency",
     closureFiles: [path.join(baseDir, "agent.agency"), path.join(baseDir, "lib", "helper.agency")],
   };
   return { baseDir, seed };
+}
+
+/** Seed + compile, the way runAgent composes these. */
+function seedAndCompile(workdirPath: string, seed: AgentSeed, overlayFiles?: Record<string, string>): string[] {
+  const files = filesToCopy(seed);
+  copyFiles(workdirPath, files);
+  applyOverlay(workdirPath, overlayFiles);
+  compileAgent(workdirPath, seed.agentRelPath, {});
+  return Object.keys(files).sort();
 }
 
 function totalBytes(dir: string): number {
@@ -44,18 +52,26 @@ function totalBytes(dir: string): number {
     .reduce((sum, size) => sum + size, 0);
 }
 
-describe("Workspace.create", () => {
-  it("seeds only the closure, at project-relative paths, and compiles the entry", () => {
+describe("seeding", () => {
+  it("filesToCopy is pure: it plans the copy without touching the filesystem", () => {
+    const { seed } = makeProject();
+
+    const files = filesToCopy(seed);
+
+    expect(Object.keys(files).sort()).toEqual(["agent.agency", path.join("lib", "helper.agency")]);
+    expect(fs.readdirSync(seed.baseDir).sort()).toEqual(["agent.agency", "junk.bin", "lib"]);
+  });
+
+  it("seeds only the closure, at project-relative paths, and the agent compiles", () => {
     const { seed } = makeProject();
     const workdirPath = path.join(tmp(), "workdir");
 
-    const workspace = Workspace.create({ workdirPath, seed, config: {} });
+    const seeded = seedAndCompile(workdirPath, seed);
 
     expect(fs.existsSync(path.join(workdirPath, "agent.agency"))).toBe(true);
     expect(fs.existsSync(path.join(workdirPath, "lib", "helper.agency"))).toBe(true);
     expect(fs.existsSync(path.join(workdirPath, "junk.bin"))).toBe(false);
-    expect(fs.existsSync(workspace.compiledEntryPath)).toBe(true);
-    expect(workspace.seededFiles).toEqual(["agent.agency", path.join("lib", "helper.agency")]);
+    expect(seeded).toEqual(["agent.agency", path.join("lib", "helper.agency")]);
   });
 
   it("seeds agency.json and .env from baseDir when present", () => {
@@ -64,7 +80,7 @@ describe("Workspace.create", () => {
     fs.writeFileSync(path.join(baseDir, ".env"), "KEY=value\n");
     const workdirPath = path.join(tmp(), "workdir");
 
-    Workspace.create({ workdirPath, seed, config: {} });
+    copyFiles(workdirPath, filesToCopy(seed));
 
     expect(fs.existsSync(path.join(workdirPath, "agency.json"))).toBe(true);
     expect(fs.existsSync(path.join(workdirPath, ".env"))).toBe(true);
@@ -77,10 +93,11 @@ describe("Workspace.create", () => {
     fs.writeFileSync(path.join(filesDir, "data", "report.txt"), "q3 numbers");
     const workdirPath = path.join(tmp(), "workdir");
 
-    const workspace = Workspace.create({ workdirPath, seed: { ...seed, filesDir }, config: {} });
+    const files = filesToCopy({ ...seed, filesDir });
+    copyFiles(workdirPath, files);
 
     expect(fs.readFileSync(path.join(workdirPath, "data", "report.txt"), "utf8")).toBe("q3 numbers");
-    expect(workspace.seededFiles).toContain(path.join("data", "report.txt"));
+    expect(Object.keys(files)).toContain(path.join("data", "report.txt"));
   });
 
   it("errors on a test-file/closure collision, naming the path and both sources", () => {
@@ -88,9 +105,8 @@ describe("Workspace.create", () => {
     const filesDir = tmp();
     fs.mkdirSync(path.join(filesDir, "lib"), { recursive: true });
     fs.writeFileSync(path.join(filesDir, "lib", "helper.agency"), "node main() {}\n");
-    const workdirPath = path.join(tmp(), "workdir");
 
-    expect(() => Workspace.create({ workdirPath, seed: { ...seed, filesDir }, config: {} }))
+    expect(() => filesToCopy({ ...seed, filesDir }))
       .toThrow(/lib\/helper\.agency.*test files.*agent/s);
   });
 
@@ -100,38 +116,23 @@ describe("Workspace.create", () => {
     fs.writeFileSync(path.join(filesDir, "toString"), "just a file");
     const workdirPath = path.join(tmp(), "workdir");
 
-    const workspace = Workspace.create({ workdirPath, seed: { ...seed, filesDir }, config: {} });
+    const files = filesToCopy({ ...seed, filesDir });
+    copyFiles(workdirPath, files);
 
     expect(fs.readFileSync(path.join(workdirPath, "toString"), "utf8")).toBe("just a file");
-    expect(workspace.seededFiles).toContain("toString");
   });
 
   it("applies overlayFiles last, over a closure file, and refuses escapes", () => {
     const { seed } = makeProject();
-
-    const workspace = Workspace.create({
-      workdirPath: path.join(tmp(), "workdir"), seed, config: {},
-      overlayFiles: { "lib/helper.agency": "export def helper(): string { return \"mutated\" }\n" },
-    });
-    expect(fs.readFileSync(path.join(workspace.workdirPath, "lib", "helper.agency"), "utf8")).toContain("mutated");
-
-    expect(() => Workspace.create({
-      workdirPath: path.join(tmp(), "w2"), seed, config: {},
-      overlayFiles: { "../escape.txt": "nope" },
-    })).toThrow(/escapes the workdir/);
-  });
-
-  it("legacy cloneDir mode copies the directory wholesale (working_dir compatibility)", () => {
-    const { baseDir, seed } = makeProject();
     const workdirPath = path.join(tmp(), "workdir");
 
-    Workspace.create({
-      workdirPath,
-      seed: { kind: "legacyClone", baseDir, agentRelPath: seed.agentRelPath, cloneDir: baseDir },
-      config: {},
+    seedAndCompile(workdirPath, seed, {
+      "lib/helper.agency": "export def helper(): string { return \"mutated\" }\n",
     });
+    expect(fs.readFileSync(path.join(workdirPath, "lib", "helper.agency"), "utf8")).toContain("mutated");
 
-    expect(fs.existsSync(path.join(workdirPath, "junk.bin"))).toBe(true);
+    expect(() => applyOverlay(path.join(tmp(), "w2"), { "../escape.txt": "nope" }))
+      .toThrow(/escapes the workdir/);
   });
 
   it("size guard: a seeded workdir stays under 1 MB even in a 2 MB project", () => {
@@ -140,7 +141,7 @@ describe("Workspace.create", () => {
     fs.writeFileSync(path.join(filesDir, "fixture.txt"), "small");
     const workdirPath = path.join(tmp(), "workdir");
 
-    Workspace.create({ workdirPath, seed: { ...seed, filesDir }, config: {} });
+    seedAndCompile(workdirPath, { ...seed, filesDir });
 
     expect(totalBytes(workdirPath)).toBeLessThan(1024 * 1024);
   });

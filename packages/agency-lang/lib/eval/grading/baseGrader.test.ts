@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import { AgencyRunner } from "./agencyRunner.js";
 import { BaseGrader } from "./baseGrader.js";
 import type { Grade, GraderInput, GraderOptions, Input } from "./types.js";
-import { agentRun } from "./testUtils.js";
+import { loadedRun } from "./testUtils.js";
 
 const stubRunner = new AgencyRunner({}, async () => ({ data: null }));
 const input = (over: Partial<Input> = {}): Input => ({ id: "i1", args: {}, ...over });
-const graderInput = (over: Partial<Input> = {}): GraderInput => ({ input: input(over), run: agentRun(null), runAgency: stubRunner });
+const graderInput = (over: Partial<Input> = {}): GraderInput => ({ input: input(over), run: loadedRun(null), runAgency: stubRunner });
 
 /** Test grader whose single-shot grade is supplied per instance. */
 class StubGrader extends BaseGrader {

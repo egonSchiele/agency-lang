@@ -1,14 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { readEvalRun, type ReadEvalRunInput, type ReadEvalRunResult } from "@/eval/readRun.js";
-import type { EvalRunInputResult, EvalRunResult, Input } from "@/eval/runTypes.js";
+import { readEvalRun, type ReadEvalRunInput } from "@/eval/readRun.js";
+import type { Input } from "@/eval/runTypes.js";
 import type { EvalRecord } from "@/eval/types.js";
 
 import type { AgencyRunner } from "./agencyRunner.js";
 import type { BaseGrader } from "./baseGrader.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
-import type { AgentRun, JSON as Json } from "./types.js";
+import type { LoadedRun, JSON as Json } from "./types.js";
 
 /** What grading needs besides the run itself. */
 export type GradingContext = {
@@ -26,12 +26,9 @@ export type GradingContext = {
  * A suite needs mixed results, not an abort. The optimizer still refuses a
  * baseline in this state, via `requireBaselineGatesPass`.
  */
-export async function gradeInput(
-  input: Input,
-  result: EvalRunInputResult,
-  ctx: GradingContext,
-): Promise<InputGrades> {
-  const lookup = lookUpOutput(result);
+async function gradeInput(entry: Entry, ctx: GradingContext): Promise<InputGrades> {
+  const input = entry.input;
+  const lookup = lookUpOutput(entry.recordPath, entry.workdir);
   if ("reason" in lookup) {
     return ungraded(input, lookup.reason);
   }
@@ -78,27 +75,29 @@ export function validateGraders(graders: BaseGrader[], input: Input | undefined)
 }
 
 /**
- * Score every input in a run. Accepts an in-memory result, an already-loaded
- * run, or a run directory path — the same union `judgeSuite` takes.
+ * Score every input in a run directory. The run directory is grading's ONLY
+ * input: run data is never handed over in memory, so `eval run --grade`
+ * deliberately re-reads the artifacts it just wrote — the same call `eval
+ * grade` makes days later. (See docs/dev/eval-grading.md.)
  *
- * An input whose agent run errored is scored 0 and marked gate-failed here
- * rather than inside `gradeInput`: it is eval-side policy, and such an input may
- * have no eval record on disk at all. The optimizer never reaches this path,
- * because its run step throws on a failed run first.
+ * Duplicate input ids collapse in the loader's by-id map, changing the mean's
+ * denominator — callers must keep ids unique. The CLI validates this;
+ * programmatic callers own it (`readEvalRun` warns on collision).
  */
-export async function gradeRun(
-  run: EvalRunResult | ReadEvalRunResult | string,
-  ctx: GradingContext,
-): Promise<Scorecard> {
+export async function gradeRun(runDir: string, ctx: GradingContext): Promise<Scorecard> {
+  const loaded = readEvalRun(runDir);
   const perInput = await Promise.all(
-    toEntries(run).map((entry) => gradeEntry(entry, ctx)),
+    Object.values(loaded.inputsById).map((input) => gradeEntry(loadedEntry(loaded.runDir, input), ctx)),
   );
   return new Scorecard(perInput);
 }
 
+/** What grading needs from one loaded input: the spec, where its evidence
+ *  lives, and optionally a reason not to grade at all. */
 type Entry = {
   input: Input;
-  result: EvalRunInputResult;
+  recordPath: string;
+  workdir: string;
   /** Set when the input cannot be graded at all — skip straight to a scored zero. */
   ungradedReason?: string;
 };
@@ -108,19 +107,7 @@ async function gradeEntry(entry: Entry, ctx: GradingContext): Promise<InputGrade
   if (entry.ungradedReason !== undefined) {
     return ungraded(entry.input, entry.ungradedReason);
   }
-  return gradeInput(entry.input, entry.result, ctx);
-}
-
-function toEntries(run: EvalRunResult | ReadEvalRunResult | string): Entry[] {
-  const loaded = typeof run === "string" ? readEvalRun(run) : run;
-  if ("inputsById" in loaded) {
-    return Object.values(loaded.inputsById).map((input) => loadedEntry(loaded.runDir, input));
-  }
-  return loaded.inputs.map((result) => ({
-    input: readInputSpec(result) ?? { id: result.inputId, args: {} },
-    result,
-    ungradedReason: result.status === "error" ? agentErrored(result.errorMessage) : undefined,
-  }));
+  return gradeInput(entry, ctx);
 }
 
 /**
@@ -128,6 +115,11 @@ function toEntries(run: EvalRunResult | ReadEvalRunResult | string): Entry[] {
  * they mean different things to a user: a run that failed, versus one that
  * succeeded but whose record is gone. Blaming the agent for the second would
  * point them at the wrong problem, so each status names its own reason.
+ *
+ * THE POLICY LIVES HERE: an errored run scores zero, always. Its salvaged
+ * eval-record.json on disk is diagnostic evidence and is never graded —
+ * `reasonByStatus.failed` diverts it from graders regardless of whether a
+ * record exists.
  */
 function loadedEntry(runDir: string, input: ReadEvalRunInput): Entry {
   const reasonByStatus: Record<ReadEvalRunInput["status"], string | undefined> = {
@@ -137,14 +129,8 @@ function loadedEntry(runDir: string, input: ReadEvalRunInput): Entry {
   };
   return {
     input: input.input ?? { id: input.inputId, args: {} },
-    result: {
-      inputId: input.inputId,
-      status: input.status === "ok" ? "success" : "error",
-      evalRecordPath: input.recordPath ?? "",
-      statelogPath: "",
-      workdirPath: workdirFor(runDir, input.inputId),
-      errorMessage: input.errorMessage,
-    },
+    recordPath: input.recordPath ?? "",
+    workdir: workdirFor(runDir, input.inputId),
     ungradedReason: reasonByStatus[input.status],
   };
 }
@@ -162,32 +148,8 @@ function ungraded(input: Input, reason: string): InputGrades {
   return { input, run: null, grades: [], gatesPassed: false, ungradedReason: reason };
 }
 
-/**
- * The input spec `prepareInput` wrote next to the workdir. An in-memory
- * EvalRunResult carries only per-input *results*, not the specs, and graders
- * need the spec — `LlmJudge` reads `goal` and `ExactMatch` reads `expected`.
- * Both would silently score against nothing if we synthesized a bare input.
- */
-function readInputSpec(result: EvalRunInputResult): Input | null {
-  if (!result.workdirPath) {
-    return null;
-  }
-  const file = path.join(path.dirname(result.workdirPath), "input.json");
-  if (!fs.existsSync(file)) {
-    return null;
-  }
-  try {
-    return globalThis.JSON.parse(fs.readFileSync(file, "utf8")) as Input;
-  } catch (error) {
-    // Degrade to a bare input rather than failing the pass; the caller falls back
-    // to `{ id, args: {} }`, which costs graders their goal/expected but no more.
-    console.warn(`grading: could not read input spec ${file}: ${error instanceof Error ? error.message : String(error)}`);
-    return null;
-  }
-}
-
 /** Either the run to grade, or why there is nothing to grade. */
-type OutputLookup = { run: AgentRun } | { reason: string };
+type OutputLookup = { run: LoadedRun } | { reason: string };
 
 /**
  * Read the record and pull out the graded output.
@@ -198,16 +160,16 @@ type OutputLookup = { run: AgentRun } | { reason: string };
  * in the `eval run` inline path the exception would arrive after every agent had
  * already run and been paid for, taking the whole result down over one bad file.
  */
-function lookUpOutput(result: EvalRunInputResult): OutputLookup {
-  if (!result.evalRecordPath || !fs.existsSync(result.evalRecordPath)) {
+function lookUpOutput(recordPath: string, workdir: string): OutputLookup {
+  if (!recordPath || !fs.existsSync(recordPath)) {
     return { reason: "no eval record found on disk for this input" };
   }
   let record: EvalRecord;
   try {
-    record = globalThis.JSON.parse(fs.readFileSync(result.evalRecordPath, "utf8")) as EvalRecord;
+    record = globalThis.JSON.parse(fs.readFileSync(recordPath, "utf8")) as EvalRecord;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`grading: could not read eval record ${result.evalRecordPath}: ${message}`);
+    console.warn(`grading: could not read eval record ${recordPath}: ${message}`);
     return { reason: `eval record unreadable: ${message}` };
   }
   const outputs = record.evalOutputs ?? [];
@@ -217,8 +179,8 @@ function lookUpOutput(result: EvalRunInputResult): OutputLookup {
   return {
     run: {
       output: outputs[outputs.length - 1].value as Json,
-      recordPath: result.evalRecordPath,
-      workdir: result.workdirPath,
+      recordPath,
+      workdir,
       record,
     },
   };

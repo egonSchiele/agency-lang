@@ -8,17 +8,15 @@ import { BaseGrader } from "@/eval/grading/baseGrader.js";
 import type { Grade, GraderInput, GraderOptions, Input } from "@/eval/grading/types.js";
 import type { Scorecard } from "@/eval/grading/scorecard.js";
 import { BaseOptimizer } from "./baseOptimizer.js";
+import { fakeRun } from "./testUtils.js";
 import type { OptimizeTargetSet } from "./targets.js";
 import type { OptimizeResult } from "./types.js";
 
-// Capture the call the optimizer makes into evalRunLoadedInputs so we can
-// assert the new spec: seed + overlayFiles travel out-of-band, no
-// working_dir on the per-input spec, agent path points at source.baseDir.
+// Capture the call the optimizer makes into runSuite so we can assert the
+// threading: seed + overlayFiles travel under perRun.
 const { mockEval } = vi.hoisted(() => ({ mockEval: vi.fn() }));
-vi.mock("@/cli/eval/run.js", () => ({
-  evalRunLoadedInputs: mockEval,
-  optimizeEvalRecordExtractor: {},
-  resolveEvalRunTarget: vi.fn(),
+vi.mock("@/eval/run/runSuite.js", () => ({
+  runSuite: mockEval,
 }));
 
 class FixedGrader extends BaseGrader {
@@ -54,9 +52,9 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
 
     mockEval.mockImplementation(async (args: { runsDir: string; runId: string; inputs: Input[] }) => {
       const input = args.inputs[0];
-      const recordPath = path.join(root, `${args.runId}-record.json`);
-      fs.writeFileSync(recordPath, JSON.stringify({ evalOutputs: [{ value: "out" }] }));
-      return { inputs: [{ status: "success", evalRecordPath: recordPath, input }] };
+      // A real one-input run directory: the optimizer grades it via gradeRun.
+      const runDir = fakeRun(input.id ?? "a", "out", input);
+      return { runDir, inputs: [{ inputId: input.id ?? "a", status: "success" }] };
     });
   });
   afterEach(() => {
@@ -74,7 +72,7 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
     return { baseDir: src, entryFile: "agent.agency", files: {}, targets: [], typeAliases: {} };
   }
 
-  it("passes seed + overlayFiles to evalRunLoadedInputs; no working_dir on input", async () => {
+  it("passes seed + overlayFiles to runSuite under perRun", async () => {
     const p = probe();
     const ws = p.forkAt();
     const files = { "agent.agency": "node main() { return 1 }\n" };
@@ -84,10 +82,9 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
     const call = mockEval.mock.calls[0][0];
     // closureFiles mirrors source.files (empty in this fixture) — the threading
     // is what's under test, not the discovery.
-    expect(call.seed).toEqual({ kind: "seeded", baseDir: src, agentRelPath: "agent.agency", closureFiles: [] });
-    expect(call.overlayFiles).toEqual(files);
+    expect(call.perRun.seed).toEqual({ baseDir: src, agentRelPath: "agent.agency", closureFiles: [] });
+    expect(call.perRun.overlayFiles).toEqual(files);
     expect(call.agent).toBe(path.join(src, "agent.agency"));
-    expect((call.inputs[0] as Input).working_dir).toBeUndefined();
   });
 
   it("partitions agent-runs by ws.key so caching is per-candidate", async () => {

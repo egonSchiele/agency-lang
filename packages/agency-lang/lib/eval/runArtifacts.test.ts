@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
+import { shouldExtractStatelog } from "./run/extract.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -9,7 +10,6 @@ import {
   prepareInput,
   recordInputPrepareFailure,
   recordInputRunFailure,
-  shouldExtractStatelog,
   writeEvalRunSummary,
 } from "./runArtifacts.js";
 
@@ -28,8 +28,7 @@ describe("eval run artifacts", () => {
     const state = initializeEvalRun({
       runId: "r1",
       runsDir: tmpDir,
-      agent: "agent.agency:main",
-      inputsSource: "tasks.json",
+      agentLabel: "agent.agency:main",
       inputs: [],
       continueOnError: true,
       startedAt: new Date("2026-06-09T14:30:00.000Z"),
@@ -38,8 +37,7 @@ describe("eval run artifacts", () => {
     expect(fs.existsSync(path.join(tmpDir, "r1", "inputs"))).toBe(true);
     expect(JSON.parse(fs.readFileSync(path.join(tmpDir, "r1", "config.json"), "utf-8"))).toMatchObject({
       runId: "r1",
-      agent: "agent.agency:main",
-      inputsSource: "tasks.json",
+      agentLabel: "agent.agency:main",
       continueOnError: true,
       startedAt: "2026-06-09T14:30:00.000Z",
     });
@@ -52,8 +50,7 @@ describe("eval run artifacts", () => {
     expect(() => initializeEvalRun({
       runId: "existing",
       runsDir: tmpDir,
-      agent: "agent.agency:main",
-      inputsSource: "tasks.json",
+      agentLabel: "agent.agency:main",
       inputs: [],
       continueOnError: true,
       startedAt: new Date("2026-06-09T14:30:00.000Z"),
@@ -83,8 +80,7 @@ Choose a different --run-id or delete the existing directory.`,
     expect(() => initializeEvalRun({
       runId: "../escape",
       runsDir: tmpDir,
-      agent: "agent.agency:main",
-      inputsSource: "tasks.json",
+      agentLabel: "agent.agency:main",
       inputs: [],
       continueOnError: true,
       startedAt: new Date("2026-06-09T14:30:00.000Z"),
@@ -96,13 +92,6 @@ Choose a different --run-id or delete the existing directory.`,
 
     expect(() => prepareInput(state, { id: "../escape", goal: "goal", args: {} })).toThrow("Invalid id");
   });
-
-  // Notes on `working_dir` handling: prepareInput is no longer responsible
-  // for materializing the workdir from a `working_dir` fixture or for
-  // validating that the value points to a directory. Both responsibilities
-  // moved to `evalRunLoadedInputs.resolveInputSeed`/`prepareRunDir`, where
-  // the agent file is in scope (enabling the "working_dir must contain the
-  // agent file" check). See `lib/cli/eval/run.workdir.test.ts`.
 
   it("records prepare failures without touching artifact paths", () => {
     const result = recordInputPrepareFailure("t1", "invalid id");
@@ -143,8 +132,7 @@ Choose a different --run-id or delete the existing directory.`,
     return initializeEvalRun({
       runId: "r1",
       runsDir: tmpDir,
-      agent: "agent.agency:main",
-      inputsSource: "tasks.json",
+      agentLabel: "agent.agency:main",
       inputs: [],
       continueOnError: true,
       startedAt: new Date("2026-06-09T14:30:00.000Z"),

@@ -80,7 +80,7 @@ These are the building blocks every optimizer composes (`this.` on `BaseOptimize
 | `validationInputs` | Held-out inputs (empty if none). See [Validation](#validation). |
 | `workspace.writeBack(source, files)` | Write a file set back to the real sources, sha-checked. `finishPointwise` already does this — only call it directly if you are not using `finishPointwise`. |
 
-`CachePartition` (formerly `Workspace`) is **not** a directory: just `{ key: string }`, a cache-partition token. The real isolation happens per input: `evaluate` hands your `files` map to the eval runner, which copies the project tree into `runs/<runId>/…/workdir/`, overlays those files, compiles, and runs there. You never write to disk yourself.
+`CachePartition` (formerly `Workspace`) is **not** a directory: just `{ key: string }`, a cache-partition token. The real isolation happens per input: `evaluate` hands your `files` map to `runSuite`, which seeds the agent's import closure into `runs/<runId>/…/workdir/`, overlays those files, compiles, and runs there. You never write to disk yourself.
 
 ## The shape: score → propose → score → compare → finish
 
@@ -242,7 +242,7 @@ Config that only your optimizer needs rides on `BaseOptimizerConfig` and gets ca
 | Seam | Replaces |
 | --- | --- |
 | `discover` | Target discovery — return a fixed `OptimizeTargetSet` instead of parsing a file. |
-| `runInput` | Running the agent — return an `EvalRunInputResult` pointing at an eval record on disk. Grading reads that record, so the file must exist; `fakeRun` in `lib/optimize/testUtils.ts` builds one, under the run layout's `agent/` directory. |
+| `runInput` | Running the agent — return the run DIRECTORY it wrote (a suite of one). Grading loads that directory like any other run, so it must carry real artifacts (`eval-record.json`, `input.json`, `summary.json`); `fakeRun` in `lib/optimize/testUtils.ts` builds one. |
 | `reporter` | Progress output — capture emitted events. |
 | `agencyRunner` | Running judge/proposer `.agency` files. |
 | `cache` | The per-`(workspace, input)` run cache. |

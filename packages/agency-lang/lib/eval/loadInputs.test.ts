@@ -75,14 +75,13 @@ describe("eval run input loading", () => {
   });
 
   it("loads input files from a directory in lexical order", () => {
-    writeJson("suite/b.json", { id: "b", goal: "B", working_dir: "fixtures/b" });
+    writeJson("suite/b.json", { id: "b", goal: "B" });
     writeJson("suite/a.json", { id: "a", goal: "A", args: { n: 1 } });
 
     const inputs = loadInputs(path.join(tmpDir, "suite"));
 
     expect(inputs.map((input) => input.id)).toEqual(["a", "b"]);
     expect(inputs[0].args).toEqual({ n: 1 });
-    expect(inputs[1].working_dir).toBe(path.join(tmpDir, "suite", "fixtures/b"));
   });
 
   it("returns an empty list for a directory with no json files", () => {
@@ -129,17 +128,6 @@ describe("files field", () => {
     fs.rmSync(suiteDir, { recursive: true, force: true });
   });
 
-  it("rejects files combined with working_dir", () => {
-    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
-    fs.mkdirSync(path.join(suiteDir, "fixture-dir"));
-    const inputsFile = path.join(suiteDir, "inputs.json");
-    fs.writeFileSync(inputsFile, JSON.stringify({
-      inputs: [{ id: "a", goal: "g", args: {}, files: "./fixture-dir", working_dir: "./fixture-dir" }],
-    }));
-
-    expect(() => loadInputs(inputsFile)).toThrow(/files.*working_dir/i);
-    fs.rmSync(suiteDir, { recursive: true, force: true });
-  });
 });
 
 describe("test directories (heavy form)", () => {

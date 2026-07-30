@@ -80,7 +80,6 @@ describe("agency eval stdlib helpers", () => {
     const result = await _evalJudgeSuite(
       "run-a",
       "run-b",
-      [{ id: "task-1", goal: "g", args: {} }],
       5,
       60,
       1,

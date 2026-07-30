@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { shouldExtractStatelog } from "../eval/run/extract.js";
 import { nanoid } from "nanoid";
 
 import { judgePairwise } from "../eval/judge/pairwise.js";
@@ -13,7 +14,6 @@ import {
   recordInputPrepareFailure,
   recordInputRunFailure,
   recordInputSuccess,
-  shouldExtractStatelog,
   writeEvalRunSummary,
   type EvalRunState,
   type PreparedInput,
@@ -56,8 +56,7 @@ export function _initEvalRun(
   const state = initializeEvalRun({
     runId: runId || nanoid(),
     runsDir,
-    agent: `${compiled.moduleId}:${node}`,
-    inputsSource: "stdlib:evalRun",
+    agentLabel: `${compiled.moduleId}:${node}`,
     inputs,
     continueOnError,
     startedAt: new Date(),
@@ -173,7 +172,6 @@ export async function _evalJudge(
 export async function _evalJudgeSuite(
   runA: string,
   runB: string,
-  inputs: Input[],
   samples: number,
   confidenceThreshold: number,
   marginThreshold: number,
@@ -186,7 +184,6 @@ export async function _evalJudgeSuite(
   return judge({
     runA,
     runB,
-    inputs,
     policy: { samples, confidenceThreshold, marginThreshold, positionBias },
   });
 }

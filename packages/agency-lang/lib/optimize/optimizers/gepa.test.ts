@@ -50,9 +50,9 @@ describe("Gepa (reflective Pareto optimizer)", () => {
   /** Assign each distinct workspace dir a score, in first-seen order. */
   function scoredRunner(scores: number[]): RunInput {
     const seen = new Map<string, number>();
-    return async (ws, _source, _files, _input, id) => {
+    return async (ws, _source, _files, input, id) => {
       if (!seen.has(ws.key)) seen.set(ws.key, scores[seen.size] ?? 0);
-      return fakeRun(id, String(seen.get(ws.key)));
+      return fakeRun(id, String(seen.get(ws.key)), input);
     };
   }
 

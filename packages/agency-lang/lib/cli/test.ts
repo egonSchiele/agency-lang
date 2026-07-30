@@ -11,11 +11,11 @@ import {
   executeNodeAsync,
   findRecursively,
   InterruptHandler,
-  parseTarget,
   pickANode,
   promptForArgs,
   promptForTarget,
 } from "./util.js";
+import { parseTarget } from "@/agentTarget.js";
 import { color } from "@/utils/termcolors.js";
 import { formatDiff } from "@/utils/diff.js";
 import {

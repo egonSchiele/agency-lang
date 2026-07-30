@@ -8,7 +8,8 @@ description: Documents the `agency eval extract` command for converting a captur
 `agency eval` is the umbrella for tools that run, grade, compare, and analyze agent runs from their captured statelog traces. The main subcommands are:
 
 ```
-agency eval run --agent <file>[:<node>] (--inputs <file|dir> | --goal <text>)
+agency eval run --agent <file>[:<node>] (--inputs <file|dir> | --goal <text>) [--graders <file>] [--no-grade]
+agency eval grade <runDir> [--graders <file>] [-o <path>]
 agency eval optimize <file>[:<node>] [--inputs <file|dir>] [--goal <text>] [--graders <file>] [--validation-inputs <file|dir> | --validation-split <ratio>]
 agency eval extract <file>
 ```
@@ -49,6 +50,8 @@ Options:
 - `--run-id <id>` — output run id. Defaults to a generated id.
 - `--runs-dir <path>` — output root. Defaults to `eval.runsDir` in `agency.json`, or `runs/`.
 - `--no-continue-on-error` — stop after the first input failure. By default, remaining inputs continue.
+- `--graders <file>` — a TypeScript grading module. Defaults to `eval.graders` in `agency.json`, then the bundled goal judge.
+- `--no-grade` — skip scoring; only run the agent.
 
 Each run writes:
 
@@ -62,9 +65,92 @@ runs/<run-id>/
     workdir/
     error.txt
   summary.json
+  grading.json        only after `agency eval grade`
 ```
 
-`summary.json` contains the run id, agent label, input results, and success/error counts. `eval-record.json` is produced with the same extractor described below whenever the input produced a non-empty statelog.
+`summary.json` contains the run id, agent label, input results, success/error counts, and — unless you passed `--no-grade` — a `grading` block with the objective and a per-input breakdown. `eval-record.json` is produced with the same extractor described below whenever the input produced a non-empty statelog.
+
+## Scoring a run
+
+`agency eval run` scores what it ran and prints an objective between 0 and 1:
+
+```bash
+agency eval run --agent agent.agency --inputs inputs.json
+#   3/3 inputs ok
+#   objective  0.71
+#     goal  0.71
+```
+
+With no `--graders`, it grades with the bundled goal judge against each input's
+`goal` field — the same default `agency optimize` uses. Pass `--no-grade` to skip
+scoring and only run the agent.
+
+### Custom graders
+
+A grading module default-exports one grader or a list of them:
+
+```ts
+// graders.ts
+import { grader, ExactMatch } from "agency-lang/eval";
+import { existsSync } from "fs";
+import { join } from "path";
+
+export default [
+  // the return value
+  grader(({ output }) => String(output).length < 500, { name: "concise" }),
+
+  // a file the agent wrote
+  grader(({ workdir }) => existsSync(join(workdir, "analyze.py")), { name: "wrote-script" }),
+
+  // what it did along the way
+  grader(({ record }) => record.metrics.costUsdTotal < 0.05, { name: "cheap" }),
+
+  // compare against the input's `expected` field
+  new ExactMatch({ mustPass: true }),
+];
+```
+
+```bash
+agency eval run --agent agent.agency --inputs inputs.json --graders graders.ts
+```
+
+A grader function receives `{ output, input, workdir, record, judge }` and returns
+a number from 0 to 1, a boolean, or a full `Grade`. Options control how it counts:
+`mustPass` makes it a gate, `weight` sets its share of the objective, `threshold`
+sets the passing bar for scalar scores, `samples` runs it k times, and
+`inputScope` restricts it to a subset of inputs.
+
+When a grading module is supplied, `goal` becomes optional on your inputs.
+
+### Pass and fail
+
+A `mustPass` grader is the assertion. If one fails, that input scores 0, the run
+reports `gatesPassed: false`, and the command exits 2 — so a gate is what makes
+`agency eval run` usable as a CI check. Every other grader is a measurement you
+track over time.
+
+An input whose agent run errored, or which produced no output, scores 0 and fails
+every gate. It is counted, not skipped: one bad input out of fifty pulls the mean
+down by its share rather than zeroing the whole run.
+
+### Re-scoring a finished run
+
+Grading is also a separate command, so you can iterate on a grader without
+re-running the agent:
+
+```bash
+agency eval grade runs/abc --graders graders.ts
+#   objective  0.71
+```
+
+It reads the run directory, scores it again, and writes `grading.json` beside the
+run. `summary.json` is never rewritten, so the original score survives. Use `-o`
+to keep several gradings of the same run.
+
+This costs nothing and is deterministic for `ExactMatch`, `Contains`,
+`Similarity`, and function graders that do not call `judge`. An `LlmJudge`, or a
+function grader calling `judge(...)`, still makes a live LLM call each time — much
+cheaper than re-running agents, and the outputs being judged stay fixed.
 
 ## Optimizing marked declarations
 

@@ -271,7 +271,12 @@ export abstract class BaseOptimizer {
       continueOnError: true,
       quietCompile: true,
       pipeAgentOutput: false,
-      seed: { dir: source.baseDir, agentRelPath: source.entryFile },
+      seed: {
+        kind: "seeded",
+        baseDir: source.baseDir,
+        agentRelPath: source.entryFile,
+        closureFiles: Object.values(source.files).map((sourceFile) => sourceFile.absoluteFile),
+      },
       overlayFiles: files,
     }, {
       // Grade the node's return value (not its last LLM reply) and skip the

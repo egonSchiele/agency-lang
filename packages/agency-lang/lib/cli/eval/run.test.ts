@@ -174,12 +174,17 @@ describe("eval run CLI", () => {
 
     expect(runs).toBe(1);
     expect(result.inputs).toHaveLength(1);
-    expect(result.inputs[0]).toMatchObject({ inputId: "first", status: "error", errorMessage: "nope" });
-    expect(fs.readFileSync(path.join(runsDir, "stop", "inputs", "first", "error.txt"), "utf-8")).toBe("nope");
+    expect(result.inputs[0]).toMatchObject({
+      inputId: "first",
+      status: "error",
+      // The message now carries the seeded-file listing for diagnosability.
+      errorMessage: expect.stringMatching(/^nope\n\nWorkdir was seeded with/),
+    });
+    expect(fs.readFileSync(path.join(runsDir, "stop", "inputs", "first", "error.txt"), "utf-8")).toMatch(/^nope\n/);
     expect(JSON.parse(fs.readFileSync(path.join(runsDir, "stop", "summary.json"), "utf-8"))).toMatchObject({
       okCount: 0,
       errorCount: 1,
-      inputs: [{ inputId: "first", status: "error", errorMessage: "nope" }],
+      inputs: [{ inputId: "first", status: "error", errorMessage: expect.stringMatching(/^nope\n\nWorkdir was seeded with/) }],
     });
   });
 

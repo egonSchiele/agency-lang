@@ -103,7 +103,7 @@ describe("evalRunLoadedInputs compiles + runs inside each input workdir", () => 
         runId: "r-overlay",
         config: {},
         pipeAgentOutput: false,
-        seed: { dir: proj, agentRelPath: "agent.agency" },
+        seed: { kind: "seeded" as const, baseDir: proj, agentRelPath: "agent.agency", closureFiles: [path.join(proj, "agent.agency")] },
         overlayFiles: { "config.txt": "patched\n" },
       },
       { runner },
@@ -125,7 +125,7 @@ describe("evalRunLoadedInputs compiles + runs inside each input workdir", () => 
         runId: "r-seed-conflict",
         config: {},
         pipeAgentOutput: false,
-        seed: { dir: proj, agentRelPath: "agent.agency" },
+        seed: { kind: "seeded" as const, baseDir: proj, agentRelPath: "agent.agency", closureFiles: [path.join(proj, "agent.agency")] },
       },
       { runner },
     );

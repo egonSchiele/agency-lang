@@ -82,7 +82,9 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
 
     expect(mockEval).toHaveBeenCalledTimes(1);
     const call = mockEval.mock.calls[0][0];
-    expect(call.seed).toEqual({ dir: src, agentRelPath: "agent.agency" });
+    // closureFiles mirrors source.files (empty in this fixture) — the threading
+    // is what's under test, not the discovery.
+    expect(call.seed).toEqual({ kind: "seeded", baseDir: src, agentRelPath: "agent.agency", closureFiles: [] });
     expect(call.overlayFiles).toEqual(files);
     expect(call.agent).toBe(path.join(src, "agent.agency"));
     expect((call.inputs[0] as Input).working_dir).toBeUndefined();

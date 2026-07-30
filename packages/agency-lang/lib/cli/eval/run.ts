@@ -28,7 +28,8 @@ import type {
   Input,
   EvalRunInputResult,
 } from "@/eval/runTypes.js";
-import { agentClosureBaseDir } from "@/analysis/closure.js";
+import { agentClosure } from "@/analysis/closure.js";
+import type { RunSeed, SeededSeed } from "@/eval/workspace.js";
 import {
   buildForkOptions,
   buildRunInstruction,
@@ -74,7 +75,7 @@ export type EvalRunLoadedInputsOptions = {
    * Mutually exclusive with per-input `working_dir`: setting both is an
    * error.
    */
-  seed?: { dir: string; agentRelPath: string };
+  seed?: SeededSeed;
   /** Candidate-file overlay applied to every input in this call (over the
    *  seeded copy, before compile). Plain eval never sets this. */
   overlayFiles?: Record<string, string>;
@@ -226,7 +227,7 @@ export async function evalRunLoadedInputs(
 
   const results: EvalRunInputResult[] = [];
   for (const input of opts.inputs) {
-    let seed: { dir: string; agentRelPath: string };
+    let seed: RunSeed;
     try {
       seed = resolveInputSeed(input, defaultSeed, absoluteAgent, opts.seed !== undefined);
     } catch (err) {
@@ -284,9 +285,14 @@ export async function evalRunLoadedInputs(
 
 /** Derive seed from agent file via closure walk. Called at most once per
  *  `evalRunLoadedInputs` invocation, never per input. */
-function deriveSeedFromAgent(agentFile: string, absoluteAgent: string): { dir: string; agentRelPath: string } {
-  const dir = agentClosureBaseDir(agentFile);
-  return { dir, agentRelPath: path.relative(dir, absoluteAgent) };
+function deriveSeedFromAgent(agentFile: string, absoluteAgent: string): SeededSeed {
+  const closure = agentClosure(agentFile);
+  return {
+    kind: "seeded",
+    baseDir: closure.baseDir,
+    agentRelPath: path.relative(closure.baseDir, absoluteAgent),
+    closureFiles: closure.files,
+  };
 }
 
 /** Apply the per-input seed rule:
@@ -295,14 +301,18 @@ function deriveSeedFromAgent(agentFile: string, absoluteAgent: string): { dir: s
  *  - neither → use the default seed. */
 function resolveInputSeed(
   input: Input,
-  defaultSeed: { dir: string; agentRelPath: string },
+  defaultSeed: SeededSeed,
   absoluteAgent: string,
   callerSetSeed: boolean,
-): { dir: string; agentRelPath: string } {
+): RunSeed {
   if (!input.working_dir) return defaultSeed;
   if (callerSetSeed) {
     throw new Error(`input.working_dir cannot be combined with a caller-supplied seed (input id=${input.id ?? "(no id)"})`);
   }
+  console.warn(
+    `[evalRun] input ${input.id ?? "(no id)"}: working_dir is deprecated; use "files" for test fixtures — ` +
+    `the agent's own files are seeded automatically.`,
+  );
   const resolved = fs.realpathSync(path.resolve(input.working_dir));
   if (!fs.statSync(resolved).isDirectory()) {
     throw new Error(`Eval input working_dir is not a directory: ${input.working_dir}`);
@@ -311,7 +321,7 @@ function resolveInputSeed(
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new Error(`working_dir must contain the agent file (working_dir=${resolved}, agent=${absoluteAgent})`);
   }
-  return { dir: resolved, agentRelPath: rel };
+  return { kind: "legacyClone", baseDir: resolved, agentRelPath: rel, cloneDir: resolved };
 }
 
 const defaultEvalRecordExtractor: EvalRecordExtractor = async ({

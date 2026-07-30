@@ -72,6 +72,11 @@
       "import": "./dist/lib/compiler/compile.js",
       "require": "./dist/lib/compiler/compile.js"
     },
+    "./eval": {
+      "types": "./dist/lib/eval/public.d.ts",
+      "import": "./dist/lib/eval/public.js",
+      "require": "./dist/lib/eval/public.js"
+    },
     "./optimize": {
       "types": "./dist/lib/optimize/public.d.ts",
       "import": "./dist/lib/optimize/public.js",

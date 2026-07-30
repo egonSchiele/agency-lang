@@ -189,7 +189,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function validateInputs(inputs: Input[]): Input[] {
-  const seen: Record<string, true> = {};
+  // Null-prototype: ids are user-controlled and the id charset allows names
+  // like "__proto__" and "constructor", which on a plain object hit inherited
+  // members ("constructor" would be a false duplicate; "__proto__" cannot be
+  // recorded at all). Same precedent as EvalCache.
+  const seen: Record<string, true> = Object.create(null);
   for (const input of inputs) {
     const id = input.id ?? "";
     assertEvalInputId(id);

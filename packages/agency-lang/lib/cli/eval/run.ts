@@ -210,7 +210,10 @@ function loadSuite(args: {
       provenance: { inputsSource: { source: "inline:--goal" }, files: {} },
     };
   }
-  const filesProvenance: Record<string, SourceProvenance> = {};
+  // Null-prototype: input ids are user-controlled and the id charset allows
+  // "__proto__", which on a plain object silently sets the prototype and
+  // drops the entry from config.json. Same precedent as EvalCache.
+  const filesProvenance: Record<string, SourceProvenance> = Object.create(null);
   const loadOptions = { requireGoal: args.requireGoal, filesProvenance, sourceCacheRoot: args.cacheRoot };
   const parsed = parseSource(args.inputs ?? "", process.cwd());
   if (parsed.kind === "git") {

@@ -94,6 +94,18 @@ describe("Workspace.create", () => {
       .toThrow(/lib\/helper\.agency.*test files.*agent/s);
   });
 
+  it("a fixture file named toString does not falsely collide with inherited object members", () => {
+    const { seed } = makeProject();
+    const filesDir = tmp();
+    fs.writeFileSync(path.join(filesDir, "toString"), "just a file");
+    const workdirPath = path.join(tmp(), "workdir");
+
+    const workspace = Workspace.create({ workdirPath, seed: { ...seed, filesDir }, config: {} });
+
+    expect(fs.readFileSync(path.join(workdirPath, "toString"), "utf8")).toBe("just a file");
+    expect(workspace.seededFiles).toContain("toString");
+  });
+
   it("applies overlayFiles last, over a closure file, and refuses escapes", () => {
     const { seed } = makeProject();
 

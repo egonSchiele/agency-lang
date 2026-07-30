@@ -71,7 +71,9 @@ function planSeed(seed: SeededSeed): Record<string, SeedEntry> {
       [rel, { sourceAbs: path.join(seed.filesDir as string, rel), origin: "test files" }]),
   );
 
-  const collisions = Object.keys(testEntries).filter((rel) => agentEntries[rel] !== undefined);
+  // Object.hasOwn, not a truthiness lookup: a fixture file named "toString"
+  // must not collide with Object.prototype's inherited members.
+  const collisions = Object.keys(testEntries).filter((rel) => Object.hasOwn(agentEntries, rel));
   if (collisions.length > 0) {
     const rel = collisions[0];
     throw new Error(

@@ -87,7 +87,7 @@ export function agentClosure(entryFile: string): { baseDir: string; files: strin
   const interopFiles = interopEntries.flatMap((interopEntry) => transitiveTsFiles(interopEntry));
 
   const allFiles = [...agencyFiles, ...interopFiles].sort();
-  const files = allFiles.filter((file, index) => allFiles.indexOf(file) === index);
+  const files = allFiles.filter((file, index) => index === 0 || file !== allFiles[index - 1]);
   return { baseDir: closureBaseDir(agencyFiles), files };
 }
 

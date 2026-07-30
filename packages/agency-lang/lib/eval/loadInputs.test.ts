@@ -234,6 +234,23 @@ describe("git sources for files", () => {
     fs.rmSync(repo, { recursive: true, force: true });
   });
 
+  it("records provenance even for an input id of __proto__ (null-prototype accumulator)", () => {
+    const { repo, first } = makeRepo();
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "__proto__", goal: "g", args: {}, files: `${repo}//tests?ref=${first}` }],
+    }));
+
+    const provenance: Record<string, { source: string; sha?: string }> = Object.create(null);
+    loadInputs(inputsFile, nanoid, { filesProvenance: provenance, sourceCacheRoot: path.join(suiteDir, "cache") });
+
+    expect(Object.hasOwn(provenance, "__proto__")).toBe(true);
+    expect(JSON.parse(JSON.stringify(provenance))["__proto__"].sha).toBe(first);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+    fs.rmSync(repo, { recursive: true, force: true });
+  });
+
   it("forbids git files sources when the suite itself came from git (one-level rule)", () => {
     const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
     const inputsFile = path.join(suiteDir, "inputs.json");

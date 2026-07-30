@@ -15,7 +15,7 @@ import { createPointwiseReporter, type PointwiseReporter } from "./reporter.js";
 import type { OptimizeMutationDiagnostic, OptimizeMutationOperation, OptimizeMutationPreview } from "./sourceMutator.js";
 import { discoverOptimizeTargets, type OptimizeTargetSet } from "./targets.js";
 import type { IterationResult, MutationProposal, OptimizeDecision, OptimizeResult } from "./types.js";
-import { WorkspaceManager, type Workspace } from "./workspace.js";
+import { WorkspaceManager, type CachePartition } from "./workspace.js";
 
 /** Result of proposing a mutation: a clean preview, or the reason it couldn't be produced. */
 export type MutationOutcome =
@@ -29,7 +29,7 @@ const MAX_PROPOSE_ATTEMPTS = 3;
  *  `files` (the candidate's complete file map, used as the workdir overlay).
  *  Reading the eval record is grading's job, not this function's. */
 export type RunInput = (
-  ws: Workspace,
+  ws: CachePartition,
   source: OptimizeTargetSet,
   files: Record<string, string>,
   input: Input,
@@ -145,7 +145,7 @@ export abstract class BaseOptimizer {
     return { ok: false, rationale, diagnostics };
   }
 
-  protected fork(): Workspace {
+  protected fork(): CachePartition {
     return this.workspace.fork();
   }
 
@@ -232,7 +232,7 @@ export abstract class BaseOptimizer {
   /** Run the agent once per input (cached by (workspace, input)), grade each, return a Scorecard.
    *  The candidate's `files` map is the overlay applied inside each per-input workdir. */
   protected async evaluate(
-    ws: Workspace,
+    ws: CachePartition,
     source: OptimizeTargetSet,
     files: Record<string, string>,
     inputs: Input[],
@@ -254,7 +254,7 @@ export abstract class BaseOptimizer {
    *  to `evalRunLoadedInputs`. The per-input `working_dir` field is forbidden
    *  here (the caller-supplied seed would conflict with it). */
   private async runInputViaEval(
-    ws: Workspace,
+    ws: CachePartition,
     source: OptimizeTargetSet,
     files: Record<string, string>,
     input: Input,

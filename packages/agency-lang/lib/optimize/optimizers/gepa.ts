@@ -13,7 +13,7 @@ import { makeRng, sampleWithoutReplacement, type Rng } from "../rng.js";
 import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationDiagnostic, type OptimizeMutationOperation, type OptimizeMutationPreview } from "../sourceMutator.js";
 import { fileMap, type OptimizeTarget as OptimizeTargetDecl, type OptimizeTargetSet } from "../targets.js";
 import type { MutationProposal, OptimizeDecision, OptimizeResult } from "../types.js";
-import type { Workspace } from "../workspace.js";
+import type { CachePartition } from "../workspace.js";
 
 export type GepaConfig = BaseOptimizerConfig & {
   minibatch: number;
@@ -29,7 +29,7 @@ export type GepaDeps = BaseOptimizerDeps & {
 /** A fully-evaluated point in the search: a workspace + its grading + its target set/files. */
 type Candidate = {
   iter: number | "baseline";
-  ws: Workspace;
+  ws: CachePartition;
   scorecard: Scorecard;
   targetSet: OptimizeTargetSet;
   files: Record<string, string>;
@@ -166,7 +166,7 @@ export class Gepa extends BaseOptimizer {
 
   /** Grade a candidate `files` map (the overlay) on `inputs`. */
   private async makeCandidate(
-    iter: number | "baseline", ws: Workspace, targetSet: OptimizeTargetSet, inputs: Input[], files: Record<string, string>,
+    iter: number | "baseline", ws: CachePartition, targetSet: OptimizeTargetSet, inputs: Input[], files: Record<string, string>,
   ): Promise<Candidate> {
     const scorecard = await this.evaluate(ws, targetSet, files, inputs);
     return { iter, ws, scorecard, targetSet, files };

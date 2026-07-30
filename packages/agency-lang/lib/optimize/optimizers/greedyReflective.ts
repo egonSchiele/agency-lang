@@ -8,7 +8,7 @@ import { formatDiagnostics } from "../reporter.js";
 import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationDiagnostic, type OptimizeMutationOperation, type OptimizeMutationPreview } from "../sourceMutator.js";
 import { fileMap, type OptimizeTargetSet } from "../targets.js";
 import type { MutationProposal, OptimizeResult } from "../types.js";
-import type { Workspace } from "../workspace.js";
+import type { CachePartition } from "../workspace.js";
 
 /** Test seams: inject proposal / preview so the loop can run without real LLM or AST work.
  *  (Target discovery is injected via BaseOptimizerDeps.discover.) */
@@ -20,7 +20,7 @@ export type GreedyDeps = BaseOptimizerDeps & {
 /** A fully-evaluated point in the search: a workspace + its grading + its target set/files. */
 type Candidate = {
   iter: number | "baseline";
-  ws: Workspace;
+  ws: CachePartition;
   scorecard: Scorecard;
   targetSet: OptimizeTargetSet;
   files: Record<string, string>;
@@ -115,7 +115,7 @@ export class GreedyReflective extends BaseOptimizer {
   /** Grade a candidate `files` map (the overlay) on `inputs`. */
   private async makeCandidate(
     iter: number | "baseline",
-    ws: Workspace,
+    ws: CachePartition,
     targetSet: OptimizeTargetSet,
     inputs: Input[],
     files: Record<string, string>,

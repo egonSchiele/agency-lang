@@ -2,22 +2,20 @@ import { main } from "./agent.js";
 import { writeFileSync } from "fs";
 
 // Two slow tools (200ms each) are called in one LLM round. Under
-// PromptRunner.parallel, both run concurrently, so total wall-clock for
-// the tool round is ~200ms — not ~400ms as it would be if the round
-// ran them sequentially.
-const start = performance.now();
+// PromptRunner.parallel, both run concurrently, so both sit inside their
+// sleep at the same moment and the agent's shared counter reaches 2. If the
+// round ran them one after the other, the counter would never exceed 1.
+//
+// The agent reports that overlap itself rather than the test timing the
+// call, so a slow or loaded CI runner cannot change the answer.
 const result = await main();
-const elapsed = performance.now() - start;
 
 writeFileSync(
   "__result.json",
   JSON.stringify(
     {
-      data: result.data,
-      // Use a coarse threshold to avoid CI flake. Sequential execution
-      // would be > 400ms; the parallel path comfortably finishes in
-      // < 350ms even on slow runners.
-      ranInParallel: elapsed < 350,
+      data: result.data.data,
+      ranInParallel: result.data.ranInParallel,
     },
     null,
     2,

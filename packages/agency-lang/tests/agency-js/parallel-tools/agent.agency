@@ -1,13 +1,35 @@
+// Both tools bump a shared counter on entry and drop it on exit. If the two
+// tool calls in one LLM round overlap, the counter reaches 2 while both are
+// sleeping. Running them one after the other can never get it above 1.
+let running: number = 0
+let sawOverlap: boolean = false
+
+def enter() {
+  running = running + 1
+  if (running > 1) {
+    sawOverlap = true
+  }
+}
+
+def leave() {
+  running = running - 1
+}
+
 def slowTool1(): string {
+  enter()
   sleep(200)
+  leave()
   return "tool1 done"
 }
 
 def slowTool2(): string {
+  enter()
   sleep(200)
+  leave()
   return "tool2 done"
 }
 
 node main() {
-  return llm("call both slowTool1 and slowTool2", { tools: [slowTool1, slowTool2] })
+  const data = llm("call both slowTool1 and slowTool2", { tools: [slowTool1, slowTool2] })
+  return { data: data, ranInParallel: sawOverlap }
 }

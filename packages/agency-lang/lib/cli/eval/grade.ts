@@ -32,8 +32,15 @@ export async function evalGrade(
   // `grade` is undefined here: there is no point running this command with
   // grading switched off, so the same resolver's default path applies.
   const graders = await resolveGraders(gradersPath, undefined, config);
+  // resolveGraders only returns undefined for --no-grade, which this command never
+  // passes, and otherwise falls back to the goal judge — so the reachable case is a
+  // grading module that default-exports an empty array.
   if (!graders || graders.length === 0) {
-    throw new Error("No graders resolved; pass --graders <file> or set eval.graders in agency.json.");
+    throw new Error(
+      gradersPath === undefined
+        ? "No graders resolved."
+        : `The grading module at ${gradersPath} exported no graders.`,
+    );
   }
 
   const scorecard = await gradeRun(resolvedRunDir, {

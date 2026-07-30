@@ -21,19 +21,21 @@ export type GradingContext = {
  * Score one input. Gates run first and short-circuit the input the moment one
  * fails, so a failing gate never pays for the advisory graders behind it.
  *
- * An input that produced nothing is scored 0 rather than throwing: a suite needs
- * mixed results, not an abort. The optimizer still refuses a baseline in this
- * state, via `requireBaselineGatesPass`.
+ * An input with nothing to grade is scored 0 rather than throwing — see
+ * {@link lookUpOutput} for the three ways that happens, each with its own reason.
+ * A suite needs mixed results, not an abort. The optimizer still refuses a
+ * baseline in this state, via `requireBaselineGatesPass`.
  */
 export async function gradeInput(
   input: Input,
   result: EvalRunInputResult,
   ctx: GradingContext,
 ): Promise<InputGrades> {
-  const run = buildAgentRun(result);
-  if (run === null) {
-    return ungraded(input, "the agent produced no output to grade");
+  const lookup = lookUpOutput(result);
+  if ("reason" in lookup) {
+    return ungraded(input, lookup.reason);
   }
+  const run = lookup.run;
 
   const applicable = ctx.graders.filter((grader) => grader.gradesInput(input));
   const gates = applicable.filter((grader) => grader.mustPass());
@@ -56,6 +58,23 @@ export async function gradeInput(
   );
 
   return { input, run, grades: [...gateGrades, ...advisoryGrades], gatesPassed: true };
+}
+
+/**
+ * Fail fast on a misconfigured grader, checked against one input before any agent
+ * runs. Match-based graders override `validateInput` to reject an unresolved
+ * `matchOn`; without this the error surfaces per input, after the whole suite has
+ * already been run and paid for. Mirrors what `BaseOptimizer` does in its preamble.
+ */
+export function validateGraders(graders: BaseGrader[], input: Input | undefined): void {
+  if (input === undefined) {
+    return;
+  }
+  for (const grader of graders) {
+    if (grader.gradesInput(input)) {
+      grader.validateInput(input);
+    }
+  }
 }
 
 /**
@@ -157,23 +176,50 @@ function readInputSpec(result: EvalRunInputResult): Input | null {
   if (!fs.existsSync(file)) {
     return null;
   }
-  return globalThis.JSON.parse(fs.readFileSync(file, "utf8")) as Input;
+  try {
+    return globalThis.JSON.parse(fs.readFileSync(file, "utf8")) as Input;
+  } catch (error) {
+    // Degrade to a bare input rather than failing the pass; the caller falls back
+    // to `{ id, args: {} }`, which costs graders their goal/expected but no more.
+    console.warn(`grading: could not read input spec ${file}: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
 }
 
-/** Read the record and pull out the graded output. Null when there is none. */
-function buildAgentRun(result: EvalRunInputResult): AgentRun | null {
+/** Either the run to grade, or why there is nothing to grade. */
+type OutputLookup = { run: AgentRun } | { reason: string };
+
+/**
+ * Read the record and pull out the graded output.
+ *
+ * Three distinct failures, each with its own reason: no record on disk, a record
+ * that will not parse, and a record carrying no output. Conflating them sends the
+ * reader after the wrong problem. A corrupt record in particular must not throw:
+ * in the `eval run` inline path the exception would arrive after every agent had
+ * already run and been paid for, taking the whole result down over one bad file.
+ */
+function lookUpOutput(result: EvalRunInputResult): OutputLookup {
   if (!result.evalRecordPath || !fs.existsSync(result.evalRecordPath)) {
-    return null;
+    return { reason: "no eval record found on disk for this input" };
   }
-  const record = globalThis.JSON.parse(fs.readFileSync(result.evalRecordPath, "utf8")) as EvalRecord;
+  let record: EvalRecord;
+  try {
+    record = globalThis.JSON.parse(fs.readFileSync(result.evalRecordPath, "utf8")) as EvalRecord;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`grading: could not read eval record ${result.evalRecordPath}: ${message}`);
+    return { reason: `eval record unreadable: ${message}` };
+  }
   const outputs = record.evalOutputs ?? [];
   if (outputs.length === 0) {
-    return null;
+    return { reason: "the agent produced no output to grade" };
   }
   return {
-    output: outputs[outputs.length - 1].value as Json,
-    recordPath: result.evalRecordPath,
-    workdir: result.workdirPath,
-    record,
+    run: {
+      output: outputs[outputs.length - 1].value as Json,
+      recordPath: result.evalRecordPath,
+      workdir: result.workdirPath,
+      record,
+    },
   };
 }

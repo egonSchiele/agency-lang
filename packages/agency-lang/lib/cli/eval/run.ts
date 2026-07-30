@@ -9,7 +9,7 @@ import { parseTarget } from "@/cli/util.js";
 import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
 import type { BaseGrader } from "@/eval/grading/baseGrader.js";
 import { breakdown } from "@/eval/grading/gradeBreakdown.js";
-import { gradeRun } from "@/eval/grading/gradeRun.js";
+import { gradeRun, validateGraders } from "@/eval/grading/gradeRun.js";
 import { LlmJudge } from "@/eval/grading/graders/llmJudge.js";
 import { loadGradingModule } from "@/eval/grading/gradingModule.js";
 import { StatelogParser } from "@/eval/statelogParser.js";
@@ -164,7 +164,11 @@ export async function evalRun(
   const inputs =
     selection === "goal"
       ? [inputFromGoal(opts.goal ?? "")]
-      : loadInputs(path.resolve(opts.inputs ?? ""), nanoid, { requireGoal: gradersPath === undefined });
+      // A goal is required only when the default goal judge will actually run it:
+      // not under --no-grade, and not when a custom grading module is supplied.
+      : loadInputs(path.resolve(opts.inputs ?? ""), nanoid, {
+        requireGoal: graders !== undefined && gradersPath === undefined,
+      });
 
   return evalRunLoadedInputs({
     graders,
@@ -201,6 +205,11 @@ export async function evalRunLoadedInputs(
 
   // One closure walk per call when no caller-supplied seed; never per input.
   const defaultSeed = opts.seed ?? deriveSeedFromAgent(target.agentFile, absoluteAgent);
+
+  // Before any agent runs: a misconfigured grader should not cost a whole suite.
+  if (opts.graders) {
+    validateGraders(opts.graders, opts.inputs[0]);
+  }
 
   const state = initializeEvalRun({
     runId,

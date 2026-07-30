@@ -147,6 +147,28 @@ describe("gradeRun", () => {
     expect(card.perInput[0].ungradedReason).toMatch(/errored/i);
   });
 
+  it("scores an input with an unreadable eval record 0 instead of throwing", async () => {
+    const { runDir, result } = makeRun({ id: "a", output: "hello" });
+    fs.writeFileSync(result.evalRecordPath, "{ this is not json");
+    const never = grader(() => 1, { name: "never-runs" });
+
+    // The mirror of the missing-record case: one corrupt file must not take down a
+    // whole pass whose agents have already run and been paid for.
+    const card = await gradeRun(runDir, ctx([never]));
+
+    expect(card.objective()).toBe(0);
+    expect(card.perInput[0].ungradedReason).toMatch(/unreadable/i);
+  });
+
+  it("distinguishes no output from a missing record and from an unreadable one", async () => {
+    const { runDir } = makeRun({ id: "a" });   // record present, evalOutputs empty
+    const never = grader(() => 1, { name: "never-runs" });
+
+    const card = await gradeRun(runDir, ctx([never]));
+
+    expect(card.perInput[0].ungradedReason).toMatch(/produced no output/i);
+  });
+
   it("distinguishes a lost eval record from a failed agent run", async () => {
     const { runDir, result } = makeRun({ id: "a", output: "hello" });
     fs.rmSync(result.evalRecordPath);

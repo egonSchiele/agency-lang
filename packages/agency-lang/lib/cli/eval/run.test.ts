@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { grader } from "@/eval/grading/functionGrader.js";
+import { ExactMatchGrader as ExactMatch } from "@/eval/grading/graders/builtinGraders.js";
 import type { EvalInputRunner, EvalRecordExtractor } from "@/eval/runEvalInput.js";
 
 import { evalRun, evalRunLoadedInputs, resolveEvalRunTarget, validateInputSelection } from "./run.js";
@@ -222,6 +223,25 @@ describe("eval run CLI", () => {
       // One of two inputs scored 1, the other 0 — the mean is 0.5, not 0.
       expect(result.grading!.objective).toBeCloseTo(0.5);
       expect(result.grading!.gatesPassed).toBe(false);
+    });
+
+    it("rejects a misconfigured grader before running any agent", async () => {
+      const opts = setup("badgrader", [{ id: "a", goal: "g", args: {} }]);
+      let ran = false;
+      const countingRunner: EvalInputRunner = async ({ statelogPath }) => {
+        ran = true;
+        fs.writeFileSync(statelogPath, "{}\n");
+        return { ok: true };
+      };
+
+      // ExactMatch's matchOn defaults to `expected`, which this input lacks.
+      await expect(evalRunLoadedInputs(
+        { ...opts, graders: [new ExactMatch({})] },
+        { runner: countingRunner, extractor: recordExtractor("hello") },
+      )).rejects.toThrow(/matchOn/);
+
+      expect(ran).toBe(false);
+      expect(fs.existsSync(path.join(tmpDir, "runs", "badgrader"))).toBe(false);
     });
 
     it("skips grading when no graders are supplied, so the optimizer path is unaffected", async () => {

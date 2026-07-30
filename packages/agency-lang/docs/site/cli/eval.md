@@ -8,7 +8,7 @@ description: Documents the `agency eval extract` command for converting a captur
 `agency eval` is the umbrella for tools that run, grade, compare, and analyze agent runs from their captured statelog traces. The main subcommands are:
 
 ```
-agency eval run --agent <file>[:<node>] (--inputs <file|dir> | --goal <text>) [--graders <file>] [--no-grade]
+agency eval run --agent <file>[:<node>] (--inputs <file|dir|git-url> | --goal <text>) [--graders <file>] [--no-grade]
 agency eval grade <runDir> [--graders <file>] [-o <path>]
 agency eval optimize <file>[:<node>] [--inputs <file|dir>] [--goal <text>] [--graders <file>] [--validation-inputs <file|dir> | --validation-split <ratio>]
 agency eval extract <file>
@@ -34,7 +34,7 @@ Input suites can be either a JSON file with `{ "inputs": [...] }` or a directory
 }
 ```
 
-`goal` is required (for `eval run` and the default optimize judge; a custom grading module makes it optional — see [Custom graders](#custom-graders)). `args` defaults to `{}`. `id` defaults to a generated id and must be filesystem-safe when supplied. `expected` is an optional gold output (any JSON) read by match graders and surfaced to the optimizer's reflection. `working_dir` is copied into the input workdir before the subprocess runs, so each input can mutate its own isolated fixture copy.
+`goal` is required (for `eval run` and the default optimize judge; a custom grading module makes it optional — see [Custom graders](#custom-graders)). `args` defaults to `{}`. `id` defaults to a generated id and must be filesystem-safe when supplied. `expected` is an optional gold output (any JSON) read by match graders and surfaced to the optimizer's reflection. `files` names the test's fixture directory (see [Test files and suites](#test-files-and-suites)). `working_dir` is deprecated in favor of `files`.
 
 For a single ad-hoc run, use `--goal` instead of `--inputs`:
 
@@ -45,7 +45,7 @@ agency eval run --agent agent.agency --goal "Answer with a concise summary"
 Options:
 
 - `--agent <file>[:<node>]` — required agent target. Directory targets resolve to `main.agency` inside the directory. The node defaults to `main`.
-- `--inputs <file|dir>` — input suite file or directory. Mutually exclusive with `--goal`.
+- `--inputs <file|dir|git-url>` — input suite: a JSON file, a directory, or a git source (`URL[//subdir][?ref=...]`). Mutually exclusive with `--goal`.
 - `--goal <text>` — create one inline input with this goal. Mutually exclusive with `--inputs`.
 - `--run-id <id>` — output run id. Defaults to a generated id.
 - `--runs-dir <path>` — output root. Defaults to `eval.runsDir` in `agency.json`, or `runs/`.
@@ -53,19 +53,64 @@ Options:
 - `--graders <file>` — a TypeScript grading module. Defaults to `eval.graders` in `agency.json`, then the bundled goal judge.
 - `--no-grade` — skip scoring; only run the agent.
 
+## Test files and suites
+
+A workdir is seeded from **two ingredients**: the input's declared files and the
+agent's own code — the entry `.agency` file, everything it transitively imports,
+and any local TypeScript files those imports use (computed; never list agent
+files by hand). The same suite can therefore grade any agent.
+
+An input declares its fixture directory with `files`; the contents land at the
+workdir root:
+
+```jsonc
+{ "id": "summarize", "goal": "Summarize the report into summary.md",
+  "args": {}, "files": "./fixtures/summarize" }
+```
+
+For file-heavy tests, a directory form is equivalent: a directory of test
+directories, each holding `test.json` (the input spec; `id` defaults to the
+directory name) and an optional `files/` directory. Point `--inputs` at the
+parent. A directory holds one suite shape: a single `inputs.json`, loose
+one-input `.json` files, or test directories — never a mix.
+
+Suites and fixtures can come from git. Anywhere a directory is accepted, a git
+source works too:
+
+```bash
+agency eval run --agent a.agency --inputs 'github.com/you/evals//tests?ref=v1.2'
+```
+
+`//subdir` names a directory inside the repo; `?ref=` takes a branch, tag, or
+commit sha (a local path with `?ref=` reads that repo's files as of the commit).
+Whatever you wrote, `config.json` records the **resolved sha**, so any past run
+is pinnable by copying its sha into `?ref=`. Clones cache under
+`~/.agency/cache/git/`; branch refs re-fetch per run, shas never do. A suite
+loaded from git may not point `files` at another git source (sources resolve
+one level deep).
+
+An agent that reads a project file that was never seeded gets a file-not-found
+error inside the workdir; the run's `error.txt` lists what was seeded and which
+fix applies. The `working_dir` field is deprecated — it fused fixtures and agent
+files into one directory, which tied a test to one agent.
+
 Each run writes:
 
 ```text
 runs/<run-id>/
-  config.json
+  config.json           # resolved provenance: agent closure with file hashes,
+                        #   inputs source (resolved sha when git), options
+  summary.json          # counts + the latest grading block
+  verifier/
+    grading.json        # what the graders concluded; re-grades write
+                        #   verifier-2/, verifier-3/ instead of overwriting
   inputs/<input-id>/
-    input.json
-    statelog.jsonl
-    eval-record.json
-    workdir/
-    error.txt
-  summary.json
-  grading.json        only after `agency eval grade`
+    input.json          # the resolved input spec
+    agent/
+      statelog.jsonl    # what the agent did
+      eval-record.json  # the normalized trace
+      error.txt         # only on error
+    workdir/            # the isolated directory the agent ran in
 ```
 
 `summary.json` contains the run id, agent label, input results, success/error counts, and — unless you passed `--no-grade` — a `grading` block with the objective and a per-input breakdown. `eval-record.json` is produced with the same extractor described below whenever the input produced a non-empty statelog.
@@ -143,9 +188,10 @@ agency eval grade runs/abc --graders graders.ts
 #   objective  0.71
 ```
 
-It reads the run directory, scores it again, and writes `grading.json` beside the
-run. `summary.json` is never rewritten, so the original score survives. Use `-o`
-to keep several gradings of the same run.
+It reads the run directory, scores it again, and writes the next `verifier-N/`
+directory (`verifier/`, then `verifier-2/`, `verifier-3/`, …), so every grading
+pass survives. `summary.json` is never rewritten. Use `-o` to write out of tree
+instead.
 
 This costs nothing and is deterministic for `ExactMatch`, `Contains`,
 `Similarity`, and function graders that do not call `judge`. An `LlmJudge`, or a

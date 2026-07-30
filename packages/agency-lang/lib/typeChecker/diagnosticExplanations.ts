@@ -481,6 +481,10 @@ def f(): string {
 **How to fix:** keep the one marker that describes the function and remove the other.`,
 
   // ---- AG8: code templates and holes ----
+  spliceTopLevelStatement: `A splice at the top level of a file adds the generator's output to the file, so that output is held to the same rule as anything you write there yourself: top-level code runs at initialization and cannot branch, loop, or wait.
+
+**How to fix:** have the generator return declarations (\`node\`, \`def\`, \`type\`), bindings, or plain calls. If it needs to branch, put the branching inside a \`def\` it declares, or splice it inside a node body instead.`,
+
   topLevelStatementNotAllowed: `Code at the top level of a file runs when the module is initialized, not when a node executes. That phase has no way to branch, loop, or wait, so a statement that controls execution has nothing to control.
 
 **How to fix:** move it inside a node or a function. Top-level code may declare things (\`node\`, \`def\`, \`type\`, imports), bind values (\`const x = 1\`), and call functions for their effect (\`print("ready")\`) — nothing else.`,

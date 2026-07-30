@@ -159,6 +159,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG8011](templates.md#ag8011) | The splice argument `&#123;name&#125;` is declared in this file, so it does not exist yet when the generator runs. Splice arguments may be literals, code literals, or imported names. |
 | [AG8012](templates.md#ag8012) | The generator `&#123;name&#125;` declares `&#123;declared&#125;`, which this file already declares. Generated declarations may not replace existing ones. |
 | [AG8013](templates.md#ag8013) | The generator `&#123;name&#125;` produced an exported declaration (`&#123;declared&#125;`). Generated declarations cannot be exported yet, because other files resolve imports without running generators. Remove the `export`. |
+| [AG8014](templates.md#ag8014) | The generator `&#123;name&#125;` returned &#123;kind&#125;, which cannot sit at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait. |
 
 ## Lint
 

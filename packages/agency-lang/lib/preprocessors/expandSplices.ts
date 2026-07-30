@@ -8,6 +8,7 @@ import { BUILTIN_VARIABLES } from "../config.js";
 import { PRELUDE_NAMES } from "../prelude.js";
 import { BUILTIN_FUNCTION_TYPES } from "../typeChecker/builtins.js";
 import { KINDS_FOR_SORT, stampOrigin } from "../runtime/template/origin.js";
+import { isLegalAtTopLevel } from "../utils/topLevel.js";
 import { kindOf } from "../runtime/template/code.js";
 import {
   checkGeneratorEligible,
@@ -462,6 +463,24 @@ function importedNamesIn(nodes: AgencyNode[]): string[] {
  * Requiring `program` would make generated constants impossible. At the
  * top level a statement is a declaration, so this costs nothing.
  */
+/** How a node reads in a message: `ifElse` means nothing to a user. */
+function describeNodeKind(type: string): string {
+  // Null-prototype: keyed by node type strings (house pattern).
+  const names: Record<string, string> = Object.assign(Object.create(null), {
+    ifElse: "an `if` statement",
+    whileLoop: "a `while` loop",
+    forLoop: "a `for` loop",
+    matchBlock: "a `match` block",
+    messageThread: "a `thread` block",
+    guardBlock: "a `guard` block",
+    finalizeBlock: "a `finalize` block",
+    handleBlock: "a handler",
+    returnStatement: "a `return`",
+    interruptStatement: "an interrupt",
+  });
+  return Object.hasOwn(names, type) ? names[type] : `a \`${type}\``;
+}
+
 /** Exhaustive, not a ternary: a third position value silently described a
  *  statement mismatch as "expression position needs an expr fragment". */
 function expectedKindFor(position: Splice["position"]): string {
@@ -572,6 +591,24 @@ function graft(
   const captured = checkNoCapture(splice, code, generatorName);
   if (captured !== null) {
     return { ok: false, diagnostic: captured };
+  }
+  // Declaration position: the kind gate above admits both `program` and
+  // `statements`, and neither says whether the NODES may sit at the top
+  // level. One fragment can hold `const x = 1` and an `if` at once, so this
+  // is per-node or nothing. Same predicate the compile path uses, so
+  // generated code is held to the standard written code is held to.
+  if (splice.position === "decl") {
+    const illegal = code.nodes.find((node) => !isLegalAtTopLevel(node));
+    if (illegal !== undefined) {
+      return {
+        ok: false,
+        diagnostic: {
+          diagnostic: "spliceTopLevelStatement",
+          params: { name: generatorName, kind: describeNodeKind(illegal.type) },
+          loc: splice.loc ?? ORIGIN_UNKNOWN,
+        },
+      };
+    }
   }
   if (!KINDS_FOR_POSITION[splice.position].includes(kindOf(code))) {
     return {

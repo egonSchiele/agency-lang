@@ -172,3 +172,13 @@ Other files find out what a module exports by reading its source, not by compili
 **How to fix:** drop the `export` from the generated declaration. If the name needs to be shared, write a hand-authored wrapper that calls it and export that.
 
 Lifting this restriction is tracked as issue #687.
+
+<a id="ag8014"></a>
+
+## AG8014 — The generator `&#123;name&#125;` returned &#123;kind&#125;, which cannot sit at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait.
+
+*Default severity: error.*
+
+A splice at the top level of a file adds the generator's output to the file, so that output is held to the same rule as anything you write there yourself: top-level code runs at initialization and cannot branch, loop, or wait.
+
+**How to fix:** have the generator return declarations (`node`, `def`, `type`), bindings, or plain calls. If it needs to branch, put the branching inside a `def` it declares, or splice it inside a node body instead.

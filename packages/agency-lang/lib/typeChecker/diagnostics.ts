@@ -620,6 +620,12 @@ export const DIAGNOSTICS = {
     message:
       "The generator `{name}` reaches non-Agency code through `{importPath}`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript raises no interrupts and cannot be checked. Set `allowNonAgencyGenerators` in your config to permit it.",
   },
+  spliceTopLevelStatement: {
+    code: "AG8014",
+    severity: "error",
+    message:
+      "The generator `{name}` returned {kind}, which cannot sit at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait.",
+  },
   spliceFragmentKindMismatch: {
     code: "AG8007",
     severity: "error",

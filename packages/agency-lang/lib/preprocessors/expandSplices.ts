@@ -462,8 +462,36 @@ function importedNamesIn(nodes: AgencyNode[]): string[] {
  * Requiring `program` would make generated constants impossible. At the
  * top level a statement is a declaration, so this costs nothing.
  */
+/** Exhaustive, not a ternary: a third position value silently described a
+ *  statement mismatch as "expression position needs an expr fragment". */
+function expectedKindFor(position: Splice["position"]): string {
+  switch (position) {
+    case "decl":
+      return "program";
+    case "statement":
+      return "statements";
+    case "expr":
+      return "expr";
+  }
+}
+
+function positionLabel(position: Splice["position"]): string {
+  switch (position) {
+    case "decl":
+      return "declaration";
+    case "statement":
+      return "statement";
+    case "expr":
+      return "expression";
+  }
+}
+
 const KINDS_FOR_POSITION: Record<Splice["position"], string[]> = {
   decl: [...KINDS_FOR_SORT.decl, "statements"],
+  // The same set a statements HOLE accepts, right for the same reason: an
+  // expression is a legal statement, and a program grafted into a body is
+  // judged when the completed program compiles.
+  statement: KINDS_FOR_SORT.statements,
   expr: KINDS_FOR_SORT.expr,
 };
 
@@ -553,8 +581,8 @@ function graft(
         params: {
           name: generatorName,
           actual: kindOf(code),
-          expected: splice.position === "decl" ? "program" : "expr",
-          position: splice.position === "decl" ? "declaration" : "expression",
+          expected: expectedKindFor(splice.position),
+          position: positionLabel(splice.position),
         },
         loc: splice.loc ?? ORIGIN_UNKNOWN,
       },

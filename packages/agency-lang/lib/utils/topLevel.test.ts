@@ -34,6 +34,9 @@ describe("isLegalAtTopLevel: allowed", () => {
     "1 + 2",
     "true",
     "null",
+    // Supported deliberately: issue #229 made this work at module scope
+    // rather than refusing it.
+    "foo() with approve",
   ];
 
   for (const source of allowed) {

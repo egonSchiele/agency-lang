@@ -441,6 +441,18 @@ export const DIAGNOSTICS = {
     message:
       "'{callee}' can interrupt, and a finalize block cannot contain interrupts. A finalize runs while its scope shuts down, so there is nothing to resume.",
   },
+  topLevelStatementNotAllowed: {
+    code: "AG3017",
+    severity: "error",
+    message:
+      "{kind} cannot sit at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait — move it inside a node or a function.",
+  },
+  topLevelHandlerNotAllowed: {
+    code: "AG3018",
+    severity: "error",
+    message:
+      "A handler cannot be registered at the top level of a file. Handlers must be inside a node or a function, where there is execution for them to guard.",
+  },
   undefinedFunction: {
     code: "AG4004",
     severity: "error",

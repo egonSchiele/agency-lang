@@ -63,6 +63,8 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG3014](effects.md#ag3014) | &#123;who&#125; may raise any effect (its type has no 'raises' clause), which exceeds the 'raises &lt;&#123;allowed&#125;&gt;' allowed by type '&#123;type&#125;'. Add a 'raises' clause to the value's type. |
 | [AG3015](effects.md#ag3015) | &#123;who&#125; raises effect '&#123;effect&#125;', which exceeds the 'raises &lt;&#123;allowed&#125;&gt;' allowed by type '&#123;type&#125;'. Add '&#123;effect&#125;' to the clause, or use a target type that allows it. |
 | [AG3016](effects.md#ag3016) | '&#123;callee&#125;' can interrupt, and a finalize block cannot contain interrupts. A finalize runs while its scope shuts down, so there is nothing to resume. |
+| [AG3017](effects.md#ag3017) | &#123;kind&#125; cannot sit at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait — move it inside a node or a function. |
+| [AG3018](effects.md#ag3018) | A handler cannot be registered at the top level of a file. Handlers must be inside a node or a function, where there is execution for them to guard. |
 
 ## Names, scope, and reserved words
 

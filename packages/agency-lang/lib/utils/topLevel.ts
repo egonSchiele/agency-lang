@@ -32,6 +32,10 @@ const LEGAL_AT_TOP_LEVEL: Record<AgencyNode["type"], boolean> = {
   valueAccess: true,
   binOpExpression: true,
   keyword: true,
+  // `foo() with approve` at module scope. This hit the same crash and was
+  // made to WORK rather than refused — partitionProgram special-cases it
+  // (issue #229), which is the other way to answer this question.
+  withModifier: true,
 
   // `static <inner>` — judged by its inner statement, see below.
   staticStatement: true,
@@ -70,7 +74,6 @@ const LEGAL_AT_TOP_LEVEL: Record<AgencyNode["type"], boolean> = {
   parallelBlock: false,
   seqBlock: false,
   tryExpression: false,
-  withModifier: false,
 
   // Node-relative: there is no enclosing node at file scope.
   returnStatement: false,

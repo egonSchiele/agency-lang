@@ -80,7 +80,9 @@ const LEGAL_AT_TOP_LEVEL: Record<AgencyNode["type"], boolean> = {
   gotoStatement: false,
 
   // Interrupts need a running node. Both spellings compile today and then
-  // crash with `__self is not defined`; refusing is the better error.
+  // crash with `__self is not defined`; refusing is the better error. The
+  // parser advertises them (staticStatementParser's inner list) and the
+  // backend never implemented them — #728.
   interruptStatement: false,
 
   // Sub-expressions and patterns, which are not statements at all.

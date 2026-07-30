@@ -29,6 +29,26 @@ function withImports(
 // that diagnostic.
 const SILENT_UNDEF = { typechecker: { undefinedFunctions: "silent" as const } };
 
+/**
+ * `typeCheck` minus the top-level-statement rule (AG3017 / AG3018).
+ *
+ * Several fixtures below place control flow — an `if`, a loop, a handler —
+ * directly in `program.nodes`, which a real program cannot do: top-level
+ * code runs at initialization and cannot branch, loop, or guard. Those
+ * fixtures exist to exercise type inference and scoping, and they count
+ * errors exactly, so the unrelated diagnostic is filtered out here. The rule
+ * itself is covered in `lib/typeChecker/topLevelStatements.test.ts`.
+ */
+function inferenceCheck(program: AgencyProgram) {
+  const result = typeCheck(program);
+  const topLevelRule = ["AG3017", "AG3018"];
+  return {
+    ...result,
+    errors: result.errors.filter((e) => !topLevelRule.includes(e.code)),
+  };
+}
+
+
 describe("TypeChecker", () => {
   describe("function call argument type matching", () => {
     it("should pass with correct argument types", () => {
@@ -1175,7 +1195,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain("not assignable to parameter type");
       expect(errors[0].params?.actual).toBe("string");
@@ -1228,7 +1248,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].params?.actual).toBe("number");
       expect(errors[0].params?.expected).toBe("string");
@@ -1260,7 +1280,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].params?.actual).toBe("boolean");
     });
@@ -1993,7 +2013,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toMatch(/For-loop iterable must be an array/);
     });
@@ -2040,7 +2060,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(0);
     });
 
@@ -2083,7 +2103,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].params?.actual).toBe("string");
       expect(errors[0].params?.expected).toBe("number");
@@ -2133,7 +2153,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(0);
     });
 
@@ -2178,7 +2198,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].params?.actual).toBe("number");
       expect(errors[0].params?.expected).toBe("string");
@@ -2231,7 +2251,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].params?.actual).toBe("number");
       expect(errors[0].params?.expected).toBe("string");
@@ -2293,7 +2313,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].params?.actual).toBe("number");
       expect(errors[0].params?.expected).toBe("string");
@@ -2330,7 +2350,7 @@ describe("TypeChecker", () => {
         ],
       };
 
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(0);
     });
   });
@@ -3211,7 +3231,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toMatch(/not assignable.*boolean/);
     });
@@ -3233,7 +3253,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(inferenceCheck(program).errors).toHaveLength(0);
     });
 
     it("flags non-boolean while condition", () => {
@@ -3253,7 +3273,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      const { errors } = typeCheck(program);
+      const { errors } = inferenceCheck(program);
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toMatch(/not assignable.*boolean/);
     });
@@ -3283,7 +3303,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(inferenceCheck(program).errors).toHaveLength(0);
     });
   });
 
@@ -3503,7 +3523,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(inferenceCheck(program).errors).toHaveLength(0);
     });
 
     it("declarations inside seq block are visible after", () => {
@@ -3536,7 +3556,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      const errors = typeCheck(program).errors;
+      const errors = inferenceCheck(program).errors;
       expect(errors.length).toBeGreaterThanOrEqual(1);
       expect(errors[0].message).toMatch(/not assignable to parameter type 'string'/);
     });
@@ -3571,7 +3591,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      expect(typeCheck(program).errors).toHaveLength(0);
+      expect(inferenceCheck(program).errors).toHaveLength(0);
     });
 
     it("imported function call uses imported signature for return type", () => {
@@ -3854,7 +3874,7 @@ describe("TypeChecker", () => {
           },
         ],
       };
-      const errors = typeCheck(program).errors;
+      const errors = inferenceCheck(program).errors;
       expect(errors.length).toBeGreaterThanOrEqual(1);
       expect(errors[0].message).toMatch(/not assignable to parameter type 'string'/);
     });

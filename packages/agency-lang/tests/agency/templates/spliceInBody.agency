@@ -1,0 +1,9 @@
+import { callFunc } from "./spliceInBodyGen.agency"
+
+// The original report: a generator returning statements, spliced into a
+// node body. Refused before this change, because a splice occupying a
+// whole statement was in expression position.
+node main(): string {
+  $( callFunc() )
+  return "ok"
+}

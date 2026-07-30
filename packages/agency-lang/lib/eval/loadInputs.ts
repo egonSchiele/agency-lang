@@ -37,14 +37,60 @@ export function loadInputsFromFile(filePath: string, makeId: MakeId = nanoid, op
   );
 }
 
+/** A parsed json file whose top-level shape is the suite-file wrapper. */
+function isWrapperFile(filePath: string): boolean {
+  const parsed = readJson(filePath);
+  return typeof parsed === "object" && parsed !== null && Array.isArray((parsed as Record<string, unknown>).inputs);
+}
+
 function loadInputsFromDirectory(directoryPath: string, makeId: MakeId, options: LoadOptions): Input[] {
-  const files = fs
-    .readdirSync(directoryPath)
-    .filter((file) => file.endsWith(".json"))
+  const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
+  const jsonFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => entry.name).sort();
+  const testDirs = entries
+    .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(directoryPath, entry.name, "test.json")))
+    .map((entry) => entry.name)
     .sort();
+  const wrapperFiles = jsonFiles.filter((name) => isWrapperFile(path.join(directoryPath, name)));
+  const looseFiles = jsonFiles.filter((name) => !wrapperFiles.includes(name));
+
+  const shapes = [wrapperFiles, looseFiles, testDirs].filter((group) => group.length > 0);
+  if (shapes.length > 1) {
+    throw new Error(
+      `Input directory ${directoryPath} mixes suite shapes ` +
+      `(${shapes.map((group) => group[0]).join(", ")}). Use one form per directory: ` +
+      `a single inputs file with an "inputs" array, one-input .json files, or test directories.`,
+    );
+  }
+  if (wrapperFiles.length > 1) {
+    throw new Error(`Input directory ${directoryPath} has multiple suite files: ${wrapperFiles.join(", ")}`);
+  }
+  if (wrapperFiles.length === 1) {
+    return loadInputsFromFile(path.join(directoryPath, wrapperFiles[0]), makeId, options);
+  }
+  if (testDirs.length > 0) {
+    return validateInputs(testDirs.map((name) => loadTestDir(path.join(directoryPath, name), makeId, options)));
+  }
   return validateInputs(
-    files.map((file) => normalizeInput(readJson(path.join(directoryPath, file)), directoryPath, makeId, options)),
+    looseFiles.map((name) => normalizeInput(readJson(path.join(directoryPath, name)), directoryPath, makeId, options)),
   );
+}
+
+/** The heavy form: test.json beside an optional files/ directory. Desugars to
+ *  the same Input the light form produces — id defaults to the directory
+ *  name, files to the sibling files/. */
+function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Input {
+  const raw = readJson(path.join(testDir, "test.json"));
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`${path.join(testDir, "test.json")} must contain a JSON object`);
+  }
+  const spec = { ...(raw as Record<string, unknown>) };
+  if (spec.id === undefined) {
+    spec.id = path.basename(testDir);
+  }
+  if (spec.files === undefined && fs.existsSync(path.join(testDir, "files"))) {
+    spec.files = "./files";
+  }
+  return normalizeInput(spec, testDir, makeId, options);
 }
 
 function readJson(filePath: string): unknown {

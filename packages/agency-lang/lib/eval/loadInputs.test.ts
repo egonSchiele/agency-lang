@@ -138,3 +138,73 @@ describe("files field", () => {
     fs.rmSync(suiteDir, { recursive: true, force: true });
   });
 });
+
+describe("test directories (heavy form)", () => {
+  function makeSuite(): string {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "suite-"));
+    fs.mkdirSync(path.join(suiteDir, "capital-france"));
+    fs.writeFileSync(path.join(suiteDir, "capital-france", "test.json"),
+      JSON.stringify({ goal: "Return the capital of France", args: {}, expected: "Paris" }));
+    fs.mkdirSync(path.join(suiteDir, "summarize", "files", "data"), { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, "summarize", "test.json"),
+      JSON.stringify({ goal: "Summarize the report", args: {} }));
+    fs.writeFileSync(path.join(suiteDir, "summarize", "files", "data", "report.txt"), "q3");
+    return suiteDir;
+  }
+
+  it("loads a directory of test directories, defaulting id and files", () => {
+    const suiteDir = makeSuite();
+    const inputs = loadInputs(suiteDir);
+
+    const byId = Object.fromEntries(inputs.map((input) => [input.id, input]));
+    expect(Object.keys(byId).sort()).toEqual(["capital-france", "summarize"]);
+    expect(byId["capital-france"].files).toBeUndefined();
+    expect(byId["summarize"].files).toBe(fs.realpathSync(path.join(suiteDir, "summarize", "files")));
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("an explicit id in test.json beats the directory name", () => {
+    const suiteDir = makeSuite();
+    fs.writeFileSync(path.join(suiteDir, "capital-france", "test.json"),
+      JSON.stringify({ id: "france", goal: "g", args: {} }));
+    const inputs = loadInputs(suiteDir);
+    expect(inputs.map((input) => input.id).sort()).toEqual(["france", "summarize"]);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("a lone inputs.json with a top-level inputs array loads as the file form", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "suite-"));
+    fs.writeFileSync(path.join(suiteDir, "inputs.json"), JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {} }, { id: "b", goal: "g", args: {} }],
+    }));
+    const inputs = loadInputs(suiteDir);
+    expect(inputs.map((input) => input.id)).toEqual(["a", "b"]);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("errors when a directory mixes loose input files with test directories", () => {
+    const suiteDir = makeSuite();
+    fs.writeFileSync(path.join(suiteDir, "loose-input.json"), JSON.stringify({ id: "x", goal: "g", args: {} }));
+
+    expect(() => loadInputs(suiteDir)).toThrow(/mixes.*loose-input\.json.*capital-france/s);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("errors when a wrapper inputs file sits beside other json files", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "suite-"));
+    fs.writeFileSync(path.join(suiteDir, "inputs.json"), JSON.stringify({ inputs: [{ id: "a", goal: "g", args: {} }] }));
+    fs.writeFileSync(path.join(suiteDir, "b.json"), JSON.stringify({ id: "b", goal: "g", args: {} }));
+
+    expect(() => loadInputs(suiteDir)).toThrow(/inputs\.json.*b\.json/s);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("subdirectories without test.json are ignored (fixture dirs can sit beside loose inputs)", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "suite-"));
+    fs.writeFileSync(path.join(suiteDir, "a.json"), JSON.stringify({ id: "a", goal: "g", args: {} }));
+    fs.mkdirSync(path.join(suiteDir, "shared-fixtures"));
+    const inputs = loadInputs(suiteDir);
+    expect(inputs.map((input) => input.id)).toEqual(["a"]);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+});

@@ -27,6 +27,7 @@ import { traceLog } from "@/cli/events.js";
 import { logsView } from "@/cli/logsView.js";
 import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
+import { evalGrade } from "@/cli/eval/grade.js";
 import { evalRun } from "@/cli/eval/run.js";
 import { formatGrading } from "@/eval/grading/gradeBreakdown.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
@@ -523,6 +524,22 @@ export function createProgram(deps: CliDependencies = {}): Command {
         });
       },
     );
+
+  evalCmd
+    .command("grade")
+    .description("Score a finished eval run without re-running the agent")
+    .argument("<runDir>", "Path to a run directory produced by `agency eval run`")
+    .option("--graders <file>", "TypeScript grading module (default-exports graders)")
+    .option("-o, --out <path>", "Output path (default: <runDir>/grading.json)")
+    .action(async (runDir: string, opts: { graders?: string; out?: string }) => {
+      const grading = await evalGrade(runDir, { ...opts, config: getConfig() });
+      for (const line of formatGrading(grading.objective, grading.perInput)) {
+        console.log(line);
+      }
+      if (!grading.gatesPassed) {
+        process.exit(2);
+      }
+    });
 
   evalCmd
     .command("judge")

@@ -441,6 +441,18 @@ export const DIAGNOSTICS = {
     message:
       "'{callee}' can interrupt, and a finalize block cannot contain interrupts. A finalize runs while its scope shuts down, so there is nothing to resume.",
   },
+  topLevelStatementNotAllowed: {
+    code: "AG3017",
+    severity: "error",
+    message:
+      "Cannot use {kind} at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait — move it inside a node or a function.",
+  },
+  topLevelHandlerNotAllowed: {
+    code: "AG3018",
+    severity: "error",
+    message:
+      "A handler cannot be registered at the top level of a file. Handlers must be inside a node or a function, where there is execution for them to guard.",
+  },
   undefinedFunction: {
     code: "AG4004",
     severity: "error",
@@ -607,6 +619,12 @@ export const DIAGNOSTICS = {
     severity: "error",
     message:
       "The generator `{name}` reaches non-Agency code through `{importPath}`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript raises no interrupts and cannot be checked. Set `allowNonAgencyGenerators` in your config to permit it.",
+  },
+  spliceTopLevelStatement: {
+    code: "AG8014",
+    severity: "error",
+    message:
+      "The generator `{name}` returned {kind}, which cannot sit at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait.",
   },
   spliceFragmentKindMismatch: {
     code: "AG8007",

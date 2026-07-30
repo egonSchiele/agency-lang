@@ -47,6 +47,7 @@ import { computeMatchExprTypes } from "./matchExprTypes.js";
 import { checkDefiniteReturns } from "./definiteReturns.js";
 import { checkConflictingMarkers } from "./conflictingMarkers.js";
 import { checkTemplateHoles } from "./templateHoles.js";
+import { checkTopLevelStatements } from "./topLevelStatements.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { declareFinalizeBinders } from "./finalizeBinder.js";
 import { checkEffectPayloads, buildEffectRegistry } from "./effectPayloadCheck.js";
@@ -367,6 +368,10 @@ export class TypeChecker {
     // Template holes: an expression hole in a position that supplies no
     // type must carry an inline annotation (AG8002).
     checkTemplateHoles(ctx);
+
+    // Top-level code is initialization: it may establish something but not
+    // control anything (AG3017, AG3018).
+    checkTopLevelStatements(ctx);
 
     // Check for undefined function calls (config-controlled severity).
     checkUndefinedFunctions(scopes, ctx);

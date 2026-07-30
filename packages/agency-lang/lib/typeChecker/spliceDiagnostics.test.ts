@@ -31,6 +31,7 @@ const SPLICE_DIAGNOSTIC_PARAMS: Record<string, Record<string, string>> = {
     name: "makeGetters",
     reason: "it reaches helper.agency, which does not parse",
   },
+  spliceTopLevelStatement: { name: "makeGetters", kind: "an `if` statement" },
 };
 
 describe("splice diagnostics", () => {
@@ -58,6 +59,7 @@ describe("splice diagnostics", () => {
       "AG8011",
       "AG8012",
       "AG8013",
+      "AG8014",
     ]);
   });
 

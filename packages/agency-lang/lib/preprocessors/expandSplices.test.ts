@@ -385,3 +385,65 @@ describe("expandSplices", () => {
     expect(result.diagnostic.loc.line).toBeGreaterThan(1);
   });
 });
+
+describe("a declaration splice is held to the top-level rule", () => {
+  /** A generator whose fragment holds `body`, with the inferred kind left
+   *  to kind inference — which is the point of several cases below. */
+  function writeGenerator(body: string): void {
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def gen(): Code {\n  return [|\n${body}\n  |]\n}\n`,
+    );
+  }
+
+  function spliceAtTopLevel() {
+    return expand(`import { gen } from "./gen.agency"\n\n$( gen() )\n`);
+  }
+
+  it("accepts a statements fragment whose nodes are all legal", () => {
+    writeGenerator("    const apiKey = 1");
+    const result = spliceAtTopLevel();
+    expect(result.ok).toBe(true);
+  });
+
+  it("refuses a statements fragment containing an if, naming it", () => {
+    writeGenerator("    if (true) {\n      print(1)\n    }");
+    const result = spliceAtTopLevel();
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(JSON.stringify(result.diagnostic)).toMatch(/ifElse|if/);
+  });
+
+  it("refuses the mixed fragment, which is the case the rule exists for", () => {
+    // One fragment, one legal statement and one illegal one. No fragment
+    // KIND distinguishes these — only looking at each node does.
+    writeGenerator("    const apiKey = 1\n    if (true) {\n      print(1)\n    }");
+    const result = spliceAtTopLevel();
+    expect(result.ok).toBe(false);
+  });
+
+  it("refuses a fragment containing a body-only block", () => {
+    // A `guard` block cannot be parsed at the top level at all, so this
+    // path is the only way one reaches the check.
+    writeGenerator("    guard(maxTime: 100) {\n      print(1)\n    }");
+    const result = spliceAtTopLevel();
+    expect(result.ok).toBe(false);
+  });
+
+  it("refuses a program fragment containing an if", () => {
+    // The hole a statements-only check leaves: this fragment infers kind
+    // `program`, because the statements attempt fails on the `def`. It
+    // passed the kind gate unexamined and crashed the backend.
+    writeGenerator(
+      "    if (true) {\n      print(1)\n    }\n\n    def helper(): number {\n      return 1\n    }",
+    );
+    const result = spliceAtTopLevel();
+    expect(result.ok).toBe(false);
+  });
+
+  it("still accepts a program fragment whose declarations are legal", () => {
+    writeGenerator('    def helper(): string {\n      return "hi"\n    }');
+    const result = spliceAtTopLevel();
+    expect(result.ok).toBe(true);
+  });
+});

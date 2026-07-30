@@ -155,3 +155,23 @@ An interrupt pauses the program and waits for an answer. When the answer arrives
 The check follows calls into functions defined in your own files. It cannot see into imported functions. If an imported function interrupts inside a finalize at runtime, the finalize counts as failed and the scope falls back to its saved draft.
 
 **How to fix:** only compute values inside the finalize, using the variables you already have. If you need to ask the user something, ask in the normal body, before the work that can trip.
+
+<a id="ag3017"></a>
+
+## AG3017 — Cannot use &#123;kind&#125; at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait — move it inside a node or a function.
+
+*Default severity: error.*
+
+Code at the top level of a file runs when the module is initialized, not when a node executes. That phase has no way to branch, loop, or wait, so a statement that controls execution has nothing to control.
+
+**How to fix:** move it inside a node or a function. Top-level code may declare things (`node`, `def`, `type`, imports), bind values (`const x = 1`), and call functions for their effect (`print("ready")`) — nothing else.
+
+<a id="ag3018"></a>
+
+## AG3018 — A handler cannot be registered at the top level of a file. Handlers must be inside a node or a function, where there is execution for them to guard.
+
+*Default severity: error.*
+
+A handler guards the code it wraps. At the top level of a file there is no execution to guard: the module is only being initialized, and a handler registered there would never see the interrupts it was written for.
+
+**How to fix:** move the `handle` block inside the node or function whose work it should guard.

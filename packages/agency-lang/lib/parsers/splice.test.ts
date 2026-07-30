@@ -43,9 +43,13 @@ describe("splice parsing", () => {
     expect(splice.position).toBe("expr");
   });
 
-  it("treats a bare splice inside a node body as an expression splice", () => {
+  it("treats a bare splice inside a node body as a statement splice", () => {
+    // CHANGED deliberately. This used to be "expr", which meant a
+    // generator returning statements was refused in the one place it is
+    // most useful. Statement position accepts the kinds a statements hole
+    // already accepts.
     const [splice] = splicesIn(`node main() {\n  $( makeThings() )\n  return 1\n}\n`);
-    expect(splice.position).toBe("expr");
+    expect(splice.position).toBe("statement");
   });
 
   it("parses a splice whose argument is a code literal", () => {
@@ -94,5 +98,28 @@ describe("splice parsing", () => {
     // fails immediately on a `splice: true` leaf ruling.
     const calls = nodesOfType(parseTemplate(`$( f(g(1)) )\n`).nodes, "functionCall");
     expect(calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("splice positions", () => {
+  function spliceIn(source: string): Splice {
+    const found = [...walkNodesArray(parseTemplate(source).nodes)]
+      .map((visit) => visit.node)
+      .find((node) => node.type === "splice");
+    if (!found) throw new Error(`no splice in: ${source}`);
+    return found as Splice;
+  }
+
+  it("stamps statement position on a splice occupying a whole statement", () => {
+    expect(spliceIn("node main() {\n  $( gen() )\n}\n").position).toBe("statement");
+  });
+
+  it("leaves a splice inside an expression as expr", () => {
+    expect(spliceIn("node main() {\n  const x = $( gen() )\n}\n").position).toBe("expr");
+  });
+
+  it("still stamps decl on a top-level splice", () => {
+    // The new wrapper must not disturb the position it sits beside.
+    expect(spliceIn("$( gen() )\n\nnode main() { print(1) }\n").position).toBe("decl");
   });
 });

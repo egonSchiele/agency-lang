@@ -1,0 +1,8 @@
+import { Code } from "std::agency"
+
+export def callFunc(): Code {
+  return [|
+    const spliced = "hello from a spliced statement"
+    print(spliced)
+  |]
+}

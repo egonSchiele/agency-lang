@@ -3,6 +3,7 @@ import { declaredName } from "../types/hole.js";
 import { printCodeLiteralBody } from "./agencyGenerator.js";
 import { walkNodesArray } from "../utils/node.js";
 import { holeNames } from "../utils/holes.js";
+import { isLegalAtTopLevel } from "../utils/topLevel.js";
 import { DIAGNOSTICS, renderMessage } from "../typeChecker/diagnostics.js";
 import {
   AgencyComment,
@@ -509,6 +510,21 @@ export class TypeScriptBuilder {
         names: unfilled.map((name) => `#${name}`).join(", "),
       });
       throw new Error(`${DIAGNOSTICS.unfilledHoles.code}: ${rendered}`);
+    }
+
+    // Same reasoning as the refusal above: refuse before generating
+    // anything. A control-flow node routed into __initializeGlobals throws
+    // from inside the step machinery, with no location to report. The type
+    // checker reports this properly (AG3017); this is the guarantee that no
+    // codegen path can reach the crash without it.
+    const illegal = program.nodes.filter((node) => !isLegalAtTopLevel(node));
+    if (illegal.length > 0) {
+      const message = renderMessage(DIAGNOSTICS.topLevelStatementNotAllowed.message, {
+        kind: illegal.map((node) => node.type).join(", "),
+      });
+      throw new Error(
+        `${DIAGNOSTICS.topLevelStatementNotAllowed.code}: ${message}`,
+      );
     }
 
     // A tripwire. Expansion removes every splice before codegen, so one

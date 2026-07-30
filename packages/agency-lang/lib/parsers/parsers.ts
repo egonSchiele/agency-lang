@@ -3268,6 +3268,14 @@ export const topLevelSpliceParser: Parser<Splice> = map(
   (splice) => ({ ...splice, position: "decl" as const }),
 );
 
+/** A splice occupying a whole statement in a body. Same shape as the
+ *  top-level form; this exists solely to stamp the position, which is what
+ *  lets a generator return statements here. */
+const statementSpliceParser: Parser<Splice> = map(
+  lazy(() => spliceParser),
+  (splice) => ({ ...splice, position: "statement" as const }),
+);
+
 const baseAtom: Parser<Expression> = or(
   // First: `#` cannot start any other expression, so this is a cheap
   // early exit. Being an operand alternative covers every expression
@@ -4783,9 +4791,8 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   // A bare `$( gen() )` occupying a whole statement needs its own entry:
   // binOpParser below rejects anything that is not a binOpExpression, and
   // the remaining alternatives (valueAccess, literal) do not start at `$`.
-  // So statement position never reaches baseAtom's spliceParser. Position
-  // stays "expr" — only the top-level parser stamps "decl".
-  lazy(() => spliceParser),
+  // So statement position never reaches baseAtom's spliceParser.
+  lazy(() => statementSpliceParser),
   binOpParser,
   booleanParser,
   valueAccessParser,

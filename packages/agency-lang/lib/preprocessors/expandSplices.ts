@@ -8,6 +8,7 @@ import { BUILTIN_VARIABLES } from "../config.js";
 import { PRELUDE_NAMES } from "../prelude.js";
 import { BUILTIN_FUNCTION_TYPES } from "../typeChecker/builtins.js";
 import { KINDS_FOR_SORT, stampOrigin } from "../runtime/template/origin.js";
+import { describeNodeKind, isLegalAtTopLevel } from "../utils/topLevel.js";
 import { kindOf } from "../runtime/template/code.js";
 import {
   checkGeneratorEligible,
@@ -462,8 +463,36 @@ function importedNamesIn(nodes: AgencyNode[]): string[] {
  * Requiring `program` would make generated constants impossible. At the
  * top level a statement is a declaration, so this costs nothing.
  */
+/** Exhaustive, not a ternary: a third position value silently described a
+ *  statement mismatch as "expression position needs an expr fragment". */
+function expectedKindFor(position: Splice["position"]): string {
+  switch (position) {
+    case "decl":
+      return "program";
+    case "statement":
+      return "statements";
+    case "expr":
+      return "expr";
+  }
+}
+
+function positionLabel(position: Splice["position"]): string {
+  switch (position) {
+    case "decl":
+      return "declaration";
+    case "statement":
+      return "statement";
+    case "expr":
+      return "expression";
+  }
+}
+
 const KINDS_FOR_POSITION: Record<Splice["position"], string[]> = {
   decl: [...KINDS_FOR_SORT.decl, "statements"],
+  // The same set a statements HOLE accepts, right for the same reason: an
+  // expression is a legal statement, and a program grafted into a body is
+  // judged when the completed program compiles.
+  statement: KINDS_FOR_SORT.statements,
   expr: KINDS_FOR_SORT.expr,
 };
 
@@ -545,6 +574,24 @@ function graft(
   if (captured !== null) {
     return { ok: false, diagnostic: captured };
   }
+  // Declaration position: the kind gate above admits both `program` and
+  // `statements`, and neither says whether the NODES may sit at the top
+  // level. One fragment can hold `const x = 1` and an `if` at once, so this
+  // is per-node or nothing. Same predicate the compile path uses, so
+  // generated code is held to the standard written code is held to.
+  if (splice.position === "decl") {
+    const illegal = code.nodes.find((node) => !isLegalAtTopLevel(node));
+    if (illegal !== undefined) {
+      return {
+        ok: false,
+        diagnostic: {
+          diagnostic: "spliceTopLevelStatement",
+          params: { name: generatorName, kind: describeNodeKind(illegal.type) },
+          loc: splice.loc ?? ORIGIN_UNKNOWN,
+        },
+      };
+    }
+  }
   if (!KINDS_FOR_POSITION[splice.position].includes(kindOf(code))) {
     return {
       ok: false,
@@ -553,8 +600,8 @@ function graft(
         params: {
           name: generatorName,
           actual: kindOf(code),
-          expected: splice.position === "decl" ? "program" : "expr",
-          position: splice.position === "decl" ? "declaration" : "expression",
+          expected: expectedKindFor(splice.position),
+          position: positionLabel(splice.position),
         },
         loc: splice.loc ?? ORIGIN_UNKNOWN,
       },

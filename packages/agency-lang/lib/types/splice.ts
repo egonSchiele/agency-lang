@@ -17,5 +17,5 @@ export type Splice = BaseNode & {
   type: "splice";
   expression: Expression;
   /** Derived from which parser matched, never written by the user. */
-  position: "decl" | "expr";
+  position: "decl" | "statement" | "expr";
 };

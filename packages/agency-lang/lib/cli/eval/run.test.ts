@@ -188,6 +188,38 @@ describe("eval run CLI", () => {
     });
   });
 
+  it("seeds an input's files directory into the workdir", async () => {
+    const filesDir = path.join(tmpDir, "fixtures");
+    fs.mkdirSync(path.join(filesDir, "data"), { recursive: true });
+    fs.writeFileSync(path.join(filesDir, "data", "report.txt"), "q3");
+    const agentDir = path.join(tmpDir, "agent");
+    fs.mkdirSync(agentDir, { recursive: true });
+    const agent = path.join(agentDir, "agent.agency");
+    fs.writeFileSync(agent, "node main() {}\n");
+
+    let sawFixture = false;
+    const result = await evalRunLoadedInputs(
+      {
+        agent,
+        inputs: [{ id: "a", goal: "g", args: {}, files: filesDir }],
+        inputsSource: "test",
+        runsDir: path.join(tmpDir, "runs"),
+        runId: "files-e2e",
+      },
+      {
+        runner: async ({ cwd, statelogPath }) => {
+          sawFixture = fs.existsSync(path.join(cwd, "data", "report.txt"));
+          fs.writeFileSync(statelogPath, "{}\n");
+          return { ok: true };
+        },
+        extractor: async () => {},
+      },
+    );
+
+    expect(result.inputs[0].status).toBe("success");
+    expect(sawFixture).toBe(true);
+  });
+
   describe("grading", () => {
 /** An agent file plus the shared run options every grading case uses. The runs
      *  directory is a sibling of the agent's directory, never inside it: the seed

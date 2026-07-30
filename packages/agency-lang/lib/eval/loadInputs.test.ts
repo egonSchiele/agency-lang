@@ -97,3 +97,44 @@ describe("eval run input loading", () => {
     });
   });
 });
+
+describe("files field", () => {
+  it("resolves files relative to the inputs file and requires a directory", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    fs.mkdirSync(path.join(suiteDir, "fixtures", "report"), { recursive: true });
+    fs.writeFileSync(path.join(suiteDir, "fixtures", "report", "q3.txt"), "data");
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {}, files: "./fixtures/report" }],
+    }));
+
+    const [input] = loadInputs(inputsFile);
+
+    expect(input.files).toBe(fs.realpathSync(path.join(suiteDir, "fixtures", "report")));
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("rejects a files value that is not a directory", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    fs.writeFileSync(path.join(suiteDir, "not-a-dir.txt"), "x");
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {}, files: "./not-a-dir.txt" }],
+    }));
+
+    expect(() => loadInputs(inputsFile)).toThrow(/files must name a directory/i);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+
+  it("rejects files combined with working_dir", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    fs.mkdirSync(path.join(suiteDir, "fixture-dir"));
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {}, files: "./fixture-dir", working_dir: "./fixture-dir" }],
+    }));
+
+    expect(() => loadInputs(inputsFile)).toThrow(/files.*working_dir/i);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+});

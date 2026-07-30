@@ -305,6 +305,9 @@ function resolveInputSeed(
   absoluteAgent: string,
   callerSetSeed: boolean,
 ): RunSeed {
+  if (input.files) {
+    return { ...defaultSeed, filesDir: input.files };
+  }
   if (!input.working_dir) return defaultSeed;
   if (callerSetSeed) {
     throw new Error(`input.working_dir cannot be combined with a caller-supplied seed (input id=${input.id ?? "(no id)"})`);

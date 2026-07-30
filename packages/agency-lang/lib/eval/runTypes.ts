@@ -16,8 +16,14 @@ export type Input = {
   args: Record<string, any>;
   /** Entry node to run. Defaults to the agent's default node at run time. */
   node?: string;
-  /** Directory copied into the run's workdir before execution. */
+  /** DEPRECATED: use files. Directory cloned wholesale into the workdir;
+   *  must contain the agent file. */
   working_dir?: string;
+  /** The test's fixture directory. Contents are copied into the workdir root;
+   *  the agent's own files are seeded automatically from its import closure.
+   *  A raw spec may hold a relative path (resolved against the inputs file) —
+   *  after loading it is always an absolute directory path. */
+  files?: string;
   /** Freeform, grader-agnostic metadata (tags, expectedOutput, …). */
   metadata?: Record<string, any>;
 };

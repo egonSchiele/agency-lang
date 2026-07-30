@@ -4,7 +4,34 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { evalRun, resolveEvalRunTarget, validateInputSelection } from "./run.js";
+import { grader } from "@/eval/grading/functionGrader.js";
+import type { EvalInputRunner, EvalRecordExtractor } from "@/eval/runEvalInput.js";
+
+import { evalRun, evalRunLoadedInputs, resolveEvalRunTarget, validateInputSelection } from "./run.js";
+
+/** Pretends the agent ran. Must write a non-empty statelog: `shouldExtractStatelog`
+ *  skips the extractor when the log is absent or empty, and then grading sees no
+ *  eval record and scores every input 0. */
+const okRunner: EvalInputRunner = async ({ statelogPath }) => {
+  fs.writeFileSync(statelogPath, "{}\n");
+  return { ok: true };
+};
+
+/** Writes the eval record grading reads, with one output value. */
+function recordExtractor(output: unknown): EvalRecordExtractor {
+  return async ({ outPath }) => {
+    fs.writeFileSync(outPath, JSON.stringify({
+      traceId: "t", recordVersion: 2, formatVersion: 1, durationMs: 1, source: "s",
+      evalValues: [], evalOutputs: [{ value: output, threadId: "0", tMs: 1 }],
+      threads: [], events: [], interrupts: [], errors: [], incomplete: [],
+      metrics: {
+        llmCalls: 0, toolStarts: 0, toolEnds: 0, models: [],
+        tokensInTotal: 0, tokensOutTotal: 0, costUsdTotal: 0, toolCounts: {},
+      },
+      warnings: [],
+    }));
+  };
+}
 
 describe("eval run CLI", () => {
   let tmpDir: string;
@@ -46,6 +73,7 @@ describe("eval run CLI", () => {
         goal: "do it",
         runsDir,
         runId: "r1",
+        grade: false,
         continueOnError: true,
       },
       {
@@ -90,6 +118,7 @@ describe("eval run CLI", () => {
         goal: "do it",
         runsDir,
         runId: "fallback",
+        grade: false,
         continueOnError: true,
       },
       {
@@ -130,6 +159,7 @@ describe("eval run CLI", () => {
         inputs: inputsFile,
         runsDir,
         runId: "stop",
+        grade: false,
         continueOnError: false,
       },
       {
@@ -149,6 +179,61 @@ describe("eval run CLI", () => {
       okCount: 0,
       errorCount: 1,
       inputs: [{ inputId: "first", status: "error", errorMessage: "nope" }],
+    });
+  });
+
+  describe("grading", () => {
+/** An agent file plus the shared run options every grading case uses. The runs
+     *  directory is a sibling of the agent's directory, never inside it: the seed
+     *  copy would otherwise recurse into its own destination. */
+    function setup(runId: string, inputs: { id: string; goal: string; args: Record<string, unknown> }[]) {
+      const agentDir = path.join(tmpDir, "agent");
+      fs.mkdirSync(agentDir, { recursive: true });
+      const agent = path.join(agentDir, "agent.agency");
+      fs.writeFileSync(agent, "node main() {}\n");
+      const runsDir = path.join(tmpDir, "runs");
+      return { agent, inputs, inputsSource: "test", runsDir, runId };
+    }
+
+    it("writes a grading block into summary.json and reports a failed gate", async () => {
+      const opts = setup("graded", [{ id: "a", goal: "g", args: {} }]);
+      const result = await evalRunLoadedInputs(
+        { ...opts, graders: [grader(() => false, { name: "gate", mustPass: true })] },
+        { runner: okRunner, extractor: recordExtractor("hello") },
+      );
+
+      expect(result.grading).toBeDefined();
+      expect(result.grading!.gatesPassed).toBe(false);
+      const summary = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "graded", "summary.json"), "utf8"));
+      expect(summary.grading.graders).toEqual(["gate"]);
+    });
+
+    it("counts a gate-failed input as a zero rather than zeroing the whole run", async () => {
+      const opts = setup("mixed", [
+        { id: "a", goal: "g", args: {} },
+        { id: "b", goal: "g", args: {} },
+      ]);
+      const result = await evalRunLoadedInputs(
+        // Passes on input "a", fails the gate on input "b".
+        { ...opts, graders: [grader(({ input }) => input.id === "a", { name: "gate", mustPass: true })] },
+        { runner: okRunner, extractor: recordExtractor("hello") },
+      );
+
+      // One of two inputs scored 1, the other 0 — the mean is 0.5, not 0.
+      expect(result.grading!.objective).toBeCloseTo(0.5);
+      expect(result.grading!.gatesPassed).toBe(false);
+    });
+
+    it("skips grading when no graders are supplied, so the optimizer path is unaffected", async () => {
+      const opts = setup("ungraded", [{ id: "a", goal: "g", args: {} }]);
+      const result = await evalRunLoadedInputs(opts, {
+        runner: okRunner,
+        extractor: recordExtractor("hello"),
+      });
+
+      expect(result.grading).toBeUndefined();
+      const summary = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "ungraded", "summary.json"), "utf8"));
+      expect(summary).not.toHaveProperty("grading");
     });
   });
 });

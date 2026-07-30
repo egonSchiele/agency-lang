@@ -99,6 +99,8 @@ export interface AgencyConfig {
   eval?: {
     runsDir?: string;
     optimizeRunsDir?: string;
+    graders?: string;                              // path to a TS grading module
+
     optimize?: {
       goal?: string;
       graders?: string;                              // path to a TS grading module
@@ -408,6 +410,7 @@ export const AgencyConfigSchema = z
       .object({
         runsDir: z.string(),
         optimizeRunsDir: z.string(),
+        graders: z.string().optional(),
         optimize: z
           .object({
             goal: z.string().optional(),

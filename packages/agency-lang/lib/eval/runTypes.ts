@@ -1,3 +1,5 @@
+import type { InputBreakdown } from "./grading/gradeBreakdown.js";
+
 /** One invocation of an agent: which node, with which args, plus optional
  *  grading metadata. Shared by the eval runner and every optimizer. */
 export type Input = {
@@ -29,6 +31,14 @@ export type EvalRunInputResult = {
   errorMessage?: string;
 };
 
+/** A run's score. Absent from EvalRunResult when grading was skipped. */
+export type EvalRunGrading = {
+  graders: string[];
+  objective: number;
+  gatesPassed: boolean;
+  perInput: InputBreakdown[];
+};
+
 export type EvalRunResult = {
   runId: string;
   runDir: string;
@@ -36,6 +46,8 @@ export type EvalRunResult = {
   inputs: EvalRunInputResult[];
   okCount: number;
   errorCount: number;
+  /** Present unless grading was skipped (`--no-grade`). */
+  grading?: EvalRunGrading;
 };
 
 export type EvalRunConfig = {

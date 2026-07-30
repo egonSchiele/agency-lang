@@ -6,6 +6,7 @@ import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
 import { parseTarget } from "@/cli/util.js";
+import type { IpcDecisionMessage } from "@/runtime/ipc.js";
 import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
 import type { BaseGrader } from "@/eval/grading/baseGrader.js";
 import { breakdown } from "@/eval/grading/gradeBreakdown.js";
@@ -454,12 +455,7 @@ async function runCompiledAgentInSubprocess(args: {
       } else if (msg?.type === "error") {
         settle({ ok: false, errorMessage: String(msg.error) });
       } else if (msg?.type === "interrupt") {
-        child.send({
-          type: "decision",
-          interruptId: msg.interruptId,
-          approved: true,
-          value: undefined,
-        });
+        child.send(evalInterruptDecision(msg.interruptId));
       }
     });
 
@@ -477,4 +473,20 @@ async function runCompiledAgentInSubprocess(args: {
 
     child.send(instruction);
   });
+}
+
+/**
+ * The eval parent's blanket auto-approval for subprocess interrupts (eval
+ * runs headless; the agent's own handlers ran first and a local reject is
+ * already final before the parent is consulted). The `satisfies` pins the
+ * IPC protocol: this reply once used a legacy `{ approved: true }` shape,
+ * the child read `outcome.kind` off undefined, and every interrupting agent
+ * under `agency eval run` crashed.
+ */
+export function evalInterruptDecision(interruptId: string): IpcDecisionMessage {
+  return {
+    type: "decision",
+    interruptId,
+    outcome: { kind: "approved", value: undefined },
+  } satisfies IpcDecisionMessage;
 }

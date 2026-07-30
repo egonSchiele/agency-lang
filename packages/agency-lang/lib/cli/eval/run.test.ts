@@ -9,7 +9,9 @@ import { grader } from "@/eval/grading/functionGrader.js";
 import { ExactMatchGrader as ExactMatch } from "@/eval/grading/graders/builtinGraders.js";
 import type { EvalInputRunner, EvalRecordExtractor } from "@/eval/runEvalInput.js";
 
-import { evalRun, evalRunLoadedInputs, resolveEvalRunTarget, validateInputSelection } from "./run.js";
+import { mergeChainOutcomes } from "@/runtime/interrupts.js";
+
+import { evalInterruptDecision, evalRun, evalRunLoadedInputs, resolveEvalRunTarget, validateInputSelection } from "./run.js";
 
 /** Pretends the agent ran. Must write a non-empty statelog: `shouldExtractStatelog`
  *  skips the extractor when the log is absent or empty, and then grading sees no
@@ -339,5 +341,16 @@ describe("eval run CLI", () => {
       const summary = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "ungraded", "summary.json"), "utf8"));
       expect(summary).not.toHaveProperty("grading");
     });
+  });
+
+  it("answers subprocess interrupts in the shape sendInterruptToParent consumes", () => {
+    const decision = evalInterruptDecision("int-1");
+
+    // The exact regression: the parent once sent { approved: true } with no
+    // outcome, and the child crashed reading `outcome.kind`. Pin the contract
+    // by pushing the reply through the runtime's own merge.
+    expect(decision).toMatchObject({ type: "decision", interruptId: "int-1" });
+    const merged = mergeChainOutcomes("std::write", { kind: "approved", value: undefined }, decision.outcome);
+    expect(merged.kind).toBe("approved");
   });
 });

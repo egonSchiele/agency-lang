@@ -3,10 +3,11 @@ import { describe, expect, it } from "vitest";
 import { AgencyRunner } from "../agencyRunner.js";
 import { HumanGrader, parseBinaryAnswer, parseScalarAnswer, type HumanRead } from "./humanGrader.js";
 import type { GraderInput, Input, JSON } from "../types.js";
+import { agentRun } from "../testUtils.js";
 
 const graderInput = (output: JSON): GraderInput => {
   const input: Input = { id: "i1", args: {} };
-  return { input, run: { output, recordPath: "" }, runAgency: new AgencyRunner({}, async () => ({ data: null })) };
+  return { input, run: agentRun(output), runAgency: new AgencyRunner({}, async () => ({ data: null })) };
 };
 
 describe("HumanGrader", () => {

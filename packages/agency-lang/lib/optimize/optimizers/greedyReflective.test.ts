@@ -11,6 +11,8 @@ import { GreedyReflective, type GreedyDeps } from "./greedyReflective.js";
 import type { ProposeMutationArgs } from "../mutator.js";
 import { defaultPreview, type OptimizeMutationPreview } from "../sourceMutator.js";
 import { discoverOptimizeTargets, type OptimizeTargetSet } from "../targets.js";
+import { fakeRun } from "../testUtils.js";
+import { agentRun } from "@/eval/grading/testUtils.js";
 
 class ValueGrader extends BaseGrader {
   protected readonly defaultName = "value";
@@ -38,7 +40,7 @@ describe("GreedyReflective (pointwise)", () => {
   });
 
   const deps = (): GreedyDeps => ({
-    runInput: async () => ({ output: "out", recordPath: "" }),
+    runInput: async (_ws, _source, _files, _input, id) => fakeRun(id, "out"),
     discover: () => fakeSource(),
     propose: async () => ({ rationale: "tighten", operations: [] }),
     preview: (targetSet): OptimizeMutationPreview => ({ files: {}, changes: [], diff: "", diagnostics: [], targetSet }),
@@ -190,7 +192,7 @@ describe("GreedyReflective (pointwise)", () => {
   it("Scorecard.gatedObjective() zeroes out a gate-failed score even when the raw objective is high", () => {
     const passed = new Scorecard([{
       input: { id: "a", args: {} },
-      run: { output: "out", recordPath: "" },
+      run: agentRun("out"),
       grades: [{ grader: new ValueGrader(() => 0.9), grade: { score: { kind: "scalar", value: 0.9 } } }],
       gatesPassed: true,
     }]);
@@ -198,7 +200,7 @@ describe("GreedyReflective (pointwise)", () => {
 
     const failed = new Scorecard([{
       input: { id: "a", args: {} },
-      run: { output: "out", recordPath: "" },
+      run: agentRun("out"),
       grades: [{ grader: new ValueGrader(() => 0.9), grade: { score: { kind: "scalar", value: 0.9 } } }],
       gatesPassed: false,
     }]);
@@ -249,7 +251,7 @@ describe("typed target end-to-end guarantee", () => {
       // 0.5 keeps the baseline below the max objective so the iteration runs.
       { graders: [new ValueGrader(() => 0.5)], iterations: 1, config: {}, runsDir: root, runId: "typed-e2e", writeback: false },
       {
-        runInput: async () => ({ output: "out", recordPath: "" }),
+        runInput: async (_ws, _source, _files, _input, id) => fakeRun(id, "out"),
         discover: () => discoverOptimizeTargets(path.join(src, "agent.agency"), { baseDir: src }),
         propose,
         // no preview override: the REAL defaultPreview runs the shape check

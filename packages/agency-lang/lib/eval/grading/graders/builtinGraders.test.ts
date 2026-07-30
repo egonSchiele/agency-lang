@@ -3,11 +3,12 @@ import { describe, expect, it } from "vitest";
 import { AgencyRunner } from "../agencyRunner.js";
 import { ContainsGrader, ExactMatchGrader, SimilarityGrader } from "./builtinGraders.js";
 import type { GraderInput, Input, JSON } from "../types.js";
+import { agentRun } from "../testUtils.js";
 
 const stubRunner = new AgencyRunner({}, async () => ({ data: null }));
 const graderInput = (output: JSON, metadata: Record<string, JSON>): GraderInput => {
   const input: Input = { id: "i1", args: {}, metadata };
-  return { input, run: { output, recordPath: "" }, runAgency: stubRunner };
+  return { input, run: agentRun(output), runAgency: stubRunner };
 };
 
 describe("ExactMatchGrader", () => {
@@ -89,7 +90,7 @@ describe("matcher pre-flight validation", () => {
   it("defaults matchOn to ['expected']", async () => {
     const grader = new ExactMatchGrader({});   // no matchOn
     const input: Input = { id: "a", args: {}, expected: "New Delhi" };
-    const grade = await grader.run({ input, run: { output: "New Delhi", recordPath: "" }, runAgency: stubRunner });
+    const grade = await grader.run({ input, run: agentRun("New Delhi"), runAgency: stubRunner });
     expect(grade.score).toEqual({ kind: "binary", pass: true });
     expect(grader.describe()).toContain("expected");
   });

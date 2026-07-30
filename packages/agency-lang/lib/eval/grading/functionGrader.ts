@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { BaseGrader } from "./baseGrader.js";
 import { asJudgeText, goalJudgeFile, ScalarVerdict } from "./goalJudgeFile.js";
+import type { EvalRecord } from "@/eval/types.js";
+
 import type { Grade, GraderInput, GraderOptions, Input, JSON } from "./types.js";
 
 /** What a metric function receives. `input` is the typed Input; the gold answer is
@@ -9,6 +11,10 @@ import type { Grade, GraderInput, GraderOptions, Input, JSON } from "./types.js"
 export type GraderContext = {
   output: JSON;
   input: Input;
+  /** The isolated directory the agent ran in. Read files the agent wrote. */
+  workdir: string;
+  /** The parsed eval record: events, metrics, tool counts, interrupts, cost. */
+  record: EvalRecord;
   /** Run the bundled LLM goal judge and get back its 0..1 score + reasoning.
    *  Defaults: `output` falls back to `run.output`, `expected` falls back to
    *  `input.expected` (so the bundled judge grades against the gold answer when
@@ -42,7 +48,13 @@ export class FunctionGrader extends BaseGrader {
         goalJudgeFile(), "main", [goal, asJudgeText(output ?? run.output), expectedText], ScalarVerdict,
       );
     };
-    const result = await this.fn({ output: run.output, input, judge });
+    const result = await this.fn({
+      output: run.output,
+      input,
+      judge,
+      workdir: run.workdir,
+      record: run.record,
+    });
     return coerce(result);
   }
 }

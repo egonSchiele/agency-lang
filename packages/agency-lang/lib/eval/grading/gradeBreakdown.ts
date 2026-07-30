@@ -10,6 +10,8 @@ export type InputBreakdown = {
   objective: number;
   gatesPassed: boolean;
   grades: GradeRow[];
+  /** Set when the input scored 0 without being graded (errored run, or no output). */
+  ungradedReason?: string;
 };
 
 /** One grade row. Shared fields computed once; the only branch is the
@@ -27,9 +29,10 @@ export function breakdown(scorecard: Scorecard): InputBreakdown[] {
   const objectives = scorecard.inputScores();   // reuse the canonical gate→0 rule; don't re-derive it
   return scorecard.perInput.map((i, idx) => ({
     inputId: i.input.id ?? "(no id)",
-    output: i.run.output,
+    output: i.run?.output ?? null,
     objective: objectives[idx],
     gatesPassed: i.gatesPassed,
     grades: i.grades.map(gradeRow),
+    ungradedReason: i.ungradedReason,
   }));
 }

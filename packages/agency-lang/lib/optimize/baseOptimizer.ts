@@ -1,8 +1,9 @@
 import * as path from "path";
 
-import { evalRunLoadedInputs, optimizeEvalRecordExtractor, resolveEvalRunTarget } from "@/cli/eval/run.js";
-import { gradeInput, type GradingContext } from "@/eval/grading/gradeRun.js";
-import type { EvalRunInputResult } from "@/eval/runTypes.js";
+import { resolveEvalRunTarget } from "@/agentTarget.js";
+import { makeEvalRecordExtractor } from "@/eval/run/extract.js";
+import { runSuite } from "@/eval/run/runSuite.js";
+import { gradeRun, type GradingContext } from "@/eval/grading/gradeRun.js";
 
 import { EvalCache } from "./evalCache.js";
 import { breakdown } from "@/eval/grading/gradeBreakdown.js";
@@ -24,17 +25,18 @@ export type MutationOutcome =
 
 const MAX_PROPOSE_ATTEMPTS = 3;
 
-/** A function that runs the agent for one input in a workspace and returns its run
- *  result. Receives the candidate's `source` (`baseDir`/`entryFile` live here) and
- *  `files` (the candidate's complete file map, used as the workdir overlay).
- *  Reading the eval record is grading's job, not this function's. */
+/** A function that runs the agent for one input in a workspace and returns the
+ *  RUN DIRECTORY it wrote (a suite of one). Receives the candidate's `source`
+ *  (`baseDir`/`entryFile` live here) and `files` (the candidate's complete
+ *  file map, used as the workdir overlay). Reading the run directory is
+ *  grading's job, not this function's. */
 export type RunInput = (
   ws: CachePartition,
   source: OptimizeTargetSet,
   files: Record<string, string>,
   input: Input,
   id: string,
-) => Promise<EvalRunInputResult>;
+) => Promise<string>;
 
 export type BaseOptimizerDeps = {
   agencyRunner?: AgencyRunner;
@@ -241,8 +243,10 @@ export abstract class BaseOptimizer {
     const perInput = await Promise.all(
       inputs.map(async (input, index) => {
         const id = inputId(input, index);
-        const result = await this.cache.get(ws.key, id, () => this.runInput(ws, source, files, input, id));
-        return gradeInput(input, result, ctx);
+        const runDir = await this.cache.get(ws.key, id, () => this.runInput(ws, source, files, input, id));
+        // A suite of one, graded like every other run directory.
+        const card = await gradeRun(runDir, ctx);
+        return card.perInput[0];
       }),
     );
     return new Scorecard(perInput);
@@ -251,44 +255,41 @@ export abstract class BaseOptimizer {
   /** Default runInput: run the agent for one input via the eval-run subprocess path.
    *  Passes `seed` (used verbatim — no closure recomputation, no silent divergence
    *  from `source.baseDir`) and `overlayFiles` (the candidate's complete file map)
-   *  to `evalRunLoadedInputs`. The per-input `working_dir` field is forbidden
-   *  here (the caller-supplied seed would conflict with it). */
+   *  to `runSuite`. */
   private async runInputViaEval(
     ws: CachePartition,
     source: OptimizeTargetSet,
     files: Record<string, string>,
     input: Input,
     id: string,
-  ): Promise<EvalRunInputResult> {
+  ): Promise<string> {
     this.runCounter += 1;
-    const result = await evalRunLoadedInputs({
+    const result = await runSuite({
       agent: path.join(source.baseDir, source.entryFile),  // used for label/node parsing only
-      inputs: [{ ...input, id, working_dir: undefined }],  // working_dir conflicts with seed
-      inputsSource: "optimize",
+      inputs: [{ ...input, id }],
+      provenance: { inputsSource: { source: "optimize" }, files: {} },
       runsDir: path.join(this.config.runsDir, this.config.runId, "agent-runs", ws.key),
       runId: `run-${this.runCounter}`,
       config: this.config.config,
       continueOnError: true,
-      quietCompile: true,
-      pipeAgentOutput: false,
-      seed: {
-        kind: "seeded",
-        baseDir: source.baseDir,
-        agentRelPath: source.entryFile,
-        closureFiles: Object.values(source.files).map((sourceFile) => sourceFile.absoluteFile),
+      perRun: {
+        pipeOutput: false,
+        seed: {
+          baseDir: source.baseDir,
+          agentRelPath: source.entryFile,
+          closureFiles: Object.values(source.files).map((sourceFile) => sourceFile.absoluteFile),
+        },
+        overlayFiles: files,
+        // Skip the "did you forget to call evalValue()" warning — optimize
+        // inputs come from the input spec, so its absence is normal here.
+        extractor: makeEvalRecordExtractor({ warnMissingValue: false }),
       },
-      overlayFiles: files,
-    }, {
-      // Grade the node's return value (not its last LLM reply) and skip the
-      // evalValue/evalOutput "did you forget to call…" warnings — neither
-      // applies to optimize: inputs come from the input spec, output is the return.
-      extractor: optimizeEvalRecordExtractor,
     });
     const inputResult = result.inputs[0];
     if (!inputResult || inputResult.status !== "success") {
       throw new Error(`agent run failed for input ${input.id ?? "(no id)"}: ${inputResult?.errorMessage ?? "unknown error"}`);
     }
-    return inputResult;
+    return result.runDir;
   }
 
   protected async eachIteration(step: (iter: number) => Promise<void>): Promise<void> {

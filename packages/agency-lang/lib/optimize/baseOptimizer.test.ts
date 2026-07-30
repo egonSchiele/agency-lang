@@ -64,7 +64,7 @@ describe("BaseOptimizer.evaluate", () => {
   }
 
   const inputs: Input[] = [{ id: "a", args: {} }, { id: "b", args: {} }];
-  const fixedRun: RunInput = async (_ws, _source, _files, _input, id) => fakeRun(id, "out");
+  const fixedRun: RunInput = async (_ws, _source, _files, input, id) => fakeRun(id, "out", input);
 
   const source: OptimizeTargetSet = {
     baseDir: "",

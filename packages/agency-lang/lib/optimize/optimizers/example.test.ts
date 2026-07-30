@@ -42,7 +42,7 @@ describe("ExampleOptimizer", () => {
     targets: [{ id: "agent.agency:global:prompt", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "prompt", valueKind: "string", value: "hi", declaredType: null }],
   });
 
-  const runInput: RunInput = async (_ws, _source, _files, _input, id) => fakeRun(id, "out");
+  const runInput: RunInput = async (_ws, _source, _files, input, id) => fakeRun(id, "out", input);
 
   function deps(over: Partial<ExampleDeps> = {}): ExampleDeps {
     return {

@@ -69,3 +69,4 @@ tests/integration/statelog/.tmp/
 # root — transient output, never a fixture (got committed by accident once;
 # see PR #517 review).
 packages/agency-lang/a.vs.b.verdict.json
+docs/superpowers/**/*

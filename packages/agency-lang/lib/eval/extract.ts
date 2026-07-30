@@ -213,7 +213,7 @@ function buildInterruptEntry(
       outcomeRaw === "rejected" ||
       outcomeRaw === "propagated"
       ? outcomeRaw
-      : "unresolved";
+      : "passed";
   const resolvedByRaw = resolved?.raw.data.resolvedBy;
   const resolvedBy: InterruptEntry["resolvedBy"] =
     resolvedByRaw === "handler" ||

@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { sha256Text } from "@/utils/hash.js";
+import { agentRunPaths } from "./run/extract.js";
 
 import { assertEvalRunId, assertEvalInputId } from "./ids.js";
 import type {
@@ -46,8 +47,7 @@ export type EvalRunState = {
   runId: string;
   runDir: string;
   inputsDir: string;
-  agent: string;
-  inputsSource: string;
+  agentLabel: string;
   continueOnError: boolean;
 };
 
@@ -64,8 +64,7 @@ export type PreparedInput = {
 export function initializeEvalRun(args: {
   runId: string;
   runsDir: string;
-  agent: string;
-  inputsSource: string;
+  agentLabel: string;
   inputs: Input[];
   continueOnError: boolean;
   startedAt: Date;
@@ -85,8 +84,7 @@ Choose a different --run-id or delete the existing directory.`,
 
   writeJson(path.join(runDir, "config.json"), {
     runId: args.runId,
-    agent: args.agent,
-    inputsSource: args.inputsSource,
+    agentLabel: args.agentLabel,
     inputs: args.inputs,
     continueOnError: args.continueOnError,
     startedAt: args.startedAt.toISOString(),
@@ -97,8 +95,7 @@ Choose a different --run-id or delete the existing directory.`,
     runId: args.runId,
     runDir,
     inputsDir,
-    agent: args.agent,
-    inputsSource: args.inputsSource,
+    agentLabel: args.agentLabel,
     continueOnError: args.continueOnError,
   };
 }
@@ -111,22 +108,19 @@ export function prepareInput(
   assertEvalInputId(id);
 
   const inputDir = path.join(state.inputsDir, id);
-  const agentDir = path.join(inputDir, "agent");
-  const workdirPath = path.join(inputDir, "workdir");
-  fs.mkdirSync(agentDir, { recursive: true });
-  // workdir is materialized by prepareRunDir (seed + overlay + compile); we
-  // only allocate the path here. working_dir validation moves to
-  // evalRunLoadedInputs, where both working_dir and the agent file are in
-  // scope (it must enforce "working_dir contains the agent file").
+  const paths = agentRunPaths(inputDir);
+  fs.mkdirSync(paths.agentDir, { recursive: true });
+  // workdir is materialized by seeding (copy + overlay + compile); we only
+  // allocate the path here.
 
   const prepared: PreparedInput = {
     input,
     inputDir,
     inputJsonPath: path.join(inputDir, "input.json"),
-    statelogPath: path.join(agentDir, "statelog.jsonl"),
-    evalRecordPath: path.join(agentDir, "eval-record.json"),
-    workdirPath,
-    errorPath: path.join(agentDir, "error.txt"),
+    statelogPath: paths.statelogPath,
+    evalRecordPath: paths.evalRecordPath,
+    workdirPath: paths.workdirPath,
+    errorPath: paths.errorPath,
   };
 
   // Defensive cleanup so re-runs of the same input id don't see stale
@@ -145,7 +139,7 @@ export function prepareInput(
 
 /**
  * Build an EvalRunInputResult for an input that failed before any artifacts
- * were prepared (e.g. invalid id, working_dir validation). The result
+ * were prepared (e.g. invalid id). The result
  * carries no on-disk paths because none were allocated.
  */
 export function recordInputPrepareFailure(
@@ -194,16 +188,6 @@ export function recordInputSuccess(
   };
 }
 
-export function shouldExtractStatelog(statelogPath: string): boolean {
-  try {
-    return fs.statSync(statelogPath).size > 0;
-  } catch (err) {
-    if (err && typeof err === "object" && "code" in err && err.code === "ENOENT") {
-      return false;
-    }
-    throw err;
-  }
-}
 
 export function writeEvalRunSummary(
   state: EvalRunState,
@@ -212,7 +196,7 @@ export function writeEvalRunSummary(
   const summary: EvalRunResult = {
     runId: state.runId,
     runDir: state.runDir,
-    agent: state.agent,
+    agentLabel: state.agentLabel,
     inputs,
     okCount: inputs.filter((input) => input.status === "success").length,
     errorCount: inputs.filter((input) => input.status === "error").length,

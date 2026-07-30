@@ -8,7 +8,7 @@ import type { EvalRunInputResult, Input } from "@/eval/runTypes.js";
 
 import { AgencyRunner } from "./agencyRunner.js";
 import { grader } from "./functionGrader.js";
-import { gradeInput, gradeRun, type GradingContext } from "./gradeRun.js";
+import { gradeRun, type GradingContext } from "./gradeRun.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -77,7 +77,7 @@ function makeRun(args: { id: string; output?: unknown; status?: "success" | "err
     errorMessage: status === "error" ? "boom" : undefined,
   };
   fs.writeFileSync(path.join(runDir, "summary.json"), globalThis.JSON.stringify({
-    runId: "r", runDir, agent: "a:main", inputs: [result],
+    runId: "r", runDir, agentLabel: "a:main", inputs: [result],
     okCount: status === "success" ? 1 : 0,
     errorCount: status === "error" ? 1 : 0,
   }));
@@ -88,25 +88,25 @@ function ctx(graders: ReturnType<typeof grader>[]): GradingContext {
   return { graders, runAgency: new AgencyRunner({}) };
 }
 
-describe("gradeInput", () => {
+describe("grading one input (through gradeRun on a suite of one)", () => {
   it("gives a grader the output, workdir, and parsed record", async () => {
-    const { result, input } = makeRun({ id: "a", output: "New Delhi" });
+    const { runDir } = makeRun({ id: "a", output: "New Delhi" });
     let seen: { output?: unknown; workdir?: string; record?: any } = {};
     const spy = grader((context) => {
       seen = context;
       return 1;
     }, { name: "spy" });
 
-    const graded = await gradeInput(input, result, ctx([spy]));
+    const card = await gradeRun(runDir, ctx([spy]));
 
     expect(seen.output).toBe("New Delhi");
     expect(fs.existsSync(seen.workdir as string)).toBe(true);
     expect(seen.record.metrics.costUsdTotal).toBe(0.01);
-    expect(graded.gatesPassed).toBe(true);
+    expect(card.perInput[0].gatesPassed).toBe(true);
   });
 
   it("runs mustPass gates before advisory graders and short-circuits on failure", async () => {
-    const { result, input } = makeRun({ id: "a", output: "x" });
+    const { runDir } = makeRun({ id: "a", output: "x" });
     const order: string[] = [];
     const gate = grader(() => {
       order.push("gate");
@@ -117,18 +117,19 @@ describe("gradeInput", () => {
       return 1;
     }, { name: "advisory" });
 
-    const graded = await gradeInput(input, result, ctx([advisory, gate]));
+    const card = await gradeRun(runDir, ctx([advisory, gate]));
 
     expect(order).toEqual(["gate"]);
-    expect(graded.gatesPassed).toBe(false);
+    expect(card.perInput[0].gatesPassed).toBe(false);
   });
 
   it("scores an input with no output 0, without throwing", async () => {
-    const { result, input } = makeRun({ id: "a" });
+    const { runDir } = makeRun({ id: "a" });
     const never = grader(() => 1, { name: "never-runs" });
 
-    const graded = await gradeInput(input, result, ctx([never]));
+    const card = await gradeRun(runDir, ctx([never]));
 
+    const graded = card.perInput[0];
     expect(graded.grades).toEqual([]);
     expect(graded.gatesPassed).toBe(false);
     expect(graded.run).toBeNull();
@@ -180,11 +181,24 @@ describe("gradeRun", () => {
     expect(card.perInput[0].ungradedReason).toMatch(/no eval record/i);
   });
 
-  it("reads the input spec from disk for an in-memory result, so goal and expected survive", async () => {
-    const { runDir, result } = makeRun({ id: "a", output: "hello" });
-    const inMemory = {
-      runId: "r", runDir, agent: "a:main", inputs: [result], okCount: 1, errorCount: 0,
-    };
+  it("never grades an errored run, even when a salvaged record with a plausible output exists", async () => {
+    const { runDir, result } = makeRun({ id: "a", status: "error" });
+    fs.writeFileSync(result.evalRecordPath, recordJson(["plausible answer"]));
+    let graderRan = false;
+    const spy = grader(() => {
+      graderRan = true;
+      return 1;
+    }, { name: "spy" });
+
+    const card = await gradeRun(runDir, ctx([spy]));
+
+    expect(graderRan).toBe(false);
+    expect(card.objective()).toBe(0);
+    expect(card.perInput[0].ungradedReason).toMatch(/agent run errored/);
+  });
+
+  it("reads the input spec from the run directory, so goal and expected survive", async () => {
+    const { runDir } = makeRun({ id: "a", output: "hello" });
     let seenGoal: unknown = "not-read";
     let seenExpected: unknown = "not-read";
     const spy = grader(({ input }) => {
@@ -193,23 +207,9 @@ describe("gradeRun", () => {
       return 1;
     }, { name: "spy" });
 
-    await gradeRun(inMemory, ctx([spy]));
+    await gradeRun(runDir, ctx([spy]));
 
     expect(seenGoal).toBe("name the capital");
     expect(seenExpected).toBe("New Delhi");
-  });
-
-  it("produces the same scorecard from a directory path and from an in-memory result", async () => {
-    const { runDir, result } = makeRun({ id: "a", output: "hello" });
-    const len = grader(({ output }) => String(output).length / 10, { name: "len" });
-    const inMemory = {
-      runId: "r", runDir, agent: "a:main", inputs: [result], okCount: 1, errorCount: 0,
-    };
-
-    const fromPath = await gradeRun(runDir, ctx([len]));
-    const fromMemory = await gradeRun(inMemory, ctx([len]));
-
-    expect(fromPath.objective()).toBeCloseTo(0.5);
-    expect(fromMemory.objective()).toBeCloseTo(0.5);
   });
 });

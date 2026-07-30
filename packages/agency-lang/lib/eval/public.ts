@@ -11,7 +11,7 @@ export {
 } from "./grading/graders/builtinGraders.js";
 export { LlmJudge } from "./grading/graders/llmJudge.js";
 export { goalJudgeFile } from "./grading/goalJudgeFile.js";   // for users who want a custom judge but the bundled prompt
-export type { AgentRun, Grade, GraderOptions, Input, JSON, JSONPath, Score } from "./grading/types.js";
+export type { LoadedRun, Grade, GraderOptions, Input, JSON, JSONPath, Score } from "./grading/types.js";
 export { Scorecard, inputObjective } from "./grading/scorecard.js";
 export type { GraderGrade, InputGrades } from "./grading/scorecard.js";
 export { breakdown } from "./grading/gradeBreakdown.js";

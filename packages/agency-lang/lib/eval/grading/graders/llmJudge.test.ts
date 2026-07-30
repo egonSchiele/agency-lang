@@ -3,14 +3,14 @@ import { describe, expect, it } from "vitest";
 import { AgencyRunner } from "../agencyRunner.js";
 import { LlmJudge } from "./llmJudge.js";
 import type { GraderInput, Input } from "../types.js";
-import { agentRun } from "../testUtils.js";
+import { loadedRun } from "../testUtils.js";
 
 const graderInput = (
   verdict: { score?: number; pass?: boolean; reasoning: string },
   goal: string = "Return the capital",
 ): GraderInput => {
   const input: Input = { id: "i1", args: {}, goal };
-  return { input, run: agentRun("New Delhi"), runAgency: new AgencyRunner({}, async () => ({ data: verdict })) };
+  return { input, run: loadedRun("New Delhi"), runAgency: new AgencyRunner({}, async () => ({ data: verdict })) };
 };
 
 describe("LlmJudge", () => {
@@ -40,7 +40,7 @@ describe("LlmJudge", () => {
       return { data: { score: 0.8, reasoning: "ok" } };
     });
     const judge = new LlmJudge({ goal: "Return the capital." });   // no agencyFile, no goalPath
-    const grade = await judge.run({ input: { id: "a", args: {} }, run: agentRun("Paris"), runAgency });
+    const grade = await judge.run({ input: { id: "a", args: {} }, run: loadedRun("Paris"), runAgency });
     expect(grade.score).toEqual({ kind: "scalar", value: 0.8 });
     expect(captured?.agencyFile.endsWith("eval/goalJudge.agency")).toBe(true);   // default file
     expect(captured?.argsString).toBe('"Return the capital.", "Paris", ""');     // inline goal; no expected → ""
@@ -53,7 +53,7 @@ describe("LlmJudge", () => {
       return { data: { score: 1, reasoning: "" } };
     });
     const judge = new LlmJudge({});   // default goalPath ["goal"]
-    await judge.run({ input: { id: "a", args: {}, goal: "from input" }, run: agentRun("x"), runAgency });
+    await judge.run({ input: { id: "a", args: {}, goal: "from input" }, run: loadedRun("x"), runAgency });
     expect(captured).toBe('"from input", "x", ""');
   });
 
@@ -64,7 +64,7 @@ describe("LlmJudge", () => {
       return { data: { score: 1, reasoning: "" } };
     });
     const judge = new LlmJudge({ goal: "Return the capital." });   // default expectedPath ["expected"]
-    await judge.run({ input: { id: "a", args: {}, expected: "New Delhi" }, run: agentRun("New Delhi"), runAgency });
+    await judge.run({ input: { id: "a", args: {}, expected: "New Delhi" }, run: loadedRun("New Delhi"), runAgency });
     expect(captured).toBe('"Return the capital.", "New Delhi", "New Delhi"');
   });
 });

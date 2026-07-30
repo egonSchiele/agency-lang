@@ -3,13 +3,11 @@ import * as path from "path";
 
 import { judgePairwise } from "@/eval/judge/pairwise.js";
 import { judgeSuite } from "@/eval/judge/suite.js";
-import { loadInputs } from "@/eval/loadInputs.js";
-import { readEvalRun, type ReadEvalRunResult } from "@/eval/readRun.js";
 import type { JudgeAggregationPolicy } from "@/eval/judge/types.js";
 
 export type EvalJudgeOptions = {
+  /** Files mode only — run directories carry their own goals. */
   goal?: string;
-  inputs?: string;
   out?: string;
   samples?: number;
   confidenceThreshold?: number;
@@ -29,7 +27,6 @@ export async function evalJudge(
 
   if (mode === "files") {
     if (!opts.goal) throw new Error("--goal is required when judging eval record files");
-    if (opts.inputs) throw new Error("--inputs is only supported for run-directory comparison");
     const verdict = await judgePairwise(opts.goal, inputA, inputB);
     const outPath = opts.out ?? defaultOutPath(inputA, inputB);
     fs.writeFileSync(outPath, JSON.stringify(verdict, null, 2));
@@ -40,12 +37,12 @@ export async function evalJudge(
     return;
   }
 
-  const selection = validateInputSelection(opts);
-  const inputs = selection === "goal" ? inputsFromInlineGoal(inputA, inputB, opts.goal ?? "") : loadInputs(path.resolve(opts.inputs ?? ""));
+  if (opts.goal) {
+    throw new Error("--goal is only for judging eval record files; run directories carry their own goals in input.json");
+  }
   const verdict = await judgeSuite({
     runA: inputA,
     runB: inputB,
-    inputs,
     policy: policyFromOptions(opts),
   });
   const outPath = opts.out ?? defaultOutPath(inputA, inputB);
@@ -63,25 +60,6 @@ function inputMode(inputA: string, inputB: string): "files" | "dirs" | "mixed" {
   return "mixed";
 }
 
-function validateInputSelection(opts: EvalJudgeOptions): "inputs" | "goal" {
-  const count = (opts.inputs ? 1 : 0) + (opts.goal ? 1 : 0);
-  if (count !== 1) {
-    throw new Error("Provide exactly one of --inputs or --goal");
-  }
-  return opts.goal ? "goal" : "inputs";
-}
-
-function inputsFromInlineGoal(runA: string, runB: string, goal: string) {
-  const summaryA = readEvalRun(runA);
-  const summaryB = readEvalRun(runB);
-  const inputIdA = onlyInputId(summaryA);
-  const inputIdB = onlyInputId(summaryB);
-  if (inputIdA !== inputIdB) {
-    throw new Error(`Inline --goal run input ids differ (${inputIdA} vs ${inputIdB}); use --inputs instead`);
-  }
-  return [{ id: inputIdA, goal, args: {} }];
-}
-
 function policyFromOptions(opts: EvalJudgeOptions): JudgeAggregationPolicy {
   return {
     samples: integerOption("samples", opts.samples ?? 3, { min: 1 }),
@@ -89,16 +67,6 @@ function policyFromOptions(opts: EvalJudgeOptions): JudgeAggregationPolicy {
     marginThreshold: integerOption("marginThreshold", opts.marginThreshold ?? 0, { min: 0 }),
     positionBias: opts.positionBias ?? "swap",
   };
-}
-
-function onlyInputId(run: ReadEvalRunResult): string {
-  const inputIds = Object.keys(run.inputsById);
-  if (inputIds.length !== 1) {
-    throw new Error("--goal is ambiguous for multi-input run directories; use --inputs instead");
-  }
-  const inputId = inputIds[0];
-  if (!inputId) throw new Error("--goal requires run directories with one input; use --inputs instead");
-  return inputId;
 }
 
 function integerOption(

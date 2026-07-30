@@ -546,8 +546,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Compare two eval records or eval run directories")
     .argument("<inputA>", "Path to first eval record (.eval.json) or run directory")
     .argument("<inputB>", "Path to second eval record (.eval.json) or run directory")
-    .option("--goal <text>", "Goal used to judge responses")
-    .option("--inputs <fileOrDir>", "Eval input suite for run-directory comparison")
+    .option("--goal <text>", "Goal used to judge responses (record files only; run directories carry their own goals)")
     .option("--samples <n>", "Judge samples per input", parseInt)
     .option("--confidence-threshold <n>", "Minimum confidence counted as a win", parseInt)
     .option("--margin-threshold <n>", "Suite win margin required", parseInt)
@@ -559,7 +558,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
         inputB: string,
         opts: {
           goal?: string;
-          inputs?: string;
           out?: string;
           samples?: number;
           confidenceThreshold?: number;

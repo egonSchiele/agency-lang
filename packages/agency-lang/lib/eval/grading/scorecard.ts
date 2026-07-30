@@ -1,11 +1,11 @@
 import type { BaseGrader } from "./baseGrader.js";
-import type { AgentRun, Grade, Input } from "./types.js";
+import type { LoadedRun, Grade, Input } from "./types.js";
 
 export type GraderGrade = { grader: BaseGrader; grade: Grade };
 export type InputGrades = {
   input: Input;
   /** Null when the input was never graded — the run errored, or produced no output. */
-  run: AgentRun | null;
+  run: LoadedRun | null;
   grades: GraderGrade[];
   gatesPassed: boolean;
   /** Why this input scored 0 without being graded. Set iff `run` is null. */

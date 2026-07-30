@@ -1,8 +1,5 @@
-import type {
-  EvalRunResult,
-  Input,
-} from "../runTypes.js";
-import { readEvalRun, type ReadEvalRunResult, type ReadEvalRunInput } from "../readRun.js";
+import type { Input } from "../runTypes.js";
+import { readEvalRun, type ReadEvalRunInput } from "../readRun.js";
 import { judgePair, type JudgePairArgs } from "./pairwise.js";
 import type {
   JudgeAggregationPolicy,
@@ -12,10 +9,11 @@ import type {
   InputVerdict,
 } from "./types.js";
 
+/** Two run directories and a policy — the input specs (ids, goals) come from
+ *  each run's own input.json files, the same way grading reads them. */
 export type JudgeSuiteArgs = {
-  runA: EvalRunResult | ReadEvalRunResult | string;
-  runB: EvalRunResult | ReadEvalRunResult | string;
-  inputs: Input[];
+  runA: string;
+  runB: string;
   policy: JudgeAggregationPolicy;
   judgePair?: (args: JudgePairArgs) => Promise<InputVerdict>;
 };
@@ -80,17 +78,23 @@ export function aggregateSuite(perInput: InputVerdict[], policy: JudgeAggregatio
 }
 
 export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
-  const runA = coerceRun(args.runA);
-  const runB = coerceRun(args.runB);
+  const runA = readEvalRun(args.runA);
+  const runB = readEvalRun(args.runB);
   const perInput: InputVerdict[] = [];
   const judge = args.judgePair ?? judgePair;
 
-  for (const input of args.inputs) {
-    const id = input.id ?? "";
+  // Run A's inputs in summary order, then any ids only run B has — a lopsided
+  // pair yields missing-data verdicts rather than silently dropping inputs.
+  const ids = [
+    ...Object.keys(runA.inputsById),
+    ...Object.keys(runB.inputsById).filter((id) => !Object.hasOwn(runA.inputsById, id)),
+  ];
+  for (const id of ids) {
     const inputA = runA.inputsById[id] ?? missingInput(id);
     const inputB = runB.inputsById[id] ?? missingInput(id);
+    const spec: Input = inputA.input ?? inputB.input ?? { id, args: {} };
     if (inputA.status !== "ok" || inputB.status !== "ok") {
-      perInput.push(missingDataVerdict(input, inputA, inputB));
+      perInput.push(missingDataVerdict(spec, inputA, inputB));
       continue;
     }
 
@@ -99,7 +103,7 @@ export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
       const order = orderForSample(index, args.policy.positionBias);
       const verdict = await judge({
         inputId: id,
-        goal: input.goal ?? "",
+        goal: spec.goal ?? "",
         recordPathA: inputA.recordPath ?? "",
         recordPathB: inputB.recordPath ?? "",
         order,
@@ -108,7 +112,7 @@ export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
     }
     perInput.push(reduceSamples({
       inputId: id,
-      goal: input.goal ?? "",
+      goal: spec.goal ?? "",
       samples,
       inputs: [verdictSideOf(inputA), verdictSideOf(inputB)],
     }));
@@ -134,21 +138,6 @@ function suiteWinner(winsA: number, winsB: number, marginThreshold: number): Jud
 function mean(values: number[]): number {
   if (values.length === 0) return 0;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function coerceRun(run: EvalRunResult | ReadEvalRunResult | string): ReadEvalRunResult {
-  if (typeof run === "string") return readEvalRun(run);
-  if ("inputsById" in run) return run;
-  const inputsById: Record<string, ReadEvalRunInput> = {};
-  for (const input of run.inputs) {
-    inputsById[input.inputId] = {
-      inputId: input.inputId,
-      recordPath: input.evalRecordPath,
-      status: input.status === "success" ? "ok" : "failed",
-      ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
-    };
-  }
-  return { runDir: run.runDir, inputsById };
 }
 
 function missingInput(inputId: string): ReadEvalRunInput {

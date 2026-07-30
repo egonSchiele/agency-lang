@@ -2,13 +2,11 @@ import * as fs from "fs";
 import * as path from "path";
 
 import type { AgencyConfig } from "@/config.js";
-import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
-import { breakdown } from "@/eval/grading/gradeBreakdown.js";
-import { gradeRun } from "@/eval/grading/gradeRun.js";
+import { gradeSuite } from "@/eval/grading/gradeSuite.js";
 import { writeVerifierGrading } from "@/eval/runArtifacts.js";
 import type { EvalRunGrading } from "@/eval/runTypes.js";
 
-import { resolveGraders } from "./run.js";
+import { resolveGraders } from "./graders.js";
 
 export type EvalGradeOptions = {
   /** Path to a TypeScript grading module. Defaults to `eval.graders`, then the goal judge. */
@@ -44,20 +42,7 @@ export async function evalGrade(
     );
   }
 
-  const scorecard = await gradeRun(resolvedRunDir, {
-    graders,
-    runAgency: new AgencyRunner(config),
-  });
-
-  const grading: EvalRunGrading = {
-    graders: graders.map((grader) => grader.name()),
-    // objective(), not gatedObjective() — same reasoning as eval run: a
-    // gate-failed input already contributes 0 to this mean, and zeroing the
-    // whole run over one failure makes the number untrackable.
-    objective: scorecard.objective(),
-    gatesPassed: scorecard.gatesPassed(),
-    perInput: breakdown(scorecard),
-  };
+  const grading = await gradeSuite(resolvedRunDir, graders, config);
 
   if (opts.out !== undefined) {
     fs.writeFileSync(opts.out, JSON.stringify(grading, null, 2));

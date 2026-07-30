@@ -6,7 +6,7 @@ import { type OptimizeTargetSet } from "./targets.js";
 /** Per-candidate cache-partition token. `EvalCache` keys runs by
  *  `(key, inputId)`; under the new model nothing on-disk lives at the workspace
  *  itself — per-iteration artifacts live under `runs/<runId>/agent-runs/<key>/`,
- *  created by `evalRunLoadedInputs` rather than here. */
+ *  created by `runSuite` rather than here. */
 export type CachePartition = { key: string };
 
 /** Owns the per-candidate cache-identity counter. No filesystem ownership. */

@@ -11,13 +11,12 @@ description: Documents `agency eval judge`, which compares two eval records agai
 
 ```bash
 agency eval judge --goal <text> [--out <path>] <recordA.eval.json> <recordB.eval.json>
-agency eval judge (--goal <text> | --inputs <file|dir>) [--out <path>] <runA> <runB>
+agency eval judge [--out <path>] <runA> <runB>
 ```
 
 Options:
 
-- `--goal <text>` — plain-English description of what success looks like. Required for record comparison. For single-input run directories, creates an inline `input-1` goal.
-- `--inputs <file|dir>` — eval input suite for run-directory comparison.
+- `--goal <text>` — plain-English description of what success looks like. Required for record comparison; rejected for run directories, which carry their own goals in each input's `input.json`.
 - `--samples <n>` — judge samples per input. Defaults to `3`.
 - `--confidence-threshold <n>` — minimum input confidence counted as a suite win. Defaults to `50`.
 - `--margin-threshold <n>` — suite win margin required. Defaults to `0`.
@@ -36,7 +35,7 @@ agency eval judge \
 Compare two run directories against an input suite:
 
 ```bash
-agency eval judge runs/baseline runs/candidate --inputs inputs.json
+agency eval judge runs/baseline runs/candidate
 ```
 
 The command prints a short summary and writes the full verdict:

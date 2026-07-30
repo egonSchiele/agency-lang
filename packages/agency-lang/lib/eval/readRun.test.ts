@@ -59,6 +59,17 @@ describe("readEvalRun", () => {
     });
   });
 
+  it("degrades a corrupt input.json to no spec instead of failing the whole load", () => {
+    writeRecord("task-1", { recordVersion: 2, evalOutputs: [{ value: "Paris", tMs: 1 }] });
+    fs.writeFileSync(path.join(runDir, "inputs", "task-1", "input.json"), "{not json");
+    writeSummary([{ inputId: "task-1", status: "success", evalRecordPath: recordPath("task-1"), statelogPath: "", workdirPath: "" }]);
+
+    const run = readEvalRun(runDir);
+
+    expect(run.inputsById["task-1"].status).toBe("ok");
+    expect(run.inputsById["task-1"].input).toBeUndefined();
+  });
+
   it("ignores input directories that are not present in summary.json", () => {
     writeInput("task-1", { id: "task-1", goal: "Return Paris", args: {} });
     writeRecord("task-1", { recordVersion: 2, evalOutputs: [{ value: "Paris", tMs: 1 }] });
@@ -73,7 +84,7 @@ describe("readEvalRun", () => {
     fs.writeFileSync(path.join(runDir, "summary.json"), JSON.stringify({
       runId: "run-a",
       runDir,
-      agent: "agent.agency:main",
+      agentLabel: "agent.agency:main",
       inputs,
       okCount: inputs.filter((input) => input.status === "success").length,
       errorCount: inputs.filter((input) => input.status === "error").length,
@@ -108,7 +119,7 @@ describe("readEvalRun layouts", () => {
     fs.mkdirSync(recordDir, { recursive: true });
     fs.writeFileSync(path.join(recordDir, "eval-record.json"), JSON.stringify({ evalOutputs: [] }));
     fs.writeFileSync(path.join(layoutRunDir, "summary.json"), JSON.stringify({
-      runId: "r", runDir: layoutRunDir, agent: "a:main", okCount: 1, errorCount: 0,
+      runId: "r", runDir: layoutRunDir, agentLabel: "a:main", okCount: 1, errorCount: 0,
       // Empty evalRecordPath forces the constructed-path fallback — the only
       // layout-sensitive code path.
       inputs: [{ inputId: "a", status: "success", evalRecordPath: "", statelogPath: "", workdirPath: "" }],

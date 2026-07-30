@@ -13,9 +13,11 @@ export type JSON = string | number | boolean | null | JSON[] | { [key: string]: 
 /** A path of object keys / array indices into a JSON value. */
 export type JSONPath = (string | number)[];
 
-/** The result of running the agent on one input. Built by the grading step from
- *  the run's `EvalRunInputResult`, so `record` is parsed exactly once per input. */
-export type AgentRun = {
+/** One finished run's evidence, loaded off disk by grading's loader — as
+ *  opposed to `AgentRun` (lib/eval/run/runAgent.ts), which is the outcome of
+ *  EXECUTING. Built from the run's `EvalRunInputResult`, so `record` is parsed
+ *  exactly once per input. */
+export type LoadedRun = {
   output: JSON;         // the agent's return value
   recordPath: string;   // path to the full execution trace (eval record)
   workdir: string;      // the isolated directory the agent ran in
@@ -47,6 +49,6 @@ export type GraderOptions = {
 /** What a grader's `_run` receives. */
 export type GraderInput = {
   input: Input;
-  run: AgentRun;
+  run: LoadedRun;
   runAgency: AgencyRunner;   // capability to invoke a judge .agency file
 };

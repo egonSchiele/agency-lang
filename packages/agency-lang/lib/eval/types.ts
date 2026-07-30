@@ -21,8 +21,12 @@
  * | evalValueRecorded                    | ✗                     | only if agent annotates   |
  * | evalOutputRecorded                   | ✗                     | only if agent annotates   |
  *
- * Legacy traces parse without errors; extraction degrades by leaving
- * the missing fields null and emitting one warning during normalize.
+ * "Legacy" here means statelogs captured by builds from before the
+ * eval work landed (PR #726's Task 0 taught the runtime to emit the
+ * right-hand column) — e.g. old saved runs under runs/, or any
+ * statelog.log a user kept around and re-grades today. Legacy traces
+ * parse without errors; extraction degrades by leaving the missing
+ * fields null and emitting one warning during normalize.
  */
 export type EvalRecord = {
   /** trace_id from the source statelog. */
@@ -118,33 +122,39 @@ export type NormalizedEventBase = {
   parentSpanId: string | null;
 };
 
+export type NormalizedLlmEvent = NormalizedEventBase & {
+  kind: "llm";
+  model: string;
+  /** Tool names available to this LLM call. Useful for
+   *  fingerprinting an agent when thread labels are absent. */
+  tools: string[];
+  durationMs: number | null;
+  costUsd: number | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+};
+
+export type NormalizedToolStartEvent = NormalizedEventBase & {
+  kind: "tool_start";
+  /** Sourced from `toolCallStart.data.toolName`. */
+  tool: string;
+  argsPreview: string;
+  model: string | null;
+};
+
+export type NormalizedToolEndEvent = NormalizedEventBase & {
+  kind: "tool_end";
+  /** Sourced from `toolCall.data.toolName`. */
+  tool: string;
+  outputPreview: string;
+  durationMs: number | null;
+};
+
 /** One step in the chronological tool-call / LLM-call sequence. */
 export type NormalizedEvent =
-  | (NormalizedEventBase & {
-    kind: "llm";
-    model: string;
-    /** Tool names available to this LLM call. Useful for
-     *  fingerprinting an agent when thread labels are absent. */
-    tools: string[];
-    durationMs: number | null;
-    costUsd: number | null;
-    tokensIn: number | null;
-    tokensOut: number | null;
-  })
-  | (NormalizedEventBase & {
-    kind: "tool_start";
-    /** Sourced from `toolCallStart.data.toolName`. */
-    tool: string;
-    argsPreview: string;
-    model: string | null;
-  })
-  | (NormalizedEventBase & {
-    kind: "tool_end";
-    /** Sourced from `toolCall.data.toolName`. */
-    tool: string;
-    outputPreview: string;
-    durationMs: number | null;
-  });
+  | NormalizedLlmEvent
+  | NormalizedToolStartEvent
+  | NormalizedToolEndEvent;
 
 export type InterruptEntry = {
   interruptId: string;
@@ -155,7 +165,10 @@ export type InterruptEntry = {
   /** Full data payload as it was on the interrupt object. May be
    *  large — consumers should preview, not log verbatim. */
   data: unknown;
-  outcome: "approved" | "rejected" | "propagated" | "unresolved";
+  /** Same vocabulary as interrupt handlers (approve / reject / propagate /
+   *  pass). "passed": no interruptResolved event recorded a decision — every
+   *  handler passed on it, or the run ended before one decided. */
+  outcome: "approved" | "rejected" | "propagated" | "passed";
   resolvedBy: "handler" | "user" | "policy" | "ipc" | null;
   thrownAtMs: number | null;
   resolvedAtMs: number | null;

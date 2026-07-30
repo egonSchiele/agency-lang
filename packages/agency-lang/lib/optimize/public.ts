@@ -21,7 +21,7 @@ export type {
   Grader,
   GraderFn,
   GraderContext,
-  AgentRun,
+  LoadedRun,
   Grade,
   GraderOptions,
   Input,

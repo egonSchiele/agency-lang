@@ -37,7 +37,7 @@ function makeRunDir(output: string): string {
     warnings: [],
   }));
   fs.writeFileSync(path.join(runDir, "summary.json"), JSON.stringify({
-    runId: "r", runDir, agent: "a:main", okCount: 1, errorCount: 0,
+    runId: "r", runDir, agentLabel: "a:main", okCount: 1, errorCount: 0,
     inputs: [{
       inputId: "a",
       status: "success",

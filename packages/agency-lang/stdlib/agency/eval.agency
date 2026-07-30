@@ -52,9 +52,7 @@ import {
   import { evalJudgeSuite } from "std::agency/eval"
 
   node main() {
-    const verdict = evalJudgeSuite("runs/baseline", "runs/candidate", [
-      { id: "capital-france", goal: "Return Paris", args: {} },
-    ])
+    const verdict = evalJudgeSuite("runs/baseline", "runs/candidate")
     print(verdict.winner)
   }
   ```
@@ -65,7 +63,6 @@ export type Input = {
   goal?: string;
   args: Record<string, any>;
   node?: string;
-  working_dir?: string;
   metadata?: Record<string, any>
 }
 
@@ -81,7 +78,7 @@ export type EvalRunInputResult = {
 export type EvalRunResult = {
   runId: string;
   runDir: string;
-  agent: string;
+  agentLabel: string;
   inputs: EvalRunInputResult[];
   okCount: number;
   errorCount: number
@@ -271,22 +268,20 @@ export type SuiteVerdict = {
 export def evalJudgeSuite(
   runA: string,
   runB: string,
-  inputs: Input[],
   samples: number = 3,
   confidenceThreshold: number = 50,
   marginThreshold: number = 0,
   positionBias: "swap" | "none" = "swap",
 ): SuiteVerdict {
   """
-  Judge two eval run directories by input id and aggregate the results into a suite verdict. Missing or failed input records are handled deterministically without calling the LLM judge; successful inputs are judged pairwise.
+  Judge two eval run directories by input id and aggregate the results into a suite verdict. Input ids and goals come from each run directory itself (the input.json files the run wrote). Missing or failed input records are handled deterministically without calling the LLM judge; successful inputs are judged pairwise.
 
   @param runA - Path to the first eval run directory
   @param runB - Path to the second eval run directory
-  @param inputs - Input suite defining input ids and goals to compare
   @param samples - Judge samples per input
   @param confidenceThreshold - Minimum input confidence counted as a suite win
   @param marginThreshold - Suite win margin required to avoid an overall tie
   @param positionBias - Whether to swap A/B order across samples to cancel judge position bias
   """
-  return _evalJudgeSuite(runA, runB, inputs, samples, confidenceThreshold, marginThreshold, positionBias)
+  return _evalJudgeSuite(runA, runB, samples, confidenceThreshold, marginThreshold, positionBias)
 }

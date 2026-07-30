@@ -31,19 +31,6 @@ import { parseAgency } from "@/parser.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 import type { FetchMock } from "../runtime/fetchMock.js";
 import { writeFetchMocksTempFile } from "./fetchMockResolve.js";
-export function parseTarget(target: string): {
-  filename: string;
-  nodeName: string;
-} {
-  const colonIndex = target.lastIndexOf(":");
-  if (colonIndex === -1) {
-    return { filename: target, nodeName: "" };
-  }
-  const filename = target.slice(0, colonIndex);
-  const nodeName = target.slice(colonIndex + 1);
-  return { filename, nodeName };
-}
-
 export async function promptForTarget(): Promise<{
   filename: string;
   nodeName: string;

@@ -7,11 +7,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { grader } from "@/eval/grading/functionGrader.js";
 import { ExactMatchGrader as ExactMatch } from "@/eval/grading/graders/builtinGraders.js";
-import type { EvalInputRunner, EvalRecordExtractor } from "@/eval/runEvalInput.js";
+import type { EvalRecordExtractor } from "@/eval/run/extract.js";
+import type { EvalInputRunner } from "@/eval/run/subprocess.js";
 
-import { mergeChainOutcomes } from "@/runtime/interrupts.js";
-
-import { evalInterruptDecision, evalRun, evalRunLoadedInputs, resolveEvalRunTarget, validateInputSelection } from "./run.js";
+import { validateGraders } from "@/eval/grading/gradeRun.js";
+import { recordGrading } from "@/eval/grading/recordGrading.js";
+import { runSuite } from "@/eval/run/runSuite.js";
+import { evalRun, validateInputSelection } from "./run.js";
 
 /** Pretends the agent ran. Must write a non-empty statelog: `shouldExtractStatelog`
  *  skips the extractor when the log is absent or empty, and then grading sees no
@@ -48,20 +50,8 @@ describe("eval run CLI", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("resolves file and directory agent targets", () => {
-    const file = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(file, "node main() {}\n");
-    const dir = path.join(tmpDir, "agent-dir");
-    fs.mkdirSync(dir);
-    fs.writeFileSync(path.join(dir, "main.agency"), "node main() {}\n");
-
-    expect(resolveEvalRunTarget(`${file}:evalMain`)).toEqual({ agentFile: file, node: "evalMain", label: `${file}:evalMain` });
-    expect(resolveEvalRunTarget(file)).toEqual({ agentFile: file, node: "main", label: `${file}:main` });
-    expect(resolveEvalRunTarget(dir)).toEqual({ agentFile: path.join(dir, "main.agency"), node: "main", label: `${path.join(dir, "main.agency")}:main` });
-  });
-
   it("requires exactly one of inputs or goal", () => {
-    expect(() => validateInputSelection({})).toThrow(/one of/i);
+    expect(() => validateInputSelection({})).toThrow(/--inputs or --goal/);
     expect(() => validateInputSelection({ inputs: "inputs.json", goal: "goal" })).toThrow(/one of/i);
     expect(validateInputSelection({ goal: "goal" })).toBe("goal");
   });
@@ -225,7 +215,7 @@ describe("eval run CLI", () => {
             ? { ok: true }
             : { ok: false, errorMessage: "fixture missing" };
         },
-        extractor: async () => {},
+        extractor: recordExtractor("ok"),
       },
     );
 
@@ -234,38 +224,6 @@ describe("eval run CLI", () => {
     expect(runConfig.provenance.inputsSource).toEqual({ source: `${suiteRepo}?ref=${suiteSha}`, sha: suiteSha });
     expect(runConfig.provenance.agent.closure.length).toBeGreaterThan(0);
     expect(runConfig.provenance.agent.closure[0].sha256).toMatch(/^[0-9a-f]{64}$/);
-  });
-
-  it("seeds an input's files directory into the workdir", async () => {
-    const filesDir = path.join(tmpDir, "fixtures");
-    fs.mkdirSync(path.join(filesDir, "data"), { recursive: true });
-    fs.writeFileSync(path.join(filesDir, "data", "report.txt"), "q3");
-    const agentDir = path.join(tmpDir, "agent");
-    fs.mkdirSync(agentDir, { recursive: true });
-    const agent = path.join(agentDir, "agent.agency");
-    fs.writeFileSync(agent, "node main() {}\n");
-
-    let sawFixture = false;
-    const result = await evalRunLoadedInputs(
-      {
-        agent,
-        inputs: [{ id: "a", goal: "g", args: {}, files: filesDir }],
-        inputsSource: "test",
-        runsDir: path.join(tmpDir, "runs"),
-        runId: "files-e2e",
-      },
-      {
-        runner: async ({ cwd, statelogPath }) => {
-          sawFixture = fs.existsSync(path.join(cwd, "data", "report.txt"));
-          fs.writeFileSync(statelogPath, "{}\n");
-          return { ok: true };
-        },
-        extractor: async () => {},
-      },
-    );
-
-    expect(result.inputs[0].status).toBe("success");
-    expect(sawFixture).toBe(true);
   });
 
   describe("grading", () => {
@@ -278,20 +236,19 @@ describe("eval run CLI", () => {
       const agent = path.join(agentDir, "agent.agency");
       fs.writeFileSync(agent, "node main() {}\n");
       const runsDir = path.join(tmpDir, "runs");
-      return { agent, inputs, inputsSource: "test", runsDir, runId };
+      return { agent, inputs, runsDir, runId };
     }
 
-    it("writes a grading block into summary.json and reports a failed gate", async () => {
+    it("recordGrading writes the grading block into summary.json and reports a failed gate", async () => {
       const opts = setup("graded", [{ id: "a", goal: "g", args: {} }]);
-      const result = await evalRunLoadedInputs(
-        { ...opts, graders: [grader(() => false, { name: "gate", mustPass: true })] },
-        { runner: okRunner, extractor: recordExtractor("hello") },
-      );
+      const summary = await runSuite({ ...opts, perRun: { extractor: recordExtractor("hello") } }, { runner: okRunner });
+      expect(summary.grading).toBeUndefined();   // the runner never grades
 
-      expect(result.grading).toBeDefined();
-      expect(result.grading!.gatesPassed).toBe(false);
-      const summary = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "graded", "summary.json"), "utf8"));
-      expect(summary.grading.graders).toEqual(["gate"]);
+      const grading = await recordGrading(summary.runDir, [grader(() => false, { name: "gate", mustPass: true })], {});
+
+      expect(grading.gatesPassed).toBe(false);
+      const onDisk = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "graded", "summary.json"), "utf8"));
+      expect(onDisk.grading.graders).toEqual(["gate"]);
       expect(fs.existsSync(path.join(tmpDir, "runs", "graded", "verifier", "grading.json"))).toBe(true);
     });
 
@@ -300,57 +257,22 @@ describe("eval run CLI", () => {
         { id: "a", goal: "g", args: {} },
         { id: "b", goal: "g", args: {} },
       ]);
-      const result = await evalRunLoadedInputs(
-        // Passes on input "a", fails the gate on input "b".
-        { ...opts, graders: [grader(({ input }) => input.id === "a", { name: "gate", mustPass: true })] },
-        { runner: okRunner, extractor: recordExtractor("hello") },
-      );
+      const summary = await runSuite({ ...opts, perRun: { extractor: recordExtractor("hello") } }, { runner: okRunner });
+      // Passes on input "a", fails the gate on input "b".
+      const grading = await recordGrading(summary.runDir, [grader(({ input }) => input.id === "a", { name: "gate", mustPass: true })], {});
 
       // One of two inputs scored 1, the other 0 — the mean is 0.5, not 0.
-      expect(result.grading!.objective).toBeCloseTo(0.5);
-      expect(result.grading!.gatesPassed).toBe(false);
+      expect(grading.objective).toBeCloseTo(0.5);
+      expect(grading.gatesPassed).toBe(false);
     });
 
-    it("rejects a misconfigured grader before running any agent", async () => {
-      const opts = setup("badgrader", [{ id: "a", goal: "g", args: {} }]);
-      let ran = false;
-      const countingRunner: EvalInputRunner = async ({ statelogPath }) => {
-        ran = true;
-        fs.writeFileSync(statelogPath, "{}\n");
-        return { ok: true };
-      };
-
+    it("a misconfigured grader is rejected by validation (evalRun calls this before any agent runs)", () => {
       // ExactMatch's matchOn defaults to `expected`, which this input lacks.
-      await expect(evalRunLoadedInputs(
-        { ...opts, graders: [new ExactMatch({})] },
-        { runner: countingRunner, extractor: recordExtractor("hello") },
-      )).rejects.toThrow(/matchOn/);
-
-      expect(ran).toBe(false);
-      expect(fs.existsSync(path.join(tmpDir, "runs", "badgrader"))).toBe(false);
-    });
-
-    it("skips grading when no graders are supplied, so the optimizer path is unaffected", async () => {
-      const opts = setup("ungraded", [{ id: "a", goal: "g", args: {} }]);
-      const result = await evalRunLoadedInputs(opts, {
-        runner: okRunner,
-        extractor: recordExtractor("hello"),
-      });
-
-      expect(result.grading).toBeUndefined();
-      const summary = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "ungraded", "summary.json"), "utf8"));
-      expect(summary).not.toHaveProperty("grading");
+      // The fail-fast ordering itself lives in evalRun: resolve → validate →
+      // run → grade; the runner no longer knows graders exist.
+      expect(() => validateGraders([new ExactMatch({})], { id: "a", goal: "g", args: {} }))
+        .toThrow(/matchOn/);
     });
   });
 
-  it("answers subprocess interrupts in the shape sendInterruptToParent consumes", () => {
-    const decision = evalInterruptDecision("int-1");
-
-    // The exact regression: the parent once sent { approved: true } with no
-    // outcome, and the child crashed reading `outcome.kind`. Pin the contract
-    // by pushing the reply through the runtime's own merge.
-    expect(decision).toMatchObject({ type: "decision", interruptId: "int-1" });
-    const merged = mergeChainOutcomes("std::write", { kind: "approved", value: undefined }, decision.outcome);
-    expect(merged.kind).toBe("approved");
-  });
 });

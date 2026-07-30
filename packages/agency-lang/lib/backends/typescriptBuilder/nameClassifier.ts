@@ -22,7 +22,7 @@ export const DIRECT_CALL_FUNCTIONS: ReadonlySet<string> = new Set([
  * expressions, …) goes into the per-execution init function so it has
  * access to `__ctx`.
  */
-const TOP_LEVEL_DECLARATION_TYPES: ReadonlySet<string> = new Set([
+export const TOP_LEVEL_DECLARATION_TYPES: ReadonlySet<string> = new Set([
   "graphNode", "function", "typeAlias",
   "importStatement", "importNodeStatement",
   "comment", "multiLineComment", "newLine",

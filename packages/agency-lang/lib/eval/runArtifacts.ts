@@ -1,12 +1,45 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { sha256Text } from "@/utils/hash.js";
+
 import { assertEvalRunId, assertEvalInputId } from "./ids.js";
 import type {
   EvalRunResult,
   Input,
   EvalRunInputResult,
 } from "./runTypes.js";
+
+export type SourceProvenance = { source: string; sha?: string };
+export type ClosureFileProvenance = { file: string; sha256: string };
+export type AgentProvenance = { entry: string; closure: ClosureFileProvenance[] };
+export type EvalRunProvenance = {
+  inputsSource: SourceProvenance;
+  /** Keyed by input id. Ids the loader GENERATED (nanoid, for id-less specs)
+   *  are random per run — stable within this config.json, not across runs.
+   *  Do not diff these keys between runs; diff the recorded sources. */
+  files: Record<string, SourceProvenance>;
+  agent: AgentProvenance;
+};
+
+/** The one assembler of config.json's provenance key. */
+export function buildProvenance(args: {
+  inputsSource: SourceProvenance;
+  files: Record<string, SourceProvenance>;
+  seed: { baseDir: string; agentRelPath: string; closureFiles: string[] };
+}): EvalRunProvenance {
+  return {
+    inputsSource: args.inputsSource,
+    files: args.files,
+    agent: {
+      entry: args.seed.agentRelPath,
+      closure: args.seed.closureFiles.map((closureFile) => ({
+        file: path.relative(args.seed.baseDir, closureFile),
+        sha256: sha256Text(fs.readFileSync(closureFile, "utf8")),
+      })),
+    },
+  };
+}
 
 export type EvalRunState = {
   runId: string;
@@ -35,6 +68,7 @@ export function initializeEvalRun(args: {
   inputs: Input[];
   continueOnError: boolean;
   startedAt: Date;
+  provenance?: EvalRunProvenance;
 }): EvalRunState {
   assertEvalRunId(args.runId);
 
@@ -55,6 +89,7 @@ Choose a different --run-id or delete the existing directory.`,
     inputs: args.inputs,
     continueOnError: args.continueOnError,
     startedAt: args.startedAt.toISOString(),
+    provenance: args.provenance,
   });
 
   return {

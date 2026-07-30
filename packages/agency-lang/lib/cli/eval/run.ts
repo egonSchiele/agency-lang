@@ -29,6 +29,8 @@ import type {
   EvalRunInputResult,
 } from "@/eval/runTypes.js";
 import { agentClosure } from "@/analysis/closure.js";
+import { buildProvenance, type EvalRunProvenance, type SourceProvenance } from "@/eval/runArtifacts.js";
+import { parseSource, resolveSource } from "@/eval/sources.js";
 import type { RunSeed, SeededSeed } from "@/eval/workspace.js";
 import {
   buildForkOptions,
@@ -79,6 +81,8 @@ export type EvalRunLoadedInputsOptions = {
   /** Candidate-file overlay applied to every input in this call (over the
    *  seeded copy, before compile). Plain eval never sets this. */
   overlayFiles?: Record<string, string>;
+  /** Source provenance collected by the CLI loader; recorded in config.json. */
+  provenance?: { inputsSource: SourceProvenance; files: Record<string, SourceProvenance> };
   /** Graders to score the finished run with. Omit to skip grading entirely.
    *  The optimizer never passes this — it grades separately via gradeInput, and
    *  defaulting grading on here would fire a discarded judge call per candidate. */
@@ -162,29 +166,64 @@ export async function evalRun(
   // The command decides what "no --graders" means; the library primitive does not.
   const gradersPath = opts.graders ?? opts.config?.eval?.graders;
   const graders = await resolveGraders(gradersPath, opts.grade, opts.config ?? {});
-  const inputs =
-    selection === "goal"
-      ? [inputFromGoal(opts.goal ?? "")]
-      // A goal is required only when the default goal judge will actually run it:
-      // not under --no-grade, and not when a custom grading module is supplied.
-      : loadInputs(path.resolve(opts.inputs ?? ""), nanoid, {
-        requireGoal: graders !== undefined && gradersPath === undefined,
-      });
+  const suite = loadSuite({
+    selection,
+    inputs: opts.inputs,
+    goal: opts.goal,
+    // A goal is required only when the default goal judge will actually run it:
+    // not under --no-grade, and not when a custom grading module is supplied.
+    requireGoal: graders !== undefined && gradersPath === undefined,
+    cacheRoot: opts.config?.eval?.sourceCacheRoot,
+  });
 
   return evalRunLoadedInputs({
     graders,
     agent: opts.agent,
-    inputs,
-    inputsSource:
-      selection === "goal"
-        ? "inline:--goal"
-        : path.resolve(opts.inputs ?? ""),
+    inputs: suite.inputs,
+    inputsSource: suite.provenance.inputsSource.source,
+    provenance: suite.provenance,
     runId: opts.runId,
     runsDir: opts.runsDir,
     continueOnError: opts.continueOnError,
     verbose: opts.verbose,
     config: opts.config,
   }, overrides);
+}
+
+type LoadedSuite = {
+  inputs: Input[];
+  provenance: { inputsSource: SourceProvenance; files: Record<string, SourceProvenance> };
+};
+
+/** Load the suite named by --inputs/--goal, resolving a git source when given
+ *  one, collecting source provenance for config.json as it goes. */
+function loadSuite(args: {
+  selection: "inputs" | "goal";
+  inputs?: string;
+  goal?: string;
+  requireGoal: boolean;
+  cacheRoot?: string;
+}): LoadedSuite {
+  if (args.selection === "goal") {
+    return {
+      inputs: [inputFromGoal(args.goal ?? "")],
+      provenance: { inputsSource: { source: "inline:--goal" }, files: {} },
+    };
+  }
+  const filesProvenance: Record<string, SourceProvenance> = {};
+  const loadOptions = { requireGoal: args.requireGoal, filesProvenance, sourceCacheRoot: args.cacheRoot };
+  const parsed = parseSource(args.inputs ?? "", process.cwd());
+  if (parsed.kind === "git") {
+    const resolved = resolveSource(parsed, { cacheRoot: args.cacheRoot });
+    return {
+      inputs: loadInputs(resolved.dir, nanoid, { ...loadOptions, forbidGitFiles: true }),
+      provenance: { inputsSource: { source: args.inputs ?? "", sha: resolved.sha }, files: filesProvenance },
+    };
+  }
+  return {
+    inputs: loadInputs(parsed.path, nanoid, loadOptions),
+    provenance: { inputsSource: { source: parsed.path }, files: filesProvenance },
+  };
 }
 
 export async function evalRunLoadedInputs(
@@ -212,6 +251,12 @@ export async function evalRunLoadedInputs(
     validateGraders(opts.graders, opts.inputs[0]);
   }
 
+  const provenance: EvalRunProvenance = buildProvenance({
+    inputsSource: opts.provenance?.inputsSource ?? { source: opts.inputsSource },
+    files: opts.provenance?.files ?? {},
+    seed: defaultSeed,
+  });
+
   const state = initializeEvalRun({
     runId,
     runsDir,
@@ -220,6 +265,7 @@ export async function evalRunLoadedInputs(
     inputs: opts.inputs,
     continueOnError,
     startedAt: new Date(),
+    provenance,
   });
 
   const runner = overrides.runner ?? makeSubprocessEvalInputRunner(opts.pipeAgentOutput ?? true);

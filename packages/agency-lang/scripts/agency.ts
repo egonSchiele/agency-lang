@@ -454,7 +454,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("run")
     .description("Run an Agency agent against an eval task suite")
     .requiredOption("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
-    .option("--inputs <fileOrDir>", "Input suite JSON file or directory")
+    .option("--inputs <source>", "Input suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])")
     .option("--goal <text>", "Run one inline input with this goal")
     .option("--run-id <id>", "Run id / output subdirectory")
     .option("--runs-dir <path>", "Runs output directory")

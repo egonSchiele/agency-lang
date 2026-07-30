@@ -4,7 +4,10 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { nanoid } from "nanoid";
+
 import { loadInputs, loadInputsFromFile, inputFromGoal } from "./loadInputs.js";
+import { makeRepo } from "./testUtils.js";
 
 describe("eval run input loading", () => {
   let tmpDir: string;
@@ -205,6 +208,41 @@ describe("test directories (heavy form)", () => {
     fs.mkdirSync(path.join(suiteDir, "shared-fixtures"));
     const inputs = loadInputs(suiteDir);
     expect(inputs.map((input) => input.id)).toEqual(["a"]);
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+  });
+});
+
+describe("git sources for files", () => {
+  it("resolves a files git source and records provenance", () => {
+    const { repo, first } = makeRepo();
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    const filesSource = `${repo}//tests?ref=${first}`;
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {}, files: filesSource }],
+    }));
+
+    const provenance: Record<string, { source: string; sha?: string }> = {};
+    const [input] = loadInputs(inputsFile, nanoid, {
+      filesProvenance: provenance,
+      sourceCacheRoot: path.join(suiteDir, "cache"),
+    });
+
+    expect(fs.readFileSync(path.join(input.files!, "a.txt"), "utf8")).toBe("v1");
+    expect(provenance["a"]).toEqual({ source: filesSource, sha: first });
+    fs.rmSync(suiteDir, { recursive: true, force: true });
+    fs.rmSync(repo, { recursive: true, force: true });
+  });
+
+  it("forbids git files sources when the suite itself came from git (one-level rule)", () => {
+    const suiteDir = fs.mkdtempSync(path.join(os.tmpdir(), "inputs-"));
+    const inputsFile = path.join(suiteDir, "inputs.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({
+      inputs: [{ id: "a", goal: "g", args: {}, files: "git@github.com:x/y.git" }],
+    }));
+
+    expect(() => loadInputs(inputsFile, nanoid, { forbidGitFiles: true }))
+      .toThrow(/one level|vendor/i);
     fs.rmSync(suiteDir, { recursive: true, force: true });
   });
 });

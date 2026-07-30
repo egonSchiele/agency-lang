@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { execFileSync } from "child_process";
 import * as os from "os";
 import * as path from "path";
 
@@ -186,6 +187,51 @@ describe("eval run CLI", () => {
       errorCount: 1,
       inputs: [{ inputId: "first", status: "error", errorMessage: expect.stringMatching(/^nope\n\nWorkdir was seeded with/) }],
     });
+  });
+
+  it("accepts a git source for --inputs and records provenance in config.json", async () => {
+    // A local repo of test directories; local path + ?ref= exercises the same
+    // resolver path as a remote URL, with no network.
+    const suiteRepo = path.join(tmpDir, "suite-repo");
+    fs.mkdirSync(path.join(suiteRepo, "capital", "files"), { recursive: true });
+    fs.writeFileSync(path.join(suiteRepo, "capital", "test.json"), JSON.stringify({ goal: "g", args: {} }));
+    fs.writeFileSync(path.join(suiteRepo, "capital", "files", "hint.txt"), "Paris");
+    const gitInSuite = (...gitArgs: string[]) => execFileSync("git", gitArgs, { cwd: suiteRepo, encoding: "utf8" }).trim();
+    gitInSuite("init", "-q", "-b", "main");
+    gitInSuite("add", "-A");
+    gitInSuite("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "suite");
+    const suiteSha = gitInSuite("rev-parse", "HEAD");
+
+    const agentDir = path.join(tmpDir, "agent");
+    fs.mkdirSync(agentDir, { recursive: true });
+    const agent = path.join(agentDir, "agent.agency");
+    fs.writeFileSync(agent, "node main() {}\n");
+
+    const result = await evalRun(
+      {
+        agent,
+        inputs: `${suiteRepo}?ref=${suiteSha}`,
+        runsDir: path.join(tmpDir, "runs"),
+        runId: "gitsuite",
+        grade: false,
+        config: { eval: { sourceCacheRoot: path.join(tmpDir, "cache") } },
+      },
+      {
+        runner: async ({ cwd, statelogPath }) => {
+          fs.writeFileSync(statelogPath, "{}\n");
+          return fs.existsSync(path.join(cwd, "hint.txt"))
+            ? { ok: true }
+            : { ok: false, errorMessage: "fixture missing" };
+        },
+        extractor: async () => {},
+      },
+    );
+
+    expect(result.inputs[0].status).toBe("success");
+    const runConfig = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "gitsuite", "config.json"), "utf8"));
+    expect(runConfig.provenance.inputsSource).toEqual({ source: `${suiteRepo}?ref=${suiteSha}`, sha: suiteSha });
+    expect(runConfig.provenance.agent.closure.length).toBeGreaterThan(0);
+    expect(runConfig.provenance.agent.closure[0].sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("seeds an input's files directory into the workdir", async () => {

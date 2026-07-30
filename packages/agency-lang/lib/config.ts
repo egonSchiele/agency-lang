@@ -100,6 +100,7 @@ export interface AgencyConfig {
     runsDir?: string;
     optimizeRunsDir?: string;
     graders?: string;                              // path to a TS grading module
+    sourceCacheRoot?: string;                      // git-source clone cache override
 
     optimize?: {
       goal?: string;
@@ -411,6 +412,7 @@ export const AgencyConfigSchema = z
         runsDir: z.string(),
         optimizeRunsDir: z.string(),
         graders: z.string().optional(),
+        sourceCacheRoot: z.string().optional(),
         optimize: z
           .object({
             goal: z.string().optional(),

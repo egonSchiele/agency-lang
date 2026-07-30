@@ -4,13 +4,23 @@ import * as path from "path";
 import { nanoid } from "nanoid";
 
 import { assertEvalInputId } from "./ids.js";
+import type { SourceProvenance } from "./runArtifacts.js";
 import type { Input } from "./runTypes.js";
+import { parseSource, resolveSource } from "./sources.js";
 
 type MakeId = () => string;
 
 /** Loader options. `requireGoal` defaults to true (the default goal-judge needs
  *  a goal); a custom grading module may not, so the optimize CLI passes false. */
-type LoadOptions = { requireGoal?: boolean };
+type LoadOptions = {
+  requireGoal?: boolean;
+  /** One-level nesting rule: set when the suite itself came from a git source. */
+  forbidGitFiles?: boolean;
+  /** Caller-supplied accumulator: input id → files source provenance. */
+  filesProvenance?: Record<string, SourceProvenance>;
+  /** Cache root override for git sources (tests; config.eval.sourceCacheRoot). */
+  sourceCacheRoot?: string;
+};
 
 export function inputFromGoal(goal: string): Input {
   if (typeof goal !== "string" || goal.length === 0) {
@@ -147,14 +157,30 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   return out;
 }
 
-/** Resolve a files entry to an absolute directory. Local paths only until the
- *  sources task teaches this to accept git sources. */
+/** Resolve a files entry — a local directory or a git source — to an absolute
+ *  directory, recording provenance when the caller collects it. */
 function resolveFilesDir(raw: string, baseDir: string, options: LoadOptions, inputId: string): string {
-  const resolved = path.resolve(baseDir, raw);
-  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
-    throw new Error(`Eval input files must name a directory (got ${raw}, resolved to ${resolved})`);
+  const parsed = parseSource(raw, baseDir);
+  if (parsed.kind === "git") {
+    if (options.forbidGitFiles) {
+      throw new Error(
+        `Input ${inputId}: files "${raw}" is a git source, but this suite was itself loaded from git. ` +
+        `Sources resolve one level deep — vendor the fixtures into the suite repo instead.`,
+      );
+    }
+    const resolved = resolveSource(parsed, { cacheRoot: options.sourceCacheRoot });
+    if (options.filesProvenance) {
+      options.filesProvenance[inputId] = { source: raw, sha: resolved.sha };
+    }
+    return resolved.dir;
   }
-  return fs.realpathSync(resolved);
+  if (!fs.existsSync(parsed.path) || !fs.statSync(parsed.path).isDirectory()) {
+    throw new Error(`Eval input files must name a directory (got ${raw}, resolved to ${parsed.path})`);
+  }
+  if (options.filesProvenance) {
+    options.filesProvenance[inputId] = { source: raw };
+  }
+  return fs.realpathSync(parsed.path);
 }
 
 /** A non-null, non-array object — the shape `args`/`metadata` must have. */

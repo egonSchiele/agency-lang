@@ -5,12 +5,13 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { RunInput } from "../baseOptimizer.js";
-import { BaseGrader } from "../grading/baseGrader.js";
-import type { Grade, GraderInput } from "../grading/types.js";
+import { BaseGrader } from "@/eval/grading/baseGrader.js";
+import type { Grade, GraderInput } from "@/eval/grading/types.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import type { OptimizeMutationPreview } from "../sourceMutator.js";
 import type { OptimizeTargetSet } from "../targets.js";
 import { ExampleOptimizer, type ExampleDeps } from "./example.js";
+import { fakeRun } from "../testUtils.js";
 
 /** Returns the next scalar from a fixed queue — lets a test set baseline vs candidate scores. */
 class QueueGrader extends BaseGrader {
@@ -41,7 +42,7 @@ describe("ExampleOptimizer", () => {
     targets: [{ id: "agent.agency:global:prompt", kind: "variable", file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), scope: "global", name: "prompt", valueKind: "string", value: "hi", declaredType: null }],
   });
 
-  const runInput: RunInput = async () => ({ output: "out", recordPath: "" });
+  const runInput: RunInput = async (_ws, _source, _files, _input, id) => fakeRun(id, "out");
 
   function deps(over: Partial<ExampleDeps> = {}): ExampleDeps {
     return {

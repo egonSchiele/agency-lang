@@ -4,14 +4,15 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { BaseGrader } from "./grading/baseGrader.js";
-import type { Grade, GraderInput, GraderOptions, Input } from "./grading/types.js";
-import type { Scorecard } from "./grading/scorecard.js";
-import { BaseOptimizer, gradedOutput, type MutationOutcome, type RunInput } from "./baseOptimizer.js";
+import { BaseGrader } from "@/eval/grading/baseGrader.js";
+import type { Grade, GraderInput, GraderOptions, Input } from "@/eval/grading/types.js";
+import type { Scorecard } from "@/eval/grading/scorecard.js";
+import { BaseOptimizer, type MutationOutcome, type RunInput } from "./baseOptimizer.js";
 import type { OptimizeTarget } from "./optimizer.js";
 import type { OptimizeMutationDiagnostic, OptimizeMutationOperation, OptimizeMutationPreview } from "./sourceMutator.js";
 import type { OptimizeTargetSet } from "./targets.js";
 import type { MutationProposal, OptimizeResult } from "./types.js";
+import { fakeRun } from "./testUtils.js";
 
 class FixedGrader extends BaseGrader {
   protected readonly defaultName = "fixed";
@@ -63,7 +64,7 @@ describe("BaseOptimizer.evaluate", () => {
   }
 
   const inputs: Input[] = [{ id: "a", args: {} }, { id: "b", args: {} }];
-  const fixedRun: RunInput = async () => ({ output: "out", recordPath: "" });
+  const fixedRun: RunInput = async (_ws, _source, _files, _input, id) => fakeRun(id, "out");
 
   const source: OptimizeTargetSet = {
     baseDir: "",
@@ -196,11 +197,6 @@ describe("BaseOptimizer.evaluate", () => {
       if (!out.ok) expect(out.rationale).toMatch(/malformed/);
       expect(propose).toHaveBeenCalledTimes(3);
     });
-  });
-
-  it("gradedOutput returns the last value, or throws a clear error when the agent produced none", () => {
-    expect(gradedOutput([{ value: "a" }, { value: "b" }], "q1")).toBe("b");
-    expect(() => gradedOutput([], "q1")).toThrow(/no output to grade for input "q1".*evalOutput\(\)/s);
   });
 
   it("buildPointwiseResult builds a baseline-led result with correct decision counts", () => {

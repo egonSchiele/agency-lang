@@ -136,7 +136,11 @@ node main(): string {
   return greeting + " world"
 }
 `);
-  run(dir, "npx agency eval run --agent eval-agent.agency --goal \"Say hello\" --runs-dir eval-runs --run-id smoke");
+  // --no-grade: this test checks the run plumbing (compile, workdir, artifacts),
+  // not scoring. eval run grades with the goal judge by default, which is an
+  // llm() call, and there is no API key in this job. Test 7 below covers the
+  // judge path with a mock.
+  run(dir, "npx agency eval run --agent eval-agent.agency --goal \"Say hello\" --runs-dir eval-runs --run-id smoke --no-grade");
   const evalSummary = JSON.parse(readFileSync(join(dir, "eval-runs", "smoke", "summary.json"), "utf-8"));
   if (evalSummary.okCount !== 1 || evalSummary.errorCount !== 0) {
     throw new Error(`eval run summary unexpected: ${JSON.stringify(evalSummary)}`);

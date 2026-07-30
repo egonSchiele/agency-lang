@@ -5,10 +5,10 @@ import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
 import { loadInputs } from "@/eval/loadInputs.js";
-import type { BaseGrader } from "@/optimize/grading/baseGrader.js";
-import { LlmJudge } from "@/optimize/grading/graders/llmJudge.js";
-import type { Input } from "@/optimize/grading/types.js";
-import { loadGradingModule } from "@/optimize/gradingModule.js";
+import type { BaseGrader } from "@/eval/grading/baseGrader.js";
+import { LlmJudge } from "@/eval/grading/graders/llmJudge.js";
+import type { Input } from "@/eval/grading/types.js";
+import { loadGradingModule } from "@/eval/grading/gradingModule.js";
 import { loadOptimizerModule } from "@/optimize/optimizerModule.js";
 import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/optimizer.js";
 import { writeReport } from "@/optimize/report.js";

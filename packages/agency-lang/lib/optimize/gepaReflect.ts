@@ -2,8 +2,8 @@ import * as path from "path";
 
 import { getAgentsDir } from "@/importPaths.js";
 
-import type { AgencyRunner } from "./grading/agencyRunner.js";
-import type { JSON } from "./grading/types.js";
+import type { AgencyRunner } from "@/eval/grading/agencyRunner.js";
+import type { JSON } from "@/eval/grading/types.js";
 import { MutationProposalSchema } from "./mutator.js";
 import type { MutationProposal } from "./types.js";
 

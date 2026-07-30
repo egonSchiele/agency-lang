@@ -1,8 +1,8 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
 import { renderReflectionFeedback } from "../reflectionFeedback.js";
-import type { Scorecard } from "../grading/scorecard.js";
-import type { Input } from "../grading/types.js";
+import type { Scorecard } from "@/eval/grading/scorecard.js";
+import type { Input } from "@/eval/grading/types.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import { formatDiagnostics } from "../reporter.js";
 import { defaultPreview, type OptimizeAppliedChange, type OptimizeMutationDiagnostic, type OptimizeMutationOperation, type OptimizeMutationPreview } from "../sourceMutator.js";

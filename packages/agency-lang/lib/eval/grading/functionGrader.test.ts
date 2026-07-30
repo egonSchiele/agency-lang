@@ -4,10 +4,11 @@ import type { AgencyRunner } from "./agencyRunner.js";
 import { FunctionGrader, grader, toGrader } from "./functionGrader.js";
 import { BaseGrader } from "./baseGrader.js";
 import type { GraderInput } from "./types.js";
+import { agentRun } from "./testUtils.js";
 
 const runInput = (output: unknown): GraderInput => ({
   input: { id: "a", args: {}, metadata: { expected: "Paris" } },
-  run: { output: output as any, recordPath: "" },
+  run: agentRun(output as any),
   runAgency: {} as AgencyRunner,
 });
 
@@ -47,7 +48,7 @@ describe("FunctionGrader", () => {
     const runStructured = vi.fn(async () => ({ score: 1, reasoning: "" }));
     const input: GraderInput = {
       input: { id: "a", args: {}, expected: "New Delhi" },
-      run: { output: "New Delhi", recordPath: "" },
+      run: agentRun("New Delhi"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };
     const g = new FunctionGrader(async ({ judge }) => (await judge({ goal: "capital" })).score);
@@ -59,7 +60,7 @@ describe("FunctionGrader", () => {
     const runStructured = vi.fn(async () => ({ score: 1, reasoning: "" }));
     const input: GraderInput = {
       input: { id: "a", args: {}, expected: "New Delhi" },
-      run: { output: "Mumbai", recordPath: "" },
+      run: agentRun("Mumbai"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };
     const g = new FunctionGrader(async ({ judge }) => (await judge({ goal: "capital", expected: "Delhi" })).score);

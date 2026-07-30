@@ -1,9 +1,7 @@
-import * as fs from "fs";
+import type { NormalizedEvent } from "@/eval/types.js";
 
-import type { EvalRecord, NormalizedEvent } from "@/eval/types.js";
-
-import { inputObjective, type InputGrades } from "./grading/scorecard.js";
-import type { Score } from "./grading/types.js";
+import { inputObjective, type InputGrades } from "@/eval/grading/scorecard.js";
+import type { Score } from "@/eval/grading/types.js";
 
 export type ReflectionRenderOptions = { maxChars?: number };
 
@@ -13,12 +11,12 @@ const DEFAULT_MAX_CHARS = 2000;
  *  tool-call trace, and graders' natural-language feedback. Bounded. */
 export function renderInputFeedback(entry: InputGrades, opts: ReflectionRenderOptions = {}): string {
   const maxChars = opts.maxChars ?? DEFAULT_MAX_CHARS;
-  const record = loadRecord(entry.run.recordPath);
+  const record = entry.run?.record ?? null;
   const lines: string[] = [];
   const objective = inputObjective(entry.grades).toFixed(3);
   lines.push(`### Input ${entry.input.id ?? "(no id)"} — objective ${objective}${entry.gatesPassed ? "" : " (GATE FAILED)"}`);
   lines.push(`Args: ${preview(JSON.stringify(entry.input.args), 400)}`);
-  lines.push(`Output: ${preview(stringifyOutput(entry.run.output), 600)}`);
+  lines.push(`Output: ${preview(stringifyOutput(entry.run?.output ?? null), 600)}`);
   if (entry.input.expected !== undefined) {
     lines.push(`Expected: ${preview(stringifyOutput(entry.input.expected), 400)}`);
   }
@@ -57,16 +55,6 @@ function renderTools(events: NormalizedEvent[]): string[] {
     else if (e.kind === "tool_end") out.push(`← ${e.tool}: ${preview(e.outputPreview, 200)}`);
   }
   return out;
-}
-
-/** A missing/corrupt trace degrades to grades-only feedback — log and continue, never crash. */
-function loadRecord(recordPath: string): EvalRecord | null {
-  try {
-    return JSON.parse(fs.readFileSync(recordPath, "utf8")) as EvalRecord;
-  } catch (e) {
-    console.warn(`reflection: could not read trace ${recordPath}: ${e instanceof Error ? e.message : String(e)}`);
-    return null;
-  }
 }
 
 function stringifyOutput(output: unknown): string {

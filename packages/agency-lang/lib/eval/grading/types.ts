@@ -1,4 +1,5 @@
 import type { Input } from "@/eval/runTypes.js";
+import type { EvalRecord } from "@/eval/types.js";
 
 import type { AgencyRunner } from "./agencyRunner.js";
 
@@ -12,10 +13,13 @@ export type JSON = string | number | boolean | null | JSON[] | { [key: string]: 
 /** A path of object keys / array indices into a JSON value. */
 export type JSONPath = (string | number)[];
 
-/** The result of running the agent on one input. */
+/** The result of running the agent on one input. Built by the grading step from
+ *  the run's `EvalRunInputResult`, so `record` is parsed exactly once per input. */
 export type AgentRun = {
-  output: JSON;        // the agent's return value
-  recordPath: string;  // path to the full execution trace (eval record)
+  output: JSON;         // the agent's return value
+  recordPath: string;   // path to the full execution trace (eval record)
+  workdir: string;      // the isolated directory the agent ran in
+  record: EvalRecord;   // that trace, parsed
 };
 
 /** A grader's score: pass/fail or a continuous value. */

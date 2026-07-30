@@ -1,14 +1,15 @@
-import * as fs from "fs";
 import * as path from "path";
 
 import { evalRunLoadedInputs, optimizeEvalRecordExtractor, resolveEvalRunTarget } from "@/cli/eval/run.js";
+import { gradeInput, type GradingContext } from "@/eval/grading/gradeRun.js";
+import type { EvalRunInputResult } from "@/eval/runTypes.js";
 
 import { EvalCache } from "./evalCache.js";
-import { breakdown } from "./gradeBreakdown.js";
-import { AgencyRunner } from "./grading/agencyRunner.js";
-import type { BaseGrader } from "./grading/baseGrader.js";
-import { Scorecard, type GraderGrade, type InputGrades } from "./grading/scorecard.js";
-import type { AgentRun, Input } from "./grading/types.js";
+import { breakdown } from "@/eval/grading/gradeBreakdown.js";
+import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
+import type { BaseGrader } from "@/eval/grading/baseGrader.js";
+import { Scorecard } from "@/eval/grading/scorecard.js";
+import type { Input } from "@/eval/grading/types.js";
 import type { BaseOptimizerConfig, OptimizeTarget } from "./optimizer.js";
 import { createPointwiseReporter, type PointwiseReporter } from "./reporter.js";
 import type { OptimizeMutationDiagnostic, OptimizeMutationOperation, OptimizeMutationPreview } from "./sourceMutator.js";
@@ -23,16 +24,17 @@ export type MutationOutcome =
 
 const MAX_PROPOSE_ATTEMPTS = 3;
 
-/** A function that runs the agent for one input in a workspace and returns its run.
- *  Receives the candidate's `source` (`baseDir`/`entryFile` live here) and `files`
- *  (the candidate's complete file map, used as the workdir overlay). */
+/** A function that runs the agent for one input in a workspace and returns its run
+ *  result. Receives the candidate's `source` (`baseDir`/`entryFile` live here) and
+ *  `files` (the candidate's complete file map, used as the workdir overlay).
+ *  Reading the eval record is grading's job, not this function's. */
 export type RunInput = (
   ws: Workspace,
   source: OptimizeTargetSet,
   files: Record<string, string>,
   input: Input,
   id: string,
-) => Promise<AgentRun>;
+) => Promise<EvalRunInputResult>;
 
 export type BaseOptimizerDeps = {
   agencyRunner?: AgencyRunner;
@@ -235,42 +237,15 @@ export abstract class BaseOptimizer {
     files: Record<string, string>,
     inputs: Input[],
   ): Promise<Scorecard> {
+    const ctx: GradingContext = { graders: this.config.graders, runAgency: this.agencyRunner };
     const perInput = await Promise.all(
-      inputs.map((input, index) => this.gradeInput(ws, source, files, input, inputId(input, index))),
+      inputs.map(async (input, index) => {
+        const id = inputId(input, index);
+        const result = await this.cache.get(ws.key, id, () => this.runInput(ws, source, files, input, id));
+        return gradeInput(input, result, ctx);
+      }),
     );
     return new Scorecard(perInput);
-  }
-
-  private async gradeInput(
-    ws: Workspace,
-    source: OptimizeTargetSet,
-    files: Record<string, string>,
-    input: Input,
-    id: string,
-  ): Promise<InputGrades> {
-    const run = await this.cache.get(ws.key, id, () => this.runInput(ws, source, files, input, id));
-    const gates = this.config.graders.filter((g) => g.mustPass() && g.gradesInput(input));
-    const advisory = this.config.graders.filter((g) => !g.mustPass() && g.gradesInput(input));
-
-    const gateGrades: GraderGrade[] = [];
-    for (const grader of gates) {
-      const grade = await grader.run({ input, run, runAgency: this.agencyRunner });
-
-      gateGrades.push({ grader, grade });
-      if (!grader.passes(grade)) {
-        return { input, run, grades: gateGrades, gatesPassed: false };
-      }
-    }
-    const advisoryGrades = await Promise.all(
-      advisory.map(async (grader) => ({ grader, grade: await grader.run({ input, run, runAgency: this.agencyRunner }) })),
-    );
-
-    return {
-      input,
-      run,
-      grades: [...gateGrades, ...advisoryGrades],
-      gatesPassed: true
-    };
   }
 
   /** Default runInput: run the agent for one input via the eval-run subprocess path.
@@ -284,7 +259,7 @@ export abstract class BaseOptimizer {
     files: Record<string, string>,
     input: Input,
     id: string,
-  ): Promise<AgentRun> {
+  ): Promise<EvalRunInputResult> {
     this.runCounter += 1;
     const result = await evalRunLoadedInputs({
       agent: path.join(source.baseDir, source.entryFile),  // used for label/node parsing only
@@ -308,9 +283,7 @@ export abstract class BaseOptimizer {
     if (!inputResult || inputResult.status !== "success") {
       throw new Error(`agent run failed for input ${input.id ?? "(no id)"}: ${inputResult?.errorMessage ?? "unknown error"}`);
     }
-    const record = JSON.parse(fs.readFileSync(inputResult.evalRecordPath, "utf8")) as { evalOutputs?: { value: unknown }[] };
-    const output = gradedOutput(record.evalOutputs ?? [], input.id ?? id);
-    return { output: output as AgentRun["output"], recordPath: inputResult.evalRecordPath };
+    return inputResult;
   }
 
   protected async eachIteration(step: (iter: number) => Promise<void>): Promise<void> {
@@ -368,18 +341,4 @@ function failingGraders(scorecard: Scorecard): string[] {
 /** A stable id for an input: its own id when present, otherwise its position. */
 function inputId(input: Input, index: number): string {
   return input.id && input.id.trim() !== "" ? input.id : `input-${index}`;
-}
-
-/**
- * The last graded output value, or a clear error when there is none — the agent
- * returned nothing AND didn't call evalOutput(), so there is nothing to grade.
- */
-export function gradedOutput(evalOutputs: { value: unknown }[], inputLabel: string): unknown {
-  if (evalOutputs.length === 0) {
-    throw new Error(
-      `Agent produced no output to grade for input "${inputLabel}": the entry node returned nothing and ` +
-      `evalOutput() was not called. Return a value from the node, or call evalOutput(value) to record what the optimizer should grade.`,
-    );
-  }
-  return evalOutputs[evalOutputs.length - 1].value;
 }

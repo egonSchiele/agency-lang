@@ -1,4 +1,4 @@
-import type { InputBreakdown } from "./gradeBreakdown.js";
+import type { InputBreakdown } from "@/eval/grading/gradeBreakdown.js";
 import type { OptimizeMutationOperation } from "./sourceMutator.js";
 
 export type OptimizeDecision = "baseline" | "accepted" | "rejected" | "validation-failed";

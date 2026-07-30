@@ -6,6 +6,12 @@ import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
 import { parseTarget } from "@/cli/util.js";
+import { AgencyRunner } from "@/eval/grading/agencyRunner.js";
+import type { BaseGrader } from "@/eval/grading/baseGrader.js";
+import { breakdown } from "@/eval/grading/gradeBreakdown.js";
+import { gradeRun, validateGraders } from "@/eval/grading/gradeRun.js";
+import { LlmJudge } from "@/eval/grading/graders/llmJudge.js";
+import { loadGradingModule } from "@/eval/grading/gradingModule.js";
 import { StatelogParser } from "@/eval/statelogParser.js";
 import { loadInputs, inputFromGoal } from "@/eval/loadInputs.js";
 import {
@@ -39,6 +45,10 @@ export type EvalRunCliOptions = {
   continueOnError?: boolean;
   verbose?: boolean;
   config?: AgencyConfig;
+  /** Path to a TypeScript grading module. Defaults to `eval.graders` in agency.json. */
+  graders?: string;
+  /** False skips grading entirely (`--no-grade`). */
+  grade?: boolean;
 };
 
 export type EvalRunLoadedInputsOptions = {
@@ -68,6 +78,10 @@ export type EvalRunLoadedInputsOptions = {
   /** Candidate-file overlay applied to every input in this call (over the
    *  seeded copy, before compile). Plain eval never sets this. */
   overlayFiles?: Record<string, string>;
+  /** Graders to score the finished run with. Omit to skip grading entirely.
+   *  The optimizer never passes this — it grades separately via gradeInput, and
+   *  defaulting grading on here would fire a discarded judge call per candidate. */
+  graders?: BaseGrader[];
 };
 
 /**
@@ -83,6 +97,25 @@ const DEFAULT_EVAL_RUN_LIMITS: RunLimits = {
   ipcPayload: 100 * 1024 * 1024,
   stdout: 1024 * 1024,
 };
+
+/**
+ * What "no --graders" means, decided at the command layer rather than in the
+ * library: the bundled goal judge, so a suite with goals scores without a
+ * grading module. `--no-grade` opts out of scoring entirely.
+ */
+export async function resolveGraders(
+  gradersPath: string | undefined,
+  grade: boolean | undefined,
+  config: AgencyConfig,
+): Promise<BaseGrader[] | undefined> {
+  if (grade === false) {
+    return undefined;
+  }
+  if (gradersPath === undefined) {
+    return [new LlmJudge({ name: "goal" })];
+  }
+  return loadGradingModule(gradersPath, config);
+}
 
 export function resolveEvalRunTarget(target: string): {
   agentFile: string;
@@ -125,12 +158,20 @@ export async function evalRun(
   } = {},
 ): Promise<EvalRunResult> {
   const selection = validateInputSelection(opts);
+  // The command decides what "no --graders" means; the library primitive does not.
+  const gradersPath = opts.graders ?? opts.config?.eval?.graders;
+  const graders = await resolveGraders(gradersPath, opts.grade, opts.config ?? {});
   const inputs =
     selection === "goal"
       ? [inputFromGoal(opts.goal ?? "")]
-      : loadInputs(path.resolve(opts.inputs ?? ""), nanoid);
+      // A goal is required only when the default goal judge will actually run it:
+      // not under --no-grade, and not when a custom grading module is supplied.
+      : loadInputs(path.resolve(opts.inputs ?? ""), nanoid, {
+        requireGoal: graders !== undefined && gradersPath === undefined,
+      });
 
   return evalRunLoadedInputs({
+    graders,
     agent: opts.agent,
     inputs,
     inputsSource:
@@ -164,6 +205,11 @@ export async function evalRunLoadedInputs(
 
   // One closure walk per call when no caller-supplied seed; never per input.
   const defaultSeed = opts.seed ?? deriveSeedFromAgent(target.agentFile, absoluteAgent);
+
+  // Before any agent runs: a misconfigured grader should not cost a whole suite.
+  if (opts.graders) {
+    validateGraders(opts.graders, opts.inputs[0]);
+  }
 
   const state = initializeEvalRun({
     runId,
@@ -213,7 +259,27 @@ export async function evalRunLoadedInputs(
     if (result.status === "error" && !continueOnError) break;
   }
 
-  return writeEvalRunSummary(state, results);
+  const summary = writeEvalRunSummary(state, results);
+  if (!opts.graders || opts.graders.length === 0) {
+    return summary;
+  }
+
+  const scorecard = await gradeRun(summary, {
+    graders: opts.graders,
+    runAgency: new AgencyRunner(config),
+  });
+  summary.grading = {
+    graders: opts.graders.map((grader) => grader.name()),
+    // objective(), not gatedObjective(): a gate-failed input already contributes
+    // 0 to this mean. gatedObjective() would zero the WHOLE run when any single
+    // input fails, so one flaky timeout out of fifty would report 0.00 and make
+    // the tracked number useless. gatesPassed drives the exit code instead.
+    objective: scorecard.objective(),
+    gatesPassed: scorecard.gatesPassed(),
+    perInput: breakdown(scorecard),
+  };
+  fs.writeFileSync(path.join(summary.runDir, "summary.json"), JSON.stringify(summary, null, 2));
+  return summary;
 }
 
 /** Derive seed from agent file via closure walk. Called at most once per

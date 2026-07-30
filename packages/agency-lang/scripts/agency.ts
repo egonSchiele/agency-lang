@@ -27,7 +27,9 @@ import { traceLog } from "@/cli/events.js";
 import { logsView } from "@/cli/logsView.js";
 import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
+import { evalGrade } from "@/cli/eval/grade.js";
 import { evalRun } from "@/cli/eval/run.js";
+import { formatGrading } from "@/eval/grading/gradeBreakdown.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
 import {
@@ -459,6 +461,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--continue-on-error", "Continue after task failures", true)
     .option("--no-continue-on-error", "Stop after first input failure")
     .option("-v, --verbose", "Log per-input progress to stderr")
+    .option("--graders <file>", "TypeScript grading module (default-exports graders)")
+    .option("--no-grade", "Skip grading; only run the agent")
     .action(async (opts: {
       agent: string;
       inputs?: string;
@@ -467,10 +471,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
       runsDir?: string;
       continueOnError?: boolean;
       verbose?: boolean;
+      graders?: string;
+      grade?: boolean;
     }) => {
       const result = await evalRun({ ...opts, config: getConfig() });
       console.log(`Run ${result.runId} completed: ${result.okCount}/${result.inputs.length} inputs ok`);
+      if (result.grading) {
+        for (const line of formatGrading(result.grading.objective, result.grading.perInput)) {
+          console.log(line);
+        }
+      }
       console.log(path.join(result.runDir, "summary.json"));
+      if (result.grading && !result.grading.gatesPassed) {
+        process.exit(2);
+      }
       if (result.errorCount > 0 && opts.continueOnError === false) {
         process.exit(2);
       }
@@ -510,6 +524,22 @@ export function createProgram(deps: CliDependencies = {}): Command {
         });
       },
     );
+
+  evalCmd
+    .command("grade")
+    .description("Score a finished eval run without re-running the agent")
+    .argument("<runDir>", "Path to a run directory produced by `agency eval run`")
+    .option("--graders <file>", "TypeScript grading module (default-exports graders)")
+    .option("-o, --out <path>", "Output path (default: <runDir>/grading.json)")
+    .action(async (runDir: string, opts: { graders?: string; out?: string }) => {
+      const grading = await evalGrade(runDir, { ...opts, config: getConfig() });
+      for (const line of formatGrading(grading.objective, grading.perInput)) {
+        console.log(line);
+      }
+      if (!grading.gatesPassed) {
+        process.exit(2);
+      }
+    });
 
   evalCmd
     .command("judge")

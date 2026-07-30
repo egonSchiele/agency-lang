@@ -2,8 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 
 import renderTemplate from "@/templates/cli/optimizeReport.js";
-import { asJudgeText } from "./goalJudgeFile.js";
-import type { GradeRow, InputBreakdown } from "./gradeBreakdown.js";
+import { asJudgeText } from "@/eval/grading/goalJudgeFile.js";
+import type { GradeRow, InputBreakdown } from "@/eval/grading/gradeBreakdown.js";
 import type { OptimizeResult } from "./types.js";
 
 export type ReportMeta = {

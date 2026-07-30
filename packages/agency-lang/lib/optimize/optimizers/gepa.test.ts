@@ -5,11 +5,12 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Gepa, type GepaConfig, type GepaDeps } from "./gepa.js";
-import { BaseGrader } from "../grading/baseGrader.js";
-import type { Grade, GraderInput } from "../grading/types.js";
+import { BaseGrader } from "@/eval/grading/baseGrader.js";
+import type { Grade, GraderInput } from "@/eval/grading/types.js";
 import type { RunInput } from "../baseOptimizer.js";
 import type { OptimizeMutationPreview } from "../sourceMutator.js";
 import type { OptimizeTargetSet } from "../targets.js";
+import { fakeRun } from "../testUtils.js";
 
 /** Scores an input by reading the numeric value the fake runner put in `run.output`. */
 class OutputScoreGrader extends BaseGrader {
@@ -49,9 +50,9 @@ describe("Gepa (reflective Pareto optimizer)", () => {
   /** Assign each distinct workspace dir a score, in first-seen order. */
   function scoredRunner(scores: number[]): RunInput {
     const seen = new Map<string, number>();
-    return async (ws) => {
+    return async (ws, _source, _files, _input, id) => {
       if (!seen.has(ws.key)) seen.set(ws.key, scores[seen.size] ?? 0);
-      return { output: String(seen.get(ws.key)), recordPath: recordFile };
+      return fakeRun(id, String(seen.get(ws.key)));
     };
   }
 

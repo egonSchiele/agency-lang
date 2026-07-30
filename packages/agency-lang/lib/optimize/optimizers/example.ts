@@ -1,6 +1,6 @@
 import { BaseOptimizer, type BaseOptimizerDeps } from "../baseOptimizer.js";
-import type { Scorecard } from "../grading/scorecard.js";
-import type { Input } from "../grading/types.js";
+import type { Scorecard } from "@/eval/grading/scorecard.js";
+import type { Input } from "@/eval/grading/types.js";
 import { proposeMutation, type ProposeMutationArgs } from "../mutator.js";
 import type { BaseOptimizerConfig } from "../optimizer.js";
 import { defaultPreview, type OptimizeMutationOperation, type OptimizeMutationPreview } from "../sourceMutator.js";

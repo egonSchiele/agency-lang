@@ -91,7 +91,7 @@ describe("eval run CLI", () => {
 
     expect(result).toMatchObject({ runId: "r1", okCount: 1, errorCount: 0 });
     expect(result.inputs[0]).toMatchObject({ status: "success" });
-    expect(fs.existsSync(path.join(runsDir, "r1", "inputs", result.inputs[0].inputId, "eval-record.json"))).toBe(true);
+    expect(fs.existsSync(path.join(runsDir, "r1", "inputs", result.inputs[0].inputId, "agent", "eval-record.json"))).toBe(true);
   });
 
   it("throws setup failures before creating a run directory", async () => {
@@ -181,7 +181,7 @@ describe("eval run CLI", () => {
       // The message now carries the seeded-file listing for diagnosability.
       errorMessage: expect.stringMatching(/^nope\n\nWorkdir was seeded with/),
     });
-    expect(fs.readFileSync(path.join(runsDir, "stop", "inputs", "first", "error.txt"), "utf-8")).toMatch(/^nope\n/);
+    expect(fs.readFileSync(path.join(runsDir, "stop", "inputs", "first", "agent", "error.txt"), "utf-8")).toMatch(/^nope\n/);
     expect(JSON.parse(fs.readFileSync(path.join(runsDir, "stop", "summary.json"), "utf-8"))).toMatchObject({
       okCount: 0,
       errorCount: 1,
@@ -290,6 +290,7 @@ describe("eval run CLI", () => {
       expect(result.grading!.gatesPassed).toBe(false);
       const summary = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "graded", "summary.json"), "utf8"));
       expect(summary.grading.graders).toEqual(["gate"]);
+      expect(fs.existsSync(path.join(tmpDir, "runs", "graded", "verifier", "grading.json"))).toBe(true);
     });
 
     it("counts a gate-failed input as a zero rather than zeroing the whole run", async () => {

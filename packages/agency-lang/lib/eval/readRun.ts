@@ -24,10 +24,17 @@ export function readEvalRun(runDir: string): ReadEvalRunResult {
   for (const result of summary.inputs) {
     const inputDir = path.join(resolvedRunDir, "inputs", result.inputId);
     const input = readOptionalJson<Input>(path.join(inputDir, "input.json"));
-    const recordPath = result.evalRecordPath || path.join(inputDir, "eval-record.json");
+    const recordPath = result.evalRecordPath
+      || firstExisting(
+        path.join(inputDir, "agent", "eval-record.json"),
+        path.join(inputDir, "eval-record.json"),      // pre-layout runs
+      );
     const status = inputStatus(result, recordPath);
     const errorMessage = status === "failed"
-      ? readOptionalText(path.join(inputDir, "error.txt")) ?? result.errorMessage
+      ? readOptionalText(firstExisting(
+          path.join(inputDir, "agent", "error.txt"),
+          path.join(inputDir, "error.txt"),
+        )) ?? result.errorMessage
       : undefined;
 
     inputsById[result.inputId] = {
@@ -45,6 +52,12 @@ export function readEvalRun(runDir: string): ReadEvalRunResult {
 function inputStatus(result: EvalRunInputResult, recordPath: string): ReadEvalRunInput["status"] {
   if (result.status === "error") return "failed";
   return fs.existsSync(recordPath) ? "ok" : "missing";
+}
+
+/** The first existing candidate, else the first candidate — so "missing"
+ *  errors point at the current-layout location. */
+function firstExisting(...candidates: string[]): string {
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
 }
 
 function readJson<T>(filePath: string): T {

@@ -6,6 +6,7 @@ import { sha256Text } from "@/utils/hash.js";
 import { assertEvalRunId, assertEvalInputId } from "./ids.js";
 import type {
   EvalRunResult,
+  EvalRunGrading,
   Input,
   EvalRunInputResult,
 } from "./runTypes.js";
@@ -110,8 +111,9 @@ export function prepareInput(
   assertEvalInputId(id);
 
   const inputDir = path.join(state.inputsDir, id);
+  const agentDir = path.join(inputDir, "agent");
   const workdirPath = path.join(inputDir, "workdir");
-  fs.mkdirSync(inputDir, { recursive: true });
+  fs.mkdirSync(agentDir, { recursive: true });
   // workdir is materialized by prepareRunDir (seed + overlay + compile); we
   // only allocate the path here. working_dir validation moves to
   // evalRunLoadedInputs, where both working_dir and the agent file are in
@@ -121,10 +123,10 @@ export function prepareInput(
     input,
     inputDir,
     inputJsonPath: path.join(inputDir, "input.json"),
-    statelogPath: path.join(inputDir, "statelog.jsonl"),
-    evalRecordPath: path.join(inputDir, "eval-record.json"),
+    statelogPath: path.join(agentDir, "statelog.jsonl"),
+    evalRecordPath: path.join(agentDir, "eval-record.json"),
     workdirPath,
-    errorPath: path.join(inputDir, "error.txt"),
+    errorPath: path.join(agentDir, "error.txt"),
   };
 
   // Defensive cleanup so re-runs of the same input id don't see stale
@@ -221,4 +223,25 @@ export function writeEvalRunSummary(
 
 function writeJson(filePath: string, value: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
+}
+
+/** One more than the highest existing verifier directory (the spec's rule:
+ *  a deleted number stays retired, never reused). verifier == 1. */
+function nextVerifierNumber(runDir: string): number {
+  const numbers = fs.readdirSync(runDir)
+    .map((name) => (name === "verifier" ? 1 : Number(/^verifier-(\d+)$/.exec(name)?.[1])))
+    .filter((candidate) => Number.isInteger(candidate));
+  return numbers.length === 0 ? 1 : Math.max(...numbers) + 1;
+}
+
+/** Write a grading pass into the run's next verifier directory. The ONLY
+ *  writer of this artifact — the inline eval-run path and `eval grade` both
+ *  call it, so its location and shape cannot drift between them. */
+export function writeVerifierGrading(runDir: string, grading: EvalRunGrading): string {
+  const verifierNumber = nextVerifierNumber(runDir);
+  const verifierDir = path.join(runDir, verifierNumber === 1 ? "verifier" : `verifier-${verifierNumber}`);
+  fs.mkdirSync(verifierDir, { recursive: true });
+  const gradingPath = path.join(verifierDir, "grading.json");
+  fs.writeFileSync(gradingPath, JSON.stringify(grading, null, 2));
+  return gradingPath;
 }

@@ -29,7 +29,7 @@ import type {
   EvalRunInputResult,
 } from "@/eval/runTypes.js";
 import { agentClosure } from "@/analysis/closure.js";
-import { buildProvenance, type EvalRunProvenance, type SourceProvenance } from "@/eval/runArtifacts.js";
+import { buildProvenance, writeVerifierGrading, type EvalRunProvenance, type SourceProvenance } from "@/eval/runArtifacts.js";
 import { parseSource, resolveSource } from "@/eval/sources.js";
 import type { RunSeed, SeededSeed } from "@/eval/workspace.js";
 import {
@@ -325,6 +325,7 @@ export async function evalRunLoadedInputs(
     gatesPassed: scorecard.gatesPassed(),
     perInput: breakdown(scorecard),
   };
+  writeVerifierGrading(summary.runDir, summary.grading);
   fs.writeFileSync(path.join(summary.runDir, "summary.json"), JSON.stringify(summary, null, 2));
   return summary;
 }

@@ -55,9 +55,10 @@ function makeRun(args: { id: string; output?: unknown; status?: "success" | "err
   const inputDir = path.join(runDir, "inputs", args.id);
   const workdir = path.join(inputDir, "workdir");
   fs.mkdirSync(workdir, { recursive: true });
+  fs.mkdirSync(path.join(inputDir, "agent"), { recursive: true });
 
   const status = args.status ?? "success";
-  const recordPath = path.join(inputDir, "eval-record.json");
+  const recordPath = path.join(inputDir, "agent", "eval-record.json");
   if (status === "success") {
     fs.writeFileSync(recordPath, recordJson(args.output === undefined ? [] : [args.output]));
   } else {
@@ -71,7 +72,7 @@ function makeRun(args: { id: string; output?: unknown; status?: "success" | "err
     inputId: args.id,
     status,
     evalRecordPath: recordPath,
-    statelogPath: path.join(inputDir, "statelog.jsonl"),
+    statelogPath: path.join(inputDir, "agent", "statelog.jsonl"),
     workdirPath: workdir,
     errorMessage: status === "error" ? "boom" : undefined,
   };

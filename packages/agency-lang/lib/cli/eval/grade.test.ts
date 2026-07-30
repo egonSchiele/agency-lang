@@ -21,11 +21,12 @@ function makeRunDir(output: string): string {
   dirs.push(runDir);
   const inputDir = path.join(runDir, "inputs", "a");
   fs.mkdirSync(path.join(inputDir, "workdir"), { recursive: true });
+  fs.mkdirSync(path.join(inputDir, "agent"), { recursive: true });
   fs.writeFileSync(
     path.join(inputDir, "input.json"),
     JSON.stringify({ id: "a", goal: "g", args: {} }),
   );
-  fs.writeFileSync(path.join(inputDir, "eval-record.json"), JSON.stringify({
+  fs.writeFileSync(path.join(inputDir, "agent", "eval-record.json"), JSON.stringify({
     traceId: "t", recordVersion: 2, formatVersion: 1, durationMs: 1, source: "s",
     evalValues: [], evalOutputs: [{ value: output, threadId: "0", tMs: 1 }],
     threads: [], events: [], interrupts: [], errors: [], incomplete: [],
@@ -40,8 +41,8 @@ function makeRunDir(output: string): string {
     inputs: [{
       inputId: "a",
       status: "success",
-      evalRecordPath: path.join(inputDir, "eval-record.json"),
-      statelogPath: path.join(inputDir, "statelog.jsonl"),
+      evalRecordPath: path.join(inputDir, "agent", "eval-record.json"),
+      statelogPath: path.join(inputDir, "agent", "statelog.jsonl"),
       workdirPath: path.join(inputDir, "workdir"),
     }],
   }));
@@ -71,7 +72,7 @@ describe("evalGrade", () => {
 
     expect(grading.objective).toBeCloseTo(0.5);
     expect(grading.graders).toEqual(["len"]);
-    const written = JSON.parse(fs.readFileSync(path.join(runDir, "grading.json"), "utf8"));
+    const written = JSON.parse(fs.readFileSync(path.join(runDir, "verifier", "grading.json"), "utf8"));
     expect(written.objective).toBeCloseTo(0.5);
     expect(fs.readFileSync(path.join(runDir, "summary.json"), "utf8")).toBe(before);
   });
@@ -84,5 +85,22 @@ describe("evalGrade", () => {
 
     expect(fs.existsSync(out)).toBe(true);
     expect(fs.existsSync(path.join(runDir, "grading.json"))).toBe(false);
+    expect(fs.existsSync(path.join(runDir, "verifier"))).toBe(false);
+  });
+
+  it("writes verifier/grading.json first, then verifier-N by highest existing + 1", async () => {
+    const runDir = makeRunDir("hello");
+
+    await evalGrade(runDir, { graders: makeGraders(), config: {} });
+    await evalGrade(runDir, { graders: makeGraders(), config: {} });
+    // A deleted number stays retired: with verifier and verifier-2 present,
+    // removing verifier-2 and planting verifier-4 must produce verifier-5.
+    fs.rmSync(path.join(runDir, "verifier-2"), { recursive: true, force: true });
+    fs.mkdirSync(path.join(runDir, "verifier-4"));
+    await evalGrade(runDir, { graders: makeGraders(), config: {} });
+
+    expect(fs.existsSync(path.join(runDir, "verifier", "grading.json"))).toBe(true);
+    expect(fs.existsSync(path.join(runDir, "verifier-5", "grading.json"))).toBe(true);
+    expect(fs.existsSync(path.join(runDir, "verifier-2"))).toBe(false);
   });
 });

@@ -99,3 +99,32 @@ describe("readEvalRun", () => {
     return path.join(runDir, "inputs", inputId, "eval-record.json");
   }
 });
+
+describe("readEvalRun layouts", () => {
+  function makeLayoutRun(layout: "legacy" | "current"): string {
+    const layoutRunDir = fs.mkdtempSync(path.join(os.tmpdir(), "readrun-"));
+    const inputDir = path.join(layoutRunDir, "inputs", "a");
+    const recordDir = layout === "current" ? path.join(inputDir, "agent") : inputDir;
+    fs.mkdirSync(recordDir, { recursive: true });
+    fs.writeFileSync(path.join(recordDir, "eval-record.json"), JSON.stringify({ evalOutputs: [] }));
+    fs.writeFileSync(path.join(layoutRunDir, "summary.json"), JSON.stringify({
+      runId: "r", runDir: layoutRunDir, agent: "a:main", okCount: 1, errorCount: 0,
+      // Empty evalRecordPath forces the constructed-path fallback — the only
+      // layout-sensitive code path.
+      inputs: [{ inputId: "a", status: "success", evalRecordPath: "", statelogPath: "", workdirPath: "" }],
+    }));
+    return layoutRunDir;
+  }
+
+  it("finds the record under agent/ (current layout)", () => {
+    const layoutRunDir = makeLayoutRun("current");
+    expect(readEvalRun(layoutRunDir).inputsById["a"].status).toBe("ok");
+    fs.rmSync(layoutRunDir, { recursive: true, force: true });
+  });
+
+  it("still finds the record at the legacy flat path", () => {
+    const layoutRunDir = makeLayoutRun("legacy");
+    expect(readEvalRun(layoutRunDir).inputsById["a"].status).toBe("ok");
+    fs.rmSync(layoutRunDir, { recursive: true, force: true });
+  });
+});

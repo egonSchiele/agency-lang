@@ -12,7 +12,7 @@ import type { OptimizeTarget } from "./optimizer.js";
 import type { OptimizeMutationDiagnostic, OptimizeMutationOperation, OptimizeMutationPreview } from "./sourceMutator.js";
 import type { OptimizeTargetSet } from "./targets.js";
 import type { MutationProposal, OptimizeResult } from "./types.js";
-import { fakeRun } from "./testUtils.js";
+import { cleanupFakeRuns, fakeRun } from "./testUtils.js";
 
 class FixedGrader extends BaseGrader {
   protected readonly defaultName = "fixed";
@@ -44,6 +44,8 @@ class Probe extends BaseOptimizer {
     return this.scoreFiles(source, files, inputs);
   }
 }
+
+afterEach(cleanupFakeRuns);
 
 describe("BaseOptimizer.evaluate", () => {
   let root: string;

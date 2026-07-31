@@ -116,15 +116,17 @@ async function runCompiledAgentInSubprocess(args: {
 /**
  * The eval parent's blanket auto-approval for subprocess interrupts (eval
  * runs headless; the agent's own handlers ran first and a local reject is
- * already final before the parent is consulted). The `satisfies` pins the
+ * already final before the parent is consulted). The return type pins the
  * IPC protocol: this reply once used a legacy `{ approved: true }` shape,
  * the child read `outcome.kind` off undefined, and every interrupting agent
- * under `agency eval run` crashed.
+ * under `agency eval run` crashed. tests/integration/eval-run/test.mjs
+ * exercises this end-to-end. The child records the verdict in its statelog
+ * (`interruptResolved`, resolvedBy "ipc"), so approvals stay auditable.
  */
 function evalInterruptDecision(interruptId: string): IpcDecisionMessage {
   return {
     type: "decision",
     interruptId,
     outcome: { kind: "approved", value: undefined },
-  } satisfies IpcDecisionMessage;
+  };
 }

@@ -4,13 +4,27 @@ import * as path from "path";
 
 import type { Input } from "@/eval/runTypes.js";
 
+/** Every directory fakeRun minted; tests call cleanupFakeRuns in afterEach so
+ *  optimizer runs do not litter the system temp dir. */
+const fakeRunDirs: string[] = [];
+
+/** Raw rmSync, not safeDelete: mkdtemp paths sit outside any project root,
+ *  which safeDelete refuses by design. Same reasoning as runArtifacts.ts. */
+export function cleanupFakeRuns(): void {
+  for (const dir of fakeRunDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 /**
  * A run directory (suite of one) backed by real artifacts on disk, because
  * grading loads the directory: eval-record.json, input.json, summary.json.
  * Optimizer tests inject `runInput` seams that return this directory.
+ * Registered for cleanupFakeRuns.
  */
 export function fakeRun(inputId: string, output: unknown, spec?: Input): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "optimize-run-"));
+  fakeRunDirs.push(root);
   const inputDir = path.join(root, "inputs", inputId);
   const workdir = path.join(inputDir, "workdir");
   const agentDir = path.join(inputDir, "agent");

@@ -23,7 +23,12 @@ export async function recordGrading(
 ): Promise<EvalRunGrading> {
   const grading = await gradeSuite(runDir, graders, config);
   const summaryPath = path.join(runDir, "summary.json");
-  const summary = JSON.parse(fs.readFileSync(summaryPath, "utf-8")) as EvalRunResult;
+  let summary: EvalRunResult;
+  try {
+    summary = JSON.parse(fs.readFileSync(summaryPath, "utf-8")) as EvalRunResult;
+  } catch (error) {
+    throw new Error(`could not read ${summaryPath}: ${error instanceof Error ? error.message : String(error)}`);
+  }
   summary.grading = grading;
   writeVerifierGrading(runDir, grading);
   fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));

@@ -1,5 +1,5 @@
-import { callFunc } from "greeter.agency"
+import { ask } from "std::agents/composable/utils"
 
 node main() {
-$( callFunc() )
+  const userResponse = ask("What country do you want to see news headlines for?")
 }

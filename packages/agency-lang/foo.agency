@@ -236,9 +236,7 @@ def review(code: string): Result<string> {
     parts.push("Errors:\n${JSON.stringify(errors, null, 2)}")
   }
   if (warnings.length > 0) {
-    parts.push(
-      "Warnings (treated as errors for generated code — e.g. calling a function that does not exist is a warning to the typechecker but fails at runtime):\n${JSON.stringify(warnings, null, 2)}",
-    )
+    parts.push("Warnings (treated as errors for generated code — e.g. calling a function that does not exist is a warning to the typechecker but fails at runtime):\n${JSON.stringify(warnings, null, 2)}")
   }
   if (parts.length > 0) {
     return failure(parts.join("\n"))
@@ -295,13 +293,11 @@ def executeFailed(message: string): Result<any> {
   if (consecutiveExecuteFailures < 2) {
     return failure(message)
   }
-  return failure(
-    """
+  return failure("""
 ${message}
 
 You have failed ${consecutiveExecuteFailures} times in a row. Do not patch this program again — write a new program from scratch, taking a different approach to the task.
-""",
-  )
+""")
 }
 
 def execute(code: string): Result<any> {

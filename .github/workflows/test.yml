@@ -166,6 +166,9 @@ jobs:
     - name: StateLog integration tests
       working-directory: packages/agency-lang
       run: node tests/integration/statelog/test.mjs
+    - name: Eval-run integration tests
+      working-directory: packages/agency-lang
+      run: node tests/integration/eval-run/test.mjs
     - name: Stdlib sandbox tests
       working-directory: packages/agency-lang
       env:

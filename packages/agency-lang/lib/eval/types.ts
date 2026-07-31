@@ -166,9 +166,12 @@ export type InterruptEntry = {
    *  large — consumers should preview, not log verbatim. */
   data: unknown;
   /** Same vocabulary as interrupt handlers (approve / reject / propagate /
-   *  pass). "passed": no interruptResolved event recorded a decision — every
-   *  handler passed on it, or the run ended before one decided. */
-  outcome: "approved" | "rejected" | "propagated" | "passed";
+   *  pass) — plus "unresolved", which is not an outcome but the absence of
+   *  one: no interruptResolved event recorded a decision (the run ended
+   *  mid-interrupt, or a legacy trace never emitted one). "passed" is only
+   *  ever an affirmative claim from a resolution event; the extractor never
+   *  infers it. */
+  outcome: "approved" | "rejected" | "propagated" | "passed" | "unresolved";
   resolvedBy: "handler" | "user" | "policy" | "ipc" | null;
   thrownAtMs: number | null;
   resolvedAtMs: number | null;

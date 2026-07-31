@@ -97,6 +97,13 @@ export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
       perInput.push(missingDataVerdict(spec, inputA, inputB));
       continue;
     }
+    // No goal means nothing to judge against. An LLM judge handed "" would
+    // still return a confident-looking verdict, so refuse deterministically
+    // instead — same treatment as missing data.
+    if (!spec.goal) {
+      perInput.push(noGoalVerdict(id, inputA, inputB));
+      continue;
+    }
 
     const samples: JudgeSample[] = [];
     for (let index = 0; index < args.policy.samples; index += 1) {
@@ -154,6 +161,23 @@ function missingDataVerdict(input: Input, inputA: ReadEvalRunInput, inputB: Read
     confidence: 100,
     reasoning: `A status: ${inputA.status}; B status: ${inputB.status}`,
     samples: [{ winner, confidence: 100, reasoning: "deterministic missing-data verdict", order: "AB" }],
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/** Neither side can win an unjudgeable input; ties never count toward a
+ *  suite winner, so a goal-less input degrades loudly in perInput without
+ *  skewing the aggregate. */
+function noGoalVerdict(inputId: string, inputA: ReadEvalRunInput, inputB: ReadEvalRunInput): InputVerdict {
+  const reasoning = "input has no goal in its input.json; nothing to judge against";
+  return {
+    inputId,
+    goal: "",
+    inputs: [verdictSideOf(inputA), verdictSideOf(inputB)],
+    winner: "tie",
+    confidence: 100,
+    reasoning,
+    samples: [{ winner: "tie", confidence: 100, reasoning, order: "AB" }],
     generatedAt: new Date().toISOString(),
   };
 }

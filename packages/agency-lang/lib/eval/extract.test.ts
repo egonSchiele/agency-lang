@@ -314,6 +314,23 @@ describe("extractEvalRecord", () => {
       expect(i.thrownAtMs).not.toBeNull();
       expect(i.resolvedAtMs).not.toBeNull();
     });
+
+    it("distinguishes a recorded pass from no recorded resolution at all", () => {
+      const passedEvents: EventEnvelope[] = [
+        ev("threadCreated", { threadId: "0", threadType: "thread" }),
+        ev("interruptThrown", { interruptId: "i-p", interruptData: {} }, "s1"),
+        ev("interruptResolved", { interruptId: "i-p", outcome: "passed", resolvedBy: "handler" }),
+        ev("interruptThrown", { interruptId: "i-u", interruptData: {} }, "s2"),
+        // i-u: no interruptResolved — the run ended mid-interrupt.
+      ];
+      const outcomes = extractEvalRecord(passedEvents, "test:pass-vs-unresolved")
+        .interrupts.map((entry) => [entry.interruptId, entry.outcome]);
+
+      // "passed" is an affirmative claim from a resolution event; "unresolved"
+      // is the absence of one. Old records that say "unresolved" stay valid.
+      expect(outcomes).toContainEqual(["i-p", "passed"]);
+      expect(outcomes).toContainEqual(["i-u", "unresolved"]);
+    });
   });
 
   describe("preview truncation", () => {

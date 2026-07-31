@@ -460,7 +460,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--runs-dir <path>", "Runs output directory")
     .option("--continue-on-error", "Continue after task failures", true)
     .option("--no-continue-on-error", "Stop after first input failure")
-    .option("-v, --verbose", "Log per-input progress to stderr")
     .option("--graders <file>", "TypeScript grading module (default-exports graders)")
     .option("--no-grade", "Skip grading; only run the agent")
     .action(async (opts: {
@@ -470,7 +469,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
       runId?: string;
       runsDir?: string;
       continueOnError?: boolean;
-      verbose?: boolean;
       graders?: string;
       grade?: boolean;
     }) => {

@@ -13,7 +13,7 @@ There used to be an in-memory handoff (`gradeRun` accepted a three-shape
 union); it was deleted on purpose.
 
 **`eval run --grade` re-reads the artifacts it just wrote.** The suite runner
-(`evalRunLoadedInputs`) executes agents and writes the run directory; it knows
+(`runSuite`) executes agents and writes the run directory; it knows
 nothing about graders. The `evalRun` command then grades that directory —
 `resolve graders → validate → run → grade` — the same call `agency eval grade`
 makes days later. The re-read looks like waste; it is the point. The cost is

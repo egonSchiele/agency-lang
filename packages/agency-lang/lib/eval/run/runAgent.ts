@@ -5,7 +5,7 @@ import type { EvalRecord } from "@/eval/types.js";
 
 import { agentRunPaths, makeEvalRecordExtractor, shouldExtractStatelog, type AgentRunPaths, type EvalRecordExtractor } from "./extract.js";
 import { applyOverlay, compileAgent, copyFiles, filesToCopy, seedFromAgentFile, type AgentSeed } from "./seed.js";
-import { makeSubprocessRunner, type EvalInputRunner } from "./subprocess.js";
+import { limitsFromConfig, makeSubprocessRunner, type EvalInputRunner } from "./subprocess.js";
 
 export type RunAgentOptions = {
   /** The directory for THIS run — records land in <runDir>/agent/, the agent
@@ -144,7 +144,8 @@ class AgentRunner {
   /** Run the compiled agent: workdir as cwd, statelog captured under agent/. */
   private execute(compiledEntryPath: string): ReturnType<EvalInputRunner> {
     fs.mkdirSync(this.paths.agentDir, { recursive: true });
-    const runner = this.deps.runner ?? makeSubprocessRunner(this.options.pipeOutput ?? true);
+    const runner = this.deps.runner ??
+      makeSubprocessRunner(this.options.pipeOutput ?? true, limitsFromConfig(this.options.config));
     return runner({
       compiledEntryPath,
       node: this.node,

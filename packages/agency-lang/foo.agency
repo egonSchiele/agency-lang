@@ -317,14 +317,19 @@ def execute(code: string): Result<any> {
   return codeResult
 }
 
-node main() {
+// `task` is for headless callers (the eval framework passes the task as a
+// node argument); interactively it stays empty and we prompt.
+node main(task: string = "") {
   // Generated programs write files relative to the agent cwd (runCode gets
   // it explicitly). Respect a cwd the harness already set; otherwise anchor
   // to where the user launched us, not wherever the subprocess lands.
   if (getAgentCwd() == "") {
     setAgentCwd(cwd())
   }
-  const userMessage = input("> ")
+  let userMessage = task
+  if (userMessage == "") {
+    userMessage = input("> ")
+  }
   const prompt = """
   ${systemPrompt}
 

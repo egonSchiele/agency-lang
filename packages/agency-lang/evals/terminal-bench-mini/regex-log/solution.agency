@@ -1,0 +1,17 @@
+// Terminal-bench's reference solution as a deterministic agent: writes the
+// known-good regex and exits, no LLM involved. Exists to smoke-test the
+// harness — `agency eval run` against this agent must score 1.0, or the
+// suite/grader plumbing is broken (it also mirrors terminal-bench's own
+// solution/solve.sh convention of keeping the answer beside the task).
+node main(task: string): string {
+  const regex = "(?=.*(?:^|[^0-9A-Za-z])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?=$|[^0-9A-Za-z])).*(?:^|[^0-9A-Za-z])(\d{4}-(?:(?:01|03|05|07|08|10|12)-(?:0[1-9]|[12]\d|3[01])|(?:04|06|09|11)-(?:0[1-9]|[12]\d|30)|02-(?:0[1-9]|1\d|2[0-9])))(?=$|[^0-9A-Za-z])"
+  handle {
+    write("regex.txt", regex)
+  } with (data) {
+    if (data.effect == "std::write") {
+      return approve()
+    }
+    return reject()
+  }
+  return "wrote regex.txt"
+}

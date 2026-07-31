@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { compile } from "../cli/commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 import { TraceReader } from "../runtime/trace/traceReader.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { DebuggerDriver } from "./driver.js";

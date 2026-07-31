@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { compile, resetCompilationCache } from "../cli/commands.js";
+import { compile, resetCompilationCache } from "@/compiler/defaultSession.js";
 
 /**
  * Worked-example integration tests for PR 2 ("per-variable topsort +

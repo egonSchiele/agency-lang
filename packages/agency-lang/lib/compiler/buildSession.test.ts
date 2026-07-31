@@ -8,7 +8,7 @@ import { _internal as parseCacheInternal } from "../parseCache.js";
 import { RunStrategy } from "../importStrategy.js";
 import { SymbolTable } from "../symbolTable.js";
 import { CompileClosureError } from "./compileClosure.js";
-import { compile, resetCompilationCache } from "../cli/commands.js";
+import { compile, resetCompilationCache } from "./defaultSession.js";
 
 const TRIVIAL = 'node main() {\n  return "ok"\n}\n';
 const HELPER = 'export def helper(): string {\n  return "shared"\n}\n';

@@ -985,8 +985,10 @@ export class StatelogClient {
     interrupt,
   }: {
     interruptId: string;
-    outcome: "approved" | "rejected" | "propagated";
-    resolvedBy: "handler" | "user" | "policy" | "ipc";
+    outcome: "approved" | "rejected" | "propagated" | "passed";
+    /** Null when nothing resolved anything — the chain-outcome event a
+     *  surfacing interrupt records ("propagated"/"passed"). */
+    resolvedBy: "handler" | "user" | "policy" | "ipc" | null;
     timeTaken?: number;
     /** Optional summary of the interrupt being resolved. See
      *  `handlerDecision.interrupt` for rationale. */

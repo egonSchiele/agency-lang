@@ -84,11 +84,11 @@ describe("eval run input loading", () => {
     expect(inputs[0].args).toEqual({ n: 1 });
   });
 
-  it("returns an empty list for a directory with no json files", () => {
+  it("rejects a directory with no json files: an empty suite is a mistake, not a run", () => {
     fs.mkdirSync(path.join(tmpDir, "empty"));
     fs.writeFileSync(path.join(tmpDir, "empty", "note.txt"), "ignore me");
 
-    expect(loadInputs(path.join(tmpDir, "empty"))).toEqual([]);
+    expect(() => loadInputs(path.join(tmpDir, "empty"))).toThrow(/no inputs loaded from/);
   });
 
   it("creates an inline input from a goal", () => {

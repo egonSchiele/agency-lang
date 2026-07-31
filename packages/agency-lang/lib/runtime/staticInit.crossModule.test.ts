@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { pathToFileURL } from "url";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { compile, resetCompilationCache } from "../cli/commands.js";
+import { compile, resetCompilationCache } from "@/compiler/defaultSession.js";
 
 /**
  * Cross-module static dependency end-to-end: compile a small two-file

@@ -1,5 +1,5 @@
 import { AgencyConfig } from "@/config.js";
-import { compile } from "./commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 import { RunStrategy } from "../importStrategy.js";
 import { pickANode, resolveCompiledFile } from "./util.js";
 import { parseAgency } from "@/parser.js";

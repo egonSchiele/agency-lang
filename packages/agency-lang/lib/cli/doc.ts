@@ -4,7 +4,7 @@ import { declaredName } from "../types/hole.js";
 import { AgencyConfig } from "@/config.js";
 import { AgencyGenerator, generateAgency } from "@/backends/agencyGenerator.js";
 import { parse, readFile } from "./commands.js";
-import { findRecursively } from "./util.js";
+import { findRecursively } from "@/utils/findRecursively.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
 import { AgencyMultiLineComment, AgencyProgram, Assignment } from "@/types.js";
 import type { Tag } from "@/types/tag.js";

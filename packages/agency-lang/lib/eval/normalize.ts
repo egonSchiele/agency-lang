@@ -10,6 +10,10 @@ export type NormalizedEnvelope = {
   raw: EventEnvelope;
   /** ms relative to the first event's timestamp. */
   tMs: number;
+  /** Position in the statelog file. tMs is millisecond-resolution, so
+   *  events written in the same millisecond need this to order — sorts
+   *  tiebreak on it instead of relying on Array#sort stability. */
+  seq: number;
   /** Resolved thread id (from `data.threadId` if present, else null). */
   threadId: string | null;
   /** `ev.data.type` hoisted for terser switch/filter. */
@@ -39,9 +43,10 @@ export function normalize(events: EventEnvelope[]): Normalized {
     return { events: [], spanIndex: {}, byType: {}, warnings: [] };
   }
   const t0 = timestampMs(events[0]);
-  const normalized: NormalizedEnvelope[] = events.map((raw) => ({
+  const normalized: NormalizedEnvelope[] = events.map((raw, seq) => ({
     raw,
     tMs: timestampMs(raw) - t0,
+    seq,
     threadId: threadIdOf(raw),
     type: raw.data.type,
     spanId: raw.span_id,

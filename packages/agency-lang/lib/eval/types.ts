@@ -5,28 +5,12 @@
  * want semantic identification ("did the oracle fire?") query the
  * thread `label` / `session` fields populated by the runtime.
  *
- * ── Field-presence matrix (recorded during Task 1 Step 2) ─────────
- *
- * | field                                | legacy `statelog.log` | post-Task 0 fresh capture |
- * |--------------------------------------|-----------------------|---------------------------|
- * | threadCreated.label                  | ✗                     | ✓                         |
- * | threadCreated.session                | ✗                     | ✓                         |
- * | threadCreated.hidden                 | ✗                     | ✓                         |
- * | toolCallStart (event type)           | ✗                     | ✓                         |
- * | handlerDecision.interrupt            | ✗                     | ✓                         |
- * | interruptResolved.interrupt          | ✗                     | ✓                         |
- * | promptCompletion.threadId            | ✗                     | ✓                         |
- * | toolCall.threadId                    | ✗                     | ✓                         |
- * | toolCallStart.threadId               | ✗                     | ✓                         |
- * | evalValueRecorded                    | ✗                     | only if agent annotates   |
- * | evalOutputRecorded                   | ✗                     | only if agent annotates   |
- *
- * "Legacy" here means statelogs captured by builds from before the
- * eval work landed (PR #726's Task 0 taught the runtime to emit the
- * right-hand column) — e.g. old saved runs under runs/, or any
- * statelog.log a user kept around and re-grades today. Legacy traces
- * parse without errors; extraction degrades by leaving the missing
- * fields null and emitting one warning during normalize.
+ * Statelogs from builds older than PR #726 (before the runtime emitted
+ * thread labels, toolCallStart, interrupt summaries, threadIds on
+ * events) are NOT supported: the tolerance that degraded them to
+ * null-filled records was deleted along with the pre-#733 run-directory
+ * layout fallbacks. Re-extract from a current build, or use a build
+ * from before this change to read museum pieces.
  */
 export type EvalRecord = {
   /** trace_id from the source statelog. */
@@ -172,12 +156,12 @@ export type InterruptEntry = {
    *  ever an affirmative claim from a resolution event; the extractor never
    *  infers it.
    *
-   *  Reachability: today's runtime emits only "approved" and "rejected"
-   *  (every interruptResolved emitter in lib/runtime/interrupts.ts);
-   *  "propagated" and "passed" are computed internally by the handler-chain
-   *  merge but never written, so they exist here for older or future traces.
-   *  Teaching the runtime to emit them is
-   *  https://github.com/egonSchiele/agency-lang/issues/736.
+   *  All four decided values are emitted by the runtime (#736): approved/
+   *  rejected at resolution, and propagated/passed when an interrupt
+   *  surfaces with its chain outcome ("passed" = the chain finished without
+   *  deciding — every handler passed, or none existed). A surfaced interrupt
+   *  the user later decides carries two interruptResolved events; extraction
+   *  takes the LAST as authoritative.
    *
    *  This is a PERSISTED field. Records written by builds between PR #734
    *  and PR #735 may say "passed" where they mean "unresolved" — the short

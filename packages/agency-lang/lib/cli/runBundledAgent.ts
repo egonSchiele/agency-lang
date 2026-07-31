@@ -5,7 +5,8 @@ import {
   serializeConfigOverrides,
   type CliFlags,
 } from "@/config.js";
-import { compile, compiledOutputNodeArgs } from "./commands.js";
+import { compiledOutputNodeArgs } from "./commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 import { AGENCY_MAX_COST, AGENCY_MAX_TIME } from "@/constants.js";
 import { spawn as realSpawn } from "child_process";
 import * as fs from "fs";

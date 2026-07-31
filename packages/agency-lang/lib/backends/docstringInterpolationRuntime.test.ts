@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import path from "path";
 import fs from "fs";
 import { pathToFileURL } from "url";
-import { compile } from "../cli/commands.js";
+import { compile } from "../compiler/defaultSession.js";
 
 // Verifies that doc string interpolation referencing a module global is
 // correctly resolved at runtime — the compiled JS module loads without

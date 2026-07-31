@@ -1,6 +1,6 @@
 #!/usr/bin/env node
+import { compile } from "@/compiler/defaultSession.js";
 import {
-  compile,
   compileWarning,
   forEachSource,
   format,

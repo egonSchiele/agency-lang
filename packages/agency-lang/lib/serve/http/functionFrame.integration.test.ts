@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { pathToFileURL } from "url";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { compile, resetCompilationCache } from "../../cli/commands.js";
+import { compile, resetCompilationCache } from "@/compiler/defaultSession.js";
 import { discoverExports } from "../discovery.js";
 import { createHttpHandler } from "./adapter.js";
 import { createLogger } from "../../logger.js";

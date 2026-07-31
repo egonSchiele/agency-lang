@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { compile } from "../cli/commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 import { freshImport, fixtureDir } from "./testHelpers.js";
 import { DebuggerTestSession } from "./testSession.js";
 

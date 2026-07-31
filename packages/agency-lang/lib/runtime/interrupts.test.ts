@@ -91,6 +91,46 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     );
   });
 
+  it("a surfaced interrupt records outcome propagated when a handler sent it up", async () => {
+    const ctx = makeCtx([async () => ({ type: "propagate" })]);
+    ctx.runId = "run-test";   // the surfaced Interrupt carries the runId
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    expect(Array.isArray(verdict)).toBe(true);   // surfaced as Interrupt[]
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "propagated", resolvedBy: null }),
+    );
+  });
+
+  it("a surfaced interrupt records outcome passed when the chain never decided", async () => {
+    // One handler that passes; without this emission a trace could not tell
+    // deliberate handler behavior from a run that died mid-interrupt (#736).
+    const ctx = makeCtx([async () => ({ type: "pass" })]);
+    ctx.runId = "run-test";
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    expect(Array.isArray(verdict)).toBe(true);
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "passed", resolvedBy: null }),
+    );
+  });
+
+  it("an EMPTY chain also records passed, and does not claim a handler was involved", async () => {
+    // The safety-trace case that matters most: nobody was watching this
+    // effect. resolvedBy must not say "handler" when no handler existed.
+    const ctx = makeCtx([]);
+    ctx.runId = "run-test";
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    expect(Array.isArray(verdict)).toBe(true);
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "passed", resolvedBy: null }),
+    );
+  });
+
   it("a relay hop (gatherChainOutcome) emits NO terminal event on reject", async () => {
     // The parent process evaluating a child's relayed interrupt: only
     // handlerDecision events belong to the hop — the terminal

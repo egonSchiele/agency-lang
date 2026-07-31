@@ -25,17 +25,10 @@ export function readEvalRun(runDir: string): ReadEvalRunResult {
   for (const result of summary.inputs) {
     const inputDir = path.join(resolvedRunDir, "inputs", result.inputId);
     const input = readOptionalJson<Input>(path.join(inputDir, "input.json"));
-    const recordPath = result.evalRecordPath
-      || firstExisting(
-        agentRunPaths(inputDir).evalRecordPath,
-        path.join(inputDir, "eval-record.json"),      // pre-#733 layout
-      );
+    const recordPath = result.evalRecordPath || agentRunPaths(inputDir).evalRecordPath;
     const status = inputStatus(result, recordPath);
     const errorMessage = status === "failed"
-      ? readOptionalText(firstExisting(
-          agentRunPaths(inputDir).errorPath,
-          path.join(inputDir, "error.txt"),           // pre-#733 layout
-        )) ?? result.errorMessage
+      ? readOptionalText(agentRunPaths(inputDir).errorPath) ?? result.errorMessage
       : undefined;
 
     if (Object.hasOwn(inputsById, result.inputId)) {
@@ -53,18 +46,31 @@ export function readEvalRun(runDir: string): ReadEvalRunResult {
     };
   }
 
+  warnIfLegacyLayout(resolvedRunDir, inputsById);
   return { runDir: resolvedRunDir, inputsById };
+}
+
+/** The pre-#733 flat layout is no longer read. Without this, grading such a
+ *  run prints objective 0.00 with every input "missing" — which reads like an
+ *  agent that produced nothing, not like an old directory. Name what
+ *  happened, once. */
+function warnIfLegacyLayout(runDir: string, inputsById: Record<string, ReadEvalRunInput>): void {
+  const all = Object.values(inputsById);
+  const allMissing = all.length > 0 && all.every((input) => input.status === "missing");
+  if (!allMissing) return;
+  const hasFlatRecord = all.some((input) =>
+    fs.existsSync(path.join(runDir, "inputs", input.inputId, "eval-record.json")));
+  if (hasFlatRecord) {
+    console.warn(
+      `readEvalRun: ${runDir} uses the pre-#733 run layout and is no longer readable. ` +
+      `Re-run the suite, or read this directory with a build from before PR #737.`,
+    );
+  }
 }
 
 function inputStatus(result: EvalRunInputResult, recordPath: string): ReadEvalRunInput["status"] {
   if (result.status === "error") return "failed";
   return fs.existsSync(recordPath) ? "ok" : "missing";
-}
-
-/** The first existing candidate, else the first candidate — so "missing"
- *  errors point at the current-layout location. */
-function firstExisting(...candidates: string[]): string {
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
 }
 
 function readJson<T>(filePath: string): T {

@@ -30,7 +30,7 @@ import {
   isPkgImport,
 } from "../importPaths.js";
 import { CompileStrategy } from "../importStrategy.js";
-import { getAllImports } from "../cli/util.js";
+import { getAllImports } from "@/analysis/imports.js";
 
 type CompileSuccess = {
   success: true;

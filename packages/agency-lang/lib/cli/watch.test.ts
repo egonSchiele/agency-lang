@@ -4,7 +4,7 @@ import * as path from "path";
 import * as os from "os";
 
 // Mock compile to avoid needing the full pipeline
-vi.mock("@/cli/commands.js", () => ({
+vi.mock("@/compiler/defaultSession.js", () => ({
   compile: vi.fn(),
   resetCompilationCache: vi.fn(),
 }));
@@ -25,7 +25,7 @@ vi.mock("chokidar", () => ({
 }));
 
 import { watchAndCompile } from "./watch.js";
-import { compile } from "@/cli/commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 import chokidar from "chokidar";
 
 describe("watchAndCompile", () => {

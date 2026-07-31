@@ -3,7 +3,7 @@ import * as smoltalk from "smoltalk";
 import * as fs from "fs";
 import * as path from "path";
 import type { DebuggerCommand } from "./types.js";
-import { compile } from "../cli/commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 import { hasInterrupts } from "@/runtime/interrupts.js";
 import { TestDebuggerIO, freshImport, makeDriver, fixtureDir } from "./testHelpers.js";
 

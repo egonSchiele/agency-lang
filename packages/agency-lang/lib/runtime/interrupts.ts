@@ -357,11 +357,13 @@ async function runHandlerChain(
           continue;
         }
         if (result.type === "reject") {
-          // Only the per-handler decision event here. The terminal
-          // interruptResolved is emitted exactly once, by the ORIGIN
-          // dispatch's renderVerdict — a relay hop (a parent process
-          // rejecting a child's interrupt via gatherChainOutcome) must not
-          // emit a second terminal event into the shared trace.
+          // Only the per-handler decision event here. interruptResolved
+          // events come from the ORIGIN dispatch's renderVerdict (and the
+          // user-resolution loop) — a relay hop (a parent process rejecting
+          // a child's interrupt via gatherChainOutcome) must not emit
+          // terminal events into the shared trace. An interrupt can carry
+          // more than one interruptResolved (chain outcome, then a user
+          // decision); the LAST is authoritative.
           ctx.statelogClient.handlerDecision({ interruptId, handlerIndex: i, decision: "reject", value: result.value, interrupt: interruptSummary });
           return { kind: "rejected", value: result.value };
         }
@@ -546,6 +548,22 @@ function renderVerdict(
   ctx.statelogClient.interruptThrown({
     interruptId: intr.interruptId,
     interruptData: data,
+  });
+  // Record what the handler chain concluded before the interrupt surfaces:
+  // "propagated" (a handler sent it up) or "passed" (the chain finished
+  // without deciding — every handler passed, or none existed). Without this,
+  // a trace could not tell deliberate handler behavior from a run that died
+  // mid-interrupt (#736). resolvedBy is null: nothing RESOLVED anything —
+  // which handler propagated or passed is already on the handlerDecision
+  // events, and claiming "handler" here would assert a handler was involved
+  // even when the chain was empty. If the user later decides, a second
+  // interruptResolved (resolvedBy "user") follows — consumers take the LAST
+  // event for an interruptId as authoritative.
+  ctx.statelogClient.interruptResolved({
+    interruptId: intr.interruptId,
+    outcome: merged.kind === "propagated" ? "propagated" : "passed",
+    resolvedBy: null,
+    interrupt: interruptSummary,
   });
   return [intr];
 }

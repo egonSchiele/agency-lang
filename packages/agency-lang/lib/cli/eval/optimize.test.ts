@@ -23,7 +23,7 @@ describe("eval optimize CLI", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  function writeAgent(relativePath = "agent.agency", source = "optimize const prompt = \"hi\"\n\nnode main() {}\n"): string {
+  function writeAgent(relativePath = "agent.agency", source = "optimize const prompt = \"hi\"\n\nnode main(task: string) {}\n"): string {
     const file = path.join(tmpDir, relativePath);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, source);

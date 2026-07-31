@@ -11,7 +11,11 @@ export type Input = {
   /** What the agent is told: an instruction string, or a JSON object for
    *  agents that take structured data. Delivered as the entry node's single
    *  positional parameter (eval entry nodes take exactly one). Required;
-   *  the loader rejects inputs without one. */
+   *  the loader rejects inputs without one. On-disk caveat: this type is
+   *  also the shape of a run directory's input.json, and run dirs written
+   *  before PR #739 carry args/node and NO task — read back off disk, task
+   *  may be undefined there. Grading and judging read only goal/expected/
+   *  metadata, so old runs still load. */
   task: string | Record<string, any>;
   /** The success criterion — read by the goal judge and the pairwise judge
    *  suite, never shown to the agent. Optional; required only when the

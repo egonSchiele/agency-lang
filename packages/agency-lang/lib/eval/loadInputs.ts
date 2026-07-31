@@ -148,6 +148,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (typeof spec.task === "string" && spec.task.length === 0) {
     throw new Error("Eval input task must not be empty");
   }
+  if (isPlainObject(spec.task) && Object.keys(spec.task).length === 0) {
+    throw new Error("Eval input task must not be empty");
+  }
   if (spec.files !== undefined && typeof spec.files !== "string") {
     throw new Error("Eval input files must be a string when provided");
   }

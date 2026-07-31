@@ -16,7 +16,7 @@ import { splitInputs } from "@/optimize/validationSplit.js";
 import { DEFAULT_OPTIMIZER, getOptimizer } from "@/optimize/registry.js";
 import type { OptimizeResult } from "@/optimize/types.js";
 
-import { resolveEvalRunTarget } from "@/agentTarget.js";
+import { assertEvalEntryNodeTakesOneParameter, resolveEvalRunTarget } from "@/agentTarget.js";
 
 export type EvalOptimizeOptions = {
   agent: string;
@@ -146,7 +146,9 @@ function provisionInputs(
 
 /** Build the optimize target: the agent plus the inputs to run it on (from --goal or --inputs). */
 export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): OptimizeTarget {
-  resolveEvalRunTarget(opts.agent); // validates the target early; the node is delivery-side
+  // Fail here, once, rather than as a run failure per candidate iteration.
+  const resolved = resolveEvalRunTarget(opts.agent);
+  assertEvalEntryNodeTakesOneParameter(resolved.agentFile, resolved.node);
   if (optimizeInputSelection(opts) === "goal") return goalTarget(opts);
   const s = resolveOptimizeSettings(opts);
   // A per-input goal is required only when nothing else supplies one: no custom

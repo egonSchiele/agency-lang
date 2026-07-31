@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { parseTarget, resolveEvalRunTarget } from "./agentTarget.js";
+import { assertEvalEntryNodeTakesOneParameter, parseTarget, resolveEvalRunTarget } from "./agentTarget.js";
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -33,5 +33,36 @@ describe("agent targets", () => {
     expect(resolveEvalRunTarget(`${file}:evalMain`)).toEqual({ agentFile: file, node: "evalMain", label: `${file}:evalMain` });
     expect(resolveEvalRunTarget(file)).toEqual({ agentFile: file, node: "main", label: `${file}:main` });
     expect(resolveEvalRunTarget(dir)).toEqual({ agentFile: path.join(dir, "main.agency"), node: "main", label: `${path.join(dir, "main.agency")}:main` });
+  });
+});
+
+describe("assertEvalEntryNodeTakesOneParameter", () => {
+  function agentWith(source: string): string {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-shape-"));
+    dirs.push(tmpDir);
+    const file = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(file, source);
+    return file;
+  }
+
+  it("accepts a one-parameter node, default value or not", () => {
+    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith("node main(task: string) {}\n"), "main")).not.toThrow();
+    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith('node main(task: string = "") {}\n'), "main")).not.toThrow();
+  });
+
+  it("rejects a zero-parameter node with the add-one hint", () => {
+    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith("node main() {}\n"), "main"))
+      .toThrow(/takes none — add one/);
+  });
+
+  it("rejects a two-parameter node, naming the parameters", () => {
+    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith("node main(a: string, b: string) {}\n"), "main"))
+      .toThrow(/takes 2 \(a, b\)/);
+  });
+
+  it("stays quiet on unparseable files and absent nodes — compile/run report those better", () => {
+    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith("this is not agency"), "main")).not.toThrow();
+    expect(() => assertEvalEntryNodeTakesOneParameter(agentWith("node other(x: string) {}\n"), "main")).not.toThrow();
+    expect(() => assertEvalEntryNodeTakesOneParameter(path.join(os.tmpdir(), "does-not-exist.agency"), "main")).not.toThrow();
   });
 });

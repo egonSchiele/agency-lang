@@ -2,7 +2,7 @@ import * as path from "path";
 
 import { nanoid } from "nanoid";
 
-import { resolveEvalRunTarget } from "@/agentTarget.js";
+import { assertEvalEntryNodeTakesOneParameter, resolveEvalRunTarget } from "@/agentTarget.js";
 import type { AgencyConfig } from "@/config.js";
 import {
   buildProvenance,
@@ -54,6 +54,9 @@ export type RunSuiteDeps = { runner?: EvalInputRunner };
  */
 export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): Promise<EvalRunResult> {
   const target = resolveEvalRunTarget(opts.agent);
+  // Before any workdir is seeded or agent compiled: a mis-shaped entry node
+  // is a configuration error, not a per-input run failure.
+  assertEvalEntryNodeTakesOneParameter(target.agentFile, target.node);
 
   const runsDir = path.resolve(
     opts.runsDir ?? opts.config?.eval?.runsDir ?? "runs",

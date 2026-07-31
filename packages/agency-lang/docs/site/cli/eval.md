@@ -40,7 +40,11 @@ running the eval picks the agent and its node with `--agent file.agency:node`.
 for agents that take structured data, and it is delivered as the entry
 node's single parameter — **eval entry nodes take exactly one parameter**,
 whatever it is named. Agents with a different shape add a small
-one-parameter adapter node.
+one-parameter adapter node. That includes agents that need no input at all
+(a fixed pipeline you run and grade): declare the parameter and ignore it —
+`node main(task: string) { ... }`. The parameter count is checked before
+anything runs, so a mis-shaped node is one configuration error, not a suite
+of run failures.
 
 `goal` is the success criterion, never shown to the agent. It is required
 when the default LLM judge will run; a custom grading module makes it

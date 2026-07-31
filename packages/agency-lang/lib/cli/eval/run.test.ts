@@ -58,7 +58,7 @@ describe("eval run CLI", () => {
 
   it("compiles, runs each task through the injected runner, and writes artifacts", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main() {}\n");
+    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
 
     const result = await evalRun(
@@ -88,7 +88,7 @@ describe("eval run CLI", () => {
 
   it("rejects an empty suite instead of succeeding with zero inputs", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main() {}\n");
+    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
     const inputsFile = path.join(tmpDir, "empty.json");
     fs.writeFileSync(inputsFile, JSON.stringify({ inputs: [] }));
     const runsDir = path.join(tmpDir, "runs");
@@ -116,7 +116,7 @@ describe("eval run CLI", () => {
 
   it("extracts from workdir statelog.log when runtime overrides do not redirect the log file", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main() {}\n");
+    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
     let extractorStatelogPath = "";
 
@@ -150,7 +150,7 @@ describe("eval run CLI", () => {
 
   it("stops after the first task error when continueOnError is false", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main() {}\n");
+    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
     const inputsFile = path.join(tmpDir, "inputs.json");
     fs.writeFileSync(inputsFile, JSON.stringify({
@@ -211,7 +211,7 @@ describe("eval run CLI", () => {
     const agentDir = path.join(tmpDir, "agent");
     fs.mkdirSync(agentDir, { recursive: true });
     const agent = path.join(agentDir, "agent.agency");
-    fs.writeFileSync(agent, "node main() {}\n");
+    fs.writeFileSync(agent, "node main(task: string) {}\n");
 
     const result = await evalRun(
       {
@@ -248,7 +248,7 @@ describe("eval run CLI", () => {
       const agentDir = path.join(tmpDir, "agent");
       fs.mkdirSync(agentDir, { recursive: true });
       const agent = path.join(agentDir, "agent.agency");
-      fs.writeFileSync(agent, "node main() {}\n");
+      fs.writeFileSync(agent, "node main(task: string) {}\n");
       const runsDir = path.join(tmpDir, "runs");
       return { agent, inputs, runsDir, runId };
     }

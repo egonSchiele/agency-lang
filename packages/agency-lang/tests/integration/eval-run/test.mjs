@@ -51,6 +51,8 @@ try {
 }
 
 node main(task: string) {
+  // task is unused: eval entry nodes must take exactly one parameter
+  // (the input's task); this test is about interrupts, not delivery.
   check()
   return "made it past the interrupt"
 }

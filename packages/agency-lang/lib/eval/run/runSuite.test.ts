@@ -27,7 +27,7 @@ describe("runSuite", () => {
   let proj: string;
   beforeEach(() => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), "runsuite-"));
-    fs.writeFileSync(path.join(proj, "agent.agency"), "node main() { return 1 }\n");
+    fs.writeFileSync(path.join(proj, "agent.agency"), "node main(task: string) { return 1 }\n");
   });
   afterEach(() => {
     // Raw rmSync, not safeDelete: mkdtemp paths sit outside any project root,
@@ -100,7 +100,7 @@ describe("runSuite", () => {
     const agentDir = path.join(proj, "agent-proj");
     fs.mkdirSync(agentDir, { recursive: true });
     const agent = path.join(agentDir, "agent.agency");
-    fs.writeFileSync(agent, "node main() {}\n");
+    fs.writeFileSync(agent, "node main(task: string) {}\n");
 
     let sawFixture = false;
     const result = await runSuite(

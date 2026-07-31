@@ -65,14 +65,14 @@ describe("eval optimize CLI", () => {
   it("desugars --goal into a single input-1 input with a first-class goal", async () => {
     const agentFile = writeAgent();
     const { target } = await capture({ agent: agentFile, goal: "Return Paris" });
-    expect(target?.inputs).toEqual([{ id: "input-1", node: "main", args: {}, goal: "Return Paris" }]);
+    expect(target?.inputs).toEqual([{ id: "input-1", task: "Return Paris", goal: "Return Paris" }]);
   });
 
   it("builds one input per entry from --inputs, carrying each goal first-class", async () => {
     const agentFile = writeAgent();
-    const inputsFile = writeInputs([{ id: "first", goal: "be correct", args: { text: "hi" } }]);
+    const inputsFile = writeInputs([{ id: "first", goal: "be correct", task: { text: "hi" } }]);
     const { target } = await capture({ agent: `${agentFile}:main`, inputs: inputsFile });
-    expect(target?.inputs).toEqual([{ id: "first", goal: "be correct", args: { text: "hi" }, node: "main" }]);
+    expect(target?.inputs).toEqual([{ id: "first", goal: "be correct", task: { text: "hi" } }]);
   });
 
   it("requires at least one of --inputs or --goal", async () => {
@@ -82,14 +82,14 @@ describe("eval optimize CLI", () => {
 
   it("allows --inputs and --goal together; --goal fills in as the overall-goal default", async () => {
     const agentFile = writeAgent();
-    const inputsFile = writeInputs([{ id: "first", args: { text: "hi" } }]);   // no per-input goal
+    const inputsFile = writeInputs([{ id: "first", task: { text: "hi" } }]);   // no per-input goal
     const { target } = await capture({ agent: `${agentFile}:main`, inputs: inputsFile, goal: "overall goal" });
-    expect(target?.inputs).toEqual([{ id: "first", args: { text: "hi" }, node: "main", goal: "overall goal" }]);
+    expect(target?.inputs).toEqual([{ id: "first", task: { text: "hi" }, goal: "overall goal" }]);
   });
 
   it("loads graders from a configured grading module instead of the default goal judge", async () => {
     const agentFile = writeAgent();
-    const inputsFile = writeInputs([{ id: "a", args: {}, metadata: { expected: "x" } }]);   // no goal; grading module present
+    const inputsFile = writeInputs([{ id: "a", task: "t", metadata: { expected: "x" } }]);   // no goal; grading module present
     // Write the grading module inside the package so its `import "agency-lang/optimize"` resolves.
     const gradingDir = fs.mkdtempSync(path.join(process.cwd(), ".test-grading-"));
     try {
@@ -103,16 +103,10 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
     }
   });
 
-  it("rejects --goal when the selected node requires arguments", async () => {
+  it("allows --goal for a one-parameter node: the goal text becomes its task", async () => {
     const agentFile = writeAgent("agent.agency", "optimize const prompt = \"hi\"\n\nnode main(text: string) {}\n");
-    await expect(evalOptimize({ agent: `${agentFile}:main`, goal: "g", config: {} }))
-      .rejects.toThrow(/requires arguments, but --goal creates a no-argument input/);
-  });
-
-  it("allows --goal when node parameters all have defaults", async () => {
-    const agentFile = writeAgent("agent.agency", "optimize const prompt = \"hi\"\n\nnode main(text: string = \"x\") {}\n");
     const { target } = await capture({ agent: `${agentFile}:main`, goal: "g" });
-    expect(target?.inputs).toHaveLength(1);
+    expect(target?.inputs).toEqual([{ id: "input-1", task: "g", goal: "g" }]);
   });
 
   it("configures a single goal LlmJudge grader plus run policy", async () => {
@@ -144,7 +138,7 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
 
   it("loads a custom optimizer when --optimizer is a path", async () => {
     const agentFile = writeAgent();
-    const inputsFile = writeInputs([{ id: "a", goal: "g", args: {} }]);
+    const inputsFile = writeInputs([{ id: "a", goal: "g", task: "t" }]);
     // Written inside the package so its `import` of agency-lang/optimize resolves.
     const dir = fs.mkdtempSync(path.join(process.cwd(), ".test-optimizer-"));
     try {
@@ -191,8 +185,8 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
     const agentFile = writeAgent();
     const trainFile = path.join(tmpDir, "train.json");
     const valFile = path.join(tmpDir, "val.json");
-    fs.writeFileSync(trainFile, JSON.stringify({ inputs: [{ id: "t", goal: "g", args: {} }] }));
-    fs.writeFileSync(valFile, JSON.stringify({ inputs: [{ id: "v", goal: "g", args: {} }] }));
+    fs.writeFileSync(trainFile, JSON.stringify({ inputs: [{ id: "t", goal: "g", task: "x" }] }));
+    fs.writeFileSync(valFile, JSON.stringify({ inputs: [{ id: "v", goal: "g", task: "x" }] }));
     const target = buildTarget({ agent: `${agentFile}:main`, inputs: trainFile, validationInputs: valFile }, {});
     expect(target.validationInputs?.map((i) => i.id)).toEqual(["v"]);
     expect(target.inputs.map((i) => i.id)).toEqual(["t"]);
@@ -201,7 +195,7 @@ export default [grader(({ output }) => (output === "x" ? 1 : 0), { name: "mine" 
   it("splits train inputs by ratio when --validation-split is given", () => {
     const agentFile = writeAgent();
     const trainFile = path.join(tmpDir, "train.json");
-    const inputs = Array.from({ length: 10 }, (_u, i) => ({ id: `t${i}`, goal: "g", args: {} }));
+    const inputs = Array.from({ length: 10 }, (_u, i) => ({ id: `t${i}`, goal: "g", task: "x" }));
     fs.writeFileSync(trainFile, JSON.stringify({ inputs }));
     const target = buildTarget({ agent: `${agentFile}:main`, inputs: trainFile, validationSplit: 0.3, seed: 1 }, {});
     expect(target.validationInputs).toHaveLength(3);

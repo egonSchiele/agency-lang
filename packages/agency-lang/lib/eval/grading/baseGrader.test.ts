@@ -6,7 +6,7 @@ import type { Grade, GraderInput, GraderOptions, Input } from "./types.js";
 import { loadedRun } from "./testUtils.js";
 
 const stubRunner = new AgencyRunner({}, async () => ({ data: null }));
-const input = (over: Partial<Input> = {}): Input => ({ id: "i1", args: {}, ...over });
+const input = (over: Partial<Input> = {}): Input => ({ id: "i1", task: "t", ...over });
 const graderInput = (over: Partial<Input> = {}): GraderInput => ({ input: input(over), run: loadedRun(null), runAgency: stubRunner });
 
 /** Test grader whose single-shot grade is supplied per instance. */

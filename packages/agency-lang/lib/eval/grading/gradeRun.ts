@@ -128,7 +128,9 @@ function loadedEntry(runDir: string, input: ReadEvalRunInput): Entry {
     missing: "no eval record found on disk for this input",
   };
   return {
-    input: input.input ?? { id: input.inputId, args: {} },
+    // Placeholder for a run dir whose input.json is missing; "" is not a
+    // loadable task, which is the point — nothing real was recorded.
+    input: input.input ?? { id: input.inputId, task: "" },
     recordPath: input.recordPath ?? "",
     workdir: workdirFor(runDir, input.inputId),
     ungradedReason: reasonByStatus[input.status],

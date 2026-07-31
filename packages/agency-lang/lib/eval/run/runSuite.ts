@@ -110,7 +110,7 @@ export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): 
         if (!continueOnError) break;
         continue;
       }
-      const run = await runAgent(target.agentFile, input.node ?? target.node, input.args, {
+      const run = await runAgent(target.agentFile, target.node, input.task, {
         runDir: prepared.inputDir,
         config,
         seedFiles: input.files,

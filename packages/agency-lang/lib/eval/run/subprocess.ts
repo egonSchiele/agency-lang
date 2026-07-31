@@ -16,7 +16,7 @@ import {
 export type EvalInputRunner = (args: {
   compiledEntryPath: string;
   node: string;
-  args: Record<string, any>;
+  task: string | Record<string, any>;
   cwd: string;
   statelogPath: string;
 }) => Promise<{ ok: true; statelogPath?: string } | { ok: false; errorMessage: string }>;
@@ -51,11 +51,11 @@ export function makeSubprocessRunner(
   pipeAgentOutput: boolean,
   limits: RunLimits = DEFAULT_EVAL_RUN_LIMITS,
 ): EvalInputRunner {
-  return async ({ compiledEntryPath, node, args, cwd, statelogPath }) => {
+  return async ({ compiledEntryPath, node, task, cwd, statelogPath }) => {
     return runCompiledAgentInSubprocess({
       compiledPath: compiledEntryPath,
       node,
-      args,
+      task,
       cwd,
       statelogPath,
       pipeAgentOutput,
@@ -67,7 +67,7 @@ export function makeSubprocessRunner(
 async function runCompiledAgentInSubprocess(args: {
   compiledPath: string;
   node: string;
-  args: Record<string, any>;
+  task: string | Record<string, any>;
   cwd: string;
   statelogPath: string;
   pipeAgentOutput: boolean;
@@ -82,7 +82,7 @@ async function runCompiledAgentInSubprocess(args: {
   const instruction = buildRunInstruction({
     scriptPath: args.compiledPath,
     node: args.node,
-    args: args.args,
+    task: args.task,
     limits,
     configOverrides: {
       observability: true,

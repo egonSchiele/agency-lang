@@ -7,7 +7,7 @@ import type { GraderInput } from "./types.js";
 import { loadedRun } from "./testUtils.js";
 
 const runInput = (output: unknown): GraderInput => ({
-  input: { id: "a", args: {}, metadata: { expected: "Paris" } },
+  input: { id: "a", task: "t", metadata: { expected: "Paris" } },
   run: loadedRun(output as any),
   runAgency: {} as AgencyRunner,
 });
@@ -47,7 +47,7 @@ describe("FunctionGrader", () => {
   it("ctx.judge forwards input.expected as the third judge arg by default", async () => {
     const runStructured = vi.fn(async () => ({ score: 1, reasoning: "" }));
     const input: GraderInput = {
-      input: { id: "a", args: {}, expected: "New Delhi" },
+      input: { id: "a", task: "t", expected: "New Delhi" },
       run: loadedRun("New Delhi"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };
@@ -59,7 +59,7 @@ describe("FunctionGrader", () => {
   it("ctx.judge lets the caller override expected explicitly", async () => {
     const runStructured = vi.fn(async () => ({ score: 1, reasoning: "" }));
     const input: GraderInput = {
-      input: { id: "a", args: {}, expected: "New Delhi" },
+      input: { id: "a", task: "t", expected: "New Delhi" },
       run: loadedRun("Mumbai"),
       runAgency: { runStructured } as unknown as AgencyRunner,
     };

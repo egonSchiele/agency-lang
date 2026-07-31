@@ -78,7 +78,7 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
     const p = probe();
     const ws = p.forkAt();
     const files = { "agent.agency": "node main() { return 1 }\n" };
-    await p.evaluateAt(ws, source(), files, [{ id: "a", args: {} }]);
+    await p.evaluateAt(ws, source(), files, [{ id: "a", task: "t" }]);
 
     expect(mockEval).toHaveBeenCalledTimes(1);
     const call = mockEval.mock.calls[0][0];
@@ -93,8 +93,8 @@ describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
     const p = probe();
     const ws1 = p.forkAt();
     const ws2 = p.forkAt();
-    await p.evaluateAt(ws1, source(), {}, [{ id: "a", args: {} }]);
-    await p.evaluateAt(ws2, source(), {}, [{ id: "a", args: {} }]);
+    await p.evaluateAt(ws1, source(), {}, [{ id: "a", task: "t" }]);
+    await p.evaluateAt(ws2, source(), {}, [{ id: "a", task: "t" }]);
 
     expect(ws1.key).not.toBe(ws2.key);
     expect(mockEval.mock.calls[0][0].runsDir).toContain(ws1.key);

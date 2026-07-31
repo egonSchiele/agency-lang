@@ -31,8 +31,8 @@ const targets: OptimizeTarget[] = [
 ];
 
 const inputs: Input[] = [
-  { id: "task-2", goal: "Mention the city", args: {} },
-  { id: "task-1", goal: "Return Paris", args: {} },
+  { id: "task-2", goal: "Mention the city", task: "t" },
+  { id: "task-1", goal: "Return Paris", task: "t" },
 ];
 
 const proposalJson = {

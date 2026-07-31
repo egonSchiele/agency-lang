@@ -72,7 +72,7 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     config: {}, runsDir: root, runId: "r", writeback: false, ...over,
   });
 
-  const threeInputs = [{ id: "a", args: {} }, { id: "b", args: {} }, { id: "c", args: {} }];
+  const threeInputs = [{ id: "a", task: "t" }, { id: "b", task: "t" }, { id: "c", task: "t" }];
 
   it("exits early without iterating when the baseline is already optimal", async () => {
     const runInput = vi.fn(scoredRunner([1.0])); // baseline scores the max objective
@@ -166,7 +166,7 @@ describe("Gepa (reflective Pareto optimizer)", () => {
     const result = await opt.optimize({
       agent: path.join(src, "agent.agency"),
       inputs: threeInputs,
-      validationInputs: [{ id: "v", args: {} }],
+      validationInputs: [{ id: "v", task: "t" }],
     });
     expect(result.championBreakdown?.length).toBeGreaterThan(0);   // #2: breakdown now emitted
     expect(typeof result.validationObjective).toBe("number");      // #3: champion picked by validation

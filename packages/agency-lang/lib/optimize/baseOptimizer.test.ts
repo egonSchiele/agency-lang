@@ -65,7 +65,7 @@ describe("BaseOptimizer.evaluate", () => {
     );
   }
 
-  const inputs: Input[] = [{ id: "a", args: {} }, { id: "b", args: {} }];
+  const inputs: Input[] = [{ id: "a", task: "t" }, { id: "b", task: "t" }];
   const fixedRun: RunInput = async (_ws, _source, _files, input, id) => fakeRun(id, "out", input);
 
   const source: OptimizeTargetSet = {
@@ -96,7 +96,7 @@ describe("BaseOptimizer.evaluate", () => {
       files: { "agent.agency": { file: "agent.agency", absoluteFile: path.join(src, "agent.agency"), source: "node main() {}\n", sha256: "x" } },
       targets: [],
     };
-    const sc = await p.scoreFilesAt(scoreSource, { "agent.agency": "node main() {}\n" }, [{ id: "a", args: {} }]);
+    const sc = await p.scoreFilesAt(scoreSource, { "agent.agency": "node main() {}\n" }, [{ id: "a", task: "t" }]);
     expect(sc.objective()).toBeCloseTo(0.4, 10);
   });
 
@@ -125,7 +125,7 @@ describe("BaseOptimizer.evaluate", () => {
         }),
       },
     );
-    await expect(opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", args: {} }] }))
+    await expect(opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] }))
       .rejects.toThrow(/did not resolve/);
     expect(runInput).not.toHaveBeenCalled();
   });
@@ -135,7 +135,7 @@ describe("BaseOptimizer.evaluate", () => {
     const advisory = new FixedGrader({ score: { kind: "scalar", value: 1 } });
     const advisorySpy = vi.spyOn(advisory as unknown as { _run: () => Promise<Grade> }, "_run");
     const p = probe([gate, advisory], fixedRun);
-    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", args: {} }]);
+    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", task: "t" }]);
     expect(sc.gatesPassed()).toBe(false);
     expect(advisorySpy).not.toHaveBeenCalled();
   });
@@ -151,21 +151,21 @@ describe("BaseOptimizer.evaluate", () => {
   it("gives id-less inputs distinct cache keys so they do not collide", async () => {
     const runInput = vi.fn(fixedRun);
     const p = probe([new FixedGrader({ score: { kind: "scalar", value: 1 } })], runInput);
-    await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ args: {} }, { args: {} }]); // both omit id
+    await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ task: "t" }, { task: "t" }]); // both omit id
     expect(runInput).toHaveBeenCalledTimes(2);
   });
 
   it("requireBaselineGatesPass throws naming the failing must-pass grader", async () => {
     const gate = new FixedGrader({ score: { kind: "binary", pass: false } }, { mustPass: true, name: "must-be-json" });
     const p = probe([gate], fixedRun);
-    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", args: {} }]);
+    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", task: "t" }]);
     expect(() => p.requireBaselineGatesPassAt(sc)).toThrow(/must-be-json/);
   });
 
   it("requireBaselineGatesPass does not throw when gates pass", async () => {
     const gate = new FixedGrader({ score: { kind: "binary", pass: true } }, { mustPass: true });
     const p = probe([gate], fixedRun);
-    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", args: {} }]);
+    const sc = await p.evaluateAt(p.forkAt(), sourceFor(src), noFiles, [{ id: "a", task: "t" }]);
     expect(() => p.requireBaselineGatesPassAt(sc)).not.toThrow();
   });
 

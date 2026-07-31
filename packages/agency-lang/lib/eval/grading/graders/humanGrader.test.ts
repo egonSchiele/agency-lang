@@ -6,7 +6,7 @@ import type { GraderInput, Input, JSON } from "../types.js";
 import { loadedRun } from "../testUtils.js";
 
 const graderInput = (output: JSON): GraderInput => {
-  const input: Input = { id: "i1", args: {} };
+  const input: Input = { id: "i1", task: "t" };
   return { input, run: loadedRun(output), runAgency: new AgencyRunner({}, async () => ({ data: null })) };
 };
 

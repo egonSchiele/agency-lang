@@ -92,7 +92,7 @@ export async function judgeSuite(args: JudgeSuiteArgs): Promise<SuiteVerdict> {
   for (const id of ids) {
     const inputA = runA.inputsById[id] ?? missingInput(id);
     const inputB = runB.inputsById[id] ?? missingInput(id);
-    const spec: Input = inputA.input ?? inputB.input ?? { id, args: {} };
+    const spec: Input = inputA.input ?? inputB.input ?? { id, task: "" };
     if (inputA.status !== "ok" || inputB.status !== "ok") {
       perInput.push(missingDataVerdict(spec, inputA, inputB));
       continue;

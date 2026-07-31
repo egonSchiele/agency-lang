@@ -1,22 +1,25 @@
 import type { InputBreakdown } from "./grading/gradeBreakdown.js";
 
-/** One invocation of an agent: which node, with which args, plus optional
- *  grading metadata. Shared by the eval runner and every optimizer. */
+/** One test case: what the agent is told, plus grading metadata. Nothing in
+ *  here describes the agent — which file, which node, how the task lands is
+ *  the runner's side of the line (--agent). Shared by the eval runner and
+ *  every optimizer. */
 export type Input = {
   /** Stable identifier. Auto-derived when omitted: the loader generates one
    *  via nanoid, the optimizer derives it positionally (`input-<index>`). */
   id?: string;
-  /** What the agent should accomplish — read by the goal judge and the
-   *  pairwise judge suite. Optional; the input-file loader requires it. */
+  /** What the agent is told: an instruction string, or a JSON object for
+   *  agents that take structured data. Delivered as the entry node's single
+   *  positional parameter (eval entry nodes take exactly one). Required;
+   *  the loader rejects inputs without one. */
+  task: string | Record<string, any>;
+  /** The success criterion — read by the goal judge and the pairwise judge
+   *  suite, never shown to the agent. Optional; required only when the
+   *  default LLM judge will run. */
   goal?: string;
   /** Gold/expected output for this input (any JSON). Read by match graders
    *  (default matchOn) and surfaced to the optimizer's reflection. */
   expected?: any;
-  /** Named arguments passed to the node. */
-  args: Record<string, any>;
-  /** Entry node to run. Overrides the node named by the --agent target
-   *  (`--agent file:node`), which itself defaults to `main`. */
-  node?: string;
   /** The test's fixture directory. Contents are copied into the workdir root;
    *  the agent's own files are seeded automatically from its import closure.
    *  A raw spec may hold a relative path (resolved against the inputs file) —

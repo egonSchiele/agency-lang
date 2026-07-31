@@ -16,7 +16,7 @@ const fakeGrader = (name: string) =>
 
 function entry(record: EvalRecord): InputGrades {
   return {
-    input: { id: "q1", args: { question: "capital of France?" } },
+    input: { id: "q1", task: { question: "capital of France?" } },
     run: { output: "Paris", recordPath: "", workdir: "", record },
     gatesPassed: true,
     grades: [{ grader: fakeGrader("goal"), grade: { score: { kind: "scalar", value: 0.4 }, feedback: "too terse" } }],

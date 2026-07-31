@@ -106,7 +106,7 @@ callback("onLLMCallStart") as data {
   if (_showTraces()) {
     // Truncated: a long prompt (a system prompt, a judge prompt embedding a
     // full response) would drown the trace. The statelog keeps the full text.
-    const promptText = truncate("${data.prompt}", 400)
+    const promptText = truncate("${data.prompt}", 4000)
     print(color.green.dim("💬 [${data.model}] ${promptText}"))
   }
 }

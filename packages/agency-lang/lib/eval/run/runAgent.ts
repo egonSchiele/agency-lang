@@ -91,7 +91,13 @@ class AgentRunner {
       return this.fail(errMessage(err));
     }
 
-    const result = await this.execute(compiledPath);
+    let result: Awaited<ReturnType<EvalInputRunner>>;
+    const removeSigintSalvage = this.installSigintSalvage();
+    try {
+      result = await this.execute(compiledPath);
+    } finally {
+      removeSigintSalvage();
+    }
 
     if (!result.ok) {
       await this.salvageRecord();
@@ -116,6 +122,26 @@ class AgentRunner {
       runDir: this.options.runDir,
       workdir: this.paths.workdirPath,
     };
+  }
+
+  /** Ctrl-C would otherwise lose the record extraction that only happens at
+   *  end of run. Salvage whatever the statelog already holds, mark the run
+   *  interrupted, and exit 130 (the SIGINT convention). Installed only while
+   *  the agent subprocess is running; the returned cleanup uninstalls it. */
+  private installSigintSalvage(): () => void {
+    const handler = () => {
+      void this.interruptSalvage().finally(() => process.exit(130));
+    };
+    process.once("SIGINT", handler);
+    return () => process.removeListener("SIGINT", handler);
+  }
+
+  private async interruptSalvage(): Promise<void> {
+    await this.salvageRecord();
+    this.fail(
+      "run interrupted (SIGINT) before completion; " +
+      "an eval record was salvaged from the statelog when one existed",
+    );
   }
 
   /** Best-effort: write the salvaged eval record to disk, so a crash after

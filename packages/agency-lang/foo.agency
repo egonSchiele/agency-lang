@@ -136,7 +136,7 @@ node main() {
 }
 ```
 
-Once you see the result (say the project turns out to be Python), call `execute` again with a second program whose task is specific: "write a linter config for a Python project". Two small specific programs beat one program full of speculative branches.
+Once you see the result (say the project turns out to be Python), call `executeAgency` again with a second program whose task is specific: "write a linter config for a Python project". Two small specific programs beat one program full of speculative branches.
 
 ## Running code in parallel
 If you need to run multiple tasks in parallel, you can do so using `fork`. Running tasks in parallel can be a good way to speed up your agent. Look for instances where a user's prompt requires work that can be done in parallel. For example, if they're asking you to compare multiple things, you can research them all in parallel. Here's an example:
@@ -189,7 +189,7 @@ In this case, the additional context of the date helps the LLM give a more accur
 Every program you write must be Agency code, even when the task mentions another language — a task saying its output will be checked with JavaScript or Python still requires you to WRITE Agency. JavaScript habits that are errors in Agency: `function` declarations (use `def`), template literals with backticks, `console.log` (use `print`), and `.forEach` callbacks (use `for (item in items) { ... }`).
 
 ## Tools
-Use the `execute` function to execute code. `execute` will return an error if your code does not parse or typecheck. Otherwise, it will execute it and return the result to you.
+Use the `executeAgency` function to execute Agency code. `executeAgency` will return an error if your code does not parse or typecheck as Agency. Otherwise, it will execute it and return the result to you.
 
 If you are having trouble, you can use some of the following tools to help:
 - `agencyGuide` - Use this to look up information about the Agency language itself. Use this if you're running into syntax errors or want to know if Agency has a particular feature.
@@ -222,12 +222,44 @@ Today's date: ${today()}
 // model invented a function and the program dies at runtime.
 static const benignWarningCodes = ["AG3009"]
 
+// Parse errors on JavaScript read as "my Agency has a typo", so the model
+// patches the JavaScript instead of switching languages. Name the real
+// problem when the code carries JS tells.
+def javascriptHint(code: string): string {
+  const markers = []
+  if (code.includes("require(")) {
+    markers.push("require()")
+  }
+  if (code.includes("console.log")) {
+    markers.push("console.log")
+  }
+  if (code.includes("=>")) {
+    markers.push("arrow functions (=>)")
+  }
+  if (code.includes("`")) {
+    markers.push("backtick template literals")
+  }
+  if (code.includes("function ")) {
+    markers.push("the `function` keyword")
+  }
+  if (markers.length == 0) {
+    return ""
+  }
+  return """
+This code appears to be JavaScript, not Agency (found: ${markers.join(", ")}). executeAgency only runs Agency code — do not patch this program; rewrite it as Agency: functions use `def name(x: type): type { ... }`, entry point is `node main() { ... }`, print with `print(...)`, loop with `for (item in items) { ... }`, and strings use double quotes (no backticks).
+"""
+}
+
 def review(code: string): Result<string> {
   """
   Review the code and return a string with any issues found.
   """
   const ast = parseAST(code)
-  if (ast is failure) {
+  if (ast is failure(parseError)) {
+    const hint = javascriptHint(code)
+    if (hint != "") {
+      return failure("${parseError}\n${hint}")
+    }
     return ast
   }
   const typeErrors = typecheck(code, ignoreCodes: benignWarningCodes)
@@ -304,9 +336,10 @@ You have failed ${consecutiveExecuteFailures} times in a row. Do not patch this 
 """)
 }
 
-def execute(code: string): Result<any> {
+def executeAgency(code: string): Result<any> {
   """
-  Execute the code and return the result. If there is an error, return the error.
+  Execute Agency code and return the result, or the error. Agency ONLY —
+  this is not a JavaScript or Python interpreter.
   """
   const res = review(code)
   if (res is failure(reviewError)) {
@@ -345,7 +378,7 @@ node main(task: string = "") {
     model: "claude-sonnet-4-6",
     provider: "anthropic",
     tools: [
-    execute,
+    executeAgency,
     docSkill.preapprove(),
     diagnosticsSkill.preapprove(),
     stdlibSkill.preapprove(),

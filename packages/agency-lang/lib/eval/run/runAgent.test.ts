@@ -161,4 +161,23 @@ describe("runAgent", () => {
     const salvaged = JSON.parse(fs.readFileSync(path.join(run7Dir, "agent", "eval-record.json"), "utf8"));
     expect(salvaged.evalOutputs[0].value).toBe("partial work");
   });
+
+  it("a SIGINT-salvage listener is live exactly while the agent subprocess runs", async () => {
+    const { agentPath } = makeAgentProject();
+    const before = process.listenerCount("SIGINT");
+    let during = -1;
+
+    await runAgent(agentPath, "main", {}, {
+      runDir: path.join(tmp(), "run-8"), config: {}, extractor: recordWritingExtractor("ok"),
+    }, {
+      runner: async ({ statelogPath }) => {
+        during = process.listenerCount("SIGINT");
+        fs.writeFileSync(statelogPath, "{}\n");
+        return { ok: true };
+      },
+    });
+
+    expect(during).toBe(before + 1);
+    expect(process.listenerCount("SIGINT")).toBe(before);
+  });
 });

@@ -102,8 +102,8 @@ describe("readEvalRun", () => {
   }
 
   function writeError(inputId: string, message: string): void {
-    fs.mkdirSync(path.join(runDir, "inputs", inputId), { recursive: true });
-    fs.writeFileSync(path.join(runDir, "inputs", inputId, "error.txt"), message);
+    fs.mkdirSync(path.join(runDir, "inputs", inputId, "agent"), { recursive: true });
+    fs.writeFileSync(path.join(runDir, "inputs", inputId, "agent", "error.txt"), message);
   }
 
   function recordPath(inputId: string): string {
@@ -133,9 +133,9 @@ describe("readEvalRun layouts", () => {
     fs.rmSync(layoutRunDir, { recursive: true, force: true });
   });
 
-  it("still finds the record at the legacy flat path", () => {
+  it("the pre-#733 flat layout is no longer read: such a run loads as missing", () => {
     const layoutRunDir = makeLayoutRun("legacy");
-    expect(readEvalRun(layoutRunDir).inputsById["a"].status).toBe("ok");
+    expect(readEvalRun(layoutRunDir).inputsById["a"].status).toBe("missing");
     fs.rmSync(layoutRunDir, { recursive: true, force: true });
   });
 });

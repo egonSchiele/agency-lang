@@ -315,10 +315,6 @@ describe("extractEvalRecord", () => {
       expect(i.resolvedAtMs).not.toBeNull();
     });
 
-    // Pins the extractor's mapping against a HYPOTHETICAL emitter: today's
-    // runtime never writes outcome "passed" (see InterruptEntry.outcome's
-    // reachability note); this hand-built event guards the mapping for the
-    // day it does.
     it("distinguishes a recorded pass from no recorded resolution at all", () => {
       const passedEvents: EventEnvelope[] = [
         ev("threadCreated", { threadId: "0", threadType: "thread" }),
@@ -334,6 +330,21 @@ describe("extractEvalRecord", () => {
       // is the absence of one. Old records that say "unresolved" stay valid.
       expect(outcomes).toContainEqual(["i-p", "passed"]);
       expect(outcomes).toContainEqual(["i-u", "unresolved"]);
+    });
+
+    it("takes the LAST interruptResolved: a user decision supersedes the chain outcome", () => {
+      // The runtime records the chain outcome when an interrupt surfaces
+      // ("propagated"), then the user decides ("approved", resolvedBy user).
+      const events: EventEnvelope[] = [
+        ev("threadCreated", { threadId: "0", threadType: "thread" }),
+        ev("interruptThrown", { interruptId: "i-s", interruptData: {} }, "s1"),
+        ev("interruptResolved", { interruptId: "i-s", outcome: "propagated", resolvedBy: "handler" }),
+        ev("interruptResolved", { interruptId: "i-s", outcome: "approved", resolvedBy: "user" }),
+      ];
+      const [entry] = extractEvalRecord(events, "test:last-wins").interrupts;
+
+      expect(entry.outcome).toBe("approved");
+      expect(entry.resolvedBy).toBe("user");
     });
   });
 

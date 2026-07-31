@@ -985,7 +985,7 @@ export class StatelogClient {
     interrupt,
   }: {
     interruptId: string;
-    outcome: "approved" | "rejected" | "propagated";
+    outcome: "approved" | "rejected" | "propagated" | "passed";
     resolvedBy: "handler" | "user" | "policy" | "ipc";
     timeTaken?: number;
     /** Optional summary of the interrupt being resolved. See

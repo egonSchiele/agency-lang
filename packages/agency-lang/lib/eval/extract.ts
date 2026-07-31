@@ -196,10 +196,12 @@ function buildInterruptEntry(
 ): InterruptEntry {
   const sorted = [...group].sort((a, b) => a.tMs - b.tMs);
   const thrown = sorted.find((e) => e.type === "interruptThrown");
-  const resolved = sorted.find((e) => e.type === "interruptResolved");
+  // LAST, not first: a surfaced interrupt records its chain outcome
+  // ("propagated"/"passed") and may then be decided by the user — the later
+  // event supersedes.
+  const resolved = sorted.filter((e) => e.type === "interruptResolved").at(-1);
   // `interrupt: {kind, message, data}` summary is attached to
-  // handlerDecision / interruptResolved by commit d1d95671. Prefer it,
-  // fall back to interruptThrown's `interruptData` for legacy traces.
+  // handlerDecision / interruptResolved by the runtime.
   const summary =
     sorted.find(
       (e) =>
@@ -227,7 +229,7 @@ function buildInterruptEntry(
     interruptId,
     kind: summary?.kind ?? null,
     message: summary?.message ?? null,
-    data: summary?.data ?? thrown?.raw.data.interruptData ?? null,
+    data: summary?.data ?? null,
     outcome,
     resolvedBy,
     thrownAtMs: thrown?.tMs ?? null,

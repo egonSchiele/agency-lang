@@ -26,6 +26,21 @@ agency eval run --agent path/to/agent.agency:main \
 Agent runs get 60 seconds of wall clock by default, which a real tool-loop
 agent will exceed; the repo `agency.json` raises it via `eval.limits.wallClockSec`.
 
+To benchmark the bundled agency agent (`agency agent`) instead of an .agency
+file, use the `agency-agent.agency` wrapper — it execs the agent CLI one-shot
+inside the workdir, terminal-bench-adapter style, and the graders read what it
+leaves behind. Point `AGENCY_CLI_JS` at a local build:
+
+```bash
+AGENCY_CLI_JS=$PWD/dist/scripts/agency.js \
+  agency eval run --agent evals/terminal-bench-mini/agency-agent.agency:main \
+  --inputs evals/terminal-bench-mini \
+  --graders evals/terminal-bench-mini/graders.ts
+```
+
+The eval record covers only the wrapper's single exec call; the inner agent's
+real tool-call evidence lands in `agent-cli-statelog.jsonl` in the workdir.
+
 Tasks that need environment *setup* (running a script to manufacture broken
 state, e.g. fix-git's dangling commit) are not portable yet — the eval
 framework only seeds static files. Punted deliberately; see the input `files`

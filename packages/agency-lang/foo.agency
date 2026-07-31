@@ -2,6 +2,7 @@ import { parseAST, typecheck, runCode } from "std::agency"
 import { today } from "std::date"
 import { getAgentCwd, setAgentCwd } from "std::index"
 import { docsSkill } from "std::skills"
+import { systemMessage } from "std::thread"
 import { highlight } from "std::syntax"
 import { cwd } from "std::system"
 
@@ -330,17 +331,14 @@ node main(task: string = "") {
   if (userMessage == "") {
     userMessage = input("> ")
   }
-  const prompt = """
-  ${systemPrompt}
-
-  Here's the user message:
-  ${userMessage}
-  """
+  // System prompt goes on the thread, not into the per-call prompt — so
+  // traces (onLLMCallStart prints the prompt) show just the user message.
+  systemMessage(systemPrompt)
 
   // The experiment runs on Sonnet. Pinned here per-call rather than in the
   // repo-wide agency.json so tests and other runs keep the repo default.
   const res = llm(
-    prompt,
+    userMessage,
     model: "claude-sonnet-4-6",
     provider: "anthropic",
     tools: [

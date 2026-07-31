@@ -1,4 +1,6 @@
-node main(): string {
+// task is unused: eval entry nodes take exactly one parameter (the input's
+// task); this fixture's behavior is driven by its optimizable prompt.
+node main(task: string): string {
   optimize const prompt = "What is the capital of France?"
   const response = llm(prompt)
   return response

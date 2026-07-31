@@ -18,9 +18,7 @@ import type { LoadedRun, JSON as Json } from "./types.js";
  *  flag) replaces every test's own graders — the experiment knob. "fallback"
  *  (eval.graders config, or the bundled goal judge) applies only to inputs
  *  that carry none. */
-export type SuiteGraders =
-  | { mode: "override"; graders: BaseGrader[] }
-  | { mode: "fallback"; graders: BaseGrader[] };
+export type SuiteGraders = { mode: "override" | "fallback"; graders: BaseGrader[] };
 
 /** What grading needs besides the run itself. */
 export type GradingContext = {
@@ -131,7 +129,9 @@ async function effectiveGraders(
  *  grading module. Exported so the run CLI's pre-run validation loads
  *  through the same path grading does. */
 export function makeGraderModuleCache(config: AgencyConfig): (modulePath: string) => Promise<BaseGrader[]> {
-  const loads: Record<string, Promise<BaseGrader[]>> = {};
+  // Null prototype: modulePath comes from suite content (input.graders), and
+  // a key like "__proto__" on a normal object would corrupt the cache.
+  const loads: Record<string, Promise<BaseGrader[]>> = Object.create(null);
   return (modulePath) => {
     loads[modulePath] ??= loadGradingModule(modulePath, config);
     return loads[modulePath];

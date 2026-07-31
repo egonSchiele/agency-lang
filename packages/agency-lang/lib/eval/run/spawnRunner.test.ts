@@ -148,11 +148,16 @@ describe("runCommandInSpawn", () => {
     }
   }, 15_000);
 
-  it("holds a SIGINT-forwarding listener exactly while the command runs", async () => {
-    const before = process.listenerCount("SIGINT");
-    const pending = runCommandInSpawn(base({ argv: ["node", "-e", "setTimeout(() => {}, 200)"] }));
-    expect(process.listenerCount("SIGINT")).toBe(before + 1);
-    await pending;
-    expect(process.listenerCount("SIGINT")).toBe(before);
+  it("signal listener count stays constant however many commands run — one shared supervisor, not per-run listeners", async () => {
+    // Per-run listeners under -n 10 tripped MaxListenersExceededWarning,
+    // which printed into the status board's in-place repaint and smeared it.
+    await runCommandInSpawn(base({ argv: ["node", "-e", "1"] }));
+    const after = process.listenerCount("SIGINT");
+    const runs = Array.from({ length: 12 }, () =>
+      runCommandInSpawn(base({ argv: ["node", "-e", "setTimeout(() => {}, 100)"] })));
+    expect(process.listenerCount("SIGINT")).toBe(after);
+    expect(process.listenerCount("exit")).toBeLessThanOrEqual(process.getMaxListeners());
+    await Promise.all(runs);
+    expect(process.listenerCount("SIGINT")).toBe(after);
   });
 });

@@ -71,4 +71,3 @@ tests/integration/eval-run/.tmp/
 # see PR #517 review).
 packages/agency-lang/a.vs.b.verdict.json
 docs/superpowers/**/*
-packages/agency-lang/evals/terminal-bench-mini/gcode-to-text/files/text.gcode

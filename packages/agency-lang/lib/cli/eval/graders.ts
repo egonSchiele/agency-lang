@@ -25,7 +25,16 @@ export async function resolveGraders(
   }
   const configPath = config.eval?.graders;
   if (configPath !== undefined) {
-    return { mode: "fallback", graders: await loadGradingModule(configPath, config) };
+    const graders = await loadGradingModule(configPath, config);
+    // An empty module here would grade every graderless input with NOTHING:
+    // objective 0.000, exit 0, no diagnostic — a misconfiguration reading as
+    // "the agent failed". This branch is the only way a fallback set can be
+    // empty (the goal-judge default never is), so the misconfiguration throw
+    // lives precisely here.
+    if (graders.length === 0) {
+      throw new Error(`The grading module at ${configPath} exported no graders.`);
+    }
+    return { mode: "fallback", graders };
   }
   return { mode: "fallback", graders: [new LlmJudge({ name: "goal" })] };
 }

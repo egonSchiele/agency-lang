@@ -29,18 +29,20 @@ export function startStatusBoard(ids: string[]): {
   stop(): void;
 } {
   const entries: BoardEntry[] = ids.map((id) => ({ id, status: "queued", costUsd: 0 }));
-  const byId: Record<string, BoardEntry> = Object.fromEntries(entries.map((e) => [e.id, e]));
+  // Null prototype: ids come from suite input ids (potentially remote
+  // content), and a key like "__proto__" on a normal object would corrupt
+  // lookups instead of just naming a test.
+  const byId: Record<string, BoardEntry> = Object.create(null);
+  for (const entry of entries) byId[entry.id] = entry;
   const isTty = process.stderr.isTTY === true;
   const paint = isTty ? color : undefined;
   let painted = false;
 
-  // Pad the plain text FIRST, colorize after: ANSI escapes inflate string
-  // length unevenly (colored vs uncolored cells) and would skew columns.
-  const cell = (text: string, width: number, colorize?: (s: string) => string): string => {
-    const padded = text.padEnd(width);
-    return colorize ? colorize(padded) : padded;
-  };
-
+  // The in-place repaint climbs one terminal row per entry, so a line must
+  // never wrap: each row is truncated to the terminal width. Pad and
+  // truncate the PLAIN text, colorize after — ANSI escapes inflate string
+  // length unevenly (colored vs uncolored cells) and would skew both the
+  // columns and the truncation point.
   const line = (entry: BoardEntry): string => {
     const statusColor =
       entry.status === "error" ? paint?.red
@@ -50,10 +52,24 @@ export function startStatusBoard(ids: string[]): {
       ? ""
       : formatElapsed((entry.endedAt ?? Date.now()) - entry.startedAt);
     const cost = entry.costUsd > 0 ? `$${entry.costUsd.toFixed(2)}` : "";
-    return (
-      `  ${cell(entry.id, 30, paint?.green)} ${cell(entry.status, 8, statusColor)} ` +
-      `${cell(elapsed, 8)} ${cost}`
-    ).trimEnd();
+
+    let remaining = isTty ? (process.stderr.columns ?? 80) : Number.MAX_SAFE_INTEGER;
+    const parts: string[] = [];
+    const cell = (text: string, width: number | undefined, colorize?: (s: string) => string) => {
+      const padded = width === undefined ? text : text.padEnd(width);
+      const taken = padded.slice(0, Math.max(0, remaining));
+      remaining -= taken.length;
+      parts.push(colorize ? colorize(taken) : taken);
+    };
+    cell("  ", undefined);
+    cell(entry.id, 30, paint?.green);
+    cell(" ", undefined);
+    cell(entry.status, 8, statusColor);
+    cell(" ", undefined);
+    cell(elapsed, 8);
+    cell(" ", undefined);
+    cell(cost, undefined);
+    return parts.join("").trimEnd();
   };
 
   const render = () => {

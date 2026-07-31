@@ -4,9 +4,7 @@ import { fileURLToPath } from "url";
 
 import { sha256Text } from "@/utils/hash.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { agentRunPaths } from "./run/extract.js";
-
 import { assertEvalRunId, assertEvalInputId } from "./ids.js";
 import type {
   EvalRunResult,
@@ -67,7 +65,7 @@ export function buildProvenance(args: {
  *  because this file sits at a different depth in dev (lib/eval) and in the
  *  published build (dist/lib/eval). */
 function harnessVersion(): string {
-  let dir = __dirname;
+  let dir = path.dirname(fileURLToPath(import.meta.url));
   for (let i = 0; i < 5; i++) {
     const candidate = path.join(dir, "package.json");
     if (fs.existsSync(candidate)) {

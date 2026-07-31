@@ -4,6 +4,7 @@ import { CONFIG_OVERRIDES_ENV, serializeConfigOverrides, TRACE_ID_ENV } from "@/
 import { ttyColor } from "@/utils/termcolors.js";
 import type { RunLimits } from "@/runtime/ipc.js";
 
+import { makeCostCapTracker } from "./subprocess.js";
 import { makeStatelogCostTailer } from "./costTail.js";
 
 /** Substituted argv must fit the OS argument-size limit; the raw failure is
@@ -15,6 +16,40 @@ const KILL_GRACE_MS = 5_000;
 
 /** Keep this much of the drained stderr for error messages. */
 const STDERR_TAIL_CHARS = 2_000;
+
+/**
+ * One process-wide supervisor for every in-flight command tree, instead of
+ * four `process` listeners per run: under `-n 10` the per-run listeners added
+ * up to 40+ and Node's MaxListenersExceededWarning printed straight into the
+ * status board's in-place repaint. The four handlers are registered once,
+ * forever; each run adds its killTree while alive and removes it on settle.
+ * The detached trees must never outlive this process: the terminating
+ * signals are forwarded as group kills, and ANY exit (normal, crash,
+ * uncaught throw) reaps with SIGKILL. The one hole no supervisor can close
+ * is SIGKILL of this process — nothing runs then; a tree's remaining
+ * protection is EPIPE on its next write to our closed pipes.
+ */
+const liveTrees: Array<(signal: NodeJS.Signals) => void> = [];
+let supervisorInstalled = false;
+
+function superviseTree(killTree: (signal: NodeJS.Signals) => void): () => void {
+  if (!supervisorInstalled) {
+    supervisorInstalled = true;
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+      process.on(signal, () => {
+        for (const kill of liveTrees) kill(signal);
+      });
+    }
+    process.on("exit", () => {
+      for (const kill of liveTrees) kill("SIGKILL");
+    });
+  }
+  liveTrees.push(killTree);
+  return () => {
+    const at = liveTrees.indexOf(killTree);
+    if (at !== -1) liveTrees.splice(at, 1);
+  };
+}
 
 /**
  * Run a command target: spawn (not fork — no IPC channel) in the workdir,
@@ -76,7 +111,8 @@ export function runCommandInSpawn(args: {
     // spending while holding our pipes open (observed: a wall-clocked agent
     // that survived 8 more minutes). Detaching also removes the tree from
     // the terminal's foreground group, so Ctrl-C no longer reaches it on its
-    // own — the SIGINT forwarding below is what delivers it, as a group kill.
+    // own — the supervisor's SIGINT forwarding is what delivers it, as a
+    // group kill.
     detached: true,
   });
 
@@ -94,33 +130,16 @@ export function runCommandInSpawn(args: {
     let settled = false;
     let timedOut = false;
     let costCapped = false;
-    let costCappedTotal = 0;
-    let stdoutBytes = 0;
+    let pipedBytes = 0;
     let stderrTail = "";
     const timers: NodeJS.Timeout[] = [];
     const intervals: NodeJS.Timeout[] = [];
-
-    // The detached tree must never outlive this process: forward the
-    // terminating signals as group kills, and reap on ANY exit (normal,
-    // crash, uncaught throw). The one hole no supervisor can close is
-    // SIGKILL of this process — nothing runs then; the tree's remaining
-    // protection is EPIPE on its next write to our closed pipes.
-    const forwardSigint = () => killTree("SIGINT");
-    const forwardSigterm = () => killTree("SIGTERM");
-    const forwardSighup = () => killTree("SIGHUP");
-    const reapOnExit = () => killTree("SIGKILL");
-    process.once("SIGINT", forwardSigint);
-    process.once("SIGTERM", forwardSigterm);
-    process.once("SIGHUP", forwardSighup);
-    process.once("exit", reapOnExit);
+    const unsupervise = superviseTree(killTree);
 
     const settle = (value: { ok: true } | { ok: false; errorMessage: string }) => {
       if (settled) return;
       settled = true;
-      process.removeListener("SIGINT", forwardSigint);
-      process.removeListener("SIGTERM", forwardSigterm);
-      process.removeListener("SIGHUP", forwardSighup);
-      process.removeListener("exit", reapOnExit);
+      unsupervise();
       for (const t of timers) clearTimeout(t);
       for (const t of intervals) clearInterval(t);
       resolve(value);
@@ -128,15 +147,21 @@ export function runCommandInSpawn(args: {
 
     // Cost cap, without an IPC channel: the child appends promptCompletion
     // events (each carrying its call's cost) to the statelog the harness
-    // pointed it at — tail that file.
+    // pointed it at — tail that file, billing each poll's delta against the
+    // shared tracker (the fork runner bills the same tracker from IPC
+    // telemetry). Trips at most once: one SIGTERM, one SIGKILL timer.
     const costTail = makeStatelogCostTailer(args.statelogPath);
+    const costCap = makeCostCapTracker(args.maxCostUsd);
+    let billedTotal = 0;
     intervals.push(setInterval(() => {
-      if (costTail.poll() > args.maxCostUsd) {
-        costCapped = true;
-        costCappedTotal = costTail.poll();
-        killTree("SIGTERM");
-        timers.push(setTimeout(() => killTree("SIGKILL"), KILL_GRACE_MS));
-      }
+      if (costCapped) return;
+      const total = costTail.poll();
+      const tripped = costCap.add(total - billedTotal);
+      billedTotal = total;
+      if (!tripped) return;
+      costCapped = true;
+      killTree("SIGTERM");
+      timers.push(setTimeout(() => killTree("SIGKILL"), KILL_GRACE_MS));
     }, 1_000));
 
     // Deliberate divergence from the fork runner: the fork path FAILS the
@@ -144,16 +169,18 @@ export function runCommandInSpawn(args: {
     // which is right for programmatic subprocess use. A benchmark must not
     // score a chatty-but-correct agent zero for verbosity — agency agent is
     // chatty by design — so here the cap only stops forwarding.
+    // pipedBytes counts BOTH streams, so args.limits.stdout acts as a
+    // combined-output forwarding cap here.
     child.stdout?.on("data", (buf: Buffer) => {
-      stdoutBytes += buf.length;
-      if (args.pipeOutput && stdoutBytes <= args.limits.stdout) {
+      pipedBytes += buf.length;
+      if (args.pipeOutput && pipedBytes <= args.limits.stdout) {
         process.stdout.write(buf);
       }
     });
     child.stderr?.on("data", (buf: Buffer) => {
-      stdoutBytes += buf.length;
+      pipedBytes += buf.length;
       stderrTail = (stderrTail + buf.toString()).slice(-STDERR_TAIL_CHARS);
-      if (args.pipeOutput && stdoutBytes <= args.limits.stdout) {
+      if (args.pipeOutput && pipedBytes <= args.limits.stdout) {
         // Red so the agent's error stream reads as one at a glance; raw when
         // stderr is not a terminal.
         process.stderr.write(process.stderr.isTTY ? ttyColor.red(buf.toString()) : buf);
@@ -175,12 +202,7 @@ export function runCommandInSpawn(args: {
 
     child.on("close", (code, signal) => {
       if (costCapped) {
-        settle({
-          ok: false,
-          errorMessage:
-            `cost cap exceeded: $${costCappedTotal.toFixed(2)} spent, cap $${args.maxCostUsd.toFixed(2)} ` +
-            `(eval.limits.maxCostUsd raises it)`,
-        });
+        settle({ ok: false, errorMessage: costCap.exceededMessage() });
       } else if (timedOut) {
         settle({
           ok: false,

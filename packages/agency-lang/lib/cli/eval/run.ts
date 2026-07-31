@@ -105,8 +105,8 @@ export async function evalRun(
   }, { runner: deps.runner });
 
   // An empty override set means "grade with nothing" — skip, like --no-grade.
-  // A fallback set is never empty (the goal judge backstops it), and even if a
-  // config module exports [], per-input graders may still score their inputs.
+  // A fallback set is never empty: the goal judge backstops it, and an empty
+  // eval.graders config module throws in resolveGraders.
   if (!graders || (graders.mode === "override" && graders.graders.length === 0)) {
     return summary;
   }

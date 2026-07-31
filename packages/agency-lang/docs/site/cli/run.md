@@ -89,7 +89,18 @@ agency run greet.agency hello
 # node main(name: string) receives "hello"
 ```
 
-An absent argument arrives as `undefined`. Note when invoking through
-another tool: `npx agency run file.agency -- x` loses the `--` to npx —
-plain trailing arguments work everywhere, and `--` works when invoking the
-`agency` binary directly.
+Three things to know about the mapping:
+
+- Every argument arrives as a **string**, whatever the parameter's declared
+  type. `node main(n: number)` called as `agency run count.agency 3`
+  receives the string `"3"` — there is no coercion or check, so `n + 1`
+  concatenates to `"31"` instead of adding. Parse inside the node
+  (`parseInt(n)`) when a parameter is numeric.
+- An absent argument arrives as `undefined` (parameter defaults apply).
+- Extra arguments — more than the entry node has parameters — are an
+  error: the run prints which arguments were extra and exits non-zero. The
+  usual cause is a mis-quoted value splitting into several arguments.
+
+Note when invoking through another tool: `npx agency run file.agency -- x`
+loses the `--` to npx — plain trailing arguments work everywhere, and `--`
+works when invoking the `agency` binary directly.

@@ -27,10 +27,14 @@ export function makeStatelogCostTailer(statelogPath: string): { poll(): number }
       if (stats.size <= offset) return total;
       const fd = fs.openSync(statelogPath, "r");
       const buf = Buffer.alloc(stats.size - offset);
-      fs.readSync(fd, buf, 0, buf.length, offset);
+      // A short read must advance offset by what was ACTUALLY read: consuming
+      // the zero-filled tail of buf would corrupt the next line boundary, and
+      // the skipped bytes would silently undercount a SAFETY cap. The
+      // unread range is picked up on the next poll.
+      const bytesRead = fs.readSync(fd, buf, 0, buf.length, offset);
       fs.closeSync(fd);
-      offset = stats.size;
-      const chunks = (remainder + buf.toString("utf8")).split("\n");
+      offset += bytesRead;
+      const chunks = (remainder + buf.subarray(0, bytesRead).toString("utf8")).split("\n");
       remainder = chunks.pop() ?? "";
       for (const line of chunks) {
         if (line.trim() === "") continue;

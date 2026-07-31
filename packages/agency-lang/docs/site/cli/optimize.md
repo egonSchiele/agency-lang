@@ -119,9 +119,9 @@ It is very similar to the code we just saw, but now there's a `country` paramete
 ```
 {
   "inputs": [
-    { "args": { "country": "India" },  "expected": "New Delhi" },
-    { "args": { "country": "Japan" },  "expected": "Tokyo" },
-    { "args": { "country": "Brazil" }, "expected": "Brasília" }
+    { "task": { "country": "India" },  "expected": "New Delhi" },
+    { "task": { "country": "Japan" },  "expected": "Tokyo" },
+    { "task": { "country": "Brazil" }, "expected": "Brasília" }
   ]
 }
 ```
@@ -133,7 +133,7 @@ agency optimize foo.agency --goal 'Return the capital of India' --inputs inputs.
 
 ```
 
-This will run the optimizer the same as earlier, except now it also has three example inputs to look at. The optimizer will run foo.agency once for each input. That means it will run your agent, setting country to `"India"` for the first iteration, `"Japan"` for the second iteration etc, and look at the return value of the node.
+This will run the optimizer the same as earlier, except now it also has three example inputs to look at. The optimizer will run foo.agency once for each input. Each input's `task` — a string, or a JSON object like the ones above — is delivered as the entry node's single parameter (eval entry nodes take exactly one parameter), so the node receives `{ country: "India" }` for the first iteration, `{ country: "Japan" }` for the second, and so on; the optimizer looks at the return value of the node.
 
 You can optionally also provide other values:
 
@@ -141,11 +141,12 @@ You can optionally also provide other values:
 export type Input = {
   /** Unique id. Generated for you if not given.*/
   id?: string;
+  /** What the agent is told: a string or a JSON object, delivered as the
+   *  entry node's single parameter. Required. */
+  task: string | Record<string, any>;
   /** What the agent should accomplish — read by the goal judge. This is a
    *  per-input goal.*/
   goal?: string;
-  /** Entry node to run. Defaults to `main`. */
-  node?: string;
   /** Freeform, grader-agnostic metadata (tags, expectedOutput, …). */
   metadata?: Record<string, any>;
 };

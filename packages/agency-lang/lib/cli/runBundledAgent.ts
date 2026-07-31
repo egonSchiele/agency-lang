@@ -2,6 +2,7 @@ import {
   AgencyConfig,
   applyCliFlags,
   CONFIG_OVERRIDES_ENV,
+  readConfigOverrides,
   serializeConfigOverrides,
   type CliFlags,
 } from "@/config.js";
@@ -136,8 +137,22 @@ export function runBundledAgent(
   const overrides = agentConfigOverride(args);
   const agentHome = agentHomeOverride(args);
   const env = { ...process.env };
-  if (Object.keys(overrides).length > 0) {
-    env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(overrides);
+  // Merge onto any inherited overrides rather than replacing them ("env
+  // first, flags on top" — the same ordering context.ts documents for the
+  // runtime side): an eval harness hands this process a statelog path via
+  // this env var, and a --trace here must not destroy it. An explicit --log
+  // still wins the logFile key — that is user intent, and the eval harness
+  // detects the missing statelog and names this cause. Among the flags
+  // agentConfigOverride parses, only `log` is nested; if that parser ever
+  // learns a flag writing another nested key (client, say), this one-level
+  // merge silently drops the inherited half of it.
+  const inherited = readConfigOverrides(env);
+  const merged: Partial<AgencyConfig> = { ...inherited, ...overrides };
+  if (inherited.log || overrides.log) {
+    merged.log = { ...inherited.log, ...overrides.log };
+  }
+  if (Object.keys(merged).length > 0) {
+    env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(merged);
   }
   // The agent home must be in the env before the child starts: the agent's
   // config module derives its settings/policy/history paths from it in

@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { MISSING_TASK_PLACEHOLDER_ERROR, TASK_PLACEHOLDER, tokenizeCommand } from "@/eval/run/commandLine.js";
 import { parseAgency } from "@/parser.js";
 
 /**
@@ -37,6 +38,33 @@ export function resolveEvalRunTarget(target: string): {
       : resolved;
   const node = parsed.nodeName || "main";
   return { agentFile, node, label: `${agentFile}:${node}` };
+}
+
+/** What runs as the agent, and what evidence it produces. `file` is the
+ *  classic seeded-and-compiled .agency target; `command` is a CLI run in the
+ *  workdir (Agency CLIs only — the statelog is the evidence contract). A
+ *  future non-Agency variant would be a third kind with a weaker record. */
+export type EvalTarget =
+  | { kind: "file"; agentFile: string; node: string; label: string }
+  | { kind: "command"; tokens: string[]; label: string };
+
+/** Resolve the runner-side agent choice. Exactly one of --agent /
+ *  --agent-cmd; the command's {task} placeholder is validated here, before
+ *  any run. Commands come ONLY from these flags, never from suite content —
+ *  suites can be remote git sources, and a suite that named its own command
+ *  would be remote code execution. */
+export function resolveEvalTarget(opts: { agent?: string; agentCmd?: string }): EvalTarget {
+  if ((opts.agent ? 1 : 0) + (opts.agentCmd ? 1 : 0) !== 1) {
+    throw new Error("Provide exactly one of --agent or --agent-cmd");
+  }
+  if (opts.agentCmd) {
+    const tokens = tokenizeCommand(opts.agentCmd);
+    if (!tokens.some((t) => t.includes(TASK_PLACEHOLDER))) {
+      throw new Error(MISSING_TASK_PLACEHOLDER_ERROR);
+    }
+    return { kind: "command", tokens, label: opts.agentCmd };
+  }
+  return { kind: "file", ...resolveEvalRunTarget(opts.agent as string) };
 }
 
 /**

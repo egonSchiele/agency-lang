@@ -13,7 +13,7 @@ import type { EvalInputRunner } from "@/eval/run/subprocess.js";
 import { validateGraders } from "@/eval/grading/gradeRun.js";
 import { recordGrading } from "@/eval/grading/recordGrading.js";
 import { runSuite } from "@/eval/run/runSuite.js";
-import { evalRun, validateInputSelection } from "./run.js";
+import { evalRun, totalRunCostUsd, validateInputSelection } from "./run.js";
 
 /** Pretends the agent ran. Must write a non-empty statelog: `shouldExtractStatelog`
  *  skips the extractor when the log is absent or empty, and then grading sees no
@@ -258,7 +258,7 @@ describe("eval run CLI", () => {
       const summary = await runSuite({ ...opts, perRun: { extractor: recordExtractor("hello") } }, { runner: okRunner });
       expect(summary.grading).toBeUndefined();   // the runner never grades
 
-      const grading = await recordGrading(summary.runDir, [grader(() => false, { name: "gate", mustPass: true })], {});
+      const grading = await recordGrading(summary.runDir, { mode: "override", graders: [grader(() => false, { name: "gate", mustPass: true })] }, {});
 
       expect(grading.gatesPassed).toBe(false);
       const onDisk = JSON.parse(fs.readFileSync(path.join(tmpDir, "runs", "graded", "summary.json"), "utf8"));
@@ -273,7 +273,7 @@ describe("eval run CLI", () => {
       ]);
       const summary = await runSuite({ ...opts, perRun: { extractor: recordExtractor("hello") } }, { runner: okRunner });
       // Passes on input "a", fails the gate on input "b".
-      const grading = await recordGrading(summary.runDir, [grader(({ input }) => input.id === "a", { name: "gate", mustPass: true })], {});
+      const grading = await recordGrading(summary.runDir, { mode: "override", graders: [grader(({ input }) => input.id === "a", { name: "gate", mustPass: true })] }, {});
 
       // One of two inputs scored 1, the other 0 — the mean is 0.5, not 0.
       expect(grading.objective).toBeCloseTo(0.5);
@@ -286,6 +286,118 @@ describe("eval run CLI", () => {
       // run → grade; the runner no longer knows graders exist.
       expect(() => validateGraders([new ExactMatch({})], { id: "a", goal: "g", task: "t" }))
         .toThrow(/matchOn/);
+    });
+  });
+
+  it("totalRunCostUsd sums record costs across inputs and tolerates missing records", () => {
+    const a = path.join(tmpDir, "a.json");
+    const b = path.join(tmpDir, "b.json");
+    fs.writeFileSync(a, JSON.stringify({ metrics: { costUsdTotal: 0.25 } }));
+    fs.writeFileSync(b, JSON.stringify({ metrics: { costUsdTotal: 0.5 } }));
+    const result = {
+      inputs: [
+        { evalRecordPath: a },
+        { evalRecordPath: b },
+        { evalRecordPath: path.join(tmpDir, "missing.json") },
+      ],
+    } as never;
+    expect(totalRunCostUsd(result)).toBeCloseTo(0.75);
+    expect(totalRunCostUsd({ inputs: [{ evalRecordPath: path.join(tmpDir, "nope.json") }] } as never)).toBeUndefined();
+  });
+
+  describe("per-test graders", () => {
+    it("each test grades itself; a config module is the fallback; --graders overrides everything", async () => {
+      const agentFile = path.join(tmpDir, "agent.agency");
+      fs.writeFileSync(agentFile, "node main(task: string) {}\n");
+      const runsDir = path.join(tmpDir, "runs");
+
+      // Two test dirs: "self" carries its own grader (scores 1 on "hello"),
+      // "plain" has none and falls back to the config module (scores 0).
+      const suiteDir = path.join(tmpDir, "suite");
+      fs.mkdirSync(path.join(suiteDir, "self"), { recursive: true });
+      fs.writeFileSync(path.join(suiteDir, "self", "test.json"), JSON.stringify({ task: "t" }));
+      fs.writeFileSync(path.join(suiteDir, "self", "graders.ts"),
+        `export default ({ output }) => (output === "hello" ? 1 : 0);`);
+      fs.mkdirSync(path.join(suiteDir, "plain"), { recursive: true });
+      fs.writeFileSync(path.join(suiteDir, "plain", "test.json"), JSON.stringify({ task: "t" }));
+      const fallbackModule = path.join(tmpDir, "fallback.ts");
+      fs.writeFileSync(fallbackModule, `export default () => 0;`);
+
+      const result = await evalRun(
+        {
+          agent: agentFile,
+          inputs: suiteDir,
+          runsDir,
+          runId: "per-test",
+          config: { eval: { graders: fallbackModule } },
+        },
+        {
+          runner: okRunner,
+          extractor: recordExtractor("hello"),
+        },
+      );
+
+      // "self" scored 1 by its own grader; "plain" scored 0 by the fallback.
+      expect(result.grading?.objective).toBeCloseTo(0.5);
+
+      // An explicit --graders replaces BOTH tests' graders.
+      const overrideModule = path.join(tmpDir, "override.ts");
+      fs.writeFileSync(overrideModule, `export default () => 1;`);
+      const overridden = await evalRun(
+        {
+          agent: agentFile,
+          inputs: suiteDir,
+          runsDir,
+          runId: "override",
+          graders: overrideModule,
+          config: { eval: { graders: fallbackModule } },
+        },
+        {
+          runner: okRunner,
+          extractor: recordExtractor("hello"),
+        },
+      );
+      expect(overridden.grading?.objective).toBeCloseTo(1);
+    });
+  });
+
+  describe("command targets", () => {
+    it("--agent-cmd reaches the runner as a substituted command job", async () => {
+      const runsDir = path.join(tmpDir, "runs");
+      let job: { kind?: string; argv?: string[] } = {};
+
+      const result = await evalRun(
+        {
+          agentCmd: "some-agent -p -- {task}",
+          goal: "do it",
+          runsDir,
+          runId: "r-cmd",
+          grade: false,
+        },
+        {
+          runner: async (j) => {
+            job = j as { kind: string; argv: string[] };
+            fs.writeFileSync((j as { statelogPath: string }).statelogPath, "{}\n");
+            return { ok: true };
+          },
+          extractor: async ({ outPath }) => {
+            fs.writeFileSync(outPath, "{}");
+          },
+        },
+      );
+
+      expect(result.okCount).toBe(1);
+      expect(job.kind).toBe("command");
+      // --goal sets task = goal, so the substituted argv carries it
+      expect(job.argv).toEqual(["some-agent", "-p", "--", "do it"]);
+    });
+
+    it("rejects neither/both agent flags and a command without {task}, before anything runs", async () => {
+      await expect(evalRun({ goal: "g", grade: false })).rejects.toThrow(/exactly one of/);
+      await expect(evalRun({ agent: "a.agency", agentCmd: "x {task}", goal: "g", grade: false }))
+        .rejects.toThrow(/exactly one of/);
+      await expect(evalRun({ agentCmd: "agent-without-placeholder", goal: "g", grade: false }))
+        .rejects.toThrow(/\{task\}/);
     });
   });
 

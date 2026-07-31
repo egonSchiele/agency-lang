@@ -85,7 +85,7 @@ function makeRun(args: { id: string; output?: unknown; status?: "success" | "err
 }
 
 function ctx(graders: ReturnType<typeof grader>[]): GradingContext {
-  return { graders, runAgency: new AgencyRunner({}) };
+  return { suiteGraders: { mode: "override", graders }, runAgency: new AgencyRunner({}), config: {} };
 }
 
 describe("grading one input (through gradeRun on a suite of one)", () => {
@@ -123,18 +123,6 @@ describe("grading one input (through gradeRun on a suite of one)", () => {
     expect(card.perInput[0].gatesPassed).toBe(false);
   });
 
-  it("scores an input with no output 0, without throwing", async () => {
-    const { runDir } = makeRun({ id: "a" });
-    const never = grader(() => 1, { name: "never-runs" });
-
-    const card = await gradeRun(runDir, ctx([never]));
-
-    const graded = card.perInput[0];
-    expect(graded.grades).toEqual([]);
-    expect(graded.gatesPassed).toBe(false);
-    expect(graded.run).toBeNull();
-    expect(graded.ungradedReason).toMatch(/no output/i);
-  });
 });
 
 describe("gradeRun", () => {
@@ -162,13 +150,22 @@ describe("gradeRun", () => {
     expect(card.perInput[0].ungradedReason).toMatch(/unreadable/i);
   });
 
-  it("distinguishes no output from a missing record and from an unreadable one", async () => {
+  it("a record with no output still grades, with output null — the deliverable may be the filesystem", async () => {
+    // Command agents (agency CLI under --agent-cmd) emit no output event;
+    // terminal-bench-style graders read the workdir, not the reply. A real
+    // agent once PASSED a task and was scored ungraded over this.
     const { runDir } = makeRun({ id: "a" });   // record present, evalOutputs empty
-    const never = grader(() => 1, { name: "never-runs" });
+    let sawOutput: unknown = "unset";
+    const disk = grader(({ output }) => {
+      sawOutput = output;
+      return 1;
+    }, { name: "disk-grader" });
 
-    const card = await gradeRun(runDir, ctx([never]));
+    const card = await gradeRun(runDir, ctx([disk]));
 
-    expect(card.perInput[0].ungradedReason).toMatch(/produced no output/i);
+    expect(card.perInput[0].ungradedReason).toBeUndefined();
+    expect(card.objective()).toBe(1);
+    expect(sawOutput).toBeNull();
   });
 
   it("distinguishes a lost eval record from a failed agent run", async () => {

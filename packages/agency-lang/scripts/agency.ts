@@ -28,7 +28,8 @@ import { logsView } from "@/cli/logsView.js";
 import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
 import { evalGrade } from "@/cli/eval/grade.js";
-import { evalRun } from "@/cli/eval/run.js";
+import { resolveRunStatelog } from "@/cli/eval/logs.js";
+import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
 import { formatGrading } from "@/eval/grading/gradeBreakdown.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
@@ -191,7 +192,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     return config;
   }
 
-  function runWithOptions(input: string, options: RunOptions) {
+  function runWithOptions(input: string, options: RunOptions, nodeArgs: string[] = []) {
     const config = applyCliFlags(getConfig(), options, input);
     let runPolicy;
     try {
@@ -217,7 +218,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.error(`Error: ${(e as Error).message}`);
       process.exit(2);
     }
-    run(config, input, undefined, options.resume, runPolicy, budget);
+    run(config, input, undefined, options.resume, runPolicy, budget, nodeArgs);
   }
 
   program
@@ -359,9 +360,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
     program
       .command("run")
       .description("Compile and run .agency file(s)")
-      .argument("<input>", "Path to .agency input file"),
-  ).action((input: string, options: RunOptions) => {
-    runWithOptions(input, options);
+      .argument("<input>", "Path to .agency input file")
+      .argument("[nodeArgs...]", "Arguments after -- are passed positionally to the entry node's parameters"),
+  ).action((input: string, nodeArgs: string[], options: RunOptions) => {
+    runWithOptions(input, options, nodeArgs);
   });
 
   program
@@ -453,7 +455,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
   evalCmd
     .command("run")
     .description("Run an Agency agent against an eval task suite")
-    .requiredOption("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
+    .option("--agent <target>", "Agent .agency file or directory, optionally suffixed with :node")
+    .option(
+      "--agent-cmd <command>",
+      "Run this command as the agent; {task} is replaced with each input's task. " +
+      "Mutually exclusive with --agent. Agency CLIs only — the command's process " +
+      "must write the statelog the harness points it at, and it must run headless " +
+      "and one-shot (e.g. agency agent --policy approve-all -p -- {task})",
+    )
     .option("--inputs <source>", "Input suite: a JSON file, a directory, or a git source (URL[//subdir][?ref=...])")
     .option("--goal <text>", "Run one inline input with this goal")
     .option("--run-id <id>", "Run id / output subdirectory")
@@ -462,6 +471,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--no-continue-on-error", "Stop after first input failure")
     .option("--graders <file>", "TypeScript grading module (default-exports graders)")
     .option("--no-grade", "Skip grading; only run the agent")
+    .option(
+      "-n, --parallel <count>",
+      "Run up to this many inputs at once (default 1). Above 1, per-agent output is replaced by a status board (name, state, elapsed, cost so far)",
+      parsePositiveInt,
+    )
     .option(
       "--max-tool-call-rounds <n>",
       "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
@@ -477,7 +491,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Fail the run on any fatal type error (typechecker.strict)",
     )
     .action(async (opts: {
-      agent: string;
+      agent?: string;
+      agentCmd?: string;
       inputs?: string;
       goal?: string;
       runId?: string;
@@ -485,14 +500,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
       continueOnError?: boolean;
       graders?: string;
       grade?: boolean;
+      parallel?: number;
       maxToolCallRounds?: number;
       maxToolResultChars?: number;
       strict?: boolean;
     }) => {
-      // Eval compiles each agent inside its seeded workdir with THIS config,
-      // and all three flags are baked into the compiled program (see
-      // applyCliFlags) — so folding them onto the config here is the whole
-      // implementation; nothing needs to reach the subprocess separately.
+      // The three flags below are compile-time: they are baked into the
+      // compiled program, and a command target compiles nothing — the
+      // equivalent flags belong inside the command itself.
+      if (opts.agentCmd && (opts.maxToolCallRounds !== undefined || opts.maxToolResultChars !== undefined || opts.strict)) {
+        console.error(
+          "Error: --max-tool-call-rounds, --max-tool-result-chars and --strict are compile-time flags " +
+          "and a command target compiles nothing — put the equivalent flags inside the command",
+        );
+        process.exit(2);
+      }
+      // Eval compiles each FILE agent inside its seeded workdir with THIS
+      // config (all three flags are baked in via applyCliFlags), so folding
+      // them onto the config here is the whole implementation.
       const config = applyCliFlags(getConfig(), {
         maxToolCallRounds: opts.maxToolCallRounds,
         maxToolResultChars: opts.maxToolResultChars,
@@ -504,6 +529,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         for (const line of formatGrading(result.grading.objective, result.grading.perInput)) {
           console.log(line);
         }
+      }
+      const costUsd = totalRunCostUsd(result);
+      if (costUsd !== undefined) {
+        console.log(`total LLM cost: $${costUsd.toFixed(2)}`);
       }
       console.log(path.join(result.runDir, "summary.json"));
       if (result.grading && !result.grading.gatesPassed) {
@@ -548,6 +577,23 @@ export function createProgram(deps: CliDependencies = {}): Command {
         });
       },
     );
+
+  evalCmd
+    .command("logs")
+    .description("Open a run's statelog in the interactive logs viewer")
+    .argument("<runDir>", "A run directory, one input's directory, or a statelog file")
+    .option("--input <id>", "Which input's statelog, when the run has several")
+    .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
+    .action(async (runDir: string, opts: { input?: string; follow?: boolean }) => {
+      let statelogPath: string;
+      try {
+        statelogPath = resolveRunStatelog(runDir, opts.input);
+      } catch (e) {
+        console.error(`Error: ${(e as Error).message}`);
+        process.exit(2);
+      }
+      await logsView(statelogPath, { follow: opts.follow });
+    });
 
   evalCmd
     .command("grade")
@@ -597,7 +643,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   const addOptimizeCommand = (parent: Command): void => {
     parent
       .command("optimize")
-      .description("Optimize marked Agency declarations against an eval goal or input suite")
+      .description("Optimize marked Agency declarations against an eval goal or input suite (file agents only — the optimizer mutates agent files, so there is no --agent-cmd here)")
       .argument("<agent>", "Agency file target: file.agency[:node]")
       .option("--goal <text>", "Goal to optimize for")
       .option("--inputs <fileOrDir>", "Input suite JSON file or directory")

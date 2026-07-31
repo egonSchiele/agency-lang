@@ -15,7 +15,7 @@
   },
   "eval": {
     "limits": {
-      "wallClockSec": 600
+      "wallClockSec": 900
     }
   },
   "doc": {

@@ -1,3 +1,5 @@
+import { ttyColor } from "@/utils/termcolors.js";
+
 import type { GraderGrade, Scorecard } from "./scorecard.js";
 
 export type GradeRow =
@@ -91,16 +93,25 @@ export function ungradedInputs(perInput: InputBreakdown[]): { inputId: string; r
  * runTypes.ts imports InputBreakdown from this file.
  */
 export function formatGrading(objective: number, perInput: InputBreakdown[]): string[] {
+  // Perfect green, zero red, in-between plain — the two ends are the ones a
+  // reader scans for. ttyColor: plain text when piped.
+  const objectiveText = objective.toFixed(3);
+  const coloredObjective =
+    objective === 0 ? ttyColor.red(objectiveText)
+    : objective === 1 ? ttyColor.green(objectiveText)
+    : objectiveText;
   return [
-    `objective  ${objective.toFixed(3)}`,
+    `objective  ${coloredObjective}`,
     ...summarizeGraders(perInput).map(formatGraderSummary),
-    ...ungradedInputs(perInput).map((entry) => `  ${entry.inputId}  not graded — ${entry.reason}`),
+    ...ungradedInputs(perInput).map((entry) =>
+      `  ${ttyColor.green(entry.inputId)}  ${ttyColor.red(`not graded — ${entry.reason}`)}`),
   ];
 }
 
 function formatGraderSummary(summary: GraderSummary): string {
   if (summary.kind === "binary") {
-    return `  ${summary.grader}  ${summary.passed}/${summary.total} pass`;
+    const counts = `${summary.passed}/${summary.total} pass`;
+    return `  ${ttyColor.green(summary.grader)}  ${summary.passed === summary.total ? ttyColor.green(counts) : ttyColor.red(counts)}`;
   }
-  return `  ${summary.grader}  ${summary.mean.toFixed(3)}`;
+  return `  ${ttyColor.green(summary.grader)}  ${summary.mean.toFixed(3)}`;
 }

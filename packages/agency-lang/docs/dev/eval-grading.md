@@ -7,10 +7,24 @@ readers; every rule here was decided deliberately (2026-07-30), not inherited.
 ## The rules
 
 **Grading's only input is a run directory.** `gradeRun(runDir, ctx)`
-(`lib/eval/grading/gradeRun.ts`) and `gradeSuite(runDir, graders, config)`
+(`lib/eval/grading/gradeRun.ts`) and `gradeSuite(runDir, suiteGraders, config)`
 (`lib/eval/grading/gradeSuite.ts`) take a path, never an in-memory result.
 There used to be an in-memory handoff (`gradeRun` accepted a three-shape
 union); it was deleted on purpose.
+
+**Tests grade themselves; the suite level is override or fallback.** An
+input may carry its own grading module (`graders` in its spec; auto-
+discovered as `graders.ts` beside `test.json`), recorded as an absolute
+path in the run directory's `input.json` — so a re-grade days later loads
+the same module with no flags. The suite-level set is a tagged union,
+`SuiteGraders` (`gradeRun.ts`): `override` (an explicit `--graders` flag)
+replaces every test's own graders — the experiment knob — while `fallback`
+(the `eval.graders` config module, else the bundled goal judge) applies
+only to inputs that carry none. Precedence, one line: flag > test's own >
+config > goal judge. Grading modules are loaded once per path per grade
+pass (`makeGraderModuleCache`); the run CLI's pre-run validation loads
+through the same cache. Trust note: graders are code the harness executes —
+pulling a remote suite means trusting it, by decision (2026-07-31).
 
 **`eval run --grade` re-reads the artifacts it just wrote.** The suite runner
 (`runSuite`) executes agents and writes the run directory; it knows
@@ -28,8 +42,19 @@ post-read processing; it currently does one `JSON.parse` and a field lookup.)
 failed run may leave a salvaged `eval-record.json` on disk (a crash after
 useful work keeps its evidence); that salvage is for humans and optimizer
 reflection, and is never graded — a run that almost finished must not earn
-points from a judge that cannot tell it crashed. The diversion lives in
-`loadedEntry` (`gradeRun.ts`), with a spy-grader test pinning it.
+points from a judge that cannot tell it crashed. This includes runs killed
+by a timeout, a cost cap, or Ctrl-C: an agent that reached the right disk
+state but could not decide it was done is not a success (decided
+2026-07-31). The diversion lives in `loadedEntry` (`gradeRun.ts`), with a
+spy-grader test pinning it.
+
+**A successful run with no recorded output still grades, with `output:
+null`.** Command agents (the agency CLI under `--agent-cmd`) emit no output
+event, and for terminal-bench-style tests the deliverable is the
+FILESYSTEM — graders read the workdir. Graders that need the output see
+`null` and fail on their own terms. The two hard ungraded reasons are
+record-missing and record-unreadable only (`lookUpOutput`, `gradeRun.ts`).
+A real agent once passed a task and was scored ungraded before this rule.
 
 **`readEvalRun` is the single place grading touches the filesystem** and owns
 all tolerance: a corrupt per-input file degrades that one input with a warning

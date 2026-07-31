@@ -132,6 +132,33 @@ describe("runBundledAgent passes config overrides to the child via env", () => {
     expect(opts.env.PATH).toBe(process.env.PATH);
   });
 
+  it("merges onto inherited overrides: --trace keeps the harness statelog path", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    vi.stubEnv(CONFIG_OVERRIDES_ENV, JSON.stringify({ observability: true, log: { logFile: "harness.jsonl" } }));
+
+    runBundledAgent({}, "agency-agent", ["--trace", "t.trace"], { spawn: spawnMock as never });
+
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    expect(JSON.parse(opts.env[CONFIG_OVERRIDES_ENV])).toEqual({
+      observability: true,
+      log: { logFile: "harness.jsonl" },   // inherited, survives
+      trace: true,
+      traceFile: "t.trace",
+    });
+  });
+
+  it("an explicit --log still wins the logFile key (user intent); the rest of the inherited overrides survive", () => {
+    const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
+    vi.stubEnv(CONFIG_OVERRIDES_ENV, JSON.stringify({ observability: true, log: { logFile: "harness.jsonl" } }));
+
+    runBundledAgent({}, "agency-agent", ["--log", "other.jsonl"], { spawn: spawnMock as never });
+
+    const opts = spawnMock.mock.calls[0][2] as { env: Record<string, string> };
+    const overrides = JSON.parse(opts.env[CONFIG_OVERRIDES_ENV]);
+    expect(overrides.log.logFile).toBe("other.jsonl");
+    expect(overrides.observability).toBe(true);
+  });
+
   it("sets AGENCY_MAX_COST/AGENCY_MAX_TIME from the budget param and clears stale ones", () => {
     const spawnMock = vi.fn((..._args: unknown[]) => ({ on: vi.fn() }) as never);
     vi.stubEnv("AGENCY_MAX_COST", "999");

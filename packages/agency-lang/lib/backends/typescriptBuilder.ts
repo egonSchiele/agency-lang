@@ -4695,6 +4695,22 @@ export class TypeScriptBuilder {
     if (
       this.compilationUnit.graphNodes.map((n) => n.nodeName).includes("main")
     ) {
+      // Direct-run argv maps onto main's parameters positionally (argv[2]
+      // onward — `agency run file.agency -- <args>` forwards them), and
+      // initialState is the OPTIONS argument after them. Before this,
+      // initialState was always the first argument: harmless when mains took
+      // no parameters (it landed in the options slot), wrong once entry
+      // nodes take parameters (#739) — the state object arrived as the
+      // first parameter's value. Absent argv entries are undefined, so
+      // parameter defaults apply.
+      const mainParamCount =
+        this.compilationUnit.graphNodes.find((n) => n.nodeName === "main")
+          ?.parameters.length ?? 0;
+      const mainCallArgs = [
+        ...Array.from({ length: mainParamCount }, (_unused, i) =>
+          $(ts.id("__process")).prop("argv").index(ts.num(2 + i)).done()),
+        ts.id("initialState"),
+      ];
       result.push(
         ts.if(
           ts.binOp(
@@ -4717,7 +4733,7 @@ export class TypeScriptBuilder {
               ts.varDecl(
                 "const",
                 "__result",
-                ts.await(ts.call(ts.id("main"), [ts.id("initialState")])),
+                ts.await(ts.call(ts.id("main"), mainCallArgs)),
               ),
               // Running `main` directly from the CLI: interrupts that no
               // handler settled have surfaced to the user. resolveCliInterrupts

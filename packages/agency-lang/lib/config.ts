@@ -106,6 +106,7 @@ export interface AgencyConfig {
      *  built-in defaults (lib/eval/run/subprocess.ts). */
     limits?: {
       wallClockSec?: number;                       // max seconds per agent run (default 60)
+      maxCostUsd?: number;                         // max LLM spend per agent run (default 50)
     };
 
     optimize?: {
@@ -422,7 +423,10 @@ export const AgencyConfigSchema = z
         // Positive int only: the value feeds setTimeout (×1000), where 0 and
         // negatives don't mean "no limit" — they fire immediately and fail
         // every run with a wall_clock limit error.
-        limits: z.object({ wallClockSec: z.number().int().positive() }).partial().optional(),
+        limits: z.object({
+          wallClockSec: z.number().int().positive(),
+          maxCostUsd: z.number().positive(),
+        }).partial().optional(),
         optimize: z
           .object({
             goal: z.string().optional(),
@@ -713,6 +717,13 @@ export function applyCliFlags(
 /** The one env var carrying a JSON Partial<AgencyConfig> into an already-compiled
  *  process (see the source-of-truth note above, source 3). */
 export const CONFIG_OVERRIDES_ENV = "AGENCY_CONFIG_OVERRIDES";
+
+/** Seeds the trace id of every RuntimeContext in a process tree (explicit
+ *  statelogConfig.traceId still wins). Set PER-RUN by harnesses — eval
+ *  command targets use it so descendants started without IPC (a bash
+ *  `agency run ...`) land in the same trace as their parent. Do not export
+ *  it from a shell: every subsequent run would merge into one trace. */
+export const TRACE_ID_ENV = "AGENCY_TRACE_ID";
 
 /** Serialize config overrides for a child process's AGENCY_CONFIG_OVERRIDES. */
 export function serializeConfigOverrides(

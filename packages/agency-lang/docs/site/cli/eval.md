@@ -8,8 +8,9 @@ description: Documents the `agency eval extract` command for converting a captur
 `agency eval` is the umbrella for tools that run, grade, compare, and analyze agent runs from their captured statelog traces. The main subcommands are:
 
 ```
-agency eval run --agent <file>[:<node>] (--inputs <file|dir|git-url> | --goal <text>) [--graders <file>] [--no-grade]
+agency eval run (--agent <file>[:<node>] | --agent-cmd '<command with {task}>') (--inputs <file|dir|git-url> | --goal <text>) [-n <count>] [--graders <file>] [--no-grade]
 agency eval grade <runDir> [--graders <file>] [-o <path>]
+agency eval logs <runDir> [--input <id>] [-f]
 agency eval optimize <file>[:<node>] [--inputs <file|dir>] [--goal <text>] [--graders <file>] [--validation-inputs <file|dir> | --validation-split <ratio>]
 agency eval extract <file>
 ```
@@ -47,12 +48,19 @@ anything runs, so a mis-shaped node is one configuration error, not a suite
 of run failures.
 
 `goal` is the success criterion, never shown to the agent. It is required
-when the default LLM judge will run; a custom grading module makes it
-optional — see [Custom graders](#custom-graders). `id` defaults to a
-generated id and must be filesystem-safe when supplied. `expected` is an
-optional gold output (any JSON) read by match graders and surfaced to the
-optimizer's reflection. `files` names the test's fixture directory (see
-[Test files and suites](#test-files-and-suites)).
+when the default LLM judge will run; a test with its own graders (or a
+suite-level grading module) makes it optional — see
+[Custom graders](#custom-graders). `id` defaults to a generated id and must
+be filesystem-safe when supplied. `expected` is an optional gold output
+(any JSON) read by match graders and surfaced to the optimizer's
+reflection. `files` names the test's fixture directory (see
+[Test files and suites](#test-files-and-suites)). `timeoutSec` overrides
+the suite's wall clock for this one test (terminal-bench's per-task
+`timeout_sec`), for tasks that legitimately need longer. `graders` names the
+test's own grading module, resolved relative to the test — in the
+test-directory form a `graders.ts` beside `test.json` is picked up
+automatically. Graders are code the harness executes: pulling a remote
+suite means trusting it.
 
 For a single ad-hoc run, use `--goal` instead of `--inputs`:
 
@@ -65,11 +73,12 @@ Options:
 - `--agent <file>[:<node>]` — required agent target. Directory targets resolve to `main.agency` inside the directory. The node defaults to `main`.
 - `--inputs <file|dir|git-url>` — input suite: a JSON file, a directory, or a git source (`URL[//subdir][?ref=...]`). Mutually exclusive with `--goal`.
 - `--goal <text>` — create one inline input whose task AND goal are both this text (the quick case where instruction and criterion coincide). Mutually exclusive with `--inputs`.
-- `--run-id <id>` — output run id. Defaults to a generated id.
+- `--run-id <id>` — output run id. Defaults to a timestamp-prefixed id (e.g. `2026-07-31-143022-Ab3dEf`), so run directories list in creation order. The run directory path is printed at the start of the run.
 - `--runs-dir <path>` — output root. Defaults to `eval.runsDir` in `agency.json`, or `runs/`.
 - `--no-continue-on-error` — stop after the first input failure. By default, remaining inputs continue.
-- `--graders <file>` — a TypeScript grading module. Defaults to `eval.graders` in `agency.json`, then the bundled goal judge.
+- `--graders <file>` — a TypeScript grading module that OVERRIDES every test's own graders for this run (the experiment knob). Without it, each test grades itself with its own `graders` module; tests without one fall back to `eval.graders` in `agency.json`, then the bundled goal judge.
 - `--no-grade` — skip scoring; only run the agent.
+- `-n, --parallel <count>` — run up to this many inputs at once (default 1, sequential). Above 1, per-agent output is replaced by a live status board on stderr: each test's name, state, elapsed time, and cost so far (tailed from its statelog every second). Drill into a live run with `agency eval logs <runDir> --input <id> -f`.
 - `--max-tool-call-rounds <n>` — max LLM tool-call rounds per tool loop, same as `agency run` (default 10; overrides `agency.json`). Agents that iterate — write code, hit an error, retry — routinely need more than the default.
 - `--max-tool-result-chars <n>` — cap on a single tool result fed back to the model, same as `agency run` (0 disables; overrides `agency.json`).
 - `--strict` — fail the run on any fatal type error, same as `agency run`.
@@ -78,8 +87,74 @@ Each run's agent subprocess also gets a wall-clock limit — 60 seconds unless
 `eval.limits.wallClockSec` in `agency.json` raises it:
 
 ```json
-{ "eval": { "limits": { "wallClockSec": 600 } } }
+{ "eval": { "limits": { "wallClockSec": 900, "maxCostUsd": 50 } } }
 ```
+
+`maxCostUsd` is a defensive per-run LLM spend ceiling (default $50): the
+harness watches each run's cost as it happens — cost telemetry for file
+agents, the statelog for command agents — and kills the run when it passes
+the cap. Enforcement lags by one LLM call (a call's cost is known only when
+it returns), so treat it as an accident stopper, not an exact budget. The
+CLI prints the total LLM cost after every run, interrupted runs included.
+
+## Command agents
+
+`--agent-cmd` runs a CLI as the agent instead of compiling an `.agency`
+file — the way to benchmark `agency agent` itself:
+
+```bash
+agency eval run \
+  --agent-cmd 'agency agent --agent code --policy approve-all --max-tool-call-rounds 100 --verbose -p -- {task}' \
+  --inputs evals/terminal-bench-mini
+```
+
+The command string must contain `{task}`; every occurrence is replaced with
+each input's task. The string is tokenized by a minimal quote-aware splitter
+and **never passes through a shell**: no expansion, no operators — and
+substitution happens after tokenization, per token, so a hostile task is
+inert (`; rm -rf /` inside a task is bytes in one argv entry, not a
+command). An object task substitutes as its JSON serialization.
+
+The command runs in each input's isolated workdir. The workdir is seeded
+from the input's `files` plus the invoking directory's `agency.json`/`.env`
+(so two machines running the same benchmark see the same config); there is
+no agent closure and nothing is compiled.
+
+**Agency CLIs only.** The harness hands the command's process the statelog
+path via `AGENCY_CONFIG_OVERRIDES` and a shared trace id via
+`AGENCY_TRACE_ID` — every compiled Agency process honors both, so the
+agent's own execution record (tool calls, cost, interrupts, its whole
+process tree) becomes the eval record, and grading/judging work unchanged.
+A non-Agency command writes no statelog and the run fails saying so.
+
+Rules that follow from the mechanism:
+
+- **The command must run headless and one-shot** (`agency agent --policy
+  approve-all -p -- {task}`). There is no IPC channel, so eval's interrupt
+  auto-approval cannot reach a command agent — an interactive command just
+  waits for input that never comes until the wall clock kills it.
+- **Do not pass `--log` inside the command** — it overrides the statelog
+  path the harness set, and the run fails with an error naming this.
+  `--trace` is safe (merged, both survive).
+- **Compile-time eval flags don't apply.** `--max-tool-call-rounds`,
+  `--max-tool-result-chars`, and `--strict` are baked into compiled file
+  agents; a command target compiles nothing, so combining them with
+  `--agent-cmd` is an error — put the agent's own flags inside the command,
+  budget flags (`--max-cost`) included.
+- **Keep credentials in the environment, never in the command.** The
+  command string is recorded verbatim as `agentLabel` in `summary.json`;
+  the child inherits your environment, so API keys need no argv.
+- **Limits:** the wall clock applies (enforced by the harness); memory is
+  capped via `NODE_OPTIONS --max-old-space-size` (V8 heap of Node
+  processes — weaker than the file-target sandbox); output is drained and
+  capped for display but never fails the run.
+- `eval optimize` does not accept `--agent-cmd`: the optimizer mutates
+  agent files, which a command target does not expose.
+
+Provenance for command runs records the command string, the harness
+version, and (when the command invokes the `agency` CLI) that CLI's
+`--version` — command runs lose file-target provenance's sha-comparability,
+so these anchor comparisons over time.
 
 ## Test files and suites
 
@@ -153,9 +228,17 @@ agency eval run --agent agent.agency --inputs inputs.json
 #     goal  0.71
 ```
 
-With no `--graders`, it grades with the bundled goal judge against each input's
-`goal` field — the same default `agency optimize` uses. Pass `--no-grade` to skip
-scoring and only run the agent.
+`agency eval grade <runDir>` re-scores a finished run without re-running
+the agent — each input's recorded graders are read from the run directory,
+so no flags are needed. `agency eval logs <runDir>` opens the run's
+statelog in the interactive viewer (`--input <id>` picks one when the run
+has several; an input directory or a statelog file also works).
+
+With no `--graders`, each test grades itself with the `graders` module it
+carries; tests without one fall back to `eval.graders` from `agency.json`,
+then to the bundled goal judge scoring against the input's `goal` field —
+the same default `agency optimize` uses. Pass `--no-grade` to skip scoring
+and only run the agent.
 
 ### Custom graders
 
@@ -181,6 +264,10 @@ export default [
   new ExactMatch({ mustPass: true }),
 ];
 ```
+
+The module can be a test's own (`"graders"` in its spec, or a `graders.ts`
+beside its `test.json`), the suite-wide fallback (`eval.graders` in
+`agency.json`), or a run-wide override (`--graders`):
 
 ```bash
 agency eval run --agent agent.agency --inputs inputs.json --graders graders.ts

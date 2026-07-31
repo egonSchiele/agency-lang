@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 
 import type { AgencyConfig } from "@/config.js";
-import { validateGraders } from "@/eval/grading/gradeRun.js";
+import { makeGraderModuleCache, validateGraders } from "@/eval/grading/gradeRun.js";
 import { recordGrading } from "@/eval/grading/recordGrading.js";
 import { loadInputs, inputFromGoal } from "@/eval/loadInputs.js";
 import type { EvalRecordExtractor } from "@/eval/run/extract.js";
@@ -11,10 +11,17 @@ import type { SourceProvenance } from "@/eval/runArtifacts.js";
 import type { EvalRunResult, Input } from "@/eval/runTypes.js";
 import { parseSource, resolveSource } from "@/eval/sources.js";
 
+import * as fs from "fs";
+
+import { resolveEvalTarget } from "@/agentTarget.js";
+
 import { resolveGraders } from "./graders.js";
 
 export type EvalRunCliOptions = {
-  agent: string;
+  /** File agent target. Exactly one of agent / agentCmd. */
+  agent?: string;
+  /** Command agent target: the command string with a {task} placeholder. */
+  agentCmd?: string;
   inputs?: string;
   goal?: string;
   runId?: string;
@@ -25,6 +32,8 @@ export type EvalRunCliOptions = {
   graders?: string;
   /** False skips grading entirely (`--no-grade`). */
   grade?: boolean;
+  /** Worker-pool size (-n/--parallel); default 1 = sequential. */
+  parallel?: number;
 };
 
 export function validateInputSelection(opts: {
@@ -53,37 +62,52 @@ export async function evalRun(
     extractor?: EvalRecordExtractor;
   } = {},
 ): Promise<EvalRunResult> {
+  // Resolve first: exactly-one-of and the {task}-placeholder check belong
+  // before anything loads or runs.
+  const target = resolveEvalTarget({ agent: opts.agent, agentCmd: opts.agentCmd });
   const selection = validateInputSelection(opts);
-  // The command decides what "no --graders" means; the library primitive does not.
-  const gradersPath = opts.graders ?? opts.config?.eval?.graders;
-  const graders = await resolveGraders(gradersPath, opts.grade, opts.config ?? {});
+  const graders = await resolveGraders(opts.graders, opts.grade, opts.config ?? {});
   const suite = loadSuite({
     selection,
     inputs: opts.inputs,
     goal: opts.goal,
-    // A goal is required only when the default goal judge will actually run it:
-    // not under --no-grade, and not when a custom grading module is supplied.
-    requireGoal: graders !== undefined && gradersPath === undefined,
+    // A goal is required only where the default goal judge would actually
+    // run: not under --no-grade, not when a suite-level module is supplied,
+    // and (relaxed inside the loader) not for inputs carrying their own
+    // graders.
+    requireGoal: graders !== undefined && opts.graders === undefined && opts.config?.eval?.graders === undefined,
     cacheRoot: opts.config?.eval?.sourceCacheRoot,
   });
 
-  // Before any agent runs: a misconfigured grader should not cost a whole suite.
+  // Before any agent runs: a misconfigured grader should not cost a whole
+  // suite. Each input is validated against the grader set that will actually
+  // score it — which per-test graders make per-input.
   if (graders) {
-    validateGraders(graders, suite.inputs[0]);
+    const load = makeGraderModuleCache(opts.config ?? {});
+    for (const input of suite.inputs) {
+      const effective = graders.mode === "fallback" && input.graders !== undefined
+        ? await load(input.graders)
+        : graders.graders;
+      validateGraders(effective, input);
+    }
   }
 
   const summary = await runSuite({
-    agent: opts.agent,
+    agent: target,
     inputs: suite.inputs,
     provenance: suite.provenance,
     runId: opts.runId,
     runsDir: opts.runsDir,
     continueOnError: opts.continueOnError,
     config: opts.config,
+    parallel: opts.parallel,
     perRun: { extractor: deps.extractor },
   }, { runner: deps.runner });
 
-  if (!graders || graders.length === 0) {
+  // An empty override set means "grade with nothing" — skip, like --no-grade.
+  // A fallback set is never empty (the goal judge backstops it), and even if a
+  // config module exports [], per-input graders may still score their inputs.
+  if (!graders || (graders.mode === "override" && graders.graders.length === 0)) {
     return summary;
   }
   summary.grading = await recordGrading(summary.runDir, graders, opts.config ?? {});
@@ -129,3 +153,24 @@ function loadSuite(args: {
   };
 }
 
+
+/** Total LLM spend across a run's inputs, summed from each eval record's
+ *  metrics. Salvaged records count too, so an interrupted run still reports
+ *  what it cost. Undefined when no record carried a cost. */
+export function totalRunCostUsd(result: EvalRunResult): number | undefined {
+  let total: number | undefined;
+  for (const input of result.inputs) {
+    try {
+      const record = JSON.parse(fs.readFileSync(input.evalRecordPath, "utf-8")) as {
+        metrics?: { costUsdTotal?: unknown };
+      };
+      const cost = record.metrics?.costUsdTotal;
+      if (typeof cost === "number" && Number.isFinite(cost)) {
+        total = (total ?? 0) + cost;
+      }
+    } catch {
+      // no record for this input (e.g. it never produced a statelog)
+    }
+  }
+  return total;
+}

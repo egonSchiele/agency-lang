@@ -419,7 +419,10 @@ export const AgencyConfigSchema = z
         optimizeRunsDir: z.string(),
         graders: z.string().optional(),
         sourceCacheRoot: z.string().optional(),
-        limits: z.object({ wallClockSec: z.number() }).partial().optional(),
+        // Positive int only: the value feeds setTimeout (×1000), where 0 and
+        // negatives don't mean "no limit" — they fire immediately and fail
+        // every run with a wall_clock limit error.
+        limits: z.object({ wallClockSec: z.number().int().positive() }).partial().optional(),
         optimize: z
           .object({
             goal: z.string().optional(),

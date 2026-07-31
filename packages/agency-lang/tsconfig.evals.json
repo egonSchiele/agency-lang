@@ -1,0 +1,12 @@
+{
+  // Type-checks evals/ (grader modules use the real agency-lang/eval types, so
+  // they cannot rot silently) WITHOUT adding it to the build: the main
+  // tsconfig's include list keeps evals/ out of dist/ and the npm tarball.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+    "rootDir": "."
+  },
+  "include": ["evals"]
+}

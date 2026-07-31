@@ -82,29 +82,49 @@ export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): 
     provenance,
   });
 
+  // Ctrl-C mid-suite must still produce a run directory the toolchain can
+  // read: the in-flight input finishes as an error result (the runner kills
+  // its child; runAgent's error path salvages an eval record and writes
+  // error.txt), the loop stops, and the summary below is written as normal.
+  // `once`, so a second Ctrl-C gets default handling — immediate death.
+  let interrupted = false;
+  const onSigint = () => {
+    interrupted = true;
+    console.warn(
+      "\neval run interrupted — salvaging the in-flight input and writing a " +
+      "partial summary; press Ctrl-C again to force quit",
+    );
+  };
+  process.once("SIGINT", onSigint);
+
   const results: EvalRunInputResult[] = [];
-  for (const input of opts.inputs) {
-    let prepared: PreparedInput;
-    try {
-      prepared = prepareInput(state, input);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`[runSuite] prepare failed for input ${input.id ?? ""}: ${message}`);
-      results.push(recordInputPrepareFailure(input.id ?? "", message));
-      if (!continueOnError) break;
-      continue;
+  try {
+    for (const input of opts.inputs) {
+      let prepared: PreparedInput;
+      try {
+        prepared = prepareInput(state, input);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[runSuite] prepare failed for input ${input.id ?? ""}: ${message}`);
+        results.push(recordInputPrepareFailure(input.id ?? "", message));
+        if (!continueOnError) break;
+        continue;
+      }
+      const run = await runAgent(target.agentFile, input.node ?? target.node, input.args, {
+        runDir: prepared.inputDir,
+        config,
+        seedFiles: input.files,
+        overlayFiles: perRun.overlayFiles,
+        seed: defaultSeed,
+        pipeOutput: perRun.pipeOutput ?? true,
+        extractor: perRun.extractor,
+      }, { runner: deps.runner });
+      results.push(toInputResult(input, prepared, run));
+      if (interrupted) break;
+      if (run.status === "error" && !continueOnError) break;
     }
-    const run = await runAgent(target.agentFile, input.node ?? target.node, input.args, {
-      runDir: prepared.inputDir,
-      config,
-      seedFiles: input.files,
-      overlayFiles: perRun.overlayFiles,
-      seed: defaultSeed,
-      pipeOutput: perRun.pipeOutput ?? true,
-      extractor: perRun.extractor,
-    }, { runner: deps.runner });
-    results.push(toInputResult(input, prepared, run));
-    if (run.status === "error" && !continueOnError) break;
+  } finally {
+    process.removeListener("SIGINT", onSigint);
   }
 
   return writeEvalRunSummary(state, results);

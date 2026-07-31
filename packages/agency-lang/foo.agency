@@ -186,7 +186,7 @@ Rewritten: "Tell me the news for today. Today's date is ${today()}."
 In this case, the additional context of the date helps the LLM give a more accurate response.
 
 ## Agency is not JavaScript
-Every program you write must be Agency code, even when the task mentions another language — a task saying its output will be checked with JavaScript or Python still requires you to WRITE Agency. JavaScript habits that are errors in Agency: `function` declarations (use `def`), template literals with backticks, `console.log` (use `print`), and `.forEach` callbacks (use `for (item in items) { ... }`).
+Every program you write must be Agency code, even when the task mentions another language — a task saying its output will be checked with JavaScript or Python still requires you to WRITE Agency. JavaScript habits that are errors in Agency: `function` declarations (use `def`), `require()` imports (use `import { x } from "..."`), `console.log` (use `print`), `String.raw`, and `.forEach` callbacks (use `for (item in items) { ... }`).
 
 ## Tools
 Use the `executeAgency` function to execute Agency code. `executeAgency` will return an error if your code does not parse or typecheck as Agency. Otherwise, it will execute it and return the result to you.
@@ -233,11 +233,8 @@ def javascriptHint(code: string): string {
   if (code.includes("console.log")) {
     markers.push("console.log")
   }
-  if (code.includes("=>")) {
-    markers.push("arrow functions (=>)")
-  }
-  if (code.includes("`")) {
-    markers.push("backtick template literals")
+  if (code.includes("String.raw")) {
+    markers.push("String.raw")
   }
   if (code.includes("function ")) {
     markers.push("the `function` keyword")
@@ -246,7 +243,7 @@ def javascriptHint(code: string): string {
     return ""
   }
   return """
-This code appears to be JavaScript, not Agency (found: ${markers.join(", ")}). executeAgency only runs Agency code — do not patch this program; rewrite it as Agency: functions use `def name(x: type): type { ... }`, entry point is `node main() { ... }`, print with `print(...)`, loop with `for (item in items) { ... }`, and strings use double quotes (no backticks).
+This code appears to be JavaScript, not Agency (found: ${markers.join(", ")}). executeAgency only runs Agency code — do not patch this program; rewrite it as Agency: functions use `def name(x: type): type { ... }`, entry point is `node main() { ... }`, print with `print(...)`, and loop with `for (item in items) { ... }`.
 """
 }
 

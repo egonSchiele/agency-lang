@@ -20,4 +20,10 @@ describe("limitsFromConfig", () => {
   it("treats an empty limits object as all-defaults", () => {
     expect(limitsFromConfig({ eval: { limits: {} } }).wallClock).toBe(60_000);
   });
+
+  it("ignores invalid wall-clock values (0, negative, NaN) and keeps the default", () => {
+    for (const bad of [0, -1, NaN, Infinity]) {
+      expect(limitsFromConfig({ eval: { limits: { wallClockSec: bad } } }).wallClock).toBe(60_000);
+    }
+  });
 });

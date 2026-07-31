@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
+import { Worker } from "worker_threads";
 
 import { grader } from "agency-lang/eval";
 
@@ -56,6 +57,42 @@ function fail(feedback: string) {
   return { score: { kind: "binary" as const, pass: false }, feedback };
 }
 
+/** Compile and run the agent-authored pattern in a worker with a deadline.
+ *  A pattern with nested quantifiers backtracks catastrophically regardless
+ *  of input size; run in-process it would hang the whole harness instead of
+ *  scoring 0. */
+const MATCH_DEADLINE_MS = 2000;
+
+type MatchOutcome =
+  | { kind: "matches"; matches: string[] }
+  | { kind: "invalid"; message: string }
+  | { kind: "timeout" };
+
+function matchInWorker(pattern: string, logText: string): Promise<MatchOutcome> {
+  const workerSource = `
+    const { parentPort, workerData } = require("worker_threads");
+    const re = new RegExp(workerData.pattern, "gm");
+    const matches = [...workerData.logText.matchAll(re)].map((m) => m[1] ?? m[0]);
+    parentPort.postMessage(matches);
+  `;
+  return new Promise((resolve) => {
+    const worker = new Worker(workerSource, { eval: true, workerData: { pattern, logText } });
+    const timer = setTimeout(() => {
+      void worker.terminate();
+      resolve({ kind: "timeout" });
+    }, MATCH_DEADLINE_MS);
+    worker.once("message", (matches: string[]) => {
+      clearTimeout(timer);
+      void worker.terminate();
+      resolve({ kind: "matches", matches });
+    });
+    worker.once("error", (err: Error) => {
+      clearTimeout(timer);
+      resolve({ kind: "invalid", message: err.message });
+    });
+  });
+}
+
 export default [
   // Gate: no file means the input scores 0, with feedback that says so
   // instead of a wrong-matches diff.
@@ -64,30 +101,30 @@ export default [
     mustPass: true,
   }),
 
-  grader(({ workdir }) => {
+  grader(async ({ workdir }) => {
     const file = join(workdir, "regex.txt");
     if (!existsSync(file)) {
       return fail("regex.txt was not written");
     }
     const pattern = readFileSync(file, "utf8").trim();
 
-    let re: RegExp;
-    try {
-      re = new RegExp(pattern, "gm");
-    } catch (err) {
-      return fail(`the regex does not compile: ${(err as Error).message}`);
+    const outcome = await matchInWorker(pattern, SAMPLE_LOGS.join("\n"));
+    if (outcome.kind === "invalid") {
+      return fail(`the regex does not compile: ${outcome.message}`);
     }
-
-    const logText = SAMPLE_LOGS.join("\n");
-    const matches = [...logText.matchAll(re)].map((m) => m[1] ?? m[0]);
-
-    if (JSON.stringify(matches) === JSON.stringify(EXPECTED_DATES)) {
+    if (outcome.kind === "timeout") {
+      return fail(
+        `the regex did not terminate within ${MATCH_DEADLINE_MS}ms — ` +
+        `likely catastrophic backtracking (nested quantifiers)`,
+      );
+    }
+    if (JSON.stringify(outcome.matches) === JSON.stringify(EXPECTED_DATES)) {
       return true;
     }
     return fail(
       `matches over the sample log differ from expected.\n` +
       `expected: ${JSON.stringify(EXPECTED_DATES)}\n` +
-      `got:      ${JSON.stringify(matches)}`,
+      `got:      ${JSON.stringify(outcome.matches)}`,
     );
   }, { name: "regex-matches", mustPass: true }),
 ];

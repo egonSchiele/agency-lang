@@ -86,6 +86,20 @@ describe("eval run CLI", () => {
     expect(fs.existsSync(path.join(runsDir, "r1", "inputs", result.inputs[0].inputId, "agent", "eval-record.json"))).toBe(true);
   });
 
+  it("rejects an empty suite instead of succeeding with zero inputs", async () => {
+    const agentFile = path.join(tmpDir, "agent.agency");
+    fs.writeFileSync(agentFile, "node main() {}\n");
+    const inputsFile = path.join(tmpDir, "empty.json");
+    fs.writeFileSync(inputsFile, JSON.stringify({ inputs: [] }));
+    const runsDir = path.join(tmpDir, "runs");
+
+    await expect(evalRun({
+      agent: agentFile, inputs: inputsFile, runsDir, runId: "empty", grade: false,
+    })).rejects.toThrow(/no inputs loaded from/);
+
+    expect(fs.existsSync(path.join(runsDir, "empty"))).toBe(false);
+  });
+
   it("throws setup failures before creating a run directory", async () => {
     const runsDir = path.join(tmpDir, "runs");
 

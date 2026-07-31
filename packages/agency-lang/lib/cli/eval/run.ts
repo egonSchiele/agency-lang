@@ -119,12 +119,21 @@ function loadSuite(args: {
   if (parsed.kind === "git") {
     const resolved = resolveSource(parsed, { cacheRoot: args.cacheRoot });
     return {
-      inputs: loadInputs(resolved.dir, nanoid, { ...loadOptions, forbidGitFiles: true }),
+      inputs: requireInputs(loadInputs(resolved.dir, nanoid, { ...loadOptions, forbidGitFiles: true }), args.inputs ?? ""),
       provenance: { inputsSource: { source: args.inputs ?? "", sha: resolved.sha }, files: filesProvenance },
     };
   }
   return {
-    inputs: loadInputs(parsed.path, nanoid, loadOptions),
+    inputs: requireInputs(loadInputs(parsed.path, nanoid, loadOptions), parsed.path),
     provenance: { inputsSource: { source: parsed.path }, files: filesProvenance },
   };
+}
+
+/** An empty suite is a mistake (wrong path, empty file), never a run: running
+ *  zero inputs would "succeed" with objective 0 and hide the mistake. */
+function requireInputs(inputs: Input[], source: string): Input[] {
+  if (inputs.length === 0) {
+    throw new Error(`no inputs loaded from ${source}`);
+  }
+  return inputs;
 }

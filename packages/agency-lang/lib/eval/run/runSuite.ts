@@ -50,6 +50,11 @@ export type RunSuiteOptions = {
   /** Worker-pool size for input scheduling; 1 (default) = sequential with
    *  piped agent output, >1 = parallel with a status board instead. */
   parallel?: number;
+  /** Default true: suite-level progress on stderr (the run-dir line, the
+   *  per-input heartbeat and status lines, the parallel status board). The
+   *  optimizer turns it off — its reporter owns the narrative, and
+   *  `eval optimize --silent` must print nothing at all. */
+  progress?: boolean;
   /** Source provenance recorded in config.json; "unspecified" when omitted. */
   provenance?: { inputsSource: SourceProvenance; files: Record<string, SourceProvenance> };
   perRun?: PerRunOptions;
@@ -107,7 +112,8 @@ export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): 
   });
   // Up front, not just at the end: a long run's evidence (statelogs, the
   // live `eval logs -f` view) lives here while it is still running.
-  console.error(`run dir: ${state.runDir}`);
+  const progress = opts.progress ?? true;
+  if (progress) console.error(`run dir: ${state.runDir}`);
 
   // Ctrl-C mid-suite must still produce a run directory the toolchain can
   // read: the in-flight input finishes as an error result (the runner kills
@@ -166,17 +172,21 @@ export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): 
         // stderr, so piped agent output and result printing stay clean.
         const startedAt = Date.now();
         const inputLabel = ttyColor.green(input.id ?? "");
-        const ticker = setInterval(() => {
-          console.error(`[${inputLabel}] running… ${formatElapsed(Date.now() - startedAt)}`);
-        }, 15_000);
+        const ticker = progress
+          ? setInterval(() => {
+              console.error(`[${inputLabel}] running… ${formatElapsed(Date.now() - startedAt)}`);
+            }, 15_000)
+          : undefined;
         let outcome: Awaited<ReturnType<typeof executeInput>>;
         try {
           outcome = await executeInput(input, perRun.pipeOutput ?? true);
         } finally {
-          clearInterval(ticker);
+          if (ticker !== undefined) clearInterval(ticker);
         }
-        const status = outcome.result.status === "error" ? ttyColor.red("error") : outcome.result.status;
-        console.error(`[${inputLabel}] ${status} in ${formatElapsed(Date.now() - startedAt)}`);
+        if (progress) {
+          const status = outcome.result.status === "error" ? ttyColor.red("error") : outcome.result.status;
+          console.error(`[${inputLabel}] ${status} in ${formatElapsed(Date.now() - startedAt)}`);
+        }
         results.push(outcome.result);
         if (interrupted) break;
         if (outcome.result.status === "error" && !continueOnError) break;
@@ -186,6 +196,7 @@ export async function runSuite(opts: RunSuiteOptions, deps: RunSuiteDeps = {}): 
         inputs: opts.inputs,
         parallel,
         continueOnError,
+        progress,
         isInterrupted: () => interrupted,
         executeInput,
       });
@@ -210,6 +221,7 @@ async function runPool(args: {
   inputs: Input[];
   parallel: number;
   continueOnError: boolean;
+  progress: boolean;
   isInterrupted: () => boolean;
   executeInput: (
     input: Input,
@@ -217,7 +229,9 @@ async function runPool(args: {
     onPrepared?: (prepared: PreparedInput) => void,
   ) => Promise<{ result: EvalRunInputResult; prepared?: PreparedInput }>;
 }): Promise<EvalRunInputResult[]> {
-  const board = startStatusBoard(args.inputs.map((input) => input.id ?? ""));
+  const board = args.progress
+    ? startStatusBoard(args.inputs.map((input) => input.id ?? ""))
+    : { update: () => {}, stop: () => {} };
   const slots: (EvalRunInputResult | undefined)[] = new Array(args.inputs.length);
   const costTails: (() => number)[] = [];
   let nextIndex = 0;

@@ -284,6 +284,9 @@ export abstract class BaseOptimizer {
       runId: `run-${this.runCounter}`,
       config: this.config.config,
       continueOnError: true,
+      // The reporter owns the optimizer's narrative; runSuite's own progress
+      // lines would interleave with it (and `--silent` must print nothing).
+      progress: false,
       perRun: {
         pipeOutput: false,
         seed: {

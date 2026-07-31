@@ -369,4 +369,26 @@ describe("runSuite", () => {
     // The listener does not outlive the suite.
     expect(process.listeners("SIGINT")).toEqual(before);
   });
+
+  it("progress: false prints nothing — the optimizer's --silent depends on it", async () => {
+    const errSpy = vi.spyOn(console, "error");
+    const runner = vi.fn(async () => ({ ok: true as const }));
+    try {
+      await runSuite(
+        {
+          agent: path.join(proj, "agent.agency"),
+          inputs: [{ id: "input-1", goal: "g", task: "t" }],
+          runsDir: path.join(proj, "runs"),
+          runId: "r-quiet",
+          config: {},
+          progress: false,
+          perRun: { pipeOutput: false, extractor: recordExtractor("done") },
+        },
+        { runner },
+      );
+      expect(errSpy).not.toHaveBeenCalled();
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
 });

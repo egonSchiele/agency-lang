@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   applyRuntimeConfigOverridesToContextArgs,
+  getRuntimeConfigOverrides,
   setRuntimeConfigOverrides,
+  withRuntimeConfigOverrides,
 } from "./configOverrides.js";
 import {
   CONFIG_OVERRIDES_ENV,
@@ -204,6 +206,40 @@ describe("writer→reader override contract", () => {
     const r = applyRuntimeConfigOverridesToContextArgs(base, overrides);
     expect(r.traceConfig?.traceFile).toBe("t.trace");
     expect(r.statelogConfig.logFile).toBe("l.jsonl");
+  });
+});
+
+describe("withRuntimeConfigOverrides", () => {
+  afterEach(() => setRuntimeConfigOverrides(undefined));
+
+  it("installs the overrides while fn runs and restores after", async () => {
+    let seen: unknown;
+    await withRuntimeConfigOverrides(
+      { observability: true, log: { projectId: "p1" } },
+      async () => {
+        seen = getRuntimeConfigOverrides();
+      },
+    );
+    expect(seen).toEqual({ observability: true, log: { projectId: "p1" } });
+    expect(getRuntimeConfigOverrides()).toBeUndefined();
+  });
+
+  it("restores the PREVIOUS value, not just undefined", async () => {
+    setRuntimeConfigOverrides({ maxCallDepth: 3 });
+    await withRuntimeConfigOverrides({ observability: true }, async () => {
+      expect(getRuntimeConfigOverrides()).toEqual({ observability: true });
+    });
+    expect(getRuntimeConfigOverrides()).toEqual({ maxCallDepth: 3 });
+  });
+
+  it("restores even when fn throws", async () => {
+    setRuntimeConfigOverrides({ maxCallDepth: 3 });
+    await expect(
+      withRuntimeConfigOverrides({ observability: true }, async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    expect(getRuntimeConfigOverrides()).toEqual({ maxCallDepth: 3 });
   });
 });
 

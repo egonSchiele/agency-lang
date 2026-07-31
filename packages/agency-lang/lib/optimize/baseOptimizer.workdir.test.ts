@@ -8,7 +8,7 @@ import { BaseGrader } from "@/eval/grading/baseGrader.js";
 import type { Grade, GraderInput, GraderOptions, Input } from "@/eval/grading/types.js";
 import type { Scorecard } from "@/eval/grading/scorecard.js";
 import { BaseOptimizer } from "./baseOptimizer.js";
-import { fakeRun } from "./testUtils.js";
+import { cleanupFakeRuns, fakeRun } from "./testUtils.js";
 import type { OptimizeTargetSet } from "./targets.js";
 import type { OptimizeResult } from "./types.js";
 
@@ -39,6 +39,8 @@ class Probe extends BaseOptimizer {
   }
   forkAt() { return this.fork(); }
 }
+
+afterEach(cleanupFakeRuns);
 
 describe("BaseOptimizer.runInputViaEval threads seed + overlayFiles", () => {
   let root: string;

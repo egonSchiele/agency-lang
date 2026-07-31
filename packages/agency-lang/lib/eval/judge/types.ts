@@ -49,6 +49,10 @@ export type InputVerdict = {
   winner: JudgeWinner;
   confidence: number;
   reasoning: string;
+  /** Set on deterministic verdicts (missing data, no goal): the judge never
+   *  ran. Lets consumers separate "could not judge" from a real tie in the
+   *  aggregate counts. */
+  unjudgeable?: true;
   samples: JudgeSample[];
   generatedAt: string;
 };

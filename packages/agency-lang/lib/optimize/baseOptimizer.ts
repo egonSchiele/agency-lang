@@ -246,6 +246,12 @@ export abstract class BaseOptimizer {
         const runDir = await this.cache.get(ws.key, id, () => this.runInput(ws, source, files, input, id));
         // A suite of one, graded like every other run directory.
         const card = await gradeRun(runDir, ctx);
+        if (card.perInput.length !== 1) {
+          // Guards the suite-of-one contract at the place that depends on it:
+          // `runInput` is an injectable seam, and a directory with 0 or 2
+          // inputs would otherwise surface much later inside objective().
+          throw new Error(`runInput for input ${id} returned ${runDir} with ${card.perInput.length} graded inputs; expected exactly 1`);
+        }
         return card.perInput[0];
       }),
     );

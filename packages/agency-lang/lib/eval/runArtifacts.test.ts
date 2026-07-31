@@ -9,7 +9,6 @@ import {
   initializeEvalRun,
   prepareInput,
   recordInputPrepareFailure,
-  recordInputRunFailure,
   writeEvalRunSummary,
 } from "./runArtifacts.js";
 
@@ -104,18 +103,6 @@ Choose a different --run-id or delete the existing directory.`,
       workdirPath: "",
       errorMessage: "invalid id",
     });
-  });
-
-  it("records run failures and writes error.txt + summary", () => {
-    const state = initializeState();
-    const prepared = prepareInput(state, { id: "t1", goal: "goal", args: {} });
-
-    const result = recordInputRunFailure(prepared, "boom");
-    const summary = writeEvalRunSummary(state, [result]);
-
-    expect(fs.readFileSync(path.join(state.runDir, "inputs", "t1", "agent", "error.txt"), "utf-8")).toBe("boom");
-    expect(summary.errorCount).toBe(1);
-    expect(JSON.parse(fs.readFileSync(path.join(state.runDir, "summary.json"), "utf-8"))).toMatchObject({ errorCount: 1 });
   });
 
   it("extracts only when statelog exists and is non-empty", () => {

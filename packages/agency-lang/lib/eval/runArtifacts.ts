@@ -156,37 +156,7 @@ export function recordInputPrepareFailure(
   };
 }
 
-/**
- * Build an EvalRunInputResult for a prepared input that failed during run or
- * extract. Writes the error message to the input's error.txt for offline
- * inspection.
- */
-export function recordInputRunFailure(
-  prepared: PreparedInput,
-  errorMessage: string,
-): EvalRunInputResult {
-  fs.writeFileSync(prepared.errorPath, errorMessage);
-  return {
-    inputId: prepared.input.id ?? "",
-    status: "error",
-    evalRecordPath: prepared.evalRecordPath,
-    statelogPath: prepared.statelogPath,
-    workdirPath: prepared.workdirPath,
-    errorMessage,
-  };
-}
 
-export function recordInputSuccess(
-  prepared: PreparedInput,
-): EvalRunInputResult {
-  return {
-    inputId: prepared.input.id ?? "",
-    status: "success",
-    evalRecordPath: prepared.evalRecordPath,
-    statelogPath: prepared.statelogPath,
-    workdirPath: prepared.workdirPath,
-  };
-}
 
 
 export function writeEvalRunSummary(

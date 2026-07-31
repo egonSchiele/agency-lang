@@ -11,7 +11,7 @@ import type { BaseOptimizerConfig } from "../optimizer.js";
 import type { OptimizeMutationPreview } from "../sourceMutator.js";
 import type { OptimizeTargetSet } from "../targets.js";
 import { ExampleOptimizer, type ExampleDeps } from "./example.js";
-import { fakeRun } from "../testUtils.js";
+import { cleanupFakeRuns, fakeRun } from "../testUtils.js";
 
 /** Returns the next scalar from a fixed queue — lets a test set baseline vs candidate scores. */
 class QueueGrader extends BaseGrader {
@@ -22,6 +22,8 @@ class QueueGrader extends BaseGrader {
     return Promise.resolve({ score: { kind: "scalar", value: this.scores[this.i++] ?? 0 } });
   }
 }
+
+afterEach(cleanupFakeRuns);
 
 describe("ExampleOptimizer", () => {
   let root: string;

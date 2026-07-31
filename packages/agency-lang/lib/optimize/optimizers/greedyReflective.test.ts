@@ -11,7 +11,7 @@ import { GreedyReflective, type GreedyDeps } from "./greedyReflective.js";
 import type { ProposeMutationArgs } from "../mutator.js";
 import { defaultPreview, type OptimizeMutationPreview } from "../sourceMutator.js";
 import { discoverOptimizeTargets, type OptimizeTargetSet } from "../targets.js";
-import { fakeRun } from "../testUtils.js";
+import { cleanupFakeRuns, fakeRun } from "../testUtils.js";
 import { loadedRun } from "@/eval/grading/testUtils.js";
 
 class ValueGrader extends BaseGrader {
@@ -19,6 +19,8 @@ class ValueGrader extends BaseGrader {
   constructor(private readonly next: () => number, options: GraderOptions = {}) { super(options); }
   protected _run(_i: GraderInput): Promise<Grade> { return Promise.resolve({ score: { kind: "scalar", value: this.next() } }); }
 }
+
+afterEach(cleanupFakeRuns);
 
 describe("GreedyReflective (pointwise)", () => {
   let root: string;

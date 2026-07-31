@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { EvalCache } from "./evalCache.js";
-import { fakeRun } from "./testUtils.js";
+import { cleanupFakeRuns, fakeRun } from "./testUtils.js";
+
+afterEach(cleanupFakeRuns);
 
 describe("EvalCache", () => {
   it("computes each (workspace,input) once and reuses the result", async () => {

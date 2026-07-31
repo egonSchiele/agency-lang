@@ -10,7 +10,7 @@ import type { Grade, GraderInput } from "@/eval/grading/types.js";
 import type { RunInput } from "../baseOptimizer.js";
 import type { OptimizeMutationPreview } from "../sourceMutator.js";
 import type { OptimizeTargetSet } from "../targets.js";
-import { fakeRun } from "../testUtils.js";
+import { cleanupFakeRuns, fakeRun } from "../testUtils.js";
 
 /** Scores an input by reading the numeric value the fake runner put in `run.output`. */
 class OutputScoreGrader extends BaseGrader {
@@ -19,6 +19,8 @@ class OutputScoreGrader extends BaseGrader {
     return Promise.resolve({ score: { kind: "scalar", value: Number(run.output) }, feedback: "fb" });
   }
 }
+
+afterEach(cleanupFakeRuns);
 
 describe("Gepa (reflective Pareto optimizer)", () => {
   let root: string;

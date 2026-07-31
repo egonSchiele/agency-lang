@@ -18,10 +18,10 @@ import {
   VariableType,
 } from "@/types.js";
 import {
-  isAgencyImport,
   resolveAgencyImportPath,
   isNonTemplatedStdlib,
 } from "../importPaths.js";
+import { getImports } from "@/analysis/imports.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "@/compiler/defaultSession.js";
@@ -580,39 +580,6 @@ export async function executeJudgeAsync(
   return { score: raw.score, reasoning: raw.reasoning, stdout, stderr };
 }
 
-export function* findRecursively(
-  dirName: string,
-  ext: string = ".agency",
-  searched: string[] = [],
-  ignoreDirs: string[] = [],
-): Generator<{ path: string }> {
-  searched.push(path.resolve(dirName));
-  // Find all .agency files in the directory
-  const files = fs.readdirSync(dirName);
-  const filesToProcess = files.filter((file) => {
-    if (file.startsWith(".")) return false;
-    if (ignoreDirs.includes(file)) return false;
-    return (
-      file.endsWith(ext) ||
-      fs.statSync(path.join(dirName, file)).isDirectory()
-    );
-  });
-
-  for (const file of filesToProcess) {
-    const fullPath = path.join(dirName, file);
-    if (fs.lstatSync(fullPath).isSymbolicLink()) {
-      continue;
-    }
-    if (fs.statSync(fullPath).isDirectory()) {
-      if (!searched.includes(path.resolve(fullPath))) {
-        yield* findRecursively(fullPath, ext, searched, ignoreDirs);
-      }
-    } else {
-      yield { path: fullPath };
-    }
-  }
-}
-
 export function getImportsRecursively(
   filename: string,
   visited = new Set<string>(),
@@ -644,35 +611,6 @@ export function getImportsRecursively(
   return imports;
 }
 
-export function getImports(program: AgencyProgram): string[] {
-  const toolAndNodeImports = program.nodes
-    .filter((node) => node.type === "importNodeStatement")
-    .map((node) => node.agencyFile.trim());
-  // this makes compile() try to parse non-agency files
-  const importStatements = program.nodes
-    .filter(
-      (node) =>
-        node.type === "importStatement" && isAgencyImport(node.modulePath),
-    )
-    .map((node) => (node as ImportStatement).modulePath.trim());
 
-  return [...toolAndNodeImports, ...importStatements];
-}
 
 // Returns EVERY import in the program, regardless of whether it points to
-// agency code (`.agency` / `std::` / `pkg::`) or a raw npm/Node module
-// (e.g. `fs`, `child_process`). Use this when you need to inspect or
-// validate the full import surface — `getImports` filters out non-agency
-// imports, which is the wrong behavior for restriction checks.
-export type AnyImport = { path: string; kind: "module" | "node" };
-export function getAllImports(program: AgencyProgram): AnyImport[] {
-  return program.nodes.flatMap((node): AnyImport[] => {
-    if (node.type === "importStatement") {
-      return [{ path: node.modulePath.trim(), kind: "module" }];
-    }
-    if (node.type === "importNodeStatement") {
-      return [{ path: node.agencyFile.trim(), kind: "node" }];
-    }
-    return [];
-  });
-}

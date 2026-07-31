@@ -99,7 +99,7 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(Array.isArray(verdict)).toBe(true);   // surfaced as Interrupt[]
     expect(resolved).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: "propagated", resolvedBy: "handler" }),
+      expect.objectContaining({ outcome: "propagated", resolvedBy: null }),
     );
   });
 
@@ -113,7 +113,21 @@ describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
     const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(Array.isArray(verdict)).toBe(true);
     expect(resolved).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: "passed", resolvedBy: "handler" }),
+      expect.objectContaining({ outcome: "passed", resolvedBy: null }),
+    );
+  });
+
+  it("an EMPTY chain also records passed, and does not claim a handler was involved", async () => {
+    // The safety-trace case that matters most: nobody was watching this
+    // effect. resolvedBy must not say "handler" when no handler existed.
+    const ctx = makeCtx([]);
+    ctx.runId = "run-test";
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    expect(Array.isArray(verdict)).toBe(true);
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "passed", resolvedBy: null }),
     );
   });
 

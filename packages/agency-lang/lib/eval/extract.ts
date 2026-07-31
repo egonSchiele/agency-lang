@@ -194,7 +194,7 @@ function buildInterruptEntry(
   interruptId: string,
   group: NormalizedEnvelope[],
 ): InterruptEntry {
-  const sorted = [...group].sort((a, b) => a.tMs - b.tMs);
+  const sorted = [...group].sort((a, b) => a.tMs - b.tMs || a.seq - b.seq);
   const thrown = sorted.find((e) => e.type === "interruptThrown");
   // LAST, not first: a surfaced interrupt records its chain outcome
   // ("propagated"/"passed") and may then be decided by the user — the later

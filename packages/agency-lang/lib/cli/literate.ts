@@ -1,7 +1,7 @@
 import { AgencyConfig } from "@/config.js";
 import { generateAgency } from "@/backends/agencyGenerator.js";
 import { parse, readFile } from "./commands.js";
-import { findRecursively } from "./util.js";
+import { findRecursively } from "@/utils/findRecursively.js";
 import { AgencyNode, AgencyProgram, AgencyMultiLineComment } from "@/types.js";
 import { codeFence } from "@/utils/markdown.js";
 import { multiLineCommentParser } from "@/parsers/parsers.js";

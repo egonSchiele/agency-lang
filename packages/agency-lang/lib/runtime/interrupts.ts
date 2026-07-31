@@ -553,13 +553,16 @@ function renderVerdict(
   // "propagated" (a handler sent it up) or "passed" (the chain finished
   // without deciding — every handler passed, or none existed). Without this,
   // a trace could not tell deliberate handler behavior from a run that died
-  // mid-interrupt (#736). If the user later decides, a second
+  // mid-interrupt (#736). resolvedBy is null: nothing RESOLVED anything —
+  // which handler propagated or passed is already on the handlerDecision
+  // events, and claiming "handler" here would assert a handler was involved
+  // even when the chain was empty. If the user later decides, a second
   // interruptResolved (resolvedBy "user") follows — consumers take the LAST
   // event for an interruptId as authoritative.
   ctx.statelogClient.interruptResolved({
     interruptId: intr.interruptId,
     outcome: merged.kind === "propagated" ? "propagated" : "passed",
-    resolvedBy,
+    resolvedBy: null,
     interrupt: interruptSummary,
   });
   return [intr];

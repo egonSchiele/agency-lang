@@ -31,10 +31,17 @@ export function inputFromGoal(goal: string): Input {
 
 export function loadInputs(sourcePath: string, makeId: MakeId = nanoid, options: LoadOptions = {}): Input[] {
   const stat = fs.statSync(sourcePath);
-  if (stat.isDirectory()) {
-    return loadInputsFromDirectory(sourcePath, makeId, options);
+  const inputs = stat.isDirectory()
+    ? loadInputsFromDirectory(sourcePath, makeId, options)
+    : loadInputsFromFile(sourcePath, makeId, options);
+  // An empty suite is a mistake (wrong path, empty file), never a run:
+  // zero inputs would "succeed" with objective 0 and hide the mistake —
+  // and under `eval optimize` it would burn the whole iteration budget
+  // grading candidates against nothing.
+  if (inputs.length === 0) {
+    throw new Error(`no inputs loaded from ${sourcePath}`);
   }
-  return loadInputsFromFile(sourcePath, makeId, options);
+  return inputs;
 }
 
 export function loadInputsFromFile(filePath: string, makeId: MakeId = nanoid, options: LoadOptions = {}): Input[] {

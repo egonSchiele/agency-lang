@@ -9,13 +9,13 @@ import {
   executeJudgeAsync,
   executeNode,
   executeNodeAsync,
-  findRecursively,
   InterruptHandler,
   pickANode,
   promptForArgs,
   promptForTarget,
 } from "./util.js";
 import { parseTarget } from "@/agentTarget.js";
+import { findRecursively } from "@/utils/findRecursively.js";
 import { color } from "@/utils/termcolors.js";
 import { formatDiff } from "@/utils/diff.js";
 import {

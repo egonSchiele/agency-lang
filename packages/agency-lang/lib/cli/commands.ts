@@ -21,7 +21,7 @@ import {
   installDirFromUrl,
   type InstallKind,
 } from "./installLocation.js";
-import { findRecursively } from "./util.js";
+import { findRecursively } from "@/utils/findRecursively.js";
 import { readFile } from "../compiler/buildSession.js";
 import { compile } from "../compiler/defaultSession.js";
 

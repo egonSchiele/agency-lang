@@ -52,7 +52,8 @@ import {
 } from "@/importPaths.js";
 import { CompileStrategy, type ImportStrategy } from "@/importStrategy.js";
 import { parseAgencyFileCached } from "@/parseCache.js";
-import { findRecursively, getImports } from "@/cli/util.js";
+import { getImports } from "@/analysis/imports.js";
+import { findRecursively } from "@/utils/findRecursively.js";
 
 export type CompileOptions = {
   ts?: boolean;

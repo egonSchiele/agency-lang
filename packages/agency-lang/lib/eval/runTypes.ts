@@ -29,6 +29,18 @@ export type Input = {
    *  A raw spec may hold a relative path (resolved against the inputs file) —
    *  after loading it is always an absolute directory path. */
   files?: string;
+  /** The test's own grading module (a TS file default-exporting graders) —
+   *  success criteria are test-side, like goal and expected. Relative in a
+   *  raw spec, absolute after loading. Auto-discovered in the test-directory
+   *  form: a graders.ts beside test.json. Precedence at grading time:
+   *  explicit --graders flag > this > eval.graders config > the goal judge.
+   *  Trust note: graders are code the harness executes — pulling a remote
+   *  suite means trusting it. */
+  graders?: string;
+  /** Per-test wall-clock override in seconds, test-side like terminal-bench's
+   *  task.toml timeout_sec — a hard task may deserve more time than the
+   *  suite default (eval.limits.wallClockSec). */
+  timeoutSec?: number;
   /** Freeform, grader-agnostic metadata (tags, expectedOutput, …). */
   metadata?: Record<string, any>;
 };

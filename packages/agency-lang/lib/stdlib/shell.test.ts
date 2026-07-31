@@ -170,6 +170,15 @@ describe("_exec / _bash reject a nonexistent cwd with a clear error", () => {
     ).rejects.toThrow(/Working directory does not exist/);
   });
 
+  it("a corrupted cwd (leaked tool-call markup) gets the fix-the-call message, not a missing-directory one", async () => {
+    const ctx = makeMockCtx();
+    // The exact shape observed in the wild: the model leaked a fragment of
+    // its own function-calling markup as the argument value.
+    await expect(
+      __internal_bash(ctx, new StateStack(), new ThreadStore(), "pwd", "</parameter>\n", 0, ""),
+    ).rejects.toThrow(/corrupted tool-call argument.*working directory is unchanged/s);
+  });
+
   it("_exec throws 'does not exist' for a missing cwd", async () => {
     const ctx = makeMockCtx();
     const missing = path.join(tmp, "nope");

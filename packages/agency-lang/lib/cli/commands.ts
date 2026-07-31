@@ -268,6 +268,9 @@ export function run(
   resumeFile?: string,
   runPolicy?: { policyJson: string; interactive: boolean },
   budget?: { maxCost?: string; maxTime?: string },
+  /** Forwarded to the compiled entry's argv (positions 2+), which the
+   *  direct-run block maps onto main's parameters positionally. */
+  nodeArgs: string[] = [],
 ): void {
   const output = compile(config, inputFile, outputFile, {
     importStrategy: new RunStrategy(),
@@ -306,7 +309,7 @@ export function run(
   // succeeds even when the CLI is installed globally.
   const nodeProcess = spawn(
     process.execPath,
-    [...compiledOutputNodeArgs(), output],
+    [...compiledOutputNodeArgs(), output, ...nodeArgs],
     {
       stdio: "inherit",
       shell: false,

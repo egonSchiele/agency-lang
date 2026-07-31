@@ -79,3 +79,32 @@ You can also specify a custom config file path using the `-c` or `--config` flag
 ```bash
 agency -c custom-config.json compile input.agency
 ```
+
+## Eval Commands
+
+Configuration for `agency eval` commands:
+
+```json
+{
+  "eval": {
+    "runsDir": "runs",
+    "graders": "path/to/graders.ts",
+    "limits": {
+      "wallClockSec": 900,
+      "maxCostUsd": 50
+    }
+  }
+}
+```
+
+- `runsDir` — where run directories land (default `runs/` under the cwd).
+- `graders` — a suite-wide fallback grading module, used by tests that carry
+  no `graders` of their own. An explicit `--graders` flag overrides
+  everything; with neither, the bundled goal judge grades against each
+  input's `goal`.
+- `limits.wallClockSec` — wall clock per agent run (default 60; a test's
+  `timeoutSec` overrides it for that test).
+- `limits.maxCostUsd` — defensive LLM-spend ceiling per agent run (default
+  50). The harness watches cost as the run happens and kills the run's whole
+  process tree past the cap. Enforcement lags by one LLM call, so treat it
+  as an accident stopper, not an exact budget.

@@ -1,6 +1,7 @@
 import { fork } from "child_process";
 
 import type { AgencyConfig } from "@/config.js";
+import { TRACE_ID_ENV } from "@/config.js";
 import type { IpcDecisionMessage } from "@/runtime/ipc.js";
 import {
   buildForkOptions,
@@ -9,17 +10,20 @@ import {
   type RunLimits,
 } from "@/runtime/ipc.js";
 
-/** How to actually invoke the compiled agent for one run. The default forks a
- *  subprocess; tests inject a fake. Must never throw — failures are returned
- *  as `{ ok: false, errorMessage }`. On success the runner may report the
- *  path where it actually wrote the statelog. */
-export type EvalInputRunner = (args: {
-  compiledEntryPath: string;
-  node: string;
-  task: string | Record<string, any>;
-  cwd: string;
-  statelogPath: string;
-}) => Promise<{ ok: true; statelogPath?: string } | { ok: false; errorMessage: string }>;
+/** One run's execution job, mirroring the EvalTarget kinds: a compiled file
+ *  entry to fork and invoke over IPC, or a substituted command argv to
+ *  spawn. */
+export type EvalRunnerJob =
+  | { kind: "file"; compiledEntryPath: string; node: string; task: string | Record<string, any>; cwd: string; statelogPath: string }
+  | { kind: "command"; argv: string[]; cwd: string; statelogPath: string; traceId: string };
+
+/** How to actually run one job. The default dispatches by kind (fork for
+ *  files, spawn for commands); tests inject a fake. Must never throw —
+ *  failures are returned as `{ ok: false, errorMessage }`. On success the
+ *  runner may report the path where it actually wrote the statelog. */
+export type EvalInputRunner = (
+  job: EvalRunnerJob,
+) => Promise<{ ok: true; statelogPath?: string } | { ok: false; errorMessage: string }>;
 
 /**
  * Per-task resource limits for subprocess invocations driven by `agency eval
@@ -38,8 +42,9 @@ const DEFAULT_EVAL_RUN_LIMITS: RunLimits = {
  *  rejects non-positive values at config load; the guard here covers configs
  *  built programmatically, where 0/-1/NaN would otherwise reach setTimeout
  *  and fail every run instantly with a wall_clock limit error. */
-export function limitsFromConfig(config: AgencyConfig): RunLimits {
-  const wallClockSec = config.eval?.limits?.wallClockSec;
+export function limitsFromConfig(config: AgencyConfig, timeoutSecOverride?: number): RunLimits {
+  // Per-test override (the input's timeoutSec) beats the suite-level config.
+  const wallClockSec = timeoutSecOverride ?? config.eval?.limits?.wallClockSec;
   const valid = typeof wallClockSec === "number" && Number.isFinite(wallClockSec) && wallClockSec > 0;
   return {
     ...DEFAULT_EVAL_RUN_LIMITS,
@@ -47,19 +52,70 @@ export function limitsFromConfig(config: AgencyConfig): RunLimits {
   };
 }
 
+/** Defensive per-run LLM spend ceiling — an accident stopper, not a budget
+ *  (raise it via eval.limits.maxCostUsd when a run legitimately needs more). */
+const DEFAULT_EVAL_MAX_COST_USD = 50;
+
+export function costCapFromConfig(config: AgencyConfig): number {
+  const cap = config.eval?.limits?.maxCostUsd;
+  const valid = typeof cap === "number" && Number.isFinite(cap) && cap > 0;
+  return valid ? cap : DEFAULT_EVAL_MAX_COST_USD;
+}
+
+/** Accumulates a run's LLM spend and answers "over the cap?". Enforcement
+ *  necessarily lags by one LLM call — a call's cost is known only after it
+ *  returns — so this is a backstop, the same trade every cost guard makes.
+ *  Shared by the fork runner (fed by IPC cost telemetry) and the spawn
+ *  runner (fed by tailing the statelog). */
+export function makeCostCapTracker(capUsd: number): {
+  add(costUsd: unknown): boolean;
+  total(): number;
+  exceededMessage(): string;
+} {
+  let total = 0;
+  return {
+    add(costUsd: unknown): boolean {
+      if (typeof costUsd === "number" && Number.isFinite(costUsd) && costUsd > 0) {
+        total += costUsd;
+      }
+      return total > capUsd;
+    },
+    total: () => total,
+    exceededMessage: () =>
+      `cost cap exceeded: $${total.toFixed(2)} spent, cap $${capUsd.toFixed(2)} ` +
+      `(eval.limits.maxCostUsd raises it)`,
+  };
+}
+
+/** The fork options for a file-target eval child, with one env subtraction:
+ *  a harness-set (or shell-stray) AGENCY_TRACE_ID must not leak in — file
+ *  targets get their trace id from their own run, and inheriting one would
+ *  merge unrelated runs into a single trace. Same precedent as run()
+ *  clearing AGENCY_RUN_POLICY (lib/cli/commands.ts). Exported for tests. */
+export function evalForkOptions(limits: RunLimits, cwd: string): ReturnType<typeof buildForkOptions> {
+  const options = buildForkOptions({ limits, cwd });
+  delete (options.env as Record<string, string | undefined>)[TRACE_ID_ENV];
+  return options;
+}
+
 export function makeSubprocessRunner(
   pipeAgentOutput: boolean,
   limits: RunLimits = DEFAULT_EVAL_RUN_LIMITS,
+  maxCostUsd: number = DEFAULT_EVAL_MAX_COST_USD,
 ): EvalInputRunner {
-  return async ({ compiledEntryPath, node, task, cwd, statelogPath }) => {
+  return async (job) => {
+    if (job.kind !== "file") {
+      return { ok: false, errorMessage: "the fork runner only runs file jobs; command jobs go to runCommandInSpawn" };
+    }
     return runCompiledAgentInSubprocess({
-      compiledPath: compiledEntryPath,
-      node,
-      task,
-      cwd,
-      statelogPath,
+      compiledPath: job.compiledEntryPath,
+      node: job.node,
+      task: job.task,
+      cwd: job.cwd,
+      statelogPath: job.statelogPath,
       pipeAgentOutput,
       limits,
+      maxCostUsd,
     });
   };
 }
@@ -72,12 +128,13 @@ async function runCompiledAgentInSubprocess(args: {
   statelogPath: string;
   pipeAgentOutput: boolean;
   limits: RunLimits;
+  maxCostUsd: number;
 }): Promise<{ ok: true } | { ok: false; errorMessage: string }> {
   const limits = args.limits;
   const child = fork(
     subprocessBootstrapPath,
     [],
-    buildForkOptions({ limits, cwd: args.cwd }),
+    evalForkOptions(limits, args.cwd),
   );
   const instruction = buildRunInstruction({
     scriptPath: args.compiledPath,
@@ -114,6 +171,11 @@ async function runCompiledAgentInSubprocess(args: {
       child.stderr?.pipe(process.stderr);
     }
 
+    // The child streams per-charge cost telemetry unprompted (StateStack.
+    // billCharge → sendCostTelemetryToParent, every IPC child); billing it
+    // against the cap here is the guard-around-the-subprocess std::agency.run
+    // runs, minus the guard stack.
+    const costCap = makeCostCapTracker(args.maxCostUsd);
     child.on("message", (msg: any) => {
       if (msg?.type === "result") {
         settle({ ok: true });
@@ -121,6 +183,11 @@ async function runCompiledAgentInSubprocess(args: {
         settle({ ok: false, errorMessage: String(msg.error) });
       } else if (msg?.type === "interrupt") {
         child.send(evalInterruptDecision(msg.interruptId));
+      } else if (msg?.type === "telemetry") {
+        if (costCap.add(msg.costUsd)) {
+          child.kill("SIGKILL");
+          settle({ ok: false, errorMessage: costCap.exceededMessage() });
+        }
       }
     });
 

@@ -27,19 +27,16 @@ export async function evalGrade(
 ): Promise<EvalRunGrading> {
   const config = opts.config ?? {};
   const resolvedRunDir = path.resolve(runDir);
-  const gradersPath = opts.graders ?? config.eval?.graders;
   // `grade` is undefined here: there is no point running this command with
-  // grading switched off, so the same resolver's default path applies.
-  const graders = await resolveGraders(gradersPath, undefined, config);
+  // grading switched off, so the same resolver's default path applies. An
+  // explicit --graders overrides every input's recorded graders; otherwise
+  // per-input graders apply, with the config module / goal judge as fallback.
+  const graders = await resolveGraders(opts.graders, undefined, config);
   // resolveGraders only returns undefined for --no-grade, which this command never
   // passes, and otherwise falls back to the goal judge — so the reachable case is a
   // grading module that default-exports an empty array.
-  if (!graders || graders.length === 0) {
-    throw new Error(
-      gradersPath === undefined
-        ? "No graders resolved."
-        : `The grading module at ${gradersPath} exported no graders.`,
-    );
+  if (!graders || (graders.mode === "override" && graders.graders.length === 0)) {
+    throw new Error(`The grading module at ${opts.graders} exported no graders.`);
   }
 
   const grading = await gradeSuite(resolvedRunDir, graders, config);

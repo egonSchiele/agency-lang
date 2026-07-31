@@ -5,16 +5,30 @@ import { readEvalRun, type ReadEvalRunInput } from "@/eval/readRun.js";
 import type { Input } from "@/eval/runTypes.js";
 import type { EvalRecord } from "@/eval/types.js";
 
+import type { AgencyConfig } from "@/config.js";
+
 import type { AgencyRunner } from "./agencyRunner.js";
 import type { BaseGrader } from "./baseGrader.js";
+import { loadGradingModule } from "./gradingModule.js";
 import { Scorecard, type GraderGrade, type InputGrades } from "./scorecard.js";
 import type { LoadedRun, JSON as Json } from "./types.js";
 
+/** The suite-level grader set and what it means against a test's own graders
+ *  (an input's recorded `graders` module). "override" (an explicit --graders
+ *  flag) replaces every test's own graders — the experiment knob. "fallback"
+ *  (eval.graders config, or the bundled goal judge) applies only to inputs
+ *  that carry none. */
+export type SuiteGraders =
+  | { mode: "override"; graders: BaseGrader[] }
+  | { mode: "fallback"; graders: BaseGrader[] };
+
 /** What grading needs besides the run itself. */
 export type GradingContext = {
-  graders: BaseGrader[];
+  suiteGraders: SuiteGraders;
   /** Capability to execute a judge .agency file. Built from an AgencyConfig. */
   runAgency: AgencyRunner;
+  /** For loading per-input grading modules. */
+  config: AgencyConfig;
 };
 
 /**
@@ -22,11 +36,11 @@ export type GradingContext = {
  * fails, so a failing gate never pays for the advisory graders behind it.
  *
  * An input with nothing to grade is scored 0 rather than throwing — see
- * {@link lookUpOutput} for the three ways that happens, each with its own reason.
+ * {@link lookUpOutput} for the two ways that happens, each with its own reason.
  * A suite needs mixed results, not an abort. The optimizer still refuses a
  * baseline in this state, via `requireBaselineGatesPass`.
  */
-async function gradeInput(entry: Entry, ctx: GradingContext): Promise<InputGrades> {
+async function gradeInput(entry: Entry, ctx: GradingContext, graders: BaseGrader[]): Promise<InputGrades> {
   const input = entry.input;
   const lookup = lookUpOutput(entry.recordPath, entry.workdir);
   if ("reason" in lookup) {
@@ -34,7 +48,7 @@ async function gradeInput(entry: Entry, ctx: GradingContext): Promise<InputGrade
   }
   const run = lookup.run;
 
-  const applicable = ctx.graders.filter((grader) => grader.gradesInput(input));
+  const applicable = graders.filter((grader) => grader.gradesInput(input));
   const gates = applicable.filter((grader) => grader.mustPass());
   const advisory = applicable.filter((grader) => !grader.mustPass());
 
@@ -86,10 +100,42 @@ export function validateGraders(graders: BaseGrader[], input: Input | undefined)
  */
 export async function gradeRun(runDir: string, ctx: GradingContext): Promise<Scorecard> {
   const loaded = readEvalRun(runDir);
+  const moduleCache = makeGraderModuleCache(ctx.config);
   const perInput = await Promise.all(
-    Object.values(loaded.inputsById).map((input) => gradeEntry(loadedEntry(loaded.runDir, input), ctx)),
+    Object.values(loaded.inputsById).map(async (input) => {
+      const entry = loadedEntry(loaded.runDir, input);
+      const graders = await effectiveGraders(entry.input, ctx, moduleCache);
+      return gradeEntry(entry, ctx, graders);
+    }),
   );
   return new Scorecard(perInput);
+}
+
+/** Which graders score this input, per the precedence the SuiteGraders doc
+ *  states: override > the input's own recorded module > fallback. */
+async function effectiveGraders(
+  input: Input,
+  ctx: GradingContext,
+  cache: (modulePath: string) => Promise<BaseGrader[]>,
+): Promise<BaseGrader[]> {
+  if (ctx.suiteGraders.mode === "override") {
+    return ctx.suiteGraders.graders;
+  }
+  if (input.graders !== undefined) {
+    return cache(input.graders);
+  }
+  return ctx.suiteGraders.graders;
+}
+
+/** One esbuild+import per module path per call, however many inputs share a
+ *  grading module. Exported so the run CLI's pre-run validation loads
+ *  through the same path grading does. */
+export function makeGraderModuleCache(config: AgencyConfig): (modulePath: string) => Promise<BaseGrader[]> {
+  const loads: Record<string, Promise<BaseGrader[]>> = {};
+  return (modulePath) => {
+    loads[modulePath] ??= loadGradingModule(modulePath, config);
+    return loads[modulePath];
+  };
 }
 
 /** What grading needs from one loaded input: the spec, where its evidence
@@ -103,11 +149,11 @@ type Entry = {
 };
 
 /** Grade one entry, or score it 0 when there is nothing gradable. */
-async function gradeEntry(entry: Entry, ctx: GradingContext): Promise<InputGrades> {
+async function gradeEntry(entry: Entry, ctx: GradingContext, graders: BaseGrader[]): Promise<InputGrades> {
   if (entry.ungradedReason !== undefined) {
     return ungraded(entry.input, entry.ungradedReason);
   }
-  return gradeInput(entry, ctx);
+  return gradeInput(entry, ctx, graders);
 }
 
 /**
@@ -156,11 +202,19 @@ type OutputLookup = { run: LoadedRun } | { reason: string };
 /**
  * Read the record and pull out the graded output.
  *
- * Three distinct failures, each with its own reason: no record on disk, a record
- * that will not parse, and a record carrying no output. Conflating them sends the
- * reader after the wrong problem. A corrupt record in particular must not throw:
- * in the `eval run` inline path the exception would arrive after every agent had
- * already run and been paid for, taking the whole result down over one bad file.
+ * Two distinct failures, each with its own reason: no record on disk, and a
+ * record that will not parse. Conflating them sends the reader after the wrong
+ * problem. A corrupt record in particular must not throw: in the `eval run`
+ * inline path the exception would arrive after every agent had already run and
+ * been paid for, taking the whole result down over one bad file.
+ *
+ * A record with NO recorded output is not a failure: command agents (the
+ * agency CLI under --agent-cmd) do not emit the output event file agents do,
+ * and for terminal-bench-style tests the deliverable is the FILESYSTEM, which
+ * graders read from the workdir. Grading proceeds with `output: null` —
+ * graders that need the output fail on their own terms against null; a real
+ * agent that passed by writing the right files must not be scored ungraded
+ * over a missing chat reply.
  */
 function lookUpOutput(recordPath: string, workdir: string): OutputLookup {
   if (!recordPath || !fs.existsSync(recordPath)) {
@@ -175,12 +229,9 @@ function lookUpOutput(recordPath: string, workdir: string): OutputLookup {
     return { reason: `eval record unreadable: ${message}` };
   }
   const outputs = record.evalOutputs ?? [];
-  if (outputs.length === 0) {
-    return { reason: "the agent produced no output to grade" };
-  }
   return {
     run: {
-      output: outputs[outputs.length - 1].value as Json,
+      output: outputs.length === 0 ? null : (outputs[outputs.length - 1].value as Json),
       recordPath,
       workdir,
       record,

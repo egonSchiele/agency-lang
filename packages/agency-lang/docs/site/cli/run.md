@@ -79,3 +79,17 @@ agency run foo.agency
 ```
 
 You can also use [pack](./pack) to produce a standalone script that has no dependencies at all. It inlines the agency package instead of importing it, so it will run anywhere with just Node installed.
+## Passing arguments to the entry node
+
+Arguments after the file (or after `--`, for dash-leading values) are passed
+positionally to the entry node's parameters:
+
+```bash
+agency run greet.agency hello
+# node main(name: string) receives "hello"
+```
+
+An absent argument arrives as `undefined`. Note when invoking through
+another tool: `npx agency run file.agency -- x` loses the `--` to npx —
+plain trailing arguments work everywhere, and `--` works when invoking the
+`agency` binary directly.

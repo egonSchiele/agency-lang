@@ -100,6 +100,102 @@ node main(task: string) {
   assert(record.interrupts[0].outcome === "approved", `record outcome: ${record.interrupts[0].outcome}`);
 
   console.log("[eval-run-integration] PASS: interrupting agent auto-approved over IPC, verdict recorded");
+
+  // ── Scenario B: a COMMAND target, end to end ──
+  // The load-bearing check for --agent-cmd: the spawned CLI (a real `agency
+  // run` process, not a fork) writes its statelog to the harness's expected
+  // path via AGENCY_CONFIG_OVERRIDES, argv delivery works through a real
+  // CLI, and the whole tree lands on ONE trace id (AGENCY_TRACE_ID). Do not
+  // trim the single-trace assertion: it is the real proof for the trace-id
+  // env var (its unit test only pins mint order).
+  const cmdFixtures = join(TMP_ROOT, "cmd-fixtures");
+  mkdirSync(cmdFixtures, { recursive: true });
+  writeFileSync(join(cmdFixtures, "writer.agency"), `node main(task: string): string {
+  handle {
+    write("out.txt", task)
+  } with (data) {
+    if (data.effect == "std::write") {
+      return approve()
+    }
+    return reject()
+  }
+  return "wrote out.txt"
+}
+`);
+  writeFileSync(join(TMP_ROOT, "cmd-inputs.json"), JSON.stringify({
+    inputs: [{ id: "cmd-e2e", goal: "writes the task to out.txt", task: "hello from a command target", files: cmdFixtures }],
+  }));
+  const agentCmd = `node ${AGENCY_CLI} run writer.agency --policy approve-all -- {task}`;
+  let cmdOutput;
+  try {
+    cmdOutput = execSync(
+      `node ${JSON.stringify(AGENCY_CLI)} eval run` +
+      ` --agent-cmd ${JSON.stringify(agentCmd)}` +
+      ` --inputs ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
+      ` --runs-dir ${JSON.stringify(runsDir)} --run-id cmd-e2e --no-grade`,
+      { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+    );
+  } catch (err) {
+    console.error("[eval-run-integration] command-target run failed. Child stdout:");
+    console.error(err.stdout ?? "(none)");
+    console.error("[eval-run-integration] Child stderr:");
+    console.error(err.stderr ?? "(none)");
+    throw err;
+  }
+  assert(cmdOutput.includes("1/1 inputs ok"), `expected a fully-ok command run, got:\n${cmdOutput}`);
+
+  const cmdInputDir = join(runsDir, "cmd-e2e", "inputs", "cmd-e2e");
+  // argv delivery through a real CLI: the agent wrote the task text
+  const outTxt = readFileSync(join(cmdInputDir, "workdir", "out.txt"), "utf-8");
+  assert(outTxt === "hello from a command target", `out.txt: ${JSON.stringify(outTxt)}`);
+  // the spawned agent's own events landed at the harness statelog path...
+  const cmdEvents = readFileSync(join(cmdInputDir, "agent", "statelog.jsonl"), "utf-8")
+    .trim().split("\n").map((line) => JSON.parse(line));
+  assert(cmdEvents.some((e) => e.data?.type === "agentStart"), "no agentStart from the spawned CLI in the harness statelog");
+  // ...with exactly one trace id across the whole tree
+  const traceIds = [...new Set(cmdEvents.map((e) => e.trace_id))];
+  assert(traceIds.length === 1, `expected one trace id, got ${traceIds.length}: ${traceIds.join(", ")}`);
+  assert(existsSync(join(cmdInputDir, "agent", "eval-record.json")), "no eval-record.json for the command run");
+  console.log("[eval-run-integration] PASS: command target — argv delivery, statelog handoff, single trace id");
+
+  // ── Scenario C: a command that writes no statelog fails with the hint ──
+  // (The --log clobber itself lives in `agency agent`, which is LLM-bound;
+  // the hint text covers both causes and this pins the whole detection path:
+  // command "succeeds", no statelog at the harness path, error names it.)
+  try {
+    execSync(
+      `node ${JSON.stringify(AGENCY_CLI)} eval run` +
+      ` --agent-cmd ${JSON.stringify(`node -e 1+1 {task}`)}` +
+      ` --inputs ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
+      ` --runs-dir ${JSON.stringify(runsDir)} --run-id cmd-clobber --no-grade`,
+      { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+    );
+  } catch {
+    // exit code is not the assertion; error.txt is
+  }
+  const clobberError = readFileSync(join(runsDir, "cmd-clobber", "inputs", "cmd-e2e", "agent", "error.txt"), "utf-8");
+  assert(clobberError.includes("If your command passes --log, remove it"),
+    `error.txt should name the --log clobber cause, got:\n${clobberError}`);
+  console.log("[eval-run-integration] PASS: missing statelog names the --log/non-Agency causes");
+
+  // ── Scenario D: a command without {task} fails at resolution, before any run dir exists ──
+  let noPlaceholderFailed = false;
+  try {
+    execSync(
+      `node ${JSON.stringify(AGENCY_CLI)} eval run --agent-cmd "echo hello"` +
+      ` --inputs ${JSON.stringify(join(TMP_ROOT, "cmd-inputs.json"))}` +
+      ` --runs-dir ${JSON.stringify(runsDir)} --run-id cmd-noplaceholder --no-grade`,
+      { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+    );
+  } catch (err) {
+    noPlaceholderFailed = true;
+    const text = `${err.stdout ?? ""}${err.stderr ?? ""}`;
+    assert(text.includes("{task}"), `error should name the {task} requirement, got:\n${text}`);
+  }
+  assert(noPlaceholderFailed, "a command without {task} must be rejected");
+  assert(!existsSync(join(runsDir, "cmd-noplaceholder")), "no run directory should exist for a resolution-time failure");
+  console.log("[eval-run-integration] PASS: missing {task} rejected before any run");
+
   passed = true;
 } finally {
   if (passed && !process.env.EVAL_RUN_KEEP_TMP) {

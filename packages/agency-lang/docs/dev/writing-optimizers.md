@@ -54,7 +54,7 @@ So inside `optimizeTargets` you already have a discovered `source` and the run `
 
 - **`OptimizeTargetSet`** (`targets.ts`): `{ baseDir, entryFile, files, targets, typeAliases }`. `files` maps each relative path to its source and discovery-time sha256; `targets` is the list of discovered `optimize` declarations (`{ id, kind, name, value, valueKind, declaredType, … }`); `typeAliases` is the closure's type registry, used to typecheck proposed values. `fileMap(source)` returns just the `{ relpath: source }` map.
 - **A candidate is a file map.** Everywhere below, `files: Record<string, string>` means a complete relpath→source map for the whole discovered closure, not a diff. `defaultPreview` produces one; you pass it to `evaluate`/`scoreFiles` and it becomes the overlay applied on top of a fresh project copy before compiling.
-- **`Input`** (`@/eval/runTypes.ts`): one agent invocation — `{ id?, args, node?, goal?, expected?, metadata? }`.
+- **`Input`** (`@/eval/runTypes.ts`): one agent invocation — `{ id?, task, goal?, expected?, files?, timeoutSec?, metadata? }`. `task` (a string or JSON object) is delivered as the entry node's single parameter.
 - **`Scorecard`** (`grading/scorecard.ts`): the result of grading a candidate. See [Grading semantics](#grading-semantics-you-should-know).
 - **`OptimizeResult`** (`types.ts`): what you return — champion iteration + files, decision counts, per-iteration records, objectives, and the champion breakdown. `finishPointwise` builds it for you.
 
@@ -75,7 +75,7 @@ These are the building blocks every optimizer composes (`this.` on `BaseOptimize
 | `buildPointwiseResult({ championIter, championFiles, attempts })` | Lower-level result assembly. `finishPointwise` calls it; you rarely need it directly. |
 | `eachIteration(step)` | `for iter in 1..config.iterations`, awaiting each `step(iter)`. |
 | `reporter` | A `PointwiseReporter` for progress (silent unless the CLI sets verbosity). |
-| `graders` | The configured `BaseGrader[]`. |
+| `graders` | The configured `BaseGrader[]`. The optimizer grades in `override` mode: this set IS the objective, and a suite input's own `graders` module is deliberately ignored — per-test graders must not silently change what is being optimized. |
 | `config` | `BaseOptimizerConfig`: `graders`, `iterations`, `seed`, `runId`, `runsDir`, `writeback`, `mutatorModel`, `verbosity`, `config` (the `AgencyConfig`). |
 | `validationInputs` | Held-out inputs (empty if none). See [Validation](#validation). |
 | `workspace.writeBack(source, files)` | Write a file set back to the real sources, sha-checked. `finishPointwise` already does this — only call it directly if you are not using `finishPointwise`. |

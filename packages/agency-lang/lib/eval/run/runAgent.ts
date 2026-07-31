@@ -1,11 +1,16 @@
 import * as fs from "fs";
 
+import { nanoid } from "nanoid";
+
+import type { EvalTarget } from "@/agentTarget.js";
 import type { AgencyConfig } from "@/config.js";
 import type { EvalRecord } from "@/eval/types.js";
 
+import { substituteTask } from "./commandLine.js";
 import { agentRunPaths, makeEvalRecordExtractor, shouldExtractStatelog, type AgentRunPaths, type EvalRecordExtractor } from "./extract.js";
-import { applyOverlay, compileAgent, copyFiles, filesToCopy, seedFromAgentFile, type AgentSeed } from "./seed.js";
-import { limitsFromConfig, makeSubprocessRunner, type EvalInputRunner } from "./subprocess.js";
+import { applyOverlay, commandFilesToCopy, compileAgent, copyFiles, filesToCopy, seedFromAgentFile, type AgentSeed } from "./seed.js";
+import { runCommandInSpawn } from "./spawnRunner.js";
+import { costCapFromConfig, limitsFromConfig, makeSubprocessRunner, type EvalInputRunner, type EvalRunnerJob } from "./subprocess.js";
 
 export type RunAgentOptions = {
   /** The directory for THIS run — records land in <runDir>/agent/, the agent
@@ -33,6 +38,8 @@ export type RunAgentOptions = {
    *  makeEvalRecordExtractor({ warnMissingValue: true }); see that factory
    *  for why the optimizer passes warnMissingValue: false. Tests pass stubs. */
   extractor?: EvalRecordExtractor;
+  /** The input's per-test wall-clock override, in seconds. */
+  timeoutSec?: number;
 };
 
 /** Test seam: inject a fake in place of the subprocess fork. */
@@ -55,16 +62,18 @@ const MAX_LISTED_SEEDED_FILES = 50;
 /**
  * Run one agent, once, and collect what happened. The level-1 atom: suites,
  * grading, and optimizing all compose over this. Never throws — every failure
- * is an error result with error.txt written.
+ * is an error result with error.txt written. Both target kinds run through
+ * the same pipeline; only seeding (commands compile nothing) and execution
+ * (fork vs spawn) branch — extraction, salvage, and error-writing are one
+ * path.
  */
 export async function runAgent(
-  agentPath: string,
-  node: string,
+  target: EvalTarget,
   task: string | Record<string, any>,
   options: RunAgentOptions,
   deps: RunAgentDeps = {},
 ): Promise<AgentRun> {
-  return new AgentRunner(agentPath, node, task, options, deps).run();
+  return new AgentRunner(target, task, options, deps).run();
 }
 
 /** One run's worth of state — the paths, and what got seeded — so the steps
@@ -74,8 +83,7 @@ class AgentRunner {
   private seededFiles: string[] = [];
 
   constructor(
-    private readonly agentPath: string,
-    private readonly node: string,
+    private readonly target: EvalTarget,
     private readonly task: string | Record<string, any>,
     private readonly options: RunAgentOptions,
     private readonly deps: RunAgentDeps,
@@ -84,7 +92,7 @@ class AgentRunner {
   }
 
   async run(): Promise<AgentRun> {
-    let compiledPath: string;
+    let compiledPath: string | null;
     try {
       compiledPath = this.seedWorkdir();
     } catch (err) {
@@ -105,9 +113,14 @@ class AgentRunner {
       return this.fail(`eval-record extraction failed: ${errMessage(err)}`);
     }
     if (record === undefined) {
+      const commandHint = this.target.kind === "command"
+        ? " If your command passes --log, remove it — the harness sets the statelog path itself. " +
+          "If the command is not an Agency CLI, it cannot produce the statelog eval requires."
+        : "";
       return this.fail(
         "run completed but produced no eval record: no statelog was written " +
-        "(or it landed somewhere unexpected), or the extractor wrote no record file",
+        "(or it landed somewhere unexpected), or the extractor wrote no record file." +
+        commandHint,
       );
     }
     return {
@@ -129,10 +142,18 @@ class AgentRunner {
     }
   }
 
-  /** Put every needed file in place (agent closure + test files + overlay)
-   *  and compile the agent inside the workdir. Returns the compiled entry. */
-  private seedWorkdir(): string {
-    const base = this.options.seed ?? seedFromAgentFile(this.agentPath);
+  /** Put every needed file in place and, for file targets, compile the agent
+   *  inside the workdir. Command targets seed the input's files plus the
+   *  invoking cwd's config files and compile nothing (compiledPath null). */
+  private seedWorkdir(): string | null {
+    if (this.target.kind === "command") {
+      const files = commandFilesToCopy(this.options.seedFiles);
+      copyFiles(this.paths.workdirPath, files);
+      applyOverlay(this.paths.workdirPath, this.options.overlayFiles);
+      this.seededFiles = Object.keys(files).sort();
+      return null;
+    }
+    const base = this.options.seed ?? seedFromAgentFile(this.target.agentFile);
     const seed = this.options.seedFiles === undefined ? base : { ...base, filesDir: this.options.seedFiles };
     const files = filesToCopy(seed);
     copyFiles(this.paths.workdirPath, files);
@@ -141,14 +162,38 @@ class AgentRunner {
     return compileAgent(this.paths.workdirPath, seed.agentRelPath, this.options.config);
   }
 
-  /** Run the compiled agent: workdir as cwd, statelog captured under agent/. */
-  private execute(compiledEntryPath: string): ReturnType<EvalInputRunner> {
+  /** Run the agent: workdir as cwd, statelog captured under agent/. */
+  private execute(compiledEntryPath: string | null): ReturnType<EvalInputRunner> {
     fs.mkdirSync(this.paths.agentDir, { recursive: true });
-    const runner = this.deps.runner ??
-      makeSubprocessRunner(this.options.pipeOutput ?? true, limitsFromConfig(this.options.config));
+    const pipeOutput = this.options.pipeOutput ?? true;
+    const limits = limitsFromConfig(this.options.config, this.options.timeoutSec);
+    const maxCostUsd = costCapFromConfig(this.options.config);
+    const runner = this.deps.runner ?? ((job: EvalRunnerJob) =>
+      job.kind === "command"
+        ? runCommandInSpawn({ ...job, pipeOutput, limits, maxCostUsd })
+        : makeSubprocessRunner(pipeOutput, limits, maxCostUsd)(job));
+
+    if (this.target.kind === "command") {
+      let argv: string[];
+      try {
+        argv = substituteTask(this.target.tokens, this.task);
+      } catch (err) {
+        return Promise.resolve({ ok: false as const, errorMessage: errMessage(err) });
+      }
+      return runner({
+        kind: "command",
+        argv,
+        cwd: this.paths.workdirPath,
+        statelogPath: this.paths.statelogPath,
+        // One id for the whole process tree this command starts; minted per
+        // run so two inputs never share a trace.
+        traceId: nanoid(),
+      });
+    }
     return runner({
-      compiledEntryPath,
-      node: this.node,
+      kind: "file",
+      compiledEntryPath: compiledEntryPath as string,
+      node: this.target.node,
       task: this.task,
       cwd: this.paths.workdirPath,
       statelogPath: this.paths.statelogPath,

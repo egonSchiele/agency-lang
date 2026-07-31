@@ -189,6 +189,25 @@ node main(task: string): string {
   }
   console.log("Test 7 passed");
 
+  // --- Test 8: run forwards trailing args to the entry node ---
+  console.log("--- Test 8: run argument passthrough ---");
+  writeFile(dir, "argful.agency", `node main(task: string): string {
+  print("got: " + task)
+  return task
+}
+`);
+  // No `--` here: npx consumes it before agency sees the args. Plain
+  // trailing positionals work; `--` also works when invoking the agency
+  // binary directly (needed for dash-leading args).
+  const withArg = run(dir, "npx agency run argful.agency hello");
+  assertIncludes(withArg, "got: hello");
+  // No argv: the parameter is undefined. This pins the direct-run bug fix —
+  // the runtime state object must never land in a declared parameter (it
+  // used to arrive as the first argument, printing "[object Object]").
+  const withoutArg = run(dir, "npx agency run argful.agency");
+  assertIncludes(withoutArg, "got: undefined");
+  console.log("Test 8 passed");
+
   console.log("=== All CLI tests passed ===");
   cleanup(dir);
 } catch (err) {

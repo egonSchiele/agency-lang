@@ -1,32 +1,14 @@
-import { run, CompiledProgram } from "std::agency"
 import {
-  _initEvalRun,
-  _prepareInput,
-  _finalizeInput,
-  _finishEvalRun,
-  _formatEvalRunFailure,
   _evalExtract,
   _evalJudge,
   _evalJudgeSuite,
 } from "agency-lang/stdlib-lib/agencyEval.js"
 
 /** @module
-  Helpers for running and judging eval suites from Agency code.
-
-  ## Run an input suite
-
-  ```ts
-  import { compile } from "std::agency"
-  import { evalRun } from "std::agency/eval"
-
-  node main() {
-    const agent = compile("agent.agency")
-    const result = evalRun(agent, [
-      { id: "capital-france", goal: "Return Paris", args: {} },
-    ])
-    print(result.runDir)
-  }
-  ```
+  Helpers for judging eval runs from Agency code. (Running suites from
+  Agency was removed 2026-07-30: the old binding predated workdir seeding
+  and diverged from `agency eval run` semantics. Run suites with the CLI;
+  a binding over the current runSuite can come back when needed.)
 
   ## Extract and judge eval records
 
@@ -57,87 +39,6 @@ import {
   }
   ```
 */
-
-export type Input = {
-  id?: string;
-  goal?: string;
-  args: Record<string, any>;
-  node?: string;
-  metadata?: Record<string, any>
-}
-
-export type EvalRunInputResult = {
-  inputId: string;
-  status: "success" | "error";
-  evalRecordPath: string;
-  statelogPath: string;
-  workdirPath: string;
-  errorMessage?: string
-}
-
-export type EvalRunResult = {
-  runId: string;
-  runDir: string;
-  agentLabel: string;
-  inputs: EvalRunInputResult[];
-  okCount: number;
-  errorCount: number
-}
-
-/** Subprocess execution goes through the std::agency run primitive, so caller
-  handlers still approve subprocess execution and child interrupts. */
-export def evalRun(
-  compiled: CompiledProgram,
-  inputs: Input[],
-  node: string = "main",
-  runsDir: string = "runs/",
-  runId: string = "",
-  continueOnError: boolean = true,
-): EvalRunResult {
-  """
-  Run a compiled Agency program against a list of eval inputs sequentially, writing per-input statelog and eval artifacts under runsDir/runId, and return a summary of the run.
-
-  @param compiled - Compiled program to evaluate
-  @param inputs - Eval inputs to run sequentially
-  @param node - Default node to invoke when an input does not specify one
-  @param runsDir - Output directory for eval runs
-  @param runId - Optional run id; generated when empty
-  @param continueOnError - Continue remaining inputs after an input error
-  """
-  const state = _initEvalRun(compiled, inputs, node, runsDir, runId, continueOnError)
-  const results: EvalRunInputResult[] = []
-  let lastStatus = "success"
-
-  for (input in state.inputs) {
-    const prep = _prepareInput(state, input)
-    if (prep.ok) {
-      const prepared = prep.prepared
-      const runResult = run(
-        compiled: compiled,
-        node: input.node ?? node,
-        args: input.args,
-        logFile: prepared.statelogPath,
-        cwd: prepared.workdirPath,
-      )
-      let runError = ""
-      if (isFailure(runResult)) {
-        runError = _formatEvalRunFailure(runResult)
-      }
-      const inputResult = _finalizeInput(prepared, runError)
-      results.push(inputResult)
-      lastStatus = inputResult.status
-    } else {
-      results.push(prep.result)
-      lastStatus = prep.result.status
-    }
-
-    if (lastStatus == "error" && !continueOnError) {
-      break
-    }
-  }
-
-  return _finishEvalRun(state, results)
-}
 
 // ---------------------------------------------------------------------------
 // `eval extract` stdlib binding

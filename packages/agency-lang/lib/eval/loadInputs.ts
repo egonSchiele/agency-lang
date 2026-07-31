@@ -22,11 +22,13 @@ type LoadOptions = {
   sourceCacheRoot?: string;
 };
 
+/** The `--goal` one-liner: criterion and instruction coincide, and both are
+ *  written explicitly so the run's input.json shows what the agent was told. */
 export function inputFromGoal(goal: string): Input {
   if (typeof goal !== "string" || goal.length === 0) {
     throw new Error("--goal must be a non-empty string");
   }
-  return { id: "input-1", goal, args: {} };
+  return { id: "input-1", task: goal, goal };
 }
 
 export function loadInputs(sourcePath: string, makeId: MakeId = nanoid, options: LoadOptions = {}): Input[] {
@@ -123,6 +125,13 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
     throw new Error("Eval input must be a JSON object");
   }
   const spec = raw as Record<string, unknown>;
+  if (spec.args !== undefined || spec.node !== undefined) {
+    throw new Error(
+      "Eval inputs no longer take \"args\" or \"node\" — tests describe the task, not the agent. " +
+      "Put what the agent is told in \"task\" (a string or a JSON object); " +
+      "pick the node with --agent file.agency:node.",
+    );
+  }
   if (spec.goal !== undefined && spec.rubric !== undefined) {
     throw new Error("Eval input cannot specify both goal and rubric");
   }
@@ -133,11 +142,14 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.goal !== undefined && typeof spec.goal !== "string") {
     throw new Error("Eval input goal must be a string when provided");
   }
-  if (spec.args !== undefined && !isPlainObject(spec.args)) {
-    throw new Error("Eval input args must be an object when provided");
+  if (typeof spec.task !== "string" && !isPlainObject(spec.task)) {
+    throw new Error("Eval input task is required: a string, or a JSON object for structured input");
   }
-  if (spec.node !== undefined && typeof spec.node !== "string") {
-    throw new Error("Eval input node must be a string when provided");
+  if (typeof spec.task === "string" && spec.task.length === 0) {
+    throw new Error("Eval input task must not be empty");
+  }
+  if (isPlainObject(spec.task) && Object.keys(spec.task).length === 0) {
+    throw new Error("Eval input task must not be empty");
   }
   if (spec.files !== undefined && typeof spec.files !== "string") {
     throw new Error("Eval input files must be a string when provided");
@@ -147,11 +159,10 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   }
   const out: Input = {
     id: typeof spec.id === "string" ? spec.id : makeId(),
-    args: (spec.args ?? {}) as Record<string, any>,
+    task: spec.task as string | Record<string, any>,
     expected: spec.expected,   // any JSON; absent stays undefined
   };
   if (typeof spec.goal === "string") out.goal = spec.goal;
-  if (typeof spec.node === "string") out.node = spec.node;
   if (typeof spec.files === "string") out.files = resolveFilesDir(spec.files, baseDir, options, out.id ?? "");
   if (isPlainObject(spec.metadata)) out.metadata = spec.metadata as Record<string, any>;
   return out;

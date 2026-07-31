@@ -12,7 +12,7 @@
 
 import { pathToFileURL } from "url";
 import type { IpcResultMessage, IpcErrorMessage, IpcInterruptedMessage, RunInstruction, ResumeInstruction } from "./ipc.js";
-import { ipcLog, setSubprocessIpcPayloadLimit, serializeInterruptsForIpc } from "./ipc.js";
+import { ipcLog, resolveNodeCallArgs, setSubprocessIpcPayloadLimit, serializeInterruptsForIpc } from "./ipc.js";
 import { hasInterrupts } from "./interrupts.js";
 import { setRuntimeConfigOverrides } from "./configOverrides.js";
 import { setSubprocessRunInfo } from "./subprocessRunInfo.js";
@@ -79,8 +79,8 @@ async function sendResultOrLimitError(msg: IpcResultMessage | IpcInterruptedMess
   await sendOrDie(msg);
 }
 
-/** Run-mode body: look up the node function, map named args to positional
- * order via the module's `__<node>NodeParams` metadata, and call it. */
+/** Run-mode body: look up the node function, resolve its positional call
+ * arguments (task delivery or named-args mapping), and call it. */
 async function executeRun(mod: any, msg: RunInstruction): Promise<any> {
   const nodeFn = mod[msg.node];
   if (typeof nodeFn !== "function") {
@@ -102,7 +102,13 @@ async function executeRun(mod: any, msg: RunInstruction): Promise<any> {
     process.exit(1);
   }
   const paramNames: string[] = mod[paramsKey];
-  const positionalArgs = paramNames.map((p: string) => msg.args[p]);
+
+  const call = resolveNodeCallArgs(msg, paramNames);
+  if ("error" in call) {
+    await sendOrDie({ type: "error", error: call.error });
+    process.exit(1);
+  }
+  const positionalArgs = call.args;
 
   ipcLog("send", { type: "log", detail: `calling node ${msg.node}` });
   // No top-level `agencyStore.run(...)` wrap here: the node entry

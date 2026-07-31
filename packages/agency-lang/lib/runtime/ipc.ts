@@ -532,14 +532,53 @@ export type RunInstruction = SubprocessIdentity & {
   scriptPath: string;
   node: string;
   args: Record<string, any>;
+  /** Present on every eval run; absent on all other runs. Delivered as the
+   *  node's single positional argument (eval entry nodes take exactly one
+   *  parameter, whatever it is named — the sender does not know the agent's
+   *  parameter names, by design). Mutually exclusive with a non-empty
+   *  `args`. */
+  task?: string | Record<string, any>;
   ipcPayload?: number;
   configOverrides?: Partial<AgencyConfig>;
 };
 
+/**
+ * Decide a run instruction's positional call arguments, given the node's
+ * parameter names (the compiled module's `__<node>NodeParams`). Two modes:
+ *
+ * Eval runs (`task` present) deliver the input's task positionally — the
+ * sender does not know the agent's parameter names, by design (tests
+ * describe the task, not the agent). Exactly one parameter, checked loudly
+ * before the node runs; a mismatch must never become a silent undefined.
+ *
+ * Everything else maps the named `args` record through the parameter list.
+ * Lives here (not in the bootstrap, which has import-time side effects) so
+ * tests can exercise it; the bootstrap turns an error into an IPC reply.
+ */
+export function resolveNodeCallArgs(
+  msg: { node: string; args: Record<string, any>; task?: string | Record<string, any> },
+  paramNames: string[],
+): { args: unknown[] } | { error: string } {
+  if (msg.task === undefined) {
+    return { args: paramNames.map((p) => msg.args[p]) };
+  }
+  if (Object.keys(msg.args ?? {}).length > 0) {
+    return { error: "Malformed run instruction: both task and args were provided; they are mutually exclusive" };
+  }
+  if (paramNames.length !== 1) {
+    const detail = paramNames.length === 0
+      ? `eval delivers the input's task as the node's parameter, but node "${msg.node}" takes none`
+      : `eval entry nodes take exactly one parameter; node "${msg.node}" takes ${paramNames.length} (${paramNames.join(", ")})`;
+    return { error: `${detail}. Agents with a different shape should add a one-parameter adapter node.` };
+  }
+  return { args: [msg.task] };
+}
+
 export function buildRunInstruction(args: {
   scriptPath: string;
   node: string;
-  args: Record<string, any>;
+  args?: Record<string, any>;
+  task?: string | Record<string, any>;
   limits: RunLimits;
   configOverrides?: Partial<AgencyConfig>;
   identity?: SubprocessIdentity;
@@ -548,7 +587,8 @@ export function buildRunInstruction(args: {
     type: "run",
     scriptPath: args.scriptPath,
     node: args.node,
-    args: args.args,
+    args: args.args ?? {},
+    ...(args.task !== undefined ? { task: args.task } : {}),
     ipcPayload: args.limits.ipcPayload,
     ...(args.configOverrides ? { configOverrides: args.configOverrides } : {}),
     ...(args.identity ?? {}),

@@ -130,9 +130,11 @@ def add(a: number, b: number): number {
 
   // --- Test 6: eval run with an inline goal ---
   console.log("--- Test 6: eval run with an inline goal ---");
+  // task is unused: eval entry nodes must take exactly one parameter (the
+  // input's task; --goal supplies the goal text as the task).
   writeFile(dir, "eval-agent.agency", `optimize const greeting = "hello"
 
-node main(): string {
+node main(task: string): string {
   return greeting + " world"
 }
 `);

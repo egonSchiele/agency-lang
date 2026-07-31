@@ -58,7 +58,7 @@ describe("eval run CLI", () => {
 
   it("compiles, runs each task through the injected runner, and writes artifacts", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main() {}\n");
+    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
 
     const result = await evalRun(
@@ -88,7 +88,7 @@ describe("eval run CLI", () => {
 
   it("rejects an empty suite instead of succeeding with zero inputs", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main() {}\n");
+    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
     const inputsFile = path.join(tmpDir, "empty.json");
     fs.writeFileSync(inputsFile, JSON.stringify({ inputs: [] }));
     const runsDir = path.join(tmpDir, "runs");
@@ -116,7 +116,7 @@ describe("eval run CLI", () => {
 
   it("extracts from workdir statelog.log when runtime overrides do not redirect the log file", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main() {}\n");
+    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
     let extractorStatelogPath = "";
 
@@ -150,13 +150,13 @@ describe("eval run CLI", () => {
 
   it("stops after the first task error when continueOnError is false", async () => {
     const agentFile = path.join(tmpDir, "agent.agency");
-    fs.writeFileSync(agentFile, "node main() {}\n");
+    fs.writeFileSync(agentFile, "node main(task: string) {}\n");
     const runsDir = path.join(tmpDir, "runs");
     const inputsFile = path.join(tmpDir, "inputs.json");
     fs.writeFileSync(inputsFile, JSON.stringify({
       inputs: [
-        { id: "first", goal: "g1", args: {} },
-        { id: "second", goal: "g2", args: {} },
+        { id: "first", goal: "g1", task: "t" },
+        { id: "second", goal: "g2", task: "t" },
       ],
     }));
 
@@ -200,7 +200,7 @@ describe("eval run CLI", () => {
     // resolver path as a remote URL, with no network.
     const suiteRepo = path.join(tmpDir, "suite-repo");
     fs.mkdirSync(path.join(suiteRepo, "capital", "files"), { recursive: true });
-    fs.writeFileSync(path.join(suiteRepo, "capital", "test.json"), JSON.stringify({ goal: "g", args: {} }));
+    fs.writeFileSync(path.join(suiteRepo, "capital", "test.json"), JSON.stringify({ goal: "g", task: "t" }));
     fs.writeFileSync(path.join(suiteRepo, "capital", "files", "hint.txt"), "Paris");
     const gitInSuite = (...gitArgs: string[]) => execFileSync("git", gitArgs, { cwd: suiteRepo, encoding: "utf8" }).trim();
     gitInSuite("init", "-q", "-b", "main");
@@ -211,7 +211,7 @@ describe("eval run CLI", () => {
     const agentDir = path.join(tmpDir, "agent");
     fs.mkdirSync(agentDir, { recursive: true });
     const agent = path.join(agentDir, "agent.agency");
-    fs.writeFileSync(agent, "node main() {}\n");
+    fs.writeFileSync(agent, "node main(task: string) {}\n");
 
     const result = await evalRun(
       {
@@ -244,17 +244,17 @@ describe("eval run CLI", () => {
 /** An agent file plus the shared run options every grading case uses. The runs
      *  directory is a sibling of the agent's directory, never inside it: the seed
      *  copy would otherwise recurse into its own destination. */
-    function setup(runId: string, inputs: { id: string; goal: string; args: Record<string, unknown> }[]) {
+    function setup(runId: string, inputs: { id: string; goal: string; task: string }[]) {
       const agentDir = path.join(tmpDir, "agent");
       fs.mkdirSync(agentDir, { recursive: true });
       const agent = path.join(agentDir, "agent.agency");
-      fs.writeFileSync(agent, "node main() {}\n");
+      fs.writeFileSync(agent, "node main(task: string) {}\n");
       const runsDir = path.join(tmpDir, "runs");
       return { agent, inputs, runsDir, runId };
     }
 
     it("recordGrading writes the grading block into summary.json and reports a failed gate", async () => {
-      const opts = setup("graded", [{ id: "a", goal: "g", args: {} }]);
+      const opts = setup("graded", [{ id: "a", goal: "g", task: "t" }]);
       const summary = await runSuite({ ...opts, perRun: { extractor: recordExtractor("hello") } }, { runner: okRunner });
       expect(summary.grading).toBeUndefined();   // the runner never grades
 
@@ -268,8 +268,8 @@ describe("eval run CLI", () => {
 
     it("counts a gate-failed input as a zero rather than zeroing the whole run", async () => {
       const opts = setup("mixed", [
-        { id: "a", goal: "g", args: {} },
-        { id: "b", goal: "g", args: {} },
+        { id: "a", goal: "g", task: "t" },
+        { id: "b", goal: "g", task: "t" },
       ]);
       const summary = await runSuite({ ...opts, perRun: { extractor: recordExtractor("hello") } }, { runner: okRunner });
       // Passes on input "a", fails the gate on input "b".
@@ -284,7 +284,7 @@ describe("eval run CLI", () => {
       // ExactMatch's matchOn defaults to `expected`, which this input lacks.
       // The fail-fast ordering itself lives in evalRun: resolve → validate →
       // run → grade; the runner no longer knows graders exist.
-      expect(() => validateGraders([new ExactMatch({})], { id: "a", goal: "g", args: {} }))
+      expect(() => validateGraders([new ExactMatch({})], { id: "a", goal: "g", task: "t" }))
         .toThrow(/matchOn/);
     });
   });

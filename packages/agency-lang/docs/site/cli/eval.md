@@ -27,14 +27,32 @@ Input suites can be either a JSON file with `{ "inputs": [...] }` or a directory
 ```json
 {
   "id": "fizzbuzz-write",
+  "task": "Write fizzbuzz in Agency",
   "goal": "Should produce a typechecking fizzbuzz program.",
-  "args": { "prompt": "Write fizzbuzz in Agency" },
-  "node": "evalMain",
   "files": "./fixtures/empty-project"
 }
 ```
 
-`goal` is required (for `eval run` and the default optimize judge; a custom grading module makes it optional — see [Custom graders](#custom-graders)). `args` defaults to `{}`. `id` defaults to a generated id and must be filesystem-safe when supplied. `expected` is an optional gold output (any JSON) read by match graders and surfaced to the optimizer's reflection. `files` names the test's fixture directory (see [Test files and suites](#test-files-and-suites)).
+Nothing in an input describes the agent — tests define the task; the person
+running the eval picks the agent and its node with `--agent file.agency:node`.
+
+`task` is required: what the agent is told. It is a string, or a JSON object
+for agents that take structured data, and it is delivered as the entry
+node's single parameter — **eval entry nodes take exactly one parameter**,
+whatever it is named. Agents with a different shape add a small
+one-parameter adapter node. That includes agents that need no input at all
+(a fixed pipeline you run and grade): declare the parameter and ignore it —
+`node main(task: string) { ... }`. The parameter count is checked before
+anything runs, so a mis-shaped node is one configuration error, not a suite
+of run failures.
+
+`goal` is the success criterion, never shown to the agent. It is required
+when the default LLM judge will run; a custom grading module makes it
+optional — see [Custom graders](#custom-graders). `id` defaults to a
+generated id and must be filesystem-safe when supplied. `expected` is an
+optional gold output (any JSON) read by match graders and surfaced to the
+optimizer's reflection. `files` names the test's fixture directory (see
+[Test files and suites](#test-files-and-suites)).
 
 For a single ad-hoc run, use `--goal` instead of `--inputs`:
 
@@ -46,7 +64,7 @@ Options:
 
 - `--agent <file>[:<node>]` — required agent target. Directory targets resolve to `main.agency` inside the directory. The node defaults to `main`.
 - `--inputs <file|dir|git-url>` — input suite: a JSON file, a directory, or a git source (`URL[//subdir][?ref=...]`). Mutually exclusive with `--goal`.
-- `--goal <text>` — create one inline input with this goal. Mutually exclusive with `--inputs`.
+- `--goal <text>` — create one inline input whose task AND goal are both this text (the quick case where instruction and criterion coincide). Mutually exclusive with `--inputs`.
 - `--run-id <id>` — output run id. Defaults to a generated id.
 - `--runs-dir <path>` — output root. Defaults to `eval.runsDir` in `agency.json`, or `runs/`.
 - `--no-continue-on-error` — stop after the first input failure. By default, remaining inputs continue.
@@ -74,8 +92,8 @@ An input declares its fixture directory with `files`; the contents land at the
 workdir root:
 
 ```jsonc
-{ "id": "summarize", "goal": "Summarize the report into summary.md",
-  "args": {}, "files": "./fixtures/summarize" }
+{ "id": "summarize", "task": "Summarize report.txt into summary.md",
+  "goal": "summary.md captures the report's findings", "files": "./fixtures/summarize" }
 ```
 
 For file-heavy tests, a directory form is equivalent: a directory of test

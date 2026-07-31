@@ -65,7 +65,7 @@ function makeRun(args: { id: string; output?: unknown; status?: "success" | "err
     fs.writeFileSync(path.join(inputDir, "error.txt"), "boom");
   }
 
-  const input: Input = { id: args.id, goal: "name the capital", args: {}, expected: "New Delhi" };
+  const input: Input = { id: args.id, goal: "name the capital", task: "t", expected: "New Delhi" };
   fs.writeFileSync(path.join(inputDir, "input.json"), globalThis.JSON.stringify(input));
 
   const result: EvalRunInputResult = {

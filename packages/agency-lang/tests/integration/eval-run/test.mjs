@@ -50,13 +50,15 @@ try {
   return interrupt("confirm the thing")
 }
 
-node main() {
+node main(task: string) {
+  // task is unused: eval entry nodes must take exactly one parameter
+  // (the input's task); this test is about interrupts, not delivery.
   check()
   return "made it past the interrupt"
 }
 `);
   writeFileSync(join(TMP_ROOT, "inputs.json"), JSON.stringify({
-    inputs: [{ id: "interrupting", goal: "finish despite the interrupt", args: {} }],
+    inputs: [{ id: "interrupting", goal: "finish despite the interrupt", task: "run" }],
   }));
 
   const runsDir = join(TMP_ROOT, "runs");

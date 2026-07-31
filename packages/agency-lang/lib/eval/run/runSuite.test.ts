@@ -27,7 +27,7 @@ describe("runSuite", () => {
   let proj: string;
   beforeEach(() => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), "runsuite-"));
-    fs.writeFileSync(path.join(proj, "agent.agency"), "node main() { return 1 }\n");
+    fs.writeFileSync(path.join(proj, "agent.agency"), "node main(task: string) { return 1 }\n");
   });
   afterEach(() => {
     // Raw rmSync, not safeDelete: mkdtemp paths sit outside any project root,
@@ -46,7 +46,7 @@ describe("runSuite", () => {
     const result = await runSuite(
       {
         agent: path.join(proj, "agent.agency"),
-        inputs: [{ id: "input-1", goal: "g", args: {} }],
+        inputs: [{ id: "input-1", goal: "g", task: "t" }],
         runsDir,
         runId: "r1",
         config: {},
@@ -73,7 +73,7 @@ describe("runSuite", () => {
     await runSuite(
       {
         agent: path.join(proj, "agent.agency"),
-        inputs: [{ id: "input-1", goal: "g", args: {} }],
+        inputs: [{ id: "input-1", goal: "g", task: "t" }],
         runsDir: path.join(proj, "runs"),
         runId: "r-overlay",
         config: {},
@@ -100,13 +100,13 @@ describe("runSuite", () => {
     const agentDir = path.join(proj, "agent-proj");
     fs.mkdirSync(agentDir, { recursive: true });
     const agent = path.join(agentDir, "agent.agency");
-    fs.writeFileSync(agent, "node main() {}\n");
+    fs.writeFileSync(agent, "node main(task: string) {}\n");
 
     let sawFixture = false;
     const result = await runSuite(
       {
         agent,
-        inputs: [{ id: "a", goal: "g", args: {}, files: filesDir }],
+        inputs: [{ id: "a", goal: "g", task: "t", files: filesDir }],
         runsDir: path.join(proj, "runs"),
         runId: "files-e2e",
         perRun: { extractor: recordExtractor("ok") },
@@ -122,6 +122,31 @@ describe("runSuite", () => {
 
     expect(result.inputs[0].status).toBe("success");
     expect(sawFixture).toBe(true);
+  });
+
+  it("delivers each input's task to the runner — string and object alike", async () => {
+    const seen: unknown[] = [];
+    const runner = vi.fn(async (args: { task: unknown }) => {
+      seen.push(args.task);
+      return { ok: true as const };
+    });
+
+    await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [
+          { id: "a", goal: "g", task: "write a haiku" },
+          { id: "b", goal: "g", task: { rows: [1, 2], mode: "fast" } },
+        ],
+        runsDir: path.join(proj, "runs"),
+        runId: "r-task",
+        config: {},
+        perRun: { pipeOutput: false, extractor: recordExtractor("done") },
+      },
+      { runner },
+    );
+
+    expect(seen).toEqual(["write a haiku", { rows: [1, 2], mode: "fast" }]);
   });
 
   it("SIGINT stops the loop after the in-flight input and still writes summary.json", async () => {
@@ -140,9 +165,9 @@ describe("runSuite", () => {
       {
         agent: path.join(proj, "agent.agency"),
         inputs: [
-          { id: "input-1", goal: "g", args: {} },
-          { id: "input-2", goal: "g", args: {} },
-          { id: "input-3", goal: "g", args: {} },
+          { id: "input-1", goal: "g", task: "t" },
+          { id: "input-2", goal: "g", task: "t" },
+          { id: "input-3", goal: "g", task: "t" },
         ],
         runsDir,
         runId: "r-sigint",

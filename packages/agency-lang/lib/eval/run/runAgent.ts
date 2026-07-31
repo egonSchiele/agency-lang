@@ -60,11 +60,11 @@ const MAX_LISTED_SEEDED_FILES = 50;
 export async function runAgent(
   agentPath: string,
   node: string,
-  args: Record<string, any>,
+  task: string | Record<string, any>,
   options: RunAgentOptions,
   deps: RunAgentDeps = {},
 ): Promise<AgentRun> {
-  return new AgentRunner(agentPath, node, args, options, deps).run();
+  return new AgentRunner(agentPath, node, task, options, deps).run();
 }
 
 /** One run's worth of state — the paths, and what got seeded — so the steps
@@ -76,7 +76,7 @@ class AgentRunner {
   constructor(
     private readonly agentPath: string,
     private readonly node: string,
-    private readonly args: Record<string, any>,
+    private readonly task: string | Record<string, any>,
     private readonly options: RunAgentOptions,
     private readonly deps: RunAgentDeps,
   ) {
@@ -149,7 +149,7 @@ class AgentRunner {
     return runner({
       compiledEntryPath,
       node: this.node,
-      args: this.args,
+      task: this.task,
       cwd: this.paths.workdirPath,
       statelogPath: this.paths.statelogPath,
     });

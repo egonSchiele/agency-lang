@@ -15,7 +15,7 @@ class StubGrader extends BaseGrader {
   }
 }
 
-const input = (id: string): Input => ({ id, args: {} });
+const input = (id: string): Input => ({ id, task: "t" });
 const scalarGrade = (grader: BaseGrader, value: number): GraderGrade => ({ grader, grade: { score: { kind: "scalar", value } } });
 
 describe("Scorecard", () => {

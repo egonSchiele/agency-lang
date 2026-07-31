@@ -65,7 +65,7 @@ Choose a different --run-id or delete the existing directory.`,
   it("prepares per-input artifact paths but leaves workdir to prepareRunDir", () => {
     const state = initializeState();
 
-    const prepared = prepareInput(state, { id: "t1", goal: "goal", args: {} });
+    const prepared = prepareInput(state, { id: "t1", goal: "goal", task: "t" });
 
     expect(JSON.parse(fs.readFileSync(path.join(state.runDir, "inputs", "t1", "input.json"), "utf-8"))).toMatchObject({ id: "t1", goal: "goal" });
     // prepareInput allocates the path but no longer creates the workdir — that's
@@ -89,7 +89,7 @@ Choose a different --run-id or delete the existing directory.`,
   it("rejects input ids that escape the input directory", () => {
     const state = initializeState();
 
-    expect(() => prepareInput(state, { id: "../escape", goal: "goal", args: {} })).toThrow("Invalid id");
+    expect(() => prepareInput(state, { id: "../escape", goal: "goal", task: "t" })).toThrow("Invalid id");
   });
 
   it("records prepare failures without touching artifact paths", () => {

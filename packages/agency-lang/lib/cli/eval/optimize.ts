@@ -14,11 +14,9 @@ import type { BaseOptimizerConfig, Optimizer, OptimizeTarget } from "@/optimize/
 import { writeReport } from "@/optimize/report.js";
 import { splitInputs } from "@/optimize/validationSplit.js";
 import { DEFAULT_OPTIMIZER, getOptimizer } from "@/optimize/registry.js";
-import { discoverOptimizeTargets, type OptimizeTargetSet } from "@/optimize/targets.js";
 import type { OptimizeResult } from "@/optimize/types.js";
-import { parseAgency } from "@/parser.js";
 
-import { resolveEvalRunTarget } from "@/agentTarget.js";
+import { assertEvalEntryNodeTakesOneParameter, resolveEvalRunTarget } from "@/agentTarget.js";
 
 export type EvalOptimizeOptions = {
   agent: string;
@@ -93,13 +91,12 @@ async function resolveOptimizer(ref: string, config: BaseOptimizerConfig, deps: 
   return optimizer;
 }
 
-/** Optimize allows --inputs and --goal together (--inputs = data, --goal =
- *  overall-goal default). Only --goal → a single synthetic input. */
 /**
  * Which input source to use. `--inputs` and `--goal` may be combined: when
  * `--inputs` is present it wins (the suite is the data) and `--goal` becomes the
  * overall-goal default for inputs that omit one (filled in by `withDefaults`).
- * `--goal` alone means one synthetic no-arg input. At least one is required.
+ * `--goal` alone means one synthetic input whose task is the goal text. At
+ * least one is required.
  */
 function optimizeInputSelection(opts: EvalOptimizeOptions): "inputs" | "goal" {
   if (opts.inputs) return "inputs";
@@ -121,12 +118,11 @@ function resolveOptimizeSettings(opts: EvalOptimizeOptions) {
   };
 }
 
-/** Fill in the default node and overall goal for inputs that omit them. */
-function withDefaults(inputs: Input[], node: string, goal?: string): Input[] {
+/** Fill in the overall goal for inputs that omit one. */
+function withDefaults(inputs: Input[], goal?: string): Input[] {
   return inputs.map((input) => {
-    const out: Input = { ...input, node: input.node ?? node };
-    if (out.goal === undefined && goal !== undefined) out.goal = goal;
-    return out;
+    if (input.goal === undefined && goal !== undefined) return { ...input, goal };
+    return input;
   });
 }
 
@@ -134,12 +130,11 @@ function withDefaults(inputs: Input[], node: string, goal?: string): Input[] {
  *  The `load` closure is reused for both — no duplicated normalization. */
 function provisionInputs(
   s: ReturnType<typeof resolveOptimizeSettings>,
-  node: string,
   requireGoal: boolean,
   deps: EvalOptimizeDeps,
 ): { inputs: Input[]; validationInputs?: Input[] } {
   const load = (p: string) =>
-    withDefaults(loadInputs(path.resolve(p), deps.makeId ?? nanoid, { requireGoal }), node, s.goal);
+    withDefaults(loadInputs(path.resolve(p), deps.makeId ?? nanoid, { requireGoal }), s.goal);
   const inputs = load(s.inputsPath ?? "");
   if (s.validationInputsPath) return { inputs, validationInputs: load(s.validationInputsPath) };
   if (s.validationSplit !== undefined) {
@@ -151,23 +146,24 @@ function provisionInputs(
 
 /** Build the optimize target: the agent plus the inputs to run it on (from --goal or --inputs). */
 export function buildTarget(opts: EvalOptimizeOptions, deps: EvalOptimizeDeps): OptimizeTarget {
+  // Fail here, once, rather than as a run failure per candidate iteration.
   const resolved = resolveEvalRunTarget(opts.agent);
-  if (optimizeInputSelection(opts) === "goal") return goalTarget(opts, resolved);
+  assertEvalEntryNodeTakesOneParameter(resolved.agentFile, resolved.node);
+  if (optimizeInputSelection(opts) === "goal") return goalTarget(opts);
   const s = resolveOptimizeSettings(opts);
   // A per-input goal is required only when nothing else supplies one: no custom
   // grading module AND no overall --goal default to fall back on.
   const requireGoal = !s.gradersPath && s.goal === undefined;
-  const { inputs, validationInputs } = provisionInputs(s, resolved.node, requireGoal, deps);
+  const { inputs, validationInputs } = provisionInputs(s, requireGoal, deps);
   const target: OptimizeTarget = { agent: opts.agent, inputs };
   if (validationInputs) target.validationInputs = validationInputs;
   return target;
 }
 
-/** The --goal-only case: one synthetic no-arg input carrying the overall goal. */
-function goalTarget(opts: EvalOptimizeOptions, resolved: ReturnType<typeof resolveEvalRunTarget>): OptimizeTarget {
-  const targetSet = discoverOptimizeTargets(resolved.agentFile);
-  rejectGoalForNodeWithRequiredArgs(targetSet, resolved.node);
-  return { agent: opts.agent, inputs: [{ id: "input-1", node: resolved.node, args: {}, goal: opts.goal ?? "" }] };
+/** The --goal-only case: one synthetic input where instruction and criterion
+ *  coincide — the goal text is delivered as the node's task. */
+function goalTarget(opts: EvalOptimizeOptions): OptimizeTarget {
+  return { agent: opts.agent, inputs: [{ id: "input-1", task: opts.goal ?? "", goal: opts.goal ?? "" }] };
 }
 
 /** Build the optimizer config: the grader set (custom module or the default goal judge) plus run policy. */
@@ -193,22 +189,3 @@ export async function buildConfig(opts: EvalOptimizeOptions, deps: EvalOptimizeD
   return base;
 }
 
-/**
- * `--goal` desugars to a single no-argument input, so it cannot drive a node
- * that requires arguments. Task files can provide args; goals cannot.
- */
-function rejectGoalForNodeWithRequiredArgs(targetSet: OptimizeTargetSet, node: string): void {
-  const entry = targetSet.files[targetSet.entryFile];
-  const parsed = parseAgency(entry.source, {}, false);
-  if (!parsed.success) return;
-  for (const candidate of parsed.result.nodes) {
-    if (candidate.type !== "graphNode" || candidate.nodeName !== node) continue;
-    const required = candidate.parameters.filter((parameter) => parameter.defaultValue === undefined);
-    if (required.length > 0) {
-      throw new Error(
-        `Node ${node} requires arguments, but --goal creates a no-argument input.\n` +
-        "Use --inputs inputs.json to provide args for this agent.",
-      );
-    }
-  }
-}

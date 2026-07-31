@@ -60,7 +60,7 @@ describe("ExampleOptimizer", () => {
     ({ graders, iterations: 1, config: {}, runsDir: root, runId, writeback: false });
 
   const run = (opt: ExampleOptimizer) =>
-    opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", args: {} }] });
+    opt.optimize({ agent: path.join(src, "agent.agency"), inputs: [{ id: "a", task: "t" }] });
 
   it("keeps the candidate when it beats the baseline", async () => {
     const opt = new ExampleOptimizer(config([new QueueGrader([0.2, 0.9])], "accept"), deps());
@@ -74,8 +74,8 @@ describe("ExampleOptimizer", () => {
     const opt = new ExampleOptimizer(config([new QueueGrader([0.2, 0.9, 0.5, 0.6])], "val"), deps());
     const result = await opt.optimize({
       agent: path.join(src, "agent.agency"),
-      inputs: [{ id: "a", args: {} }],
-      validationInputs: [{ id: "v", args: {} }],
+      inputs: [{ id: "a", task: "t" }],
+      validationInputs: [{ id: "v", task: "t" }],
     });
     expect(typeof result.validationObjective).toBe("number");
     expect(result.championBreakdown?.length).toBeGreaterThan(0);

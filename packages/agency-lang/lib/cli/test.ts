@@ -26,7 +26,8 @@ import {
 import { safeDeleteFile } from "@/utils.js";
 import { AgencyConfig } from "@/config.js";
 import path from "path";
-import { compile, loadConfig } from "./commands.js";
+import { loadConfig } from "./commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 import { precompileTestSources } from "./precompile.js";
 import { CompileClosureError } from "../compiler/compileClosure.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";

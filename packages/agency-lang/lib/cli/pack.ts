@@ -6,7 +6,7 @@ import { build, type Plugin } from "esbuild";
 import { AgencyConfig } from "@/config.js";
 import { findPackageRoot } from "@/importPaths.js";
 import { SymbolTable } from "@/symbolTable.js";
-import { compile } from "./commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 
 // Locate this package's install root by walking up from this module's
 // location until we find a package.json whose name is "agency-lang".

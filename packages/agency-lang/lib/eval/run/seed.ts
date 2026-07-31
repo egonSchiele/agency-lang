@@ -3,7 +3,7 @@ import * as path from "path";
 
 import { agentClosure } from "@/analysis/closure.js";
 import type { AgencyConfig } from "@/config.js";
-import { compile } from "@/cli/commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 import { RunStrategy } from "@/importStrategy.js";
 
 /** Which files a run needs: the agent's own (computed from its imports) and

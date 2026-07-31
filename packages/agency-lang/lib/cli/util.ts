@@ -24,7 +24,7 @@ import {
 } from "../importPaths.js";
 import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
-import { compile } from "./commands.js";
+import { compile } from "@/compiler/defaultSession.js";
 import { RunStrategy } from "../importStrategy.js";
 import { AgencyConfig } from "@/config.js";
 import { parseAgency } from "@/parser.js";

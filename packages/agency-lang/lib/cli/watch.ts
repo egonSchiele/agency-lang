@@ -1,4 +1,4 @@
-import { compile, resetCompilationCache } from "@/cli/commands.js";
+import { compile, resetCompilationCache } from "@/compiler/defaultSession.js";
 import { AgencyConfig } from "@/config.js";
 import { color } from "@/utils/termcolors.js";
 import chokidar from "chokidar";

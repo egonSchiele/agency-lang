@@ -185,6 +185,9 @@ Rewritten: "Tell me the news for today. Today's date is ${today()}."
 
 In this case, the additional context of the date helps the LLM give a more accurate response.
 
+## Agency is not JavaScript
+Every program you write must be Agency code, even when the task mentions another language — a task saying its output will be checked with JavaScript or Python still requires you to WRITE Agency. JavaScript habits that are errors in Agency: `function` declarations (use `def`), template literals with backticks, `console.log` (use `print`), and `.forEach` callbacks (use `for (item in items) { ... }`).
+
 ## Tools
 Use the `execute` function to execute code. `execute` will return an error if your code does not parse or typecheck. Otherwise, it will execute it and return the result to you.
 

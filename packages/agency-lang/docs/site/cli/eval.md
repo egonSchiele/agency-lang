@@ -52,6 +52,16 @@ Options:
 - `--no-continue-on-error` — stop after the first input failure. By default, remaining inputs continue.
 - `--graders <file>` — a TypeScript grading module. Defaults to `eval.graders` in `agency.json`, then the bundled goal judge.
 - `--no-grade` — skip scoring; only run the agent.
+- `--max-tool-call-rounds <n>` — max LLM tool-call rounds per tool loop, same as `agency run` (default 10; overrides `agency.json`). Agents that iterate — write code, hit an error, retry — routinely need more than the default.
+- `--max-tool-result-chars <n>` — cap on a single tool result fed back to the model, same as `agency run` (0 disables; overrides `agency.json`).
+- `--strict` — fail the run on any fatal type error, same as `agency run`.
+
+Each run's agent subprocess also gets a wall-clock limit — 60 seconds unless
+`eval.limits.wallClockSec` in `agency.json` raises it:
+
+```json
+{ "eval": { "limits": { "wallClockSec": 600 } } }
+```
 
 ## Test files and suites
 

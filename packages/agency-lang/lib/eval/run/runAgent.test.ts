@@ -161,4 +161,5 @@ describe("runAgent", () => {
     const salvaged = JSON.parse(fs.readFileSync(path.join(run7Dir, "agent", "eval-record.json"), "utf8"));
     expect(salvaged.evalOutputs[0].value).toBe("partial work");
   });
+
 });

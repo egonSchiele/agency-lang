@@ -1,5 +1,6 @@
 import { fork } from "child_process";
 
+import type { AgencyConfig } from "@/config.js";
 import type { IpcDecisionMessage } from "@/runtime/ipc.js";
 import {
   buildForkOptions,
@@ -24,8 +25,6 @@ export type EvalInputRunner = (args: {
  * Per-task resource limits for subprocess invocations driven by `agency eval
  * run`. Lifted out of the runner so it's obvious where to tune them and so
  * the runner body isn't cluttered with magic numbers.
- *
- * TODO: pipe these through `AgencyConfig.eval.limits` once that field exists.
  */
 const DEFAULT_EVAL_RUN_LIMITS: RunLimits = {
   wallClock: 60_000,
@@ -34,7 +33,24 @@ const DEFAULT_EVAL_RUN_LIMITS: RunLimits = {
   stdout: 1024 * 1024,
 };
 
-export function makeSubprocessRunner(pipeAgentOutput: boolean): EvalInputRunner {
+/** The run limits a suite's config asks for: `eval.limits` overlaid on the
+ *  defaults. Only wall clock is configurable so far. The schema already
+ *  rejects non-positive values at config load; the guard here covers configs
+ *  built programmatically, where 0/-1/NaN would otherwise reach setTimeout
+ *  and fail every run instantly with a wall_clock limit error. */
+export function limitsFromConfig(config: AgencyConfig): RunLimits {
+  const wallClockSec = config.eval?.limits?.wallClockSec;
+  const valid = typeof wallClockSec === "number" && Number.isFinite(wallClockSec) && wallClockSec > 0;
+  return {
+    ...DEFAULT_EVAL_RUN_LIMITS,
+    ...(valid ? { wallClock: wallClockSec * 1000 } : {}),
+  };
+}
+
+export function makeSubprocessRunner(
+  pipeAgentOutput: boolean,
+  limits: RunLimits = DEFAULT_EVAL_RUN_LIMITS,
+): EvalInputRunner {
   return async ({ compiledEntryPath, node, args, cwd, statelogPath }) => {
     return runCompiledAgentInSubprocess({
       compiledPath: compiledEntryPath,
@@ -43,6 +59,7 @@ export function makeSubprocessRunner(pipeAgentOutput: boolean): EvalInputRunner 
       cwd,
       statelogPath,
       pipeAgentOutput,
+      limits,
     });
   };
 }
@@ -54,8 +71,9 @@ async function runCompiledAgentInSubprocess(args: {
   cwd: string;
   statelogPath: string;
   pipeAgentOutput: boolean;
+  limits: RunLimits;
 }): Promise<{ ok: true } | { ok: false; errorMessage: string }> {
-  const limits = DEFAULT_EVAL_RUN_LIMITS;
+  const limits = args.limits;
   const child = fork(
     subprocessBootstrapPath,
     [],
@@ -74,11 +92,20 @@ async function runCompiledAgentInSubprocess(args: {
 
   return new Promise((resolve) => {
     let settled = false;
+    // A terminal Ctrl-C reaches the whole process group, but a programmatic
+    // SIGINT (a supervisor, process.kill) hits only this process — forward it
+    // so the child never outlives an interrupted run. The kill settles this
+    // promise through the normal "close" path, as an error result.
+    const forwardSigint = () => {
+      child.kill("SIGINT");
+    };
+    process.once("SIGINT", forwardSigint);
     const settle = (
       value: { ok: true } | { ok: false; errorMessage: string },
     ) => {
       if (settled) return;
       settled = true;
+      process.removeListener("SIGINT", forwardSigint);
       resolve(value);
     };
 

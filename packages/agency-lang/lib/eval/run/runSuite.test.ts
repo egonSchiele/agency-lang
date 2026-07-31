@@ -123,4 +123,41 @@ describe("runSuite", () => {
     expect(result.inputs[0].status).toBe("success");
     expect(sawFixture).toBe(true);
   });
+
+  it("SIGINT stops the loop after the in-flight input and still writes summary.json", async () => {
+    const runsDir = path.join(proj, "runs");
+    const before = process.listeners("SIGINT");
+    const runner = vi.fn(async () => {
+      // Fire runSuite's own listener directly (a real signal would kill the
+      // test process): find the one this run installed and invoke it.
+      const added = process.listeners("SIGINT").filter((l) => !before.includes(l));
+      expect(added).toHaveLength(1);
+      added[0]("SIGINT");
+      return { ok: true as const };
+    });
+
+    const result = await runSuite(
+      {
+        agent: path.join(proj, "agent.agency"),
+        inputs: [
+          { id: "input-1", goal: "g", args: {} },
+          { id: "input-2", goal: "g", args: {} },
+          { id: "input-3", goal: "g", args: {} },
+        ],
+        runsDir,
+        runId: "r-sigint",
+        config: {},
+        perRun: { pipeOutput: false, extractor: recordExtractor("done") },
+      },
+      { runner },
+    );
+
+    // The in-flight input finished and was recorded; the rest never ran.
+    expect(runner).toHaveBeenCalledTimes(1);
+    expect(result.inputs.map((i) => i.inputId)).toEqual(["input-1"]);
+    const summary = JSON.parse(fs.readFileSync(path.join(runsDir, "r-sigint", "summary.json"), "utf8"));
+    expect(summary.inputs).toHaveLength(1);
+    // The listener does not outlive the suite.
+    expect(process.listeners("SIGINT")).toEqual(before);
+  });
 });

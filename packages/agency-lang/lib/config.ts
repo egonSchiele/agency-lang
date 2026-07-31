@@ -102,6 +102,12 @@ export interface AgencyConfig {
     graders?: string;                              // path to a TS grading module
     sourceCacheRoot?: string;                      // git-source clone cache override
 
+    /** Per-run resource limits for the agent subprocess. Unset fields keep the
+     *  built-in defaults (lib/eval/run/subprocess.ts). */
+    limits?: {
+      wallClockSec?: number;                       // max seconds per agent run (default 60)
+    };
+
     optimize?: {
       goal?: string;
       graders?: string;                              // path to a TS grading module
@@ -413,6 +419,10 @@ export const AgencyConfigSchema = z
         optimizeRunsDir: z.string(),
         graders: z.string().optional(),
         sourceCacheRoot: z.string().optional(),
+        // Positive int only: the value feeds setTimeout (×1000), where 0 and
+        // negatives don't mean "no limit" — they fire immediately and fail
+        // every run with a wall_clock limit error.
+        limits: z.object({ wallClockSec: z.number().int().positive() }).partial().optional(),
         optimize: z
           .object({
             goal: z.string().optional(),

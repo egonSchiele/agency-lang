@@ -462,6 +462,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--no-continue-on-error", "Stop after first input failure")
     .option("--graders <file>", "TypeScript grading module (default-exports graders)")
     .option("--no-grade", "Skip grading; only run the agent")
+    .option(
+      "--max-tool-call-rounds <n>",
+      "Max LLM tool-call rounds before halting a tool loop (default 10; overrides agency.json)",
+      parsePositiveInt,
+    )
+    .option(
+      "--max-tool-result-chars <n>",
+      "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
+      parseNonNegativeInt,
+    )
+    .option(
+      "--strict",
+      "Fail the run on any fatal type error (typechecker.strict)",
+    )
     .action(async (opts: {
       agent: string;
       inputs?: string;
@@ -471,8 +485,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
       continueOnError?: boolean;
       graders?: string;
       grade?: boolean;
+      maxToolCallRounds?: number;
+      maxToolResultChars?: number;
+      strict?: boolean;
     }) => {
-      const result = await evalRun({ ...opts, config: getConfig() });
+      // Eval compiles each agent inside its seeded workdir with THIS config,
+      // and all three flags are baked into the compiled program (see
+      // applyCliFlags) — so folding them onto the config here is the whole
+      // implementation; nothing needs to reach the subprocess separately.
+      const config = applyCliFlags(getConfig(), {
+        maxToolCallRounds: opts.maxToolCallRounds,
+        maxToolResultChars: opts.maxToolResultChars,
+        strict: opts.strict,
+      });
+      const result = await evalRun({ ...opts, config });
       console.log(`Run ${result.runId} completed: ${result.okCount}/${result.inputs.length} inputs ok`);
       if (result.grading) {
         for (const line of formatGrading(result.grading.objective, result.grading.perInput)) {

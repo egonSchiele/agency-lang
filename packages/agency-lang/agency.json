@@ -13,6 +13,11 @@
   "typechecker": {
     "enabled": true
   },
+  "eval": {
+    "limits": {
+      "wallClockSec": 600
+    }
+  },
   "doc": {
     "outDir": "docs/site/stdlib",
     "baseUrl": "https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib"

@@ -34,6 +34,35 @@ export function getRuntimeConfigOverrides(): Partial<AgencyConfig> | undefined {
 }
 
 /**
+ * Run `fn` with `overrides` installed as the active runtime config overrides,
+ * restoring whatever was set before when `fn` settles.
+ *
+ * A host that serves many compiled modules from one process uses this to bind
+ * per-module log/observability config at the moment it imports that module: the
+ * overrides are read by the `RuntimeContext` constructor, which runs while the
+ * module is importing, so the import must happen inside `fn`. The overrides only
+ * need to differ per module (not per request), because they are frozen into that
+ * module's `RuntimeContext` at import and every later invocation derives from it.
+ *
+ * The overrides live in a single process-global, so a host serving concurrently
+ * MUST serialize its imports (e.g. behind a mutex) — otherwise two overlapping
+ * `withRuntimeConfigOverrides` scopes would read each other's values. This helper
+ * does not lock; it only pairs set with restore.
+ */
+export async function withRuntimeConfigOverrides<T>(
+  overrides: Partial<AgencyConfig> | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const previous = activeRuntimeConfigOverrides;
+  activeRuntimeConfigOverrides = overrides;
+  try {
+    return await fn();
+  } finally {
+    activeRuntimeConfigOverrides = previous;
+  }
+}
+
+/**
  * Apply runtime config overrides — a `Partial<AgencyConfig>` — onto the args
  * used to construct a `RuntimeContext`. This is THE single runtime merge; it
  * serves two transports:

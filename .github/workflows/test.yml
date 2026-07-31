@@ -169,6 +169,7 @@ jobs:
     - name: Eval-run integration tests
       working-directory: packages/agency-lang
       run: node tests/integration/eval-run/test.mjs
+      timeout-minutes: 5
     - name: Stdlib sandbox tests
       working-directory: packages/agency-lang
       env:

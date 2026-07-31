@@ -170,7 +170,18 @@ export type InterruptEntry = {
    *  one: no interruptResolved event recorded a decision (the run ended
    *  mid-interrupt, or a legacy trace never emitted one). "passed" is only
    *  ever an affirmative claim from a resolution event; the extractor never
-   *  infers it. */
+   *  infers it.
+   *
+   *  Reachability: today's runtime emits only "approved" and "rejected"
+   *  (every interruptResolved emitter in lib/runtime/interrupts.ts);
+   *  "propagated" and "passed" are computed internally by the handler-chain
+   *  merge but never written, so they exist here for older or future traces.
+   *  Teaching the runtime to emit them is
+   *  https://github.com/egonSchiele/agency-lang/issues/736.
+   *
+   *  This is a PERSISTED field. Records written by builds between PR #734
+   *  and PR #735 may say "passed" where they mean "unresolved" — the short
+   *  window where the extractor mapped no-decision to "passed". */
   outcome: "approved" | "rejected" | "propagated" | "passed" | "unresolved";
   resolvedBy: "handler" | "user" | "policy" | "ipc" | null;
   thrownAtMs: number | null;

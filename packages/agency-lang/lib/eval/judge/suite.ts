@@ -160,6 +160,7 @@ function missingDataVerdict(input: Input, inputA: ReadEvalRunInput, inputB: Read
     winner,
     confidence: 100,
     reasoning: `A status: ${inputA.status}; B status: ${inputB.status}`,
+    unjudgeable: true,
     samples: [{ winner, confidence: 100, reasoning: "deterministic missing-data verdict", order: "AB" }],
     generatedAt: new Date().toISOString(),
   };
@@ -169,7 +170,10 @@ function missingDataVerdict(input: Input, inputA: ReadEvalRunInput, inputB: Read
  *  suite winner, so a goal-less input degrades loudly in perInput without
  *  skewing the aggregate. */
 function noGoalVerdict(inputId: string, inputA: ReadEvalRunInput, inputB: ReadEvalRunInput): InputVerdict {
-  const reasoning = "input has no goal in its input.json; nothing to judge against";
+  // "no goal recorded", not "no goal in its input.json": this branch also
+  // fires when input.json is missing or unparseable (the loader degrades
+  // those to a spec-less input while the records stay judgeable).
+  const reasoning = "no goal recorded for this input; nothing to judge against";
   return {
     inputId,
     goal: "",
@@ -177,6 +181,7 @@ function noGoalVerdict(inputId: string, inputA: ReadEvalRunInput, inputB: ReadEv
     winner: "tie",
     confidence: 100,
     reasoning,
+    unjudgeable: true,
     samples: [{ winner: "tie", confidence: 100, reasoning, order: "AB" }],
     generatedAt: new Date().toISOString(),
   };

@@ -49,6 +49,11 @@ export async function evalJudge(
   fs.writeFileSync(outPath, JSON.stringify(verdict, null, 2));
 
   console.log(`Suite winner: ${verdict.winner} (A ${verdict.winsA}, B ${verdict.winsB}, ties ${verdict.ties})`);
+  // A tie from "we could not judge this" must not read as "these were close".
+  const unjudgeable = verdict.perInput.filter((entry) => entry.unjudgeable).length;
+  if (unjudgeable > 0) {
+    console.log(`${unjudgeable} input(s) could not be judged (missing data or no goal) — counted as ties above`);
+  }
   console.log(`\nWrote verdict to ${outPath}`);
 }
 

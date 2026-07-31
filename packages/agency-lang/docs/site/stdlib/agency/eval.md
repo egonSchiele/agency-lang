@@ -7,8 +7,17 @@ description: "Helpers for judging eval runs from Agency code."
 
 Helpers for judging eval runs from Agency code. (Running suites from
   Agency was removed 2026-07-30: the old binding predated workdir seeding
-  and diverged from `agency eval run` semantics. Run suites with the CLI;
-  a binding over the current runSuite can come back when needed.)
+  and diverged from `agency eval run` semantics. Run suites with the CLI.
+
+  SAFETY CONSTRAINT for whoever adds run-from-Agency back: the old binding
+  routed every task through `std::agency.run` SPECIFICALLY so subprocess
+  interrupts hit the CALLING AGENT's handler stack. A thin binding over
+  runSuite would lose that: runSuite's default runner blanket-approves
+  every child interrupt from TypeScript — correct for a headless CLI
+  invocation, wrong for a suite launched by an agent whose handlers were
+  meant to gate those interrupts. A future binding must route execution
+  through std::agency.run, or inject a runner that defers to the caller's
+  handlers — never runSuite's default.)
 
   ## Extract and judge eval records
 
@@ -52,7 +61,7 @@ export type EvalValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L47))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L56))
 
 ### EvalRecord
 
@@ -75,7 +84,7 @@ export type EvalRecord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L63))
 
 ### PairwiseVerdictInput
 
@@ -87,7 +96,7 @@ export type PairwiseVerdictInput = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L98))
 
 ### PairwiseVerdict
 
@@ -103,7 +112,7 @@ export type PairwiseVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L104))
 
 ### JudgeAggregationPolicy
 
@@ -116,7 +125,7 @@ export type JudgeAggregationPolicy = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L134))
 
 ### VerdictSide
 
@@ -130,7 +139,7 @@ export type VerdictSide = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L141))
 
 ### JudgeSample
 
@@ -143,7 +152,7 @@ export type JudgeSample = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L149))
 
 ### InputVerdict
 
@@ -160,7 +169,7 @@ export type InputVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L156))
 
 ### SuiteVerdict
 
@@ -177,7 +186,7 @@ export type SuiteVerdict = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L158))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L167))
 
 ## Functions
 
@@ -205,7 +214,7 @@ The shape mirrors the on-disk eval-record format. Top-level fields (traceId,
 
 **Returns:** [EvalRecord](#evalrecord)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L85))
 
 ### evalJudge
 
@@ -239,7 +248,7 @@ Runs the bundled pairwise-judge program in a subprocess, so a real LLM call
 
 **Returns:** [PairwiseVerdict](#pairwiseverdict)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L110))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L119))
 
 ### evalJudgeSuite
 
@@ -276,4 +285,4 @@ Judge two eval run directories by input id and aggregate the results into a suit
 
 **Returns:** [SuiteVerdict](#suiteverdict)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/eval.agency#L178))

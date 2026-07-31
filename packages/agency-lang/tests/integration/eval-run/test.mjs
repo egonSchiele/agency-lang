@@ -36,6 +36,11 @@ function assert(condition, message) {
   if (!condition) throw new Error(`[ASSERT FAILED] ${message}`);
 }
 
+// On failure the scenario directory is KEPT for inspection (and execSync's
+// captured child output is printed) — the failure path is the one that needs
+// the evidence. EVAL_RUN_KEEP_TMP=1 keeps it on success too, same pattern as
+// the optimize-efficacy harness.
+let passed = false;
 try {
   rmSync(TMP_ROOT, { recursive: true, force: true });
   const agentDir = join(TMP_ROOT, "agent");
@@ -46,7 +51,7 @@ try {
 }
 
 node main() {
-  const r = check()
+  check()
   return "made it past the interrupt"
 }
 `);
@@ -55,13 +60,24 @@ node main() {
   }));
 
   const runsDir = join(TMP_ROOT, "runs");
-  const output = execSync(
-    `node ${JSON.stringify(AGENCY_CLI)} eval run` +
-    ` --agent ${JSON.stringify(join(agentDir, "agent.agency"))}` +
-    ` --inputs ${JSON.stringify(join(TMP_ROOT, "inputs.json"))}` +
-    ` --runs-dir ${JSON.stringify(runsDir)} --run-id interrupt-e2e --no-grade`,
-    { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
-  );
+  let output;
+  try {
+    output = execSync(
+      `node ${JSON.stringify(AGENCY_CLI)} eval run` +
+      ` --agent ${JSON.stringify(join(agentDir, "agent.agency"))}` +
+      ` --inputs ${JSON.stringify(join(TMP_ROOT, "inputs.json"))}` +
+      ` --runs-dir ${JSON.stringify(runsDir)} --run-id interrupt-e2e --no-grade`,
+      { cwd: REPO_ROOT, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+    );
+  } catch (err) {
+    // execSync's error message is just the command line; the child's actual
+    // output sits on the error object and nobody prints it by default.
+    console.error("[eval-run-integration] eval run failed. Child stdout:");
+    console.error(err.stdout ?? "(none)");
+    console.error("[eval-run-integration] Child stderr:");
+    console.error(err.stderr ?? "(none)");
+    throw err;
+  }
   assert(output.includes("1/1 inputs ok"), `expected a fully-ok run, got:\n${output}`);
 
   const summary = JSON.parse(readFileSync(join(runsDir, "interrupt-e2e", "summary.json"), "utf-8"));
@@ -82,6 +98,11 @@ node main() {
   assert(record.interrupts[0].outcome === "approved", `record outcome: ${record.interrupts[0].outcome}`);
 
   console.log("[eval-run-integration] PASS: interrupting agent auto-approved over IPC, verdict recorded");
+  passed = true;
 } finally {
-  rmSync(TMP_ROOT, { recursive: true, force: true });
+  if (passed && !process.env.EVAL_RUN_KEEP_TMP) {
+    rmSync(TMP_ROOT, { recursive: true, force: true });
+  } else if (!passed) {
+    console.error(`[eval-run-integration] evidence kept at ${TMP_ROOT}`);
+  }
 }

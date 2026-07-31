@@ -315,6 +315,10 @@ describe("extractEvalRecord", () => {
       expect(i.resolvedAtMs).not.toBeNull();
     });
 
+    // Pins the extractor's mapping against a HYPOTHETICAL emitter: today's
+    // runtime never writes outcome "passed" (see InterruptEntry.outcome's
+    // reachability note); this hand-built event guards the mapping for the
+    // day it does.
     it("distinguishes a recorded pass from no recorded resolution at all", () => {
       const passedEvents: EventEnvelope[] = [
         ev("threadCreated", { threadId: "0", threadType: "thread" }),

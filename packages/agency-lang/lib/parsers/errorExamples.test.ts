@@ -1,5 +1,24 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "@/parser.js";
+import {
+  C_STYLE_FOR_MESSAGE,
+  HANDLER_BODY_MESSAGE,
+  IF_EXPRESSION_MESSAGE,
+  MATCH_CASES_MESSAGE,
+  SWITCH_MESSAGE,
+  TERNARY_MESSAGE,
+} from "./messages.js";
+
+/** Pull the code example out of a message. `messages.ts` requires every example
+ *  to be indented by exactly two spaces, which is what makes this possible;
+ *  prose lines are flush left. */
+function exampleFrom(message: string): string {
+  return message
+    .split("\n")
+    .filter((line) => line.startsWith("  "))
+    .map((line) => line.slice(2))
+    .join("\n");
+}
 
 function failure(src: string) {
   const parsed = parseAgency(src, {}, false);
@@ -21,6 +40,37 @@ describe("ternaries are refused with the if-then-else form", () => {
     const message = failure(src);
     expect(message).toMatch(/no ternary/);
     expect(message).toContain("if isProd then");
+  });
+
+  // Prettier wraps any ternary past the line limit onto three lines, so this
+  // is the shape a model has seen most. Skipping only spaces missed it
+  // entirely and fell through to the catch-all.
+  it.each([
+    ["wrapped across three lines", `node main() {\n  const y = cond\n    ? a\n    : b\n}`],
+    ["a newline after the question mark", `node main() { const y = cond ?\n a : b }`],
+    ["a newline before the colon", `node main() { const y = cond ? a\n : b }`],
+  ])("catches a ternary %s", (_name, src) => {
+    expect(failure(src)).toMatch(/no ternary/);
+  });
+
+  // The inner refusal fires first and anchors the message at the inner `?`.
+  // Recorded because the behaviour is a consequence of the wrapper running on
+  // every expression, not something designed.
+  it("reports a nested ternary at the inner question mark", () => {
+    const message = failure(`node main() { const y = a ? b ? c : d : e }`);
+    expect(message).toMatch(/no ternary/);
+    expect(message).toMatch(/^Line 1, col 3[0-9]:/);
+  });
+
+  // Unlike the statement-level probes, this one runs inside speculative
+  // branches. A ternary refusal recorded in a branch that is later discarded
+  // must not outrank the real failure.
+  it("does not hijack an unrelated later failure", () => {
+    const message = failure(
+      `node main() {\n  match (x) {\n    1 => print(1)\n    _ => print(2)\n  }\n  switch (y) { case 1: print(1) }\n}`,
+    );
+    expect(message).toMatch(/no `switch` statement/);
+    expect(message).not.toMatch(/no ternary/);
   });
 
   it("reports a real position rather than the body catch-all", () => {
@@ -70,50 +120,44 @@ describe("messages carry a worked example", () => {
  * Agency. An example that does not parse is worse than no example: it teaches
  * the wrong thing to exactly the reader who is already stuck.
  *
- * Each entry is the example as it appears in its message, wrapped in the least
- * scaffolding needed to stand alone.
+ * The example is EXTRACTED from the real message string rather than
+ * transcribed here, so editing a message cannot leave this passing on a stale
+ * copy. Extraction keys on the two-space indent that `messages.ts` requires of
+ * every example.
+ *
+ * The scaffolding around each example (the types and node it needs to stand
+ * alone) still has to be written by hand; `%s` in it marks where the extracted
+ * block goes.
  */
 describe("every example in a parser message is valid Agency", () => {
-  it.each([
-    ["match arms", `type Shape = { kind: "circle", r: number } | { kind: "square", side: number }
+  const cases: [string, string, string][] = [
+    [
+      "match arms",
+      MATCH_CASES_MESSAGE,
+      `type Shape = { kind: "circle", r: number } | { kind: "square", side: number }
 node main(shape: Shape) {
-  const area = match (shape) {
-    { kind: "circle", r } => 3.14 * r * r
-    { kind: "square", side } if (side > 0) => side * side
-    _ => {
-      print("unknown")
-      return 0
-    }
-  }
+  const area = %s
   print(area)
-}`],
-    ["if-then-else, also quoted by the ternary message", `node main(isProd: boolean) {
-  const label = if isProd then "Production" else "Local"
-  print(label)
-}`],
-    ["handler", `node main() {
-  handle {
-    read("./notes.md")
-  } with (intr) {
-    if (intr.effect == "std::read") { return approve() }
-    return reject()
-  }
-}`],
-    ["the C-style-for alternatives", `node main(items: string[]) {
-  for (i in range(0, 10)) { print(i) }
-  for (item in items) { print(item) }
-  for (item, i in items) { print(i, item) }
-  const doubled = [x * 2 for x in items]
-  print(doubled)
-}`],
-    ["the switch replacement", `node main(x: string) {
-  match (x) {
-    "a" => doThing()
-    "b" => doOtherThing()
-    _   => fallback()
-  }
-}`],
-  ])("%s", (_name, example) => {
-    expect(parses(example)).toBe(true);
+}`,
+    ],
+    ["if-then-else", IF_EXPRESSION_MESSAGE, `node main(isProd: boolean) {\n  %s\n}`],
+    ["ternary replacement", TERNARY_MESSAGE, `node main(isProd: boolean) {\n  %s\n}`],
+    ["handler", HANDLER_BODY_MESSAGE, `node main() {\n  %s\n}`],
+    ["switch replacement", SWITCH_MESSAGE, `node main(x: string) {\n  %s\n}`],
+    [
+      "C-style-for alternatives",
+      C_STYLE_FOR_MESSAGE,
+      `node main(items: string[]) {\n  %s\n  print(1)\n}`,
+    ],
+  ];
+
+  it.each(cases)("%s", (_name, message, scaffold) => {
+    const example = exampleFrom(message);
+    expect(example).not.toBe("");
+    const source = scaffold.replace("%s", example.split("\n").join("\n  "));
+    if (!parses(source)) {
+      throw new Error(`example does not parse:\n${source}`);
+    }
   });
+
 });

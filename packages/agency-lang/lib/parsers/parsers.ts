@@ -594,22 +594,43 @@ const objectParser = (input: string): ParserResult<Record<string, any>> => {
   return parser(input);
 };
 
-export const numberParser: Parser<NumberLiteral> = label("a number", (input: string): ParserResult<NumberLiteral> => {
-  const parser = seqC(
-    set("type", "number"),
-    capture(map(many1WithJoin(or(char("-"), char("."), char("_"), digit)), (v) => v.replace(/_/g, "")), "value"),
-  );
-  const result = parser(input);
-  if (!result.success) return result;
-  // Require at least one digit. Without this check, bare runs of `-`, `.`,
-  // and `_` (e.g. `.`, `-`, `--`, `..`, `_`) all parse as "numbers" with
-  // no digits, which then leak into surrounding parses as nonsense AST
-  // (e.g. `"-".repeat(5)` parses `.` as a number node).
-  if (!/[0-9]/.test(result.result.value)) {
-    return failure("expected a number with at least one digit", input);
-  }
-  return result;
-});
+/** Digits with optional `_` separators, e.g. `1_000`. Leads with a digit, so a
+ *  run of bare underscores is not a number. */
+const digitRun: Parser<string> = map(
+  seqC(capture(digit, "first"), capture(manyWithJoin(or(digit, char("_"))), "rest")),
+  (r: { first: string; rest: string }) => `${r.first}${r.rest}`,
+);
+
+/** `.5` — the dot must be followed by digits. That requirement is what stops
+ *  `3..6` after `3`, leaving `..6` for the range operator, and what stops
+ *  `1.2.3` after `1.2`. */
+const fractionPart: Parser<string> = map(
+  seqC(char("."), capture(digitRun, "digits")),
+  (r: { digits: string }) => `.${r.digits}`,
+);
+
+/** Digits with an optional fraction (`3`, `3.5`), or a bare fraction (`.5`). */
+const numberMagnitude: Parser<string> = or(
+  map(
+    seqC(capture(digitRun, "whole"), capture(optional(fractionPart), "fraction")),
+    (r: { whole: string; fraction: string | null }) => `${r.whole}${r.fraction ?? ""}`,
+  ),
+  fractionPart,
+);
+
+export const numberParser: Parser<NumberLiteral> = label(
+  "a number",
+  map(
+    seqC(
+      capture(optional(char("-")), "sign"),
+      capture(numberMagnitude, "magnitude"),
+    ),
+    (r: { sign: string | null; magnitude: string }) => ({
+      type: "number" as const,
+      value: `${r.sign ?? ""}${r.magnitude}`.replace(/_/g, ""),
+    }),
+  ),
+);
 
 // --- Unit literal parser ---
 const TIME_MULTIPLIERS: Record<TimeUnitLiteral["unit"], number> = {

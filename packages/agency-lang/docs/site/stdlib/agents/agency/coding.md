@@ -46,27 +46,6 @@ Return the Agency writer's tools: the bundled documentation, the source
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L106))
 
-### syntaxHintFor
-
-```ts
-syntaxHintFor(errors: string): string
-```
-
-Return a specific syntax reminder to inject next to a diagnostic, or ""
-  when no known pattern matches.
-
-  @param errors - The rendered diagnostic text to match against
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| errors | `string` |  |
-
-**Returns:** `string`
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L124))
-
 ### agencyCodingAgent
 
 ```ts
@@ -115,4 +94,4 @@ Write an Agency program for the task. Iterates until the source parses,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L251))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L230))

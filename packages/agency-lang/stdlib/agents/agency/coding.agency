@@ -121,27 +121,6 @@ export def buildTools(): any[] {
   ]
 }
 
-export def syntaxHintFor(errors: string): string {
-  """
-  Return a specific syntax reminder to inject next to a diagnostic, or ""
-  when no known pattern matches.
-
-  @param errors - The rendered diagnostic text to match against
-  """
-  if (errors =~ re/for loop condition/) {
-    return "Reminder: Agency has no C-style for loop. Count with a while loop, or iterate with for (x in items)."
-  }
-  return ""
-}
-
-/** Prepend the point-of-need syntax hint to a diagnostic block, if one
-  applies. The rule lands better delivered alongside the error than buried in
-  the system prompt. */
-def withSyntaxHint(findings: string): string {
-  const hint = syntaxHintFor(findings)
-  return if hint == "" then findings else "${hint}\n\n${findings}"
-}
-
 /** True when the source declares a `node main` entry point. Missing main is
   not a typecheck diagnostic, so the loop checks for it directly. */
 def hasMainNode(source: string): boolean {
@@ -175,14 +154,14 @@ def checkSource(source: string): Critique {
     const findings = renderFeedback(reviewed)
     return {
       accepted: false,
-      feedback: "That code has problems:\n${withSyntaxHint(findings)}\nReturn a corrected complete program.",
+      feedback: "That code has problems:\n${findings}\nReturn a corrected complete program.",
     }
   }
   const compiled = compile(source)
   if (compiled is failure(compileErr)) {
     return {
       accepted: false,
-      feedback: "That code failed to compile:\n${withSyntaxHint("${compileErr}")}\nReturn a corrected complete program.",
+      feedback: "That code failed to compile:\n${compileErr}\nReturn a corrected complete program.",
     }
   }
   if (!hasMainNode(source)) {

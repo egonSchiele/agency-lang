@@ -1,0 +1,22 @@
+{
+  // Type-checks the tests. The main tsconfig excludes them so they stay out of
+  // dist/, and vitest transpiles without checking types, so nothing else would.
+  // The exclude list is the one the main tsconfig used before tests were dropped
+  // from the build, so this checks exactly what it used to.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": ["lib", "scripts"],
+  "exclude": [
+    "node_modules",
+    "references",
+    "tests",
+    "*.mts",
+    "examples",
+    "lib/tui/test",
+    "lib/stdlib/__tests__/**",
+    "lib/stdlib/**/*.test.ts"
+  ]
+}

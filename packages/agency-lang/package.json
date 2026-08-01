@@ -1,8 +1,8 @@
 {
   "name": "agency-lang",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "The Agency language",
-  "main": "lib/index.js",
+  "main": "./dist/lib/index.js",
   "scripts": {
     "test": "vitest --test-timeout=1000",
     "test:run": "vitest run",
@@ -16,7 +16,7 @@
     "build": "make build",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.evals.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tests.json && tsc -p tsconfig.evals.json",
     "agency": "node ./dist/scripts/agency.js",
     "a": "node ./dist/scripts/agency.js",
     "compile": "node ./dist/scripts/agency.js compile",
@@ -111,7 +111,7 @@
     "prompts": "^2.4.2",
     "smoltalk": "^0.8.4",
     "tarsec": "0.5.3",
-    "typestache": "^0.5.0",
+    "typestache": "^0.6.0",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-protocol": "^3.17.5",
     "vscode-languageserver-textdocument": "^1.0.12",

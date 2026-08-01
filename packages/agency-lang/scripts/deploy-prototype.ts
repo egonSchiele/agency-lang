@@ -111,10 +111,13 @@ function localImports(source: string): string[] {
   return found;
 }
 
-/** Build the upload HTTP request (pure). Path segments are encoded, though the
- *  project slug is already constrained server-side. */
+/** Build the upload HTTP request (pure). The upload schema requires an
+ *  `entrypoint` (the name of the file to treat as the agent's entry) alongside
+ *  the file set. Path segments are encoded, though the project slug is already
+ *  constrained server-side. */
 function buildUploadRequest(
   target: DeployTarget,
+  entrypoint: string,
   files: DeployFile[],
 ): { url: string; method: "POST"; headers: Record<string, string>; body: string } {
   const url = new URL(
@@ -128,7 +131,7 @@ function buildUploadRequest(
       Authorization: `Bearer ${target.apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ files }),
+    body: JSON.stringify({ entrypoint, files }),
   };
 }
 
@@ -258,11 +261,16 @@ async function main(): Promise<void> {
     );
   }
 
-  const req = buildUploadRequest(target, files);
+  const entrypoint = path.basename(filePath);
+  const req = buildUploadRequest(target, entrypoint, files);
   console.log(`\n${bold("Request")}`);
   console.log(`  ${green(req.method)} ${req.url}`);
   console.log(`  ${dim("Authorization:")} Bearer ${redactKey(target.apiKey)}`);
-  console.log(`  ${dim("body:")} { files: [${files.map((f) => f.name).join(", ")}] }`);
+  console.log(
+    `  ${dim("body:")} { entrypoint: ${entrypoint}, files: [${files
+      .map((f) => f.name)
+      .join(", ")}] }`,
+  );
 
   if (!flags.execute) {
     console.log(`\n${yellow("dry-run")} — nothing sent. Re-run with ${bold("--execute")} to deploy.\n`);

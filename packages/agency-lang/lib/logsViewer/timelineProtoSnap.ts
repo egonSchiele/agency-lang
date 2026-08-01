@@ -43,6 +43,12 @@ show(proto, "flame view, drilled into the longest span (Enter)");
 proto = protoHandleKey(proto, { key: "t" });
 show(proto, "byName view of the drilled subtree");
 
-proto = protoHandleKey(proto, { key: "left" });
-proto = protoHandleKey(proto, { key: "t" });
-show(proto, "byName view, back at top (←, then t)");
+// occurrences of the 3rd-busiest name (usually a tool like bash)
+proto = { ...proto, cursor: Math.min(2, proto.byName.length - 1) };
+proto = protoHandleKey(proto, { key: "enter" });
+show(proto, "occurrences view (Enter on a byName row)");
+
+// detail of the 2nd occurrence
+proto = protoHandleKey(proto, { key: "down" });
+proto = protoHandleKey(proto, { key: "d" });
+show(proto, "detail screen (d on an occurrence)");

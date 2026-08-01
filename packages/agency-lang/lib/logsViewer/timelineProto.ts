@@ -2,11 +2,12 @@
 // PROTOTYPE — THROWAWAY CODE. Do not ship, do not test, do not polish.
 //
 // Question this answers: what should the timeline views of a single run
-// look like in the terminal, and how should drill-down / zoom / labels
-// behave? Two variants, cycled with `t` from the normal tree view:
-//   tree → flame (row per call, indented, drill with Enter/→/←)
-//        → byName (row per function, repeated bars + count/total/share)
-//        → tree
+// look like in the terminal, and how should drill-down / labels / detail
+// behave? Views, cycled with `t` from the normal tree view:
+//   flame       row per call, indented; Enter/→ drills in, ← climbs out
+//   byName      row per function; Enter opens that name's occurrences
+//   occurrences every call of one name, with where-it-came-from context
+//   detail      full info for one call (prompt transcript, args, cost)
 // Everything lives in this one file; run.ts has a small marked hook.
 // The real implementation will be rebuilt properly from what we learn.
 // ═══════════════════════════════════════════════════════════════════════
@@ -14,13 +15,15 @@ import { column, line } from "../tui/builders.js";
 import type { Element } from "../tui/elements.js";
 import { scrollList } from "../tui/scrollList.js";
 import type { KeyEvent } from "../tui/input/types.js";
+import { formatConversation } from "./conversation.js";
 import { expandAncestorsOf } from "./search.js";
 import type { TreeNode, ViewerState } from "./types.js";
 
 type ProtoSpan = {
   node: TreeNode;
   name: string;       // grouping key + color key, e.g. `llm(claude-sonnet-5)`, `bash`
-  detail: string;     // what THIS call was doing, e.g. the bash command
+  label: string;      // flame row text, e.g. `llm · "Analyze the gcode…"`
+  detail: string;     // per-call extra: tokens+cost, or the bash command
   kind: string;
   depth: number;
   start: number;
@@ -45,12 +48,14 @@ type NameRow = {
 // every single tool call (90× in one run) and buries the signal. `h` shows.
 const ADMIN_KINDS = ["handlerChain", "threadEndHooks"];
 
+type ProtoView = "flame" | "byName" | "occ" | "detail";
+
 export type ProtoState = {
-  view: "flame" | "byName";
+  view: ProtoView;
   traceLabel: string;
   path: TreeNode[];         // drill stack; last entry is the current root
   hideAdmin: boolean;
-  // everything below is derived from the current root (deriveView)
+  // derived from the current root (deriveView)
   spans: ProtoSpan[];
   byName: NameRow[];
   colors: Record<string, string>;
@@ -60,6 +65,14 @@ export type ProtoState = {
   t1: number;
   cursor: number;
   scrollTop: number;
+  // occurrences view
+  occName?: string;
+  occSpans?: ProtoSpan[];
+  // detail view
+  detailTitle?: string;
+  detailLines?: string[];
+  detailScroll: number;
+  detailReturn?: ProtoView;
   // set by `o`: leave the prototype and focus this span in the tree
   jumpToSpanId?: string;
   exit?: boolean;
@@ -78,7 +91,7 @@ export function enterProto(state: ViewerState): ProtoState | undefined {
   const base: ProtoState = {
     view: "flame", traceLabel: trace.label, path: [trace], hideAdmin: true,
     spans: [], byName: [], colors: {}, rootStart: 0, rootEnd: 0, t0: 0, t1: 0,
-    cursor: 0, scrollTop: 0,
+    cursor: 0, scrollTop: 0, detailScroll: 0,
   };
   const derived = deriveView(base);
   return derived.spans.length > 0 ? derived : undefined;
@@ -89,7 +102,6 @@ function deriveView(p: ProtoState): ProtoState {
   const root = p.path[p.path.length - 1];
   const spans: ProtoSpan[] = [];
   collectSpans(root, 0, p.hideAdmin, spans);
-  // Drilling into a span: the root itself is a row too (depth 0 context).
   if (p.path.length > 1) {
     const rootSpan = makeSpan(root, 0);
     if (rootSpan) spans.unshift(rootSpan);
@@ -138,6 +150,7 @@ function makeSpan(node: TreeNode, depth: number): ProtoSpan | undefined {
   return {
     node,
     name: nameOf(node),
+    label: labelOf(node),
     detail: detailOf(node),
     kind: node.label,
     depth,
@@ -212,9 +225,34 @@ function nameOf(node: TreeNode): string {
   return node.label;
 }
 
-/** What this one call was doing — the thing the row label alone cannot
- *  say. Tools: the first string argument (a bash command, a file path, a
- *  subagent's task). LLM calls: tokens + cost. */
+/** Flame row text. LLM calls show what was ASKED, not which model — the
+ *  model name ate the whole gutter and identified nothing (screenshot
+ *  feedback); the model still lives in byName rows, the footer, and the
+ *  detail screen. */
+function labelOf(node: TreeNode): string {
+  if (node.label === "llmCall") {
+    const snippet = promptSnippet(node);
+    return snippet ? `llm · ${snippet}` : "llm";
+  }
+  return nameOf(node);
+}
+
+/** First words of the llm call's prompt: the LAST user message (in a tool
+ *  loop that is the round's actual input; for a subagent it is the task). */
+function promptSnippet(node: TreeNode): string {
+  const l = firstLeaf(node, (t) => t === "promptCompletion");
+  const messages = l?.event?.data.messages;
+  if (!Array.isArray(messages)) return "";
+  const userMessages = messages.filter(
+    (m: { role?: string; content?: unknown }) => m.role === "user" && typeof m.content === "string",
+  );
+  const last = userMessages[userMessages.length - 1];
+  return last ? oneLine(String(last.content)) : "";
+}
+
+/** Per-call extra shown after the label. Tools: the first string argument
+ *  (a bash command, a file path, a subagent's task). LLM calls: tokens +
+ *  cost — the "is this worth digging into" number. */
 function detailOf(node: TreeNode): string {
   if (node.label === "toolExecution") {
     const l = firstLeaf(node, (t) => t === "toolCallStart" || t === "toolCall");
@@ -251,9 +289,25 @@ function groupByName(spans: ProtoSpan[], rootMs: number): NameRow[] {
   return rows;
 }
 
+/** "main » codeAgent » llm" — where a call sits, for occurrence rows. */
+function contextOf(target: TreeNode, root: TreeNode): string {
+  const chain: TreeNode[] = [];
+  const find = (n: TreeNode, trail: TreeNode[]): boolean => {
+    if (n === target) { chain.push(...trail); return true; }
+    return n.children.some((c) => find(c, [...trail, n]));
+  };
+  find(root, []);
+  const names = chain
+    .filter((n) => n.nodeKind === "span")
+    .map((n) => (n.label === "llmCall" ? "llm" : nameOf(n)));
+  return names.join(" » ");
+}
+
 // ── keys ───────────────────────────────────────────────────────────────
 
 export function protoHandleKey(p: ProtoState, ev: KeyEvent): ProtoState {
+  if (p.view === "detail") return detailKeys(p, ev);
+  if (p.view === "occ") return occKeys(p, ev);
   const rows = p.view === "flame" ? p.spans.length : p.byName.length;
   const window = p.t1 - p.t0;
   if (ev.key === "t") {
@@ -263,8 +317,15 @@ export function protoHandleKey(p: ProtoState, ev: KeyEvent): ProtoState {
   if (ev.key === "escape") return { ...p, exit: true };
   if (ev.key === "up" || ev.key === "k") return { ...p, cursor: Math.max(0, p.cursor - 1) };
   if (ev.key === "down" || ev.key === "j") return { ...p, cursor: Math.min(rows - 1, p.cursor + 1) };
-  if (ev.key === "enter" || ev.key === "return" || ev.key === "right") return drillIn(p);
+  if (ev.key === "enter" || ev.key === "return" || ev.key === "right") {
+    if (p.view === "byName") return openOccurrences(p);
+    return drillOrDetail(p);
+  }
   if (ev.key === "left") return drillOut(p);
+  if (ev.key === "d") {
+    const sel = p.view === "flame" ? p.spans[p.cursor] : p.byName[p.cursor]?.spans[0];
+    return sel ? openDetail(p, sel, p.view) : p;
+  }
   if (ev.key === "o") {
     const target = p.view === "flame" ? p.spans[p.cursor] : p.byName[p.cursor]?.spans[0];
     if (target) return { ...p, jumpToSpanId: target.node.id, exit: true };
@@ -279,18 +340,58 @@ export function protoHandleKey(p: ProtoState, ev: KeyEvent): ProtoState {
   return p;
 }
 
-/** Re-root the flame on the selected span: only it and its descendants
- *  remain, and the time axis rescales to its extent. From byName, drill
- *  into the selected name's longest call. */
-function drillIn(p: ProtoState): ProtoState {
-  const target = p.view === "flame"
-    ? p.spans[p.cursor]
-    : longestSpan(p.byName[p.cursor]?.spans);
+function occKeys(p: ProtoState, ev: KeyEvent): ProtoState {
+  const rows = p.occSpans?.length ?? 0;
+  if (ev.key === "escape" || ev.key === "left") {
+    return { ...p, view: "byName", occName: undefined, occSpans: undefined, cursor: 0, scrollTop: 0 };
+  }
+  if (ev.key === "up" || ev.key === "k") return { ...p, cursor: Math.max(0, p.cursor - 1) };
+  if (ev.key === "down" || ev.key === "j") return { ...p, cursor: Math.min(rows - 1, p.cursor + 1) };
+  if (ev.key === "enter" || ev.key === "return" || ev.key === "right" || ev.key === "d") {
+    const sel = p.occSpans?.[p.cursor];
+    if (!sel) return p;
+    if (ev.key !== "d" && sel.node.children.some((c) => c.nodeKind === "span")) {
+      return deriveView({ ...p, view: "flame", path: [...p.path, sel.node], occName: undefined, occSpans: undefined });
+    }
+    return openDetail(p, sel, "occ");
+  }
+  if (ev.key === "o") {
+    const sel = p.occSpans?.[p.cursor];
+    return sel ? { ...p, jumpToSpanId: sel.node.id, exit: true } : p;
+  }
+  if (ev.key === "t") return { ...p, exit: true };
+  return p;
+}
+
+function detailKeys(p: ProtoState, ev: KeyEvent): ProtoState {
+  const lines = p.detailLines?.length ?? 0;
+  if (ev.key === "escape" || ev.key === "left") {
+    return { ...p, view: p.detailReturn ?? "flame", detailLines: undefined, detailTitle: undefined, detailScroll: 0 };
+  }
+  if (ev.key === "up" || ev.key === "k") return { ...p, detailScroll: Math.max(0, p.detailScroll - 1) };
+  if (ev.key === "down" || ev.key === "j") return { ...p, detailScroll: Math.min(Math.max(0, lines - 5), p.detailScroll + 1) };
+  if (ev.key === "t") return { ...p, exit: true };
+  return p;
+}
+
+/** byName Enter: list every call of the selected name, chronologically,
+ *  each with the context of where it came from. */
+function openOccurrences(p: ProtoState): ProtoState {
+  const row = p.byName[p.cursor];
+  if (!row) return p;
+  const occ = [...row.spans].sort((a, b) => a.start - b.start);
+  return { ...p, view: "occ", occName: row.name, occSpans: occ, cursor: 0, scrollTop: 0 };
+}
+
+/** Flame Enter: drill into a span with children; open detail for a leaf. */
+function drillOrDetail(p: ProtoState): ProtoState {
+  const target = p.spans[p.cursor];
   if (!target) return p;
   const currentRoot = p.path[p.path.length - 1];
-  if (target.node === currentRoot) return p;
-  if (!target.node.children.some((c) => c.nodeKind === "span")) return p;
-  return deriveView({ ...p, view: "flame", path: [...p.path, target.node] });
+  if (target.node !== currentRoot && target.node.children.some((c) => c.nodeKind === "span")) {
+    return deriveView({ ...p, view: "flame", path: [...p.path, target.node] });
+  }
+  return openDetail(p, target, "flame");
 }
 
 function drillOut(p: ProtoState): ProtoState {
@@ -298,9 +399,36 @@ function drillOut(p: ProtoState): ProtoState {
   return deriveView({ ...p, path: p.path.slice(0, -1) });
 }
 
-function longestSpan(spans: ProtoSpan[] | undefined): ProtoSpan | undefined {
-  if (!spans || spans.length === 0) return undefined;
-  return [...spans].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
+// ── detail screen content ──────────────────────────────────────────────
+
+function openDetail(p: ProtoState, s: ProtoSpan, from: ProtoView): ProtoState {
+  const lines: string[] = [];
+  lines.push(String(s.node.summary ?? s.name));
+  lines.push(`start +${fmtMs(s.start - p.rootStart)}   duration ${fmtMs(s.end - s.start)}   self ${fmtMs(s.selfMs)}`);
+  lines.push("");
+  const prompt = firstLeaf(s.node, (t) => t === "promptCompletion");
+  if (prompt?.event) {
+    const d = prompt.event.data;
+    lines.push(`model: ${String(d.model ?? "?").replace(/"/g, "")}`);
+    const usage = d.usage ?? {};
+    lines.push(`tokens: ${usage.inputTokens ?? "?"} in / ${usage.outputTokens ?? "?"} out   cost: $${(d.cost?.totalCost ?? 0).toFixed(4)}`);
+    lines.push("");
+    lines.push("── transcript ──");
+    const messages = Array.isArray(d.messages) ? d.messages : [];
+    const completion = d.completion?.output || d.completion?.toolCalls?.length
+      ? [{ role: "assistant", content: d.completion.output, toolCalls: d.completion.toolCalls }]
+      : [];
+    lines.push(...formatConversation([...messages, ...completion]));
+  } else {
+    const tool = firstLeaf(s.node, (t) => t === "toolCallStart" || t === "toolCall");
+    if (tool?.event) {
+      lines.push("── call ──");
+      lines.push(...JSON.stringify(tool.event.data, null, 2).split("\n"));
+    } else if (s.node.event) {
+      lines.push(...JSON.stringify(s.node.event.data, null, 2).split("\n"));
+    }
+  }
+  return { ...p, view: "detail", detailTitle: s.label, detailLines: lines, detailScroll: 0, detailReturn: from };
 }
 
 function zoomAround(p: ProtoState, newWindow: number): ProtoState {
@@ -334,6 +462,8 @@ const FLAME_GUTTER = 48;
 const NAME_GUTTER = 28;
 
 export function renderProto(p: ProtoState, viewport: { rows: number; cols: number }): Element {
+  if (p.view === "detail") return renderDetail(p, viewport);
+  if (p.view === "occ") return renderOccurrences(p, viewport);
   const gutter = p.view === "flame" ? FLAME_GUTTER : NAME_GUTTER;
   const statsW = p.view === "byName" ? 20 : 16;
   const axisW = Math.max(10, viewport.cols - gutter - statsW - 1);
@@ -357,18 +487,77 @@ export function renderProto(p: ProtoState, viewport: { rows: number; cols: numbe
         : nameRow(p, item as NameRow, isCursor, axisW),
   });
 
-  const drillCrumbs = p.path.length > 1
-    ? "  » " + p.path.slice(1).map((n) => nameOf(n)).join(" » ")
-    : "";
   return column({ justifyContent: "flex-start" },
-    line(`TIMELINE [${p.view}]  ${p.traceLabel}${drillCrumbs}  ${fmtMs(p.rootEnd - p.rootStart)}` +
-      (p.hideAdmin ? "" : "  [admin spans shown]") +
-      (p.t0 !== p.rootStart || p.t1 !== p.rootEnd ? `  (zoom ${fmtMs(p.t0 - p.rootStart)}–${fmtMs(p.t1 - p.rootStart)})` : ""),
-      { fg: "bright-white" }),
+    line(headerLine(p), { fg: "bright-white" }),
     line(axisHeader(p, gutter, axisW), { fg: "gray" }),
     body,
     line(selectionInfo(p), { fg: "bright-white" }),
-    line("t view  ↑↓ select  Enter/→ drill in  ← out  o open in tree  +/- zoom  [ ] pan  0 reset  h admin  Esc back", { fg: "gray" }),
+    line("t view  ↑↓ select  Enter/→ drill  ← out  d detail  o tree  +/- zoom  [ ] pan  0 reset  h admin  Esc back", { fg: "gray" }),
+  );
+}
+
+function headerLine(p: ProtoState): string {
+  const drillCrumbs = p.path.length > 1
+    ? "  » " + p.path.slice(1).map((n) => nameOf(n)).join(" » ")
+    : "";
+  return `TIMELINE [${p.view}]  ${p.traceLabel}${drillCrumbs}  ${fmtMs(p.rootEnd - p.rootStart)}` +
+    (p.hideAdmin ? "" : "  [admin spans shown]") +
+    (p.t0 !== p.rootStart || p.t1 !== p.rootEnd ? `  (zoom ${fmtMs(p.t0 - p.rootStart)}–${fmtMs(p.t1 - p.rootStart)})` : "");
+}
+
+function renderOccurrences(p: ProtoState, viewport: { rows: number; cols: number }): Element {
+  const occ = p.occSpans ?? [];
+  const root = p.path[p.path.length - 1];
+  const gutter = Math.min(64, Math.floor(viewport.cols * 0.55));
+  const statsW = 10;
+  const axisW = Math.max(10, viewport.cols - gutter - statsW - 1);
+  const bodyRows = viewport.rows - 4;
+  let scrollTop = p.scrollTop;
+  if (p.cursor < scrollTop) scrollTop = p.cursor;
+  if (p.cursor >= scrollTop + bodyRows) scrollTop = p.cursor - bodyRows + 1;
+  p.scrollTop = scrollTop;
+
+  const { element: body } = scrollList({
+    items: occ as unknown[],
+    cursorIdx: p.cursor,
+    scrollTop,
+    viewportRows: bodyRows,
+    renderItem: (item, isCursor) => {
+      const s = item as ProtoSpan;
+      const idx = occ.indexOf(s) + 1;
+      // The part of the path SHARED by every occurrence says nothing about
+      // this one — show only the distinguishing tail (full path in header).
+      const contexts = occ.map((o) => contextOf((o as ProtoSpan).node, root));
+      const shared = commonPrefix(contexts);
+      const context = contexts[occ.indexOf(s)].slice(shared.length) || "·";
+      const text = s.detail ? `${context} · ${s.detail}` : context;
+      const label = clip(`#${String(idx).padStart(2)} ${text}`, gutter - 3);
+      const bar = barCells(axisW, [[s.start, s.end]], p);
+      const marker = isCursor ? "▶ " : "  ";
+      return line(`${marker}${pad(label, gutter - 2)}${bar}${fmtMs(s.end - s.start).padStart(statsW - 1)}`,
+        { fg: isCursor ? "bright-white" : p.colors[s.name] });
+    },
+  });
+
+  const sharedPath = commonPrefix(occ.map((o) => contextOf(o.node, root)));
+  return column({ justifyContent: "flex-start" },
+    line(`TIMELINE [occurrences]  ${p.occName}  — ${occ.length} call(s)` +
+      (sharedPath ? `  (all under ${sharedPath.replace(/ » $/, "")})` : ""), { fg: "bright-white" }),
+    line(axisHeader(p, gutter, axisW), { fg: "gray" }),
+    body,
+    line(selectionInfoOcc(p), { fg: "bright-white" }),
+    line("↑↓ select  Enter/→ drill or detail  d detail  o tree  ←/Esc back to byName", { fg: "gray" }),
+  );
+}
+
+function renderDetail(p: ProtoState, viewport: { rows: number; cols: number }): Element {
+  const all = (p.detailLines ?? []).flatMap((l) => wrap(l, viewport.cols - 2));
+  const bodyRows = viewport.rows - 3;
+  const visible = all.slice(p.detailScroll, p.detailScroll + bodyRows);
+  return column({ justifyContent: "flex-start" },
+    line(`DETAIL  ${p.detailTitle ?? ""}`, { fg: "bright-white" }),
+    ...visible.map((l) => line(l)),
+    line(`↑↓ scroll (${p.detailScroll + 1}–${Math.min(all.length, p.detailScroll + bodyRows)} of ${all.length})  ←/Esc back`, { fg: "gray" }),
   );
 }
 
@@ -383,7 +572,7 @@ function axisHeader(p: ProtoState, gutter: number, axisW: number): string {
 
 function flameRow(p: ProtoState, s: ProtoSpan, isCursor: boolean, axisW: number, statsW: number): Element {
   const indent = "  ".repeat(Math.min(s.depth, 10));
-  const text = s.detail ? `${s.name} · ${s.detail}` : s.name;
+  const text = s.detail ? `${s.label} · ${s.detail}` : s.label;
   const label = clip(`${indent}${text}`, FLAME_GUTTER - 3);
   const bar = barCells(axisW, [[s.start, s.end]], p);
   const dur = s.end - s.start;
@@ -404,32 +593,51 @@ function nameRow(p: ProtoState, r: NameRow, isCursor: boolean, axisW: number): E
     { fg: isCursor ? "bright-white" : p.colors[r.name] });
 }
 
-/** Paint intervals onto axisW cells. 0 hits = "·", 1 = "█", 2+ = "▓"
- *  (overlap from concurrent calls of the same name under fork). Every
- *  interval inside the window paints at least one cell. */
+/** Paint intervals onto axisW cells. The shade means how BUSY the slice
+ *  was — what fraction of that cell's time window the function actually
+ *  ran: · none, ░ ≤25%, ▒ ≤50%, ▓ ≤90%, █ nearly all. (Count-based
+ *  shading made 62 tiny bash calls read as "heavy overlap".) Every
+ *  interval inside the window still paints at least one cell. */
 function barCells(axisW: number, intervals: [number, number][], p: ProtoState): string {
-  const counts = new Array(axisW).fill(0);
+  const covered = new Array(axisW).fill(0);
   const window = p.t1 - p.t0 || 1;
+  const cellMs = window / axisW;
   for (const [start, end] of intervals) {
     if (end < p.t0 || start > p.t1) continue;
     const a = Math.max(0, Math.floor(((start - p.t0) / window) * axisW));
     const b = Math.min(axisW - 1, Math.max(a, Math.ceil(((end - p.t0) / window) * axisW) - 1));
-    for (let i = a; i <= b; i++) counts[i] += 1;
+    for (let i = a; i <= b; i++) {
+      const cellStart = p.t0 + i * cellMs;
+      const cellEnd = cellStart + cellMs;
+      const overlap = Math.min(end, cellEnd) - Math.max(start, cellStart);
+      covered[i] += Math.max(overlap, cellMs * 0.05); // floor: stay visible
+    }
   }
-  return counts.map((c: number) => (c === 0 ? "·" : c === 1 ? "█" : "▓")).join("");
+  return covered.map((ms: number) => {
+    const frac = ms / cellMs;
+    if (frac <= 0) return "·";
+    if (frac <= 0.25) return "░";
+    if (frac <= 0.5) return "▒";
+    if (frac <= 0.9) return "▓";
+    return "█";
+  }).join("");
 }
 
 function selectionInfo(p: ProtoState): string {
   if (p.view === "flame") {
     const s = p.spans[p.cursor];
     if (!s) return "";
-    // node.summary is the tree view's precomputed line: label, identifying
-    // detail, and metrics (duration, tokens, cost).
     return `${s.node.summary}  ·  start +${fmtMs(s.start - p.rootStart)}  self ${fmtMs(s.selfMs)}`;
   }
   const r = p.byName[p.cursor];
   if (!r) return "";
   return `${r.name}  [${r.kind}]  ${r.count} call(s)  self-time total ${fmtMs(r.totalMs)}  ${Math.round(r.share * 100)}% of view`;
+}
+
+function selectionInfoOcc(p: ProtoState): string {
+  const s = p.occSpans?.[p.cursor];
+  if (!s) return "";
+  return `${s.node.summary}  ·  start +${fmtMs(s.start - p.rootStart)}  self ${fmtMs(s.selfMs)}`;
 }
 
 function fmtMs(ms: number): string {
@@ -445,4 +653,22 @@ function pad(s: string, w: number): string {
 
 function clip(s: string, w: number): string {
   return s.length <= w ? s : s.slice(0, w - 1) + "…";
+}
+
+function commonPrefix(strings: string[]): string {
+  if (strings.length === 0) return "";
+  let prefix = strings[0];
+  for (const s of strings) {
+    while (!s.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  }
+  // cut at a path-segment boundary so we never split a name mid-word
+  const at = prefix.lastIndexOf(" » ");
+  return at === -1 ? "" : prefix.slice(0, at + 3);
+}
+
+function wrap(s: string, w: number): string[] {
+  if (s.length <= w) return [s];
+  const out: string[] = [];
+  for (let i = 0; i < s.length; i += w) out.push(s.slice(i, i + w));
+  return out;
 }

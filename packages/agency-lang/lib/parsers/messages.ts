@@ -103,3 +103,14 @@ export const HANDLER_BODY_MESSAGE = `expected \`{\` to open handler body:
   }
 
 The handler takes the interrupt and returns \`approve()\`, \`reject()\`, \`propagate()\` or \`pass()\`. \`with approve\` is shorthand for a handler that approves everything.`;
+
+export const BLOCK_AS_VALUE_MESSAGE = `Agency blocks are arguments, not values, so a block cannot be assigned to a variable:
+
+  const double = (n) => n * 2      // not allowed
+  const doubled = map(xs, (n) => n * 2)
+
+Pass the block directly to the function that takes it. If you want a reusable
+function, declare one with \`def\`:
+
+  def double(n: number): number { return n * 2 }
+  const doubled = map(xs, double)`;

@@ -763,6 +763,21 @@ export function readConfigOverrides(
   }
 }
 
+/** Combine inherited env overrides with flag-derived ones: flags win
+ *  key-by-key, and `log` (the only nested override flag parsing writes)
+ *  merges one level deep — so a --trace flag cannot destroy an inherited
+ *  logFile, while an explicit --log still wins that key. */
+export function mergeConfigOverrides(
+  inherited: Partial<AgencyConfig>,
+  flags: Partial<AgencyConfig>,
+): Partial<AgencyConfig> {
+  const merged: Partial<AgencyConfig> = { ...inherited, ...flags };
+  if (inherited.log || flags.log) {
+    merged.log = { ...inherited.log, ...flags.log };
+  }
+  return merged;
+}
+
 /** Return a deep copy of `config` with secret-bearing fields masked, for
  *  human-facing output (`agency config show`). Masks every `apiKey` — the
  *  top-level `log.apiKey` string and each key under `client.apiKey` /

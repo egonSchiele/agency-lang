@@ -303,9 +303,9 @@ export async function main(input: any, { messages, callbacks }: { messages?: any
 export const __mainNodeParams = ["input"];
 if (__process.argv[1] === fileURLToPath(import.meta.url)) {
   if (__process.argv.length > 3) {
-    console.error(`main() takes 1 argument(s) but got ${__process.argv.length - 2}; extra: ${__process.argv.slice(3).join(" ")}`)
-    __process.exit(1)
-  }
+  console.error(`main() takes 1 argument(s) but got ${__process.argv.length - 2}; extra: ${__process.argv.slice(3).join(" ")}`);
+  __process.exit(1);
+}
   try {
     const initialState = {
       messages: new ThreadStore(),

@@ -165,39 +165,48 @@ class AgentRunner {
   /** Run the agent: workdir as cwd, statelog captured under agent/. */
   private execute(compiledEntryPath: string | null): ReturnType<EvalInputRunner> {
     fs.mkdirSync(this.paths.agentDir, { recursive: true });
-    const pipeOutput = this.options.pipeOutput ?? true;
-    const limits = limitsFromConfig(this.options.config, this.options.timeoutSec);
-    const maxCostUsd = costCapFromConfig(this.options.config);
-    const runner = this.deps.runner ?? ((job: EvalRunnerJob) =>
-      job.kind === "command"
-        ? runCommandInSpawn({ ...job, pipeOutput, limits, maxCostUsd })
-        : makeSubprocessRunner(pipeOutput, limits, maxCostUsd)(job));
-
-    if (this.target.kind === "command") {
-      let argv: string[];
-      try {
-        argv = substituteTask(this.target.tokens, this.task);
-      } catch (err) {
-        return Promise.resolve({ ok: false as const, errorMessage: errMessage(err) });
-      }
-      return runner({
-        kind: "command",
-        argv,
-        cwd: this.paths.workdirPath,
-        statelogPath: this.paths.statelogPath,
-        // One id for the whole process tree this command starts; minted per
-        // run so two inputs never share a trace.
-        traceId: nanoid(),
-      });
+    let job: EvalRunnerJob;
+    try {
+      job = this.buildJob(compiledEntryPath);
+    } catch (err) {
+      return Promise.resolve({ ok: false as const, errorMessage: errMessage(err) });
     }
-    return runner({
+    return this.makeRunner()(job);
+  }
+
+  /** The runner job for this target kind. Task substitution happens here for
+   *  commands (and can throw on a task too large for argv); the trace id is
+   *  minted per run so two inputs never share a trace. */
+  private buildJob(compiledEntryPath: string | null): EvalRunnerJob {
+    const cwd = this.paths.workdirPath;
+    const statelogPath = this.paths.statelogPath;
+    if (this.target.kind === "command") {
+      const argv = substituteTask(this.target.tokens, this.task);
+      return { kind: "command", argv, traceId: nanoid(), cwd, statelogPath };
+    }
+    return {
       kind: "file",
       compiledEntryPath: compiledEntryPath as string,
       node: this.target.node,
       task: this.task,
-      cwd: this.paths.workdirPath,
-      statelogPath: this.paths.statelogPath,
-    });
+      cwd,
+      statelogPath,
+    };
+  }
+
+  /** The injected test runner when present; otherwise fork for file jobs,
+   *  spawn for command jobs, under the config's limits and cost cap. */
+  private makeRunner(): EvalInputRunner {
+    if (this.deps.runner !== undefined) {
+      return this.deps.runner;
+    }
+    const pipeOutput = this.options.pipeOutput ?? true;
+    const limits = limitsFromConfig(this.options.config, this.options.timeoutSec);
+    const maxCostUsd = costCapFromConfig(this.options.config);
+    return (job: EvalRunnerJob) =>
+      job.kind === "command"
+        ? runCommandInSpawn({ ...job, pipeOutput, limits, maxCostUsd })
+        : makeSubprocessRunner(pipeOutput, limits, maxCostUsd)(job);
   }
 
   /** Distill the statelog into the eval record. Undefined when there is

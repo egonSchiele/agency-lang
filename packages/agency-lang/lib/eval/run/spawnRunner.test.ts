@@ -128,10 +128,12 @@ describe("runCommandInSpawn", () => {
     const cwd = tmp();
     const statelogPath = path.join(cwd, "statelog.jsonl");
     // The child writes two promptCompletion events ($0.30 + $0.40 > $0.50 cap)
-    // to its statelog, then sleeps; the tailer must catch it and kill.
+    // to its statelog, then sleeps; the tailer must catch it and kill. The
+    // lines carry the full wire envelope — the tailer parses with the real
+    // statelog parser, which rejects envelope-less lines.
     const script = `
       const fs = require("fs");
-      const line = (c) => JSON.stringify({ data: { type: "promptCompletion", cost: { totalCost: c } } }) + "\\n";
+      const line = (c) => JSON.stringify({ trace_id: "t", data: { type: "promptCompletion", timestamp: "0", cost: { totalCost: c } } }) + "\\n";
       fs.appendFileSync(${JSON.stringify(statelogPath)}, line(0.3));
       fs.appendFileSync(${JSON.stringify(statelogPath)}, line(0.4));
       setTimeout(() => {}, 30000);

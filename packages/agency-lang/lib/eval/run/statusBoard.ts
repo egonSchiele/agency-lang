@@ -44,10 +44,12 @@ export function startStatusBoard(ids: string[]): {
   // length unevenly (colored vs uncolored cells) and would skew both the
   // columns and the truncation point.
   const line = (entry: BoardEntry): string => {
-    const statusColor =
-      entry.status === "error" ? paint?.red
-      : entry.status === "done" ? paint?.green
-      : undefined;
+    let statusColor: ((s: string) => string) | undefined;
+    if (entry.status === "error") {
+      statusColor = paint?.red;
+    } else if (entry.status === "done") {
+      statusColor = paint?.green;
+    }
     const elapsed = entry.startedAt === undefined
       ? ""
       : formatElapsed((entry.endedAt ?? Date.now()) - entry.startedAt);

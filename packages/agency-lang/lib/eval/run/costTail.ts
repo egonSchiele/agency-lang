@@ -1,56 +1,29 @@
-import * as fs from "fs";
+import { makeStatelogTailer } from "@/statelog/tail.js";
+import type { EventEnvelope } from "@/statelog/wireTypes.js";
 
 /**
- * Incremental reader of a live statelog's LLM spend: each poll() reads the
- * bytes appended since the last poll, sums the cost on promptCompletion
- * events, and returns the running total. One partial trailing line is normal
- * mid-append (the writer is another process); it is kept and re-parsed once
- * complete. Torn lines under concurrent writers are skipped, not fatal —
- * this feeds a cost cap and a status display, and both prefer a slightly
- * stale number to a crash.
- *
- * Used by the spawn runner's cost cap (command targets have no IPC channel
- * to stream cost telemetry over) and the parallel status board.
+ * Running total of a live run's LLM spend: the cost each promptCompletion
+ * event records, summed as the statelog grows. Feeds the spawn runner's
+ * cost cap and the parallel status board's cost column.
  */
 export function makeStatelogCostTailer(statelogPath: string): { poll(): number } {
-  let offset = 0;
-  let remainder = "";
+  const tailer = makeStatelogTailer(statelogPath);
   let total = 0;
   return {
     poll(): number {
-      let stats: fs.Stats;
-      try {
-        stats = fs.statSync(statelogPath);
-      } catch {
-        return total;   // no statelog yet
-      }
-      if (stats.size <= offset) return total;
-      const fd = fs.openSync(statelogPath, "r");
-      const buf = Buffer.alloc(stats.size - offset);
-      // A short read must advance offset by what was ACTUALLY read: consuming
-      // the zero-filled tail of buf would corrupt the next line boundary, and
-      // the skipped bytes would silently undercount a SAFETY cap. The
-      // unread range is picked up on the next poll.
-      const bytesRead = fs.readSync(fd, buf, 0, buf.length, offset);
-      fs.closeSync(fd);
-      offset += bytesRead;
-      const chunks = (remainder + buf.subarray(0, bytesRead).toString("utf8")).split("\n");
-      remainder = chunks.pop() ?? "";
-      for (const line of chunks) {
-        if (line.trim() === "") continue;
-        let event: { data?: { type?: string; cost?: { totalCost?: unknown } } };
-        try {
-          event = JSON.parse(line);
-        } catch {
-          continue;
-        }
-        if (event.data?.type !== "promptCompletion") continue;
-        const cost = event.data.cost?.totalCost;
-        if (typeof cost === "number" && Number.isFinite(cost) && cost > 0) {
-          total += cost;
-        }
+      for (const event of tailer.poll()) {
+        total += promptCompletionCost(event);
       }
       return total;
     },
   };
+}
+
+function promptCompletionCost(event: EventEnvelope): number {
+  if (event.data.type !== "promptCompletion") {
+    return 0;
+  }
+  const cost = event.data.cost?.totalCost;
+  const isPayable = typeof cost === "number" && Number.isFinite(cost) && cost > 0;
+  return isPayable ? cost : 0;
 }

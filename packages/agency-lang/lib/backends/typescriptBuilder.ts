@@ -144,6 +144,7 @@ import type {
 } from "../ir/tsIR.js";
 import type { CompilationUnit } from "../compilationUnit.js";
 import { SourceMapBuilder } from "./sourceMap.js";
+import { directRunExtraArgsCheck } from "./typescriptBuilder/directRunArgsCheck.js";
 import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
@@ -4780,39 +4781,4 @@ export class TypeScriptBuilder {
 
     return result;
   }
-}
-
-/**
- * Direct-run guard: more argv entries than main has parameters is a loud
- * error, not a silent drop — the common typo is an extra or mis-quoted
- * trailing arg, and dropping it runs the agent against the wrong input
- * without a word. (Missing args stay permitted: absent argv entries are
- * undefined and parameter defaults apply.)
- */
-function directRunExtraArgsCheck(mainParamCount: number): TsNode {
-  const argvLen = $(ts.id("__process")).prop("argv").prop("length").done();
-  return ts.if(
-    ts.binOp(argvLen, ">", ts.num(2 + mainParamCount)),
-    ts.statements([
-      ts.consoleError(
-        ts.template([
-          { text: `main() takes ${mainParamCount} argument(s) but got `, expr: ts.binOp(argvLen, "-", ts.num(2)) },
-          {
-            text: "; extra: ",
-            expr: ts.methodCall(
-              ts.methodCall(
-                $(ts.id("__process")).prop("argv").done(),
-                "slice",
-                [ts.num(2 + mainParamCount)],
-              ),
-              "join",
-              [ts.str(" ")],
-            ),
-          },
-          { text: "" },
-        ]),
-      ),
-      ts.methodCall(ts.id("__process"), "exit", [ts.num(1)]),
-    ]),
-  );
 }

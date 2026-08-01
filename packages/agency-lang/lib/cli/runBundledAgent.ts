@@ -2,6 +2,7 @@ import {
   AgencyConfig,
   applyCliFlags,
   CONFIG_OVERRIDES_ENV,
+  mergeConfigOverrides,
   readConfigOverrides,
   serializeConfigOverrides,
   type CliFlags,
@@ -137,20 +138,10 @@ export function runBundledAgent(
   const overrides = agentConfigOverride(args);
   const agentHome = agentHomeOverride(args);
   const env = { ...process.env };
-  // Merge onto any inherited overrides rather than replacing them ("env
-  // first, flags on top" — the same ordering context.ts documents for the
-  // runtime side): an eval harness hands this process a statelog path via
-  // this env var, and a --trace here must not destroy it. An explicit --log
-  // still wins the logFile key — that is user intent, and the eval harness
-  // detects the missing statelog and names this cause. Among the flags
-  // agentConfigOverride parses, only `log` is nested; if that parser ever
-  // learns a flag writing another nested key (client, say), this one-level
-  // merge silently drops the inherited half of it.
-  const inherited = readConfigOverrides(env);
-  const merged: Partial<AgencyConfig> = { ...inherited, ...overrides };
-  if (inherited.log || overrides.log) {
-    merged.log = { ...inherited.log, ...overrides.log };
-  }
+  // Inherited overrides matter: an eval harness hands this process its
+  // statelog path via this env var, and flags must layer on top, not
+  // replace it.
+  const merged = mergeConfigOverrides(readConfigOverrides(env), overrides);
   if (Object.keys(merged).length > 0) {
     env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(merged);
   }

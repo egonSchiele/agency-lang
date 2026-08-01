@@ -1,0 +1,16 @@
+// Node parameter defaults: the default applies when the argument is
+// omitted — whether the node is invoked directly with no input or
+// reached through a goto that leaves the argument off — and an explicit
+// value always wins. (Defaults used to parse but vanish at compile time.)
+
+node withDefault(name: string = "fallback"): string {
+  return "hi " + name
+}
+
+node viaGoto() {
+  goto withDefault()
+}
+
+node viaGotoWithArg() {
+  goto withDefault("explicit")
+}

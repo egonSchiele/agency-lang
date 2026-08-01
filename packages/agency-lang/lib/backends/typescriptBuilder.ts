@@ -3049,7 +3049,13 @@ export class TypeScriptBuilder {
     if (targetNode && targetNode.parameters.length > 0) {
       const entries: Record<string, TsNode> = {};
       targetNode.parameters.forEach((p, i) => {
-        entries[p.name] = argNodes[i];
+        // A goto may omit trailing arguments (legal when the parameter
+        // has a default): leave the key out of data so the node body
+        // sees undefined and applies its default. Emitting argNodes[i]
+        // blindly put undefined into the IR and crashed the printer.
+        if (argNodes[i] !== undefined) {
+          entries[p.name] = argNodes[i];
+        }
       });
       dataNode = ts.obj(entries);
     } else if (argNodes.length > 0) {
@@ -3148,14 +3154,23 @@ export class TypeScriptBuilder {
       ...hoistedAliases,
     ];
 
-    // Param assignments (only when not resuming)
+    // Param assignments (only when not resuming). A parameter default
+    // applies whenever the incoming data slot is undefined — this is the
+    // ONE site every invocation path funnels through (the exported
+    // wrapper, direct runs, and graph transitions all deliver arguments
+    // via __state.data), so defaults work identically for all of them.
     if (parameters.length > 0) {
-      const paramStmts = parameters.map((p) =>
-        ts.assign(
-          $(ts.stack("args")).index(ts.str(p.name)).done(),
-          $(ts.runtime.state).prop("data").prop(p.name).done(),
-        ),
-      );
+      const paramStmts = parameters.map((p) => {
+        const incoming = $(ts.runtime.state).prop("data").prop(p.name).done();
+        const value = p.defaultValue
+          ? ts.ternary(
+              ts.binOp(incoming, "===", ts.id("undefined")),
+              this.processNode(p.defaultValue),
+              incoming,
+            )
+          : incoming;
+        return ts.assign($(ts.stack("args")).index(ts.str(p.name)).done(), value);
+      });
       stmts.push(ts.if(ts.raw("!__state.isResume"), ts.statements(paramStmts)));
     }
 
@@ -4602,6 +4617,25 @@ export class TypeScriptBuilder {
     return nodes;
   }
 
+  /** The exported node wrapper's parameter list: the node's own
+   *  parameters (with their defaults, so TS callers can omit them) plus
+   *  the trailing options object. */
+  private nodeWrapperParams(
+    args: FunctionParameter[],
+  ): { name: string; typeAnnotation?: string; defaultValue?: TsNode }[] {
+    const params = args.map((arg) => ({
+      name: arg.name,
+      typeAnnotation: arg.typeHint ? formatTypeHintTs(arg.typeHint) : "any",
+      defaultValue: arg.defaultValue ? this.processNode(arg.defaultValue) : undefined,
+    }));
+    params.push({
+      name: "{ messages, callbacks }",
+      typeAnnotation: "{ messages?: any; callbacks?: any }",
+      defaultValue: ts.obj({}),
+    });
+    return params;
+  }
+
   private postprocess(): TsNode[] {
     const result: TsNode[] = [];
 
@@ -4635,24 +4669,7 @@ export class TypeScriptBuilder {
 
     for (const node of this.compilationUnit.graphNodes) {
       const args = node.parameters;
-      const fnParams: {
-        name: string;
-        typeAnnotation?: string;
-        defaultValue?: TsNode;
-      }[] = [];
-      if (args.length > 0) {
-        for (const arg of args) {
-          const typeHint = arg.typeHint
-            ? formatTypeHintTs(arg.typeHint)
-            : "any";
-          fnParams.push({ name: arg.name, typeAnnotation: typeHint });
-        }
-      }
-      fnParams.push({
-        name: "{ messages, callbacks }",
-        typeAnnotation: "{ messages?: any; callbacks?: any }",
-        defaultValue: ts.obj({}),
-      });
+      const fnParams = this.nodeWrapperParams(args);
       const dataObj: Record<string, TsNode> = {};
       for (const arg of args) {
         dataObj[arg.name] = ts.id(arg.name);

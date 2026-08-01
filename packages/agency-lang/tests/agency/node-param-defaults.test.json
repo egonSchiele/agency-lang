@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "nodeName": "withDefault",
+      "description": "an omitted argument takes the default",
+      "input": "",
+      "expectedOutput": "\"hi fallback\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "withDefault",
+      "description": "an explicit argument wins over the default",
+      "input": "\"Ada\"",
+      "expectedOutput": "\"hi Ada\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "viaGoto",
+      "description": "a goto that omits the argument also gets the default",
+      "input": "",
+      "expectedOutput": "\"hi fallback\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "viaGotoWithArg",
+      "description": "a goto with an explicit argument passes it through",
+      "input": "",
+      "expectedOutput": "\"hi explicit\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

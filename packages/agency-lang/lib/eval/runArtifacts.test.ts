@@ -163,6 +163,23 @@ Choose a different --run-id or delete the existing directory.`,
       expect(warnings).toEqual([]);
     });
 
+    it("a parseable record with a wrong shape leaves metrics absent with a warning", () => {
+      const state = initializeState();
+      const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
+      fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
+      fs.writeFileSync(prepared.evalRecordPath, JSON.stringify({
+        durationMs: "not-a-number", startedAtMs: 10,
+        metrics: { costUsdTotal: 1.0, models: ["sonnet"] },
+      }));
+      const warnings: string[] = [];
+
+      const summary = writeEvalRunSummary(state, [inputResult(prepared, "success")], (m) => warnings.push(m));
+
+      expect(summary.inputs[0].metrics).toBeUndefined();
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain("unexpected shape");
+    });
+
     it("warns on a malformed record but still writes the summary", () => {
       const state = initializeState();
       const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });

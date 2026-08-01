@@ -49,6 +49,18 @@ describe("readRecordMetrics", () => {
     expect(read.value.agentName).toBeUndefined();
   });
 
+  it("a record with no metrics block reports null cost, never $0.00", () => {
+    const recordPath = path.join(tmpDir, "no-metrics.json");
+    fs.writeFileSync(recordPath, JSON.stringify({ durationMs: 5_000 }));
+
+    const read = readRecordMetrics(recordPath);
+    if (read.kind !== "metrics") {
+      throw new Error(`expected metrics, got ${read.kind}`);
+    }
+    expect(read.value.costUsd).toBeNull();
+    expect(read.value.models).toBeNull();
+  });
+
   it("missing and malformed records are typed results, never throws", () => {
     expect(readRecordMetrics(path.join(tmpDir, "nope.json")).kind).toBe("missing");
     const torn = path.join(tmpDir, "torn.json");

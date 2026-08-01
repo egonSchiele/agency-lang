@@ -240,22 +240,37 @@ function readInputMetrics(recordPath: string): InputMetricsRead {
   if (recordPath === "" || !fs.existsSync(recordPath)) {
     return { kind: "missing" };
   }
+  let record: EvalRecord;
   try {
-    const record = JSON.parse(fs.readFileSync(recordPath, "utf-8")) as EvalRecord;
-    const value: InputMetricsSummary = {
-      costUsd: record.metrics.costUsdTotal,
-      durationMs: record.durationMs,
-      startedAtMs: record.startedAtMs,
-      models: record.metrics.models,
-    };
-    if (record.agentName !== undefined) {
-      value.agentName = record.agentName;
-    }
-    return { kind: "metrics", value };
+    record = JSON.parse(fs.readFileSync(recordPath, "utf-8")) as EvalRecord;
   } catch (error) {
     const text = error instanceof Error ? error.message : String(error);
     return { kind: "warning", message: `summary metrics: could not read ${recordPath}: ${text}` };
   }
+  // Validate before copying: a parseable-but-corrupt record must leave
+  // metrics ABSENT (so cross-run tools backfill from the statelog),
+  // never write NaN/undefined into summary.json as if it were fact.
+  const costUsd = record.metrics?.costUsdTotal;
+  const durationMs = record.durationMs;
+  const startedAtMs = record.startedAtMs;
+  const models = record.metrics?.models;
+  const shapeOk = isFiniteNumber(costUsd)
+    && isFiniteNumber(durationMs)
+    && isFiniteNumber(startedAtMs)
+    && Array.isArray(models)
+    && models.every((model) => typeof model === "string");
+  if (!shapeOk) {
+    return { kind: "warning", message: `summary metrics: ${recordPath} has an unexpected shape — leaving metrics absent` };
+  }
+  const value: InputMetricsSummary = { costUsd, durationMs, startedAtMs, models };
+  if (typeof record.agentName === "string") {
+    value.agentName = record.agentName;
+  }
+  return { kind: "metrics", value };
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function writeJson(filePath: string, value: unknown): void {

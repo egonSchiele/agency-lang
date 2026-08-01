@@ -16,7 +16,7 @@ import {
 import { readEvalRunPhaseOne, type ReadFileFn } from "./readRunSummary.js";
 import {
   createStatelogScan, readRecordMetrics,
-  type RecordMetrics, type StatelogScan,
+  type RecordMetrics, type StatelogScan, type TraceTotals,
 } from "./mine.js";
 import type { Source } from "./sources.js";
 
@@ -127,7 +127,9 @@ export function createRunsLoader(sources: Source[], deps: LoaderDeps = {}): Runs
       }
       if (read.kind === "metrics") {
         job.record = read.value;
-        const complete = read.value.startedAtMs !== null && read.value.agentName !== undefined;
+        const complete = read.value.costUsd !== null
+          && read.value.startedAtMs !== null
+          && read.value.agentName !== undefined;
         if (complete) {
           return finishJob(job);
         }
@@ -201,17 +203,25 @@ export function createRunsLoader(sources: Source[], deps: LoaderDeps = {}): Runs
 }
 
 /** Record fields win where both exist (they are the salvaged truth);
- *  the statelog fills what the record could not know. */
+ *  the statelog fills what the record could not know. A record with no
+ *  metrics block reports null cost/models, so the statelog fallback
+ *  runs — a wrong $0.00 must never read as a fact. */
 function jobPatch(job: BackfillJob): InputBackfillPatch {
   const patch: InputBackfillPatch = { warnings: [...job.recordWarnings] };
   if (job.record !== null) {
     patch.recordFound = true;
-    patch.costUsd = job.record.costUsd;
-    patch.durationMs = job.record.durationMs;
+    if (job.record.costUsd !== null) {
+      patch.costUsd = job.record.costUsd;
+    }
+    if (job.record.durationMs !== null) {
+      patch.durationMs = job.record.durationMs;
+    }
     if (job.record.startedAtMs !== null) {
       patch.startedAtMs = job.record.startedAtMs;
     }
-    patch.models = job.record.models;
+    if (job.record.models !== null) {
+      patch.models = job.record.models;
+    }
     if (job.record.agentName !== undefined) {
       patch.agentName = job.record.agentName;
     }
@@ -225,25 +235,69 @@ function jobPatch(job: BackfillJob): InputBackfillPatch {
       return patch;
     }
     patch.warnings.push(...result.warnings);
-    const totals = Object.values(result.traces)[0];
+    // A per-input row means "this input", not "this trace": an agent
+    // that ran agency more than once wrote several traces into one
+    // statelog, and dropping all but the first would under-report the
+    // very cost this backfill exists to recover. Sum cost, union
+    // models, take the envelope of the timestamps.
+    const summed = sumTraces(Object.values(result.traces));
     patch.statelogHadEvents = true;
     if (patch.costUsd === undefined) {
-      patch.costUsd = totals.costUsd;
+      patch.costUsd = summed.costUsd;
     }
     if (patch.models === undefined) {
-      patch.models = totals.models;
+      patch.models = summed.models;
     }
-    if (patch.startedAtMs === undefined && totals.firstTsMs !== null) {
-      patch.startedAtMs = totals.firstTsMs;
+    if (patch.startedAtMs === undefined && summed.firstTsMs !== null) {
+      patch.startedAtMs = summed.firstTsMs;
     }
-    if (patch.durationMs === undefined && totals.firstTsMs !== null && totals.lastTsMs !== null) {
-      patch.durationMs = totals.lastTsMs - totals.firstTsMs;
+    if (patch.durationMs === undefined && summed.firstTsMs !== null && summed.lastTsMs !== null) {
+      patch.durationMs = summed.lastTsMs - summed.firstTsMs;
     }
-    if (patch.agentName === undefined && totals.agentName !== undefined) {
-      patch.agentName = totals.agentName;
+    if (patch.agentName === undefined && summed.agentName !== undefined) {
+      patch.agentName = summed.agentName;
     }
   }
   return patch;
+}
+
+/** Fold every trace of an input's statelog into one total. The agent
+ *  name comes from the busiest trace that has one — for an interleaved
+ *  log that is the main trace, not whichever id happened to appear
+ *  first. */
+function sumTraces(traces: TraceTotals[]): TraceTotals {
+  const summed: TraceTotals = {
+    costUsd: 0,
+    models: [],
+    firstTsMs: null,
+    lastTsMs: null,
+    eventCount: 0,
+  };
+  let namedEventCount = -1;
+  for (const totals of traces) {
+    summed.costUsd += totals.costUsd;
+    summed.eventCount += totals.eventCount;
+    for (const model of totals.models) {
+      if (!summed.models.includes(model)) {
+        summed.models.push(model);
+      }
+    }
+    if (totals.firstTsMs !== null) {
+      summed.firstTsMs = summed.firstTsMs === null
+        ? totals.firstTsMs
+        : Math.min(summed.firstTsMs, totals.firstTsMs);
+    }
+    if (totals.lastTsMs !== null) {
+      summed.lastTsMs = summed.lastTsMs === null
+        ? totals.lastTsMs
+        : Math.max(summed.lastTsMs, totals.lastTsMs);
+    }
+    if (totals.agentName !== undefined && totals.eventCount > namedEventCount) {
+      summed.agentName = totals.agentName;
+      namedEventCount = totals.eventCount;
+    }
+  }
+  return summed;
 }
 
 /** Drain a loader synchronously. The only completion path CSV export

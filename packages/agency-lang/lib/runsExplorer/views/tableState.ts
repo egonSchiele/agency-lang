@@ -20,7 +20,10 @@ export type GroupAggregates = {
   score: number | null;
   /** Sum over members with known cost. */
   cost: number | null;
-  /** Sum over members with known wall time. */
+  /** Sum over members with known wall time — "total machine time
+   *  spent", deliberately NOT the elapsed envelope a single run's time
+   *  column shows: group members usually span days, so an envelope
+   *  would mostly measure the gaps between runs. */
   time: number | null;
   agent: string;
   suite: string;

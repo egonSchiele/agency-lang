@@ -63,6 +63,11 @@ class ExplorerShell {
   private rows: RunRow[] = [];
   private rowsSeen = false;
   private pendingKey: Promise<KeyEvent> | null = null;
+  /** The `.then`-derived race arm, cached WITH pendingKey: deriving a
+   *  fresh one per tick would pile a handler onto the same underlying
+   *  promise for every chunk of a long scan (same fix as
+   *  Screen.runLoop, lib/tui/screen.ts). */
+  private pendingKeyStep: Promise<{ kind: "key"; event: KeyEvent }> | null = null;
 
   constructor(private readonly options: ExplorerOptions) {
     this.loader = createRunsLoader(options.sources);
@@ -103,18 +108,21 @@ class ExplorerShell {
   private async nextStep(): Promise<{ kind: "key"; event: KeyEvent } | { kind: "tick" }> {
     if (this.pendingKey === null) {
       this.pendingKey = this.screen.nextKey();
+      this.pendingKeyStep = this.pendingKey.then((event) => ({ kind: "key" as const, event }));
     }
     if (this.loader.isDone()) {
       const event = await this.pendingKey;
       this.pendingKey = null;
+      this.pendingKeyStep = null;
       return { kind: "key", event };
     }
     const winner = await Promise.race([
-      this.pendingKey.then((event) => ({ kind: "key" as const, event })),
+      this.pendingKeyStep as Promise<{ kind: "key"; event: KeyEvent }>,
       nextMacrotask().then(() => ({ kind: "tick" as const })),
     ]);
     if (winner.kind === "key") {
       this.pendingKey = null;
+      this.pendingKeyStep = null;
     }
     return winner;
   }
@@ -211,8 +219,15 @@ class ExplorerShell {
         csvRowsFromProjection(action.projection, this.rows),
         new Date(),
       );
-      fs.writeFileSync(outPath, content);
-      this.active().notify(`exported → ${outPath}`);
+      // User-triggered disk write: a read-only cwd or full disk must
+      // land in the status line, not as a stack trace over the screen.
+      try {
+        fs.writeFileSync(outPath, content);
+        this.active().notify(`exported → ${outPath}`);
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        this.active().notify(`export failed: ${text}`);
+      }
       return false;
     }
     return false;
@@ -220,7 +235,10 @@ class ExplorerShell {
 
   /** Hand the SAME terminal to the logs viewer. The explorer must not
    *  hold a key waiter while the viewer runs — the assertion guards the
-   *  bug where a stale waiter eats the viewer's first keypress. */
+   *  bug where a stale waiter eats the viewer's first keypress. Sharing
+   *  one OutputTarget between two Screen instances is safe because
+   *  TerminalOutput owns the single previousGrid both write through, so
+   *  the diff-based repaint stays coherent across the hand-off. */
   private async openLog(statelogPath: string): Promise<boolean> {
     if (this.pendingKey !== null) {
       throw new Error("explorer key waiter still outstanding at viewer hand-off");

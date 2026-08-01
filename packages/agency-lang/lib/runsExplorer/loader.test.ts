@@ -105,6 +105,28 @@ describe("createRunsLoader", () => {
     expect(last.backfilled).toBe(true);
   });
 
+  it("backfill sums every trace of a multi-trace input statelog", () => {
+    const runDir = writeKilledRun(tmpDir);
+    const statelog = path.join(runDir, "inputs", "t1", "agent", "statelog.jsonl");
+    // A second, busier trace in the SAME input statelog (an agent that
+    // invoked agency twice). Backfill must sum both, and the agent name
+    // comes from the busiest trace, not whichever id appeared first.
+    fs.appendFileSync(statelog, [
+      JSON.stringify({ format_version: 1, trace_id: "killed-t1-second", data: { type: "threadCreated", timestamp: "2026-08-01T10:00:01.000Z", threadId: "0" } }),
+      JSON.stringify({ format_version: 1, trace_id: "killed-t1-second", data: { type: "agentName", timestamp: "2026-08-01T10:00:02.000Z", name: "busy-agent" } }),
+      JSON.stringify({ format_version: 1, trace_id: "killed-t1-second", data: { type: "promptCompletion", timestamp: "2026-08-01T10:00:03.000Z", model: '"opus"', cost: { totalCost: 1.5 } } }),
+      JSON.stringify({ format_version: 1, trace_id: "killed-t1-second", data: { type: "promptCompletion", timestamp: "2026-08-01T10:00:04.000Z", model: '"opus"', cost: { totalCost: 1.5 } } }),
+    ].join("\n") + "\n");
+
+    const { events } = runLoaderToEnd([{ kind: "runDir", dir: runDir }]);
+
+    const rows = upserts(events);
+    const last = rows[rows.length - 1];
+    expect(last.costUsd).toBeCloseTo(6.0 + 3.0);
+    expect(last.models).toEqual(["sonnet", "opus"]);
+    expect(last.agent).toBe("busy-agent");
+  });
+
   it("a corrupt summary becomes a visible failed row, not a crash", () => {
     const runDir = writeCorruptRun(tmpDir);
     const { events } = runLoaderToEnd([{ kind: "runDir", dir: runDir }]);

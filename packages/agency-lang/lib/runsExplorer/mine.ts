@@ -17,13 +17,14 @@ export const STATELOG_SCAN_CHUNK_BYTES = 256 * 1024;
 
 // ── record mining ──────────────────────────────────────────────────
 
+/** Null fields mean "this record does not know" — the statelog supplies
+ *  them then. A wrong $0.00 would read as a fact, so a record with no
+ *  metrics block reports null cost, never zero. */
 export type RecordMetrics = {
-  costUsd: number;
-  durationMs: number;
-  /** Null on records written before startedAtMs existed — the statelog
-   *  supplies it then. */
+  costUsd: number | null;
+  durationMs: number | null;
   startedAtMs: number | null;
-  models: string[];
+  models: string[] | null;
   agentName?: string;
 };
 
@@ -44,10 +45,10 @@ export function readRecordMetrics(recordPath: string): RecordMetricsRead {
   }
   const metrics = parsed.metrics as Record<string, unknown> | undefined;
   const value: RecordMetrics = {
-    costUsd: numberOr(metrics?.costUsdTotal, 0),
-    durationMs: numberOr(parsed.durationMs, 0),
-    startedAtMs: typeof parsed.startedAtMs === "number" ? parsed.startedAtMs : null,
-    models: Array.isArray(metrics?.models) ? (metrics.models as string[]) : [],
+    costUsd: numberOrNull(metrics?.costUsdTotal),
+    durationMs: numberOrNull(parsed.durationMs),
+    startedAtMs: numberOrNull(parsed.startedAtMs),
+    models: Array.isArray(metrics?.models) ? (metrics.models as string[]) : null,
   };
   if (typeof parsed.agentName === "string") {
     value.agentName = parsed.agentName;
@@ -157,6 +158,8 @@ export function createStatelogScan(file: string): StatelogScan {
       if (openFailure !== null) {
         return { kind: "failed", warning: openFailure };
       }
+      // An empty traces object always comes back as "failed" — consumers
+      // (loader.jobPatch) rely on "ok" implying at least one trace.
       if (Object.keys(traces).length === 0) {
         return { kind: "failed", warning: `${file}: no recoverable statelog events` };
       }
@@ -219,6 +222,10 @@ function accumulate(traces: Record<string, TraceTotals>, parsed: unknown): void 
 
 function numberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function errText(error: unknown): string {

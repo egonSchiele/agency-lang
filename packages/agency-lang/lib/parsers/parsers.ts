@@ -594,16 +594,19 @@ const objectParser = (input: string): ParserResult<Record<string, any>> => {
   return parser(input);
 };
 
-/** Digits with optional `_` separators, e.g. `1_000`. Leads with a digit, so a
- *  run of bare underscores is not a number. */
+/** Digits with `_` as a separator, e.g. `1_000`. Every `_` must sit between two
+ *  digits, so neither a bare run of underscores nor a trailing one (`1_`) is a
+ *  number. */
 const digitRun: Parser<string> = map(
-  seqC(capture(digit, "first"), capture(manyWithJoin(or(digit, char("_"))), "rest")),
+  seqC(
+    capture(digit, "first"),
+    capture(manyWithJoin(map(seqC(optional(char("_")), capture(digit, "d")), (g: { d: string }) => g.d)), "rest"),
+  ),
   (r: { first: string; rest: string }) => `${r.first}${r.rest}`,
 );
 
-/** `.5` — the dot must be followed by digits. That requirement is what stops
- *  `3..6` after `3`, leaving `..6` for the range operator, and what stops
- *  `1.2.3` after `1.2`. */
+/** `.5` — the dot must be followed by digits, which is what stops `1.2.3` after
+ *  `1.2` instead of swallowing the whole run. */
 const fractionPart: Parser<string> = map(
   seqC(char("."), capture(digitRun, "digits")),
   (r: { digits: string }) => `.${r.digits}`,
@@ -642,17 +645,13 @@ const TIME_MULTIPLIERS: Record<TimeUnitLiteral["unit"], number> = {
   w: 604800000,
 };
 
-// Shares `numberMagnitude` with `numberParser` rather than accepting any run of
-// dots and digits. A greedy version reads `a + 1..b - 1` as the byte literal
-// `1..b`, swallowing the range operator — the same failure `numberParser` had.
-const unsignedNumberChars = numberMagnitude;
 const timeSuffix = or(str("ms"), str("s"), str("m"), str("h"), str("d"), str("w"));
 
 const timeUnitParser: Parser<UnitLiteral> = label("a time unit literal", (input: string): ParserResult<UnitLiteral> => {
   const parser = seqC(
     set("type", "unitLiteral"),
     set("dimension", "time"),
-    capture(unsignedNumberChars, "value"),
+    capture(numberMagnitude, "value"),
     capture(timeSuffix, "unit"),
   );
   const result = parser(input);
@@ -670,7 +669,7 @@ const costUnitParser: Parser<UnitLiteral> = label("a cost unit literal", (input:
     set("dimension", "cost"),
     set("unit", "$"),
     char("$"),
-    capture(unsignedNumberChars, "value"),
+    capture(numberMagnitude, "value"),
   );
   const result = parser(input);
   if (!result.success) return result;
@@ -694,7 +693,7 @@ const byteUnitParser: Parser<UnitLiteral> = label("a byte unit literal", (input:
   const parser = seqC(
     set("type", "unitLiteral"),
     set("dimension", "bytes"),
-    capture(unsignedNumberChars, "value"),
+    capture(numberMagnitude, "value"),
     capture(byteSuffix, "unit"),
   );
   const result = parser(input);
@@ -3337,9 +3336,6 @@ const baseAtom: Parser<Expression> = or(
   // unmatched. A future reorder that only preserves the first constraint
   // breaks the fork form while the sequential form keeps passing.
   lazy(() => comprehensionParser),
-  // MUST precede agencyArrayParser: it commits to a targeted error for the
-  // one shape that parser would otherwise accept as a silently wrong value.
-  lazy(() => bracketedRangeParser),
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),
   lazy(() => booleanParser),
@@ -3386,35 +3382,6 @@ function wsOp(opStr: string): Parser<string> {
 // Like wsOp but with word boundary check (for keyword operators like "catch")
 const wsKeyword = (kw: string): Parser<string> =>
   map(seqR(optionalSpacesOrNewline, str(kw), not(varNameChar), optionalSpaces), () => kw);
-
-/** Marks a `range()` call as having come from `..` rather than being written by
- *  hand. Non-enumerable so it stays out of JSON, `Object.entries`, and
- *  structural equality — the AST a test sees is identical to a hand-written
- *  `range(3, 6)`, which is the design rule. `bracketedRangeParser` reads it to
- *  tell `[3..6]` (an error) from `[range(3, 6)]` (legal). */
-const RANGE_OP_MARKER = "__fromRangeOp";
-
-export function isRangeOperatorCall(node: unknown): boolean {
-  return typeof node === "object" && node !== null && RANGE_OP_MARKER in node;
-}
-
-/** `a..b` is not a binary operator in the AST — it builds the same `range(a, b)`
- *  call someone would write by hand. Same approach as comprehensionDesugar:
- *  emit a shape the rest of the compiler already understands, so typing,
- *  codegen, and the runtime are inherited rather than reimplemented.
- *  `agency fmt` therefore prints `range(a, b)`. */
-function makeRangeCall(left: Expression, right: Expression): Expression {
-  const node: FunctionCall = {
-    type: "functionCall",
-    functionName: "range",
-    arguments: [left, right],
-  };
-  if (left.loc && right.loc) {
-    node.loc = { ...left.loc, end: right.loc.end };
-  }
-  Object.defineProperty(node, RANGE_OP_MARKER, { value: true, enumerable: false });
-  return node;
-}
 
 // Build a BinOpExpression AST node
 function makeBinOp(op: string): (left: Expression, right: Expression) => Expression {
@@ -3514,12 +3481,6 @@ export const exprParser: Parser<Expression> = label("an expression", memo("exprP
       { op: wsOp("-="), assoc: "right" as const, apply: makeBinOp("-=") },
       { op: wsOp("+"), assoc: "left" as const, apply: makeBinOp("+") },
       { op: wsOp("-"), assoc: "left" as const, apply: makeBinOp("-") },
-    ],
-    // Precedence 4.5: ranges. Looser than additive so `a + 1..b - 1` reads as
-    // range(a + 1, b - 1); tighter than relational so `x..y == z` compares the
-    // range. Builds a `range()` call, not a binOp node — see makeRangeCall.
-    [
-      { op: wsOp(".."), assoc: "left" as const, apply: makeRangeCall },
     ],
     // Precedence 4: relational
     [
@@ -4618,56 +4579,6 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   if (isStatic) out.static = true;
   return success(out, result.rest);
 });
-
-const BRACKETED_RANGE_MESSAGE =
-  "`[3..6]` builds an array containing a range, not a range. " +
-  "Write `3..6` for the range itself, or `[(3..6)]` if you really want " +
-  "an array containing a range.";
-
-/**
- * `[3..6]` is the range spelling in Haskell, CoffeeScript, and bash, so models
- * write it constantly. Under Agency's infix reading it means "an array holding
- * one range", which loops exactly once and binds the whole array — a silently
- * wrong answer rather than an error. Commit to a targeted message instead.
- *
- * The check is structural, reading the marker `makeRangeCall` sets. Matching
- * `..` against the source text would reject `["a..b"]`, where the dots are data.
- *
- * Only the bare form is caught: `[(3..6)]` and `[range(3, 6)]` parse normally,
- * which is why the message points at the former. Requiring the closing `]` is
- * what keeps `[3..6, 8..9]` and `[1, 3..6]` legal — both reach a `,` where this
- * expects `]` and decline.
- *
- * Throws rather than returning `failure(...)` for the same reason
- * `bodyDeclarationParser` does — a plain failure would be shadowed by a sibling
- * alternative in the enclosing `or(...)`.
- */
-const bracketedRangeParser: Parser<never> = (input: string) => {
-  const probe = seqC(
-    char("["),
-    optionalSpacesOrNewline,
-    // Parentheses leave no trace in the AST, so `[(3..6)]` and `[3..6]` yield
-    // the identical node. Declining on a leading `(` is what makes the
-    // escape hatch the message recommends actually work.
-    not(char("(")),
-    capture(lazy(() => exprParser), "element"),
-    optionalSpacesOrNewline,
-    char("]"),
-  );
-  const probed = probe(input);
-  if (!probed.success) return failure("", input);
-  if (!isRangeOperatorCall((probed.result as { element: unknown }).element)) {
-    return failure("", input);
-  }
-  const declined = committedFailure(BRACKETED_RANGE_MESSAGE, probed.rest);
-  // Record it in the preferred-message slot for the same reason
-  // `bodyDeclarationParser` does: marking the result committed only stops
-  // backtracking, and without the slot this message loses to the enclosing
-  // `parseError` throw, so the author gets "expected node body" instead of
-  // being told what is actually wrong.
-  getParseState().committedFailure = declined;
-  return declined as ParserResult<never>;
-};
 
 const BODY_DECLARATION_MESSAGE =
   "`node`, `def` and `function` declarations are only legal at the top level of a file.";

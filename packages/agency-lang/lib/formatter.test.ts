@@ -347,7 +347,6 @@ describe("syntax variations are a fixed point after one format", () => {
     ["arrow return type", `def f() -> string { return "x" }`],
     ["thin arrow in a match arm", `node main() { match (1) { 1 -> print("one") _ -> print("no") } }`],
     ["fat arrow in an inline block", `node main() { const ys = map(xs, \\n => n * 2) }`],
-    ["range", `node main() { for (i in 3..6) { print(i) } }`],
   ];
 
   for (const [name, src] of variations) {

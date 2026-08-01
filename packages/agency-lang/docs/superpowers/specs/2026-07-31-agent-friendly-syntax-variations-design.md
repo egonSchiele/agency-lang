@@ -2,6 +2,15 @@
 
 ## Background
 
+> **Ranges were dropped before merge.** Sections describing `3..6` below are kept
+> for the record, but the feature is not implemented. The owner's call, on
+> 2026-08-01: the design cost — an exclusive-vs-inclusive decision with a silent
+> off-by-one failure mode, a bracketed-form error whose escape hatch needed two
+> rounds of correction, and a number-grammar change to make `..` reachable at all
+> — outweighed the payoff for one spelling. The number-grammar fix was kept,
+> because it fixes a real bug on its own. What shipped is the three token swaps.
+
+
 Agency is a language for writing agents, and it is also a language meant to be
 written *by* agents. Those two goals pull in different directions in one
 specific way.

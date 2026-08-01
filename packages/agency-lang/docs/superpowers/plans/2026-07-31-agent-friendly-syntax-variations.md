@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Tasks 6, 7 and 9 were not shipped.** Ranges were dropped before merge (see
+> the note at the top of the spec). Task 5's number-grammar fix was kept as an
+> independent bug fix. Everything else shipped as written.
+
 **Goal:** Let the Agency parser accept four syntax variations that models naturally write — `function` for `def`, `->` for the return-type `:`, either arrow in match arms and inline blocks, and `3..6` ranges — with `agency fmt` normalizing each back to canonical form.
 
 **Architecture:** Every production change is confined to `lib/parsers/parsers.ts`. Each variation produces an AST identical to the canonical spelling, so `AgencyGenerator` needs no changes and normalization falls out for free. Ranges are the one construct doing more than a token swap: `..` becomes an infix operator whose `apply` hook builds an ordinary `range(a, b)` call at parse time, so no new AST node type, no new typing rules, no new codegen.

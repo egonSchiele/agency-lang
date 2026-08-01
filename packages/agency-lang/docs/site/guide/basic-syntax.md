@@ -208,21 +208,12 @@ You can also write a module-level doc comment using the `@module` tag. This docu
 */
 ```
 
-> Note: prefer putting comments on their own line.
+> Note: comments must be on their own line, they cannot be at the end of a line containing code.
 
-A comment *can* follow code on the same line, but `agency fmt` will move it onto
-its own line above whatever comes next. That can change what the comment appears
-to describe, so it is best avoided:
+Not allowed:
 
 ```ts
-// written
-const x = 5 // explains x
-const y = 6
-
-// after agency fmt — the comment now reads as explaining y
-const x = 5
-// explains x
-const y = 6
+const x = 5 // this is a comment
 ```
 
 ## Functions
@@ -322,46 +313,6 @@ const negativeSlice = arr[-3:-1]
 // arr is now [10, 20, 30, 4, 5]
 arr[:3] = [10, 20, 30]
 ```
-
-## Ranges
-
-`a..b` counts from `a` up to but not including `b`:
-
-```ts
-for (i in 3..6) {
-  print(i)      // 3, 4, 5
-}
-```
-
-The end is excluded, matching both `range()` and slice syntax — `arr[1:4]` also
-stops before index 4. `a..b` is exactly `range(a, b)`, and `agency fmt` writes it
-that way.
-
-One thing to watch: `[3..6]` is an array *containing* a range, not a range, so it
-is a compile error with a message pointing at the fix. Write `3..6` for the range
-itself, or `[(3..6)]` if you really do want an array holding one range. The error
-only fires when the range is the array's only element — `[1, 3..6]` is a
-two-element array and is perfectly legal.
-
-Ranges use the `range` function from the standard library, which is
-auto-imported. A file that defines its own `range` changes what `a..b` means in
-that file.
-
-## Syntax the parser also accepts
-
-Agency accepts a few spellings borrowed from other languages, so code written out
-of habit still compiles. `agency fmt` rewrites each one into the canonical form
-shown on the right.
-
-| Also accepted | Canonical |
-|---|---|
-| `function add(a, b) { ... }` | `def add(a, b) { ... }` |
-| `def add(a, b) -> number` | `def add(a, b): number` |
-| `match (x) { 1 -> "one" }` | `match (x) { 1 => "one" }` |
-| `map(xs, \n => n * 2)` | `map(xs, \n -> n * 2)` |
-
-These are the same construct written differently, not separate features, so there
-is nothing extra to learn — write whichever comes naturally and format the file.
 
 ## Unit literals
 

@@ -1,0 +1,8 @@
+export node main(message: string) {
+  return message
+}
+
+export def add(a: number, b: number): number {
+  """Add two numbers."""
+  return a + b
+}

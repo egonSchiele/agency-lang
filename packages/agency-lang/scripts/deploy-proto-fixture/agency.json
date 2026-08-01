@@ -1,0 +1,6 @@
+{
+  "log": {
+    "host": "http://localhost:1065",
+    "projectId": "my-project"
+  }
+}

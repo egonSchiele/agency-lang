@@ -1,0 +1,5 @@
+import { helper } from "./helpers.agency"
+
+export node main(x: string) {
+  return helper(x)
+}

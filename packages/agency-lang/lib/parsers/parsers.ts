@@ -4726,16 +4726,23 @@ const SWITCH_MESSAGE =
  * reaching for `switch` is reasoning about the wrong thing and should be told,
  * not silently accommodated.
  *
- * The probe requires a `case` or `default` inside the block rather than
+ * The probe requires a labelled `case ...:` or `default:` arm rather than
  * stopping at `switch (`. `switch` is a legal identifier, and the standard
- * library already has a `std::git::switch` effect, so a bare `switch(...)`
- * could be an ordinary call — possibly one taking a block. Requiring the arm
- * keyword makes the shape unmistakable.
+ * library already has a `std::git::switch` effect, so a bare `switch(...)` can
+ * be an ordinary call — possibly one taking a block. The label's `:` is what
+ * makes the shape unmistakable: a block that merely *starts* with something
+ * named `case` (say `case(1)`) is ordinary Agency and must still parse.
+ *
+ * The condition is scanned to the opening `{`, not to the first `)`. Stopping
+ * at `)` declines on `switch (f(x))`, where the first `)` closes the inner
+ * call — and switching on a computed value is at least as common as switching
+ * on a name. The trade is a `)` in the condition for a `{` in the condition
+ * (`switch ({ a: 1 }.a)`), which is the rarer shape.
  *
  * The cost of that precision: `switch (x) { 1 => ... }`, mixing the two
  * syntaxes, is not caught and still gets a generic error.
  *
- * Throws rather than returning `failure(...)` for the same reason
+ * Commits the failure rather than returning a plain one for the same reason
  * `bodyDeclarationParser` does — a plain failure would be shadowed by a
  * sibling alternative in the enclosing `or(...)`.
  */
@@ -4744,13 +4751,15 @@ const switchStatementParser: Parser<never> = (input: string) => {
     str("switch"),
     optionalSpaces,
     char("("),
-    many(noneOf(")")),
-    char(")"),
-    optionalSpacesOrNewline,
+    many(noneOf("{")),
     char("{"),
     optionalSpacesOrNewline,
-    or(str("case"), str("default")),
-    not(varNameChar),
+    or(
+      // `case <expr>:` — the space is required, which is what keeps `case(1)`
+      // (an ordinary call) from matching.
+      seqC(str("case"), spaces, many1(noneOf(":\n{}")), char(":")),
+      seqC(str("default"), optionalSpaces, char(":")),
+    ),
   );
   const probed = probe(input);
   if (!probed.success) return failure("", input);
@@ -4769,6 +4778,10 @@ const C_STYLE_FOR_MESSAGE =
   "  for (item in items) { print(item) }\n" +
   "  for (item, i in items) { print(i, item) }\n" +
   "\n" +
+  "To build a list from another list, use a comprehension:\n" +
+  "\n" +
+  "  const doubled = [x * 2 for x in items]\n" +
+  "\n" +
   "For a condition-driven loop, use `while (cond) { ... }`.";
 
 /**
@@ -4779,6 +4792,9 @@ const C_STYLE_FOR_MESSAGE =
  * The probe keys on the initializer shape (an optional declaration keyword, a
  * name, then `=`) rather than scanning for a `;`. Scanning would misfire on a
  * semicolon inside a string, as in `for (x in ["a;b"])`.
+ *
+ * Commits the failure rather than returning a plain one, so a sibling
+ * alternative in the enclosing `or(...)` cannot shadow the message.
  */
 const cStyleForParser: Parser<never> = (input: string) => {
   const probe = seqC(

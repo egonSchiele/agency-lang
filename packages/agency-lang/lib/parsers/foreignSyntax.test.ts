@@ -36,6 +36,29 @@ describe("switch statements are refused with a message naming match", () => {
     expect(parses(`def switch(x: number) { print(x) }\nnode main() { switch(1) }`)).toBe(true);
   });
 
+  it("catches a computed condition", () => {
+    // A probe that scanned to the first `)` would stop at the one closing
+    // `f(x)` and decline. Switching on a computed value is at least as common
+    // as switching on a name.
+    expect(failure(`node main() { switch (f(x)) { case 1: print(1) } }`))
+      .toMatch(/no `switch` statement/);
+  });
+
+  it("catches a parenthesized case label", () => {
+    expect(failure(`node main() { switch (x) { case (1): print(1) } }`))
+      .toMatch(/no `switch` statement/);
+  });
+
+  // The label's `:` is what disambiguates. A block that merely starts with
+  // something *named* `case` is ordinary Agency.
+  it("leaves a call whose block starts with a call to `case` alone", () => {
+    expect(parses(`def switch(b) { return b() }\nnode main() { switch(1) { case(1) } }`)).toBe(true);
+  });
+
+  it("leaves a block containing a variable named case alone", () => {
+    expect(parses(`node main() { doThing(1) { case } }`)).toBe(true);
+  });
+
   it("leaves a match block alone", () => {
     expect(parses(`node main() { match (x) { 1 => print(1) _ => print(2) } }`)).toBe(true);
   });
@@ -53,9 +76,10 @@ describe("C-style for loops are refused with a message naming the alternatives",
       .toMatch(/no C-style `for` loop/);
   });
 
-  it("offers both iteration and while as alternatives", () => {
+  it("offers iteration, comprehensions and while as alternatives", () => {
     const message = failure(`node main() { for (let i = 0; i < 10; i++) { print(i) } }`);
     expect(message).toContain("for (item in items)");
+    expect(message).toContain("[x * 2 for x in items]");
     expect(message).toContain("while (cond)");
   });
 

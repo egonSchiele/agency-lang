@@ -1,3 +1,12 @@
+## Aug 1 2026
+
+### Language / Parser
+- **The parser accepts syntax variations models commonly write** — `function` for `def`, `->` for the `:` before a return type, either arrow in match arms and inline blocks, and `a..b` ranges. Each parses to the same tree as the canonical spelling, and `agency fmt` normalizes them.
+- **Ranges** — `3..6` is `range(3, 6)`, counting up to but not including the end, like slices and `range()`. `[3..6]` is a compile error pointing at the fix, because it would otherwise silently build an array holding one range.
+- **`agency fmt` is now lossy for these spellings.** A hand-written `function` becomes `def` and `3..6` becomes `range(3, 6)`, with no way to keep the original.
+- Fixed: a nested `function` declaration inside a body silently misparsed as a name plus a call and failed at run time; it now produces the same error a nested `def` does.
+- Fixed: number literals no longer swallow a run of dots, so `1.2.3` is an error instead of a malformed number node. The same fix applies to unit literals, where `a + 1..b - 1` previously parsed `1..b` as a byte literal.
+
 ## Jul 28 2026 — v0.10.0
 
 ### Language / Typechecker

@@ -4708,6 +4708,97 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   return success(out, result.rest);
 });
 
+const SWITCH_MESSAGE =
+  "Agency has no `switch` statement. Use a `match` block instead:\n" +
+  "\n" +
+  "  match (x) {\n" +
+  '    "a" => doThing()\n' +
+  '    "b" => doOtherThing()\n' +
+  "    _   => fallback()\n" +
+  "  }\n" +
+  "\n" +
+  "Arms do not fall through, so no `break` is needed, and `match` checks that " +
+  "you covered every case. `_` is the catch-all.";
+
+/**
+ * `switch` is a construct Agency deliberately does not have — `match` differs
+ * in ways that matter (no fall-through, exhaustiveness checking), so an author
+ * reaching for `switch` is reasoning about the wrong thing and should be told,
+ * not silently accommodated.
+ *
+ * The probe requires a `case` or `default` inside the block rather than
+ * stopping at `switch (`. `switch` is a legal identifier, and the standard
+ * library already has a `std::git::switch` effect, so a bare `switch(...)`
+ * could be an ordinary call — possibly one taking a block. Requiring the arm
+ * keyword makes the shape unmistakable.
+ *
+ * The cost of that precision: `switch (x) { 1 => ... }`, mixing the two
+ * syntaxes, is not caught and still gets a generic error.
+ *
+ * Throws rather than returning `failure(...)` for the same reason
+ * `bodyDeclarationParser` does — a plain failure would be shadowed by a
+ * sibling alternative in the enclosing `or(...)`.
+ */
+const switchStatementParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    str("switch"),
+    optionalSpaces,
+    char("("),
+    many(noneOf(")")),
+    char(")"),
+    optionalSpacesOrNewline,
+    char("{"),
+    optionalSpacesOrNewline,
+    or(str("case"), str("default")),
+    not(varNameChar),
+  );
+  const probed = probe(input);
+  if (!probed.success) return failure("", input);
+  const declined = committedFailure(SWITCH_MESSAGE, probed.rest);
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
+const C_STYLE_FOR_MESSAGE =
+  "Agency has no C-style `for` loop. To count, iterate a range:\n" +
+  "\n" +
+  "  for (i in range(0, 10)) { print(i) }\n" +
+  "\n" +
+  "To walk a collection, iterate it directly:\n" +
+  "\n" +
+  "  for (item in items) { print(item) }\n" +
+  "  for (item, i in items) { print(i, item) }\n" +
+  "\n" +
+  "For a condition-driven loop, use `while (cond) { ... }`.";
+
+/**
+ * A C-style `for (let i = 0; i < n; i++)`. Without this the author gets
+ * "expected `(` to open for loop condition", which is actively misleading —
+ * there IS a `(`; what the parser could not find is the `in`.
+ *
+ * The probe keys on the initializer shape (an optional declaration keyword, a
+ * name, then `=`) rather than scanning for a `;`. Scanning would misfire on a
+ * semicolon inside a string, as in `for (x in ["a;b"])`.
+ */
+const cStyleForParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    str("for"),
+    optionalSpaces,
+    char("("),
+    optionalSpaces,
+    optional(seqC(oneOfStr(["let", "const", "var"]), spaces)),
+    many1WithJoin(varNameChar),
+    optionalSpaces,
+    char("="),
+    not(char("=")),
+  );
+  const probed = probe(input);
+  if (!probed.success) return failure("", input);
+  const declined = committedFailure(C_STYLE_FOR_MESSAGE, probed.rest);
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
 const BODY_DECLARATION_MESSAGE =
   "`node`, `def` and `function` declarations are only legal at the top level of a file.";
 
@@ -4913,6 +5004,12 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   // must sit ahead of assignmentParser / binOpParser / valueAccessParser,
   // which are what would otherwise read `node` as a name.
   bodyDeclarationParser,
+  // Both decline a construct Agency deliberately does not have, replacing an
+  // unhelpful generic failure with a message naming the Agency equivalent.
+  // `cStyleForParser` MUST precede `forLoopParser`, which would otherwise
+  // report a missing `(` that is plainly present.
+  switchStatementParser,
+  cStyleForParser,
   // withModifierParser must be tried before returnStatementParser/
   // assignmentParser so that `return foo() with approve` and
   // `const x = foo() with approve` don't get partially consumed by

@@ -22,9 +22,10 @@ import {
   BORDER_CELLS, BORDER_CHARS, BorderChars, BorderStyle, buildTopEdge,
   minWidthForTitle, placeTitle, resolveBorderStyle,
 } from "./border.js";
-import { Cell, ColumnSpec, LayoutNode, Width, parseWidth } from "./nodes.js";
+import { Cell, ColumnSpec, LayoutNode, parseWidth } from "./nodes.js";
 import { growToWidth, renderNode, resolveNode } from "./render.js";
 import { NodeHandler, SizingContext, resolveOwnWidth } from "./sizing.js";
+import { resolveColumnWidths, type ColumnPlan } from "../../utils/columnWidths.js";
 
 export { Cell, ColumnSpec };
 
@@ -244,7 +245,7 @@ export function _resolveTableWidths(
   const available = resolvedWidth !== undefined ? Math.max(0, resolvedWidth - chrome) : undefined;
 
   const plan = planColumns(columns, columnCount, sections);
-  const resolvedColumnWidths = computeColumnWidths(plan, available);
+  const resolvedColumnWidths = resolveColumnWidths(plan, available, "std::ui/layout");
   const annotated = annotateCellsWithWrap(sections, resolvedColumnWidths);
 
   return {
@@ -260,16 +261,6 @@ export function _resolveTableWidths(
   };
 }
 
-// A single column's sizing inputs, gathered up front so the
-// width-distribution logic can read them as data rather than re-deriving
-// from the raw `ColumnSpec[]` mid-loop.
-type ColumnPlan = {
-  index:    number;
-  parsed:   Width | null;   // parsed `width` attribute, or null for unsized
-  natural:  number;         // measured content width
-  minWidth: number;         // explicit floor from `minWidth`
-};
-
 function planColumns(
   columns: ColumnSpec[],
   columnCount: number,
@@ -282,73 +273,6 @@ function planColumns(
     natural:  natural[index],
     minWidth: columns[index]?.minWidth ?? 0,
   }));
-}
-
-// Compute the final width of every column.
-//
-// Allocation order:
-//   1. Fixed-cell columns claim their declared value.
-//   2. Unsized columns claim their natural content width.
-//   3. Percent / "full" columns share whatever is left of `available`.
-//      When their declared percentages sum to > 100, each gets its
-//      proportional share of the remainder; otherwise each gets its
-//      literal share and the slack stays at the right edge.
-//   4. `minWidth` is applied as a floor.
-function computeColumnWidths(
-  plan: ColumnPlan[],
-  available: number | undefined,
-): number[] {
-  assertPercentsHaveBasis(plan, available);
-
-  const fixed    = plan.map(fixedWidthFor);
-  const claimed  = fixed.reduce<number>((sum, w) => sum + (w ?? 0), 0);
-  const remain   = Math.max(0, (available ?? Infinity) - claimed);
-  const totalPct = sumPercentages(plan);
-
-  return plan.map((col, i) => {
-    const own = fixed[i] ?? percentWidthFor(col, remain, totalPct);
-    return Math.max(own, col.minWidth);
-  });
-}
-
-function assertPercentsHaveBasis(plan: ColumnPlan[], available: number | undefined): void {
-  if (available !== undefined) return;
-  const percentCol = plan.find((col) => isPercentLike(col.parsed));
-  if (percentCol === undefined) return;
-  throw new Error(
-    `std::ui/layout: column[${percentCol.index}] uses a percentage width ` +
-    `but the table has no resolved width to take a percentage of. ` +
-    `Set width: on the table or one of its ancestors.`,
-  );
-}
-
-// Width for a column whose own size doesn't depend on the leftover
-// space: fixed cells (declared count) or unsized (natural content
-// width). Returns null for percent/full columns, which are sized later.
-function fixedWidthFor(col: ColumnPlan): number | null {
-  if (col.parsed === null)            return col.natural;
-  if (col.parsed.kind === "cells")    return col.parsed.value;
-  return null;
-}
-
-function percentWidthFor(col: ColumnPlan, remaining: number, totalPct: number): number {
-  const pct = pctValue(col.parsed);
-  const share = totalPct > 100 ? pct / totalPct : pct / 100;
-  return Math.floor(remaining * share);
-}
-
-function isPercentLike(w: Width | null): boolean {
-  return w?.kind === "percent" || w?.kind === "full";
-}
-
-function pctValue(w: Width | null): number {
-  if (w?.kind === "percent") return w.value;
-  if (w?.kind === "full")    return 100;
-  return 0;
-}
-
-function sumPercentages(plan: ColumnPlan[]): number {
-  return plan.reduce((sum, col) => sum + pctValue(col.parsed), 0);
 }
 
 function measureNaturalColumnWidths(

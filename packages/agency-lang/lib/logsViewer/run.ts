@@ -45,13 +45,8 @@ export type RunViewerOpts = {
 };
 
 export async function runViewer(opts: RunViewerOpts): Promise<void> {
-  // One reader, one offset cursor, alive for the whole session. `f`
-  // toggles POLLING only — the reader (and its offset) persists, which is
-  // what kills the old accumulator rewind: there is nothing to re-seed.
-  let reader = opts.followPath !== undefined ? makeAppendReader(opts.followPath, 0) : undefined;
-  let lastSize = opts.followPath !== undefined ? currentFileSize(opts.followPath) : 0;
-  let accum = reader !== undefined ? reader.read() : (opts.jsonl ?? "");
-  const parsed = parseStatelogJsonl(accum);
+  const watcher = makeFollowWatcher(opts, (text) => onNewText(text));
+  const parsed = parseStatelogJsonl(watcher.bootText);
   let roots = buildForest(parsed.events);
   let parseErrors: ReadonlyArray<{ line: number }> = parsed.errors;
 
@@ -77,44 +72,15 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
   let helpOpen = false;
   let quit = false;
 
-  // Follow mode: poll the persistent reader, re-parse the accumulated
-  // text on growth, and hand the fresh forest to EVERY view on the stack.
-  // A file that SHRANK was rotated/truncated: start over from offset 0
-  // with an empty accumulator (views' setData cursor-fallback absorbs the
-  // renumbering).
-  let pollTimer: ReturnType<typeof setInterval> | undefined;
   let followOn = false;
-  const onNewText = (): void => {
-    const reparsed = parseStatelogJsonl(accum);
+  const onNewText = (text: string): void => {
+    const reparsed = parseStatelogJsonl(text);
     const rebuilt = buildForest(reparsed.events);
     if (rebuilt.length === 0) return;
     roots = rebuilt;
     parseErrors = reparsed.errors;
     for (const view of stack.all()) view.setData(roots);
     render();
-  };
-  const poll = (): void => {
-    if (reader === undefined || opts.followPath === undefined) return;
-    const size = currentFileSize(opts.followPath);
-    if (size < lastSize) {
-      reader = makeAppendReader(opts.followPath, 0);
-      accum = "";
-    }
-    lastSize = size;
-    const chunk = reader.read();
-    if (chunk.length > 0) {
-      accum += chunk;
-      onNewText();
-    }
-  };
-  const startFollow = (): void => {
-    if (opts.followPath === undefined || pollTimer !== undefined) return;
-    pollTimer = setInterval(poll, opts.followIntervalMs ?? 250);
-  };
-  const stopFollow = (): void => {
-    if (pollTimer === undefined) return;
-    clearInterval(pollTimer);
-    pollTimer = undefined;
   };
   const toggleFollow = (): void => {
     if (!opts.followPath) {
@@ -123,15 +89,15 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
     }
     followOn = !followOn;
     treeView.setFollowIndicator(followOn);
-    if (followOn) startFollow();
-    else stopFollow();
+    if (followOn) watcher.start();
+    else watcher.stop();
     stack.active().notify(followOn ? "follow on" : "follow off");
   };
 
   if (opts.initialFollow && opts.followPath) {
     followOn = true;
     treeView.setFollowIndicator(true);
-    startFollow();
+    watcher.start();
   }
 
   const render = (): void => {
@@ -211,8 +177,53 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
       render();
     }
   } finally {
-    stopFollow();
+    watcher.stop();
   }
+}
+
+/**
+ * The follow watcher. One reader, one offset cursor, alive for the whole
+ * session: its first read() IS the boot read, so nothing can land in a
+ * gap between a separate boot read and the watcher start, and `f`
+ * toggles POLLING only — the reader persists, so there is no accumulator
+ * to rewind (the two bugs that made the old follow dead on arrival). A
+ * file that SHRANK was rotated/truncated: start over from offset 0 with
+ * an empty accumulator; view setData cursor-fallback absorbs it.
+ */
+function makeFollowWatcher(
+  opts: RunViewerOpts,
+  onText: (accum: string) => void,
+): { bootText: string; start(): void; stop(): void } {
+  let reader = opts.followPath !== undefined ? makeAppendReader(opts.followPath, 0) : undefined;
+  let lastSize = opts.followPath !== undefined ? currentFileSize(opts.followPath) : 0;
+  let accum = reader !== undefined ? reader.read() : (opts.jsonl ?? "");
+  let pollTimer: ReturnType<typeof setInterval> | undefined;
+  const poll = (): void => {
+    if (reader === undefined || opts.followPath === undefined) return;
+    const size = currentFileSize(opts.followPath);
+    if (size < lastSize) {
+      reader = makeAppendReader(opts.followPath, 0);
+      accum = "";
+    }
+    lastSize = size;
+    const chunk = reader.read();
+    if (chunk.length > 0) {
+      accum += chunk;
+      onText(accum);
+    }
+  };
+  return {
+    bootText: accum,
+    start: () => {
+      if (opts.followPath === undefined || pollTimer !== undefined) return;
+      pollTimer = setInterval(poll, opts.followIntervalMs ?? 250);
+    },
+    stop: () => {
+      if (pollTimer === undefined) return;
+      clearInterval(pollTimer);
+      pollTimer = undefined;
+    },
+  };
 }
 
 function copyToClipboard(text: string, notify: (message: string) => void): void {

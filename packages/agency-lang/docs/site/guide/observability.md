@@ -74,8 +74,51 @@ Press `?` in the viewer to see this info.
 | `Esc` | Clear active search |
 | `y` | Copy the focused node's JSON to the clipboard |
 | `f` | Toggle follow mode at runtime |
+| `t` | Open the timeline views (see below) |
+| `d` | Full details of the focused call (prompt transcript, tool arguments) |
 | `?` | Show / hide the keybinding help |
 | `q`, `Ctrl+C` | Quit |
+
+### Timeline views
+
+Press `t` to see where a run spent its time. `t` cycles tree → **flame** → **by-name** →
+tree, and works in `agency eval logs <runDir>` too.
+
+The **flame view** shows one row per call, indented by nesting, as bars on a shared time
+axis. Rows say what each call was doing — an LLM row shows the question it was asked plus
+tokens and cost (never just the model name), a tool row shows its argument (the bash
+command, the file path):
+
+```
+llm · Classify this coding task. If …  ░···················        3.4s
+llm · Task: There's a file called te…  ░████░··············       1m33s
+llm · There's a file called text.gco…  ·····███████████████       15m59s
+  bash · pip install matplotlib 2>&1…  ··········░░········        3.7s
+```
+
+`Enter`/`→` drills into the selected call — only it and its descendants remain, the axis
+rescales, and a breadcrumb shows the path. `←` climbs back out. `Enter` on a leaf (or `d`
+anywhere) opens the full-detail screen. `+`/`-` zoom, `[`/`]` pan, `0` resets. `o` jumps
+back to the tree view focused on that call.
+
+The **by-name view** groups calls: LLM calls by their thread label (else the function they
+were called from, else the model), tools by name. One row per group, with call count, total
+**self-time** (the time a call spent itself, not waiting on nested calls — so a wrapping
+LLM span cannot claim its subagents' time), and share of the run:
+
+```
+llm(codingAgent)     ·······▓██████▓▓████████▓██▒······    1×  15m21s  77%
+llm(verifierAgent)   ··························▓█████      2×   1m48s   9%
+bash                 ·······░░·░··░░▒▒░░···░··░░▒░░       62×     41s   3%
+```
+
+A share above 100% means the work ran in parallel (forked branches). `Enter` opens the
+**occurrences view**: every call of that group in order, each with where it came from, so
+"bash ran 62 times" becomes inspectable call by call.
+
+Bar shading is busyness: `░` means the function ran for up to a quarter of that time slice,
+`█` means nearly all of it. A bar ending in `⋯` is still running (follow mode). Bookkeeping
+spans (interrupt handler checks) are hidden by default — press `a` to show them.
 
 ### Highlighting slow calls
 

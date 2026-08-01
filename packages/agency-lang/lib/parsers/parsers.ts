@@ -40,6 +40,7 @@ import {
   peek,
   Parser,
   ParserResult,
+  ParserFailure,
   quotedString,
   regexParser,
   sepBy,
@@ -3588,7 +3589,15 @@ const atomWithIs: Parser<Expression> = (input: string) => {
 // Operator table: highest precedence first.
 // Multi-char operators must come before their single-char prefixes
 // (e.g., *= before *, <= before <).
-export const exprParser: Parser<Expression> = label("an expression", memo("exprParser", buildExpressionParser<Expression>(
+const TERNARY_MESSAGE =
+  "Agency has no ternary (`? :`). Use an `if ... then ... else` expression:\n" +
+  "\n" +
+  "  const label = if isProd then \"Production\" else \"Local\"\n" +
+  "\n" +
+  "The `else` is required. The expression is only allowed as a `const`/`let` " +
+  "value or a `return` — for anything more involved, use `match`.";
+
+const _exprParserBase: Parser<Expression> = label("an expression", memo("exprParser", buildExpressionParser<Expression>(
   atomWithIs,
   [
     // Precedence 7: exponentiation
@@ -3651,6 +3660,48 @@ export const exprParser: Parser<Expression> = label("an expression", memo("exprP
   ],
   parenParser,
 )));
+
+/**
+ * `exprParser` plus one refusal: a JavaScript ternary.
+ *
+ * The check lives here rather than in the statement list because a ternary
+ * never appears in statement position — it is the value of an assignment, the
+ * operand of a return, an argument, an object field. Wrapping the expression
+ * parser is what reaches all of those at once.
+ *
+ * Without it the author gets the enclosing `parseError`'s catch-all, `expected
+ * node body`, with no position and no hint.
+ *
+ * Cost is a single character peek on every successful expression parse; the
+ * expensive branch only runs once a bare `?` is actually sitting there.
+ */
+const ternaryRefusal = (rest: string): ParserFailure | null => {
+  const afterExpr = optionalSpaces(rest);
+  if (!afterExpr.success) return null;
+  // `?.` (optional chaining) and `??` (nullish coalescing) are both real
+  // Agency operators, so a bare `?` is the only ternary candidate.
+  const marker = seqC(char("?"), not(oneOf(".?")))(afterExpr.rest);
+  if (!marker.success) return null;
+  const tail = seqC(
+    optionalSpaces,
+    lazy(() => exprParser),
+    optionalSpaces,
+    char(":"),
+  )(marker.rest);
+  if (!tail.success) return null;
+  return committedFailure(TERNARY_MESSAGE, tail.rest);
+};
+
+export const exprParser: Parser<Expression> = (input: string) => {
+  const result = _exprParserBase(input);
+  if (!result.success) return result;
+  const refused = ternaryRefusal(result.rest);
+  if (!refused) return result;
+  // The enclosing node body is wrapped in a `parseError` that would otherwise
+  // win the reporting contest, so record the commit in the parse state too.
+  getParseState().committedFailure = refused;
+  return refused as ParserResult<Expression>;
+};
 
 // Wire up the circular reference for parenParser
 _exprParser = exprParser;
@@ -4184,7 +4235,21 @@ export const matchBlockExprParser = label("a match expression", withLoc(seqC(
   char("{"),
   captureCaptures(
     parseError(
-      "expected match cases of the form `value => expression` separated by `;` or newlines, followed by `}`",
+      "expected match cases of the form `value => expression`, separated by " +
+        "`;` or newlines, followed by `}`:\n" +
+        "\n" +
+        "  match (shape) {\n" +
+        '    { kind: "circle", r } => 3.14 * r * r\n' +
+        '    { kind: "square", side } if (side > 0) => side * side\n' +
+        "    _ => {\n" +
+        "      print(\"unknown\")\n" +
+        "      return 0\n" +
+        "    }\n" +
+        "  }\n" +
+        "\n" +
+        "An arm is `pattern => expression`, with an optional `if (...)` guard " +
+        "before the arrow. Use a block when an arm needs several statements. " +
+        "`_` is the catch-all, and an open type such as `string` requires one.",
       optionalSpacesOrNewline,
       capture(many(or(blankLineParser, commentParser, matchBlockParserCase)), "cases"),
       optionalSpaces,
@@ -5246,7 +5311,18 @@ const inlineHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
     optionalSpaces,
     captureCaptures(
       parseError(
-        "expected `{` to open handler body",
+        "expected `{` to open handler body:\n" +
+          "\n" +
+          "  handle {\n" +
+          '    read("./notes.md")\n' +
+          "  } with (intr) {\n" +
+          '    if (intr.effect == "std::read") { return approve() }\n' +
+          "    return reject()\n" +
+          "  }\n" +
+          "\n" +
+          "The handler takes the interrupt and returns `approve()`, `reject()`, " +
+          "`propagate()` or `pass()`. `with approve` is shorthand for a handler " +
+          "that approves everything.",
         char("{"),
         optionalSpacesOrNewline,
         capture(bodyParser, "body"),
@@ -5553,7 +5629,14 @@ export const ifExpressionParser: Parser<IfElse> = label(
     optionalSpacesOrNewline,
     captureCaptures(
       parseError(
-        "an `if ... then ... else` expression requires an `else` branch",
+        "an `if ... then ... else` expression requires an `else` branch:\n" +
+          "\n" +
+          '  const label = if isProd then "Production" else "Local"\n' +
+          "\n" +
+          "This is Agency's replacement for the ternary, so it always produces " +
+          "a value and the `else` is not optional. It is allowed only as a " +
+          "`const`/`let` value or a `return`, and does not nest — use `match` " +
+          "for more than two cases.",
         str("else"),
         not(varNameChar),
         optionalSpacesOrNewline,

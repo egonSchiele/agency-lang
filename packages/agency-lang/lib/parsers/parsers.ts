@@ -214,7 +214,7 @@ export const LEGAL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
  *  modifiers, literal words); extend it when a new keyword lands. */
 export const RESERVED_WORDS: readonly string[] = [
   "def", "function", "node", "return", "goto", "raise", "interrupt", "import", "export",
-  "type", "effect", "effectSet", "if", "else", "for", "while", "in",
+  "type", "interface", "effect", "effectSet", "if", "else", "elif", "for", "while", "in",
   "match", "thread", "subthread", "handle", "finalize", "guard", "debugger",
   "skills", "skill", "static", "const", "let", "async", "sync", "await",
   "fork", "race", "try", "catch", "is", "as", "from", "with",
@@ -932,6 +932,14 @@ export const multiLineStringParser: Parser<MultiLineStringLiteral> = or(
   multiLineStringParserFor("'''"),
 );
 
+/** `undefined` written as a value, rewritten to `null`. See `nullParser` for
+ *  why they are one value with two spellings. Used only from the expression
+ *  atom, so binders and property names keep their own name. */
+const undefinedAliasParser: Parser<VariableNameLiteral> = map(
+  seqC(str("undefined"), not(varNameChar)),
+  () => ({ type: "variableName" as const, value: "null" }),
+);
+
 export const variableNameParser: Parser<VariableNameLiteral> = label("an identifier", memo("variableNameParser", (
   input: string,
 ) => {
@@ -942,16 +950,9 @@ export const variableNameParser: Parser<VariableNameLiteral> = label("an identif
       capture(manyWithJoin(varNameChar), "value"),
     ],
     (_, captures) => {
-      const name = `${captures.init}${captures.value}`;
       return {
         type: "variableName" as const,
-        // `undefined` is a second spelling of `null`, not a second value —
-        // Agency has exactly one nothing-value (docs/dev/null-and-undefined.md),
-        // and the *type* `undefined` has always normalized to `null`. In
-        // expression position both spellings arrive here rather than at
-        // `nullParser`, so converging them here is what makes the value side
-        // agree with the type side. `agency fmt` prints `null`.
-        value: name === "undefined" ? "null" : name,
+        value: `${captures.init}${captures.value}`,
       };
     },
   );
@@ -1141,9 +1142,17 @@ export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: 
 // exactly one nothing-value (docs/dev/null-and-undefined.md); the *type*
 // `undefined` has always normalized to `null` here, and accepting the literal
 // makes the value side agree. `agency fmt` prints `null`.
+// `undefined` is a second spelling of `null`, not a second value. Agency has
+// exactly one nothing-value (docs/dev/null-and-undefined.md); the *type*
+// `undefined` has always normalized to `null`, and accepting the literal makes
+// the value side agree. `agency fmt` prints `null`.
+//
+// Both spellings need the word boundary: without it `nullThing` is consumed as
+// `null` with `Thing` stranded, the same hazard the primitive types have.
 export const nullParser: Parser<NullLiteral> = label("null", seqC(
   set("type", "null"),
-  or(str("null"), seqR(str("undefined"), not(varNameChar))),
+  or(str("null"), str("undefined")),
+  not(varNameChar),
 ));
 
 export const literalParser: Parser<Literal> = memo("literalParser", or(
@@ -1216,10 +1225,12 @@ export const primitiveTypeParser: Parser<PrimitiveType> = memo(
       // routinely start with these words.
       not(varNameChar),
     ),
-    // Nullish unification: the `undefined` type keyword is accepted (e.g. from
-    // imported TS type annotations) but normalized to `null` at parse time, so
-    // the stored AST never contains an `undefined` primitive. The *value*
-    // `undefined` remains unparseable. See docs/dev/null-and-undefined.md.
+    // Nullish unification: `undefined` is accepted (e.g. from imported TS type
+    // annotations) but normalized to `null` at parse time, so the stored AST
+    // never contains an `undefined` primitive. The *value* `undefined` is
+    // likewise a spelling of `null` — see `nullParser`. The capitalized
+    // TypeScript spellings normalize the same way.
+    // See docs/dev/null-and-undefined.md.
     (r: PrimitiveType) => {
       const normalized: Record<string, string> = {
         undefined: "null",
@@ -2120,7 +2131,38 @@ const baseTypeAliasParserFor = (keyword: string, separator: Parser<unknown>) => 
   ),
 ));
 
+const INTERFACE_EXTENDS_MESSAGE =
+  "Agency has no interface inheritance. Write `type Foo = Bar & { ... }` instead.";
+
+/**
+ * `interface Foo extends Bar { ... }` is a shape models write constantly.
+ * Without this it reaches `variableTypeParser` as `extends Bar { ... }` and
+ * fails with a generic type error that names nothing useful. Commit to a
+ * message that names the replacement instead.
+ *
+ * Throws rather than returning `failure(...)` for the same reason
+ * `bodyDeclarationParser` does — a plain failure would be shadowed by a sibling
+ * alternative in the enclosing `or(...)`.
+ */
+const interfaceExtendsParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    optional(seqC(str("export"), spaces)),
+    str("interface"),
+    spaces,
+    many1WithJoin(varNameChar),
+    spaces,
+    str("extends"),
+    not(varNameChar),
+  );
+  const probed = probe(input);
+  if (!probed.success) return failure("", input);
+  const declined = committedFailure(INTERFACE_EXTENDS_MESSAGE, probed.rest);
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
 const baseTypeAliasParser: Parser<TypeAlias> = or(
+  interfaceExtendsParser,
   baseTypeAliasParserFor("type", str("=")),
   baseTypeAliasParserFor("interface", succeed(undefined)),
 );
@@ -2563,8 +2605,11 @@ const namedArgumentParser: Parser<NamedArgument> = memo(
     set("type", "namedArgument"),
     capture(many1WithJoin(varNameChar), "name"),
     optionalSpaces,
-    // `=` is the Python spelling. Agency has no assignment expression, so
-    // nothing else can appear here; `agency fmt` prints `:`.
+    // `=` is the Python spelling; `agency fmt` prints `:`. The `not(char("="))`
+    // guard is what keeps this off `==`. Compound assignment operators (`+=`,
+    // `-=`, `*=`, `/=` — all real binops in the table below) are already
+    // excluded because their leading character matches neither `varNameChar`
+    // nor `char("=")`.
     or(char(":"), seqR(char("="), not(char("=")))),
     optionalSpaces,
     capture(or(lazy(() => inlineBlockParser), lazy(() => exprParser)), "value"),
@@ -3411,6 +3456,16 @@ const baseAtom: Parser<Expression> = or(
   lazy(() => agencyObjectParser),
   lazy(() => booleanParser),
   lazy(() => regexLiteralParser),
+  // MUST precede valueAccessParser, which would otherwise take `undefined` as
+  // an ordinary name. Placed here rather than in `variableNameParser` because
+  // that parser also supplies property names, pattern binders and template hole
+  // names — rewriting there renames `obj.undefined` and `{ a as undefined }`.
+  //
+  // Emits the same node `null` produces along this path (a `variableName`, not
+  // a `null` literal), so the two spellings stay indistinguishable downstream.
+  // That `null` has two node shapes depending on whether `literalParser` or
+  // this path reached it is pre-existing; unifying it is a separate change.
+  lazy(() => undefinedAliasParser),
   lazy(() => valueAccessParser),
   lazy(() => literalParser),
 );
@@ -5255,12 +5310,11 @@ export const withModifierParser: Parser<WithModifier> = withLoc((input: string) 
 });
 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
-  // `elif` is the Python spelling of `else if`, and is rewritten to one here:
-  // the remaining input keeps the `if`, so the "else if" branch below handles
-  // it unchanged. `agency fmt` prints `else if`.
-  const elif = seqC(optionalSpaces, str("elif"), peek(not(varNameChar)))(input);
-  if (elif.success) {
-    const asElseIf = ifParser("if" + elif.rest);
+  // `elif` stands in for `else if`, so it is an else clause whose sole
+  // statement is an if. See `elifParser`.
+  const elifPrefix = seqC(optionalSpaces)(input);
+  if (elifPrefix.success) {
+    const asElseIf = elifParser(elifPrefix.rest);
     if (asElseIf.success) {
       return success([asElseIf.result], asElseIf.rest);
     }
@@ -5290,12 +5344,12 @@ const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
   return success(blockResult.result.body, blockResult.rest);
 };
 
-const _ifParserInner: Parser<IfElse> = (input: string) => {
+const _ifParserInnerFor = (keyword: string): Parser<IfElse> => (input: string) => {
   const parser = trace(
     "ifParser",
     seqC(
       set("type", "ifElse"),
-      str("if"),
+      str(keyword),
       optionalSpaces,
       char("("),
       optionalSpaces,
@@ -5330,7 +5384,19 @@ const _ifParserInner: Parser<IfElse> = (input: string) => {
 
   return result;
 };
+const _ifParserInner = _ifParserInnerFor("if");
+
 export const ifParser: Parser<IfElse> = label("an if statement", withLoc(_ifParserInner));
+
+/** `elif` is the Python spelling of `else if`. Parsed in place by swapping the
+ *  opening keyword, NOT by rewriting the source and re-parsing: tarsec measures
+ *  spans against the input it is handed, so a synthetic string would put every
+ *  `loc` inside the branch at the wrong offset, and nested `elif` would compound
+ *  the error. `agency fmt` prints `else if`. */
+const elifParser: Parser<IfElse> = label(
+  "an elif statement",
+  withLoc(_ifParserInnerFor("elif")),
+);
 
 // `if <condition> then <thenExpr> else <elseExpr>` — a conditional EXPRESSION.
 // Produces the SAME `IfElse` node a statement `if` uses (single-expression

@@ -343,6 +343,13 @@ describe("fillHoles: identifier holes", () => {
     expect(() => fillHoles(load(template), { tool: "function" })).toThrow(/reserved word/);
   });
 
+  it.each(["interface", "elif"])(
+    "rejects `%s`, a keyword the grammar now consumes",
+    (kw) => {
+      expect(() => fillHoles(load(template), { tool: kw })).toThrow(/reserved word/);
+    },
+  );
+
   it("rejects the hygiene prefix", () => {
     expect(() => fillHoles(load(template), { tool: "__hyg1_x" })).toThrow(/reserved/);
   });

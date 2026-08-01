@@ -118,12 +118,56 @@ describe("aliases do not swallow neighbouring syntax", () => {
   });
 
   it("== is not read as a named-argument separator", () => {
-    expect(program(`node main() { if (a == b) { print(1) } }`))
-      .toEqualWithoutLoc(program(`node main() { if (a == b) { print(1) } }`));
-    expect(parseAgency(`node main() { f(a == b) }`, {}, false).success).toBe(true);
+    // Assert an observable outcome: if `==` were split into a named argument
+    // `a` with value `= b`, the formatter could not print it back.
+    expect(formatSource(`node main() { f(a == b) }`)).toContain("a == b");
+    expect(formatSource(`node main() { if (a == b) { print(1) } }`)).toContain("a == b");
   });
 
   it("single-quoted strings still parse", () => {
     expect(parseAgency(`node main() { const s = 'hi' }`, {}, false).success).toBe(true);
+  });
+});
+
+describe("the undefined alias is confined to expression position", () => {
+  it("does not rename a property called undefined", () => {
+    const parsed = parseAgency(`node main() { const o = { a: 1 }\nprint(o.undefined) }`, {}, false);
+    expect(parsed.success).toBe(true);
+    expect(JSON.stringify(parsed)).toContain("undefined");
+  });
+
+  it("does not rename a binder called undefined", () => {
+    const parsed = parseAgency(`node main() { const undefined = 1\nprint(undefined) }`, {}, false);
+    expect(parsed.success).toBe(true);
+    expect(JSON.stringify(parsed)).toContain("undefined");
+  });
+
+  it("does not rename a match-pattern binder", () => {
+    const parsed = parseAgency(
+      `node main() { match (x) { { a as undefined } => print(1) _ => print(2) } }`, {}, false);
+    expect(parsed.success).toBe(true);
+    expect(JSON.stringify(parsed)).toContain("undefined");
+  });
+
+  it("does not swallow an identifier that starts with null", () => {
+    // `nullThing` must not be read as `null` with `Thing` stranded.
+    const parsed = parseAgency(`node main() { const nullThing = 1\nprint(nullThing) }`, {}, false);
+    expect(parsed.success).toBe(true);
+    expect(JSON.stringify(parsed)).toContain("nullThing");
+  });
+});
+
+describe("interface inheritance gets a targeted error", () => {
+  it("names the replacement instead of failing generically", () => {
+    const parsed = parseAgency(`interface Foo extends Bar { a: string }`, {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/no interface inheritance/);
+    expect(parsed.message).toContain("&");
+  });
+
+  it("leaves a type named `extendsSomething` alone", () => {
+    expect(parseAgency(`interface Foo { extendsThing: string }\nnode main() { print(1) }`, {}, false).success)
+      .toBe(true);
   });
 });

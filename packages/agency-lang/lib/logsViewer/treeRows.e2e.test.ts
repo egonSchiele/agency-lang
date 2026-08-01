@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildForest } from "./tree.js";
-import { flattenVisibleRows, renderRowText } from "./render.js";
+import { flattenVisibleRows, renderRowText } from "./treeRows.js";
 import { EventEnvelope, TreeNode, ViewerState } from "./types.js";
 
 // End-to-end: feed a realistic statelog through the WHOLE viewer

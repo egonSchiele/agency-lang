@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildForest } from "./tree.js";
-import { flattenVisibleRows } from "./render.js";
+import { flattenVisibleRows } from "./treeRows.js";
 import { EventEnvelope, TreeNode, ViewerState } from "./types.js";
 
 // Build an envelope with sane defaults.

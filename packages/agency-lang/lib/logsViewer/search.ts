@@ -3,7 +3,7 @@ import {
   eventExpansionChildren,
   rawDataChildren,
   llmCallSpanChildren,
-} from "./render.js";
+} from "./treeRows.js";
 
 // Walk every node in the forest (regardless of current expansion
 // state) AND every synthetic expansion row (conversation lines, JSON

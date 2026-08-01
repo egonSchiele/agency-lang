@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { handleKey } from "./input.js";
-import { ViewerState, TreeNode } from "./types.js";
-import type { KeyEvent } from "../tui/input/types.js";
+import { handleKey } from "./treeReducer.js";
+import { ViewerState, TreeNode } from "../types.js";
+import type { KeyEvent } from "../../tui/input/types.js";
 
 const k = (key: string, mods: Partial<KeyEvent> = {}): KeyEvent => ({ key, ...mods });
 

@@ -18,7 +18,10 @@ import type { KeyEvent } from "../tui/input/types.js";
 import { scrollList } from "../tui/scrollList.js";
 import { parseStatelogJsonl } from "./parse.js";
 import type { EventEnvelope } from "./types.js";
-import { fmtDuration, stripQuotes } from "./spanText.js";
+import { costColor, fmtDuration, stripQuotes } from "./spanText.js";
+import { DEFAULT_THRESHOLDS } from "./thresholds.js";
+import { bottomHints } from "./views/shared.js";
+import { row as tuiRow } from "../tui/builders.js";
 
 export type RunRow = {
   source: "eval" | "statelog";
@@ -81,6 +84,15 @@ function evalRunRow(dir: string): RunRow | undefined {
         costUsd += record.metrics.costUsdTotal ?? 0;
         durationMs += record.durationMs ?? 0;
         for (const m of record.metrics.models ?? []) {
+          if (!models.includes(m)) models.push(m);
+        }
+      } else if (input.statelogPath && fs.existsSync(input.statelogPath)) {
+        // Killed/errored run with no salvaged record: the statelog still
+        // has the truth — mine it so a $6 kill does not read as $0.00.
+        const mined = mineStatelogTotals(input.statelogPath);
+        costUsd += mined.costUsd;
+        durationMs += mined.durationMs;
+        for (const m of mined.models) {
           if (!models.includes(m)) models.push(m);
         }
       }
@@ -153,6 +165,18 @@ function statelogRows(file: string): RunRow[] {
   });
 }
 
+function mineStatelogTotals(file: string): { costUsd: number; durationMs: number; models: string[] } {
+  const totals = { costUsd: 0, durationMs: 0, models: [] as string[] };
+  for (const trace of statelogRows(file)) {
+    totals.costUsd += trace.costUsd;
+    totals.durationMs += trace.durationMs;
+    for (const m of trace.models) {
+      if (!totals.models.includes(m)) totals.models.push(m);
+    }
+  }
+  return totals;
+}
+
 /** The owner's proposed convention: a stdlib statelog call emits an
  *  `agentName` event; when present it becomes the row identity and the
  *  command moves to the detail screen. */
@@ -210,6 +234,7 @@ export class ExplorerProto {
   private cursor = 0;
   private scrollTop = 0;
   private screen: "main" | "info" | "logs" = "main";
+  private agentColors: Record<string, string | undefined> | undefined;
   private logsCursor = 0;
   private message = "";
 
@@ -232,11 +257,12 @@ export class ExplorerProto {
     if (fmt === "q" || fmt === "Ctrl+C") return { kind: "quit" };
     else if (fmt === "Up" || fmt === "k") move(-1);
     else if (fmt === "Down" || fmt === "j") move(1);
-    else if (fmt === "g") this.group = this.group === "none" ? "agent" : this.group === "agent" ? "suite" : "none";
+    else if (fmt === "g") this.cursor = 0;
     else if (fmt === "G") this.cursor = Math.max(0, visible.length - 1);
+    else if (fmt === "b") this.group = this.group === "none" ? "agent" : this.group === "agent" ? "suite" : "none";
     else if (fmt === "Ctrl+F" || fmt === "Ctrl+D") move(Math.max(1, viewport.rows - 5));
     else if (fmt === "Ctrl+B" || fmt === "Ctrl+U") move(-Math.max(1, viewport.rows - 5));
-    else if (fmt === "v") this.variant = this.variant === "table" ? "compare" : this.variant === "compare" ? "trend" : "table";
+    else if (fmt === "t") this.variant = this.variant === "table" ? "compare" : this.variant === "compare" ? "trend" : "table";
     else if (fmt === "s") this.sort = this.sort === "date" ? "score" : this.sort === "score" ? "cost" : this.sort === "cost" ? "duration" : "date";
     else if (fmt === "i") this.screen = "info";
     else if (fmt === "e") this.exportCsv();
@@ -299,14 +325,19 @@ export class ExplorerProto {
       renderItem: (item, isCursor) => this.renderTableRow(item as any, isCursor),
     });
     return column({ justifyContent: "flex-start" },
-      line(`RUNS [table]  ${this.rows.length} run(s)  sort:${this.sort}  group:${this.group}`, { fg: "bright-white" }),
+      line(`RUNS  ${this.rows.length} run(s)  sort:${this.sort}  group:${this.group}`, { fg: "bright-white" }),
       line(header, { fg: "gray" }),
       body,
       line(this.footer(), { fg: "bright-white" }),
-      line("v view  s sort  g group  Enter open log  i info  e export csv  q quit", { fg: "gray" }),
+      line(bottomHints("t view  s sort  b group  g/G top/bottom  Enter open log  i info  e export csv  q quit", "table", viewport.cols), { fg: "gray" }),
     );
   }
 
+  /** Color scheme (screenshot feedback: all-monochrome was hard to
+   *  read): agent gets an identity color (same idea as the timeline's
+   *  group palette), score is a verdict color (green 1.0 / yellow mid /
+   *  red 0), cost uses the viewer's expense thresholds, statelog-source
+   *  rows are dimmed, the cursor row is bright-white throughout. */
   private renderTableRow(item: RunRow | { groupLabel: string; rows: RunRow[] }, isCursor: boolean): Element {
     const marker = isCursor ? "▶ " : "  ";
     if ("groupLabel" in item) {
@@ -317,15 +348,50 @@ export class ExplorerProto {
         : "—";
       const cost = rows.reduce((s, r) => s + r.costUsd, 0);
       const text = `${marker}${pad(`(${rows.length})`, 12)}${pad(clip(item.groupLabel, 44), 46)}${pad(mean, 7)}${pad("", 6)}${pad(`$${cost.toFixed(2)}`, 9)}`;
-      return line(text, { fg: isCursor ? "bright-white" : "bright-cyan" });
+      return line(text, { fg: isCursor ? "bright-white" : this.agentColor(item.groupLabel) ?? "bright-cyan" });
     }
     const r = item;
-    const text = `${marker}${pad(fmtDate(r.dateMs), 12)}${pad(clip(r.agent, 22), 24)}${pad(clip(r.suite, 20), 22)}` +
+    if (isCursor) {
+      return line(this.rowText(r, marker), { fg: "bright-white" });
+    }
+    const dim = r.source === "statelog";
+    const scoreColor = r.score === undefined ? "gray"
+      : r.score >= 0.99 ? "green" : r.score <= 0.01 ? "bright-red" : "yellow";
+    return tuiRow(
+      line(`${marker}${pad(fmtDate(r.dateMs), 12)}`, { fg: "gray" }),
+      line(pad(clip(r.agent, 22), 24), { fg: this.agentColor(r.agent) ?? (dim ? "gray" : undefined) }),
+      line(pad(clip(r.suite, 20), 22), dim ? { fg: "gray" } : undefined),
+      line(pad(r.score !== undefined ? r.score.toFixed(2) : "—", 7), { fg: scoreColor }),
+      line(pad(r.tests > 0 ? `${r.passed}/${r.tests}` : "—", 6), { fg: r.tests > 0 && r.passed === r.tests ? "green" : r.tests > 0 ? "bright-red" : "gray" }),
+      line(pad(`$${r.costUsd.toFixed(2)}`, 9), { fg: costColor(r.costUsd, DEFAULT_THRESHOLDS) ?? (dim ? "gray" : undefined) }),
+      line(pad(fmtDuration(r.durationMs, { minutes: true }), 8), dim ? { fg: "gray" } : undefined),
+      line(clip(r.models.join(","), 30), { fg: "gray" }),
+    );
+  }
+
+  private rowText(r: RunRow, marker: string): string {
+    return `${marker}${pad(fmtDate(r.dateMs), 12)}${pad(clip(r.agent, 22), 24)}${pad(clip(r.suite, 20), 22)}` +
       `${pad(r.score !== undefined ? r.score.toFixed(2) : "—", 7)}` +
       `${pad(r.tests > 0 ? `${r.passed}/${r.tests}` : "—", 6)}` +
       `${pad(`$${r.costUsd.toFixed(2)}`, 9)}${pad(fmtDuration(r.durationMs, { minutes: true }), 8)}${clip(r.models.join(","), 30)}`;
-    const fg = isCursor ? "bright-white" : r.source === "statelog" ? "gray" : undefined;
-    return line(text, fg ? { fg } : undefined);
+  }
+
+  /** Stable identity colors for the most-seen agents — "cyan means
+   *  agency-agent" holds everywhere in the table, like the timeline. */
+  private agentColor(agent: string): string | undefined {
+    if (this.agentColors === undefined) {
+      const counts: Record<string, number> = Object.create(null);
+      for (const r of this.rows) counts[r.agent] = (counts[r.agent] ?? 0) + 1;
+      const palette = ["bright-cyan", "bright-magenta", "bright-yellow", "bright-green", "bright-blue", "cyan", "magenta"];
+      const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      this.agentColors = Object.create(null);
+      const colors: Record<string, string | undefined> = Object.create(null);
+      ranked.forEach(([name], i) => {
+        colors[name] = palette[i];
+      });
+      this.agentColors = colors;
+    }
+    return this.agentColors[agent];
   }
 
   // ── compare variant: agent × suite matrix of mean scores ─────────────
@@ -348,9 +414,9 @@ export class ExplorerProto {
     }
     if (agents.length === 0) out.push("  (no scored runs — compare needs eval runs)");
     return column({ justifyContent: "flex-start" },
-      line(`RUNS [compare]  mean score ($ mean cost) ×runs — agents × suites`, { fg: "bright-white" }),
+      line(`RUNS  mean score ($ mean cost) ×runs — agents × suites`, { fg: "bright-white" }),
       ...out.slice(0, viewport.rows - 3).map((t, i) => line(t, i === 0 ? { fg: "gray" } : undefined)),
-      line("v next view  q quit", { fg: "gray" }),
+      line(bottomHints("t next view  q quit", "compare", viewport.cols), { fg: "gray" }),
     );
   }
 
@@ -370,10 +436,10 @@ export class ExplorerProto {
       out.push(`  ${pad(fmtDate(r.dateMs), 12)}${pad(clip(r.agent, 20), 22)}${scoreBar} ${pad(`$${r.costUsd.toFixed(2)}`, 8)}${costBar}`);
     }
     return column({ justifyContent: "flex-start" },
-      line(`RUNS [trend]  chronological — score (█/10) and cost bars`, { fg: "bright-white" }),
+      line(`RUNS  chronological — score (█/10) and cost bars`, { fg: "bright-white" }),
       line(`  ${pad("date", 12)}${pad("agent", 22)}${pad("score", 11)}${pad("cost", 8)}`, { fg: "gray" }),
       ...out.map((t) => line(t)),
-      line("v next view  q quit", { fg: "gray" }),
+      line(bottomHints("t next view  q quit", "trend", viewport.cols), { fg: "gray" }),
     );
   }
 
@@ -397,7 +463,7 @@ export class ExplorerProto {
     return column({ justifyContent: "flex-start" },
       line(`RUN INFO  ${r?.id ?? ""}`, { fg: "bright-white" }),
       ...lines_.flatMap((t) => wrap(t, viewport.cols - 2)).map((t) => line(t)),
-      line("←/Esc back", { fg: "gray" }),
+      line(bottomHints("←/Esc back", "run info", viewport.cols), { fg: "gray" }),
     );
   }
 
@@ -431,7 +497,7 @@ export class ExplorerProto {
         `${i === this.logsCursor ? "▶ " : "  "}${pad(l.label, 24)}${pad(l.score !== undefined ? l.score.toFixed(2) : "—", 7)}${l.status ?? ""}`,
         { fg: i === this.logsCursor ? "bright-white" : undefined },
       )),
-      line("Enter open in log viewer  ←/Esc back", { fg: "gray" }),
+      line(bottomHints("Enter open in log viewer  ←/Esc back", "pick test", 80), { fg: "gray" }),
     );
   }
 

@@ -149,6 +149,16 @@ export function fmtOffset(ms: number): string {
   return fmtDuration(ms, { minutes: true });
 }
 
+/** The bottom hint line with the current view's name pinned to the
+ *  bottom-right corner — every view (explorer included) renders through
+ *  this so "where am I" is always answered in the same place. */
+export function bottomHints(hints: string, tag: string, cols: number): string {
+  const label = `[${tag}]`;
+  const room = Math.max(0, cols - label.length - 1);
+  const left = hints.length > room ? hints.slice(0, Math.max(0, room - 1)) + "…" : hints;
+  return left + " ".repeat(Math.max(1, cols - left.length - label.length)) + label;
+}
+
 export function padCell(text: string, width: number): string {
   return text.length >= width ? text : text + " ".repeat(width - text.length);
 }

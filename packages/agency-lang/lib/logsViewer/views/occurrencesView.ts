@@ -23,6 +23,7 @@ import {
   clipCell,
   padCell,
   splitWidth,
+  bottomHints,
 } from "./shared.js";
 import type { TreeNode } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
@@ -108,7 +109,7 @@ export class OccurrencesView implements View {
       line(new AxisHeader(widths.gutter).computeText(window, window.start, widths.bar), { fg: "gray" }),
       body,
       line(new SelectionFooter().computeText(this.footerText(window)), { fg: "bright-white" }),
-      line("↑↓ select  Enter/→ drill or detail  d detail  o tree  ←/Esc back to by-name", { fg: "gray" }),
+      line(bottomHints("↑↓ select  Enter/→ drill or detail  d detail  o tree  ←/Esc back to by-name", "occurrences", viewport.cols), { fg: "gray" }),
     );
   }
 

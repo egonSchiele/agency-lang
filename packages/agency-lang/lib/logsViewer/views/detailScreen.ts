@@ -11,7 +11,7 @@ import { formatConversation } from "../conversation.js";
 import { fmtDuration, stripQuotes } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
 import { spanExtent, timelineSpans } from "../timeline/spans.js";
-import { fmtOffset } from "./shared.js";
+import { bottomHints, fmtOffset } from "./shared.js";
 import type { TreeNode } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
 
@@ -59,8 +59,12 @@ export class DetailScreen implements View {
       line(`DETAIL  ${this.node?.summary ?? "(span no longer in the log)"}`, { fg: "bright-white" }),
       ...visible.map((text) => line(text)),
       line(
-        `↑↓ scroll (${Math.min(this.scroll + 1, all.length)}–${shownTo} of ${all.length})  y copy  ←/Esc back` +
-        (this.message ? `  ${this.message}` : ""),
+        bottomHints(
+          `↑↓ scroll (${Math.min(this.scroll + 1, all.length)}–${shownTo} of ${all.length})  y copy  ←/Esc back` +
+          (this.message ? `  ${this.message}` : ""),
+          "detail",
+          viewport.cols,
+        ),
         { fg: "gray" },
       ),
     );

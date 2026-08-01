@@ -46,6 +46,7 @@ import { checkMatchExhaustiveness } from "./matchExhaustiveness.js";
 import { computeMatchExprTypes } from "./matchExprTypes.js";
 import { checkDefiniteReturns } from "./definiteReturns.js";
 import { checkConflictingMarkers } from "./conflictingMarkers.js";
+import { checkParamDefaultOrder } from "./paramDefaultOrder.js";
 import { checkTemplateHoles } from "./templateHoles.js";
 import { checkTopLevelStatements } from "./topLevelStatements.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
@@ -364,6 +365,10 @@ export class TypeChecker {
 
     // A function cannot be both destructive and idempotent.
     checkConflictingMarkers(ctx);
+
+    // Defaulted parameters must come last (positional binding makes a
+    // required-after-defaulted parameter silently unfillable).
+    checkParamDefaultOrder(ctx);
 
     // Template holes: an expression hole in a position that supplies no
     // type must carry an inline annotation (AG8002).

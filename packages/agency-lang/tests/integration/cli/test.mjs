@@ -208,6 +208,19 @@ node main(task: string): string {
   assertIncludes(withoutArg, "got: undefined");
   console.log("Test 8 passed");
 
+  // --- Test 8b: a node parameter default applies on the direct-run path ---
+  console.log("--- Test 8b: direct-run argv with a parameter default ---");
+  writeFile(dir, "argdefault.agency", `node main(name: string = "fallback"): string {
+  print("got: " + name)
+  return name
+}
+`);
+  const defaulted = run(dir, "npx agency run argdefault.agency");
+  assertIncludes(defaulted, "got: fallback");
+  const explicit = run(dir, "npx agency run argdefault.agency Ada");
+  assertIncludes(explicit, "got: Ada");
+  console.log("Test 8b passed");
+
   console.log("=== All CLI tests passed ===");
   cleanup(dir);
 } catch (err) {

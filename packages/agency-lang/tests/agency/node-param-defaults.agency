@@ -1,0 +1,37 @@
+// Node parameter defaults: the default applies when the argument is
+// omitted, and an explicit value always wins. (Defaults used to parse
+// and then vanish at compile time.) Two mechanisms cooperate, and the
+// tests below name which one they pin:
+// - the exported wrapper carries the default in its TS signature, so a
+//   direct invocation with no argument is filled by JS itself;
+// - the node BODY defaults an undefined __state.data slot, which is what
+//   a goto that omits the argument exercises.
+
+node withDefault(name: string = "fallback"): string {
+  return "hi " + name
+}
+
+node viaGoto() {
+  goto withDefault()
+}
+
+node viaGotoWithArg() {
+  goto withDefault("explicit")
+}
+
+// null is a VALUE, not an omission: it must not trigger the default.
+// (Differs from def functions, whose __UNSET sentinel preserves the
+// omitted-vs-explicit distinction — see the builder comment.)
+node viaGotoWithNull(): string {
+  goto withDefault(null)
+}
+
+// The only non-scalar default shapes the parser accepts.
+node listDefault(items: string[] = ["a", "b"]): number {
+  return items.length
+}
+
+// Several parameters, only the trailing one defaulted.
+node partial(greeting: string, name: string = "world"): string {
+  return greeting + " " + name
+}

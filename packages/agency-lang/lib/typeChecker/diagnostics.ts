@@ -566,6 +566,12 @@ export const DIAGNOSTICS = {
     message:
       "finalize yields a single value — the scope's saved draft. Use one binder: finalize as {name} {{ ... }}.",
   },
+  requiredParamAfterDefault: {
+    code: "AG6039",
+    severity: "error",
+    message:
+      "Parameter '{name}' on '{fn}' has no default but comes after a defaulted parameter. Put defaulted parameters last, so an omitted argument is always a trailing one.",
+  },
   staticReassignedAtTopLevel: {
     code: "AG7004",
     severity: "error",

@@ -9,8 +9,8 @@ import type { Element } from "../tui/elements.js";
 import { formatKey } from "../tui/input/format.js";
 import type { InputSource } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
+import { currentFileSize, makeAppendReader } from "../statelog/appendReader.js";
 import { detectClipboard } from "./clipboard.js";
-import { follow, Follower } from "./follow.js";
 import { parseStatelogJsonl } from "./parse.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
 import { buildForest } from "./tree.js";
@@ -23,7 +23,11 @@ import { makeViewStack, type ViewAction, type Viewport } from "./views/view.js";
 import type { TreeNode } from "./types.js";
 
 export type RunViewerOpts = {
-  jsonl: string;
+  // The statelog text. Optional when `followPath` is given — the shell
+  // then reads the file itself through ONE append reader whose first
+  // read() IS the boot read, so nothing can land in a gap between a
+  // separate boot read and the watcher start (the old design's bug).
+  jsonl?: string;
   input: InputSource;
   output: OutputTarget;
   viewport: { rows: number; cols: number };
@@ -35,11 +39,19 @@ export type RunViewerOpts = {
   // to launching the viewer and then pressing `f`. Ignored when
   // followPath is undefined.
   initialFollow?: boolean;
+  // Watcher poll interval; tests inject a small one.
+  followIntervalMs?: number;
   thresholds?: ViewerThresholds;
 };
 
 export async function runViewer(opts: RunViewerOpts): Promise<void> {
-  const parsed = parseStatelogJsonl(opts.jsonl);
+  // One reader, one offset cursor, alive for the whole session. `f`
+  // toggles POLLING only — the reader (and its offset) persists, which is
+  // what kills the old accumulator rewind: there is nothing to re-seed.
+  let reader = opts.followPath !== undefined ? makeAppendReader(opts.followPath, 0) : undefined;
+  let lastSize = opts.followPath !== undefined ? currentFileSize(opts.followPath) : 0;
+  let accum = reader !== undefined ? reader.read() : (opts.jsonl ?? "");
+  const parsed = parseStatelogJsonl(accum);
   let roots = buildForest(parsed.events);
   let parseErrors: ReadonlyArray<{ line: number }> = parsed.errors;
 
@@ -65,12 +77,15 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
   let helpOpen = false;
   let quit = false;
 
-  // Follow mode. The watcher re-parses the whole accumulated JSONL on each
-  // append and hands the fresh forest to EVERY view on the stack.
-  let followerState: { f: Follower; jsonl: string } | undefined;
+  // Follow mode: poll the persistent reader, re-parse the accumulated
+  // text on growth, and hand the fresh forest to EVERY view on the stack.
+  // A file that SHRANK was rotated/truncated: start over from offset 0
+  // with an empty accumulator (views' setData cursor-fallback absorbs the
+  // renumbering).
+  let pollTimer: ReturnType<typeof setInterval> | undefined;
   let followOn = false;
-  const onNewText = (jsonl: string): void => {
-    const reparsed = parseStatelogJsonl(jsonl);
+  const onNewText = (): void => {
+    const reparsed = parseStatelogJsonl(accum);
     const rebuilt = buildForest(reparsed.events);
     if (rebuilt.length === 0) return;
     roots = rebuilt;
@@ -78,25 +93,28 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
     for (const view of stack.all()) view.setData(roots);
     render();
   };
+  const poll = (): void => {
+    if (reader === undefined || opts.followPath === undefined) return;
+    const size = currentFileSize(opts.followPath);
+    if (size < lastSize) {
+      reader = makeAppendReader(opts.followPath, 0);
+      accum = "";
+    }
+    lastSize = size;
+    const chunk = reader.read();
+    if (chunk.length > 0) {
+      accum += chunk;
+      onNewText();
+    }
+  };
   const startFollow = (): void => {
-    if (!opts.followPath || followerState) return;
-    let accum = opts.jsonl;
-    followerState = {
-      jsonl: accum,
-      f: follow({
-        path: opts.followPath,
-        onAppend: (chunk) => {
-          accum += chunk;
-          if (followerState) followerState.jsonl = accum;
-          onNewText(accum);
-        },
-      }),
-    };
+    if (opts.followPath === undefined || pollTimer !== undefined) return;
+    pollTimer = setInterval(poll, opts.followIntervalMs ?? 250);
   };
   const stopFollow = (): void => {
-    if (!followerState) return;
-    followerState.f.stop();
-    followerState = undefined;
+    if (pollTimer === undefined) return;
+    clearInterval(pollTimer);
+    pollTimer = undefined;
   };
   const toggleFollow = (): void => {
     if (!opts.followPath) {

@@ -11,7 +11,9 @@ import type {
   EvalRunGrading,
   Input,
   EvalRunInputResult,
+  InputMetricsSummary,
 } from "./runTypes.js";
+import type { EvalRecord } from "./types.js";
 
 export type SourceProvenance = { source: string; sha?: string };
 export type ClosureFileProvenance = { file: string; sha256: string };
@@ -199,17 +201,61 @@ export function recordInputPrepareFailure(
 export function writeEvalRunSummary(
   state: EvalRunState,
   inputs: EvalRunInputResult[],
+  onWarning: (message: string) => void = console.warn,
 ): EvalRunResult {
+  const withMetrics = inputs.map((input) => attachMetrics(input, onWarning));
   const summary: EvalRunResult = {
     runId: state.runId,
     runDir: state.runDir,
     agentLabel: state.agentLabel,
-    inputs,
+    inputs: withMetrics,
     okCount: inputs.filter((input) => input.status === "success").length,
     errorCount: inputs.filter((input) => input.status === "error").length,
   };
   writeJson(path.join(state.runDir, "summary.json"), summary);
   return summary;
+}
+
+function attachMetrics(
+  input: EvalRunInputResult,
+  onWarning: (message: string) => void,
+): EvalRunInputResult {
+  const read = readInputMetrics(input.evalRecordPath);
+  if (read.kind === "missing") {
+    return input;
+  }
+  if (read.kind === "warning") {
+    onWarning(read.message);
+    return input;
+  }
+  return { ...input, metrics: read.value };
+}
+
+type InputMetricsRead =
+  | { kind: "metrics"; value: InputMetricsSummary }
+  | { kind: "missing" }
+  | { kind: "warning"; message: string };
+
+function readInputMetrics(recordPath: string): InputMetricsRead {
+  if (recordPath === "" || !fs.existsSync(recordPath)) {
+    return { kind: "missing" };
+  }
+  try {
+    const record = JSON.parse(fs.readFileSync(recordPath, "utf-8")) as EvalRecord;
+    const value: InputMetricsSummary = {
+      costUsd: record.metrics.costUsdTotal,
+      durationMs: record.durationMs,
+      startedAtMs: record.startedAtMs,
+      models: record.metrics.models,
+    };
+    if (record.agentName !== undefined) {
+      value.agentName = record.agentName;
+    }
+    return { kind: "metrics", value };
+  } catch (error) {
+    const text = error instanceof Error ? error.message : String(error);
+    return { kind: "warning", message: `summary metrics: could not read ${recordPath}: ${text}` };
+  }
 }
 
 function writeJson(filePath: string, value: unknown): void {

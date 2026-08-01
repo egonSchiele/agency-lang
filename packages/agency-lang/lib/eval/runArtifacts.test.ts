@@ -115,6 +115,80 @@ Choose a different --run-id or delete the existing directory.`,
     expect(shouldExtractStatelog(statelog)).toBe(true);
   });
 
+  describe("writeEvalRunSummary metrics", () => {
+    it("copies a metrics block from each eval record, including the agent name", () => {
+      const state = initializeState();
+      const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
+      fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
+      fs.writeFileSync(prepared.evalRecordPath, JSON.stringify({
+        durationMs: 120_000,
+        startedAtMs: 1_754_000_000_000,
+        agentName: "gcode",
+        metrics: { costUsdTotal: 1.25, models: ["sonnet"] },
+      }));
+
+      const summary = writeEvalRunSummary(state, [inputResult(prepared, "success")]);
+
+      expect(summary.inputs[0].metrics).toEqual({
+        costUsd: 1.25,
+        durationMs: 120_000,
+        startedAtMs: 1_754_000_000_000,
+        models: ["sonnet"],
+        agentName: "gcode",
+      });
+    });
+
+    it("omits agentName when the record has none", () => {
+      const state = initializeState();
+      const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
+      fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
+      fs.writeFileSync(prepared.evalRecordPath, JSON.stringify({
+        durationMs: 5, startedAtMs: 10, metrics: { costUsdTotal: 0, models: [] },
+      }));
+
+      const summary = writeEvalRunSummary(state, [inputResult(prepared, "success")]);
+
+      expect(summary.inputs[0].metrics).toBeDefined();
+      expect(summary.inputs[0].metrics).not.toHaveProperty("agentName");
+    });
+
+    it("leaves metrics absent for a missing record without warning", () => {
+      const state = initializeState();
+      const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
+      const warnings: string[] = [];
+
+      const summary = writeEvalRunSummary(state, [inputResult(prepared, "error")], (m) => warnings.push(m));
+
+      expect(summary.inputs[0].metrics).toBeUndefined();
+      expect(warnings).toEqual([]);
+    });
+
+    it("warns on a malformed record but still writes the summary", () => {
+      const state = initializeState();
+      const prepared = prepareInput(state, { id: "t1", goal: "g", task: "t" });
+      fs.mkdirSync(path.dirname(prepared.evalRecordPath), { recursive: true });
+      fs.writeFileSync(prepared.evalRecordPath, "{ torn");
+      const warnings: string[] = [];
+
+      const summary = writeEvalRunSummary(state, [inputResult(prepared, "success")], (m) => warnings.push(m));
+
+      expect(summary.inputs[0].metrics).toBeUndefined();
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain(prepared.evalRecordPath);
+      expect(fs.existsSync(path.join(state.runDir, "summary.json"))).toBe(true);
+    });
+  });
+
+  function inputResult(prepared: { input: { id?: string }; evalRecordPath: string; statelogPath: string; workdirPath: string }, status: "success" | "error") {
+    return {
+      inputId: prepared.input.id ?? "t1",
+      status,
+      evalRecordPath: prepared.evalRecordPath,
+      statelogPath: prepared.statelogPath,
+      workdirPath: prepared.workdirPath,
+    };
+  }
+
   function initializeState() {
     return initializeEvalRun({
       runId: "r1",

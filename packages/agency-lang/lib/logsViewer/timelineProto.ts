@@ -100,10 +100,13 @@ export function enterProto(state: ViewerState): ProtoState | undefined {
 /** Recompute rows/colors/extent for the current drill root. */
 function deriveView(p: ProtoState): ProtoState {
   const root = p.path[p.path.length - 1];
+  // Thread labels come from threadCreated events anywhere in the TRACE
+  // (a drilled subtree's llm calls still belong to threads created above).
+  const ctx: SpanContext = { threadLabels: threadLabelsOf(p.path[0]), enclosing: "" };
   const spans: ProtoSpan[] = [];
-  collectSpans(root, 0, p.hideAdmin, spans);
+  collectSpans(root, 0, p.hideAdmin, spans, ctx);
   if (p.path.length > 1) {
-    const rootSpan = makeSpan(root, 0);
+    const rootSpan = makeSpan(root, 0, ctx);
     if (rootSpan) spans.unshift(rootSpan);
   }
   if (spans.length === 0) return { ...p, spans, byName: [], cursor: 0 };
@@ -126,19 +129,51 @@ function traceOfCursor(state: ViewerState): TreeNode | undefined {
   return state.roots.find((r) => r.traceId === traceId) ?? state.roots[0];
 }
 
-function collectSpans(node: TreeNode, depth: number, hideAdmin: boolean, out: ProtoSpan[]): void {
+/** What an llm span needs from its surroundings to name its group:
+ *  thread labels (trace-wide) and the function/node the call sits in. */
+type SpanContext = { threadLabels: Record<string, string>; enclosing: string };
+
+/** threadId → label from every threadCreated event under `root`. NOTE for
+ *  the real build: thread ids are NOT unique across subprocess trees (this
+ *  trace has two threadCreated for id "1" — parent's "main"/"expertAgent"
+ *  vs the subprocess's); last-wins is prototype-grade only. */
+function threadLabelsOf(root: TreeNode): Record<string, string> {
+  const labels: Record<string, string> = {};
+  const walk = (n: TreeNode) => {
+    const d = n.event?.data;
+    if (d?.type === "threadCreated" && typeof d.label === "string" && d.label.length > 0) {
+      labels[String(d.threadId)] = d.label;
+    }
+    n.children.forEach(walk);
+  };
+  walk(root);
+  return labels;
+}
+
+function collectSpans(node: TreeNode, depth: number, hideAdmin: boolean, out: ProtoSpan[], ctx: SpanContext): void {
   for (const child of node.children) {
     if (child.nodeKind !== "span") continue;
     const hidden = hideAdmin && ADMIN_KINDS.includes(child.label);
     if (!hidden) {
-      const s = makeSpan(child, depth);
+      const s = makeSpan(child, depth, ctx);
       if (s) out.push(s);
     }
-    collectSpans(child, hidden ? depth : depth + 1, hideAdmin, out);
+    const enclosing = enclosingNameFor(child) ?? ctx.enclosing;
+    collectSpans(child, hidden ? depth : depth + 1, hideAdmin, out, { ...ctx, enclosing });
   }
 }
 
-function makeSpan(node: TreeNode, depth: number): ProtoSpan | undefined {
+/** The "function the call was made in", for llm calls with no thread
+ *  label: the nearest enclosing tool (a subagent like codeAgent counts —
+ *  tools and functions are the same thing) or node. */
+function enclosingNameFor(span: TreeNode): string | undefined {
+  if (span.label === "toolExecution" || span.label === "nodeExecution") {
+    return nameOf(span);
+  }
+  return undefined;
+}
+
+function makeSpan(node: TreeNode, depth: number, ctx: SpanContext): ProtoSpan | undefined {
   const extent = spanExtent(node);
   if (!extent) return undefined;
   const childExtents = node.children
@@ -149,7 +184,7 @@ function makeSpan(node: TreeNode, depth: number): ProtoSpan | undefined {
   const selfIntervals = subtractIntervals([extent.start, extent.end], childExtents);
   return {
     node,
-    name: nameOf(node),
+    name: groupNameOf(node, ctx),
     label: labelOf(node),
     detail: detailOf(node),
     kind: node.label,
@@ -205,6 +240,18 @@ function firstLeaf(node: TreeNode, want: (t: string) => boolean): TreeNode | und
   };
   walk(node);
   return found;
+}
+
+/** Grouping/color key. For llm calls (owner decision): the THREAD LABEL
+ *  when one exists (`llm(codingAgent)`), else the enclosing function, else
+ *  the model. Non-llm spans group by their plain name. */
+function groupNameOf(node: TreeNode, ctx: SpanContext): string {
+  if (node.label !== "llmCall") return nameOf(node);
+  const leaf = firstLeaf(node, (t) => t === "promptCompletion" || t === "promptStart");
+  const threadId = leaf?.event?.data.threadId;
+  const label = threadId !== undefined ? ctx.threadLabels[String(threadId)] : undefined;
+  const key = label ?? (ctx.enclosing || undefined);
+  return key ? `llm(${key})` : nameOf(node);
 }
 
 function nameOf(node: TreeNode): string {
@@ -631,7 +678,15 @@ function selectionInfo(p: ProtoState): string {
   }
   const r = p.byName[p.cursor];
   if (!r) return "";
-  return `${r.name}  [${r.kind}]  ${r.count} call(s)  self-time total ${fmtMs(r.totalMs)}  ${Math.round(r.share * 100)}% of view`;
+  // The model left the llm group key (groups are thread labels now), so
+  // name the models here — still one glance to see the model mix.
+  const models = [...new Set(
+    r.spans
+      .filter((s) => s.kind === "llmCall")
+      .map((s) => nameOf(s.node).replace(/^llm\(|\)$/g, "")),
+  )];
+  const modelInfo = models.length > 0 ? `  models: ${models.join(", ")}` : "";
+  return `${r.name}  [${r.kind}]  ${r.count} call(s)  self-time total ${fmtMs(r.totalMs)}  ${Math.round(r.share * 100)}% of view${modelInfo}`;
 }
 
 function selectionInfoOcc(p: ProtoState): string {

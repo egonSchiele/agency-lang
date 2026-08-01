@@ -213,7 +213,7 @@ export const LEGAL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
  *  strings this grammar consumes (`def`, `node`, statement keywords,
  *  modifiers, literal words); extend it when a new keyword lands. */
 export const RESERVED_WORDS: readonly string[] = [
-  "def", "node", "return", "goto", "raise", "interrupt", "import", "export",
+  "def", "function", "node", "return", "goto", "raise", "interrupt", "import", "export",
   "type", "effect", "effectSet", "if", "else", "for", "while", "in",
   "match", "thread", "subthread", "handle", "finalize", "guard", "debugger",
   "skills", "skill", "static", "const", "let", "async", "sync", "await",
@@ -5727,7 +5727,7 @@ const _baseFunctionParser: Parser<any> = memo(
   "_baseFunctionParser",
   seqC(
     set("type", "function"),
-    capture(str("def"), "keyword"),
+    capture(oneOfStr(["def", "function"]), "keyword"),
     many1(space),
     capture(declNameParser, "functionName"),
     char("("),

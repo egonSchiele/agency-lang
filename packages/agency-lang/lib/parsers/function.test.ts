@@ -9,6 +9,7 @@ import {
   _submessageThreadParser,
 } from "./parsers.js";
 import { normalizeCode, parseAgency } from "@/parser.js";
+import { formatSource } from "@/formatter.js";
 
 describe("docStringParser", () => {
   const testCases = [
@@ -3682,5 +3683,30 @@ describe("nested declaration probe", () => {
 
   it("still accepts a top-level declaration", () => {
     expect(parseAgency(`def inner() { print(1) }`, {}, false).success).toBe(true);
+  });
+});
+
+describe("function keyword", () => {
+  it("parses `function` to the same AST as `def`", () => {
+    expect(program(`function add(a: number, b: number): number { return a + b }`))
+      .toEqualWithoutLoc(program(`def add(a: number, b: number): number { return a + b }`));
+  });
+
+  it("accepts modifiers before `function`", () => {
+    expect(program(`export destructive function f() { print(1) }`))
+      .toEqualWithoutLoc(program(`export destructive def f() { print(1) }`));
+  });
+
+  it("normalizes `function` to `def` when formatted", () => {
+    const formatted = formatSource(`function add(a: number, b: number): number { return a + b }`);
+    expect(formatted).toContain("def add(");
+    expect(formatted).not.toContain("function add(");
+  });
+
+  // RESERVED_WORDS governs identifier-hole filling only, not general identifier
+  // parsing, so `function` stays usable as a variable name.
+  it("leaves `function` usable as an identifier", () => {
+    expect(parseAgency(`node main() { const function = 5\nprint(function) }`, {}, false).success)
+      .toBe(true);
   });
 });

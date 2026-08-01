@@ -47,6 +47,13 @@ export function flat(el: Element): string[] {
   return (el.children ?? []).flatMap(flat);
 }
 
+/** Approximate the visual layout: children of a row concatenate onto
+ *  one line; children of a column stack. */
 export function screenText(el: Element): string {
-  return flat(el).join("\n");
+  if (el.type === "text") {
+    return el.content ?? "";
+  }
+  const children = (el.children ?? []).map(screenText);
+  const isRow = (el.style as { flexDirection?: string } | undefined)?.flexDirection === "row";
+  return children.join(isRow ? "" : "\n");
 }

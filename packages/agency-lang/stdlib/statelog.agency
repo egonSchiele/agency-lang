@@ -5,6 +5,7 @@ import {
   _evalValues,
   _evalOutputs,
   _finalEvalOutput,
+  _setAgentName,
 } from "agency-lang/stdlib-lib/statelog.js"
 
 /** @module
@@ -38,6 +39,8 @@ export type StatelogEvalRecord = {
   recordVersion: number;
   formatVersion: number;
   durationMs: number;
+  startedAtMs: number;
+  agentName?: string;
   source: string;
   evalValues: StatelogEvalValue[];
   evalOutputs: StatelogEvalValue[];
@@ -73,6 +76,20 @@ export def emit(data: any) {
  * Nested functions, `undefined`, and symbols follow JSON rules. Circular
  * references and `bigint` throw at the call site.
  */
+/**
+ * Names this agent in the statelog. Cross-run tools (the runs explorer)
+ * group runs under this identity instead of the launch command. Call it
+ * once, early; the last call in a trace wins.
+ */
+export def setAgentName(name: string) {
+  """
+  Set a stable display name for this agent, used to group its runs.
+
+  @param name - The agent name, e.g. "gcode-v2".
+  """
+  _setAgentName(name)
+}
+
 export def evalValue(value: any) {
   """
   Record a value as part of the user-facing input to this agent. May be called multiple times per trace; all firings are collected in order.

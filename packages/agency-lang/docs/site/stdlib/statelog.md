@@ -34,7 +34,7 @@ export type StatelogEvalValue = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L29))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L30))
 
 ### StatelogEvalRecord
 
@@ -44,6 +44,8 @@ export type StatelogEvalRecord = {
   recordVersion: number;
   formatVersion: number;
   durationMs: number;
+  startedAtMs: number;
+  agentName?: string;
   source: string;
   evalValues: StatelogEvalValue[];
   evalOutputs: StatelogEvalValue[];
@@ -57,7 +59,7 @@ export type StatelogEvalRecord = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L37))
 
 ## Functions
 
@@ -79,7 +81,29 @@ Delivered to the host via the `onEmit` callback.
 |---|---|---|
 | data | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L57))
+
+### setAgentName
+
+```ts
+setAgentName(name: string)
+```
+
+Set a stable display name for this agent, used to group its runs.
+
+  @param name - The agent name, e.g. "gcode-v2".
+
+* Names this agent in the statelog. Cross-run tools (the runs explorer)
+ * group runs under this identity instead of the launch command. Call it
+ * once, early; the last call in a trace wins.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L84))
 
 ### evalValue
 
@@ -91,25 +115,13 @@ Record a value as part of the user-facing input to this agent. May be called mul
 
   @param value - The value to record. Any JSON-serializable type is accepted.
 
-* Records the value in the statelog as an `evalValueRecorded` event, which
- * `agency eval extract` surfaces on the `evalValues[]` field. When no eval
- * annotation exists in a trace, `eval extract` falls back to a heuristic
- * (first user-role message of the first LLM call) and emits a warning.
- * Annotating explicitly is preferred. The consuming eval / judge / input
- * definition decides what to do with multiple firings.
- *
- * Serialization: the value is stored as `unknown`. Top-level `undefined`
- * records as `null`. Top-level functions and symbols throw a TypeError.
- * Nested functions, `undefined`, and symbols follow JSON rules. Circular
- * references and `bigint` throw at the call site.
-
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L93))
 
 ### evalOutput
 
@@ -137,7 +149,7 @@ Record a value as the agent's user-facing response. May be called multiple times
 |---|---|---|
 | value | `any` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L113))
 
 ### evalRecord
 
@@ -165,7 +177,7 @@ Parse a statelog JSONL file and return the same structured EvalRecord
 
 **Returns:** [StatelogEvalRecord](#statelogevalrecord)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L122))
 
 ### evalValues
 
@@ -192,7 +204,7 @@ Mirrors `new StatelogParser(path).evalValues()` in TypeScript.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L119))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L136))
 
 ### evalOutputs
 
@@ -219,7 +231,7 @@ Mirrors `new StatelogParser(path).evalOutputs()` in TypeScript.
 
 **Returns:** `StatelogEvalValue[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L130))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L147))
 
 ### finalEvalOutput
 
@@ -246,4 +258,4 @@ Parse a statelog JSONL file and return the final eval output, or null when
 
 **Returns:** `StatelogEvalValue | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/statelog.agency#L157))

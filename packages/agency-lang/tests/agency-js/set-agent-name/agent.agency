@@ -1,0 +1,6 @@
+import { setAgentName } from "std::statelog"
+
+node main() {
+  setAgentName("named-agent")
+  return "done"
+}

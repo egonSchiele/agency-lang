@@ -9,6 +9,7 @@ export const EMPTY_RECORD: EvalRecord = {
   recordVersion: 2,
   formatVersion: 1,
   durationMs: 0,
+  startedAtMs: 0,
   source: "test",
   evalValues: [],
   evalOutputs: [],

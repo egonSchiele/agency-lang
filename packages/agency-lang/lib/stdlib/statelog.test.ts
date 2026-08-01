@@ -17,6 +17,7 @@ import {
   _evalOutputs,
   _evalRecord,
   _finalEvalOutput,
+  _setAgentName,
 } from "./statelog.js";
 
 let ts = 0;
@@ -59,12 +60,14 @@ function makeCtx(): RuntimeContext<any> {
 function spyClient(ctx: RuntimeContext<any>) {
   const evalValueRecorded = vi.fn(async () => undefined);
   const evalOutputRecorded = vi.fn(async () => undefined);
+  const agentName = vi.fn(async () => undefined);
   ctx.statelogClient = {
     ...ctx.statelogClient,
     evalValueRecorded,
     evalOutputRecorded,
+    agentName,
   } as any;
-  return { evalValueRecorded, evalOutputRecorded };
+  return { evalValueRecorded, evalOutputRecorded, agentName };
 }
 
 async function withFrame(
@@ -103,6 +106,23 @@ describe("std::statelog eval annotations", () => {
       value: "hello",
       threadId,
     });
+  });
+
+  it("setAgentName posts an agentName event through the frame client", async () => {
+    const ctx = makeCtx();
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    const spies = spyClient(ctx);
+
+    await runInTestContext(ctx, new StateStack(), threads, async () => {
+      await _setAgentName("gcode-v2");
+    });
+
+    expect(spies.agentName).toHaveBeenCalledOnce();
+    expect(spies.agentName).toHaveBeenCalledWith({ name: "gcode-v2" });
+  });
+
+  it("setAgentName outside an Agency frame is a no-op", async () => {
+    await expect(_setAgentName("gcode-v2")).resolves.toBeUndefined();
   });
 
   it("round-trips plain objects before recording", async () => {

@@ -28,7 +28,7 @@ import {
   applyRuntimeConfigOverridesToContextArgs,
   getRuntimeConfigOverrides,
 } from "../configOverrides.js";
-import { readConfigOverrides } from "../../config.js";
+import { readConfigOverrides, TRACE_ID_ENV } from "../../config.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";
@@ -268,7 +268,11 @@ export class RuntimeContext<T> {
     this.clock = args.clock ?? defaultClock();
     const statelogConfig = {
       ...args.statelogConfig,
-      traceId: args.statelogConfig.traceId || nanoid(),
+      // Explicit > env > minted. The env var lets a harness give an entire
+      // process tree one trace id, including descendants started without
+      // IPC (a bash `agency run ...`), so a shared statelog stays
+      // single-trace for the eval extractor.
+      traceId: args.statelogConfig.traceId || process.env[TRACE_ID_ENV] || nanoid(),
     };
 
     this.statelogConfig = statelogConfig;

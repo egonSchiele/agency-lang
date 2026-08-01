@@ -73,6 +73,49 @@ describe("eval run input loading", () => {
     expect(loaded[0].task).toEqual({ rows: [1, 2] });
   });
 
+  it("resolves a graders path relative to the test and requires it to exist", () => {
+    fs.mkdirSync(path.join(tmpDir, "suite2"));
+    fs.writeFileSync(path.join(tmpDir, "suite2", "check.ts"), "export default [];");
+    const [input] = loadInputsFromFile(writeJson("suite2/wrap.json", { inputs: [{ id: "g", task: "t", graders: "./check.ts" }] }));
+    expect(input.graders).toBe(path.join(tmpDir, "suite2", "check.ts"));
+    expect(() => loadInputsFromFile(writeJson("suite2/bad.json", { inputs: [{ id: "g", task: "t", graders: "./missing.ts" }] })))
+      .toThrow(/graders must name a TypeScript file/);
+  });
+
+  it("an input with its own graders does not need a goal", () => {
+    fs.mkdirSync(path.join(tmpDir, "suite3"));
+    fs.writeFileSync(path.join(tmpDir, "suite3", "check.ts"), "export default [];");
+    const [input] = loadInputsFromFile(writeJson("suite3/wrap.json", { inputs: [{ id: "g", task: "t", graders: "./check.ts" }] }));
+    expect(input.goal).toBeUndefined();
+  });
+
+  it("test-directory form auto-discovers graders.ts, and a single test dir loads directly", () => {
+    const testDir = path.join(tmpDir, "suite4", "my-test");
+    fs.mkdirSync(testDir, { recursive: true });
+    fs.writeFileSync(path.join(testDir, "test.json"), JSON.stringify({ task: "t", goal: "g" }));
+    fs.writeFileSync(path.join(testDir, "graders.ts"), "export default [];");
+
+    // the whole suite: a directory of test dirs
+    const fromSuite = loadInputs(path.join(tmpDir, "suite4"));
+    expect(fromSuite[0].id).toBe("my-test");
+    expect(fromSuite[0].graders).toBe(path.join(testDir, "graders.ts"));
+
+    // one test: the test dir itself, keeping the same sugar
+    const fromTestDir = loadInputs(testDir);
+    expect(fromTestDir).toHaveLength(1);
+    expect(fromTestDir[0].id).toBe("my-test");
+    expect(fromTestDir[0].graders).toBe(path.join(testDir, "graders.ts"));
+  });
+
+  it("timeoutSec must be a positive number when provided", () => {
+    const [input] = loadInputsFromFile(writeJson("timeout.json", { inputs: [{ id: "t", goal: "g", task: "x", timeoutSec: 1200 }] }));
+    expect(input.timeoutSec).toBe(1200);
+    for (const bad of [0, -5, "10"]) {
+      expect(() => loadInputsFromFile(writeJson("timeout-bad.json", { inputs: [{ id: "t", goal: "g", task: "x", timeoutSec: bad }] })))
+        .toThrow(/timeoutSec must be a positive number/);
+    }
+  });
+
   it("rejects legacy args/node with a migration message", () => {
     expect(() => loadInputsFromFile(writeJson("legacy-args.json", { inputs: [{ goal: "g", args: { x: 1 } }] })))
       .toThrow(/tests describe the task, not the agent/);

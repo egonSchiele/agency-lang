@@ -239,7 +239,13 @@ export abstract class BaseOptimizer {
     files: Record<string, string>,
     inputs: Input[],
   ): Promise<Scorecard> {
-    const ctx: GradingContext = { graders: this.config.graders, runAgency: this.agencyRunner };
+    // "override": the optimizer's grader set IS its objective — a suite
+    // input's own graders must not silently change what is being optimized.
+    const ctx: GradingContext = {
+      suiteGraders: { mode: "override", graders: this.config.graders },
+      runAgency: this.agencyRunner,
+      config: this.config.config ?? {},
+    };
     const perInput = await Promise.all(
       inputs.map(async (input, index) => {
         const id = inputId(input, index);
@@ -278,6 +284,9 @@ export abstract class BaseOptimizer {
       runId: `run-${this.runCounter}`,
       config: this.config.config,
       continueOnError: true,
+      // The reporter owns the optimizer's narrative; runSuite's own progress
+      // lines would interleave with it (and `--silent` must print nothing).
+      progress: false,
       perRun: {
         pipeOutput: false,
         seed: {

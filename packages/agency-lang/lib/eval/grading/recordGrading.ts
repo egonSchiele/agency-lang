@@ -5,7 +5,7 @@ import type { AgencyConfig } from "@/config.js";
 import { writeVerifierGrading } from "@/eval/runArtifacts.js";
 import type { EvalRunGrading, EvalRunResult } from "@/eval/runTypes.js";
 
-import type { BaseGrader } from "./baseGrader.js";
+import type { SuiteGraders } from "./gradeRun.js";
 import { gradeSuite } from "./gradeSuite.js";
 
 /**
@@ -18,10 +18,10 @@ import { gradeSuite } from "./gradeSuite.js";
  */
 export async function recordGrading(
   runDir: string,
-  graders: BaseGrader[],
+  suiteGraders: SuiteGraders,
   config: AgencyConfig,
 ): Promise<EvalRunGrading> {
-  const grading = await gradeSuite(runDir, graders, config);
+  const grading = await gradeSuite(runDir, suiteGraders, config);
   const summaryPath = path.join(runDir, "summary.json");
   let summary: EvalRunResult;
   try {

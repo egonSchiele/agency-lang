@@ -1,9 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 
 import { sha256Text } from "@/utils/hash.js";
-import { agentRunPaths } from "./run/extract.js";
 
+import { agentRunPaths } from "./run/extract.js";
 import { assertEvalRunId, assertEvalInputId } from "./ids.js";
 import type {
   EvalRunResult,
@@ -14,7 +15,14 @@ import type {
 
 export type SourceProvenance = { source: string; sha?: string };
 export type ClosureFileProvenance = { file: string; sha256: string };
-export type AgentProvenance = { entry: string; closure: ClosureFileProvenance[] };
+/** File targets record the entry + hashed import closure, which makes two
+ *  runs comparable exactly when their shas match (#733). Command targets
+ *  lose that property — an accepted trade, softened where cheap: the record
+ *  carries the harness's own version and, when the command invokes the
+ *  agency CLI, that CLI's --version output. */
+export type AgentProvenance =
+  | { entry: string; closure: ClosureFileProvenance[] }
+  | { command: string; harnessVersion: string; cliVersion?: string };
 export type EvalRunProvenance = {
   inputsSource: SourceProvenance;
   /** Keyed by input id. Ids the loader GENERATED (nanoid, for id-less specs)
@@ -28,19 +36,48 @@ export type EvalRunProvenance = {
 export function buildProvenance(args: {
   inputsSource: SourceProvenance;
   files: Record<string, SourceProvenance>;
-  seed: { baseDir: string; agentRelPath: string; closureFiles: string[] };
+  agent:
+    | { kind: "file"; seed: { baseDir: string; agentRelPath: string; closureFiles: string[] } }
+    | { kind: "command"; command: string; cliVersion?: string };
 }): EvalRunProvenance {
+  const agent: AgentProvenance = args.agent.kind === "file"
+    ? {
+        entry: args.agent.seed.agentRelPath,
+        closure: args.agent.seed.closureFiles.map((closureFile) => ({
+          file: path.relative((args.agent as { kind: "file"; seed: { baseDir: string } }).seed.baseDir, closureFile),
+          sha256: sha256Text(fs.readFileSync(closureFile, "utf8")),
+        })),
+      }
+    : {
+        command: args.agent.command,
+        harnessVersion: harnessVersion(),
+        ...(args.agent.cliVersion !== undefined ? { cliVersion: args.agent.cliVersion } : {}),
+      };
   return {
     inputsSource: args.inputsSource,
     files: args.files,
-    agent: {
-      entry: args.seed.agentRelPath,
-      closure: args.seed.closureFiles.map((closureFile) => ({
-        file: path.relative(args.seed.baseDir, closureFile),
-        sha256: sha256Text(fs.readFileSync(closureFile, "utf8")),
-      })),
-    },
+    agent,
   };
+}
+
+/** This package's version — comparing benchmark runs over time is the whole
+ *  point, and the command string alone cannot anchor a comparison. Walks up
+ *  because this file sits at a different depth in dev (lib/eval) and in the
+ *  published build (dist/lib/eval). */
+function harnessVersion(): string {
+  let dir = path.dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 5; i++) {
+    const candidate = path.join(dir, "package.json");
+    if (fs.existsSync(candidate)) {
+      try {
+        return (JSON.parse(fs.readFileSync(candidate, "utf8")) as { version?: string }).version ?? "unknown";
+      } catch {
+        return "unknown";
+      }
+    }
+    dir = path.dirname(dir);
+  }
+  return "unknown";
 }
 
 export type EvalRunState = {

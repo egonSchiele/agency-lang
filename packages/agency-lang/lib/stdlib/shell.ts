@@ -54,11 +54,34 @@ function buildSpawnOptions(
  * start in a directory that doesn't exist. Fail early with a clear, actionable
  * message instead so the model creates the directory first.
  */
+/**
+ * A cwd containing newlines, angle brackets, or null bytes is never a real
+ * path — it is a corrupted tool-call argument (models occasionally leak
+ * fragments of their own function-calling markup, e.g. "</parameter>", into
+ * argument values). Without this check the garbage gets appended to a real
+ * path in a "directory does not exist" error, which reads as "my workspace
+ * is gone" — and agents have abandoned a correct working directory over it.
+ * The message must say the opposite: the filesystem is fine, fix the call.
+ */
+function rejectCorruptedCwd(cwd: string): void {
+  const found = ["\n", "\r", "<", ">", "\0"].filter((ch) => cwd.includes(ch));
+  if (found.length === 0) return;
+  const shown = found.map((ch) => JSON.stringify(ch)).join(", ");
+  throw new Error(
+    `The cwd argument is not a valid path: it contains ${shown}. ` +
+      `This is a corrupted tool-call argument, not a filesystem problem — ` +
+      `your working directory is unchanged and any files you created are ` +
+      `still there. Retry the call with a plain path, or omit cwd to use ` +
+      `the current directory.`,
+  );
+}
+
 async function resolveSpawnCwd(
   cwd: string,
   allowedPaths: string[],
 ): Promise<string> {
   if (!cwd) return "";
+  rejectCorruptedCwd(cwd);
   const resolved = await resolveDir(cwd, allowedPaths);
   let stat;
   try {

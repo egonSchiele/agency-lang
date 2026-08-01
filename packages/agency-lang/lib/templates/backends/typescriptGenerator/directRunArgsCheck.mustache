@@ -1,0 +1,4 @@
+if (__process.argv.length > {{{extraStart}}}) {
+  console.error(`main() takes {{{paramCount}}} argument(s) but got \${__process.argv.length - 2}; extra: \${__process.argv.slice({{{extraStart}}}).join(" ")}`);
+  __process.exit(1);
+}

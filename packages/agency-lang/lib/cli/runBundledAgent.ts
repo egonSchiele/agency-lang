@@ -2,6 +2,8 @@ import {
   AgencyConfig,
   applyCliFlags,
   CONFIG_OVERRIDES_ENV,
+  mergeConfigOverrides,
+  readConfigOverrides,
   serializeConfigOverrides,
   type CliFlags,
 } from "@/config.js";
@@ -136,8 +138,12 @@ export function runBundledAgent(
   const overrides = agentConfigOverride(args);
   const agentHome = agentHomeOverride(args);
   const env = { ...process.env };
-  if (Object.keys(overrides).length > 0) {
-    env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(overrides);
+  // Inherited overrides matter: an eval harness hands this process its
+  // statelog path via this env var, and flags must layer on top, not
+  // replace it.
+  const merged = mergeConfigOverrides(readConfigOverrides(env), overrides);
+  if (Object.keys(merged).length > 0) {
+    env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(merged);
   }
   // The agent home must be in the env before the child starts: the agent's
   // config module derives its settings/policy/history paths from it in

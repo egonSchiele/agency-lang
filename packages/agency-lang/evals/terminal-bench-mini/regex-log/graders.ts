@@ -96,10 +96,7 @@ function matchInWorker(pattern: string, logText: string): Promise<MatchOutcome> 
 export default [
   // Gate: no file means the input scores 0, with feedback that says so
   // instead of a wrong-matches diff.
-  grader(({ workdir }) => existsSync(join(workdir, "regex.txt")), {
-    name: "wrote-regex-file",
-    mustPass: true,
-  }),
+  grader(({ workdir }) => existsSync(join(workdir, "regex.txt")), { name: "wrote-regex-file", mustPass: true }),
 
   grader(async ({ workdir }) => {
     const file = join(workdir, "regex.txt");

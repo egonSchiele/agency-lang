@@ -63,6 +63,12 @@ function isWrapperFile(filePath: string): boolean {
 }
 
 function loadInputsFromDirectory(directoryPath: string, makeId: MakeId, options: LoadOptions): Input[] {
+  // A directory that itself contains test.json IS a single test — pointing
+  // --inputs at one test of a suite must keep the test-directory sugar
+  // (id from the directory name, files/, graders.ts auto-discovery).
+  if (fs.existsSync(path.join(directoryPath, "test.json"))) {
+    return validateInputs([loadTestDir(directoryPath, makeId, options)]);
+  }
   const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
   const jsonFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => entry.name).sort();
   const testDirs = entries
@@ -94,9 +100,10 @@ function loadInputsFromDirectory(directoryPath: string, makeId: MakeId, options:
   );
 }
 
-/** The heavy form: test.json beside an optional files/ directory. Desugars to
- *  the same Input the light form produces — id defaults to the directory
- *  name, files to the sibling files/. */
+/** The heavy form: test.json beside an optional files/ directory and an
+ *  optional graders.ts. Desugars to the same Input the light form produces —
+ *  id defaults to the directory name, files to the sibling files/, graders
+ *  to the sibling graders.ts. */
 function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Input {
   const raw = readJson(path.join(testDir, "test.json"));
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -108,6 +115,9 @@ function loadTestDir(testDir: string, makeId: MakeId, options: LoadOptions): Inp
   }
   if (spec.files === undefined && fs.existsSync(path.join(testDir, "files"))) {
     spec.files = "./files";
+  }
+  if (spec.graders === undefined && fs.existsSync(path.join(testDir, "graders.ts"))) {
+    spec.graders = "./graders.ts";
   }
   return normalizeInput(spec, testDir, makeId, options);
 }
@@ -135,7 +145,9 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.goal !== undefined && spec.rubric !== undefined) {
     throw new Error("Eval input cannot specify both goal and rubric");
   }
-  const requireGoal = options.requireGoal ?? true;
+  // A goal is only required where the default LLM judge would actually run —
+  // an input carrying its own graders grades itself.
+  const requireGoal = (options.requireGoal ?? true) && spec.graders === undefined;
   if (requireGoal && (typeof spec.goal !== "string" || spec.goal.length === 0)) {
     throw new Error("Eval input goal must be a non-empty string");
   }
@@ -154,6 +166,13 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   if (spec.files !== undefined && typeof spec.files !== "string") {
     throw new Error("Eval input files must be a string when provided");
   }
+  if (spec.graders !== undefined && typeof spec.graders !== "string") {
+    throw new Error("Eval input graders must be a path string when provided");
+  }
+  if (spec.timeoutSec !== undefined &&
+      (typeof spec.timeoutSec !== "number" || !Number.isFinite(spec.timeoutSec) || spec.timeoutSec <= 0)) {
+    throw new Error("Eval input timeoutSec must be a positive number of seconds when provided");
+  }
   if (spec.metadata !== undefined && !isPlainObject(spec.metadata)) {
     throw new Error("Eval input metadata must be an object when provided");
   }
@@ -164,6 +183,8 @@ function normalizeInput(raw: unknown, baseDir: string, makeId: MakeId, options: 
   };
   if (typeof spec.goal === "string") out.goal = spec.goal;
   if (typeof spec.files === "string") out.files = resolveFilesDir(spec.files, baseDir, options, out.id ?? "");
+  if (typeof spec.graders === "string") out.graders = resolveGradersFile(spec.graders, baseDir, out.id ?? "");
+  if (typeof spec.timeoutSec === "number") out.timeoutSec = spec.timeoutSec;
   if (isPlainObject(spec.metadata)) out.metadata = spec.metadata as Record<string, any>;
   return out;
 }
@@ -192,6 +213,17 @@ function resolveFilesDir(raw: string, baseDir: string, options: LoadOptions, inp
     options.filesProvenance[inputId] = { source: raw };
   }
   return fs.realpathSync(parsed.path);
+}
+
+/** Resolve an input's grading module to an absolute file path. Graders are
+ *  code the harness executes — a suite that ships one is trusted by virtue
+ *  of being run, remote git sources included. */
+function resolveGradersFile(raw: string, baseDir: string, inputId: string): string {
+  const abs = path.resolve(baseDir, raw);
+  if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+    throw new Error(`Input ${inputId}: graders must name a TypeScript file (got ${raw}, resolved to ${abs})`);
+  }
+  return abs;
 }
 
 /** A non-null, non-array object — the shape `args`/`metadata` must have. */

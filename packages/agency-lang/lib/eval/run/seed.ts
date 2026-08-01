@@ -88,6 +88,26 @@ export function filesToCopy(seed: AgentSeed): Record<string, SeedEntry> {
   return { ...agentEntries, ...testEntries };
 }
 
+/** What a COMMAND target's workdir gets: the input's files plus the invoking
+ *  cwd's project config files — there is no agent ingredient (nothing to
+ *  compile, no closure), and no collision rule for the same reason. Seeding
+ *  the config from the invoking cwd makes two machines running the same
+ *  benchmark see the same config; the consequence is that the agent under
+ *  test sees the invoking project's agency.json, eval.* settings included. */
+export function commandFilesToCopy(filesDir: string | undefined): Record<string, SeedEntry> {
+  const configEntries: Record<string, SeedEntry> = Object.fromEntries(
+    PROJECT_CONFIG_FILES
+      .filter((name) => fs.existsSync(path.join(process.cwd(), name)))
+      .map((name): [string, SeedEntry] =>
+        [name, { sourceAbs: path.join(process.cwd(), name), origin: "agent" }]),
+  );
+  const testEntries: Record<string, SeedEntry> = Object.fromEntries(
+    (filesDir ? listFilesRecursive(filesDir) : []).map((rel): [string, SeedEntry] =>
+      [rel, { sourceAbs: path.join(filesDir as string, rel), origin: "test files" }]),
+  );
+  return { ...configEntries, ...testEntries };
+}
+
 /** Copy them. The only filesystem writes in seeding. */
 export function copyFiles(workdirPath: string, files: Record<string, SeedEntry>): void {
   fs.mkdirSync(workdirPath, { recursive: true });

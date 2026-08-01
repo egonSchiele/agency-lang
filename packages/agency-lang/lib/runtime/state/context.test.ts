@@ -20,6 +20,33 @@ function makeMockCtx() {
   });
 }
 
+describe("trace id minting", () => {
+  afterEach(() => {
+    delete process.env.AGENCY_TRACE_ID;
+  });
+
+  it("takes the trace id from AGENCY_TRACE_ID when none is explicit", () => {
+    process.env.AGENCY_TRACE_ID = "trace-from-env";
+    expect((makeMockCtx() as any).statelogConfig.traceId).toBe("trace-from-env");
+  });
+
+  it("an explicit traceId beats the env var", () => {
+    process.env.AGENCY_TRACE_ID = "trace-from-env";
+    const ctx = new RuntimeContext({
+      statelogConfig: {
+        host: "https://example.com",
+        apiKey: "test-api-key",
+        projectId: "test-project",
+        debugMode: false,
+        traceId: "explicit-trace",
+      },
+      smoltalkDefaults: {},
+      dirname: "/tmp",
+    });
+    expect((ctx as any).statelogConfig.traceId).toBe("explicit-trace");
+  });
+});
+
 describe("RuntimeContext", () => {
   it("should initialize debugger field as null", () => {
     const ctx = makeMockCtx();

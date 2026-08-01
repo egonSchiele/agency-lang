@@ -1,6 +1,32 @@
-node main() {
-  let a = range(5)
-  let b = range(2, 5)
-  let c = range(0)
-  return a + " | " + b + " | " + c
+// 3..6 is exclusive, so a loop over it runs three times summing to 12.
+// Returning both numbers catches two failure modes with one assertion: a
+// collapsed range shows up as count 1, and an inclusive end shows up as 15.
+node loopHeader() {
+  let total = 0
+  let count = 0
+  for (i in 3..6) {
+    total = total + i
+    count = count + 1
+  }
+  return [count, total]
+}
+
+// Non-literal endpoints go through the same path as literals.
+node variableEndpoints() {
+  const start = 2
+  const end = 5
+  let count = 0
+  for (i in start..end) {
+    count = count + 1
+  }
+  return count
+}
+
+// An inverted range yields nothing rather than counting backwards.
+node inverted() {
+  let count = 0
+  for (i in 6..3) {
+    count = count + 1
+  }
+  return count
 }

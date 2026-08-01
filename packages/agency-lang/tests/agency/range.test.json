@@ -1,14 +1,25 @@
 {
   "tests": [
     {
-      "nodeName": "main",
+      "nodeName": "loopHeader",
+      "description": "3..6 yields three values summing to 12",
       "input": "",
-      "expectedOutput": "\"0,1,2,3,4 | 2,3,4 | \"",
-      "evaluationCriteria": [
-        {
-          "type": "exact"
-        }
-      ]
+      "expectedOutput": "[3,12]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "variableEndpoints",
+      "description": "a range with variable endpoints expands the same way",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "inverted",
+      "description": "an inverted range yields no values",
+      "input": "",
+      "expectedOutput": "0",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

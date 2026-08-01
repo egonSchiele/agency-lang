@@ -95,7 +95,7 @@ export class CompareView implements ExplorerView {
       counts[row.agent] = (counts[row.agent] ?? 0) + 1;
     }
     return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
+      .sort((left, right) => right[1] - left[1])
       .slice(0, MAX_COMPARE_AGENTS)
       .map(([agent]) => agent);
   }

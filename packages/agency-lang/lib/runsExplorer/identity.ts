@@ -65,11 +65,11 @@ export function agentColors(names: string[]): Record<string, string | undefined>
   for (const name of names) {
     counts[name] = (counts[name] ?? 0) + 1;
   }
-  const ranked = Object.entries(counts).sort((a, b) => {
-    if (b[1] !== a[1]) {
-      return b[1] - a[1];
+  const ranked = Object.entries(counts).sort((left, right) => {
+    if (right[1] !== left[1]) {
+      return right[1] - left[1];
     }
-    return a[0].localeCompare(b[0]);
+    return left[0].localeCompare(right[0]);
   });
   const colors: Record<string, string | undefined> = Object.create(null);
   ranked.forEach(([name], rank) => {

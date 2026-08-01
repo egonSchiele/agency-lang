@@ -2,7 +2,8 @@
 
 The interactive statelog viewer behind `agency logs` and `agency eval logs`. This page is
 the architecture; the user-facing keys and views are documented in
-`docs/site/guide/observability.md`.
+`docs/site/guide/observability.md`. The CROSS-run explorer (`agency logs` over run
+directories) is a separate app that embeds this viewer — see `docs/dev/runs-explorer.md`.
 
 ## The component model
 

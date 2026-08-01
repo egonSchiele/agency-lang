@@ -38,7 +38,7 @@ export function promptCompletion(traceId: string, model: string, totalCost: numb
 
 export function writeStatelog(filePath: string, events: Record<string, unknown>[]): string {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, events.map((e) => JSON.stringify(e)).join("\n") + "\n");
+  fs.writeFileSync(filePath, events.map((event) => JSON.stringify(event)).join("\n") + "\n");
   return filePath;
 }
 
@@ -106,8 +106,8 @@ export function writeRunDir(baseDir: string, run: FixtureRun): string {
     runDir,
     agentLabel: run.agentLabel ?? "agent.agency:main",
     inputs,
-    okCount: inputs.filter((i) => i.status === "success").length,
-    errorCount: inputs.filter((i) => i.status === "error").length,
+    okCount: inputs.filter((input) => input.status === "success").length,
+    errorCount: inputs.filter((input) => input.status === "error").length,
   };
   if (run.grading !== undefined) {
     summary.grading = { graders: ["fixture"], ...run.grading };

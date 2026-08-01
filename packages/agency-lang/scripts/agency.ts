@@ -29,8 +29,6 @@ import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
 import { evalGrade } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
-// PROTOTYPE import — remove with the runs-proto command.
-import { runsProto } from "@/cli/runsProto.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
 import { formatGrading } from "@/eval/grading/gradeBreakdown.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
@@ -423,15 +421,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("-o, --output <file>", "Output JSON file path (default: stdout)")
     .action((file: string, options: { output?: string }) => {
       traceLog(file, options.output);
-    });
-
-  // ── PROTOTYPE: cross-run explorer (see lib/logsViewer/explorerProto.ts) ──
-  program
-    .command("runs-proto")
-    .description("PROTOTYPE: explore eval runs and statelogs as a sortable table")
-    .argument("[paths...]", "Run dirs, dirs of run dirs, or statelog files (default: ./runs)")
-    .action(async (paths: string[]) => {
-      await runsProto(paths ?? []);
     });
 
   const logsCmd = program

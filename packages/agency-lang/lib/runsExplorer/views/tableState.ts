@@ -143,7 +143,7 @@ function rePin(rows: RunRow[], state: TableState): TableState {
 // ── projection internals ───────────────────────────────────────────
 
 function displayRows(rows: RunRow[], state: TableState): DisplayRow[] {
-  const sorted = [...rows].sort((a, b) => compareValues(sortValue(a, state.sort), sortValue(b, state.sort), state.ascending));
+  const sorted = [...rows].sort((left, right) => compareValues(sortValue(left, state.sort), sortValue(right, state.sort), state.ascending));
   if (state.group === "none") {
     return sorted.map((row) => ({ kind: "run", key: row.key, row }));
   }
@@ -162,13 +162,13 @@ function displayRows(rows: RunRow[], state: TableState): DisplayRow[] {
       key,
       group,
       label,
-      memberKeys: members.map((m) => m.key),
+      memberKeys: members.map((member) => member.key),
       count: members.length,
       aggregates: aggregate(members, group, label),
       expanded: state.expandedGroupKeys.includes(key),
     };
   });
-  headers.sort((a, b) => compareValues(headerSortValue(a, state.sort), headerSortValue(b, state.sort), state.ascending));
+  headers.sort((left, right) => compareValues(headerSortValue(left, state.sort), headerSortValue(right, state.sort), state.ascending));
 
   const display: DisplayRow[] = [];
   for (const header of headers) {
@@ -186,10 +186,10 @@ function groupHeaderKey(group: "agent" | "suite", label: string): string {
 }
 
 function aggregate(members: RunRow[], group: "agent" | "suite", label: string): GroupAggregates {
-  const dates = members.map((m) => m.startedAtMs).filter((v): v is number => v !== null);
-  const scores = members.map((m) => m.score).filter((v): v is number => v !== null);
-  const costs = members.map((m) => m.costUsd).filter((v): v is number => v !== null);
-  const times = members.map((m) => m.wallMs).filter((v): v is number => v !== null);
+  const dates = members.map((member) => member.startedAtMs).filter(isKnown);
+  const scores = members.map((member) => member.score).filter(isKnown);
+  const costs = members.map((member) => member.costUsd).filter(isKnown);
+  const times = members.map((member) => member.wallMs).filter(isKnown);
   return {
     date: dates.length === 0 ? null : Math.max(...dates),
     score: scores.length === 0 ? null : scores.reduce((s, v) => s + v, 0) / scores.length,
@@ -198,6 +198,10 @@ function aggregate(members: RunRow[], group: "agent" | "suite", label: string): 
     agent: group === "agent" ? label : sharedLabel(members.map((m) => m.agent)),
     suite: group === "suite" ? label : sharedLabel(members.map((m) => m.suite)),
   };
+}
+
+function isKnown(value: number | null): value is number {
+  return value !== null;
 }
 
 function sharedLabel(labels: string[]): string {

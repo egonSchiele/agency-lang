@@ -5,6 +5,10 @@ import { DEFAULT_THRESHOLDS } from "../../logsViewer/thresholds.js";
 import type { RunRow } from "../rows.js";
 
 export const EMPTY_CELL = "—";
+/** Verdict thresholds: at/above PASS reads green, at/below FAIL reads
+ *  bright red, anything between is a yellow partial. */
+const PASS_SCORE = 0.99;
+const FAIL_SCORE = 0.01;
 /** Backfill has not filled this cell in yet. */
 export const PENDING_CELL = "…";
 
@@ -50,10 +54,10 @@ export function scoreColor(score: number | null): string {
   if (score === null) {
     return "gray";
   }
-  if (score >= 0.99) {
+  if (score >= PASS_SCORE) {
     return "green";
   }
-  if (score <= 0.01) {
+  if (score <= FAIL_SCORE) {
     return "bright-red";
   }
   return "yellow";

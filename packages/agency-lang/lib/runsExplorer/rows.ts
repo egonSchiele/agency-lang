@@ -72,7 +72,7 @@ export function buildRunRow(phaseOne: EvalRunPhaseOne, source: Source): BuiltRun
       statelogPath: input.statelogPath,
       score: grade !== undefined ? grade.objective : null,
       gatesPassed: grade !== undefined ? grade.gatesPassed : null,
-      status: input.status === "error" ? "failed" : input.metrics !== undefined ? "ok" : "missing",
+      status: initialTestStatus(input),
       costUsd: input.metrics !== undefined ? input.metrics.costUsd : null,
       durationMs: input.metrics !== undefined ? input.metrics.durationMs : null,
       startedAtMs: input.metrics !== undefined ? input.metrics.startedAtMs : null,
@@ -182,7 +182,7 @@ export type InputBackfillPatch = {
 };
 
 export function applyInputPatch(row: RunRow, inputId: string, patch: InputBackfillPatch): void {
-  const test = row.tests.find((t) => t.inputId === inputId);
+  const test = row.tests.find((candidate) => candidate.inputId === inputId);
   if (test === undefined) {
     row.warnings.push(`backfill for unknown input ${inputId}`);
     return;
@@ -216,15 +216,15 @@ export function applyInputPatch(row: RunRow, inputId: string, patch: InputBackfi
 export function recomputeRunAggregates(row: RunRow): void {
   const tests = row.tests;
 
-  const knownCosts = tests.filter((t) => t.costUsd !== null);
+  const knownCosts = tests.filter((test) => test.costUsd !== null);
   row.costUsd = knownCosts.length === 0
     ? null
-    : knownCosts.reduce((sum, t) => sum + (t.costUsd ?? 0), 0);
+    : knownCosts.reduce((sum, test) => sum + (test.costUsd ?? 0), 0);
 
-  const started = tests.filter((t) => t.startedAtMs !== null);
+  const started = tests.filter((test) => test.startedAtMs !== null);
   if (started.length > 0) {
-    const minStart = Math.min(...started.map((t) => t.startedAtMs ?? 0));
-    const maxEnd = Math.max(...started.map((t) => (t.startedAtMs ?? 0) + (t.durationMs ?? 0)));
+    const minStart = Math.min(...started.map((test) => test.startedAtMs ?? 0));
+    const maxEnd = Math.max(...started.map((test) => (test.startedAtMs ?? 0) + (test.durationMs ?? 0)));
     row.startedAtMs = minStart;
     row.wallMs = maxEnd - minStart;
   }
@@ -240,7 +240,7 @@ export function recomputeRunAggregates(row: RunRow): void {
   row.models = models;
 
   row.agent = resolveAgentName({
-    agentName: tests.map((t) => t.agentName).find((name) => name !== undefined),
+    agentName: tests.map((test) => test.agentName).find((name) => name !== undefined),
     agentLabel: row.agentLabel,
     command: row.command,
     fallback: lastPathSegment(row.key),
@@ -249,18 +249,27 @@ export function recomputeRunAggregates(row: RunRow): void {
   row.status = deriveRunStatus(tests);
 }
 
+/** "missing" = no metrics yet; backfill upgrades it to "ok" when the
+ *  eval record turns out to exist. */
+function initialTestStatus(input: { status: string; metrics?: unknown }): TestRow["status"] {
+  if (input.status === "error") {
+    return "failed";
+  }
+  return input.metrics !== undefined ? "ok" : "missing";
+}
+
 function deriveRunStatus(tests: TestRow[]): RunRow["status"] {
   if (tests.length === 0) {
     return "failed";
   }
-  const okCount = tests.filter((t) => t.status === "ok").length;
+  const okCount = tests.filter((test) => test.status === "ok").length;
   if (okCount === tests.length) {
     return "ok";
   }
   if (okCount > 0) {
     return "partial";
   }
-  if (tests.some((t) => t.statelogHadEvents === true)) {
+  if (tests.some((test) => test.statelogHadEvents === true)) {
     return "killed";
   }
   return "failed";

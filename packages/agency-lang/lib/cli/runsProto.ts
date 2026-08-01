@@ -33,8 +33,14 @@ export async function runsProto(paths: string[]): Promise<void> {
         return;
       }
       if (action.kind === "openLog") {
-        // The real viewer, on the same terminal — q inside it returns here.
-        await runViewer({ input, output, viewport, followPath: action.path });
+        // The real viewer on the same terminal. Esc backs out to this
+        // table; q quits the whole program (the Esc/q contract).
+        const resolution = await runViewer({
+          input, output, viewport, followPath: action.path, embedded: true,
+        });
+        if (resolution === "quit") {
+          return;
+        }
       }
       screen.render(explorer.render(viewport));
     }

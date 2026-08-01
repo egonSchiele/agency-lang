@@ -86,6 +86,7 @@ export class FlameView implements View {
     else if (fmt === "Enter" || fmt === "Right" || fmt === "l") return this.drillOrDetail();
     else if (fmt === "Left" || fmt === "h") this.drillOut();
     else if (fmt === "t") return { kind: "open", view: "byName" };
+    else if (fmt === "T") return { kind: "open", view: "tree" };
     else if (fmt === "Escape") return { kind: "back" };
     else if (fmt === "o" && this.selected()) {
       return { kind: "focusInTree", spanId: this.selected()!.span.id };

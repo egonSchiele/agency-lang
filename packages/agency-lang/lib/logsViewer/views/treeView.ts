@@ -44,6 +44,9 @@ export class TreeView implements View {
     if (fmt === "t") {
       return { kind: "open", view: "flame" };
     }
+    if (fmt === "T") {
+      return { kind: "open", view: "byName" };
+    }
     if (fmt === "d") {
       const id = this.cursorRealId();
       if (id !== undefined) return { kind: "openDetail", spanId: id };
@@ -134,6 +137,12 @@ export class TreeView implements View {
 
   setFollowIndicator(on: boolean): void {
     this.state = { ...this.state, followOn: on };
+  }
+
+  /** Whether Esc still has something to clear here (active search) —
+   *  the shell's back-out rule needs to know. */
+  hasActiveSearch(): boolean {
+    return !!(this.state.query || (this.state.matches && this.state.matches.length > 0));
   }
 
   /** Test probes. */

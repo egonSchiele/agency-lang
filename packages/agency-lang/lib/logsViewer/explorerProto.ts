@@ -39,7 +39,15 @@ export type RunRow = {
   models: string[];
   /** What Enter opens: per-test statelogs for eval runs; the whole file
    *  for a statelog trace (the viewer splits traces itself). */
-  logs: { label: string; path: string; score?: number; status?: string }[];
+  logs: {
+    label: string;
+    path: string;
+    score?: number;
+    status?: string;
+    costUsd: number;
+    durationMs: number;
+    models: string[];
+  }[];
 };
 
 // ── data layer ─────────────────────────────────────────────────────────
@@ -78,23 +86,26 @@ function evalRunRow(dir: string): RunRow | undefined {
     let costUsd = 0;
     let durationMs = 0;
     let agentName: string | undefined;
+    const perTest: Record<string, { costUsd: number; durationMs: number; models: string[] }> = Object.create(null);
     for (const input of inputs) {
       const record = input.evalRecordPath ? readJson(input.evalRecordPath) : undefined;
+      let t = { costUsd: 0, durationMs: 0, models: [] as string[] };
       if (record?.metrics) {
-        costUsd += record.metrics.costUsdTotal ?? 0;
-        durationMs += record.durationMs ?? 0;
-        for (const m of record.metrics.models ?? []) {
-          if (!models.includes(m)) models.push(m);
-        }
+        t = {
+          costUsd: record.metrics.costUsdTotal ?? 0,
+          durationMs: record.durationMs ?? 0,
+          models: record.metrics.models ?? [],
+        };
       } else if (input.statelogPath && fs.existsSync(input.statelogPath)) {
         // Killed/errored run with no salvaged record: the statelog still
         // has the truth — mine it so a $6 kill does not read as $0.00.
-        const mined = mineStatelogTotals(input.statelogPath);
-        costUsd += mined.costUsd;
-        durationMs += mined.durationMs;
-        for (const m of mined.models) {
-          if (!models.includes(m)) models.push(m);
-        }
+        t = mineStatelogTotals(input.statelogPath);
+      }
+      perTest[input.inputId] = t;
+      costUsd += t.costUsd;
+      durationMs += t.durationMs;
+      for (const m of t.models) {
+        if (!models.includes(m)) models.push(m);
       }
       if (agentName === undefined && input.statelogPath && fs.existsSync(input.statelogPath)) {
         agentName = agentNameFromEvents(parseStatelogJsonl(fs.readFileSync(input.statelogPath, "utf8")).events);
@@ -122,6 +133,9 @@ function evalRunRow(dir: string): RunRow | undefined {
         path: i.statelogPath,
         score: gradeById[i.inputId]?.objective,
         status: i.status,
+        costUsd: perTest[i.inputId]?.costUsd ?? 0,
+        durationMs: perTest[i.inputId]?.durationMs ?? 0,
+        models: perTest[i.inputId]?.models ?? [],
       })),
     };
   } catch {
@@ -160,7 +174,13 @@ function statelogRows(file: string): RunRow[] {
       costUsd,
       durationMs: times.length > 0 ? Math.max(...times) - Math.min(...times) : 0,
       models,
-      logs: [{ label: `trace ${traceId.slice(0, 8)}`, path: file }],
+      logs: [{
+        label: `trace ${traceId.slice(0, 8)}`,
+        path: file,
+        costUsd,
+        durationMs: times.length > 0 ? Math.max(...times) - Math.min(...times) : 0,
+        models,
+      }],
     };
   });
 }
@@ -222,6 +242,18 @@ type Variant = "table" | "compare" | "trend";
 type SortKey = "date" | "score" | "cost" | "duration";
 type GroupKey = "none" | "agent" | "suite";
 
+/** One fixed-width table segment. Without an explicit width the tui row
+ *  layout gives every child flex:1 and SPLITS the terminal evenly across
+ *  them — which is exactly the column-drift the screenshot showed. */
+function seg(text: string, width: number, fg?: string, bg?: string): Element {
+  const style: Record<string, unknown> = { width, height: 1 };
+  if (fg) style.fg = fg;
+  if (bg) style.bg = bg;
+  return { type: "text", content: pad(text, width), style } as unknown as Element;
+}
+
+const CURSOR_BG = "#3a3a3a";
+
 export type ExplorerAction =
   | { kind: "none" }
   | { kind: "quit" }
@@ -244,6 +276,7 @@ export class ExplorerProto {
     this.message = "";
     const fmt = formatKey(ev);
     if (this.screen === "info") {
+      if (fmt === "q" || fmt === "Ctrl+C") return { kind: "quit" };
       if (fmt === "Escape" || fmt === "Left" || fmt === "h" || fmt === "i") this.screen = "main";
       return { kind: "none" };
     }
@@ -263,6 +296,7 @@ export class ExplorerProto {
     else if (fmt === "Ctrl+F" || fmt === "Ctrl+D") move(Math.max(1, viewport.rows - 5));
     else if (fmt === "Ctrl+B" || fmt === "Ctrl+U") move(-Math.max(1, viewport.rows - 5));
     else if (fmt === "t") this.variant = this.variant === "table" ? "compare" : this.variant === "compare" ? "trend" : "table";
+    else if (fmt === "T") this.variant = this.variant === "table" ? "trend" : this.variant === "trend" ? "compare" : "table";
     else if (fmt === "s") this.sort = this.sort === "date" ? "score" : this.sort === "score" ? "cost" : this.sort === "cost" ? "duration" : "date";
     else if (fmt === "i") this.screen = "info";
     else if (fmt === "e") this.exportCsv();
@@ -329,16 +363,17 @@ export class ExplorerProto {
       line(header, { fg: "gray" }),
       body,
       line(this.footer(), { fg: "bright-white" }),
-      line(bottomHints("t view  s sort  b group  g/G top/bottom  Enter open log  i info  e export csv  q quit", "table", viewport.cols), { fg: "gray" }),
+      line(bottomHints("t/T views  s sort  b group  g/G top/bottom  Enter open  i info  e export  Esc back  q quit", "table", viewport.cols), { fg: "gray" }),
     );
   }
 
-  /** Color scheme (screenshot feedback: all-monochrome was hard to
-   *  read): agent gets an identity color (same idea as the timeline's
-   *  group palette), score is a verdict color (green 1.0 / yellow mid /
-   *  red 0), cost uses the viewer's expense thresholds, statelog-source
-   *  rows are dimmed, the cursor row is bright-white throughout. */
+  /** Color scheme (screenshot feedback): identity color per agent,
+   *  verdict colors on score/pass, expense thresholds on cost, dimmed
+   *  statelog rows. The cursor row keeps the SAME text colors and adds a
+   *  background highlight instead (owner request). Every segment has an
+   *  explicit width — the fix for the column-drift bug. */
   private renderTableRow(item: RunRow | { groupLabel: string; rows: RunRow[] }, isCursor: boolean): Element {
+    const bg = isCursor ? CURSOR_BG : undefined;
     const marker = isCursor ? "▶ " : "  ";
     if ("groupLabel" in item) {
       const rows = item.rows;
@@ -348,32 +383,23 @@ export class ExplorerProto {
         : "—";
       const cost = rows.reduce((s, r) => s + r.costUsd, 0);
       const text = `${marker}${pad(`(${rows.length})`, 12)}${pad(clip(item.groupLabel, 44), 46)}${pad(mean, 7)}${pad("", 6)}${pad(`$${cost.toFixed(2)}`, 9)}`;
-      return line(text, { fg: isCursor ? "bright-white" : this.agentColor(item.groupLabel) ?? "bright-cyan" });
+      return line(text, { fg: this.agentColor(item.groupLabel) ?? "bright-cyan", ...(bg ? { bg } : {}) });
     }
     const r = item;
-    if (isCursor) {
-      return line(this.rowText(r, marker), { fg: "bright-white" });
-    }
     const dim = r.source === "statelog";
     const scoreColor = r.score === undefined ? "gray"
       : r.score >= 0.99 ? "green" : r.score <= 0.01 ? "bright-red" : "yellow";
+    const passColor = r.tests > 0 && r.passed === r.tests ? "green" : r.tests > 0 ? "bright-red" : "gray";
     return tuiRow(
-      line(`${marker}${pad(fmtDate(r.dateMs), 12)}`, { fg: "gray" }),
-      line(pad(clip(r.agent, 22), 24), { fg: this.agentColor(r.agent) ?? (dim ? "gray" : undefined) }),
-      line(pad(clip(r.suite, 20), 22), dim ? { fg: "gray" } : undefined),
-      line(pad(r.score !== undefined ? r.score.toFixed(2) : "—", 7), { fg: scoreColor }),
-      line(pad(r.tests > 0 ? `${r.passed}/${r.tests}` : "—", 6), { fg: r.tests > 0 && r.passed === r.tests ? "green" : r.tests > 0 ? "bright-red" : "gray" }),
-      line(pad(`$${r.costUsd.toFixed(2)}`, 9), { fg: costColor(r.costUsd, DEFAULT_THRESHOLDS) ?? (dim ? "gray" : undefined) }),
-      line(pad(fmtDuration(r.durationMs, { minutes: true }), 8), dim ? { fg: "gray" } : undefined),
-      line(clip(r.models.join(","), 30), { fg: "gray" }),
+      seg(`${marker}${fmtDate(r.dateMs)}`, 14, "gray", bg),
+      seg(clip(r.agent, 22), 24, this.agentColor(r.agent) ?? (dim ? "gray" : undefined), bg),
+      seg(clip(r.suite, 20), 22, dim ? "gray" : undefined, bg),
+      seg(r.score !== undefined ? r.score.toFixed(2) : "—", 7, scoreColor, bg),
+      seg(r.tests > 0 ? `${r.passed}/${r.tests}` : "—", 6, passColor, bg),
+      seg(`$${r.costUsd.toFixed(2)}`, 9, costColor(r.costUsd, DEFAULT_THRESHOLDS) ?? (dim ? "gray" : undefined), bg),
+      seg(fmtDuration(r.durationMs, { minutes: true }), 8, dim ? "gray" : undefined, bg),
+      seg(clip(r.models.join(","), 40), 42, "gray", bg),
     );
-  }
-
-  private rowText(r: RunRow, marker: string): string {
-    return `${marker}${pad(fmtDate(r.dateMs), 12)}${pad(clip(r.agent, 22), 24)}${pad(clip(r.suite, 20), 22)}` +
-      `${pad(r.score !== undefined ? r.score.toFixed(2) : "—", 7)}` +
-      `${pad(r.tests > 0 ? `${r.passed}/${r.tests}` : "—", 6)}` +
-      `${pad(`$${r.costUsd.toFixed(2)}`, 9)}${pad(fmtDuration(r.durationMs, { minutes: true }), 8)}${clip(r.models.join(","), 30)}`;
   }
 
   /** Stable identity colors for the most-seen agents — "cyan means
@@ -396,27 +422,32 @@ export class ExplorerProto {
 
   // ── compare variant: agent × suite matrix of mean scores ─────────────
 
+  /** One row per agent, one column per suite; the cell answers "how did
+   *  this agent do on this suite" (screenshot feedback: the old one-line
+   *  header explained none of this). */
   private renderCompare(viewport: { rows: number; cols: number }): Element {
     const scored = this.rows.filter((r) => r.score !== undefined);
     const agents = [...new Set(scored.map((r) => r.agent))];
     const suites = [...new Set(scored.map((r) => r.suite))].slice(0, 4);
-    const out: string[] = [];
-    out.push(`  ${pad("", 26)}${suites.map((s) => pad(clip(s, 18), 20)).join("")}`);
+    const rows: Element[] = [];
+    rows.push(line(`  ${pad("agent", 26)}${suites.map((s) => pad(clip(`suite: ${s}`, 24), 26)).join("")}`, { fg: "gray" }));
     for (const agent of agents) {
       const cells = suites.map((suite) => {
         const cell = scored.filter((r) => r.agent === agent && r.suite === suite);
-        if (cell.length === 0) return pad("·", 20);
+        if (cell.length === 0) return seg("·", 26, "gray");
         const mean = cell.reduce((s, r) => s + (r.score ?? 0), 0) / cell.length;
         const cost = cell.reduce((s, r) => s + r.costUsd, 0) / cell.length;
-        return pad(`${mean.toFixed(2)} ($${cost.toFixed(2)}) ×${cell.length}`, 20);
+        const meanColor = mean >= 0.99 ? "green" : mean <= 0.01 ? "bright-red" : "yellow";
+        return seg(`${mean.toFixed(2)}  $${cost.toFixed(2)}  (${cell.length} run${cell.length === 1 ? "" : "s"})`, 26, meanColor);
       });
-      out.push(`  ${pad(clip(agent, 24), 26)}${cells.join("")}`);
+      rows.push(tuiRow(seg(`  ${clip(agent, 24)}`, 28, this.agentColor(agent)), ...cells));
     }
-    if (agents.length === 0) out.push("  (no scored runs — compare needs eval runs)");
+    if (agents.length === 0) rows.push(line("  (no scored runs — comparing needs eval runs)"));
     return column({ justifyContent: "flex-start" },
-      line(`RUNS  mean score ($ mean cost) ×runs — agents × suites`, { fg: "bright-white" }),
-      ...out.slice(0, viewport.rows - 3).map((t, i) => line(t, i === 0 ? { fg: "gray" } : undefined)),
-      line(bottomHints("t next view  q quit", "compare", viewport.cols), { fg: "gray" }),
+      line(`COMPARE  which agent does best on which suite?`, { fg: "bright-white" }),
+      line(`  each cell: mean score · mean cost · how many runs it averages`, { fg: "gray" }),
+      ...rows.slice(0, viewport.rows - 4),
+      line(bottomHints("t/T next/prev view  q quit", "compare", viewport.cols), { fg: "gray" }),
     );
   }
 
@@ -436,10 +467,11 @@ export class ExplorerProto {
       out.push(`  ${pad(fmtDate(r.dateMs), 12)}${pad(clip(r.agent, 20), 22)}${scoreBar} ${pad(`$${r.costUsd.toFixed(2)}`, 8)}${costBar}`);
     }
     return column({ justifyContent: "flex-start" },
-      line(`RUNS  chronological — score (█/10) and cost bars`, { fg: "bright-white" }),
+      line(`TREND  every run in time order — is it getting better or cheaper?`, { fg: "bright-white" }),
+      line(`  score bar: █ = 0.1 (full bar = perfect)   cost bar: ▄ ≈ $0.25`, { fg: "gray" }),
       line(`  ${pad("date", 12)}${pad("agent", 22)}${pad("score", 11)}${pad("cost", 8)}`, { fg: "gray" }),
       ...out.map((t) => line(t)),
-      line(bottomHints("t next view  q quit", "trend", viewport.cols), { fg: "gray" }),
+      line(bottomHints("t/T next/prev view  q quit", "trend", viewport.cols), { fg: "gray" }),
     );
   }
 
@@ -488,16 +520,36 @@ export class ExplorerProto {
     return { kind: "none" };
   }
 
-  private renderLogs(_viewport: { rows: number; cols: number }): Element {
+  /** Same table shape as the main screen — date, name, score, status,
+   *  cost, time, models — so drilling in does not change the world
+   *  (screenshot feedback: the old picker dropped the columns). */
+  private renderLogs(viewport: { rows: number; cols: number }): Element {
     const r = this.selectedRun();
     const logs = r?.logs ?? [];
+    const header =
+      `  ${pad("date", 12)}${pad("test", 24)}${pad("", 22)}${pad("score", 7)}${pad("pass", 6)}${pad("cost", 9)}${pad("time", 8)}models`;
+    const rows = logs.map((l, i) => {
+      const isCursor = i === this.logsCursor;
+      const bg = isCursor ? CURSOR_BG : undefined;
+      const scoreColor = l.score === undefined ? "gray"
+        : l.score >= 0.99 ? "green" : l.score <= 0.01 ? "bright-red" : "yellow";
+      const statusColor = l.status === "ok" ? "green" : l.status === "error" ? "bright-red" : "gray";
+      return tuiRow(
+        seg(`${isCursor ? "▶ " : "  "}${fmtDate(r?.dateMs)}`, 14, "gray", bg),
+        seg(clip(l.label, 22), 24, this.agentColor(r?.agent ?? "") ?? undefined, bg),
+        seg("", 22, undefined, bg),
+        seg(l.score !== undefined ? l.score.toFixed(2) : "—", 7, scoreColor, bg),
+        seg(l.status ?? "—", 6, statusColor, bg),
+        seg(`$${l.costUsd.toFixed(2)}`, 9, costColor(l.costUsd, DEFAULT_THRESHOLDS), bg),
+        seg(fmtDuration(l.durationMs, { minutes: true }), 8, undefined, bg),
+        seg(clip(l.models.join(","), 40), 42, "gray", bg),
+      );
+    });
     return column({ justifyContent: "flex-start" },
-      line(`OPEN WHICH TEST?  ${r?.id ?? ""}`, { fg: "bright-white" }),
-      ...logs.map((l, i) => line(
-        `${i === this.logsCursor ? "▶ " : "  "}${pad(l.label, 24)}${pad(l.score !== undefined ? l.score.toFixed(2) : "—", 7)}${l.status ?? ""}`,
-        { fg: i === this.logsCursor ? "bright-white" : undefined },
-      )),
-      line(bottomHints("Enter open in log viewer  ←/Esc back", "pick test", 80), { fg: "gray" }),
+      line(`RUN ${r?.id ?? ""}  —  ${r?.agent ?? ""}  —  open which test?`, { fg: "bright-white" }),
+      line(header, { fg: "gray" }),
+      ...rows,
+      line(bottomHints("Enter open in log viewer  ←/Esc back  q quit", "pick test", viewport.cols), { fg: "gray" }),
     );
   }
 

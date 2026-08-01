@@ -67,6 +67,7 @@ export class ByNameView implements View {
       const sel = this.selected();
       if (sel !== undefined) return { kind: "openOccurrences", groupKey: sel.group.key };
     } else if (fmt === "t" || fmt === "Escape") return { kind: "open", view: "tree" };
+    else if (fmt === "T") return { kind: "open", view: "flame" };
     else if (fmt === "d") {
       const longest = this.longestOf(this.selected());
       if (longest !== undefined) return { kind: "openDetail", spanId: longest.id };

@@ -41,10 +41,16 @@ export type RunViewerOpts = {
   initialFollow?: boolean;
   // Watcher poll interval; tests inject a small one.
   followIntervalMs?: number;
+  // Hosted inside another TUI (the runs explorer): Esc at the bottom of
+  // the stack RETURNS to the host instead of doing nothing, and the
+  // resolution tells the host whether the user backed out or quit.
+  embedded?: boolean;
   thresholds?: ViewerThresholds;
 };
 
-export async function runViewer(opts: RunViewerOpts): Promise<void> {
+export type ViewerResolution = "quit" | "back";
+
+export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> {
   const watcher = makeFollowWatcher(opts);
   const parsed = parseStatelogJsonl(watcher.bootText);
   let roots = buildForest(parsed.events);
@@ -63,7 +69,7 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
   if (roots.length === 0 && !(opts.followPath !== undefined && opts.initialFollow)) {
     screen.render(lines(["No events found."]));
     await opts.input.nextKey();
-    return;
+    return "back";
   }
 
   const thresholds = opts.thresholds ?? DEFAULT_THRESHOLDS;
@@ -165,6 +171,12 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
         quit = true;
         break;
       }
+      // Esc backs out, never quits: with nothing left to pop or clear,
+      // an embedded viewer hands control back to its host.
+      if (opts.embedded && fmt === "Escape"
+          && stack.all().length === 1 && !treeView.hasActiveSearch()) {
+        return "back";
+      }
       if (helpOpen) {
         helpOpen = false;
         render();
@@ -186,6 +198,7 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
   } finally {
     watcher.stop();
   }
+  return quit ? "quit" : "back";
 }
 
 /**

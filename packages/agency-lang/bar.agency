@@ -1,5 +1,3 @@
-import { ask } from "std::agents/composable/utils"
-
 node main() {
-  const userResponse = ask("What country do you want to see news headlines for?")
+  print(range(3, 6))
 }

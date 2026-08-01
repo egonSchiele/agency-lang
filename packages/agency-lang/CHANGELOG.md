@@ -1,3 +1,30 @@
+## Jul 31 2026 — v0.11.0
+
+### Eval framework
+- **Graders moved out of `optimize` and into eval** — `agency eval run --graders` now scores a run instead of only reporting that the process exited.
+- **Command agents** — `eval run --agent-cmd '<command with {task}>'` runs any Agency CLI command as the agent. Mostly useful for testing the Agency agent.
+- **Workdirs are seeded, not cloned** — Each test specifies the file set it needs, and only those files are cloned into the workdir. This is a massive improvement, and takes the working directory's size down from an average of 1gb to less than 1mb.
+- **Breaking — tests describe the task, not the agent.** Earlier, each test would describe the node to run and the args to run it with, which felt like it was describing the shape that the agent needed to be in. Tests now just describe the task and the person who wrote the agent decides what node the test should aim at.
+- **Parallel runs and cost control** — `-n/--parallel` runs tests in a bounded pool with a nice progress display. Tests can now set their own `timeoutSec`, and every run has a $50 default cost cap.
+- **Observability** — new `agency eval logs <runDir>`, the run directory is printed at the start of every run, run ids sort chronologically, grading output is colorized, and a sequential run prints regular progress updates of time taken.
+- Killed or errored runs score 0 even when the right answer is on disk.
+- Killing a run with Ctrl-C still generates a summary file.
+- The pairwise optimize loop is removed, and eval output now defaults to the node's return value.
+
+### Language / Typechecker
+- **Match arms narrow** — an early return inside an arm ends its branch, `===` and `!==` narrow like `==` and `!=`, and bare-variable, property-path and literal-index scrutinees narrow inside arm bodies.
+- **One rule for what may sit at the top level of a file** — an `if`, `while`, `for`, `match` or `handle` at file scope is a real diagnostic instead of a compiler crash, and a splice on its own line inside a node body can return statements.
+- **Breaking — validators are predicates.** Validators can no longer return a modified value.
+- `fill` checks a plain value against the hole's real type, including record types and aliases, instead of only literal `string`, `number` and `boolean`. This means more issues are caught at compile time.
+
+### Runtime
+- `serve` exports `withRuntimeConfigOverrides`, so a host serving many compiled modules can route each one's logs to its own project.
+- `runCode` takes a `maxCost` cap.
+
+### CLI
+- `agency run file.agency [args...]` passes trailing arguments to the entry node's parameters. Extra arguments are a loud error instead of a silent drop.
+- `fmt` only collapses a one-statement arm block when the arm grammar can re-parse it, so formatting no longer breaks a file with a raise statement in an arm.
+
 ## Jul 28 2026 — v0.10.0
 
 ### Language / Typechecker

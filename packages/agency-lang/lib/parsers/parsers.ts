@@ -642,7 +642,10 @@ const TIME_MULTIPLIERS: Record<TimeUnitLiteral["unit"], number> = {
   w: 604800000,
 };
 
-const unsignedNumberChars = many1WithJoin(or(char("."), digit));
+// Shares `numberMagnitude` with `numberParser` rather than accepting any run of
+// dots and digits. A greedy version reads `a + 1..b - 1` as the byte literal
+// `1..b`, swallowing the range operator — the same failure `numberParser` had.
+const unsignedNumberChars = numberMagnitude;
 const timeSuffix = or(str("ms"), str("s"), str("m"), str("h"), str("d"), str("w"));
 
 const timeUnitParser: Parser<UnitLiteral> = label("a time unit literal", (input: string): ParserResult<UnitLiteral> => {
@@ -3381,6 +3384,35 @@ function wsOp(opStr: string): Parser<string> {
 const wsKeyword = (kw: string): Parser<string> =>
   map(seqR(optionalSpacesOrNewline, str(kw), not(varNameChar), optionalSpaces), () => kw);
 
+/** Marks a `range()` call as having come from `..` rather than being written by
+ *  hand. Non-enumerable so it stays out of JSON, `Object.entries`, and
+ *  structural equality — the AST a test sees is identical to a hand-written
+ *  `range(3, 6)`, which is the design rule. `bracketedRangeParser` reads it to
+ *  tell `[3..6]` (an error) from `[range(3, 6)]` (legal). */
+const RANGE_OP_MARKER = "__fromRangeOp";
+
+export function isRangeOperatorCall(node: unknown): boolean {
+  return typeof node === "object" && node !== null && RANGE_OP_MARKER in node;
+}
+
+/** `a..b` is not a binary operator in the AST — it builds the same `range(a, b)`
+ *  call someone would write by hand. Same approach as comprehensionDesugar:
+ *  emit a shape the rest of the compiler already understands, so typing,
+ *  codegen, and the runtime are inherited rather than reimplemented.
+ *  `agency fmt` therefore prints `range(a, b)`. */
+function makeRangeCall(left: Expression, right: Expression): Expression {
+  const node: FunctionCall = {
+    type: "functionCall",
+    functionName: "range",
+    arguments: [left, right],
+  };
+  if (left.loc && right.loc) {
+    node.loc = { ...left.loc, end: right.loc.end };
+  }
+  Object.defineProperty(node, RANGE_OP_MARKER, { value: true, enumerable: false });
+  return node;
+}
+
 // Build a BinOpExpression AST node
 function makeBinOp(op: string): (left: Expression, right: Expression) => Expression {
   return (left, right) => ({
@@ -3479,6 +3511,12 @@ export const exprParser: Parser<Expression> = label("an expression", memo("exprP
       { op: wsOp("-="), assoc: "right" as const, apply: makeBinOp("-=") },
       { op: wsOp("+"), assoc: "left" as const, apply: makeBinOp("+") },
       { op: wsOp("-"), assoc: "left" as const, apply: makeBinOp("-") },
+    ],
+    // Precedence 4.5: ranges. Looser than additive so `a + 1..b - 1` reads as
+    // range(a + 1, b - 1); tighter than relational so `x..y == z` compares the
+    // range. Builds a `range()` call, not a binOp node — see makeRangeCall.
+    [
+      { op: wsOp(".."), assoc: "left" as const, apply: makeRangeCall },
     ],
     // Precedence 4: relational
     [

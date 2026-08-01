@@ -20,6 +20,8 @@ import { ViewerState, TreeNode } from "./types.js";
 import { findMatches, expandAncestorsOf } from "./search.js";
 import { detectClipboard } from "./clipboard.js";
 import { follow, Follower } from "./follow.js";
+// PROTOTYPE hook — see timelineProto.ts; remove with it.
+import { enterProto, protoExitToTree, protoHandleKey, renderProto, type ProtoState } from "./timelineProto.js";
 import { helpLines } from "./help.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
 
@@ -73,6 +75,9 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
     opts.viewport,
   );
 
+  // PROTOTYPE state — undefined means the normal tree view is active.
+  let proto: ProtoState | undefined;
+
   // Follow mode book-keeping. The watcher is started/stopped lazily
   // when the user toggles `f`. We re-parse the *whole* JSONL on each
   // append — simpler than incremental and the file is usually tiny.
@@ -119,6 +124,21 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
         state = { ...state, quit: true };
         break;
       }
+      // ── PROTOTYPE: timeline views. `t` enters; see timelineProto.ts ──
+      if (proto !== undefined || event.key === "t") {
+        proto = proto === undefined ? enterProto(state) : protoHandleKey(proto, event);
+        if (proto !== undefined && proto.exit) {
+          state = applyScroll(protoExitToTree(state, proto), opts.viewport);
+          proto = undefined;
+        }
+        if (proto !== undefined) {
+          screen.render(renderProto(proto, opts.viewport));
+        } else {
+          screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
+        }
+        continue;
+      }
+      // ── end PROTOTYPE hook ──
       // Vim-style page scroll — handled here because page size is
       // viewport-dependent and the pure reducer doesn't know the
       // viewport. We move the cursor by N rows; applyScroll then

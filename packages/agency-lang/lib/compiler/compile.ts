@@ -57,6 +57,12 @@ export type CompileSourceOptions = AgencyConfig & {
    * See `lib/importPaths.ts` for the ImportPolicy shape.
    */
   imports?: ImportPolicy;
+  /**
+   * PROTOTYPE: real on-disk path of `source`. When set, compile at this path
+   * (where sibling `.agency` files live) instead of an isolated temp file, so
+   * relative imports resolve. The file must already exist on disk.
+   */
+  sourcePath?: string;
 };
 
 // Walk every import in the program and reject anything that fails the
@@ -100,11 +106,19 @@ export function compileSource(
   config: CompileSourceOptions,
 ): CompileResult {
   const moduleId = `agency_${nanoid()}`;
-  // Write source to a temp file so SymbolTable.build() can read it.
-  // The symbol table walks the file system to resolve imports and find builtins.
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-compile-"));
-  const syntheticPath = path.join(tempDir, `${moduleId}.agency`);
-  fs.writeFileSync(syntheticPath, source, "utf-8");
+  // When the caller gives a real sourcePath (the file is already on disk beside
+  // its sibling imports), compile at that path so relative `.agency` imports
+  // resolve. Otherwise write to an isolated temp file (single-file compile —
+  // relative imports cannot resolve, by design).
+  let tempDir: string | undefined;
+  let syntheticPath: string;
+  if (config.sourcePath) {
+    syntheticPath = config.sourcePath;
+  } else {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-compile-"));
+    syntheticPath = path.join(tempDir, `${moduleId}.agency`);
+    fs.writeFileSync(syntheticPath, source, "utf-8");
+  }
 
   try {
     // 1. Parse
@@ -240,8 +254,9 @@ export function compileSource(
       errors: [error instanceof Error ? error.message : String(error)],
     };
   } finally {
-    // Clean up temp source file (best-effort — OS cleans tmpdir eventually)
-    if (tempDir.startsWith(os.tmpdir())) {
+    // Clean up temp source file (best-effort — OS cleans tmpdir eventually).
+    // Skipped when compiling at a caller-owned sourcePath (no temp dir).
+    if (tempDir && tempDir.startsWith(os.tmpdir())) {
       try {
         fs.rmSync(tempDir, { recursive: true });
       } catch (_) {

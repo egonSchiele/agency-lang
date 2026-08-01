@@ -74,6 +74,18 @@ describe("splitWidth", () => {
   });
 });
 
+describe("splitWidth degradation", () => {
+  it("never returns a split wider than the terminal, all the way down", () => {
+    for (const view of ["flame", "byName", "occurrences"] as const) {
+      for (let cols = 10; cols <= 200; cols += 7) {
+        const w = splitWidth(view, cols);
+        expect(w.gutter + w.bar + w.stats).toBeLessThanOrEqual(cols);
+        expect(w.bar).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+});
+
 describe("AxisHeader", () => {
   it("pads the gutter then lays left/mid/right labels across the bar width", () => {
     const text = new AxisHeader(10).computeText({ start: 0, end: 120_000 }, 0, 40);

@@ -45,7 +45,7 @@ export type RunViewerOpts = {
 };
 
 export async function runViewer(opts: RunViewerOpts): Promise<void> {
-  const watcher = makeFollowWatcher(opts, (text) => onNewText(text));
+  const watcher = makeFollowWatcher(opts);
   const parsed = parseStatelogJsonl(watcher.bootText);
   let roots = buildForest(parsed.events);
   let parseErrors: ReadonlyArray<{ line: number }> = parsed.errors;
@@ -57,7 +57,10 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
     height: opts.viewport.rows,
   });
 
-  if (roots.length === 0) {
+  // Empty log: exit — EXCEPT under --follow, where an empty (or not yet
+  // created) file is the most useful case: keep polling and render as
+  // events arrive.
+  if (roots.length === 0 && !(opts.followPath !== undefined && opts.initialFollow)) {
     screen.render(lines(["No events found."]));
     await opts.input.nextKey();
     return;
@@ -88,8 +91,8 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
       return;
     }
     followOn = !followOn;
-    treeView.setFollowIndicator(followOn);
-    if (followOn) watcher.start();
+    for (const view of stack.all()) view.setFollowIndicator(followOn);
+    if (followOn) watcher.start(onNewText);
     else watcher.stop();
     stack.active().notify(followOn ? "follow on" : "follow off");
   };
@@ -97,7 +100,7 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
   if (opts.initialFollow && opts.followPath) {
     followOn = true;
     treeView.setFollowIndicator(true);
-    watcher.start();
+    watcher.start(onNewText);
   }
 
   const render = (): void => {
@@ -116,6 +119,10 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
     screen.render(column({ justifyContent: "flex-start" }, ...parts));
   };
 
+  const pushView = (view: FlameView | ByNameView | OccurrencesView | DetailScreen): void => {
+    view.setFollowIndicator(followOn);
+    stack.push(view);
+  };
   const dispatch = async (action: ViewAction): Promise<void> => {
     if (action.kind === "open") {
       if (action.view === "tree") {
@@ -125,16 +132,16 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
       if (stack.popTo(action.view)) return;
       if (action.view === "flame") {
         timelineTraceId = treeView.cursorTraceId();
-        stack.push(new FlameView(roots, timelineTraceId, thresholds));
+        pushView(new FlameView(roots, timelineTraceId, thresholds));
       } else {
-        stack.push(new ByNameView(roots, timelineTraceId, thresholds));
+        pushView(new ByNameView(roots, timelineTraceId, thresholds));
       }
     } else if (action.kind === "openFlameAt") {
-      stack.push(new FlameView(roots, timelineTraceId, thresholds, { drillTo: action.spanId }));
+      pushView(new FlameView(roots, timelineTraceId, thresholds, { drillTo: action.spanId }));
     } else if (action.kind === "openOccurrences") {
-      stack.push(new OccurrencesView(roots, timelineTraceId, action.groupKey, thresholds));
+      pushView(new OccurrencesView(roots, timelineTraceId, action.groupKey, thresholds));
     } else if (action.kind === "openDetail") {
-      stack.push(new DetailScreen(roots, action.spanId, thresholds));
+      pushView(new DetailScreen(roots, action.spanId, thresholds));
     } else if (action.kind === "focusInTree") {
       stack.popTo("tree");
       treeView.reveal(action.spanId);
@@ -192,12 +199,15 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
  */
 function makeFollowWatcher(
   opts: RunViewerOpts,
-  onText: (accum: string) => void,
-): { bootText: string; start(): void; stop(): void } {
+): { bootText: string; start(onText: (accum: string) => void): void; stop(): void } {
   let reader = opts.followPath !== undefined ? makeAppendReader(opts.followPath, 0) : undefined;
   let lastSize = opts.followPath !== undefined ? currentFileSize(opts.followPath) : 0;
   let accum = reader !== undefined ? reader.read() : (opts.jsonl ?? "");
   let pollTimer: ReturnType<typeof setInterval> | undefined;
+  // The callback is bound at start(), never at construction — so the
+  // watcher cannot reach into the shell before the shell finishes wiring
+  // itself up (a temporal-dead-zone hazard otherwise).
+  let onText: (accum: string) => void = () => {};
   const poll = (): void => {
     if (reader === undefined || opts.followPath === undefined) return;
     const size = currentFileSize(opts.followPath);
@@ -214,7 +224,8 @@ function makeFollowWatcher(
   };
   return {
     bootText: accum,
-    start: () => {
+    start: (callback) => {
+      onText = callback;
       if (opts.followPath === undefined || pollTimer !== undefined) return;
       pollTimer = setInterval(poll, opts.followIntervalMs ?? 250);
     },

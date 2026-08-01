@@ -33,6 +33,8 @@ export type View = {
   helpLines(): string[];
   /** Shell feedback (copy result, stale-view notes) → the view's message bar. */
   notify(message: string): void;
+  /** Follow mode is shell-owned; views only display it (status bar / header). */
+  setFollowIndicator(on: boolean): void;
 };
 
 export type ViewStack = {

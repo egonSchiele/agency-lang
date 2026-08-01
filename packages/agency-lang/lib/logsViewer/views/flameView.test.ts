@@ -113,6 +113,14 @@ describe("FlameView", () => {
     const miss = view.handleKey({ key: "/" }, viewport);
     if (miss.kind === "promptLine") miss.onResult("zzz-nothing");
     expect(frame(view)).toContain('no matches for "zzz-nothing"');
+    view.handleKey({ key: "down" }, viewport);   // any key clears it, like the tree
+    expect(frame(view)).not.toContain("zzz-nothing");
+  });
+
+  it("the follow indicator shows in the header", () => {
+    const view = new FlameView(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    view.setFollowIndicator(true);
+    expect(frame(view)).toContain("[following]");
   });
 
   it("paging moves the cursor by viewport rows", () => {

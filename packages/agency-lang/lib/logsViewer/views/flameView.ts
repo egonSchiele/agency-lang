@@ -18,7 +18,7 @@ import {
   truncate,
 } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
-import { groupSpans, spanDisplayName } from "../timeline/groups.js";
+import { buildTreeIndex, groupSpans, spanDisplayName, type TreeIndex } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
 import {
@@ -52,6 +52,8 @@ export class FlameView implements View {
   private hideAdmin = true;
   private query: string | undefined;
   private message = "";
+  private following = false;
+  private index: TreeIndex | undefined;
   private rows: FlameRow[] = [];
 
   constructor(
@@ -68,6 +70,7 @@ export class FlameView implements View {
   }
 
   handleKey(ev: KeyEvent, viewport: Viewport): ViewAction {
+    this.message = "";   // transient, like the tree's message bar
     const fmt = formatKey(ev);
     const move = (delta: number) => {
       this.cursor = Math.max(0, Math.min(this.rows.length - 1, this.cursor + delta));
@@ -153,6 +156,10 @@ export class FlameView implements View {
     this.message = message;
   }
 
+  setFollowIndicator(on: boolean): void {
+    this.following = on;
+  }
+
   /** Test probes — reading, never mutating. */
   rowSpans(): TimelineSpan[] {
     return this.rows.map((r) => r.span);
@@ -171,20 +178,22 @@ export class FlameView implements View {
       return;
     }
     const cursorId = this.selected()?.span.id;
-    this.drillPath = this.drillPath.filter((id) => findNode([trace], id) !== undefined);
+    const index = buildTreeIndex(trace);
+    this.index = index;
+    this.drillPath = this.drillPath.filter((id) => index.byId[id] !== undefined);
     const rootNode = this.drillPath.length > 0
-      ? findNode([trace], this.drillPath[this.drillPath.length - 1])!
+      ? index.byId[this.drillPath[this.drillPath.length - 1]]
       : trace;
     const spans = timelineSpans(rootNode, { hideKinds: this.hideAdmin ? ADMIN_KINDS : [] });
-    const colorByKey = rankColors(groupSpans(spans, trace));
-    const groups = groupSpans(spans, trace);
-    const keyBySpanId: Record<string, string> = {};
+    const groups = groupSpans(spans, trace, index);
+    const colorByKey = rankColors(groups);
+    const keyBySpanId: Record<string, string> = Object.create(null);
     for (const g of groups) {
       for (const id of g.spanIds) keyBySpanId[id] = g.key;
     }
     this.rows = spans.map((span) => ({
       span,
-      node: findNode([trace], span.id)!,
+      node: index.byId[span.id],
       color: colorByKey[keyBySpanId[span.id] ?? ""],
     }));
     const restored = this.rows.findIndex((r) => r.span.id === cursorId);
@@ -288,9 +297,8 @@ export class FlameView implements View {
 
   private headerText(window: Interval): string {
     const full = this.viewExtent();
-    const trace = this.roots.find((r) => r.traceId === this.traceId);
     const crumbs = this.drillPath
-      .map((id) => (trace !== undefined ? findNode([trace], id) : undefined))
+      .map((id) => this.index?.byId[id])
       .filter((n): n is TreeNode => n !== undefined)
       .map((n) => spanDisplayName(n));
     return new TimelineHeader().computeText({
@@ -301,6 +309,7 @@ export class FlameView implements View {
       zoom: this.zoom !== undefined ? window : undefined,
       viewStart: full.start,
       adminShown: !this.hideAdmin,
+      following: this.following,
     });
   }
 
@@ -397,14 +406,3 @@ export function rankColors(groups: { key: string; totalSelfMs: number }[]): Reco
   return colors;
 }
 
-function findNode(roots: TreeNode[], id: string): TreeNode | undefined {
-  for (const root of roots) {
-    const stack: TreeNode[] = [root];
-    while (stack.length > 0) {
-      const n = stack.pop()!;
-      if (n.id === id) return n;
-      stack.push(...n.children);
-    }
-  }
-  return undefined;
-}

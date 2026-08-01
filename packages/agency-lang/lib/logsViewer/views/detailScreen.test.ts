@@ -72,6 +72,12 @@ describe("DetailScreen", () => {
     }
   });
 
+  it("a leaf event's self-time is its envelope, not 0ms", () => {
+    const screen = new DetailScreen(toolForest(), "T1", DEFAULT_THRESHOLDS);
+    const header = screen.allLines(200).find((l) => l.includes("self"))!;
+    expect(header).not.toContain("self 0ms");
+  });
+
   it("escape and left go back", () => {
     const screen = new DetailScreen(llmForest(), "L1", DEFAULT_THRESHOLDS);
     expect(screen.handleKey({ key: "escape" }, viewport)).toEqual({ kind: "back" });

@@ -11,6 +11,7 @@ function fakeView(viewName: View["viewName"]): View {
     setData: () => {},
     helpLines: () => [viewName],
     notify: () => {},
+    setFollowIndicator: () => {},
   };
 }
 

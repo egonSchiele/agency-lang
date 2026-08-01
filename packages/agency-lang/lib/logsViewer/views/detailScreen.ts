@@ -84,6 +84,10 @@ export class DetailScreen implements View {
     this.message = message;
   }
 
+  setFollowIndicator(): void {
+    // The detail screen shows a single finished call; nothing to indicate.
+  }
+
   /** The page content, wrapped to `cols`. Exposed for tests. */
   allLines(cols: number): string[] {
     if (this.node === undefined) return [];
@@ -96,7 +100,8 @@ export class DetailScreen implements View {
     const extent = spanExtent(node);
     const spans = timelineSpans(node, { hideKinds: [] });
     if (extent !== undefined) {
-      const self = spans.length > 0 ? spans[0].selfMs : 0;
+      // A leaf event yields no timeline span; its self-time IS its envelope.
+      const self = spans.length > 0 ? spans[0].selfMs : extent.end - extent.start;
       out.push(
         `start +${fmtOffset(0)}   duration ${fmtDuration(extent.end - extent.start, { minutes: true })}` +
         `   self ${fmtDuration(self, { minutes: true })}`,

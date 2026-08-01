@@ -10,7 +10,7 @@ import type { KeyEvent } from "../../tui/input/types.js";
 import { scrollList } from "../../tui/scrollList.js";
 import { fmtDuration } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
-import { groupSpans, type SpanGroup } from "../timeline/groups.js";
+import { buildTreeIndex, groupSpans, type SpanGroup } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
 import { rankColors } from "./flameView.js";
@@ -37,6 +37,7 @@ export class ByNameView implements View {
   private hideAdmin = true;
   private query: string | undefined;
   private message = "";
+  private following = false;
   private rows: GroupRow[] = [];
 
   constructor(
@@ -49,6 +50,7 @@ export class ByNameView implements View {
   }
 
   handleKey(ev: KeyEvent, viewport: Viewport): ViewAction {
+    this.message = "";   // transient, like the tree's message bar
     const fmt = formatKey(ev);
     const move = (delta: number) => {
       this.cursor = Math.max(0, Math.min(this.rows.length - 1, this.cursor + delta));
@@ -138,6 +140,10 @@ export class ByNameView implements View {
     this.message = message;
   }
 
+  setFollowIndicator(on: boolean): void {
+    this.following = on;
+  }
+
   /** Test probes. */
   groupRows(): SpanGroup[] {
     return this.rows.map((r) => r.group);
@@ -153,9 +159,9 @@ export class ByNameView implements View {
       return;
     }
     const spans = timelineSpans(trace, { hideKinds: this.hideAdmin ? ADMIN_KINDS : [] });
-    const bySpanId: Record<string, TimelineSpan> = {};
+    const bySpanId: Record<string, TimelineSpan> = Object.create(null);
     for (const s of spans) bySpanId[s.id] = s;
-    const groups = groupSpans(spans, trace);
+    const groups = groupSpans(spans, trace, buildTreeIndex(trace));
     const colors = rankColors(groups);
     this.rows = groups.map((group) => ({
       group,
@@ -253,6 +259,7 @@ export class ByNameView implements View {
       zoom: this.zoom !== undefined ? window : undefined,
       viewStart: full.start,
       adminShown: !this.hideAdmin,
+      following: this.following,
     });
   }
 

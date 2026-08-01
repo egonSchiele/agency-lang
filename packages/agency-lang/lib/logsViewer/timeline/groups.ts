@@ -19,13 +19,16 @@ export type SpanGroup = {
   models: string[];
 };
 
-export function groupSpans(spans: TimelineSpan[], root: TreeNode): SpanGroup[] {
-  const index = indexTree(root);
-  const byKey: Record<string, SpanGroup> = {};
+export function groupSpans(spans: TimelineSpan[], root: TreeNode, index?: TreeIndex): SpanGroup[] {
+  const treeIndex = index ?? buildTreeIndex(root);
+  // Null prototype: keys incorporate statelog content (thread labels,
+  // tool names) — "__proto__" must be an ordinary key.
+  const byKey: Record<string, SpanGroup> = Object.create(null);
+  const labelCache: ScopeLabelCache = Object.create(null);
   for (const s of spans) {
-    const node = index.byId[s.id];
+    const node = treeIndex.byId[s.id];
     if (node === undefined) continue;
-    const key = keyOf(node, index);
+    const key = keyOf(node, treeIndex, labelCache);
     byKey[key] ??= { key, spanIds: [], count: 0, totalSelfMs: 0, share: 0, models: [] };
     const group = byKey[key];
     group.spanIds.push(s.id);
@@ -48,10 +51,10 @@ export function groupSpans(spans: TimelineSpan[], root: TreeNode): SpanGroup[] {
  *  through this once per setData). Builds its own tree index; bulk callers
  *  go through groupSpans, which builds it once. */
 export function groupKeyOf(spanId: string, root: TreeNode): string {
-  const index = indexTree(root);
+  const index = buildTreeIndex(root);
   const node = index.byId[spanId];
   if (node === undefined) return "?";
-  return keyOf(node, index);
+  return keyOf(node, index, Object.create(null));
 }
 
 /** How a span is named everywhere a short name is needed: tool name,
@@ -70,11 +73,14 @@ export function spanDisplayName(node: TreeNode): string {
   return node.label;
 }
 
-type TreeIndex = { byId: Record<string, TreeNode>; parentIds: Record<string, string> };
+export type TreeIndex = { byId: Record<string, TreeNode>; parentIds: Record<string, string> };
 
-function indexTree(root: TreeNode): TreeIndex {
-  const byId: Record<string, TreeNode> = {};
-  const parentIds: Record<string, string> = {};
+/** One DFS over the tree; reused by the views so per-row lookups are O(1)
+ *  instead of a fresh tree walk (span ids come from statelog content, so
+ *  both records are null-prototype). */
+export function buildTreeIndex(root: TreeNode): TreeIndex {
+  const byId: Record<string, TreeNode> = Object.create(null);
+  const parentIds: Record<string, string> = Object.create(null);
   const walk = (node: TreeNode) => {
     byId[node.id] = node;
     for (const child of node.children) {
@@ -86,12 +92,16 @@ function indexTree(root: TreeNode): TreeIndex {
   return { byId, parentIds };
 }
 
+/** Per-scope threadId→label maps, built once per process subtree instead
+ *  of re-scanning the scope for every llm call (O(k·n) otherwise). */
+type ScopeLabelCache = Record<string, Record<string, string>>;
+
 /** llm: thread label → enclosing function → model. Others: display name. */
-function keyOf(node: TreeNode, index: TreeIndex): string {
+function keyOf(node: TreeNode, index: TreeIndex, cache: ScopeLabelCache): string {
   if (node.label !== "llmCall") {
     return spanDisplayName(node);
   }
-  const label = threadLabelFor(node, index);
+  const label = threadLabelFor(node, index, cache);
   if (label !== undefined) return `llm(${label})`;
   const enclosing = enclosingFunctionName(node, index);
   if (enclosing !== undefined) return `llm(${enclosing})`;
@@ -102,24 +112,32 @@ function keyOf(node: TreeNode, index: TreeIndex): string {
  *  threadCreated events for id "1"), so the lookup scope is the nearest
  *  enclosing subprocessRun span — or the trace root — EXCLUDING nested
  *  subprocessRun subtrees, which are other processes' id spaces. */
-function threadLabelFor(node: TreeNode, index: TreeIndex): string | undefined {
+function threadLabelFor(node: TreeNode, index: TreeIndex, cache: ScopeLabelCache): string | undefined {
   const call = childEvent(node, "promptCompletion") ?? childEvent(node, "promptStart");
   const threadId = call?.data.threadId;
   if (threadId === undefined) return undefined;
   const scope = nearestAncestor(node, index, (a) => a.label === "subprocessRun")
     ?? rootOf(node, index);
-  let label: string | undefined;
+  cache[scope.id] ??= scanScopeLabels(scope);
+  return cache[scope.id][String(threadId)];
+}
+
+/** DFS order means a reused thread id resolves to the LAST threadCreated
+ *  in the scope — "the most recent naming wins". Id reuse within one
+ *  process is rare enough that positional (before-the-call) resolution
+ *  has not been worth the bookkeeping; revisit if a real log disagrees. */
+function scanScopeLabels(scope: TreeNode): Record<string, string> {
+  const labels: Record<string, string> = Object.create(null);
   const scan = (n: TreeNode) => {
     if (n !== scope && n.nodeKind === "span" && n.label === "subprocessRun") return;
     const d = n.event?.data;
-    if (d?.type === "threadCreated" && String(d.threadId) === String(threadId)
-        && typeof d.label === "string" && d.label.length > 0) {
-      label = d.label;
+    if (d?.type === "threadCreated" && typeof d.label === "string" && d.label.length > 0) {
+      labels[String(d.threadId)] = d.label;
     }
     n.children.forEach(scan);
   };
   scan(scope);
-  return label;
+  return labels;
 }
 
 function enclosingFunctionName(node: TreeNode, index: TreeIndex): string | undefined {

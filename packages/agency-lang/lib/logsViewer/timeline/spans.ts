@@ -86,7 +86,11 @@ function makeSpan(node: TreeNode, depth: number): TimelineSpan | undefined {
 
 /** Envelope over ALL descendant leaves: start = min(timestamp − timeTaken),
  *  end = max(timestamp). All-descendants is what makes parent ⊇ child hold
- *  (tree.ts uses the same rule for duration), which keeps self-time ≥ 0. */
+ *  (tree.ts uses the same rule for duration), which keeps self-time ≥ 0.
+ *  Called once per node plus once per direct child, and isRunning walks
+ *  again — O(n·depth) overall. Fine at current statelog sizes; fold into
+ *  one memoised post-order pass when the cross-run project starts feeding
+ *  this bigger inputs. */
 export function spanExtent(node: TreeNode): Interval | undefined {
   let start = Number.POSITIVE_INFINITY;
   let end = Number.NEGATIVE_INFINITY;

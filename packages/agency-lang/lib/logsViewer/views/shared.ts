@@ -39,6 +39,15 @@ export function splitWidth(view: "flame" | "byName" | "occurrences", cols: numbe
     stats = Math.max(8, cols - gutter - LAYOUT.minBarCells);
     bar = Math.max(LAYOUT.minBarCells, cols - gutter - stats);
   }
+  // The floors sum to 38; below that, keep the one-row invariant anyway —
+  // a sub-floor bar beats a wrapped row (which desyncs the repaint math).
+  if (gutter + bar + stats > cols) {
+    bar = Math.max(1, cols - gutter - stats);
+    if (gutter + bar + stats > cols) {
+      stats = Math.max(0, cols - gutter - bar);
+      gutter = Math.min(gutter, Math.max(0, cols - bar - stats));
+    }
+  }
   return { gutter, bar, stats };
 }
 
@@ -114,9 +123,11 @@ export class TimelineHeader {
     zoom?: Interval;
     viewStart: number;
     adminShown: boolean;
+    following?: boolean;
   }): string {
     const crumbs = args.crumbs.length > 0 ? `  » ${args.crumbs.join(" » ")}` : "";
-    const admin = args.adminShown ? "  [admin spans shown]" : "";
+    const admin = (args.adminShown ? "  [admin spans shown]" : "")
+      + (args.following ? "  [following]" : "");
     const zoom = args.zoom !== undefined
       ? `  (zoom ${fmtOffset(args.zoom.start - args.viewStart)}–${fmtOffset(args.zoom.end - args.viewStart)})`
       : "";

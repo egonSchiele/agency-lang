@@ -12,7 +12,7 @@ import type { KeyEvent } from "../../tui/input/types.js";
 import { scrollList } from "../../tui/scrollList.js";
 import { fmtDuration } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
-import { groupSpans, spanDisplayName } from "../timeline/groups.js";
+import { buildTreeIndex, groupSpans, spanDisplayName, type TreeIndex } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
 import { DurationCell, RowLabel } from "./flameView.js";
@@ -27,7 +27,7 @@ import {
 import type { TreeNode } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
 
-type Occurrence = { span: TimelineSpan; node: TreeNode; contextTail: string };
+type Occurrence = { span: TimelineSpan; node: TreeNode; contextTail: string; rowNumber: number };
 
 export class OccurrencesView implements View {
   readonly viewName = "occurrences" as const;
@@ -35,6 +35,7 @@ export class OccurrencesView implements View {
   private cursor = 0;
   private scrollTop = 0;
   private message = "";
+  private following = false;
   private stale = false;
   private occ: Occurrence[] = [];
   private sharedPrefix = "";
@@ -53,6 +54,7 @@ export class OccurrencesView implements View {
     if (this.stale) {
       return { kind: "back" };
     }
+    this.message = "";   // transient, like the tree's message bar
     const fmt = formatKey(ev);
     const move = (delta: number) => {
       this.cursor = Math.max(0, Math.min(this.occ.length - 1, this.cursor + delta));
@@ -101,6 +103,7 @@ export class OccurrencesView implements View {
       : "";
     return column({ justifyContent: "flex-start" },
       line(`TIMELINE [occurrences]  ${this.groupKey} — ${this.occ.length} call(s)${under}` +
+        (this.following ? "  [following]" : "") +
         (this.stale ? "  [group no longer exists — press any key]" : ""), { fg: "bright-white" }),
       line(new AxisHeader(widths.gutter).computeText(window, window.start, widths.bar), { fg: "gray" }),
       body,
@@ -135,6 +138,10 @@ export class OccurrencesView implements View {
     this.message = message;
   }
 
+  setFollowIndicator(on: boolean): void {
+    this.following = on;
+  }
+
   /** Test probes. */
   occurrenceIds(): string[] {
     return this.occ.map((o) => o.span.id);
@@ -149,24 +156,26 @@ export class OccurrencesView implements View {
       this.occ = [];
       return;
     }
+    const index = buildTreeIndex(trace);
     const spans = timelineSpans(trace, { hideKinds: ADMIN_KINDS });
-    const group = groupSpans(spans, trace).find((g) => g.key === this.groupKey);
+    const group = groupSpans(spans, trace, index).find((g) => g.key === this.groupKey);
     if (group === undefined) {
       this.occ = [];
       return;
     }
-    const bySpanId: Record<string, TimelineSpan> = {};
+    const bySpanId: Record<string, TimelineSpan> = Object.create(null);
     for (const s of spans) bySpanId[s.id] = s;
     const members = group.spanIds
       .map((id) => bySpanId[id])
       .filter((s): s is TimelineSpan => s !== undefined)
       .sort((a, b) => a.extent.start - b.extent.start);
-    const contexts = members.map((s) => contextPathOf(s.id, trace));
+    const contexts = members.map((s) => contextPathOf(s.id, index));
     this.sharedPrefix = commonSegmentPrefix(contexts);
     this.occ = members.map((span, i) => ({
       span,
-      node: findNode(trace, span.id)!,
+      node: index.byId[span.id],
       contextTail: contexts[i].slice(this.sharedPrefix.length) || "·",
+      rowNumber: i + 1,
     }));
   }
 
@@ -187,9 +196,8 @@ export class OccurrencesView implements View {
   }
 
   private renderRow(item: Occurrence, isCursor: boolean, window: Interval, widths: { gutter: number; bar: number; stats: number }): Element {
-    const index = this.occ.indexOf(item) + 1;
     const detail = new RowLabel(item.node).computeText();
-    const text = `#${String(index).padStart(2)} ${item.contextTail} · ${detail}`;
+    const text = `#${String(item.rowNumber).padStart(2)} ${item.contextTail} · ${detail}`;
     const label = padCell(clipCell(`${isCursor ? "▶ " : "  "}${text}`, widths.gutter - 1), widths.gutter);
     const bar = new BarComponent([item.span.extent], { running: item.span.running })
       .computeCells(window, widths.bar);
@@ -201,21 +209,20 @@ export class OccurrencesView implements View {
   }
 }
 
-/** "agentRun » node main » llm » codeAgent" — ancestor display names. */
-function contextPathOf(spanId: string, trace: TreeNode): string {
-  const path: TreeNode[] = [];
-  const find = (n: TreeNode, trail: TreeNode[]): boolean => {
-    if (n.id === spanId) {
-      path.push(...trail);
-      return true;
+/** "agentRun » node main » llm » codeAgent" — ancestor display names,
+ *  walked up through the tree index (no per-member DFS). */
+function contextPathOf(spanId: string, index: TreeIndex): string {
+  const names: string[] = [];
+  let currentId = index.parentIds[spanId];
+  while (currentId !== undefined) {
+    const ancestor = index.byId[currentId];
+    if (ancestor === undefined) break;
+    if (ancestor.nodeKind === "span") {
+      names.unshift(ancestor.label === "llmCall" ? "llm" : spanDisplayName(ancestor));
     }
-    return n.children.some((c) => find(c, [...trail, n]));
-  };
-  find(trace, []);
-  return path
-    .filter((n) => n.nodeKind === "span")
-    .map((n) => (n.label === "llmCall" ? "llm" : spanDisplayName(n)))
-    .join(" » ");
+    currentId = index.parentIds[currentId];
+  }
+  return names.join(" » ");
 }
 
 /** Longest common prefix, kept only up to a ` » ` segment boundary: a
@@ -238,12 +245,3 @@ function commonSegmentPrefix(paths: string[]): string {
   return at === -1 ? "" : prefix.slice(0, at + 3);
 }
 
-function findNode(trace: TreeNode, id: string): TreeNode | undefined {
-  const stack: TreeNode[] = [trace];
-  while (stack.length > 0) {
-    const n = stack.pop()!;
-    if (n.id === id) return n;
-    stack.push(...n.children);
-  }
-  return undefined;
-}

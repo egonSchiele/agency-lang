@@ -7,6 +7,21 @@
 // --- tarsec imports (combined from all parser files) ---
 import { TarsecError } from "tarsec";
 import {
+  BODY_DECLARATION_MESSAGE,
+  BODY_RESERVED_MODIFIER_MESSAGE,
+  C_STYLE_FOR_MESSAGE,
+  HANDLER_BODY_MESSAGE,
+  IF_EXPRESSION_MESSAGE,
+  INTERFACE_EXTENDS_MESSAGE,
+  MATCH_CASES_MESSAGE,
+  RESERVED_CLASS_MESSAGE,
+  STATIC_ASSIGN_MESSAGE,
+  STATIC_INNER_MESSAGE,
+  STATIC_LET_MESSAGE,
+  SWITCH_MESSAGE,
+  TERNARY_MESSAGE,
+} from "./messages.js";
+import {
   anyChar,
   between,
   buildExpressionParser,
@@ -40,6 +55,7 @@ import {
   peek,
   Parser,
   ParserResult,
+  ParserFailure,
   quotedString,
   regexParser,
   sepBy,
@@ -2127,8 +2143,6 @@ const baseTypeAliasParserFor = (keyword: string, separator: Parser<unknown>) => 
   ),
 ));
 
-const INTERFACE_EXTENDS_MESSAGE =
-  "Agency has no interface inheritance. Write `type Foo = Bar & { ... }` instead.";
 
 /**
  * `interface Foo extends Bar { ... }` is a shape models write constantly.
@@ -3588,7 +3602,8 @@ const atomWithIs: Parser<Expression> = (input: string) => {
 // Operator table: highest precedence first.
 // Multi-char operators must come before their single-char prefixes
 // (e.g., *= before *, <= before <).
-export const exprParser: Parser<Expression> = label("an expression", memo("exprParser", buildExpressionParser<Expression>(
+
+const _exprParserBase: Parser<Expression> = label("an expression", memo("exprParser", buildExpressionParser<Expression>(
   atomWithIs,
   [
     // Precedence 7: exponentiation
@@ -3651,6 +3666,47 @@ export const exprParser: Parser<Expression> = label("an expression", memo("exprP
   ],
   parenParser,
 )));
+
+/**
+ * `exprParser` plus one refusal: a JavaScript ternary.
+ *
+ * Wraps the expression parser rather than joining the statement-level probes
+ * because a ternary is always a value — of an assignment, a return, an
+ * argument, an object field — and never a statement.
+ */
+/** `?` not followed by `.` or `?`. Optional chaining and nullish coalescing are
+ *  both real Agency operators, so a bare `?` is the only ternary candidate.
+ *  Built once: this runs on every successful expression parse. */
+const ternaryMarker = seqC(char("?"), not(oneOf(".?")));
+
+const ternaryRefusal = (rest: string): ParserFailure | null => {
+  // Newlines are crossed on purpose. Prettier wraps any ternary past the line
+  // limit onto three lines, so `cond\n  ? a\n  : b` is the shape a model has
+  // seen most, and skipping only spaces would miss it. A statement cannot begin
+  // with `?`, so a `?` on the next line is unambiguously a continuation.
+  const afterExpr = optionalSpacesOrNewline(rest);
+  const marker = ternaryMarker(afterExpr.success ? afterExpr.rest : rest);
+  if (!marker.success) return null;
+  const tail = seqC(
+    optionalSpacesOrNewline,
+    lazy(() => exprParser),
+    optionalSpacesOrNewline,
+    char(":"),
+  )(marker.rest);
+  if (!tail.success) return null;
+  return committedFailure(TERNARY_MESSAGE, tail.rest);
+};
+
+export const exprParser: Parser<Expression> = (input: string) => {
+  const result = _exprParserBase(input);
+  if (!result.success) return result;
+  const refused = ternaryRefusal(result.rest);
+  if (!refused) return result;
+  // The enclosing node body is wrapped in a `parseError` that would otherwise
+  // win the reporting contest, so record the commit in the parse state too.
+  getParseState().committedFailure = refused;
+  return refused as ParserResult<Expression>;
+};
 
 // Wire up the circular reference for parenParser
 _exprParser = exprParser;
@@ -4184,7 +4240,7 @@ export const matchBlockExprParser = label("a match expression", withLoc(seqC(
   char("{"),
   captureCaptures(
     parseError(
-      "expected match cases of the form `value => expression` separated by `;` or newlines, followed by `}`",
+      MATCH_CASES_MESSAGE,
       optionalSpacesOrNewline,
       capture(many(or(blankLineParser, commentParser, matchBlockParserCase)), "cases"),
       optionalSpaces,
@@ -4708,17 +4764,6 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   return success(out, result.rest);
 });
 
-const SWITCH_MESSAGE =
-  "Agency has no `switch` statement. Use a `match` block instead:\n" +
-  "\n" +
-  "  match (x) {\n" +
-  '    "a" => doThing()\n' +
-  '    "b" => doOtherThing()\n' +
-  "    _   => fallback()\n" +
-  "  }\n" +
-  "\n" +
-  "Arms do not fall through, so no `break` is needed, and `match` checks that " +
-  "you covered every case. `_` is the catch-all.";
 
 /**
  * `switch` is a construct Agency deliberately does not have — `match` differs
@@ -4768,21 +4813,6 @@ const switchStatementParser: Parser<never> = (input: string) => {
   return declined as ParserResult<never>;
 };
 
-const C_STYLE_FOR_MESSAGE =
-  "Agency has no C-style `for` loop. To count, iterate a range:\n" +
-  "\n" +
-  "  for (i in range(0, 10)) { print(i) }\n" +
-  "\n" +
-  "To walk a collection, iterate it directly:\n" +
-  "\n" +
-  "  for (item in items) { print(item) }\n" +
-  "  for (item, i in items) { print(i, item) }\n" +
-  "\n" +
-  "To build a list from another list, use a comprehension:\n" +
-  "\n" +
-  "  const doubled = [x * 2 for x in items]\n" +
-  "\n" +
-  "For a condition-driven loop, use `while (cond) { ... }`.";
 
 /**
  * A C-style `for (let i = 0; i < n; i++)`. Without this the author gets
@@ -4815,8 +4845,6 @@ const cStyleForParser: Parser<never> = (input: string) => {
   return declined as ParserResult<never>;
 };
 
-const BODY_DECLARATION_MESSAGE =
-  "`node`, `def` and `function` declarations are only legal at the top level of a file.";
 
 /**
  * Decline a statement that starts like a `node` or `def` declaration.
@@ -4879,9 +4907,6 @@ const bodyOptimizeAssignmentParser: Parser<Assignment> = (input: string) => {
   return failure("expected optimize assignment", input);
 };
 
-const BODY_RESERVED_MODIFIER_MESSAGE =
-  "`static` and `export` declarations are only supported at module top level. " +
-  "Inside function and node bodies, use `optimize const ...` for optimizable local declarations or ordinary `const`/`let` declarations.";
 
 const bodyReservedModifierParser: Parser<never> = (input: string) => {
   const probe = seqC(
@@ -4930,20 +4955,8 @@ const bodyReservedModifierParser: Parser<never> = (input: string) => {
  * the wrapper never appears again — downstream codegen sees only the
  * inner statement.
  */
-const STATIC_LET_MESSAGE =
-  "`static let` is not allowed. Use `static const <name> = ...` for a " +
-  "once-per-process binding, or `static <expr>` (e.g. `static foo()`) " +
-  "for a once-per-process side effect.";
 
-const STATIC_ASSIGN_MESSAGE =
-  "`static <name> = ...` is not allowed. Use `static const <name> = ...` " +
-  "for a once-per-process binding, or `static <expr>` (e.g. `static foo()`) " +
-  "for a once-per-process side effect.";
 
-const STATIC_INNER_MESSAGE =
-  "`static` at top level must be followed by `const <name> = ...` " +
-  "or an expression statement (e.g., `static foo()` or " +
-  "`static logger.flush()`).";
 
 export const staticStatementParser: Parser<StaticStatement> = withLoc(
   (input: string) => {
@@ -5246,7 +5259,7 @@ const inlineHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
     optionalSpaces,
     captureCaptures(
       parseError(
-        "expected `{` to open handler body",
+        HANDLER_BODY_MESSAGE,
         char("{"),
         optionalSpacesOrNewline,
         capture(bodyParser, "body"),
@@ -5553,7 +5566,7 @@ export const ifExpressionParser: Parser<IfElse> = label(
     optionalSpacesOrNewline,
     captureCaptures(
       parseError(
-        "an `if ... then ... else` expression requires an `else` branch",
+        IF_EXPRESSION_MESSAGE,
         str("else"),
         not(varNameChar),
         optionalSpacesOrNewline,
@@ -6257,10 +6270,6 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
 //   over an always-failing inner parser to throw a `TarsecError` that
 //   bypasses `or()` backtracking entirely. `parseAgency` already catches
 //   `TarsecError` and surfaces it as a normal parse diagnostic.
-const RESERVED_CLASS_MESSAGE =
-  "`class` definitions are no longer supported in Agency. " +
-  "Use functions and plain objects instead, or instantiate an imported " +
-  "JS class with `new Foo(...)`.";
 
 export const reservedClassParser: Parser<never> = (input: string) => {
   // Probe: `class` followed by one-or-more space/tab and an identifier.

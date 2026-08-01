@@ -7,6 +7,7 @@
 // --- tarsec imports (combined from all parser files) ---
 import { TarsecError } from "tarsec";
 import {
+  BLOCK_AS_VALUE_MESSAGE,
   BODY_DECLARATION_MESSAGE,
   BODY_RESERVED_MODIFIER_MESSAGE,
   C_STYLE_FOR_MESSAGE,
@@ -2628,7 +2629,14 @@ const namedArgumentParser: Parser<NamedArgument> = memo(
     // nor `char("=")`.
     or(char(":"), seqR(char("="), not(char("=")))),
     optionalSpaces,
-    capture(or(lazy(() => inlineBlockParser), lazy(() => exprParser)), "value"),
+    capture(
+      or(
+        lazy(() => inlineBlockParser),
+        lazy(() => arrowBlockParser),
+        lazy(() => exprParser),
+      ),
+      "value",
+    ),
   ),
 );
 
@@ -2647,6 +2655,9 @@ const argumentListParser = memo("argumentListParser", seqC(
         // `f(#...args)` needs its own alternative here.
         lazy(() => spliceHoleParser),
         lazy(() => inlineBlockParser),
+        // Before exprParser: `(n)` and `n` both parse as expressions, so the
+        // arrow form has to get first refusal on them.
+        lazy(() => arrowBlockParser),
         lazy(() => exprParser),
       ),
     ),
@@ -4012,6 +4023,67 @@ export const inlineBlockParser: Parser<BlockArgument> = memo(
   ),
 );
 
+/**
+ * A JavaScript arrow function in argument position, accepted as a second
+ * spelling of a block argument. An expression body builds the node
+ * `inlineBlockParser` builds; a braced body builds the node the `as` form
+ * builds, so neither records the spelling and `agency fmt` prints canonical.
+ *
+ * MUST precede `exprParser` in argument position: `(n)` and `n` are both
+ * ordinary expressions, so the arrow form needs first refusal on them. It
+ * commits only once `=>` is present.
+ */
+const arrowBlockParser: Parser<BlockArgument> = memo(
+  "arrowBlockParser",
+  (input: string): ParserResult<BlockArgument> => {
+    // `async` is accepted and discarded, the same treatment `await` and `sync`
+    // already get: models write it from JS habit and Agency awaits everything.
+    const afterAsync = optional(seqC(str("async"), spaces))(input);
+    const rest = afterAsync.success ? afterAsync.rest : input;
+
+    // `blockParamsParser` returns an empty list without consuming when it
+    // matches nothing, so a bare `=>` would otherwise read as a zero-parameter
+    // block. JavaScript requires `()` there and so do we.
+    const params = blockParamsParser(rest);
+    if (!params.success) return params as ParserResult<BlockArgument>;
+    if (params.rest === rest) return failure("expected arrow function parameters", input);
+
+    const arrow = seqC(optionalSpaces, str("=>"), optionalSpacesOrNewline)(params.rest);
+    if (!arrow.success) return arrow as ParserResult<BlockArgument>;
+
+    const braced = seqC(
+      char("{"),
+      optionalSpacesOrNewline,
+      capture(lazy(() => bodyParser), "body"),
+      optionalSpacesOrNewline,
+      char("}"),
+    )(arrow.rest);
+    if (braced.success) {
+      return success(
+        {
+          type: "blockArgument" as const,
+          inline: false,
+          params: params.result,
+          body: braced.result.body as AgencyNode[],
+        },
+        braced.rest,
+      );
+    }
+
+    const expr = lazy(() => exprParser)(arrow.rest);
+    if (!expr.success) return expr as ParserResult<BlockArgument>;
+    return success(
+      {
+        type: "blockArgument" as const,
+        inline: true,
+        params: params.result,
+        body: [{ type: "returnStatement", value: expr.result } as ReturnStatement],
+      },
+      expr.rest,
+    );
+  },
+);
+
 // =============================================================================
 // matchBlock.ts
 // =============================================================================
@@ -4847,6 +4919,46 @@ const cStyleForParser: Parser<never> = (input: string) => {
 
 
 /**
+ * `const double = (n) => n * 2`. Blocks in Agency are arguments, not values,
+ * so this is not a gap in `arrowBlockParser` — the canonical `\\n -> n * 2`
+ * fails in the same position for the same reason. What was missing is the
+ * message: it landed on the body parser's catch-all with no position.
+ *
+ * Detects both spellings, since the canonical one deserves the message too.
+ */
+const blockAsValueParser: Parser<never> = (input: string) => {
+  const head = seqC(
+    oneOfStr(["const", "let"]),
+    spaces,
+    many1WithJoin(varNameChar),
+    optionalSpaces,
+    char("="),
+    not(char("=")),
+    optionalSpaces,
+  )(input);
+  if (!head.success) return failure("", input);
+
+  const arrow = seqC(
+    optional(seqC(str("async"), spaces)),
+    blockParamsParser,
+    optionalSpaces,
+    str("=>"),
+  )(head.rest);
+  const backslash = seqC(
+    char("\\"),
+    optionalSpaces,
+    blockParamsParser,
+    optionalSpaces,
+    str("->"),
+  )(head.rest);
+  if (!arrow.success && !backslash.success) return failure("", input);
+
+  const declined = committedFailure(BLOCK_AS_VALUE_MESSAGE, head.rest);
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
+/**
  * Decline a statement that starts like a `node` or `def` declaration.
  *
  * A call may take a trailing block and keywords are not reserved in
@@ -5039,6 +5151,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
   // report a missing `(` that is plainly present.
   switchStatementParser,
   cStyleForParser,
+  blockAsValueParser,
   // withModifierParser must be tried before returnStatementParser/
   // assignmentParser so that `return foo() with approve` and
   // `const x = foo() with approve` don't get partially consumed by

@@ -381,6 +381,35 @@ describe("extractEvalRecord", () => {
     });
   });
 
+  describe("run start and agent name", () => {
+    it("startedAtMs is the first event's absolute timestamp", () => {
+      resetClock();
+      const events: EventEnvelope[] = [
+        ev("threadCreated", { threadId: "0", threadType: "thread", label: "main" }),
+        ev("promptCompletion", { threadId: "0" }),
+      ];
+      const rec = extractEvalRecord(events, "test:startedAt");
+      expect(rec.startedAtMs).toBe(1_700_000_000_000 + 100);
+    });
+
+    it("agentName is the last agentName event; absent when none is valid", () => {
+      resetClock();
+      const named = extractEvalRecord([
+        ev("agentName", { name: "first-name" }),
+        ev("promptCompletion", { threadId: "0" }),
+        ev("agentName", { name: "gcode-v2" }),
+      ], "test:agentName");
+      expect(named.agentName).toBe("gcode-v2");
+
+      resetClock();
+      const unnamed = extractEvalRecord([
+        ev("promptCompletion", { threadId: "0" }),
+        ev("agentName", { name: 42 }),
+      ], "test:agentName-invalid");
+      expect(unnamed.agentName).toBeUndefined();
+    });
+  });
+
   describe("explicit eval annotation extraction", () => {
     it("uses explicit evalValueRecorded / evalOutputRecorded events without fallback warnings", () => {
       resetClock();

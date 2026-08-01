@@ -25,6 +25,12 @@ export type EvalRecord = {
   /** Total wall-clock duration in milliseconds, derived from the
    *  first event's timestamp to the last event's timestamp. */
   durationMs: number;
+  /** Absolute epoch ms of the first event — durationMs is relative to
+   *  this. Enables cross-run wall-clock math. */
+  startedAtMs: number;
+  /** Last `agentName` statelog event in the trace (std::statelog
+   *  setAgentName). Absent when the agent never named itself. */
+  agentName?: string;
   /** Source file path, for traceability. Always a real path — stdin
    *  input is not supported. */
   source: string;

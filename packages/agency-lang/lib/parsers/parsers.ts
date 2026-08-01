@@ -3337,6 +3337,9 @@ const baseAtom: Parser<Expression> = or(
   // unmatched. A future reorder that only preserves the first constraint
   // breaks the fork form while the sequential form keeps passing.
   lazy(() => comprehensionParser),
+  // MUST precede agencyArrayParser: it commits to a targeted error for the
+  // one shape that parser would otherwise accept as a silently wrong value.
+  lazy(() => bracketedRangeParser),
   lazy(() => agencyArrayParser),
   lazy(() => agencyObjectParser),
   lazy(() => booleanParser),
@@ -4615,6 +4618,56 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
   if (isStatic) out.static = true;
   return success(out, result.rest);
 });
+
+const BRACKETED_RANGE_MESSAGE =
+  "`[3..6]` builds an array containing a range, not a range. " +
+  "Write `3..6` for the range itself, or `[(3..6)]` if you really want " +
+  "an array containing a range.";
+
+/**
+ * `[3..6]` is the range spelling in Haskell, CoffeeScript, and bash, so models
+ * write it constantly. Under Agency's infix reading it means "an array holding
+ * one range", which loops exactly once and binds the whole array — a silently
+ * wrong answer rather than an error. Commit to a targeted message instead.
+ *
+ * The check is structural, reading the marker `makeRangeCall` sets. Matching
+ * `..` against the source text would reject `["a..b"]`, where the dots are data.
+ *
+ * Only the bare form is caught: `[(3..6)]` and `[range(3, 6)]` parse normally,
+ * which is why the message points at the former. Requiring the closing `]` is
+ * what keeps `[3..6, 8..9]` and `[1, 3..6]` legal — both reach a `,` where this
+ * expects `]` and decline.
+ *
+ * Throws rather than returning `failure(...)` for the same reason
+ * `bodyDeclarationParser` does — a plain failure would be shadowed by a sibling
+ * alternative in the enclosing `or(...)`.
+ */
+const bracketedRangeParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    char("["),
+    optionalSpacesOrNewline,
+    // Parentheses leave no trace in the AST, so `[(3..6)]` and `[3..6]` yield
+    // the identical node. Declining on a leading `(` is what makes the
+    // escape hatch the message recommends actually work.
+    not(char("(")),
+    capture(lazy(() => exprParser), "element"),
+    optionalSpacesOrNewline,
+    char("]"),
+  );
+  const probed = probe(input);
+  if (!probed.success) return failure("", input);
+  if (!isRangeOperatorCall((probed.result as { element: unknown }).element)) {
+    return failure("", input);
+  }
+  const declined = committedFailure(BRACKETED_RANGE_MESSAGE, probed.rest);
+  // Record it in the preferred-message slot for the same reason
+  // `bodyDeclarationParser` does: marking the result committed only stops
+  // backtracking, and without the slot this message loses to the enclosing
+  // `parseError` throw, so the author gets "expected node body" instead of
+  // being told what is actually wrong.
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
 
 const BODY_DECLARATION_MESSAGE =
   "`node`, `def` and `function` declarations are only legal at the top level of a file.";

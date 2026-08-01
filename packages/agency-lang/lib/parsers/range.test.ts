@@ -69,3 +69,49 @@ describe("dot runs stay distinct", () => {
       .toContain("valueAccess");
   });
 });
+
+describe("bracketed range", () => {
+  it("rejects a lone range inside brackets", () => {
+    const parsed = parseAgency(`node main() { const r = [3..6] }`, {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/builds an array containing a range/);
+  });
+
+  it("names both fixes in the message", () => {
+    const parsed = parseAgency(`node main() { const r = [3..6] }`, {}, false);
+    if (parsed.success) throw new Error("expected a failed parse");
+    expect(parsed.message).toContain("3..6");
+    expect(parsed.message).toContain("[(3..6)]");
+  });
+
+  it("accepts a parenthesized range as an array element", () => {
+    expect(program(`node main() { const r = [(3..6)] }`))
+      .toEqualWithoutLoc(program(`node main() { const r = [range(3, 6)] }`));
+  });
+
+  it("accepts a hand-written range() call as a lone element", () => {
+    expect(parseAgency(`node main() { const r = [range(3, 6)] }`, {}, false).success).toBe(true);
+  });
+
+  // The case a text-matching implementation gets wrong: the dots are DATA.
+  it("accepts a lone string containing two dots", () => {
+    expect(parseAgency(`node main() { const r = ["a..b"] }`, {}, false).success).toBe(true);
+    expect(parseAgency(`node main() { const r = [f("a..b")] }`, {}, false).success).toBe(true);
+  });
+
+  it("accepts two ranges in one array", () => {
+    expect(program(`node main() { const r = [3..6, 8..9] }`))
+      .toEqualWithoutLoc(program(`node main() { const r = [range(3, 6), range(8, 9)] }`));
+  });
+
+  it("accepts a range alongside another element", () => {
+    expect(program(`node main() { const r = [1, 3..6] }`))
+      .toEqualWithoutLoc(program(`node main() { const r = [1, range(3, 6)] }`));
+  });
+
+  it("leaves comprehensions alone", () => {
+    expect(parseAgency(`node main() { const xs = [1, 2]\nconst r = [x * 2 for x in xs] }`, {}, false).success)
+      .toBe(true);
+  });
+});

@@ -511,10 +511,13 @@ const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment>
 // One character of raw multi-line text: any char that does not begin the close
 // delimiter (`"""`) or an interpolation (`${`). `not(...)` is a zero-width
 // negative lookahead; `capture(anyChar)` then consumes the single char.
-const multiLineRawChar: Parser<string> = map(
-  seqC(not(or(str('"""'), str("${"))), capture(anyChar, "c")),
-  (r) => r.c,
-);
+const multiLineRawCharFor = (delim: string): Parser<string> =>
+  map(
+    seqC(not(or(str(delim), str("${"))), capture(anyChar, "c")),
+    (r: { c: string }) => r.c,
+  );
+
+const multiLineRawChar: Parser<string> = multiLineRawCharFor('"""');
 
 // Text segment inside a triple-quoted string. Raw by design — backslash escapes
 // like `\n` are NOT interpreted (a literal backslash then `n`) — with ONE
@@ -523,10 +526,16 @@ const multiLineRawChar: Parser<string> = map(
 // source) without opening an interpolation. `\${` is tried first so its `${` is
 // consumed as an escape rather than starting one; a lone backslash and every
 // other `\x` stays verbatim. Ends at the closing `"""` or an unescaped `${`.
-export const multiLineStringTextSegmentParser: Parser<TextSegment> = map(
-  many1WithJoin(or(dollarBraceEscape, multiLineRawChar)),
-  (value) => ({ type: "text", value }),
-);
+export const multiLineStringTextSegmentParserFor = (
+  delim: string,
+): Parser<TextSegment> =>
+  map(
+    many1WithJoin(or(dollarBraceEscape, multiLineRawCharFor(delim))),
+    (value: string) => ({ type: "text" as const, value }),
+  );
+
+export const multiLineStringTextSegmentParser: Parser<TextSegment> =
+  multiLineStringTextSegmentParserFor('"""');
 
 export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((
   input: string,
@@ -890,24 +899,38 @@ export const stringParser: Parser<StringLiteral> = label("a string", (input: str
   );
 });
 
-export const multiLineStringParser: Parser<MultiLineStringLiteral> = (input: string) => {
-  const parser = seqC(
-    set("type", "multiLineString"),
-    str('"""'),
-    capture(
-      many(or(multiLineStringTextSegmentParser, interpolationSegmentParser)),
-      "segments",
-    ),
-    str('"""'),
-  );
-  const result = parser(input);
-  if (result.success) {
-    for (const seg of result.result.segments) {
-      if (seg.type === "text") seg.value = stripSentinels(seg.value);
+const multiLineStringParserFor =
+  (delim: string): Parser<MultiLineStringLiteral> =>
+  (input: string) => {
+    const parser = seqC(
+      set("type", "multiLineString"),
+      str(delim),
+      capture(
+        many(
+          or(multiLineStringTextSegmentParserFor(delim), interpolationSegmentParser),
+        ),
+        "segments",
+      ),
+      str(delim),
+    );
+    const result = parser(input);
+    if (result.success) {
+      for (const seg of result.result.segments) {
+        if (seg.type === "text") seg.value = stripSentinels(seg.value);
+      }
     }
-  }
-  return result;
-};
+    return result;
+  };
+
+// Triple single-quotes are a second spelling of `"""`. Both build the same
+// `multiLineString` node — the delimiter is not recorded — so `agency fmt`
+// prints the canonical `"""`. Without this, a triple-single-quoted string
+// parsed as an empty single-quoted string followed by stray statements, losing
+// its contents silently.
+export const multiLineStringParser: Parser<MultiLineStringLiteral> = or(
+  multiLineStringParserFor('"""'),
+  multiLineStringParserFor("'''"),
+);
 
 export const variableNameParser: Parser<VariableNameLiteral> = label("an identifier", memo("variableNameParser", (
   input: string,
@@ -919,9 +942,16 @@ export const variableNameParser: Parser<VariableNameLiteral> = label("an identif
       capture(manyWithJoin(varNameChar), "value"),
     ],
     (_, captures) => {
+      const name = `${captures.init}${captures.value}`;
       return {
         type: "variableName" as const,
-        value: `${captures.init}${captures.value}`,
+        // `undefined` is a second spelling of `null`, not a second value —
+        // Agency has exactly one nothing-value (docs/dev/null-and-undefined.md),
+        // and the *type* `undefined` has always normalized to `null`. In
+        // expression position both spellings arrive here rather than at
+        // `nullParser`, so converging them here is what makes the value side
+        // agree with the type side. `agency fmt` prints `null`.
+        value: name === "undefined" ? "null" : name,
       };
     },
   );
@@ -1107,9 +1137,13 @@ export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: 
   return parser(input);
 });
 
+// `undefined` is a second spelling of `null`, not a second value. Agency has
+// exactly one nothing-value (docs/dev/null-and-undefined.md); the *type*
+// `undefined` has always normalized to `null` here, and accepting the literal
+// makes the value side agree. `agency fmt` prints `null`.
 export const nullParser: Parser<NullLiteral> = label("null", seqC(
   set("type", "null"),
-  str("null"),
+  or(str("null"), seqR(str("undefined"), not(varNameChar))),
 ));
 
 export const literalParser: Parser<Literal> = memo("literalParser", or(
@@ -1157,6 +1191,12 @@ export const primitiveTypeParser: Parser<PrimitiveType> = memo(
           str("number"),
           str("string"),
           str("boolean"),
+          // TypeScript's boxed-object spellings. Accepted because models reach
+          // for them; normalized below so the AST only ever holds the
+          // lowercase primitive.
+          str("Number"),
+          str("String"),
+          str("Boolean"),
           str("undefined"),
           str("void"),
           str("null"),
@@ -1169,12 +1209,27 @@ export const primitiveTypeParser: Parser<PrimitiveType> = memo(
         ),
         "value",
       ),
+      // A primitive name must be a whole word. Without this, `str("Number")`
+      // matches the front of a type reference like `NumberInRange` and strands
+      // the rest. The lowercase names have the same hazard (`stringify`); the
+      // capitalized ones just make it far likelier, since PascalCase type names
+      // routinely start with these words.
+      not(varNameChar),
     ),
     // Nullish unification: the `undefined` type keyword is accepted (e.g. from
     // imported TS type annotations) but normalized to `null` at parse time, so
     // the stored AST never contains an `undefined` primitive. The *value*
     // `undefined` remains unparseable. See docs/dev/null-and-undefined.md.
-    (r: PrimitiveType) => (r.value === "undefined" ? { ...r, value: "null" } : r),
+    (r: PrimitiveType) => {
+      const normalized: Record<string, string> = {
+        undefined: "null",
+        Number: "number",
+        String: "string",
+        Boolean: "boolean",
+      };
+      const value = normalized[r.value];
+      return value ? { ...r, value } : r;
+    },
   ),
 );
 
@@ -1996,11 +2051,20 @@ export const valueParamParser: Parser<ValueParam> = memo(
   ),
 );
 
-const baseTypeAliasParser: Parser<TypeAlias> = withLoc(memo(
-  "typeAliasParser",
+/**
+ * `type Foo = X` and `interface Foo X` are the same declaration with two
+ * spellings. They differ only in the separator: `type` requires `=`, and
+ * `interface` has none.
+ *
+ * The separator is a PARAMETER rather than an `optional(str("="))` shared by
+ * both. Making it optional would also accept `type A number`, which is
+ * currently a targeted parse error and is relied on well beyond this parser.
+ */
+const baseTypeAliasParserFor = (keyword: string, separator: Parser<unknown>) => withLoc(memo(
+  `typeAliasParser:${keyword}`,
   seqC(
     set("type", "typeAlias"),
-    str("type"),
+    str(keyword),
     spaces,
     captureCaptures(
       parseError(
@@ -2046,7 +2110,7 @@ const baseTypeAliasParser: Parser<TypeAlias> = withLoc(memo(
           ),
         ),
         optionalSpaces,
-        str("="),
+        separator,
         optionalSpaces,
         capture(variableTypeParser, "aliasedType"),
         optionalSemicolon,
@@ -2055,6 +2119,11 @@ const baseTypeAliasParser: Parser<TypeAlias> = withLoc(memo(
     ),
   ),
 ));
+
+const baseTypeAliasParser: Parser<TypeAlias> = or(
+  baseTypeAliasParserFor("type", str("=")),
+  baseTypeAliasParserFor("interface", succeed(undefined)),
+);
 
 export const typeAliasParser: Parser<TypeAlias> = label("a type alias",
   (input: string) => {
@@ -2494,7 +2563,9 @@ const namedArgumentParser: Parser<NamedArgument> = memo(
     set("type", "namedArgument"),
     capture(many1WithJoin(varNameChar), "name"),
     optionalSpaces,
-    char(":"),
+    // `=` is the Python spelling. Agency has no assignment expression, so
+    // nothing else can appear here; `agency fmt` prints `:`.
+    or(char(":"), seqR(char("="), not(char("=")))),
     optionalSpaces,
     capture(or(lazy(() => inlineBlockParser), lazy(() => exprParser)), "value"),
   ),
@@ -5184,6 +5255,17 @@ export const withModifierParser: Parser<WithModifier> = withLoc((input: string) 
 });
 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
+  // `elif` is the Python spelling of `else if`, and is rewritten to one here:
+  // the remaining input keeps the `if`, so the "else if" branch below handles
+  // it unchanged. `agency fmt` prints `else if`.
+  const elif = seqC(optionalSpaces, str("elif"), peek(not(varNameChar)))(input);
+  if (elif.success) {
+    const asElseIf = ifParser("if" + elif.rest);
+    if (asElseIf.success) {
+      return success([asElseIf.result], asElseIf.rest);
+    }
+  }
+
   const parser = seqC(optionalSpaces, str("else"), optionalSpaces);
   const prefixResult = parser(input);
   if (!prefixResult.success) return prefixResult;

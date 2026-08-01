@@ -17,6 +17,8 @@ import {
   installDirFromUrl,
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
+import { deploy } from "@/cli/deploy/deploy.js";
+import { renderOutcome } from "@/cli/deploy/render.js";
 import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
 import { resolveBudget } from "@/cli/budget.js";
@@ -393,6 +395,42 @@ export function createProgram(deps: CliDependencies = {}): Command {
           target: "node",
         });
         console.log(`Packed ${input} -> ${opts.output}`);
+      },
+    );
+
+  program
+    // Hidden while the hosted-serve feature is still in progress — the command
+    // works, it just isn't advertised in `--help` yet.
+    .command("deploy", { hidden: true })
+    .description("Upload an agent to a hosted statelog so it can be served")
+    .argument("<file>", "Agency entrypoint file to deploy")
+    .option("--host <url>", "statelog host (overrides agency.json log.host)")
+    .option("--project <slug>", "project slug (overrides agency.json log.projectId)")
+    .option(
+      "--api-key-env <name>",
+      "env var to read the API key from (default: STATELOG_API_KEY)",
+    )
+    .option("--dry-run", "preview the deploy without uploading")
+    .action(
+      async (
+        file: string,
+        opts: {
+          host?: string;
+          project?: string;
+          apiKeyEnv?: string;
+          dryRun?: boolean;
+        },
+      ) => {
+        const outcome = await deploy(file, getConfig(), {
+          host: opts.host,
+          project: opts.project,
+          apiKeyEnv: opts.apiKeyEnv,
+          dryRun: opts.dryRun,
+        });
+        renderOutcome(outcome);
+        if (outcome.kind === "error") {
+          process.exit(1);
+        }
       },
     );
 

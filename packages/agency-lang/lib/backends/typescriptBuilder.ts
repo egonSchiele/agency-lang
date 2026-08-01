@@ -145,6 +145,7 @@ import type {
 import type { CompilationUnit } from "../compilationUnit.js";
 import { SourceMapBuilder } from "./sourceMap.js";
 import { directRunExtraArgsCheck } from "./typescriptBuilder/directRunArgsCheck.js";
+import { nodeWrapperParams } from "./typescriptBuilder/nodeWrapperParams.js";
 import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
@@ -3049,10 +3050,12 @@ export class TypeScriptBuilder {
     if (targetNode && targetNode.parameters.length > 0) {
       const entries: Record<string, TsNode> = {};
       targetNode.parameters.forEach((p, i) => {
-        // A goto may omit trailing arguments (legal when the parameter
-        // has a default): leave the key out of data so the node body
-        // sees undefined and applies its default. Emitting argNodes[i]
-        // blindly put undefined into the IR and crashed the printer.
+        // A goto may omit trailing arguments: leave the key out of data
+        // so the node body sees undefined and applies its default.
+        // (Emitting argNodes[i] blindly put undefined into the IR and
+        // crashed the printer.) Only TRAILING omissions can reach here —
+        // AG6039 rejects a required parameter after a defaulted one, so
+        // a missing slot always belongs to a defaulted parameter.
         if (argNodes[i] !== undefined) {
           entries[p.name] = argNodes[i];
         }
@@ -3159,6 +3162,16 @@ export class TypeScriptBuilder {
     // ONE site every invocation path funnels through (the exported
     // wrapper, direct runs, and graph transitions all deliver arguments
     // via __state.data), so defaults work identically for all of them.
+    // (On the wrapper path the wrapper's own TS default fills data first,
+    // so this ternary is a no-op there; it is what makes goto work.)
+    //
+    // Deliberately `undefined`, NOT the __UNSET sentinel def functions
+    // use: node arguments cross a serialization boundary (checkpoints,
+    // resume) where a module-level sentinel would not survive, and a
+    // missing object key reads as undefined naturally. Edge-semantic
+    // consequence, matching JS default parameters: explicitly passing
+    // undefined/omitting both take the default, whereas a def's __UNSET
+    // preserves an explicit undefined. null does NOT take the default.
     if (parameters.length > 0) {
       const paramStmts = parameters.map((p) => {
         const incoming = $(ts.runtime.state).prop("data").prop(p.name).done();
@@ -4617,25 +4630,6 @@ export class TypeScriptBuilder {
     return nodes;
   }
 
-  /** The exported node wrapper's parameter list: the node's own
-   *  parameters (with their defaults, so TS callers can omit them) plus
-   *  the trailing options object. */
-  private nodeWrapperParams(
-    args: FunctionParameter[],
-  ): { name: string; typeAnnotation?: string; defaultValue?: TsNode }[] {
-    const params = args.map((arg) => ({
-      name: arg.name,
-      typeAnnotation: arg.typeHint ? formatTypeHintTs(arg.typeHint) : "any",
-      defaultValue: arg.defaultValue ? this.processNode(arg.defaultValue) : undefined,
-    }));
-    params.push({
-      name: "{ messages, callbacks }",
-      typeAnnotation: "{ messages?: any; callbacks?: any }",
-      defaultValue: ts.obj({}),
-    });
-    return params;
-  }
-
   private postprocess(): TsNode[] {
     const result: TsNode[] = [];
 
@@ -4669,7 +4663,7 @@ export class TypeScriptBuilder {
 
     for (const node of this.compilationUnit.graphNodes) {
       const args = node.parameters;
-      const fnParams = this.nodeWrapperParams(args);
+      const fnParams = nodeWrapperParams(args, (n) => this.processNode(n));
       const dataObj: Record<string, TsNode> = {};
       for (const arg of args) {
         dataObj[arg.name] = ts.id(arg.name);

@@ -2,31 +2,80 @@
   "tests": [
     {
       "nodeName": "withDefault",
-      "description": "an omitted argument takes the default",
+      "description": "omitted argument takes the default (wrapper-signature path)",
       "input": "",
       "expectedOutput": "\"hi fallback\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "withDefault",
       "description": "an explicit argument wins over the default",
       "input": "\"Ada\"",
       "expectedOutput": "\"hi Ada\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "viaGoto",
-      "description": "a goto that omits the argument also gets the default",
+      "description": "goto omitting the argument takes the default (body/__state.data path)",
       "input": "",
       "expectedOutput": "\"hi fallback\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "viaGotoWithArg",
-      "description": "a goto with an explicit argument passes it through",
+      "description": "goto with an explicit argument passes it through",
       "input": "",
       "expectedOutput": "\"hi explicit\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "viaGotoWithNull",
+      "description": "null is a value, not an omission - the default must NOT fire",
+      "input": "",
+      "expectedOutput": "\"hi null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listDefault",
+      "description": "array-literal default (the non-scalar shape the parser accepts)",
+      "input": "",
+      "expectedOutput": "2",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "partial",
+      "description": "mixed parameters: required filled, trailing default applies",
+      "input": "\"hello\"",
+      "expectedOutput": "\"hello world\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

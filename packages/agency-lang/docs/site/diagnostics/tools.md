@@ -396,3 +396,13 @@ A finalize body runs in the same variable scope as the function or block it belo
 The `as` clause on a finalize binds what the abort yields to the block, and the abort yields exactly one thing: the scope's saved draft (or null when nothing was saved). There is no second value to bind, so a parameter list has no meaning here. The shared block-argument grammar is why the parser accepts the list at all.
 
 **How to fix:** keep one binder: `finalize as draft { ... }`. Everything else the finalize needs is already in scope as ordinary locals.
+
+<a id="ag6039"></a>
+
+## AG6039 — Parameter '&#123;name&#125;' on '&#123;fn&#125;' has no default but comes after a defaulted parameter. Put defaulted parameters last, so an omitted argument is always a trailing one.
+
+*Default severity: error.*
+
+Arguments bind to parameters left to right, so a call can only ever leave off the LAST arguments. If a parameter without a default comes after one with a default, an omitted argument would fill the defaulted parameter and silently leave the required one empty — for example `node t(a: string = "x", b: string)` called as `goto t("only")` would set `a` and leave `b` undefined.
+
+**How to fix:** move parameters with defaults to the end of the parameter list.

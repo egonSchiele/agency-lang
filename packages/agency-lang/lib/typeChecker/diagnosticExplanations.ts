@@ -455,6 +455,10 @@ def f(): string {
 
 **How to fix:** keep one binder: \`finalize as draft { ... }\`. Everything else the finalize needs is already in scope as ordinary locals.`,
 
+  requiredParamAfterDefault: `Arguments bind to parameters left to right, so a call can only ever leave off the LAST arguments. If a parameter without a default comes after one with a default, an omitted argument would fill the defaulted parameter and silently leave the required one empty — for example \`node t(a: string = "x", b: string)\` called as \`goto t("only")\` would set \`a\` and leave \`b\` undefined.
+
+**How to fix:** move parameters with defaults to the end of the parameter list.`,
+
   // ---- AG7: static init, config, and imports ----
   exportRequiresStaticConst: `Only \`static const\` declarations can be exported from a module. A plain \`const\`, \`let\`, or other declaration is per-run state and is not part of a module's public surface.
 

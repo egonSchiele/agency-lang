@@ -232,7 +232,9 @@ agency eval run --agent agent.agency --inputs inputs.json
 the agent — each input's recorded graders are read from the run directory,
 so no flags are needed. `agency eval logs <runDir>` opens the run's
 statelog in the interactive viewer (`--input <id>` picks one when the run
-has several; an input directory or a statelog file also works).
+has several; an input directory or a statelog file also works). Press `t`
+in the viewer for the timeline views — where the run's time went, call by
+call and function by function (see the observability guide).
 
 With no `--graders`, each test grades itself with the `graders` module it
 carries; tests without one fall back to `eval.graders` from `agency.json`,

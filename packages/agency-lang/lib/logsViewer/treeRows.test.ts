@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderViewerLines, flattenVisibleRows, colorFor, wrapLine } from "./render.js";
+import { renderViewerLines, flattenVisibleRows, colorFor, wrapLine } from "./treeRows.js";
 import { TreeNode, ViewerState } from "./types.js";
 import { color } from "@/utils/termcolors.js";
 

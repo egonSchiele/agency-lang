@@ -1,30 +1,33 @@
+// The viewer shell: owns the screen, the view stack, action dispatch, the
+// help overlay, the parse-error footer, quit, and follow mode. Everything
+// view-specific lives in the View classes (lib/logsViewer/views/); the
+// shell only routes keys to the active view and interprets the actions it
+// cannot perform itself.
 import { Screen } from "../tui/screen.js";
 import { column, line, lines } from "../tui/builders.js";
 import type { Element } from "../tui/elements.js";
+import { formatKey } from "../tui/input/format.js";
 import type { InputSource } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
-import { clampScroll, followCursor } from "../tui/scroll.js";
-import { scrollList } from "../tui/scrollList.js";
-import { parseStatelogJsonl } from "./parse.js";
-import { buildForest } from "./tree.js";
-import {
-  flattenVisibleRows,
-  colorFor,
-  renderRowText,
-  VisibleRow,
-} from "./render.js";
-import { handleKeyEx } from "./input.js";
-import { formatKey } from "../tui/input/format.js";
-import type { KeyEvent } from "../tui/input/types.js";
-import { ViewerState, TreeNode } from "./types.js";
-import { findMatches, expandAncestorsOf } from "./search.js";
+import { currentFileSize, makeAppendReader } from "../statelog/appendReader.js";
 import { detectClipboard } from "./clipboard.js";
-import { follow, Follower } from "./follow.js";
-import { helpLines } from "./help.js";
+import { parseStatelogJsonl } from "./parse.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
+import { buildForest } from "./tree.js";
+import { ByNameView } from "./views/byNameView.js";
+import { DetailScreen } from "./views/detailScreen.js";
+import { FlameView } from "./views/flameView.js";
+import { OccurrencesView } from "./views/occurrencesView.js";
+import { TreeView } from "./views/treeView.js";
+import { makeViewStack, type ViewAction, type Viewport } from "./views/view.js";
+import type { TreeNode } from "./types.js";
 
 export type RunViewerOpts = {
-  jsonl: string;
+  // The statelog text. Optional when `followPath` is given — the shell
+  // then reads the file itself through ONE append reader whose first
+  // read() IS the boot read, so nothing can land in a gap between a
+  // separate boot read and the watcher start (the old design's bug).
+  jsonl?: string;
   input: InputSource;
   output: OutputTarget;
   viewport: { rows: number; cols: number };
@@ -36,12 +39,16 @@ export type RunViewerOpts = {
   // to launching the viewer and then pressing `f`. Ignored when
   // followPath is undefined.
   initialFollow?: boolean;
+  // Watcher poll interval; tests inject a small one.
+  followIntervalMs?: number;
   thresholds?: ViewerThresholds;
 };
 
 export async function runViewer(opts: RunViewerOpts): Promise<void> {
-  const parsed = parseStatelogJsonl(opts.jsonl);
-  const roots = buildForest(parsed.events);
+  const watcher = makeFollowWatcher(opts);
+  const parsed = parseStatelogJsonl(watcher.bootText);
+  let roots = buildForest(parsed.events);
+  let parseErrors: ReadonlyArray<{ line: number }> = parsed.errors;
 
   const screen = new Screen({
     input: opts.input,
@@ -50,319 +57,198 @@ export async function runViewer(opts: RunViewerOpts): Promise<void> {
     height: opts.viewport.rows,
   });
 
-  if (roots.length === 0) {
+  // Empty log: exit — EXCEPT under --follow, where an empty (or not yet
+  // created) file is the most useful case: keep polling and render as
+  // events arrive.
+  if (roots.length === 0 && !(opts.followPath !== undefined && opts.initialFollow)) {
     screen.render(lines(["No events found."]));
     await opts.input.nextKey();
     return;
   }
 
   const thresholds = opts.thresholds ?? DEFAULT_THRESHOLDS;
-  let state: ViewerState = applyScroll(
-    {
-      roots,
-      // Default-expand the only trace if there is exactly one.
-      expanded: new Set(roots.length === 1 ? [roots[0].id] : []),
-      cursorId: roots[0].id,
-      scrollTop: 0,
-      quit: false,
-      // Propagate the terminal width into state so render, input,
-      // and search all wrap promptCompletion convoLines to the same
-      // boundary.
-      viewportCols: opts.viewport.cols,
-    },
-    opts.viewport,
-  );
+  const viewport: Viewport = opts.viewport;
+  const treeView = new TreeView(roots, thresholds, viewport);
+  const stack = makeViewStack(treeView);
+  // The trace timeline views open on: fixed when flame opens from the tree.
+  let timelineTraceId = treeView.cursorTraceId();
+  let helpOpen = false;
+  let quit = false;
 
-  // Follow mode book-keeping. The watcher is started/stopped lazily
-  // when the user toggles `f`. We re-parse the *whole* JSONL on each
-  // append — simpler than incremental and the file is usually tiny.
-  let followerState: { f: Follower; jsonl: string } | undefined;
-  const startFollow = (): void => {
-    if (!opts.followPath || followerState) return;
-    let accum = opts.jsonl;
-    followerState = {
-      jsonl: accum,
-      f: follow({
-        path: opts.followPath,
-        onAppend: (chunk) => {
-          accum += chunk;
-          if (followerState) followerState.jsonl = accum;
-          state = onFollowAppend(state, accum, opts.viewport);
-          screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
-        },
-      }),
-    };
+  let followOn = false;
+  const onNewText = (text: string): void => {
+    const reparsed = parseStatelogJsonl(text);
+    const rebuilt = buildForest(reparsed.events);
+    if (rebuilt.length === 0) return;
+    roots = rebuilt;
+    parseErrors = reparsed.errors;
+    for (const view of stack.all()) view.setData(roots);
+    render();
   };
-  const stopFollow = (): void => {
-    if (!followerState) return;
-    followerState.f.stop();
-    followerState = undefined;
+  const toggleFollow = (): void => {
+    if (!opts.followPath) {
+      stack.active().notify("follow unavailable when reading from stdin");
+      return;
+    }
+    followOn = !followOn;
+    for (const view of stack.all()) view.setFollowIndicator(followOn);
+    if (followOn) watcher.start(onNewText);
+    else watcher.stop();
+    stack.active().notify(followOn ? "follow on" : "follow off");
   };
 
-  // Auto-start follow if --follow was passed. We do this after
-  // building state so the [FOLLOW] indicator appears in the first
-  // render below.
   if (opts.initialFollow && opts.followPath) {
-    startFollow();
-    state = { ...state, followOn: true };
+    followOn = true;
+    treeView.setFollowIndicator(true);
+    watcher.start(onNewText);
   }
 
-  screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
+  const render = (): void => {
+    if (helpOpen) {
+      screen.render(lines(["Keybindings", "─────────────", ...stack.active().helpLines(), "", "Press any key to close."]));
+      return;
+    }
+    const body = stack.active().render(viewport);
+    const parts: Element[] = [body];
+    if (parseErrors.length > 0) {
+      parts.push(line(
+        `${parseErrors.length} parse error(s) — first: line ${parseErrors[0].line}`,
+        { fg: "bright-red" },
+      ));
+    }
+    screen.render(column({ justifyContent: "flex-start" }, ...parts));
+  };
+
+  const pushView = (view: FlameView | ByNameView | OccurrencesView | DetailScreen): void => {
+    view.setFollowIndicator(followOn);
+    stack.push(view);
+  };
+  const dispatch = async (action: ViewAction): Promise<void> => {
+    if (action.kind === "open") {
+      if (action.view === "tree") {
+        stack.popTo("tree");
+        return;
+      }
+      if (stack.popTo(action.view)) return;
+      if (action.view === "flame") {
+        timelineTraceId = treeView.cursorTraceId();
+        pushView(new FlameView(roots, timelineTraceId, thresholds));
+      } else {
+        pushView(new ByNameView(roots, timelineTraceId, thresholds));
+      }
+    } else if (action.kind === "openFlameAt") {
+      pushView(new FlameView(roots, timelineTraceId, thresholds, { drillTo: action.spanId }));
+    } else if (action.kind === "openOccurrences") {
+      pushView(new OccurrencesView(roots, timelineTraceId, action.groupKey, thresholds));
+    } else if (action.kind === "openDetail") {
+      pushView(new DetailScreen(roots, action.spanId, thresholds));
+    } else if (action.kind === "focusInTree") {
+      stack.popTo("tree");
+      treeView.reveal(action.spanId);
+    } else if (action.kind === "back") {
+      if (stack.all().length === 1) return;
+      stack.pop();
+    } else if (action.kind === "promptLine") {
+      const text = await screen.nextLine(action.label);
+      action.onResult(text);
+    } else if (action.kind === "copy") {
+      copyToClipboard(action.text, (message) => stack.active().notify(message));
+    }
+  };
+
+  render();
   try {
-    while (!state.quit) {
+    while (!quit) {
       const event = await screen.nextKey();
-      // Global quit, regardless of any overlay.
-      if (
-        event.key === "q" ||
-        (event.ctrl && (event.key === "c" || event.key === "C"))
-      ) {
-        state = { ...state, quit: true };
+      const fmt = formatKey(event);
+      if (fmt === "q" || fmt === "Ctrl+C") {
+        quit = true;
         break;
       }
-      // Vim-style page scroll — handled here because page size is
-      // viewport-dependent and the pure reducer doesn't know the
-      // viewport. We move the cursor by N rows; applyScroll then
-      // pages the viewport along with it.
-      const paged = paginate(state, event, opts.viewport);
-      if (paged) {
-        state = applyScroll(paged, opts.viewport);
-        screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
+      if (helpOpen) {
+        helpOpen = false;
+        render();
         continue;
       }
-      const { state: next, command } = handleKeyEx(state, event);
-      state = applyScroll(next, opts.viewport);
-      if (command?.kind === "search") {
-        const query = await screen.nextLine("Search: ");
-        state = applySearch(state, query, opts.viewport);
-      } else if (command?.kind === "copy") {
-        state = runCopy(state);
-      } else if (command?.kind === "toggleFollow") {
-        state = runToggleFollow(state, opts.followPath, startFollow, stopFollow);
+      if (fmt === "?") {
+        helpOpen = true;
+        render();
+        continue;
       }
-      state = applyScroll(state, opts.viewport);
-      screen.render(renderState(state, parsed.errors, opts.viewport, thresholds));
+      if (fmt === "f") {
+        toggleFollow();
+        render();
+        continue;
+      }
+      await dispatch(stack.active().handleKey(event, viewport));
+      render();
     }
   } finally {
-    stopFollow();
+    watcher.stop();
   }
 }
 
-function findNode(roots: TreeNode[], id: string): TreeNode | undefined {
-  const stack: TreeNode[] = [...roots];
-  while (stack.length > 0) {
-    const n = stack.pop()!;
-    if (n.id === id) return n;
-    for (const c of n.children) stack.push(c);
-  }
-  return undefined;
-}
-
-function applySearch(
-  state: ViewerState,
-  query: string,
-  viewport: { rows: number; cols: number },
-): ViewerState {
-  const trimmed = query.trim();
-  if (trimmed.length === 0) {
-    return { ...state, query: undefined, matches: undefined, matchIdx: undefined };
-  }
-  const matches = findMatches(state.roots, trimmed, state.viewportCols);
-  if (matches.length === 0) {
-    return {
-      ...state,
-      query: trimmed,
-      matches: [],
-      matchIdx: undefined,
-      messageBar: `no matches for "${trimmed}"`,
-    };
-  }
-  const withAncestors = expandAncestorsOf(state, matches);
-  const jumped: ViewerState = {
-    ...withAncestors,
-    query: trimmed,
-    matches,
-    matchIdx: 0,
-    cursorId: matches[0],
+/**
+ * The follow watcher. One reader, one offset cursor, alive for the whole
+ * session: its first read() IS the boot read, so nothing can land in a
+ * gap between a separate boot read and the watcher start, and `f`
+ * toggles POLLING only — the reader persists, so there is no accumulator
+ * to rewind (the two bugs that made the old follow dead on arrival). A
+ * file that SHRANK was rotated/truncated: start over from offset 0 with
+ * an empty accumulator; view setData cursor-fallback absorbs it.
+ */
+function makeFollowWatcher(
+  opts: RunViewerOpts,
+): { bootText: string; start(onText: (accum: string) => void): void; stop(): void } {
+  let reader = opts.followPath !== undefined ? makeAppendReader(opts.followPath, 0) : undefined;
+  let lastSize = opts.followPath !== undefined ? currentFileSize(opts.followPath) : 0;
+  let accum = reader !== undefined ? reader.read() : (opts.jsonl ?? "");
+  let pollTimer: ReturnType<typeof setInterval> | undefined;
+  // The callback is bound at start(), never at construction — so the
+  // watcher cannot reach into the shell before the shell finishes wiring
+  // itself up (a temporal-dead-zone hazard otherwise).
+  let onText: (accum: string) => void = () => {};
+  const poll = (): void => {
+    if (reader === undefined || opts.followPath === undefined) return;
+    const size = currentFileSize(opts.followPath);
+    if (size < lastSize) {
+      reader = makeAppendReader(opts.followPath, 0);
+      accum = "";
+    }
+    lastSize = size;
+    const chunk = reader.read();
+    if (chunk.length > 0) {
+      accum += chunk;
+      onText(accum);
+    }
   };
-  return applyScroll(jumped, viewport);
-}
-
-function runToggleFollow(
-  state: ViewerState,
-  followPath: string | undefined,
-  start: () => void,
-  stop: () => void,
-): ViewerState {
-  if (!followPath) {
-    // We only end up here when the viewer was launched without a
-    // file path (stdin pipe). There is no on-disk file to tail.
-    return { ...state, messageBar: "follow unavailable when reading from stdin" };
-  }
-  if (state.followOn) {
-    stop();
-    return { ...state, followOn: false, messageBar: "follow off" };
-  }
-  start();
-  return { ...state, followOn: true, messageBar: "follow on" };
-}
-
-function runCopy(state: ViewerState): ViewerState {
-  const node = findNode(state.roots, state.cursorId);
-  if (!node) return state;
-  const cb = detectClipboard();
-  if (!cb) return { ...state, messageBar: "clipboard unavailable" };
-  const payload = node.event ?? {
-    label: node.label,
-    traceId: node.traceId,
-    metrics: { duration: node.duration, tokens: node.tokens, cost: node.cost },
-  };
-  const text = JSON.stringify(payload, null, 2);
-  try {
-    cb.write(text);
-    return { ...state, messageBar: `copied ${text.length} bytes` };
-  } catch (e) {
-    return { ...state, messageBar: `copy failed: ${(e as Error).message}` };
-  }
-}
-
-// Re-parse the whole accumulated JSONL after a follow append. We
-// preserve the cursor id across reloads; if it has been removed,
-// fall back to the first trace root.
-function onFollowAppend(
-  prev: ViewerState,
-  jsonl: string,
-  viewport: { rows: number; cols: number },
-): ViewerState {
-  const parsed = parseStatelogJsonl(jsonl);
-  const roots = buildForest(parsed.events);
-  if (roots.length === 0) return prev;
-  const stillThere = findNode(roots, prev.cursorId);
-  const next: ViewerState = {
-    ...prev,
-    roots,
-    cursorId: stillThere ? prev.cursorId : roots[0].id,
-  };
-  return applyScroll(next, viewport);
-}
-
-// Vim-style page scroll. Returns the updated state if `event` is a
-// page-scroll key; otherwise undefined so the caller falls through
-// to the normal reducer.
-function paginate(
-  state: ViewerState,
-  event: KeyEvent,
-  viewport: { rows: number; cols: number },
-): ViewerState | undefined {
-  const fmt = formatKey(event);
-  const pageRows = Math.max(1, treePaneRows(viewport, state) - 1);
-  const halfPage = Math.max(1, Math.floor(pageRows / 2));
-  let delta = 0;
-  if (fmt === "Ctrl+F" || fmt === "PageDown") delta = +pageRows;
-  else if (fmt === "Ctrl+B" || fmt === "PageUp") delta = -pageRows;
-  else if (fmt === "Ctrl+D") delta = +halfPage;
-  else if (fmt === "Ctrl+U") delta = -halfPage;
-  else return undefined;
-  const rows = flattenVisibleRows(state);
-  if (rows.length === 0) return state;
-  const curIdx = Math.max(0, rows.findIndex((r) => r.node.id === state.cursorId));
-  const nextIdx = Math.min(rows.length - 1, Math.max(0, curIdx + delta));
-  return { ...state, cursorId: rows[nextIdx].node.id };
-}
-
-// Clamp and cursor-follow scrollTop based on the current visible
-// rows. Kept in `run.ts` so the pure `handleKey` reducer stays free
-// of viewport / rendering concerns.
-function applyScroll(
-  state: ViewerState,
-  viewport: { rows: number; cols: number },
-): ViewerState {
-  const rows = flattenVisibleRows(state);
-  const cursorIdx = rows.findIndex((r) => r.node.id === state.cursorId);
-  const visible = treePaneRows(viewport, state);
-  const clamped = clampScroll(state.scrollTop, rows.length, visible);
-  const scrollTop = cursorIdx >= 0
-    ? followCursor(clamped, cursorIdx, visible)
-    : clamped;
-  return scrollTop === state.scrollTop ? state : { ...state, scrollTop };
-}
-
-// Rows available to the tree after subtracting the bottom status
-// line (when present).
-function treePaneRows(
-  viewport: { rows: number; cols: number },
-  state: ViewerState,
-): number {
-  const reserved = hasStatusBar(state) ? 1 : 0;
-  return Math.max(1, viewport.rows - reserved);
-}
-
-function hasStatusBar(state: ViewerState): boolean {
-  return !!(
-    state.messageBar ||
-    (state.matches && state.matches.length > 0) ||
-    state.followOn ||
-    state.query
-  );
-}
-
-function renderState(
-  state: ViewerState,
-  parseErrors: ReadonlyArray<{ line: number }>,
-  viewport: { rows: number; cols: number },
-  thresholds: ViewerThresholds,
-): Element {
-  if (state.helpOpen) return renderHelpOverlay();
-
-  const treeRows = flattenVisibleRows(state);
-  const cursorIdx = treeRows.findIndex((r) => r.node.id === state.cursorId);
-  const treeHeight = treePaneRows(viewport, state);
-
-  const { element: tree } = scrollList<VisibleRow>({
-    items: treeRows,
-    cursorIdx,
-    scrollTop: state.scrollTop,
-    viewportRows: treeHeight,
-    renderItem: (vrow, isCursor) => {
-      const fg = colorFor(vrow.node);
-      return line(
-        renderRowText(vrow, isCursor, state.expanded.has(vrow.node.id), {
-          query: state.query,
-          thresholds,
-        }),
-        fg ? { fg } : undefined,
-      );
+  return {
+    bootText: accum,
+    start: (callback) => {
+      onText = callback;
+      if (opts.followPath === undefined || pollTimer !== undefined) return;
+      pollTimer = setInterval(poll, opts.followIntervalMs ?? 250);
     },
-  });
-
-  const parts: Element[] = [tree];
-
-  if (hasStatusBar(state)) {
-    parts.push(renderStatusBar(state));
-  }
-
-  if (parseErrors.length > 0) {
-    parts.push(line(
-      `${parseErrors.length} parse error(s) — first: line ${parseErrors[0].line}`,
-      { fg: "bright-red" },
-    ));
-  }
-
-  return column({ justifyContent: "flex-start" }, ...parts);
+    stop: () => {
+      if (pollTimer === undefined) return;
+      clearInterval(pollTimer);
+      pollTimer = undefined;
+    },
+  };
 }
 
-function renderStatusBar(state: ViewerState): Element {
-  const parts: string[] = [];
-  if (state.query && state.matches !== undefined) {
-    const total = state.matches.length;
-    const idx = (state.matchIdx ?? 0) + 1;
-    parts.push(total > 0 ? `match ${idx}/${total} — "${state.query}"` : `no matches — "${state.query}"`);
+function copyToClipboard(text: string, notify: (message: string) => void): void {
+  const clipboard = detectClipboard();
+  if (clipboard === null) {
+    notify("clipboard unavailable");
+    return;
   }
-  if (state.followOn) parts.push("[FOLLOW]");
-  if (state.messageBar) parts.push(state.messageBar);
-  return line(parts.join("  "), { fg: "gray" });
+  try {
+    clipboard.write(text);
+    notify("copied");
+  } catch (err) {
+    notify(`copy failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
-function renderHelpOverlay(): Element {
-  const out = ["Keybindings", "─────────────", ...helpLines()];
-  return lines(out);
-}
+export type { TreeNode };

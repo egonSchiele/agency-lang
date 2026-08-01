@@ -123,6 +123,7 @@ Pipeline and architecture:
 - `docs/dev/reply-attachments.md` — How tools hand images back to the model: attachToReply, branch-local queues, harvest/inject in the tool loop, marker-string API
 - `docs/dev/writing-optimizers.md` — How to write a new `eval optimize` strategy on `BaseOptimizer`: the contract, helpers, grading semantics, reflection feedback, registration, testing
 - `docs/dev/eval-grading.md` — The run directory is the interface between running and grading: why `eval run --grade` deliberately re-reads what it just wrote, errored-runs-score-zero, per-test graders and the override/fallback precedence, where loader tolerance lives
+- `docs/dev/logs-viewer.md` — The interactive statelog viewer: the component View classes and view stack, the timeline kernel (self-time, busyness shading, thread-label grouping), and the rebuilt follow mode
 - `docs/dev/eval-command-agents.md` — Running a CLI as the eval agent (`--agent-cmd`): the EvalTarget union, tokenize-then-substitute, the AGENCY_CONFIG_OVERRIDES/AGENCY_TRACE_ID statelog handoff, process-group kill lifecycle, and the two cost-cap feeds
 - `docs/dev/pkg-imports.md` — Importing Agency code from npm packages using `pkg::` prefix
 - `docs/dev/trace.md` — Execution traces capturing checkpoints at every step

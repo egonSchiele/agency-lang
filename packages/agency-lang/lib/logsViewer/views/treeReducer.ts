@@ -1,7 +1,7 @@
-import { ViewerState, TreeNode } from "./types.js";
-import { flattenVisibleRows, VisibleRow } from "./render.js";
-import type { KeyEvent } from "../tui/input/types.js";
-import { formatKey } from "../tui/input/format.js";
+import { ViewerState, TreeNode } from "../types.js";
+import { flattenVisibleRows, VisibleRow } from "../treeRows.js";
+import type { KeyEvent } from "../../tui/input/types.js";
+import { formatKey } from "../../tui/input/format.js";
 
 // Signals from the input layer back to the run loop. `requestSearch`
 // asks the loop to open the line-prompt for `/`. `requestCopy` asks

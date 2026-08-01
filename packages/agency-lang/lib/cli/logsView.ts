@@ -22,11 +22,11 @@ export async function logsView(
     console.error(`File not found: ${file}`);
     process.exit(1);
   }
-  const jsonl = fs.readFileSync(file, "utf8");
-  // Always pass `file` as `followPath` so the user can toggle follow
-  // mode at runtime with `f`. `initialFollow` only controls whether
-  // the watcher is started immediately at boot.
-  await runWith(jsonl, {
+  // No pre-read: the viewer reads the file through its own append
+  // reader, whose first read() is the boot read — the old separate
+  // pre-read left a gap the watcher never covered. `followPath` also
+  // lets the user toggle follow at runtime with `f`.
+  await runWith(undefined, {
     stdinIsPipe: false,
     followPath: file,
     initialFollow: cliOpts.follow ?? false,
@@ -34,7 +34,7 @@ export async function logsView(
 }
 
 async function runWith(
-  jsonl: string,
+  jsonl: string | undefined,
   opts: { stdinIsPipe: boolean; followPath?: string; initialFollow?: boolean },
 ): Promise<void> {
   // When stdin was used to feed the JSONL data we cannot also use it

@@ -28,8 +28,21 @@ const show = (p: ProtoState, title: string) => {
   for (const l of flatten(renderProto(p, { rows: 34, cols }))) console.log(l);
 };
 
-show(proto, "flame view");
+show(proto, "flame view (top level)");
+
+// drill into the longest top-level-ish span: move cursor to the deepest
+// big thing — here just walk down a few rows and drill twice
+const longest = proto.spans
+  .map((s, i) => ({ i, dur: s.end - s.start, depth: s.depth }))
+  .filter((x) => x.depth <= 2)
+  .sort((a, b) => b.dur - a.dur)[0];
+proto = { ...proto, cursor: longest?.i ?? 0 };
+proto = protoHandleKey(proto, { key: "enter" });
+show(proto, "flame view, drilled into the longest span (Enter)");
+
 proto = protoHandleKey(proto, { key: "t" });
-show(proto, "byName view");
-proto = protoHandleKey(proto, { key: "+" });
-show(proto, "byName, zoomed 2x around selection");
+show(proto, "byName view of the drilled subtree");
+
+proto = protoHandleKey(proto, { key: "left" });
+proto = protoHandleKey(proto, { key: "t" });
+show(proto, "byName view, back at top (←, then t)");

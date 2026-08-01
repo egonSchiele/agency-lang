@@ -437,17 +437,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
   const logsCmd = program
     .command("logs")
     .description("Inspect StateLog output")
-    // `view` is the default: `agency logs <file>` behaves like
-    // `agency logs view <file>`. The argument is optional so bare
-    // `agency logs` (no subcommand, no file) falls through to help.
-    .argument("[file]", "Path to a .statelog.jsonl file, or '-' for stdin")
+    // `view` is the default for a single statelog file: `agency logs
+    // <file>` behaves like `agency logs view <file>`. Run directories,
+    // directories of run directories, or several paths open the
+    // cross-run explorer instead. The argument is optional so bare
+    // `agency logs` (no subcommand, no paths) falls through to help.
+    .argument("[files...]", "Statelog files ('-' for stdin), run directories, or directories of runs")
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
-    .action(async (file: string | undefined, options: { follow?: boolean }) => {
-      if (!file) {
+    .option("--csv", "Print the runs table as CSV to stdout instead of opening the explorer")
+    .action(async (files: string[], options: { follow?: boolean; csv?: boolean }) => {
+      if (files.length === 0) {
         logsCmd.help();
         return;
       }
-      await logsView(file, { follow: options.follow });
+      await logsView(files, { follow: options.follow, csv: options.csv });
     });
 
   logsCmd
@@ -596,6 +599,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--input <id>", "Which input's statelog, when the run has several")
     .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
     .action(async (runDir: string, opts: { input?: string; follow?: boolean }) => {
+      // A whole run without --input opens the explorer's per-test
+      // table; --input (or an input dir / statelog file) keeps the
+      // straight-to-viewer path.
+      if (opts.input === undefined && fs.existsSync(path.join(path.resolve(runDir), "summary.json"))) {
+        await logsView([runDir], { follow: opts.follow });
+        return;
+      }
       let statelogPath: string;
       try {
         statelogPath = resolveRunStatelog(runDir, opts.input);

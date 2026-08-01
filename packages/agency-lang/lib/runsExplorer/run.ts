@@ -18,7 +18,7 @@ import { runViewer } from "../logsViewer/run.js";
 import { Screen } from "../tui/screen.js";
 import type { InputSource, KeyEvent } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
-import { createRunsLoader, type LoaderEvent } from "./loader.js";
+import { createRunsLoader, type LoaderEvent, type RunsLoader } from "./loader.js";
 import type { RunRow } from "./rows.js";
 import type { Source } from "./sources.js";
 import { exportCsv, csvRowsFromProjection } from "./csv.js";
@@ -51,7 +51,7 @@ export async function runExplorer(options: ExplorerOptions): Promise<void> {
 
 class ExplorerShell {
   private readonly screen: Screen;
-  private readonly loader = createRunsLoader(this.options.sources);
+  private readonly loader: RunsLoader;
   private readonly variants: Record<Variant, ExplorerView> = {
     runs: new RunsTableView(),
     compare: new CompareView(),
@@ -65,6 +65,7 @@ class ExplorerShell {
   private pendingKey: Promise<KeyEvent> | null = null;
 
   constructor(private readonly options: ExplorerOptions) {
+    this.loader = createRunsLoader(options.sources);
     this.screen = new Screen({
       input: options.input,
       output: options.output,

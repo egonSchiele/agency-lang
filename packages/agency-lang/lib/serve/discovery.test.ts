@@ -10,7 +10,7 @@ describe("discoverExports", () => {
         name: "publicFn",
         module: "test",
         fn: async () => {},
-        params: [],
+        params: [{ name: "x" }, { name: "y" }],
         toolDefinition: {
           name: "publicFn",
           description: "A public fn",
@@ -44,6 +44,34 @@ describe("discoverExports", () => {
     const functions = exports.filter((e) => e.kind === "function");
     expect(functions).toHaveLength(1);
     expect(functions[0].name).toBe("publicFn");
+    expect(functions[0].kind === "function" && functions[0].parameters).toEqual([
+      { name: "x" },
+      { name: "y" },
+    ]);
+  });
+
+  it("excludes bound params from a function's parameters", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    AgencyFunction.create(
+      {
+        name: "boundFn",
+        module: "test",
+        fn: async () => {},
+        params: [{ name: "visible" }, { name: "hidden", isBound: true }],
+        toolDefinition: { name: "boundFn", description: "", schema: null },
+        exported: true,
+      },
+      registry,
+    );
+
+    const exports = discoverExports({
+      toolRegistry: registry,
+      moduleExports: {},
+      moduleId: "test",
+    });
+    const fn = exports.find((e) => e.name === "boundFn");
+    // Only the unbound param is caller-facing.
+    expect(fn && fn.kind === "function" && fn.parameters).toEqual([{ name: "visible" }]);
   });
 
   it("filters by moduleId", () => {

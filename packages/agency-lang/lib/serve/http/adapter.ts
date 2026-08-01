@@ -153,6 +153,7 @@ export function createHttpHandler(config: HandlerConfig): (
           functions: Object.values(functions).map((f) => ({
             name: f.name,
             description: f.description,
+            parameters: f.parameters.map((p) => p.name),
             // Retry-safety markers, mirroring the MCP adapter's
             // destructiveHint/idempotentHint. Only the set marker appears.
             destructive: f.agencyFunction.markers?.destructive ?? false,

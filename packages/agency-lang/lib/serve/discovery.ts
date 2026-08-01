@@ -58,6 +58,11 @@ function toExportedFunction(
     kind: "function",
     name: fn.name,
     description: fn.toolDefinition!.description,
+    // Only unbound params are caller-facing — bound params are filled at
+    // definition time and rejected if sent. Matches `logRoutes` in adapter.ts.
+    parameters: fn.params
+      .filter((param) => !param.isBound)
+      .map((param) => ({ name: param.name })),
     agencyFunction: fn,
     interruptEffects,
     invoke: makeInvoker(fn, moduleInvoke),

@@ -5,6 +5,9 @@ export type ExportedFunction = {
   kind: "function";
   name: string;
   description: string;
+  /** Names of the function's parameters, in declaration order — mirrors
+   *  `ExportedNode.parameters` so the manifest describes both the same way. */
+  parameters: Array<{ name: string }>;
   agencyFunction: AgencyFunction;
   interruptEffects: InterruptEffect[];
   /**

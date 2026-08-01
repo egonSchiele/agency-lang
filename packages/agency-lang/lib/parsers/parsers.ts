@@ -4549,7 +4549,7 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
 });
 
 const BODY_DECLARATION_MESSAGE =
-  "`node` and `def` declarations are only legal at the top level of a file.";
+  "`node`, `def` and `function` declarations are only legal at the top level of a file.";
 
 /**
  * Decline a statement that starts like a `node` or `def` declaration.
@@ -4581,7 +4581,7 @@ const BODY_DECLARATION_MESSAGE =
  */
 const bodyDeclarationParser: Parser<never> = (input: string) => {
   const probe = seqC(
-    or(str("node"), str("def")),
+    or(str("node"), str("def"), str("function")),
     many1(space),
     many1WithJoin(varNameChar),
     optionalSpaces,

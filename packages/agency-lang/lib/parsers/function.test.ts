@@ -3647,3 +3647,40 @@ describe("functionParameterParser optional params (nullish unification)", () => 
     }
   });
 });
+
+function program(src: string) {
+  const parsed = parseAgency(src, {}, false);
+  if (!parsed.success) throw new Error(`expected a successful parse, got: ${parsed.message}`);
+  return parsed.result;
+}
+
+describe("nested declaration probe", () => {
+  const nested = (kw: string) => `node main() {
+  ${kw} inner() { print(1) }
+  print("x")
+}`;
+
+  it("rejects a nested `function` declaration", () => {
+    const parsed = parseAgency(nested("function"), {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/only legal at the top level/);
+  });
+
+  it("still rejects a nested `def` declaration", () => {
+    const parsed = parseAgency(nested("def"), {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/only legal at the top level/);
+  });
+
+  it("names every keyword it catches in the message", () => {
+    const parsed = parseAgency(nested("function"), {}, false);
+    if (parsed.success) throw new Error("expected a failed parse");
+    expect(parsed.message).toMatch(/function/);
+  });
+
+  it("still accepts a top-level declaration", () => {
+    expect(parseAgency(`def inner() { print(1) }`, {}, false).success).toBe(true);
+  });
+});

@@ -1,6 +1,16 @@
 {
   "tests": [
     {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"0,1,2,3,4 | 2,3,4 | \"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "loopHeader",
       "description": "3..6 yields three values summing to 12",
       "input": "",

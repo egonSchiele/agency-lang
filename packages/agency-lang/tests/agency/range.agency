@@ -1,3 +1,10 @@
+node main() {
+  let a = range(5)
+  let b = range(2, 5)
+  let c = range(0)
+  return a + " | " + b + " | " + c
+}
+
 // 3..6 is exclusive, so a loop over it runs three times summing to 12.
 // Returning both numbers catches two failure modes with one assertion: a
 // collapsed range shows up as count 1, and an inclusive end shows up as 15.

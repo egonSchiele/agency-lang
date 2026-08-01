@@ -151,8 +151,11 @@ describe("matchBlockParserCase", () => {
         },
       },
     },
+    // `x -> y` used to be listed here as a failure. `->` is now an accepted
+    // arm arrow, normalized to `=>` by the formatter; see the "arm arrow"
+    // block below. A genuinely unknown arrow still fails.
     {
-      input: "x -> y",
+      input: "x ~> y",
       expected: { success: false },
     },
     {
@@ -983,5 +986,39 @@ describe("type patterns in match arms", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.result.caseValue).toBe("_");
+  });
+});
+
+import { parseAgency } from "@/parser.js";
+import { formatSource } from "@/formatter.js";
+
+function program(src: string) {
+  const parsed = parseAgency(src, {}, false);
+  if (!parsed.success) throw new Error(`expected a successful parse, got: ${parsed.message}`);
+  return parsed.result;
+}
+
+describe("arm arrow", () => {
+  it("accepts -> in a match arm", () => {
+    expect(program(`node main() { match (1) { 1 -> print("one") _ -> print("no") } }`))
+      .toEqualWithoutLoc(program(`node main() { match (1) { 1 => print("one") _ => print("no") } }`));
+  });
+
+  it("normalizes -> to => when formatted", () => {
+    const formatted = formatSource(`node main() { match (1) { 1 -> print("one") _ -> print("no") } }`);
+    expect(formatted).toContain("=>");
+    expect(formatted).not.toMatch(/\d\s*->/);
+  });
+
+  // The risk here is MISparsing, not failing to parse: `>-` next to the arrow.
+  it("does not confuse a guard ending in a negative comparison with the arrow", () => {
+    expect(program(`node main() { match (1) { _ if (a >-3) -> print("yes") } }`))
+      .toEqualWithoutLoc(program(`node main() { match (1) { _ if (a >-3) => print("yes") } }`));
+  });
+
+  // Where the two edits in this task meet.
+  it("accepts an inline block as an arm body with either arrow", () => {
+    expect(program(`node main() { match (1) { 1 -> map(xs, \\n => n * 2) _ -> [] } }`))
+      .toEqualWithoutLoc(program(`node main() { match (1) { 1 => map(xs, \\n -> n * 2) _ => [] } }`));
   });
 });

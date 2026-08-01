@@ -3792,7 +3792,7 @@ export const inlineBlockParser: Parser<BlockArgument> = memo(
       optionalSpaces,
       capture(blockParamsParser, "params"),
       optionalSpaces,
-      str("->"),
+      or(str("->"), str("=>")),
       optionalSpaces,
       capture(lazy(() => exprParser), "expr"),
     ),
@@ -3817,12 +3817,21 @@ export const defaultCaseParser: Parser<DefaultCase> = map(
 );
 
 // The arm lookahead, shared by every alternative: an arm LHS is only
-// accepted when the next non-space token is `=>` or a guard `if`. This
+// accepted when the next non-space token is an arrow or a guard `if`. This
 // prevents `v` from being parsed as a pattern when the user wrote `v > 5 =>`
 // in the `match(x is pat)` guard form.
+//
+// Both arrows are accepted here for the same reason both are accepted at the
+// arm itself: miss one and the LHS silently falls through to another
+// alternative rather than failing, so `_ -> x` would parse as a variable
+// pattern named `_` instead of the default case.
 function armFollowsPattern(rest: string): boolean {
   const trimmed = rest.replace(/^[ \t]+/, "");
-  return trimmed.startsWith("=>") || /^if[^A-Za-z0-9_]/.test(trimmed);
+  return (
+    trimmed.startsWith("=>") ||
+    trimmed.startsWith("->") ||
+    /^if[^A-Za-z0-9_]/.test(trimmed)
+  );
 }
 
 // Wrap an arm-LHS alternative so it only wins when the lookahead holds.
@@ -3965,7 +3974,7 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
       ),
     ),
     optionalSpaces,
-    str("=>"),
+    or(str("=>"), str("->")),
     optionalSpaces,
     capture(
       or(

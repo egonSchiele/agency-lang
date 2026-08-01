@@ -39,7 +39,7 @@ parser directly:
 
 | Written by an agent | Parses today? |
 |---|---|
-| `const x = 5 // trailing comment` | yes, correctly |
+| `const x = 5 // trailing comment` | yes, but `fmt` relocates it — see below |
 | `const x = await llm("hi")` | yes, `await` discarded |
 | `for (x of xs)` | yes |
 | `for (const x in xs)` | yes |
@@ -50,11 +50,48 @@ parser directly:
 
 Two findings from that pass are worth recording:
 
-**The trailing-comment documentation is wrong.** `docs/site/guide/basic-syntax.md`
-states that a comment cannot follow code on the same line and gives
-`const x = 5 // this is a comment` as an example of what is *not* allowed. It
-parses fine, and has for some time. An agent reading the guide is being told to
-avoid something that works. This spec fixes the doc.
+**Trailing comments parse, but `agency fmt` relocates them.**
+`docs/site/guide/basic-syntax.md` says a comment cannot follow code on the same
+line and gives `const x = 5 // this is a comment` as an example of what is *not*
+allowed. That advice is sound, but the stated reason is inaccurate: the line
+parses without error and the comment text is never lost. What happens instead is
+that the comment becomes a standalone comment node, and the formatter renders it
+on its own line *above the following item*:
+
+```ts
+// written
+const x = 5 // trailing on a const
+const y = 6
+
+// after agency fmt
+const x = 5
+// trailing on a const
+const y = 6
+```
+
+The same thing happens for object type members, array items, object literal
+fields, and match arms.
+
+The cause is structural, not a formatter bug. Trailing comments have nowhere to
+live in the AST. Comments are carried as *trivia* anchored by index between
+items — `lib/types/typeHints.ts:255-258` documents `anchorIndex: 0` as "before
+the first property", `anchorIndex: N` as "between", and
+`anchorIndex: properties.length` as "after the last property". There is no field
+anywhere expressing "this comment sits at the end of this line", and
+`emitTriviaAt` (`lib/backends/agencyGenerator.ts:774`) can only push whole
+lines. Object types, array literals, and object literals all share that one
+helper, which is why all three behave identically.
+
+This matters more than it first appears. A relocated comment can change what it
+appears to describe: `const x = 5 // explains x` formats into a comment sitting
+directly above `const y = 6`, where it now reads as explaining `y`. A comment
+that silently changes meaning when the file is formatted is worse than one
+rejected outright.
+
+So the guide should keep telling people not to write them. It should correct
+*why*, and warn about the relocation. Making trailing comments genuinely work is
+a real feature — it needs a trailing-comment slot on statements plus generator
+support — and is out of scope here. It is recorded in the last section.
 
 **`[3..6]` silently misparses today.** It does not error. `numberParser`
 (`lib/parsers/parsers.ts:600`) builds a number's text from
@@ -355,8 +392,11 @@ byte-identical trees.
 
 ## Documentation
 
-- `docs/site/guide/basic-syntax.md` — add the accepted variations, and **remove
-  the incorrect claim that a comment cannot follow code on the same line.**
+- `docs/site/guide/basic-syntax.md` — add the accepted variations, and **correct
+  the stated reason for the trailing-comment rule.** Keep the advice; replace
+  "not allowed" with the truth: it parses, but `agency fmt` moves the comment
+  onto its own line above the next item, which can change what it appears to
+  describe.
 - `docs/site/guide/functions.md` — mention `function` and `->` as accepted
   spellings that `agency fmt` normalizes.
 - `docs/site/guide/blocks.md` and `match-expressions.md` — note that both arrows
@@ -385,6 +425,14 @@ These came up while brainstorming and were deliberately deferred:
   it fails at run time rather than compile time — that is worth its own look.
 - **C-style `for (let i = 0; i < n; i++)`.** Lowers to a `while` loop. Common
   from agents, but a larger transform.
+- **Real trailing-comment support.** Today a trailing comment parses and then
+  gets moved onto its own line by `fmt`, as described in the Background. Making
+  it stay put needs a trailing-comment slot on statements and list items, plus
+  generator support to render it at end of line — a change to the AST shape
+  rather than a spelling the AST can forget, which puts it outside the rule this
+  spec follows. Worth doing on its own: agents write trailing comments
+  constantly, and the current silent relocation can change what a comment
+  appears to describe.
 - **`switch`/`case`.** Rejected, not deferred. The semantics differ from `match`
   (fallthrough, exhaustiveness), so an agent reaching for `switch` is probably
   reasoning about the wrong construct and should be told so.

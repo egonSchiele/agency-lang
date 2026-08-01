@@ -262,7 +262,9 @@ export type ExplorerAction =
 export class ExplorerProto {
   private variant: Variant = "table";
   private sort: SortKey = "date";
+  private sortAsc = false;
   private group: GroupKey = "none";
+  private expandedGroups: string[] = [];
   private cursor = 0;
   private scrollTop = 0;
   private screen: "main" | "info" | "logs" = "main";
@@ -298,13 +300,20 @@ export class ExplorerProto {
     else if (fmt === "t") this.variant = this.variant === "table" ? "compare" : this.variant === "compare" ? "trend" : "table";
     else if (fmt === "T") this.variant = this.variant === "table" ? "trend" : this.variant === "trend" ? "compare" : "table";
     else if (fmt === "s") this.sort = this.sort === "date" ? "score" : this.sort === "score" ? "cost" : this.sort === "cost" ? "duration" : "date";
+    else if (fmt === "S") this.sortAsc = !this.sortAsc;
     else if (fmt === "i") this.screen = "info";
     else if (fmt === "e") this.exportCsv();
     else if (fmt === "Enter" || fmt === "Right" || fmt === "l") {
-      const row = this.selectedRun();
-      if (row === undefined) return { kind: "none" };
-      if (row.logs.length === 1) {
-        return { kind: "openLog", path: row.logs[0].path, title: `${row.id} / ${row.logs[0].label}` };
+      const item = this.visibleRows()[this.cursor];
+      if (item === undefined) return { kind: "none" };
+      if ("groupLabel" in item) {
+        this.expandedGroups = item.expanded
+          ? this.expandedGroups.filter((g) => g !== item.groupLabel)
+          : [...this.expandedGroups, item.groupLabel];
+        return { kind: "none" };
+      }
+      if (item.logs.length === 1) {
+        return { kind: "openLog", path: item.logs[0].path, title: `${item.id} / ${item.logs[0].label}` };
       }
       this.screen = "logs";
       this.logsCursor = 0;
@@ -322,20 +331,31 @@ export class ExplorerProto {
 
   // ── table variant ────────────────────────────────────────────────────
 
-  private visibleRows(): (RunRow | { groupLabel: string; rows: RunRow[] })[] {
+  private visibleRows(): (RunRow | { groupLabel: string; rows: RunRow[]; expanded: boolean })[] {
     const sorted = [...this.rows].sort((a, b) => this.compare(a, b));
     if (this.group === "none" || this.variant !== "table") return sorted;
     const key = this.group === "agent" ? (r: RunRow) => r.agent : (r: RunRow) => r.suite;
     const byKey: Record<string, RunRow[]> = Object.create(null);
     for (const r of sorted) (byKey[key(r)] ??= []).push(r);
-    return Object.entries(byKey).map(([groupLabel, rows]) => ({ groupLabel, rows }));
+    // Group headers with their member runs nested beneath when expanded —
+    // Enter on a header toggles it (screenshot feedback: there was no way
+    // to see "just those 14 runs").
+    const out: (RunRow | { groupLabel: string; rows: RunRow[]; expanded: boolean })[] = [];
+    for (const [groupLabel, rows] of Object.entries(byKey)) {
+      const expanded = this.expandedGroups.includes(groupLabel);
+      out.push({ groupLabel, rows, expanded });
+      if (expanded) out.push(...rows);
+    }
+    return out;
   }
 
   private compare(a: RunRow, b: RunRow): number {
-    if (this.sort === "date") return (b.dateMs ?? 0) - (a.dateMs ?? 0);
-    if (this.sort === "score") return (b.score ?? -1) - (a.score ?? -1);
-    if (this.sort === "cost") return b.costUsd - a.costUsd;
-    return b.durationMs - a.durationMs;
+    let out: number;
+    if (this.sort === "date") out = (b.dateMs ?? 0) - (a.dateMs ?? 0);
+    else if (this.sort === "score") out = (b.score ?? -1) - (a.score ?? -1);
+    else if (this.sort === "cost") out = b.costUsd - a.costUsd;
+    else out = b.durationMs - a.durationMs;
+    return this.sortAsc ? -out : out;
   }
 
   private selectedRun(): RunRow | undefined {
@@ -344,13 +364,31 @@ export class ExplorerProto {
     return "groupLabel" in v ? v.rows[0] : v;
   }
 
+  /** Header segments: the active sort column is highlighted and carries a
+   *  direction arrow (screenshot feedback). */
+  private renderHeader(): Element {
+    const arrow = this.sortAsc ? "▲" : "▼";
+    const col = (label: string, width: number, sortKey?: SortKey) => {
+      const active = sortKey !== undefined && this.sort === sortKey;
+      return seg(active ? `${label}${arrow}` : label, width, active ? "bright-white" : "gray");
+    };
+    return tuiRow({ height: 1 },
+      col("  date", 14, "date"),
+      col("agent", 24),
+      col("suite", 22),
+      col("score", 7, "score"),
+      col("pass", 6),
+      col("cost", 9, "cost"),
+      col("time", 8, "duration"),
+      col("models", 42),
+    );
+  }
+
   private renderTable(viewport: { rows: number; cols: number }): Element {
     const visible = this.visibleRows();
     const bodyRows = Math.max(1, viewport.rows - 4);
     if (this.cursor < this.scrollTop) this.scrollTop = this.cursor;
     if (this.cursor >= this.scrollTop + bodyRows) this.scrollTop = this.cursor - bodyRows + 1;
-    const header =
-      `  ${pad("date", 12)}${pad("agent", 24)}${pad("suite", 22)}${pad("score", 7)}${pad("pass", 6)}${pad("cost", 9)}${pad("time", 8)}models`;
     const { element: body } = scrollList({
       items: visible as unknown[],
       cursorIdx: this.cursor,
@@ -359,11 +397,11 @@ export class ExplorerProto {
       renderItem: (item, isCursor) => this.renderTableRow(item as any, isCursor),
     });
     return column({ justifyContent: "flex-start" },
-      line(`RUNS  ${this.rows.length} run(s)  sort:${this.sort}  group:${this.group}`, { fg: "bright-white" }),
-      line(header, { fg: "gray" }),
+      line(`RUNS  ${this.rows.length} run(s)  sort:${this.sort}${this.sortAsc ? " (asc)" : ""}  group:${this.group}`, { fg: "bright-white" }),
+      this.renderHeader(),
       body,
       line(this.footer(), { fg: "bright-white" }),
-      line(bottomHints("t/T views  s sort  b group  g/G top/bottom  Enter open  i info  e export  Esc back  q quit", "table", viewport.cols), { fg: "gray" }),
+      line(bottomHints("t/T views  s sort  S asc/desc  b group (Enter expands)  Enter open  i info  e export  q quit", "table", viewport.cols), { fg: "gray" }),
     );
   }
 
@@ -372,7 +410,7 @@ export class ExplorerProto {
    *  statelog rows. The cursor row keeps the SAME text colors and adds a
    *  background highlight instead (owner request). Every segment has an
    *  explicit width — the fix for the column-drift bug. */
-  private renderTableRow(item: RunRow | { groupLabel: string; rows: RunRow[] }, isCursor: boolean): Element {
+  private renderTableRow(item: RunRow | { groupLabel: string; rows: RunRow[]; expanded: boolean }, isCursor: boolean): Element {
     const bg = isCursor ? CURSOR_BG : undefined;
     const marker = isCursor ? "▶ " : "  ";
     if ("groupLabel" in item) {
@@ -382,15 +420,31 @@ export class ExplorerProto {
         ? (scored.reduce((s, r) => s + (r.score ?? 0), 0) / scored.length).toFixed(2)
         : "—";
       const cost = rows.reduce((s, r) => s + r.costUsd, 0);
-      const text = `${marker}${pad(`(${rows.length})`, 12)}${pad(clip(item.groupLabel, 44), 46)}${pad(mean, 7)}${pad("", 6)}${pad(`$${cost.toFixed(2)}`, 9)}`;
-      return line(text, { fg: this.agentColor(item.groupLabel) ?? "bright-cyan", ...(bg ? { bg } : {}) });
+      const label = `${clip(item.groupLabel, 32)} (${rows.length} runs)`;
+      const groupColor = this.agentColor(item.groupLabel) ?? "bright-cyan";
+      const meanColor = mean === "—" ? "gray"
+        : Number(mean) >= 0.99 ? "green" : Number(mean) <= 0.01 ? "bright-red" : "yellow";
+      // The label sits under the column it groups by; date holds only the
+      // expand arrow (the count under "date" was the confusing part).
+      const agentCell = this.group === "agent" ? label : "";
+      const suiteCell = this.group === "suite" ? label : "";
+      return tuiRow({ height: 1 },
+        seg(`${marker}${item.expanded ? "▾" : "▸"}`, 14, groupColor, bg),
+        seg(agentCell, 24, groupColor, bg),
+        seg(suiteCell, 22, groupColor, bg),
+        seg(mean, 7, meanColor, bg),
+        seg("", 6, undefined, bg),
+        seg(`$${cost.toFixed(2)}`, 9, costColor(cost, DEFAULT_THRESHOLDS), bg),
+        seg("", 8, undefined, bg),
+        seg("", 42, undefined, bg),
+      );
     }
     const r = item;
     const dim = r.source === "statelog";
     const scoreColor = r.score === undefined ? "gray"
       : r.score >= 0.99 ? "green" : r.score <= 0.01 ? "bright-red" : "yellow";
     const passColor = r.tests > 0 && r.passed === r.tests ? "green" : r.tests > 0 ? "bright-red" : "gray";
-    return tuiRow(
+    return tuiRow({ height: 1 },
       seg(`${marker}${fmtDate(r.dateMs)}`, 14, "gray", bg),
       seg(clip(r.agent, 22), 24, this.agentColor(r.agent) ?? (dim ? "gray" : undefined), bg),
       seg(clip(r.suite, 20), 22, dim ? "gray" : undefined, bg),
@@ -440,7 +494,7 @@ export class ExplorerProto {
         const meanColor = mean >= 0.99 ? "green" : mean <= 0.01 ? "bright-red" : "yellow";
         return seg(`${mean.toFixed(2)}  $${cost.toFixed(2)}  (${cell.length} run${cell.length === 1 ? "" : "s"})`, 26, meanColor);
       });
-      rows.push(tuiRow(seg(`  ${clip(agent, 24)}`, 28, this.agentColor(agent)), ...cells));
+      rows.push(tuiRow({ height: 1 }, seg(`  ${clip(agent, 24)}`, 28, this.agentColor(agent)), ...cells));
     }
     if (agents.length === 0) rows.push(line("  (no scored runs — comparing needs eval runs)"));
     return column({ justifyContent: "flex-start" },
@@ -457,20 +511,28 @@ export class ExplorerProto {
     const dated = this.rows
       .filter((r) => r.dateMs !== undefined)
       .sort((a, b) => (a.dateMs ?? 0) - (b.dateMs ?? 0));
-    const out: string[] = [];
-    const width = Math.max(10, Math.min(40, viewport.cols - 46));
-    for (const r of dated.slice(-Math.max(1, viewport.rows - 4))) {
+    const barWidth = Math.max(10, Math.min(40, viewport.cols - 64));
+    const rowEls: Element[] = [];
+    for (const r of dated.slice(-Math.max(1, viewport.rows - 5))) {
+      const scoreColor = r.score === undefined ? "gray"
+        : r.score >= 0.99 ? "green" : r.score <= 0.01 ? "bright-red" : "yellow";
       const scoreBar = r.score !== undefined
-        ? "█".repeat(Math.max(1, Math.round(r.score * 10))).padEnd(10)
-        : pad("—", 10);
-      const costBar = "▄".repeat(Math.min(width, Math.max(r.costUsd > 0 ? 1 : 0, Math.round(r.costUsd * 4))));
-      out.push(`  ${pad(fmtDate(r.dateMs), 12)}${pad(clip(r.agent, 20), 22)}${scoreBar} ${pad(`$${r.costUsd.toFixed(2)}`, 8)}${costBar}`);
+        ? "█".repeat(Math.max(1, Math.round(r.score * 10)))
+        : "—";
+      const costBar = "▄".repeat(Math.min(barWidth, Math.max(r.costUsd > 0 ? 1 : 0, Math.round(r.costUsd * 4))));
+      rowEls.push(tuiRow({ height: 1 },
+        seg(`  ${fmtDate(r.dateMs)}`, 14, "gray"),
+        seg(clip(r.agent, 20), 22, this.agentColor(r.agent)),
+        seg(scoreBar, 11, scoreColor),
+        seg(`$${r.costUsd.toFixed(2)}`, 8, costColor(r.costUsd, DEFAULT_THRESHOLDS)),
+        seg(costBar, barWidth, costColor(r.costUsd, DEFAULT_THRESHOLDS) ?? "yellow"),
+      ));
     }
     return column({ justifyContent: "flex-start" },
       line(`TREND  every run in time order — is it getting better or cheaper?`, { fg: "bright-white" }),
       line(`  score bar: █ = 0.1 (full bar = perfect)   cost bar: ▄ ≈ $0.25`, { fg: "gray" }),
       line(`  ${pad("date", 12)}${pad("agent", 22)}${pad("score", 11)}${pad("cost", 8)}`, { fg: "gray" }),
-      ...out.map((t) => line(t)),
+      ...rowEls,
       line(bottomHints("t/T next/prev view  q quit", "trend", viewport.cols), { fg: "gray" }),
     );
   }
@@ -534,7 +596,7 @@ export class ExplorerProto {
       const scoreColor = l.score === undefined ? "gray"
         : l.score >= 0.99 ? "green" : l.score <= 0.01 ? "bright-red" : "yellow";
       const statusColor = l.status === "ok" ? "green" : l.status === "error" ? "bright-red" : "gray";
-      return tuiRow(
+      return tuiRow({ height: 1 },
         seg(`${isCursor ? "▶ " : "  "}${fmtDate(r?.dateMs)}`, 14, "gray", bg),
         seg(clip(l.label, 22), 24, this.agentColor(r?.agent ?? "") ?? undefined, bg),
         seg("", 22, undefined, bg),

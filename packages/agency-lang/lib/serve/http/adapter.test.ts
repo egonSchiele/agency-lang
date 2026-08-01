@@ -35,6 +35,7 @@ function makeExports(): {
       kind: "function",
       name: "add",
       description: "Add two numbers",
+      parameters: [{ name: "a" }, { name: "b" }],
       agencyFunction: addFn,
       interruptEffects: [],
       invoke: (namedArgs) => addFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
@@ -115,6 +116,7 @@ describe("HTTP adapter", () => {
     const body = result.body as any;
     expect(body.functions).toHaveLength(1);
     expect(body.functions[0].name).toBe("add");
+    expect(body.functions[0].parameters).toEqual(["a", "b"]);
     expect(body.functions[0].interruptEffects).toEqual([]);
     expect(body.nodes).toHaveLength(1);
     expect(body.nodes[0].name).toBe("main");
@@ -154,6 +156,7 @@ describe("HTTP adapter", () => {
       kind: "function",
       name,
       description: name,
+      parameters: [],
       agencyFunction: mk(name, markers),
       interruptEffects: [],
       invoke: (namedArgs: Record<string, unknown>) =>
@@ -240,6 +243,7 @@ describe("HTTP adapter", () => {
           kind: "function",
           name: "deploy",
           description: "Deploy",
+          parameters: [],
           agencyFunction: deployFn,
           interruptEffects: [{ effect: "myapp::deploy" }],
           invoke: (namedArgs) => deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
@@ -359,6 +363,7 @@ describe("startHttpServer auth and host validation", () => {
         kind: "function",
         name: "fail",
         description: "",
+        parameters: [],
         agencyFunction: failFn,
         interruptEffects: [],
         invoke: (namedArgs) => failFn.invoke({ type: "named", positionalArgs: [], namedArgs }),

@@ -21,6 +21,7 @@ export const __toolRegistry = {
     name: "add",
     module: "agent",
     exported: true,
+    params: [{ name: "a" }, { name: "b" }],
     toolDefinition: { name: "add", description: "Add two numbers", schema: null },
   },
 };

@@ -10,7 +10,7 @@ describe("discoverExports", () => {
         name: "publicFn",
         module: "test",
         fn: async () => {},
-        params: [],
+        params: [{ name: "x" }, { name: "y" }],
         toolDefinition: {
           name: "publicFn",
           description: "A public fn",
@@ -44,6 +44,10 @@ describe("discoverExports", () => {
     const functions = exports.filter((e) => e.kind === "function");
     expect(functions).toHaveLength(1);
     expect(functions[0].name).toBe("publicFn");
+    expect(functions[0].kind === "function" && functions[0].parameters).toEqual([
+      { name: "x" },
+      { name: "y" },
+    ]);
   });
 
   it("filters by moduleId", () => {

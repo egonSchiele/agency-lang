@@ -58,6 +58,7 @@ function toExportedFunction(
     kind: "function",
     name: fn.name,
     description: fn.toolDefinition!.description,
+    parameters: fn.params.map((param) => ({ name: param.name })),
     agencyFunction: fn,
     interruptEffects,
     invoke: makeInvoker(fn, moduleInvoke),

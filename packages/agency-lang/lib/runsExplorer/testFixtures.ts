@@ -194,6 +194,8 @@ export function writeLegacyRun(baseDir: string, runId: string = "legacy-run"): s
 export function writeKilledRun(baseDir: string, runId: string = "killed-run"): string {
   return writeRunDir(baseDir, {
     runId,
+    // Command agents record the command string as their label too.
+    agentLabel: "claude -p {task}",
     agentCommand: "claude -p {task}",
     inputs: [
       {

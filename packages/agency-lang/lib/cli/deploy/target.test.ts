@@ -2,63 +2,85 @@ import { describe, it, expect } from "vitest";
 import { resolveDeployTarget } from "./target.js";
 
 describe("resolveDeployTarget", () => {
-  it("reads host/project/apiKey from agency.json log by default", () => {
+  it("reads host/project from agency.json log and the key from $STATELOG_API_KEY", () => {
     const result = resolveDeployTarget(
-      { host: "https://statelog.example", projectId: "proj", apiKey: "key-in-config" },
+      { host: "https://statelog.example", projectId: "proj" },
       {},
-      {},
+      { STATELOG_API_KEY: "env-key" },
     );
     expect(result).toEqual({
       ok: true,
-      target: { host: "https://statelog.example", projectId: "proj", apiKey: "key-in-config" },
+      target: { host: "https://statelog.example", projectId: "proj", apiKey: "env-key" },
       provenance: {
         host: "agency.json log.host",
         projectId: "agency.json log.projectId",
-        apiKey: "agency.json log.apiKey",
+        apiKey: "$STATELOG_API_KEY",
       },
     });
   });
 
   it("lets flags override host and project", () => {
     const result = resolveDeployTarget(
-      { host: "https://baked", projectId: "baked-proj", apiKey: "k" },
+      { host: "https://baked", projectId: "baked-proj" },
       { host: "https://flag", project: "flag-proj" },
-      {},
+      { STATELOG_API_KEY: "k" },
     );
     expect(result.ok && result.target.host).toBe("https://flag");
     expect(result.ok && result.target.projectId).toBe("flag-proj");
   });
 
-  it("reads the api key env-first when --api-key-env is given, over log.apiKey", () => {
+  it("reads the key from the --api-key-env variable when given", () => {
     const result = resolveDeployTarget(
-      { projectId: "p", apiKey: "config-key" },
+      { host: "https://h", projectId: "p" },
       { apiKeyEnv: "MY_KEY" },
-      { MY_KEY: "env-key" },
+      { MY_KEY: "custom-key", STATELOG_API_KEY: "default-key" },
     );
-    expect(result.ok && result.target.apiKey).toBe("env-key");
+    expect(result.ok && result.target.apiKey).toBe("custom-key");
     expect(result.ok && result.provenance.apiKey).toBe("$MY_KEY");
   });
 
-  it("falls back to $STATELOG_API_KEY when neither flag nor log.apiKey is set", () => {
+  it("never reads the key from agency.json (env only)", () => {
     const result = resolveDeployTarget(
-      { projectId: "p" },
+      { host: "https://h", projectId: "p" },
       {},
-      { STATELOG_API_KEY: "default-key" },
+      {},
     );
-    expect(result.ok && result.target.apiKey).toBe("default-key");
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error).toContain("STATELOG_API_KEY");
   });
 
-  it("defaults the host to localhost:1065 when unset", () => {
-    const result = resolveDeployTarget({ projectId: "p", apiKey: "k" }, {}, {});
-    expect(result.ok && result.target.host).toBe("http://localhost:1065");
+  it("errors when the host is missing", () => {
+    const result = resolveDeployTarget({ projectId: "p" }, {}, { STATELOG_API_KEY: "k" });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error).toContain("host");
   });
 
-  it("errors listing what's missing when project and key are absent", () => {
+  it("errors when the host is not a valid URL (no scheme)", () => {
+    const result = resolveDeployTarget(
+      { host: "statelog.example", projectId: "p" },
+      {},
+      { STATELOG_API_KEY: "k" },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error).toContain("valid host URL");
+  });
+
+  it("errors listing every missing field at once", () => {
     const result = resolveDeployTarget(undefined, {}, {});
     expect(result.ok).toBe(false);
     if (result.ok) {
       return;
     }
+    expect(result.error).toContain("host");
     expect(result.error).toContain("project");
     expect(result.error).toContain("API key");
   });

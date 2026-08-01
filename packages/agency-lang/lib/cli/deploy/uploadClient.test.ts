@@ -7,7 +7,7 @@ const bundle = { entrypoint: "greeter.agency", files: [{ name: "greeter.agency",
 function mockFetch(handler: (url: string, init?: { method?: string }) => unknown): void {
   vi.spyOn(globalThis, "fetch").mockImplementation((async (url: unknown, init?: { method?: string }) => {
     const body = handler(String(url), init);
-    return { status: 200, json: async () => body } as unknown as globalThis.Response;
+    return { ok: true, status: 200, json: async () => body } as unknown as globalThis.Response;
   }) as unknown as typeof fetch);
 }
 
@@ -38,6 +38,32 @@ describe("uploadBundle", () => {
     mockFetch(() => ({ success: false, error: "Invalid input: entrypoint required" }));
     const result = await uploadBundle(target, bundle);
     expect(result).toEqual({ ok: false, error: "Invalid input: entrypoint required" });
+  });
+
+  it("errors on a success envelope missing endpointUrls rather than crashing", async () => {
+    mockFetch(() => ({ success: true, value: {} }));
+    const result = await uploadBundle(target, bundle);
+    expect(result.ok).toBe(false);
+  });
+
+  it("still succeeds without a manifest when /list returns a non-ok response", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((async (url: unknown) => {
+      if (String(url).endsWith("/upload")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, value: { endpointUrls: ["/serve/u/p/g/list"] } }),
+        } as unknown as globalThis.Response;
+      }
+      return { ok: false, status: 500, json: async () => ({}) } as unknown as globalThis.Response;
+    }) as unknown as typeof fetch);
+
+    const result = await uploadBundle(target, bundle);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.manifest).toBeUndefined();
   });
 
   it("reports a friendly error when the host is unreachable", async () => {

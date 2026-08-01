@@ -399,7 +399,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
 
   program
-    .command("deploy")
+    // Hidden while the hosted-serve feature is still in progress — the command
+    // works, it just isn't advertised in `--help` yet.
+    .command("deploy", { hidden: true })
     .description("Upload an agent to a hosted statelog so it can be served")
     .argument("<file>", "Agency entrypoint file to deploy")
     .option("--host <url>", "statelog host (overrides agency.json log.host)")

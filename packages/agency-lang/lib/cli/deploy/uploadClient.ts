@@ -1,6 +1,8 @@
 // The statelog upload API, sealed off here. This is the only file that knows
 // the endpoint paths, the request body shape, and the response envelope — so a
-// change to statelog's API touches nothing else.
+// change to statelog's API touches nothing else. Server responses are treated
+// as untrusted: a bad body reports an error or drops the extra (the manifest)
+// rather than crashing a deploy that already landed.
 
 import type { DeployTarget } from "./target.js";
 import type { AgencyBundle } from "./bundle.js";
@@ -15,11 +17,6 @@ export type Manifest = {
 export type UploadResult =
   | { ok: true; endpointUrls: string[]; manifest?: Manifest }
   | { ok: false; error: string };
-
-/** statelog wraps responses in a Result envelope. */
-type UploadEnvelope =
-  | { success: true; value: { endpointUrls: string[] } }
-  | { success: false; error: string };
 
 /**
  * Upload the bundle and return the agent's serve endpoints (absolute URLs).
@@ -55,39 +52,66 @@ export async function uploadBundle(
     return { ok: false, error: `Could not reach ${target.host} (${detail}).` };
   }
 
-  let envelope: UploadEnvelope;
+  let envelope: unknown;
   try {
-    envelope = (await response.json()) as UploadEnvelope;
+    envelope = await response.json();
   } catch {
     return { ok: false, error: `statelog returned a non-JSON response (HTTP ${response.status}).` };
   }
 
-  if (!envelope || envelope.success === false) {
-    return { ok: false, error: envelope?.error ?? `Upload rejected (HTTP ${response.status}).` };
+  const endpointUrls = readEndpointUrls(envelope);
+  if (!endpointUrls) {
+    return { ok: false, error: rejectionMessage(envelope, response.status) };
   }
 
-  const endpointUrls = envelope.value.endpointUrls.map((relative) =>
-    new URL(relative, target.host).toString(),
-  );
-  const manifest = await fetchManifest(endpointUrls, target.apiKey);
-  return { ok: true, endpointUrls, manifest };
+  const absoluteUrls = endpointUrls.map((relative) => new URL(relative, target.host).toString());
+  const manifest = await fetchManifest(absoluteUrls, target.apiKey);
+  return { ok: true, endpointUrls: absoluteUrls, manifest };
+}
+
+/** Endpoint URLs from a `{ success: true, value: { endpointUrls } }` envelope,
+ *  or null if the response isn't that success shape. */
+function readEndpointUrls(envelope: unknown): string[] | null {
+  if (
+    typeof envelope === "object" &&
+    envelope !== null &&
+    (envelope as { success?: unknown }).success === true
+  ) {
+    const urls = (envelope as { value?: { endpointUrls?: unknown } }).value?.endpointUrls;
+    if (Array.isArray(urls)) {
+      return urls as string[];
+    }
+  }
+  return null;
+}
+
+/** The error text from a `{ success: false, error }` envelope, or a fallback. */
+function rejectionMessage(envelope: unknown, status: number): string {
+  const error = (envelope as { error?: unknown } | null)?.error;
+  return typeof error === "string" ? error : `Upload rejected (HTTP ${status}).`;
 }
 
 /** Fetch the agent's `/list` manifest. Best-effort — returns undefined on any
- *  failure, since the deploy already succeeded and this only enriches output. */
+ *  failure or unexpected shape, since the deploy already succeeded and this only
+ *  enriches the output. */
 async function fetchManifest(
   endpointUrls: string[],
   apiKey: string,
 ): Promise<Manifest | undefined> {
-  const listUrl = endpointUrls.find((url) => url.endsWith("/list"));
+  const listUrl = manifestUrl(endpointUrls);
   if (!listUrl) {
     return undefined;
   }
   try {
-    const response = await fetch(listUrl, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    return (await response.json()) as Manifest;
+    const response = await fetch(listUrl, { headers: { Authorization: `Bearer ${apiKey}` } });
+    if (!response.ok) {
+      return undefined;
+    }
+    const body = (await response.json()) as { nodes?: unknown; functions?: unknown };
+    if (!Array.isArray(body.nodes) || !Array.isArray(body.functions)) {
+      return undefined;
+    }
+    return body as Manifest;
   } catch (error) {
     console.error(
       `deploy: could not fetch manifest for curl examples: ${
@@ -98,9 +122,17 @@ async function fetchManifest(
   }
 }
 
+/** The manifest endpoint — the file-level `…/<file>/list`, not a `/node/list`
+ *  from a node that happens to be named `list`. */
+function manifestUrl(endpointUrls: string[]): string | undefined {
+  return endpointUrls.find(
+    (url) => url.endsWith("/list") && !url.includes("/node/") && !url.includes("/function/"),
+  );
+}
+
 /** The serve base URL (…/serve/:user/:project/:file) shared by an agent's
- *  endpoints — the `/list` URL with its trailing segment removed. */
+ *  endpoints — the manifest URL with its trailing `/list` removed. */
 export function serveBaseUrl(endpointUrls: string[]): string | undefined {
-  const listUrl = endpointUrls.find((url) => url.endsWith("/list"));
+  const listUrl = manifestUrl(endpointUrls);
   return listUrl ? listUrl.slice(0, -"/list".length) : undefined;
 }

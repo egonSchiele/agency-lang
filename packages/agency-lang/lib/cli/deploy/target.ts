@@ -1,6 +1,8 @@
 // Resolving *where* an agent deploys to: the statelog host, project, and API
-// key. These come from the same `log` config that observability already uses
-// (agency.json), with flag and env overrides.
+// key. Host and project come from the same `log` config observability uses
+// (agency.json), with flag overrides. The API key is read only from an
+// environment variable — never a flag or agency.json — so it can't be committed
+// or leak into process listings.
 
 export type DeployTarget = {
   host: string;
@@ -26,20 +28,19 @@ export type TargetOverrides = {
 export type LogConfig = {
   host?: string;
   projectId?: string;
-  apiKey?: string;
 };
 
 export type ResolveTargetResult =
   | { ok: true; target: DeployTarget; provenance: TargetProvenance }
   | { ok: false; error: string };
 
-const DEFAULT_HOST = "http://localhost:1065";
 const DEFAULT_API_KEY_ENV = "STATELOG_API_KEY";
 
 /**
- * Resolve the deploy target. Per field the precedence is flag > agency.json
- * `log.*` > env/default. The API key is env-first — read from an env var, never
- * passed as a flag — so it stays out of shell history and process listings.
+ * Resolve the deploy target. Host and project come from a flag or agency.json
+ * `log.*`; the API key is read from an environment variable (the `--api-key-env`
+ * one, or `STATELOG_API_KEY` by default). Fails with everything that's missing
+ * or malformed rather than one problem at a time.
  */
 export function resolveDeployTarget(
   log: LogConfig | undefined,
@@ -48,27 +49,26 @@ export function resolveDeployTarget(
 ): ResolveTargetResult {
   const logConfig = log ?? {};
 
-  const host = overrides.host ?? logConfig.host ?? DEFAULT_HOST;
-  let hostFrom: string;
-  if (overrides.host) {
-    hostFrom = "--host";
-  } else if (logConfig.host) {
-    hostFrom = "agency.json log.host";
-  } else {
-    hostFrom = `default (${DEFAULT_HOST})`;
-  }
+  const host = overrides.host ?? logConfig.host;
+  const hostFrom = overrides.host ? "--host" : "agency.json log.host";
 
   const projectId = overrides.project ?? logConfig.projectId;
   const projectFrom = overrides.project ? "--project" : "agency.json log.projectId";
 
-  const apiKey = resolveApiKey(logConfig, overrides.apiKeyEnv, env);
+  const apiKeyEnvName = overrides.apiKeyEnv ?? DEFAULT_API_KEY_ENV;
+  const apiKey = env[apiKeyEnvName];
 
   const missing: string[] = [];
+  if (!host) {
+    missing.push("host (set log.host in agency.json, or pass --host)");
+  } else if (!isValidUrl(host)) {
+    missing.push(`a valid host URL (got "${host}" — include the scheme, e.g. https://…)`);
+  }
   if (!projectId) {
     missing.push("project (set log.projectId in agency.json, or pass --project)");
   }
-  if (!apiKey.value) {
-    missing.push(`API key (set ${apiKey.from}, or pass --api-key-env <NAME>)`);
+  if (!apiKey) {
+    missing.push(`API key (set $${apiKeyEnvName}, or pass --api-key-env <NAME>)`);
   }
   if (missing.length > 0) {
     return { ok: false, error: `Cannot deploy — missing ${missing.join("; ")}.` };
@@ -76,23 +76,16 @@ export function resolveDeployTarget(
 
   return {
     ok: true,
-    target: { host, projectId: projectId!, apiKey: apiKey.value! },
-    provenance: { host: hostFrom, projectId: projectFrom, apiKey: apiKey.from },
+    target: { host: host!, projectId: projectId!, apiKey: apiKey! },
+    provenance: { host: hostFrom, projectId: projectFrom, apiKey: `$${apiKeyEnvName}` },
   };
 }
 
-/** Env-first API-key resolution: an explicit `--api-key-env` wins, else the key
- *  baked in agency.json `log.apiKey`, else the conventional STATELOG_API_KEY. */
-function resolveApiKey(
-  log: LogConfig,
-  apiKeyEnv: string | undefined,
-  env: NodeJS.ProcessEnv,
-): { value: string | undefined; from: string } {
-  if (apiKeyEnv) {
-    return { value: env[apiKeyEnv], from: `$${apiKeyEnv}` };
+function isValidUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
   }
-  if (log.apiKey) {
-    return { value: log.apiKey, from: "agency.json log.apiKey" };
-  }
-  return { value: env[DEFAULT_API_KEY_ENV], from: `$${DEFAULT_API_KEY_ENV}` };
 }

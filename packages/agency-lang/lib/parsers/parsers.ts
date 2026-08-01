@@ -5700,7 +5700,7 @@ export const variadicParameterParser: Parser<FunctionParameter> = memo(
 export const functionReturnTypeParser: Parser<VariableType> = memo(
   "functionReturnTypeParser",
   seqC(
-    char(":"),
+    or(char(":"), str("->")),
     optionalSpaces,
     captureCaptures(
       or(variableTypeParser, parseError("Invalid return type", fail("error"))),

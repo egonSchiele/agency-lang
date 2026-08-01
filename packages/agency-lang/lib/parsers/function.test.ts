@@ -3710,3 +3710,32 @@ describe("function keyword", () => {
       .toBe(true);
   });
 });
+
+describe("arrow return type", () => {
+  const pairs: [string, string][] = [
+    [`def f() -> string { return "x" }`, `def f(): string { return "x" }`],
+    [`node main() -> string { return "x" }`, `node main(): string { return "x" }`],
+    [`def f() -> string! { return "x" }`, `def f(): string! { return "x" }`],
+    [`def f() -> string raises <*> { return "x" }`, `def f(): string raises <*> { return "x" }`],
+    [`def f() -> (string) -> string { return g }`, `def f(): (string) -> string { return g }`],
+    [
+      `def f() -> (string) -> string raises <*> { return g }`,
+      `def f(): (string) -> string raises <*> { return g }`,
+    ],
+    [
+      `node main() -> (string) -> string { return g }`,
+      `node main(): (string) -> string { return g }`,
+    ],
+  ];
+
+  for (const [arrow, colon] of pairs) {
+    it(`parses ${arrow} identically to its colon form`, () => {
+      expect(program(arrow)).toEqualWithoutLoc(program(colon));
+    });
+  }
+
+  it("normalizes the separator without touching the arrow inside the type", () => {
+    expect(formatSource(`def f() -> (string) -> string { return g }`))
+      .toContain("def f(): (string) -> string");
+  });
+});

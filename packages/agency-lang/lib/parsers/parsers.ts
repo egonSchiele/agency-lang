@@ -2628,7 +2628,14 @@ const namedArgumentParser: Parser<NamedArgument> = memo(
     // nor `char("=")`.
     or(char(":"), seqR(char("="), not(char("=")))),
     optionalSpaces,
-    capture(or(lazy(() => inlineBlockParser), lazy(() => exprParser)), "value"),
+    capture(
+      or(
+        lazy(() => inlineBlockParser),
+        lazy(() => arrowBlockParser),
+        lazy(() => exprParser),
+      ),
+      "value",
+    ),
   ),
 );
 
@@ -2647,6 +2654,9 @@ const argumentListParser = memo("argumentListParser", seqC(
         // `f(#...args)` needs its own alternative here.
         lazy(() => spliceHoleParser),
         lazy(() => inlineBlockParser),
+        // Before exprParser: `(n)` and `n` both parse as expressions, so the
+        // arrow form has to get first refusal on them.
+        lazy(() => arrowBlockParser),
         lazy(() => exprParser),
       ),
     ),
@@ -4010,6 +4020,70 @@ export const inlineBlockParser: Parser<BlockArgument> = memo(
       body: [{ type: "returnStatement", value: result.expr } as ReturnStatement],
     }),
   ),
+);
+
+/**
+ * A JavaScript arrow function in argument position, accepted as a second
+ * spelling of a block argument:
+ *
+ *   map(xs, (n) => n * 2)     is  map(xs, \n -> n * 2)
+ *   map(xs, n => n * 2)       is  map(xs, \n -> n * 2)
+ *   map(xs, () => 5)          is  map(xs, \ -> 5)
+ *   map(xs, (n) => { ... })   is  map(xs) as n { ... }
+ *
+ * Both bodies are supported because both are what models write. An expression
+ * body produces the same node `inlineBlockParser` does, wrapping the expression
+ * in a synthetic return; a braced body produces the same node the `as` form
+ * does. Nothing records which spelling was used, so `agency fmt` prints the
+ * canonical one.
+ *
+ * MUST be tried before `exprParser` in argument position, since `(n)` and `n`
+ * both parse as ordinary expressions. It only commits once the `=>` is there,
+ * so anything else backtracks cleanly.
+ */
+const arrowBlockParser: Parser<BlockArgument> = memo(
+  "arrowBlockParser",
+  (input: string): ParserResult<BlockArgument> => {
+    const head = seqC(
+      capture(blockParamsParser, "params"),
+      optionalSpaces,
+      str("=>"),
+      optionalSpaces,
+    )(input);
+    if (!head.success) return head as ParserResult<BlockArgument>;
+    const params = head.result.params as FunctionParameter[];
+
+    const braced = seqC(
+      char("{"),
+      optionalSpacesOrNewline,
+      capture(lazy(() => bodyParser), "body"),
+      optionalSpacesOrNewline,
+      char("}"),
+    )(head.rest);
+    if (braced.success) {
+      return success(
+        {
+          type: "blockArgument" as const,
+          inline: false,
+          params,
+          body: braced.result.body as AgencyNode[],
+        },
+        braced.rest,
+      );
+    }
+
+    const expr = lazy(() => exprParser)(head.rest);
+    if (!expr.success) return expr as ParserResult<BlockArgument>;
+    return success(
+      {
+        type: "blockArgument" as const,
+        inline: true,
+        params,
+        body: [{ type: "returnStatement", value: expr.result } as ReturnStatement],
+      },
+      expr.rest,
+    );
+  },
 );
 
 // =============================================================================

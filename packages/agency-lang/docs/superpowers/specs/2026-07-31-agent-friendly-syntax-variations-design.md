@@ -93,7 +93,7 @@ So the guide should keep telling people not to write them. It should correct
 a real feature — it needs a trailing-comment slot on statements plus generator
 support — and is out of scope here. It is recorded in the last section.
 
-**`[3..6]` silently misparses today.** It does not error. `numberParser`
+**`3..6` silently misparses today.** It does not error. `numberParser`
 (`lib/parsers/parsers.ts:600`) builds a number's text from
 `many1WithJoin(or(char("-"), char("."), char("_"), digit))`, which accepts any
 number of dots. So `[3..6]` parses as a one-element array holding a number
@@ -110,10 +110,24 @@ regardless of whether ranges land.
 ## The approach
 
 The parser accepts each variation as a first-class alternative producing the
-same AST as the canonical spelling. The AST records *meaning, not spelling* —
-it does not remember which keyword or which arrow the author typed. `agency fmt`
-therefore normalizes for free, because `AgencyGenerator` has only one spelling
-available to emit.
+same AST as the canonical spelling. None of the four variations in this spec is
+recorded in the AST — it does not remember which keyword or which arrow the
+author typed. `agency fmt` therefore normalizes for free, because
+`AgencyGenerator` has only one spelling available to emit.
+
+To be precise about the scope of that claim: it is a property of *these four*
+changes, not a general law about the AST. The AST does record authorial choice
+in places. The match-arm parser six lines from one of our edits
+(`lib/parsers/parsers.ts:3968`) carries this comment:
+
+```ts
+// A block body is remembered as such (`blockBody`), so the
+// formatter can preserve the author's choice of form.
+```
+
+The arrow is not that choice, so the arrow change is unaffected. But anyone
+applying the rule below to a *future* variation should treat "can the AST forget
+this?" as a question to answer, not a guarantee to assume.
 
 The alternative we considered and rejected was keeping one strict grammar and
 adding a recovery pass: on a parse failure, re-parse tolerantly, and if that
@@ -123,10 +137,16 @@ but it means maintaining a second parse path forever, and it still costs the
 agent a turn. Accepting the syntax costs zero turns.
 
 The trade-off we are taking on knowingly: **`agency fmt` becomes lossy.** A
-hand-written `function` becomes `def`, and a hand-written `[3..6]` becomes
+hand-written `function` becomes `def`, and a hand-written `3..6` becomes
 `range(3, 6)`, with no way to ask for the original back. That is the intended
 behavior, but it is a behavior change for anyone who expected `fmt` to preserve
 their choices.
+
+There is also a small **compatibility break**: `function` is a legal identifier
+today (`const function = 5` parses), and reserving it makes that an error. A
+grep across `stdlib`, `tests`, `examples`, and `lib/agents` finds the word only
+in docstring prose, never as an identifier, so in-repo impact is zero. It still
+belongs in the changelog alongside the `fmt` note.
 
 ## Scope
 
@@ -136,7 +156,7 @@ onto an AST node that already exists.
 1. `function` as a second spelling of `def`
 2. `->` as a second spelling of the `:` before a return type
 3. `=>` and `->` interchangeable in match arms and inline blocks
-4. `[3..6]` range literals, lowering to `range(3, 6)`
+4. `3..6` as an infix range operator, lowering to `range(3, 6)`
 
 Deliberately **not** in this spec, and why, is in the last section.
 
@@ -187,6 +207,14 @@ with a `ReferenceError`. The probe exists to catch the shape and produce a real
 error instead. It must learn the new keyword at the same time the function
 parser does.
 
+**This is not hypothetical, and it is not blocked on the rest of this spec.** The
+misparse is reachable *today* through the `function` spelling, because `function`
+is a legal identifier. Verified: the snippet above parses without complaint right
+now, while the identical code written with `def` produces the targeted error
+"node and def declarations are only legal at the top level of a file." So this is
+an existing bug that the probe change fixes, rather than bookkeeping that merely
+accompanies the feature. It could ship on its own.
+
 **`RESERVED_WORDS` (`lib/parsers/parsers.ts:215`).** Add `"function"`.
 
 This list does not govern general identifier parsing. Its only consumer is
@@ -220,13 +248,43 @@ both delegate to this parser (lines 5757 and 5918).
 
 ### Ambiguity
 
-None. At that position the parser has just consumed the closing `)` of the
-parameter list. The only things that may legally follow a return type are `!`
-(the validation bang), a `raises` clause, or `{`.
+What *follows* a return type is not a problem: the parser has just consumed the
+closing `)` of the parameter list, and the only things that may legally come
+after a return type are `!` (the validation bang), a `raises` clause, or `{`.
 
-Note that `->` is *already* the arrow in function type annotations —
-`type Callback = (string) -> string` — so this makes the two consistent rather
-than introducing a new meaning for the token.
+What the return type can *contain* is the real question, and it is not free of
+ambiguity. **A return type can itself be a function type, and function types
+already use `->`.** All of these parse today:
+
+```ts
+def f(): (string) -> string { return g }
+def f(): (string) -> string raises <*> { return g }
+node main(): (string) -> string { return g }
+```
+
+So after this change the following is legal input, with two arrows in one
+signature — the first the separator, the second part of the type:
+
+```ts
+def f() -> (string) -> string { return g }
+```
+
+Greedy left-to-right consumption should get this right: the separator parser
+runs first and takes the first `->`, then `variableTypeParser` consumes the rest
+including the second. We are not claiming it breaks. But this must be settled by
+a test rather than by confidence, held to the same standard as the match-guard
+case in section 3.
+
+Note the irony worth naming: the fact that `->` is *already* the function-type
+arrow is what makes this change feel natural, and it is also the reason the two
+uses can now meet in one signature.
+
+Three cases to pin, all four of the shapes above plus the doubled form:
+
+- `def f() -> string` — the plain case.
+- `def f() -> (string) -> string` — separator and function type together.
+- `def f() -> (string) -> string raises <*>` — with a `raises` clause after.
+- `node main() -> (string) -> string` — same through `graphNodeParser`.
 
 ---
 
@@ -274,22 +332,75 @@ that, not because we expect it to fail.
 
 ---
 
-## 4. Range literals
+## 4. Ranges
 
 An agent writes:
 
 ```ts
-for (i in [3..6]) { print(i) }
+for (i in 3..6) { print(i) }
 ```
+
+### `..` is an infix operator, not a bracketed form
+
+This needs stating plainly because the two readings are easy to conflate and
+they produce different values. **`..` is an ordinary infix operator.** `3..6` is
+an expression evaluating to `range(3, 6)`, and it composes wherever an
+expression may appear: a loop header, a call argument, the right side of an
+assignment.
+
+It follows that `[3..6]` is an *array literal containing a range* — `[[3, 4, 5]]`,
+one element, not three. That is almost never what someone means. Agents reach
+for the bracketed form because it is the range syntax in Haskell, CoffeeScript,
+and bash, and under an infix reading it would loop exactly once and bind the
+whole array, printing `[3, 4, 5]` with no error at all.
+
+So an array literal whose **sole** element is a range is a targeted parse error:
+
+```
+AG####: `[3..6]` builds an array containing a range, not a range.
+  Write `3..6` for the range itself, or `[[3..6]]` for a nested array.
+```
+
+This is the one shape where being permissive would produce a silently wrong
+answer rather than an inconvenience, which is the same reason the exclusivity
+decision below is argued at length. Loud beats silent.
+
+The error fires only on the single-element shape. A range among other elements
+is a legitimate thing to write and is left alone:
+
+| Written | Meaning |
+|---|---|
+| `3..6` | `range(3, 6)` — the range itself |
+| `[3..6]` | **parse error**, message above |
+| `[[3..6]]` | an array holding one range |
+| `[3..6, 8..9]` | an array holding two ranges |
+| `[1, 3..6]` | an array holding `1` and one range |
+
+The asymmetry between `[3..6]` and `[1, 3..6]` is a deliberate wart. A range
+alone in brackets is almost certainly someone thinking in another language; a
+range alongside other elements is someone who meant it.
 
 ### Two changes
 
-**First, fix the silent misparse.** `numberParser`
-(`lib/parsers/parsers.ts:600`) must reject a numeric literal containing more
-than one `.`. Today it accepts any number of them and hands downstream code a
-malformed number, as described in the Background. This is a bug fix that stands
-on its own: after it, `[3..6]` produces a real parse error even before range
-support lands.
+**First, fix the number-literal boundary.** `numberParser`
+(`lib/parsers/parsers.ts:600`) builds its text from
+`many1WithJoin(or(char("-"), char("."), char("_"), digit))` and accepts any
+number of dots, which is why `3..6` currently becomes the malformed number
+`"3..6"` described in the Background.
+
+The fix is a rule about the **boundary**, not a count: a number may contain at
+most one `.`, **and may not be followed by another `.`**. Stating it as "at most
+one dot" is not enough and would actively break the range parser, because
+`many1WithJoin` is greedy — given `3..6` it would consume `3.` and stop, leaving
+`.6`, so the range parser would look for `..` and never find it. The same
+greediness means `1.2.3` would consume `1.2` and leave `.3`, which begins member
+access rather than erroring. Lookahead is required.
+
+This also has to coexist with syntax that already uses dots. **`...` is real
+today** — array spread (`lib/parsers/parsers.ts:2337`), variadic parameters
+(`:5683`, `:6010`), and splices (`:930`), all of which parse. So the grammar
+must keep `.`, `..`, and `...` distinct, and a typo like `[3...6]` needs a
+defined outcome rather than an accident.
 
 **Second, add the range parser.** `a..b` produces an ordinary `range(a, b)`
 `functionCall` node. This follows the pattern in
@@ -302,8 +413,8 @@ codegen, and no new runtime support.
 
 ### `..` is exclusive
 
-`[3..6]` means `range(3, 6)`, which is `3, 4, 5`. The end is not included.
-`[a..b]` is `range(a, b)` — a pure spelling change with no arithmetic.
+`3..6` means `range(3, 6)`, which is `3, 4, 5`. The end is not included. `a..b`
+is `range(a, b)` — a pure spelling change with no arithmetic.
 
 This decision deserves its reasoning recorded, because the failure mode if we
 choose wrong is a silent off-by-one rather than an error, and because the
@@ -333,16 +444,25 @@ is the largest single influence on how models write code, so a model's prior for
 committed to that prior twice, visibly.
 
 **No inclusive spelling.** We are not adding `..=`, `...`, or `..<`. An author
-who wants an inclusive range writes `[3..7]` or `range(3, 7)`, exactly as they
-would today. Rationale: `...` differs from `..` by a single character for the
-opposite meaning, which is a well-known source of bugs in Ruby and precisely the
-kind of near-invisible distinction a model gets wrong; `..=` and `..<` are both
-extra syntax to learn in service of a case the language already handles.
+who wants an inclusive range writes `3..7` or `range(3, 7)`, exactly as they
+would today.
 
-**One thing to document.** `range` is auto-imported through the standard-library
-prelude. A file that shadows `range` with its own definition would silently
-retarget every range literal in that file. This is rare, but it should be
-mentioned in the guide.
+`...` is not merely a bad choice, it is **already taken** — array spread,
+variadic parameters, and splices all use it, as noted above. That makes it a
+grammar conflict rather than a preference, which settles it outright. (It would
+also have been a poor choice on its own terms: one character apart from `..` for
+the opposite meaning is a well-known source of bugs in Ruby.) `..=` and `..<`
+are both extra syntax to learn in service of a case the language already
+handles.
+
+**Two things to document.** `range` is auto-imported through the standard-library
+prelude, which has two consequences. A file that shadows `range` with its own
+definition would silently retarget every range in that file. And the lowering
+*assumes* `range` is in scope, so it needs a defined behavior in any file where
+the prelude is not injected — including the standard library's own
+`stdlib/index.agency`, where `range` is defined and a range expression would be
+circular. Both are probably non-issues, but they are cheaper to answer now than
+to discover.
 
 ---
 
@@ -378,17 +498,38 @@ Beyond the four round trips:
 
 - **Nested `function` in a body.** `function inner() { }` inside a node body
   must produce the same targeted error `def` does, not a name-plus-call
-  misparse. This is a regression guard on an already-fixed bug.
+  misparse. This one is a live bug fix, not a regression guard — see section 1.
+- **Return-type arrow meeting a function-type arrow.** The four shapes listed at
+  the end of section 2, including `def f() -> (string) -> string`.
 - **Match-guard arrow adjacency.** The `_ if (a >-3) -> "yes"` case above.
-- **Multi-dot number literal.** `1.2.3` must be a parse error, not a number.
-- **Range in the positions that matter.** In a `for` header, as a standalone
-  expression, and with non-literal endpoints (`[a..b]`).
+- **Number-literal boundary.** `1.2.3` must be a parse error, and `3..6` must
+  reach the range parser rather than being half-eaten by the number parser.
+  Both directions matter; one without the other is the trap described in
+  section 4.
+- **Dot-run disambiguation.** `.`, `..`, and `...` stay distinct: spread
+  (`[...a]`), variadic (`def f(...xs)`), and splices still parse, and `[3...6]`
+  produces a defined outcome rather than an accident.
+- **Range positions.** In a `for` header, as a call argument, on the right of an
+  assignment, and with non-literal endpoints (`a..b`).
+- **The bracketed-range error.** `[3..6]` produces the targeted message, while
+  `[[3..6]]`, `[3..6, 8..9]`, and `[1, 3..6]` all parse as described in the
+  table in section 4.
 - **Formatter idempotence.** Formatting an already-formatted file that
   originally used the variations changes nothing on the second pass.
 
-Agency execution tests are not needed. None of this changes runtime behavior —
-a range becomes a `range()` call that already works, and the other three produce
-byte-identical trees.
+**Formatter fixtures.** There is a `tests/formatter/` fixture directory and a
+`make fixtures` target. Parser changes often mean regenerating fixtures. These
+four should not, because none of them changes how canonical source prints — but
+the implementer should confirm that rather than assume it, and say so in the PR
+either way, so the next person does not repeat the worried detour.
+
+**One execution test, for ranges only.** The three token swaps need no runtime
+test: they produce byte-identical trees, so step 2 above already proves it.
+Ranges are doing more work, since the lowering is new and the loop header is
+exactly where a mistake would show. Agency execution tests need no LLM calls, so
+a `for (i in 3..6)` test asserting it prints three numbers is nearly free
+insurance against the silent-single-iteration failure that motivated the
+bracketed-range error.
 
 ## Documentation
 

@@ -9,6 +9,7 @@ import {
   _submessageThreadParser,
 } from "./parsers.js";
 import { normalizeCode, parseAgency } from "@/parser.js";
+import { formatSource } from "@/formatter.js";
 
 describe("docStringParser", () => {
   const testCases = [
@@ -3645,5 +3646,96 @@ describe("functionParameterParser optional params (nullish unification)", () => 
         ],
       });
     }
+  });
+});
+
+function program(src: string) {
+  const parsed = parseAgency(src, {}, false);
+  if (!parsed.success) throw new Error(`expected a successful parse, got: ${parsed.message}`);
+  return parsed.result;
+}
+
+describe("nested declaration probe", () => {
+  const nested = (kw: string) => `node main() {
+  ${kw} inner() { print(1) }
+  print("x")
+}`;
+
+  it("rejects a nested `function` declaration", () => {
+    const parsed = parseAgency(nested("function"), {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/only legal at the top level/);
+  });
+
+  it("still rejects a nested `def` declaration", () => {
+    const parsed = parseAgency(nested("def"), {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/only legal at the top level/);
+  });
+
+  it("names every keyword it catches in the message", () => {
+    const parsed = parseAgency(nested("function"), {}, false);
+    if (parsed.success) throw new Error("expected a failed parse");
+    expect(parsed.message).toMatch(/function/);
+  });
+
+  it("still accepts a top-level declaration", () => {
+    expect(parseAgency(`def inner() { print(1) }`, {}, false).success).toBe(true);
+  });
+});
+
+describe("function keyword", () => {
+  it("parses `function` to the same AST as `def`", () => {
+    expect(program(`function add(a: number, b: number): number { return a + b }`))
+      .toEqualWithoutLoc(program(`def add(a: number, b: number): number { return a + b }`));
+  });
+
+  it("accepts modifiers before `function`", () => {
+    expect(program(`export destructive function f() { print(1) }`))
+      .toEqualWithoutLoc(program(`export destructive def f() { print(1) }`));
+  });
+
+  it("normalizes `function` to `def` when formatted", () => {
+    const formatted = formatSource(`function add(a: number, b: number): number { return a + b }`);
+    expect(formatted).toContain("def add(");
+    expect(formatted).not.toContain("function add(");
+  });
+
+  // RESERVED_WORDS governs identifier-hole filling only, not general identifier
+  // parsing, so `function` stays usable as a variable name.
+  it("leaves `function` usable as an identifier", () => {
+    expect(parseAgency(`node main() { const function = 5\nprint(function) }`, {}, false).success)
+      .toBe(true);
+  });
+});
+
+describe("arrow return type", () => {
+  const pairs: [string, string][] = [
+    [`def f() -> string { return "x" }`, `def f(): string { return "x" }`],
+    [`node main() -> string { return "x" }`, `node main(): string { return "x" }`],
+    [`def f() -> string! { return "x" }`, `def f(): string! { return "x" }`],
+    [`def f() -> string raises <*> { return "x" }`, `def f(): string raises <*> { return "x" }`],
+    [`def f() -> (string) -> string { return g }`, `def f(): (string) -> string { return g }`],
+    [
+      `def f() -> (string) -> string raises <*> { return g }`,
+      `def f(): (string) -> string raises <*> { return g }`,
+    ],
+    [
+      `node main() -> (string) -> string { return g }`,
+      `node main(): (string) -> string { return g }`,
+    ],
+  ];
+
+  for (const [arrow, colon] of pairs) {
+    it(`parses ${arrow} identically to its colon form`, () => {
+      expect(program(arrow)).toEqualWithoutLoc(program(colon));
+    });
+  }
+
+  it("normalizes the separator without touching the arrow inside the type", () => {
+    expect(formatSource(`def f() -> (string) -> string { return g }`))
+      .toContain("def f(): (string) -> string");
   });
 });

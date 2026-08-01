@@ -339,6 +339,10 @@ describe("fillHoles: identifier holes", () => {
     expect(() => fillHoles(load(template), { tool: "if" })).toThrow(/reserved word/);
   });
 
+  it("rejects `function`, which the parser accepts as a spelling of `def`", () => {
+    expect(() => fillHoles(load(template), { tool: "function" })).toThrow(/reserved word/);
+  });
+
   it("rejects the hygiene prefix", () => {
     expect(() => fillHoles(load(template), { tool: "__hyg1_x" })).toThrow(/reserved/);
   });

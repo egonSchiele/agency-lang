@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { parseAgency } from "@/parser.js";
 import {
   interpolationSegmentParser,
   numberParser,
@@ -1795,5 +1796,65 @@ describe("literals parsers", () => {
         });
       }
     });
+  });
+});
+
+describe("number literal grammar", () => {
+  it("stops at the second dot rather than building 1.2.3", () => {
+    const r = numberParser("1.2.3");
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.result.value).toBe("1.2");
+    expect(r.rest).toBe(".3");
+  });
+
+  it("parses a decimal", () => {
+    const r = numberParser("3.5");
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.result.value).toBe("3.5");
+    expect(r.rest).toBe("");
+  });
+
+  it("parses a negative number", () => {
+    const r = numberParser("-3");
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.result.value).toBe("-3");
+  });
+
+  it("strips underscores and leaves the rest intact", () => {
+    const r = numberParser("1_000 + 2");
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.result.value).toBe("1000");
+    expect(r.rest).toBe(" + 2");
+  });
+
+  it("rejects a run with no digits", () => {
+    expect(numberParser("..").success).toBe(false);
+    expect(numberParser(".").success).toBe(false);
+  });
+
+  it("rejects a trailing underscore", () => {
+    const r = numberParser("1_");
+    expect(r.success).toBe(true);
+    if (!r.success) return;
+    expect(r.result.value).toBe("1");
+    expect(r.rest).toBe("_");
+  });
+
+  // Pins what actually happens at program level, which is NOT an error: the
+  // number parser stops after `1.2` and the body parser tolerates the leftover
+  // `.3`, dropping it. Worth recording rather than assuming — the local fix
+  // stops the number parser building a malformed literal, but it does not make
+  // the whole expression fail. Tightening that tolerance is a separate change.
+  it("parses 1.2.3 as 1.2 and silently drops the rest", () => {
+    const parsed = parseAgency(`node main() { const x = 1.2.3 }`, {}, false);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect((parsed.result.nodes[0] as any).body[0].value).toEqual(
+      expect.objectContaining({ type: "number", value: "1.2" }),
+    );
   });
 });

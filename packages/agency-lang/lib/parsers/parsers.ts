@@ -213,7 +213,7 @@ export const LEGAL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
  *  strings this grammar consumes (`def`, `node`, statement keywords,
  *  modifiers, literal words); extend it when a new keyword lands. */
 export const RESERVED_WORDS: readonly string[] = [
-  "def", "node", "return", "goto", "raise", "interrupt", "import", "export",
+  "def", "function", "node", "return", "goto", "raise", "interrupt", "import", "export",
   "type", "effect", "effectSet", "if", "else", "for", "while", "in",
   "match", "thread", "subthread", "handle", "finalize", "guard", "debugger",
   "skills", "skill", "static", "const", "let", "async", "sync", "await",
@@ -594,22 +594,46 @@ const objectParser = (input: string): ParserResult<Record<string, any>> => {
   return parser(input);
 };
 
-export const numberParser: Parser<NumberLiteral> = label("a number", (input: string): ParserResult<NumberLiteral> => {
-  const parser = seqC(
-    set("type", "number"),
-    capture(map(many1WithJoin(or(char("-"), char("."), char("_"), digit)), (v) => v.replace(/_/g, "")), "value"),
-  );
-  const result = parser(input);
-  if (!result.success) return result;
-  // Require at least one digit. Without this check, bare runs of `-`, `.`,
-  // and `_` (e.g. `.`, `-`, `--`, `..`, `_`) all parse as "numbers" with
-  // no digits, which then leak into surrounding parses as nonsense AST
-  // (e.g. `"-".repeat(5)` parses `.` as a number node).
-  if (!/[0-9]/.test(result.result.value)) {
-    return failure("expected a number with at least one digit", input);
-  }
-  return result;
-});
+/** Digits with `_` as a separator, e.g. `1_000`. Every `_` must sit between two
+ *  digits, so neither a bare run of underscores nor a trailing one (`1_`) is a
+ *  number. */
+const digitRun: Parser<string> = map(
+  seqC(
+    capture(digit, "first"),
+    capture(manyWithJoin(map(seqC(optional(char("_")), capture(digit, "d")), (g: { d: string }) => g.d)), "rest"),
+  ),
+  (r: { first: string; rest: string }) => `${r.first}${r.rest}`,
+);
+
+/** `.5` — the dot must be followed by digits, which is what stops `1.2.3` after
+ *  `1.2` instead of swallowing the whole run. */
+const fractionPart: Parser<string> = map(
+  seqC(char("."), capture(digitRun, "digits")),
+  (r: { digits: string }) => `.${r.digits}`,
+);
+
+/** Digits with an optional fraction (`3`, `3.5`), or a bare fraction (`.5`). */
+const numberMagnitude: Parser<string> = or(
+  map(
+    seqC(capture(digitRun, "whole"), capture(optional(fractionPart), "fraction")),
+    (r: { whole: string; fraction: string | null }) => `${r.whole}${r.fraction ?? ""}`,
+  ),
+  fractionPart,
+);
+
+export const numberParser: Parser<NumberLiteral> = label(
+  "a number",
+  map(
+    seqC(
+      capture(optional(char("-")), "sign"),
+      capture(numberMagnitude, "magnitude"),
+    ),
+    (r: { sign: string | null; magnitude: string }) => ({
+      type: "number" as const,
+      value: `${r.sign ?? ""}${r.magnitude}`.replace(/_/g, ""),
+    }),
+  ),
+);
 
 // --- Unit literal parser ---
 const TIME_MULTIPLIERS: Record<TimeUnitLiteral["unit"], number> = {
@@ -621,14 +645,13 @@ const TIME_MULTIPLIERS: Record<TimeUnitLiteral["unit"], number> = {
   w: 604800000,
 };
 
-const unsignedNumberChars = many1WithJoin(or(char("."), digit));
 const timeSuffix = or(str("ms"), str("s"), str("m"), str("h"), str("d"), str("w"));
 
 const timeUnitParser: Parser<UnitLiteral> = label("a time unit literal", (input: string): ParserResult<UnitLiteral> => {
   const parser = seqC(
     set("type", "unitLiteral"),
     set("dimension", "time"),
-    capture(unsignedNumberChars, "value"),
+    capture(numberMagnitude, "value"),
     capture(timeSuffix, "unit"),
   );
   const result = parser(input);
@@ -646,7 +669,7 @@ const costUnitParser: Parser<UnitLiteral> = label("a cost unit literal", (input:
     set("dimension", "cost"),
     set("unit", "$"),
     char("$"),
-    capture(unsignedNumberChars, "value"),
+    capture(numberMagnitude, "value"),
   );
   const result = parser(input);
   if (!result.success) return result;
@@ -670,7 +693,7 @@ const byteUnitParser: Parser<UnitLiteral> = label("a byte unit literal", (input:
   const parser = seqC(
     set("type", "unitLiteral"),
     set("dimension", "bytes"),
-    capture(unsignedNumberChars, "value"),
+    capture(numberMagnitude, "value"),
     capture(byteSuffix, "unit"),
   );
   const result = parser(input);
@@ -3792,7 +3815,7 @@ export const inlineBlockParser: Parser<BlockArgument> = memo(
       optionalSpaces,
       capture(blockParamsParser, "params"),
       optionalSpaces,
-      str("->"),
+      or(str("->"), str("=>")),
       optionalSpaces,
       capture(lazy(() => exprParser), "expr"),
     ),
@@ -3817,12 +3840,21 @@ export const defaultCaseParser: Parser<DefaultCase> = map(
 );
 
 // The arm lookahead, shared by every alternative: an arm LHS is only
-// accepted when the next non-space token is `=>` or a guard `if`. This
+// accepted when the next non-space token is an arrow or a guard `if`. This
 // prevents `v` from being parsed as a pattern when the user wrote `v > 5 =>`
 // in the `match(x is pat)` guard form.
+//
+// Both arrows are accepted here for the same reason both are accepted at the
+// arm itself: miss one and the LHS silently falls through to another
+// alternative rather than failing, so `_ -> x` would parse as a variable
+// pattern named `_` instead of the default case.
 function armFollowsPattern(rest: string): boolean {
   const trimmed = rest.replace(/^[ \t]+/, "");
-  return trimmed.startsWith("=>") || /^if[^A-Za-z0-9_]/.test(trimmed);
+  return (
+    trimmed.startsWith("=>") ||
+    trimmed.startsWith("->") ||
+    /^if[^A-Za-z0-9_]/.test(trimmed)
+  );
 }
 
 // Wrap an arm-LHS alternative so it only wins when the lookahead holds.
@@ -3965,7 +3997,7 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
       ),
     ),
     optionalSpaces,
-    str("=>"),
+    or(str("=>"), str("->")),
     optionalSpaces,
     capture(
       or(
@@ -4549,7 +4581,7 @@ export const modifiedAssignmentParser: Parser<Assignment> = withLoc((input: stri
 });
 
 const BODY_DECLARATION_MESSAGE =
-  "`node` and `def` declarations are only legal at the top level of a file.";
+  "`node`, `def` and `function` declarations are only legal at the top level of a file.";
 
 /**
  * Decline a statement that starts like a `node` or `def` declaration.
@@ -4581,7 +4613,7 @@ const BODY_DECLARATION_MESSAGE =
  */
 const bodyDeclarationParser: Parser<never> = (input: string) => {
   const probe = seqC(
-    or(str("node"), str("def")),
+    or(str("node"), str("def"), str("function")),
     many1(space),
     many1WithJoin(varNameChar),
     optionalSpaces,
@@ -5700,7 +5732,7 @@ export const variadicParameterParser: Parser<FunctionParameter> = memo(
 export const functionReturnTypeParser: Parser<VariableType> = memo(
   "functionReturnTypeParser",
   seqC(
-    char(":"),
+    or(char(":"), str("->")),
     optionalSpaces,
     captureCaptures(
       or(variableTypeParser, parseError("Invalid return type", fail("error"))),
@@ -5727,7 +5759,7 @@ const _baseFunctionParser: Parser<any> = memo(
   "_baseFunctionParser",
   seqC(
     set("type", "function"),
-    capture(str("def"), "keyword"),
+    capture(oneOfStr(["def", "function"]), "keyword"),
     many1(space),
     capture(declNameParser, "functionName"),
     char("("),

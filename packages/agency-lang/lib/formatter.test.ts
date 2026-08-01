@@ -340,3 +340,20 @@ describe("formatSource", () => {
     });
   });
 });
+
+describe("syntax variations are a fixed point after one format", () => {
+  const variations: [string, string][] = [
+    ["function keyword", `function add(a: number, b: number): number { return a + b }`],
+    ["arrow return type", `def f() -> string { return "x" }`],
+    ["thin arrow in a match arm", `node main() { match (1) { 1 -> print("one") _ -> print("no") } }`],
+    ["fat arrow in an inline block", `node main() { const ys = map(xs, \\n => n * 2) }`],
+  ];
+
+  for (const [name, src] of variations) {
+    it(`formatting ${name} twice matches formatting it once`, () => {
+      const once = formatSource(src);
+      expect(once).not.toBeNull();
+      expect(formatSource(once as string)).toBe(once);
+    });
+  }
+});

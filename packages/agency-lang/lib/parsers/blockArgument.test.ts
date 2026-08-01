@@ -298,3 +298,30 @@ describe("function call with block argument", () => {
     }
   });
 });
+
+import { parseAgency } from "@/parser.js";
+import { formatSource } from "@/formatter.js";
+
+function program(src: string) {
+  const parsed = parseAgency(src, {}, false);
+  if (!parsed.success) throw new Error(`expected a successful parse, got: ${parsed.message}`);
+  return parsed.result;
+}
+
+describe("inline block arrow", () => {
+  it("accepts => in an inline block", () => {
+    expect(program(`node main() { const ys = map(xs, \\n => n * 2) }`))
+      .toEqualWithoutLoc(program(`node main() { const ys = map(xs, \\n -> n * 2) }`));
+  });
+
+  it("accepts => with multiple parenthesized params", () => {
+    expect(program(`node main() { const ys = mapWithIndex(xs, \\(n, i) => n * i) }`))
+      .toEqualWithoutLoc(program(`node main() { const ys = mapWithIndex(xs, \\(n, i) -> n * i) }`));
+  });
+
+  it("normalizes => to -> when formatted", () => {
+    const formatted = formatSource(`node main() { const ys = map(xs, \\n => n * 2) }`);
+    expect(formatted).toContain("->");
+    expect(formatted).not.toContain("=>");
+  });
+});

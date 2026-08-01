@@ -100,5 +100,16 @@
     "skipLibCheck": true /* Skip type checking all .d.ts files. */
   },
   "include": ["lib", "scripts", "test.ts"],
-  "exclude": ["node_modules", "references", "tests", "*.mts", "examples", "lib/tui/test", "lib/stdlib/__tests__/**", "lib/stdlib/**/*.test.ts"]
+  // Tests are excluded so they stay out of ./dist, which the npm tarball packs
+  // wholesale. tsconfig.tests.json still type-checks them.
+  "exclude": [
+    "node_modules",
+    "references",
+    "tests",
+    "*.mts",
+    "examples",
+    "lib/tui/test",
+    "**/*.test.ts",
+    "**/__tests__/**"
+  ]
 }

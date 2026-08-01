@@ -2,7 +2,7 @@
   "name": "agency-lang",
   "version": "0.10.0",
   "description": "The Agency language",
-  "main": "lib/index.js",
+  "main": "./dist/lib/index.js",
   "scripts": {
     "test": "vitest --test-timeout=1000",
     "test:run": "vitest run",
@@ -16,7 +16,7 @@
     "build": "make build",
     "start": "node dist/index.js",
     "templates": "typestache ./lib/templates",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.evals.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tests.json && tsc -p tsconfig.evals.json",
     "agency": "node ./dist/scripts/agency.js",
     "a": "node ./dist/scripts/agency.js",
     "compile": "node ./dist/scripts/agency.js compile",

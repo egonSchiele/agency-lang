@@ -358,8 +358,16 @@ So an array literal whose **sole** element is a range is a targeted parse error:
 
 ```
 AG####: `[3..6]` builds an array containing a range, not a range.
-  Write `3..6` for the range itself, or `[[3..6]]` for a nested array.
+  Write `3..6` for the range itself,
+  or `[(3..6)]` if you really want an array containing a range.
 ```
+
+The escape hatch is **parentheses, not doubled brackets**. An earlier draft of
+this spec said to write `[[3..6]]`, which is wrong: under an infix reading
+`[3..6]` already *is* the spelling for "an array containing a range", so the
+error would have left no way to write the thing it was pointing at. `[(3..6)]`
+works because the parenthesized expression is unambiguous, and the error only
+fires on a bare `..` directly inside the brackets.
 
 This is the one shape where being permissive would produce a silently wrong
 answer rather than an inconvenience, which is the same reason the exclusivity
@@ -372,7 +380,7 @@ is a legitimate thing to write and is left alone:
 |---|---|
 | `3..6` | `range(3, 6)` — the range itself |
 | `[3..6]` | **parse error**, message above |
-| `[[3..6]]` | an array holding one range |
+| `[(3..6)]` | an array holding one range |
 | `[3..6, 8..9]` | an array holding two ranges |
 | `[1, 3..6]` | an array holding `1` and one range |
 

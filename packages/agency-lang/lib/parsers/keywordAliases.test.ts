@@ -166,6 +166,15 @@ describe("interface inheritance gets a targeted error", () => {
     expect(parsed.message).toContain("&");
   });
 
+  it("covers the generic form too", () => {
+    // `extends` and type parameters travel together in TypeScript, so this
+    // shape is at least as likely as the bare one.
+    const parsed = parseAgency(`interface Foo<T> extends Bar { a: T }`, {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/no interface inheritance/);
+  });
+
   it("leaves a type named `extendsSomething` alone", () => {
     expect(parseAgency(`interface Foo { extendsThing: string }\nnode main() { print(1) }`, {}, false).success)
       .toBe(true);

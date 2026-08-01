@@ -1140,10 +1140,6 @@ export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: 
 
 // `undefined` is a second spelling of `null`, not a second value. Agency has
 // exactly one nothing-value (docs/dev/null-and-undefined.md); the *type*
-// `undefined` has always normalized to `null` here, and accepting the literal
-// makes the value side agree. `agency fmt` prints `null`.
-// `undefined` is a second spelling of `null`, not a second value. Agency has
-// exactly one nothing-value (docs/dev/null-and-undefined.md); the *type*
 // `undefined` has always normalized to `null`, and accepting the literal makes
 // the value side agree. `agency fmt` prints `null`.
 //
@@ -2150,6 +2146,12 @@ const interfaceExtendsParser: Parser<never> = (input: string) => {
     str("interface"),
     spaces,
     many1WithJoin(varNameChar),
+    // The type-parameter list is optional but must be skipped when present:
+    // `extends` and type parameters travel together in TypeScript, so
+    // `interface Foo<T> extends Bar` is at least as likely as the bare form.
+    // Without this the probe declines on `<` and the author gets back the
+    // generic error this parser exists to replace.
+    optional(seqC(optionalSpaces, char("<"), manyTill(char(">")), char(">"))),
     spaces,
     str("extends"),
     not(varNameChar),
@@ -5312,12 +5314,10 @@ export const withModifierParser: Parser<WithModifier> = withLoc((input: string) 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
   // `elif` stands in for `else if`, so it is an else clause whose sole
   // statement is an if. See `elifParser`.
-  const elifPrefix = seqC(optionalSpaces)(input);
-  if (elifPrefix.success) {
-    const asElseIf = elifParser(elifPrefix.rest);
-    if (asElseIf.success) {
-      return success([asElseIf.result], asElseIf.rest);
-    }
+  const afterSpaces = optionalSpaces(input);
+  const asElseIf = elifParser(afterSpaces.rest);
+  if (asElseIf.success) {
+    return success([asElseIf.result], asElseIf.rest);
   }
 
   const parser = seqC(optionalSpaces, str("else"), optionalSpaces);

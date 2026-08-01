@@ -154,6 +154,40 @@ function interpretResponse(
   return { ok: true, value: { urls } };
 }
 
+type Manifest = {
+  nodes: { name: string; parameters: string[] }[];
+  functions: { name: string }[];
+};
+
+/** Ready-to-run curl commands for a deployed agent (uses a `$KEY` placeholder —
+ *  never the real key). Node bodies get a template from the manifest's
+ *  parameters; functions get `{}` because the manifest omits their params
+ *  today (a known serve gap). */
+function curlExamples(base: string, manifest: Manifest): { label: string; cmd: string }[] {
+  const auth = `-H "Authorization: Bearer $KEY"`;
+  const json = `-H "Content-Type: application/json"`;
+  const out: { label: string; cmd: string }[] = [];
+
+  out.push({ label: "manifest", cmd: `curl -s ${auth} "${base}/list"` });
+
+  for (const node of manifest.nodes) {
+    const body = node.parameters.length
+      ? `{${node.parameters.map((p) => `"${p}":"…"`).join(",")}}`
+      : "{}";
+    out.push({
+      label: `node ${node.name}`,
+      cmd: `curl -s -X POST "${base}/node/${node.name}" ${auth} ${json} -d '${body}'`,
+    });
+  }
+  for (const fn of manifest.functions) {
+    out.push({
+      label: `function ${fn.name}`,
+      cmd: `curl -s -X POST "${base}/function/${fn.name}" ${auth} ${json} -d '{}'`,
+    });
+  }
+  return out;
+}
+
 // ═════════════════════════════════════════════════════════════════════════
 // THROWAWAY CLI SHELL — arg parsing, file I/O, fetch, rendering. Not for prod.
 // ═════════════════════════════════════════════════════════════════════════
@@ -303,6 +337,24 @@ async function main(): Promise<void> {
   for (const u of interp.value.urls) {
     const label = u.includes("/list") ? dim("manifest") : dim("run node ");
     console.log(`  ${label} ${u}`);
+  }
+
+  // Fetch the manifest so the printed curls show real node params, then print
+  // ready-to-run examples. Best-effort — a failed /list still leaves the URLs.
+  const listUrl = interp.value.urls.find((u) => u.endsWith("/list"));
+  if (listUrl) {
+    const base = listUrl.slice(0, -"/list".length);
+    try {
+      const lr = await fetch(listUrl, { headers: { Authorization: `Bearer ${target.apiKey}` } });
+      const manifest = (await lr.json()) as Manifest;
+      console.log(`\n${bold("Try it")}  ${dim("(export KEY=<your-api-key> first)")}`);
+      for (const ex of curlExamples(base, manifest)) {
+        console.log(`  ${dim(ex.label)}`);
+        console.log(`    ${ex.cmd}`);
+      }
+    } catch {
+      console.log(dim("\n  (could not fetch manifest for curl examples)"));
+    }
   }
   console.log();
 }

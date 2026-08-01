@@ -100,6 +100,41 @@ read as "done, and fast".
 End-to-end regressions live in `followMode.test.ts` (append, toggle-rewind, truncation) and
 `lib/statelog/appendReader.test.ts` (UTF-8 split across read boundaries, offset rewind).
 
+## Composing rows over lib/tui: two layout rules that will bite you
+
+Both were found the hard way while building tables (the runs-explorer
+prototype hit each one as a visible rendering bug):
+
+- **Every child of a `row(...)` needs an explicit `width`.** A child
+  without one gets `flex: 1`, and the layout engine SPLITS the terminal
+  width evenly across all flex children — so a table row composed of
+  colored text segments drifts out of alignment with its header, with
+  each column stretched to `cols / segmentCount`. Give every segment a
+  fixed width that matches the header's padding.
+- **Every composed row box needs `height: 1`.** A box without a height
+  also gets `flex: 1` — on the main axis of the enclosing column this
+  time — and stretches to absorb the leftover vertical space. A short
+  list of composed rows renders with paragraphs of blank space between
+  entries. (`line()` sets `height: 1` for exactly this reason; a
+  hand-built `row(...)` must do the same.)
+
+If a real fixed-grid table component ever lands in `lib/tui`, these two
+rules are its reason to exist.
+
+## Keybinding and chrome conventions (shared with any sibling TUI)
+
+- `t` cycles views forward, `Shift+T` backward — any Agency TUI with
+  multiple views uses the same pair.
+- **Esc backs out until there is nothing left to back out of, and never
+  quits; `q` quits the whole program instantly from any screen.** For a
+  viewer hosted inside another TUI, `runViewer` takes `embedded: true`
+  and resolves with `"back"` (Esc at the bottom of the stack, nothing
+  left to clear) or `"quit"` (`q`), so the host can honor the same
+  contract.
+- Every view pins its name to the bottom-right corner via
+  `views/shared.ts`'s `bottomHints(hints, tag, cols)` — the answer to
+  "where am I" always lives in the same place.
+
 ## Adding a view
 
 Implement the `View` type, add a `ViewAction` case if the view needs a new cross-view jump,

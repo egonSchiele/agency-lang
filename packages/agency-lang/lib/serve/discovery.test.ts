@@ -50,6 +50,30 @@ describe("discoverExports", () => {
     ]);
   });
 
+  it("excludes bound params from a function's parameters", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    AgencyFunction.create(
+      {
+        name: "boundFn",
+        module: "test",
+        fn: async () => {},
+        params: [{ name: "visible" }, { name: "hidden", isBound: true }],
+        toolDefinition: { name: "boundFn", description: "", schema: null },
+        exported: true,
+      },
+      registry,
+    );
+
+    const exports = discoverExports({
+      toolRegistry: registry,
+      moduleExports: {},
+      moduleId: "test",
+    });
+    const fn = exports.find((e) => e.name === "boundFn");
+    // Only the unbound param is caller-facing.
+    expect(fn && fn.kind === "function" && fn.parameters).toEqual([{ name: "visible" }]);
+  });
+
   it("filters by moduleId", () => {
     const registry: Record<string, AgencyFunction> = {};
     AgencyFunction.create(

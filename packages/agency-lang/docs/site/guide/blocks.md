@@ -88,6 +88,8 @@ const results = twice(\ -> "hello")
 
 Inline blocks are single-line only, and the expression is implicitly returned.
 
+`=>` works in place of `->` here too, and `agency fmt` normalizes to `->`.
+
 ## Limitations of blocks
 
 ### Don't assign the block to another variable

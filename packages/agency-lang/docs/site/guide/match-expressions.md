@@ -16,6 +16,8 @@ match (status) {
 }
 ```
 
+Arms may use `->` instead of `=>`; `agency fmt` normalizes to `=>`.
+
 ## Assignment
 
 You can assign the result of a match to a variable:

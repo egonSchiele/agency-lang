@@ -14,6 +14,10 @@ def add(a: number, b: number): number {
 print(add(4, 5))
 ```
 
+`function` also works and is normalized to `def` by `agency fmt`, as is `->` in
+place of the `:` before a return type. See
+[Syntax the parser also accepts](/guide/basic-syntax#syntax-the-parser-also-accepts).
+
 ## Tool calls
 
 Any function defined in Agency can automatically be used as a tool for the LLM. Pass the function in the `tools` option:

@@ -243,9 +243,17 @@ describe("analyzeCondition", () => {
     "r.kind == s.kind", // both member access (RHS not a literal)
     "x == 1", // no member access
     "r.kind == r.text", // same var both sides, no literal
-    "r.kind == undefined", // undefined is a variableName, not a literal
   ])("produces no candidates for %s", (src) => {
     expect(analyzeCondition(firstIfCondition(src))).toEqual({ then: [], else: [] });
+  });
+
+  // `undefined` used to reach here as a plain variable name, so it narrowed
+  // nothing. It is now a second spelling of `null` (parsed to the same node),
+  // so it gets null-presence narrowing like `== null` does.
+  it("narrows r.kind == undefined exactly like r.kind == null", () => {
+    expect(analyzeCondition(firstIfCondition("r.kind == undefined"))).toEqual(
+      analyzeCondition(firstIfCondition("r.kind == null")),
+    );
   });
 
   it('r.a.kind == "x": one-hop receiver r.a now narrows (M1; was out-of-scope)', () => {

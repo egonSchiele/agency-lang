@@ -11,9 +11,11 @@ This doc is the "why"; that spec is the "what."
 
 ## The decision in one paragraph
 
-There is exactly one nothing-value in Agency: `null`. Users cannot write
-`undefined` as a value (the parser has no `undefinedParser`, only a
-`nullParser`). Optionality is `T | null`. At runtime, `null` and `undefined`
+There is exactly one nothing-value in Agency: `null`. `undefined` is accepted as
+a second *spelling* of it — in a type it always was, and as of the keyword-alias
+work the value side agrees: `undefined` parses to the same node as `null`, and
+`agency fmt` prints `null`. There is still no second nothing-*value*; this is a
+spelling, not a concept. Optionality is `T | null`. At runtime, `null` and `undefined`
 compare equal (via the `__eq` helper), and `undefined` arriving from the JS
 runtime or TypeScript interop is absorbed into `null`. `undefined` is never a
 distinct concept a user has to reason about.

@@ -214,7 +214,7 @@ export const LEGAL_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
  *  modifiers, literal words); extend it when a new keyword lands. */
 export const RESERVED_WORDS: readonly string[] = [
   "def", "function", "node", "return", "goto", "raise", "interrupt", "import", "export",
-  "type", "effect", "effectSet", "if", "else", "for", "while", "in",
+  "type", "interface", "effect", "effectSet", "if", "else", "elif", "for", "while", "in",
   "match", "thread", "subthread", "handle", "finalize", "guard", "debugger",
   "skills", "skill", "static", "const", "let", "async", "sync", "await",
   "fork", "race", "try", "catch", "is", "as", "from", "with",
@@ -511,10 +511,13 @@ const stringTextSegmentParserFor = (delim: '"' | "'" | "`"): Parser<TextSegment>
 // One character of raw multi-line text: any char that does not begin the close
 // delimiter (`"""`) or an interpolation (`${`). `not(...)` is a zero-width
 // negative lookahead; `capture(anyChar)` then consumes the single char.
-const multiLineRawChar: Parser<string> = map(
-  seqC(not(or(str('"""'), str("${"))), capture(anyChar, "c")),
-  (r) => r.c,
-);
+const multiLineRawCharFor = (delim: string): Parser<string> =>
+  map(
+    seqC(not(or(str(delim), str("${"))), capture(anyChar, "c")),
+    (r: { c: string }) => r.c,
+  );
+
+const multiLineRawChar: Parser<string> = multiLineRawCharFor('"""');
 
 // Text segment inside a triple-quoted string. Raw by design — backslash escapes
 // like `\n` are NOT interpreted (a literal backslash then `n`) — with ONE
@@ -523,10 +526,16 @@ const multiLineRawChar: Parser<string> = map(
 // source) without opening an interpolation. `\${` is tried first so its `${` is
 // consumed as an escape rather than starting one; a lone backslash and every
 // other `\x` stays verbatim. Ends at the closing `"""` or an unescaped `${`.
-export const multiLineStringTextSegmentParser: Parser<TextSegment> = map(
-  many1WithJoin(or(dollarBraceEscape, multiLineRawChar)),
-  (value) => ({ type: "text", value }),
-);
+export const multiLineStringTextSegmentParserFor = (
+  delim: string,
+): Parser<TextSegment> =>
+  map(
+    many1WithJoin(or(dollarBraceEscape, multiLineRawCharFor(delim))),
+    (value: string) => ({ type: "text" as const, value }),
+  );
+
+export const multiLineStringTextSegmentParser: Parser<TextSegment> =
+  multiLineStringTextSegmentParserFor('"""');
 
 export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((
   input: string,
@@ -890,24 +899,46 @@ export const stringParser: Parser<StringLiteral> = label("a string", (input: str
   );
 });
 
-export const multiLineStringParser: Parser<MultiLineStringLiteral> = (input: string) => {
-  const parser = seqC(
-    set("type", "multiLineString"),
-    str('"""'),
-    capture(
-      many(or(multiLineStringTextSegmentParser, interpolationSegmentParser)),
-      "segments",
-    ),
-    str('"""'),
-  );
-  const result = parser(input);
-  if (result.success) {
-    for (const seg of result.result.segments) {
-      if (seg.type === "text") seg.value = stripSentinels(seg.value);
+const multiLineStringParserFor =
+  (delim: string): Parser<MultiLineStringLiteral> =>
+  (input: string) => {
+    const parser = seqC(
+      set("type", "multiLineString"),
+      str(delim),
+      capture(
+        many(
+          or(multiLineStringTextSegmentParserFor(delim), interpolationSegmentParser),
+        ),
+        "segments",
+      ),
+      str(delim),
+    );
+    const result = parser(input);
+    if (result.success) {
+      for (const seg of result.result.segments) {
+        if (seg.type === "text") seg.value = stripSentinels(seg.value);
+      }
     }
-  }
-  return result;
-};
+    return result;
+  };
+
+// Triple single-quotes are a second spelling of `"""`. Both build the same
+// `multiLineString` node — the delimiter is not recorded — so `agency fmt`
+// prints the canonical `"""`. Without this, a triple-single-quoted string
+// parsed as an empty single-quoted string followed by stray statements, losing
+// its contents silently.
+export const multiLineStringParser: Parser<MultiLineStringLiteral> = or(
+  multiLineStringParserFor('"""'),
+  multiLineStringParserFor("'''"),
+);
+
+/** `undefined` written as a value, rewritten to `null`. See `nullParser` for
+ *  why they are one value with two spellings. Used only from the expression
+ *  atom, so binders and property names keep their own name. */
+const undefinedAliasParser: Parser<VariableNameLiteral> = map(
+  seqC(str("undefined"), not(varNameChar)),
+  () => ({ type: "variableName" as const, value: "null" }),
+);
 
 export const variableNameParser: Parser<VariableNameLiteral> = label("an identifier", memo("variableNameParser", (
   input: string,
@@ -1107,9 +1138,17 @@ export const booleanParser: Parser<BooleanLiteral> = label("a boolean", (input: 
   return parser(input);
 });
 
+// `undefined` is a second spelling of `null`, not a second value. Agency has
+// exactly one nothing-value (docs/dev/null-and-undefined.md); the *type*
+// `undefined` has always normalized to `null`, and accepting the literal makes
+// the value side agree. `agency fmt` prints `null`.
+//
+// Both spellings need the word boundary: without it `nullThing` is consumed as
+// `null` with `Thing` stranded, the same hazard the primitive types have.
 export const nullParser: Parser<NullLiteral> = label("null", seqC(
   set("type", "null"),
-  str("null"),
+  or(str("null"), str("undefined")),
+  not(varNameChar),
 ));
 
 export const literalParser: Parser<Literal> = memo("literalParser", or(
@@ -1157,6 +1196,12 @@ export const primitiveTypeParser: Parser<PrimitiveType> = memo(
           str("number"),
           str("string"),
           str("boolean"),
+          // TypeScript's boxed-object spellings. Accepted because models reach
+          // for them; normalized below so the AST only ever holds the
+          // lowercase primitive.
+          str("Number"),
+          str("String"),
+          str("Boolean"),
           str("undefined"),
           str("void"),
           str("null"),
@@ -1169,12 +1214,29 @@ export const primitiveTypeParser: Parser<PrimitiveType> = memo(
         ),
         "value",
       ),
+      // A primitive name must be a whole word. Without this, `str("Number")`
+      // matches the front of a type reference like `NumberInRange` and strands
+      // the rest. The lowercase names have the same hazard (`stringify`); the
+      // capitalized ones just make it far likelier, since PascalCase type names
+      // routinely start with these words.
+      not(varNameChar),
     ),
-    // Nullish unification: the `undefined` type keyword is accepted (e.g. from
-    // imported TS type annotations) but normalized to `null` at parse time, so
-    // the stored AST never contains an `undefined` primitive. The *value*
-    // `undefined` remains unparseable. See docs/dev/null-and-undefined.md.
-    (r: PrimitiveType) => (r.value === "undefined" ? { ...r, value: "null" } : r),
+    // Nullish unification: `undefined` is accepted (e.g. from imported TS type
+    // annotations) but normalized to `null` at parse time, so the stored AST
+    // never contains an `undefined` primitive. The *value* `undefined` is
+    // likewise a spelling of `null` — see `nullParser`. The capitalized
+    // TypeScript spellings normalize the same way.
+    // See docs/dev/null-and-undefined.md.
+    (r: PrimitiveType) => {
+      const normalized: Record<string, string> = {
+        undefined: "null",
+        Number: "number",
+        String: "string",
+        Boolean: "boolean",
+      };
+      const value = normalized[r.value];
+      return value ? { ...r, value } : r;
+    },
   ),
 );
 
@@ -1996,11 +2058,20 @@ export const valueParamParser: Parser<ValueParam> = memo(
   ),
 );
 
-const baseTypeAliasParser: Parser<TypeAlias> = withLoc(memo(
-  "typeAliasParser",
+/**
+ * `type Foo = X` and `interface Foo X` are the same declaration with two
+ * spellings. They differ only in the separator: `type` requires `=`, and
+ * `interface` has none.
+ *
+ * The separator is a PARAMETER rather than an `optional(str("="))` shared by
+ * both. Making it optional would also accept `type A number`, which is
+ * currently a targeted parse error and is relied on well beyond this parser.
+ */
+const baseTypeAliasParserFor = (keyword: string, separator: Parser<unknown>) => withLoc(memo(
+  `typeAliasParser:${keyword}`,
   seqC(
     set("type", "typeAlias"),
-    str("type"),
+    str(keyword),
     spaces,
     captureCaptures(
       parseError(
@@ -2046,7 +2117,7 @@ const baseTypeAliasParser: Parser<TypeAlias> = withLoc(memo(
           ),
         ),
         optionalSpaces,
-        str("="),
+        separator,
         optionalSpaces,
         capture(variableTypeParser, "aliasedType"),
         optionalSemicolon,
@@ -2055,6 +2126,48 @@ const baseTypeAliasParser: Parser<TypeAlias> = withLoc(memo(
     ),
   ),
 ));
+
+const INTERFACE_EXTENDS_MESSAGE =
+  "Agency has no interface inheritance. Write `type Foo = Bar & { ... }` instead.";
+
+/**
+ * `interface Foo extends Bar { ... }` is a shape models write constantly.
+ * Without this it reaches `variableTypeParser` as `extends Bar { ... }` and
+ * fails with a generic type error that names nothing useful. Commit to a
+ * message that names the replacement instead.
+ *
+ * Throws rather than returning `failure(...)` for the same reason
+ * `bodyDeclarationParser` does — a plain failure would be shadowed by a sibling
+ * alternative in the enclosing `or(...)`.
+ */
+const interfaceExtendsParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    optional(seqC(str("export"), spaces)),
+    str("interface"),
+    spaces,
+    many1WithJoin(varNameChar),
+    // The type-parameter list is optional but must be skipped when present:
+    // `extends` and type parameters travel together in TypeScript, so
+    // `interface Foo<T> extends Bar` is at least as likely as the bare form.
+    // Without this the probe declines on `<` and the author gets back the
+    // generic error this parser exists to replace.
+    optional(seqC(optionalSpaces, char("<"), manyTill(char(">")), char(">"))),
+    spaces,
+    str("extends"),
+    not(varNameChar),
+  );
+  const probed = probe(input);
+  if (!probed.success) return failure("", input);
+  const declined = committedFailure(INTERFACE_EXTENDS_MESSAGE, probed.rest);
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
+const baseTypeAliasParser: Parser<TypeAlias> = or(
+  interfaceExtendsParser,
+  baseTypeAliasParserFor("type", str("=")),
+  baseTypeAliasParserFor("interface", succeed(undefined)),
+);
 
 export const typeAliasParser: Parser<TypeAlias> = label("a type alias",
   (input: string) => {
@@ -2494,7 +2607,12 @@ const namedArgumentParser: Parser<NamedArgument> = memo(
     set("type", "namedArgument"),
     capture(many1WithJoin(varNameChar), "name"),
     optionalSpaces,
-    char(":"),
+    // `=` is the Python spelling; `agency fmt` prints `:`. The `not(char("="))`
+    // guard is what keeps this off `==`. Compound assignment operators (`+=`,
+    // `-=`, `*=`, `/=` — all real binops in the table below) are already
+    // excluded because their leading character matches neither `varNameChar`
+    // nor `char("=")`.
+    or(char(":"), seqR(char("="), not(char("=")))),
     optionalSpaces,
     capture(or(lazy(() => inlineBlockParser), lazy(() => exprParser)), "value"),
   ),
@@ -3340,6 +3458,16 @@ const baseAtom: Parser<Expression> = or(
   lazy(() => agencyObjectParser),
   lazy(() => booleanParser),
   lazy(() => regexLiteralParser),
+  // MUST precede valueAccessParser, which would otherwise take `undefined` as
+  // an ordinary name. Placed here rather than in `variableNameParser` because
+  // that parser also supplies property names, pattern binders and template hole
+  // names — rewriting there renames `obj.undefined` and `{ a as undefined }`.
+  //
+  // Emits the same node `null` produces along this path (a `variableName`, not
+  // a `null` literal), so the two spellings stay indistinguishable downstream.
+  // That `null` has two node shapes depending on whether `literalParser` or
+  // this path reached it is pre-existing; unifying it is a separate change.
+  lazy(() => undefinedAliasParser),
   lazy(() => valueAccessParser),
   lazy(() => literalParser),
 );
@@ -5184,6 +5312,14 @@ export const withModifierParser: Parser<WithModifier> = withLoc((input: string) 
 });
 
 const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
+  // `elif` stands in for `else if`, so it is an else clause whose sole
+  // statement is an if. See `elifParser`.
+  const afterSpaces = optionalSpaces(input);
+  const asElseIf = elifParser(afterSpaces.rest);
+  if (asElseIf.success) {
+    return success([asElseIf.result], asElseIf.rest);
+  }
+
   const parser = seqC(optionalSpaces, str("else"), optionalSpaces);
   const prefixResult = parser(input);
   if (!prefixResult.success) return prefixResult;
@@ -5208,12 +5344,12 @@ const elseClauseParser: Parser<AgencyNode[]> = (input: string) => {
   return success(blockResult.result.body, blockResult.rest);
 };
 
-const _ifParserInner: Parser<IfElse> = (input: string) => {
+const _ifParserInnerFor = (keyword: string): Parser<IfElse> => (input: string) => {
   const parser = trace(
     "ifParser",
     seqC(
       set("type", "ifElse"),
-      str("if"),
+      str(keyword),
       optionalSpaces,
       char("("),
       optionalSpaces,
@@ -5248,7 +5384,19 @@ const _ifParserInner: Parser<IfElse> = (input: string) => {
 
   return result;
 };
+const _ifParserInner = _ifParserInnerFor("if");
+
 export const ifParser: Parser<IfElse> = label("an if statement", withLoc(_ifParserInner));
+
+/** `elif` is the Python spelling of `else if`. Parsed in place by swapping the
+ *  opening keyword, NOT by rewriting the source and re-parsing: tarsec measures
+ *  spans against the input it is handed, so a synthetic string would put every
+ *  `loc` inside the branch at the wrong offset, and nested `elif` would compound
+ *  the error. `agency fmt` prints `else if`. */
+const elifParser: Parser<IfElse> = label(
+  "an elif statement",
+  withLoc(_ifParserInnerFor("elif")),
+);
 
 // `if <condition> then <thenExpr> else <elseExpr>` — a conditional EXPRESSION.
 // Produces the SAME `IfElse` node a statement `if` uses (single-expression

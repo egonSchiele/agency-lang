@@ -725,31 +725,20 @@ export class AgencyGenerator {
 
   // Wrapping helpers
 
-  /** Shift the second and later lines of an already-rendered item by one
-   *  level. `wrapList` builds its items before it knows the list will wrap,
-   *  so a multi-line item comes in indented for the outer level; `indentStr`
-   *  only moves the first line. Blank lines stay blank rather than becoming
-   *  trailing whitespace. */
-  private indentContinuationLines(item: string): string {
-    if (!item.includes("\n")) {
-      return item;
-    }
-    const continuationIndent = this.indent(1);
-    return item
-      .split("\n")
-      .map((line, index) =>
-        index === 0 || line === "" ? line : continuationIndent + line,
-      )
-      .join("\n");
-  }
-
+  /** `renderItems` is a callback, not an array, because a multi-line item has
+   *  to be built at the depth it will actually print at. Rewriting an
+   *  already-rendered item's lines instead would reach inside triple-quoted
+   *  strings, whose newlines are data rather than layout, and silently change
+   *  the program. So the items are rendered once to measure, and rendered
+   *  again after the indent increases if the list turns out to wrap. */
   private wrapList(
-    items: string[],
+    renderItems: () => string[],
     prefix: string,
     open: string,
     close: string,
     suffix: string = "",
   ): string {
+    const items = renderItems();
     const inline = `${prefix}${open}${items.join(", ")}${close}${suffix}`;
     // An empty list never wraps: wrapping zero items prints `(\n\n)`,
     // which the parser rejects (found by the round-trip gate on a
@@ -758,9 +747,7 @@ export class AgencyGenerator {
     if (items.length === 0) return inline;
     if (this.indentStr(inline).length <= 80) return inline;
     this.increaseIndent();
-    const lines = items.map((item) =>
-      this.indentStr(`${this.indentContinuationLines(item)},`),
-    );
+    const lines = renderItems().map((item) => this.indentStr(`${item},`));
     this.decreaseIndent();
     return `${prefix}${open}\n${lines.join("\n")}\n${this.indent()}${close}${suffix}`;
   }
@@ -1312,7 +1299,7 @@ export class AgencyGenerator {
       : "";
     const raisesStr = this.formatRaisesClause(node.raises);
     return this.renderParenList(
-      this.renderParams(node.parameters, policy),
+      () => this.renderParams(node.parameters, policy),
       policy === "source" ? node.parameterTrivia : undefined,
       prefix,
       `${returnTypeStr}${raisesStr}${opener}`,
@@ -1457,14 +1444,14 @@ export class AgencyGenerator {
    *  for a call that means `renderArgs` has appended any inline block last,
    *  matching how `extractInlineBlock` remapped the anchors. */
   protected renderParenList(
-    rendered: string[],
+    renderItems: () => string[],
     trivia: ListTrivia[] | undefined,
     prefix: string,
     suffix: string,
   ): string {
-    const body = this.renderListIfTrivia(rendered, trivia, "(", ")");
+    const body = this.renderListIfTrivia(renderItems(), trivia, "(", ")");
     if (body === undefined) {
-      return this.wrapList(rendered, prefix, "(", ")", suffix);
+      return this.wrapList(renderItems, prefix, "(", ")", suffix);
     }
     return `${prefix}${body}${suffix}`;
   }
@@ -1479,7 +1466,7 @@ export class AgencyGenerator {
   ): string {
     const rendered = this.renderArgs(args, block);
     if (trivia?.length) {
-      return this.renderParenList(rendered, trivia, "", "");
+      return this.renderParenList(() => rendered, trivia, "", "");
     }
     return `(${rendered.join(", ")})`;
   }
@@ -1497,9 +1484,8 @@ export class AgencyGenerator {
 
     const block = node.block;
     const inlineBlock = block?.inline ? block : undefined;
-    const rendered = this.renderArgs(node.arguments, inlineBlock);
     let result = this.renderParenList(
-      rendered,
+      () => this.renderArgs(node.arguments, inlineBlock),
       node.argumentTrivia,
       `${asyncPrefix}${declaredName(node.functionName)}`,
       "",
@@ -1533,7 +1519,7 @@ export class AgencyGenerator {
     // so each comment gets its own line.
     if (!node.trivia?.length) {
       const items = node.items.map((item) => this.renderArrayItem(item));
-      return this.wrapList(items, "", "[", "]");
+      return this.wrapList(() => items, "", "[", "]");
     }
 
     return this.renderListWithTrivia({
@@ -1913,7 +1899,7 @@ export class AgencyGenerator {
         return this.indentStr(`${importKeyword}${withTrivia}${suffix}`);
       }
       return this.indentStr(
-        this.wrapList(names, importKeyword, "{ ", " }", suffix),
+        this.wrapList(() => names, importKeyword, "{ ", " }", suffix),
       );
     }
 

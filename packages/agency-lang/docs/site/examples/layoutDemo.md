@@ -134,12 +134,12 @@ node main() {
     header: ["#", "file", "notes"],
     body: [
       [
-        text("1"),
-        text("lib/foo.ts"),
-        text(
-          "This is a really long string that will wrap to the next line because the column is only 30% of the table width.",
-        ),
-      ],
+      text("1"),
+      text("lib/foo.ts"),
+      text(
+      "This is a really long string that will wrap to the next line because the column is only 30% of the table width.",
+    ),
+    ],
       [text("2"), text("lib/bar.ts"), text("ok")],
     ],
   )

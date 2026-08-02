@@ -106,11 +106,11 @@ Build a skills tool for an LLM over a directory of skills.
 ```ts
 docsSkill(
   section: 
-    | "guide"
-    | "cli"
-    | "diagnostics"
-    | "stdlib"
-    | "agent",
+  | "guide"
+  | "cli"
+  | "diagnostics"
+  | "stdlib"
+  | "agent",
 )
 ```
 

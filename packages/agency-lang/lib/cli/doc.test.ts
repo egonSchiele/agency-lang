@@ -142,7 +142,7 @@ afterEach(() => {
 });
 
 describe("generateDoc", () => {
-  it("keeps commented object types out of display signatures", () => {
+  it("keeps alias source trivia but omits function signature trivia", () => {
     const inputDir = path.join(tmpDir, "input-display-types");
     const outputDir = path.join(tmpDir, "output-display-types");
     fs.mkdirSync(inputDir, { recursive: true });
@@ -151,14 +151,16 @@ describe("generateDoc", () => {
       `export type Input = {
   @validate(isPresent)
   @jsonSchema({ description: "stable identifier" })
-  id: string,
+  id: string, // keep id
   nested: {
     @jsonSchema({ description: "nested value" })
-    value: string // keep
+    value: string // keep nested
   }
 }
 
-export def load(input: {
+export def load(
+  // parameter keep
+  input: {
   id: string // keep
 }): {
   value: string // keep
@@ -179,12 +181,12 @@ export type Input = {
   @jsonSchema({
     description: "stable identifier"
   })
-  id: string;
+  id: string; // keep id
   nested: {
     @jsonSchema({
       description: "nested value"
     })
-    value: string
+    value: string // keep nested
   }
 }
 \`\`\``);
@@ -193,7 +195,9 @@ export type Input = {
 \`\`\`ts
 load(input: { id: string }): { value: string }
 \`\`\``);
-    expect(output).not.toContain("// keep");
+    expect(output).not.toContain("// parameter keep");
+    expect(output).not.toContain("id: string // keep\n}):");
+    expect(output).not.toContain("{ value: string // keep }");
   });
 
   it("renders a function's raises clause and wraps a long signature", () => {

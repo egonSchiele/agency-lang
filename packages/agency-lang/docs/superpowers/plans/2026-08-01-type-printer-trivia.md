@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `agency fmt` preserve comments, blank lines, and semantic property metadata inside object types at every source-formatting position, while display signatures omit all trivia but preserve object-alias layout, metadata, and the established alias doc-comment prefix.
+**Goal:** Make `agency fmt` preserve comments, blank lines, and semantic property metadata inside object types at every source-formatting position, while direct display signatures omit all trivia and type-alias reference bodies retain full source rendering.
 
-**Architecture:** Keep `variableTypeToString` as the only recursive type printer and add an optional declarative object-type rendering hook that every recursive edge forwards. `AgencyGenerator` installs source and display policies around that hook and owns object layout and indentation. Source layout activates for trivia or semantic property metadata so the inline fallback cannot discard tags or descriptions. Display layout strips object and parameter trivia, keeps root object aliases multiline, and retains semantic metadata and alias declaration annotations. Wrapped lists fix multiline item indentation for any multiline item by shifting continuation lines after rendering, without callbacks or a second rendering pass.
+**Architecture:** Keep `variableTypeToString` as the only recursive type printer and add an optional declarative object-type rendering hook that every recursive edge forwards. `AgencyGenerator` installs source and display policies around that hook and owns object layout and indentation. Source layout activates for trivia or semantic property metadata so the inline fallback cannot discard tags or descriptions. Direct `signatureOf` consumers, including `std::agency` `_describe`, strip object and parameter trivia. `agency doc` uses source rendering for type-alias reference bodies, preserving alias doc comments, property comments, validators, descriptions, and multiline layout; its function and node signatures remain trivia-free. Existing wrapped-list layout remains unchanged.
 
 **Tech Stack:** TypeScript, Vitest, Agency parser and formatter.
 
@@ -13,10 +13,11 @@
 - Run every command from `packages/agency-lang` in the current worktree; all paths below are relative to that directory.
 - Preserve no-hook `variableTypeToString` output byte-for-byte, including TypeScript generation, generic value arguments, `Result` shorthand, precedence, effect sets, long unions, and block-type `raises` clauses. Formatter source output is intentionally exempt when an object has property tags or descriptions: metadata safety requires Agency-owned multiline layout even without trivia.
 - Do not add `typeHasTrivia`, a second recursive printer, duplicated precedence helpers, or printer-agreement tests.
-- Keep `signatureOf`, `agency doc`, and `std::agency` `describe` on an explicit display rendering path; object and parameter comments and blank-line trivia must not appear in signatures. Root object aliases remain multiline, property tags/descriptions remain visible at every object depth, and alias doc comments retain their prior code-block placement. Trivia-only parameter and return objects may remain compact.
+- Keep direct `signatureOf` and `std::agency` `describe` on an explicit display rendering path; object and parameter comments and blank-line trivia must not appear there. `agency doc` type aliases instead use full source rendering so reference bodies retain alias and property comments, validators, descriptions, and multiline layout. Its function and node signatures use the trivia-free display path.
 - Compose type-alias assignments structurally so a multiline right-hand side follows `=` immediately; generated signatures and doc code blocks must contain no trailing whitespace.
 - Do not change parser code. The PR #768 issue is already fixed: `objectMemberEntry` checks `consumedLineEnding(input, item.rest)` before both pre- and post-delimiter trailing-comment parses.
 - Do not edit `docs/site/` or add other user-facing documentation.
+- Keep cosmetic continuation indentation out of scope. This work must not change unrelated wrapped lists or generated documentation.
 - Follow `docs/dev/anti-patterns.md`: preserve one syntax owner, expose a declarative hook, avoid repeated stateful rendering, and do not add dynamic imports, `Map`, `Set`, one-line `if` statements, nested ternaries, or single-character names.
 - Redirect test and verification runs to `.tmp/type-printer-trivia-*.txt`, inspect the saved output, and remove those files before finishing. Regenerate fixtures with `make fixtures`, then run `make`; checked-in `docs/site/` must remain clean. After `make`, run the full unit suite, structural lint, and `git diff --check`. The full Agency execution suite and performance suite are not required.
 - Do not amend or force-push. Eventual implementation commits use `git commit -F`; the implementation PR must target `adit/trailing-comments-integration`.
@@ -31,11 +32,10 @@ The parser already preserves object-type `trivia`; the loss occurs when the shar
 |---|---|
 | `lib/backends/typescriptGenerator/typeToString.ts` | Define the optional object hook and remain the canonical recursive syntax/precedence printer. |
 | `lib/backends/typescriptGenerator/typeToString.test.ts` | Pin no-hook compatibility and recursive hook forwarding. |
-| `lib/backends/agencyGenerator.ts` | Install the source hook, lay out trivia-bearing object types, explicitly select plain rendering for `signatureOf`, and shift wrapped continuation lines. |
-| `lib/backends/agencyGenerator.test.ts` | Exact production-formatter output (including blank-line preprocessing), reparse/idempotence, nested and root blank-line preservation, wrapper/source-position coverage, and wrapped indentation. |
-| `lib/cli/doc.test.ts` | Exact `agency doc` plain-signature regression. |
+| `lib/backends/agencyGenerator.ts` | Install the source hook, lay out trivia-bearing object types, and explicitly select plain rendering for `signatureOf`. |
+| `lib/backends/agencyGenerator.test.ts` | Exact production-formatter output (including blank-line preprocessing), reparse/idempotence, nested and root blank-line preservation, and wrapper/source-position coverage. |
+| `lib/cli/doc.test.ts` | Exact `agency doc` regressions for source-rendered aliases and trivia-free function/node signatures. |
 | `lib/stdlib/agency.test.ts` | Exact `std::agency` `_describe` plain-signature regression. |
-| `tests/formatter/roundtrip.agency` | Canonical wrapped-list indentation fixture regenerated after the continuation-line fix. |
 
 No new production file is needed. Do not modify `lib/types/dataStructures.ts`, formatter/parser implementation files, generated fixtures, or user-facing docs.
 
@@ -360,50 +360,9 @@ git commit -F .tmp/type-printer-trivia-commit.txt
 
 ---
 
-### Task 4: Shift continuation lines in wrapped items and complete focused verification
+### Final verification
 
-**Files:**
-- Modify: `lib/backends/agencyGenerator.ts`
-- Modify: `lib/backends/agencyGenerator.test.ts`
-
-**Interfaces:**
-- Consumes: already-rendered `string[]` items in `wrapList`.
-- Produces: correctly indented continuation lines without changing callers or rendering twice.
-
-- [ ] **Step 1: Add the exact failing wrapped-signature test**
-
-Format a function with enough parameters to exceed the existing 80-column threshold and a trivia-bearing multiline object parameter. Assert exact output with the first parameter line at two spaces, its object members at four spaces, its closing brace at two spaces, and later parameters unchanged. Reparse and format twice.
-
-- [ ] **Step 2: Run and inspect the expected indentation failure**
-
-```bash
-pnpm test:run lib/backends/agencyGenerator.test.ts > .tmp/type-printer-trivia-task4-red.txt 2>&1
-```
-
-Expected: nonzero exit because continuation lines retain the pre-wrap indentation.
-
-- [ ] **Step 3: Shift continuation lines only in `wrapList`’s wrapped branch**
-
-Add a local pure helper:
-
-```ts
-private indentContinuationLines(item: string): string {
-  const continuationIndent = this.indent(1);
-  return item
-    .split("\n")
-    .map((line, index) => {
-      if (index === 0 || line === "") {
-        return line;
-      }
-      return continuationIndent + line;
-    })
-    .join("\n");
-}
-```
-
-In only the multiline branch of `wrapList`, apply this helper to each already-rendered item before `indentStr(`${item},`)`. Do not change `wrapList` or `renderParenList` to callbacks, do not mutate indentation and rerender, and do not alter callers for arrays, calls, or imports. Inline items remain byte-for-byte unchanged.
-
-- [ ] **Step 4: Run all focused suites and structural lint**
+- [ ] **Step 1: Run all focused suites and structural lint**
 
 ```bash
 pnpm test:run lib/backends/typescriptGenerator/typeToString.test.ts lib/backends/agencyGenerator.test.ts lib/cli/doc.test.ts lib/stdlib/agency.test.ts > .tmp/type-printer-trivia-final-tests.txt 2>&1
@@ -414,7 +373,7 @@ cat .tmp/type-printer-trivia-lint.txt
 
 Expected: both commands exit 0. Diagnose any failure from the saved file before rerunning only the affected command.
 
-- [ ] **Step 5: Audit scope and anti-patterns**
+- [ ] **Step 2: Audit scope and anti-patterns**
 
 Run:
 
@@ -428,11 +387,11 @@ git status --short
 
 Confirm: one recursive printer; one declarative object hook; all recursive edges forward it; no copied precedence logic; no second traversal; display calls are explicit; no repeated rendering or broad caller conversion; parser and `docs/site/` are untouched; generic `(3)`, `Result<T>`, block `raises`, wrappers, every source position, exact display output, reparse, and idempotence are covered. Re-read `docs/dev/anti-patterns.md` and inspect the diff specifically for duplication, imperative leakage, order-dependent mutable state, useless special cases, and inconsistent patterns.
 
-- [ ] **Step 6: Commit, clean temporary output, and prepare the eventual PR**
+- [ ] **Step 3: Commit, clean temporary output, and prepare the eventual PR**
 
 ```bash
-printf '%s\n' 'fix: indent multiline types in wrapped signatures' > .tmp/type-printer-trivia-commit.txt
-git add lib/backends/agencyGenerator.ts lib/backends/agencyGenerator.test.ts
+printf '%s\n' 'fix: preserve type trivia in formatter output' > .tmp/type-printer-trivia-commit.txt
+git add lib/backends/agencyGenerator.ts lib/backends/agencyGenerator.test.ts lib/cli/doc.test.ts lib/stdlib/agency.test.ts
 git commit -F .tmp/type-printer-trivia-commit.txt
 rm -f .tmp/type-printer-trivia-*.txt
 git status --short
@@ -448,7 +407,7 @@ Expected: no temporary output remains and the worktree contains no unintended fi
 - [ ] The optional object hook is forwarded through every recursive edge and can delegate with `undefined`.
 - [ ] `AgencyGenerator` owns only trivia-aware object layout, indentation, and explicit source/display selection.
 - [ ] Exact source tests cover generic value args, `Result` shorthand, block types, optional/nested types, arrays, unions, intersections, `keyof`, indexed access, and every formatter-facing type position.
-- [ ] Wrapped multiline items shift continuation lines locally and render only once.
-- [ ] `signatureOf`, `agency doc`, and `std::agency` exact regressions prove comments do not leak into display signatures.
+- [ ] Cosmetic continuation indentation remains unchanged, so unrelated wrapped lists and generated docs retain their existing output.
+- [ ] Direct `signatureOf`, `agency doc` function/node signatures, and `std::agency` exact regressions prove comments do not leak into display signatures; exact alias-doc regressions prove reference bodies retain full source trivia and metadata.
 - [ ] Focused tests and structural lint pass from saved output; parser code, generated content, and user-facing docs are unchanged.
 - [ ] The anti-pattern audit passes, and the eventual implementation PR base is `adit/trailing-comments-integration`.

@@ -143,8 +143,8 @@ export def bash(
     timeout,
     stdin,
     {
-      blockedCommands: blockedCommands
-    },
+    blockedCommands: blockedCommands
+  },
   )
 }
 

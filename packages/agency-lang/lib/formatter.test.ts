@@ -428,3 +428,33 @@ describe("trailing comments in every body owner", () => {
     expect(formatSource(once as string)).toBe(once);
   });
 });
+
+describe("a multi-line item inside a wrapped list", () => {
+  // The list wraps on length, so its items were already rendered as strings
+  // at the outer indent. Only their first line used to be moved.
+  it("indents an object literal's continuation lines with the list", () => {
+    const source = `def f() {\n  return _bash(\n    command,\n    cwd,\n    timeout,\n    stdin,\n    {\n      blockedCommands: blockedCommands\n    },\n  )\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain(
+      "    {\n      blockedCommands: blockedCommands\n    },",
+    );
+    expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+    expect(formatSource(once as string)).toBe(once);
+  });
+
+  it("indents a nested array's continuation lines with the list", () => {
+    const source = `def f() {\n  return someFunctionWithALongName(\n    firstArgument,\n    secondArgument,\n    [\n      1, // one\n      2\n    ],\n    thirdArgument\n  )\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain("    [\n      1, // one\n      2\n    ],");
+    expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+    expect(formatSource(once as string)).toBe(once);
+  });
+
+  it("leaves a blank line inside a wrapped item unindented", () => {
+    const source = `def f() {\n  return someFunctionWithALongName(\n    firstArgument,\n    secondArgument,\n    {\n      a: 1,\n\n      b: 2\n    },\n    thirdArgument\n  )\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain("\n\n      b: 2");
+    expect(once).not.toContain("  \n");
+    expect(formatSource(once as string)).toBe(once);
+  });
+});

@@ -78,16 +78,16 @@ node main() {
     title: "Ledger",
     caption: "today",
     columns: [{
-    align: "start"
-  }, {
-    align: "end"
-  }],
+      align: "start"
+    }, {
+      align: "end"
+    }],
     header: ["Account", "Change"],
     body: [
-    ["sales", text("+450", fgColor: "green")],
-    ["refunds", text("-50", fgColor: "red")],
-    ["fees", text("-12", fgColor: "red")],
-  ],
+      ["sales", text("+450", fgColor: "green")],
+      ["refunds", text("-50", fgColor: "red")],
+      ["fees", text("-12", fgColor: "red")],
+    ],
     footer: [["net", text("+388", fgColor: "green", bold: true)]],
   )
   print(render(ledger))
@@ -126,22 +126,22 @@ node main() {
     title: "Build summary",
     width: "full",
     columns: [{
-    width: 2,
-    align: "end"
-  }, {}, {
-    width: "30%"
-  }],
+      width: 2,
+      align: "end"
+    }, {}, {
+      width: "30%"
+    }],
     header: ["#", "file", "notes"],
     body: [
-    [
-    text("1"),
-    text("lib/foo.ts"),
-    text(
-    "This is a really long string that will wrap to the next line because the column is only 30% of the table width.",
-  ),
-  ],
-    [text("2"), text("lib/bar.ts"), text("ok")],
-  ],
+      [
+        text("1"),
+        text("lib/foo.ts"),
+        text(
+          "This is a really long string that will wrap to the next line because the column is only 30% of the table width.",
+        ),
+      ],
+      [text("2"), text("lib/bar.ts"), text("ok")],
+    ],
   )
   print(render(sized))
 }

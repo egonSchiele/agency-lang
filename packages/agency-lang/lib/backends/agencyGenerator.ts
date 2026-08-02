@@ -725,6 +725,24 @@ export class AgencyGenerator {
 
   // Wrapping helpers
 
+  /** Shift the second and later lines of an already-rendered item by one
+   *  level. `wrapList` builds its items before it knows the list will wrap,
+   *  so a multi-line item comes in indented for the outer level; `indentStr`
+   *  only moves the first line. Blank lines stay blank rather than becoming
+   *  trailing whitespace. */
+  private indentContinuationLines(item: string): string {
+    if (!item.includes("\n")) {
+      return item;
+    }
+    const continuationIndent = this.indent(1);
+    return item
+      .split("\n")
+      .map((line, index) =>
+        index === 0 || line === "" ? line : continuationIndent + line,
+      )
+      .join("\n");
+  }
+
   private wrapList(
     items: string[],
     prefix: string,
@@ -740,7 +758,9 @@ export class AgencyGenerator {
     if (items.length === 0) return inline;
     if (this.indentStr(inline).length <= 80) return inline;
     this.increaseIndent();
-    const lines = items.map((item) => this.indentStr(`${item},`));
+    const lines = items.map((item) =>
+      this.indentStr(`${this.indentContinuationLines(item)},`),
+    );
     this.decreaseIndent();
     return `${prefix}${open}\n${lines.join("\n")}\n${this.indent()}${close}${suffix}`;
   }

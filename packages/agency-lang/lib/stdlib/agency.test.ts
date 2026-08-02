@@ -645,6 +645,32 @@ describe("_describe (reify)", () => {
     expect(article?.docstring).toContain("One extracted article");
   });
 
+  it("uses plain display signatures for commented object types", () => {
+    const info = _describe(`export type Input = {
+  id: string // keep
+}
+export def load(input: {
+  id: string // keep
+}): {
+  value: string // keep
+} {
+  return { value: input.id }
+}
+export node inspect(input: {
+  id: string // keep
+}): {
+  value: string // keep
+} {
+  return { value: input.id }
+}`);
+
+    expect(info.exports.map(({ name, signature }) => [name, signature])).toEqual([
+      ["Input", "type Input = { id: string }"],
+      ["load", "load(input: { id: string }): { value: string }"],
+      ["inspect", "inspect(input: { id: string }): { value: string }"],
+    ]);
+  });
+
   it("surfaces the module doc comment as the description", () => {
     const info = _describe(source);
     expect(info.description).toContain("Tools for the news agent");

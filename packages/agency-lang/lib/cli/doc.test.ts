@@ -142,6 +142,36 @@ afterEach(() => {
 });
 
 describe("generateDoc", () => {
+  it("keeps commented object types out of display signatures", () => {
+    const inputDir = path.join(tmpDir, "input-display-types");
+    const outputDir = path.join(tmpDir, "output-display-types");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "display.agency"),
+      `export type Input = {
+  id: string // keep
+}
+
+export def load(input: {
+  id: string // keep
+}): {
+  value: string // keep
+} {
+  return { value: input.id }
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "display.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "display.md"), "utf-8");
+
+    expect(output).toContain("```ts\nexport type Input = { id: string }\n```");
+    expect(output).toContain(
+      "```ts\nload(input: { id: string }): { value: string }\n```",
+    );
+    expect(output).not.toContain("// keep");
+  });
+
   it("renders a function's raises clause and wraps a long signature", () => {
     const inputDir = path.join(tmpDir, "input-raises");
     const outputDir = path.join(tmpDir, "output-raises");

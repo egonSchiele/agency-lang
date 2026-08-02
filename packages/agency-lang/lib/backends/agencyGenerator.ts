@@ -109,6 +109,8 @@ import {
   WildcardPattern,
 } from "@/types/pattern.js";
 
+type TypeRenderPolicy = "source" | "display";
+
 // Escape the characters that have special meaning inside a string
 // literal so the formatter's output round-trips through the parser.
 // Mirror the escapes recognized by `stringTextSegmentParserFor` in
@@ -606,7 +608,7 @@ export class AgencyGenerator {
       case "newExpression":
         return this.processNewExpression(node);
       case "schemaExpression":
-        return `schema(${variableTypeToString(node.typeArg, this.typeAliases, true)})`;
+        return `schema(${this.renderTypeSource(node.typeArg)})`;
       case "regex":
         return `re/${node.pattern}/${node.flags}`;
       case "interruptStatement":
@@ -645,7 +647,7 @@ export class AgencyGenerator {
     // or the round trip breaks.
     const name = LEGAL_IDENTIFIER.test(node.name) ? node.name : `"${node.name}"`;
     const annotation = node.typeAnnotation
-      ? `: ${variableTypeToString(node.typeAnnotation, this.typeAliases, true)}`
+      ? `: ${this.renderTypeSource(node.typeAnnotation)}`
       : "";
     return `${sigil}${name}${annotation}`;
   }
@@ -742,18 +744,17 @@ export class AgencyGenerator {
     return `${prefix}${open}\n${lines.join("\n")}\n${this.indent()}${close}${suffix}`;
   }
 
-  private renderParams(parameters: FunctionParameter[]): string[] {
+  private renderParams(
+    parameters: FunctionParameter[],
+    policy: TypeRenderPolicy,
+  ): string[] {
     return parameters.map((p) => {
       const prefix = p.variadic ? "..." : "";
       const defaultSuffix = p.defaultValue
         ? ` = ${this.processNode(p.defaultValue).trim()}`
         : "";
       if (p.typeHint) {
-        const typeStr = variableTypeToString(
-          p.typeHint,
-          this.typeAliases,
-          true,
-        );
+        const typeStr = this.renderType(p.typeHint, policy);
         const bang = p.validated ? "!" : "";
         return `${prefix}${p.name}: ${typeStr}${bang}${defaultSuffix}`;
       } else {
@@ -773,6 +774,16 @@ export class AgencyGenerator {
         return this.renderObjectTypeSource(objectType, printChild);
       },
     });
+  }
+
+  private renderTypeDisplay(type: VariableType): string {
+    return variableTypeToString(type, this.typeAliases, true);
+  }
+
+  private renderType(type: VariableType, policy: TypeRenderPolicy): string {
+    return policy === "source"
+      ? this.renderTypeSource(type)
+      : this.renderTypeDisplay(type);
   }
 
   private stringifyProp(
@@ -877,7 +888,13 @@ export class AgencyGenerator {
     return `${args.open}\n${lines.join("\n")}\n${this.indentStr(args.close)}`;
   }
 
-  protected aliasedTypeToString(aliasedType: VariableType): string {
+  protected aliasedTypeToString(
+    aliasedType: VariableType,
+    policy: TypeRenderPolicy,
+  ): string {
+    if (policy === "display") {
+      return this.renderTypeDisplay(aliasedType);
+    }
     if (aliasedType.type === "objectType") {
       return this.renderObjectTypeSource(aliasedType, (child) =>
         this.renderTypeSource(child),
@@ -911,7 +928,7 @@ export class AgencyGenerator {
     const body =
       node.payloadType.properties.length === 0
         ? "{}"
-        : this.aliasedTypeToString(node.payloadType);
+        : this.aliasedTypeToString(node.payloadType, "source");
     return (
       this.formatDocComment(node) +
       this.indentStr(`effect ${node.effect} ${body}`)
@@ -920,7 +937,7 @@ export class AgencyGenerator {
 
   protected processTypeAlias(node: TypeAlias): string {
     this.typeAliases[node.aliasName] = node.aliasedType;
-    const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
+    const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType, "source");
     const exportPrefix = node.exported ? "export " : "";
     // An effectSet declaration uses the `effectSet` keyword; its RHS is an
     // effect set rendered via `effectSetTypeToString` so `<*>` (stored as the
@@ -933,8 +950,8 @@ export class AgencyGenerator {
         )
       );
     }
-    const typeParamsStr = this.formatTypeParams(node.typeParams);
-    const valueParamsStr = this.formatValueParams(node.valueParams);
+    const typeParamsStr = this.formatTypeParams(node.typeParams, "source");
+    const valueParamsStr = this.formatValueParams(node.valueParams, "source");
     const tags = this.formatAttachedTags(node);
     return (
       this.formatDocComment(node) +
@@ -949,11 +966,14 @@ export class AgencyGenerator {
    * Format the `<T, U = string, ...>` chunk of a generic alias declaration.
    * Returns an empty string when there are no type params.
    */
-  private formatTypeParams(params: TypeAlias["typeParams"]): string {
+  private formatTypeParams(
+    params: TypeAlias["typeParams"],
+    policy: TypeRenderPolicy,
+  ): string {
     if (!params || params.length === 0) return "";
     const parts = params.map((p) => {
       if (!p.default) return p.name;
-      const def = variableTypeToString(p.default, this.typeAliases, true);
+      const def = this.renderType(p.default, policy);
       return `${p.name} = ${def}`;
     });
     return `<${parts.join(", ")}>`;
@@ -964,10 +984,13 @@ export class AgencyGenerator {
    * value-parameterized alias declaration. Returns an empty string when
    * there are no value params.
    */
-  private formatValueParams(params: TypeAlias["valueParams"]): string {
+  private formatValueParams(
+    params: TypeAlias["valueParams"],
+    policy: TypeRenderPolicy,
+  ): string {
     if (!params || params.length === 0) return "";
     const parts = params.map((p) => {
-      const typeStr = variableTypeToString(p.type, this.typeAliases, true);
+      const typeStr = this.renderType(p.type, policy);
       const base = `${p.name}: ${typeStr}`;
       if (p.default === undefined) return base;
       return `${base} = ${this.processNode(p.default).trim()}`;
@@ -988,7 +1011,7 @@ export class AgencyGenerator {
     const lhs = node.pattern
       ? this.formatPattern(node.pattern)
       : node.typeHint
-        ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases, true)}${bangSuffix}`
+        ? `${node.variableName}${chainStr}: ${this.renderTypeSource(node.typeHint)}${bangSuffix}`
         : `${node.variableName}${chainStr}`;
     const exportPrefix = node.exported ? "export " : "";
     const optimizePrefix = node.optimize ? "optimize " : "";
@@ -1048,7 +1071,7 @@ export class AgencyGenerator {
         // named after the type, which matches anything — a formatter pass
         // would quietly turn a validated rule into an unvalidated one.
         const tp = pattern as TypePattern;
-        const typeStr = variableTypeToString(tp.typeHint, this.typeAliases, true);
+        const typeStr = this.renderTypeSource(tp.typeHint);
         return tp.pattern === null
           ? `_: ${typeStr}`
           : `${this.formatPattern(tp.pattern)}: ${typeStr}`;
@@ -1068,7 +1091,7 @@ export class AgencyGenerator {
     if (pattern.type === "typePattern") {
       const tp = pattern as TypePattern;
       if (tp.pattern === null) {
-        return variableTypeToString(tp.typeHint, this.typeAliases, true);
+        return this.renderTypeSource(tp.typeHint);
       }
     }
     return this.formatPattern(pattern);
@@ -1084,7 +1107,7 @@ export class AgencyGenerator {
     if (caseValue.type === "typePattern") {
       const tp = caseValue as TypePattern;
       return tp.pattern === null
-        ? `is ${variableTypeToString(tp.typeHint, this.typeAliases, true)}`
+        ? `is ${this.renderTypeSource(tp.typeHint)}`
         : this.formatPattern(tp);
     }
     return this.processNode(caseValue as AgencyNode).trim();
@@ -1222,16 +1245,17 @@ export class AgencyGenerator {
     prefix: string,
     node: FunctionDefinition | GraphNodeDefinition,
     opener: string,
+    policy: TypeRenderPolicy,
   ): string {
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
       ? ": " +
-        variableTypeToString(node.returnType, this.typeAliases, true) +
+        this.renderType(node.returnType, policy) +
         returnTypeBang
       : "";
     const raisesStr = this.formatRaisesClause(node.raises);
     return this.renderParenList(
-      this.renderParams(node.parameters),
+      this.renderParams(node.parameters, policy),
       node.parameterTrivia,
       prefix,
       `${returnTypeStr}${raisesStr}${opener}`,
@@ -1254,12 +1278,12 @@ export class AgencyGenerator {
       if (node.isEffectSet) {
         return `effectSet ${node.aliasName} = ${this.effectSetTypeToString(node.aliasedType)}`;
       }
-      const typeParamsStr = this.formatTypeParams(node.typeParams);
-      const valueParamsStr = this.formatValueParams(node.valueParams);
-      return `type ${node.aliasName}${typeParamsStr}${valueParamsStr} = ${this.aliasedTypeToString(node.aliasedType)}`;
+      const typeParamsStr = this.formatTypeParams(node.typeParams, "display");
+      const valueParamsStr = this.formatValueParams(node.valueParams, "display");
+      return `type ${node.aliasName}${typeParamsStr}${valueParamsStr} = ${this.aliasedTypeToString(node.aliasedType, "display")}`;
     }
     const name = declaredName(node.type === "function" ? node.functionName : node.nodeName);
-    return this.buildSignature(name, node, "");
+    return this.buildSignature(name, node, "", "display");
   }
 
   protected processFunctionDefinition(node: FunctionDefinition): string {
@@ -1272,7 +1296,7 @@ export class AgencyGenerator {
     if (node.markers?.idempotent) prefixes.push("idempotent");
     prefixes.push("def");
     const prefix = `${prefixes.join(" ")} ${declaredName(node.functionName)}`;
-    const signature = this.buildSignature(prefix, node, " {");
+    const signature = this.buildSignature(prefix, node, " {", "source");
 
     let result = this.indentStr(`${signature}\n`);
 
@@ -1946,7 +1970,7 @@ export class AgencyGenerator {
     const tags = this.formatAttachedTags(node);
     const { body } = node;
     const prefix = `${node.exported ? "export " : ""}node ${declaredName(node.nodeName)}`;
-    const signature = this.buildSignature(prefix, node, " {");
+    const signature = this.buildSignature(prefix, node, " {", "source");
 
     let result = this.indentStr(`${signature}\n`);
 
@@ -2061,7 +2085,7 @@ export class AgencyGenerator {
     if (node.handler.kind === "inline") {
       const handlerBang = node.handler.param.validated ? "!" : "";
       const paramStr = node.handler.param.typeHint
-        ? `${node.handler.param.name}: ${variableTypeToString(node.handler.param.typeHint, this.typeAliases, true)}${handlerBang}`
+        ? `${node.handler.param.name}: ${this.renderTypeSource(node.handler.param.typeHint)}${handlerBang}`
         : node.handler.param.name;
       this.increaseIndent();
       const handlerBodyStr = this.renderBody(node.handler.body);
@@ -2084,7 +2108,7 @@ export class AgencyGenerator {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    const rendered = this.renderParams(node.params);
+    const rendered = this.renderParams(node.params, "source");
     let asClause = "";
     if (rendered.length === 1) {
       asClause = ` as ${rendered[0]}`;

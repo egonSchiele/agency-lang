@@ -323,10 +323,13 @@ export {
 import { extractSummaryOverride, moduleDescription } from "../utils/moduleDoc.js";
 
 function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
-  const code = generateAgency({
+  const source = generateAgency({
     type: "agencyProgram",
     nodes: [alias],
   });
+  const declarationStart = source.indexOf("export type");
+  const annotations = declarationStart === -1 ? "" : source.slice(0, declarationStart);
+  const code = `${annotations}export ${generator.signatureOf(alias)}`;
   return section(
     heading(3, alias.aliasName),
     alias.docComment ? formatDocComment(alias.docComment) : null,

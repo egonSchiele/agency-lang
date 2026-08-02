@@ -1088,6 +1088,75 @@ type IndexedWrapped = {
 }) -> void raises <std::read, std::write>`;
     expectExactStableFormat(source, source);
   });
+
+  describe("source type positions", () => {
+    const cases = [
+      ["schema type argument", `const value = schema({
+  id: string // keep
+})`],
+      ["hole annotation", `node main() {
+  const value = #value: {
+    id: string // keep
+  }
+}`],
+      ["function parameter and return", `def save(value: {
+  id: string // keep
+}): Result<{
+  ok: boolean // keep
+}> {
+  return success(value)
+}`],
+      ["node parameter and return", `node save(value: {
+  id: string // keep
+}): {
+  ok: boolean // keep
+} {
+  return value
+}`],
+      ["generic default", `type Box<T = {
+  id: string // keep
+}> = T`],
+      ["value parameter", `type Box(options: {
+  id: string // keep
+}) = string`],
+      ["variable annotation", `const value: {
+  id: string // keep
+} = null`],
+      ["match-arm type pattern", `match(value) {
+  is {
+    id: string // keep
+  } => value
+}`],
+      ["is-expression type pattern", `const valid = value is {
+  id: string // keep
+}`],
+      ["inline handler parameter", `handle {
+  interrupt("stop")
+} with (event: {
+  id: string // keep
+}) {
+  return approve()
+}`],
+      ["finalize parameter", `def save(): any {
+  return null
+  finalize as draft: {
+    id: string // keep
+  } {
+    return draft
+  }
+}`],
+      ["type alias", `type Item = {
+  id: string // keep
+}`],
+      ["effect payload", `effect Save {
+  id: string // keep
+}`],
+    ] as const;
+
+    it.each(cases)("preserves comments in %s", (_name, source) => {
+      expectExactStableFormat(source, source);
+    });
+  });
 });
 
 describe("AgencyGenerator - literal comment trivia (issue #317)", () => {

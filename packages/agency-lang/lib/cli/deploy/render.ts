@@ -7,8 +7,8 @@
 import { color } from "@/utils/termcolors.js";
 import renderDeployReport from "@/templates/cli/deployReport.js";
 import type { DeployOutcome, DeployPlan } from "./deploy.js";
-import { serveBaseUrl } from "./uploadClient.js";
-import type { Manifest } from "./uploadClient.js";
+import { serveBaseUrl } from "../statelog/uploadClient.js";
+import type { ServeManifest } from "../statelog/serveClient.js";
 import { curlExamples } from "./curlExamples.js";
 
 export function renderOutcome(outcome: DeployOutcome): void {
@@ -55,7 +55,7 @@ function filesBlock(plan: DeployPlan): string {
 }
 
 /** Banner + serve endpoints + (when a manifest was fetched) curl examples. */
-function deployedBody(endpointUrls: string[], manifest: Manifest | undefined): string {
+function deployedBody(endpointUrls: string[], manifest: ServeManifest | undefined): string {
   const endpoints = section(color.bold("Serve endpoints"), endpointRows(endpointUrls));
   const banner = `\n\n${color.green("✓ deployed")}`;
   return banner + endpoints + curlSection(endpointUrls, manifest);
@@ -78,7 +78,7 @@ function endpointLabel(url: string): string {
   return "endpoint";
 }
 
-function curlSection(endpointUrls: string[], manifest: Manifest | undefined): string {
+function curlSection(endpointUrls: string[], manifest: ServeManifest | undefined): string {
   const base = serveBaseUrl(endpointUrls);
   if (!base || !manifest) {
     return "";

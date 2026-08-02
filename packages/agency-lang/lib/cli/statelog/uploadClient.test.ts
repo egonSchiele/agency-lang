@@ -15,7 +15,10 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("uploadBundle", () => {
   it("returns absolute endpoint URLs and the fetched manifest", async () => {
-    const manifest = { nodes: [{ name: "main", parameters: ["message"] }], functions: [{ name: "add" }] };
+    const manifest = {
+      nodes: [{ name: "main", parameters: ["message"], interruptEffects: [] }],
+      functions: [{ name: "add", parameters: ["a", "b"], interruptEffects: [] }],
+    };
     mockFetch((url) => {
       if (url.endsWith("/upload")) {
         return { success: true, value: { endpointUrls: ["/serve/u/proj/greeter/list", "/serve/u/proj/greeter/node/main"] } };
@@ -64,6 +67,31 @@ describe("uploadBundle", () => {
       return;
     }
     expect(result.manifest).toBeUndefined();
+  });
+
+  it("rejects a cross-origin endpoint URL and never fetches the manifest", async () => {
+    let listFetched = false;
+    mockFetch((url) => {
+      if (url.endsWith("/upload")) {
+        return { success: true, value: { endpointUrls: ["https://evil.example/serve/u/p/g/list"] } };
+      }
+      listFetched = true;
+      return {};
+    });
+    const result = await uploadBundle(target, bundle);
+    expect(result.ok).toBe(false);
+    expect(listFetched).toBe(false);
+  });
+
+  it("rejects a non-string endpoint URL entry", async () => {
+    mockFetch((url) => {
+      if (url.endsWith("/upload")) {
+        return { success: true, value: { endpointUrls: [42] } };
+      }
+      return {};
+    });
+    const result = await uploadBundle(target, bundle);
+    expect(result.ok).toBe(false);
   });
 
   it("reports a friendly error when the host is unreachable", async () => {

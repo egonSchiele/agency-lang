@@ -13,7 +13,6 @@ import {
   MultiLineStringLiteral,
   NewLine,
   ObjectProperty,
-  ObjectTypeTrivia,
   ParallelBlock,
   Scope,
   ScopeType,
@@ -58,7 +57,6 @@ import {
   AgencyArray,
   AgencyObject,
   AgencyObjectKV,
-  Trivia,
 } from "../types/dataStructures.js";
 import {
   FunctionCall,
@@ -652,7 +650,11 @@ export class AgencyGenerator {
   }
 
   protected processInterruptStatement(node: InterruptStatement): string {
-    const args = this.renderArgList(node.arguments);
+    const args = this.renderArgList(
+      node.arguments,
+      undefined,
+      node.argumentTrivia,
+    );
     // `raise` lowers to an interruptStatement; viaRaise drives the keyword.
     const keyword = node.viaRaise ? "raise" : "interrupt";
     if (node.effect === "unknown") {
@@ -791,10 +793,7 @@ export class AgencyGenerator {
     return str;
   }
 
-  // Append the comment/blank-line trivia anchored at `anchorIndex` to `lines`,
-  // one rendered line per comment. Shared by object types and array/object
-  // literals so all three preserve trivia identically. Accepts either
-  // `ObjectTypeTrivia[]` or `Trivia[]` (structurally identical).
+  /** One trivia node as its own source line. */
   protected renderTriviaNode(node: TriviaNode): string {
     if (node.type === "newLine") {
       return "";
@@ -827,16 +826,6 @@ export class AgencyGenerator {
       .filter(isTrailingListTrivia)
       .filter((entry) => entry.anchorIndex === anchorIndex)
       .flatMap((entry) => entry.comments);
-  }
-
-  protected emitTriviaAt(
-    trivia: (ObjectTypeTrivia | Trivia)[] | undefined,
-    anchorIndex: number,
-    lines: string[],
-  ): void {
-    for (const node of this.beforeTriviaAt(trivia, anchorIndex)) {
-      lines.push(this.renderTriviaNode(node));
-    }
   }
 
   /** Render one multiline list, owning indentation and both comment
@@ -1217,11 +1206,10 @@ export class AgencyGenerator {
         returnTypeBang
       : "";
     const raisesStr = this.formatRaisesClause(node.raises);
-    return this.wrapList(
+    return this.renderParenList(
       this.renderParams(node.parameters),
+      node.parameterTrivia,
       prefix,
-      "(",
-      ")",
       `${returnTypeStr}${raisesStr}${opener}`,
     );
   }
@@ -1326,12 +1314,45 @@ export class AgencyGenerator {
     return rendered;
   }
 
+  /** The one way a parenthesized `( ... )` list is printed. Without trivia
+   *  it keeps `wrapList`'s compact/wrapping behavior exactly; with trivia it
+   *  goes multiline so every comment gets a line to sit at the end of.
+   *  `rendered` must already be in canonical print order — for a call that
+   *  means `renderArgs` has appended any inline block last, matching how
+   *  `extractInlineBlock` remapped the anchors. */
+  protected renderParenList(
+    rendered: string[],
+    trivia: ListTrivia[] | undefined,
+    prefix: string,
+    suffix: string,
+  ): string {
+    if (!trivia?.length) {
+      return this.wrapList(rendered, prefix, "(", ")", suffix);
+    }
+    const body = this.renderListWithTrivia({
+      items: rendered,
+      trivia,
+      open: "(",
+      close: ")",
+      renderItem: (code) => ({ code }),
+      separator: (index, count) => (index === count - 1 ? "" : ","),
+    });
+    return `${prefix}${body}${suffix}`;
+  }
+
   // Format args as inline parenthesized list (no wrapping — used by access chain callers)
+  /** A parenthesized argument list that normally stays on one line
+   *  (access chains, `interrupt`, `guard`). Trivia forces the multiline
+   *  form, since a `//` comment cannot share a line with what follows it. */
   protected renderArgList(
     args: FunctionCall["arguments"],
     block?: BlockArgument,
+    trivia?: ListTrivia[],
   ): string {
     const rendered = this.renderArgs(args, block);
+    if (trivia?.length) {
+      return this.renderParenList(rendered, trivia, "", "");
+    }
     return `(${rendered.join(", ")})`;
   }
 
@@ -1349,11 +1370,10 @@ export class AgencyGenerator {
     const block = node.block;
     const inlineBlock = block?.inline ? block : undefined;
     const rendered = this.renderArgs(node.arguments, inlineBlock);
-    let result = this.wrapList(
+    let result = this.renderParenList(
       rendered,
+      node.argumentTrivia,
       `${asyncPrefix}${declaredName(node.functionName)}`,
-      "(",
-      ")",
       "",
     );
 
@@ -2062,6 +2082,8 @@ export class AgencyGenerator {
     this.decreaseIndent();
     const argsStr = this.renderArgList(
       node.arguments as FunctionCall["arguments"],
+      undefined,
+      node.argumentTrivia,
     );
     return this.indentStr(
       `guard${argsStr} {\n${bodyCodeStr}${this.indentStr("}")}`,
@@ -2155,7 +2177,7 @@ export class AgencyGenerator {
       case "methodCall":
         return `${dot}${this.generateFunctionCallExpression(node.functionCall, "valueAccess")}`;
       case "call":
-        return `${node.optional ? "?." : ""}${this.renderArgList(node.arguments, node.block)}`;
+        return `${node.optional ? "?." : ""}${this.renderArgList(node.arguments, node.block, node.argumentTrivia)}`;
       default:
         throw new Error(
           `Unknown access chain element kind: ${(node as any).kind}`,

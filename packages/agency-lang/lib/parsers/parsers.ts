@@ -170,6 +170,7 @@ import {
   ListTrivia,
   ParsedList,
   TriviaNode,
+  isTrailingListTrivia,
 } from "../types/dataStructures.js";
 import {
   DefaultImport,
@@ -1836,6 +1837,91 @@ function partitionTrivia<T>(entries: InterleavedEntry<T>[]): ParsedList<T> {
   return trivia.length > 0 ? { items, trivia } : { items };
 }
 
+/** A comma-separated list that may span lines, with trivia between items.
+ *  `closer` is only looked at, never consumed: it lets the last item go
+ *  without a comma while still requiring commas between items (#602). */
+function commaDelimitedList<T>(
+  itemParser: Parser<T>,
+  closer: string,
+): Parser<ParsedList<T>> {
+  return map(
+    many(
+      or(
+        triviaEntry,
+        itemEntryAfterDelimiter(itemParser, literalDelimiter(closer)),
+      ),
+    ),
+    (entries: InterleavedEntry<T>[]) => partitionTrivia(entries),
+  );
+}
+
+/** `commaDelimitedList` shaped for `captureCaptures`: lifts the items and
+ *  their trivia into the parent under the two given field names. */
+function commaDelimitedListCaptures<
+  T,
+  ItemsKey extends string,
+  TriviaKey extends string,
+>(
+  itemParser: Parser<T>,
+  closer: string,
+  itemsKey: ItemsKey,
+  triviaKey: TriviaKey,
+): Parser<{ [K in ItemsKey]: T[] } & { [K in TriviaKey]?: ListTrivia[] }> {
+  return map(
+    commaDelimitedList(itemParser, closer),
+    (parsed: ParsedList<T>) =>
+      ({
+        [itemsKey]: parsed.items,
+        ...(parsed.trivia && { [triviaKey]: parsed.trivia }),
+      }) as { [K in ItemsKey]: T[] } & { [K in TriviaKey]?: ListTrivia[] },
+  );
+}
+
+/** Move trivia anchors from source order to the order a list will print in.
+ *  `canonicalSourceIndexes[c]` is the source index of the item that ends up
+ *  at canonical position `c`. A before-comment stays with the item it
+ *  preceded and a trailing comment stays with the item it followed, so both
+ *  travel when the formatter reorders (an inline block moving last, thread
+ *  arguments taking canonical order). */
+export function remapListTrivia(
+  trivia: ListTrivia[] | undefined,
+  canonicalSourceIndexes: number[],
+): ListTrivia[] | undefined {
+  if (!trivia) {
+    return undefined;
+  }
+
+  const sourceItemCount = canonicalSourceIndexes.length;
+  const sortedIndexes = [...canonicalSourceIndexes].sort(
+    (left, right) => left - right,
+  );
+  const isPermutation = sortedIndexes.every(
+    (sourceIndex, expectedIndex) => sourceIndex === expectedIndex,
+  );
+  if (!isPermutation) {
+    throw new Error("canonical list order must contain every source item once");
+  }
+
+  const sourceToCanonical: (number | undefined)[] = [];
+  canonicalSourceIndexes.forEach((sourceIndex, canonicalIndex) => {
+    sourceToCanonical[sourceIndex] = canonicalIndex;
+  });
+
+  return trivia.map((entry) => {
+    // The after-the-last-item anchor is not an item, so it does not move.
+    if (!isTrailingListTrivia(entry) && entry.anchorIndex === sourceItemCount) {
+      return entry;
+    }
+    const anchorIndex = sourceToCanonical[entry.anchorIndex];
+    if (anchorIndex === undefined) {
+      throw new Error(
+        `list trivia has invalid source anchor ${entry.anchorIndex}`,
+      );
+    }
+    return { ...entry, anchorIndex };
+  });
+}
+
 const objectMember = objectMemberEntry(
   or(
     taggedObjectPropertyParser,
@@ -1863,7 +1949,9 @@ export const objectTypeParser: Parser<ObjectType> = memo(
         r.entries as InterleavedEntry<ObjectProperty>[],
       );
       const objectType: ObjectType = { type: "objectType", properties: items };
-      if (trivia) objectType.trivia = trivia;
+      if (trivia) {
+        objectType.trivia = trivia;
+      }
       return objectType;
     },
   ),
@@ -2733,7 +2821,9 @@ export const agencyArrayParser: Parser<AgencyArray> = memo(
         r.entries as InterleavedEntry<Expression | SplatExpression>[],
       );
       const node: AgencyArray = { type: "agencyArray", items };
-      if (trivia) node.trivia = trivia;
+      if (trivia) {
+        node.trivia = trivia;
+      }
       return node;
     },
   ),
@@ -2803,7 +2893,9 @@ export const agencyObjectParser: Parser<AgencyObject> = map(
       r.entries as InterleavedEntry<AgencyObjectKV | SplatExpression>[],
     );
     const node: AgencyObject = { type: "agencyObject", entries: items };
-    if (trivia) node.trivia = trivia;
+    if (trivia) {
+      node.trivia = trivia;
+    }
     return node;
   },
 );
@@ -2836,33 +2928,40 @@ const namedArgumentParser: Parser<NamedArgument> = memo(
   ),
 );
 
+const argumentItemParser = or(
+  namedArgumentParser,
+  splatParser,
+  // Before exprParser: the expression path rejects splices, so
+  // `f(#...args)` needs its own alternative here.
+  lazy(() => spliceHoleParser),
+  lazy(() => inlineBlockParser),
+  // Before exprParser: `(n)` and `n` both parse as expressions, so the
+  // arrow form has to get first refusal on them.
+  lazy(() => arrowBlockParser),
+  lazy(() => exprParser),
+);
+
 // Shared argument list parser: (arg1, arg2, \x -> expr, ...)
-// Used by both _functionCallParser and callChainParser.
-const argumentListParser = memo("argumentListParser", seqC(
-  char("("),
-  optionalSpacesOrNewline,
-  capture(
-    sepBy(
-      commaWithNewline,
-      or(
-        namedArgumentParser,
-        splatParser,
-        // Before exprParser: the expression path rejects splices, so
-        // `f(#...args)` needs its own alternative here.
-        lazy(() => spliceHoleParser),
-        lazy(() => inlineBlockParser),
-        // Before exprParser: `(n)` and `n` both parse as expressions, so the
-        // arrow form has to get first refusal on them.
-        lazy(() => arrowBlockParser),
-        lazy(() => exprParser),
+// Used by _functionCallParser, callChainParser, interrupt/raise, and guard.
+// Captures `arguments` plus `argumentTrivia`, so the consumers that lift it
+// with `captureCaptures` carry comments through without extra wiring.
+const argumentListParser = memo(
+  "argumentListParser",
+  seqC(
+    char("("),
+    optionalSpacesOrNewline,
+    captureCaptures(
+      commaDelimitedListCaptures(
+        argumentItemParser,
+        ")",
+        "arguments",
+        "argumentTrivia",
       ),
     ),
-    "arguments",
+    optionalSpacesOrNewline,
+    char(")"),
   ),
-  optional(comma),
-  optionalSpacesOrNewline,
-  char(")"),
-));
+);
 
 // Extract inline block from parsed arguments into a separate block field.
 // Returns { arguments, block } or a failure if there are multiple inline blocks,
@@ -2871,7 +2970,8 @@ function extractInlineBlock(
   args: ArgWithBlock[],
   existingBlock: BlockArgument | undefined,
   input: string,
-): { success: true; arguments: FunctionCall["arguments"]; block?: BlockArgument } | { success: false; error: ParserResult<any> } {
+  trivia?: ListTrivia[],
+): { success: true; arguments: FunctionCall["arguments"]; block?: BlockArgument; trivia?: ListTrivia[] } | { success: false; error: ParserResult<any> } {
   const inlineBlocks = args.filter((a): a is BlockArgument => a.type === "blockArgument");
   if (inlineBlocks.length > 1) {
     return { success: false, error: failure("A function call cannot have more than one block argument", input) };
@@ -2880,13 +2980,21 @@ function extractInlineBlock(
     if (existingBlock) {
       return { success: false, error: failure("A function call cannot have both an inline block and a trailing 'as' block", input) };
     }
+    // The block prints last regardless of where it was written, so canonical
+    // order is every other argument followed by the block. Trivia anchors
+    // move with it.
+    const blockIndex = args.findIndex((a) => a.type === "blockArgument");
+    const ordinaryIndexes = args
+      .map((_, index) => index)
+      .filter((index) => index !== blockIndex);
     return {
       success: true,
       arguments: args.filter((a): a is Exclude<ArgWithBlock, BlockArgument> => a.type !== "blockArgument"),
       block: inlineBlocks[0],
+      trivia: remapListTrivia(trivia, [...ordinaryIndexes, blockIndex]),
     };
   }
-  return { success: true, arguments: args as FunctionCall["arguments"], block: existingBlock };
+  return { success: true, arguments: args as FunctionCall["arguments"], block: existingBlock, trivia };
 }
 
 type ArgWithBlock = Expression | SplatExpression | NamedArgument | BlockArgument;
@@ -2915,10 +3023,16 @@ export const _functionCallParser: Parser<FunctionCall> = memo("_functionCallPars
   if (!result.success) return result;
 
   const funcCall = result.result;
-  const extracted = extractInlineBlock(funcCall.arguments, funcCall.block, input);
+  const extracted = extractInlineBlock(
+    funcCall.arguments,
+    funcCall.block,
+    input,
+    funcCall.argumentTrivia,
+  );
   if (!extracted.success) return extracted.error;
   funcCall.arguments = extracted.arguments;
   funcCall.block = extracted.block;
+  funcCall.argumentTrivia = extracted.trivia;
 
   return result as ParserResult<FunctionCall>;
 });
@@ -3070,11 +3184,16 @@ const callChainParser: Parser<AccessChainElement> = (input: string) => {
   const result = argumentListParser(isOptional ? optResult.rest : input);
   if (!result.success) return failure("expected call arguments", input);
 
-  const extracted = extractInlineBlock(result.result.arguments, undefined, input);
+  const extracted = extractInlineBlock(
+    result.result.arguments,
+    undefined,
+    input,
+    result.result.argumentTrivia,
+  );
   if (!extracted.success) return extracted.error;
 
   return success(
-    { kind: "call" as const, arguments: extracted.arguments, ...(extracted.block && { block: extracted.block }), ...(isOptional && { optional: true }) },
+    { kind: "call" as const, arguments: extracted.arguments, ...(extracted.block && { block: extracted.block }), ...(extracted.trivia && { argumentTrivia: extracted.trivia }), ...(isOptional && { optional: true }) },
     result.rest,
   );
 };
@@ -5636,6 +5755,9 @@ export const guardBlockParser: Parser<GuardBlock> = label(
         {
           type: "guardBlock",
           arguments: (pre.result as any).arguments,
+          ...((pre.result as any).argumentTrivia && {
+            argumentTrivia: (pre.result as any).argumentTrivia,
+          }),
           body: (bodyR.result as any).body,
         } as GuardBlock,
         bodyR.rest,
@@ -6345,14 +6467,14 @@ const _baseFunctionParser: Parser<any> = memo(
     capture(declNameParser, "functionName"),
     char("("),
     optionalSpacesOrNewline,
-    capture(
-      sepBy(
-        seqC(commaWithNewline, optionalSpaces),
+    captureCaptures(
+      commaDelimitedListCaptures(
         or(variadicParameterParser, functionParameterParser),
+        ")",
+        "parameters",
+        "parameterTrivia",
       ),
-      "parameters",
     ),
-    optional(comma),
     optionalSpacesOrNewline,
     // Once we've consumed `def NAME (` plus parameters, we're committed
     // to a function definition. Anything other than `,` (another param)
@@ -6514,14 +6636,14 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
       capture(declNameParser, "nodeName"),
       char("("),
       optionalSpacesOrNewline,
-      capture(
-        sepBy(
-          seqC(commaWithNewline, optionalSpaces),
+      captureCaptures(
+        commaDelimitedListCaptures(
           functionParameterParser,
+          ")",
+          "parameters",
+          "parameterTrivia",
         ),
-        "parameters",
       ),
-      optional(comma),
       optionalSpacesOrNewline,
       parseError(
         "expected `,` between parameters or `)` to close the parameter list",

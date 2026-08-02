@@ -1,3 +1,4 @@
+import type { ListTrivia } from "./dataStructures.js";
 import { AgencyMultiLineComment, AgencyNode, FunctionCall, VariableType } from "../types.js";
 import { ValueAccess } from "./access.js";
 import { BaseNode } from "./base.js";
@@ -12,6 +13,8 @@ export type GraphNodeDefinition = BaseNode & {
    *  a compilable program. */
   nodeName: string | Hole;
   parameters: FunctionParameter[];
+  /** Comments between parameters in the signature. */
+  parameterTrivia?: ListTrivia[];
   body: AgencyNode[];
   returnType?: VariableType | null;
   returnTypeValidated?: boolean;

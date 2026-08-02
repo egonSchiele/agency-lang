@@ -1,3 +1,4 @@
+import type { ListTrivia } from "./dataStructures.js";
 import {
   AgencyMultiLineComment,
   AgencyNode,
@@ -63,6 +64,8 @@ export type FunctionDefinition = BaseNode & {
    *  a compilable program. */
   functionName: string | Hole;
   parameters: FunctionParameter[];
+  /** Comments between parameters in the signature. */
+  parameterTrivia?: ListTrivia[];
   body: AgencyNode[];
   returnType?: VariableType | null;
   returnTypeValidated?: boolean;
@@ -85,6 +88,8 @@ export type FunctionCall = BaseNode & {
    *  lexical chain the owning block is. 0 (or absent) = the current block. */
   blockDepth?: number;
   arguments: (Expression | SplatExpression | NamedArgument)[];
+  /** Comments between arguments, in the order the call PRINTS. */
+  argumentTrivia?: ListTrivia[];
   block?: BlockArgument;
   async?: boolean;
   tags?: Tag[];

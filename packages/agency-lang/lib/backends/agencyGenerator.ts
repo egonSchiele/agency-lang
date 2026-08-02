@@ -783,7 +783,10 @@ export class AgencyGenerator {
   private renderTypeSource(type: VariableType): string {
     return variableTypeToString(type, this.typeAliases, true, {
       objectType: (objectType, printChild) => {
-        if (!objectType.trivia?.length) {
+        if (
+          !objectType.trivia?.length &&
+          !this.objectTypeHasPropertyMetadata(objectType)
+        ) {
           return undefined;
         }
         return this.renderObjectTypeSource(objectType, printChild);
@@ -792,7 +795,23 @@ export class AgencyGenerator {
   }
 
   private renderTypeDisplay(type: VariableType): string {
-    return variableTypeToString(type, this.typeAliases, true);
+    return variableTypeToString(type, this.typeAliases, true, {
+      objectType: (objectType, printChild) => {
+        if (!this.objectTypeHasPropertyMetadata(objectType)) {
+          return undefined;
+        }
+        return this.renderObjectTypeSource(
+          { ...objectType, trivia: undefined },
+          printChild,
+        );
+      },
+    });
+  }
+
+  private objectTypeHasPropertyMetadata(objectType: ObjectType): boolean {
+    return objectType.properties.some(
+      (property) => !!property.tags?.length || !!property.description,
+    );
   }
 
   private renderType(type: VariableType, policy: TypeRenderPolicy): string {
@@ -908,6 +927,12 @@ export class AgencyGenerator {
     policy: TypeRenderPolicy,
   ): string {
     if (policy === "display") {
+      if (aliasedType.type === "objectType") {
+        return this.renderObjectTypeSource(
+          { ...aliasedType, trivia: undefined },
+          (child) => this.renderTypeDisplay(child),
+        );
+      }
       return this.renderTypeDisplay(aliasedType);
     }
     if (aliasedType.type === "objectType") {

@@ -2,18 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `agency fmt` preserve comments and blank lines inside object types at every source-formatting position without changing plain type rendering or user-facing signatures.
+**Goal:** Make `agency fmt` preserve comments, blank lines, and semantic property metadata inside object types at every source-formatting position, while display signatures omit trivia but preserve object-alias layout and metadata.
 
-**Architecture:** Keep `variableTypeToString` as the only recursive type printer and add an optional declarative object-type rendering hook that every recursive edge forwards. `AgencyGenerator` installs that hook only for source formatting and owns only trivia-aware object layout and indentation; plain/display consumers omit it and retain current output. Wrapped lists fix multiline item indentation by shifting continuation lines after rendering, without callbacks or a second rendering pass.
+**Architecture:** Keep `variableTypeToString` as the only recursive type printer and add an optional declarative object-type rendering hook that every recursive edge forwards. `AgencyGenerator` installs source and display policies around that hook and owns object layout and indentation. Source layout activates for trivia or semantic property metadata so the inline fallback cannot discard tags or descriptions. Display layout strips trivia, keeps root object aliases multiline, and retains semantic metadata. Wrapped lists fix multiline item indentation by shifting continuation lines after rendering, without callbacks or a second rendering pass.
 
 **Tech Stack:** TypeScript, Vitest, Agency parser and formatter.
 
 ## Global Constraints
 
 - Run every command from `packages/agency-lang` in the current worktree; all paths below are relative to that directory.
-- Preserve no-hook `variableTypeToString` output byte-for-byte, including TypeScript generation, generic value arguments, `Result` shorthand, precedence, effect sets, long unions, and block-type `raises` clauses.
+- Preserve no-hook `variableTypeToString` output byte-for-byte, including TypeScript generation, generic value arguments, `Result` shorthand, precedence, effect sets, long unions, and block-type `raises` clauses. Formatter source output is intentionally exempt when an object has property tags or descriptions: metadata safety requires Agency-owned multiline layout even without trivia.
 - Do not add `typeHasTrivia`, a second recursive printer, duplicated precedence helpers, or printer-agreement tests.
-- Keep `signatureOf`, `agency doc`, and `std::agency` `describe` on an explicit plain/display rendering path; comments must not appear in signatures.
+- Keep `signatureOf`, `agency doc`, and `std::agency` `describe` on an explicit display rendering path; comments and blank-line trivia must not appear in signatures. Root object aliases remain multiline, and property tags/descriptions remain visible at every object depth. Trivia-only parameter and return objects may remain compact.
 - Do not change parser code. The PR #768 issue is already fixed: `objectMemberEntry` checks `consumedLineEnding(input, item.rest)` before both pre- and post-delimiter trailing-comment parses.
 - Do not edit `docs/site/` or add other user-facing documentation.
 - Follow `docs/dev/anti-patterns.md`: preserve one syntax owner, expose a declarative hook, avoid repeated stateful rendering, and do not add dynamic imports, `Map`, `Set`, one-line `if` statements, nested ternaries, or single-character names.
@@ -70,7 +70,7 @@ private renderTypeSource(type: VariableType): string {
 }
 ```
 
-`renderObjectTypeSource` and `stringifyProp` accept `printChild`; they do not recurse independently. Root object aliases retain their existing multiline layout by calling the same object layout method directly, while nested trivia-free objects continue through the canonical inline branch.
+`renderObjectTypeSource` and `stringifyProp` accept `printChild`; they do not recurse independently. Root object aliases retain their existing multiline layout by calling the same object layout method directly. Nested objects continue through the canonical inline branch only when they have neither trivia nor semantic property metadata. Display rendering calls the same formatter-owned object layout with `trivia` removed for root aliases and metadata-bearing nested objects.
 
 ---
 

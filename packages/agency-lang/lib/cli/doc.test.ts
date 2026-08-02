@@ -149,7 +149,13 @@ describe("generateDoc", () => {
     fs.writeFileSync(
       path.join(inputDir, "display.agency"),
       `export type Input = {
-  id: string // keep
+  @validate(isPresent)
+  @jsonSchema({ description: "stable identifier" })
+  id: string,
+  nested: {
+    @jsonSchema({ description: "nested value" })
+    value: string // keep
+  }
 }
 
 export def load(input: {
@@ -168,7 +174,19 @@ export def load(input: {
     expect(output).toContain(`### Input
 
 \`\`\`ts
-export type Input = { id: string }
+export type Input = {
+  @validate(isPresent)
+  @jsonSchema({
+    description: "stable identifier"
+  })
+  id: string;
+  nested: {
+    @jsonSchema({
+      description: "nested value"
+    })
+    value: string
+  }
+}
 \`\`\``);
     expect(output).toContain(`### load
 
@@ -624,6 +642,7 @@ node main() {
       path.join(inputDir, "annotated.agency"),
       `import { isEmail } from "std::validation"
 
+// keep
 @validate(isEmail)
 @jsonSchema({ format: "email", description: "export type email" })
 export type Email = string
@@ -648,7 +667,7 @@ export type Email = string
 })
 export type Email = string
 \`\`\``);
-    expect(output).not.toContain("//");
+    expect(output).not.toContain("// keep");
 
     // Structured "Validators:" line should list the validator.
     expect(output).toMatch(/\*\*Validators:\*\* `isEmail`/);

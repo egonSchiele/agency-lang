@@ -1062,6 +1062,25 @@ type Optional = {
     expectExactStableFormat(source, expected);
   });
 
+  it("preserves metadata-only nested object properties", () => {
+    const source = `type Wrapped = Container<{
+  @validate(isPositive)
+  @jsonSchema({ minimum: 1, description: "stable identifier" })
+  id: number,
+  label: string
+}>`;
+    const expected = `type Wrapped = Container<{
+  @validate(isPositive)
+  @jsonSchema({
+    minimum: 1,
+    description: "stable identifier"
+  })
+  id: number;
+  label: string
+}>`;
+    expectExactStableFormat(source, expected);
+  });
+
   it("keeps a trivia-free root object alias in its multiline canonical layout", () => {
     const source = "type Plain = { id: number, label: string }";
     const expected = `type Plain = {

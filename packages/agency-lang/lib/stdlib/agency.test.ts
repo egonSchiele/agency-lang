@@ -647,7 +647,13 @@ describe("_describe (reify)", () => {
 
   it("uses plain display signatures for commented object types", () => {
     const info = _describe(`export type Input = {
-  id: string // keep
+  @validate(isPresent)
+  @jsonSchema({ description: "stable identifier" })
+  id: string,
+  nested: {
+    @jsonSchema({ description: "nested value" })
+    value: string // keep
+  }
 }
 export def load(input: {
   id: string // keep
@@ -665,7 +671,22 @@ export node inspect(input: {
 }`);
 
     expect(info.exports.map(({ name, signature }) => [name, signature])).toEqual([
-      ["Input", "type Input = { id: string }"],
+      [
+        "Input",
+        `type Input = {
+  @validate(isPresent)
+  @jsonSchema({
+    description: "stable identifier"
+  })
+  id: string;
+  nested: {
+    @jsonSchema({
+      description: "nested value"
+    })
+    value: string
+  }
+}`,
+      ],
       ["load", "load(input: { id: string }): { value: string }"],
       ["inspect", "inspect(input: { id: string }): { value: string }"],
     ]);

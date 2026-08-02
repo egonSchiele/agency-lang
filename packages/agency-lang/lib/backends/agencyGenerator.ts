@@ -68,6 +68,7 @@ import { GraphNodeDefinition } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
 import {
   ImportNameType,
+  NamedImport,
   ImportNodeStatement,
   ImportStatement,
 } from "../types/importStatement.js";
@@ -1167,12 +1168,18 @@ export class AgencyGenerator {
       // `{ name: _: string }`.
       return `${prop.key}: ${this.formatIsRhs(prop.value)}`;
     });
-    return `{ ${parts.join(", ")} }`;
+    return (
+      this.renderListIfTrivia(parts, node.propertyTrivia, "{", "}") ??
+      `{ ${parts.join(", ")} }`
+    );
   }
 
   private formatArrayPattern(node: ArrayPattern): string {
     const parts = node.elements.map((el) => this.formatPattern(el));
-    return `[${parts.join(", ")}]`;
+    return (
+      this.renderListIfTrivia(parts, node.elementTrivia, "[", "]") ??
+      `[${parts.join(", ")}]`
+    );
   }
 
   protected generateLiteral(literal: Literal): string {
@@ -1406,27 +1413,43 @@ export class AgencyGenerator {
    *  `rendered` must already be in canonical print order — for a call that
    *  means `renderArgs` has appended any inline block last, matching how
    *  `extractInlineBlock` remapped the anchors. */
+  /** A list of already-rendered items laid out across lines with its
+   *  comments, or `undefined` when there are none. Callers keep their own
+   *  inline or wrapping behavior for the no-comment case, so trivia-free
+   *  output is untouched; a comment cannot share a line with what follows
+   *  it, so its presence forces the multiline form. */
+  protected renderListIfTrivia(
+    rendered: string[],
+    trivia: ListTrivia[] | undefined,
+    open: string,
+    close: string,
+  ): string | undefined {
+    if (!trivia?.length) {
+      return undefined;
+    }
+    return this.renderListWithTrivia({
+      items: rendered,
+      trivia,
+      open,
+      close,
+      renderItem: (code) => ({ code }),
+      separator: (index, count) => (index === count - 1 ? "" : ","),
+    });
+  }
+
   protected renderParenList(
     rendered: string[],
     trivia: ListTrivia[] | undefined,
     prefix: string,
     suffix: string,
   ): string {
-    if (!trivia?.length) {
+    const body = this.renderListIfTrivia(rendered, trivia, "(", ")");
+    if (body === undefined) {
       return this.wrapList(rendered, prefix, "(", ")", suffix);
     }
-    const body = this.renderListWithTrivia({
-      items: rendered,
-      trivia,
-      open: "(",
-      close: ")",
-      renderItem: (code) => ({ code }),
-      separator: (index, count) => (index === count - 1 ? "" : ","),
-    });
     return `${prefix}${body}${suffix}`;
   }
 
-  // Format args as inline parenthesized list (no wrapping — used by access chain callers)
   /** A parenthesized argument list that normally stays on one line
    *  (access chains, `interrupt`, `guard`). Trivia forces the multiline
    *  form, since a `//` comment cannot share a line with what follows it. */
@@ -1860,17 +1883,16 @@ export class AgencyGenerator {
       node.importedNames[0].type === "namedImport"
     ) {
       const namedImport = node.importedNames[0];
-      const names = namedImport.importedNames.map((entry) => {
-        const name = declaredName(entry);
-        const alias = namedImport.aliases[name];
-        const base = alias ? `${name} as ${alias}` : name;
-        return this.prefixMarkedName(
-          name,
-          base,
-          namedImport.destructiveNames,
-          namedImport.idempotentNames,
-        );
-      });
+      const names = this.renderImportNames(namedImport);
+      const withTrivia = this.renderListIfTrivia(
+        names,
+        namedImport.nameTrivia,
+        "{",
+        "}",
+      );
+      if (withTrivia !== undefined) {
+        return this.indentStr(`${importKeyword}${withTrivia}${suffix}`);
+      }
       return this.indentStr(
         this.wrapList(names, importKeyword, "{ ", " }", suffix),
       );
@@ -1883,21 +1905,33 @@ export class AgencyGenerator {
     return this.indentStr(`${importKeyword}${importedNames.join(", ")}${suffix}`);
   }
 
+  /** The names inside an import's `{ ... }`, with their aliases and
+   *  retry-safety markers. Shared by the sole-named and mixed paths. */
+  private renderImportNames(namedImport: NamedImport): string[] {
+    return namedImport.importedNames.map((entry) => {
+      const name = declaredName(entry);
+      const alias = namedImport.aliases[name];
+      const base = alias ? `${name} as ${alias}` : name;
+      return this.prefixMarkedName(
+        name,
+        base,
+        namedImport.destructiveNames,
+        namedImport.idempotentNames,
+      );
+    });
+  }
+
   protected processImportNameType(node: ImportNameType): string {
     switch (node.type) {
       case "namedImport": {
-        const names = node.importedNames.map((entry) => {
-          const name = declaredName(entry);
-          const alias = node.aliases[name];
-          const base = alias ? `${name} as ${alias}` : name;
-          return this.prefixMarkedName(
-            name,
-            base,
-            node.destructiveNames,
-            node.idempotentNames,
-          );
-        });
-        return `{ ${names.join(", ")} }`;
+        const names = this.renderImportNames(node);
+        // A mixed import (`import tools, { a } from ...`) reaches this path
+        // too, so it has to honor trivia the same way a sole named import
+        // does — otherwise the comment is dropped on the first format.
+        return (
+          this.renderListIfTrivia(names, node.nameTrivia, "{", "}") ??
+          `{ ${names.join(", ")} }`
+        );
       }
       case "namespaceImport":
         return `* as ${node.importedNames}`;
@@ -1924,7 +1958,17 @@ export class AgencyGenerator {
   }
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {
-    return `import node { ${node.importedNodes.join(", ")} } from "${node.agencyFile}"`;
+    const suffix = ` from "${node.agencyFile}"`;
+    const withTrivia = this.renderListIfTrivia(
+      node.importedNodes,
+      node.nodeTrivia,
+      "{",
+      "}",
+    );
+    if (withTrivia !== undefined) {
+      return `import node ${withTrivia}${suffix}`;
+    }
+    return `import node { ${node.importedNodes.join(", ")} }${suffix}`;
   }
 
   protected processExportFromStatement(node: ExportFromStatement): string {
@@ -1942,9 +1986,17 @@ export class AgencyGenerator {
         body.idempotentNames,
       );
     });
-    return this.indentStr(
-      `export { ${items.join(", ")} } from "${node.modulePath}"`,
+    const suffix = ` from "${node.modulePath}"`;
+    const withTrivia = this.renderListIfTrivia(
+      items,
+      body.nameTrivia,
+      "{",
+      "}",
     );
+    if (withTrivia !== undefined) {
+      return this.indentStr(`export ${withTrivia}${suffix}`);
+    }
+    return this.indentStr(`export { ${items.join(", ")} }${suffix}`);
   }
 
   private sortAndRenderImports(): string {
@@ -2087,7 +2139,16 @@ export class AgencyGenerator {
       }
     }
 
-    const paramsStr = params.length > 0 ? `(${params.join(", ")})` : "";
+    // `params` is built in THREAD_ARGUMENT_ORDER, the same canonical order
+    // the parser remapped the trivia anchors into.
+    const withTrivia = this.renderListIfTrivia(
+      params,
+      node.argumentTrivia,
+      "(",
+      ")",
+    );
+    const paramsStr =
+      withTrivia ?? (params.length > 0 ? `(${params.join(", ")})` : "");
 
     return this.indentStr(
       `${threadType}${paramsStr} {\n${bodyCodeStr}${this.indentStr("}")}`,
@@ -2098,9 +2159,12 @@ export class AgencyGenerator {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    const sharedSuffix = node.shared
-      ? `(shared: ${this.processNode(node.shared).trim()})`
-      : "";
+    const sharedArgs = node.shared
+      ? [`shared: ${this.processNode(node.shared).trim()}`]
+      : [];
+    const sharedSuffix =
+      this.renderListIfTrivia(sharedArgs, node.argumentTrivia, "(", ")") ??
+      (node.shared ? `(${sharedArgs[0]})` : "");
     return this.indentStr(
       `parallel${sharedSuffix} {\n${bodyCodeStr}${this.indentStr("}")}`,
     );

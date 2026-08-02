@@ -622,7 +622,12 @@ const ResumeBatchSchema = z
     responses: z.array(z.object({ type: z.enum(["approve", "reject"]) })),
   })
   .refine((batch) => batch.interrupts.length === batch.responses.length, {
-    message: "interrupts and responses length mismatch",
+    // Name the counts — this is the actionable message TS callers of
+    // respondToInterrupts see, and a test pins that it mentions them.
+    error: (issue) => {
+      const batch = issue.input as { interrupts: unknown[]; responses: unknown[] };
+      return `expected ${batch.interrupts.length} responses but got ${batch.responses.length}`;
+    },
   })
   .refine(
     (batch) =>

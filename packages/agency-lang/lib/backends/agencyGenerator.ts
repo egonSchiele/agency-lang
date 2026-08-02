@@ -1167,12 +1167,18 @@ export class AgencyGenerator {
       // `{ name: _: string }`.
       return `${prop.key}: ${this.formatIsRhs(prop.value)}`;
     });
-    return `{ ${parts.join(", ")} }`;
+    return (
+      this.renderListIfTrivia(parts, node.propertyTrivia, "{", "}") ??
+      `{ ${parts.join(", ")} }`
+    );
   }
 
   private formatArrayPattern(node: ArrayPattern): string {
     const parts = node.elements.map((el) => this.formatPattern(el));
-    return `[${parts.join(", ")}]`;
+    return (
+      this.renderListIfTrivia(parts, node.elementTrivia, "[", "]") ??
+      `[${parts.join(", ")}]`
+    );
   }
 
   protected generateLiteral(literal: Literal): string {
@@ -1406,23 +1412,40 @@ export class AgencyGenerator {
    *  `rendered` must already be in canonical print order — for a call that
    *  means `renderArgs` has appended any inline block last, matching how
    *  `extractInlineBlock` remapped the anchors. */
+  /** A list of already-rendered items laid out across lines with its
+   *  comments, or `undefined` when there are none. Callers keep their own
+   *  inline or wrapping behavior for the no-comment case, so trivia-free
+   *  output is untouched; a comment cannot share a line with what follows
+   *  it, so its presence forces the multiline form. */
+  protected renderListIfTrivia(
+    rendered: string[],
+    trivia: ListTrivia[] | undefined,
+    open: string,
+    close: string,
+  ): string | undefined {
+    if (!trivia?.length) {
+      return undefined;
+    }
+    return this.renderListWithTrivia({
+      items: rendered,
+      trivia,
+      open,
+      close,
+      renderItem: (code) => ({ code }),
+      separator: (index, count) => (index === count - 1 ? "" : ","),
+    });
+  }
+
   protected renderParenList(
     rendered: string[],
     trivia: ListTrivia[] | undefined,
     prefix: string,
     suffix: string,
   ): string {
-    if (!trivia?.length) {
+    const body = this.renderListIfTrivia(rendered, trivia, "(", ")");
+    if (body === undefined) {
       return this.wrapList(rendered, prefix, "(", ")", suffix);
     }
-    const body = this.renderListWithTrivia({
-      items: rendered,
-      trivia,
-      open: "(",
-      close: ")",
-      renderItem: (code) => ({ code }),
-      separator: (index, count) => (index === count - 1 ? "" : ","),
-    });
     return `${prefix}${body}${suffix}`;
   }
 
@@ -1871,6 +1894,15 @@ export class AgencyGenerator {
           namedImport.idempotentNames,
         );
       });
+      const withTrivia = this.renderListIfTrivia(
+        names,
+        namedImport.nameTrivia,
+        "{",
+        "}",
+      );
+      if (withTrivia !== undefined) {
+        return this.indentStr(`${importKeyword}${withTrivia}${suffix}`);
+      }
       return this.indentStr(
         this.wrapList(names, importKeyword, "{ ", " }", suffix),
       );
@@ -1924,7 +1956,17 @@ export class AgencyGenerator {
   }
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {
-    return `import node { ${node.importedNodes.join(", ")} } from "${node.agencyFile}"`;
+    const suffix = ` from "${node.agencyFile}"`;
+    const withTrivia = this.renderListIfTrivia(
+      node.importedNodes,
+      node.nodeTrivia,
+      "{",
+      "}",
+    );
+    if (withTrivia !== undefined) {
+      return `import node ${withTrivia}${suffix}`;
+    }
+    return `import node { ${node.importedNodes.join(", ")} }${suffix}`;
   }
 
   protected processExportFromStatement(node: ExportFromStatement): string {
@@ -1942,9 +1984,17 @@ export class AgencyGenerator {
         body.idempotentNames,
       );
     });
-    return this.indentStr(
-      `export { ${items.join(", ")} } from "${node.modulePath}"`,
+    const suffix = ` from "${node.modulePath}"`;
+    const withTrivia = this.renderListIfTrivia(
+      items,
+      body.nameTrivia,
+      "{",
+      "}",
     );
+    if (withTrivia !== undefined) {
+      return this.indentStr(`export ${withTrivia}${suffix}`);
+    }
+    return this.indentStr(`export { ${items.join(", ")} }${suffix}`);
   }
 
   private sortAndRenderImports(): string {
@@ -2087,7 +2137,16 @@ export class AgencyGenerator {
       }
     }
 
-    const paramsStr = params.length > 0 ? `(${params.join(", ")})` : "";
+    // `params` is built in THREAD_ARGUMENT_ORDER, the same canonical order
+    // the parser remapped the trivia anchors into.
+    const withTrivia = this.renderListIfTrivia(
+      params,
+      node.argumentTrivia,
+      "(",
+      ")",
+    );
+    const paramsStr =
+      withTrivia ?? (params.length > 0 ? `(${params.join(", ")})` : "");
 
     return this.indentStr(
       `${threadType}${paramsStr} {\n${bodyCodeStr}${this.indentStr("}")}`,
@@ -2098,9 +2157,12 @@ export class AgencyGenerator {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    const sharedSuffix = node.shared
-      ? `(shared: ${this.processNode(node.shared).trim()})`
-      : "";
+    const sharedArgs = node.shared
+      ? [`shared: ${this.processNode(node.shared).trim()}`]
+      : [];
+    const sharedSuffix =
+      this.renderListIfTrivia(sharedArgs, node.argumentTrivia, "(", ")") ??
+      (node.shared ? `(${sharedArgs[0]})` : "");
     return this.indentStr(
       `parallel${sharedSuffix} {\n${bodyCodeStr}${this.indentStr("}")}`,
     );

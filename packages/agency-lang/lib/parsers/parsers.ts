@@ -1870,7 +1870,13 @@ type CommaListPolicy = {
 
 /** Look ahead past trivia to the closer, without consuming anything. */
 const closerAhead = (closer: string) =>
-  peek(seqR(many(seqR(literalTrivia, optionalSpacesOrNewline)), char(closer)));
+  peek(
+    seqR(
+      optionalSpacesOrNewline,
+      many(seqR(literalTrivia, optionalSpacesOrNewline)),
+      char(closer),
+    ),
+  );
 
 /** The separator between two items. In `reject` mode a comma must be
  *  followed by another item, so `[a, b,]` fails rather than quietly
@@ -4898,6 +4904,9 @@ const namedImportParser: Parser<NamedImport> = memo(
         importedNames,
         aliases,
       };
+      if (result.nameTrivia) {
+        node.nameTrivia = result.nameTrivia;
+      }
       if (destructiveNames.length > 0) {
         node.destructiveNames = destructiveNames;
       }
@@ -5020,6 +5029,9 @@ const namedExportBodyParser = map(
       names,
       aliases,
     };
+    if (result.nameTrivia) {
+      body.nameTrivia = result.nameTrivia;
+    }
     if (destructiveNames.length > 0) {
       body.destructiveNames = destructiveNames;
     }
@@ -6192,7 +6204,9 @@ const _parallelNamedArgsParser: Parser<ParallelNamedArgs> = (
     char(")"),
   );
   const r = inner(input);
-  if (!r.success) return r as ParserResult<ParallelNamedArgs>;
+  if (!r.success) {
+    return r as ParserResult<ParallelNamedArgs>;
+  }
   const args: NamedArgument[] = r.result.arguments;
   const seen: Record<string, Expression> = {};
   for (const arg of args) {

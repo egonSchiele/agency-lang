@@ -209,3 +209,105 @@ describe("line boundaries around nested members", () => {
     expect(formatSource(once as string)).toBe(once);
   });
 });
+
+describe("remaining multiline surfaces", () => {
+  it.each([
+    [
+      "named import",
+      `import {\n  alpha, // alpha\n  beta // beta\n} from "./tools"\n`,
+      ["alpha, // alpha", "beta // beta"],
+    ],
+    [
+      "node import",
+      `import node {\n  first, // first\n  second // second\n} from "./nodes.agency"\n`,
+      ["first, // first", "second // second"],
+    ],
+    [
+      "named export",
+      `export {\n  alpha, // alpha\n  beta // beta\n} from "./tools"\n`,
+      ["alpha, // alpha", "beta // beta"],
+    ],
+    [
+      "array binding pattern",
+      `node main() {\n  const [\n    first, // first\n    second // second\n  ] = values\n}\n`,
+      ["first, // first", "second // second"],
+    ],
+    [
+      "object binding pattern",
+      `node main() {\n  const {\n    name, // name\n    age // age\n  } = user\n}\n`,
+      ["name, // name", "age // age"],
+    ],
+    [
+      "match array pattern",
+      `node main() {\n  match (value) {\n    [\n      "ok", // tag\n      result // payload\n    ] => result\n  }\n}\n`,
+      [`"ok", // tag`, "result // payload"],
+    ],
+    [
+      "thread arguments",
+      `node main() {\n  thread(\n    label: "work", // label\n    hidden: true // visibility\n  ) {\n    print(1)\n  }\n}\n`,
+      [`label: "work", // label`, "hidden: true // visibility"],
+    ],
+    [
+      "parallel arguments",
+      `node main() {\n  parallel(\n    shared: true // state mode\n  ) {\n    print(1)\n  }\n}\n`,
+      ["shared: true // state mode"],
+    ],
+  ])("preserves %s comments", (_name, source, expectedLines) => {
+    const once = formatSource(source);
+    expect(once).not.toBeNull();
+    for (const line of expectedLines) {
+      expect(once).toContain(line);
+    }
+    expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+    expect(formatSource(once as string)).toBe(once);
+  });
+
+  it("moves a thread comment with its argument when the order is canonicalized", () => {
+    // Written hidden-first; the formatter prints label first. Each comment
+    // must travel with the argument it described, not stay at its index.
+    const source = `node main() {\n  thread(\n    hidden: true, // about hidden\n    label: "work" // about label\n  ) {\n    print(1)\n  }\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain(`label: "work", // about label`);
+    expect(once).toContain("hidden: true // about hidden");
+    expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+    expect(formatSource(once as string)).toBe(once);
+  });
+
+  it("keeps inner and trailing import comments with the right import when sorting", () => {
+    // Written zeta-first; the formatter sorts alpha first. Both the name
+    // comment inside each list and the comment after each `from` clause must
+    // travel with their own import.
+    const source =
+      `import {\n  zeta // the zeta name\n} from "./zeta" // trailing zeta\nimport {\n  alpha // the alpha name\n} from "./alpha" // trailing alpha\n`;
+    const once = formatSource(source) as string;
+    expect(once).not.toBeNull();
+    expect(once.indexOf("alpha // the alpha name")).toBeLessThan(
+      once.indexOf("zeta // the zeta name"),
+    );
+    expect(once).toContain("alpha // the alpha name");
+    expect(once).toContain(`from "./alpha" // trailing alpha`);
+    expect(once).toContain("zeta // the zeta name");
+    expect(once).toContain(`from "./zeta" // trailing zeta`);
+    expect(formatSource(once)).toBe(once);
+  });
+});
+
+// Each `reject` policy needs its own negative test, or migrating a site to the
+// shared parser could silently start accepting a trailing comma.
+describe("trailing commas stay rejected where they always were", () => {
+  it.each([
+    ["node import", `import node { first, second, } from "./nodes.agency"\n`],
+    ["array binding pattern", `node main() {\n  const [first, second, ] = values\n}\n`],
+    ["object binding pattern", `node main() {\n  const { name, age, } = user\n}\n`],
+  ])("rejects a trailing comma in a %s", (_name, source) => {
+    expect(parseAgency(source, {}, false, false).success).toBe(false);
+  });
+
+  it.each([
+    ["named import", `import { alpha, beta, } from "./tools"\n`],
+    ["named export", `export { alpha, beta, } from "./tools"\n`],
+    ["call arguments", `node main() {\n  save(first, second, )\n}\n`],
+  ])("still accepts a trailing comma in a %s", (_name, source) => {
+    expect(parseAgency(source, {}, false, false).success).toBe(true);
+  });
+});

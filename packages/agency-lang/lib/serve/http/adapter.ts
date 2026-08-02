@@ -1,6 +1,7 @@
 import http from "http";
 import type { ExportedItem, ExportedFunction, ExportedNode } from "../types.js";
 import { errorMessage, toArgs, parseJsonBody } from "../util.js";
+import { validateResumeBatch } from "../../runtime/interrupts.js";
 import type { Logger } from "../../logger.js";
 import {
   DEFAULT_HOST,
@@ -105,8 +106,11 @@ async function resumeInterrupts(
     interrupts: unknown[];
     responses: unknown[];
   };
-  if (!Array.isArray(interrupts) || !Array.isArray(responses)) {
-    return { status: 400, body: { error: "interrupts and responses must be arrays" } };
+  const validationError = validateResumeBatch(interrupts, responses);
+  if (validationError) {
+    // Reject before any runtime code runs: a malformed response must never
+    // reach the resume path, where an unknown type continues past the interrupt.
+    return { status: 400, body: { error: validationError } };
   }
   try {
     const result = (await respondToInterrupts(interrupts, responses)) as { data: unknown };

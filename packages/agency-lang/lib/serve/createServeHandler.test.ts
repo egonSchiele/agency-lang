@@ -37,10 +37,10 @@ export async function main(message) {
   return { data: { echo: message, version: ${JSON.stringify(version)} } };
 }
 export async function needsApproval() {
-  return { data: { __interrupts: [{ type: "interrupt", effect: "std::read", message: "ok?" }] } };
+  return { data: [{ type: "interrupt", effect: "std::read", message: "ok?", origin: "agent", interruptId: "fixture-int-1", runId: "fixture-run-1", data: null }] };
 }
 export function hasInterrupts(data) {
-  return !!(data && data.__interrupts);
+  return Array.isArray(data) && data.length > 0 && data.every((item) => item && item.type === "interrupt");
 }
 export async function respondToInterrupts(interrupts, responses) {
   return { data: { resumed: true, responses } };
@@ -109,11 +109,12 @@ describe("createServeHandler", () => {
   it("returns the interrupts payload, then resumes to the final value", async () => {
     const handler = await createServeHandler(modulePath, baseOptions());
     const paused = await handler("POST", "/node/needsApproval", {});
-    const pausedBody = paused.body as { success: boolean; value: { interrupts: unknown } };
-    expect(pausedBody.value.interrupts).toBeTruthy();
+    const pausedBody = paused.body as { success: boolean; value: { interrupts: unknown[] } };
+    expect(Array.isArray(pausedBody.value.interrupts)).toBe(true);
 
+    // Echo the exact interrupt array from the pause, as a real client would.
     const resumed = await handler("POST", "/resume", {
-      interrupts: [{ type: "interrupt", effect: "std::read", message: "ok?" }],
+      interrupts: pausedBody.value.interrupts,
       responses: [{ type: "approve" }],
     });
     const resumedBody = resumed.body as { success: boolean; value: { resumed: boolean } };

@@ -1,6 +1,7 @@
 import * as smoltalk from "smoltalk";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import {
@@ -606,18 +607,63 @@ export async function interruptWithHandlers<T = any>(
   return renderVerdict(outcome, ctx, interruptId, interruptObj, parentDecided ? "ipc" : "handler");
 }
 
+// A resume batch, validated before it can reach interrupt-resume execution.
+// The generated resume code acts only on `"approve"` and `"reject"`, so a
+// malformed response would otherwise fall through and continue execution *past*
+// the interrupt. The schema also enforces equal lengths and unique interrupt
+// IDs — the response map is ID-keyed, so duplicates would silently overwrite.
+// Each item schema keeps only the identity fields it gates on; interrupts and
+// responses carry more fields, which parse harmlessly.
+const ResumeBatchSchema = z
+  .object({
+    interrupts: z
+      .array(z.object({ type: z.literal("interrupt"), interruptId: z.string().min(1) }))
+      .min(1),
+    responses: z.array(z.object({ type: z.enum(["approve", "reject"]) })),
+  })
+  .refine((batch) => batch.interrupts.length === batch.responses.length, {
+    // Name the counts — this is the actionable message TS callers of
+    // respondToInterrupts see, and a test pins that it mentions them.
+    error: (issue) => {
+      const batch = issue.input as { interrupts: unknown[]; responses: unknown[] };
+      return `expected ${batch.interrupts.length} responses but got ${batch.responses.length}`;
+    },
+  })
+  .refine(
+    (batch) =>
+      new Set(batch.interrupts.map((interrupt) => interrupt.interruptId)).size ===
+      batch.interrupts.length,
+    { message: "interrupt IDs must be unique" },
+  );
+
+/**
+ * Validate a resume batch. Returns the first problem as a message, or `null`
+ * when the batch is well-formed. `safeParse` never throws — a `null` or
+ * primitive item is a validation error, not a crash.
+ */
+export function validateResumeBatch(
+  interrupts: unknown,
+  responses: unknown,
+): string | null {
+  const result = ResumeBatchSchema.safeParse({ interrupts, responses });
+  return result.success ? null : result.error.issues[0].message;
+}
+
 /** Build the ID-keyed response map for `respondToInterrupts`. Extracted
  * to keep the main function under the structural lint limit. */
 function buildResponseMap(
   interrupts: Interrupt[],
   responses: InterruptResponse[],
 ): Record<string, { response: InterruptResponse }> {
-  if (responses.length !== interrupts.length) {
-    throw new Error(
-      `respondToInterrupts: expected ${interrupts.length} responses but got ${responses.length}`,
-    );
+  // Defense in depth: non-HTTP callers (MCP, direct embedders) reach here
+  // without the adapter's check, so the same validator gates this path too.
+  const validationError = validateResumeBatch(interrupts, responses);
+  if (validationError) {
+    throw new Error(`respondToInterrupts: ${validationError}`);
   }
-  const responseMap: Record<string, { response: InterruptResponse }> = {};
+  // Null-prototype: interruptId comes from the (client-echoed) request, so an id
+  // like "__proto__" must be a plain key, not a write to the map's prototype.
+  const responseMap: Record<string, { response: InterruptResponse }> = Object.create(null);
   for (let i = 0; i < interrupts.length; i++) {
     responseMap[interrupts[i].interruptId] = {
       response: deepClone(responses[i]),

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AgencyGenerator, generateAgency } from "./agencyGenerator.js";
 import { parseAgency } from "../parser.js";
+import { formatSource } from "../formatter.js";
 import { deepFreeze } from "../runtime/utils.js";
 import { FunctionDefinition } from "../types.js";
 
@@ -948,6 +949,305 @@ describe("AgencyGenerator - optional key shorthand (nullish unification)", () =>
 
     expect(result.output).toContain("foo?: string");
     expect(result.output).not.toContain("string | null");
+  });
+});
+
+describe("AgencyGenerator - nested object type trivia", () => {
+  function formatAgency(source: string): string {
+    const formatted = formatSource(source);
+    expect(formatted).not.toBeNull();
+    return formatted?.trim() ?? "";
+  }
+
+  function expectExactStableFormat(source: string, expected: string): void {
+    const once = formatAgency(source);
+    expect(once).toBe(expected);
+    expect(parseAgency(once, {}, false, false).success).toBe(true);
+    expect(formatAgency(once)).toBe(expected);
+  }
+
+  it("omits parameter trivia from direct display signatures", () => {
+    const parsed = parseAgency(`def configure(
+  // keep
+  host: string,
+  port: number
+): string {
+  return host
+}`, {}, false);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) {
+      return;
+    }
+    const definition = parsed.result.nodes.find((node) => node.type === "function");
+    expect(definition?.type).toBe("function");
+    if (definition?.type !== "function") {
+      return;
+    }
+
+    expect(new AgencyGenerator().signatureOf(definition)).toBe(
+      "configure(host: string, port: number): string",
+    );
+    expect(formatAgency(`def configure(
+  // keep
+  host: string,
+  port: number
+): string {
+  return host
+}`)).toContain("// keep");
+  });
+
+  it("retains alias doc comments and avoids whitespace before multiline RHS", () => {
+    const parsed = parseAgency(`/** Kept in generated code blocks. */
+@jsonSchema({ description: "choice" })
+type Choice = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"`, {}, false);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) {
+      return;
+    }
+    const alias = parsed.result.nodes.find((node) => node.type === "typeAlias");
+    expect(alias?.type).toBe("typeAlias");
+    if (alias?.type !== "typeAlias") {
+      return;
+    }
+    const generator = new AgencyGenerator();
+
+    expect(generator.signatureOf(alias)).toBe(`type Choice =
+  | "alpha"
+  | "bravo"
+  | "charlie"
+  | "delta"
+  | "echo"
+  | "foxtrot"
+  | "golf"
+  | "hotel"
+  | "india"`);
+    expect(generator.signatureOf(alias)).not.toMatch(/[ \t]+$/m);
+  });
+
+  it("preserves generic, Result, block, and nested-property wrappers", () => {
+    const source = `type Generic = Container<{
+  x: number // keep
+}>(3)
+
+type Loaded = Result<{
+  x: number // keep
+}>
+
+type Callback = (arg: {
+  x: number // keep
+}) -> {
+  y: string // keep
+}
+
+type Optional = {
+  nested: {
+    x: number // keep
+  } | null
+}`;
+    const expected = `type Generic = Container<{
+  x: number // keep
+}>(3)
+
+type Loaded = Result<{
+  x: number // keep
+}>
+
+type Callback = (arg: {
+  x: number // keep
+}) -> {
+  y: string // keep
+}
+
+type Optional = {
+  nested?: {
+    x: number // keep
+  }
+}`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("preserves blank lines and standalone comments inside a nested wrapper", () => {
+    const source = `type Commented = Array<{
+  // first
+  x: number,
+
+  y: string,
+  // last
+}>`;
+    const expected = `type Commented = Array<{
+  // first
+  x: number;
+
+  y: string
+  // last
+}>`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("preserves a blank line inside a root object alias", () => {
+    const source = `type Root = {
+  x: number,
+
+  y: string
+}`;
+    const expected = `type Root = {
+  x: number;
+
+  y: string
+}`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("preserves tagged property descriptions in a commented wrapper object", () => {
+    const source = `type Wrapped = Container<{
+  // identity field
+  @validate(isPositive)
+  @jsonSchema({ description: "stable identifier" })
+  id: number,
+  label: string,
+  // end fields
+}>`;
+    const expected = `type Wrapped = Container<{
+  // identity field
+  @validate(isPositive)
+  @jsonSchema({
+    description: "stable identifier"
+  })
+  id: number;
+  label: string
+  // end fields
+}>`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("preserves metadata-only nested object properties", () => {
+    const source = `type Wrapped = Container<{
+  @validate(isPositive)
+  @jsonSchema({ minimum: 1, description: "stable identifier" })
+  id: number,
+  label: string
+}>`;
+    const expected = `type Wrapped = Container<{
+  @validate(isPositive)
+  @jsonSchema({
+    minimum: 1,
+    description: "stable identifier"
+  })
+  id: number;
+  label: string
+}>`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("keeps a trivia-free root object alias in its multiline canonical layout", () => {
+    const source = "type Plain = { id: number, label: string }";
+    const expected = `type Plain = {
+  id: number;
+  label: string
+}`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("preserves array, union, intersection, keyof, and indexed-access syntax", () => {
+    const source = `type ArrayWrapped = {
+  x: number // keep
+}[]
+
+type UnionWrapped = {
+  x: number // keep
+} | null
+
+type IntersectionWrapped = {
+  x: number // keep
+} & Named
+
+type KeyWrapped = keyof {
+  x: number // keep
+}
+
+type IndexedWrapped = {
+  x: number // keep
+}["x"]`;
+    expectExactStableFormat(source, source);
+  });
+
+  it("preserves block object types adjacent to a raises effect set", () => {
+    // Effect-set members cannot be object types in parser-supported source,
+    // so the object occupies the nearest recursive block slot while raises
+    // pins the effect-set union syntax on the same wrapper.
+    const source = `type EffectCallback = (arg: {
+  x: number // keep
+}) -> void raises <std::read, std::write>`;
+    expectExactStableFormat(source, source);
+  });
+
+  describe("source type positions", () => {
+    const cases = [
+      ["schema type argument", `const value = schema({
+  id: string // keep
+})`],
+      ["hole annotation", `node main() {
+  const value = #value: {
+    id: string // keep
+  }
+}`],
+      ["function parameter and return", `def save(value: {
+  id: string // keep
+}): Result<{
+  ok: boolean // keep
+}> {
+  return success(value)
+}`],
+      ["node parameter and return", `node save(value: {
+  id: string // keep
+}): {
+  ok: boolean // keep
+} {
+  return value
+}`],
+      ["generic default", `type Box<T = {
+  id: string // keep
+}> = T`],
+      ["value parameter", `type Box(options: {
+  id: string // keep
+}) = string`],
+      ["variable annotation", `const value: {
+  id: string // keep
+} = null`],
+      ["match-arm type pattern", `match(value) {
+  is {
+    id: string // keep
+  } => value
+}`],
+      ["is-expression type pattern", `const valid = value is {
+  id: string // keep
+}`],
+      ["inline handler parameter", `handle {
+  interrupt("stop")
+} with (event: {
+  id: string // keep
+}) {
+  return approve()
+}`],
+      ["finalize parameter", `def save(): any {
+  return null
+  finalize as draft: {
+    id: string // keep
+  } {
+    return draft
+  }
+}`],
+      ["type alias", `type Item = {
+  id: string // keep
+}`],
+      ["effect payload", `effect Save {
+  id: string // keep
+}`],
+    ] as const;
+
+    it.each(cases)("preserves comments in %s", (_name, source) => {
+      expectExactStableFormat(source, source);
+    });
   });
 });
 

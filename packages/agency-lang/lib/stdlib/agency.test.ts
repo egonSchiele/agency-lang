@@ -645,6 +645,67 @@ describe("_describe (reify)", () => {
     expect(article?.docstring).toContain("One extracted article");
   });
 
+  it("uses plain display signatures for commented object types", () => {
+    const info = _describe(`export type Input = {
+  @validate(isPresent)
+  @jsonSchema({ description: "stable identifier" })
+  id: string,
+  nested: {
+    @jsonSchema({ description: "nested value" })
+    value: string // keep
+  }
+}
+export def load(input: {
+  id: string // keep
+}): {
+  value: string // keep
+} {
+  return { value: input.id }
+}
+export node inspect(input: {
+  id: string // keep
+}): {
+  value: string // keep
+} {
+  return { value: input.id }
+}`);
+
+    expect(info.exports.map(({ name, signature }) => [name, signature])).toEqual([
+      [
+        "Input",
+        `type Input = {
+  @validate(isPresent)
+  @jsonSchema({
+    description: "stable identifier"
+  })
+  id: string;
+  nested: {
+    @jsonSchema({
+      description: "nested value"
+    })
+    value: string
+  }
+}`,
+      ],
+      ["load", "load(input: { id: string }): { value: string }"],
+      ["inspect", "inspect(input: { id: string }): { value: string }"],
+    ]);
+  });
+
+  it("omits multiline parameter comments from describe signatures", () => {
+    const info = _describe(`export def configure(
+  // keep
+  host: string,
+  port: number
+): string {
+  return host
+}`);
+
+    expect(info.exports.find(({ name }) => name === "configure")?.signature).toBe(
+      "configure(host: string, port: number): string",
+    );
+  });
+
   it("surfaces the module doc comment as the description", () => {
     const info = _describe(source);
     expect(info.description).toContain("Tools for the news agent");

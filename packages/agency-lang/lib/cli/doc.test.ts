@@ -142,6 +142,64 @@ afterEach(() => {
 });
 
 describe("generateDoc", () => {
+  it("keeps alias source trivia but omits function signature trivia", () => {
+    const inputDir = path.join(tmpDir, "input-display-types");
+    const outputDir = path.join(tmpDir, "output-display-types");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "display.agency"),
+      `export type Input = {
+  @validate(isPresent)
+  @jsonSchema({ description: "stable identifier" })
+  id: string, // keep id
+  nested: {
+    @jsonSchema({ description: "nested value" })
+    value: string // keep nested
+  }
+}
+
+export def load(
+  // parameter keep
+  input: {
+  id: string // keep
+}): {
+  value: string // keep
+} {
+  return { value: input.id }
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "display.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "display.md"), "utf-8");
+
+    expect(output).toContain(`### Input
+
+\`\`\`ts
+export type Input = {
+  @validate(isPresent)
+  @jsonSchema({
+    description: "stable identifier"
+  })
+  id: string; // keep id
+  nested: {
+    @jsonSchema({
+      description: "nested value"
+    })
+    value: string // keep nested
+  }
+}
+\`\`\``);
+    expect(output).toContain(`### load
+
+\`\`\`ts
+load(input: { id: string }): { value: string }
+\`\`\``);
+    expect(output).not.toContain("// parameter keep");
+    expect(output).not.toContain("id: string // keep\n}):");
+    expect(output).not.toContain("{ value: string // keep }");
+  });
+
   it("renders a function's raises clause and wraps a long signature", () => {
     const inputDir = path.join(tmpDir, "input-raises");
     const outputDir = path.join(tmpDir, "output-raises");
@@ -438,6 +496,36 @@ export type Category = "reminder" | "todo"
     expect(output).toContain("### Category");
   });
 
+  it("keeps alias doc comments in code blocks without trailing whitespace", () => {
+    const inputDir = path.join(tmpDir, "input-long-alias");
+    const outputDir = path.join(tmpDir, "output-long-alias");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "choice.agency"),
+      `/** Kept in generated code blocks. */
+export type Choice = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "choice.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "choice.md"), "utf-8");
+
+    expect(output).toContain(`\`\`\`ts
+/** Kept in generated code blocks. */
+export type Choice =
+  | "alpha"
+  | "bravo"
+  | "charlie"
+  | "delta"
+  | "echo"
+  | "foxtrot"
+  | "golf"
+  | "hotel"
+  | "india"
+\`\`\``);
+    expect(output).not.toMatch(/[ \t]+$/m);
+  });
+
   it("handles type aliases that are not objects", () => {
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");
@@ -588,8 +676,9 @@ node main() {
       path.join(inputDir, "annotated.agency"),
       `import { isEmail } from "std::validation"
 
+// keep
 @validate(isEmail)
-@jsonSchema({ format: "email", description: "User email." })
+@jsonSchema({ format: "email", description: "export type email" })
 export type Email = string
 `,
     );
@@ -600,9 +689,19 @@ export type Email = string
       "utf-8",
     );
 
-    // The type alias should appear with its annotations inline.
-    expect(output).toContain("@validate(isEmail)");
-    expect(output).toContain("@jsonSchema(");
+    expect(output).toContain(`## Types
+
+### Email
+
+\`\`\`ts
+@validate(isEmail)
+@jsonSchema({
+  format: "email",
+  description: "export type email"
+})
+export type Email = string
+\`\`\``);
+    expect(output).not.toContain("// keep");
 
     // Structured "Validators:" line should list the validator.
     expect(output).toMatch(/\*\*Validators:\*\* `isEmail`/);

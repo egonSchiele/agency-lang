@@ -7,8 +7,8 @@ import { resolveDeployTarget } from "./target.js";
 import type { DeployTarget, TargetProvenance } from "./target.js";
 import { collectAgencyBundle, validateBundleCompiles } from "./bundle.js";
 import type { AgencyBundle } from "./bundle.js";
-import { uploadBundle } from "./uploadClient.js";
-import type { Manifest } from "./uploadClient.js";
+import { uploadBundle } from "../statelog/uploadClient.js";
+import type { Manifest } from "../statelog/uploadClient.js";
 
 export type DeployOptions = {
   host?: string;

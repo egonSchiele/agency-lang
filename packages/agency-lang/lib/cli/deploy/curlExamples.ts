@@ -1,7 +1,7 @@
 // Ready-to-run curl commands for a deployed agent. Pure: manifest in, command
 // strings out. Uses a `$KEY` placeholder — never the real API key.
 
-import type { Manifest } from "./uploadClient.js";
+import type { Manifest } from "../statelog/uploadClient.js";
 
 export type CurlExample = { label: string; command: string };
 

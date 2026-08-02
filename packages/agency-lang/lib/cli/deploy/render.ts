@@ -7,8 +7,8 @@
 import { color } from "@/utils/termcolors.js";
 import renderDeployReport from "@/templates/cli/deployReport.js";
 import type { DeployOutcome, DeployPlan } from "./deploy.js";
-import { serveBaseUrl } from "./uploadClient.js";
-import type { Manifest } from "./uploadClient.js";
+import { serveBaseUrl } from "../statelog/uploadClient.js";
+import type { Manifest } from "../statelog/uploadClient.js";
 import { curlExamples } from "./curlExamples.js";
 
 export function renderOutcome(outcome: DeployOutcome): void {

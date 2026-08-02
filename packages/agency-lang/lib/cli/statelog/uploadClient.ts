@@ -4,8 +4,9 @@
 // as untrusted: a bad body reports an error or drops the extra (the manifest)
 // rather than crashing a deploy that already landed.
 
-import type { DeployTarget } from "./target.js";
-import type { AgencyBundle } from "./bundle.js";
+import type { DeployTarget } from "../deploy/target.js";
+import type { AgencyBundle } from "../deploy/bundle.js";
+import { resolveTrustedEndpointUrl } from "./serveUrl.js";
 
 /** The `/list` manifest, narrowed to what the curl examples need. Functions
  *  currently carry no `parameters` — a known serve-side gap. */
@@ -64,7 +65,17 @@ export async function uploadBundle(
     return { ok: false, error: rejectionMessage(envelope, response.status) };
   }
 
-  const absoluteUrls = endpointUrls.map((relative) => new URL(relative, target.host).toString());
+  // Resolve and origin-check every response URL BEFORE the Bearer token follows
+  // it to fetch /list or the caller persists it — a compromised response must
+  // not redirect the API key to another origin.
+  let absoluteUrls: string[];
+  try {
+    absoluteUrls = endpointUrls.map((relative) =>
+      resolveTrustedEndpointUrl(relative, target.host),
+    );
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
   const manifest = await fetchManifest(absoluteUrls, target.apiKey);
   return { ok: true, endpointUrls: absoluteUrls, manifest };
 }

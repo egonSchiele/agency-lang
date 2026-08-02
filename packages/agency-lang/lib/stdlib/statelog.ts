@@ -45,6 +45,14 @@ function serializeEvalValue(value: unknown): unknown {
   return JSON.parse(json);
 }
 
+export async function _setAgentName(name: string): Promise<void> {
+  const frame = agencyStore.getStore();
+  if (!frame) {
+    return;
+  }
+  await frame.ctx.statelogClient.agentName({ name: String(name) });
+}
+
 export async function _evalValue(value: unknown): Promise<void> {
   const prepared = prepareEvalEvent(value);
   if (!prepared) return;

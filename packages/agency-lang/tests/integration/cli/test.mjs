@@ -149,6 +149,13 @@ node main(task: string): string {
   }
   console.log("Test 6 passed");
 
+  // --- Test 6b: agency logs --csv over the run directory just written ---
+  console.log("--- Test 6b: agency logs --csv ---");
+  const csvOutput = run(dir, "npx agency logs eval-runs --csv");
+  assertIncludes(csvOutput, "agent");
+  assertIncludes(csvOutput, "run");
+  console.log("Test 6b passed");
+
   // --- Test 7: eval optimize baseline-only run ---
   // --iterations 0 skips the mutator, but the greedy optimizer still grades the
   // baseline with the goal judge — an llm() call. Mock it so the smoke test runs

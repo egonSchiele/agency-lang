@@ -138,4 +138,26 @@ describe("readEvalRun layouts", () => {
     expect(readEvalRun(layoutRunDir).inputsById["a"].status).toBe("missing");
     fs.rmSync(layoutRunDir, { recursive: true, force: true });
   });
+
+  it("routes the legacy-layout warning to onWarning instead of the console", () => {
+    const layoutRunDir = makeLayoutRun("legacy");
+    const warnings: string[] = [];
+
+    readEvalRun(layoutRunDir, (message) => warnings.push(message));
+
+    expect(warnings.some((w) => w.includes("pre-#733"))).toBe(true);
+    fs.rmSync(layoutRunDir, { recursive: true, force: true });
+  });
+
+  it("routes the corrupt input.json warning to onWarning", () => {
+    const layoutRunDir = makeLayoutRun("current");
+    const inputJson = path.join(layoutRunDir, "inputs", "a", "input.json");
+    fs.writeFileSync(inputJson, "{not json");
+    const warnings: string[] = [];
+
+    readEvalRun(layoutRunDir, (message) => warnings.push(message));
+
+    expect(warnings.some((w) => w.includes(inputJson))).toBe(true);
+    fs.rmSync(layoutRunDir, { recursive: true, force: true });
+  });
 });

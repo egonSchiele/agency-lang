@@ -829,6 +829,13 @@ export class StatelogClient {
     });
   }
 
+  async agentName({ name }: { name: string }): Promise<void> {
+    await this.post({
+      type: "agentName",
+      name,
+    });
+  }
+
   async evalValueRecorded({
     value,
     threadId,

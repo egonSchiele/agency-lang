@@ -3,6 +3,7 @@ import {
   completionOf,
   cost,
   modelOf,
+  timestampMs,
   toolNameOf,
   tokensIn,
   tokensOut,
@@ -81,12 +82,14 @@ export function extractEvalRecord(
   const evalOutputs = collectExplicit("evalOutputRecorded", n) ?? returnValueOutputs(n);
 
   const last = n.events[n.events.length - 1];
+  const agentName = lastAgentName(n);
 
-  return {
+  const record: EvalRecord = {
     traceId,
     recordVersion: 2,
     formatVersion: events[0].format_version,
     durationMs: last.tMs,
+    startedAtMs: timestampMs(events[0]),
     source,
     evalValues: capValues(evalValues.result),
     evalOutputs: capValues(evalOutputs.result),
@@ -107,6 +110,20 @@ export function extractEvalRecord(
       ...evalOutputs.warnings,
     ],
   };
+  if (agentName !== undefined) {
+    record.agentName = agentName;
+  }
+  return record;
+}
+
+/** Last `agentName` event wins — an agent may rename itself after
+ *  startup and the final identity is the one cross-run tools group by. */
+function lastAgentName(n: Normalized): string | undefined {
+  const names = n.events
+    .map((e) => e.raw.data)
+    .filter((data) => data.type === "agentName" && typeof data.name === "string")
+    .map((data) => data.name as string);
+  return names[names.length - 1];
 }
 
 // ────────────────────────────────────────────────────────────────────

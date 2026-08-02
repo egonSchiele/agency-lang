@@ -15,6 +15,7 @@ import { helpLines as treeHelpLines } from "../help.js";
 import { handleKeyEx } from "./treeReducer.js";
 import { colorFor, flattenVisibleRows, renderRowText, VisibleRow } from "../treeRows.js";
 import { expandAncestorsOf, findMatches } from "../search.js";
+import { bottomHints } from "./shared.js";
 import type { ViewerThresholds } from "../thresholds.js";
 import type { TreeNode, ViewerState } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
@@ -42,6 +43,9 @@ export class TreeView implements View {
     const fmt = formatKey(ev);
     if (fmt === "t") {
       return { kind: "open", view: "flame" };
+    }
+    if (fmt === "T") {
+      return { kind: "open", view: "byName" };
     }
     if (fmt === "d") {
       const id = this.cursorRealId();
@@ -92,11 +96,7 @@ export class TreeView implements View {
         );
       },
     });
-    const parts: Element[] = [tree];
-    if (this.hasStatusBar()) {
-      parts.push(this.renderStatusBar());
-    }
-    return column({ justifyContent: "flex-start" }, ...parts);
+    return column({ justifyContent: "flex-start" }, tree, this.renderStatusBar(viewport));
   }
 
   setData(roots: TreeNode[]): void {
@@ -137,6 +137,12 @@ export class TreeView implements View {
 
   setFollowIndicator(on: boolean): void {
     this.state = { ...this.state, followOn: on };
+  }
+
+  /** Whether Esc still has something to clear here (active search) —
+   *  the shell's back-out rule needs to know. */
+  hasActiveSearch(): boolean {
+    return !!(this.state.query || (this.state.matches && this.state.matches.length > 0));
   }
 
   /** Test probes. */
@@ -228,21 +234,14 @@ export class TreeView implements View {
     return JSON.stringify(payload, null, 2);
   }
 
-  private paneRows(viewport: Viewport, state: ViewerState = this.state): number {
-    const reserved = this.hasStatusBar(state) ? 1 : 0;
-    return Math.max(1, viewport.rows - reserved);
+  private paneRows(viewport: Viewport, _state: ViewerState = this.state): number {
+    // One row is always reserved: the status line now doubles as the
+    // view tag ("[tree]", bottom right), so it is always present.
+    return Math.max(1, viewport.rows - 1);
   }
 
-  private hasStatusBar(state: ViewerState = this.state): boolean {
-    return !!(
-      state.messageBar ||
-      (state.matches && state.matches.length > 0) ||
-      state.followOn ||
-      state.query
-    );
-  }
 
-  private renderStatusBar(): Element {
+  private renderStatusBar(viewport: Viewport): Element {
     const state = this.state;
     const parts: string[] = [];
     if (state.query && state.matches !== undefined) {
@@ -254,7 +253,7 @@ export class TreeView implements View {
     }
     if (state.followOn) parts.push("[FOLLOW]");
     if (state.messageBar) parts.push(state.messageBar);
-    return line(parts.join("  "), { fg: "gray" });
+    return line(bottomHints(parts.join("  "), "tree", viewport.cols), { fg: "gray" });
   }
 }
 

@@ -30,6 +30,7 @@ import {
   fmtOffset,
   padCell,
   splitWidth,
+  bottomHints,
 } from "./shared.js";
 import type { TreeNode } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
@@ -85,6 +86,7 @@ export class FlameView implements View {
     else if (fmt === "Enter" || fmt === "Right" || fmt === "l") return this.drillOrDetail();
     else if (fmt === "Left" || fmt === "h") this.drillOut();
     else if (fmt === "t") return { kind: "open", view: "byName" };
+    else if (fmt === "T") return { kind: "open", view: "tree" };
     else if (fmt === "Escape") return { kind: "back" };
     else if (fmt === "o" && this.selected()) {
       return { kind: "focusInTree", spanId: this.selected()!.span.id };
@@ -127,7 +129,7 @@ export class FlameView implements View {
       line(new AxisHeader(widths.gutter).computeText(window, this.viewStart(), widths.bar), { fg: "gray" }),
       body,
       line(new SelectionFooter().computeText(this.footerText()), { fg: "bright-white" }),
-      line("t view  ↑↓ select  Enter/→ drill  ← out  d detail  o tree  +/- zoom  [ ] pan  0 reset  a admin  / search  Esc back", { fg: "gray" }),
+      line(bottomHints("t view  ↑↓ select  Enter/→ drill  ← out  d detail  o tree  +/- zoom  [ ] pan  0 reset  a admin  / search  Esc back", "flame", viewport.cols), { fg: "gray" }),
     );
   }
 

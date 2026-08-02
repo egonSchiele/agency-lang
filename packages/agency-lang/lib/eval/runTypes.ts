@@ -49,6 +49,19 @@ export type Input = {
  *  artifacts live. Exists whether or not anything was graded. Its judgment
  *  counterpart is grading's InputBreakdown (scores per grader), which can be
  *  regenerated later by `eval grade` without re-running anything. */
+/** Denormalized from the input's eval record when the summary is
+ *  written, so cross-run tools (the runs explorer) read one file per
+ *  run instead of one record per input. Absent on runs written before
+ *  this field existed and on inputs whose record is missing or
+ *  unreadable — that absence routes the run to statelog backfill. */
+export type InputMetricsSummary = {
+  costUsd: number;
+  durationMs: number;
+  startedAtMs: number;
+  models: string[];
+  agentName?: string;
+};
+
 export type EvalRunInputResult = {
   inputId: string;
   status: "success" | "error";
@@ -56,6 +69,7 @@ export type EvalRunInputResult = {
   statelogPath: string;
   workdirPath: string;
   errorMessage?: string;
+  metrics?: InputMetricsSummary;
 };
 
 /** A run's score. Absent from EvalRunResult when grading was skipped. */

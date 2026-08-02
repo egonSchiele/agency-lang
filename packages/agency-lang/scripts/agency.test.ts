@@ -108,11 +108,19 @@ describe("agency CLI command tree", () => {
     // `view` is still registered explicitly as a subcommand.
     const logsSubcommands = logsCommand?.commands.map((command) => command.name()) ?? [];
     expect(logsSubcommands).toContain("view");
-    // The parent `logs` command itself takes an optional [file] argument
-    // and has its own action handler — that's the default-view path.
-    expect(logsCommand?.usage()).toContain("[file]");
+    // The parent `logs` command itself takes optional variadic [files...]
+    // and has its own action handler — a sole statelog file is the
+    // default-view path; run dirs and multiple paths open the explorer.
+    expect(logsCommand?.usage()).toContain("[files...]");
     expect(typeof (logsCommand as unknown as { _actionHandler?: unknown })._actionHandler)
       .toBe("function");
+  });
+
+  it("logs supports --csv for a headless runs-table export", () => {
+    const program = createProgram();
+    const logsCommand = program.commands.find((command) => command.name() === "logs");
+    const optionNames = logsCommand?.options.map((option) => option.long) ?? [];
+    expect(optionNames).toContain("--csv");
   });
 });
 

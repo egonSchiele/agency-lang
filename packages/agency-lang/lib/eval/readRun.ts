@@ -17,14 +17,17 @@ export type ReadEvalRunResult = {
   inputsById: Record<string, ReadEvalRunInput>;
 };
 
-export function readEvalRun(runDir: string): ReadEvalRunResult {
+export function readEvalRun(
+  runDir: string,
+  onWarning: (message: string) => void = console.warn,
+): ReadEvalRunResult {
   const resolvedRunDir = path.resolve(runDir);
   const summary = readJson<EvalRunResult>(path.join(resolvedRunDir, "summary.json"));
   const inputsById: Record<string, ReadEvalRunInput> = {};
 
   for (const result of summary.inputs) {
     const inputDir = path.join(resolvedRunDir, "inputs", result.inputId);
-    const input = readOptionalJson<Input>(path.join(inputDir, "input.json"));
+    const input = readOptionalJson<Input>(path.join(inputDir, "input.json"), onWarning);
     const recordPath = result.evalRecordPath || agentRunPaths(inputDir).evalRecordPath;
     const status = inputStatus(result, recordPath);
     const errorMessage = status === "failed"
@@ -35,7 +38,7 @@ export function readEvalRun(runDir: string): ReadEvalRunResult {
       // The by-id map would silently swallow one of them, changing the mean's
       // denominator. Unreachable via the CLI (loadInputs rejects duplicate
       // ids), but programmatic callers skip that validation.
-      console.warn(`readEvalRun: duplicate inputId "${result.inputId}" in ${resolvedRunDir} — keeping the last`);
+      onWarning(`readEvalRun: duplicate inputId "${result.inputId}" in ${resolvedRunDir} — keeping the last`);
     }
     inputsById[result.inputId] = {
       inputId: result.inputId,
@@ -46,7 +49,7 @@ export function readEvalRun(runDir: string): ReadEvalRunResult {
     };
   }
 
-  warnIfLegacyLayout(resolvedRunDir, inputsById);
+  warnIfLegacyLayout(resolvedRunDir, inputsById, onWarning);
   return { runDir: resolvedRunDir, inputsById };
 }
 
@@ -54,14 +57,18 @@ export function readEvalRun(runDir: string): ReadEvalRunResult {
  *  run prints objective 0.00 with every input "missing" — which reads like an
  *  agent that produced nothing, not like an old directory. Name what
  *  happened, once. */
-function warnIfLegacyLayout(runDir: string, inputsById: Record<string, ReadEvalRunInput>): void {
+function warnIfLegacyLayout(
+  runDir: string,
+  inputsById: Record<string, ReadEvalRunInput>,
+  onWarning: (message: string) => void,
+): void {
   const all = Object.values(inputsById);
   const allMissing = all.length > 0 && all.every((input) => input.status === "missing");
   if (!allMissing) return;
   const hasFlatRecord = all.some((input) =>
     fs.existsSync(path.join(runDir, "inputs", input.inputId, "eval-record.json")));
   if (hasFlatRecord) {
-    console.warn(
+    onWarning(
       `readEvalRun: ${runDir} uses the pre-#733 run layout and is no longer readable. ` +
       `Re-run the suite, or read this directory with a build from before PR #737.`,
     );
@@ -81,14 +88,17 @@ function readJson<T>(filePath: string): T {
   }
 }
 
-function readOptionalJson<T>(filePath: string): T | undefined {
+function readOptionalJson<T>(
+  filePath: string,
+  onWarning: (message: string) => void,
+): T | undefined {
   if (!fs.existsSync(filePath)) return undefined;
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
   } catch (error) {
     // Degrade, do not throw: grading runs after every agent has been paid for,
     // and one corrupt per-input file must not take the whole pass down.
-    console.warn(`readEvalRun: could not parse ${filePath}: ${errText(error)}`);
+    onWarning(`readEvalRun: could not parse ${filePath}: ${errText(error)}`);
     return undefined;
   }
 }

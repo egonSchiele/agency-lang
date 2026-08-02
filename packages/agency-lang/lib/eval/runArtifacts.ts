@@ -11,7 +11,9 @@ import type {
   EvalRunGrading,
   Input,
   EvalRunInputResult,
+  InputMetricsSummary,
 } from "./runTypes.js";
+import type { EvalRecord } from "./types.js";
 
 export type SourceProvenance = { source: string; sha?: string };
 export type ClosureFileProvenance = { file: string; sha256: string };
@@ -199,17 +201,76 @@ export function recordInputPrepareFailure(
 export function writeEvalRunSummary(
   state: EvalRunState,
   inputs: EvalRunInputResult[],
+  onWarning: (message: string) => void = console.warn,
 ): EvalRunResult {
+  const withMetrics = inputs.map((input) => attachMetrics(input, onWarning));
   const summary: EvalRunResult = {
     runId: state.runId,
     runDir: state.runDir,
     agentLabel: state.agentLabel,
-    inputs,
+    inputs: withMetrics,
     okCount: inputs.filter((input) => input.status === "success").length,
     errorCount: inputs.filter((input) => input.status === "error").length,
   };
   writeJson(path.join(state.runDir, "summary.json"), summary);
   return summary;
+}
+
+function attachMetrics(
+  input: EvalRunInputResult,
+  onWarning: (message: string) => void,
+): EvalRunInputResult {
+  const read = readInputMetrics(input.evalRecordPath);
+  if (read.kind === "missing") {
+    return input;
+  }
+  if (read.kind === "warning") {
+    onWarning(read.message);
+    return input;
+  }
+  return { ...input, metrics: read.value };
+}
+
+type InputMetricsRead =
+  | { kind: "metrics"; value: InputMetricsSummary }
+  | { kind: "missing" }
+  | { kind: "warning"; message: string };
+
+function readInputMetrics(recordPath: string): InputMetricsRead {
+  if (recordPath === "" || !fs.existsSync(recordPath)) {
+    return { kind: "missing" };
+  }
+  let record: EvalRecord;
+  try {
+    record = JSON.parse(fs.readFileSync(recordPath, "utf-8")) as EvalRecord;
+  } catch (error) {
+    const text = error instanceof Error ? error.message : String(error);
+    return { kind: "warning", message: `summary metrics: could not read ${recordPath}: ${text}` };
+  }
+  // Validate before copying: a parseable-but-corrupt record must leave
+  // metrics ABSENT (so cross-run tools backfill from the statelog),
+  // never write NaN/undefined into summary.json as if it were fact.
+  const costUsd = record.metrics?.costUsdTotal;
+  const durationMs = record.durationMs;
+  const startedAtMs = record.startedAtMs;
+  const models = record.metrics?.models;
+  const shapeOk = isFiniteNumber(costUsd)
+    && isFiniteNumber(durationMs)
+    && isFiniteNumber(startedAtMs)
+    && Array.isArray(models)
+    && models.every((model) => typeof model === "string");
+  if (!shapeOk) {
+    return { kind: "warning", message: `summary metrics: ${recordPath} has an unexpected shape — leaving metrics absent` };
+  }
+  const value: InputMetricsSummary = { costUsd, durationMs, startedAtMs, models };
+  if (typeof record.agentName === "string") {
+    value.agentName = record.agentName;
+  }
+  return { kind: "metrics", value };
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function writeJson(filePath: string, value: unknown): void {

@@ -22,6 +22,7 @@ import {
   clipCell,
   padCell,
   splitWidth,
+  bottomHints,
 } from "./shared.js";
 import type { TreeNode } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
@@ -66,6 +67,7 @@ export class ByNameView implements View {
       const sel = this.selected();
       if (sel !== undefined) return { kind: "openOccurrences", groupKey: sel.group.key };
     } else if (fmt === "t" || fmt === "Escape") return { kind: "open", view: "tree" };
+    else if (fmt === "T") return { kind: "open", view: "flame" };
     else if (fmt === "d") {
       const longest = this.longestOf(this.selected());
       if (longest !== undefined) return { kind: "openDetail", spanId: longest.id };
@@ -109,7 +111,7 @@ export class ByNameView implements View {
       line(new AxisHeader(widths.gutter).computeText(window, this.viewStart(), widths.bar), { fg: "gray" }),
       body,
       line(new SelectionFooter().computeText(this.footerText()), { fg: "bright-white" }),
-      line("t/Esc back to tree  ↑↓ select  Enter occurrences  d detail  o tree  +/- zoom  [ ] pan  0 reset  a admin  / search", { fg: "gray" }),
+      line(bottomHints("t/Esc back to tree  ↑↓ select  Enter occurrences  d detail  o tree  +/- zoom  [ ] pan  0 reset  a admin  / search", "by-name", viewport.cols), { fg: "gray" }),
     );
   }
 

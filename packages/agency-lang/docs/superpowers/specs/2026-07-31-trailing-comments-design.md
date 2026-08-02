@@ -1,304 +1,505 @@
 # Trailing comments
 
-## Background
+## Goal
 
-Write this in an Agency file:
+Agency preserves a same-line `//` comment beside the complete construct it
+describes when `agency fmt` reformats the file.
 
-```ts
+Users learn one rule:
+
+> A `//` comment written at the end of a complete declaration, statement,
+> match arm, or item in a multiline list stays attached to that construct.
+> In a comma-separated list, write the comma before the comment.
+
+```agency
+type UserId = string // top-level declaration
+
+node main() {
+  const ids = [
+    1, // first item
+    2, // second item
+  ]
+
+  save(
+    ids, // values to save
+    retries: 3, // retry budget
+  ) // complete call statement
+}
+```
+
+The rule follows Agency's existing layout grammar rather than parser
+implementation boundaries. It applies to complete constructs and to item lists
+that already permit line breaks. It does not make an inline-only grammar
+multiline merely to admit comments.
+
+## Problem
+
+Today Agency usually parses a trailing comment but loses its placement. For
+example:
+
+```agency
 const x = 5 // explains x
 const y = 6
 ```
 
-Run `agency fmt` and you get this:
+formats as:
 
-```ts
+```agency
 const x = 5
 // explains x
 const y = 6
 ```
 
-The comment parses, and its text is never lost. But it moves. And where it
-moves to is directly above `const y = 6`, so a comment written to explain `x`
-now reads as explaining `y`. Formatting a file silently changed what a comment
-appears to say.
+The text survives, but the formatter makes it appear to describe `y`. Similar
+relocation occurs at top level, in match arms, and in trivia-aware lists such as
+arrays, objects, and object types. Other multiline lists, including calls and
+function parameters, reject comments because they have no trivia model.
 
-The same thing happens for object type members, array items, object literal
-fields, and match arms. In every position, a comment following code on the same
-line is re-rendered on its own line above whatever comes next.
+The language should not expose those internal differences to users.
 
-This matters because agents write trailing comments constantly. It is one of
-the most ingrained habits in every language they have learned from, and Agency
-neither rejects it nor honors it — it accepts the input and quietly rearranges
-the meaning. Of all the ways Agency can surprise someone writing it, this is the
-only one I know of where being permissive produces a *wrong result* rather than
-an inconvenient one.
+## Supported positions
 
-### Why it happens
+The complete feature includes every complete-construct stream and every list
+grammar that already accepts line breaks.
 
-This is not a formatter bug. Trailing comments have nowhere to live in the AST.
+### Complete constructs
 
-Comments inside a function body are parsed as ordinary body nodes. In
-`_bodyParserImpl` (`lib/parsers/parsers.ts:4804`) the body is
-`many(seqC(capture(_bodyNodeParser, "node"), optionalSpacesOrNewline))`, and
-`commentParser` (`lib/parsers/parsers.ts:4781`) is one of the alternatives
-`_bodyNodeParser` (`:4744`) tries. So
-`const x = 5 // explains x` parses as two sibling nodes in the body array: an
-assignment, then a comment. Nothing records that they were on the same line.
-The generator walks the body and emits one line per node, which is exactly what
-you see.
+- Top-level declarations and expression statements.
+- Statements in every body, including function, node, `if`/`else`, `while`,
+  `for`, `thread`, `subthread`, `guard`, `handle`, inline handler, `finalize`,
+  `parallel`, `seq`, destructive, block-argument, and block match-arm bodies.
+- Inline and block match arms.
+- Statement-kind code-literal bodies, which parse through `bodyParser`.
 
-Inside literals and type bodies there is a richer mechanism — *trivia* — but it
-cannot express trailing either. Trivia anchors a comment to a position
-*between* items. `lib/types/typeHints.ts:255-258` documents the scheme:
+### Multiline lists
 
+- Array items.
+- Object-literal entries.
+- Object-type properties and schema/effect payload properties.
+- Function-call arguments, including named and splat arguments, method/access
+  chain calls, and inline block arguments.
+- Interrupt, `raise`, and `guard` argument lists, which consume the same
+  multiline argument grammar.
+- `def` and `node` parameters.
+- Named imports, node imports, and named exports.
+- Array and object binding patterns.
+- Array and object match patterns.
+- Thread/subthread named arguments.
+- Parallel named arguments.
+
+### Principled exclusions
+
+These positions are out of scope because their current grammar is inline-only:
+
+- tag arguments;
+- generic type arguments and generic declaration parameters;
+- value-parameterized type arguments and declarations;
+- effect sets, `raises` lists, and block-type parameters;
+- block/lambda parameter lists;
+- `new` arguments;
+- any other list whose separators accept horizontal spaces but not newlines.
+
+If a future change makes one of those lists multiline, trailing-comment support
+becomes part of that syntax change's definition of done.
+
+Also out of scope:
+
+- trailing `/* ... */` metadata—block comments remain ordinary trivia;
+- comments inside unfinished expressions, such as between an operator and its
+  right operand;
+- placing a comma after a `//` comment—the comment owns the rest of the line, so
+  comma lists use `item, // comment`;
+- comment reflow or width-based relocation;
+- preserving exact original whitespace or delimiter spelling;
+- emitting source comments into generated TypeScript.
+
+## Architecture
+
+Two parser shapes need different metadata, but they implement one language
+rule.
+
+```diagram
+                          ┌──────────────────────────────┐
+                          │ Preserve trailing // comment │
+                          └──────────────┬───────────────┘
+                                         │
+                     ┌───────────────────┴───────────────────┐
+                     │                                       │
+                     ▼                                       ▼
+┌──────────────────────────────────┐      ┌──────────────────────────────────┐
+│ Complete construct streams       │      │ Multiline delimited lists       │
+│                                  │      │                                  │
+│ completeConstructEntry(parser)   │      │ owner.trivia: ListTrivia[]       │
+│                                  │      │                                  │
+│ BaseNode.trailingComment         │      │ placement: before | trailing     │
+└──────────────────────────────────┘      └──────────────────────────────────┘
 ```
-anchorIndex: 0                    — appears before the first property
-anchorIndex: N                    — appears between
-anchorIndex: properties.length    — appears after the last property
-```
 
-It answers "which gap is this comment in", not "which line is it at the end
-of". And `emitTriviaAt` (`lib/backends/agencyGenerator.ts:774`) can only push
-whole lines into the output. Object types, array literals, and object literals
-all share that one helper, which is why all three behave identically.
+### A leaf `LineComment` type
 
-So the fix has to add a place for the information to live.
-
-## Why not a wrapper node
-
-The obvious model is a node that wraps another node and adds a comment to it:
+`BaseNode` must not import the aggregate `lib/types.ts` module that imports it.
+Define the leaf shape beside `BaseNode`:
 
 ```ts
-type TrailingComment = { type: "trailingComment", node: AgencyNode, comment: AgencyComment }
-```
+export type LineComment = {
+  type: "comment";
+  content: string;
+  loc?: SourceLocation;
+};
 
-This is the wrong shape for this codebase, and the reason is a documented safety
-property rather than a style preference.
-
-A wrapper changes the shape of the tree. Every consumer that matches on node
-types — the walkers, the typechecker, the preprocessors, both lowering passes,
-both generators — would need to know to unwrap it. And
-`docs/dev/template-agency.md:75` records what happens when one of them doesn't:
-
-> That makes **`walkNodes`' descent completeness load-bearing for safety**: a
-> node kind whose expression children the walker misses under-reports free
-> names, no test fails, and a filler silently captures a template binder — the
-> exact bug hygiene exists to prevent, failing open.
-
-That is the failure mode. Not a crash, not a red test — a Template Agency filler
-silently capturing a binder it should not have. The corpus invariants in
-`lib/utils/expressionSlots.test.ts` exist specifically because this class of bug
-is invisible. Introducing a wrapper node that can appear in any position is
-volunteering for it.
-
-An optional **field** avoids all of it:
-
-```ts
 export type BaseNode = {
   loc?: SourceLocation;
-  /** A `//` comment that followed this node on the same source line. */
-  trailingComment?: AgencyComment;
+  trailingComment?: LineComment;
 };
 ```
 
-The tree shape is unchanged, so no walker needs to know the field exists. A
-consumer that ignores it behaves exactly as it does today. This is how every
-comparable piece of formatter-only or optional metadata is already modeled here:
-`trivia` on arrays and object types, `raises` and `markers` on function
-definitions, `loc` on everything. None of them is a wrapper node.
+`AgencyComment` remains structurally compatible. This avoids both an aggregate
+import cycle and a duplicated inline type.
 
-## The model
+An optional field is safer than a wrapper node. A wrapper changes tree shape and
+would require every walker, lowerer, checker, and generator to unwrap it.
+`docs/dev/template-agency.md` explains why walker completeness is load-bearing
+for Template Agency hygiene: a missed child can silently capture a binder.
 
-**A comment trails the node whose source range ends on that line.**
+### Exact line-comment parsing
 
-That single rule handles the case that seems hardest — a multi-line construct:
+Split the current comment parser into two layers:
 
 ```ts
-const x = someCall(
-  a,
-  b
-) // trailing on the whole statement
+export const lineCommentCore: Parser<AgencyComment> = seqC(
+  set("type", "comment"),
+  str("//"),
+  capture(manyTill(or(newline, blankLineParser)), "content"),
+);
+
+export const commentParser: Parser<AgencyComment> = map(
+  seqC(
+    optionalSpaces,
+    capture(lineCommentCore, "comment"),
+    optionalSpacesOrNewline,
+  ),
+  (result) => result.comment,
+);
 ```
 
-The comment attaches to the statement, because the statement is what ends on
-that line. The generator emits it after the closing `)`. This also survives
-reflow: the comment stays at the end of its node even if the formatter moves the
-node to a different physical line.
+`lineCommentCore` begins exactly at `//` and does not own surrounding
+whitespace. The standalone `commentParser` preserves today's behavior. Other
+parsers no longer need undocumented knowledge of `commentParser`'s whitespace
+policy.
 
-Every node carries `loc` with `start` and `end` character offsets
-(`lib/types/base.ts`), so "which node ends here" is computable. Note that
-`loc.line` is the node's *start* line only — the end line has to be derived from
-the `end` offset.
+### Complete constructs: a reusable decorator
 
-**Only `//` comments.** A `//` comment necessarily runs to the end of its line,
-so "the code before it on this line" is unambiguous. A `/* ... */` comment can
-have code after it on the same line, which makes "trailing" undefined —
-`const x = 5 /* why */ + 1` is not a trailing comment at all. Block comments
-keep today's behavior.
-
-## Phase 1 — statements in a body
-
-This is the common case and the one agents hit. It is also the simplest, because
-a statement's trailing comment is already parsed as its immediate next sibling.
-
-### Parser
-
-One site: `_bodyParserImpl` (`lib/parsers/parsers.ts:4804`). Today each
-iteration parses a node then consumes `optionalSpacesOrNewline`. Change it so
-that after parsing a node, the parser looks ahead past spaces **but not past a
-newline** for a comment. If it finds one, it attaches it as `trailingComment` on
-the node just parsed and consumes it, instead of letting the next loop iteration
-pick it up as a sibling.
-
-The distinction is entirely "did we cross a newline first". A comment on its own
-line is still a sibling body node and keeps today's behavior, which is correct —
-that is what a standalone comment is.
-
-### Generator
-
-`AgencyGenerator` renders a body one node per line. Where a body statement's
-line is produced, append `" " + this.processComment(node.trailingComment)` when
-the field is set. `processComment` already exists at
-`lib/backends/agencyGenerator.ts:1607`.
-
-### What Phase 1 covers
-
-Any statement in any body: node bodies, function bodies, `if` and `while` and
-`for` bodies, `handle` blocks, `guard` blocks, `thread` blocks. All of them go
-through `bodyParser`, so one parser change covers them all.
-
-## Phase 2 — items in literals and type bodies
+Top-level and body child parsers consume inconsistent amounts of trailing
+whitespace. The decorator must inspect the trailing whitespace in the source
+the wrapped parser consumed; checking only `rest` is incorrect because a child
+may already have consumed the newline before a standalone comment.
 
 ```ts
-const arr = [
-  1, // one
-  2, // two
+type TrailingCommentOwner = {
+  type: string;
+  trailingComment?: LineComment;
+};
+
+type TrailingCommentOptions<T> = {
+  canAttach?: (value: T) => boolean;
+};
+
+function consumedLineEnding(input: string, rest: string): boolean {
+  const consumedLength = input.length - rest.length;
+  const consumed = input.slice(0, consumedLength);
+  const trailingWhitespace = consumed.match(/[ \t\r\n]*$/)?.[0] ?? "";
+  return /[\r\n]/.test(trailingWhitespace);
+}
+
+export function withTrailingLineComment<T extends TrailingCommentOwner>(
+  parser: Parser<T>,
+  options: TrailingCommentOptions<T> = {},
+): Parser<T> {
+  return (input: string) => {
+    const parsed = parser(input);
+    if (!parsed.success) {
+      return parsed;
+    }
+
+    if (options.canAttach && !options.canAttach(parsed.result)) {
+      return parsed;
+    }
+
+    if (consumedLineEnding(input, parsed.rest)) {
+      return parsed;
+    }
+
+    const comment = seqR(optionalSpaces, lineCommentCore)(parsed.rest);
+    if (!comment.success) {
+      return parsed;
+    }
+
+    return success(
+      { ...parsed.result, trailingComment: comment.result },
+      comment.rest,
+    );
+  };
+}
+
+export function completeConstructEntry<T extends TrailingCommentOwner>(
+  parser: Parser<T>,
+  options?: TrailingCommentOptions<T>,
+): Parser<T> {
+  return map(
+    seqC(
+      capture(withTrailingLineComment(parser, options), "value"),
+      optionalSpacesOrNewline,
+    ),
+    (result) => result.value,
+  );
+}
+```
+
+`withTrailingLineComment` owns the same-line decision and leaves the line ending
+in `rest`. A second shared `completeConstructEntry` composes it with
+`optionalSpacesOrNewline`. Top-level, body, and match-arm streams consume that
+complete entry, so every stream advances past an attached comment without
+duplicating cursor logic. Body/top-level call sites supply a declarative
+`canAttach` policy where trivia alternatives share the same parser union.
+
+The owner's `loc.end` does **not** extend through the comment. Existing source
+replacement and diagnostic code treats the construct's location as its
+syntactic range; the comment remains separate formatter metadata.
+
+### Lists: compatibility-preserving placement metadata
+
+Lists own their trivia because the separator belongs before a trailing comment:
+
+```agency
+first, // comment
+```
+
+Attaching the comment to the expression would make generic expression rendering
+produce the invalid order `first // comment,`.
+
+Unify the existing `Trivia` and `ObjectTypeTrivia` shapes without changing
+serialized ASTs for existing standalone comments:
+
+```ts
+export type BeforeListTrivia = {
+  anchorIndex: number;
+  comments: TriviaNode[];
+  placement?: "before";
+};
+
+export type TrailingListTrivia = {
+  anchorIndex: number;
+  placement: "trailing";
+  comments: [LineComment];
+};
+
+export type ListTrivia = BeforeListTrivia | TrailingListTrivia;
+
+export type Trivia = ListTrivia;
+export type ObjectTypeTrivia = ListTrivia;
+```
+
+For `before`, `anchorIndex` is the item the trivia precedes; `items.length`
+means before the closer. Existing parser output omits `placement`, preserving
+current AST snapshots. For `trailing`, `anchorIndex` is the item the line
+comment follows.
+
+Multiple entries may share an anchor. For example:
+
+```agency
+[
+  first, // explains first
+  // prepares second
+  second,
 ]
 ```
 
-Arrays, object literals, and object types already anchor comments by index. What
-is missing is one bit per trivia entry distinguishing the two placements:
+produces a trailing record for item 0 and a before record for item 1. The
+generator must process all matching entries, not use `.find(...)`.
+
+### Shared list parsing without erasing separator rules
+
+Share trivia classification, partitioning, and result shape. Do not force all
+lists through one separator policy. Agency has at least:
+
+1. comma lists, where another item requires a comma;
+2. object-type lists, where comma, semicolon, or newline separates properties;
+3. match-arm streams, which contain complete constructs and use the decorator.
+
+The common list result is:
 
 ```ts
-export type Trivia = {
-  anchorIndex: number;
-  comments: TriviaNode[];
-  /** True when these comments trailed item `anchorIndex - 1` on its own line,
-   *  rather than sitting on their own line before item `anchorIndex`. */
-  trailing?: boolean;
+export type ParsedList<T> = {
+  items: T[];
+  trivia?: ListTrivia[];
 };
 ```
 
-`ObjectTypeTrivia` gets the same field. The generator change is confined to
-`emitTriviaAt` (`lib/backends/agencyGenerator.ts:774`) plus its three callers,
-since a trailing entry must be appended to the previous line rather than pushed
-as a new one — which means `emitTriviaAt` needs to return the trailing text
-instead of only pushing lines.
-
-Splitting a single trivia entry that holds both kinds is the fiddly part: a
-trailing comment and then a standalone comment before the next item are both
-anchored at the same index and must not be merged. The cleanest handling is to
-let the parser emit two entries at the same `anchorIndex`, one flagged trailing
-and one not, and have the generator emit the trailing one first.
-
-## Phase 3 — argument and parameter lists — deferred
+A comma-list parser accepts the item parser plus explicit policy data:
 
 ```ts
-foo(
-  a, // first
-  b
-)
+type CommaListPolicy = {
+  closer: string;
+  cardinality: "zero-or-more" | "one-or-more";
+  trailingComma: "allow" | "reject";
+};
 ```
 
-Function calls and parameter lists have no trivia at all today, so this needs
-the anchoring infrastructure built from scratch for them, not just extended.
-Deferred, and possibly indefinitely — this is a much rarer shape in agent-written
-code than the first two.
+This retains each grammar's load-bearing missing-comma checks without silently
+broadening trailing-comma or empty-list behavior. Arrays, objects, calls, and
+parameters keep their existing policies. Node imports and binding/match
+patterns continue to reject trailing commas. Object-type members keep their
+separate punctuation-or-newline policy and permit an undelimited final member.
+The comma-list source order is:
 
-## The reflow rule
+1. item;
+2. horizontal whitespace;
+3. comma when another item follows;
+4. horizontal whitespace;
+5. optional same-line `//` trailing trivia;
+6. line ending and standalone trivia;
+7. next item or closer.
 
-The genuine hazard is not modeling, it is collapsing. If the formatter takes a
-multi-line construct holding two trailing comments and prints it on one line,
-both comments end up on the same output line and the result is nonsense — or,
-worse, unparseable.
+The final item may use `item // comment` before a closer on the next line. A
+non-final item must use `item, // comment`.
 
-**A construct containing trailing comments never collapses to one line.**
+### AST ownership
 
-There is direct precedent. `armPrintsInline`
-(`lib/backends/agencyGenerator.ts:1484`) already governs when a one-statement
-match arm may print inline, and its rule is "the author's form wins: an arm
-written as a block prints as a block." PR #712 tightened it further so that an
-arm only collapses when the single-statement grammar can re-parse the result,
-with the reasoning that degrading to block form is "more verbose, never
-unparseable — the right failure direction for a formatter." The same reasoning
-applies unchanged here.
+Named fields make the list being described explicit when a node can own more
+than one list:
+
+```ts
+FunctionCall.argumentTrivia?: ListTrivia[];
+FunctionDefinition.parameterTrivia?: ListTrivia[];
+GraphNodeDefinition.parameterTrivia?: ListTrivia[];
+InterruptStatement.argumentTrivia?: ListTrivia[];
+GuardBlock.argumentTrivia?: ListTrivia[];
+type CallChainElement = {
+  kind: "call";
+  optional?: boolean;
+} & Pick<FunctionCall, "arguments" | "block" | "argumentTrivia">;
+NamedImport.nameTrivia?: ListTrivia[];
+ImportNodeStatement.nodeTrivia?: ListTrivia[];
+NamedExportBody.nameTrivia?: ListTrivia[];
+ArrayPattern.elementTrivia?: ListTrivia[];
+ObjectPattern.propertyTrivia?: ListTrivia[];
+MessageThread.argumentTrivia?: ListTrivia[];
+ParallelBlock.argumentTrivia?: ListTrivia[];
+MatchBlockCase.trailingComment?: LineComment;
+```
+
+Arrays, objects, and object types retain their existing `trivia` field names.
+
+Function-call inline blocks need explicit re-anchoring. The parser currently
+extracts an inline block from `arguments`, and the formatter canonicalizes it to
+the last argument. Trivia must move with its source item into that canonical
+order. A standalone comment before the following source argument remains with
+that following argument. Remapping validates that canonical source indexes are
+a permutation and rejects an unmapped anchor instead of producing
+`anchorIndex: undefined`. Rendering uses a virtual item list containing ordinary
+arguments followed by the extracted inline block, so the block cannot disappear
+on the trivia-aware path.
+
+### Generator interfaces
+
+Separate comment text from standalone placement:
+
+```ts
+protected commentText(comment: LineComment): string {
+  return `//${comment.content}`;
+}
+
+protected processComment(comment: AgencyComment): string {
+  return this.indentStr(this.commentText(comment));
+}
+
+protected appendTrailingComment(
+  code: string,
+  comment: LineComment | undefined,
+): string {
+  return comment ? `${code} ${this.commentText(comment)}` : code;
+}
+```
+
+`processNode` uses `appendTrailingComment` for ordinary complete constructs.
+Sorted imports bypass ordinary `processNode`, so their sorting render path must
+append the comment after moving the import. Match arms use the same helper.
+
+Delimited lists use a shared multiline renderer. An item renderer returns
+structured `{ leadingLines?, code }` data, allowing object-property tags and
+similar item-owned lines without passing pre-indented multiline strings through
+the abstraction. With no trivia, callers retain the existing `wrapList` output.
+With trivia, rendering must:
+
+1. force multiline form;
+2. emit every before record for the item;
+3. render the item and its canonical separator;
+4. append every trailing record for that item;
+5. emit before records anchored at the closer.
+
+A construct containing trailing comments never collapses to one line.
 
 ## Testing
 
-Round-trip tests are the core of this. For each supported position: parse source
-with a trailing comment, format, and assert the output is byte-identical to the
-input. That single assertion covers both the parser attaching correctly and the
-generator emitting in the right place.
+Formatter tests assert canonical expected output, successful reparsing, and a
+second-format fixed point. Byte identity is not required because imports,
+spacing, delimiters, and inline-block position already canonicalize.
 
-Specific cases to pin:
+Required coverage includes:
 
-- **Every body kind.** A trailing comment on a statement inside a node body,
-  function body, `if`, `while`, `for`, `handle`, `guard`, and `thread` block.
-- **The relocation regression.** The exact case from the Background —
-  `const x = 5 // explains x` followed by `const y = 6` — must round-trip with
-  the comment still on the first line. This is the bug the whole spec exists for.
-- **Multi-line node.** A comment after the closing `)` of a call spanning several
-  lines attaches to the statement and stays after the `)`.
-- **Standalone comments are unaffected.** A comment on its own line stays a
-  sibling body node and renders on its own line. This is the negative case that
-  proves the newline check works.
-- **Last statement in a body.** A trailing comment on the final statement, with
-  the closing `}` on the next line.
-- **Block comments keep old behavior.** `const x = 5 /* why */` does not attach.
-- **No collapse.** A construct holding trailing comments stays expanded even when
-  it would otherwise print inline.
-- **Idempotence.** Formatting twice changes nothing on the second pass.
+- top-level declarations and sorted imports whose comments move with them;
+- standalone-comment negatives after assignment, return, call, block, and blank
+  line paths that consume whitespace differently;
+- every body owner listed above;
+- inline and block match arms;
+- a comment after the closing `)` of a multiline call statement;
+- unchanged owner `loc.end`;
+- existing array/object/object-type trivia AST snapshots with no new
+  `placement` field;
+- missing-comma regressions for arrays and objects;
+- trailing plus standalone comments at the same logical list boundary;
+- parser progress after a trailing comment on a non-final match arm and list
+  item;
+- a standalone comment after a nested item parser that consumes its newline;
+- non-final and final items in each supported list family;
+- calls with positional, named, splat, access-chain, and inline-block arguments;
+- interrupt, `raise`, and `guard` arguments;
+- function and node parameters, including variadic, defaulted, and validated
+  parameters;
+- imports, exports, binding patterns, match patterns, thread args, and parallel
+  args;
+- tagged object-type properties with trailing comments;
+- unchanged cardinality and trailing-comma acceptance for every migrated list
+  family;
+- block comments remaining ordinary before-trivia;
+- test TypeScript compilation, structural lint, unit tests, formatter corpus,
+  build, and parser performance.
 
-Phase 2 adds the same battery for array items, object literal fields, and object
-type members, plus the mixed case where one item has a trailing comment and the
-next is preceded by a standalone one.
+Comments have no runtime semantics, so no Agency execution tests or LLM calls
+are needed.
 
-No Agency execution tests are needed. Comments have no runtime meaning; this is
-entirely a parse-and-print change.
+## Compatibility and safety
 
-## Risks and open questions
+- No wrapper node is introduced, preserving walker completeness.
+- Existing ASTs without trailing comments do not gain fields.
+- Existing before-trivia records do not gain `placement`.
+- Existing `Trivia` and `ObjectTypeTrivia` exported names remain aliases.
+- `loc` continues to describe the syntactic owner, not attached formatter
+  metadata.
+- Literal comma requirements remain unchanged.
+- Handlers remain ordinary body consumers; the shared body decorator must never
+  skip or unregister them.
+- The TypeScript generator ignores formatter-only trivia exactly as it does
+  today.
 
-**`BaseNode` is universal.** Adding `trailingComment` to `BaseNode` puts the
-field on every node type in the language, including ones that can never carry a
-trailing comment because they are not statements. That is harmless — it is
-optional and nothing reads it unless set — and it matches how `loc` is already
-handled. The alternative, declaring it on each statement type individually,
-means a long list that will drift as node types are added. `BaseNode` is the
-right call, but it is worth naming the trade-off rather than pretending there
-isn't one.
+## Delivery
 
-**Exact-match AST tests.** Some parser tests assert on whole AST objects. Adding
-an optional field does not change any existing tree, since the field is only
-present when a trailing comment was actually found, so those should be
-unaffected. Worth confirming early rather than discovering late.
+This is one language feature delivered in reviewable milestones:
 
-**The TypeScript generator.** This spec covers `AgencyGenerator` only, since the
-motivating problem is `agency fmt` rearranging a user's file. Carrying trailing
-comments into generated TypeScript would make compiled output more readable, but
-nothing depends on it and it is a separate change.
+1. complete-construct metadata, parsing, and rendering;
+2. shared list metadata and migration of existing trivia-aware lists;
+3. call arguments and declaration parameters;
+4. remaining already-multiline surfaces;
+5. documentation and compatibility verification.
 
-**Interaction with `loc` offsets.** Attaching a comment to the preceding node
-does not change that node's `loc.end`, so a node's recorded range will no longer
-cover everything the parser consumed for it. Nothing currently depends on that
-being exact for statements, but source-map generation and the LSP both read
-`loc`, so this deserves a check before implementation rather than an assumption.
-
-## Out of scope
-
-- **Making trailing comments idiomatic.** This spec makes them survive; it does
-  not make them recommended. The guide should keep advising against them until
-  Phase 1 lands, then say plainly which positions honor them.
-- **Comment reflow or rewrapping.** A long trailing comment stays long. The
-  formatter does not move it to its own line to fit a width budget.
-- **Attaching comments to expressions inside a line.** `foo(a /* x */, b)`
-  stays as-is. Only end-of-line comments are in scope.
+The guide should publish the universal rule only after all milestones land.

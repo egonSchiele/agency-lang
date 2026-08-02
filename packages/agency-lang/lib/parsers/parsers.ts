@@ -1857,20 +1857,100 @@ function partitionTrivia<T>(entries: InterleavedEntry<T>[]): ParsedList<T> {
 /** A comma-separated list that may span lines, with trivia between items.
  *  `closer` is only looked at, never consumed: it lets the last item go
  *  without a comma while still requiring commas between items (#602). */
+/** What a particular comma list allows. Stated per call site rather than
+ *  inferred, because these differ across the grammar and getting one wrong
+ *  silently widens what the language accepts: `import { a, b }` permits a
+ *  trailing comma while `import node { a, b }` and every destructuring
+ *  pattern reject one. */
+type CommaListPolicy = {
+  closer: string;
+  cardinality: "zero-or-more" | "one-or-more";
+  trailingComma: "allow" | "reject";
+};
+
+/** Look ahead past trivia to the closer, without consuming anything. */
+const closerAhead = (closer: string) =>
+  peek(seqR(many(seqR(literalTrivia, optionalSpacesOrNewline)), char(closer)));
+
+/** The separator between two items. In `reject` mode a comma must be
+ *  followed by another item, so `[a, b,]` fails rather than quietly
+ *  dropping the empty slot. */
+function commaListDelimiter(policy: CommaListPolicy): Parser<unknown> {
+  const ahead = closerAhead(policy.closer);
+  const comma =
+    policy.trailingComma === "allow" ? char(",") : seqR(char(","), not(ahead));
+  return seqR(optionalSpacesOrNewline, or(comma, ahead), optionalSpacesOrNewline);
+}
+
 function commaDelimitedList<T>(
   itemParser: Parser<T>,
-  closer: string,
+  policy: CommaListPolicy,
 ): Parser<ParsedList<T>> {
-  return map(
-    many(
-      or(
-        triviaEntry,
-        itemEntryAfterDelimiter(itemParser, literalDelimiter(closer)),
-      ),
+  const entries = many(
+    or(
+      triviaEntry,
+      itemEntryAfterDelimiter(itemParser, commaListDelimiter(policy)),
     ),
-    (entries: InterleavedEntry<T>[]) => partitionTrivia(entries),
   );
+  return (input: string) => {
+    const parsed = entries(input);
+    if (!parsed.success) {
+      return parsed as ParserResult<ParsedList<T>>;
+    }
+    const list = partitionTrivia(parsed.result as InterleavedEntry<T>[]);
+    if (policy.cardinality === "one-or-more" && list.items.length === 0) {
+      return failure("expected at least one item", input);
+    }
+    return success(list, parsed.rest);
+  };
 }
+
+/** Every comma list's policy, named so a call site reads as a rule rather
+ *  than as three anonymous arguments. Each one mirrors the grammar that
+ *  site accepted before it moved onto the shared parser. */
+const CALL_ARGUMENT_LIST: CommaListPolicy = {
+  closer: ")",
+  cardinality: "zero-or-more",
+  trailingComma: "allow",
+};
+
+const NAMED_ARGUMENT_LIST: CommaListPolicy = {
+  closer: ")",
+  cardinality: "zero-or-more",
+  trailingComma: "allow",
+};
+
+const IMPORT_NAME_LIST: CommaListPolicy = {
+  closer: "}",
+  cardinality: "one-or-more",
+  trailingComma: "allow",
+};
+
+/** `import node { a, b }` never accepted a trailing comma, unlike the
+ *  value-import list above. */
+const IMPORT_NODE_LIST: CommaListPolicy = {
+  closer: "}",
+  cardinality: "one-or-more",
+  trailingComma: "reject",
+};
+
+const EXPORT_NAME_LIST: CommaListPolicy = {
+  closer: "}",
+  cardinality: "one-or-more",
+  trailingComma: "allow",
+};
+
+const ARRAY_PATTERN_LIST: CommaListPolicy = {
+  closer: "]",
+  cardinality: "zero-or-more",
+  trailingComma: "reject",
+};
+
+const OBJECT_PATTERN_LIST: CommaListPolicy = {
+  closer: "}",
+  cardinality: "zero-or-more",
+  trailingComma: "reject",
+};
 
 /** `commaDelimitedList` shaped for `captureCaptures`: lifts the items and
  *  their trivia into the parent under the two given field names. */
@@ -1880,12 +1960,12 @@ function commaDelimitedListCaptures<
   TriviaKey extends string,
 >(
   itemParser: Parser<T>,
-  closer: string,
+  policy: CommaListPolicy,
   itemsKey: ItemsKey,
   triviaKey: TriviaKey,
 ): Parser<{ [K in ItemsKey]: T[] } & { [K in TriviaKey]?: ListTrivia[] }> {
   return map(
-    commaDelimitedList(itemParser, closer),
+    commaDelimitedList(itemParser, policy),
     (parsed: ParsedList<T>) =>
       ({
         [itemsKey]: parsed.items,
@@ -2970,7 +3050,7 @@ const argumentListParser = memo(
     captureCaptures(
       commaDelimitedListCaptures(
         argumentItemParser,
-        ")",
+        CALL_ARGUMENT_LIST,
         "arguments",
         "argumentTrivia",
       ),
@@ -4704,7 +4784,14 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = withLoc(mem
         spaces,
         char("{"),
         optionalSpacesOrNewline,
-        capture(sepBy1(commaWithNewline, many1WithJoin(varNameChar)), "importedNodes"),
+        captureCaptures(
+          commaDelimitedListCaptures(
+            many1WithJoin(varNameChar),
+            IMPORT_NODE_LIST,
+            "importedNodes",
+            "nodeTrivia",
+          ),
+        ),
         optionalSpacesOrNewline,
         char("}"),
         spaces,
@@ -4775,8 +4862,14 @@ const namedImportParser: Parser<NamedImport> = memo(
     seqC(
       char("{"),
       optionalSpacesOrNewline,
-      capture(sepBy1(commaWithNewline, markedNameItem), "items"),
-      optional(commaWithNewline),
+      captureCaptures(
+        commaDelimitedListCaptures(
+          markedNameItem,
+          IMPORT_NAME_LIST,
+          "items",
+          "nameTrivia",
+        ),
+      ),
       optionalSpacesOrNewline,
       char("}"),
     ),
@@ -4897,8 +4990,14 @@ const namedExportBodyParser = map(
   seqC(
     char("{"),
     optionalSpacesOrNewline,
-    capture(sepBy1(commaWithNewline, markedNameItem), "items"),
-    optional(commaWithNewline),
+    captureCaptures(
+      commaDelimitedListCaptures(
+        markedNameItem,
+        EXPORT_NAME_LIST,
+        "items",
+        "nameTrivia",
+      ),
+    ),
     optionalSpacesOrNewline,
     char("}"),
   ),
@@ -5554,7 +5653,19 @@ type ThreadNamedArgs = {
   continueExpr: Expression | null;
   sessionExpr: Expression | null;
   hidden: Expression | null;
+  argumentTrivia?: ListTrivia[];
 };
+
+/** The order the formatter prints thread arguments in, regardless of the
+ *  order they were written. Trivia anchors are remapped into it so a
+ *  comment travels with the argument it described. */
+const THREAD_ARGUMENT_ORDER = [
+  "label",
+  "summarize",
+  "continue",
+  "session",
+  "hidden",
+];
 
 const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
   input: string,
@@ -5564,18 +5675,21 @@ const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
   const inner: Parser<any> = seqC(
     char("("),
     optionalSpacesOrNewline,
-    capture(
-      sepBy(commaWithNewline, namedArgumentParser),
-      "arguments",
+    captureCaptures(
+      commaDelimitedListCaptures(
+        namedArgumentParser,
+        NAMED_ARGUMENT_LIST,
+        "arguments",
+        "argumentTrivia",
+      ),
     ),
-    optional(comma),
     optionalSpacesOrNewline,
     char(")"),
   );
   const r = inner(input);
   if (!r.success) return r as ParserResult<ThreadNamedArgs>;
   const args: NamedArgument[] = r.result.arguments;
-  const allowed = ["label", "summarize", "continue", "session", "hidden"];
+  const allowed = THREAD_ARGUMENT_ORDER;
   const seen: Record<string, Expression> = {};
   for (const arg of args) {
     if (!allowed.includes(arg.name)) {
@@ -5595,6 +5709,15 @@ const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
       input,
     );
   }
+  // Printing reorders the arguments, so the anchors have to move with them.
+  const canonicalSourceIndexes = THREAD_ARGUMENT_ORDER.flatMap((name) => {
+    const index = args.findIndex((arg) => arg.name === name);
+    return index === -1 ? [] : [index];
+  });
+  const argumentTrivia = remapListTrivia(
+    r.result.argumentTrivia,
+    canonicalSourceIndexes,
+  );
   return success(
     {
       label: seen.label ?? null,
@@ -5602,6 +5725,7 @@ const _threadNamedArgsParser: Parser<ThreadNamedArgs> = (
       continueExpr: seen.continue ?? null,
       sessionExpr: seen.session ?? null,
       hidden: seen.hidden ?? null,
+      ...(argumentTrivia && { argumentTrivia }),
     },
     r.rest,
   );
@@ -5659,16 +5783,7 @@ export const _submessageThreadParser: Parser<MessageThread> = memo(
 /** Lift `_args` (the optional named-args object) to top-level fields on
  *  the MessageThread node. */
 const liftThreadArgs = (parsed: any): MessageThread => {
-  const args = parsed._args as
-    | {
-      label: Expression | null;
-      summarize: Expression | null;
-      continueExpr: Expression | null;
-      sessionExpr: Expression | null;
-      hidden: Expression | null;
-    }
-    | null
-    | undefined;
+  const args = parsed._args as ThreadNamedArgs | null | undefined;
   const out: any = { ...parsed };
   delete out._args;
   if (args) {
@@ -5677,6 +5792,9 @@ const liftThreadArgs = (parsed: any): MessageThread => {
     out.continueExpr = args.continueExpr;
     out.sessionExpr = args.sessionExpr;
     out.hidden = args.hidden;
+    if (args.argumentTrivia) {
+      out.argumentTrivia = args.argumentTrivia;
+    }
   } else {
     out.label = null;
     out.summarize = null;
@@ -6051,22 +6169,30 @@ export const whileLoopParser: Parser<WhileLoop> = label("a while loop", withLoc(
 /** Parser for the optional `(shared: <expr>)` named-args list after
  *  `parallel`. Modelled on `_threadNamedArgsParser` but with a smaller
  *  allowlist. Returns `{ shared: Expression | null }` on success. */
-const _parallelNamedArgsParser: Parser<{ shared: Expression | null }> = (
+type ParallelNamedArgs = {
+  shared: Expression | null;
+  argumentTrivia?: ListTrivia[];
+};
+
+const _parallelNamedArgsParser: Parser<ParallelNamedArgs> = (
   input: string,
-): ParserResult<{ shared: Expression | null }> => {
+): ParserResult<ParallelNamedArgs> => {
   const inner: Parser<any> = seqC(
     char("("),
     optionalSpacesOrNewline,
-    capture(
-      sepBy(commaWithNewline, namedArgumentParser),
-      "arguments",
+    captureCaptures(
+      commaDelimitedListCaptures(
+        namedArgumentParser,
+        NAMED_ARGUMENT_LIST,
+        "arguments",
+        "argumentTrivia",
+      ),
     ),
-    optional(comma),
     optionalSpacesOrNewline,
     char(")"),
   );
   const r = inner(input);
-  if (!r.success) return r as ParserResult<{ shared: Expression | null }>;
+  if (!r.success) return r as ParserResult<ParallelNamedArgs>;
   const args: NamedArgument[] = r.result.arguments;
   const seen: Record<string, Expression> = {};
   for (const arg of args) {
@@ -6081,7 +6207,13 @@ const _parallelNamedArgsParser: Parser<{ shared: Expression | null }> = (
     }
     seen[arg.name] = arg.value as Expression;
   }
-  return success({ shared: seen.shared ?? null }, r.rest);
+  return success(
+    {
+      shared: seen.shared ?? null,
+      ...(r.result.argumentTrivia && { argumentTrivia: r.result.argumentTrivia }),
+    },
+    r.rest,
+  );
 };
 
 export const parallelBlockParser: Parser<ParallelBlock> = label("a parallel block", withLoc(map(memo(
@@ -6103,11 +6235,14 @@ export const parallelBlockParser: Parser<ParallelBlock> = label("a parallel bloc
     ),
   ),
 ), (parsed: any): ParallelBlock => {
-  const args = parsed._args as { shared: Expression | null } | null | undefined;
+  const args = parsed._args as ParallelNamedArgs | null | undefined;
   const out: any = { ...parsed };
   delete out._args;
   if (args && args.shared !== null) {
     out.shared = args.shared;
+  }
+  if (args?.argumentTrivia) {
+    out.argumentTrivia = args.argumentTrivia;
   }
   return out as ParallelBlock;
 })));
@@ -6487,7 +6622,7 @@ const _baseFunctionParser: Parser<any> = memo(
     captureCaptures(
       commaDelimitedListCaptures(
         or(variadicParameterParser, functionParameterParser),
-        ")",
+        CALL_ARGUMENT_LIST,
         "parameters",
         "parameterTrivia",
       ),
@@ -6656,7 +6791,7 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
       captureCaptures(
         commaDelimitedListCaptures(
           functionParameterParser,
-          ")",
+          CALL_ARGUMENT_LIST,
           "parameters",
           "parameterTrivia",
         ),
@@ -6822,12 +6957,13 @@ export const arrayBindingPatternParser: Parser<ArrayPattern> = label(
         set("type", "arrayPattern"),
         char("["),
         optionalSpacesOrNewline,
-        capture(
-          or(
-            sepBy(commaWithNewline, lazy(() => bindingPatternParser)),
-            succeed([]),
+        captureCaptures(
+          commaDelimitedListCaptures(
+            lazy(() => bindingPatternParser),
+            ARRAY_PATTERN_LIST,
+            "elements",
+            "elementTrivia",
           ),
-          "elements",
         ),
         optionalSpacesOrNewline,
         char("]"),
@@ -6920,12 +7056,13 @@ export const objectBindingPatternParser: Parser<ObjectPattern> = label(
       set("type", "objectPattern"),
       char("{"),
       optionalSpacesOrNewline,
-      capture(
-        or(
-          sepBy(commaWithNewline, _bindingObjectPropertyParser),
-          succeed([]),
+      captureCaptures(
+        commaDelimitedListCaptures(
+          _bindingObjectPropertyParser,
+          OBJECT_PATTERN_LIST,
+          "properties",
+          "propertyTrivia",
         ),
-        "properties",
       ),
       optionalSpacesOrNewline,
       char("}"),
@@ -7112,15 +7249,13 @@ export const arrayMatchPatternParser: Parser<ArrayPattern> = label(
         set("type", "arrayPattern"),
         char("["),
         optionalSpacesOrNewline,
-        capture(
-          or(
-            sepBy(
-              commaWithNewline,
-              lazy(() => matchPatternParser) as Parser<ArrayPattern["elements"][number]>,
-            ),
-            succeed([]),
+        captureCaptures(
+          commaDelimitedListCaptures(
+            lazy(() => matchPatternParser) as Parser<ArrayPattern["elements"][number]>,
+            ARRAY_PATTERN_LIST,
+            "elements",
+            "elementTrivia",
           ),
-          "elements",
         ),
         optionalSpacesOrNewline,
         char("]"),
@@ -7146,12 +7281,13 @@ export const objectMatchPatternParser: Parser<ObjectPattern> = label(
       set("type", "objectPattern"),
       char("{"),
       optionalSpacesOrNewline,
-      capture(
-        or(
-          sepBy(commaWithNewline, _matchObjectPropertyParser),
-          succeed([]),
+      captureCaptures(
+        commaDelimitedListCaptures(
+          _matchObjectPropertyParser,
+          OBJECT_PATTERN_LIST,
+          "properties",
+          "propertyTrivia",
         ),
-        "properties",
       ),
       optionalSpacesOrNewline,
       char("}"),

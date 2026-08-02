@@ -1,3 +1,4 @@
+import type { ListTrivia } from "./dataStructures.js";
 import { BaseNode } from "./base.js";
 
 export type ExportFromStatement = BaseNode & {
@@ -11,6 +12,8 @@ export type NamedExportBody = {
   kind: "namedExport";
   /** Source-side names being re-exported. */
   names: string[];
+  /** Comments between items in this list. */
+  nameTrivia?: ListTrivia[];
   /** Map of sourceName → localName for entries written as `name as alias`. */
   aliases: Record<string, string>;
   /** Source-side names marked `destructive` / `idempotent`. Present only

@@ -1,3 +1,4 @@
+import type { ListTrivia } from "./dataStructures.js";
 import { AgencyNode, Expression } from "@/types.js";
 import { BaseNode } from "./base.js";
 
@@ -7,6 +8,8 @@ export type MessageThread = BaseNode & {
   type: "messageThread";
   threadType: ThreadType;
   body: AgencyNode[];
+  /** Comments between the named arguments, in the order they PRINT. */
+  argumentTrivia?: ListTrivia[];
   /** Optional template-level label from `thread(label: "...") { }`. */
   label?: Expression | null;
   /** Optional eager-summarize flag from `thread(summarize: true) { }`. */

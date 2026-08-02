@@ -12,6 +12,7 @@ import {
   Literal,
   MultiLineStringLiteral,
   NewLine,
+  ObjectType,
   ObjectProperty,
   ParallelBlock,
   Scope,
@@ -763,7 +764,21 @@ export class AgencyGenerator {
 
   // Type system methods
 
-  private stringifyProp(prop: ObjectProperty): string {
+  private renderTypeSource(type: VariableType): string {
+    return variableTypeToString(type, this.typeAliases, true, {
+      objectType: (objectType, printChild) => {
+        if (!objectType.trivia?.length) {
+          return undefined;
+        }
+        return this.renderObjectTypeSource(objectType, printChild);
+      },
+    });
+  }
+
+  private stringifyProp(
+    prop: ObjectProperty,
+    printChild: (child: VariableType) => string,
+  ): string {
     const isUnionWithNull =
       prop.value.type === "unionType" &&
       prop.value.types.some(
@@ -779,14 +794,14 @@ export class AgencyGenerator {
         nonNullTypes.length === 1
           ? nonNullTypes[0]
           : { type: "unionType", types: nonNullTypes };
-      let str = `${prop.key}?: ${variableTypeToString(unionWithoutNull, this.typeAliases, true)}`;
+      let str = `${prop.key}?: ${printChild(unionWithoutNull)}`;
       if (prop.description) {
         str += ` # ${prop.description}`;
       }
       return str;
     }
 
-    let str = `${prop.key}: ${variableTypeToString(prop.value, this.typeAliases, true)}`;
+    let str = `${prop.key}: ${printChild(prop.value)}`;
     if (prop.description) {
       str += ` # ${prop.description}`;
     }
@@ -864,21 +879,30 @@ export class AgencyGenerator {
 
   protected aliasedTypeToString(aliasedType: VariableType): string {
     if (aliasedType.type === "objectType") {
-      return this.renderListWithTrivia({
-        items: aliasedType.properties,
-        trivia: aliasedType.trivia,
-        open: "{",
-        close: "}",
-        // `@validate(...)` / `@jsonSchema(...)` annotations render on their
-        // own lines above the property, matching source layout.
-        renderItem: (prop) => ({
-          leadingLines: (prop.tags ?? []).map((tag) => this.formatTag(tag).trim()),
-          code: this.stringifyProp(prop),
-        }),
-        separator: (index, count) => (index === count - 1 ? "" : ";"),
-      });
+      return this.renderObjectTypeSource(aliasedType, (child) =>
+        this.renderTypeSource(child),
+      );
     }
-    return variableTypeToString(aliasedType, this.typeAliases, true);
+    return this.renderTypeSource(aliasedType);
+  }
+
+  private renderObjectTypeSource(
+    objectType: ObjectType,
+    printChild: (child: VariableType) => string,
+  ): string {
+    return this.renderListWithTrivia({
+      items: objectType.properties,
+      trivia: objectType.trivia,
+      open: "{",
+      close: "}",
+      // `@validate(...)` / `@jsonSchema(...)` annotations render on their
+      // own lines above the property, matching source layout.
+      renderItem: (prop) => ({
+        leadingLines: (prop.tags ?? []).map((tag) => this.formatTag(tag).trim()),
+        code: this.stringifyProp(prop, printChild),
+      }),
+      separator: (index, count) => (index === count - 1 ? "" : ";"),
+    });
   }
 
   protected processEffectDeclaration(node: EffectDeclaration): string {

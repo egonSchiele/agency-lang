@@ -951,6 +951,114 @@ describe("AgencyGenerator - optional key shorthand (nullish unification)", () =>
   });
 });
 
+describe("AgencyGenerator - nested object type trivia", () => {
+  function formatAgency(source: string): string {
+    const parsed = parseAgency(source, {}, false, false);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return "";
+    return new AgencyGenerator().generate(parsed.result).output.trim();
+  }
+
+  function expectExactStableFormat(source: string, expected: string): void {
+    const once = formatAgency(source);
+    expect(once).toBe(expected);
+    expect(parseAgency(once, {}, false, false).success).toBe(true);
+    expect(formatAgency(once)).toBe(expected);
+  }
+
+  it("preserves generic, Result, block, and nested-property wrappers", () => {
+    const source = `type Generic = Container<{
+  x: number // keep
+}>(3)
+
+type Loaded = Result<{
+  x: number // keep
+}>
+
+type Callback = (arg: {
+  x: number // keep
+}) -> {
+  y: string // keep
+}
+
+type Optional = {
+  nested: {
+    x: number // keep
+  } | null
+}`;
+    const expected = `type Generic = Container<{
+  x: number // keep
+}>(3)
+
+type Loaded = Result<{
+  x: number // keep
+}>
+
+type Callback = (arg: {
+  x: number // keep
+}) -> {
+  y: string // keep
+}
+
+type Optional = {
+  nested?: {
+    x: number // keep
+  }
+}`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("preserves standalone comments and blank lines", () => {
+    const source = `type Commented = Array<{
+  // first
+  x: number,
+
+  y: string,
+  // last
+}>`;
+    const expected = `type Commented = Array<{
+  // first
+  x: number;
+  y: string
+  // last
+}>`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("preserves array, union, intersection, keyof, and indexed-access syntax", () => {
+    const source = `type ArrayWrapped = {
+  x: number // keep
+}[]
+
+type UnionWrapped = {
+  x: number // keep
+} | null
+
+type IntersectionWrapped = {
+  x: number // keep
+} & Named
+
+type KeyWrapped = keyof {
+  x: number // keep
+}
+
+type IndexedWrapped = {
+  x: number // keep
+}["x"]`;
+    expectExactStableFormat(source, source);
+  });
+
+  it("preserves block parameters beside an effect-set union", () => {
+    // Effect-set members cannot be object types in parser-supported source,
+    // so the object occupies the nearest recursive block slot while raises
+    // pins the effect-set union syntax on the same wrapper.
+    const source = `type EffectCallback = (arg: {
+  x: number // keep
+}) -> void raises <std::read, std::write>`;
+    expectExactStableFormat(source, source);
+  });
+});
+
 describe("AgencyGenerator - literal comment trivia (issue #317)", () => {
   const roundTrip = (input: string): string => {
     const parseResult = parseAgency(input, {}, false);

@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { compileSource, typeCheckSource } from "./compile.js";
 
 describe("compileSource", () => {
@@ -10,6 +13,53 @@ describe("compileSource", () => {
       expect(result.code).toContain("function");
       expect(result.moduleId).toBeTruthy();
     }
+  });
+
+  describe("sourcePath — resolving relative imports", () => {
+    const HELPERS = `export def helper(x: string): string {\n  """h"""\n  return x\n}\n`;
+    const MAIN = `import { helper } from "./helpers.agency"\n\nexport node main(x: string) {\n  return helper(x)\n}\n`;
+
+    it("resolves a relative .agency import when sourcePath is given", () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "compile-sourcepath-"));
+      try {
+        fs.writeFileSync(path.join(dir, "helpers.agency"), HELPERS);
+        const mainPath = path.join(dir, "main.agency");
+        fs.writeFileSync(mainPath, MAIN);
+
+        const result = compileSource(MAIN, { sourcePath: mainPath });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.code).toContain('from "./helpers.js"');
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("cannot resolve the relative import without sourcePath (single-file compile)", () => {
+      const result = compileSource(MAIN, {});
+      expect(result.success).toBe(false);
+    });
+
+    it("treats the on-disk file as authoritative when source and disk disagree", () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "compile-sourcepath-"));
+      try {
+        const onDisk = `export node main(): string {\n  return "from-disk"\n}\n`;
+        const mainPath = path.join(dir, "main.agency");
+        fs.writeFileSync(mainPath, onDisk);
+
+        // Pass a DIFFERENT source string; the file at sourcePath must win.
+        const stale = `export node main(): string {\n  return "from-arg"\n}\n`;
+        const result = compileSource(stale, { sourcePath: mainPath });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.code).toContain("from-disk");
+          expect(result.code).not.toContain("from-arg");
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   it("returns errors for invalid syntax", () => {

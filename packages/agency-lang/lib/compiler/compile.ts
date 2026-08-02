@@ -57,6 +57,19 @@ export type CompileSourceOptions = AgencyConfig & {
    * See `lib/importPaths.ts` for the ImportPolicy shape.
    */
   imports?: ImportPolicy;
+  /**
+   * Real on-disk path of the file to compile. Given it, `compileSource` compiles
+   * at that path — where sibling `.agency` files live — so relative imports
+   * resolve. Without it, `source` is written to an isolated temp file, so
+   * relative imports cannot resolve (single-file compile). A host that stores
+   * multi-file agents on disk passes this to compile each file against its real
+   * neighbors.
+   *
+   * When set, the file at this path is authoritative: it is parsed AND used for
+   * symbol/import resolution, so the two can't diverge. The `source` argument is
+   * ignored (pass the file's contents for clarity, but the disk file wins).
+   */
+  sourcePath?: string;
 };
 
 // Walk every import in the program and reject anything that fails the
@@ -100,15 +113,33 @@ export function compileSource(
   config: CompileSourceOptions,
 ): CompileResult {
   const moduleId = `agency_${nanoid()}`;
-  // Write source to a temp file so SymbolTable.build() can read it.
-  // The symbol table walks the file system to resolve imports and find builtins.
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-compile-"));
-  const syntheticPath = path.join(tempDir, `${moduleId}.agency`);
-  fs.writeFileSync(syntheticPath, source, "utf-8");
+  // SymbolTable.build() walks the file system from the source's path to resolve
+  // imports. With a caller-supplied sourcePath (the file is already on disk
+  // beside its siblings), compile at that path so relative `.agency` imports
+  // resolve. Otherwise write to an isolated temp file — relative imports cannot
+  // resolve there, by design (single-file compile).
+  let tempDir: string | undefined;
+  let syntheticPath: string;
+  if (config.sourcePath) {
+    syntheticPath = config.sourcePath;
+  } else {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-compile-"));
+    syntheticPath = path.join(tempDir, `${moduleId}.agency`);
+    fs.writeFileSync(syntheticPath, source, "utf-8");
+  }
+
+  // The file at `syntheticPath` is the single source of truth: SymbolTable.build
+  // and buildCompiledClosure read the entrypoint and its imports from there, so
+  // parse the SAME bytes rather than the passed `source`. In the temp-file case
+  // that file IS `source` (just written); with a caller `sourcePath` this reads
+  // the on-disk file, so the AST and symbol/import resolution can't diverge.
+  const compiledSource = config.sourcePath
+    ? fs.readFileSync(syntheticPath, "utf-8")
+    : source;
 
   try {
     // 1. Parse
-    const parseResult = parseAgency(source, config, true);
+    const parseResult = parseAgency(compiledSource, config, true);
     if (!parseResult.success) {
       return {
         success: false,
@@ -165,7 +196,7 @@ export function compileSource(
       liftedProgram,
       symbolTable,
       syntheticPath,
-      source,
+      compiledSource,
     );
 
     // 5. Type check
@@ -240,8 +271,9 @@ export function compileSource(
       errors: [error instanceof Error ? error.message : String(error)],
     };
   } finally {
-    // Clean up temp source file (best-effort — OS cleans tmpdir eventually)
-    if (tempDir.startsWith(os.tmpdir())) {
+    // Clean up temp source file (best-effort — OS cleans tmpdir eventually).
+    // Skipped when compiling at a caller-owned sourcePath (no temp dir created).
+    if (tempDir && tempDir.startsWith(os.tmpdir())) {
       try {
         fs.rmSync(tempDir, { recursive: true });
       } catch (_) {

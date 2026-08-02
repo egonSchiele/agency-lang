@@ -633,7 +633,10 @@ export function validateResumeBatch(
   if (interrupts.length !== responses.length) {
     return "interrupts and responses length mismatch";
   }
-  const seenInterruptIds: string[] = [];
+  // Null-prototype set: O(1) membership on untrusted, possibly large input, and
+  // an id like "__proto__" is an ordinary key rather than a prototype hit that a
+  // plain object would report as already-seen.
+  const seenInterruptIds: Record<string, true> = Object.create(null);
   for (const item of interrupts) {
     if (typeof item !== "object" || item === null || Array.isArray(item)) {
       return "each interrupt must be an object";
@@ -645,10 +648,10 @@ export function validateResumeBatch(
     if (typeof fields.interruptId !== "string" || fields.interruptId.length === 0) {
       return "each interrupt must carry a non-empty string interruptId";
     }
-    if (seenInterruptIds.includes(fields.interruptId)) {
+    if (seenInterruptIds[fields.interruptId]) {
       return "interrupt IDs must be unique";
     }
-    seenInterruptIds.push(fields.interruptId);
+    seenInterruptIds[fields.interruptId] = true;
   }
   for (const item of responses) {
     if (typeof item !== "object" || item === null || Array.isArray(item)) {
@@ -674,7 +677,9 @@ function buildResponseMap(
   if (validationError) {
     throw new Error(`respondToInterrupts: ${validationError}`);
   }
-  const responseMap: Record<string, { response: InterruptResponse }> = {};
+  // Null-prototype: interruptId comes from the (client-echoed) request, so an id
+  // like "__proto__" must be a plain key, not a write to the map's prototype.
+  const responseMap: Record<string, { response: InterruptResponse }> = Object.create(null);
   for (let i = 0; i < interrupts.length; i++) {
     responseMap[interrupts[i].interruptId] = {
       response: deepClone(responses[i]),

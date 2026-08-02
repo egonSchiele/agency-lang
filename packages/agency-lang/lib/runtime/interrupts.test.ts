@@ -424,6 +424,17 @@ describe("validateResumeBatch", () => {
     ).not.toBeNull();
   });
 
+  it("treats an interruptId of __proto__ as an ordinary key", () => {
+    // A plain-object seen-set would report the first "__proto__" as a duplicate
+    // (it inherits truthy from the prototype); a single one must be accepted,
+    // and two of them must still be rejected as duplicates.
+    const proto = { ...validInterrupt, interruptId: "__proto__" };
+    expect(validateResumeBatch([proto], [approveResponse])).toBeNull();
+    expect(
+      validateResumeBatch([proto, { ...proto }], [approveResponse, approveResponse]),
+    ).not.toBeNull();
+  });
+
   it("rejects a non approve/reject response discriminant", () => {
     // Deliberately invalid discriminant — the type is cast so the test can send it.
     const badResponses = [{ type: "propagate" }] as unknown as InterruptResponse[];

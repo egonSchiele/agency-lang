@@ -1,5 +1,6 @@
 import { Expression } from "../../types.js";
 import { VariableType } from "../../types.js";
+import type { ObjectType } from "../../types.js";
 
 const MAX_LENGTH = 50;
 
@@ -108,10 +109,11 @@ function formatValueArgs(valueArgs: Expression[] | undefined): string {
 function effectSetMemberToSource(
   member: VariableType,
   typeAliases: Record<string, VariableType>,
+  hooks?: TypePrintHooks,
 ): string {
   if (member.type === "stringLiteralType") return member.value;
   if (member.type === "typeAliasVariable") return member.aliasName;
-  return variableTypeToString(member, typeAliases, true);
+  return variableTypeToString(member, typeAliases, true, hooks);
 }
 
 /** Render a `raises` clause back to Agency source: `<*>` for the `any`
@@ -122,15 +124,24 @@ function effectSetMemberToSource(
 export function effectSetToSource(
   type: VariableType,
   typeAliases: Record<string, VariableType>,
+  hooks?: TypePrintHooks,
 ): string {
   if (type.type === "primitiveType" && type.value === "any") return "<*>";
-  return variableTypeToString(type, typeAliases, true);
+  return variableTypeToString(type, typeAliases, true, hooks);
 }
+
+export type TypePrintHooks = {
+  objectType?: (
+    objectType: ObjectType,
+    printChild: (child: VariableType) => string,
+  ) => string | undefined;
+};
 
 export function variableTypeToString(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
   forFormatting: boolean = false,
+  hooks?: TypePrintHooks,
 ): string {
   if (variableType.type === "primitiveType") {
     if (variableType.value === "object") {
@@ -148,6 +159,7 @@ export function variableTypeToString(
       variableType.elementType,
       typeAliases,
       forFormatting,
+      hooks,
     );
     if (
       variableType.elementType.type === "unionType" ||
@@ -171,12 +183,12 @@ export function variableTypeToString(
     // type, and would want the plain `a | b` form anyway.
     if (forFormatting && variableType.isEffectSet) {
       const members = variableType.types
-        .map((t) => effectSetMemberToSource(t, typeAliases))
+        .map((t) => effectSetMemberToSource(t, typeAliases, hooks))
         .join(", ");
       return `<${members}>`;
     }
     const str = variableType.types
-      .map((t) => variableTypeToString(t, typeAliases, forFormatting))
+      .map((t) => variableTypeToString(t, typeAliases, forFormatting, hooks))
       .join(" | ");
     if (str.length > MAX_LENGTH) {
       const arr = str.split(" | ");
@@ -184,10 +196,17 @@ export function variableTypeToString(
     }
     return str;
   } else if (variableType.type === "objectType") {
+    const rendered = hooks?.objectType?.(
+      variableType,
+      (child) => variableTypeToString(child, typeAliases, forFormatting, hooks),
+    );
+    if (rendered !== undefined) {
+      return rendered;
+    }
     const props = variableType.properties
       .map(
         (prop) =>
-          `${prop.key}: ${variableTypeToString(prop.value, typeAliases, forFormatting)}`,
+          `${prop.key}: ${variableTypeToString(prop.value, typeAliases, forFormatting, hooks)}`,
       )
       .join("; ");
     return `{ ${props} }`;
@@ -204,32 +223,48 @@ export function variableTypeToString(
           p.typeAnnotation,
           typeAliases,
           forFormatting,
+          hooks,
         );
         return p.name ? `${p.name}: ${t}` : t;
       })
       .join(", ");
-    const ret = variableTypeToString(variableType.returnType, typeAliases, forFormatting);
+    const ret = variableTypeToString(
+      variableType.returnType,
+      typeAliases,
+      forFormatting,
+      hooks,
+    );
     // `raises` is Agency-only surface syntax; never emit it into TS codegen (`=>`).
     const raisesStr =
       forFormatting && variableType.raises
-        ? ` raises ${effectSetToSource(variableType.raises, typeAliases)}`
+        ? ` raises ${effectSetToSource(variableType.raises, typeAliases, hooks)}`
         : "";
     return `(${params}) ${arrow} ${ret}${raisesStr}`;
   } else if (variableType.type === "resultType") {
-    const s = variableTypeToString(variableType.successType, typeAliases, forFormatting);
-    const f = variableTypeToString(variableType.failureType, typeAliases, forFormatting);
+    const s = variableTypeToString(
+      variableType.successType,
+      typeAliases,
+      forFormatting,
+      hooks,
+    );
+    const f = variableTypeToString(
+      variableType.failureType,
+      typeAliases,
+      forFormatting,
+      hooks,
+    );
     if (s === "any" && f === "any") return "Result";
     if (f === "string") return `Result<${s}>`;
     return `Result<${s}, ${f}>`;
   } else if (variableType.type === "genericType") {
     const args = variableType.typeArgs
-      .map((a) => variableTypeToString(a, typeAliases, forFormatting))
+      .map((a) => variableTypeToString(a, typeAliases, forFormatting, hooks))
       .join(", ");
     return `${variableType.name}<${args}>${formatValueArgs(variableType.valueArgs)}`;
   } else if (variableType.type === "intersectionType") {
     return variableType.types
       .map((m) => {
-        const s = variableTypeToString(m, typeAliases, forFormatting);
+        const s = variableTypeToString(m, typeAliases, forFormatting, hooks);
         return m.type === "unionType" ? `(${s})` : s;
       })
       .join(" & ");
@@ -238,6 +273,7 @@ export function variableTypeToString(
       variableType.operand,
       typeAliases,
       forFormatting,
+      hooks,
     );
     // Parenthesize union AND intersection operands: `keyof (A | B)` /
     // `keyof (A & B)` must not print bare (wrong re-parse precedence).
@@ -250,6 +286,7 @@ export function variableTypeToString(
       variableType.objectType,
       typeAliases,
       forFormatting,
+      hooks,
     );
     const wrapped =
       variableType.objectType.type === "keyofType" ||
@@ -261,6 +298,7 @@ export function variableTypeToString(
       variableType.index,
       typeAliases,
       forFormatting,
+      hooks,
     );
     return `${wrapped}[${index}]`;
   }

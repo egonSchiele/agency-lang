@@ -101,6 +101,18 @@ describe("variableTypeToString: object rendering hook", () => {
       expected: "OBJECT<number> | string",
     },
     {
+      name: "effect-set union members",
+      type: {
+        type: "unionType",
+        types: [
+          objectOf(numberType),
+          { type: "stringLiteralType", value: "std::read" },
+        ],
+        isEffectSet: true,
+      },
+      expected: "<OBJECT<number>, std::read>",
+    },
+    {
       name: "intersection members",
       type: {
         type: "intersectionType",

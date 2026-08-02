@@ -12,8 +12,8 @@ import {
   Literal,
   MultiLineStringLiteral,
   NewLine,
+  ObjectType,
   ObjectProperty,
-  ObjectTypeTrivia,
   ParallelBlock,
   Scope,
   ScopeType,
@@ -24,6 +24,29 @@ import {
   formatUnitLiteral,
   isExpressionNode,
 } from "../types.js";
+import { LineComment } from "../types/base.js";
+import {
+  ListTrivia,
+  TriviaNode,
+  isTrailingListTrivia,
+} from "../types/dataStructures.js";
+
+/** One rendered list item. `leadingLines` are whole lines that print above
+ *  it (an object-type property's `@validate` tags); the shared renderer
+ *  indents them, so callers hand back plain text. */
+type RenderedListItem = {
+  leadingLines?: string[];
+  code: string;
+};
+
+type RenderListWithTriviaOptions<T> = {
+  items: T[];
+  trivia: ListTrivia[] | undefined;
+  open: string;
+  close: string;
+  renderItem: (item: T, index: number) => RenderedListItem;
+  separator: (index: number, itemCount: number) => string;
+};
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import { declaredName } from "../types/hole.js";
@@ -35,7 +58,6 @@ import {
   AgencyArray,
   AgencyObject,
   AgencyObjectKV,
-  Trivia,
 } from "../types/dataStructures.js";
 import {
   FunctionCall,
@@ -46,12 +68,13 @@ import { GraphNodeDefinition } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
 import {
   ImportNameType,
+  NamedImport,
   ImportNodeStatement,
   ImportStatement,
 } from "../types/importStatement.js";
 import { ExportFromStatement } from "../types/exportFromStatement.js";
 import { EffectDeclaration } from "../types/effectDeclaration.js";
-import { MatchBlock } from "../types/matchBlock.js";
+import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { ForLoop } from "../types/forLoop.js";
@@ -86,6 +109,8 @@ import {
   TypePattern,
   WildcardPattern,
 } from "@/types/pattern.js";
+
+type TypeRenderPolicy = "source" | "display";
 
 // Escape the characters that have special meaning inside a string
 // literal so the formatter's output round-trips through the parser.
@@ -486,7 +511,8 @@ export class AgencyGenerator {
 
   public processNode(node: AgencyNode): string {
     const result = this.processNodeInner(node);
-    return this.trace(node.type, result);
+    const traced = this.trace(node.type, result);
+    return this.appendTrailingComment(traced, node.trailingComment);
   }
 
   private processNodeInner(node: AgencyNode): string {
@@ -583,7 +609,7 @@ export class AgencyGenerator {
       case "newExpression":
         return this.processNewExpression(node);
       case "schemaExpression":
-        return `schema(${variableTypeToString(node.typeArg, this.typeAliases, true)})`;
+        return `schema(${this.renderTypeSource(node.typeArg)})`;
       case "regex":
         return `re/${node.pattern}/${node.flags}`;
       case "interruptStatement":
@@ -622,13 +648,17 @@ export class AgencyGenerator {
     // or the round trip breaks.
     const name = LEGAL_IDENTIFIER.test(node.name) ? node.name : `"${node.name}"`;
     const annotation = node.typeAnnotation
-      ? `: ${variableTypeToString(node.typeAnnotation, this.typeAliases, true)}`
+      ? `: ${this.renderTypeSource(node.typeAnnotation)}`
       : "";
     return `${sigil}${name}${annotation}`;
   }
 
   protected processInterruptStatement(node: InterruptStatement): string {
-    const args = this.renderArgList(node.arguments);
+    const args = this.renderArgList(
+      node.arguments,
+      undefined,
+      node.argumentTrivia,
+    );
     // `raise` lowers to an interruptStatement; viaRaise drives the keyword.
     const keyword = node.viaRaise ? "raise" : "interrupt";
     if (node.effect === "unknown") {
@@ -715,18 +745,17 @@ export class AgencyGenerator {
     return `${prefix}${open}\n${lines.join("\n")}\n${this.indent()}${close}${suffix}`;
   }
 
-  private renderParams(parameters: FunctionParameter[]): string[] {
+  private renderParams(
+    parameters: FunctionParameter[],
+    policy: TypeRenderPolicy,
+  ): string[] {
     return parameters.map((p) => {
       const prefix = p.variadic ? "..." : "";
       const defaultSuffix = p.defaultValue
         ? ` = ${this.processNode(p.defaultValue).trim()}`
         : "";
       if (p.typeHint) {
-        const typeStr = variableTypeToString(
-          p.typeHint,
-          this.typeAliases,
-          true,
-        );
+        const typeStr = this.renderType(p.typeHint, policy);
         const bang = p.validated ? "!" : "";
         return `${prefix}${p.name}: ${typeStr}${bang}${defaultSuffix}`;
       } else {
@@ -737,7 +766,50 @@ export class AgencyGenerator {
 
   // Type system methods
 
-  private stringifyProp(prop: ObjectProperty): string {
+  private renderTypeSource(type: VariableType): string {
+    return variableTypeToString(type, this.typeAliases, true, {
+      objectType: (objectType, printChild) => {
+        if (
+          !objectType.trivia?.length &&
+          !this.objectTypeHasPropertyMetadata(objectType)
+        ) {
+          return undefined;
+        }
+        return this.renderObjectTypeSource(objectType, printChild);
+      },
+    });
+  }
+
+  private renderTypeDisplay(type: VariableType): string {
+    return variableTypeToString(type, this.typeAliases, true, {
+      objectType: (objectType, printChild) => {
+        if (!this.objectTypeHasPropertyMetadata(objectType)) {
+          return undefined;
+        }
+        return this.renderObjectTypeSource(
+          { ...objectType, trivia: undefined },
+          printChild,
+        );
+      },
+    });
+  }
+
+  private objectTypeHasPropertyMetadata(objectType: ObjectType): boolean {
+    return objectType.properties.some(
+      (property) => !!property.tags?.length || !!property.description,
+    );
+  }
+
+  private renderType(type: VariableType, policy: TypeRenderPolicy): string {
+    return policy === "source"
+      ? this.renderTypeSource(type)
+      : this.renderTypeDisplay(type);
+  }
+
+  private stringifyProp(
+    prop: ObjectProperty,
+    printChild: (child: VariableType) => string,
+  ): string {
     const isUnionWithNull =
       prop.value.type === "unionType" &&
       prop.value.types.some(
@@ -753,58 +825,127 @@ export class AgencyGenerator {
         nonNullTypes.length === 1
           ? nonNullTypes[0]
           : { type: "unionType", types: nonNullTypes };
-      let str = `${prop.key}?: ${variableTypeToString(unionWithoutNull, this.typeAliases, true)}`;
+      let str = `${prop.key}?: ${printChild(unionWithoutNull)}`;
       if (prop.description) {
         str += ` # ${prop.description}`;
       }
       return str;
     }
 
-    let str = `${prop.key}: ${variableTypeToString(prop.value, this.typeAliases, true)}`;
+    let str = `${prop.key}: ${printChild(prop.value)}`;
     if (prop.description) {
       str += ` # ${prop.description}`;
     }
     return str;
   }
 
-  // Append the comment/blank-line trivia anchored at `anchorIndex` to `lines`,
-  // one rendered line per comment. Shared by object types and array/object
-  // literals so all three preserve trivia identically. Accepts either
-  // `ObjectTypeTrivia[]` or `Trivia[]` (structurally identical).
-  protected emitTriviaAt(
-    trivia: (ObjectTypeTrivia | Trivia)[] | undefined,
-    anchorIndex: number,
-    lines: string[],
-  ): void {
-    const match = (trivia ?? []).find((t) => t.anchorIndex === anchorIndex);
-    for (const n of match?.comments ?? []) {
-      if (n.type === "newLine") lines.push("");
-      else if (n.type === "comment") lines.push(this.processComment(n));
-      else lines.push(this.processMultiLineComment(n));
+  /** One trivia node as its own source line. */
+  protected renderTriviaNode(node: TriviaNode): string {
+    if (node.type === "newLine") {
+      return "";
     }
+    if (node.type === "comment") {
+      return this.processComment(node);
+    }
+    return this.processMultiLineComment(node);
   }
 
-  protected aliasedTypeToString(aliasedType: VariableType): string {
-    if (aliasedType.type === "objectType") {
-      this.increaseIndent();
-      const lines: string[] = [];
-      const props = aliasedType.properties;
-      for (let i = 0; i < props.length; i++) {
-        this.emitTriviaAt(aliasedType.trivia, i, lines);
-        // `@validate(...)` / `@jsonSchema(...)` annotations render on their
-        // own lines above the property, matching source layout. `formatTag`
-        // already applies the current (property-level) indentation.
-        for (const tag of props[i].tags ?? []) {
-          lines.push(this.formatTag(tag));
-        }
-        const sep = i === props.length - 1 ? "" : ";";
-        lines.push(this.indentStr(this.stringifyProp(props[i])) + sep);
+  /** Comments that print on their own line ABOVE item `anchorIndex`. */
+  protected beforeTriviaAt(
+    trivia: ListTrivia[] | undefined,
+    anchorIndex: number,
+  ): TriviaNode[] {
+    return (trivia ?? [])
+      .filter(
+        (entry) =>
+          entry.anchorIndex === anchorIndex && entry.placement !== "trailing",
+      )
+      .flatMap((entry) => entry.comments);
+  }
+
+  /** Comments that print at the END of item `anchorIndex`'s line. */
+  protected trailingTriviaAt(
+    trivia: ListTrivia[] | undefined,
+    anchorIndex: number,
+  ): LineComment[] {
+    return (trivia ?? [])
+      .filter(isTrailingListTrivia)
+      .filter((entry) => entry.anchorIndex === anchorIndex)
+      .flatMap((entry) => entry.comments);
+  }
+
+  /** Render one multiline list, owning indentation and both comment
+   *  placements. Callers supply how to render an item and where separators
+   *  go; they must not place comments themselves. */
+  protected renderListWithTrivia<T>(
+    args: RenderListWithTriviaOptions<T>,
+  ): string {
+    this.increaseIndent();
+    const lines: string[] = [];
+
+    for (let index = 0; index < args.items.length; index++) {
+      for (const node of this.beforeTriviaAt(args.trivia, index)) {
+        lines.push(this.renderTriviaNode(node));
       }
-      this.emitTriviaAt(aliasedType.trivia, props.length, lines);
-      this.decreaseIndent();
-      return "{\n" + lines.join("\n") + "\n" + this.indentStr("}");
+
+      const item = args.renderItem(args.items[index], index);
+      for (const leadingLine of item.leadingLines ?? []) {
+        lines.push(this.indentStr(leadingLine));
+      }
+      const separator = args.separator(index, args.items.length);
+      let line = this.indentStr(`${item.code}${separator}`);
+      for (const comment of this.trailingTriviaAt(args.trivia, index)) {
+        line = this.appendTrailingComment(line, comment);
+      }
+      lines.push(line);
     }
-    return variableTypeToString(aliasedType, this.typeAliases, true);
+
+    for (const node of this.beforeTriviaAt(args.trivia, args.items.length)) {
+      lines.push(this.renderTriviaNode(node));
+    }
+
+    this.decreaseIndent();
+    return `${args.open}\n${lines.join("\n")}\n${this.indentStr(args.close)}`;
+  }
+
+  protected aliasedTypeToString(
+    aliasedType: VariableType,
+    policy: TypeRenderPolicy,
+  ): string {
+    if (policy === "display") {
+      if (aliasedType.type === "objectType") {
+        return this.renderObjectTypeSource(
+          { ...aliasedType, trivia: undefined },
+          (child) => this.renderTypeDisplay(child),
+        );
+      }
+      return this.renderTypeDisplay(aliasedType);
+    }
+    if (aliasedType.type === "objectType") {
+      return this.renderObjectTypeSource(aliasedType, (child) =>
+        this.renderTypeSource(child),
+      );
+    }
+    return this.renderTypeSource(aliasedType);
+  }
+
+  private renderObjectTypeSource(
+    objectType: ObjectType,
+    printChild: (child: VariableType) => string,
+  ): string {
+    return this.renderListWithTrivia({
+      items: objectType.properties,
+      trivia: objectType.trivia,
+      open: "{",
+      close: "}",
+      // `@validate(...)` / `@jsonSchema(...)` annotations render on their
+      // own lines above the property, matching source layout.
+      renderItem: (prop) => ({
+        leadingLines: (prop.tags ?? []).map((tag) => this.formatTag(tag).trim()),
+        code: this.stringifyProp(prop, printChild),
+      }),
+      separator: (index, count) => (index === count - 1 ? "" : ";"),
+    });
   }
 
   protected processEffectDeclaration(node: EffectDeclaration): string {
@@ -813,7 +954,7 @@ export class AgencyGenerator {
     const body =
       node.payloadType.properties.length === 0
         ? "{}"
-        : this.aliasedTypeToString(node.payloadType);
+        : this.aliasedTypeToString(node.payloadType, "source");
     return (
       this.formatDocComment(node) +
       this.indentStr(`effect ${node.effect} ${body}`)
@@ -822,7 +963,7 @@ export class AgencyGenerator {
 
   protected processTypeAlias(node: TypeAlias): string {
     this.typeAliases[node.aliasName] = node.aliasedType;
-    const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType);
+    const aliasedTypeStr = this.aliasedTypeToString(node.aliasedType, "source");
     const exportPrefix = node.exported ? "export " : "";
     // An effectSet declaration uses the `effectSet` keyword; its RHS is an
     // effect set rendered via `effectSetTypeToString` so `<*>` (stored as the
@@ -835,27 +976,35 @@ export class AgencyGenerator {
         )
       );
     }
-    const typeParamsStr = this.formatTypeParams(node.typeParams);
-    const valueParamsStr = this.formatValueParams(node.valueParams);
-    const tags = this.formatAttachedTags(node);
+    const typeParamsStr = this.formatTypeParams(node.typeParams, "source");
+    const valueParamsStr = this.formatValueParams(node.valueParams, "source");
     return (
-      this.formatDocComment(node) +
-      tags +
+      this.declarationAnnotationPrefixOf(node) +
       this.indentStr(
-        `${exportPrefix}type ${node.aliasName}${typeParamsStr}${valueParamsStr} = ${aliasedTypeStr}`,
+        this.composeTypeAliasAssignment(
+          `${exportPrefix}type ${node.aliasName}${typeParamsStr}${valueParamsStr}`,
+          aliasedTypeStr,
+        ),
       )
     );
+  }
+
+  private composeTypeAliasAssignment(prefix: string, rhs: string): string {
+    return rhs.startsWith("\n") ? `${prefix} =${rhs}` : `${prefix} = ${rhs}`;
   }
 
   /**
    * Format the `<T, U = string, ...>` chunk of a generic alias declaration.
    * Returns an empty string when there are no type params.
    */
-  private formatTypeParams(params: TypeAlias["typeParams"]): string {
+  private formatTypeParams(
+    params: TypeAlias["typeParams"],
+    policy: TypeRenderPolicy,
+  ): string {
     if (!params || params.length === 0) return "";
     const parts = params.map((p) => {
       if (!p.default) return p.name;
-      const def = variableTypeToString(p.default, this.typeAliases, true);
+      const def = this.renderType(p.default, policy);
       return `${p.name} = ${def}`;
     });
     return `<${parts.join(", ")}>`;
@@ -866,10 +1015,13 @@ export class AgencyGenerator {
    * value-parameterized alias declaration. Returns an empty string when
    * there are no value params.
    */
-  private formatValueParams(params: TypeAlias["valueParams"]): string {
+  private formatValueParams(
+    params: TypeAlias["valueParams"],
+    policy: TypeRenderPolicy,
+  ): string {
     if (!params || params.length === 0) return "";
     const parts = params.map((p) => {
-      const typeStr = variableTypeToString(p.type, this.typeAliases, true);
+      const typeStr = this.renderType(p.type, policy);
       const base = `${p.name}: ${typeStr}`;
       if (p.default === undefined) return base;
       return `${base} = ${this.processNode(p.default).trim()}`;
@@ -890,7 +1042,7 @@ export class AgencyGenerator {
     const lhs = node.pattern
       ? this.formatPattern(node.pattern)
       : node.typeHint
-        ? `${node.variableName}${chainStr}: ${variableTypeToString(node.typeHint, this.typeAliases, true)}${bangSuffix}`
+        ? `${node.variableName}${chainStr}: ${this.renderTypeSource(node.typeHint)}${bangSuffix}`
         : `${node.variableName}${chainStr}`;
     const exportPrefix = node.exported ? "export " : "";
     const optimizePrefix = node.optimize ? "optimize " : "";
@@ -950,7 +1102,7 @@ export class AgencyGenerator {
         // named after the type, which matches anything — a formatter pass
         // would quietly turn a validated rule into an unvalidated one.
         const tp = pattern as TypePattern;
-        const typeStr = variableTypeToString(tp.typeHint, this.typeAliases, true);
+        const typeStr = this.renderTypeSource(tp.typeHint);
         return tp.pattern === null
           ? `_: ${typeStr}`
           : `${this.formatPattern(tp.pattern)}: ${typeStr}`;
@@ -970,7 +1122,7 @@ export class AgencyGenerator {
     if (pattern.type === "typePattern") {
       const tp = pattern as TypePattern;
       if (tp.pattern === null) {
-        return variableTypeToString(tp.typeHint, this.typeAliases, true);
+        return this.renderTypeSource(tp.typeHint);
       }
     }
     return this.formatPattern(pattern);
@@ -986,7 +1138,7 @@ export class AgencyGenerator {
     if (caseValue.type === "typePattern") {
       const tp = caseValue as TypePattern;
       return tp.pattern === null
-        ? `is ${variableTypeToString(tp.typeHint, this.typeAliases, true)}`
+        ? `is ${this.renderTypeSource(tp.typeHint)}`
         : this.formatPattern(tp);
     }
     return this.processNode(caseValue as AgencyNode).trim();
@@ -1016,12 +1168,18 @@ export class AgencyGenerator {
       // `{ name: _: string }`.
       return `${prop.key}: ${this.formatIsRhs(prop.value)}`;
     });
-    return `{ ${parts.join(", ")} }`;
+    return (
+      this.renderListIfTrivia(parts, node.propertyTrivia, "{", "}") ??
+      `{ ${parts.join(", ")} }`
+    );
   }
 
   private formatArrayPattern(node: ArrayPattern): string {
     const parts = node.elements.map((el) => this.formatPattern(el));
-    return `[${parts.join(", ")}]`;
+    return (
+      this.renderListIfTrivia(parts, node.elementTrivia, "[", "]") ??
+      `[${parts.join(", ")}]`
+    );
   }
 
   protected generateLiteral(literal: Literal): string {
@@ -1124,19 +1282,19 @@ export class AgencyGenerator {
     prefix: string,
     node: FunctionDefinition | GraphNodeDefinition,
     opener: string,
+    policy: TypeRenderPolicy,
   ): string {
     const returnTypeBang = node.returnTypeValidated ? "!" : "";
     const returnTypeStr = node.returnType
       ? ": " +
-        variableTypeToString(node.returnType, this.typeAliases, true) +
+        this.renderType(node.returnType, policy) +
         returnTypeBang
       : "";
     const raisesStr = this.formatRaisesClause(node.raises);
-    return this.wrapList(
-      this.renderParams(node.parameters),
+    return this.renderParenList(
+      this.renderParams(node.parameters, policy),
+      policy === "source" ? node.parameterTrivia : undefined,
       prefix,
-      "(",
-      ")",
       `${returnTypeStr}${raisesStr}${opener}`,
     );
   }
@@ -1157,12 +1315,20 @@ export class AgencyGenerator {
       if (node.isEffectSet) {
         return `effectSet ${node.aliasName} = ${this.effectSetTypeToString(node.aliasedType)}`;
       }
-      const typeParamsStr = this.formatTypeParams(node.typeParams);
-      const valueParamsStr = this.formatValueParams(node.valueParams);
-      return `type ${node.aliasName}${typeParamsStr}${valueParamsStr} = ${this.aliasedTypeToString(node.aliasedType)}`;
+      const typeParamsStr = this.formatTypeParams(node.typeParams, "display");
+      const valueParamsStr = this.formatValueParams(node.valueParams, "display");
+      return this.composeTypeAliasAssignment(
+        `type ${node.aliasName}${typeParamsStr}${valueParamsStr}`,
+        this.aliasedTypeToString(node.aliasedType, "display"),
+      );
     }
     const name = declaredName(node.type === "function" ? node.functionName : node.nodeName);
-    return this.buildSignature(name, node, "");
+    return this.buildSignature(name, node, "", "display");
+  }
+
+  /** Render the annotations that precede a type alias declaration. */
+  declarationAnnotationPrefixOf(node: TypeAlias): string {
+    return this.formatDocComment(node) + this.formatAttachedTags(node);
   }
 
   protected processFunctionDefinition(node: FunctionDefinition): string {
@@ -1175,7 +1341,7 @@ export class AgencyGenerator {
     if (node.markers?.idempotent) prefixes.push("idempotent");
     prefixes.push("def");
     const prefix = `${prefixes.join(" ")} ${declaredName(node.functionName)}`;
-    const signature = this.buildSignature(prefix, node, " {");
+    const signature = this.buildSignature(prefix, node, " {", "source");
 
     let result = this.indentStr(`${signature}\n`);
 
@@ -1241,12 +1407,60 @@ export class AgencyGenerator {
     return rendered;
   }
 
-  // Format args as inline parenthesized list (no wrapping — used by access chain callers)
+  /** A list of already-rendered items laid out across lines with its
+   *  comments, or `undefined` when there are none. Callers keep their own
+   *  inline or wrapping behavior for the no-comment case, so trivia-free
+   *  output is untouched; a comment cannot share a line with what follows
+   *  it, so its presence forces the multiline form. */
+  protected renderListIfTrivia(
+    rendered: string[],
+    trivia: ListTrivia[] | undefined,
+    open: string,
+    close: string,
+  ): string | undefined {
+    if (!trivia?.length) {
+      return undefined;
+    }
+    return this.renderListWithTrivia({
+      items: rendered,
+      trivia,
+      open,
+      close,
+      renderItem: (code) => ({ code }),
+      separator: (index, count) => (index === count - 1 ? "" : ","),
+    });
+  }
+
+  /** The one way a parenthesized `( ... )` list is printed. Without trivia
+   *  it keeps `wrapList`'s compact/wrapping behavior exactly; with trivia it
+   *  goes multiline. `rendered` must already be in canonical print order —
+   *  for a call that means `renderArgs` has appended any inline block last,
+   *  matching how `extractInlineBlock` remapped the anchors. */
+  protected renderParenList(
+    rendered: string[],
+    trivia: ListTrivia[] | undefined,
+    prefix: string,
+    suffix: string,
+  ): string {
+    const body = this.renderListIfTrivia(rendered, trivia, "(", ")");
+    if (body === undefined) {
+      return this.wrapList(rendered, prefix, "(", ")", suffix);
+    }
+    return `${prefix}${body}${suffix}`;
+  }
+
+  /** A parenthesized argument list that normally stays on one line
+   *  (access chains, `interrupt`, `guard`). Trivia forces the multiline
+   *  form, since a `//` comment cannot share a line with what follows it. */
   protected renderArgList(
     args: FunctionCall["arguments"],
     block?: BlockArgument,
+    trivia?: ListTrivia[],
   ): string {
     const rendered = this.renderArgs(args, block);
+    if (trivia?.length) {
+      return this.renderParenList(rendered, trivia, "", "");
+    }
     return `(${rendered.join(", ")})`;
   }
 
@@ -1264,11 +1478,10 @@ export class AgencyGenerator {
     const block = node.block;
     const inlineBlock = block?.inline ? block : undefined;
     const rendered = this.renderArgs(node.arguments, inlineBlock);
-    let result = this.wrapList(
+    let result = this.renderParenList(
       rendered,
+      node.argumentTrivia,
       `${asyncPrefix}${declaredName(node.functionName)}`,
-      "(",
-      ")",
       "",
     );
 
@@ -1299,57 +1512,50 @@ export class AgencyGenerator {
     // (which may render on a single line). Trivia forces the multi-line form
     // so each comment gets its own line.
     if (!node.trivia?.length) {
-      const items = node.items.map((item) => {
-        if (item.type === "splat") {
-          return `...${this.processNode(item.value).trim()}`;
-        }
-        return this.processNode(item).trim();
-      });
+      const items = node.items.map((item) => this.renderArrayItem(item));
       return this.wrapList(items, "", "[", "]");
     }
 
-    this.increaseIndent();
-    const lines: string[] = [];
-    for (let i = 0; i < node.items.length; i++) {
-      this.emitTriviaAt(node.trivia, i, lines);
-      const item = node.items[i];
-      const itemStr =
-        item.type === "splat"
-          ? `...${this.processNode(item.value).trim()}`
-          : this.processNode(item).trim();
-      const sep = i === node.items.length - 1 ? "" : ",";
-      lines.push(this.indentStr(itemStr) + sep);
+    return this.renderListWithTrivia({
+      items: node.items,
+      trivia: node.trivia,
+      open: "[",
+      close: "]",
+      renderItem: (item) => ({ code: this.renderArrayItem(item) }),
+      separator: (index, count) => (index === count - 1 ? "" : ","),
+    });
+  }
+
+  private renderArrayItem(item: AgencyArray["items"][number]): string {
+    if (item.type === "splat") {
+      return `...${this.processNode(item.value).trim()}`;
     }
-    this.emitTriviaAt(node.trivia, node.items.length, lines);
-    this.decreaseIndent();
-    return "[\n" + lines.join("\n") + "\n" + this.indentStr("]");
+    return this.processNode(item).trim();
   }
 
   protected processAgencyObject(node: AgencyObject): string {
     if (node.entries.length === 0 && !node.trivia?.length) {
       return `{}`;
     }
-    this.increaseIndent();
-    const lines: string[] = [];
-    for (let i = 0; i < node.entries.length; i++) {
-      this.emitTriviaAt(node.trivia, i, lines);
-      const entry = node.entries[i];
-      let entryStr: string;
-      if ("type" in entry && entry.type === "splat") {
-        entryStr = `...${this.processNode(entry.value).trim()}`;
-      } else {
-        const kv = entry as AgencyObjectKV;
-        const valueCode = this.processNode(kv.value).trim();
-        entryStr = kv.computedKey
-          ? `[${this.processNode(kv.computedKey).trim()}]: ${valueCode}`
-          : `${this.addQuotesToKey(kv.key)}: ${valueCode}`;
-      }
-      const sep = i === node.entries.length - 1 ? "" : ",";
-      lines.push(this.indentStr(entryStr) + sep);
+    return this.renderListWithTrivia({
+      items: node.entries,
+      trivia: node.trivia,
+      open: "{",
+      close: "}",
+      renderItem: (entry) => ({ code: this.renderObjectEntry(entry) }),
+      separator: (index, count) => (index === count - 1 ? "" : ","),
+    });
+  }
+
+  private renderObjectEntry(entry: AgencyObject["entries"][number]): string {
+    if ("type" in entry && entry.type === "splat") {
+      return `...${this.processNode(entry.value).trim()}`;
     }
-    this.emitTriviaAt(node.trivia, node.entries.length, lines);
-    this.decreaseIndent();
-    return "{\n" + lines.join("\n") + "\n" + this.indentStr("}");
+    const kv = entry as AgencyObjectKV;
+    const valueCode = this.processNode(kv.value).trim();
+    return kv.computedKey
+      ? `[${this.processNode(kv.computedKey).trim()}]: ${valueCode}`
+      : `${this.addQuotesToKey(kv.key)}: ${valueCode}`;
   }
 
   private addQuotesToKey(key: string): string {
@@ -1454,30 +1660,48 @@ export class AgencyGenerator {
         ? ` if (${this.processNode(caseNode.guard).trim()})`
         : "";
 
-      if (this.armPrintsInline(caseNode)) {
-        const stmt = caseNode.body[0];
-        let stmtCode = this.processNode(stmt).trim();
-        // `=> { ... }` is always parsed as a block, never an object literal
-        // (JS-arrow rule — see matchArmBlockParser). An inline arm whose
-        // sole statement is an object literal must therefore stay
-        // parenthesized so it round-trips as an expression, not a block.
-        if (stmt.type === "agencyObject") {
-          stmtCode = `(${stmtCode})`;
-        }
-        result += this.indentStr(`${pattern}${guardCode} => ${stmtCode}\n`);
-      } else {
-        result += this.indentStr(`${pattern}${guardCode} => {\n`);
-        this.increaseIndent();
-        result += this.renderBody(caseNode.body);
-        this.decreaseIndent();
-        result += this.indentStr("}\n");
-      }
+      const arm = this.armPrintsInline(caseNode)
+        ? this.renderInlineMatchArm(caseNode, pattern, guardCode)
+        : this.renderBlockMatchArm(caseNode, pattern, guardCode);
+      result += this.appendTrailingComment(arm, caseNode.trailingComment) + "\n";
     }
 
     this.decreaseIndent();
 
     result += this.indentStr(`}`);
 
+    return result;
+  }
+
+  /** One arm, without its final newline — a complete construct an
+   *  attached comment can follow. */
+  private renderInlineMatchArm(
+    caseNode: MatchBlockCase,
+    pattern: string,
+    guardCode: string,
+  ): string {
+    const stmt = caseNode.body[0];
+    let stmtCode = this.processNode(stmt).trim();
+    // `=> { ... }` is always parsed as a block, never an object literal
+    // (JS-arrow rule — see matchArmBlockParser). An inline arm whose
+    // sole statement is an object literal must therefore stay
+    // parenthesized so it round-trips as an expression, not a block.
+    if (stmt.type === "agencyObject") {
+      stmtCode = `(${stmtCode})`;
+    }
+    return this.indentStr(`${pattern}${guardCode} => ${stmtCode}`);
+  }
+
+  private renderBlockMatchArm(
+    caseNode: MatchBlockCase,
+    pattern: string,
+    guardCode: string,
+  ): string {
+    let result = this.indentStr(`${pattern}${guardCode} => {\n`);
+    this.increaseIndent();
+    result += this.renderBody(caseNode.body);
+    this.decreaseIndent();
+    result += this.indentStr("}");
     return result;
   }
 
@@ -1604,8 +1828,26 @@ export class AgencyGenerator {
 
   // Utility methods
 
+  /** The sole owner of line-comment source text. Do not rebuild
+   *  `//${content}` anywhere else. */
+  protected commentText(comment: LineComment): string {
+    return `//${comment.content}`;
+  }
+
   protected processComment(node: AgencyComment): string {
-    return this.indentStr(`//${node.content}`);
+    return this.indentStr(this.commentText(node));
+  }
+
+  /** Place an attached comment after already-rendered code. Empty code has
+   *  no construct to attach to, so the comment is left to its owner. */
+  protected appendTrailingComment(
+    code: string,
+    comment: LineComment | undefined,
+  ): string {
+    if (!comment || code === "") {
+      return code;
+    }
+    return `${code} ${this.commentText(comment)}`;
   }
 
   protected processMultiLineComment(node: AgencyMultiLineComment): string {
@@ -1640,17 +1882,16 @@ export class AgencyGenerator {
       node.importedNames[0].type === "namedImport"
     ) {
       const namedImport = node.importedNames[0];
-      const names = namedImport.importedNames.map((entry) => {
-        const name = declaredName(entry);
-        const alias = namedImport.aliases[name];
-        const base = alias ? `${name} as ${alias}` : name;
-        return this.prefixMarkedName(
-          name,
-          base,
-          namedImport.destructiveNames,
-          namedImport.idempotentNames,
-        );
-      });
+      const names = this.renderImportNames(namedImport);
+      const withTrivia = this.renderListIfTrivia(
+        names,
+        namedImport.nameTrivia,
+        "{",
+        "}",
+      );
+      if (withTrivia !== undefined) {
+        return this.indentStr(`${importKeyword}${withTrivia}${suffix}`);
+      }
       return this.indentStr(
         this.wrapList(names, importKeyword, "{ ", " }", suffix),
       );
@@ -1663,21 +1904,33 @@ export class AgencyGenerator {
     return this.indentStr(`${importKeyword}${importedNames.join(", ")}${suffix}`);
   }
 
+  /** The names inside an import's `{ ... }`, with their aliases and
+   *  retry-safety markers. Shared by the sole-named and mixed paths. */
+  private renderImportNames(namedImport: NamedImport): string[] {
+    return namedImport.importedNames.map((entry) => {
+      const name = declaredName(entry);
+      const alias = namedImport.aliases[name];
+      const base = alias ? `${name} as ${alias}` : name;
+      return this.prefixMarkedName(
+        name,
+        base,
+        namedImport.destructiveNames,
+        namedImport.idempotentNames,
+      );
+    });
+  }
+
   protected processImportNameType(node: ImportNameType): string {
     switch (node.type) {
       case "namedImport": {
-        const names = node.importedNames.map((entry) => {
-          const name = declaredName(entry);
-          const alias = node.aliases[name];
-          const base = alias ? `${name} as ${alias}` : name;
-          return this.prefixMarkedName(
-            name,
-            base,
-            node.destructiveNames,
-            node.idempotentNames,
-          );
-        });
-        return `{ ${names.join(", ")} }`;
+        const names = this.renderImportNames(node);
+        // A mixed import (`import tools, { a } from ...`) reaches this path
+        // too, so it has to honor trivia the same way a sole named import
+        // does — otherwise the comment is dropped on the first format.
+        return (
+          this.renderListIfTrivia(names, node.nameTrivia, "{", "}") ??
+          `{ ${names.join(", ")} }`
+        );
       }
       case "namespaceImport":
         return `* as ${node.importedNames}`;
@@ -1704,7 +1957,17 @@ export class AgencyGenerator {
   }
 
   protected processImportNodeStatement(node: ImportNodeStatement): string {
-    return `import node { ${node.importedNodes.join(", ")} } from "${node.agencyFile}"`;
+    const suffix = ` from "${node.agencyFile}"`;
+    const withTrivia = this.renderListIfTrivia(
+      node.importedNodes,
+      node.nodeTrivia,
+      "{",
+      "}",
+    );
+    if (withTrivia !== undefined) {
+      return `import node ${withTrivia}${suffix}`;
+    }
+    return `import node { ${node.importedNodes.join(", ")} }${suffix}`;
   }
 
   protected processExportFromStatement(node: ExportFromStatement): string {
@@ -1722,9 +1985,17 @@ export class AgencyGenerator {
         body.idempotentNames,
       );
     });
-    return this.indentStr(
-      `export { ${items.join(", ")} } from "${node.modulePath}"`,
+    const suffix = ` from "${node.modulePath}"`;
+    const withTrivia = this.renderListIfTrivia(
+      items,
+      body.nameTrivia,
+      "{",
+      "}",
     );
+    if (withTrivia !== undefined) {
+      return this.indentStr(`export ${withTrivia}${suffix}`);
+    }
+    return this.indentStr(`export { ${items.join(", ")} }${suffix}`);
   }
 
   private sortAndRenderImports(): string {
@@ -1734,10 +2005,15 @@ export class AgencyGenerator {
       node: ImportStatement | ImportNodeStatement,
       body: string,
     ): string => {
+      // Sorting renders imports directly, bypassing processNode, so the
+      // attached comment has to be placed here too.
+      const rendered = this.appendTrailingComment(body, node.trailingComment);
       const attached = this.importAttachedComments.get(node) ?? [];
-      if (attached.length === 0) return body;
+      if (attached.length === 0) {
+        return rendered;
+      }
       const commentLines = attached.map((c) => this.processNode(c));
-      return [...commentLines, body].join("\n");
+      return [...commentLines, rendered].join("\n");
     };
 
     const stdlib: ImportEntry[] = [];
@@ -1783,7 +2059,7 @@ export class AgencyGenerator {
     const tags = this.formatAttachedTags(node);
     const { body } = node;
     const prefix = `${node.exported ? "export " : ""}node ${declaredName(node.nodeName)}`;
-    const signature = this.buildSignature(prefix, node, " {");
+    const signature = this.buildSignature(prefix, node, " {", "source");
 
     let result = this.indentStr(`${signature}\n`);
 
@@ -1862,7 +2138,16 @@ export class AgencyGenerator {
       }
     }
 
-    const paramsStr = params.length > 0 ? `(${params.join(", ")})` : "";
+    // `params` is built in THREAD_ARGUMENT_ORDER, the same canonical order
+    // the parser remapped the trivia anchors into.
+    const withTrivia = this.renderListIfTrivia(
+      params,
+      node.argumentTrivia,
+      "(",
+      ")",
+    );
+    const paramsStr =
+      withTrivia ?? (params.length > 0 ? `(${params.join(", ")})` : "");
 
     return this.indentStr(
       `${threadType}${paramsStr} {\n${bodyCodeStr}${this.indentStr("}")}`,
@@ -1873,9 +2158,12 @@ export class AgencyGenerator {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    const sharedSuffix = node.shared
-      ? `(shared: ${this.processNode(node.shared).trim()})`
-      : "";
+    const sharedArgs = node.shared
+      ? [`shared: ${this.processNode(node.shared).trim()}`]
+      : [];
+    const sharedSuffix =
+      this.renderListIfTrivia(sharedArgs, node.argumentTrivia, "(", ")") ??
+      (node.shared ? `(${sharedArgs[0]})` : "");
     return this.indentStr(
       `parallel${sharedSuffix} {\n${bodyCodeStr}${this.indentStr("}")}`,
     );
@@ -1898,7 +2186,7 @@ export class AgencyGenerator {
     if (node.handler.kind === "inline") {
       const handlerBang = node.handler.param.validated ? "!" : "";
       const paramStr = node.handler.param.typeHint
-        ? `${node.handler.param.name}: ${variableTypeToString(node.handler.param.typeHint, this.typeAliases, true)}${handlerBang}`
+        ? `${node.handler.param.name}: ${this.renderTypeSource(node.handler.param.typeHint)}${handlerBang}`
         : node.handler.param.name;
       this.increaseIndent();
       const handlerBodyStr = this.renderBody(node.handler.body);
@@ -1921,7 +2209,7 @@ export class AgencyGenerator {
     this.increaseIndent();
     const bodyCodeStr = this.renderBody(node.body);
     this.decreaseIndent();
-    const rendered = this.renderParams(node.params);
+    const rendered = this.renderParams(node.params, "source");
     let asClause = "";
     if (rendered.length === 1) {
       asClause = ` as ${rendered[0]}`;
@@ -1943,6 +2231,8 @@ export class AgencyGenerator {
     this.decreaseIndent();
     const argsStr = this.renderArgList(
       node.arguments as FunctionCall["arguments"],
+      undefined,
+      node.argumentTrivia,
     );
     return this.indentStr(
       `guard${argsStr} {\n${bodyCodeStr}${this.indentStr("}")}`,
@@ -2036,7 +2326,7 @@ export class AgencyGenerator {
       case "methodCall":
         return `${dot}${this.generateFunctionCallExpression(node.functionCall, "valueAccess")}`;
       case "call":
-        return `${node.optional ? "?." : ""}${this.renderArgList(node.arguments, node.block)}`;
+        return `${node.optional ? "?." : ""}${this.renderArgList(node.arguments, node.block, node.argumentTrivia)}`;
       default:
         throw new Error(
           `Unknown access chain element kind: ${(node as any).kind}`,

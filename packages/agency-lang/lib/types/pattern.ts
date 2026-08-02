@@ -1,3 +1,4 @@
+import type { ListTrivia } from "./dataStructures.js";
 import { BaseNode } from "./base.js";
 import { Literal, VariableNameLiteral } from "./literals.js";
 import type { Expression, VariableType } from "../types.js";
@@ -18,6 +19,8 @@ export type ObjectPatternShorthand = {
 export type ObjectPattern = BaseNode & {
   type: "objectPattern";
   properties: (ObjectPatternProperty | ObjectPatternShorthand | RestPattern)[];
+  /** Comments between properties. */
+  propertyTrivia?: ListTrivia[];
 };
 
 export type ArrayPattern = BaseNode & {
@@ -32,6 +35,8 @@ export type ArrayPattern = BaseNode & {
     | ResultPattern
     | TypePattern
   )[];
+  /** Comments between elements. */
+  elementTrivia?: ListTrivia[];
 };
 
 export type RestPattern = BaseNode & {

@@ -1,3 +1,4 @@
+import type { ListTrivia } from "./dataStructures.js";
 import { BaseNode } from "./base.js";
 import { Hole } from "./hole.js";
 
@@ -19,6 +20,8 @@ export type NamedImport = {
   /** An entry is a Hole only inside a template (`import { #tool } from ...`);
    *  always strings in a compilable program. */
   importedNames: (string | Hole)[];
+  /** Comments between items in this list. */
+  nameTrivia?: ListTrivia[];
   /** Source-side names marked `destructive` / `idempotent`. Each present
    *  only when non-empty (matching `testOnly` above) so exact-match AST
    *  comparisons stay clean. */
@@ -61,6 +64,8 @@ export function getImportedNames(importNameType: ImportNameType): string[] {
 export type ImportNodeStatement = BaseNode & {
   type: "importNodeStatement";
   importedNodes: string[];
+  /** Comments between items in this list. */
+  nodeTrivia?: ListTrivia[];
   agencyFile: string;
   /**
    * When true, the typescript builder also emits a JS-level re-export of each

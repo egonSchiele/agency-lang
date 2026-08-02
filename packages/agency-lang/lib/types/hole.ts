@@ -1,4 +1,4 @@
-import { SourceLocation } from "./base.js";
+import { BaseNode, SourceLocation } from "./base.js";
 import { VariableType } from "./typeHints.js";
 
 /** The syntactic category of thing that can fill a hole. Determined by the
@@ -7,7 +7,7 @@ export type HoleSort = "expr" | "statements" | "identifier" | "decl";
 
 /** A gap in a template. A program containing one cannot be compiled or run;
  *  it must be loaded with loadTemplate and filled first. */
-export type Hole = {
+export type Hole = BaseNode & {
   type: "hole";
   name: string;
   sort: HoleSort;

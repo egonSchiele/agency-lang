@@ -4,21 +4,50 @@ import {
   AgencyMultiLineComment,
   NewLine,
 } from "../types.js";
-import { BaseNode } from "./base.js";
+import { BaseNode, LineComment } from "./base.js";
 
 /** A single comment or blank-line node preserved as trivia. */
 export type TriviaNode = AgencyComment | AgencyMultiLineComment | NewLine;
 
 /**
- * Comment / blank-line trivia preserved inside array and object literals so
- * `agency fmt` round-trips losslessly. `anchorIndex` is the index of the
- * item/entry that the trivia immediately precedes; trailing trivia (after the
- * last item) is anchored at the item count. Same shape as
- * `ObjectTypeTrivia`, which does the equivalent for object *type* bodies.
+ * Comment / blank-line trivia sitting BEFORE an item. `anchorIndex` is the
+ * index of the item/entry the trivia immediately precedes; trivia after the
+ * last item is anchored at the item count.
  */
-export type Trivia = {
+export type BeforeListTrivia = {
   anchorIndex: number;
   comments: TriviaNode[];
+  /** Omitted by parsers, so existing ASTs keep their exact shape. */
+  placement?: "before";
+};
+
+/** A `//` comment on the same line as the item it follows. */
+export type TrailingListTrivia = {
+  anchorIndex: number;
+  placement: "trailing";
+  comments: [LineComment];
+};
+
+/**
+ * Trivia preserved inside a multiline list so `agency fmt` round-trips
+ * losslessly. Shared by array literals, object literals, and object *type*
+ * bodies (which alias this as `ObjectTypeTrivia`).
+ */
+export type ListTrivia = BeforeListTrivia | TrailingListTrivia;
+
+/** Long-standing name for the same thing. */
+export type Trivia = ListTrivia;
+
+export function isTrailingListTrivia(
+  entry: ListTrivia,
+): entry is TrailingListTrivia {
+  return entry.placement === "trailing";
+}
+
+/** What a list parser produces: items, plus trivia when any was found. */
+export type ParsedList<T> = {
+  items: T[];
+  trivia?: ListTrivia[];
 };
 
 export type SplatExpression = {

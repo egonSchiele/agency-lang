@@ -1,5 +1,5 @@
 import { AgencyComment, AgencyNode, Expression, NewLine } from "../types.js";
-import { BaseNode } from "./base.js";
+import { BaseNode, LineComment } from "./base.js";
 import { IsExpression, MatchPattern } from "./pattern.js";
 
 export type DefaultCase = "_";
@@ -14,6 +14,8 @@ export type MatchBlockCase = {
    *  blocks to inline arms. Absent for inline arms and for cases built
    *  programmatically. */
   blockBody?: true;
+  /** A same-line `//` comment after the whole arm. */
+  trailingComment?: LineComment;
 };
 
 export type MatchBlock = BaseNode & {

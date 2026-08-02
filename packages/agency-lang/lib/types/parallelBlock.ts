@@ -1,3 +1,4 @@
+import type { ListTrivia } from "./dataStructures.js";
 import { AgencyNode, Expression } from "../types.js";
 import { BaseNode } from "./base.js";
 
@@ -8,6 +9,8 @@ export type ParallelBlock = BaseNode & {
    *  Forwarded by `parallelDesugar` onto the synthesized `fork(arms,
    *  shared: <expr>)` call. Absent means isolated (the default). */
   shared?: Expression;
+  /** Comments between the named arguments. */
+  argumentTrivia?: ListTrivia[];
 };
 
 export type SeqBlock = BaseNode & {

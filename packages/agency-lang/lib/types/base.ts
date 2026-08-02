@@ -10,6 +10,17 @@ export type SourceLocation = {
   origin?: { kind: "template" | "filler" | "splice"; name: string };
 };
 
+/** A `//` comment. Declared here rather than reused from `../types.js`,
+ *  because that aggregate module imports BaseNode. */
+export type LineComment = {
+  type: "comment";
+  content: string;
+  loc?: SourceLocation;
+};
+
 export type BaseNode = {
   loc?: SourceLocation;
+  /** A same-line `//` comment attached for Agency source formatting.
+   *  Never part of the owner's `loc`. */
+  trailingComment?: LineComment;
 };

@@ -2,6 +2,7 @@ import { AgencyComment, AgencyMultiLineComment, NewLine } from "../types.js";
 import type { FunctionParameter } from "./function.js";
 import { BaseNode } from "./base.js";
 import type { Tag } from "./tag.js";
+import type { ListTrivia } from "./dataStructures.js";
 import type { Expression } from "../types.js";
 
 /**
@@ -265,10 +266,7 @@ export type ObjectProperty = {
  * Trivia is *not* semantic — no consumer outside the agency formatter
  * should read it.
  */
-export type ObjectTypeTrivia = {
-  anchorIndex: number;
-  comments: (AgencyComment | AgencyMultiLineComment | NewLine)[];
-};
+export type ObjectTypeTrivia = ListTrivia;
 
 export type ObjectType = {
   type: "objectType";

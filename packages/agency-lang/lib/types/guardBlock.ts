@@ -1,3 +1,4 @@
+import type { ListTrivia } from "./dataStructures.js";
 import type { AgencyNode, BaseNode, Expression } from "../types.js";
 import type { NamedArgument, SplatExpression } from "./dataStructures.js";
 
@@ -22,5 +23,7 @@ import type { NamedArgument, SplatExpression } from "./dataStructures.js";
 export type GuardBlock = BaseNode & {
   type: "guardBlock";
   arguments: (Expression | SplatExpression | NamedArgument)[];
+  /** Comments between arguments. */
+  argumentTrivia?: ListTrivia[];
   body: AgencyNode[];
 };

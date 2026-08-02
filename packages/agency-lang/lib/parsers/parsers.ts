@@ -167,8 +167,10 @@ import {
   AgencyObject,
   AgencyObjectKV,
   SplatExpression,
-  Trivia,
+  ListTrivia,
+  ParsedList,
   TriviaNode,
+  isTrailingListTrivia,
 } from "../types/dataStructures.js";
 import {
   DefaultImport,
@@ -373,15 +375,27 @@ const NON_TRAILING_OWNER_TYPES = [
   "newLine",
 ];
 
+const LINE_ENDING_PATTERN = new RegExp(`[\\r\\n${BLANK_LINE_SENTINEL}]`);
+
+/** Whether ANY line ending was crossed going from `from` to `to`. Use this
+ *  for a span that should sit entirely on one line, such as the delimiter
+ *  between two list items. Do not use it across an item, whose own text may
+ *  legitimately span lines. */
+function spanCrossesLine(from: string, to: string): boolean {
+  return LINE_ENDING_PATTERN.test(from.slice(0, from.length - to.length));
+}
+
 /** A construct's own parser may or may not swallow the line ending after
  *  it. If it did, any `//` that follows starts a later line and belongs to
- *  whatever comes next. Blank lines are sentinels by this point
- *  (replaceBlankLines), so they count as line endings too. */
+ *  whatever comes next. Only the TRAILING whitespace is examined, so an item
+ *  that spans lines internally still counts as ending on its last line.
+ *  Blank lines are sentinels by this point (replaceBlankLines), so they
+ *  count as line endings too. */
 function consumedLineEnding(input: string, rest: string): boolean {
   const consumed = input.slice(0, input.length - rest.length);
   const trailingWhitespace =
     consumed.match(new RegExp(`[ \\t\\r\\n${BLANK_LINE_SENTINEL}]*$`))?.[0] ?? "";
-  return new RegExp(`[\\r\\n${BLANK_LINE_SENTINEL}]`).test(trailingWhitespace);
+  return LINE_ENDING_PATTERN.test(trailingWhitespace);
 }
 
 const sameLineComment: Parser<LineComment> = map(
@@ -1674,7 +1688,11 @@ export const taggedObjectPropertyParser: Parser<ObjectProperty> = memo(
 // anchor-indexed trivia. These are parse-time tagging types, not AST nodes.
 // -----------------------------------------------------------------------------
 
-type ItemEntry<T> = { kind: "item"; item: T };
+type ItemEntry<T> = {
+  kind: "item";
+  item: T;
+  trailingComment?: LineComment;
+};
 type TriviaEntry = { kind: "trivia"; node: TriviaNode };
 type InterleavedEntry<T> = ItemEntry<T> | TriviaEntry;
 
@@ -1694,45 +1712,234 @@ const triviaEntry: Parser<TriviaEntry> = seqC(
   optionalSpacesOrNewline,
 ) as Parser<TriviaEntry>;
 
+/** A `//` comment plus the layout that ends its line, for the list item it
+ *  follows. Unlike the complete-construct case, the list's own `many(...)`
+ *  loop does not consume that layout, so the entry must. */
+const trailingLineCommentEntry: Parser<LineComment> = map(
+  seqC(
+    optionalSpaces,
+    capture(lineCommentCore, "comment"),
+    optionalSpacesOrNewline,
+  ),
+  (result: { comment: LineComment }) => result.comment,
+);
+
 // Wrap an item parser as a tagged `{ kind: "item", item }` entry, consuming
-// the trailing delimiter (`delimiter`) after it.
-const itemEntry = <T>(
+// the trailing delimiter (`delimiter`) after it. A `//` comment is attached
+// only when the item AND its delimiter stayed on one line, so
+// `first, \n // about second` still belongs to `second`.
+const itemEntryAfterDelimiter = <T>(
   itemParser: Parser<T>,
   delimiter: Parser<unknown>,
 ): Parser<ItemEntry<T>> =>
-  seqC(
-    set("kind", "item"),
-    capture(itemParser, "item"),
-    delimiter,
-  ) as Parser<ItemEntry<T>>;
+  (input: string): ParserResult<ItemEntry<T>> => {
+    const item = itemParser(input);
+    if (!item.success) {
+      return item as ParserResult<ItemEntry<T>>;
+    }
+
+    const separated = delimiter(item.rest);
+    if (!separated.success) {
+      return separated as ParserResult<ItemEntry<T>>;
+    }
+
+    if (spanCrossesLine(item.rest, separated.rest)) {
+      return success({ kind: "item", item: item.result }, separated.rest);
+    }
+
+    const comment = trailingLineCommentEntry(separated.rest);
+    if (!comment.success) {
+      return success({ kind: "item", item: item.result }, separated.rest);
+    }
+
+    return success(
+      { kind: "item", item: item.result, trailingComment: comment.result },
+      comment.rest,
+    );
+  };
+
+/** Object-TYPE members, where a newline is itself a legal delimiter. Both
+ *  `property // comment` (comment before the newline delimiter) and
+ *  `property, // comment` (comment after a punctuation delimiter) are
+ *  legal, so this policy tries the comment on both sides. */
+const objectMemberEntry = <T>(
+  itemParser: Parser<T>,
+  delimiter: Parser<unknown>,
+): Parser<ItemEntry<T>> =>
+  (input: string): ParserResult<ItemEntry<T>> => {
+    const item = itemParser(input);
+    if (!item.success) {
+      return item as ParserResult<ItemEntry<T>>;
+    }
+
+    const beforeDelimiter = consumedLineEnding(input, item.rest)
+      ? failure("item ended on a later line", item.rest)
+      : trailingLineCommentEntry(item.rest);
+    if (beforeDelimiter.success) {
+      const separated = delimiter(beforeDelimiter.rest);
+      if (!separated.success) {
+        return separated as ParserResult<ItemEntry<T>>;
+      }
+      return success(
+        {
+          kind: "item",
+          item: item.result,
+          trailingComment: beforeDelimiter.result,
+        },
+        separated.rest,
+      );
+    }
+
+    const separated = delimiter(item.rest);
+    if (!separated.success) {
+      return separated as ParserResult<ItemEntry<T>>;
+    }
+
+    if (
+      consumedLineEnding(input, item.rest) ||
+      spanCrossesLine(item.rest, separated.rest)
+    ) {
+      return success({ kind: "item", item: item.result }, separated.rest);
+    }
+
+    const afterDelimiter = trailingLineCommentEntry(separated.rest);
+    if (!afterDelimiter.success) {
+      return success({ kind: "item", item: item.result }, separated.rest);
+    }
+
+    return success(
+      {
+        kind: "item",
+        item: item.result,
+        trailingComment: afterDelimiter.result,
+      },
+      afterDelimiter.rest,
+    );
+  };
 
 // Fold an interleaved item/trivia list into the item array plus anchor-indexed
-// trivia. Trivia is anchored to the index of the item it precedes; trailing
-// trivia is anchored at `items.length`. The one place this rule lives.
-function partitionTrivia<T>(
-  entries: InterleavedEntry<T>[],
-): { items: T[]; trivia: Trivia[] } {
+// trivia. Before-trivia is anchored to the index of the item it precedes, and
+// trivia after the last item is anchored at `items.length`; a trailing comment
+// is anchored to the item it follows. The one place these rules live.
+function partitionTrivia<T>(entries: InterleavedEntry<T>[]): ParsedList<T> {
   const items: T[] = [];
-  const trivia: Trivia[] = [];
+  const trivia: ListTrivia[] = [];
   let pending: TriviaNode[] = [];
+
   for (const entry of entries) {
     if (entry.kind === "trivia") {
       pending.push(entry.node);
-    } else {
-      if (pending.length > 0) {
-        trivia.push({ anchorIndex: items.length, comments: pending });
-        pending = [];
-      }
-      items.push(entry.item);
+      continue;
+    }
+
+    if (pending.length > 0) {
+      trivia.push({ anchorIndex: items.length, comments: pending });
+      pending = [];
+    }
+
+    items.push(entry.item);
+    if (entry.trailingComment) {
+      trivia.push({
+        anchorIndex: items.length - 1,
+        placement: "trailing",
+        comments: [entry.trailingComment],
+      });
     }
   }
+
   if (pending.length > 0) {
     trivia.push({ anchorIndex: items.length, comments: pending });
   }
-  return { items, trivia };
+
+  return trivia.length > 0 ? { items, trivia } : { items };
 }
 
-const objectMember = itemEntry(
+/** A comma-separated list that may span lines, with trivia between items.
+ *  `closer` is only looked at, never consumed: it lets the last item go
+ *  without a comma while still requiring commas between items (#602). */
+function commaDelimitedList<T>(
+  itemParser: Parser<T>,
+  closer: string,
+): Parser<ParsedList<T>> {
+  return map(
+    many(
+      or(
+        triviaEntry,
+        itemEntryAfterDelimiter(itemParser, literalDelimiter(closer)),
+      ),
+    ),
+    (entries: InterleavedEntry<T>[]) => partitionTrivia(entries),
+  );
+}
+
+/** `commaDelimitedList` shaped for `captureCaptures`: lifts the items and
+ *  their trivia into the parent under the two given field names. */
+function commaDelimitedListCaptures<
+  T,
+  ItemsKey extends string,
+  TriviaKey extends string,
+>(
+  itemParser: Parser<T>,
+  closer: string,
+  itemsKey: ItemsKey,
+  triviaKey: TriviaKey,
+): Parser<{ [K in ItemsKey]: T[] } & { [K in TriviaKey]?: ListTrivia[] }> {
+  return map(
+    commaDelimitedList(itemParser, closer),
+    (parsed: ParsedList<T>) =>
+      ({
+        [itemsKey]: parsed.items,
+        ...(parsed.trivia && { [triviaKey]: parsed.trivia }),
+      }) as { [K in ItemsKey]: T[] } & { [K in TriviaKey]?: ListTrivia[] },
+  );
+}
+
+/** Move trivia anchors from source order to the order a list will print in.
+ *  `canonicalSourceIndexes[c]` is the source index of the item that ends up
+ *  at canonical position `c`. A before-comment stays with the item it
+ *  preceded and a trailing comment stays with the item it followed, so both
+ *  travel when the formatter reorders (an inline block moving last, thread
+ *  arguments taking canonical order). */
+export function remapListTrivia(
+  trivia: ListTrivia[] | undefined,
+  canonicalSourceIndexes: number[],
+): ListTrivia[] | undefined {
+  if (!trivia) {
+    return undefined;
+  }
+
+  const sourceItemCount = canonicalSourceIndexes.length;
+  const sortedIndexes = [...canonicalSourceIndexes].sort(
+    (left, right) => left - right,
+  );
+  const isPermutation = sortedIndexes.every(
+    (sourceIndex, expectedIndex) => sourceIndex === expectedIndex,
+  );
+  if (!isPermutation) {
+    throw new Error("canonical list order must contain every source item once");
+  }
+
+  const sourceToCanonical: (number | undefined)[] = [];
+  canonicalSourceIndexes.forEach((sourceIndex, canonicalIndex) => {
+    sourceToCanonical[sourceIndex] = canonicalIndex;
+  });
+
+  return trivia.map((entry) => {
+    // The after-the-last-item anchor is not an item, so it does not move.
+    if (!isTrailingListTrivia(entry) && entry.anchorIndex === sourceItemCount) {
+      return entry;
+    }
+    const anchorIndex = sourceToCanonical[entry.anchorIndex];
+    if (anchorIndex === undefined) {
+      throw new Error(
+        `list trivia has invalid source anchor ${entry.anchorIndex}`,
+      );
+    }
+    return { ...entry, anchorIndex };
+  });
+}
+
+const objectMember = objectMemberEntry(
   or(
     taggedObjectPropertyParser,
     objectPropertyParser,
@@ -1759,7 +1966,9 @@ export const objectTypeParser: Parser<ObjectType> = memo(
         r.entries as InterleavedEntry<ObjectProperty>[],
       );
       const objectType: ObjectType = { type: "objectType", properties: items };
-      if (trivia.length > 0) objectType.trivia = trivia;
+      if (trivia) {
+        objectType.trivia = trivia;
+      }
       return objectType;
     },
   ),
@@ -2616,7 +2825,7 @@ export const agencyArrayParser: Parser<AgencyArray> = memo(
         many(
           or(
             triviaEntry,
-            itemEntry(or(splatParser, lazy(() => exprParser)), literalDelimiter("]")),
+            itemEntryAfterDelimiter(or(splatParser, lazy(() => exprParser)), literalDelimiter("]")),
           ),
         ),
         "entries",
@@ -2629,7 +2838,9 @@ export const agencyArrayParser: Parser<AgencyArray> = memo(
         r.entries as InterleavedEntry<Expression | SplatExpression>[],
       );
       const node: AgencyArray = { type: "agencyArray", items };
-      if (trivia.length > 0) node.trivia = trivia;
+      if (trivia) {
+        node.trivia = trivia;
+      }
       return node;
     },
   ),
@@ -2686,7 +2897,7 @@ export const agencyObjectParser: Parser<AgencyObject> = map(
       many(
         or(
           triviaEntry,
-          itemEntry(or(splatParser, agencyObjectKVParser), literalDelimiter("}")),
+          itemEntryAfterDelimiter(or(splatParser, agencyObjectKVParser), literalDelimiter("}")),
         ),
       ),
       "entries",
@@ -2699,7 +2910,9 @@ export const agencyObjectParser: Parser<AgencyObject> = map(
       r.entries as InterleavedEntry<AgencyObjectKV | SplatExpression>[],
     );
     const node: AgencyObject = { type: "agencyObject", entries: items };
-    if (trivia.length > 0) node.trivia = trivia;
+    if (trivia) {
+      node.trivia = trivia;
+    }
     return node;
   },
 );
@@ -2732,33 +2945,40 @@ const namedArgumentParser: Parser<NamedArgument> = memo(
   ),
 );
 
+const argumentItemParser = or(
+  namedArgumentParser,
+  splatParser,
+  // Before exprParser: the expression path rejects splices, so
+  // `f(#...args)` needs its own alternative here.
+  lazy(() => spliceHoleParser),
+  lazy(() => inlineBlockParser),
+  // Before exprParser: `(n)` and `n` both parse as expressions, so the
+  // arrow form has to get first refusal on them.
+  lazy(() => arrowBlockParser),
+  lazy(() => exprParser),
+);
+
 // Shared argument list parser: (arg1, arg2, \x -> expr, ...)
-// Used by both _functionCallParser and callChainParser.
-const argumentListParser = memo("argumentListParser", seqC(
-  char("("),
-  optionalSpacesOrNewline,
-  capture(
-    sepBy(
-      commaWithNewline,
-      or(
-        namedArgumentParser,
-        splatParser,
-        // Before exprParser: the expression path rejects splices, so
-        // `f(#...args)` needs its own alternative here.
-        lazy(() => spliceHoleParser),
-        lazy(() => inlineBlockParser),
-        // Before exprParser: `(n)` and `n` both parse as expressions, so the
-        // arrow form has to get first refusal on them.
-        lazy(() => arrowBlockParser),
-        lazy(() => exprParser),
+// Used by _functionCallParser, callChainParser, interrupt/raise, and guard.
+// Captures `arguments` plus `argumentTrivia`, so the consumers that lift it
+// with `captureCaptures` carry comments through without extra wiring.
+const argumentListParser = memo(
+  "argumentListParser",
+  seqC(
+    char("("),
+    optionalSpacesOrNewline,
+    captureCaptures(
+      commaDelimitedListCaptures(
+        argumentItemParser,
+        ")",
+        "arguments",
+        "argumentTrivia",
       ),
     ),
-    "arguments",
+    optionalSpacesOrNewline,
+    char(")"),
   ),
-  optional(comma),
-  optionalSpacesOrNewline,
-  char(")"),
-));
+);
 
 // Extract inline block from parsed arguments into a separate block field.
 // Returns { arguments, block } or a failure if there are multiple inline blocks,
@@ -2767,7 +2987,8 @@ function extractInlineBlock(
   args: ArgWithBlock[],
   existingBlock: BlockArgument | undefined,
   input: string,
-): { success: true; arguments: FunctionCall["arguments"]; block?: BlockArgument } | { success: false; error: ParserResult<any> } {
+  trivia?: ListTrivia[],
+): { success: true; arguments: FunctionCall["arguments"]; block?: BlockArgument; trivia?: ListTrivia[] } | { success: false; error: ParserResult<any> } {
   const inlineBlocks = args.filter((a): a is BlockArgument => a.type === "blockArgument");
   if (inlineBlocks.length > 1) {
     return { success: false, error: failure("A function call cannot have more than one block argument", input) };
@@ -2776,13 +2997,21 @@ function extractInlineBlock(
     if (existingBlock) {
       return { success: false, error: failure("A function call cannot have both an inline block and a trailing 'as' block", input) };
     }
+    // The block prints last regardless of where it was written, so canonical
+    // order is every other argument followed by the block. Trivia anchors
+    // move with it.
+    const blockIndex = args.findIndex((a) => a.type === "blockArgument");
+    const ordinaryIndexes = args
+      .map((_, index) => index)
+      .filter((index) => index !== blockIndex);
     return {
       success: true,
       arguments: args.filter((a): a is Exclude<ArgWithBlock, BlockArgument> => a.type !== "blockArgument"),
       block: inlineBlocks[0],
+      trivia: remapListTrivia(trivia, [...ordinaryIndexes, blockIndex]),
     };
   }
-  return { success: true, arguments: args as FunctionCall["arguments"], block: existingBlock };
+  return { success: true, arguments: args as FunctionCall["arguments"], block: existingBlock, trivia };
 }
 
 type ArgWithBlock = Expression | SplatExpression | NamedArgument | BlockArgument;
@@ -2811,10 +3040,16 @@ export const _functionCallParser: Parser<FunctionCall> = memo("_functionCallPars
   if (!result.success) return result;
 
   const funcCall = result.result;
-  const extracted = extractInlineBlock(funcCall.arguments, funcCall.block, input);
+  const extracted = extractInlineBlock(
+    funcCall.arguments,
+    funcCall.block,
+    input,
+    funcCall.argumentTrivia,
+  );
   if (!extracted.success) return extracted.error;
   funcCall.arguments = extracted.arguments;
   funcCall.block = extracted.block;
+  funcCall.argumentTrivia = extracted.trivia;
 
   return result as ParserResult<FunctionCall>;
 });
@@ -2966,11 +3201,16 @@ const callChainParser: Parser<AccessChainElement> = (input: string) => {
   const result = argumentListParser(isOptional ? optResult.rest : input);
   if (!result.success) return failure("expected call arguments", input);
 
-  const extracted = extractInlineBlock(result.result.arguments, undefined, input);
+  const extracted = extractInlineBlock(
+    result.result.arguments,
+    undefined,
+    input,
+    result.result.argumentTrivia,
+  );
   if (!extracted.success) return extracted.error;
 
   return success(
-    { kind: "call" as const, arguments: extracted.arguments, ...(extracted.block && { block: extracted.block }), ...(isOptional && { optional: true }) },
+    { kind: "call" as const, arguments: extracted.arguments, ...(extracted.block && { block: extracted.block }), ...(extracted.trivia && { argumentTrivia: extracted.trivia }), ...(isOptional && { optional: true }) },
     result.rest,
   );
 };
@@ -5532,6 +5772,9 @@ export const guardBlockParser: Parser<GuardBlock> = label(
         {
           type: "guardBlock",
           arguments: (pre.result as any).arguments,
+          ...((pre.result as any).argumentTrivia && {
+            argumentTrivia: (pre.result as any).argumentTrivia,
+          }),
           body: (bodyR.result as any).body,
         } as GuardBlock,
         bodyR.rest,
@@ -6241,14 +6484,14 @@ const _baseFunctionParser: Parser<any> = memo(
     capture(declNameParser, "functionName"),
     char("("),
     optionalSpacesOrNewline,
-    capture(
-      sepBy(
-        seqC(commaWithNewline, optionalSpaces),
+    captureCaptures(
+      commaDelimitedListCaptures(
         or(variadicParameterParser, functionParameterParser),
+        ")",
+        "parameters",
+        "parameterTrivia",
       ),
-      "parameters",
     ),
-    optional(comma),
     optionalSpacesOrNewline,
     // Once we've consumed `def NAME (` plus parameters, we're committed
     // to a function definition. Anything other than `,` (another param)
@@ -6410,14 +6653,14 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label("a node defini
       capture(declNameParser, "nodeName"),
       char("("),
       optionalSpacesOrNewline,
-      capture(
-        sepBy(
-          seqC(commaWithNewline, optionalSpaces),
+      captureCaptures(
+        commaDelimitedListCaptures(
           functionParameterParser,
+          ")",
+          "parameters",
+          "parameterTrivia",
         ),
-        "parameters",
       ),
-      optional(comma),
       optionalSpacesOrNewline,
       parseError(
         "expected `,` between parameters or `)` to close the parameter list",

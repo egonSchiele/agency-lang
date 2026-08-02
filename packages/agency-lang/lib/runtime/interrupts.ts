@@ -1,6 +1,7 @@
 import * as smoltalk from "smoltalk";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import {
@@ -606,63 +607,41 @@ export async function interruptWithHandlers<T = any>(
   return renderVerdict(outcome, ctx, interruptId, interruptObj, parentDecided ? "ipc" : "handler");
 }
 
+// A resume batch, validated before it can reach interrupt-resume execution.
+// The generated resume code acts only on `"approve"` and `"reject"`, so a
+// malformed response would otherwise fall through and continue execution *past*
+// the interrupt. The schema also enforces equal lengths and unique interrupt
+// IDs — the response map is ID-keyed, so duplicates would silently overwrite.
+// Each item schema keeps only the identity fields it gates on; interrupts and
+// responses carry more fields, which parse harmlessly.
+const ResumeBatchSchema = z
+  .object({
+    interrupts: z
+      .array(z.object({ type: z.literal("interrupt"), interruptId: z.string().min(1) }))
+      .min(1),
+    responses: z.array(z.object({ type: z.enum(["approve", "reject"]) })),
+  })
+  .refine((batch) => batch.interrupts.length === batch.responses.length, {
+    message: "interrupts and responses length mismatch",
+  })
+  .refine(
+    (batch) =>
+      new Set(batch.interrupts.map((interrupt) => interrupt.interruptId)).size ===
+      batch.interrupts.length,
+    { message: "interrupt IDs must be unique" },
+  );
+
 /**
- * Validate a resume batch before it can reach interrupt-resume execution.
- *
- * This is the single gate protecting a safety-critical path: the generated
- * resume code acts only on `"approve"` and `"reject"`, so a malformed response
- * would otherwise fall through and continue execution *past* the interrupt. It
- * proves each item is a real object before reading any field, so a `null` or a
- * primitive returns an error string rather than throwing. Returns the first
- * problem found, or `null` when the batch is well-formed.
- *
- * Owns: non-empty arrays, equal lengths, interrupt identity, unique interrupt
- * IDs (the response map is ID-keyed, so duplicates would silently overwrite),
- * and approve/reject response discriminants.
+ * Validate a resume batch. Returns the first problem as a message, or `null`
+ * when the batch is well-formed. `safeParse` never throws — a `null` or
+ * primitive item is a validation error, not a crash.
  */
 export function validateResumeBatch(
   interrupts: unknown,
   responses: unknown,
 ): string | null {
-  if (!Array.isArray(interrupts) || !Array.isArray(responses)) {
-    return "interrupts and responses must be arrays";
-  }
-  if (interrupts.length === 0) {
-    return "interrupts must be non-empty";
-  }
-  if (interrupts.length !== responses.length) {
-    return "interrupts and responses length mismatch";
-  }
-  // Null-prototype set: O(1) membership on untrusted, possibly large input, and
-  // an id like "__proto__" is an ordinary key rather than a prototype hit that a
-  // plain object would report as already-seen.
-  const seenInterruptIds: Record<string, true> = Object.create(null);
-  for (const item of interrupts) {
-    if (typeof item !== "object" || item === null || Array.isArray(item)) {
-      return "each interrupt must be an object";
-    }
-    const fields = item as Record<string, unknown>;
-    if (fields.type !== "interrupt") {
-      return "each interrupt type must be interrupt";
-    }
-    if (typeof fields.interruptId !== "string" || fields.interruptId.length === 0) {
-      return "each interrupt must carry a non-empty string interruptId";
-    }
-    if (seenInterruptIds[fields.interruptId]) {
-      return "interrupt IDs must be unique";
-    }
-    seenInterruptIds[fields.interruptId] = true;
-  }
-  for (const item of responses) {
-    if (typeof item !== "object" || item === null || Array.isArray(item)) {
-      return "each response must be an object";
-    }
-    const responseType = (item as { type?: unknown }).type;
-    if (responseType !== "approve" && responseType !== "reject") {
-      return "each response type must be approve or reject";
-    }
-  }
-  return null;
+  const result = ResumeBatchSchema.safeParse({ interrupts, responses });
+  return result.success ? null : result.error.issues[0].message;
 }
 
 /** Build the ID-keyed response map for `respondToInterrupts`. Extracted

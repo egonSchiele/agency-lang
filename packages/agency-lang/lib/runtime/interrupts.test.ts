@@ -456,8 +456,10 @@ describe("respondToInterrupts input validation (defense in depth)", () => {
     // buildResponseMap runs before ctx is touched, so this stub is never read.
     const stubCtx = {} as unknown as Parameters<typeof respondToInterrupts>[0]["ctx"];
     const badResponses = [{ type: "propagate" }] as unknown as InterruptResponse[];
+    // The validator rejects with a `respondToInterrupts:`-prefixed error before
+    // the context is touched (a later checkpoint error has no such prefix).
     await expect(
       respondToInterrupts({ ctx: stubCtx, interrupts: [validInterrupt], responses: badResponses }),
-    ).rejects.toThrow(/approve or reject/);
+    ).rejects.toThrow(/^respondToInterrupts:/);
   });
 });

@@ -68,6 +68,7 @@ import { GraphNodeDefinition } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
 import {
   ImportNameType,
+  NamedImport,
   ImportNodeStatement,
   ImportStatement,
 } from "../types/importStatement.js";
@@ -1449,7 +1450,6 @@ export class AgencyGenerator {
     return `${prefix}${body}${suffix}`;
   }
 
-  // Format args as inline parenthesized list (no wrapping — used by access chain callers)
   /** A parenthesized argument list that normally stays on one line
    *  (access chains, `interrupt`, `guard`). Trivia forces the multiline
    *  form, since a `//` comment cannot share a line with what follows it. */
@@ -1883,17 +1883,7 @@ export class AgencyGenerator {
       node.importedNames[0].type === "namedImport"
     ) {
       const namedImport = node.importedNames[0];
-      const names = namedImport.importedNames.map((entry) => {
-        const name = declaredName(entry);
-        const alias = namedImport.aliases[name];
-        const base = alias ? `${name} as ${alias}` : name;
-        return this.prefixMarkedName(
-          name,
-          base,
-          namedImport.destructiveNames,
-          namedImport.idempotentNames,
-        );
-      });
+      const names = this.renderImportNames(namedImport);
       const withTrivia = this.renderListIfTrivia(
         names,
         namedImport.nameTrivia,
@@ -1915,21 +1905,33 @@ export class AgencyGenerator {
     return this.indentStr(`${importKeyword}${importedNames.join(", ")}${suffix}`);
   }
 
+  /** The names inside an import's `{ ... }`, with their aliases and
+   *  retry-safety markers. Shared by the sole-named and mixed paths. */
+  private renderImportNames(namedImport: NamedImport): string[] {
+    return namedImport.importedNames.map((entry) => {
+      const name = declaredName(entry);
+      const alias = namedImport.aliases[name];
+      const base = alias ? `${name} as ${alias}` : name;
+      return this.prefixMarkedName(
+        name,
+        base,
+        namedImport.destructiveNames,
+        namedImport.idempotentNames,
+      );
+    });
+  }
+
   protected processImportNameType(node: ImportNameType): string {
     switch (node.type) {
       case "namedImport": {
-        const names = node.importedNames.map((entry) => {
-          const name = declaredName(entry);
-          const alias = node.aliases[name];
-          const base = alias ? `${name} as ${alias}` : name;
-          return this.prefixMarkedName(
-            name,
-            base,
-            node.destructiveNames,
-            node.idempotentNames,
-          );
-        });
-        return `{ ${names.join(", ")} }`;
+        const names = this.renderImportNames(node);
+        // A mixed import (`import tools, { a } from ...`) reaches this path
+        // too, so it has to honor trivia the same way a sole named import
+        // does — otherwise the comment is dropped on the first format.
+        return (
+          this.renderListIfTrivia(names, node.nameTrivia, "{", "}") ??
+          `{ ${names.join(", ")} }`
+        );
       }
       case "namespaceImport":
         return `* as ${node.importedNames}`;

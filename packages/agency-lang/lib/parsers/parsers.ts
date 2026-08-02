@@ -1854,9 +1854,6 @@ function partitionTrivia<T>(entries: InterleavedEntry<T>[]): ParsedList<T> {
   return trivia.length > 0 ? { items, trivia } : { items };
 }
 
-/** A comma-separated list that may span lines, with trivia between items.
- *  `closer` is only looked at, never consumed: it lets the last item go
- *  without a comma while still requiring commas between items (#602). */
 /** What a particular comma list allows. Stated per call site rather than
  *  inferred, because these differ across the grammar and getting one wrong
  *  silently widens what the language accepts: `import { a, b }` permits a
@@ -1888,6 +1885,10 @@ function commaListDelimiter(policy: CommaListPolicy): Parser<unknown> {
   return seqR(optionalSpacesOrNewline, or(comma, ahead), optionalSpacesOrNewline);
 }
 
+/** A comma-separated list that may span lines, with trivia between items.
+ *  `policy.closer` is only looked at, never consumed: that is what lets the
+ *  last item go without a comma while still requiring commas between items
+ *  (#602). */
 function commaDelimitedList<T>(
   itemParser: Parser<T>,
   policy: CommaListPolicy,

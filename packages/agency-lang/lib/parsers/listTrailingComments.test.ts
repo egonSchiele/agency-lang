@@ -273,14 +273,36 @@ describe("remaining multiline surfaces", () => {
     expect(formatSource(once as string)).toBe(once);
   });
 
+  // A mixed import renders through a different path than a sole named
+  // import, so it needs its own coverage — it silently dropped the comment
+  // until the second path learned about trivia.
+  it.each([
+    [
+      "default plus named",
+      `import tools, {\n  alpha // keep\n} from "./tools"\n`,
+      `import tools, {\n  alpha // keep\n} from "./tools"\n`,
+    ],
+    [
+      "namespace plus named",
+      `import * as t, {\n  alpha // keep\n} from "./tools"\n`,
+      `import * as t, {\n  alpha // keep\n} from "./tools"\n`,
+    ],
+  ])("keeps a comment in a %s import", (_name, source, expected) => {
+    const once = formatSource(source);
+    expect(once).toBe(expected);
+    expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+    expect(formatSource(once as string)).toBe(once);
+  });
+
   it("keeps inner and trailing import comments with the right import when sorting", () => {
     // Written zeta-first; the formatter sorts alpha first. Both the name
     // comment inside each list and the comment after each `from` clause must
     // travel with their own import.
     const source =
       `import {\n  zeta // the zeta name\n} from "./zeta" // trailing zeta\nimport {\n  alpha // the alpha name\n} from "./alpha" // trailing alpha\n`;
-    const once = formatSource(source) as string;
-    expect(once).not.toBeNull();
+    const formatted = formatSource(source);
+    expect(formatted).not.toBeNull();
+    const once = formatted as string;
     expect(once.indexOf("alpha // the alpha name")).toBeLessThan(
       once.indexOf("zeta // the zeta name"),
     );

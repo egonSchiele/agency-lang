@@ -975,10 +975,14 @@ describe("AgencyGenerator - nested object type trivia", () => {
   return host
 }`, {}, false);
     expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      return;
+    }
     const definition = parsed.result.nodes.find((node) => node.type === "function");
     expect(definition?.type).toBe("function");
-    if (definition?.type !== "function") return;
+    if (definition?.type !== "function") {
+      return;
+    }
 
     expect(new AgencyGenerator().signatureOf(definition)).toBe(
       "configure(host: string, port: number): string",
@@ -997,10 +1001,14 @@ describe("AgencyGenerator - nested object type trivia", () => {
 @jsonSchema({ description: "choice" })
 type Choice = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"`, {}, false);
     expect(parsed.success).toBe(true);
-    if (!parsed.success) return;
+    if (!parsed.success) {
+      return;
+    }
     const alias = parsed.result.nodes.find((node) => node.type === "typeAlias");
     expect(alias?.type).toBe("typeAlias");
-    if (alias?.type !== "typeAlias") return;
+    if (alias?.type !== "typeAlias") {
+      return;
+    }
     const generator = new AgencyGenerator();
 
     expect(generator.signatureOf(alias)).toBe(`type Choice =

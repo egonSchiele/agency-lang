@@ -167,7 +167,8 @@ import {
   AgencyObject,
   AgencyObjectKV,
   SplatExpression,
-  Trivia,
+  ListTrivia,
+  ParsedList,
   TriviaNode,
 } from "../types/dataStructures.js";
 import {
@@ -1674,7 +1675,11 @@ export const taggedObjectPropertyParser: Parser<ObjectProperty> = memo(
 // anchor-indexed trivia. These are parse-time tagging types, not AST nodes.
 // -----------------------------------------------------------------------------
 
-type ItemEntry<T> = { kind: "item"; item: T };
+type ItemEntry<T> = {
+  kind: "item";
+  item: T;
+  trailingComment?: LineComment;
+};
 type TriviaEntry = { kind: "trivia"; node: TriviaNode };
 type InterleavedEntry<T> = ItemEntry<T> | TriviaEntry;
 
@@ -1694,45 +1699,144 @@ const triviaEntry: Parser<TriviaEntry> = seqC(
   optionalSpacesOrNewline,
 ) as Parser<TriviaEntry>;
 
+/** A `//` comment plus the layout that ends its line, for the list item it
+ *  follows. Unlike the complete-construct case, the list's own `many(...)`
+ *  loop does not consume that layout, so the entry must. */
+const trailingLineCommentEntry: Parser<LineComment> = map(
+  seqC(
+    optionalSpaces,
+    capture(lineCommentCore, "comment"),
+    optionalSpacesOrNewline,
+  ),
+  (result: { comment: LineComment }) => result.comment,
+);
+
 // Wrap an item parser as a tagged `{ kind: "item", item }` entry, consuming
-// the trailing delimiter (`delimiter`) after it.
-const itemEntry = <T>(
+// the trailing delimiter (`delimiter`) after it. A `//` comment is attached
+// only when the item AND its delimiter stayed on one line, so
+// `first, \n // about second` still belongs to `second`.
+const itemEntryAfterDelimiter = <T>(
   itemParser: Parser<T>,
   delimiter: Parser<unknown>,
 ): Parser<ItemEntry<T>> =>
-  seqC(
-    set("kind", "item"),
-    capture(itemParser, "item"),
-    delimiter,
-  ) as Parser<ItemEntry<T>>;
+  (input: string): ParserResult<ItemEntry<T>> => {
+    const item = itemParser(input);
+    if (!item.success) {
+      return item as ParserResult<ItemEntry<T>>;
+    }
+
+    const separated = delimiter(item.rest);
+    if (!separated.success) {
+      return separated as ParserResult<ItemEntry<T>>;
+    }
+
+    if (consumedLineEnding(input, separated.rest)) {
+      return success({ kind: "item", item: item.result }, separated.rest);
+    }
+
+    const comment = trailingLineCommentEntry(separated.rest);
+    if (!comment.success) {
+      return success({ kind: "item", item: item.result }, separated.rest);
+    }
+
+    return success(
+      { kind: "item", item: item.result, trailingComment: comment.result },
+      comment.rest,
+    );
+  };
+
+/** Object-TYPE members, where a newline is itself a legal delimiter. Both
+ *  `property // comment` (comment before the newline delimiter) and
+ *  `property, // comment` (comment after a punctuation delimiter) are
+ *  legal, so this policy tries the comment on both sides. */
+const objectMemberEntry = <T>(
+  itemParser: Parser<T>,
+  delimiter: Parser<unknown>,
+): Parser<ItemEntry<T>> =>
+  (input: string): ParserResult<ItemEntry<T>> => {
+    const item = itemParser(input);
+    if (!item.success) {
+      return item as ParserResult<ItemEntry<T>>;
+    }
+
+    const beforeDelimiter = trailingLineCommentEntry(item.rest);
+    if (beforeDelimiter.success) {
+      const separated = delimiter(beforeDelimiter.rest);
+      if (!separated.success) {
+        return separated as ParserResult<ItemEntry<T>>;
+      }
+      return success(
+        {
+          kind: "item",
+          item: item.result,
+          trailingComment: beforeDelimiter.result,
+        },
+        separated.rest,
+      );
+    }
+
+    const separated = delimiter(item.rest);
+    if (!separated.success) {
+      return separated as ParserResult<ItemEntry<T>>;
+    }
+
+    if (consumedLineEnding(input, separated.rest)) {
+      return success({ kind: "item", item: item.result }, separated.rest);
+    }
+
+    const afterDelimiter = trailingLineCommentEntry(separated.rest);
+    if (!afterDelimiter.success) {
+      return success({ kind: "item", item: item.result }, separated.rest);
+    }
+
+    return success(
+      {
+        kind: "item",
+        item: item.result,
+        trailingComment: afterDelimiter.result,
+      },
+      afterDelimiter.rest,
+    );
+  };
 
 // Fold an interleaved item/trivia list into the item array plus anchor-indexed
-// trivia. Trivia is anchored to the index of the item it precedes; trailing
-// trivia is anchored at `items.length`. The one place this rule lives.
-function partitionTrivia<T>(
-  entries: InterleavedEntry<T>[],
-): { items: T[]; trivia: Trivia[] } {
+// trivia. Before-trivia is anchored to the index of the item it precedes, and
+// trivia after the last item is anchored at `items.length`; a trailing comment
+// is anchored to the item it follows. The one place these rules live.
+function partitionTrivia<T>(entries: InterleavedEntry<T>[]): ParsedList<T> {
   const items: T[] = [];
-  const trivia: Trivia[] = [];
+  const trivia: ListTrivia[] = [];
   let pending: TriviaNode[] = [];
+
   for (const entry of entries) {
     if (entry.kind === "trivia") {
       pending.push(entry.node);
-    } else {
-      if (pending.length > 0) {
-        trivia.push({ anchorIndex: items.length, comments: pending });
-        pending = [];
-      }
-      items.push(entry.item);
+      continue;
+    }
+
+    if (pending.length > 0) {
+      trivia.push({ anchorIndex: items.length, comments: pending });
+      pending = [];
+    }
+
+    items.push(entry.item);
+    if (entry.trailingComment) {
+      trivia.push({
+        anchorIndex: items.length - 1,
+        placement: "trailing",
+        comments: [entry.trailingComment],
+      });
     }
   }
+
   if (pending.length > 0) {
     trivia.push({ anchorIndex: items.length, comments: pending });
   }
-  return { items, trivia };
+
+  return trivia.length > 0 ? { items, trivia } : { items };
 }
 
-const objectMember = itemEntry(
+const objectMember = objectMemberEntry(
   or(
     taggedObjectPropertyParser,
     objectPropertyParser,
@@ -1759,7 +1863,7 @@ export const objectTypeParser: Parser<ObjectType> = memo(
         r.entries as InterleavedEntry<ObjectProperty>[],
       );
       const objectType: ObjectType = { type: "objectType", properties: items };
-      if (trivia.length > 0) objectType.trivia = trivia;
+      if (trivia) objectType.trivia = trivia;
       return objectType;
     },
   ),
@@ -2616,7 +2720,7 @@ export const agencyArrayParser: Parser<AgencyArray> = memo(
         many(
           or(
             triviaEntry,
-            itemEntry(or(splatParser, lazy(() => exprParser)), literalDelimiter("]")),
+            itemEntryAfterDelimiter(or(splatParser, lazy(() => exprParser)), literalDelimiter("]")),
           ),
         ),
         "entries",
@@ -2629,7 +2733,7 @@ export const agencyArrayParser: Parser<AgencyArray> = memo(
         r.entries as InterleavedEntry<Expression | SplatExpression>[],
       );
       const node: AgencyArray = { type: "agencyArray", items };
-      if (trivia.length > 0) node.trivia = trivia;
+      if (trivia) node.trivia = trivia;
       return node;
     },
   ),
@@ -2686,7 +2790,7 @@ export const agencyObjectParser: Parser<AgencyObject> = map(
       many(
         or(
           triviaEntry,
-          itemEntry(or(splatParser, agencyObjectKVParser), literalDelimiter("}")),
+          itemEntryAfterDelimiter(or(splatParser, agencyObjectKVParser), literalDelimiter("}")),
         ),
       ),
       "entries",
@@ -2699,7 +2803,7 @@ export const agencyObjectParser: Parser<AgencyObject> = map(
       r.entries as InterleavedEntry<AgencyObjectKV | SplatExpression>[],
     );
     const node: AgencyObject = { type: "agencyObject", entries: items };
-    if (trivia.length > 0) node.trivia = trivia;
+    if (trivia) node.trivia = trivia;
     return node;
   },
 );

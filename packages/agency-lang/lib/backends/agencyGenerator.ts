@@ -25,6 +25,28 @@ import {
   isExpressionNode,
 } from "../types.js";
 import { LineComment } from "../types/base.js";
+import {
+  ListTrivia,
+  TriviaNode,
+  isTrailingListTrivia,
+} from "../types/dataStructures.js";
+
+/** One rendered list item. `leadingLines` are whole lines that print above
+ *  it (an object-type property's `@validate` tags); the shared renderer
+ *  indents them, so callers hand back plain text. */
+type RenderedListItem = {
+  leadingLines?: string[];
+  code: string;
+};
+
+type RenderListWithTriviaOptions<T> = {
+  items: T[];
+  trivia: ListTrivia[] | undefined;
+  open: string;
+  close: string;
+  renderItem: (item: T, index: number) => RenderedListItem;
+  separator: (index: number, itemCount: number) => string;
+};
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import { declaredName } from "../types/hole.js";
@@ -773,38 +795,99 @@ export class AgencyGenerator {
   // one rendered line per comment. Shared by object types and array/object
   // literals so all three preserve trivia identically. Accepts either
   // `ObjectTypeTrivia[]` or `Trivia[]` (structurally identical).
+  protected renderTriviaNode(node: TriviaNode): string {
+    if (node.type === "newLine") {
+      return "";
+    }
+    if (node.type === "comment") {
+      return this.processComment(node);
+    }
+    return this.processMultiLineComment(node);
+  }
+
+  /** Comments that print on their own line ABOVE item `anchorIndex`. */
+  protected beforeTriviaAt(
+    trivia: ListTrivia[] | undefined,
+    anchorIndex: number,
+  ): TriviaNode[] {
+    return (trivia ?? [])
+      .filter(
+        (entry) =>
+          entry.anchorIndex === anchorIndex && entry.placement !== "trailing",
+      )
+      .flatMap((entry) => entry.comments);
+  }
+
+  /** Comments that print at the END of item `anchorIndex`'s line. */
+  protected trailingTriviaAt(
+    trivia: ListTrivia[] | undefined,
+    anchorIndex: number,
+  ): LineComment[] {
+    return (trivia ?? [])
+      .filter(isTrailingListTrivia)
+      .filter((entry) => entry.anchorIndex === anchorIndex)
+      .flatMap((entry) => entry.comments);
+  }
+
   protected emitTriviaAt(
     trivia: (ObjectTypeTrivia | Trivia)[] | undefined,
     anchorIndex: number,
     lines: string[],
   ): void {
-    const match = (trivia ?? []).find((t) => t.anchorIndex === anchorIndex);
-    for (const n of match?.comments ?? []) {
-      if (n.type === "newLine") lines.push("");
-      else if (n.type === "comment") lines.push(this.processComment(n));
-      else lines.push(this.processMultiLineComment(n));
+    for (const node of this.beforeTriviaAt(trivia, anchorIndex)) {
+      lines.push(this.renderTriviaNode(node));
     }
+  }
+
+  /** Render one multiline list, owning indentation and both comment
+   *  placements. Callers supply how to render an item and where separators
+   *  go; they must not place comments themselves. */
+  protected renderListWithTrivia<T>(
+    args: RenderListWithTriviaOptions<T>,
+  ): string {
+    this.increaseIndent();
+    const lines: string[] = [];
+
+    for (let index = 0; index < args.items.length; index++) {
+      for (const node of this.beforeTriviaAt(args.trivia, index)) {
+        lines.push(this.renderTriviaNode(node));
+      }
+
+      const item = args.renderItem(args.items[index], index);
+      for (const leadingLine of item.leadingLines ?? []) {
+        lines.push(this.indentStr(leadingLine));
+      }
+      const separator = args.separator(index, args.items.length);
+      let line = this.indentStr(`${item.code}${separator}`);
+      for (const comment of this.trailingTriviaAt(args.trivia, index)) {
+        line = this.appendTrailingComment(line, comment);
+      }
+      lines.push(line);
+    }
+
+    for (const node of this.beforeTriviaAt(args.trivia, args.items.length)) {
+      lines.push(this.renderTriviaNode(node));
+    }
+
+    this.decreaseIndent();
+    return `${args.open}\n${lines.join("\n")}\n${this.indentStr(args.close)}`;
   }
 
   protected aliasedTypeToString(aliasedType: VariableType): string {
     if (aliasedType.type === "objectType") {
-      this.increaseIndent();
-      const lines: string[] = [];
-      const props = aliasedType.properties;
-      for (let i = 0; i < props.length; i++) {
-        this.emitTriviaAt(aliasedType.trivia, i, lines);
+      return this.renderListWithTrivia({
+        items: aliasedType.properties,
+        trivia: aliasedType.trivia,
+        open: "{",
+        close: "}",
         // `@validate(...)` / `@jsonSchema(...)` annotations render on their
-        // own lines above the property, matching source layout. `formatTag`
-        // already applies the current (property-level) indentation.
-        for (const tag of props[i].tags ?? []) {
-          lines.push(this.formatTag(tag));
-        }
-        const sep = i === props.length - 1 ? "" : ";";
-        lines.push(this.indentStr(this.stringifyProp(props[i])) + sep);
-      }
-      this.emitTriviaAt(aliasedType.trivia, props.length, lines);
-      this.decreaseIndent();
-      return "{\n" + lines.join("\n") + "\n" + this.indentStr("}");
+        // own lines above the property, matching source layout.
+        renderItem: (prop) => ({
+          leadingLines: (prop.tags ?? []).map((tag) => this.formatTag(tag).trim()),
+          code: this.stringifyProp(prop),
+        }),
+        separator: (index, count) => (index === count - 1 ? "" : ";"),
+      });
     }
     return variableTypeToString(aliasedType, this.typeAliases, true);
   }
@@ -1301,57 +1384,50 @@ export class AgencyGenerator {
     // (which may render on a single line). Trivia forces the multi-line form
     // so each comment gets its own line.
     if (!node.trivia?.length) {
-      const items = node.items.map((item) => {
-        if (item.type === "splat") {
-          return `...${this.processNode(item.value).trim()}`;
-        }
-        return this.processNode(item).trim();
-      });
+      const items = node.items.map((item) => this.renderArrayItem(item));
       return this.wrapList(items, "", "[", "]");
     }
 
-    this.increaseIndent();
-    const lines: string[] = [];
-    for (let i = 0; i < node.items.length; i++) {
-      this.emitTriviaAt(node.trivia, i, lines);
-      const item = node.items[i];
-      const itemStr =
-        item.type === "splat"
-          ? `...${this.processNode(item.value).trim()}`
-          : this.processNode(item).trim();
-      const sep = i === node.items.length - 1 ? "" : ",";
-      lines.push(this.indentStr(itemStr) + sep);
+    return this.renderListWithTrivia({
+      items: node.items,
+      trivia: node.trivia,
+      open: "[",
+      close: "]",
+      renderItem: (item) => ({ code: this.renderArrayItem(item) }),
+      separator: (index, count) => (index === count - 1 ? "" : ","),
+    });
+  }
+
+  private renderArrayItem(item: AgencyArray["items"][number]): string {
+    if (item.type === "splat") {
+      return `...${this.processNode(item.value).trim()}`;
     }
-    this.emitTriviaAt(node.trivia, node.items.length, lines);
-    this.decreaseIndent();
-    return "[\n" + lines.join("\n") + "\n" + this.indentStr("]");
+    return this.processNode(item).trim();
   }
 
   protected processAgencyObject(node: AgencyObject): string {
     if (node.entries.length === 0 && !node.trivia?.length) {
       return `{}`;
     }
-    this.increaseIndent();
-    const lines: string[] = [];
-    for (let i = 0; i < node.entries.length; i++) {
-      this.emitTriviaAt(node.trivia, i, lines);
-      const entry = node.entries[i];
-      let entryStr: string;
-      if ("type" in entry && entry.type === "splat") {
-        entryStr = `...${this.processNode(entry.value).trim()}`;
-      } else {
-        const kv = entry as AgencyObjectKV;
-        const valueCode = this.processNode(kv.value).trim();
-        entryStr = kv.computedKey
-          ? `[${this.processNode(kv.computedKey).trim()}]: ${valueCode}`
-          : `${this.addQuotesToKey(kv.key)}: ${valueCode}`;
-      }
-      const sep = i === node.entries.length - 1 ? "" : ",";
-      lines.push(this.indentStr(entryStr) + sep);
+    return this.renderListWithTrivia({
+      items: node.entries,
+      trivia: node.trivia,
+      open: "{",
+      close: "}",
+      renderItem: (entry) => ({ code: this.renderObjectEntry(entry) }),
+      separator: (index, count) => (index === count - 1 ? "" : ","),
+    });
+  }
+
+  private renderObjectEntry(entry: AgencyObject["entries"][number]): string {
+    if ("type" in entry && entry.type === "splat") {
+      return `...${this.processNode(entry.value).trim()}`;
     }
-    this.emitTriviaAt(node.trivia, node.entries.length, lines);
-    this.decreaseIndent();
-    return "{\n" + lines.join("\n") + "\n" + this.indentStr("}");
+    const kv = entry as AgencyObjectKV;
+    const valueCode = this.processNode(kv.value).trim();
+    return kv.computedKey
+      ? `[${this.processNode(kv.computedKey).trim()}]: ${valueCode}`
+      : `${this.addQuotesToKey(kv.key)}: ${valueCode}`;
   }
 
   private addQuotesToKey(key: string): string {

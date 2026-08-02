@@ -115,8 +115,15 @@ function segment(
   align: "left" | "right" | undefined,
   style: CellStyle,
 ): Element {
-  const clipped = clipCell(value, width);
-  const padding = " ".repeat(width - clipped.length);
-  const content = align === "right" ? `${padding}${clipped}` : `${clipped}${padding}`;
+  // The last column of every cell is a guaranteed gap: without it, a
+  // full-width value (or a right-aligned one) touches its neighbor and
+  // adjacent headers read as one word.
+  if (width <= 0) {
+    return line("", { width, ...style });
+  }
+  const inner = width - 1;
+  const clipped = clipCell(value, inner);
+  const padding = " ".repeat(inner - clipped.length);
+  const content = align === "right" ? `${padding}${clipped} ` : `${clipped}${padding} `;
   return line(content, { width, ...style });
 }

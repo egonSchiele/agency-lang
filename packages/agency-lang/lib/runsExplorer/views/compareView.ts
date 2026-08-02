@@ -127,7 +127,9 @@ export class CompareView implements ExplorerView {
     const agentColumns = agents.map((agent): TableColumn<CompareRow> => ({
       key: `agent:${agent}`,
       header: agent,
-      width: 14,
+      // 15 + the component's built-in gap column leaves visible air
+      // between cells; 18 + 4×15 still fits an 80-column terminal.
+      width: 15,
       cell: (row) => {
         const cell = row.cells[agent];
         return cell === null ? EMPTY_CELL : `${cell.mean.toFixed(2)} ×${cell.count}`;

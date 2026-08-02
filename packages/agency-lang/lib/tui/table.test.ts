@@ -38,10 +38,10 @@ describe("TableComponent", () => {
     expect(rowName.style.width).toBe(10);
   });
 
-  it("right-aligns right columns", () => {
+  it("right-aligns right columns, keeping the trailing gap column", () => {
     const cells = renderCells({ columns, rows, cursor: null, width: 40 });
     const score = cells[4];
-    expect(score.content).toBe("   0.90");
+    expect(score.content).toBe("  0.90 ");
   });
 
   it("flex column absorbs the leftover frame width and reacts to resize", () => {
@@ -51,10 +51,10 @@ describe("TableComponent", () => {
     expect(narrow[2].style.width).toBe(30 - 10 - 7);
   });
 
-  it("clips long cells with an ellipsis and never overflows the width", () => {
+  it("clips long cells with an ellipsis, never touching the next column", () => {
     const cells = renderCells({ columns, rows, cursor: null, width: 40 });
     const longName = cells[6];
-    expect(longName.content).toBe("watermelo…");
+    expect(longName.content).toBe("watermel… ");
     expect(longName.content.length).toBe(10);
   });
 
@@ -70,9 +70,18 @@ describe("TableComponent", () => {
       sort: { columnKey: "score", direction: "desc" },
     });
     const scoreHeader = cells[1];
-    expect(scoreHeader.content).toBe(" score▼");
+    expect(scoreHeader.content).toBe("score▼ ");
     expect(scoreHeader.style.fg).toBe("bright-white");
     expect(cells[0].style.fg).toBe("gray");
+  });
+
+  it("adjacent headers never touch, even right-aligned next to left-aligned", () => {
+    const tight: TableColumn<Fruit>[] = [
+      { key: "pass", header: "pass", width: 5, align: "right", cell: () => "✓" },
+      { key: "status", header: "status", width: 7, cell: () => "ok" },
+    ];
+    const cells = textCells(new TableComponent<Fruit>().render({ columns: tight, rows, cursor: null, width: 20 }));
+    expect(cells[0].content + cells[1].content).toContain("pass status");
   });
 
   it("cursor row keeps per-cell foreground and sets the cursor background everywhere", () => {

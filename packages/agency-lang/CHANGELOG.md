@@ -1,3 +1,20 @@
+## Aug 1 2026 — v0.12.0
+
+### Language / Parser
+- **Parser meets agents halfway** — accepts the syntax models actually write: `function` for `def`, `->` / `=>` arrows, arrow functions as block arguments, and common keyword/literal spellings (`interface`, `elif`, `undefined`, f-strings). `agency fmt` can be used to normalize the syntax.
+- Clearer errors where Agency differs from other languages — errors for ternaries, `switch`, and C-style `for` now show code examples for the Agency equivalent.
+- **Fix** — node parameter defaults now survive compilation
+- `compileSource` takes a `sourcePath`, so relative imports in compiled source resolve.
+
+### CLI / Observability
+- **`agency logs` cross-run explorer** — point it at a directory of runs for a sortable, groupable table with one row per run, drill-down into each test, plus compare and trend views. A single statelog file still opens the log viewer.
+- **`agency deploy`** — upload an agent to a hosted statelog.
+- **`setAgentName`** (`std::statelog`) gives an agent a stable identity across runs, so every run groups under one name in the explorer.
+- Log viewer adds timeline views (flame / by-name / occurrences / detail) and a working follow mode.
+
+### Runtime
+- `serve`'s `/list` manifest now lists each function's parameter names, excluding bound params.
+
 ## Jul 31 2026 — v0.11.0
 
 ### Eval framework

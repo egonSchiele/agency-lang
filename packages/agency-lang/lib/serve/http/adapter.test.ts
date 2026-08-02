@@ -1,11 +1,44 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import http from "http";
 import { AddressInfo } from "net";
 import { createHttpHandler, startHttpServer } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
+import { interrupt } from "../../runtime/interrupts.js";
+import type { Interrupt } from "../../runtime/interrupts.js";
 import type { ExportedItem } from "../types.js";
 import { createLogger } from "../../logger.js";
 import type { Logger } from "../../logger.js";
+
+// A fully-formed interrupt, as the runtime produces one — every identity field
+// present. Resume validation now requires these, so tests build real interrupts
+// instead of `{ id: "1" }` shaped partials.
+function makeInterrupt(interruptId: string): Interrupt {
+  return interrupt({
+    effect: "delete",
+    message: "delete emails?",
+    data: null,
+    origin: "test",
+    runId: "run-1",
+    interruptId,
+  });
+}
+
+// A handler whose respondToInterrupts is a spy, so a malformed /resume can be
+// proven to never reach the runtime.
+function makeSpyHandler(): {
+  handler: ReturnType<typeof createHttpHandler>;
+  respondSpy: ReturnType<typeof vi.fn>;
+} {
+  const { exports } = makeExports();
+  const respondSpy = vi.fn(async () => ({ data: "resumed" }));
+  const handler = createHttpHandler({
+    exports,
+    logger: createLogger("error"),
+    hasInterrupts: () => false,
+    respondToInterrupts: respondSpy,
+  });
+  return { handler, respondSpy };
+}
 
 function makeExports(): {
   exports: ExportedItem[];
@@ -203,12 +236,13 @@ describe("HTTP adapter", () => {
 
   it("POST /resume calls respondToInterrupts", async () => {
     const result = await handler("POST", "/resume", {
-      interrupts: [{ id: "1" }],
+      interrupts: [makeInterrupt("id-1")],
       responses: [{ type: "approve" }],
     });
     expect(result.status).toBe(200);
     const body = result.body as any;
     expect(body.success).toBe(true);
+    expect(body.value).toBe("resumed");
   });
 
   it("POST /resume rejects non-array inputs", async () => {
@@ -217,6 +251,77 @@ describe("HTTP adapter", () => {
       responses: "not-array",
     });
     expect(result.status).toBe(400);
+  });
+
+  it("POST /resume rejects an unknown response type without running", async () => {
+    // The core safety case: an unrecognized response type would otherwise fall
+    // through the generated resume branch and continue PAST the interrupt.
+    const { handler: spyHandler, respondSpy } = makeSpyHandler();
+    const result = await spyHandler("POST", "/resume", {
+      interrupts: [makeInterrupt("id-1")],
+      responses: [{ type: "propagate" }],
+    });
+    expect(result.status).toBe(400);
+    expect(respondSpy).not.toHaveBeenCalled();
+  });
+
+  it("POST /resume rejects length mismatch, empty, and duplicate-id batches", async () => {
+    const { handler: spyHandler, respondSpy } = makeSpyHandler();
+    const first = makeInterrupt("id-1");
+    const second = makeInterrupt("id-2");
+    const approveResponse = { type: "approve" };
+    const rejectResponse = { type: "reject" };
+
+    const mismatched = await spyHandler("POST", "/resume", {
+      interrupts: [first, second],
+      responses: [approveResponse],
+    });
+    expect(mismatched.status).toBe(400);
+
+    const empty = await spyHandler("POST", "/resume", { interrupts: [], responses: [] });
+    expect(empty.status).toBe(400);
+
+    // buildResponseMap is keyed by interruptId, so duplicate ids would overwrite
+    // one response and leave an interrupt unanswered.
+    const duplicate = await spyHandler("POST", "/resume", {
+      interrupts: [first, { ...second, interruptId: first.interruptId }],
+      responses: [approveResponse, rejectResponse],
+    });
+    expect(duplicate.status).toBe(400);
+
+    expect(respondSpy).not.toHaveBeenCalled();
+  });
+
+  it("POST /resume rejects malformed interrupt and response items via a table", async () => {
+    const { handler: spyHandler, respondSpy } = makeSpyHandler();
+    const valid = makeInterrupt("id-1");
+    const approveResponse = { type: "approve" };
+
+    const badInterrupts: unknown[] = [
+      null,
+      42,
+      ["array"],
+      { ...valid, type: "notInterrupt" },
+      { ...valid, interruptId: "" },
+    ];
+    for (const badInterrupt of badInterrupts) {
+      const result = await spyHandler("POST", "/resume", {
+        interrupts: [badInterrupt],
+        responses: [approveResponse],
+      });
+      expect(result.status).toBe(400);
+    }
+
+    const badResponses: unknown[] = [null, 42, ["array"], {}, { type: "propagate" }];
+    for (const badResponse of badResponses) {
+      const result = await spyHandler("POST", "/resume", {
+        interrupts: [valid],
+        responses: [badResponse],
+      });
+      expect(result.status).toBe(400);
+    }
+
+    expect(respondSpy).not.toHaveBeenCalled();
   });
 
   it("returns 404 for unknown routes", async () => {

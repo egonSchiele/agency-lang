@@ -606,6 +606,62 @@ export async function interruptWithHandlers<T = any>(
   return renderVerdict(outcome, ctx, interruptId, interruptObj, parentDecided ? "ipc" : "handler");
 }
 
+/**
+ * Validate a resume batch before it can reach interrupt-resume execution.
+ *
+ * This is the single gate protecting a safety-critical path: the generated
+ * resume code acts only on `"approve"` and `"reject"`, so a malformed response
+ * would otherwise fall through and continue execution *past* the interrupt. It
+ * proves each item is a real object before reading any field, so a `null` or a
+ * primitive returns an error string rather than throwing. Returns the first
+ * problem found, or `null` when the batch is well-formed.
+ *
+ * Owns: non-empty arrays, equal lengths, interrupt identity, unique interrupt
+ * IDs (the response map is ID-keyed, so duplicates would silently overwrite),
+ * and approve/reject response discriminants.
+ */
+export function validateResumeBatch(
+  interrupts: unknown,
+  responses: unknown,
+): string | null {
+  if (!Array.isArray(interrupts) || !Array.isArray(responses)) {
+    return "interrupts and responses must be arrays";
+  }
+  if (interrupts.length === 0) {
+    return "interrupts must be non-empty";
+  }
+  if (interrupts.length !== responses.length) {
+    return "interrupts and responses length mismatch";
+  }
+  const seenInterruptIds: string[] = [];
+  for (const item of interrupts) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      return "each interrupt must be an object";
+    }
+    const fields = item as Record<string, unknown>;
+    if (fields.type !== "interrupt") {
+      return "each interrupt type must be interrupt";
+    }
+    if (typeof fields.interruptId !== "string" || fields.interruptId.length === 0) {
+      return "each interrupt must carry a non-empty string interruptId";
+    }
+    if (seenInterruptIds.includes(fields.interruptId)) {
+      return "interrupt IDs must be unique";
+    }
+    seenInterruptIds.push(fields.interruptId);
+  }
+  for (const item of responses) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      return "each response must be an object";
+    }
+    const responseType = (item as { type?: unknown }).type;
+    if (responseType !== "approve" && responseType !== "reject") {
+      return "each response type must be approve or reject";
+    }
+  }
+  return null;
+}
+
 /** Build the ID-keyed response map for `respondToInterrupts`. Extracted
  * to keep the main function under the structural lint limit. */
 function buildResponseMap(

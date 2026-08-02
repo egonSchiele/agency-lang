@@ -1089,6 +1089,24 @@ type IndexedWrapped = {
     expectExactStableFormat(source, source);
   });
 
+  it("indents multiline parameter continuations when a signature wraps", () => {
+    const source = `def configure(configuration: {
+  endpoint: string // keep
+}, retryCount: number, requestTimeoutMilliseconds: number): string {
+  return configuration.endpoint
+}`;
+    const expected = `def configure(
+  configuration: {
+    endpoint: string // keep
+  },
+  retryCount: number,
+  requestTimeoutMilliseconds: number,
+): string {
+  return configuration.endpoint
+}`;
+    expectExactStableFormat(source, expected);
+  });
+
   describe("source type positions", () => {
     const cases = [
       ["schema type argument", `const value = schema({

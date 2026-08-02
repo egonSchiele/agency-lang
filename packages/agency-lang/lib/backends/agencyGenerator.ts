@@ -724,6 +724,19 @@ export class AgencyGenerator {
 
   // Wrapping helpers
 
+  private indentContinuationLines(item: string): string {
+    const continuationIndent = this.indent(1);
+    return item
+      .split("\n")
+      .map((line, index) => {
+        if (index === 0 || line === "") {
+          return line;
+        }
+        return continuationIndent + line;
+      })
+      .join("\n");
+  }
+
   private wrapList(
     items: string[],
     prefix: string,
@@ -739,7 +752,9 @@ export class AgencyGenerator {
     if (items.length === 0) return inline;
     if (this.indentStr(inline).length <= 80) return inline;
     this.increaseIndent();
-    const lines = items.map((item) => this.indentStr(`${item},`));
+    const lines = items.map((item) =>
+      this.indentStr(`${this.indentContinuationLines(item)},`),
+    );
     this.decreaseIndent();
     return `${prefix}${open}\n${lines.join("\n")}\n${this.indent()}${close}${suffix}`;
   }

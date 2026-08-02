@@ -137,6 +137,21 @@ export type TypePrintHooks = {
   ) => string | undefined;
 };
 
+function objectTypeToString(
+  objectType: ObjectType,
+  printChild: (child: VariableType) => string,
+  hooks?: TypePrintHooks,
+): string {
+  const rendered = hooks?.objectType?.(objectType, printChild);
+  if (rendered !== undefined) {
+    return rendered;
+  }
+  const props = objectType.properties
+    .map((prop) => `${prop.key}: ${printChild(prop.value)}`)
+    .join("; ");
+  return `{ ${props} }`;
+}
+
 export function variableTypeToString(
   variableType: VariableType,
   typeAliases: Record<string, VariableType>,
@@ -196,20 +211,11 @@ export function variableTypeToString(
     }
     return str;
   } else if (variableType.type === "objectType") {
-    const rendered = hooks?.objectType?.(
+    return objectTypeToString(
       variableType,
       (child) => variableTypeToString(child, typeAliases, forFormatting, hooks),
+      hooks,
     );
-    if (rendered !== undefined) {
-      return rendered;
-    }
-    const props = variableType.properties
-      .map(
-        (prop) =>
-          `${prop.key}: ${variableTypeToString(prop.value, typeAliases, forFormatting, hooks)}`,
-      )
-      .join("; ");
-    return `{ ${props} }`;
   } else if (variableType.type === "typeAliasVariable") {
     return `${variableType.aliasName}${formatValueArgs(variableType.valueArgs)}`;
   } else if (variableType.type === "blockType") {

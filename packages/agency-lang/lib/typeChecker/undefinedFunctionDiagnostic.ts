@@ -4,6 +4,7 @@ import type { Scope } from "./scope.js";
 import type { AgencyNode, FunctionCall } from "../types.js";
 import type { ValueAccess, AccessChainElement } from "../types/access.js";
 import { walkNodes } from "../utils/node.js";
+import { holeNames } from "../utils/holes.js";
 import {
   hasFunctionOrNodeAncestor,
   isResolvableBareCall,
@@ -38,6 +39,11 @@ export function checkUndefinedFunctions(
   // `{ typechecker: { undefinedFunctions: "silent" } }` in agency.json.
   const mode = ctx.config.typechecker?.undefinedFunctions ?? "warn";
   if (mode === "silent") return;
+
+  // A file with holes is a template. AG8015 owns every call name in it, so
+  // reporting here too would double up. The JS-namespace chain check below
+  // goes quiet in such a file as well.
+  if (holeNames(ctx.programNodes).length > 0) return;
 
   const shadowing = collectProgramShadowing(ctx.programNodes);
 

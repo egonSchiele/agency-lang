@@ -4,6 +4,7 @@ import type { Scope } from "./scope.js";
 import type { AgencyNode, VariableNameLiteral } from "../types.js";
 import type { WalkAncestor } from "../utils/node.js";
 import { walkNodes } from "../utils/node.js";
+import { holeNames } from "../utils/holes.js";
 import { resolveVariable } from "./resolveVariable.js";
 import {
   hasFunctionOrNodeAncestor,
@@ -44,6 +45,10 @@ export function checkUndefinedVariables(
 ): void {
   const mode = ctx.config.typechecker?.undefinedVariables ?? "silent";
   if (mode === "silent") return;
+
+  // A file with holes is a template. AG8015 owns every name in it, and
+  // reports what this pass would, so reporting here too would double up.
+  if (holeNames(ctx.programNodes).length > 0) return;
 
   const { importedNodeNames } = collectProgramShadowing(
     ctx.programNodes,

@@ -283,3 +283,78 @@ describe("AG8015: the message", () => {
     expect(message).toMatch(/declares or imports/);
   });
 });
+
+describe("AG8015: template files", () => {
+  // A .agency file with holes is itself a template, so the always-on pass
+  // owns every undefined name in it.
+
+  const missingVariable = [
+    "node main(): string {",
+    "#body",
+    "  print(res)",
+    "  return res",
+    "}",
+    "",
+  ].join("\n");
+
+  const missingCall = [
+    "#helpers",
+    "",
+    "node main(): string {",
+    "  return guarded()",
+    "}",
+    "",
+  ].join("\n");
+
+  it("reports a missing variable as AG8015, not AG4007", () => {
+    expect(codesOf(missingVariable)).toContain("AG8015");
+    expect(codesOf(missingVariable)).not.toContain("AG4007");
+  });
+
+  it("reports a missing call as AG8015, not AG4004", () => {
+    expect(codesOf(missingCall)).toContain("AG8015");
+    expect(codesOf(missingCall)).not.toContain("AG4004");
+  });
+
+  it("still reports an ordinary variable typo away from the hole", () => {
+    // AG4007 stands down for the whole file, so this pass has to cover
+    // what it stopped covering.
+    const source = [
+      "node main(): string {",
+      "#body",
+      "  const greeting = 1",
+      "  print(greetign)",
+      '  return "x"',
+      "}",
+      "",
+    ].join("\n");
+    expect(codesOf(source)).toContain("AG8015");
+  });
+
+  it("still reports an ordinary call typo away from the hole", () => {
+    const source = [
+      "#helpers",
+      "",
+      "def greet(): string {",
+      '  return "hi"',
+      "}",
+      "",
+      "node main(): string {",
+      "  return greeet()",
+      "}",
+      "",
+    ].join("\n");
+    expect(codesOf(source)).toContain("AG8015");
+  });
+
+  it("leaves a hole-free file's missing variable to the ordinary pass", () => {
+    const source = 'node main(): string {\n  print(res)\n  return "x"\n}\n';
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+
+  it("leaves a hole-free file's missing call to AG4004", () => {
+    const source = 'node main(): string {\n  return missingHelper()\n}\n';
+    expect(codesOf(source)).toContain("AG4004");
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+});

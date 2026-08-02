@@ -1,6 +1,7 @@
 import { buildCompilationUnit, GLOBAL_SCOPE_KEY } from "../compilationUnit.js";
 import { PRELUDE_NAMES } from "../prelude.js";
 import { declaredName } from "../types/hole.js";
+import { holeNames } from "../utils/holes.js";
 import { walkNodes, walkNodesArray } from "../utils/node.js";
 import { diagnostic } from "./diagnostics.js";
 import {
@@ -88,22 +89,33 @@ export function findUndefinedTemplateNames(
  * before run time.
  */
 export function checkTemplateNames(ctx: TypeCheckerContext): void {
+  // A file with holes is itself a template, so this pass owns every name
+  // in it, not just the ones inside literals. The ordinary undefined-name
+  // passes stand down for such a file.
+  if (holeNames(ctx.programNodes).length > 0) {
+    const findings = findUndefinedTemplateNames(ctx.programNodes, ctx.config);
+    reportTemplateNameFindings(findings, ctx);
+    return;
+  }
   for (const visit of walkNodesArray(ctx.programNodes)) {
     if (visit.node.type !== "codeLiteral") {
       continue;
     }
-    report((visit.node as CodeLiteral).nodes, ctx);
+    const literal = visit.node as CodeLiteral;
+    reportTemplateNameFindings(
+      findUndefinedTemplateNames(literal.nodes, ctx.config),
+      ctx,
+    );
   }
 }
 
-function report(nodes: AgencyNode[], ctx: TypeCheckerContext): void {
-  for (const undefinedName of findUndefinedTemplateNames(nodes, ctx.config)) {
+function reportTemplateNameFindings(
+  findings: UndefinedTemplateName[],
+  ctx: TypeCheckerContext,
+): void {
+  for (const finding of findings) {
     ctx.errors.push(
-      diagnostic(
-        "templateNameNotDefined",
-        { name: undefinedName.name },
-        undefinedName.loc,
-      ),
+      diagnostic("templateNameNotDefined", { name: finding.name }, finding.loc),
     );
   }
 }

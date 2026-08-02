@@ -58,12 +58,16 @@ export type CompileSourceOptions = AgencyConfig & {
    */
   imports?: ImportPolicy;
   /**
-   * Real on-disk path of `source`, when it already exists on disk. Given it,
-   * `compileSource` compiles at that path — where sibling `.agency` files live —
-   * so relative imports resolve. Without it, `source` is written to an isolated
-   * temp file, so relative imports cannot resolve (single-file compile). A host
-   * that stores multi-file agents on disk passes this to compile each file
-   * against its real neighbors.
+   * Real on-disk path of the file to compile. Given it, `compileSource` compiles
+   * at that path — where sibling `.agency` files live — so relative imports
+   * resolve. Without it, `source` is written to an isolated temp file, so
+   * relative imports cannot resolve (single-file compile). A host that stores
+   * multi-file agents on disk passes this to compile each file against its real
+   * neighbors.
+   *
+   * When set, the file at this path is authoritative: it is parsed AND used for
+   * symbol/import resolution, so the two can't diverge. The `source` argument is
+   * ignored (pass the file's contents for clarity, but the disk file wins).
    */
   sourcePath?: string;
 };
@@ -124,9 +128,18 @@ export function compileSource(
     fs.writeFileSync(syntheticPath, source, "utf-8");
   }
 
+  // The file at `syntheticPath` is the single source of truth: SymbolTable.build
+  // and buildCompiledClosure read the entrypoint and its imports from there, so
+  // parse the SAME bytes rather than the passed `source`. In the temp-file case
+  // that file IS `source` (just written); with a caller `sourcePath` this reads
+  // the on-disk file, so the AST and symbol/import resolution can't diverge.
+  const compiledSource = config.sourcePath
+    ? fs.readFileSync(syntheticPath, "utf-8")
+    : source;
+
   try {
     // 1. Parse
-    const parseResult = parseAgency(source, config, true);
+    const parseResult = parseAgency(compiledSource, config, true);
     if (!parseResult.success) {
       return {
         success: false,
@@ -183,7 +196,7 @@ export function compileSource(
       liftedProgram,
       symbolTable,
       syntheticPath,
-      source,
+      compiledSource,
     );
 
     // 5. Type check

@@ -40,6 +40,26 @@ describe("compileSource", () => {
       const result = compileSource(MAIN, {});
       expect(result.success).toBe(false);
     });
+
+    it("treats the on-disk file as authoritative when source and disk disagree", () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "compile-sourcepath-"));
+      try {
+        const onDisk = `export node main(): string {\n  return "from-disk"\n}\n`;
+        const mainPath = path.join(dir, "main.agency");
+        fs.writeFileSync(mainPath, onDisk);
+
+        // Pass a DIFFERENT source string; the file at sourcePath must win.
+        const stale = `export node main(): string {\n  return "from-arg"\n}\n`;
+        const result = compileSource(stale, { sourcePath: mainPath });
+        expect(result.success).toBe(true);
+        if (result.success) {
+          expect(result.code).toContain("from-disk");
+          expect(result.code).not.toContain("from-arg");
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 
   it("returns errors for invalid syntax", () => {

@@ -376,6 +376,9 @@ const NON_TRAILING_OWNER_TYPES = [
 ];
 
 const LINE_ENDING_PATTERN = new RegExp(`[\\r\\n${BLANK_LINE_SENTINEL}]`);
+const TRAILING_WHITESPACE_PATTERN = new RegExp(
+  `[ \\t\\r\\n${BLANK_LINE_SENTINEL}]*$`,
+);
 
 /** Whether ANY line ending was crossed going from `from` to `to`. Use this
  *  for a span that should sit entirely on one line, such as the delimiter
@@ -393,8 +396,7 @@ function spanCrossesLine(from: string, to: string): boolean {
  *  count as line endings too. */
 function consumedLineEnding(input: string, rest: string): boolean {
   const consumed = input.slice(0, input.length - rest.length);
-  const trailingWhitespace =
-    consumed.match(new RegExp(`[ \\t\\r\\n${BLANK_LINE_SENTINEL}]*$`))?.[0] ?? "";
+  const trailingWhitespace = consumed.match(TRAILING_WHITESPACE_PATTERN)?.[0] ?? "";
   return LINE_ENDING_PATTERN.test(trailingWhitespace);
 }
 
@@ -3136,7 +3138,12 @@ export const _functionCallParser: Parser<FunctionCall> = memo("_functionCallPars
   if (!extracted.success) return extracted.error;
   funcCall.arguments = extracted.arguments;
   funcCall.block = extracted.block;
-  funcCall.argumentTrivia = extracted.trivia;
+  // Conditional so a trivia-free call has no `argumentTrivia` key at all,
+  // matching every other trivia owner and keeping exact-shape AST
+  // comparisons clean.
+  if (extracted.trivia) {
+    funcCall.argumentTrivia = extracted.trivia;
+  }
 
   return result as ParserResult<FunctionCall>;
 });

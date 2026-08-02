@@ -3,7 +3,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { formatSource } from "./formatter.js";
-import { parseAgency } from "./parser.js";
+import { parseAgency, replaceBlankLines } from "./parser.js";
+import { findRecursively } from "./utils/findRecursively.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -57,26 +58,41 @@ function collectComments(value: unknown, found: string[] = []): string[] {
   return found;
 }
 
-/** How many times each `//` comment body appears in `source`, counted in one
- *  pass so a large corpus does not turn into a scan per comment. */
-function countCommentLines(source: string): Record<string, number> {
+/** Parse the way `formatSource` does. Blank lines become sentinels before
+ *  parsing and statement boundaries depend on it, so skipping that step would
+ *  hand this test a different tree than the formatter actually saw. */
+function parseLikeFormatter(source: string) {
+  return parseAgency(replaceBlankLines(source), {}, false, false);
+}
+
+/** How many times each comment body appears, counted in one pass. */
+function commentCounts(comments: string[]): Record<string, number> {
   const counts: Record<string, number> = {};
-  for (const match of source.matchAll(/\/\/(.*)$/gm)) {
-    const body = match[1].trim();
-    counts[body] = (counts[body] ?? 0) + 1;
+  for (const comment of comments) {
+    counts[comment] = (counts[comment] ?? 0) + 1;
   }
   return counts;
 }
 
-/** The comments in `source` that are missing from `formatted`. */
+/** The comments in `source` that are missing from `formatted`.
+ *
+ *  Both sides are counted as parsed comment NODES, not as `//` occurrences in
+ *  text. Scanning the text would also count `//` inside a string literal or a
+ *  block comment, and that can hide the exact regression this test is for: a
+ *  dropped `// keep` passes if the program happens to contain the string
+ *  `"// keep"` somewhere. */
 function missingComments(source: string, formatted: string): string[] {
-  const parsed = parseAgency(source, {}, false, false);
-  if (!parsed.success) {
+  const before = parseLikeFormatter(source);
+  if (!before.success) {
     return [];
   }
-  const remaining = countCommentLines(formatted);
+  const after = parseLikeFormatter(formatted);
+  if (!after.success) {
+    return ["<formatted output did not re-parse>"];
+  }
+  const remaining = commentCounts(collectComments(after.result.nodes));
   const missing: string[] = [];
-  for (const comment of collectComments(parsed.result.nodes)) {
+  for (const comment of collectComments(before.result.nodes)) {
     if ((remaining[comment] ?? 0) > 0) {
       remaining[comment] -= 1;
     } else {
@@ -86,15 +102,15 @@ function missingComments(source: string, formatted: string): string[] {
   return missing;
 }
 
+/** Every `.agency` file under `relativeDir`, including nested ones — the
+ *  fixture directories have subdirectories, and a non-recursive read quietly
+ *  skipped ten files that do contain comments. */
 function agencyFilesIn(relativeDir: string): string[] {
   const dir = path.join(__dirname, "..", relativeDir);
   if (!fs.existsSync(dir)) {
     return [];
   }
-  return fs
-    .readdirSync(dir)
-    .filter((name) => name.endsWith(".agency"))
-    .map((name) => path.join(dir, name));
+  return [...findRecursively(dir, ".agency")].map((found) => found.path);
 }
 
 // Written-out samples, one per construct that can carry a comment. The corpus
@@ -196,14 +212,19 @@ describe("a comment comes out where it went in", () => {
     ...agencyFilesIn("tests/typescriptGenerator"),
   ];
 
-  it("has a corpus with comments in it", () => {
+  it("has a corpus with comments in it, including nested fixtures", () => {
     // Without this the suite below passes vacuously if the corpus moves or
-    // stops containing comments.
-    expect(corpus.length).toBeGreaterThan(10);
+    // stops containing comments. The nested-directory assertion is here
+    // because a plain `readdirSync` silently skipped fourteen fixture files
+    // and a bare count threshold was too loose to notice.
+    expect(corpus.length).toBeGreaterThan(50);
+    expect(
+      corpus.filter((file) => path.dirname(file).includes("euler")).length,
+    ).toBeGreaterThan(0);
     const total = corpus
       .map((file) => fs.readFileSync(file, "utf-8"))
       .map((source) => {
-        const parsed = parseAgency(source, {}, false, false);
+        const parsed = parseLikeFormatter(source);
         return parsed.success ? collectComments(parsed.result.nodes).length : 0;
       })
       .reduce((sum, n) => sum + n, 0);
@@ -215,7 +236,7 @@ describe("a comment comes out where it went in", () => {
     for (const file of corpus) {
       const source = fs.readFileSync(file, "utf-8");
       // A fixture that does not parse is some other test's problem.
-      if (!parseAgency(source, {}, false, false).success) {
+      if (!parseLikeFormatter(source).success) {
         continue;
       }
       const formatted = formatSource(source);

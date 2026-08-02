@@ -992,14 +992,19 @@ export class AgencyGenerator {
     }
     const typeParamsStr = this.formatTypeParams(node.typeParams, "source");
     const valueParamsStr = this.formatValueParams(node.valueParams, "source");
-    const tags = this.formatAttachedTags(node);
     return (
-      this.formatDocComment(node) +
-      tags +
+      this.declarationAnnotationPrefixOf(node) +
       this.indentStr(
-        `${exportPrefix}type ${node.aliasName}${typeParamsStr}${valueParamsStr} = ${aliasedTypeStr}`,
+        this.composeTypeAliasAssignment(
+          `${exportPrefix}type ${node.aliasName}${typeParamsStr}${valueParamsStr}`,
+          aliasedTypeStr,
+        ),
       )
     );
+  }
+
+  private composeTypeAliasAssignment(prefix: string, rhs: string): string {
+    return rhs.startsWith("\n") ? `${prefix} =${rhs}` : `${prefix} = ${rhs}`;
   }
 
   /**
@@ -1296,7 +1301,7 @@ export class AgencyGenerator {
     const raisesStr = this.formatRaisesClause(node.raises);
     return this.renderParenList(
       this.renderParams(node.parameters, policy),
-      node.parameterTrivia,
+      policy === "source" ? node.parameterTrivia : undefined,
       prefix,
       `${returnTypeStr}${raisesStr}${opener}`,
     );
@@ -1320,7 +1325,10 @@ export class AgencyGenerator {
       }
       const typeParamsStr = this.formatTypeParams(node.typeParams, "display");
       const valueParamsStr = this.formatValueParams(node.valueParams, "display");
-      return `type ${node.aliasName}${typeParamsStr}${valueParamsStr} = ${this.aliasedTypeToString(node.aliasedType, "display")}`;
+      return this.composeTypeAliasAssignment(
+        `type ${node.aliasName}${typeParamsStr}${valueParamsStr}`,
+        this.aliasedTypeToString(node.aliasedType, "display"),
+      );
     }
     const name = declaredName(node.type === "function" ? node.functionName : node.nodeName);
     return this.buildSignature(name, node, "", "display");
@@ -1328,7 +1336,7 @@ export class AgencyGenerator {
 
   /** Render the annotations that precede a type alias declaration. */
   declarationAnnotationPrefixOf(node: TypeAlias): string {
-    return this.formatAttachedTags(node);
+    return this.formatDocComment(node) + this.formatAttachedTags(node);
   }
 
   protected processFunctionDefinition(node: FunctionDefinition): string {

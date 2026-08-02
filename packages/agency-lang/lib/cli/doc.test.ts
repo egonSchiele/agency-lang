@@ -492,6 +492,36 @@ export type Category = "reminder" | "todo"
     expect(output).toContain("### Category");
   });
 
+  it("keeps alias doc comments in code blocks without trailing whitespace", () => {
+    const inputDir = path.join(tmpDir, "input-long-alias");
+    const outputDir = path.join(tmpDir, "output-long-alias");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "choice.agency"),
+      `/** Kept in generated code blocks. */
+export type Choice = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "choice.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "choice.md"), "utf-8");
+
+    expect(output).toContain(`\`\`\`ts
+/** Kept in generated code blocks. */
+export type Choice =
+  | "alpha"
+  | "bravo"
+  | "charlie"
+  | "delta"
+  | "echo"
+  | "foxtrot"
+  | "golf"
+  | "hotel"
+  | "india"
+\`\`\``);
+    expect(output).not.toMatch(/[ \t]+$/m);
+  });
+
   it("handles type aliases that are not objects", () => {
     const inputDir = path.join(tmpDir, "input");
     const outputDir = path.join(tmpDir, "output");

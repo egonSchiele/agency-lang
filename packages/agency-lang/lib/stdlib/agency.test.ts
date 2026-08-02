@@ -692,6 +692,20 @@ export node inspect(input: {
     ]);
   });
 
+  it("omits multiline parameter comments from describe signatures", () => {
+    const info = _describe(`export def configure(
+  // keep
+  host: string,
+  port: number
+): string {
+  return host
+}`);
+
+    expect(info.exports.find(({ name }) => name === "configure")?.signature).toBe(
+      "configure(host: string, port: number): string",
+    );
+  });
+
   it("surfaces the module doc comment as the description", () => {
     const info = _describe(source);
     expect(info.description).toContain("Tools for the news agent");

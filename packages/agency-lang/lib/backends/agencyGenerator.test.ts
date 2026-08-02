@@ -966,6 +966,56 @@ describe("AgencyGenerator - nested object type trivia", () => {
     expect(formatAgency(once)).toBe(expected);
   }
 
+  it("omits parameter trivia from direct display signatures", () => {
+    const parsed = parseAgency(`def configure(
+  // keep
+  host: string,
+  port: number
+): string {
+  return host
+}`, {}, false);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const definition = parsed.result.nodes.find((node) => node.type === "function");
+    expect(definition?.type).toBe("function");
+    if (definition?.type !== "function") return;
+
+    expect(new AgencyGenerator().signatureOf(definition)).toBe(
+      "configure(host: string, port: number): string",
+    );
+    expect(formatAgency(`def configure(
+  // keep
+  host: string,
+  port: number
+): string {
+  return host
+}`)).toContain("// keep");
+  });
+
+  it("retains alias doc comments and avoids whitespace before multiline RHS", () => {
+    const parsed = parseAgency(`/** Kept in generated code blocks. */
+@jsonSchema({ description: "choice" })
+type Choice = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"`, {}, false);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const alias = parsed.result.nodes.find((node) => node.type === "typeAlias");
+    expect(alias?.type).toBe("typeAlias");
+    if (alias?.type !== "typeAlias") return;
+    const generator = new AgencyGenerator();
+
+    expect(generator.signatureOf(alias)).toBe(`type Choice =
+  | "alpha"
+  | "bravo"
+  | "charlie"
+  | "delta"
+  | "echo"
+  | "foxtrot"
+  | "golf"
+  | "hotel"
+  | "india"`);
+    expect(generator.signatureOf(alias)).not.toMatch(/[ \t]+$/m);
+  });
+
   it("preserves generic, Result, block, and nested-property wrappers", () => {
     const source = `type Generic = Container<{
   x: number // keep

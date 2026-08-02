@@ -65,11 +65,33 @@ export function createServeClient(address: ServeAddress, apiKey: string): ServeC
     } catch (error) {
       throw new ServeRequestError(`could not reach ${url} (${message(error)})`);
     }
+
+    let json: unknown;
+    let parsed = true;
     try {
-      return await response.json();
+      json = await response.json();
     } catch {
+      parsed = false;
+    }
+
+    // A non-2xx is a failure even with a valid JSON body — surface it as a
+    // ServeRequestError (with the server's message when it gave one) rather than
+    // letting a 404/500 body flow on as a bogus value or manifest.
+    if (!response.ok) {
+      const envelopeError =
+        parsed && json !== null && typeof json === "object"
+          ? (json as { error?: unknown }).error
+          : undefined;
+      throw new ServeRequestError(
+        typeof envelopeError === "string"
+          ? envelopeError
+          : `statelog request failed (HTTP ${response.status})`,
+      );
+    }
+    if (!parsed) {
       throw new ServeRequestError(`statelog returned a non-JSON response (HTTP ${response.status})`);
     }
+    return json;
   }
 
   // node/function/resume speak the { success, value } envelope; /list does not.

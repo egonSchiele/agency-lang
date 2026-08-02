@@ -9,9 +9,8 @@ const AUTH = `-H "Authorization: Bearer $KEY"`;
 const JSON_HEADER = `-H "Content-Type: application/json"`;
 
 /**
- * One curl per endpoint: the manifest (GET), each node (POST with a body
- * templated from its parameters), and each function (POST). Functions get an
- * empty `{}` body because the manifest does not yet expose their parameters.
+ * One curl per endpoint: the manifest (GET), each node (POST), and each function
+ * (POST) — every call body templated from that endpoint's parameters.
  */
 export function curlExamples(serveBase: string, manifest: ServeManifest): CurlExample[] {
   const manifestExample: CurlExample = {
@@ -26,7 +25,7 @@ export function curlExamples(serveBase: string, manifest: ServeManifest): CurlEx
 
   const functionExamples = manifest.functions.map((fn) => ({
     label: `function ${fn.name}`,
-    command: post(`${serveBase}/function/${fn.name}`, "{}"),
+    command: post(`${serveBase}/function/${fn.name}`, bodyTemplate(fn.parameters)),
   }));
 
   return [manifestExample, ...nodeExamples, ...functionExamples];

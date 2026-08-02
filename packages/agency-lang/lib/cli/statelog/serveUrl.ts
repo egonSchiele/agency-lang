@@ -65,9 +65,18 @@ export function parseServeBaseUrl(rawUrl: string): ServeAddress | null {
   const segments = parsed.pathname.split("/").filter((segment) => segment.length > 0);
   if (segments.length !== 4 || segments[0] !== "serve") return null;
 
-  const userId = decodeURIComponent(segments[1]);
-  const projectId = decodeURIComponent(segments[2]);
-  const filename = decodeURIComponent(segments[3]);
+  // decodeURIComponent throws on malformed escapes (e.g. `%E0%A4%A`); the
+  // contract is to reject such input with null, not crash the caller.
+  let userId: string;
+  let projectId: string;
+  let filename: string;
+  try {
+    userId = decodeURIComponent(segments[1]);
+    projectId = decodeURIComponent(segments[2]);
+    filename = decodeURIComponent(segments[3]);
+  } catch {
+    return null;
+  }
   const serveUrl = `${parsed.origin}/serve/${encodeURIComponent(userId)}/${encodeURIComponent(
     projectId,
   )}/${encodeURIComponent(filename)}`;

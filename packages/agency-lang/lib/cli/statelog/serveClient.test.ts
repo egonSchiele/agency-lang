@@ -56,6 +56,15 @@ describe("createServeClient", () => {
     await expect(client().invokeNode("main", {})).rejects.toThrow(/Tool execution failed/);
   });
 
+  it("throws ServeRequestError on a non-2xx response with a valid JSON body", async () => {
+    // A 404 whose body carries an error message — surfaced, not accepted.
+    mockFetch(() => ({ status: 404, json: { error: "no such node" } }));
+    await expect(client().invokeNode("main", {})).rejects.toThrow(/no such node/);
+    // A 500 whose body happens to be manifest-shaped must not be returned.
+    mockFetch(() => ({ status: 500, json: { nodes: [], functions: [] } }));
+    await expect(client().fetchManifest()).rejects.toBeInstanceOf(ServeRequestError);
+  });
+
   it("throws ServeRequestError on an HTTP/JSON failure", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((async () => ({
       ok: false,

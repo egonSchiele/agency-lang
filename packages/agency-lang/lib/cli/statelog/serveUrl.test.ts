@@ -68,6 +68,10 @@ describe("parseServeBaseUrl", () => {
     expect(parseServeBaseUrl(`${HOST}/serve/u/p`)).toBeNull();
   });
 
+  it("returns null on a malformed percent-encoded identifier (does not throw)", () => {
+    expect(parseServeBaseUrl(`${HOST}/serve/u/p/%E0%A4%A`)).toBeNull();
+  });
+
   it("rejects query, hash, credentials, and unsupported protocols", () => {
     expect(parseServeBaseUrl(`${HOST}/serve/u/p/a?x=1`)).toBeNull();
     expect(parseServeBaseUrl(`${HOST}/serve/u/p/a#frag`)).toBeNull();

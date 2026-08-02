@@ -69,10 +69,11 @@ import {
   AGENCY_TEMPLATE_OFFSET,
   setTemplateOffset,
   registerProgramParserForLiterals,
+  completeConstructEntry,
 } from "./parsers/parsers.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
 
-const nodeParser = or(
+const nodeParserInner = or(
   keywordParser,
   importNodeStatmentParser,
   importStatmentParser,
@@ -115,16 +116,10 @@ const nodeParser = or(
   newLineParser,
 );
 
+const nodeParser = completeConstructEntry(nodeParserInner);
+
 export const agencyNode: Parser<AgencyNode[]> = (input: string) => {
-  const parser = many(
-    trace(
-      "agencyParser",
-      map(
-        seqC(capture(nodeParser, "node"), optionalSpacesOrNewline),
-        (result) => result.node,
-      ),
-    ),
-  );
+  const parser = many(trace("agencyParser", nodeParser));
 
   return parser(input);
 };

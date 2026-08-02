@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatSource } from "./formatter.js";
+import { parseAgency } from "./parser.js";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -356,4 +357,74 @@ describe("syntax variations are a fixed point after one format", () => {
       expect(formatSource(once as string)).toBe(once);
     });
   }
+});
+
+function expectTrailingCommentFixedPoint(source: string, expected: string): void {
+  const once = formatSource(source);
+  expect(once).not.toBeNull();
+  expect(once).toBe(expected);
+  expect(formatSource(once as string)).toBe(once);
+  expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+}
+
+describe("complete-construct trailing comments", () => {
+  it("preserves top-level and body comments", () => {
+    expectTrailingCommentFixedPoint(
+      `type UserId=string // id\nnode main(){\nconst x=5 // x\n}\n`,
+      `type UserId = string // id\n\nnode main() {\n  const x = 5 // x\n}\n`,
+    );
+  });
+
+  it("keeps comments with imports while sorting", () => {
+    const formatted = formatSource(
+      `import { z } from "./z" // z comment\nimport { a } from "./a" // a comment\n`,
+    );
+    expect(formatted).toContain(
+      `import { a } from "./a" // a comment\nimport { z } from "./z" // z comment`,
+    );
+  });
+
+  it("keeps a comment after a multiline call closing delimiter", () => {
+    const source = `node main() {\n  save(\n    "a very long argument that keeps this call multiline",\n    "another very long argument that keeps this call multiline"\n  ) // whole call\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain(`\n  ) // whole call\n`);
+    expect(formatSource(once as string)).toBe(once);
+  });
+});
+
+describe("trailing comments in every body owner", () => {
+  it.each([
+    ["node", `node main() {\n  print(1) // c\n}\n`],
+    ["function", `def f() {\n  print(1) // c\n}\n`],
+    ["if", `node main() {\n  if (true) {\n    print(1) // c\n  }\n}\n`],
+    ["else", `node main() {\n  if (true) {\n    print(2)\n  } else {\n    print(1) // c\n  }\n}\n`],
+    ["while", `node main() {\n  while (true) {\n    print(1) // c\n  }\n}\n`],
+    ["for", `node main() {\n  for (x in xs) {\n    print(1) // c\n  }\n}\n`],
+    ["thread", `node main() {\n  thread {\n    print(1) // c\n  }\n}\n`],
+    ["subthread", `node main() {\n  subthread {\n    print(1) // c\n  }\n}\n`],
+    ["guard", `node main() {\n  guard() {\n    print(1) // c\n  }\n}\n`],
+    ["handle", `node main() {\n  handle {\n    print(1) // c\n  } with approve\n}\n`],
+    ["inline handler", `node main() {\n  handle {\n    print(2)\n  } with (answer) {\n    print(1) // c\n  }\n}\n`],
+    ["finalize", `node main() {\n  finalize {\n    print(1) // c\n  }\n}\n`],
+    ["parallel", `node main() {\n  parallel {\n    print(1) // c\n  }\n}\n`],
+    ["seq", `node main() {\n  seq {\n    print(1) // c\n  }\n}\n`],
+    ["destructive", `node main() {\n  destructive {\n    print(1) // c\n  }\n}\n`],
+    ["block match arm", `node main() {\n  match (x) {\n    1 => {\n      print(1) // c\n    }\n  }\n}\n`],
+    ["block argument", `node main() {\n  each(xs) as item {\n    print(1) // c\n  }\n}\n`],
+    ["statement code literal", `def f(): Code {\n  return [| node main(): number {\n    print(1) // c\n    return 1\n  } |]\n}\n`],
+  ])("preserves a trailing comment in a %s body", (_name, source) => {
+    const once = formatSource(source);
+    expect(once).toContain("print(1) // c");
+    expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+    expect(formatSource(once as string)).toBe(once);
+  });
+
+  it("preserves a trailing comment on an inline match arm", () => {
+    const source = `node main() {\n  match (x) {\n    1 => "one" // first\n    2 => "two" // second\n  }\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain(`1 => "one" // first`);
+    expect(once).toContain(`2 => "two" // second`);
+    expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+    expect(formatSource(once as string)).toBe(once);
+  });
 });

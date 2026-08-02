@@ -215,6 +215,40 @@ The filler must be a plain string that is a legal identifier. Anything else is r
 
 A declaration hole is a bare `#name` at the top level of a file. They accept more than a statement — you can give whole declarations like functions, nodes, types, and imports.
 
+## What names a template can use
+
+A template can use the prelude and the built-in functions, plus whatever it declares or imports itself. It cannot use a name from the file around it, and it cannot use a name that arrives through a hole. A hole is opaque while the template is checked, so the compiler has no way to know what will fill it, and the file the template turns into does not contain the surrounding program at all.
+
+So this is rejected, because `helper` lives in the host file and will not exist in the generated program:
+
+```ts
+def helper(): string {
+  return "hi"
+}
+
+static const template = [|
+  node main(): string {
+    return helper()   // AG8015: `helper` is not defined in this template
+  }
+|]
+```
+
+Move the definition into the template, and it works:
+
+```ts
+static const template = [|
+  def helper(): string {
+    return "hi"
+  }
+
+  node main(): string {
+    return helper()
+  }
+|]
+```
+
+The same rule applies when you compose. A fragment that fills a hole cannot supply a function that another fragment calls: keep the definition and its callers together in one fragment, and use holes for the parts that vary.
+
 ## Composing templates
 
 Here's a template for a main node where the body is empty:

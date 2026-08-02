@@ -1,5 +1,8 @@
 #helpers
 
-export node main(): string {
-  return guarded()
+// This wrapper declares something of its own so `#helpers` sits at a
+// declaration position. It cannot call what fills the hole: a template may
+// only use names it declares or imports itself.
+def wrapperTag(): string {
+  return "wrapper"
 }

@@ -1407,12 +1407,6 @@ export class AgencyGenerator {
     return rendered;
   }
 
-  /** The one way a parenthesized `( ... )` list is printed. Without trivia
-   *  it keeps `wrapList`'s compact/wrapping behavior exactly; with trivia it
-   *  goes multiline so every comment gets a line to sit at the end of.
-   *  `rendered` must already be in canonical print order — for a call that
-   *  means `renderArgs` has appended any inline block last, matching how
-   *  `extractInlineBlock` remapped the anchors. */
   /** A list of already-rendered items laid out across lines with its
    *  comments, or `undefined` when there are none. Callers keep their own
    *  inline or wrapping behavior for the no-comment case, so trivia-free
@@ -1437,6 +1431,11 @@ export class AgencyGenerator {
     });
   }
 
+  /** The one way a parenthesized `( ... )` list is printed. Without trivia
+   *  it keeps `wrapList`'s compact/wrapping behavior exactly; with trivia it
+   *  goes multiline. `rendered` must already be in canonical print order —
+   *  for a call that means `renderArgs` has appended any inline block last,
+   *  matching how `extractInlineBlock` remapped the anchors. */
   protected renderParenList(
     rendered: string[],
     trivia: ListTrivia[] | undefined,

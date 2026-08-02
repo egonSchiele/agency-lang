@@ -1,7 +1,7 @@
 // Ready-to-run curl commands for a deployed agent. Pure: manifest in, command
 // strings out. Uses a `$KEY` placeholder — never the real API key.
 
-import type { Manifest } from "../statelog/uploadClient.js";
+import type { ServeManifest } from "../statelog/serveClient.js";
 
 export type CurlExample = { label: string; command: string };
 
@@ -13,7 +13,7 @@ const JSON_HEADER = `-H "Content-Type: application/json"`;
  * templated from its parameters), and each function (POST). Functions get an
  * empty `{}` body because the manifest does not yet expose their parameters.
  */
-export function curlExamples(serveBase: string, manifest: Manifest): CurlExample[] {
+export function curlExamples(serveBase: string, manifest: ServeManifest): CurlExample[] {
   const manifestExample: CurlExample = {
     label: "manifest",
     command: `curl -s ${AUTH} "${serveBase}/list"`,

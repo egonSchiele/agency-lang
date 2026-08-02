@@ -15,7 +15,10 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("uploadBundle", () => {
   it("returns absolute endpoint URLs and the fetched manifest", async () => {
-    const manifest = { nodes: [{ name: "main", parameters: ["message"] }], functions: [{ name: "add" }] };
+    const manifest = {
+      nodes: [{ name: "main", parameters: ["message"], interruptEffects: [] }],
+      functions: [{ name: "add", parameters: ["a", "b"], interruptEffects: [] }],
+    };
     mockFetch((url) => {
       if (url.endsWith("/upload")) {
         return { success: true, value: { endpointUrls: ["/serve/u/proj/greeter/list", "/serve/u/proj/greeter/node/main"] } };

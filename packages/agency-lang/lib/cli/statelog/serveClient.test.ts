@@ -1,0 +1,117 @@
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { createServeClient, ServeRequestError } from "./serveClient.js";
+import { parseServeBaseUrl } from "./serveUrl.js";
+import { interrupt } from "@/runtime/interrupts.js";
+
+const address = parseServeBaseUrl("https://statelog.example/serve/u/p/agent.agency")!;
+
+// Stub fetch: `handler(url)` returns { status?, json } or throws for a network
+// error. Records every requested URL.
+function mockFetch(handler: (url: string) => { status?: number; json: unknown }): {
+  urls: string[];
+} {
+  const urls: string[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation((async (url: unknown) => {
+    urls.push(String(url));
+    const { status = 200, json } = handler(String(url));
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => json,
+    } as unknown as globalThis.Response;
+  }) as unknown as typeof fetch);
+  return { urls };
+}
+
+function client() {
+  return createServeClient(address, "key");
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe("createServeClient", () => {
+  it("invokeNode returns a final value as { data: value }", async () => {
+    mockFetch(() => ({ json: { success: true, value: { answer: 42 } } }));
+    expect(await client().invokeNode("main", {})).toEqual({ data: { answer: 42 } });
+  });
+
+  it("invokeNode returns a pause (state string + real interrupts) as { data: interrupts }", async () => {
+    const paused = [interrupt({ effect: "app::confirm", message: "ok?", data: null, origin: "o", runId: "r", interruptId: "i1" })];
+    mockFetch(() => ({ json: { success: true, value: { interrupts: paused, state: "serialized" } } }));
+    expect(await client().invokeNode("main", {})).toEqual({ data: paused });
+  });
+
+  it("treats an object without a string state (or without real interrupts) as final", async () => {
+    mockFetch(() => ({ json: { success: true, value: { interrupts: [], completed: 12 } } }));
+    expect(await client().invokeNode("main", {})).toEqual({ data: { interrupts: [], completed: 12 } });
+
+    mockFetch(() => ({ json: { success: true, value: { interrupts: ["not-an-interrupt"], state: "s" } } }));
+    expect(await client().invokeNode("main", {})).toEqual({
+      data: { interrupts: ["not-an-interrupt"], state: "s" },
+    });
+  });
+
+  it("throws ServeRequestError on a success:false envelope", async () => {
+    mockFetch(() => ({ json: { success: false, error: "Tool execution failed" } }));
+    await expect(client().invokeNode("main", {})).rejects.toThrow(/Tool execution failed/);
+  });
+
+  it("throws ServeRequestError on an HTTP/JSON failure", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((async () => ({
+      ok: false,
+      status: 500,
+      json: async () => {
+        throw new Error("not json");
+      },
+    })) as unknown as typeof fetch);
+    await expect(client().invokeNode("main", {})).rejects.toBeInstanceOf(ServeRequestError);
+  });
+
+  it("encodes a node name needing escaping exactly once", async () => {
+    const { urls } = mockFetch(() => ({ json: { success: true, value: null } }));
+    await client().invokeNode("a b", {});
+    expect(urls[0]).toBe("https://statelog.example/serve/u/p/agent.agency/node/a%20b");
+  });
+
+  it("invokeFunction returns the raw value", async () => {
+    mockFetch(() => ({ json: { success: true, value: 5 } }));
+    expect(await client().invokeFunction("add", { a: 2, b: 3 })).toBe(5);
+  });
+
+  it("resume returns an InterruptResult and can fail on a later leg", async () => {
+    mockFetch(() => ({ json: { success: true, value: "resumed" } }));
+    expect(await client().resume([], [])).toEqual({ data: "resumed" });
+
+    mockFetch(() => ({ json: { success: false, error: "resume boom" } }));
+    await expect(client().resume([], [])).rejects.toThrow(/resume boom/);
+  });
+
+  it("fetchManifest validates and returns a typed manifest", async () => {
+    mockFetch(() => ({
+      json: {
+        nodes: [{ name: "main", parameters: ["message"], interruptEffects: ["app::confirm"] }],
+        functions: [
+          { name: "add", parameters: ["a", "b"], interruptEffects: [], description: "adds", destructive: false },
+        ],
+      },
+    }));
+    const manifest = await client().fetchManifest();
+    expect(manifest.nodes[0]).toEqual({
+      name: "main",
+      parameters: ["message"],
+      interruptEffects: ["app::confirm"],
+    });
+    expect(manifest.functions[0].description).toBe("adds");
+    expect(manifest.functions[0].destructive).toBe(false);
+  });
+
+  it("fetchManifest throws on a malformed manifest item rather than reaching render code", async () => {
+    mockFetch(() => ({
+      json: { nodes: [{ name: "main", parameters: [42], interruptEffects: [] }], functions: [] },
+    }));
+    await expect(client().fetchManifest()).rejects.toBeInstanceOf(ServeRequestError);
+
+    mockFetch(() => ({ json: { nodes: "nope", functions: [] } }));
+    await expect(client().fetchManifest()).rejects.toBeInstanceOf(ServeRequestError);
+  });
+});

@@ -6,17 +6,12 @@
 
 import type { DeployTarget } from "../deploy/target.js";
 import type { AgencyBundle } from "../deploy/bundle.js";
-import { resolveTrustedEndpointUrl } from "./serveUrl.js";
-
-/** The `/list` manifest, narrowed to what the curl examples need. Functions
- *  currently carry no `parameters` — a known serve-side gap. */
-export type Manifest = {
-  nodes: { name: string; parameters: string[] }[];
-  functions: { name: string }[];
-};
+import { resolveTrustedEndpointUrl, parseServeBaseUrl } from "./serveUrl.js";
+import { createServeClient, ServeRequestError } from "./serveClient.js";
+import type { ServeManifest } from "./serveClient.js";
 
 export type UploadResult =
-  | { ok: true; endpointUrls: string[]; manifest?: Manifest }
+  | { ok: true; endpointUrls: string[]; manifest?: ServeManifest }
   | { ok: false; error: string };
 
 /**
@@ -76,7 +71,7 @@ export async function uploadBundle(
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
-  const manifest = await fetchManifest(absoluteUrls, target.apiKey);
+  const manifest = await enrichManifest(absoluteUrls, target.apiKey);
   return { ok: true, endpointUrls: absoluteUrls, manifest };
 }
 
@@ -102,34 +97,26 @@ function rejectionMessage(envelope: unknown, status: number): string {
   return typeof error === "string" ? error : `Upload rejected (HTTP ${status}).`;
 }
 
-/** Fetch the agent's `/list` manifest. Best-effort — returns undefined on any
- *  failure or unexpected shape, since the deploy already succeeded and this only
- *  enriches the output. */
-async function fetchManifest(
+/** Best-effort `/list` fetch to enrich the deploy output with curl examples.
+ *  The manifest model and reader now live in serveClient; a fetch failure just
+ *  omits the manifest, since the deploy already succeeded. */
+async function enrichManifest(
   endpointUrls: string[],
   apiKey: string,
-): Promise<Manifest | undefined> {
-  const listUrl = manifestUrl(endpointUrls);
-  if (!listUrl) {
+): Promise<ServeManifest | undefined> {
+  const base = serveBaseUrl(endpointUrls);
+  const address = base ? parseServeBaseUrl(base) : null;
+  if (!address) {
     return undefined;
   }
   try {
-    const response = await fetch(listUrl, { headers: { Authorization: `Bearer ${apiKey}` } });
-    if (!response.ok) {
-      return undefined;
-    }
-    const body = (await response.json()) as { nodes?: unknown; functions?: unknown };
-    if (!Array.isArray(body.nodes) || !Array.isArray(body.functions)) {
-      return undefined;
-    }
-    return body as Manifest;
+    return await createServeClient(address, apiKey).fetchManifest();
   } catch (error) {
-    console.error(
-      `deploy: could not fetch manifest for curl examples: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-    return undefined;
+    if (error instanceof ServeRequestError) {
+      console.error(`deploy: could not fetch manifest for curl examples: ${error.message}`);
+      return undefined;
+    }
+    throw error;
   }
 }
 

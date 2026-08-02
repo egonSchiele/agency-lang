@@ -92,7 +92,7 @@ export {
 
 export { checkPolicy, checkPolicyExplicit, validatePolicy } from "./policy.js";
 
-export { resolveCliInterrupts } from "./runPolicyHandler.js";
+export { resolveCliInterrupts } from "./cliInterruptResolution.js";
 
 export { isGenerator, handleStreamingResponse } from "./streaming.js";
 

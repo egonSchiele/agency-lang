@@ -7,6 +7,8 @@ import {
   interruptWithHandlers,
   gatherChainOutcome,
   pass,
+  approve,
+  reject,
   validateResumeBatch,
   respondToInterrupts,
 } from "./interrupts.js";
@@ -461,5 +463,37 @@ describe("respondToInterrupts input validation (defense in depth)", () => {
     await expect(
       respondToInterrupts({ ctx: stubCtx, interrupts: [validInterrupt], responses: badResponses }),
     ).rejects.toThrow(/^respondToInterrupts:/);
+  });
+});
+
+describe("interrupt response API (moved to interruptResponse leaf, re-exported)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("approve/reject preserve an optional value", () => {
+    // Re-exported from ./interrupts.js — importing them here proves that.
+    expect(approve("filename.txt")).toEqual({ type: "approve", value: "filename.txt" });
+    expect(reject("no")).toEqual({ type: "reject", value: "no" });
+    expect(approve()).toEqual({ type: "approve", value: undefined });
+  });
+
+  it("reportUnhandledInterrupts accepts a minimal { data } InterruptResult", () => {
+    const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // No RunNodeResult fields — just { data }, proving the generalized param.
+    reportUnhandledInterrupts({
+      data: [
+        interrupt({
+          effect: "std::edit",
+          message: "edit?",
+          data: null,
+          origin: "o",
+          runId: "run-1",
+          interruptId: "id-1",
+        }),
+      ],
+    });
+    expect(exit).toHaveBeenCalledWith(1);
   });
 });

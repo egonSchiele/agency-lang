@@ -2,6 +2,12 @@ import * as smoltalk from "smoltalk";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
 import { z } from "zod";
+import { approve, reject } from "./interruptResponse.js";
+import type {
+  InterruptApprove,
+  InterruptReject,
+  InterruptResponse,
+} from "./interruptResponse.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import {
@@ -18,7 +24,7 @@ import { loadProviderModules } from "./providerModules.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
-import { Approved, GraphState, Rejected, RunNodeResult } from "./types.js";
+import { Approved, GraphState, Rejected } from "./types.js";
 import type { HandlerEntry } from "./types.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
@@ -28,25 +34,15 @@ import {
   insideHandlerFunction,
 } from "./executingHandlers.js";
 
-export type InterruptApprove = {
-  type: "approve";
-};
+// The response API lives in the cycle-free `interruptResponse.ts` leaf (imported
+// at the top of this file). Re-export so `import { approve, reject,
+// InterruptResponse } from "./interrupts.js"` keeps resolving everywhere.
+export { approve, reject };
+export type { InterruptApprove, InterruptReject, InterruptResponse };
 
-export type InterruptReject = {
-  type: "reject";
-};
-
-export type InterruptResponse =
-  | InterruptApprove
-  | InterruptReject;
-
-export function approve(value?: any): InterruptResponse {
-  return { type: "approve", value } as any;
-}
-
-export function reject(value?: any): InterruptResponse {
-  return { type: "reject", value } as any;
-}
+/** The minimal result shape the interrupt loop and its reporter operate over:
+ *  a local `RunNodeResult` and the remote client's result both satisfy it. */
+export type InterruptResult = { data: unknown };
 
 /** Explicit "not my interrupt — ask the next handler." Identical in effect
  *  to a handler returning nothing, but usable in value position (a match
@@ -153,7 +149,7 @@ export function hasInterrupts(data: any): data is Interrupt[] {
  * and this is never reached — there, the caller is expected to inspect
  * `result.data` / `respondToInterrupts` itself, so a returned interrupt is fine.
  */
-export function reportUnhandledInterrupts(result: RunNodeResult<any>): void {
+export function reportUnhandledInterrupts(result: InterruptResult): void {
   if (!hasInterrupts(result.data)) return;
   for (const it of result.data) {
     console.error(

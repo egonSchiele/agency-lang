@@ -105,4 +105,12 @@ describe("resolveRunPolicy", () => {
     expect(p["std::read"]).toEqual([{ action: "approve" }]);
     expect(p["std::write"]).toEqual([{ action: "reject" }]);
   });
+
+  it("exposes the parsed policy, matching its JSON, for in-process callers", () => {
+    const result = resolveRunPolicy({ approve: "std::read", cwd: process.cwd() });
+    expect(result).not.toBeNull();
+    // Same object the JSON was serialized from — built once, not re-parsed.
+    expect(result!.policy).toEqual(JSON.parse(result!.policyJson));
+    expect(result!.policy["std::read"]).toEqual([{ action: "approve" }]);
+  });
 });

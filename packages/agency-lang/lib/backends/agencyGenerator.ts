@@ -1776,7 +1776,9 @@ export class AgencyGenerator {
       // attached comment has to be placed here too.
       const rendered = this.appendTrailingComment(body, node.trailingComment);
       const attached = this.importAttachedComments.get(node) ?? [];
-      if (attached.length === 0) return rendered;
+      if (attached.length === 0) {
+        return rendered;
+      }
       const commentLines = attached.map((c) => this.processNode(c));
       return [...commentLines, rendered].join("\n");
     };

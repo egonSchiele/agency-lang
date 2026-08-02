@@ -6,7 +6,12 @@
 
 import { hasInterrupts } from "./interrupts.js";
 import type { Interrupt, InterruptResult } from "./interrupts.js";
+import { approve, reject } from "./interruptResponse.js";
 import type { InterruptResponse } from "./interruptResponse.js";
+import { checkPolicyExplicit } from "./policy.js";
+import type { Policy } from "./policy.js";
+import { terminalPrompt, terminalValuePrompt } from "./interruptPrompts.js";
+import type { PromptFn, ValuePromptFn } from "./interruptPrompts.js";
 
 export type { InterruptResult } from "./interrupts.js";
 
@@ -40,4 +45,57 @@ export async function resolveInterrupts<R extends InterruptResult>(
     result = await respond(interrupts, responses);
   }
   return result;
+}
+
+export type BuildDeciderOptions = {
+  /** Client-endpoint policy. Omitted for local `run` (its policy acts in-chain,
+   *  and re-applying it here would auto-approve interrupts a handler propagated
+   *  — finding 1). Passed for `remote call`, which has no in-chain handler. */
+  policy?: Policy;
+  interactive: boolean;
+  prompt?: PromptFn;
+  valuePrompt?: ValuePromptFn;
+};
+
+/**
+ * Build the per-interrupt decision function. Policy runs first: an explicit
+ * approve/reject settles immediately; `propagate` and no-match are both
+ * "unsettled" and fall through to the interactive prompt (or a fail-closed
+ * reject when non-interactive). Value-expecting interrupts use the value
+ * prompt. "Always" answers are remembered per effect for the run. The result
+ * is always an approve/reject response — never `propagate`, so it can never be
+ * sent over a resume boundary.
+ */
+export function buildDecider(options: BuildDeciderOptions): DecideFn {
+  const prompt = options.prompt ?? terminalPrompt;
+  const valuePrompt = options.valuePrompt ?? terminalValuePrompt;
+  const remembered: Record<string, "approve" | "reject"> = Object.create(null);
+
+  return async (interrupt) => {
+    const decision = options.policy ? checkPolicyExplicit(options.policy, interrupt) : null;
+    if (decision?.type === "approve") {
+      return approve();
+    }
+    if (decision?.type === "reject") {
+      return reject();
+    }
+    if (interrupt.expectsValue) {
+      if (options.interactive) {
+        return valuePrompt(interrupt);
+      }
+      return reject();
+    }
+
+    let action = remembered[interrupt.effect];
+    if (!action && options.interactive) {
+      const answer = await prompt(interrupt);
+      const approves = answer === "approve" || answer === "approve-always";
+      action = approves ? "approve" : "reject";
+      const remember = answer === "approve-always" || answer === "reject-always";
+      if (remember) {
+        remembered[interrupt.effect] = action;
+      }
+    }
+    return action === "approve" ? approve() : reject();
+  };
 }

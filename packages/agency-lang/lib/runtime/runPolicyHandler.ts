@@ -1,11 +1,7 @@
 import type { Policy } from "./policy.js";
 import { checkPolicyExplicit, validatePolicy } from "./policy.js";
-import {
-  approve,
-  reject,
-  hasInterrupts,
-  reportUnhandledInterrupts,
-} from "./interrupts.js";
+import { approve, reject } from "./interruptResponse.js";
+import { hasInterrupts, reportUnhandledInterrupts } from "./interrupts.js";
 import type { Interrupt, InterruptResponse } from "./interrupts.js";
 import type { HandlerFn, RunNodeResult } from "./types.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
@@ -14,28 +10,23 @@ import {
   AGENCY_RUN_POLICY_INTERACTIVE,
   AGENCY_RUN_POLICY_INTERACTIVE_ON,
 } from "@/constants.js";
-import readline from "readline";
-import { color } from "@/utils/termcolors.js";
+import {
+  terminalPrompt,
+  terminalValuePrompt,
+} from "./interruptPrompts.js";
+import type { Intr, PromptDecision, PromptFn, ValuePromptFn } from "./interruptPrompts.js";
 
-type Intr = {
-  effect: string;
-  message: string;
-  data: any;
-  origin: string;
-  expectsValue?: boolean;
-};
-
-export type PromptDecision =
-  | "approve"
-  | "reject"
-  | "approve-always"
-  | "reject-always";
-
-export type PromptFn = (intr: Intr) => Promise<PromptDecision>;
-
-// Prompt for a value-expecting interrupt (`const x = raise …`): returns the
-// full response (approve carries the typed answer) rather than a decision.
-export type ValuePromptFn = (intr: Intr) => Promise<InterruptResponse>;
+// The terminal prompt mechanics now live in the cycle-free interruptPrompts
+// leaf. Re-export them so existing `… from "./runPolicyHandler.js"` imports and
+// tests keep resolving.
+export {
+  parsePromptAnswer,
+  parseValueAnswer,
+  formatInterruptPrompt,
+  terminalPrompt,
+  terminalValuePrompt,
+} from "./interruptPrompts.js";
+export type { PromptDecision, PromptFn, ValuePromptFn } from "./interruptPrompts.js";
 
 // How each prompt decision resolves: the immediate action, and whether to
 // remember it for the rest of the run.
@@ -66,122 +57,6 @@ export function makeRunPolicyHandler(policy: Policy): HandlerFn {
   };
 }
 
-// Map a raw terminal answer to a decision. Accepts the short forms shown in the
-// prompt (a / r / aa / rr) and the spelled-out words; anything unrecognized is a
-// safe reject (fail-closed). Pure and exported so the four cases are unit-tested
-// without readline plumbing.
-export function parsePromptAnswer(raw: string): PromptDecision {
-  const choice = raw.trim().toLowerCase();
-  if (choice === "aa" || choice === "approve-always") return "approve-always";
-  if (choice === "rr" || choice === "reject-always") return "reject-always";
-  if (choice === "a" || choice === "approve") return "approve";
-  return "reject";
-}
-
-// Terminal prompts share ONE physical stdin, so concurrent interrupts (fork /
-// race raising several at once) must be surfaced one at a time — two readline
-// interfaces reading the same stdin would interleave and clobber each other.
-// This process-global chain queues prompts so the user answers them in
-// sequence. Process-global is correct here: it guards the terminal itself, not
-// per-run state.
-let promptQueue: Promise<unknown> = Promise.resolve();
-
-// Serialize a prompt through the terminal queue (see promptQueue above).
-function queuePrompt<T>(fn: () => Promise<T>): Promise<T> {
-  const run = promptQueue.then(fn);
-  // Keep the chain alive whether or not this prompt resolves cleanly.
-  promptQueue = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
-}
-
-// Terminal approve/reject prompt used by resolveCliInterrupts. Falls back to
-// reject (fail-closed) when stdin is not a TTY rather than hanging. Exported
-// so the non-TTY fallback is unit-testable.
-export async function terminalPrompt(intr: Intr): Promise<PromptDecision> {
-  if (!process.stdin.isTTY) return "reject";
-  return queuePrompt(async () =>
-    parsePromptAnswer(
-      await askLine(
-        formatInterruptPrompt(intr) +
-          `(a)pprove / (r)eject / (aa) approve-always / (rr) reject-always: `,
-      ),
-    ),
-  );
-}
-
-// Terminal prompt for a value-expecting interrupt: the interrupt message IS
-// the question, and the typed line becomes the approval value. Same non-TTY
-// fail-closed contract as terminalPrompt.
-export async function terminalValuePrompt(intr: Intr): Promise<InterruptResponse> {
-  if (!process.stdin.isTTY) return reject();
-  return queuePrompt(async () =>
-    parseValueAnswer(
-      await askLine(formatInterruptPrompt(intr) + `answer (empty line rejects): `),
-    ),
-  );
-}
-
-// Map a typed line to a response for a value-expecting interrupt: the text is
-// the approval value verbatim; an empty/whitespace-only line (including stdin
-// EOF, which askLine surfaces as "") rejects. Pure and exported for tests.
-export function parseValueAnswer(raw: string): InterruptResponse {
-  return raw.trim() === "" ? reject() : approve(raw);
-}
-
-// Render the interrupt banner shown above the approve/reject question:
-// effect name over a horizontal rule (both cyan), then the message in bold,
-// then the interrupt's data pretty-printed — omitted entirely when there is
-// none (null/undefined or an empty object). Exported for unit tests.
-export function formatInterruptPrompt(intr: Intr): string {
-  const rule = "─".repeat(Math.max(intr.effect.length, 36));
-  const lines = [
-    "",
-    color.cyan(intr.effect),
-    color.cyan(rule),
-    "",
-    color.bold(intr.message),
-  ];
-  const hasData =
-    intr.data != null &&
-    !(typeof intr.data === "object" && Object.keys(intr.data).length === 0);
-  if (hasData) {
-    // Best-effort: interrupt data is program-controlled and may not be
-    // serializable (circular references, BigInt). The prompt must still
-    // render — a throw here would crash the run right as it asks for a
-    // decision.
-    try {
-      lines.push(JSON.stringify(intr.data, null, 2));
-    } catch {
-      lines.push(String(intr.data));
-    }
-  }
-  lines.push("");
-  return lines.join("\n");
-}
-
-// Ask one question on the terminal and return the typed line. Stdin EOF (^D,
-// or a closed pipe) while the question is pending would otherwise leave the
-// promise unsettled forever — the process would die with an "unsettled
-// top-level await" instead of a decision — so it resolves to "" (which every
-// caller parses to a safe reject).
-async function askLine(question: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  try {
-    return await new Promise((resolve) => {
-      rl.once("close", () => resolve(""));
-      rl.question(question, resolve);
-    });
-  } finally {
-    rl.close();
-  }
-}
-
 // Parse and validate the run policy from the environment. Returns null when
 // no policy was passed (the run was launched without any policy flag).
 function loadEnvPolicy(): Policy | null {
@@ -199,6 +74,14 @@ function loadEnvPolicy(): Policy | null {
     throw new Error(`${AGENCY_RUN_POLICY} is not a valid policy: ${valid.error}`);
   }
   return policy as Policy;
+}
+
+// Whether the run was launched with any interrupt-handling mechanism (a
+// --policy / --approve / --reject / --interactive flag all set AGENCY_RUN_POLICY).
+// The declarative environment boundary the CLI endpoint adapter checks before
+// falling back to reporting an unhandled interrupt.
+export function hasRunPolicyMechanism(): boolean {
+  return loadEnvPolicy() !== null;
 }
 
 // Install the root policy handler on `execCtx` when the run was launched

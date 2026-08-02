@@ -2,6 +2,10 @@
 
 Terminal-bench tasks re-expressed as Agency eval suites, so we can benchmark
 Agency agents with `agency eval run` instead of the Harbor/Docker harness.
+
+These tests are hard on purpose — they measure how good an agent is. When you
+need to know whether the harness itself is working, run `evals/smoke` instead:
+four small deterministic tests, each with a no-LLM reference solution.
 We port the useful parts, not the packaging: each task keeps its original
 instruction and verifier logic, adapted where the original assumed Python or
 absolute container paths (`/app/...` becomes the run's working directory).

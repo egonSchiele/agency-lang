@@ -1,0 +1,7 @@
+// Reference solution: no LLM. Writes the known answer rather than searching —
+// the seeding it would otherwise prove is already covered by csv-total, so this
+// one exists only to keep the grader honest.
+node main(task: string): string {
+  write("answer.txt", "archive/2025/q3-notes.md") with approve
+  return "wrote answer.txt"
+}

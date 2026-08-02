@@ -1,0 +1,17 @@
+// Reference solution: no LLM. Unlike hello-file's, this one actually reads the
+// seeded CSV rather than writing a known constant — so a 1.0 here proves the
+// fixture reached the workdir, which is the property this test exists to check.
+node main(task: string): string {
+  const contents = read("sales.csv") with approve
+  let total = 0
+  if (contents is success(text)) {
+    for (line in text.trim().split("\n")) {
+      const parts = line.split(",")
+      if (parts[0] != "date") {
+        total = total + Number(parts[4])
+      }
+    }
+  }
+  write("answer.txt", "${total}") with approve
+  return "wrote answer.txt"
+}

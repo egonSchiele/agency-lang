@@ -1,0 +1,6 @@
+{
+  "goal": "answer.txt contains the total of the amount column in sales.csv, as digits only.",
+  "task": "The file sales.csv in your current working directory holds one sales record per row. Add up every value in the `amount` column and write the total to a file named answer.txt.\n\nWrite the total as digits only — no currency symbol, no thousands separators, no explanatory text. For example, a total of one thousand two hundred would be written as 1200.",
+  "expected": "3388",
+  "timeoutSec": 180
+}

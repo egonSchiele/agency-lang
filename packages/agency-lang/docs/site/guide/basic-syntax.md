@@ -208,32 +208,12 @@ You can also write a module-level doc comment using the `@module` tag. This docu
 */
 ```
 
-A `//` comment can also sit at the end of a line, after a complete
-declaration, statement, or match arm. `agency fmt` keeps it on that line,
-beside the thing it describes:
+> Note: comments must be on their own line, they cannot be at the end of a line containing code.
+
+Not allowed:
 
 ```ts
-type UserId = string // stable identifier
-
-node main() {
-  const x = 5 // starting count
-
-  match (x) {
-    5 => "five" // the only case we expect
-    _ => "other"
-  }
-}
-```
-
-Two things are not end-of-line comments. A block comment (`/* ... */`) after
-code is not attached, and neither is a `//` comment between the items of a
-multiline list — `agency fmt` still moves that onto its own line:
-
-```ts
-const xs = [
-  1, // fmt moves this comment above the 2
-  2
-]
+const x = 5 // this is a comment
 ```
 
 ## Functions

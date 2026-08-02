@@ -668,10 +668,11 @@ function buildResponseMap(
   interrupts: Interrupt[],
   responses: InterruptResponse[],
 ): Record<string, { response: InterruptResponse }> {
-  if (responses.length !== interrupts.length) {
-    throw new Error(
-      `respondToInterrupts: expected ${interrupts.length} responses but got ${responses.length}`,
-    );
+  // Defense in depth: non-HTTP callers (MCP, direct embedders) reach here
+  // without the adapter's check, so the same validator gates this path too.
+  const validationError = validateResumeBatch(interrupts, responses);
+  if (validationError) {
+    throw new Error(`respondToInterrupts: ${validationError}`);
   }
   const responseMap: Record<string, { response: InterruptResponse }> = {};
   for (let i = 0; i < interrupts.length; i++) {

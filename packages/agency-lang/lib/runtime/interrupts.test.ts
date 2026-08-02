@@ -7,7 +7,10 @@ import {
   interruptWithHandlers,
   gatherChainOutcome,
   pass,
+  validateResumeBatch,
+  respondToInterrupts,
 } from "./interrupts.js";
+import type { InterruptResponse } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 
@@ -379,5 +382,71 @@ describe("pass()", () => {
     const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
     expect(Array.isArray(verdict)).toBe(true);
     expect((verdict as any)[0].effect).toBe("std::bash");
+  });
+});
+
+describe("validateResumeBatch", () => {
+  const validInterrupt = interrupt({
+    effect: "delete",
+    message: "?",
+    data: null,
+    origin: "o",
+    runId: "run-1",
+    interruptId: "id-1",
+  });
+  const approveResponse = { type: "approve" as const };
+
+  it("accepts a well-formed approve/reject batch", () => {
+    expect(validateResumeBatch([validInterrupt], [approveResponse])).toBeNull();
+  });
+
+  it("rejects non-arrays, empty, and length mismatch", () => {
+    expect(validateResumeBatch("x", [])).not.toBeNull();
+    expect(validateResumeBatch([], [])).not.toBeNull();
+    expect(validateResumeBatch([validInterrupt], [])).not.toBeNull();
+  });
+
+  it("rejects malformed interrupt items without throwing on null/primitives", () => {
+    expect(validateResumeBatch([null], [approveResponse])).not.toBeNull();
+    expect(validateResumeBatch([42], [approveResponse])).not.toBeNull();
+    expect(
+      validateResumeBatch([{ ...validInterrupt, type: "notInterrupt" }], [approveResponse]),
+    ).not.toBeNull();
+    expect(
+      validateResumeBatch([{ ...validInterrupt, interruptId: "" }], [approveResponse]),
+    ).not.toBeNull();
+  });
+
+  it("rejects duplicate interrupt IDs", () => {
+    const duplicate = { ...validInterrupt };
+    expect(
+      validateResumeBatch([validInterrupt, duplicate], [approveResponse, approveResponse]),
+    ).not.toBeNull();
+  });
+
+  it("rejects a non approve/reject response discriminant", () => {
+    // Deliberately invalid discriminant — the type is cast so the test can send it.
+    const badResponses = [{ type: "propagate" }] as unknown as InterruptResponse[];
+    expect(validateResumeBatch([validInterrupt], badResponses)).not.toBeNull();
+    expect(validateResumeBatch([validInterrupt], [null])).not.toBeNull();
+  });
+});
+
+describe("respondToInterrupts input validation (defense in depth)", () => {
+  it("rejects an invalid response before the runtime context is used", async () => {
+    const validInterrupt = interrupt({
+      effect: "delete",
+      message: "?",
+      data: null,
+      origin: "o",
+      runId: "run-1",
+      interruptId: "id-1",
+    });
+    // buildResponseMap runs before ctx is touched, so this stub is never read.
+    const stubCtx = {} as unknown as Parameters<typeof respondToInterrupts>[0]["ctx"];
+    const badResponses = [{ type: "propagate" }] as unknown as InterruptResponse[];
+    await expect(
+      respondToInterrupts({ ctx: stubCtx, interrupts: [validInterrupt], responses: badResponses }),
+    ).rejects.toThrow(/approve or reject/);
   });
 });

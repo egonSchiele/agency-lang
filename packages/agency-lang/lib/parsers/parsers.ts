@@ -4321,7 +4321,7 @@ const matchArmBlockParser: Parser<AgencyNode[]> = map(
   (result: { body: AgencyNode[] }) => result.body,
 );
 
-export const matchBlockParserCase: Parser<MatchBlockCase> = (
+const matchBlockParserCaseInner: Parser<MatchBlockCase> = (
   input: string,
 ): ParserResult<MatchBlockCase> => {
   const parser = seqC(
@@ -4371,7 +4371,6 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
       "bodyForm",
     ),
     optionalSemicolon,
-    optionalSpacesOrNewline,
   );
   const result = parser(input) as ParserResult<
     Omit<MatchBlockCase, "body"> & { bodyForm: { body: AgencyNode[]; block: boolean } }
@@ -4387,6 +4386,10 @@ export const matchBlockParserCase: Parser<MatchBlockCase> = (
     result.rest,
   );
 };
+
+export const matchBlockParserCase = completeConstructEntry(
+  matchBlockParserCaseInner,
+);
 
 const semicolon = seqC(optionalSpaces, char(";"), optionalSpaces);
 

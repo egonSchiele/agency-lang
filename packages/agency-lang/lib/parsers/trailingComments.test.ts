@@ -54,6 +54,25 @@ describe("complete-construct trailing comment attachment", () => {
     expect(body.some((node) => node.type === "comment")).toBe(true);
   });
 
+  it("does not extend the owner location through the comment", () => {
+    const source = `type UserId = string // identifier\n`;
+    const node = parseRaw(source).nodes[0];
+    expect(node.trailingComment?.content).toBe(" identifier");
+    expect(source.slice(node.loc!.start, node.loc!.end)).not.toContain("//");
+  });
+
+  it("attaches to a match arm without swallowing the next arm", () => {
+    const body = mainBody(
+      `node main() {\n  match (x) {\n    1 => "one" // first\n    2 => "two"\n  }\n}\n`,
+    );
+    const cases = body[0].cases.filter(
+      (entry: any) => entry.type === "matchBlockCase",
+    );
+    expect(cases).toHaveLength(2);
+    expect(cases[0].trailingComment?.content).toBe(" first");
+    expect(cases[1].trailingComment).toBeUndefined();
+  });
+
   it("does not attach a block comment", () => {
     const body = mainBody(
       `node main() {\n  const x = 5 /* why */\n  const y = 6\n}\n`,

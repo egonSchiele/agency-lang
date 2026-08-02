@@ -24,6 +24,7 @@ import {
   formatUnitLiteral,
   isExpressionNode,
 } from "../types.js";
+import { LineComment } from "../types/base.js";
 
 import { AccessChainElement, ValueAccess } from "../types/access.js";
 import { declaredName } from "../types/hole.js";
@@ -51,7 +52,7 @@ import {
 } from "../types/importStatement.js";
 import { ExportFromStatement } from "../types/exportFromStatement.js";
 import { EffectDeclaration } from "../types/effectDeclaration.js";
-import { MatchBlock } from "../types/matchBlock.js";
+import { MatchBlock, MatchBlockCase } from "../types/matchBlock.js";
 import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { ForLoop } from "../types/forLoop.js";
@@ -486,7 +487,8 @@ export class AgencyGenerator {
 
   public processNode(node: AgencyNode): string {
     const result = this.processNodeInner(node);
-    return this.trace(node.type, result);
+    const traced = this.trace(node.type, result);
+    return this.appendTrailingComment(traced, node.trailingComment);
   }
 
   private processNodeInner(node: AgencyNode): string {
@@ -1454,30 +1456,48 @@ export class AgencyGenerator {
         ? ` if (${this.processNode(caseNode.guard).trim()})`
         : "";
 
-      if (this.armPrintsInline(caseNode)) {
-        const stmt = caseNode.body[0];
-        let stmtCode = this.processNode(stmt).trim();
-        // `=> { ... }` is always parsed as a block, never an object literal
-        // (JS-arrow rule — see matchArmBlockParser). An inline arm whose
-        // sole statement is an object literal must therefore stay
-        // parenthesized so it round-trips as an expression, not a block.
-        if (stmt.type === "agencyObject") {
-          stmtCode = `(${stmtCode})`;
-        }
-        result += this.indentStr(`${pattern}${guardCode} => ${stmtCode}\n`);
-      } else {
-        result += this.indentStr(`${pattern}${guardCode} => {\n`);
-        this.increaseIndent();
-        result += this.renderBody(caseNode.body);
-        this.decreaseIndent();
-        result += this.indentStr("}\n");
-      }
+      const arm = this.armPrintsInline(caseNode)
+        ? this.renderInlineMatchArm(caseNode, pattern, guardCode)
+        : this.renderBlockMatchArm(caseNode, pattern, guardCode);
+      result += this.appendTrailingComment(arm, caseNode.trailingComment) + "\n";
     }
 
     this.decreaseIndent();
 
     result += this.indentStr(`}`);
 
+    return result;
+  }
+
+  /** One arm, without its final newline — a complete construct an
+   *  attached comment can follow. */
+  private renderInlineMatchArm(
+    caseNode: MatchBlockCase,
+    pattern: string,
+    guardCode: string,
+  ): string {
+    const stmt = caseNode.body[0];
+    let stmtCode = this.processNode(stmt).trim();
+    // `=> { ... }` is always parsed as a block, never an object literal
+    // (JS-arrow rule — see matchArmBlockParser). An inline arm whose
+    // sole statement is an object literal must therefore stay
+    // parenthesized so it round-trips as an expression, not a block.
+    if (stmt.type === "agencyObject") {
+      stmtCode = `(${stmtCode})`;
+    }
+    return this.indentStr(`${pattern}${guardCode} => ${stmtCode}`);
+  }
+
+  private renderBlockMatchArm(
+    caseNode: MatchBlockCase,
+    pattern: string,
+    guardCode: string,
+  ): string {
+    let result = this.indentStr(`${pattern}${guardCode} => {\n`);
+    this.increaseIndent();
+    result += this.renderBody(caseNode.body);
+    this.decreaseIndent();
+    result += this.indentStr("}");
     return result;
   }
 
@@ -1604,8 +1624,26 @@ export class AgencyGenerator {
 
   // Utility methods
 
+  /** The sole owner of line-comment source text. Do not rebuild
+   *  `//${content}` anywhere else. */
+  protected commentText(comment: LineComment): string {
+    return `//${comment.content}`;
+  }
+
   protected processComment(node: AgencyComment): string {
-    return this.indentStr(`//${node.content}`);
+    return this.indentStr(this.commentText(node));
+  }
+
+  /** Place an attached comment after already-rendered code. Empty code has
+   *  no construct to attach to, so the comment is left to its owner. */
+  protected appendTrailingComment(
+    code: string,
+    comment: LineComment | undefined,
+  ): string {
+    if (!comment || code === "") {
+      return code;
+    }
+    return `${code} ${this.commentText(comment)}`;
   }
 
   protected processMultiLineComment(node: AgencyMultiLineComment): string {
@@ -1734,10 +1772,13 @@ export class AgencyGenerator {
       node: ImportStatement | ImportNodeStatement,
       body: string,
     ): string => {
+      // Sorting renders imports directly, bypassing processNode, so the
+      // attached comment has to be placed here too.
+      const rendered = this.appendTrailingComment(body, node.trailingComment);
       const attached = this.importAttachedComments.get(node) ?? [];
-      if (attached.length === 0) return body;
+      if (attached.length === 0) return rendered;
       const commentLines = attached.map((c) => this.processNode(c));
-      return [...commentLines, body].join("\n");
+      return [...commentLines, rendered].join("\n");
     };
 
     const stdlib: ImportEntry[] = [];

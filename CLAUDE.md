@@ -137,6 +137,7 @@ Pipeline and architecture:
 - `docs/dev/splices.md` — Compile-time splices `$( ... )`: where expansion sits in the pipeline, the five paths that must run it, why the cache is mandatory, the import restriction that carries the safety argument, and the cycle guard
 - `docs/dev/effect-propagation.md` — How a function's interrupt effects are computed: the shared walk in lib/analysis/effects.ts, the fixpoint at the end of SymbolTable.build, following re-exports, the `.invoke()` shape, why `_guard` is seeded rather than walked, and the four things the walk cannot see
 - `docs/dev/template-agency.md` — Template Agency internals: the Hole node and per-position parsing, `Code` fragment kinds, the never-parse lifting rule and its two escaping conventions, scope-keyed hygiene with `__hyg` seeding, AG8001/AG8002 refusals, and the walker-completeness tripwire
+- `docs/dev/hosted-agent-execution.md` — Hosting agents on statelog (`agency deploy` + the `./serve` API): the serve wire contract and moduleId gotcha, per-agent observability via `withRuntimeConfigOverrides`, `compileSource(sourcePath)` for multi-file, the deploy CLI's module layout, the statelog host pieces, and the known limitations
 
 Other references:
 - `docs/misc/TESTING.md` — Full testing guide (unit tests, fixtures, execution tests, agency-js tests)

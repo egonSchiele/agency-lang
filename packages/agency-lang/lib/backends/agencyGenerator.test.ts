@@ -1008,7 +1008,7 @@ type Optional = {
     expectExactStableFormat(source, expected);
   });
 
-  it("preserves standalone comments and blank lines", () => {
+  it("canonicalizes ordinary blank lines while preserving standalone comments", () => {
     const source = `type Commented = Array<{
   // first
   x: number,
@@ -1022,6 +1022,37 @@ type Optional = {
   y: string
   // last
 }>`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("preserves tagged property descriptions in a commented wrapper object", () => {
+    const source = `type Wrapped = Container<{
+  // identity field
+  @validate(isPositive)
+  @jsonSchema({ description: "stable identifier" })
+  id: number,
+  label: string,
+  // end fields
+}>`;
+    const expected = `type Wrapped = Container<{
+  // identity field
+  @validate(isPositive)
+  @jsonSchema({
+    description: "stable identifier"
+  })
+  id: number;
+  label: string
+  // end fields
+}>`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("keeps a trivia-free root object alias in its multiline canonical layout", () => {
+    const source = "type Plain = { id: number, label: string }";
+    const expected = `type Plain = {
+  id: number;
+  label: string
+}`;
     expectExactStableFormat(source, expected);
   });
 
@@ -1048,7 +1079,7 @@ type IndexedWrapped = {
     expectExactStableFormat(source, source);
   });
 
-  it("preserves block parameters beside an effect-set union", () => {
+  it("preserves block object types adjacent to a raises effect set", () => {
     // Effect-set members cannot be object types in parser-supported source,
     // so the object occupies the nearest recursive block slot while raises
     // pins the effect-set union syntax on the same wrapper.

@@ -46,6 +46,9 @@ export function collectAgencyBundle(
   config: AgencyConfig,
 ): CollectBundleResult {
   const entrypointAbs = path.resolve(entrypointPath);
+  if (!fs.existsSync(entrypointAbs)) {
+    return { ok: false, error: `Entrypoint not found: ${entrypointAbs}` };
+  }
   const rootDir = path.dirname(entrypointAbs);
 
   const collected: Record<string, BundleFile> = {};

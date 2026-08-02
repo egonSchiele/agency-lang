@@ -73,13 +73,13 @@ describe("collectAgencyBundle", () => {
     expect(result.error).toContain("outside the entrypoint's directory");
   });
 
-  it("errors when the entrypoint does not exist", () => {
+  it("errors clearly when the entrypoint does not exist", () => {
     const result = collectAgencyBundle(path.join(dir, "missing.agency"), {});
     expect(result.ok).toBe(false);
     if (result.ok) {
       return;
     }
-    expect(result.error).toContain("not found");
+    expect(result.error).toContain("Entrypoint not found");
   });
 });
 

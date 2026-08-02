@@ -88,7 +88,7 @@ import {
 } from "tarsec";
 
 // --- Type imports (combined from all parser files) ---
-import { SourceLocation } from "../types/base.js";
+import { LineComment, SourceLocation } from "../types/base.js";
 import {
   AccessChainElement,
   AgencyNode,
@@ -334,16 +334,108 @@ export const blankLineParser: Parser<NewLine> = map(
 // comment.ts
 // =============================================================================
 
+/** A comment starting exactly at `//`, stopping before its line ending.
+ *  Callers that own the following layout (trailing-comment attachment)
+ *  need those two properties; `commentParser` adds the surrounding
+ *  whitespace policy standalone comments have always had. */
+export const lineCommentCore: Parser<AgencyComment> = seqC(
+  set("type", "comment"),
+  str("//"),
+  capture(manyTill(or(newline, blankLineParser)), "content"),
+);
+
 export const commentParser: Parser<AgencyComment> = (input: string) => {
-  const parser = seqC(
-    set("type", "comment"),
-    optionalSpaces,
-    str("//"),
-    capture(manyTill(or(newline, blankLineParser)), "content"),
-    optionalSpacesOrNewline,
+  const parser = map(
+    seqC(
+      optionalSpaces,
+      capture(lineCommentCore, "comment"),
+      optionalSpacesOrNewline,
+    ),
+    (result: { comment: AgencyComment }) => result.comment,
   );
   return parser(input);
 };
+
+// =============================================================================
+// trailingComment.ts
+// =============================================================================
+
+type TrailingCommentOwner = {
+  type: string;
+  trailingComment?: LineComment;
+};
+
+/** Trivia nodes describe the layout around a construct rather than a
+ *  construct of their own, so nothing attaches to them. */
+const NON_TRAILING_OWNER_TYPES = [
+  "comment",
+  "multiLineComment",
+  "newLine",
+];
+
+/** A construct's own parser may or may not swallow the line ending after
+ *  it. If it did, any `//` that follows starts a later line and belongs to
+ *  whatever comes next. Blank lines are sentinels by this point
+ *  (replaceBlankLines), so they count as line endings too. */
+function consumedLineEnding(input: string, rest: string): boolean {
+  const consumed = input.slice(0, input.length - rest.length);
+  const trailingWhitespace =
+    consumed.match(new RegExp(`[ \\t\\r\\n${BLANK_LINE_SENTINEL}]*$`))?.[0] ?? "";
+  return new RegExp(`[\\r\\n${BLANK_LINE_SENTINEL}]`).test(trailingWhitespace);
+}
+
+const sameLineComment: Parser<LineComment> = map(
+  seqC(optionalSpaces, capture(lineCommentCore, "comment")),
+  (result: { comment: LineComment }) => result.comment,
+);
+
+/** Attach a same-line `//` comment to whatever `parser` produced, without
+ *  consuming the line ending after it. Owns the same-line decision. */
+export function withTrailingLineComment<T extends TrailingCommentOwner>(
+  parser: Parser<T>,
+): Parser<T> {
+  return (input: string) => {
+    const parsed = parser(input);
+    if (!parsed.success) {
+      return parsed;
+    }
+
+    if (NON_TRAILING_OWNER_TYPES.includes(parsed.result.type)) {
+      return parsed;
+    }
+
+    if (consumedLineEnding(input, parsed.rest)) {
+      return parsed;
+    }
+
+    const comment = sameLineComment(parsed.rest);
+    if (!comment.success) {
+      return parsed;
+    }
+
+    return success(
+      { ...parsed.result, trailingComment: comment.result },
+      comment.rest,
+    );
+  };
+}
+
+/** One entry in a stream of complete constructs: the construct, its
+ *  trailing comment, and the layout that ends the line. Sole owner of that
+ *  boundary — callers must not consume the line ending separately, or a
+ *  comment-terminated entry would strand the newline `lineCommentCore`
+ *  deliberately leaves behind. */
+export function completeConstructEntry<T extends TrailingCommentOwner>(
+  parser: Parser<T>,
+): Parser<T> {
+  return map(
+    seqC(
+      capture(withTrailingLineComment(parser), "value"),
+      optionalSpacesOrNewline,
+    ),
+    (result: { value: T }) => result.value,
+  );
+}
 
 // =============================================================================
 // multiLineComment.ts
@@ -5202,12 +5294,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo("bodyNodeParser", or(
 
 const _bodyParserImpl: Parser<AgencyNode[]> = memo(
   "functionBodyParser",
-  many(
-    map(
-      seqC(capture(_bodyNodeParser, "node"), optionalSpacesOrNewline),
-      (result) => result.node,
-    ),
-  ),
+  many(completeConstructEntry(_bodyNodeParser)),
 );
 
 export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {

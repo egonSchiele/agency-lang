@@ -44,9 +44,9 @@ The global `-c, --config <path>` option selects which `agency.json` to read.
 
 ## What gets uploaded
 
-`agency deploy` compiles the agent locally first, so obvious errors surface before any upload. It then sends the source; statelog compiles it again server-side.
+`agency deploy` uploads the entrypoint and every local `.agency` file it imports (transitively), compiling them locally first so obvious errors surface before any upload. statelog compiles them again server-side.
 
-**Deploy is single-file for now.** An agent that imports another local `.agency` file, or local TypeScript/JavaScript interop, is refused with a clear message — statelog compiles each uploaded file in isolation, so multi-file hosting isn't supported yet (tracked in statelog#9).
+**All the files must sit in one directory.** statelog stores an agent's files flat, so a local import that resolves outside the entrypoint's directory (e.g. `./sub/helper.agency` or `../helper.agency`) is refused. Local TypeScript/JavaScript interop imports are also refused — statelog only compiles `.agency` source.
 
 ## Running a deployed agent
 

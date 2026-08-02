@@ -165,10 +165,16 @@ export def load(input: {
     generateDoc({}, path.join(inputDir, "display.agency"), outputDir);
     const output = fs.readFileSync(path.join(outputDir, "display.md"), "utf-8");
 
-    expect(output).toContain("```ts\nexport type Input = { id: string }\n```");
-    expect(output).toContain(
-      "```ts\nload(input: { id: string }): { value: string }\n```",
-    );
+    expect(output).toContain(`### Input
+
+\`\`\`ts
+export type Input = { id: string }
+\`\`\``);
+    expect(output).toContain(`### load
+
+\`\`\`ts
+load(input: { id: string }): { value: string }
+\`\`\``);
     expect(output).not.toContain("// keep");
   });
 
@@ -619,7 +625,7 @@ node main() {
       `import { isEmail } from "std::validation"
 
 @validate(isEmail)
-@jsonSchema({ format: "email", description: "User email." })
+@jsonSchema({ format: "email", description: "export type email" })
 export type Email = string
 `,
     );
@@ -630,9 +636,19 @@ export type Email = string
       "utf-8",
     );
 
-    // The type alias should appear with its annotations inline.
-    expect(output).toContain("@validate(isEmail)");
-    expect(output).toContain("@jsonSchema(");
+    expect(output).toContain(`## Types
+
+### Email
+
+\`\`\`ts
+@validate(isEmail)
+@jsonSchema({
+  format: "email",
+  description: "export type email"
+})
+export type Email = string
+\`\`\``);
+    expect(output).not.toContain("//");
 
     // Structured "Validators:" line should list the validator.
     expect(output).toMatch(/\*\*Validators:\*\* `isEmail`/);

@@ -31,7 +31,7 @@ The parser already preserves object-type `trivia`; the loss occurs when the shar
 | `lib/backends/typescriptGenerator/typeToString.ts` | Define the optional object hook and remain the canonical recursive syntax/precedence printer. |
 | `lib/backends/typescriptGenerator/typeToString.test.ts` | Pin no-hook compatibility and recursive hook forwarding. |
 | `lib/backends/agencyGenerator.ts` | Install the source hook, lay out trivia-bearing object types, explicitly select plain rendering for `signatureOf`, and shift wrapped continuation lines. |
-| `lib/backends/agencyGenerator.test.ts` | Exact formatter output, reparse/idempotence, wrapper/source-position coverage, and wrapped indentation. |
+| `lib/backends/agencyGenerator.test.ts` | Exact production-formatter output (including blank-line preprocessing), reparse/idempotence, nested and root blank-line preservation, wrapper/source-position coverage, and wrapped indentation. |
 | `lib/cli/doc.test.ts` | Exact `agency doc` plain-signature regression. |
 | `lib/stdlib/agency.test.ts` | Exact `std::agency` `_describe` plain-signature regression. |
 
@@ -176,6 +176,12 @@ git commit -F .tmp/type-printer-trivia-commit.txt
 Add a local assertion helper beside the existing formatter helper in `lib/backends/agencyGenerator.test.ts`:
 
 ```ts
+function formatAgency(source: string): string {
+  const formatted = formatSource(source);
+  expect(formatted).not.toBeNull();
+  return formatted?.trim() ?? "";
+}
+
 function expectExactStableFormat(source: string, expected: string): void {
   const once = formatAgency(source);
   expect(once).toBe(expected);
@@ -183,6 +189,11 @@ function expectExactStableFormat(source: string, expected: string): void {
   expect(formatAgency(once)).toBe(expected);
 }
 ```
+
+Use `formatSource`, rather than calling `parseAgency(source)` directly, so the
+tests exercise production's `replaceBlankLines` preprocessing. Blank lines
+must survive inside both nested wrapper objects and root object aliases; each
+exact case must reparse and reach the same formatting fixed point.
 
 Use complete exact strings—not `toContain`—for a compact set of cases covering:
 
@@ -208,7 +219,7 @@ type Optional = {
 }
 ```
 
-Add exact cases for standalone comments and blank lines, plus arrays, ordinary/effect-set unions, intersections, `keyof`, and indexed access. Ensure expected output pins all suffixes, parentheses, `(3)`, one-argument `Result<T>`, block arrows, and `raises <...>`. Include an object nested inside another object property so `stringifyProp` must use `printChild`.
+Add exact cases for standalone comments and blank lines at nested and root object positions, plus arrays, ordinary/effect-set unions, intersections, `keyof`, and indexed access. Ensure expected output pins all suffixes, parentheses, `(3)`, one-argument `Result<T>`, block arrows, and `raises <...>`. Include an object nested inside another object property so `stringifyProp` must use `printChild`.
 
 - [ ] **Step 2: Run and inspect the expected formatter failures**
 

@@ -1301,6 +1301,11 @@ export class AgencyGenerator {
     return this.buildSignature(name, node, "", "display");
   }
 
+  /** Render the annotations that precede a type alias declaration. */
+  declarationAnnotationPrefixOf(node: TypeAlias): string {
+    return this.formatAttachedTags(node);
+  }
+
   protected processFunctionDefinition(node: FunctionDefinition): string {
     const tags = this.formatAttachedTags(node);
     const { body } = node;

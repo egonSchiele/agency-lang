@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AgencyGenerator, generateAgency } from "./agencyGenerator.js";
 import { parseAgency } from "../parser.js";
+import { formatSource } from "../formatter.js";
 import { deepFreeze } from "../runtime/utils.js";
 import { FunctionDefinition } from "../types.js";
 
@@ -953,10 +954,9 @@ describe("AgencyGenerator - optional key shorthand (nullish unification)", () =>
 
 describe("AgencyGenerator - nested object type trivia", () => {
   function formatAgency(source: string): string {
-    const parsed = parseAgency(source, {}, false, false);
-    expect(parsed.success).toBe(true);
-    if (!parsed.success) return "";
-    return new AgencyGenerator().generate(parsed.result).output.trim();
+    const formatted = formatSource(source);
+    expect(formatted).not.toBeNull();
+    return formatted?.trim() ?? "";
   }
 
   function expectExactStableFormat(source: string, expected: string): void {
@@ -1008,7 +1008,7 @@ type Optional = {
     expectExactStableFormat(source, expected);
   });
 
-  it("canonicalizes ordinary blank lines while preserving standalone comments", () => {
+  it("preserves blank lines and standalone comments inside a nested wrapper", () => {
     const source = `type Commented = Array<{
   // first
   x: number,
@@ -1019,9 +1019,24 @@ type Optional = {
     const expected = `type Commented = Array<{
   // first
   x: number;
+
   y: string
   // last
 }>`;
+    expectExactStableFormat(source, expected);
+  });
+
+  it("preserves a blank line inside a root object alias", () => {
+    const source = `type Root = {
+  x: number,
+
+  y: string
+}`;
+    const expected = `type Root = {
+  x: number;
+
+  y: string
+}`;
     expectExactStableFormat(source, expected);
   });
 

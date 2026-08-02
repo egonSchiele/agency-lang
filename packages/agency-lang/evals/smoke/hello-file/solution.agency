@@ -1,0 +1,7 @@
+// Reference solution: writes the answer and exits, no LLM involved. Running
+// the suite against this must score 1.0 — if it doesn't, the harness is broken,
+// not the agent. Same role as terminal-bench's solution/solve.sh.
+node main(task: string): string {
+  write("out.txt", "hello world") with approve
+  return "wrote out.txt"
+}

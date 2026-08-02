@@ -56,9 +56,17 @@ function loadBase(policy: string | undefined, cwd: string): Policy {
   return parsed as Policy;
 }
 
-export function resolveRunPolicy(
-  flags: RunPolicyFlags,
-): { policyJson: string; interactive: boolean } | null {
+/** The resolved run policy. `policyJson` is threaded into the subprocess
+ *  environment (AGENCY_RUN_POLICY); `policy` is the same object, exposed so
+ *  in-process callers (e.g. `remote call`'s decider) use it without re-parsing
+ *  the JSON or rebuilding the policy. */
+export type ResolvedRunPolicy = {
+  policy: Policy;
+  policyJson: string;
+  interactive: boolean;
+};
+
+export function resolveRunPolicy(flags: RunPolicyFlags): ResolvedRunPolicy | null {
   const hasAny =
     !!flags.policy || !!flags.approve || !!flags.reject || !!flags.interactive;
   if (!hasAny) return null;
@@ -86,5 +94,5 @@ export function resolveRunPolicy(
     ];
   }
 
-  return { policyJson: JSON.stringify(policy), interactive: !!flags.interactive };
+  return { policy, policyJson: JSON.stringify(policy), interactive: !!flags.interactive };
 }

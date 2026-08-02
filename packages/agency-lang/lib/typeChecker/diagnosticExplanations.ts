@@ -497,6 +497,12 @@ def f(): string {
 
 **How to fix:** move the \`handle\` block inside the node or function whose work it should guard.`,
 
+  templateNameNotDefined: `A template is checked before anything fills it, so a hole is opaque: the checker cannot see what will arrive there, and neither can the code around it.
+
+This also covers names from the file the template is written in. A template becomes its own program — \`toSource\` prints it and \`runCode\` compiles the print — and the surrounding file is not there when that happens.
+
+**How to fix:** keep each fragment self-contained. Move the code that defines the name into the template, or move the code that uses it into the fragment that defines it. A template may always use the prelude, language builtins, and anything it declares or imports itself.`,
+
   unfilledHoles: `This file contains template holes (\`#name\`), which mark gaps for code or values to be filled in later. A file with unfilled holes is a template, not a program, so it cannot be compiled or run directly.
 
 **How to fix:** load the file with \`loadTemplate\`, fill every hole with \`fill\`, and run the completed program (for example with \`runCode(toSource(filled))\`). Use \`holesOf\` to list what still needs filling.`,

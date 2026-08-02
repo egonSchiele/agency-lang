@@ -626,6 +626,12 @@ export const DIAGNOSTICS = {
     message:
       "The generator `{name}` reaches non-Agency code through `{importPath}`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript raises no interrupts and cannot be checked. Set `allowNonAgencyGenerators` in your config to permit it.",
   },
+  templateNameNotDefined: {
+    code: "AG8015",
+    severity: "error",
+    message:
+      "`{name}` is not defined in this template. A template can only use names it declares or imports itself, because a hole hides whatever fills it. Move the code that defines `{name}` into this template, or move the code that uses it into the fragment that defines it.",
+  },
   spliceTopLevelStatement: {
     code: "AG8014",
     severity: "error",

@@ -48,6 +48,7 @@ import { checkDefiniteReturns } from "./definiteReturns.js";
 import { checkConflictingMarkers } from "./conflictingMarkers.js";
 import { checkParamDefaultOrder } from "./paramDefaultOrder.js";
 import { checkTemplateHoles } from "./templateHoles.js";
+import { checkTemplateNames } from "./templateNames.js";
 import { checkTopLevelStatements } from "./topLevelStatements.js";
 import { refineInlineHandlerParams } from "./handlerParamTyping.js";
 import { declareFinalizeBinders } from "./finalizeBinder.js";
@@ -373,6 +374,9 @@ export class TypeChecker {
     // Template holes: an expression hole in a position that supplies no
     // type must carry an inline annotation (AG8002).
     checkTemplateHoles(ctx);
+
+    // A template can only use names it declares or imports itself (AG8015).
+    checkTemplateNames(ctx);
 
     // Top-level code is initialization: it may establish something but not
     // control anything (AG3017, AG3018).

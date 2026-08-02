@@ -182,3 +182,15 @@ Lifting this restriction is tracked as issue #687.
 A splice at the top level of a file adds the generator's output to the file, so that output is held to the same rule as anything you write there yourself: top-level code runs at initialization and cannot branch, loop, or wait.
 
 **How to fix:** have the generator return declarations (`node`, `def`, `type`), bindings, or plain calls. If it needs to branch, put the branching inside a `def` it declares, or splice it inside a node body instead.
+
+<a id="ag8015"></a>
+
+## AG8015 — `&#123;name&#125;` is not defined in this template. A template can only use names it declares or imports itself, because a hole hides whatever fills it. Move the code that defines `&#123;name&#125;` into this template, or move the code that uses it into the fragment that defines it.
+
+*Default severity: error.*
+
+A template is checked before anything fills it, so a hole is opaque: the checker cannot see what will arrive there, and neither can the code around it.
+
+This also covers names from the file the template is written in. A template becomes its own program — `toSource` prints it and `runCode` compiles the print — and the surrounding file is not there when that happens.
+
+**How to fix:** keep each fragment self-contained. Move the code that defines the name into the template, or move the code that uses it into the fragment that defines it. A template may always use the prelude, language builtins, and anything it declares or imports itself.

@@ -375,15 +375,27 @@ const NON_TRAILING_OWNER_TYPES = [
   "newLine",
 ];
 
+const LINE_ENDING_PATTERN = new RegExp(`[\\r\\n${BLANK_LINE_SENTINEL}]`);
+
+/** Whether ANY line ending was crossed going from `from` to `to`. Use this
+ *  for a span that should sit entirely on one line, such as the delimiter
+ *  between two list items. Do not use it across an item, whose own text may
+ *  legitimately span lines. */
+function spanCrossesLine(from: string, to: string): boolean {
+  return LINE_ENDING_PATTERN.test(from.slice(0, from.length - to.length));
+}
+
 /** A construct's own parser may or may not swallow the line ending after
  *  it. If it did, any `//` that follows starts a later line and belongs to
- *  whatever comes next. Blank lines are sentinels by this point
- *  (replaceBlankLines), so they count as line endings too. */
+ *  whatever comes next. Only the TRAILING whitespace is examined, so an item
+ *  that spans lines internally still counts as ending on its last line.
+ *  Blank lines are sentinels by this point (replaceBlankLines), so they
+ *  count as line endings too. */
 function consumedLineEnding(input: string, rest: string): boolean {
   const consumed = input.slice(0, input.length - rest.length);
   const trailingWhitespace =
     consumed.match(new RegExp(`[ \\t\\r\\n${BLANK_LINE_SENTINEL}]*$`))?.[0] ?? "";
-  return new RegExp(`[\\r\\n${BLANK_LINE_SENTINEL}]`).test(trailingWhitespace);
+  return LINE_ENDING_PATTERN.test(trailingWhitespace);
 }
 
 const sameLineComment: Parser<LineComment> = map(
@@ -1731,7 +1743,7 @@ const itemEntryAfterDelimiter = <T>(
       return separated as ParserResult<ItemEntry<T>>;
     }
 
-    if (consumedLineEnding(input, separated.rest)) {
+    if (spanCrossesLine(item.rest, separated.rest)) {
       return success({ kind: "item", item: item.result }, separated.rest);
     }
 
@@ -1760,7 +1772,9 @@ const objectMemberEntry = <T>(
       return item as ParserResult<ItemEntry<T>>;
     }
 
-    const beforeDelimiter = trailingLineCommentEntry(item.rest);
+    const beforeDelimiter = consumedLineEnding(input, item.rest)
+      ? failure("item ended on a later line", item.rest)
+      : trailingLineCommentEntry(item.rest);
     if (beforeDelimiter.success) {
       const separated = delimiter(beforeDelimiter.rest);
       if (!separated.success) {
@@ -1781,7 +1795,10 @@ const objectMemberEntry = <T>(
       return separated as ParserResult<ItemEntry<T>>;
     }
 
-    if (consumedLineEnding(input, separated.rest)) {
+    if (
+      consumedLineEnding(input, item.rest) ||
+      spanCrossesLine(item.rest, separated.rest)
+    ) {
       return success({ kind: "item", item: item.result }, separated.rest);
     }
 

@@ -176,3 +176,36 @@ describe("inline block canonicalization keeps comments with their argument", () 
     expect(formatSource(once as string)).toBe(once);
   });
 });
+
+// A nested list parser consumes the layout after its own closer, so the next
+// line's standalone comment is already sitting where a trailing comment would
+// be. These pin the boundary from both sides.
+describe("line boundaries around nested members", () => {
+  it("leaves a comment on the line AFTER a nested object type standalone", () => {
+    const source = `type Value = {\n  nested: {\n    x: number\n  }\n  // describes next\n  next: string\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain("nested: { x: number };\n  // describes next");
+    expect(formatSource(once as string)).toBe(once);
+  });
+
+  it("still attaches a comment ON the nested closing brace's line", () => {
+    const source = `type Value = {\n  nested: {\n    x: number\n  } // about nested\n  next: string\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain("nested: { x: number }; // about nested");
+    expect(formatSource(once as string)).toBe(once);
+  });
+
+  it("does not attach across a leading-comma line break", () => {
+    const source = `node main() {\n  const xs = [\n    first\n    , // comment\n    second\n  ]\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain("first,\n    // comment");
+    expect(formatSource(once as string)).toBe(once);
+  });
+
+  it("attaches after a multiline item, whose own newlines do not count", () => {
+    const source = `node main() {\n  const xs = [\n    [\n      1,\n      2\n    ], // outer\n    third\n  ]\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain("], // outer");
+    expect(formatSource(once as string)).toBe(once);
+  });
+});

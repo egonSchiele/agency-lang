@@ -3,7 +3,18 @@ import { AgencyGenerator, generateAgency } from "./agencyGenerator.js";
 import { parseAgency } from "../parser.js";
 import { formatSource } from "../formatter.js";
 import { deepFreeze } from "../runtime/utils.js";
-import { FunctionDefinition } from "../types.js";
+import { AgencyNode, FunctionDefinition } from "../types.js";
+
+class ProcessCountingGenerator extends AgencyGenerator {
+  functionCallsProcessed = 0;
+
+  override processNode(node: AgencyNode): string {
+    if (node.type === "functionCall") {
+      this.functionCallsProcessed++;
+    }
+    return super.processNode(node);
+  }
+}
 
 describe("AgencyGenerator - Function Parameter Type Hints", () => {
   describe("processFunctionDefinition", () => {
@@ -1477,5 +1488,20 @@ describe("AgencyGenerator - does not modify its input", () => {
     expect(printed.indexOf('import { read } from "std::fs"')).toBeLessThan(
       printed.indexOf("node main(): string {"),
     );
+  });
+});
+
+describe("AgencyGenerator - nested call rendering", () => {
+  it("renders each unwrapped nested call once", () => {
+    const depth = 12;
+    const expression = "f(".repeat(depth) + "x" + ")".repeat(depth);
+    const parsed = parseAgency(`node main() {\n  return ${expression}\n}\n`);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    const generator = new ProcessCountingGenerator();
+    generator.generate(parsed.result);
+
+    expect(generator.functionCallsProcessed).toBe(depth);
   });
 });

@@ -5766,10 +5766,9 @@ export const _messageThreadParser: Parser<MessageThread> = memo(
     captureCaptures(
       parseError(
         "expected block body followed by `}`",
-        // Not `spaces`: an empty body prints as a blank line, which is a
-        // sentinel character rather than whitespace by the time this runs.
-        // Every other block parser uses this, and `thread` was the one that
-        // could not read back what the formatter wrote.
+        // Not `spaces`: an empty body prints as a blank line, which becomes a
+        // BLANK_LINE_SENTINEL by the time this runs. `spaces` would fail before
+        // bodyParser can consume it, breaking fmt idempotence for thread/subthread.
         optionalSpacesOrNewline,
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,

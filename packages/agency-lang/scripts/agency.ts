@@ -17,8 +17,6 @@ import {
   installDirFromUrl,
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
-import { deploy } from "@/cli/deploy/deploy.js";
-import { renderOutcome } from "@/cli/deploy/render.js";
 import { runLink } from "@/cli/remote/commands/link.js";
 import { runDeploy } from "@/cli/remote/commands/deploy.js";
 import { runLs } from "@/cli/remote/commands/ls.js";
@@ -409,44 +407,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
           target: "node",
         });
         console.log(`Packed ${input} -> ${opts.output}`);
-      },
-    );
-
-  program
-    // Deprecated in favor of `agency remote deploy`. Kept as a hidden shim for
-    // compatibility: same behavior as before (no binding is written), plus a
-    // notice. Remove after one release.
-    .command("deploy", { hidden: true })
-    .description("Deprecated: use 'agency remote deploy'")
-    .argument("<file>", "Agency entrypoint file to deploy")
-    .option("--host <url>", "statelog host (overrides agency.json log.host)")
-    .option("--project <slug>", "project slug (overrides agency.json log.projectId)")
-    .option(
-      "--api-key-env <name>",
-      "env var to read the API key from (default: STATELOG_API_KEY)",
-    )
-    .option("--dry-run", "preview the deploy without uploading")
-    .action(
-      async (
-        file: string,
-        opts: {
-          host?: string;
-          project?: string;
-          apiKeyEnv?: string;
-          dryRun?: boolean;
-        },
-      ) => {
-        console.error(color.yellow("agency deploy is deprecated; use agency remote deploy"));
-        const outcome = await deploy(file, getConfig(), {
-          host: opts.host,
-          project: opts.project,
-          apiKeyEnv: opts.apiKeyEnv,
-          dryRun: opts.dryRun,
-        });
-        renderOutcome(outcome);
-        if (outcome.kind === "error") {
-          process.exit(1);
-        }
       },
     );
 

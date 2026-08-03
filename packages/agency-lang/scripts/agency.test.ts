@@ -129,11 +129,9 @@ describe("agency CLI command tree", () => {
     ]);
   });
 
-  it("keeps a hidden top-level deploy shim, deprecated in favor of remote deploy", () => {
+  it("no longer registers a top-level deploy command (moved to remote deploy)", () => {
     const program = createProgram();
-    const deploy = program.commands.find((command) => command.name() === "deploy");
-    expect(deploy).toBeDefined();
-    expect(deploy?.description()).toMatch(/deprecated/i);
+    expect(program.commands.map((command) => command.name())).not.toContain("deploy");
   });
 
   it("logs supports --csv for a headless runs-table export", () => {

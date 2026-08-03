@@ -223,7 +223,7 @@ POST /serve/:userId/:projectId/:filename/resume
 
 **The sealed statelog wire** lives in `lib/cli/statelog/`: `serveUrl.ts` (origin-checked, canonical `/serve/:user/:project/:file` parsing and route building) and `serveClient.ts` (`createServeClient` → `fetchManifest`/`invokeNode`/`invokeFunction`/`resume`, returning the runtime's `InterruptResult`/`ResumeFn` so the shared driver consumes them directly). The binding, arg coercion, decider, prompts, browser launch, and rendering each sit behind their own module in `lib/cli/remote/`; the command files are thin recipes.
 
-Top-level `agency deploy` is now a hidden **deprecated shim** for `agency remote deploy` (same behavior, plus a notice, no binding write).
+Top-level `agency deploy` has been **removed** (a breaking change) in favor of `agency remote deploy`; the `deploy()` engine in `lib/cli/deploy/` stays and is what `remote deploy` calls.
 
 **Deferred (need statelog changes):** `remote inspect` (files/last-upload), `remote pull` (source zip), and `remote logs` (traces in the CLI viewer) — all read routes that are browser-session-only today. A statelog "whoami" route would let the binding drop its cached `userId`.
 

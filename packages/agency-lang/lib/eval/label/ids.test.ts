@@ -1,0 +1,210 @@
+import { describe, expect, it } from "vitest";
+
+import { canonicalize } from "@/utils/canonicalize.js";
+
+import {
+  contentHashOf,
+  makeAnnotationId,
+  makeChecklistId,
+  makeOutputId,
+  makeQuestionId,
+  makeSessionId,
+} from "./ids.js";
+import {
+  AnnotationRowSchema,
+  ChecklistQuestionSchema,
+  CorpusRowSchema,
+  ManifestSchema,
+  type ExecutionIdentity,
+  type SessionIdentity,
+} from "./types.js";
+
+const executionIdentity: ExecutionIdentity = {
+  traceId: "trace-one",
+  inputId: "summary",
+  finalOutputIndex: 2,
+};
+
+describe("makeOutputId", () => {
+  it("is stable for the same execution, so recapture is idempotent", () => {
+    expect(makeOutputId(executionIdentity)).toBe(makeOutputId(executionIdentity));
+  });
+
+  it("distinguishes two traces that share an input id", () => {
+    const other: ExecutionIdentity = { ...executionIdentity, traceId: "trace-two" };
+    expect(makeOutputId(executionIdentity)).not.toBe(makeOutputId(other));
+  });
+
+  it("distinguishes a different selected output within one trace", () => {
+    const other: ExecutionIdentity = { ...executionIdentity, finalOutputIndex: 3 };
+    expect(makeOutputId(executionIdentity)).not.toBe(makeOutputId(other));
+  });
+
+  it("cannot be confused by ids that contain the field separator", () => {
+    const left = makeOutputId({ traceId: "a\0b", inputId: "c", finalOutputIndex: 0 });
+    const right = makeOutputId({ traceId: "a", inputId: "b\0c", finalOutputIndex: 0 });
+    expect(left).not.toBe(right);
+  });
+
+  it("produces a filesystem-safe prefixed digest", () => {
+    expect(makeOutputId(executionIdentity)).toMatch(/^out_[a-f0-9]{64}$/);
+  });
+});
+
+describe("contentHashOf", () => {
+  it("separates identical text captured under different tasks", () => {
+    const review = contentHashOf({ inputId: "a", task: "Review this patch" }, "Looks good");
+    const release = contentHashOf({ inputId: "a", task: "Write a release note" }, "Looks good");
+    expect(review).not.toBe(release);
+  });
+
+  it("is stable across key order inside a structured task", () => {
+    const left = contentHashOf({ inputId: "a", task: { x: 1, y: 2 } }, "out");
+    const right = contentHashOf({ inputId: "a", task: { y: 2, x: 1 } }, "out");
+    expect(left).toBe(right);
+  });
+
+  it("changes when the value changes", () => {
+    const input = { inputId: "a", task: "t" };
+    expect(contentHashOf(input, "one")).not.toBe(contentHashOf(input, "two"));
+  });
+});
+
+describe("makeSessionId", () => {
+  const identity: SessionIdentity = {
+    outputIds: ["out_a", "out_b"],
+    checklistId: "cl_one",
+    annotator: { kind: "human", id: "adit" },
+  };
+
+  it("is stable for the same session inputs", () => {
+    expect(makeSessionId(identity)).toBe(makeSessionId(identity));
+  });
+
+  it("depends on output ORDER, so a reordered source is a different session", () => {
+    const reordered: SessionIdentity = { ...identity, outputIds: ["out_b", "out_a"] };
+    expect(makeSessionId(identity)).not.toBe(makeSessionId(reordered));
+  });
+
+  it("depends on the annotator", () => {
+    const other: SessionIdentity = { ...identity, annotator: { kind: "human", id: "someone" } };
+    expect(makeSessionId(identity)).not.toBe(makeSessionId(other));
+  });
+
+  it("depends on the checklist lineage", () => {
+    const other: SessionIdentity = { ...identity, checklistId: "cl_two" };
+    expect(makeSessionId(identity)).not.toBe(makeSessionId(other));
+  });
+
+  it("is filesystem-safe, because it names a draft file", () => {
+    expect(makeSessionId(identity)).toMatch(/^session_[a-f0-9]{64}$/);
+  });
+});
+
+describe("random entity ids", () => {
+  it("are prefixed and unique", () => {
+    expect(makeQuestionId()).toMatch(/^q_[A-Za-z0-9_-]+$/);
+    expect(makeChecklistId()).toMatch(/^cl_[A-Za-z0-9_-]+$/);
+    expect(makeAnnotationId()).toMatch(/^ann_[A-Za-z0-9_-]+$/);
+    expect(makeQuestionId()).not.toBe(makeQuestionId());
+  });
+});
+
+describe("canonicalize", () => {
+  it("orders keys at every depth so equal values hash equally", () => {
+    expect(canonicalize({ outer: { z: 1, a: 2 } })).toBe(canonicalize({ outer: { a: 2, z: 1 } }));
+  });
+
+  it("keeps array order, which is meaningful", () => {
+    expect(canonicalize([1, 2])).not.toBe(canonicalize([2, 1]));
+  });
+});
+
+describe("durable schemas", () => {
+  it("pins schemaVersion to exactly 1", () => {
+    expect(ManifestSchema.safeParse({ schemaVersion: 1 }).success).toBe(true);
+    expect(ManifestSchema.safeParse({ schemaVersion: 2 }).success).toBe(false);
+  });
+
+  it("rejects unknown keys, so a typo cannot silently persist", () => {
+    expect(ManifestSchema.safeParse({ schemaVersion: 1, extra: true }).success).toBe(false);
+  });
+
+  it("rejects a question weight that is zero, negative or not finite", () => {
+    const base = { id: "q_a", text: "Accurate?", deleted: false };
+    expect(ChecklistQuestionSchema.safeParse({ ...base, weight: 1 }).success).toBe(true);
+    expect(ChecklistQuestionSchema.safeParse({ ...base, weight: 0 }).success).toBe(false);
+    expect(ChecklistQuestionSchema.safeParse({ ...base, weight: -1 }).success).toBe(false);
+    expect(ChecklistQuestionSchema.safeParse({ ...base, weight: Number.POSITIVE_INFINITY }).success).toBe(false);
+  });
+
+  it("rejects a corpus row whose outputId is not a well-formed digest", () => {
+    const row = {
+      schemaVersion: 1,
+      outputId: "not-an-output-id",
+      contentHash: `sha256:${"0".repeat(64)}`,
+      capturedAt: "2026-08-03T00:00:00.000Z",
+      execution: { traceId: "t", inputId: "a", finalOutputIndex: 0 },
+      input: { inputId: "a", task: "t" },
+      value: "v",
+      text: "v",
+      provenance: { runStartedAtMs: null, agent: null, models: [] },
+    };
+    expect(CorpusRowSchema.safeParse(row).success).toBe(false);
+  });
+
+  it("rejects an annotation with duplicate covered question ids", () => {
+    const row = {
+      schemaVersion: 1,
+      annotationId: "ann_a",
+      outputId: `out_${"a".repeat(64)}`,
+      annotator: { kind: "human", id: "adit" },
+      checklistId: "cl_a",
+      checklistVersion: 1,
+      checklistHash: `sha256:${"0".repeat(64)}`,
+      createdAt: "2026-08-03T00:00:00.000Z",
+      activeMs: 0,
+      coveredQuestionIds: ["q_a", "q_a"],
+      answers: { q_a: true },
+      note: "",
+    };
+    expect(AnnotationRowSchema.safeParse(row).success).toBe(false);
+  });
+
+  it("rejects a negative or non-finite activeMs", () => {
+    const base = {
+      schemaVersion: 1,
+      annotationId: "ann_a",
+      outputId: `out_${"a".repeat(64)}`,
+      annotator: { kind: "human", id: "adit" },
+      checklistId: "cl_a",
+      checklistVersion: 1,
+      checklistHash: `sha256:${"0".repeat(64)}`,
+      createdAt: "2026-08-03T00:00:00.000Z",
+      coveredQuestionIds: ["q_a"],
+      answers: { q_a: true },
+      note: "",
+    };
+    expect(AnnotationRowSchema.safeParse({ ...base, activeMs: 0 }).success).toBe(true);
+    expect(AnnotationRowSchema.safeParse({ ...base, activeMs: -1 }).success).toBe(false);
+    expect(AnnotationRowSchema.safeParse({ ...base, activeMs: Number.NaN }).success).toBe(false);
+  });
+});
+
+describe("canonicalize is collision-resistant", () => {
+  it("does not let a __proto__ key vanish, which would collide with its absence", () => {
+    const withProto = JSON.parse('{"__proto__":{"x":1},"a":2}');
+    const without = JSON.parse('{"a":2}');
+    expect(canonicalize(withProto)).not.toBe(canonicalize(without));
+  });
+
+  it("gives two different tasks different content hashes even via __proto__", () => {
+    const left = contentHashOf({ inputId: "a", task: JSON.parse('{"__proto__":{"x":1}}') }, "out");
+    const right = contentHashOf({ inputId: "a", task: JSON.parse("{}") }, "out");
+    expect(left).not.toBe(right);
+  });
+
+  it("keeps an undefined array element as null, as JSON.stringify does", () => {
+    expect(canonicalize([undefined])).toBe("[null]");
+  });
+});

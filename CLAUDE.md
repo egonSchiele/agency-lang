@@ -139,6 +139,7 @@ Pipeline and architecture:
 - `docs/dev/trailing-comments.md` — How `agency fmt` keeps an end-of-line `//` comment where it was written: the two mechanisms (`BaseNode.trailingComment` vs `placement: "trailing"` list trivia) and which applies where, who owns the end of the line, why a reordering formatter path must call `remapListTrivia`, the `CommaListPolicy` table, and the three ways this silently regresses
 - `docs/dev/template-agency.md` — Template Agency internals: the Hole node and per-position parsing, `Code` fragment kinds, the never-parse lifting rule and its two escaping conventions, scope-keyed hygiene with `__hyg` seeding, AG8001/AG8002 refusals, and the walker-completeness tripwire
 - `docs/dev/hosted-agent-execution.md` — Hosting agents on statelog (`agency deploy` + the `./serve` API): the serve wire contract and moduleId gotcha, per-agent observability via `withRuntimeConfigOverrides`, `compileSource(sourcePath)` for multi-file, the deploy CLI's module layout, the statelog host pieces, and the known limitations
+- `docs/dev/eval-labeling.md` — The human-label store behind `agency eval label`: why it lives outside `runs/`, occurrence vs content identity, immutable checklist revisions, the per-question annotation fold, the sign-off commit protocol and its recovery boundaries, and why validation is strict where grading is tolerant
 
 Other references:
 - `docs/misc/TESTING.md` — Full testing guide (unit tests, fixtures, execution tests, agency-js tests)

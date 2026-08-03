@@ -1,5 +1,5 @@
 import { describe, test, expect, afterEach } from "vitest";
-import { installRootBudget } from "@/runtime/rootBudget.js";
+import { installRootBudget, reinstallRootBudget } from "@/runtime/rootBudget.js";
 import { StateStack } from "@/runtime/state/stateStack.js";
 import { CostGuard, TimeGuard } from "@/runtime/guard.js";
 import { AGENCY_MAX_COST, AGENCY_MAX_TIME } from "@/constants.js";
@@ -126,5 +126,58 @@ describe("installRootBudget with a context budget (config, no flag)", () => {
     expect(() => installRootBudget(new StateStack(), { maxTimeMs: Infinity })).toThrow(
       /budget\.maxTime is not a finite number/,
     );
+  });
+});
+
+describe("reinstallRootBudget (resume: host-authoritative limit)", () => {
+  test("drops a restored root guard and re-installs from the context budget", () => {
+    const stack = new StateStack();
+    // A restored root guard whose limit the client inflated to 999.
+    const stale = new CostGuard(999);
+    stale.isRootBudget = true;
+    stack.pushGuard(stale);
+
+    reinstallRootBudget(stack, { maxCost: 1 });
+
+    const roots = stack.guards.filter(
+      (g): g is CostGuard => g instanceof CostGuard && g.isRootBudget,
+    );
+    expect(roots).toHaveLength(1);
+    expect(roots[0]).not.toBe(stale);
+    // The fresh guard carries the HOST limit, not the client's 999.
+    expect(roots[0].costLimit).toBe(1);
+  });
+
+  test("preserves a non-root (user) guard", () => {
+    const stack = new StateStack();
+    const userGuard = new CostGuard(5); // isRootBudget defaults to false
+    stack.pushGuard(userGuard);
+
+    reinstallRootBudget(stack, { maxCost: 1 });
+
+    expect(stack.guards).toContain(userGuard);
+  });
+
+  test("no host budget: drops the restored root guard, installs nothing", () => {
+    const stack = new StateStack();
+    const stale = new CostGuard(999);
+    stale.isRootBudget = true;
+    stack.pushGuard(stale);
+
+    reinstallRootBudget(stack, undefined);
+
+    expect(stack.guards.some((g) => g.isRootBudget)).toBe(false);
+  });
+
+  test("no-op in IPC mode (parent owns the budget)", () => {
+    process.env.AGENCY_IPC = "1";
+    const stack = new StateStack();
+    const stale = new CostGuard(999);
+    stale.isRootBudget = true;
+    stack.pushGuard(stale);
+
+    reinstallRootBudget(stack, { maxCost: 1 });
+
+    expect(stack.guards).toEqual([stale]);
   });
 });

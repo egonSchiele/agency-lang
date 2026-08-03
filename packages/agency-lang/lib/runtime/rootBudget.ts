@@ -55,6 +55,31 @@ export function installRootBudget(
   }
 }
 
+/** Re-assert the root budget on a RESUMED exec context. The root guard is
+ *  serialized with the checkpoint, so on a stateless resume its limit and
+ *  accumulated spend arrive from the (client-controllable) checkpoint. Drop any
+ *  restored root guard and re-install from the host-authoritative `contextBudget`
+ *  (the CLI env flag still wins), so the ceiling cannot be raised from the
+ *  client on a resumed leg. Same root-only gating as installRootBudget — a no-op
+ *  in IPC, where the parent owns the budget.
+ *
+ *  This resets accumulated spend for the leg: a stateless resume carries no
+ *  authoritative running total. Preventing per-leg reset needs host-side state
+ *  (server-stored checkpoints or signed, anti-replay envelopes) — out of scope
+ *  here. See docs/dev/checkpointing.md and the spend-controls handoff. */
+export function reinstallRootBudget(
+  stack: StateStack,
+  contextBudget?: { maxCost?: number; maxTimeMs?: number },
+): void {
+  if (isIpcMode()) return;
+  const withoutRoot = stack.guards.filter((g) => !g.isRootBudget);
+  if (withoutRoot.length !== stack.guards.length) {
+    stack.guards = withoutRoot;
+    stack.rebuildAbortSignal();
+  }
+  installRootBudget(stack, contextBudget);
+}
+
 /** FAIL CLOSED on a malformed budget value. The env is an internal
  *  carrier and the CLI validates before setting it, so a non-finite
  *  value here means a hand-set env or a bug — and for a cost-control

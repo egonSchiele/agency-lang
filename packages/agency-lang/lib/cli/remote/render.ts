@@ -5,6 +5,13 @@
 import { color } from "@/utils/termcolors.js";
 import type { ServeManifest } from "../statelog/serveClient.js";
 import type { RemoteBinding } from "./binding.js";
+import type {
+  ProjectSummary,
+  KeySummary,
+  CreatedKey,
+} from "../statelog/accountClient.js";
+
+const NONE = "—";
 
 export function renderManifest(manifest: ServeManifest, binding: RemoteBinding): string {
   const lines: string[] = [
@@ -40,4 +47,65 @@ export function renderLink(binding: RemoteBinding): string {
 
 function effectsSuffix(interruptEffects: string[]): string {
   return interruptEffects.length ? color.dim(`  raises ${interruptEffects.join(", ")}`) : "";
+}
+
+export function renderWhoami(userId: string, origin: string): string {
+  return [
+    `${color.bold("User:")} ${userId}`,
+    `${color.bold("Host:")} ${color.dim(origin)}`,
+  ].join("\n");
+}
+
+export function renderProjects(projects: ProjectSummary[]): string {
+  if (projects.length === 0) {
+    return color.dim("No projects yet.");
+  }
+  const rows = projects.map((project) => [
+    project.projectId,
+    project.name,
+    project.description ?? NONE,
+  ]);
+  return formatStaticTable(["PROJECT", "NAME", "DESCRIPTION"], rows);
+}
+
+export function renderProjectCreated(project: ProjectSummary): string {
+  return `${color.green("Created project")} ${color.bold(project.projectId)} — ${project.name}`;
+}
+
+export function renderKeys(keys: KeySummary[]): string {
+  if (keys.length === 0) {
+    return color.dim("No API keys yet.");
+  }
+  const rows = keys.map((key) => [
+    key.name ?? NONE,
+    key.scope,
+    key.projectId ?? NONE,
+    key.createdAt,
+    key.id,
+  ]);
+  return formatStaticTable(["NAME", "SCOPE", "PROJECT", "CREATED", "ID"], rows);
+}
+
+export function renderCreatedKey(key: CreatedKey): string {
+  const project = key.scope === "project" ? ` · ${key.projectId}` : "";
+  return [
+    `${color.green("Created API key")} ${color.bold(key.name ?? NONE)} (${key.scope}${project})`,
+    "",
+    color.yellow("Copy this key now — it will not be shown again:"),
+    `  ${key.plainKey}`,
+  ].join("\n");
+}
+
+/** A plain, ANSI-free aligned table. Colour is applied around the table by the
+ *  renderers, never inside a cell, so byte-width never skews alignment. */
+function formatStaticTable(headers: string[], rows: string[][]): string {
+  const widths = headers.map((header, columnIndex) => {
+    const values = rows.map((row) => row[columnIndex] ?? "");
+    return Math.max(header.length, ...values.map((value) => value.length));
+  });
+  return [headers, ...rows]
+    .map((row) =>
+      row.map((value, index) => value.padEnd(widths[index] ?? 0)).join("  ").trimEnd(),
+    )
+    .join("\n");
 }

@@ -133,7 +133,7 @@ describe("openStore", () => {
   it("refuses a version 1 store and names the migrate command", () => {
     fs.mkdirSync(storeDir, { recursive: true });
     fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
-    expect(() => open()).toThrow(/agency eval label migrate/);
+    expect(() => open()).toThrow(/agency eval label-migrate/);
   });
 
   it("checks the manifest BEFORE parsing any log", () => {
@@ -142,7 +142,7 @@ describe("openStore", () => {
     fs.mkdirSync(storeDir, { recursive: true });
     fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
     fs.writeFileSync(path.join(storeDir, "outputs.jsonl"), '{"schemaVersion":1,"nonsense":true}\n');
-    expect(() => open()).toThrow(/agency eval label migrate/);
+    expect(() => open()).toThrow(/agency eval label-migrate/);
   });
 
   it("refuses a manifest with unknown keys", () => {

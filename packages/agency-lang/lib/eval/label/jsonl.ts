@@ -170,7 +170,7 @@ function parseLine<Value>(args: OpenJsonlArgs<Value>, line: string, lineNumber: 
  * already told the person was recorded — and this store exists precisely
  * because those judgements cannot be regenerated.
  */
-function appendDurably(filePath: string, line: string): void {
+export function appendDurably(filePath: string, line: string): void {
   const handle = fs.openSync(filePath, "a");
   try {
     fs.writeSync(handle, line);
@@ -188,7 +188,7 @@ function appendDurably(filePath: string, line: string): void {
  * ignored: some platforms and filesystems refuse it, and that is not a reason
  * to fail a write that otherwise succeeded.
  */
-function syncDirectory(directoryPath: string): void {
+export function syncDirectory(directoryPath: string): void {
   let handle: number | undefined;
   try {
     handle = fs.openSync(directoryPath, "r");

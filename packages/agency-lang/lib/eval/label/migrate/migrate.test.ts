@@ -1,0 +1,393 @@
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { checklistHashOf } from "../ids.js";
+import type { AnnotationRow, CorpusRow, OccurrenceRow } from "../types.js";
+
+import { migrateStore, MigrationTargetError } from "./migrate.js";
+import { MigrationBlockedError, MigrationConflictError } from "./plan.js";
+
+let root: string;
+let sourceDir: string;
+let destDir: string;
+
+const HASH = `sha256:${"0".repeat(64)}`;
+const CHECKLIST_ID = "cl_news";
+
+beforeEach(() => {
+  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "label-migrate-")));
+  sourceDir = path.join(root, "old-labels");
+  destDir = path.join(root, "new-labels");
+});
+
+afterEach(() => {
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+type V1Row = {
+  outputId: string;
+  task: unknown;
+  value: unknown;
+  capturedAt?: string;
+  traceId?: string;
+  inputId?: string;
+};
+
+function v1Row(row: V1Row): unknown {
+  return {
+    schemaVersion: 1,
+    outputId: row.outputId,
+    contentHash: HASH,
+    capturedAt: row.capturedAt ?? "2026-08-03T00:00:00.000Z",
+    execution: {
+      traceId: row.traceId ?? "t-1",
+      inputId: row.inputId ?? "a",
+      finalOutputIndex: 0,
+    },
+    input: { inputId: row.inputId ?? "a", task: row.task },
+    value: row.value,
+    text: typeof row.value === "string" ? row.value : JSON.stringify(row.value),
+    provenance: {
+      runStartedAtMs: 1000,
+      agent: { kind: "file", entry: "news.agency" },
+      models: ["gpt-4o"],
+    },
+  };
+}
+
+function annotation(over: Partial<AnnotationRow> & { outputId: string }): AnnotationRow {
+  return {
+    schemaVersion: 1,
+    annotationId: `ann_${over.outputId.slice(4, 12)}`,
+    annotator: { kind: "human", id: "adit" },
+    checklistId: CHECKLIST_ID,
+    checklistVersion: 1,
+    checklistHash: HASH,
+    createdAt: "2026-08-03T00:00:00.000Z",
+    activeMs: 10,
+    coveredQuestionIds: ["q_accurate"],
+    answers: { q_accurate: true },
+    note: "",
+    ...over,
+  } as AnnotationRow;
+}
+
+function writeV1Store(rows: unknown[], annotations: AnnotationRow[] = []): void {
+  fs.mkdirSync(sourceDir, { recursive: true });
+  fs.writeFileSync(path.join(sourceDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
+  fs.writeFileSync(
+    path.join(sourceDir, "outputs.jsonl"),
+    rows.map((row) => `${JSON.stringify(row)}\n`).join(""),
+  );
+  if (annotations.length > 0) {
+    fs.writeFileSync(
+      path.join(sourceDir, "labels.jsonl"),
+      annotations.map((row) => `${JSON.stringify(row)}\n`).join(""),
+    );
+  }
+  writeChecklist();
+}
+
+function writeChecklist(): void {
+  const questions = [{ id: "q_accurate", text: "Accurate?", weight: 1, deleted: false }];
+  const hash = checklistHashOf({ checklistId: CHECKLIST_ID, version: 1, questions });
+  const dir = path.join(sourceDir, "checklists", CHECKLIST_ID);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "1.json"), JSON.stringify({
+    schemaVersion: 1,
+    checklistId: CHECKLIST_ID,
+    name: "news-quality",
+    version: 1,
+    parentVersion: null,
+    createdAt: "2026-08-03T00:00:00.000Z",
+    hash,
+    questions,
+  }));
+  fs.writeFileSync(path.join(dir, "current.json"), JSON.stringify({
+    schemaVersion: 1, checklistId: CHECKLIST_ID, version: 1, hash,
+  }));
+}
+
+/** Annotations must record the hash of the revision they were made against, so
+ *  the migrated store passes its own open-time validation. */
+function checklistHash(): string {
+  const questions = [{ id: "q_accurate", text: "Accurate?", weight: 1, deleted: false }];
+  return checklistHashOf({ checklistId: CHECKLIST_ID, version: 1, questions });
+}
+
+function readJsonl<Row>(file: string): Row[] {
+  if (!fs.existsSync(file)) {
+    return [];
+  }
+  return fs.readFileSync(file, "utf8").trim().split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as Row);
+}
+
+function records(): CorpusRow[] {
+  return readJsonl<CorpusRow>(path.join(destDir, "outputs.jsonl"));
+}
+
+function occurrences(): OccurrenceRow[] {
+  return readJsonl<OccurrenceRow>(path.join(destDir, "occurrences.jsonl"));
+}
+
+function migratedAnnotations(): AnnotationRow[] {
+  return readJsonl<AnnotationRow>(path.join(destDir, "labels.jsonl"));
+}
+
+const OUT_A = `out_${"a".repeat(64)}`;
+const OUT_B = `out_${"b".repeat(64)}`;
+const OUT_C = `out_${"c".repeat(64)}`;
+
+describe("migrateStore", () => {
+  it("rewrites every record with a content-derived id", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "Summarize", value: "Done" })]);
+    migrateStore({ sourceDir, destDir });
+    expect(records()).toHaveLength(1);
+    expect(records()[0].fields).toEqual({ task: "Summarize", output: "Done" });
+    expect(records()[0].outputId).not.toBe(OUT_A);
+  });
+
+  it("maps every annotation onto the record holding the same text", () => {
+    writeV1Store(
+      [v1Row({ outputId: OUT_A, task: "Summarize", value: "Done" })],
+      [annotation({ outputId: OUT_A, checklistHash: checklistHash() })],
+    );
+    migrateStore({ sourceDir, destDir });
+    expect(migratedAnnotations()[0].outputId).toBe(records()[0].outputId);
+  });
+
+  it("projects a structured task and output through the shared rule", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: { topic: "news" }, value: { s: 1 } })]);
+    migrateStore({ sourceDir, destDir });
+    expect(records()[0].fields).toEqual({ task: '{"topic":"news"}', output: '{"s":1}' });
+  });
+
+  it("writes one record per distinct field map and one occurrence per old row", () => {
+    writeV1Store([
+      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
+      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+      v1Row({ outputId: OUT_C, task: "Summarize", value: "Different" }),
+    ]);
+    const result = migrateStore({ sourceDir, destDir });
+    expect(records()).toHaveLength(2);
+    expect(occurrences()).toHaveLength(3);
+    expect(result.mergedGroups).toBe(1);
+  });
+
+  it("marks migrated occurrences legacy rather than inventing a source name", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "Summarize", value: "Done" })]);
+    migrateStore({ sourceDir, destDir });
+    expect(occurrences().every((row) => row.source === "legacy")).toBe(true);
+    expect(occurrences().every((row) => row.origin.kind === "legacy")).toBe(true);
+  });
+
+  it("preserves raw values and every existing provenance field", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: { topic: "news" }, value: { s: 1 } })]);
+    migrateStore({ sourceDir, destDir });
+    expect(occurrences()[0].origin).toMatchObject({
+      kind: "legacy",
+      traceId: "t-1",
+      runStartedAtMs: 1000,
+      models: ["gpt-4o"],
+      agent: { kind: "file", entry: "news.agency" },
+      rawTask: { topic: "news" },
+      rawValue: { s: 1 },
+    });
+  });
+
+  it("collapses two merged rows whose effective answers agree", () => {
+    writeV1Store([
+      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
+      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+    ], [
+      annotation({ outputId: OUT_A, annotationId: "ann_one", checklistHash: checklistHash() }),
+      annotation({ outputId: OUT_B, annotationId: "ann_two", checklistHash: checklistHash() }),
+    ]);
+    migrateStore({ sourceDir, destDir });
+    expect(records()).toHaveLength(1);
+    // Both annotations survive: the fold makes them one effective judgement,
+    // and discarding either would lose the history of who judged what when.
+    expect(migratedAnnotations()).toHaveLength(2);
+  });
+
+  it("REFUSES when merged rows disagree, naming the old ids and the question", () => {
+    writeV1Store([
+      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
+      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+    ], [
+      annotation({ outputId: OUT_A, annotationId: "ann_one", answers: { q_accurate: true } }),
+      annotation({ outputId: OUT_B, annotationId: "ann_two", answers: { q_accurate: false } }),
+    ]);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(MigrationConflictError);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/q_accurate/);
+  });
+
+  it("refuses when merged rows carry different notes", () => {
+    writeV1Store([
+      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
+      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+    ], [
+      annotation({ outputId: OUT_A, annotationId: "ann_one", note: "looks fine" }),
+      annotation({ outputId: OUT_B, annotationId: "ann_two", note: "actually wrong" }),
+    ]);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/notes also differ/);
+  });
+
+  it("writes nothing when it refuses, so there is no partial store to clean up", () => {
+    writeV1Store([
+      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
+      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+    ], [
+      annotation({ outputId: OUT_A, annotationId: "ann_one", answers: { q_accurate: true } }),
+      annotation({ outputId: OUT_B, annotationId: "ann_two", answers: { q_accurate: false } }),
+    ]);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow();
+    expect(fs.existsSync(destDir)).toBe(false);
+    expect(fs.existsSync(`${destDir}.migrating`)).toBe(false);
+  });
+
+  it("does not treat two rows judged by DIFFERENT people as a conflict", () => {
+    writeV1Store([
+      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
+      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+    ], [
+      annotation({
+        outputId: OUT_A, annotationId: "ann_one", checklistHash: checklistHash(),
+        answers: { q_accurate: true },
+      }),
+      annotation({
+        outputId: OUT_B, annotationId: "ann_two", checklistHash: checklistHash(),
+        annotator: { kind: "human", id: "sam" }, answers: { q_accurate: false },
+      }),
+    ]);
+    expect(() => migrateStore({ sourceDir, destDir })).not.toThrow();
+  });
+
+  it("uses the earliest capturedAt of a merged group, so order does not matter", () => {
+    writeV1Store([
+      v1Row({ outputId: OUT_A, task: "S", value: "D", traceId: "t-1", capturedAt: "2026-08-05T00:00:00.000Z" }),
+      v1Row({ outputId: OUT_B, task: "S", value: "D", traceId: "t-2", capturedAt: "2026-08-01T00:00:00.000Z" }),
+    ]);
+    migrateStore({ sourceDir, destDir });
+    expect(records()[0].capturedAt).toBe("2026-08-01T00:00:00.000Z");
+  });
+
+  it("keeps annotations in their original append order, because the fold depends on it", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })], [
+      annotation({ outputId: OUT_A, annotationId: "ann_first", checklistHash: checklistHash() }),
+      annotation({
+        outputId: OUT_A, annotationId: "ann_second", checklistHash: checklistHash(),
+        answers: { q_accurate: false },
+      }),
+    ]);
+    migrateStore({ sourceDir, destDir });
+    expect(migratedAnnotations().map((row) => row.annotationId))
+      .toEqual(["ann_first", "ann_second"]);
+  });
+
+  it("refuses while a draft exists in the source store", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    fs.mkdirSync(path.join(sourceDir, "drafts"), { recursive: true });
+    fs.writeFileSync(path.join(sourceDir, "drafts", "session_x.json"), "{}");
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(MigrationBlockedError);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/Finish or discard/);
+  });
+
+  it("copies checklists unchanged, since nothing about them is keyed by output", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    const before = fs.readFileSync(
+      path.join(sourceDir, "checklists", CHECKLIST_ID, "1.json"), "utf8");
+    migrateStore({ sourceDir, destDir });
+    expect(fs.readFileSync(path.join(destDir, "checklists", CHECKLIST_ID, "1.json"), "utf8"))
+      .toBe(before);
+  });
+
+  it("leaves the source store untouched", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    const before = fs.readFileSync(path.join(sourceDir, "outputs.jsonl"), "utf8");
+    migrateStore({ sourceDir, destDir });
+    expect(fs.readFileSync(path.join(sourceDir, "outputs.jsonl"), "utf8")).toBe(before);
+    expect(JSON.parse(fs.readFileSync(path.join(sourceDir, "manifest.json"), "utf8")))
+      .toEqual({ schemaVersion: 1 });
+  });
+
+  it("produces a store the ordinary read path can open", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })],
+      [annotation({ outputId: OUT_A, checklistHash: checklistHash() })]);
+    // migrateStore validates this itself before publishing; asserting it here
+    // pins the guarantee rather than trusting the implementation to keep it.
+    expect(() => migrateStore({ sourceDir, destDir })).not.toThrow();
+    expect(JSON.parse(fs.readFileSync(path.join(destDir, "manifest.json"), "utf8")))
+      .toEqual({ schemaVersion: 2, fieldOrder: ["task", "output"] });
+  });
+
+  it("leaves no usable destination if interrupted before the manifest write", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    expect(() => migrateStore({
+      sourceDir,
+      destDir,
+      faultBeforePublish: () => {
+        throw new Error("interrupted");
+      },
+    })).toThrow("interrupted");
+    expect(fs.existsSync(destDir)).toBe(false);
+  });
+
+  it("recovers from an interrupted run on the next attempt", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    expect(() => migrateStore({
+      sourceDir,
+      destDir,
+      faultBeforePublish: () => {
+        throw new Error("interrupted");
+      },
+    })).toThrow();
+    // The leftover staging directory must not make the retry refuse.
+    expect(() => migrateStore({ sourceDir, destDir })).not.toThrow();
+    expect(records()).toHaveLength(1);
+  });
+
+  it("refuses to delete a staging path it did not create", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    fs.mkdirSync(`${destDir}.migrating`, { recursive: true });
+    fs.writeFileSync(path.join(`${destDir}.migrating`, "someone-elses-file"), "important");
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/does not recognise/);
+  });
+
+  it("refuses an existing destination rather than merging into it", () => {
+    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    fs.mkdirSync(destDir, { recursive: true });
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(MigrationTargetError);
+  });
+
+  it("reports a missing source store", () => {
+    expect(() => migrateStore({ sourceDir: path.join(root, "nope"), destDir }))
+      .toThrow(/Source store not found/);
+  });
+
+  it("refuses a store that is not version 1", () => {
+    fs.mkdirSync(sourceDir, { recursive: true });
+    fs.writeFileSync(path.join(sourceDir, "manifest.json"),
+      JSON.stringify({ schemaVersion: 2, fieldOrder: [] }));
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/not a version 1 label store/);
+  });
+
+  it("reports counts a person can check against their old store", () => {
+    writeV1Store([
+      v1Row({ outputId: OUT_A, task: "S", value: "D", traceId: "t-1" }),
+      v1Row({ outputId: OUT_B, task: "S", value: "D", traceId: "t-2" }),
+    ], [annotation({ outputId: OUT_A, checklistHash: checklistHash() })]);
+    expect(migrateStore({ sourceDir, destDir })).toMatchObject({
+      oldRecords: 2,
+      newRecords: 1,
+      mergedGroups: 1,
+      occurrences: 2,
+      annotations: 1,
+    });
+  });
+});

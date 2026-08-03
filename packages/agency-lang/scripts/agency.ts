@@ -45,6 +45,7 @@ import {
   INGEST_PATH_DESCRIPTION,
   SOURCE_FLAG_DESCRIPTION,
 } from "@/cli/eval/ingest.js";
+import { evalLabelMigrate } from "@/cli/eval/migrate.js";
 import { evalGrade } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
@@ -818,6 +819,20 @@ export function createProgram(deps: CliDependencies = {}): Command {
     }) => {
       try {
         await evalIngest({ ...opts, path: source, extraArgs: extra, config: getConfig() });
+      } catch (e) {
+        console.error(`Error: ${(e as Error).message}`);
+        process.exit(2);
+      }
+    });
+
+  evalCmd
+    .command("label-migrate")
+    .description("Rewrite a label store in the current format, writing a new store")
+    .argument("<source>", "Existing label store directory")
+    .argument("<dest>", "Where to write the migrated store; must not exist")
+    .action(async (source: string, dest: string) => {
+      try {
+        await evalLabelMigrate({ sourceDir: source, destDir: dest });
       } catch (e) {
         console.error(`Error: ${(e as Error).message}`);
         process.exit(2);

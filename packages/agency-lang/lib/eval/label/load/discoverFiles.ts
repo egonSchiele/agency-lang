@@ -145,7 +145,7 @@ function globToRegExp(pattern: string): RegExp {
 function walk(root: string, dir: string, recursive: boolean): DiscoveredFile[] {
   const entries = fs.readdirSync(dir, { withFileTypes: true })
     .slice()
-    .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
+    .sort((left, right) => compareNames(left.name, right.name));
 
   const found: DiscoveredFile[] = [];
   for (const entry of entries) {
@@ -165,6 +165,15 @@ function walk(root: string, dir: string, recursive: boolean): DiscoveredFile[] {
     }
   }
   return found;
+}
+
+/** Byte order, not locale order: `localeCompare` varies by machine, and ingest
+ *  order decides the order a labelling session presents records in. */
+function compareNames(left: string, right: string): number {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
 }
 
 function keyOf(root: string, absolutePath: string): string {

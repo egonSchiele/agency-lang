@@ -26,8 +26,8 @@ Getting this list wrong is how a dataset silently stops meaning what it says.
 
 | Identity | Names | Rule |
 |---|---|---|
-| `outputId` | One captured **occurrence** | `sha256` of `(traceId, inputId, finalOutputIndex)`. Never a path |
-| `contentHash` | The **content** | `sha256` of `(input, value)`. Deduplication and search only — never identity |
+| `outputId` | One **record** | `sha256` of the record's fields. Never a path, never an execution |
+| `occurrenceId` | One **observation** of a record | `sha256` of `(outputId, source, origin)`. Excludes the timestamp |
 | `checklistId` | A checklist **lineage** | `name` is display metadata |
 | `checklistVersion` + `checklistHash` | One immutable **revision** | Every revision is a full snapshot |
 | `questionId` | One question's **meaning** | Changing text needs a new id. Never reused |
@@ -35,15 +35,35 @@ Getting this list wrong is how a dataset silently stops meaning what it says.
 | `annotator` (`kind` + `id`) | Who judged | A machine `id` identifies one judge configuration and revision |
 | `sessionId` | One resumable session | `sha256` of ordered `outputIds`, `checklistId`, annotator |
 
-**Occurrence, not content.** Two runs of the same input are two outputs worth
-keeping, so identity cannot be a hash of the text. Text alone is also
-insufficient: `"Looks good"` means different things under "Review this patch"
-and "Write a release announcement", `Input.task` can be an object, and an
-output value can be structured JSON.
+**Content, not execution.** A record is a map of named text fields — typically
+`task` and `output` — and its id is the hash of that map. Two runs that emit
+byte-identical output produced the same training example and are labelled once;
+which run emitted it is a fact *about* the record, kept in `occurrences.jsonl`.
+
+Everything follows from one principle: **the labelled artifact and the label are
+the whole training example.** An agent learning from this data sees those two
+things and nothing else. So anything a label depends on must be inside the
+artifact, which is why a record has named fields rather than one string. If the
+task is a field, a question may lean on it; if it is absent, no question may.
+Argilla, Label Studio and Prodigy all landed on multi-field records for the same
+reason.
+
+**The checklist rule, which nothing enforces.** Every question must be
+answerable from the record's fields alone. The tooling cannot check this — it
+cannot tell that "today" is unanchored, or that "LGTM" refers to a diff that is
+not present. A question that leans on absent context produces confidently wrong
+labels and nothing will say so. This is the residual risk of the design,
+accepted because the alternative is a type system for prose.
 
 **Never a path.** A run directory can be renamed or copied, and two unrelated
-runs can share a basename. `traceId` is persisted in the eval record and does
-not move.
+runs can share a basename. Occurrence provenance keeps `traceId`, which is
+persisted in the eval record and does not move.
+
+**Field values are strings, and one function makes them.**
+`projectArtifactField` turns structured source data into a field value, and its
+exact output is hashed into every id derived from it. Treat it as a wire format:
+changing it forks every record built from structured data. No loader may
+substitute its own rule.
 
 **Order is part of the session identity.** Answers are stored by output id but
 the cursor is an index. A draft resumed against a reordered source would put a
@@ -52,19 +72,29 @@ reordered source hashes to a different session.
 
 ## The three state machines
 
-### 1. Source occurrence capture
+### 1. Ingest
 
-`inspect → skip or identify → replay or conflict → append → ordered result`
+`resolve format → discover candidates → decode and project → skip or build → ensure record → ensure occurrence → manifest`
 
-Eligibility is narrow, and every rejection is reported with a code rather than
-dropped:
+Three sources, chosen by `--format` or guessed by `auto`: a run directory
+(needs **both** a `config.json` and an `inputs/` directory, so a folder that
+merely contains a `config.json` is not mistaken for one), a directory or quoted
+glob where each file is one record, or a `.json` file holding an array of
+strings. A source that yields zero records is an error, never a quiet success.
+
+One eligibility policy applies to every loader's text — an empty string in a
+JSON array is exactly as unlabelable as an empty file:
 
 | Reason | Why it is not labellable |
 |---|---|
+| `empty` | Whitespace only; nothing to judge |
+| `too-large` | A screen cannot show it, and it is more likely a mistake than real output |
+| `not-utf8` | Decoding is `fatal`; Node's default would substitute U+FFFD and hash a corrupted file to a stable, meaningless id |
+| `symlink` | Would make the item key ambiguous |
 | `run-failed` | A failed run's salvaged record is evidence for diagnosis, not a result to judge — the same reason grading refuses it |
 | `record-unreadable` | Nothing to read |
 | `legacy-record` | Predates recorded eval outputs; there is no way to say which output was final |
-| `missing-trace-id` | No stable identity across recapture |
+| `missing-trace-id` | No stable provenance across recapture |
 | `invalid-task` | The task is missing or not JSON data |
 | `no-output` | Filesystem-oriented runs legitimately produce none |
 | `truncated-output` | A label on a truncation is not a judgement of the output |
@@ -72,18 +102,20 @@ dropped:
 A placeholder in the corpus would be worse than a gap, because a placeholder
 can be labelled.
 
-Selection returns the chosen **index** alongside the value, so identity and
-display can never disagree about which output was judged. The text projection
-matches `lib/eval/judge/selectFinalResponse.ts`: strings pass through,
-everything else is JSON. `String(value)` would render an object as
-`[object Object]` and merge unrelated structured outputs into one meaningless
-string.
+**Write order is load-bearing.** Records first, occurrences second, manifest
+last. An occurrence pointing at a record nobody stored is unrecoverable; a
+record with no occurrence is merely missing provenance and gets it back by
+re-ingesting the same source. A stale `fieldOrder` only affects display.
 
-Recapturing the same run is idempotent. Reusing an output id with different
-content is refused — a rewritten record or a reused trace id would otherwise
-drift existing labels onto different text. `capturedAt` and provenance are
-excluded from that comparison, because they can differ between two captures of
-the same execution without changing what was judged.
+**Occurrence keys must locate the item, not just the batch.** A file's key is
+its path relative to the batch root, so the same folder ingested from two
+working directories yields the same key. A JSON element's key is the document
+name *and* the index, so equal strings at index 0 of two documents stay two
+observations rather than collapsing into one.
+
+Re-ingesting the same source is idempotent. Two sources emitting identical text
+produce one record with two occurrences, which is what makes "did v2 beat v1"
+answerable by counting occurrences per source.
 
 ### 2. Checklist publication
 
@@ -221,16 +253,78 @@ controller   -> pure session reducer and selectors
 store        -> pure annotation fold, status, score
 ```
 
-`labelTui.ts` does not import `draft`, `checklist`, `corpus`, `capture`, `lock`
-or `store`. The controller is the only module that may compose capture, drafts,
+Ingest has its own chain, and the CLI sits at only one end of it:
+
+```text
+CLI options -> IngestRequest -> loadBatch -> LoadedBatch -> LabelStore.ingest
+```
+
+`loadBatch` is the only module that imports the individual loaders, so the CLI
+never chooses a format or builds loader-specific arguments. Loaders describe
+candidates and know nothing about store paths, JSONL or ids; the store derives
+both ids and owns every durable write.
+
+`labelTui.ts` does not import `draft`, `checklist`, `corpus`, `lock`
+or `store`. The controller is the only module that may compose ingest, drafts,
 publication, annotation commits and recovery. The facade exposes no file paths,
 no mutable rows and no unrestricted append — those are how ordering guarantees
 get bypassed.
 
+## Two logs that deliberately do not use `appendExact`
+
+`appendExact` replays a byte-identical row and throws on anything else. That is
+right for annotations and wrong for both other logs, because each holds a field
+that is not part of its identity:
+
+- **`occurrences.jsonl`** stores `firstObservedAt`, which the id excludes.
+  Re-ingesting the same source tomorrow would build the same id with a new
+  timestamp and be rejected as corruption. `ensureOccurrence` returns the
+  existing row instead, keeping the original timestamp.
+- **`outputs.jsonl`** stores `capturedAt`, with the same problem.
+  `ensureRecord` behaves the same way.
+
+Both are named and commented so a later reader does not "fix" them into using
+the shared helper.
+
+## Migration, and why it refuses
+
+Version 1 identified an output by its execution. Version 2 identifies a record
+by its content, so **every id changes** and annotations must be rewritten.
+`agency eval label-migrate <old> <new>` does it out of place: opening a version
+1 store is refused with a pointer to that command, and the original is never
+touched.
+
+Content identity merges equal field maps, so two version 1 rows can become one
+record. If the same annotator answered the same question differently on each,
+rewriting both onto the merged id would turn two independent judgements into one
+relabel history — and because answers fold in **append order**, whichever row
+happened to be written second would win. Migration order would silently decide
+the dataset. So migration compares the effective answers first and **refuses**,
+naming the old ids and the conflicting questions.
+
+Two details that are easy to get wrong:
+
+- The comparison folds answers under each **old** output id. Asking for the
+  effective answers of the new id before anything is rewritten returns nothing,
+  and every conflict passes unnoticed.
+- Annotations are rewritten in their original order, not collapsed into one
+  synthetic row. Collapsing would discard history, timing and note edits.
+
+Publication is staged: everything is written to a sibling directory whose
+manifest goes last, the result is opened through the ordinary read path to prove
+it is readable, and only then is it renamed into place. A crash leaves a staging
+directory that the next run reclaims — after checking a marker file that says
+this exact migration created it, and removing only the entries this code writes.
+
 ## What is not built yet
 
 No judges, no agreement measurement, no calibration, no multi-annotator
-reconciliation, no active learning, no pairwise UI. The schema carries
+reconciliation, no active learning, no pairwise UI. **No editing a record**
+either: changing a field changes the artifact, and an old label is not evidence
+about a new one. Re-ingest with the framing you want instead. Doing it properly
+needs a supersession relation, a rule for which record a later session shows,
+and a way to rebind an in-progress session whose output ids moved — none of
+which ingest requires, so it was deferred rather than half-built. The schema carries
 `annotator.kind` so machine judgements can share it later, and judge
 annotations are intended for a separate file — a judge scores every output on
 every run, and that volume must not bury the human labels it is measured

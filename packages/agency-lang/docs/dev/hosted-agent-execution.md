@@ -207,6 +207,28 @@ POST /serve/:userId/:projectId/:filename/resume
 
 ---
 
+## 6. `agency remote` (agency-lang `lib/cli/remote/`)
+
+`agency remote` is the CLI surface for a hosted agent — the ceremony a client would otherwise hand-write against the serve routes. Five subcommands:
+
+- **`remote link`** — show, or set with `--url`, the linked agent (stored as `remote.serveUrl` in `agency.json`).
+- **`remote deploy <file>`** — upload + link (reuses the `deploy()` engine). Warns, and on a TTY confirms, if the agent exports no nodes/functions.
+- **`remote ls`** — the callable nodes/functions (`GET /list`).
+- **`remote call <name>`** — invoke a node (or `--function`) and drive the interrupt cycle.
+- **`remote open`** — the project page in a browser.
+
+**One interrupt mechanism, shared with `agency run`.** `remote call` reuses the runtime's `resolveInterrupts` + `buildDecider` (`lib/runtime/interruptResolution.ts`); it differs from a local run only in the resume transport (HTTP `/resume` vs in-process). It borrows run's flags — `--interactive`, `--policy`, `--approve`, `--reject` — through `resolveRunPolicy`. With no such flag a surfaced interrupt is reported unhandled and exits, exactly like `run`. **The remote policy acts on *surfaced* interrupts only** (the server's own handlers ran first), unlike run's in-chain policy.
+
+**`--function` is one-shot.** Served functions have no resume path (`runExportedFunction` is a stateless frame; an unhandled function interrupt fails at checkpoint creation and comes back wrapped in a success envelope — see `functionFrame.integration.test.ts`). So `remote call --function` prints the result and never enters the resume loop.
+
+**The sealed statelog wire** lives in `lib/cli/statelog/`: `serveUrl.ts` (origin-checked, canonical `/serve/:user/:project/:file` parsing and route building) and `serveClient.ts` (`createServeClient` → `fetchManifest`/`invokeNode`/`invokeFunction`/`resume`, returning the runtime's `InterruptResult`/`ResumeFn` so the shared driver consumes them directly). The binding, arg coercion, decider, prompts, browser launch, and rendering each sit behind their own module in `lib/cli/remote/`; the command files are thin recipes.
+
+Top-level `agency deploy` is now a hidden **deprecated shim** for `agency remote deploy` (same behavior, plus a notice, no binding write).
+
+**Deferred (need statelog changes):** `remote inspect` (files/last-upload), `remote pull` (source zip), and `remote logs` (traces in the CLI viewer) — all read routes that are browser-session-only today. A statelog "whoami" route would let the binding drop its cached `userId`.
+
+---
+
 ## Running a deployed agent (curl)
 
 ```bash
@@ -236,7 +258,7 @@ These are accepted for the current trusted, single-tenant posture and tracked in
 
 ## Follow-ups
 
-- **`agency call`** — a CLI command to invoke a hosted node/function and drive the interrupt/resume loop, hiding the "check `success`, detect interrupts, thread through `/resume`" ceremony. Design was scoped (the open fork was the interrupt UX: interactive prompt vs non-interactive policy) but the work is **punted**.
+- **`agency call`** — ✅ **shipped as `agency remote call`** (section 6). The interrupt-UX fork resolved to "mirror `agency run`."
 - **First-class observability binding** — replace the ambient `withRuntimeConfigOverrides` + import-mutex with a supported `createServeHandler({ observability })` option that agency-lang applies internally. Filed as an agency-lang issue.
 - **statelog#11** — the containment, sibling-cache, and atomicity items above.
 - **Minimal statelog UI** — an upload/list/invoke browser flow with a jump to a run's trace. Deferred in favor of the CLI (`agency deploy`) path.

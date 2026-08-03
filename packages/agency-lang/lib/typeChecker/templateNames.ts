@@ -12,6 +12,7 @@ import {
 import { resolveCall } from "./resolveCall.js";
 import { resolveVariable } from "./resolveVariable.js";
 import { buildScopes } from "./scopes.js";
+import { collectProgramShadowing } from "./shadowing.js";
 import { ANY_T } from "./primitives.js";
 import type { AgencyConfig } from "../config.js";
 import type { AgencyNode, AgencyProgram, CodeLiteral } from "../types.js";
@@ -95,8 +96,9 @@ export function checkTemplateNames(ctx: TypeCheckerContext): void {
   if (holeNames(ctx.programNodes).length > 0) {
     const findings = findUndefinedTemplateNames(ctx.programNodes, ctx.config);
     reportTemplateNameFindings(findings, ctx);
-    return;
   }
+  // The literal loop still runs: the walker treats a literal's nodes as
+  // opaque, so the whole-file pass above never looked inside them.
   for (const visit of walkNodesArray(ctx.programNodes)) {
     if (visit.node.type !== "codeLiteral") {
       continue;
@@ -134,6 +136,10 @@ function templateNameScopes(
 ): TemplateNameScope[] {
   const program: AgencyProgram = { type: "agencyProgram", nodes };
   const context = isolatedContext(program, config);
+  // `walkScopeBody` has no `importNodeStatement` case, so an `import node`
+  // the template makes itself has no lexical-scope fallback. Collect those
+  // names here or a template-local imported node looks undefined.
+  const { importedNodeNames } = collectProgramShadowing(nodes);
   return buildScopes(context).map((info) => ({
     body: info.body,
     kind: info.name === "top-level" ? "topLevel" : "definition",
@@ -143,7 +149,7 @@ function templateNameScopes(
         functionDefs: context.functionDefs,
         nodeDefs: context.nodeDefs,
         importedFunctions: context.importedFunctions,
-        importedNodeNames: [],
+        importedNodeNames,
         jsImportedNames: context.jsImportedNames,
         scopeHas: (candidate: string) => info.scope.has(candidate),
       }).kind !== "unresolved",
@@ -153,7 +159,7 @@ function templateNameScopes(
         functionDefs: context.functionDefs,
         nodeDefs: context.nodeDefs,
         importedFunctions: context.importedFunctions,
-        importedNodeNames: [],
+        importedNodeNames,
         jsImportedNames: context.jsImportedNames,
         scopeHas: (candidate: string) => info.scope.has(candidate),
       }).kind !== "unresolved",

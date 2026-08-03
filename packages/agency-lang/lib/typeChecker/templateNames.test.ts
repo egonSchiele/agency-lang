@@ -357,4 +357,85 @@ describe("AG8015: template files", () => {
     expect(codesOf(source)).toContain("AG4004");
     expect(codesOf(source)).not.toContain("AG8015");
   });
+
+  it("still checks a literal inside a file that has its own hole", () => {
+    // The whole-file walk treats a literal's nodes as opaque, so the
+    // literal loop has to keep running after the file-level report.
+    const source = [
+      "#helpers",
+      "",
+      "node main(): string {",
+      "  const template = [|",
+      "    node inner(): string {",
+      "      return missingInLiteral()",
+      "    }",
+      "  |]",
+      '  return "x"',
+      "}",
+      "",
+    ].join("\n");
+    expect(messageFor(source, "AG8015")).toBeDefined();
+    const names = diagnosticsOf(source)
+      .filter((found) => found.code === "AG8015")
+      .map((found) => found.message);
+    expect(names.some((message) => message.includes("missingInLiteral"))).toBe(
+      true,
+    );
+  });
+
+  it("keeps checking JS namespace members in a template file", () => {
+    // AG8015 sees `nosuch` as a method, not a lexical name, so the
+    // ordinary pass has to keep covering this position.
+    const source = [
+      "#helpers",
+      "",
+      "node main(): number {",
+      "  return Math.nosuch(1)",
+      "}",
+      "",
+    ].join("\n");
+    expect(codesOf(source)).toContain("AG4004");
+  });
+});
+
+describe("AG8015: names reached through an access", () => {
+  it("reports an index expression the template does not define", () => {
+    const source = withLiteral([
+      "    const items = [1, 2]",
+      "    print(items[missingIndex])",
+    ]);
+    expect(codesOf(source)).toContain("AG8015");
+    expect(messageFor(source, "AG8015")).toMatch(/missingIndex/);
+  });
+
+  it("says nothing about an index the template declares", () => {
+    const source = withLiteral([
+      "    const items = [1, 2]",
+      "    const i = 0",
+      "    print(items[i])",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+});
+
+describe("AG8015: a template's own imported node", () => {
+  it("says nothing about a direct call to it", () => {
+    const source = withLiteral([
+      '    import node { helper } from "./helper.agency"',
+      "",
+      "    node main(): string {",
+      "      return helper()",
+      "    }",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+
+  it("says nothing about a first-class reference to it", () => {
+    const source = withLiteral([
+      '    import node { helper } from "./helper.agency"',
+      "",
+      "    const tool = helper",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
 });

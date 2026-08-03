@@ -40,10 +40,11 @@ export function checkUndefinedFunctions(
   const mode = ctx.config.typechecker?.undefinedFunctions ?? "warn";
   if (mode === "silent") return;
 
-  // A file with holes is a template. AG8015 owns every call name in it, so
-  // reporting here too would double up. The JS-namespace chain check below
-  // goes quiet in such a file as well.
-  if (holeNames(ctx.programNodes).length > 0) return;
+  // A file with holes is a template. AG8015 owns bare call names in it, so
+  // reporting them here too would double up. It does not look at JS
+  // namespace members — `nosuch` in `Math.nosuch()` is a method to it, not
+  // a lexical name — so the chain check below keeps running.
+  const isTemplateFile = holeNames(ctx.programNodes).length > 0;
 
   const shadowing = collectProgramShadowing(ctx.programNodes);
 
@@ -58,6 +59,7 @@ export function checkUndefinedFunctions(
         if (isTopLevel && hasFunctionOrNodeAncestor(ancestors)) continue;
 
         if (node.type === "functionCall") {
+          if (isTemplateFile) continue;
           if (!isResolvableBareCall(node, ancestors)) continue;
           checkBareCall(node, info.scope, ctx, mode, shadowing.importedNodeNames);
         } else if (node.type === "valueAccess") {

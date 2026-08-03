@@ -29,11 +29,15 @@ export function hasFunctionOrNodeAncestor(
 /**
  * Is this `variableName` a real read that has to resolve?
  *
- * Three positions look like reads and are not. A property name in
- * `obj.x` is not a lookup. A `for` binder is a declaration. A block-call
- * parameter, as in `xs.map(\(item) -> item)`, is a binding the
- * typechecker's `Scope` does not track at all, so resolving it would
- * always fail.
+ * Two positions look like reads and are not. A `for` binder is a
+ * declaration. A block-call parameter, as in `xs.map(\(item) -> item)`,
+ * is a binding the typechecker's `Scope` does not track at all, so
+ * resolving it would always fail.
+ *
+ * Names under a `valueAccess` are all real reads. A property name is not
+ * a lookup, but `walkNodes` never yields one as a standalone name; what
+ * it does yield with the access as parent is the base and the index and
+ * slice expressions, as in `obj[i]` and `obj[lo:hi]`.
  */
 export function isResolvableVariableReference(
   ref: VariableNameLiteral,
@@ -41,11 +45,6 @@ export function isResolvableVariableReference(
 ): boolean {
   const parent = ancestors[ancestors.length - 1] as AgencyNode | undefined;
   if (!parent) {
-    return false;
-  }
-  // The base of `obj.x` is a real reference. The property is not, and
-  // walkNodes does not yield it as a standalone name anyway.
-  if (parent.type === "valueAccess" && parent.base !== ref) {
     return false;
   }
   for (const ancestor of ancestors) {

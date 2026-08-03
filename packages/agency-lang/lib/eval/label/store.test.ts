@@ -14,6 +14,7 @@ let definitionPath: string;
 const warnings: string[] = [];
 
 const OUTPUT_ID = `out_${"a".repeat(64)}`;
+const SESSION_ID = `session_${"c".repeat(64)}`;
 const HASH_ZERO = `sha256:${"0".repeat(64)}`;
 
 beforeEach(() => {
@@ -81,7 +82,7 @@ function annotationRow(revision: ChecklistRevision, over: Partial<AnnotationRow>
 describe("openStore", () => {
   it("opens an empty store and writes a manifest", () => {
     const store = open();
-    expect(store.annotationSnapshot()).toEqual([]);
+    expect(store.readSession(SESSION_ID).annotations).toEqual([]);
     expect(JSON.parse(fs.readFileSync(path.join(storeDir, "manifest.json"), "utf8")))
       .toEqual({ schemaVersion: 1 });
     store.close();
@@ -193,7 +194,7 @@ describe("appendAnnotation", () => {
     appendRaw("outputs.jsonl", corpusRow());
     const store = open();
     expect(store.appendAnnotation(annotationRow(revision))).toBe("appended");
-    expect(store.annotationSnapshot()).toHaveLength(1);
+    expect(store.readSession(SESSION_ID).annotations).toHaveLength(1);
     store.close();
   });
 
@@ -203,7 +204,7 @@ describe("appendAnnotation", () => {
     const store = open();
     store.appendAnnotation(annotationRow(revision));
     expect(store.appendAnnotation(annotationRow(revision))).toBe("replayed");
-    expect(store.annotationSnapshot()).toHaveLength(1);
+    expect(store.readSession(SESSION_ID).annotations).toHaveLength(1);
     store.close();
   });
 
@@ -227,6 +228,66 @@ describe("appendAnnotation", () => {
   it("refuses every operation after close", () => {
     const store = open();
     store.close();
-    expect(() => store.annotationSnapshot()).toThrow(/closed/i);
+    expect(() => store.readSession(SESSION_ID).annotations).toThrow(/closed/i);
+  });
+});
+
+describe("readSession and saveDraft", () => {
+  function draftFor(sessionId: string) {
+    return {
+      schemaVersion: 1 as const,
+      sessionId,
+      binding: {
+        outputIds: [OUTPUT_ID],
+        checklistId: "cl_news",
+        checklist: { kind: "published" as const, version: 1, hash: HASH_ZERO },
+        annotator: { kind: "human" as const, id: "adit" },
+      },
+      currentIndex: 0,
+      answersByOutputId: {},
+      notesByOutputId: {},
+      reviewedByOutputId: {},
+      stagedQuestions: null,
+      pendingRevision: null,
+      pendingAnnotation: null,
+      activeMsByOutputId: {},
+    };
+  }
+
+  it("reports no draft for a session that has none", () => {
+    const store = open();
+    expect(store.readSession(SESSION_ID).draft).toBeNull();
+    store.close();
+  });
+
+  it("round-trips a draft through the facade", () => {
+    const store = open();
+    store.saveDraft(draftFor(SESSION_ID));
+    expect(store.readSession(SESSION_ID).draft?.currentIndex).toBe(0);
+    store.close();
+  });
+
+  it("returns a frozen projection, not a mutable internal reference", () => {
+    const store = open();
+    const snapshot = store.readSession(SESSION_ID);
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot.annotationIds)).toBe(true);
+    store.close();
+  });
+
+  it("indexes annotation ids for O(1) replay checks", () => {
+    const revision = publishChecklist();
+    appendRaw("outputs.jsonl", corpusRow());
+    const store = open();
+    store.appendAnnotation(annotationRow(revision));
+    expect(store.readSession(SESSION_ID).annotationIds).toEqual({ ann_one: true });
+    store.close();
+  });
+
+  it("validates a draft before writing it", () => {
+    const store = open();
+    const invalid = { ...draftFor(SESSION_ID), currentIndex: -1 };
+    expect(() => store.saveDraft(invalid)).toThrow();
+    store.close();
   });
 });

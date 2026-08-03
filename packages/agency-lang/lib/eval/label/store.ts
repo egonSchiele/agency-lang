@@ -22,6 +22,7 @@ import {
   type PublishRevisionResult,
 } from "./checklist.js";
 import { openCorpusLog } from "./corpus.js";
+import { loadDraftFile, saveDraftFile, type Draft } from "./draft.js";
 import { atomicWriteValidated, type OpenedJsonl } from "./jsonl.js";
 import type { StoreLock } from "./lock.js";
 import {
@@ -58,9 +59,18 @@ export type CaptureSourceArgs = {
  * get bypassed. Callers get read-only projections and whole idempotent
  * operations.
  */
+/** What one session needs to reconstruct itself: the completed history, an
+ *  O(1) replay index, and its own in-progress draft if there is one. */
+export type LabelStoreSnapshot = {
+  draft: DeepReadonly<Draft> | null;
+  annotations: readonly DeepReadonly<AnnotationRow>[];
+  annotationIds: Readonly<Record<string, true>>;
+};
+
 export type LabelStore = {
   captureSource(args: CaptureSourceArgs): CaptureResult;
-  annotationSnapshot(): readonly DeepReadonly<AnnotationRow>[];
+  readSession(sessionId: string): DeepReadonly<LabelStoreSnapshot>;
+  saveDraft(draft: Draft): void;
   corpusSnapshot(): readonly DeepReadonly<CorpusRow>[];
   checklistSnapshot(checklistId: string, version?: number): DeepReadonly<ChecklistRevision>;
   prepareChecklist(definition: NormalizedDefinition): PrepareChecklistResult;
@@ -108,9 +118,23 @@ export function openStore(args: OpenStoreArgs): LabelStore {
       });
     },
 
-    annotationSnapshot(): readonly DeepReadonly<AnnotationRow>[] {
+    readSession(sessionId: string): DeepReadonly<LabelStoreSnapshot> {
       assertOpen();
-      return annotations.rows();
+      const rows = annotations.rows();
+      const annotationIds: Record<string, true> = {};
+      for (const row of rows as readonly AnnotationRow[]) {
+        annotationIds[row.annotationId] = true;
+      }
+      return Object.freeze({
+        draft: loadDraftFile(args.storeDir, sessionId) ?? null,
+        annotations: rows,
+        annotationIds: Object.freeze(annotationIds),
+      });
+    },
+
+    saveDraft(draft: Draft): void {
+      assertOpen();
+      saveDraftFile(args.storeDir, draft);
     },
 
     corpusSnapshot(): readonly DeepReadonly<CorpusRow>[] {

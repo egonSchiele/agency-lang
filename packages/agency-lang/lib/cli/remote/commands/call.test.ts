@@ -86,6 +86,15 @@ describe("runCall", () => {
     expect(fakeClient.resume).not.toHaveBeenCalled();
   });
 
+  it("a failed function (serve client throws) exits non-zero, not a success result", async () => {
+    fakeClient.invokeFunction.mockRejectedValueOnce(new Error("boom"));
+    await expect(
+      runCall("f", { function: true }, context()),
+    ).rejects.toBeInstanceOf(ProcessExit);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(logs.join("\n")).not.toContain("Result:");
+  });
+
   it("a resume failure becomes one clean CLI error", async () => {
     fakeClient.invokeNode.mockResolvedValueOnce({ data: [intr("X")] });
     fakeClient.resume.mockRejectedValueOnce(new Error("resume boom"));

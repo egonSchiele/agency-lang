@@ -6,6 +6,7 @@
 
 import { hasInterrupts } from "@/runtime/interrupts.js";
 import type { Interrupt } from "@/runtime/interrupts.js";
+import { isFailure } from "@/runtime/result.js";
 import type { InterruptResult, ResumeFn } from "@/runtime/interruptResolution.js";
 import { serveRouteUrl } from "./serveUrl.js";
 import type { ServeAddress } from "./serveUrl.js";
@@ -120,7 +121,9 @@ export function createServeClient(address: ServeAddress, apiKey: string): ServeC
   }
 
   async function invokeFunction(name: string, args: Record<string, unknown>): Promise<unknown> {
-    return requestValue(serveRouteUrl(address.serveUrl, ["function", name]), args);
+    const value = await requestValue(serveRouteUrl(address.serveUrl, ["function", name]), args);
+    throwIfAgentFailure(value);
+    return value;
   }
 
   const resume: ResumeFn<InterruptResult> = async (interrupts, responses) => {
@@ -148,7 +151,23 @@ function toInterruptResult(value: unknown): InterruptResult {
       return { data: wrapped.interrupts as Interrupt[] };
     }
   }
+  // A final value that is a failed AgencyResult is an agent failure, not a
+  // result to print — surface it as an error (a served function that raises an
+  // unhandled interrupt lands here, one-shot, wrapped in the success envelope).
+  throwIfAgentFailure(value);
   return { data: value };
+}
+
+/** The serve adapter wraps a function/node's own result in its success
+ *  envelope, so a failed AgencyResult arrives as a "successful" value. Treat it
+ *  as the failure it is. A *successful* Result passes through untouched. */
+function throwIfAgentFailure(value: unknown): void {
+  if (isFailure(value)) {
+    const error = (value as { error?: unknown }).error;
+    throw new ServeRequestError(
+      typeof error === "string" ? error : "the served agent returned a failure",
+    );
+  }
 }
 
 function validateManifest(json: unknown): ServeManifest {

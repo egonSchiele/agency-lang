@@ -9,7 +9,12 @@ export type RemoteArgsOptions = {
 };
 
 export function buildArgs(options: RemoteArgsOptions): Record<string, unknown> {
-  const args: Record<string, unknown> = { ...parseDataBase(options.data) };
+  // Null-prototype: arg names are user-controlled, so a key like "__proto__"
+  // must be a plain data property, not a write to the object's prototype.
+  const args: Record<string, unknown> = Object.create(null);
+  for (const [key, value] of Object.entries(parseDataBase(options.data))) {
+    args[key] = value;
+  }
   for (const pair of options.arg ?? []) {
     const equals = pair.indexOf("=");
     if (equals <= 0) {

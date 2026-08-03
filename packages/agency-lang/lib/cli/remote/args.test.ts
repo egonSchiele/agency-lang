@@ -30,4 +30,11 @@ describe("buildArgs", () => {
     expect(() => buildArgs({ data: "[1,2]" })).toThrow();
     expect(() => buildArgs({ data: "not json" })).toThrow();
   });
+
+  it("stores a __proto__ arg as data without polluting the prototype", () => {
+    const result = buildArgs({ arg: ["__proto__=x"] });
+    expect(Object.getPrototypeOf(result)).toBeNull();
+    expect(result["__proto__"]).toBe("x");
+    expect(({} as Record<string, unknown>).x).toBeUndefined();
+  });
 });

@@ -33,9 +33,10 @@ export async function runCall(
     const decide = resolveRemoteDecision(options);
     const client = createServeClient(binding, apiKey);
 
-    // Functions are one-shot — no resume path (see the served-function
-    // integration test); a surfaced function interrupt comes back as a serve
-    // error and is reported like any other failure.
+    // Functions are one-shot — no resume path. A surfaced function interrupt
+    // (or any failed AgencyResult) is recognized at the serve-client boundary
+    // and thrown as a ServeRequestError, so it reaches the catch below and exits
+    // non-zero rather than printing a failure object with a success status.
     if (options.function) {
       const value = await client.invokeFunction(name, args);
       console.log(renderResult(value));

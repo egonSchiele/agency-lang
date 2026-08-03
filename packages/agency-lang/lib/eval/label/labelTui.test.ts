@@ -1,27 +1,30 @@
-import { EventEmitter } from "events";
-
 import { describe, expect, it, vi } from "vitest";
+
+import { ScriptedInput } from "@/tui/input/scripted.js";
+import type { KeyEvent } from "@/tui/input/types.js";
+import { FrameRecorder } from "@/tui/output/recorder.js";
+import { Screen } from "@/tui/screen.js";
 
 import type { LabelingSessionController } from "./controller.js";
 import {
   actionForKey,
   isQuitKey,
-  parseKeys,
-  renderLabelScreen,
+  labelScreen,
+  paneHeightFor,
+  renderChecklist,
+  pastedText,
   renderMarkdownSafely,
   runLabelTui,
+  sanitizeUntrusted,
   scrollDelta,
   stripAnsi,
-  visibleLength,
-  wrapAnsi,
 } from "./labelTui.js";
 import type { SessionAction, SessionSnapshot } from "./session.js";
 
-const BOLD = "\x1b[1m";
-const RESET = "\x1b[0m";
+const OUTPUT_ID = `out_${"a".repeat(64)}`;
 
 function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
-  const item = { outputId: `out_${"a".repeat(64)}`, task: "a task", text: "some output" };
+  const item = { outputId: OUTPUT_ID, task: "a task", text: "some output" };
   return {
     items: [item],
     itemIndex: 0,
@@ -35,8 +38,8 @@ function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
     answers: { q_a: true },
     note: "",
     editor: { kind: "none" },
-    statuses: { [item.outputId]: "untouched" },
-    scores: { [item.outputId]: null },
+    statuses: { [OUTPUT_ID]: "untouched" },
+    scores: { [OUTPUT_ID]: null },
     progress: { reviewed: 0, total: 1, stale: 0 },
     canSignOff: true,
     hasStagedQuestions: false,
@@ -44,45 +47,124 @@ function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
   };
 }
 
-describe("visibleLength", () => {
-  it("ignores colour codes", () => {
-    expect(visibleLength(`${BOLD}abc${RESET}`)).toBe(3);
+const key = (event: Partial<KeyEvent> & { key: string }): KeyEvent => event as KeyEvent;
+
+/** Lay the element tree out through the real engine and read it as plain
+ *  text — what the terminal would actually show, rather than a string this
+ *  module assembled and this test re-parsed. */
+function frameText(over: Partial<SessionSnapshot> = {}, size = { width: 100, height: 30 }): string {
+  const recorder = new FrameRecorder();
+  const screen = new Screen({
+    input: new ScriptedInput(),
+    output: recorder,
+    width: size.width,
+    height: size.height,
+  });
+  screen.render(labelScreen({
+    snapshot: snapshot(over),
+    storeLabel: "labels",
+    width: size.width,
+    height: size.height,
+    scroll: 0,
+    body: ["output line one", "output line two"],
+  }));
+  return recorder.lastText();
+}
+
+describe("frame content", () => {
+  it("shows the header with reviewed progress", () => {
+    const text = frameText();
+    expect(text).toContain("eval label");
+    expect(text).toContain("0/1 reviewed");
   });
 
-  it("ignores OSC-8 hyperlinks, which carry a URL in zero columns", () => {
-    const link = "\x1b]8;;https://example.com/very/long/path\x07label\x1b]8;;\x07";
-    expect(visibleLength(link)).toBe(5);
+  it("shows a ticked box for an answered question", () => {
+    expect(frameText()).toContain("[✓] Accurate?");
+  });
+
+  it("shows a deleted question with a dot box rather than hiding it", () => {
+    const text = frameText();
+    expect(text).toContain("[·]");
+    expect(text).toContain("Today?");
+  });
+
+  it("shows a dash rather than a number for an unscored item", () => {
+    expect(frameText()).toMatch(/untouched\s+—/);
+  });
+
+  it("reports stale items in the header", () => {
+    expect(frameText({ progress: { reviewed: 1, total: 3, stale: 2 } })).toContain("2 stale");
+  });
+
+  it("switches the footer to the question editor", () => {
+    expect(frameText({ editor: { kind: "question", draft: "Sourced?" } }))
+      .toContain("new question Sourced?");
+  });
+
+  it("labels d as undelete when the focused question is deleted", () => {
+    expect(frameText({ currentQuestion: { id: "q_b", text: "Today?", weight: 1, deleted: true } }))
+      .toContain("d undelete");
+  });
+
+  it("handles an empty corpus without throwing", () => {
+    expect(frameText({ currentItem: null, items: [] })).toContain("nothing to label");
+  });
+
+  it("shows the output body in the left pane", () => {
+    expect(frameText()).toContain("output line one");
+  });
+
+  it("keeps every rendered row within the terminal width", () => {
+    for (const row of frameText().split("\n")) {
+      expect(row.length).toBeLessThanOrEqual(100);
+    }
   });
 });
 
-describe("wrapAnsi", () => {
-  it("keeps every wrapped line within the width", () => {
-    for (const line of wrapAnsi("the quick brown fox jumps over the lazy dog", 12)) {
-      expect(visibleLength(line)).toBeLessThanOrEqual(12);
-    }
+describe("renderChecklist", () => {
+  it("reports the line the focused question starts on", () => {
+    expect(renderChecklist(snapshot({ questionIndex: 1 }), 40).focusLine).toBe(1);
   });
 
-  it("hard-breaks a token longer than the column", () => {
-    const lines = wrapAnsi("x".repeat(50), 10);
-    expect(lines.length).toBeGreaterThan(1);
-    for (const line of lines) {
-      expect(visibleLength(line)).toBeLessThanOrEqual(10);
-    }
+  it("accounts for wrapped questions when reporting the focus line", () => {
+    const questions = [
+      {
+        id: "q_a",
+        text: "A question long enough that it certainly wraps across several lines",
+        weight: 1,
+        deleted: false,
+      },
+      { id: "q_b", text: "Second", weight: 1, deleted: false },
+    ];
+    expect(renderChecklist(snapshot({ questions, questionIndex: 1 }), 24).focusLine)
+      .toBeGreaterThan(1);
+  });
+});
+
+describe("checklist viewport", () => {
+  function manyQuestions(count: number, focusIndex: number): Partial<SessionSnapshot> {
+    const questions = Array.from({ length: count }, (_, index) => ({
+      id: `q_${index}`, text: `Question number ${index}`, weight: 1, deleted: false,
+    }));
+    return { questions, questionIndex: focusIndex, currentQuestion: questions[focusIndex] };
+  }
+
+  it("keeps a question near the end of a long checklist visible", () => {
+    // Without followCursor the pane always starts at question 0, so Space and
+    // Enter would act on a checkbox the reader cannot see.
+    expect(frameText(manyQuestions(40, 39), { width: 100, height: 20 }))
+      .toContain("Question number 39");
   });
 
-  it("loses no visible words", () => {
-    const source = "alpha beta gamma delta epsilon zeta";
-    const joined = stripAnsi(wrapAnsi(source, 9).join(" "));
-    for (const word of source.split(" ")) {
-      expect(joined).toContain(word);
-    }
+  it("still shows the first question when focus is at the top", () => {
+    expect(frameText(manyQuestions(40, 0), { width: 100, height: 20 }))
+      .toContain("Question number 0");
   });
 
-  it("does not let a hyperlink swallow the text after it", () => {
-    const source = "(\x1b]8;;https://example.com/a/b/c\x07site\x1b]8;;\x07) and more words here";
-    const joined = wrapAnsi(source, 40).join(" ");
-    expect(joined).toContain("and more words here");
-    expect(joined).toContain("site");
+  it("does not scroll a checklist that already fits", () => {
+    const text = frameText(manyQuestions(3, 2), { width: 100, height: 30 });
+    expect(text).toContain("Question number 0");
+    expect(text).toContain("Question number 2");
   });
 });
 
@@ -94,145 +176,94 @@ describe("renderMarkdownSafely", () => {
       expect(rendered).toContain(word);
     }
   });
-
-  it("returns plain text unchanged when there is nothing to highlight", () => {
-    expect(stripAnsi(renderMarkdownSafely("plain"))).toContain("plain");
-  });
-});
-
-describe("renderLabelScreen", () => {
-  const base = { storeLabel: "labels", columns: 100, rows: 30, scroll: 0, body: ["output line"] };
-
-  it("aligns the divider on every body row", () => {
-    const frame = stripAnsi(renderLabelScreen({ ...base, snapshot: snapshot() }));
-    const columns = frame.split("\n").slice(5, 15).map((line) => line.indexOf("│"));
-    expect(new Set(columns.filter((column) => column >= 0)).size).toBe(1);
-  });
-
-  it("shows a ticked box for an answered question and an empty one otherwise", () => {
-    const frame = stripAnsi(renderLabelScreen({ ...base, snapshot: snapshot() }));
-    expect(frame).toContain("[✓] Accurate?");
-  });
-
-  it("shows a deleted question with a dot box rather than hiding it", () => {
-    const frame = stripAnsi(renderLabelScreen({ ...base, snapshot: snapshot() }));
-    expect(frame).toContain("[·]");
-    expect(frame).toContain("Today?");
-  });
-
-  it("shows a dash rather than a number for an unscored item", () => {
-    const frame = stripAnsi(renderLabelScreen({ ...base, snapshot: snapshot() }));
-    expect(frame).toMatch(/untouched\s+—/);
-  });
-
-  it("reports stale items in the header", () => {
-    const frame = stripAnsi(renderLabelScreen({
-      ...base, snapshot: snapshot({ progress: { reviewed: 1, total: 3, stale: 2 } }),
-    }));
-    expect(frame).toContain("2 stale");
-  });
-
-  it("switches the footer to the question editor", () => {
-    const frame = stripAnsi(renderLabelScreen({
-      ...base, snapshot: snapshot({ editor: { kind: "question", draft: "Sourced?" } }),
-    }));
-    expect(frame).toContain("new question Sourced?");
-  });
-
-  it("labels d as undelete when the focused question is deleted", () => {
-    const frame = stripAnsi(renderLabelScreen({
-      ...base,
-      snapshot: snapshot({ currentQuestion: { id: "q_b", text: "Today?", weight: 1, deleted: true } }),
-    }));
-    expect(frame).toContain("d undelete");
-  });
-
-  it("handles an empty corpus without throwing", () => {
-    const frame = stripAnsi(renderLabelScreen({
-      ...base, snapshot: snapshot({ currentItem: null, items: [] }),
-    }));
-    expect(frame).toContain("nothing to label");
-  });
-});
-
-describe("parseKeys", () => {
-  it("parses arrows from one chunk", () => {
-    expect(parseKeys("\x1b[A\x1b[B\x1b[C\x1b[D").map((key) => key.kind))
-      .toEqual(["up", "down", "right", "left"]);
-  });
-
-  it("parses enter, escape and backspace", () => {
-    expect(parseKeys("\r\x1b\x7f").map((key) => key.kind)).toEqual(["enter", "escape", "backspace"]);
-  });
-
-  it("parses a space as a character", () => {
-    expect(parseKeys(" ")).toEqual([{ kind: "char", value: " " }]);
-  });
 });
 
 describe("actionForKey", () => {
   it("maps navigation and toggling while labelling", () => {
-    expect(actionForKey({ kind: "char", value: " " }, false)).toEqual({ kind: "toggleAnswer" });
-    expect(actionForKey({ kind: "left" }, false)).toEqual({ kind: "previousItem" });
-    expect(actionForKey({ kind: "up" }, false)).toEqual({ kind: "previousQuestion" });
-    expect(actionForKey({ kind: "enter" }, false)).toEqual({ kind: "signOff" });
-    expect(actionForKey({ kind: "char", value: "d" }, false)).toEqual({ kind: "toggleQuestionDeleted" });
+    expect(actionForKey(key({ key: " " }), false)).toEqual({ kind: "toggleAnswer" });
+    expect(actionForKey(key({ key: "left" }), false)).toEqual({ kind: "previousItem" });
+    expect(actionForKey(key({ key: "up" }), false)).toEqual({ kind: "previousQuestion" });
+    expect(actionForKey(key({ key: "enter" }), false)).toEqual({ kind: "signOff" });
+    expect(actionForKey(key({ key: "d" }), false)).toEqual({ kind: "toggleQuestionDeleted" });
   });
 
   it("routes printable keys into the editor while editing", () => {
-    expect(actionForKey({ kind: "char", value: "x" }, true))
-      .toEqual({ kind: "appendEditorText", text: "x" });
-    expect(actionForKey({ kind: "enter" }, true)).toEqual({ kind: "submitEditor" });
-    expect(actionForKey({ kind: "escape" }, true)).toEqual({ kind: "cancelEditor" });
+    expect(actionForKey(key({ key: "x" }), true)).toEqual({ kind: "appendEditorText", text: "x" });
+    expect(actionForKey(key({ key: "enter" }), true)).toEqual({ kind: "submitEditor" });
+    expect(actionForKey(key({ key: "escape" }), true)).toEqual({ kind: "cancelEditor" });
   });
 
-  it("keeps a control key out of the editor text", () => {
-    expect(actionForKey({ kind: "char", value: "\x06" }, true)).toBeNull();
+  it("keeps a ctrl chord out of the editor text", () => {
+    expect(actionForKey(key({ key: "f", ctrl: true }), true)).toBeNull();
   });
 
-  it("does not treat space as a toggle while editing", () => {
-    expect(actionForKey({ kind: "char", value: " " }, true))
-      .toEqual({ kind: "appendEditorText", text: " " });
+  it("does not treat a ctrl chord as a command while labelling", () => {
+    expect(actionForKey(key({ key: "d", ctrl: true }), false)).toBeNull();
+  });
+
+  it("treats space as text while editing, not as a toggle", () => {
+    expect(actionForKey(key({ key: " " }), true)).toEqual({ kind: "appendEditorText", text: " " });
+  });
+});
+
+describe("paste in the editor", () => {
+  it("appends the whole clipboard in one action", () => {
+    expect(actionForKey(key({ key: "paste", text: "some pasted text" }), true))
+      .toEqual({ kind: "appendEditorText", text: "some pasted text" });
+  });
+
+  it("is ignored outside the editor, where keys are commands", () => {
+    expect(actionForKey(key({ key: "paste", text: "x" }), false)).toBeNull();
+  });
+
+  it("ignores an empty paste rather than dispatching a no-op", () => {
+    expect(actionForKey(key({ key: "paste", text: "" }), true)).toBeNull();
+  });
+
+  it("collapses newlines and tabs, because the draft renders on one row", () => {
+    expect(pastedText("first\nsecond\tthird")).toBe("first second third");
+  });
+
+  it("drops other control characters from pasted text", () => {
+    expect(pastedText("safe\x1b[2Jhidden")).toBe("safe[2Jhidden");
+  });
+
+  it("leaves ordinary pasted text alone", () => {
+    expect(pastedText("Is the information accurate?")).toBe("Is the information accurate?");
   });
 });
 
 describe("scrollDelta and isQuitKey", () => {
-  it("scrolls by a page with ctrl-f and ctrl-b", () => {
-    expect(scrollDelta({ kind: "char", value: "\x06" }, 30)).toBeGreaterThan(0);
-    expect(scrollDelta({ kind: "char", value: "\x02" }, 30)).toBeLessThan(0);
+  it("pages with ctrl-f and ctrl-b", () => {
+    expect(scrollDelta(key({ key: "f", ctrl: true }), 20)).toBeGreaterThan(0);
+    expect(scrollDelta(key({ key: "b", ctrl: true }), 20)).toBeLessThan(0);
   });
 
-  it("scrolls by half a page with ctrl-d and ctrl-u", () => {
-    expect(scrollDelta({ kind: "char", value: "\x04" }, 30))
-      .toBeLessThan(scrollDelta({ kind: "char", value: "\x06" }, 30));
+  it("half-pages with ctrl-d and ctrl-u", () => {
+    expect(scrollDelta(key({ key: "d", ctrl: true }), 20))
+      .toBeLessThan(scrollDelta(key({ key: "f", ctrl: true }), 20));
+  });
+
+  it("ignores the same letters without ctrl, which are commands", () => {
+    expect(scrollDelta(key({ key: "d" }), 20)).toBe(0);
+  });
+
+  it("pages with the dedicated pageup and pagedown keys", () => {
+    expect(scrollDelta(key({ key: "pagedown" }), 20)).toBeGreaterThan(0);
+    expect(scrollDelta(key({ key: "pageup" }), 20)).toBeLessThan(0);
+  });
+
+  it("pages the same distance whether by page key or ctrl chord", () => {
+    expect(scrollDelta(key({ key: "pagedown" }), 20))
+      .toBe(scrollDelta(key({ key: "f", ctrl: true }), 20));
   });
 
   it("treats q and ctrl-c as quit", () => {
-    expect(isQuitKey({ kind: "char", value: "q" })).toBe(true);
-    expect(isQuitKey({ kind: "char", value: "\x03" })).toBe(true);
-    expect(isQuitKey({ kind: "char", value: "a" })).toBe(false);
+    expect(isQuitKey(key({ key: "q" }))).toBe(true);
+    expect(isQuitKey(key({ key: "c", ctrl: true }))).toBe(true);
+    expect(isQuitKey(key({ key: "c" }))).toBe(false);
   });
 });
-
-/** A terminal pair that records what was written and lets a test push keys. */
-function fakeTerminal(isTTY = true) {
-  const input = new EventEmitter() as unknown as NodeJS.ReadStream & {
-    setRawMode: ReturnType<typeof vi.fn>;
-    isRaw: boolean;
-  };
-  input.isTTY = isTTY;
-  input.isRaw = false;
-  input.setRawMode = vi.fn((raw: boolean) => { input.isRaw = raw; return input; });
-  input.resume = vi.fn(() => input);
-  input.pause = vi.fn(() => input);
-  input.setEncoding = vi.fn(() => input);
-  const written: string[] = [];
-  const output = {
-    isTTY, columns: 100, rows: 30,
-    write: (text: string) => { written.push(text); return true; },
-  } as unknown as NodeJS.WriteStream;
-  return { input, output, written };
-}
 
 function fakeController(over: Partial<SessionSnapshot> = {}) {
   const dispatched: SessionAction[] = [];
@@ -244,58 +275,96 @@ function fakeController(over: Partial<SessionSnapshot> = {}) {
   return { controller, dispatched };
 }
 
-describe("runLabelTui", () => {
-  it("refuses a non-interactive terminal", async () => {
-    const { input, output } = fakeTerminal(false);
-    const { controller } = fakeController();
-    await expect(runLabelTui({ controller, input, output }))
-      .rejects.toThrow(/interactive terminal/i);
+function scriptedScreen(keys: (KeyEvent | string)[]) {
+  const recorder = new FrameRecorder();
+  const screen = new Screen({
+    input: new ScriptedInput(keys),
+    output: recorder,
+    width: 100,
+    height: 30,
   });
+  return { screen, recorder };
+}
 
-  it("draws a frame on start and restores raw mode on quit", async () => {
-    const { input, output, written } = fakeTerminal();
+describe("runLabelTui", () => {
+  it("draws a frame and exits on quit", async () => {
+    const { screen, recorder } = scriptedScreen(["q"]);
     const { controller } = fakeController();
-    const done = runLabelTui({ controller, input, output });
-    expect(written.length).toBeGreaterThan(0);
-    input.emit("data", "q");
-    await done;
-    expect(input.setRawMode).toHaveBeenLastCalledWith(false);
+    await runLabelTui({ controller, screen });
+    expect(recorder.frames.length).toBeGreaterThan(0);
+    expect(recorder.lastText()).toContain("eval label");
   });
 
   it("dispatches the action a key maps to", async () => {
-    const { input, output } = fakeTerminal();
+    const { screen } = scriptedScreen([" ", "q"]);
     const { controller, dispatched } = fakeController();
-    const done = runLabelTui({ controller, input, output });
-    input.emit("data", " ");
-    input.emit("data", "q");
-    await done;
+    await runLabelTui({ controller, screen });
     expect(dispatched).toContainEqual({ kind: "toggleAnswer" });
   });
 
-  it("restores raw mode when the controller throws", async () => {
-    const { input, output } = fakeTerminal();
+  it("does not dispatch for a page key either", async () => {
+    const { screen } = scriptedScreen([key({ key: "pagedown" }), "q"]);
+    const { controller, dispatched } = fakeController();
+    await runLabelTui({ controller, screen });
+    expect(dispatched).toEqual([]);
+  });
+
+  it("does not dispatch for a scroll chord", async () => {
+    const { screen } = scriptedScreen([key({ key: "f", ctrl: true }), "q"]);
+    const { controller, dispatched } = fakeController();
+    await runLabelTui({ controller, screen });
+    expect(dispatched).toEqual([]);
+  });
+
+  it("propagates a controller failure rather than swallowing it", async () => {
+    const { screen } = scriptedScreen([" "]);
     const controller: LabelingSessionController = {
       snapshot: () => snapshot(),
       dispatch: async () => { throw new Error("controller exploded"); },
       close: async () => {},
     };
-    const done = runLabelTui({ controller, input, output });
-    input.emit("data", " ");
-    await expect(done).rejects.toThrow(/exploded/);
-    expect(input.setRawMode).toHaveBeenLastCalledWith(false);
+    await expect(runLabelTui({ controller, screen })).rejects.toThrow(/exploded/);
   });
 
   it("never calls close: the CLI owns the session lifecycle", async () => {
-    const { input, output } = fakeTerminal();
+    const { screen } = scriptedScreen(["q"]);
     const closed = vi.fn(async () => {});
     const controller: LabelingSessionController = {
       snapshot: () => snapshot(),
       dispatch: async () => snapshot(),
       close: closed,
     };
-    const done = runLabelTui({ controller, input, output });
-    input.emit("data", "q");
-    await done;
+    await runLabelTui({ controller, screen });
     expect(closed).not.toHaveBeenCalled();
+  });
+});
+
+describe("resizing", () => {
+  it("adopts a new terminal size on the next draw", async () => {
+    const { screen } = scriptedScreen(["q"]);
+    const { controller } = fakeController();
+    await runLabelTui({
+      controller,
+      screen,
+      currentSize: () => ({ width: 60, height: 18 }),
+    });
+    expect(screen.size()).toEqual({ width: 60, height: 18 });
+  });
+
+  it("leaves the size alone when no provider is given", async () => {
+    const { screen } = scriptedScreen(["q"]);
+    const { controller } = fakeController();
+    await runLabelTui({ controller, screen });
+    expect(screen.size()).toEqual({ width: 100, height: 30 });
+  });
+});
+
+describe("layout arithmetic", () => {
+  it("leaves room for the chrome above and below the panes", () => {
+    expect(paneHeightFor(30)).toBeLessThan(30);
+  });
+
+  it("keeps newlines and tabs when sanitizing", () => {
+    expect(sanitizeUntrusted("a\nb\tc")).toBe("a\nb\tc");
   });
 });

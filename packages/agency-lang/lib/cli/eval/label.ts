@@ -5,6 +5,9 @@ import * as path from "path";
 import type { AgencyConfig } from "@/config.js";
 import { openLabelingSession, type LabelingSessionController } from "@/eval/label/controller.js";
 import { runLabelTui } from "@/eval/label/labelTui.js";
+import { TerminalInput } from "@/tui/input/terminal.js";
+import { TerminalOutput } from "@/tui/output/terminal.js";
+import { Screen } from "@/tui/screen.js";
 import type { Annotator } from "@/eval/label/types.js";
 
 const DEFAULT_STORE_DIRECTORY = "labels";
@@ -23,8 +26,10 @@ export type EvalLabelOptions = {
 export type EvalLabelDependencies = {
   openSession: typeof openLabelingSession;
   runTui: typeof runLabelTui;
-  input: NodeJS.ReadStream;
-  output: NodeJS.WriteStream;
+  /** Built here rather than inside the TUI so the terminal lifecycle has one
+   *  owner, alongside the session it must be torn down with. */
+  makeScreen(): Screen;
+  isInteractive(): boolean;
   environment: NodeJS.ProcessEnv;
   osUserName(): string | undefined;
 };
@@ -62,11 +67,31 @@ export function resolveAnnotator(
   return { kind: "human", id: FALLBACK_ANNOTATOR_ID };
 }
 
+const DEFAULT_COLUMNS = 100;
+const DEFAULT_ROWS = 30;
+
+/**
+ * A usable terminal dimension.
+ *
+ * `??` is not enough: a PTY with no attached window reports **0**, not
+ * undefined, and a zero-width screen lays every element out to nothing and
+ * renders a blank frame. Anything that is not a positive finite number falls
+ * back.
+ */
+export function terminalDimension(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 const defaultDependencies: EvalLabelDependencies = {
   openSession: openLabelingSession,
   runTui: runLabelTui,
-  input: process.stdin,
-  output: process.stdout,
+  makeScreen: () => new Screen({
+    input: new TerminalInput({ suppressSigint: true }),
+    output: new TerminalOutput(),
+    width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
+    height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
+  }),
+  isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
   environment: process.env,
   osUserName: () => {
     try {
@@ -95,25 +120,42 @@ export async function evalLabel(
   if (!fs.existsSync(options.source)) {
     throw new Error(`Source run directory not found: ${options.source}`);
   }
+  if (!dependencies.isInteractive()) {
+    throw new Error(
+      "agency eval label needs an interactive terminal: it shows outputs and reads " +
+      "keystrokes. Run it directly rather than through a pipe.",
+    );
+  }
 
   const config = options.config ?? {};
+  const storeDir = resolveLabelStore(options, config);
   const controller: LabelingSessionController = await dependencies.openSession({
     sourceDir: path.resolve(options.source),
-    storeDir: resolveLabelStore(options, config),
+    storeDir,
     checklistFile: path.resolve(options.checklist),
     annotator: resolveAnnotator(options, dependencies),
     reportWarning: (message) => console.warn(message),
   });
 
-  // The session owns a lock and a draft; closing it is not optional, which is
-  // why the CLI holds the finally rather than the terminal loop.
+  // The session owns a lock and a draft, and the screen owns raw mode; closing
+  // both is not optional, which is why the CLI holds the finallys rather than
+  // the terminal loop.
+  const screen = dependencies.makeScreen();
   try {
     await dependencies.runTui({
       controller,
-      input: dependencies.input,
-      output: dependencies.output,
+      screen,
+      storeLabel: path.basename(storeDir),
+      currentSize: () => ({
+        width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
+        height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
+      }),
     });
   } finally {
-    await controller.close();
+    try {
+      screen.destroy();
+    } finally {
+      await controller.close();
+    }
   }
 }

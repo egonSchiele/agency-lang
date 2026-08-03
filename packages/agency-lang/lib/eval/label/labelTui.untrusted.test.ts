@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  parseKeysBuffered,
-  renderLabelScreen,
-  sanitizeUntrusted,
-  stripAnsi,
-} from "./labelTui.js";
+import { ScriptedInput } from "@/tui/input/scripted.js";
+import { FrameRecorder } from "@/tui/output/recorder.js";
+import { Screen } from "@/tui/screen.js";
+
+import { labelScreen, sanitizeUntrusted } from "./labelTui.js";
 import type { SessionSnapshot } from "./session.js";
 
 const OUTPUT_ID = `out_${"a".repeat(64)}`;
-const ESC = "";
+const ESC = "\x1b";
+const BEL = "\x07";
 
 function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
   const item = { outputId: OUTPUT_ID, task: "a task", text: "some output" };
@@ -32,7 +32,31 @@ function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
   };
 }
 
-const baseRender = { storeLabel: "labels", columns: 100, rows: 30, scroll: 0, body: [] as string[] };
+/**
+ * Render through the real layout engine and read back what the terminal would
+ * receive, escapes included. Asserting on the frame rather than on a string
+ * this module built is the point: it proves nothing hostile survives all the
+ * way to the output target.
+ */
+function frameCells(over: Partial<SessionSnapshot> = {}, body: string[] = ["output"]): string {
+  const recorder = new FrameRecorder();
+  const screen = new Screen({
+    input: new ScriptedInput(),
+    output: recorder,
+    width: 100,
+    height: 30,
+  });
+  screen.render(labelScreen({
+    snapshot: snapshot(over),
+    storeLabel: "labels",
+    width: 100,
+    height: 30,
+    scroll: 0,
+    body,
+  }));
+  // Every character the frame holds, so a stray escape cannot hide in a cell.
+  return recorder.lastText();
+}
 
 describe("sanitizeUntrusted", () => {
   it("neutralizes cursor movement and clear-screen", () => {
@@ -40,11 +64,11 @@ describe("sanitizeUntrusted", () => {
   });
 
   it("neutralizes an OSC 52 clipboard write", () => {
-    expect(sanitizeUntrusted(`${ESC}]52;c;cGF5bG9hZA==`)).not.toContain(ESC);
+    expect(sanitizeUntrusted(`${ESC}]52;c;cGF5bG9hZA==${BEL}`)).not.toContain(ESC);
   });
 
   it("neutralizes C1 controls, which are a single byte each", () => {
-    expect(sanitizeUntrusted("ac")).not.toContain("");
+    expect(sanitizeUntrusted("ac")).not.toContain("");
   });
 
   it("neutralizes a bare carriage return, which would overwrite the line", () => {
@@ -61,126 +85,51 @@ describe("sanitizeUntrusted", () => {
   });
 });
 
-describe("untrusted content never reaches the terminal raw", () => {
+describe("untrusted content never reaches the frame raw", () => {
   it("sanitizes a hostile task", () => {
     const hostile = { outputId: OUTPUT_ID, task: `safe${ESC}[2Jhidden`, text: "x" };
-    const frame = renderLabelScreen({
-      ...baseRender,
-      snapshot: snapshot({ currentItem: hostile, items: [hostile] }),
-    });
-    expect(frame).not.toContain(`${ESC}[2J`);
+    expect(frameCells({ currentItem: hostile, items: [hostile] })).not.toContain(ESC);
   });
 
   it("sanitizes a hostile question", () => {
-    const frame = renderLabelScreen({
-      ...baseRender,
-      snapshot: snapshot({
-        questions: [{ id: "q_a", text: `ok${ESC}[2Jgone`, weight: 1, deleted: false }],
-      }),
-    });
-    expect(frame).not.toContain(`${ESC}[2J`);
+    const questions = [{ id: "q_a", text: `ok${ESC}[2Jgone`, weight: 1, deleted: false }];
+    expect(frameCells({ questions })).not.toContain(ESC);
   });
 
   it("sanitizes a hostile note", () => {
-    const frame = renderLabelScreen({
-      ...baseRender,
-      snapshot: snapshot({ note: `note${ESC}[2Jgone` }),
-    });
-    expect(frame).not.toContain(`${ESC}[2J`);
+    expect(frameCells({ note: `note${ESC}[2Jgone` })).not.toContain(ESC);
   });
 
   it("sanitizes a hostile editor draft", () => {
-    const frame = renderLabelScreen({
-      ...baseRender,
-      snapshot: snapshot({ editor: { kind: "note", draft: `typed${ESC}[2J` } }),
-    });
-    expect(frame).not.toContain(`${ESC}[2J`);
+    // A draft is untrusted after a round trip: beginNote seeds it from a
+    // stored note, which came from this same input.
+    expect(frameCells({ editor: { kind: "note", draft: `typed${ESC}[2J` } })).not.toContain(ESC);
+  });
+
+  it("sanitizes hostile output body text", () => {
+    expect(frameCells({}, [sanitizeUntrusted(`body${ESC}[2Jgone`)])).not.toContain(ESC);
+  });
+
+  it("escapes style tags in a hostile question, which are markup to the parser", () => {
+    // Control characters are not the only way in: {black-fg} is markup, so
+    // text alone could restyle or hide the evidence being judged.
+    const questions = [{ id: "q_a", text: "{black-fg}invisible?{/black-fg}", weight: 1, deleted: false }];
+    expect(frameCells({ questions })).toContain("{black-fg}invisible?");
+  });
+
+  it("escapes style tags in a hostile note", () => {
+    expect(frameCells({ note: "{bg-red}alarming{/bg-red}" })).toContain("{bg-red}alarming");
+  });
+
+  it("escapes style tags in a hostile task", () => {
+    const hostile = { outputId: OUTPUT_ID, task: "{black-fg}hidden", text: "x" };
+    expect(frameCells({ currentItem: hostile, items: [hostile] })).toContain("{black-fg}hidden");
   });
 
   it("shows only the first line of a multi-line task, so the layout cannot be broken", () => {
     const multiline = { outputId: OUTPUT_ID, task: "first line\nsecond line", text: "x" };
-    const frame = stripAnsi(renderLabelScreen({
-      ...baseRender,
-      snapshot: snapshot({ currentItem: multiline, items: [multiline] }),
-    }));
-    expect(frame).toContain("first line");
-    expect(frame).not.toContain("second line");
-  });
-});
-
-describe("checklist viewport follows the focused question", () => {
-  function manyQuestions(count: number, focusIndex: number): SessionSnapshot {
-    const questions = Array.from({ length: count }, (_, index) => ({
-      id: `q_${index}`, text: `Question number ${index}`, weight: 1, deleted: false,
-    }));
-    return snapshot({
-      questions, questionIndex: focusIndex, currentQuestion: questions[focusIndex],
-    });
-  }
-
-  it("keeps a question near the end of a long checklist visible", () => {
-    // Without a viewport the right pane always starts at question 0, so Space
-    // and Enter would act on a checkbox the reader cannot see.
-    const frame = stripAnsi(renderLabelScreen({
-      ...baseRender, rows: 20, snapshot: manyQuestions(40, 39),
-    }));
-    expect(frame).toContain("Question number 39");
-  });
-
-  it("still shows the first question when focus is at the top", () => {
-    const frame = stripAnsi(renderLabelScreen({
-      ...baseRender, rows: 20, snapshot: manyQuestions(40, 0),
-    }));
-    expect(frame).toContain("Question number 0");
-  });
-
-  it("does not scroll a checklist that already fits", () => {
-    const frame = stripAnsi(renderLabelScreen({
-      ...baseRender, rows: 30, snapshot: manyQuestions(3, 2),
-    }));
-    expect(frame).toContain("Question number 0");
-    expect(frame).toContain("Question number 2");
-  });
-});
-
-describe("parseKeysBuffered", () => {
-  it("holds a split arrow key until the rest arrives", () => {
-    const first = parseKeysBuffered(`${ESC}[`);
-    expect(first.keys).toEqual([]);
-    expect(first.rest).toBe(`${ESC}[`);
-    const second = parseKeysBuffered(first.rest + "A");
-    expect(second.keys).toEqual([{ kind: "up" }]);
-    expect(second.rest).toBe("");
-  });
-
-  it("holds a lone escape, which could begin a sequence", () => {
-    expect(parseKeysBuffered(ESC)).toEqual({ keys: [], rest: ESC });
-  });
-
-  it("holds a partial page-up until its terminator arrives", () => {
-    const first = parseKeysBuffered(`${ESC}[5`);
-    expect(first.rest).toBe(`${ESC}[5`);
-    expect(parseKeysBuffered(first.rest + "~").keys).toEqual([{ kind: "pageUp" }]);
-  });
-
-  it("parses every supported sequence split at each byte boundary", () => {
-    const sequences: [string, string][] = [
-      [`${ESC}[A`, "up"], [`${ESC}[B`, "down"], [`${ESC}[C`, "right"], [`${ESC}[D`, "left"],
-      [`${ESC}[5~`, "pageUp"], [`${ESC}[6~`, "pageDown"],
-    ];
-    for (const [sequence, kind] of sequences) {
-      for (let split = 1; split < sequence.length; split += 1) {
-        const first = parseKeysBuffered(sequence.slice(0, split));
-        const second = parseKeysBuffered(first.rest + sequence.slice(split));
-        expect([...first.keys, ...second.keys]).toEqual([{ kind }]);
-      }
-    }
-  });
-
-  it("emits ordinary characters immediately", () => {
-    expect(parseKeysBuffered("ab")).toEqual({
-      keys: [{ kind: "char", value: "a" }, { kind: "char", value: "b" }],
-      rest: "",
-    });
+    const text = frameCells({ currentItem: multiline, items: [multiline] });
+    expect(text).toContain("first line");
+    expect(text).not.toContain("second line");
   });
 });

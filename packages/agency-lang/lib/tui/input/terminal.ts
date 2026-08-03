@@ -139,6 +139,30 @@ export function readEscapeSequence(
   return null;
 }
 
+/**
+ * True when `str` from `i` begins an escape sequence that has not finished
+ * arriving, so the caller should hold it for the next chunk.
+ *
+ * A lone ESC is excluded, and that is a deliberate limit: telling the Escape
+ * KEY apart from the first byte of a sequence needs a timer, and holding every
+ * ESC would make Escape feel broken. Terminals write a sequence in one call,
+ * so a split at that exact byte needs a one-byte buffer boundary.
+ */
+function isIncompleteEscape(str: string, i: number): boolean {
+  const rest = str.slice(i);
+  if (!rest.startsWith("\x1b[") && !rest.startsWith("\x1bO")) {
+    return false;
+  }
+  // Complete once a final byte arrives (@ through ~ for CSI, a letter for SS3).
+  return !/^\x1b(\[[\d;?]*[\x40-\x7e]|O.)/.test(rest);
+}
+
+export type TerminalInputOptions = {
+  /** Emit Ctrl-C as a key WITHOUT raising SIGINT, so the app can run its own
+   *  teardown. Default false, which keeps the signal. */
+  suppressSigint?: boolean;
+};
+
 export class TerminalInput implements InputSource {
   private keyWaiters: ((key: KeyEvent) => void)[] = [];
   private keyQueue: KeyEvent[] = [];
@@ -152,6 +176,12 @@ export class TerminalInput implements InputSource {
   // events. `null` when no paste is in progress; a string buffer
   // collecting the body once `PASTE_START` has been seen.
   private pasteBuffer: string | null = null;
+  private escapeBuffer = "";
+  private readonly suppressSigint: boolean;
+
+  constructor(options: TerminalInputOptions = {}) {
+    this.suppressSigint = options.suppressSigint === true;
+  }
 
   private ensureInitialized(): void {
     if (this.initialized) return;
@@ -280,7 +310,8 @@ export class TerminalInput implements InputSource {
    *   6. A single character (printable or ctrl+letter)
    */
   private parseAndEmit(input: string): void {
-    let str = input;
+    let str = this.escapeBuffer + input;
+    this.escapeBuffer = "";
 
     // 1. Mid-paste continuation. Treat the carried `pasteBuffer` as
     //    text already inside the markers, and look for the close
@@ -313,6 +344,16 @@ export class TerminalInput implements InputSource {
         continue;
       }
 
+      // 2b. An escape sequence cut in half by the stream boundary. Hold it
+      //     for the next chunk rather than emitting Escape, `[`, `A` — which
+      //     cancels an editor mid-word and turns fragments into commands. Only
+      //     prefixes LONGER than a lone ESC are held: a bare ESC is the Escape
+      //     key and must stay immediate.
+      if (isIncompleteEscape(str, i)) {
+        this.escapeBuffer = str.slice(i);
+        return;
+      }
+
       // 3. Ctrl+Z: surface as SIGTSTP and stop processing — the
       //    rest of this chunk is irrelevant once we're suspended.
       const code = str.charCodeAt(i);
@@ -324,7 +365,12 @@ export class TerminalInput implements InputSource {
       // 4. Ctrl+C: re-raise SIGINT and ALSO emit the key so Agency
       //    handlers can react before the signal actually lands.
       if (code === 0x03) {
-        process.kill(process.pid, "SIGINT");
+        // An app that wants to run its own teardown on Ctrl-C opts out of the
+        // signal: SIGINT would otherwise exit the process before the app's
+        // loop ever sees the key, skipping its cleanup entirely.
+        if (!this.suppressSigint) {
+          process.kill(process.pid, "SIGINT");
+        }
         this.emitKey({ key: "c", ctrl: true });
         i += 1;
         continue;

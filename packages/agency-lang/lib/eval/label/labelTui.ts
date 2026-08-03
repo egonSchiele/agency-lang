@@ -1,42 +1,39 @@
+import { stripAnsi, visualWidth, wrapText } from "@/stdlib/layout/ansi.js";
 import { syntaxHighlight } from "@/stdlib/syntax.js";
-import { color, RESET } from "@/utils/termcolors.js";
+import { column, line, lines, row } from "@/tui/builders.js";
+import { escapeStyleTags } from "@/tui/styleParser.js";
+import type { Element, Style } from "@/tui/elements.js";
+import type { KeyEvent } from "@/tui/input/types.js";
+import type { Screen } from "@/tui/screen.js";
+import { followCursor } from "@/tui/scroll.js";
+import { color } from "@/utils/termcolors.js";
 
 import type { LabelingSessionController } from "./controller.js";
 import type { SessionAction, SessionSnapshot } from "./session.js";
 
-// Styling goes through lib/utils/termcolors rather than raw escapes, so the
-// palette has one home. RESET is still needed directly: wrapAnsi ends each
-// wrapped line with it to stop colour bleeding into the next row, which is a
-// line-level concern rather than styling a span of text.
-
-/**
- * Two kinds of zero-width escape appear in highlighted markdown: SGR colour
- * codes, and OSC 8 hyperlinks, which carry a whole URL that occupies no
- * columns. Counting either as visible text throws the column arithmetic off
- * badly, and the outputs being labelled are link-dense.
- */
-const ESCAPE_SOURCE = "\\x1b\\[[0-9;]*m|\\x1b\\]8;;[^\\x07\\x1b]*(?:\\x07|\\x1b\\\\)";
-
 /** Highlighting is a nice-to-have; showing the actual output is not. */
 const CONTENT_KEEP_RATIO = 0.9;
-const SCROLL_PAGE_MARGIN = 12;
+const LEFT_PANE_FRACTION = 0.6;
+/** Rows the header, rules and footer occupy, leaving the rest for the panes. */
+const CHROME_ROWS = 7;
 
-export function stripAnsi(text: string): string {
-  return text.replace(new RegExp(ESCAPE_SOURCE, "g"), "");
-}
+export { stripAnsi, visualWidth };
 
 /**
  * Neutralize control characters in text this tool did not author.
  *
- * Agent output, task text, question text and notes are all untrusted here: a
- * model can emit cursor movement, clear-screen, or OSC 52 clipboard writes,
- * and rendering those raw would let the thing being judged hide or forge the
+ * Agent output, task text, question text and notes are all untrusted: a model
+ * can emit cursor movement, clear-screen, or OSC 52 clipboard writes, and
+ * rendering those raw would let the thing being judged hide or forge the
  * evidence on screen. Only newline and tab survive, because the layout uses
  * them; everything else in C0, C1 and DEL becomes a visible replacement so the
- * reader can see that something was there.
+ * reader can see something was there.
  *
- * Styling is applied by this module AFTER sanitizing, so the tool's own colour
- * is unaffected.
+ * Style tags are escaped too. The TUI parser reads `{black-fg}` as markup, so
+ * plain text alone is enough to restyle or hide the very evidence being
+ * judged — control characters are not the only way into a terminal.
+ *
+ * Styling is applied afterwards, so the tool's own colour is unaffected.
  */
 export function sanitizeUntrusted(text: string): string {
   let out = "";
@@ -51,64 +48,31 @@ export function sanitizeUntrusted(text: string): string {
     const isC1 = code >= 0x80 && code <= 0x9f;
     out += isC0 || isDelete || isC1 ? "�" : character;
   }
-  return out;
+  return escapeStyleTags(out);
 }
 
-export function visibleLength(text: string): number {
-  return stripAnsi(text).length;
-}
-
-/** Split into units of one escape sequence or one visible character, so
- *  wrapping counts what the eye sees. */
-function units(text: string): string[] {
-  // The (?:...) group is load-bearing: "^a|b" parses as "(^a)|(b)", so without
-  // it the second alternative is unanchored and matches anywhere in the rest
-  // of the string, eating every visible character in between.
-  const anchored = new RegExp(`^(?:${ESCAPE_SOURCE})`);
-  const out: string[] = [];
-  let index = 0;
-  while (index < text.length) {
-    const match = text.slice(index).match(anchored);
-    if (match !== null) {
-      out.push(match[0]);
-      index += match[0].length;
-    } else {
-      out.push(text[index]);
-      index += 1;
+/**
+ * Clipboard text, made safe for a single-line editor.
+ *
+ * Newlines and tabs are collapsed to spaces because the draft renders on one
+ * footer row, and every other control character is dropped rather than
+ * replaced — a paste is the user's own text, so a visible replacement marker
+ * would be noise rather than evidence.
+ */
+export function pastedText(text: string): string {
+  let out = "";
+  for (const character of text) {
+    const code = character.codePointAt(0) ?? 0;
+    if (character === "\n" || character === "\r" || character === "\t") {
+      out += " ";
+      continue;
+    }
+    const isControl = code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f);
+    if (!isControl) {
+      out += character;
     }
   }
   return out;
-}
-
-/** Wrap highlighted text, breaking at spaces where possible and hard-breaking
- *  tokens longer than the column. Styles reset at each break rather than being
- *  carried, which keeps colour from bleeding down the pane. */
-export function wrapAnsi(text: string, width: number): string[] {
-  const lines: string[] = [];
-  for (const paragraph of text.split("\n")) {
-    let current: string[] = [];
-    let visible = 0;
-    let lastBreak = -1;
-    for (const unit of units(paragraph)) {
-      const isEscape = unit.length > 1;
-      if (!isEscape && unit === " ") {
-        lastBreak = current.length;
-      }
-      current.push(unit);
-      if (!isEscape) {
-        visible += 1;
-      }
-      if (visible >= width) {
-        const cut = lastBreak > 0 ? lastBreak : current.length;
-        lines.push(current.slice(0, cut).join("") + RESET);
-        current = current.slice(lastBreak > 0 ? cut + 1 : cut);
-        visible = current.filter((entry) => entry.length === 1).length;
-        lastBreak = -1;
-      }
-    }
-    lines.push(current.join("") + RESET);
-  }
-  return lines;
 }
 
 function contentWords(text: string): string[] {
@@ -139,85 +103,7 @@ export function renderMarkdownSafely(source: string): string {
   return kept / wanted.length >= CONTENT_KEEP_RATIO ? rendered : source;
 }
 
-function pad(text: string, width: number): string {
-  return text + " ".repeat(Math.max(0, width - visibleLength(text)));
-}
-
-export type RenderArgs = {
-  snapshot: SessionSnapshot;
-  storeLabel: string;
-  columns: number;
-  rows: number;
-  scroll: number;
-  body: string[];
-};
-
-/** Build the whole frame as a string. Pure, so the layout is testable without
- *  a terminal. */
-export function renderLabelScreen(args: RenderArgs): string {
-  const { snapshot } = args;
-  const leftWidth = Math.floor(args.columns * 0.6);
-  const rightWidth = args.columns - leftWidth - 3;
-  const bodyHeight = Math.max(8, args.rows - 10);
-
-  const out: string[] = [];
-  const staleNote = snapshot.progress.stale > 0
-    ? `  ${color.yellow(`⟳ ${snapshot.progress.stale} stale`)}`
-    : "";
-  out.push(
-    ` ${color.bgBlue.bold(" eval label ")} ${color.brightBlack(args.storeLabel)}  ` +
-    `${color.bold.green(String(snapshot.progress.reviewed))}` +
-    `${color.dim(`/${snapshot.progress.total} reviewed`)}${staleNote}`,
-  );
-  out.push(color.brightBlack("━".repeat(args.columns)));
-
-  const item = snapshot.currentItem;
-  if (item === null) {
-    out.push(" nothing to label");
-    return out.join("\n");
-  }
-
-  const status = snapshot.statuses[item.outputId] ?? "untouched";
-  const chip = {
-    untouched: color.brightBlack("○ untouched"),
-    reviewed: color.green("● reviewed"),
-    stale: color.yellow("⟳ stale — a question was added since"),
-  }[status];
-  const score = snapshot.scores[item.outputId];
-  const scoreText = score === null || score === undefined
-    ? color.brightBlack("—")
-    : scoreColour(score)(score.toFixed(2));
-  out.push(
-    ` ${color.bold.cyan(item.outputId.slice(0, 12))} ` +
-    `${color.brightBlack(`${snapshot.itemIndex + 1}/${snapshot.items.length}`)}  ${chip}  ${scoreText}`,
-  );
-  out.push(` ${color.dim(sanitizeUntrusted(item.task).split("\n")[0].slice(0, args.columns - 4))}`);
-  out.push("");
-
-  const checklist = renderChecklist(snapshot, rightWidth);
-  const checklistView = checklist.lines.slice(
-    checklistOffset(checklist.focusLine, checklist.lines.length, bodyHeight),
-    checklistOffset(checklist.focusLine, checklist.lines.length, bodyHeight) + bodyHeight,
-  );
-  const visibleBody = args.body.slice(args.scroll, args.scroll + bodyHeight);
-  for (let row = 0; row < bodyHeight; row += 1) {
-    out.push(`${pad(visibleBody[row] ?? "", leftWidth)}${color.brightBlack("│")} ${checklistView[row] ?? ""}`);
-  }
-
-  out.push(color.brightBlack("━".repeat(args.columns)));
-  out.push(renderFooter(snapshot));
-  return out.join("\n");
-}
-
-function scoreColour(score: number) {
-  if (score >= 0.75) {
-    return color.bold.green;
-  }
-  if (score >= 0.4) {
-    return color.bold.yellow;
-  }
-  return color.bold.magenta;
-}
+// --- rendering -----------------------------------------------------------
 
 /** A deleted question keeps its place in the list, struck through, because it
  *  still holds every answer recorded against it. */
@@ -231,8 +117,7 @@ function checkbox(deleted: boolean, checked: boolean): string {
   return color.brightBlack("[ ]");
 }
 
-/** Returns a styler rather than an escape prefix, so callers wrap text instead
- *  of concatenating codes. */
+/** Returns a styler rather than an escape prefix, so callers wrap text. */
 function questionStyle(deleted: boolean, focused: boolean, checked: boolean) {
   if (deleted) {
     return color.strikethrough.brightBlack;
@@ -246,281 +131,328 @@ function questionStyle(deleted: boolean, focused: boolean, checked: boolean) {
   return color.dim;
 }
 
-/** Where the right pane starts, so the focused question is always on screen.
- *  Without this, Space and Enter act on a checkbox the reader cannot see once
- *  the checklist is longer than the pane. */
-function checklistOffset(focusLine: number, total: number, height: number): number {
-  if (total <= height || focusLine < height) {
-    return 0;
+function scoreStyle(score: number) {
+  if (score >= 0.75) {
+    return color.bold.green;
   }
-  return Math.min(focusLine - height + 1, Math.max(0, total - height));
+  if (score >= 0.4) {
+    return color.bold.yellow;
+  }
+  return color.bold.magenta;
 }
 
-function renderChecklist(
-  snapshot: SessionSnapshot,
-  width: number,
-): { lines: string[]; focusLine: number } {
-  const lines: string[] = [];
+export type ChecklistRender = { lines: string[]; focusLine: number };
+
+/** The right pane's lines, plus which line the focused question starts on so
+ *  the viewport can keep it visible. */
+export function renderChecklist(snapshot: SessionSnapshot, width: number): ChecklistRender {
+  const out: string[] = [];
   let focusLine = 0;
   snapshot.questions.forEach((question, index) => {
     const checked = snapshot.answers[question.id] === true;
-    const deleted = question.deleted;
     const focused = index === snapshot.questionIndex;
-    const box = checkbox(deleted, checked);
-    const arrow = focused ? color.bold.cyan("▸") : " ";
-    const style = questionStyle(deleted, focused, checked);
     if (focused) {
-      focusLine = lines.length;
+      focusLine = out.length;
     }
-    const wrapped = wrapAnsi(sanitizeUntrusted(question.text), Math.max(8, width - 7));
-    lines.push(`${arrow} ${box} ${style(wrapped[0] ?? "")}`);
+    const style = questionStyle(question.deleted, focused, checked);
+    const wrapped = wrapText(sanitizeUntrusted(question.text), Math.max(8, width - 7));
+    const arrow = focused ? color.bold.cyan("▸") : " ";
+    out.push(`${arrow} ${checkbox(question.deleted, checked)} ${style(wrapped[0] ?? "")}`);
     for (const continuation of wrapped.slice(1)) {
-      lines.push(`     ${style(continuation)}`);
+      out.push(`     ${style(continuation)}`);
     }
   });
-  lines.push("");
-  lines.push(`${color.bold.blue("note")} ${snapshot.note.length === 0 ? color.brightBlack("—") : ""}`);
+  out.push("");
+  out.push(`${color.bold.blue("note")} ${snapshot.note.length === 0 ? color.brightBlack("—") : ""}`);
   const noteLines = snapshot.note.length === 0
     ? []
-    : wrapAnsi(sanitizeUntrusted(snapshot.note), Math.max(8, width - 2));
-  for (const line of noteLines) {
-    lines.push(` ${line}`);
+    : wrapText(sanitizeUntrusted(snapshot.note), Math.max(8, width - 2));
+  for (const noteLine of noteLines) {
+    out.push(` ${noteLine}`);
   }
-  return { lines, focusLine };
+  return { lines: out, focusLine };
 }
 
-function renderFooter(snapshot: SessionSnapshot): string {
+function statusChip(status: string): string {
+  if (status === "reviewed") {
+    return color.green("● reviewed");
+  }
+  if (status === "stale") {
+    return color.yellow("⟳ stale — a question was added since");
+  }
+  return color.brightBlack("○ untouched");
+}
+
+function headerLine(snapshot: SessionSnapshot, storeLabel: string): string {
+  const stale = snapshot.progress.stale > 0
+    ? `  ${color.yellow(`⟳ ${snapshot.progress.stale} stale`)}`
+    : "";
+  return ` ${color.bgBlue.bold(" eval label ")} ${color.brightBlack(sanitizeUntrusted(storeLabel))}  ` +
+    `${color.bold.green(String(snapshot.progress.reviewed))}` +
+    `${color.dim(`/${snapshot.progress.total} reviewed`)}${stale}`;
+}
+
+function itemLine(snapshot: SessionSnapshot): string {
+  const item = snapshot.currentItem;
+  if (item === null) {
+    return "";
+  }
+  const score = snapshot.scores[item.outputId];
+  const scoreText = score === null || score === undefined
+    ? color.brightBlack("—")
+    : scoreStyle(score)(score.toFixed(2));
+  return ` ${color.bold.cyan(item.outputId.slice(0, 12))} ` +
+    `${color.brightBlack(`${snapshot.itemIndex + 1}/${snapshot.items.length}`)}  ` +
+    `${statusChip(snapshot.statuses[item.outputId] ?? "untouched")}  ${scoreText}`;
+}
+
+function footerLines(snapshot: SessionSnapshot): string[] {
   if (snapshot.editor.kind === "question") {
-    return ` ${color.bold.yellow("new question")} ${sanitizeUntrusted(snapshot.editor.draft)}${color.cyan("▏")}\n` +
-      ` ${color.dim("enter: add to every item   esc: cancel")}`;
+    return [
+      ` ${color.bold.yellow("new question")} ${sanitizeUntrusted(snapshot.editor.draft)}${color.cyan("▏")}`,
+      ` ${color.dim("enter: add to every item   esc: cancel")}`,
+    ];
   }
   if (snapshot.editor.kind === "note") {
-    return ` ${color.bold.blue("note")} ${sanitizeUntrusted(snapshot.editor.draft)}${color.cyan("▏")}\n` +
-      ` ${color.dim("enter: save   esc: cancel")}`;
+    return [
+      ` ${color.bold.blue("note")} ${sanitizeUntrusted(snapshot.editor.draft)}${color.cyan("▏")}`,
+      ` ${color.dim("enter: save   esc: cancel")}`,
+    ];
   }
-  const deleteLabel = snapshot.currentQuestion?.deleted === true ? "undelete" : "delete";
   const key = (name: string, description: string) =>
     `${color.bold(name)}${color.brightBlack(` ${description}`)}`;
-  return ` ${key("space", "toggle")}  ${key("↑↓", "question")}  ${key("←→", "item")}  ` +
+  const deleteLabel = snapshot.currentQuestion?.deleted === true ? "undelete" : "delete";
+  return [
+    ` ${key("space", "toggle")}  ${key("↑↓", "question")}  ${key("←→", "item")}  ` +
     `${key("enter", "reviewed+next")}  ${key("a", "add")}  ${key("d", deleteLabel)}  ` +
-    `${key("m", "note")}  ${key("^f/^b", "scroll")}  ${key("q", "quit")}`;
+    `${key("m", "note")}  ${key("^f/^b", "scroll")}  ${key("q", "quit")}`,
+  ];
+}
+
+export type RenderArgs = {
+  snapshot: SessionSnapshot;
+  storeLabel: string;
+  width: number;
+  height: number;
+  /** Left-pane scroll position, owned by the loop. */
+  scroll: number;
+  /** The output body, already highlighted and wrapped to the left pane. */
+  body: string[];
+};
+
+export function paneHeightFor(height: number): number {
+  return Math.max(4, height - CHROME_ROWS);
+}
+
+export function leftPaneWidthFor(width: number): number {
+  return Math.max(10, Math.floor(width * LEFT_PANE_FRACTION));
+}
+
+/**
+ * Build the frame as an Element tree.
+ *
+ * Pure, and laid out by the same engine the terminal uses — so a test asserts
+ * on the real frame rather than on a string this module assembled by hand.
+ */
+export function labelScreen(args: RenderArgs): Element {
+  const { snapshot } = args;
+  const leftWidth = leftPaneWidthFor(args.width);
+  const rightWidth = Math.max(10, args.width - leftWidth - 1);
+  const paneHeight = paneHeightFor(args.height);
+
+  if (snapshot.currentItem === null) {
+    return lines([headerLine(snapshot, args.storeLabel), "", " nothing to label"]);
+  }
+
+  const checklist = renderChecklist(snapshot, rightWidth);
+  // followCursor is the library's keep-the-cursor-visible-without-jitter rule,
+  // the same one the logs viewer uses. Without it, Space and Enter would act
+  // on a checkbox scrolled off the bottom of the pane.
+  const checklistScroll = followCursor(0, checklist.focusLine, paneHeight);
+
+  return column(
+    line(headerLine(snapshot, args.storeLabel)),
+    line("", { fill: "━", fg: "gray" }),
+    line(itemLine(snapshot)),
+    line(` ${color.dim(sanitizeUntrusted(snapshot.currentItem.task).split("\n")[0])}`),
+    row(
+      { height: paneHeight },
+      pane(args.body, { width: leftWidth, height: paneHeight, scrollOffset: args.scroll }),
+      pane(
+        Array.from({ length: paneHeight }, () => color.brightBlack("│")),
+        { width: 1, height: paneHeight },
+      ),
+      pane(checklist.lines, { flex: 1, height: paneHeight, scrollOffset: checklistScroll }),
+    ),
+    line("", { fill: "━", fg: "gray" }),
+    ...footerLines(snapshot).map((footer) => line(footer)),
+  );
+}
+
+/**
+ * A scrollable pane.
+ *
+ * The content is ONE text element joined by newlines rather than a column of
+ * `line()` children, because `scrollOffset` slices an element's own content by
+ * newline — a column of one-line children has nothing to slice, and the offset
+ * is silently ignored.
+ */
+function pane(contentLines: string[], style: Style): Element {
+  return { type: "text", content: contentLines.join("\n"), style };
 }
 
 // --- input ---------------------------------------------------------------
 
-export type Key =
-  | { kind: "up" } | { kind: "down" } | { kind: "left" } | { kind: "right" }
-  | { kind: "pageUp" } | { kind: "pageDown" }
-  | { kind: "enter" } | { kind: "escape" } | { kind: "backspace" }
-  | { kind: "char"; value: string };
-
-/** A prefix of a sequence we would recognise if more bytes arrived. */
-function isIncompleteSequence(rest: string): boolean {
-  if (rest === "\x1b") {
-    return true;
-  }
-  if (!rest.startsWith("\x1b[")) {
-    return false;
-  }
-  // "\x1b[" alone, or "\x1b[5" waiting for its "~".
-  return rest === "\x1b[" || /^\x1b\[[0-9]*$/.test(rest);
-}
-
 /**
- * Parse a chunk into keys, returning any trailing partial escape sequence.
+ * Translate a keystroke into a domain action.
  *
- * A stream can split an arrow key as `"\x1b["` then `"A"`. Parsing each chunk
- * independently reads that as Escape, `[`, `A` — which cancels the editor
- * mid-word, and in normal mode turns fragments into character commands. The
- * caller keeps `rest` and prepends it to the next chunk.
+ * Returns null for keys the loop handles itself (scrolling, quitting) or
+ * ignores. Events arrive already parsed by the TUI input layer, which owns
+ * escape-sequence reassembly and bracketed paste.
  */
-export function parseKeysBuffered(chunk: string): { keys: Key[]; rest: string } {
-  const keys: Key[] = [];
-  let index = 0;
-  while (index < chunk.length) {
-    const rest = chunk.slice(index);
-    if (isIncompleteSequence(rest)) {
-      return { keys, rest };
-    }
-    const parsed = parseOneKey(rest);
-    keys.push(parsed.key);
-    index += parsed.length;
-  }
-  return { keys, rest: "" };
-}
-
-function parseOneKey(rest: string): { key: Key; length: number } {
-  if (rest.startsWith("\x1b[5~")) return { key: { kind: "pageUp" }, length: 4 };
-  if (rest.startsWith("\x1b[6~")) return { key: { kind: "pageDown" }, length: 4 };
-  if (rest.startsWith("\x1b[A")) return { key: { kind: "up" }, length: 3 };
-  if (rest.startsWith("\x1b[B")) return { key: { kind: "down" }, length: 3 };
-  if (rest.startsWith("\x1b[C")) return { key: { kind: "right" }, length: 3 };
-  if (rest.startsWith("\x1b[D")) return { key: { kind: "left" }, length: 3 };
-  const character = rest[0];
-  if (character === "\x1b") return { key: { kind: "escape" }, length: 1 };
-  if (character === "\r" || character === "\n") return { key: { kind: "enter" }, length: 1 };
-  if (character === "\x7f") return { key: { kind: "backspace" }, length: 1 };
-  return { key: { kind: "char", value: character }, length: 1 };
-}
-
-/** Parse a complete chunk, treating any trailing partial sequence as literal
- *  keys. Used where no more bytes are coming. */
-export function parseKeys(chunk: string): Key[] {
-  const keys: Key[] = [];
-  let index = 0;
-  while (index < chunk.length) {
-    const parsed = parseOneKey(chunk.slice(index));
-    keys.push(parsed.key);
-    index += parsed.length;
-  }
-  return keys;
-}
-
-/** Translate a keystroke into a domain action. Returns null for keys that are
- *  handled by the loop itself (scrolling, quitting) or ignored. */
-export function actionForKey(key: Key, editing: boolean): SessionAction | null {
+export function actionForKey(event: KeyEvent, editing: boolean): SessionAction | null {
   if (editing) {
-    if (key.kind === "enter") return { kind: "submitEditor" };
-    if (key.kind === "escape") return { kind: "cancelEditor" };
-    if (key.kind === "backspace") return { kind: "backspaceEditor" };
-    if (key.kind === "char" && key.value >= " ") {
-      return { kind: "appendEditorText", text: key.value };
+    if (event.key === "enter") return { kind: "submitEditor" };
+    if (event.key === "escape") return { kind: "cancelEditor" };
+    if (event.key === "backspace") return { kind: "backspaceEditor" };
+    // Bracketed paste arrives as ONE event carrying the whole clipboard, not
+    // as a stream of characters. Dropping it would make paste silently do
+    // nothing, which is worse than the keystroke-at-a-time behaviour it
+    // replaced.
+    if (event.key === "paste") {
+      const pasted = pastedText(event.text ?? "");
+      return pasted.length === 0 ? null : { kind: "appendEditorText", text: pasted };
+    }
+    // A stray Ctrl-F while typing must not land in the text.
+    if (event.ctrl === true) return null;
+    if (event.key.length === 1 && event.key >= " ") {
+      return { kind: "appendEditorText", text: event.key };
     }
     return null;
   }
-  switch (key.kind) {
+  if (event.ctrl === true) {
+    return null;
+  }
+  switch (event.key) {
     case "up": return { kind: "previousQuestion" };
     case "down": return { kind: "nextQuestion" };
     case "left": return { kind: "previousItem" };
     case "right": return { kind: "nextItem" };
     case "enter": return { kind: "signOff" };
-    case "char":
-      if (key.value === " ") return { kind: "toggleAnswer" };
-      if (key.value === "a") return { kind: "beginQuestion" };
-      if (key.value === "d") return { kind: "toggleQuestionDeleted" };
-      if (key.value === "m") return { kind: "beginNote" };
-      return null;
-    default:
-      return null;
+    case " ": return { kind: "toggleAnswer" };
+    case "a": return { kind: "beginQuestion" };
+    case "d": return { kind: "toggleQuestionDeleted" };
+    case "m": return { kind: "beginNote" };
+    default: return null;
   }
 }
 
-export function scrollDelta(key: Key, rows: number): number {
-  const page = Math.max(4, rows - SCROLL_PAGE_MARGIN);
-  const half = Math.max(2, Math.floor(page / 2));
-  if (key.kind === "pageDown") return page;
-  if (key.kind === "pageUp") return -page;
-  if (key.kind !== "char") return 0;
-  if (key.value === "\x06") return page;
-  if (key.value === "\x02") return -page;
-  if (key.value === "\x04") return half;
-  if (key.value === "\x15") return -half;
+/** Vim-style paging. Cmd+arrow is not bindable — terminals do not transmit the
+ *  Cmd modifier. */
+export function scrollDelta(event: KeyEvent, paneHeight: number): number {
+  const page = Math.max(1, paneHeight - 1);
+  const half = Math.max(1, Math.floor(page / 2));
+  // Dedicated page keys, for keyboards that have them.
+  if (event.key === "pageup") return -page;
+  if (event.key === "pagedown") return page;
+  if (event.ctrl !== true) {
+    return 0;
+  }
+  if (event.key === "f") return page;
+  if (event.key === "b") return -page;
+  if (event.key === "d") return half;
+  if (event.key === "u") return -half;
   return 0;
 }
 
-export function isQuitKey(key: Key): boolean {
-  return key.kind === "char" && (key.value === "q" || key.value === "\x03");
+export function isQuitKey(event: KeyEvent): boolean {
+  return event.key === "q" || (event.key === "c" && event.ctrl === true);
 }
 
 // --- the loop ------------------------------------------------------------
 
 export type RunLabelTuiArgs = {
   controller: LabelingSessionController;
-  input: NodeJS.ReadStream;
-  output: NodeJS.WriteStream;
+  screen: Screen;
+  storeLabel?: string;
+  /** Current terminal size, read before every draw. Screen stores its
+   *  dimensions, so without this a resize leaves stale pane widths, wrapping
+   *  and scroll bounds until restart. */
+  currentSize?: () => { width: number; height: number };
+};
+
+type BodyCache = { outputId: string; width: number; lines: string[] };
+
+type LoopState = {
+  scroll: number;
+  done: boolean;
+  /** Highlight and wrap are expensive enough that redoing them per keystroke
+   *  shows, so the result is cached until the item or the width changes. */
+  body: BodyCache | null;
 };
 
 export async function runLabelTui(args: RunLabelTuiArgs): Promise<void> {
-  assertInteractiveTerminal(args.input, args.output);
-  const restore = enterTerminalMode(args.input);
-  try {
-    await runInputLoop(args);
-  } finally {
-    restore();
-  }
-}
-
-function assertInteractiveTerminal(input: NodeJS.ReadStream, output: NodeJS.WriteStream): void {
-  if (input.isTTY !== true || output.isTTY !== true) {
-    throw new Error(
-      "agency eval label needs an interactive terminal: it shows outputs and reads keystrokes. " +
-      "Run it directly rather than through a pipe.",
-    );
-  }
-}
-
-function enterTerminalMode(input: NodeJS.ReadStream): () => void {
-  const wasRaw = input.isRaw === true;
-  input.setRawMode(true);
-  input.resume();
-  input.setEncoding("utf8");
-  return () => {
-    // Restoring must happen even when the loop threw, or the caller's shell is
-    // left in raw mode with no echo.
-    input.setRawMode(wasRaw);
-    input.pause();
-  };
-}
-
-async function runInputLoop(args: RunLabelTuiArgs): Promise<void> {
-  let scroll = 0;
-  let bodyCache: { outputId: string; width: number; lines: string[] } | undefined;
-
-  const draw = (): void => {
-    const snapshot = args.controller.snapshot();
-    const columns = args.output.columns ?? 100;
-    const rows = args.output.rows ?? 30;
-    const leftWidth = Math.floor(columns * 0.6) - 1;
-    const item = snapshot.currentItem;
-    if (item !== null && (bodyCache?.outputId !== item.outputId || bodyCache?.width !== leftWidth)) {
-      // Highlighting parses the whole document, which is far too slow to redo
-      // on every keystroke.
-      bodyCache = {
-        outputId: item.outputId,
-        width: leftWidth,
-        lines: renderMarkdownSafely(sanitizeUntrusted(item.text)).split("\n")
-          .flatMap((line) => wrapAnsi(line, leftWidth)),
-      };
+  /** Adopt the terminal's current size, so a resize takes effect on the next
+   *  draw rather than at restart. */
+  const syncSize = (): { width: number; height: number } => {
+    const current = args.currentSize?.();
+    if (current !== undefined) {
+      const stored = args.screen.size();
+      if (current.width !== stored.width || current.height !== stored.height) {
+        args.screen.resize(current.width, current.height);
+      }
     }
-    args.output.write(`\x1b[2J\x1b[H${renderLabelScreen({
-      snapshot, storeLabel: "", columns, rows, scroll, body: bodyCache?.lines ?? [],
-    })}\n`);
+    return args.screen.size();
   };
 
-  draw();
+  const withBody = (state: LoopState): LoopState => {
+    const item = args.controller.snapshot().currentItem;
+    if (item === null) {
+      return state;
+    }
+    const leftWidth = leftPaneWidthFor(args.screen.size().width);
+    if (state.body?.outputId === item.outputId && state.body.width === leftWidth) {
+      return state;
+    }
+    const rendered = renderMarkdownSafely(sanitizeUntrusted(item.text));
+    const wrapped = rendered.split("\n").flatMap((source) => wrapText(source, leftWidth));
+    return { ...state, body: { outputId: item.outputId, width: leftWidth, lines: wrapped } };
+  };
 
-  await new Promise<void>((resolve, reject) => {
-    let pending = "";
-    const onData = (chunk: string): void => {
-      void (async () => {
-        try {
-          const parsed = parseKeysBuffered(pending + chunk);
-          pending = parsed.rest;
-          for (const key of parsed.keys) {
-            const snapshot = args.controller.snapshot();
-            const editing = snapshot.editor.kind !== "none";
-            if (!editing && isQuitKey(key)) {
-              args.input.off("data", onData);
-              resolve();
-              return;
-            }
-            const previousItem = snapshot.currentItem?.outputId;
-            const action = actionForKey(key, editing);
-            if (action !== null) {
-              const next = await args.controller.dispatch(action);
-              if (next.currentItem?.outputId !== previousItem) {
-                scroll = 0;
-              }
-            }
-            scroll = Math.max(0, scroll + scrollDelta(key, args.output.rows ?? 30));
-          }
-          draw();
-        } catch (error) {
-          args.input.off("data", onData);
-          reject(error);
+  await args.screen.runLoop<LoopState>({
+    initialState: withBody({ scroll: 0, done: false, body: null }),
+    render: (state) => {
+      const size = syncSize();
+      return labelScreen({
+        snapshot: args.controller.snapshot(),
+        storeLabel: args.storeLabel ?? "",
+        width: size.width,
+        height: size.height,
+        scroll: state.scroll,
+        body: state.body?.lines ?? [],
+      });
+    },
+    handleKey: async (state, event) => {
+      const snapshot = args.controller.snapshot();
+      const editing = snapshot.editor.kind !== "none";
+      if (!editing && isQuitKey(event)) {
+        return { ...state, done: true };
+      }
+      const previousItem = snapshot.currentItem?.outputId;
+      let next = state;
+      const action = actionForKey(event, editing);
+      if (action !== null) {
+        const after = await args.controller.dispatch(action);
+        if (after.currentItem?.outputId !== previousItem) {
+          next = { ...next, scroll: 0 };
         }
-      })();
-    };
-    args.input.on("data", onData);
+      }
+      next = withBody(next);
+      const paneHeight = paneHeightFor(args.screen.size().height);
+      const maxScroll = Math.max(0, (next.body?.lines.length ?? 0) - paneHeight);
+      const scrolled = next.scroll + scrollDelta(event, paneHeight);
+      return { ...next, scroll: Math.min(Math.max(0, scrolled), maxScroll) };
+    },
+    isDone: (state) => state.done,
   });
 }

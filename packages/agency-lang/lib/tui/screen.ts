@@ -37,6 +37,13 @@ export class Screen {
     return { width: this.width, height: this.height };
   }
 
+  /** Adopt a new terminal size. Layout reads these on every render, so an app
+   *  that watches SIGWINCH can keep panes correct without restarting. */
+  resize(width: number, height: number): void {
+    this.width = width;
+    this.height = height;
+  }
+
   async runLoop<S>(opts: {
     initialState: S;
     render: (state: S) => Element | Promise<Element>;

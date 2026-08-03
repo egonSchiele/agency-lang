@@ -5,15 +5,24 @@
 // `visualWidth`, and only emit escape sequences via `sgr` (or by
 // asking `stripAnsi` to remove them).
 
-const CSI_RE = /\x1b\[[\d;]*[A-Za-z]/g;
-const CSI_TOKEN_RE = /\x1b\[[\d;]*[A-Za-z]/y;
+const ESC = "\x1b";
+const BEL = "\x07";
+const CSI_SOURCE = "\\x1b\\[[\\d;]*[A-Za-z]";
+// OSC sequences — `ESC ] … BEL` or `ESC ] … ST`. The one that matters in
+// practice is OSC 8, the hyperlink wrapper, which carries a whole URL that
+// occupies no columns. Counting that URL as visible text throws every width
+// calculation off, and terminal-rendered Markdown is full of links.
+const OSC_SOURCE = "\\x1b\\][^\\x07\\x1b]*(?:\\x07|\\x1b\\\\)";
+
+const ZERO_WIDTH_RE = new RegExp(`${CSI_SOURCE}|${OSC_SOURCE}`, "g");
+const ZERO_WIDTH_TOKEN_RE = new RegExp(`${CSI_SOURCE}|${OSC_SOURCE}`, "y");
 
 export function visualWidth(s: string): number {
-  return s.replace(CSI_RE, "").length;
+  return s.replace(ZERO_WIDTH_RE, "").length;
 }
 
 export function stripAnsi(s: string): string {
-  return s.replace(CSI_RE, "");
+  return s.replace(ZERO_WIDTH_RE, "");
 }
 
 // Matches SGR sequences only (CSI … `m`), not other CSI like cursor/erase.
@@ -41,13 +50,33 @@ function updateActiveSgr(active: string, segment: string): string {
 // never dropped mid-span; when no style is active a blank line stays "".
 function reinjectSgr(segments: string[]): string[] {
   let active = "";
+  let link = "";
   return segments.map((segment) => {
     const opened = active;
     const closed = updateActiveSgr(opened, segment);
     active = closed;
-    const suffix = closed === "" ? "" : RESET;
-    return opened + segment + suffix;
+    const openedLink = link;
+    link = updateActiveHyperlink(openedLink, segment);
+    // A hyperlink left open across a wrap makes everything after it — borders,
+    // the next pane, unrelated rows — clickable. Close it at the boundary and
+    // reopen it on the next segment, the same way SGR state is carried.
+    const suffix = (closed === "" ? "" : RESET) + (link === "" ? "" : HYPERLINK_CLOSE);
+    return openedLink + opened + segment + suffix;
   });
+}
+
+// OSC 8 opener carrying a URL, and the closer that ends the link.
+const OSC8_RE = /\x1b\]8;;([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
+const HYPERLINK_CLOSE = `${ESC}]8;;${BEL}`;
+
+/** Track the hyperlink open since the last closer. An opener with an empty URL
+ *  IS the closer, per the OSC 8 spec. */
+function updateActiveHyperlink(active: string, segment: string): string {
+  let result = active;
+  for (const match of segment.matchAll(OSC8_RE)) {
+    result = match[1] === "" ? "" : match[0];
+  }
+  return result;
 }
 
 export function wrapText(content: string, width: number): string[] {
@@ -98,11 +127,11 @@ function breakLongToken(token: string, width: number): string[] {
   let index = 0;
 
   while (index < token.length) {
-    CSI_TOKEN_RE.lastIndex = index;
-    const escape = CSI_TOKEN_RE.exec(token);
+    ZERO_WIDTH_TOKEN_RE.lastIndex = index;
+    const escape = ZERO_WIDTH_TOKEN_RE.exec(token);
     if (escape && escape.index === index) {
       current += escape[0];
-      index = CSI_TOKEN_RE.lastIndex;
+      index = ZERO_WIDTH_TOKEN_RE.lastIndex;
       continue;
     }
 

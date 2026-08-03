@@ -191,17 +191,40 @@ function scoreColour(score: number): string {
   return MAGENTA;
 }
 
+/** A deleted question keeps its place in the list, struck through, because it
+ *  still holds every answer recorded against it. */
+function checkbox(deleted: boolean, checked: boolean): string {
+  if (deleted) {
+    return `${GREY}[·]${RESET}`;
+  }
+  if (checked) {
+    return `${GREEN}${BOLD}[✓]${RESET}`;
+  }
+  return `${GREY}[ ]${RESET}`;
+}
+
+function questionStyle(deleted: boolean, focused: boolean, checked: boolean): string {
+  if (deleted) {
+    return `${STRIKE}${GREY}`;
+  }
+  if (focused) {
+    return BOLD;
+  }
+  if (checked) {
+    return "";
+  }
+  return DIM;
+}
+
 function renderChecklist(snapshot: SessionSnapshot, width: number): string[] {
   const lines: string[] = [];
   snapshot.questions.forEach((question, index) => {
     const checked = snapshot.answers[question.id] === true;
     const deleted = question.deleted;
-    const box = deleted
-      ? `${GREY}[·]${RESET}`
-      : checked ? `${GREEN}${BOLD}[✓]${RESET}` : `${GREY}[ ]${RESET}`;
     const focused = index === snapshot.questionIndex;
+    const box = checkbox(deleted, checked);
     const arrow = focused ? `${CYAN}${BOLD}▸${RESET}` : " ";
-    const style = deleted ? `${STRIKE}${GREY}` : focused ? BOLD : checked ? "" : DIM;
+    const style = questionStyle(deleted, focused, checked);
     const wrapped = wrapAnsi(question.text, Math.max(8, width - 7));
     lines.push(`${arrow} ${box} ${style}${wrapped[0] ?? ""}${RESET}`);
     for (const continuation of wrapped.slice(1)) {

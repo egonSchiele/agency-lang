@@ -87,6 +87,21 @@ describe("createServeClient", () => {
     expect(await client().invokeFunction("add", { a: 2, b: 3 })).toBe(5);
   });
 
+  it("throws when a function/node returns a failed AgencyResult (wrapped in the success envelope)", async () => {
+    // The real shape of a served function that raises an unhandled interrupt.
+    const failed = { success: true, value: { __type: "resultType", success: false, error: "boom" } };
+    mockFetch(() => ({ json: failed }));
+    await expect(client().invokeFunction("f", {})).rejects.toThrow(/boom/);
+    mockFetch(() => ({ json: failed }));
+    await expect(client().invokeNode("main", {})).rejects.toThrow(/boom/);
+  });
+
+  it("passes a successful Result value through unchanged", async () => {
+    const ok = { __type: "resultType", success: true, value: 7 };
+    mockFetch(() => ({ json: { success: true, value: ok } }));
+    expect(await client().invokeFunction("f", {})).toEqual(ok);
+  });
+
   it("resume returns an InterruptResult and can fail on a later leg", async () => {
     mockFetch(() => ({ json: { success: true, value: "resumed" } }));
     expect(await client().resume([], [])).toEqual({ data: "resumed" });

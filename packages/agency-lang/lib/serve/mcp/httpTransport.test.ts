@@ -28,6 +28,7 @@ function makeHandler() {
       kind: "function",
       name: "add",
       description: "Add two numbers",
+      parameters: [{ name: "a" }, { name: "b" }],
       agencyFunction: addFn,
       interruptEffects: [],
       invoke: (namedArgs) => addFn.invoke({ type: "named", positionalArgs: [], namedArgs }),

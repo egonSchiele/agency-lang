@@ -35,6 +35,7 @@ function makeTestExports(): ExportedItem[] {
       kind: "function",
       name: "add",
       description: "Add two numbers",
+      parameters: [{ name: "a" }, { name: "b" }],
       agencyFunction: addFn,
       interruptEffects: [],
       invoke: (namedArgs) => addFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
@@ -173,6 +174,7 @@ describe("MCP adapter", () => {
           kind: "function",
           name: "deploy",
           description: "Deploy app",
+          parameters: [],
           agencyFunction: deployFn,
           interruptEffects: [{ effect: "myapp::deploy" }, { effect: "myapp::approve" }],
           invoke: (namedArgs) => deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
@@ -219,6 +221,7 @@ describe("MCP adapter", () => {
         kind: "function" as const,
         name,
         description: name,
+        parameters: [],
         agencyFunction: fn,
         interruptEffects: [],
         invoke: (namedArgs: Record<string, unknown>) =>
@@ -406,7 +409,7 @@ describe("MCP adapter — policy tools", () => {
       serverName: "test",
       serverVersion: "1.0.0",
       exports: [
-        { kind: "function", name: "greet", description: "Greet someone", agencyFunction: greetFn, interruptEffects: [{ effect: "test::greet" }], invoke: (namedArgs) => greetFn.invoke({ type: "named", positionalArgs: [], namedArgs }) },
+        { kind: "function", name: "greet", description: "Greet someone", parameters: [{ name: "name" }], agencyFunction: greetFn, interruptEffects: [{ effect: "test::greet" }], invoke: (namedArgs) => greetFn.invoke({ type: "named", positionalArgs: [], namedArgs }) },
       ],
       policyConfig: {
         policyStore: new PolicyStore("test", tmpDir),
@@ -456,7 +459,7 @@ describe("MCP adapter — policy tools", () => {
       serverName: "test",
       serverVersion: "1.0.0",
       exports: [
-        { kind: "function", name: "sendEmail", description: "Send an email", agencyFunction: sendFn, interruptEffects: [{ effect: "email::send" }], invoke: (namedArgs) => sendFn.invoke({ type: "named", positionalArgs: [], namedArgs }) },
+        { kind: "function", name: "sendEmail", description: "Send an email", parameters: [], agencyFunction: sendFn, interruptEffects: [{ effect: "email::send" }], invoke: (namedArgs) => sendFn.invoke({ type: "named", positionalArgs: [], namedArgs }) },
       ],
       policyConfig: {
         policyStore: store,

@@ -10,7 +10,10 @@ describe("discoverExports", () => {
         name: "publicFn",
         module: "test",
         fn: async () => {},
-        params: [{ name: "x" }, { name: "y" }],
+        params: [
+          { name: "x", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "y", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
         toolDefinition: {
           name: "publicFn",
           description: "A public fn",
@@ -57,7 +60,10 @@ describe("discoverExports", () => {
         name: "boundFn",
         module: "test",
         fn: async () => {},
-        params: [{ name: "visible" }, { name: "hidden", isBound: true }],
+        params: [
+          { name: "visible", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "hidden", hasDefault: false, defaultValue: undefined, variadic: false, isBound: true },
+        ],
         toolDefinition: { name: "boundFn", description: "", schema: null },
         exported: true,
       },

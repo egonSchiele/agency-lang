@@ -154,3 +154,134 @@ describe("accountClient transport", () => {
     expect((error as Error).message).not.toContain("top-secret-key");
   });
 });
+
+function rawProjectKey(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    id: "key-1",
+    name: "CI",
+    scope: "project",
+    projectId: "db-project-1",
+    createdAt: "2026-08-03T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function rawAccountKey(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    id: "key-acc",
+    name: "root",
+    scope: "account",
+    projectId: null,
+    createdAt: "2026-08-03T00:00:00Z",
+    ...overrides,
+  };
+}
+
+describe("accountClient keys and id translation", () => {
+  it("creates a project key by translating the slug to the private id", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { success: true, value: [rawProject()] }))
+      .mockResolvedValueOnce(
+        response(200, { success: true, value: rawProjectKey({ plainKey: "plain-once" }) }),
+      );
+    const created = await client.createProjectKey({ name: "CI", projectId: "public-project" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://host.example/api/projects");
+    expect(fetchMock.mock.calls[1]).toEqual([
+      "https://host.example/api/api_keys",
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer top-secret-key",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: "CI", scope: "project", projectId: "db-project-1" }),
+      },
+    ]);
+    expect(created).toEqual({
+      id: "key-1",
+      name: "CI",
+      scope: "project",
+      projectId: "public-project",
+      createdAt: "2026-08-03T00:00:00Z",
+      plainKey: "plain-once",
+    });
+    expect(JSON.stringify(created)).not.toContain("db-project-1");
+  });
+
+  it("fetches projects once and makes no POST for an unknown slug", async () => {
+    fetchMock.mockResolvedValueOnce(response(200, { success: true, value: [] }));
+    await expect(client.createProjectKey({ name: "CI", projectId: "missing" })).rejects.toThrow(
+      "unknown project 'missing'",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://host.example/api/projects");
+  });
+
+  it("lists keys after one project fetch and returns only public slugs", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { success: true, value: [rawProject()] }))
+      .mockResolvedValueOnce(response(200, { success: true, value: [rawProjectKey()] }));
+    const keys = await client.listKeys();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      "https://host.example/api/projects",
+      "https://host.example/api/api_keys",
+    ]);
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual({
+      method: "GET",
+      headers: { Authorization: "Bearer top-secret-key" },
+    });
+    expect(keys[0]?.projectId).toBe("public-project");
+    expect(JSON.stringify(keys)).not.toContain("db-project-1");
+    expect(JSON.stringify(keys)).not.toContain("plainKey");
+  });
+
+  it("maps a key whose project no longer exists to the placeholder", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { success: true, value: [] }))
+      .mockResolvedValueOnce(
+        response(200, { success: true, value: [rawProjectKey({ projectId: "db-gone" })] }),
+      );
+    const keys = await client.listKeys();
+    expect(keys[0]?.projectId).toBe("(unknown project)");
+    expect(JSON.stringify(keys)).not.toContain("db-gone");
+  });
+
+  it("keeps an account key's projectId null", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { success: true, value: [] }))
+      .mockResolvedValueOnce(response(200, { success: true, value: [rawAccountKey()] }));
+    const keys = await client.listKeys();
+    expect(keys[0]).toMatchObject({ scope: "account", projectId: null });
+  });
+
+  it.each([
+    ["account key with a projectId", rawAccountKey({ projectId: "db-x" })],
+    ["project key with a null projectId", rawProjectKey({ projectId: null })],
+    ["unknown scope", rawProjectKey({ scope: "weird" })],
+    ["missing id", rawProjectKey({ id: undefined })],
+    ["missing createdAt", rawProjectKey({ createdAt: undefined })],
+  ])("rejects an impossible/invalid key: %s", async (_label, badKey) => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { success: true, value: [rawProject()] }))
+      .mockResolvedValueOnce(response(200, { success: true, value: [badKey] }));
+    await expect(client.listKeys()).rejects.toBeInstanceOf(AccountRequestError);
+  });
+
+  it("rejects a non-array key list", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { success: true, value: [] }))
+      .mockResolvedValueOnce(response(200, { success: true, value: {} }));
+    await expect(client.listKeys()).rejects.toThrow(/api_keys must be an array/);
+  });
+
+  it("rejects a created key without a plainKey", async () => {
+    fetchMock
+      .mockResolvedValueOnce(response(200, { success: true, value: [rawProject()] }))
+      .mockResolvedValueOnce(response(200, { success: true, value: rawProjectKey() }));
+    await expect(
+      client.createProjectKey({ name: "CI", projectId: "public-project" }),
+    ).rejects.toThrow("created key missing plainKey");
+  });
+});

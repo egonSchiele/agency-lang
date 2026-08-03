@@ -17,6 +17,25 @@ export type CreateProjectInput = {
   description?: string;
 };
 
+type KeySummaryBase = {
+  id: string;
+  name: string | null;
+  createdAt: string;
+};
+
+/** A key summary in public terms: a project key's `projectId` is the slug (the
+ *  client has already translated it from the internal id). */
+export type KeySummary =
+  | (KeySummaryBase & { scope: "account"; projectId: null })
+  | (KeySummaryBase & { scope: "project"; projectId: string });
+
+export type CreatedKey = KeySummary & { plainKey: string };
+
+export type CreateProjectKeyInput = {
+  name: string;
+  projectId: string;
+};
+
 /** A project as statelog sends it, with the internal id kept private. */
 type RawProject = {
   id: string;
@@ -24,6 +43,12 @@ type RawProject = {
   name: string;
   description: string | null;
 };
+
+/** A key as statelog sends it: a project key's `projectId` is the internal
+ *  database id, never exposed past this file. */
+type RawKeySummary =
+  | (KeySummaryBase & { scope: "account"; projectId: null })
+  | (KeySummaryBase & { scope: "project"; projectId: string });
 
 /** Any account request that did not produce a usable result. */
 export class AccountRequestError extends Error {}
@@ -38,6 +63,8 @@ export type AccountClient = {
   whoami(): Promise<{ userId: string }>;
   listProjects(): Promise<ProjectSummary[]>;
   createProject(input: CreateProjectInput): Promise<ProjectSummary>;
+  listKeys(): Promise<KeySummary[]>;
+  createProjectKey(input: CreateProjectKeyInput): Promise<CreatedKey>;
 };
 
 type AccountRoute = "whoami" | "projects" | "api_keys";
@@ -126,6 +153,27 @@ export function createAccountClient(origin: string, apiKey: string): AccountClie
       });
       return toProjectSummary(validateRawProject(value));
     },
+    async listKeys() {
+      const projects = await listProjectsRaw();
+      const value = await request("GET", "api_keys");
+      const slugById = slugByInternalId(projects);
+      return asArray(value, "api_keys").map((entry) =>
+        toKeySummary(validateRawKeySummary(entry), slugById),
+      );
+    },
+    async createProjectKey(input) {
+      const projects = await listProjectsRaw();
+      const match = projects.find((project) => project.project_id === input.projectId);
+      if (!match) {
+        throw new AccountRequestError(`unknown project '${input.projectId}'`);
+      }
+      const value = await request("POST", "api_keys", {
+        name: input.name,
+        scope: "project",
+        projectId: match.id,
+      });
+      return validateCreatedKey(value, slugByInternalId(projects));
+    },
   };
 }
 
@@ -153,6 +201,62 @@ function validateRawProject(value: unknown): RawProject {
     throw new AccountRequestError("project description must be a string or null");
   }
   return { id, project_id, name, description: obj.description };
+}
+
+/** internal id → public slug, so a listed key's project can be shown by slug. */
+function slugByInternalId(projects: RawProject[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const project of projects) {
+    map[project.id] = project.project_id;
+  }
+  return map;
+}
+
+function validateRawKeySummary(value: unknown): RawKeySummary {
+  const obj = asObject(value);
+  if (!obj) {
+    throw new AccountRequestError("each key entry must be an object");
+  }
+  const id = requireString(obj.id, "key id");
+  if (obj.name !== null && typeof obj.name !== "string") {
+    throw new AccountRequestError("key name must be a string or null");
+  }
+  const createdAt = requireString(obj.createdAt, "key createdAt");
+  const base: KeySummaryBase = { id, name: obj.name, createdAt };
+  if (obj.scope === "account") {
+    if (obj.projectId !== null) {
+      throw new AccountRequestError("account key must have a null projectId");
+    }
+    return { ...base, scope: "account", projectId: null };
+  }
+  if (obj.scope === "project") {
+    return { ...base, scope: "project", projectId: requireString(obj.projectId, "project key projectId") };
+  }
+  throw new AccountRequestError(`unknown key scope ${String(obj.scope)}`);
+}
+
+/** Replace a project key's internal id with its public slug (or a placeholder
+ *  when the project no longer exists — never the raw id). */
+function toKeySummary(raw: RawKeySummary, slugById: Record<string, string>): KeySummary {
+  if (raw.scope === "account") {
+    return { id: raw.id, name: raw.name, createdAt: raw.createdAt, scope: "account", projectId: null };
+  }
+  return {
+    id: raw.id,
+    name: raw.name,
+    createdAt: raw.createdAt,
+    scope: "project",
+    projectId: slugById[raw.projectId] ?? "(unknown project)",
+  };
+}
+
+function validateCreatedKey(value: unknown, slugById: Record<string, string>): CreatedKey {
+  const summary = toKeySummary(validateRawKeySummary(value), slugById);
+  const obj = asObject(value);
+  if (!obj || typeof obj.plainKey !== "string") {
+    throw new AccountRequestError("created key missing plainKey");
+  }
+  return { ...summary, plainKey: obj.plainKey };
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {

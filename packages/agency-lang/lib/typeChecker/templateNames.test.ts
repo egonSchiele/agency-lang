@@ -581,3 +581,24 @@ describe("AG8015: type names in a template file", () => {
     expect(codesOf(source)).not.toContain("AG8015");
   });
 });
+
+describe("AG8015: type names that collide with object methods", () => {
+  it("reports a borrowed type named after a prototype method", () => {
+    // A plain-object alias table would find Object.prototype.toString and
+    // treat the name as resolved.
+    const source = withLiteral(["    const x: toString = 1"]);
+    expect(codesOf(source)).toContain("AG8015");
+    expect(messageFor(source, "AG8015")).toMatch(/toString/);
+  });
+
+  it("says nothing when the template imports that name", () => {
+    // The alias map is a plain object too, so reading it needs the same
+    // care: without it the stub is keyed by a function.
+    const source = withLiteral([
+      '    import { toString } from "./types.agency"',
+      "",
+      "    const x: toString = 1",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+});

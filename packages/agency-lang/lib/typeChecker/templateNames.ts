@@ -265,7 +265,12 @@ function importedTypeStubs(
       if (entry.type !== "namedImport") continue;
       for (const name of entry.importedNames) {
         if (typeof name !== "string") continue;
-        stubs[entry.aliases[name] ?? name] = { body: ANY_T };
+        // Own-property only: `import { toString }` would otherwise read the
+        // alias map's prototype and key the stub by a function.
+        const local = Object.hasOwn(entry.aliases, name)
+          ? entry.aliases[name]
+          : name;
+        stubs[local] = { body: ANY_T };
       }
     }
   }
@@ -313,10 +318,13 @@ function isolatedContext(
     matchExprYieldTypes: {},
     config,
     // Imported stubs first, so a name the template also declares wins.
-    getTypeAliases: () => ({
-      ...imported,
-      ...unit.typeAliases.visibleIn(currentScopeKey),
-    }),
+    // Null-prototype: a type named `toString` must miss, not find a method.
+    getTypeAliases: () =>
+      Object.assign(
+        Object.create(null) as Record<string, TypeAliasEntry>,
+        imported,
+        unit.typeAliases.visibleIn(currentScopeKey),
+      ),
     withScope<T>(key: string, fn: () => T): T {
       const previous = currentScopeKey;
       currentScopeKey = key;

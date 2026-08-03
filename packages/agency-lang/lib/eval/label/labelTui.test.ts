@@ -12,6 +12,7 @@ import {
   labelScreen,
   paneHeightFor,
   renderChecklist,
+  pastedText,
   renderMarkdownSafely,
   runLabelTui,
   sanitizeUntrusted,
@@ -205,6 +206,33 @@ describe("actionForKey", () => {
   });
 });
 
+describe("paste in the editor", () => {
+  it("appends the whole clipboard in one action", () => {
+    expect(actionForKey(key({ key: "paste", text: "some pasted text" }), true))
+      .toEqual({ kind: "appendEditorText", text: "some pasted text" });
+  });
+
+  it("is ignored outside the editor, where keys are commands", () => {
+    expect(actionForKey(key({ key: "paste", text: "x" }), false)).toBeNull();
+  });
+
+  it("ignores an empty paste rather than dispatching a no-op", () => {
+    expect(actionForKey(key({ key: "paste", text: "" }), true)).toBeNull();
+  });
+
+  it("collapses newlines and tabs, because the draft renders on one row", () => {
+    expect(pastedText("first\nsecond\tthird")).toBe("first second third");
+  });
+
+  it("drops other control characters from pasted text", () => {
+    expect(pastedText("safe\x1b[2Jhidden")).toBe("safe[2Jhidden");
+  });
+
+  it("leaves ordinary pasted text alone", () => {
+    expect(pastedText("Is the information accurate?")).toBe("Is the information accurate?");
+  });
+});
+
 describe("scrollDelta and isQuitKey", () => {
   it("pages with ctrl-f and ctrl-b", () => {
     expect(scrollDelta(key({ key: "f", ctrl: true }), 20)).toBeGreaterThan(0);
@@ -218,6 +246,16 @@ describe("scrollDelta and isQuitKey", () => {
 
   it("ignores the same letters without ctrl, which are commands", () => {
     expect(scrollDelta(key({ key: "d" }), 20)).toBe(0);
+  });
+
+  it("pages with the dedicated pageup and pagedown keys", () => {
+    expect(scrollDelta(key({ key: "pagedown" }), 20)).toBeGreaterThan(0);
+    expect(scrollDelta(key({ key: "pageup" }), 20)).toBeLessThan(0);
+  });
+
+  it("pages the same distance whether by page key or ctrl chord", () => {
+    expect(scrollDelta(key({ key: "pagedown" }), 20))
+      .toBe(scrollDelta(key({ key: "f", ctrl: true }), 20));
   });
 
   it("treats q and ctrl-c as quit", () => {
@@ -262,6 +300,13 @@ describe("runLabelTui", () => {
     const { controller, dispatched } = fakeController();
     await runLabelTui({ controller, screen });
     expect(dispatched).toContainEqual({ kind: "toggleAnswer" });
+  });
+
+  it("does not dispatch for a page key either", async () => {
+    const { screen } = scriptedScreen([key({ key: "pagedown" }), "q"]);
+    const { controller, dispatched } = fakeController();
+    await runLabelTui({ controller, screen });
+    expect(dispatched).toEqual([]);
   });
 
   it("does not dispatch for a scroll chord", async () => {

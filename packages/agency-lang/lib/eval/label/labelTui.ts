@@ -46,6 +46,30 @@ export function sanitizeUntrusted(text: string): string {
   return out;
 }
 
+/**
+ * Clipboard text, made safe for a single-line editor.
+ *
+ * Newlines and tabs are collapsed to spaces because the draft renders on one
+ * footer row, and every other control character is dropped rather than
+ * replaced — a paste is the user's own text, so a visible replacement marker
+ * would be noise rather than evidence.
+ */
+export function pastedText(text: string): string {
+  let out = "";
+  for (const character of text) {
+    const code = character.codePointAt(0) ?? 0;
+    if (character === "\n" || character === "\r" || character === "\t") {
+      out += " ";
+      continue;
+    }
+    const isControl = code < 0x20 || code === 0x7f || (code >= 0x80 && code <= 0x9f);
+    if (!isControl) {
+      out += character;
+    }
+  }
+  return out;
+}
+
 function contentWords(text: string): string[] {
   const withoutUrls = text.replace(/https?:\/\/\S+/g, " ");
   return (withoutUrls.match(/[A-Za-z]{5,}/g) ?? []).map((word) => word.toLowerCase());
@@ -287,6 +311,14 @@ export function actionForKey(event: KeyEvent, editing: boolean): SessionAction |
     if (event.key === "enter") return { kind: "submitEditor" };
     if (event.key === "escape") return { kind: "cancelEditor" };
     if (event.key === "backspace") return { kind: "backspaceEditor" };
+    // Bracketed paste arrives as ONE event carrying the whole clipboard, not
+    // as a stream of characters. Dropping it would make paste silently do
+    // nothing, which is worse than the keystroke-at-a-time behaviour it
+    // replaced.
+    if (event.key === "paste") {
+      const pasted = pastedText(event.text ?? "");
+      return pasted.length === 0 ? null : { kind: "appendEditorText", text: pasted };
+    }
     // A stray Ctrl-F while typing must not land in the text.
     if (event.ctrl === true) return null;
     if (event.key.length === 1 && event.key >= " ") {
@@ -314,11 +346,14 @@ export function actionForKey(event: KeyEvent, editing: boolean): SessionAction |
 /** Vim-style paging. Cmd+arrow is not bindable — terminals do not transmit the
  *  Cmd modifier. */
 export function scrollDelta(event: KeyEvent, paneHeight: number): number {
+  const page = Math.max(1, paneHeight - 1);
+  const half = Math.max(1, Math.floor(page / 2));
+  // Dedicated page keys, for keyboards that have them.
+  if (event.key === "pageup") return -page;
+  if (event.key === "pagedown") return page;
   if (event.ctrl !== true) {
     return 0;
   }
-  const page = Math.max(1, paneHeight - 1);
-  const half = Math.max(1, Math.floor(page / 2));
   if (event.key === "f") return page;
   if (event.key === "b") return -page;
   if (event.key === "d") return half;

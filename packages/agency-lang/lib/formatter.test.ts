@@ -527,3 +527,25 @@ describe("a multi-line item inside a wrapped list", () => {
     expect(formatSource(once as string)).toBe(once);
   });
 });
+
+describe("blocks with an empty body", () => {
+  // The formatter puts a blank line in an empty body. That blank line is a
+  // sentinel character by the time the next parse runs, and `thread` was the
+  // one block that required real whitespace after its `{`, so it could not
+  // read back what the formatter had just written.
+  it.each([
+    ["thread", `node main() {\n  thread {\n  }\n}\n`],
+    ["thread with arguments", `node main() {\n  thread(label: "w") {\n  }\n}\n`],
+    ["subthread", `node main() {\n  subthread {\n  }\n}\n`],
+    ["parallel", `node main() {\n  parallel {\n  }\n}\n`],
+    ["seq", `node main() {\n  seq {\n  }\n}\n`],
+    ["if", `node main() {\n  if (x) {\n  }\n}\n`],
+    ["guard", `node main() {\n  guard() {\n  }\n}\n`],
+    ["node", `node main() {\n}\n`],
+    ["def", `def f() {\n}\n`],
+  ])("formats an empty %s body to something it can read back", (_name, source) => {
+    const once = formatSource(source);
+    expect(once).not.toBeNull();
+    expect(formatSource(once as string)).toBe(once);
+  });
+});

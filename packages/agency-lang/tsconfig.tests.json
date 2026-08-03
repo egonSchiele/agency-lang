@@ -6,7 +6,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "incremental": false
+    // Own buildinfo file so this check never clobbers the main build's, which
+    // the base tsconfig points at ./.agency-build/tsc.tsbuildinfo. Both live in
+    // .agency-build/ (gitignored, wiped by `make clean`).
+    "tsBuildInfoFile": "./.agency-build/tsc-tests.tsbuildinfo"
   },
   "include": ["lib", "scripts"],
   "exclude": [

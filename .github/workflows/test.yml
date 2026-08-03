@@ -443,6 +443,9 @@ jobs:
       TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
       BROWSER_USE_API_KEY: ${{ secrets.BROWSER_USE_API_KEY }}
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      STATELOG_API_KEY: ${{ secrets.STATELOG_API_KEY }}
+      STATELOG_HOST: ${{ secrets.STATELOG_HOST }}
+      STATELOG_PROJECT_ID: ${{ secrets.STATELOG_PROJECT_ID }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -460,3 +463,6 @@ jobs:
       - name: Credential stdlib tests
         working-directory: packages/agency-lang
         run: node tests/integration/stdlib-sandbox/credential/run.mjs
+      - name: Remote CLI integration test (real statelog upload)
+        working-directory: packages/agency-lang
+        run: node tests/integration/remote/test.mjs

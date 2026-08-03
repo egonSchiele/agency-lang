@@ -3,7 +3,13 @@ import { CostGuard, TimeGuard } from "./guard.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import type { StateStack } from "./state/stateStack.js";
 
-/** Install a root cost/time guard from AGENCY_MAX_COST / AGENCY_MAX_TIME.
+/** Install a root cost/time guard from the CLI flags (AGENCY_MAX_COST /
+ *  AGENCY_MAX_TIME env vars) or, when a flag is absent for that dimension, the
+ *  resolved config `budget` (passed as `contextBudget`). The flag wins per
+ *  dimension, so `agency run --max-cost` still overrides an `agency.json`
+ *  budget; a served agent, which has no flag, is governed by the budget its
+ *  host bound via runtime-config overrides.
+ *
  *  Applies the disable rule: cost < 0 installs nothing; time <= 0 installs
  *  nothing (cost 0 IS a real limit — no paid spend, local-models-only).
  *  Called once at the root, next to installRunPolicyHandler, before the
@@ -14,27 +20,38 @@ import type { StateStack } from "./state/stateStack.js";
  *  pushGuard() installs immediately, so a time budget's clock starts at
  *  run start — the intended whole-run semantics. Interrupt halts and
  *  input() waits still pause it like any other time guard. */
-export function installRootBudget(stack: StateStack): void {
+export function installRootBudget(
+  stack: StateStack,
+  contextBudget?: { maxCost?: number; maxTimeMs?: number },
+): void {
   if (isIpcMode()) return;
+
   const rawCost = process.env[AGENCY_MAX_COST];
-  if (rawCost !== undefined) {
-    const cost = parseBudgetValue(rawCost, AGENCY_MAX_COST);
-    if (cost >= 0) {
-      const g = new CostGuard(cost);
-      // The operator's ceiling: never raises an interrupt, never
-      // extendable by user code. Serialized with the guard.
-      g.isRootBudget = true;
-      stack.pushGuard(g);
-    }
+  const cost =
+    rawCost !== undefined
+      ? parseBudgetValue(rawCost, AGENCY_MAX_COST)
+      : contextBudget?.maxCost !== undefined
+        ? finiteContextBudget(contextBudget.maxCost, "budget.maxCost")
+        : undefined;
+  if (cost !== undefined && cost >= 0) {
+    const g = new CostGuard(cost);
+    // The operator's ceiling: never raises an interrupt, never
+    // extendable by user code. Serialized with the guard.
+    g.isRootBudget = true;
+    stack.pushGuard(g);
   }
+
   const rawTime = process.env[AGENCY_MAX_TIME];
-  if (rawTime !== undefined) {
-    const ms = parseBudgetValue(rawTime, AGENCY_MAX_TIME);
-    if (ms > 0) {
-      const g = new TimeGuard(ms);
-      g.isRootBudget = true;
-      stack.pushGuard(g);
-    }
+  const ms =
+    rawTime !== undefined
+      ? parseBudgetValue(rawTime, AGENCY_MAX_TIME)
+      : contextBudget?.maxTimeMs !== undefined
+        ? finiteContextBudget(contextBudget.maxTimeMs, "budget.maxTime")
+        : undefined;
+  if (ms !== undefined && ms > 0) {
+    const g = new TimeGuard(ms);
+    g.isRootBudget = true;
+    stack.pushGuard(g);
   }
 }
 
@@ -44,6 +61,23 @@ export function installRootBudget(stack: StateStack): void {
  *  feature, silently running UNBOUNDED is the wrong failure direction.
  *  Refuse the run instead. (Negative values are not malformed: they are
  *  the documented disable range and fall through the install checks.) */
+/** FAIL CLOSED on a non-finite config/override budget number. Env values go
+ *  through parseBudgetValue; this guards the RuntimeContext path (an agency.json
+ *  bake or a programmatic `withRuntimeConfigOverrides` value), where
+ *  TypeScript's `number` still admits NaN/Infinity. A non-finite cap is the
+ *  wrong direction for a budget — Infinity installs an effectively unbounded
+ *  guard, and NaN (NaN >= 0 is false) installs none at all — so refuse the run.
+ *  Negatives are fine: they are the documented disable range. */
+function finiteContextBudget(value: number, name: string): number {
+  if (!Number.isFinite(value)) {
+    throw new Error(
+      `${name} is not a finite number (got ${value}). Refusing to run without ` +
+        `the requested budget — fix the config or the runtime override.`,
+    );
+  }
+  return value;
+}
+
 function parseBudgetValue(raw: string, name: string): number {
   const n = Number(raw);
   if (raw.trim() === "" || !Number.isFinite(n)) {

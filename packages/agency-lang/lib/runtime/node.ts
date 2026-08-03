@@ -329,7 +329,7 @@ export async function runNode({
   // installer): no-op in IPC subprocesses, whose budgets are owned by the
   // parent's guard. Outermost, before the node body runs, so it cannot be
   // bypassed.
-  installRootBudget(execCtx.stateStack);
+  installRootBudget(execCtx.stateStack, execCtx.budget);
   // Externally-passed callbacks are stored on ctx; hook execution merges them
   // with scoped/top-level callbacks at call time.
   if (callbacks) {

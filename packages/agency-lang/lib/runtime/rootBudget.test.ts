@@ -71,3 +71,60 @@ describe("installRootBudget", () => {
     expect(stack.guards[1]).toBeInstanceOf(TimeGuard);
   });
 });
+
+describe("installRootBudget with a context budget (config, no flag)", () => {
+  test("installs cost and time guards from the context budget when no env is set", () => {
+    const stack = new StateStack();
+    installRootBudget(stack, { maxCost: 2, maxTimeMs: 5000 });
+    expect(stack.guards.some((g) => g instanceof CostGuard)).toBe(true);
+    expect(stack.guards.some((g) => g instanceof TimeGuard)).toBe(true);
+  });
+  test("context cost 0 installs (local-only limit); negative installs nothing", () => {
+    const zero = new StateStack();
+    installRootBudget(zero, { maxCost: 0 });
+    expect(zero.guards.some((g) => g instanceof CostGuard)).toBe(true);
+
+    const neg = new StateStack();
+    installRootBudget(neg, { maxCost: -1 });
+    expect(neg.guards.length).toBe(0);
+  });
+  test("context time <= 0 installs nothing", () => {
+    const stack = new StateStack();
+    installRootBudget(stack, { maxTimeMs: 0 });
+    expect(stack.guards.length).toBe(0);
+  });
+  test("the env flag wins over the context budget, per dimension", () => {
+    // Env disables cost; a context cost would have installed one — env wins.
+    process.env[AGENCY_MAX_COST] = "-1";
+    const disabled = new StateStack();
+    installRootBudget(disabled, { maxCost: 5 });
+    expect(disabled.guards.some((g) => g instanceof CostGuard)).toBe(false);
+    delete process.env[AGENCY_MAX_COST];
+
+    // Env sets cost; a disabling context is ignored — env wins.
+    process.env[AGENCY_MAX_COST] = "0.5";
+    const enabled = new StateStack();
+    installRootBudget(enabled, { maxCost: -1 });
+    expect(enabled.guards.some((g) => g instanceof CostGuard)).toBe(true);
+  });
+  test("no-op in IPC mode even with a context budget", () => {
+    process.env.AGENCY_IPC = "1";
+    const stack = new StateStack();
+    installRootBudget(stack, { maxCost: 5, maxTimeMs: 5000 });
+    expect(stack.guards.length).toBe(0);
+  });
+  test("a non-finite context budget FAILS CLOSED (Infinity/NaN never uncaps spend)", () => {
+    // Infinity would install an effectively unbounded guard; NaN (NaN >= 0 is
+    // false) would install none. Both must refuse the run instead. This is the
+    // gate for every non-env ingress: agency.json bake and runtime overrides.
+    expect(() => installRootBudget(new StateStack(), { maxCost: Infinity })).toThrow(
+      /budget\.maxCost is not a finite number/,
+    );
+    expect(() => installRootBudget(new StateStack(), { maxCost: NaN })).toThrow(
+      /budget\.maxCost is not a finite number/,
+    );
+    expect(() => installRootBudget(new StateStack(), { maxTimeMs: Infinity })).toThrow(
+      /budget\.maxTime is not a finite number/,
+    );
+  });
+});

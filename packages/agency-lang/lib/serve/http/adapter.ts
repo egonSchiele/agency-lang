@@ -2,6 +2,8 @@ import http from "http";
 import type { ExportedItem, ExportedFunction, ExportedNode } from "../types.js";
 import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import { validateResumeBatch } from "../../runtime/interrupts.js";
+import { readCause } from "../../runtime/errors.js";
+import { formatBudgetExceeded } from "../../runtime/budgetExit.js";
 import type { Logger } from "../../logger.js";
 import {
   DEFAULT_HOST,
@@ -61,6 +63,43 @@ function interruptResult(data: unknown): RouteResult {
  */
 const TOOL_ERROR_MESSAGE = "Tool execution failed";
 
+/** A tripped ROOT budget is a spend/time stop, not a generic tool failure.
+ *  Return a typed, structured result (HTTP 402) carrying the dimension, limit,
+ *  and spend, so a caller and traces can tell it apart without string-matching
+ *  the generic message. Unlike other errors, the budget numbers are safe to
+ *  surface — they are the operator's own limit, not server internals. */
+function budgetExceeded(cause: {
+  dimension: "cost" | "time";
+  limit: number;
+  spent: number;
+}): RouteResult {
+  return {
+    status: 402,
+    body: {
+      success: false,
+      code: "budgetExceeded",
+      error: formatBudgetExceeded(cause),
+      dimension: cause.dimension,
+      limit: cause.limit,
+      spent: cause.spent,
+    },
+  };
+}
+
+/** Map a thrown error to a route result: a root-budget trip becomes a typed
+ *  budgetExceeded (402); anything else is logged and returned as the generic
+ *  tool error so no server detail leaks. Detection is by CAUSE (mirrors
+ *  budgetExit), so it catches a root trip however it surfaced. */
+function errorResult(err: unknown, logger: Logger, what: string): RouteResult {
+  const cause = readCause(err);
+  if (cause?.kind === "guardTrip") {
+    logger.error(`${what}: ${formatBudgetExceeded(cause)}`);
+    return budgetExceeded(cause);
+  }
+  logger.error(`${what} threw: ${errorMessage(err)}`);
+  return fail(TOOL_ERROR_MESSAGE);
+}
+
 async function callFunction(
   fn: ExportedFunction,
   body: unknown,
@@ -70,8 +109,7 @@ async function callFunction(
     const result = await fn.invoke(toArgs(body));
     return ok(result);
   } catch (err) {
-    logger.error(`function ${fn.name} threw: ${errorMessage(err)}`);
-    return fail(TOOL_ERROR_MESSAGE);
+    return errorResult(err, logger, `function ${fn.name}`);
   }
 }
 
@@ -88,8 +126,7 @@ async function callNode(
     if (hasInterrupts(result.data)) return interruptResult(result.data);
     return ok(result.data);
   } catch (err) {
-    logger.error(`node ${node.name} threw: ${errorMessage(err)}`);
-    return fail(TOOL_ERROR_MESSAGE);
+    return errorResult(err, logger, `node ${node.name}`);
   }
 }
 
@@ -117,8 +154,7 @@ async function resumeInterrupts(
     if (hasInterrupts(result.data)) return interruptResult(result.data);
     return ok(result.data);
   } catch (err) {
-    logger.error(`resume threw: ${errorMessage(err)}`);
-    return fail(TOOL_ERROR_MESSAGE);
+    return errorResult(err, logger, "resume");
   }
 }
 

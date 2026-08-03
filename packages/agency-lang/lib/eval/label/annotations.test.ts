@@ -125,6 +125,18 @@ describe("itemStatus", () => {
     expect(itemStatus({ answers, revision: revision([question("q_a")]) })).toBe("reviewed");
   });
 
+  it("is REVIEWED, not untouched, when every question was answered no", () => {
+    // "untouched" means nobody judged this. A `false` is a judgement, and the
+    // fold records it explicitly rather than omitting it, so failing every
+    // question is a reviewed item with score 0.
+    const answers = effectiveAnswers([annotation({
+      coveredQuestionIds: ["q_a", "q_b"], answers: { q_a: false, q_b: false },
+    })], key);
+    const both = revision([question("q_a"), question("q_b")]);
+    expect(itemStatus({ answers, revision: both })).toBe("reviewed");
+    expect(score({ answers, revision: both })).toBe(0);
+  });
+
   it("is stale when a live question has no answer", () => {
     const answers = effectiveAnswers(
       [annotation({ coveredQuestionIds: ["q_a"], answers: { q_a: true } })], key);

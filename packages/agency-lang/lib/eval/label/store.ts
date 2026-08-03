@@ -99,7 +99,7 @@ export function openStore(args: OpenStoreArgs): LabelStore {
 
   const corpus = openCorpusLog(args.storeDir);
   const annotations = openAnnotationLog(args.storeDir);
-  validateStore(args.storeDir, corpus, annotations);
+  validateStore(args.storeDir, corpus, annotations, args.reportWarning);
 
   let open = true;
   const assertOpen = (): void => {
@@ -207,6 +207,7 @@ function validateStore(
   storeDir: string,
   corpus: OpenedJsonl<CorpusRow>,
   annotations: OpenedJsonl<AnnotationRow>,
+  reportWarning: (message: string) => void,
 ): void {
   const corpusById: Record<string, CorpusRow> = Object.create(null);
   for (const row of corpus.rows() as readonly CorpusRow[]) {
@@ -222,7 +223,7 @@ function validateStore(
     return revisionCache[key];
   };
 
-  validateLineages(storeDir, corpus, annotations, readCached);
+  validateLineages(storeDir, corpus, annotations, readCached, reportWarning);
 
   for (const row of annotations.rows() as readonly AnnotationRow[]) {
     if (corpusById[row.outputId] === undefined) {
@@ -255,6 +256,7 @@ function validateLineages(
   corpus: OpenedJsonl<CorpusRow>,
   annotations: OpenedJsonl<AnnotationRow>,
   readCached: (checklistId: string, version: number) => ChecklistRevision,
+  reportWarning: (message: string) => void,
 ): void {
   const checklistIds = new Set<string>();
   for (const row of annotations.rows() as readonly AnnotationRow[]) {
@@ -297,17 +299,28 @@ function validateLineages(
       );
     }
     const newest = versions[versions.length - 1];
-    if (pointer.version !== newest) {
+    if (pointer.version > newest) {
       throw new StoreValidationError(
-        `Checklist "${checklistId}" current points at version ${pointer.version}, but the ` +
-        `newest published revision is ${newest}. A crash between the two is repaired by ` +
-        `reopening a session on this checklist.`,
+        `Checklist "${checklistId}" current points at version ${pointer.version}, which has no ` +
+        `stored revision. The newest is ${newest}.`,
       );
     }
     if (pointer.hash !== readCached(checklistId, pointer.version).hash) {
       throw new StoreValidationError(
         `Checklist "${checklistId}" current records hash ${pointer.hash}, which does not match ` +
         `revision ${pointer.version}.`,
+      );
+    }
+    // A pointer that LAGS is recoverable, not corrupt: it is exactly what a
+    // crash between the immutable rename and the pointer update leaves behind,
+    // and the revisions past it are complete and immutable. Refusing to open
+    // here would make that state permanently unrepairable, since recovery runs
+    // after the store opens. Report it and let the session advance the pointer.
+    if (pointer.version < newest) {
+      reportWarning(
+        `Checklist "${checklistId}" has revisions up to ${newest} but current points at ` +
+        `${pointer.version}, which means a publication was interrupted. Reopening a session on ` +
+        `this checklist completes it.`,
       );
     }
   }

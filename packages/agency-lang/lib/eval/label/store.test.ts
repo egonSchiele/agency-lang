@@ -170,13 +170,26 @@ describe("store invariants across files", () => {
     expect(() => open()).toThrow(/without covering/i);
   });
 
-  it("rejects a current pointer that lags the newest revision", () => {
+  it("TOLERATES a current pointer that lags, because that is an interrupted publication", () => {
+    // Refusing here would make the state permanently unrepairable: recovery
+    // runs after the store opens. It warns instead, and a session completes it.
     const revision = publishChecklist();
     fs.writeFileSync(
       path.join(storeDir, "checklists", revision.checklistId, "2.json"),
       JSON.stringify({ ...revision, version: 2, parentVersion: 1 }),
     );
-    expect(() => open()).toThrow(/current points at/i);
+    const store = open();
+    expect(warnings.join(" ")).toMatch(/publication was interrupted/i);
+    store.close();
+  });
+
+  it("rejects a current pointer naming a revision that does not exist", () => {
+    const revision = publishChecklist();
+    fs.writeFileSync(
+      path.join(storeDir, "checklists", revision.checklistId, "current.json"),
+      JSON.stringify({ schemaVersion: 1, checklistId: revision.checklistId, version: 9, hash: revision.hash }),
+    );
+    expect(() => open()).toThrow(/has no stored revision/i);
   });
 
   it("rejects a broken parent chain", () => {

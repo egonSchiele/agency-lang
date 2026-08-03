@@ -27,6 +27,14 @@ export type OpenJsonlArgs<Value> = {
 export type OpenedJsonl<Value> = {
   rows(): readonly DeepReadonly<Value>[];
   /**
+   * The row with this identity, if the log holds one.
+   *
+   * Exposed so callers that need "already present?" reuse the index this log
+   * already maintains. A second index built outside would be a second owner of
+   * the same question, free to disagree with this one.
+   */
+  find(identity: string): DeepReadonly<Value> | undefined;
+  /**
    * Append unless this exact row is already present.
    *
    * `"replayed"` means the identity is present and the content matches
@@ -48,6 +56,7 @@ export type OpenedJsonl<Value> = {
 export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<Value> {
   const loaded = readAll(args);
   const canonicalById: Record<string, string> = Object.create(null);
+  const rowById: Record<string, Value> = Object.create(null);
   for (let index = 0; index < loaded.length; index += 1) {
     const identity = args.identityOf(loaded[index]);
     const canonical = canonicalize(loaded[index]);
@@ -64,11 +73,16 @@ export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<
       );
     }
     canonicalById[identity] = canonical;
+    rowById[identity] = loaded[index];
   }
 
   return {
     rows(): readonly DeepReadonly<Value>[] {
       return loaded as readonly DeepReadonly<Value>[];
+    },
+
+    find(identity: string): DeepReadonly<Value> | undefined {
+      return rowById[identity] as DeepReadonly<Value> | undefined;
     },
 
     appendExact(value: Value): "appended" | "replayed" {
@@ -91,6 +105,7 @@ export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<
       appendDurably(args.filePath, `${JSON.stringify(validated)}\n`);
       loaded.push(validated);
       canonicalById[identity] = canonical;
+      rowById[identity] = validated;
       return "appended";
     },
   };

@@ -15,13 +15,13 @@ import type {
   ChecklistRevision,
   CorpusRow,
   DeepReadonly,
+  Fields,
 } from "./types.js";
 
-/** One thing being judged, projected for display. */
+/** One thing being judged: its id and the named fields that make it up. */
 export type SessionItem = {
   outputId: string;
-  task: string;
-  text: string;
+  fields: Fields;
 };
 
 export type SessionEditor =
@@ -116,8 +116,7 @@ function foldKey(state: SessionState, outputId: string): AnnotationFoldKey {
 export function initSession(args: InitSessionArgs): SessionState {
   const items: SessionItem[] = args.corpus.map((row) => ({
     outputId: row.outputId,
-    task: typeof row.input.task === "string" ? row.input.task : JSON.stringify(row.input.task),
-    text: row.text,
+    fields: { ...row.fields },
   }));
 
   const answersByOutputId: Record<string, Record<string, boolean>> = {};

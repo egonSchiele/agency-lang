@@ -34,28 +34,30 @@ export const ANNOTATION_ID_RANDOM_LENGTH = 12;
 const hexDigest = `[a-f0-9]{${DIGEST_HEX_LENGTH}}`;
 /** Anchored and filesystem-safe: these ids become path segments and file names. */
 export const OutputIdSchema = z.string().regex(new RegExp(`^out_${hexDigest}$`));
+export const OccurrenceIdSchema = z.string().regex(new RegExp(`^occ_${hexDigest}$`));
 export const SessionIdSchema = z.string().regex(new RegExp(`^session_${hexDigest}$`));
 export const ContentHashSchema = z.string().regex(new RegExp(`^sha256:${hexDigest}$`));
 export const ChecklistIdSchema = z.string().regex(/^cl_[A-Za-z0-9_-]+$/);
 export const QuestionIdSchema = z.string().regex(/^q_[A-Za-z0-9_-]+$/);
 export const AnnotationIdSchema = z.string().regex(/^ann_[A-Za-z0-9_-]+$/);
 
+// --- records -------------------------------------------------------------
+
+/** Field names are display-safe and stable: they become headers in the screen
+ *  and keys in exported training data. The charset also means a name can never
+ *  carry a control character or a `{style-tag}`. */
+export const FieldNameSchema = z.string().regex(/^[a-z][a-z0-9_]*$/);
+
+/** A record is a map of named text. Values are strings because the stored
+ *  artifact must be exactly the bytes a human read and an agent will read. */
+export const FieldsSchema = z.record(FieldNameSchema, z.string()).refine(
+  (fields) => Object.keys(fields).length > 0,
+  { message: "a record must have at least one field" },
+);
+
+export type Fields = z.infer<typeof FieldsSchema>;
+
 // --- identities ----------------------------------------------------------
-
-/** What makes one captured output distinct. Deliberately excludes any path or
- *  directory name: a run directory can be renamed, copied, or share a basename
- *  with an unrelated run, and none of that changes which execution this was. */
-export type ExecutionIdentity = {
-  traceId: string;
-  inputId: string;
-  finalOutputIndex: number;
-};
-
-export const ExecutionIdentitySchema = z.object({
-  traceId: z.string().min(1),
-  inputId: z.string().min(1),
-  finalOutputIndex: z.number().int().nonnegative(),
-}).strict();
 
 export type Annotator = {
   kind: "human" | "llm" | "code";
@@ -79,7 +81,10 @@ export type SessionIdentity = {
 // --- durable rows --------------------------------------------------------
 
 export const ManifestSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
+  /** Display order for fields. A store-level property so the same field means
+   *  the same thing everywhere and order can never leak into identity. */
+  fieldOrder: z.array(FieldNameSchema),
 }).strict();
 
 export type Manifest = z.infer<typeof ManifestSchema>;
@@ -141,36 +146,80 @@ export const ChecklistDefinitionSchema = z.object({
 
 export type ChecklistDefinition = z.infer<typeof ChecklistDefinitionSchema>;
 
-export const CorpusInputSchema = z.object({
-  inputId: z.string().min(1),
-  task: JsonValueSchema,
-}).strict();
-
-export type CorpusInput = z.infer<typeof CorpusInputSchema>;
-
-export const CorpusProvenanceSchema = z.object({
-  runStartedAtMs: z.number().finite().nullable(),
-  agent: JsonValueSchema,
-  models: z.array(z.string()),
-}).strict();
-
-export type CorpusProvenance = z.infer<typeof CorpusProvenanceSchema>;
-
 export const CorpusRowSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   outputId: OutputIdSchema,
-  contentHash: ContentHashSchema,
   capturedAt: z.string().min(1),
-  execution: ExecutionIdentitySchema,
-  input: CorpusInputSchema,
-  value: JsonValueSchema,
-  /** The display projection. Always present so the labelled artifact is
-   *  exactly what was shown, even if the projection rule changes later. */
-  text: z.string(),
-  provenance: CorpusProvenanceSchema,
+  fields: FieldsSchema,
 }).strict();
 
 export type CorpusRow = z.infer<typeof CorpusRowSchema>;
+
+/**
+ * Where one observation of a record came from.
+ *
+ * A discriminated union is safe here in a way it is not for a record's
+ * identity: nothing about an output id flows through `kind`. This is the one
+ * place the shape of a source is allowed to matter.
+ */
+export const OccurrenceOriginSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("run"),
+    traceId: z.string().min(1),
+    inputId: z.string().min(1),
+    finalOutputIndex: z.number().int().nonnegative(),
+    runStartedAtMs: z.number().finite().nullable(),
+    models: z.array(z.string()),
+    agent: JsonValueSchema,
+    rawTask: JsonValueSchema.nullable(),
+    /** Pre-projection structured output. Provenance only: never hashed into a
+     *  record id, never displayed, never exported. */
+    rawValue: JsonValueSchema.nullable(),
+  }).strict(),
+  z.object({
+    kind: z.literal("file"),
+    /** Path normalized relative to the batch root, so the same folder ingested
+     *  from two working directories yields the same key. */
+    itemKey: z.string().min(1),
+  }).strict(),
+  z.object({
+    kind: z.literal("json"),
+    /** Normalized path of the JSON document relative to its batch root. Without
+     *  it, equal strings at index 0 of two documents would be one observation. */
+    itemKey: z.string().min(1),
+    itemIndex: z.number().int().nonnegative(),
+  }).strict(),
+  z.object({
+    kind: z.literal("legacy"),
+    traceId: z.string().min(1),
+    inputId: z.string().min(1),
+    finalOutputIndex: z.number().int().nonnegative(),
+    runStartedAtMs: z.number().finite().nullable(),
+    models: z.array(z.string()),
+    agent: JsonValueSchema,
+    rawTask: JsonValueSchema.nullable(),
+    rawValue: JsonValueSchema.nullable(),
+  }).strict(),
+]);
+
+export type OccurrenceOrigin = z.infer<typeof OccurrenceOriginSchema>;
+
+export const OccurrenceRowSchema = z.object({
+  schemaVersion: z.literal(1),
+  occurrenceId: OccurrenceIdSchema,
+  outputId: OutputIdSchema,
+  source: z.string().min(1),
+  firstObservedAt: z.string().min(1),
+  origin: OccurrenceOriginSchema,
+}).strict();
+
+export type OccurrenceRow = z.infer<typeof OccurrenceRowSchema>;
+
+export type OccurrenceCandidate = {
+  outputId: string;
+  source: string;
+  origin: OccurrenceOrigin;
+};
 
 export const AnnotationRowSchema = z.object({
   schemaVersion: z.literal(1),
@@ -201,6 +250,8 @@ export type AnnotationRow = z.infer<typeof AnnotationRowSchema>;
  *  here rather than in store.ts because checklist publication needs to signal
  *  them and must not import the store that imports it. */
 export type LabelStoreFaultPoint =
+  | "after-record-append"
+  | "after-occurrence-append"
   | "after-revision-temp-write"
   | "after-revision-rename"
   | "after-current-update"

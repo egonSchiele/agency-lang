@@ -7,7 +7,8 @@ import {
   type NormalizedDefinition,
   type PendingRevision,
 } from "./checklist.js";
-import { describeCaptureSkip } from "./capture.js";
+import { describeIngestSkip } from "./load/eligibility.js";
+import type { LoadedBatch } from "./load/types.js";
 import {
   assertBindingIsCoherent,
   assertDraftMatches,
@@ -41,7 +42,11 @@ export type WallClock = { nowIso(): string };
 export type EntityIds = { questionId(): string; annotationId(): string };
 
 export type OpenLabelingSessionArgs = {
-  sourceDir: string;
+  /** Records to add before labelling, already loaded. The controller ingests
+   *  them rather than the caller, because ingesting must happen inside the
+   *  writer lock this function owns. Absent means "label what is already
+   *  stored". */
+  ingest?: LoadedBatch;
   storeDir: string;
   checklistFile: string;
   annotator: Annotator;
@@ -130,13 +135,18 @@ async function openSession(
       fault: dependencies.fault as FaultHook | undefined,
     });
 
-    const capture = store.captureSource({ sourceDir: args.sourceDir });
-    for (const skip of capture.skipped) {
-      args.reportWarning(describeCaptureSkip(skip));
+    if (args.ingest !== undefined) {
+      const result = store.ingest(args.ingest);
+      for (const skip of result.skips) {
+        args.reportWarning(describeIngestSkip(skip));
+      }
     }
-    if (capture.rows.length === 0) {
+
+    const corpus = store.corpusSnapshot();
+    if (corpus.length === 0) {
       throw new Error(
-        `No labellable outputs in ${args.sourceDir}. Every input was skipped; see the warnings above.`,
+        "There is nothing to label: the store holds no records. Add some with " +
+        "`agency eval label ingest <source> --source <name>`.",
       );
     }
 
@@ -148,14 +158,14 @@ async function openSession(
       syncChecklistDefinitionIds(args.checklistFile, definition);
     }
 
-    const outputIds = capture.rows.map((row) => row.outputId);
+    const outputIds = corpus.map((row) => row.outputId);
     const sessionId = makeSessionId({
       outputIds, checklistId: definition.checklistId, annotator: args.annotator,
     });
 
     const session = new LabelingSession({
       args, dependencies, store, lock, sessionId, outputIds, definition,
-      corpus: capture.rows,
+      corpus,
     });
     session.open();
     return session.controller();

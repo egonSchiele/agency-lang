@@ -8,8 +8,8 @@ import {
   ANNOTATION_ID_RANDOM_LENGTH,
   CHECKLIST_ID_RANDOM_LENGTH,
   QUESTION_ID_RANDOM_LENGTH,
-  type CorpusInput,
-  type ExecutionIdentity,
+  type Fields,
+  type OccurrenceCandidate,
   type SessionIdentity,
 } from "./types.js";
 
@@ -25,23 +25,25 @@ function digestOf(identity: JsonValue): string {
 }
 
 /**
- * Identity of one captured output occurrence.
+ * Identity of a record: the hash of its fields.
  *
- * Derived from the persisted execution rather than from where the run happens
- * to be stored: a run directory can be renamed or copied, and two unrelated
- * runs can share a basename, none of which changes which execution produced
- * this output. Deterministic, so recapturing the same source is idempotent
- * without consulting the store.
+ * Not where it came from. Two runs that emit byte-identical output produced the
+ * same training example and should be labelled once; which run emitted it is a
+ * fact about the record, recorded in the occurrence log. Canonical JSON sorts
+ * keys, so the order fields were added in cannot change an id.
  */
-export function makeOutputId(identity: ExecutionIdentity): string {
-  return `out_${digestOf({ ...identity })}`;
+export function makeOutputId(fields: Fields): string {
+  return `out_${digestOf({ ...fields })}`;
 }
 
-/** Content identity: the input and the value together, because the same text
- *  means different things under different tasks. Used for deduplication and
- *  duplicate warnings — never as an identity. */
-export function contentHashOf(input: CorpusInput, value: JsonValue): string {
-  return `sha256:${digestOf({ input: { ...input }, value })}`;
+/** Identity of one observation. Deliberately excludes the timestamp: when you
+ *  observed something is not part of which observation it is. */
+export function makeOccurrenceId(candidate: OccurrenceCandidate): string {
+  return `occ_${digestOf({
+    outputId: candidate.outputId,
+    source: candidate.source,
+    origin: { ...candidate.origin },
+  })}`;
 }
 
 /** Identity of a resumable session. Includes output ORDER, so a draft can

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import { stripAnsi } from "@/stdlib/layout/ansi.js";
 import { ScriptedInput } from "@/tui/input/scripted.js";
 import { FrameRecorder } from "@/tui/output/recorder.js";
 import { Screen } from "@/tui/screen.js";
 
-import { labelScreen, sanitizeUntrusted } from "./labelTui.js";
+import { labelScreen, renderFields, sanitizeUntrusted } from "./labelTui.js";
 import type { SessionSnapshot } from "./session.js";
 
 const OUTPUT_ID = `out_${"a".repeat(64)}`;
@@ -12,7 +13,7 @@ const ESC = "\x1b";
 const BEL = "\x07";
 
 function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
-  const item = { outputId: OUTPUT_ID, task: "a task", text: "some output" };
+  const item = { outputId: OUTPUT_ID, fields: { task: "a task", output: "some output" } };
   return {
     items: [item],
     itemIndex: 0,
@@ -38,7 +39,13 @@ function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
  * this module built is the point: it proves nothing hostile survives all the
  * way to the output target.
  */
-function frameCells(over: Partial<SessionSnapshot> = {}, body: string[] = ["output"]): string {
+function frameCells(over: Partial<SessionSnapshot> = {}, body?: string[]): string {
+  const state = snapshot(over);
+  // Default to the body the loop would actually build, so a field's own
+  // rendering path is covered rather than a stand-in string.
+  const bodyLines = body ?? (state.currentItem === null
+    ? []
+    : renderFields(state.currentItem.fields, ["task", "output"], 100));
   const recorder = new FrameRecorder();
   const screen = new Screen({
     input: new ScriptedInput(),
@@ -47,15 +54,27 @@ function frameCells(over: Partial<SessionSnapshot> = {}, body: string[] = ["outp
     height: 30,
   });
   screen.render(labelScreen({
-    snapshot: snapshot(over),
+    snapshot: state,
     storeLabel: "labels",
     width: 100,
     height: 30,
     scroll: 0,
-    body,
+    body: bodyLines,
   }));
   // Every character the frame holds, so a stray escape cannot hide in a cell.
   return recorder.lastText();
+}
+
+/**
+ * The frame with styling removed.
+ *
+ * Field values pass through markdown highlighting, which sprinkles colour codes
+ * between characters — so an escaped `{` can reach the screen intact while a
+ * raw `toContain` on the styled frame still fails. Stripping isolates the
+ * question these assertions actually ask: did the braces survive as text?
+ */
+function frameVisible(over: Partial<SessionSnapshot> = {}): string {
+  return stripAnsi(frameCells(over));
 }
 
 describe("sanitizeUntrusted", () => {
@@ -86,8 +105,8 @@ describe("sanitizeUntrusted", () => {
 });
 
 describe("untrusted content never reaches the frame raw", () => {
-  it("sanitizes a hostile task", () => {
-    const hostile = { outputId: OUTPUT_ID, task: `safe${ESC}[2Jhidden`, text: "x" };
+  it("sanitizes a hostile task field", () => {
+    const hostile = { outputId: OUTPUT_ID, fields: { task: `safe${ESC}[2Jhidden`, output: "x" } };
     expect(frameCells({ currentItem: hostile, items: [hostile] })).not.toContain(ESC);
   });
 
@@ -121,15 +140,22 @@ describe("untrusted content never reaches the frame raw", () => {
     expect(frameCells({ note: "{bg-red}alarming{/bg-red}" })).toContain("{bg-red}alarming");
   });
 
-  it("escapes style tags in a hostile task", () => {
-    const hostile = { outputId: OUTPUT_ID, task: "{black-fg}hidden", text: "x" };
-    expect(frameCells({ currentItem: hostile, items: [hostile] })).toContain("{black-fg}hidden");
+  it("escapes style tags in a hostile task field", () => {
+    const hostile = { outputId: OUTPUT_ID, fields: { task: "{black-fg}hidden", output: "x" } };
+    expect(frameVisible({ currentItem: hostile, items: [hostile] })).toContain("{black-fg}hidden");
   });
 
-  it("shows only the first line of a multi-line task, so the layout cannot be broken", () => {
-    const multiline = { outputId: OUTPUT_ID, task: "first line\nsecond line", text: "x" };
-    const text = frameCells({ currentItem: multiline, items: [multiline] });
-    expect(text).toContain("first line");
-    expect(text).not.toContain("second line");
+  it("escapes style tags in a hostile output field", () => {
+    const hostile = { outputId: OUTPUT_ID, fields: { task: "t", output: "{bg-red}alarming" } };
+    expect(frameVisible({ currentItem: hostile, items: [hostile] })).toContain("{bg-red}alarming");
+  });
+
+  it("renders a field name as a header without letting a value forge one", () => {
+    // Field names come from a charset that cannot express markup, so the only
+    // way a header can appear is if the store put it there.
+    const hostile = { outputId: OUTPUT_ID, fields: { output: "not_a_field:\nfaked" } };
+    const text = frameVisible({ currentItem: hostile, items: [hostile] });
+    expect(text).toContain("output:");
+    expect(text).toContain("not_a_field:");
   });
 });

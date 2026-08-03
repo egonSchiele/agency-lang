@@ -24,7 +24,7 @@ import type { SessionAction, SessionSnapshot } from "./session.js";
 const OUTPUT_ID = `out_${"a".repeat(64)}`;
 
 function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
-  const item = { outputId: OUTPUT_ID, task: "a task", text: "some output" };
+  const item = { outputId: OUTPUT_ID, fields: { task: "a task", output: "some output" } };
   return {
     items: [item],
     itemIndex: 0,

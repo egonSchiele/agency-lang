@@ -11,6 +11,8 @@ import {
   type LabelingSessionController,
 } from "./controller.js";
 import { loadDraftFile } from "./draft.js";
+import { loadBatch } from "./load/index.js";
+import { DEFAULT_MAX_INGEST_BYTES } from "./load/types.js";
 import { readCurrentPointer } from "./checklist.js";
 import type { AnnotationRow } from "./types.js";
 
@@ -65,9 +67,23 @@ function writeChecklist(questions: string[]): void {
   }, null, 2));
 }
 
+/** Load the run the way the CLI does, so the controller receives exactly what
+ *  it would in production. */
+function loadRunBatch() {
+  return loadBatch({
+    source: { path: sourceDir, requestedFormat: "run", includeTaskField: true, recursive: false },
+    sourceName: "agent-v1",
+    constantFields: {},
+    maxBytes: DEFAULT_MAX_INGEST_BYTES,
+    reportWarning: (message) => warnings.push(message),
+  });
+}
+
 async function open(dependencies = makeDependencies()): Promise<LabelingSessionController> {
   return createLabelingSessionOpener(dependencies)({
-    sourceDir, storeDir, checklistFile,
+    ingest: loadRunBatch(),
+    storeDir,
+    checklistFile,
     annotator: { kind: "human", id: "adit" },
     reportWarning: (message) => warnings.push(message),
   });
@@ -144,9 +160,9 @@ describe("opening", () => {
     expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
   });
 
-  it("refuses a source with no labellable outputs", async () => {
+  it("refuses when the store holds nothing to label", async () => {
     fs.rmSync(path.join(sourceDir, "inputs"), { recursive: true, force: true });
-    await expect(open()).rejects.toThrow(/no labellable outputs/i);
+    await expect(open()).rejects.toThrow(/nothing to label/i);
     expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
   });
 
@@ -157,9 +173,12 @@ describe("opening", () => {
     // so the earlier draft is never loaded against them. The draft-level guard
     // is defence in depth for that (see draft.test.ts).
     const controller = await open();
-    expect(controller.snapshot().items.map((item) => item.task)).toEqual(["task b", "task a"]);
+    // Records are content-identified, so a reordered source produces the same
+    // two records; the session id changes because the ORDER changed.
+    expect(controller.snapshot().items.map((item) => item.fields.task).slice().sort())
+      .toEqual(["task a", "task b"]);
     await controller.close();
-    expect(fs.readdirSync(path.join(storeDir, "drafts"))).toHaveLength(2);
+    expect(fs.readdirSync(path.join(storeDir, "drafts"))).toHaveLength(1);
   });
 });
 

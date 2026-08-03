@@ -4,10 +4,7 @@ import * as path from "path";
 import { canonicalize } from "@/utils/canonicalize.js";
 
 import { openAnnotationLog } from "./annotations.js";
-import {
-  captureSourceOccurrences,
-  type CaptureResult,
-} from "./capture.js";
+import type { IngestSkip, LoadedBatch } from "./load/types.js";
 import {
   listRevisionVersions,
   normalizeDefinition,
@@ -22,9 +19,11 @@ import {
   type PrepareChecklistResult,
   type PublishRevisionResult,
 } from "./checklist.js";
-import { openCorpusLog } from "./corpus.js";
+import { openCorpusLog, type OpenedCorpusLog } from "./corpus.js";
 import { loadDraftFile, saveDraftFile, type Draft } from "./draft.js";
+import { makeOccurrenceId, makeOutputId } from "./ids.js";
 import { atomicWriteValidated, type OpenedJsonl } from "./jsonl.js";
+import { openOccurrenceLog, type OpenedOccurrenceLog } from "./occurrences.js";
 import type { StoreLock } from "./lock.js";
 import {
   ManifestSchema,
@@ -34,11 +33,19 @@ import {
   type DeepReadonly,
   type FaultHook,
   type LabelStoreFaultPoint,
+  type Manifest,
+  type OccurrenceRow,
 } from "./types.js";
 
 export type { LabelStoreFaultPoint };
 
 export class StoreValidationError extends Error {}
+
+/** A store written by an older format. Separate from StoreValidationError so
+ *  the CLI can tell "needs migrating" from "is broken". */
+export class StoreVersionError extends Error {}
+
+export const CURRENT_STORE_VERSION = 2;
 
 export type OpenStoreArgs = {
   storeDir: string;
@@ -48,8 +55,16 @@ export type OpenStoreArgs = {
   fault?: FaultHook;
 };
 
-export type CaptureSourceArgs = {
-  sourceDir: string;
+export type IngestResult = {
+  recordsAdded: number;
+  recordsReplayed: number;
+  occurrencesAdded: number;
+  occurrencesReplayed: number;
+  skips: readonly IngestSkip[];
+  /** Field names this batch introduced that the store had never seen. The CLI
+   *  warns about them: two batches using `output` and `response` produce
+   *  disjoint record shapes that no question can span. */
+  newFieldNames: readonly string[];
 };
 
 /**
@@ -69,10 +84,11 @@ export type LabelStoreSnapshot = {
 };
 
 export type LabelStore = {
-  captureSource(args: CaptureSourceArgs): CaptureResult;
+  ingest(batch: LoadedBatch): IngestResult;
   readSession(sessionId: string): DeepReadonly<LabelStoreSnapshot>;
   saveDraft(draft: Draft): void;
   corpusSnapshot(): readonly DeepReadonly<CorpusRow>[];
+  occurrenceSnapshot(): readonly DeepReadonly<OccurrenceRow>[];
   checklistSnapshot(checklistId: string, version?: number): DeepReadonly<ChecklistRevision>;
   prepareChecklist(definition: NormalizedDefinition): PrepareChecklistResult;
   syncChecklistDefinition(definitionPath: string, revision: ChecklistRevision): void;
@@ -96,11 +112,13 @@ export function manifestPath(storeDir: string): string {
  */
 export function openStore(args: OpenStoreArgs): LabelStore {
   fs.mkdirSync(args.storeDir, { recursive: true });
-  ensureManifest(args.storeDir);
+  assertStoreVersion(args.storeDir);
+  let manifest = ensureManifest(args.storeDir);
 
   const corpus = openCorpusLog(args.storeDir);
+  const occurrences = openOccurrenceLog(args.storeDir);
   const annotations = openAnnotationLog(args.storeDir);
-  validateStore(args.storeDir, corpus, annotations, args.reportWarning);
+  validateStore(args.storeDir, corpus, occurrences, annotations, manifest, args.reportWarning);
 
   // Built once, then kept current by captureSource, so grounding an annotation
   // is O(1) rather than a scan of the whole corpus per append.
@@ -117,17 +135,66 @@ export function openStore(args: OpenStoreArgs): LabelStore {
   };
 
   return {
-    captureSource(captureArgs: CaptureSourceArgs): CaptureResult {
+    ingest(batch: LoadedBatch): IngestResult {
       assertOpen();
-      const result = captureSourceOccurrences({
-        sourceDir: captureArgs.sourceDir,
-        corpus,
-        reportWarning: args.reportWarning,
-      });
-      for (const row of result.rows) {
-        knownOutputIds[row.outputId] = true;
+      let recordsAdded = 0;
+      let recordsReplayed = 0;
+      let occurrencesAdded = 0;
+      let occurrencesReplayed = 0;
+
+      // Write order is load-bearing. A record first, its occurrence second: an
+      // occurrence pointing at a record nobody stored is unrecoverable, while a
+      // record with no occurrence is merely missing provenance and gets it back
+      // by re-ingesting the same source.
+      for (const candidate of batch.occurrences) {
+        const record = corpus.ensureRecord(candidate.fields);
+        if (record.added) {
+          recordsAdded += 1;
+        } else {
+          recordsReplayed += 1;
+        }
+        knownOutputIds[record.row.outputId] = true;
+        args.fault?.("after-record-append");
+
+        const occurrence = occurrences.ensureOccurrence({
+          outputId: record.row.outputId,
+          source: candidate.source,
+          origin: candidate.origin,
+        });
+        if (occurrence.added) {
+          occurrencesAdded += 1;
+        } else {
+          occurrencesReplayed += 1;
+        }
       }
-      return result;
+      args.fault?.("after-occurrence-append");
+
+      // The manifest is last for the same reason: a stale fieldOrder only
+      // affects display, and re-ingesting the same batch repairs it.
+      const newFieldNames = batch.discoveredFieldNames
+        .filter((name) => !manifest.fieldOrder.includes(name));
+      if (newFieldNames.length > 0) {
+        manifest = { ...manifest, fieldOrder: [...manifest.fieldOrder, ...newFieldNames] };
+        atomicWriteValidated({
+          targetPath: manifestPath(args.storeDir),
+          value: manifest,
+          schema: ManifestSchema,
+        });
+      }
+
+      return {
+        recordsAdded,
+        recordsReplayed,
+        occurrencesAdded,
+        occurrencesReplayed,
+        skips: batch.skips,
+        newFieldNames,
+      };
+    },
+
+    occurrenceSnapshot(): readonly DeepReadonly<OccurrenceRow>[] {
+      assertOpen();
+      return occurrences.rows();
     },
 
     readSession(sessionId: string): DeepReadonly<LabelStoreSnapshot> {
@@ -199,11 +266,52 @@ export function openStore(args: OpenStoreArgs): LabelStore {
   };
 }
 
-function ensureManifest(storeDir: string): void {
+/**
+ * Reject an older store BEFORE opening any log.
+ *
+ * Order matters: parsing a version 1 log against a version 2 schema produces a
+ * validation error deep inside a file, which reads as corruption rather than as
+ * "this store predates the current format".
+ */
+function assertStoreVersion(storeDir: string): void {
   const file = manifestPath(storeDir);
   if (!fs.existsSync(file)) {
-    atomicWriteValidated({ targetPath: file, value: { schemaVersion: 1 }, schema: ManifestSchema });
     return;
+  }
+  let parsed: { schemaVersion?: unknown };
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { schemaVersion?: unknown };
+  } catch (error) {
+    throw new StoreValidationError(`${file} is not valid JSON: ${(error as Error).message}`);
+  }
+  if (parsed.schemaVersion === CURRENT_STORE_VERSION) {
+    return;
+  }
+  throw new StoreVersionError(
+    `${storeDir} uses label store format ${String(parsed.schemaVersion)}; this build writes ` +
+    `format ${CURRENT_STORE_VERSION}. Migrate it with:\n\n` +
+    `  agency eval label migrate ${storeDir} <new-store>\n\n` +
+    "The original store is left untouched.",
+  );
+}
+
+/** The display order a renderer needs, without opening the whole store. Absent
+ *  or unreadable is an empty order, not an error: this only affects layout. */
+export function readFieldOrder(storeDir: string): readonly string[] {
+  const file = manifestPath(storeDir);
+  if (!fs.existsSync(file)) {
+    return [];
+  }
+  const parsed = ManifestSchema.safeParse(JSON.parse(fs.readFileSync(file, "utf8")));
+  return parsed.success ? parsed.data.fieldOrder : [];
+}
+
+function ensureManifest(storeDir: string): Manifest {
+  const file = manifestPath(storeDir);
+  if (!fs.existsSync(file)) {
+    const fresh: Manifest = { schemaVersion: CURRENT_STORE_VERSION, fieldOrder: [] };
+    atomicWriteValidated({ targetPath: file, value: fresh, schema: ManifestSchema });
+    return fresh;
   }
   const parsed = ManifestSchema.safeParse(JSON.parse(fs.readFileSync(file, "utf8")));
   if (!parsed.success) {
@@ -212,18 +320,61 @@ function ensureManifest(storeDir: string): void {
       `store rather than risk a dataset written by a different version.`,
     );
   }
+  return parsed.data;
 }
 
 /** Every cross-file invariant, checked once at open. */
 function validateStore(
   storeDir: string,
-  corpus: OpenedJsonl<CorpusRow>,
+  corpus: OpenedCorpusLog,
+  occurrences: OpenedOccurrenceLog,
   annotations: OpenedJsonl<AnnotationRow>,
+  manifest: Manifest,
   reportWarning: (message: string) => void,
 ): void {
   const corpusById: Record<string, CorpusRow> = Object.create(null);
-  for (const row of corpus.rows() as readonly CorpusRow[]) {
+  for (const row of corpus.rows()) {
+    // Shape-only validation is not enough for a derived identity: a hand-edited
+    // row could hold a well-formed id that is not the hash of its own fields,
+    // and every label on it would then describe text nobody can reconstruct.
+    const expected = makeOutputId(row.fields);
+    if (row.outputId !== expected) {
+      throw new StoreValidationError(
+        `Corpus row "${row.outputId}" does not match the hash of its own fields (${expected}). ` +
+        `An output id is derived from its content and cannot be edited independently.`,
+      );
+    }
     corpusById[row.outputId] = row;
+  }
+
+  for (const row of occurrences.rows()) {
+    const expected = makeOccurrenceId({
+      outputId: row.outputId,
+      source: row.source,
+      origin: row.origin,
+    });
+    if (row.occurrenceId !== expected) {
+      throw new StoreValidationError(
+        `Occurrence "${row.occurrenceId}" does not match the hash of its own identity ` +
+        `(${expected}).`,
+      );
+    }
+    if (corpusById[row.outputId] === undefined) {
+      throw new StoreValidationError(
+        `Occurrence "${row.occurrenceId}" refers to output "${row.outputId}", which is not in ` +
+        `the corpus. Records are always written before the occurrences that reference them.`,
+      );
+    }
+  }
+
+  const seenFieldNames: Record<string, true> = Object.create(null);
+  for (const name of manifest.fieldOrder) {
+    if (seenFieldNames[name] === true) {
+      throw new StoreValidationError(
+        `The manifest lists field "${name}" more than once in fieldOrder.`,
+      );
+    }
+    seenFieldNames[name] = true;
   }
 
   const revisionCache: Record<string, ChecklistRevision> = Object.create(null);
@@ -235,7 +386,7 @@ function validateStore(
     return revisionCache[key];
   };
 
-  validateLineages(storeDir, corpus, annotations, readCached, reportWarning);
+  validateLineages(storeDir, annotations, readCached, reportWarning);
 
   for (const row of annotations.rows() as readonly AnnotationRow[]) {
     if (corpusById[row.outputId] === undefined) {
@@ -265,7 +416,6 @@ function validateStore(
 
 function validateLineages(
   storeDir: string,
-  corpus: OpenedJsonl<CorpusRow>,
   annotations: OpenedJsonl<AnnotationRow>,
   readCached: (checklistId: string, version: number) => ChecklistRevision,
   reportWarning: (message: string) => void,
@@ -326,7 +476,6 @@ function validateLineages(
       );
     }
   }
-  void corpus;
 }
 
 /**

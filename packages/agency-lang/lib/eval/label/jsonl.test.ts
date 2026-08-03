@@ -167,3 +167,27 @@ describe("atomicWriteValidated", () => {
     expect(fs.readdirSync(dir).filter((name) => name.includes(".tmp"))).toEqual([]);
   });
 });
+
+describe("find", () => {
+  it("returns undefined for an identity the log does not hold", () => {
+    expect(open().find("missing")).toBeUndefined();
+  });
+
+  it("returns a row appended in this session", () => {
+    const log = open();
+    log.appendExact({ id: "a", n: 1 });
+    expect(log.find("a")).toEqual({ id: "a", n: 1 });
+  });
+
+  it("returns a row written by an earlier session, after reopening", () => {
+    open().appendExact({ id: "a", n: 1 });
+    expect(open().find("a")).toEqual({ id: "a", n: 1 });
+  });
+
+  it("shares one index with appendExact, so a found row is also a replay", () => {
+    const log = open();
+    log.appendExact({ id: "a", n: 1 });
+    expect(log.find("a")).toBeDefined();
+    expect(log.appendExact({ id: "a", n: 1 })).toBe("replayed");
+  });
+});

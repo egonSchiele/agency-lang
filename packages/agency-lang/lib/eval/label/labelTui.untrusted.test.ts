@@ -9,7 +9,7 @@ import {
 import type { SessionSnapshot } from "./session.js";
 
 const OUTPUT_ID = `out_${"a".repeat(64)}`;
-const ESC = "";
+const ESC = "\x1b";
 
 function snapshot(over: Partial<SessionSnapshot> = {}): SessionSnapshot {
   const item = { outputId: OUTPUT_ID, task: "a task", text: "some output" };

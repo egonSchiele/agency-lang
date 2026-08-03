@@ -5,15 +5,22 @@
 // `visualWidth`, and only emit escape sequences via `sgr` (or by
 // asking `stripAnsi` to remove them).
 
-const CSI_RE = /\x1b\[[\d;]*[A-Za-z]/g;
-const CSI_TOKEN_RE = /\x1b\[[\d;]*[A-Za-z]/y;
+const CSI_SOURCE = "\\x1b\\[[\\d;]*[A-Za-z]";
+// OSC sequences — `ESC ] … BEL` or `ESC ] … ST`. The one that matters in
+// practice is OSC 8, the hyperlink wrapper, which carries a whole URL that
+// occupies no columns. Counting that URL as visible text throws every width
+// calculation off, and terminal-rendered Markdown is full of links.
+const OSC_SOURCE = "\\x1b\\][^\\x07\\x1b]*(?:\\x07|\\x1b\\\\)";
+
+const ZERO_WIDTH_RE = new RegExp(`${CSI_SOURCE}|${OSC_SOURCE}`, "g");
+const ZERO_WIDTH_TOKEN_RE = new RegExp(`${CSI_SOURCE}|${OSC_SOURCE}`, "y");
 
 export function visualWidth(s: string): number {
-  return s.replace(CSI_RE, "").length;
+  return s.replace(ZERO_WIDTH_RE, "").length;
 }
 
 export function stripAnsi(s: string): string {
-  return s.replace(CSI_RE, "");
+  return s.replace(ZERO_WIDTH_RE, "");
 }
 
 // Matches SGR sequences only (CSI … `m`), not other CSI like cursor/erase.
@@ -98,11 +105,11 @@ function breakLongToken(token: string, width: number): string[] {
   let index = 0;
 
   while (index < token.length) {
-    CSI_TOKEN_RE.lastIndex = index;
-    const escape = CSI_TOKEN_RE.exec(token);
+    ZERO_WIDTH_TOKEN_RE.lastIndex = index;
+    const escape = ZERO_WIDTH_TOKEN_RE.exec(token);
     if (escape && escape.index === index) {
       current += escape[0];
-      index = CSI_TOKEN_RE.lastIndex;
+      index = ZERO_WIDTH_TOKEN_RE.lastIndex;
       continue;
     }
 

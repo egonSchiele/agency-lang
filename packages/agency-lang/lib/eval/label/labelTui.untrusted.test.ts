@@ -110,6 +110,22 @@ describe("untrusted content never reaches the frame raw", () => {
     expect(frameCells({}, [sanitizeUntrusted(`body${ESC}[2Jgone`)])).not.toContain(ESC);
   });
 
+  it("escapes style tags in a hostile question, which are markup to the parser", () => {
+    // Control characters are not the only way in: {black-fg} is markup, so
+    // text alone could restyle or hide the evidence being judged.
+    const questions = [{ id: "q_a", text: "{black-fg}invisible?{/black-fg}", weight: 1, deleted: false }];
+    expect(frameCells({ questions })).toContain("{black-fg}invisible?");
+  });
+
+  it("escapes style tags in a hostile note", () => {
+    expect(frameCells({ note: "{bg-red}alarming{/bg-red}" })).toContain("{bg-red}alarming");
+  });
+
+  it("escapes style tags in a hostile task", () => {
+    const hostile = { outputId: OUTPUT_ID, task: "{black-fg}hidden", text: "x" };
+    expect(frameCells({ currentItem: hostile, items: [hostile] })).toContain("{black-fg}hidden");
+  });
+
   it("shows only the first line of a multi-line task, so the layout cannot be broken", () => {
     const multiline = { outputId: OUTPUT_ID, task: "first line\nsecond line", text: "x" };
     const text = frameCells({ currentItem: multiline, items: [multiline] });

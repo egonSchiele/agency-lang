@@ -1,6 +1,7 @@
 import { stripAnsi, visualWidth, wrapText } from "@/stdlib/layout/ansi.js";
 import { syntaxHighlight } from "@/stdlib/syntax.js";
 import { column, line, lines, row } from "@/tui/builders.js";
+import { escapeStyleTags } from "@/tui/styleParser.js";
 import type { Element, Style } from "@/tui/elements.js";
 import type { KeyEvent } from "@/tui/input/types.js";
 import type { Screen } from "@/tui/screen.js";
@@ -28,6 +29,10 @@ export { stripAnsi, visualWidth };
  * them; everything else in C0, C1 and DEL becomes a visible replacement so the
  * reader can see something was there.
  *
+ * Style tags are escaped too. The TUI parser reads `{black-fg}` as markup, so
+ * plain text alone is enough to restyle or hide the very evidence being
+ * judged — control characters are not the only way into a terminal.
+ *
  * Styling is applied afterwards, so the tool's own colour is unaffected.
  */
 export function sanitizeUntrusted(text: string): string {
@@ -43,7 +48,7 @@ export function sanitizeUntrusted(text: string): string {
     const isC1 = code >= 0x80 && code <= 0x9f;
     out += isC0 || isDelete || isC1 ? "�" : character;
   }
-  return out;
+  return escapeStyleTags(out);
 }
 
 /**
@@ -182,7 +187,7 @@ function headerLine(snapshot: SessionSnapshot, storeLabel: string): string {
   const stale = snapshot.progress.stale > 0
     ? `  ${color.yellow(`⟳ ${snapshot.progress.stale} stale`)}`
     : "";
-  return ` ${color.bgBlue.bold(" eval label ")} ${color.brightBlack(storeLabel)}  ` +
+  return ` ${color.bgBlue.bold(" eval label ")} ${color.brightBlack(sanitizeUntrusted(storeLabel))}  ` +
     `${color.bold.green(String(snapshot.progress.reviewed))}` +
     `${color.dim(`/${snapshot.progress.total} reviewed`)}${stale}`;
 }
@@ -303,8 +308,7 @@ function pane(contentLines: string[], style: Style): Element {
  *
  * Returns null for keys the loop handles itself (scrolling, quitting) or
  * ignores. Events arrive already parsed by the TUI input layer, which owns
- * escape-sequence reassembly across stream chunks — the thing this module used
- * to do by hand, and got wrong.
+ * escape-sequence reassembly and bracketed paste.
  */
 export function actionForKey(event: KeyEvent, editing: boolean): SessionAction | null {
   if (editing) {
@@ -371,6 +375,10 @@ export type RunLabelTuiArgs = {
   controller: LabelingSessionController;
   screen: Screen;
   storeLabel?: string;
+  /** Current terminal size, read before every draw. Screen stores its
+   *  dimensions, so without this a resize leaves stale pane widths, wrapping
+   *  and scroll bounds until restart. */
+  currentSize?: () => { width: number; height: number };
 };
 
 type BodyCache = { outputId: string; width: number; lines: string[] };
@@ -384,15 +392,25 @@ type LoopState = {
 };
 
 export async function runLabelTui(args: RunLabelTuiArgs): Promise<void> {
-  const { width, height } = args.screen.size();
-  const leftWidth = leftPaneWidthFor(width);
-  const paneHeight = paneHeightFor(height);
+  /** Adopt the terminal's current size, so a resize takes effect on the next
+   *  draw rather than at restart. */
+  const syncSize = (): { width: number; height: number } => {
+    const current = args.currentSize?.();
+    if (current !== undefined) {
+      const stored = args.screen.size();
+      if (current.width !== stored.width || current.height !== stored.height) {
+        args.screen.resize(current.width, current.height);
+      }
+    }
+    return args.screen.size();
+  };
 
   const withBody = (state: LoopState): LoopState => {
     const item = args.controller.snapshot().currentItem;
     if (item === null) {
       return state;
     }
+    const leftWidth = leftPaneWidthFor(args.screen.size().width);
     if (state.body?.outputId === item.outputId && state.body.width === leftWidth) {
       return state;
     }
@@ -403,14 +421,17 @@ export async function runLabelTui(args: RunLabelTuiArgs): Promise<void> {
 
   await args.screen.runLoop<LoopState>({
     initialState: withBody({ scroll: 0, done: false, body: null }),
-    render: (state) => labelScreen({
-      snapshot: args.controller.snapshot(),
-      storeLabel: args.storeLabel ?? "",
-      width,
-      height,
-      scroll: state.scroll,
-      body: state.body?.lines ?? [],
-    }),
+    render: (state) => {
+      const size = syncSize();
+      return labelScreen({
+        snapshot: args.controller.snapshot(),
+        storeLabel: args.storeLabel ?? "",
+        width: size.width,
+        height: size.height,
+        scroll: state.scroll,
+        body: state.body?.lines ?? [],
+      });
+    },
     handleKey: async (state, event) => {
       const snapshot = args.controller.snapshot();
       const editing = snapshot.editor.kind !== "none";
@@ -427,6 +448,7 @@ export async function runLabelTui(args: RunLabelTuiArgs): Promise<void> {
         }
       }
       next = withBody(next);
+      const paneHeight = paneHeightFor(args.screen.size().height);
       const maxScroll = Math.max(0, (next.body?.lines.length ?? 0) - paneHeight);
       const scrolled = next.scroll + scrollDelta(event, paneHeight);
       return { ...next, scroll: Math.min(Math.max(0, scrolled), maxScroll) };

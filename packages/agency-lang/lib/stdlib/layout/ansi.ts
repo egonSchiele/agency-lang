@@ -5,6 +5,8 @@
 // `visualWidth`, and only emit escape sequences via `sgr` (or by
 // asking `stripAnsi` to remove them).
 
+const ESC = "\x1b";
+const BEL = "\x07";
 const CSI_SOURCE = "\\x1b\\[[\\d;]*[A-Za-z]";
 // OSC sequences — `ESC ] … BEL` or `ESC ] … ST`. The one that matters in
 // practice is OSC 8, the hyperlink wrapper, which carries a whole URL that
@@ -48,13 +50,33 @@ function updateActiveSgr(active: string, segment: string): string {
 // never dropped mid-span; when no style is active a blank line stays "".
 function reinjectSgr(segments: string[]): string[] {
   let active = "";
+  let link = "";
   return segments.map((segment) => {
     const opened = active;
     const closed = updateActiveSgr(opened, segment);
     active = closed;
-    const suffix = closed === "" ? "" : RESET;
-    return opened + segment + suffix;
+    const openedLink = link;
+    link = updateActiveHyperlink(openedLink, segment);
+    // A hyperlink left open across a wrap makes everything after it — borders,
+    // the next pane, unrelated rows — clickable. Close it at the boundary and
+    // reopen it on the next segment, the same way SGR state is carried.
+    const suffix = (closed === "" ? "" : RESET) + (link === "" ? "" : HYPERLINK_CLOSE);
+    return openedLink + opened + segment + suffix;
   });
+}
+
+// OSC 8 opener carrying a URL, and the closer that ends the link.
+const OSC8_RE = /\x1b\]8;;([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
+const HYPERLINK_CLOSE = `${ESC}]8;;${BEL}`;
+
+/** Track the hyperlink open since the last closer. An opener with an empty URL
+ *  IS the closer, per the OSC 8 spec. */
+function updateActiveHyperlink(active: string, segment: string): string {
+  let result = active;
+  for (const match of segment.matchAll(OSC8_RE)) {
+    result = match[1] === "" ? "" : match[0];
+  }
+  return result;
 }
 
 export function wrapText(content: string, width: number): string[] {

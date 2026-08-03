@@ -80,3 +80,33 @@ describe("wrapText with hyperlinks", () => {
     }
   });
 });
+
+describe("hyperlink state across wrap boundaries", () => {
+  it("closes an open link at the end of a wrapped segment", () => {
+    // A long label forces the link to span more than one line. Leaving the
+    // link open would make the rest of the row, and the next pane, clickable.
+    const label = "a clickable label long enough to wrap across two lines";
+    const wrapped = wrapText(link(LONG_URL, label), 20);
+    expect(wrapped.length).toBeGreaterThan(1);
+    expect(wrapped[0].endsWith(`${ESC}]8;;${BEL}`)).toBe(true);
+  });
+
+  it("reopens the link on the following segment", () => {
+    const label = "a clickable label long enough to wrap across two lines";
+    const wrapped = wrapText(link(LONG_URL, label), 20);
+    expect(wrapped[1].startsWith(`${ESC}]8;;${LONG_URL}${BEL}`)).toBe(true);
+  });
+
+  it("does not reopen a link after its closer", () => {
+    const wrapped = wrapText(`${link(LONG_URL, "site")} then plenty more words here to wrap`, 12);
+    expect(wrapped[wrapped.length - 1]).not.toContain(LONG_URL);
+  });
+
+  it("still loses no visible text", () => {
+    const label = "a clickable label long enough to wrap";
+    const joined = wrapText(link(LONG_URL, label), 15).map(stripAnsi).join(" ");
+    for (const word of label.split(" ")) {
+      expect(joined).toContain(word);
+    }
+  });
+});

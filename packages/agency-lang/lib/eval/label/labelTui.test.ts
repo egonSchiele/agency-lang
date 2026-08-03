@@ -339,6 +339,26 @@ describe("runLabelTui", () => {
   });
 });
 
+describe("resizing", () => {
+  it("adopts a new terminal size on the next draw", async () => {
+    const { screen } = scriptedScreen(["q"]);
+    const { controller } = fakeController();
+    await runLabelTui({
+      controller,
+      screen,
+      currentSize: () => ({ width: 60, height: 18 }),
+    });
+    expect(screen.size()).toEqual({ width: 60, height: 18 });
+  });
+
+  it("leaves the size alone when no provider is given", async () => {
+    const { screen } = scriptedScreen(["q"]);
+    const { controller } = fakeController();
+    await runLabelTui({ controller, screen });
+    expect(screen.size()).toEqual({ width: 100, height: 30 });
+  });
+});
+
 describe("layout arithmetic", () => {
   it("leaves room for the chrome above and below the panes", () => {
     expect(paneHeightFor(30)).toBeLessThan(30);

@@ -86,7 +86,7 @@ const defaultDependencies: EvalLabelDependencies = {
   openSession: openLabelingSession,
   runTui: runLabelTui,
   makeScreen: () => new Screen({
-    input: new TerminalInput(),
+    input: new TerminalInput({ suppressSigint: true }),
     output: new TerminalOutput(),
     width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
     height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
@@ -142,7 +142,15 @@ export async function evalLabel(
   // the terminal loop.
   const screen = dependencies.makeScreen();
   try {
-    await dependencies.runTui({ controller, screen, storeLabel: path.basename(storeDir) });
+    await dependencies.runTui({
+      controller,
+      screen,
+      storeLabel: path.basename(storeDir),
+      currentSize: () => ({
+        width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
+        height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),
+      }),
+    });
   } finally {
     try {
       screen.destroy();

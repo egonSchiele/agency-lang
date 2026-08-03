@@ -2,7 +2,10 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { uploadBundle, serveBaseUrl } from "./uploadClient.js";
 
 const target = { host: "https://statelog.example", projectId: "proj", apiKey: "k" };
-const bundle = { entrypoint: "greeter.agency", files: [{ name: "greeter.agency", contents: "x" }] };
+const bundle = {
+  entrypoint: "greeter.agency",
+  files: [{ name: "greeter.agency", contents: "x", absPath: "/tmp/greeter.agency" }],
+};
 
 function mockFetch(handler: (url: string, init?: { method?: string }) => unknown): void {
   vi.spyOn(globalThis, "fetch").mockImplementation((async (url: unknown, init?: { method?: string }) => {

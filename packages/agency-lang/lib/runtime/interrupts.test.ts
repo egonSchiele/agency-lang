@@ -283,7 +283,7 @@ describe("reportUnhandledInterrupts", () => {
       .spyOn(process, "exit")
       .mockImplementation(() => undefined as never);
 
-    reportUnhandledInterrupts({ messages: {} as any, data: "the answer" });
+    reportUnhandledInterrupts({ data: "the answer" });
 
     expect(err).not.toHaveBeenCalled();
     expect(exit).not.toHaveBeenCalled();
@@ -296,7 +296,6 @@ describe("reportUnhandledInterrupts", () => {
       .mockImplementation(() => undefined as never);
 
     reportUnhandledInterrupts({
-      messages: {} as any,
       data: [
         interrupt({
           effect: "std::edit",
@@ -322,7 +321,6 @@ describe("reportUnhandledInterrupts", () => {
     vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 
     reportUnhandledInterrupts({
-      messages: {} as any,
       data: [
         interrupt({ effect: "std::read", message: "read", data: {}, origin: "", runId: "r" }),
         interrupt({ effect: "std::edit", message: "edit", data: {}, origin: "", runId: "r" }),

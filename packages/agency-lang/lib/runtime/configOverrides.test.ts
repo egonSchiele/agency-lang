@@ -268,3 +268,36 @@ describe("failurePropagation override", () => {
     expect(merged.failurePropagation).toBeUndefined();
   });
 });
+
+describe("budget override (how statelog sets a served agent's spend limit)", () => {
+  const base = () => ({
+    statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+    smoltalkDefaults: {},
+    dirname: "/p",
+  });
+
+  it("resolves the config shape (maxTime string) into { maxCost, maxTimeMs }", () => {
+    const merged = applyRuntimeConfigOverridesToContextArgs(base(), {
+      budget: { maxCost: 1.5, maxTime: "10m" },
+    });
+    expect(merged.budget).toEqual({ maxCost: 1.5, maxTimeMs: 600_000 });
+  });
+
+  it("carries maxCost alone (no maxTimeMs) when maxTime is omitted", () => {
+    const merged = applyRuntimeConfigOverridesToContextArgs(base(), {
+      budget: { maxCost: 0 },
+    });
+    expect(merged.budget).toEqual({ maxCost: 0 });
+  });
+
+  it("fails closed on a malformed maxTime", () => {
+    expect(() =>
+      applyRuntimeConfigOverridesToContextArgs(base(), { budget: { maxTime: "soon" } }),
+    ).toThrow(/budget\.maxTime/);
+  });
+
+  it("leaves budget unset when the override omits it", () => {
+    const merged = applyRuntimeConfigOverridesToContextArgs(base(), { maxCallDepth: 7 });
+    expect(merged.budget).toBeUndefined();
+  });
+});

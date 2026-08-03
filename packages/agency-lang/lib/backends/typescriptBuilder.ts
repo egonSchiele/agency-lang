@@ -50,6 +50,7 @@ import * as renderResultCheckpointSetup from "../templates/backends/typescriptGe
 import * as renderFunctionCatchFailure from "../templates/backends/typescriptGenerator/functionCatchFailure.js";
 
 import { AgencyConfig } from "@/config.js";
+import { parseDurationMs } from "@/duration.js";
 import {
   BinOpArgument,
   BinOpExpression,
@@ -4499,6 +4500,23 @@ export class TypeScriptBuilder {
       runtimeCtxArgs.failurePropagation = ts.str(
         this.agencyConfig.failurePropagation,
       );
+    }
+    // Bake the config `budget` into the RuntimeContext, resolving maxTime to ms
+    // at compile time. installRootBudget reads this when no --max-cost/--max-time
+    // flag is set. (Served agents get the budget via runtime-config overrides
+    // instead, since statelog compiles the uploaded source without this config.)
+    if (this.agencyConfig.budget !== undefined) {
+      const b = this.agencyConfig.budget;
+      const budgetFields: Record<string, TsNode> = {};
+      if (b.maxCost !== undefined) {
+        budgetFields.maxCost = ts.raw(String(b.maxCost));
+      }
+      if (b.maxTime !== undefined) {
+        budgetFields.maxTimeMs = ts.raw(
+          String(parseDurationMs(b.maxTime, "budget.maxTime")),
+        );
+      }
+      runtimeCtxArgs.budget = ts.obj(budgetFields);
     }
     if (cfg.client?.maxToolResultChars !== undefined) {
       runtimeCtxArgs.maxToolResultChars = ts.raw(

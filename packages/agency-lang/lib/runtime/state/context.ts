@@ -214,6 +214,12 @@ export class RuntimeContext<T> {
    *  recursion guard trips. See lib/runtime/callDepth.ts. */
   maxCallDepth: number;
   failurePropagation: "off" | "warn" | "on";
+  /** Resolved root budget (dollars of LLM spend / wall-clock ms) sourced from
+   *  the `budget` config field — baked for local runs, override-supplied for
+   *  served agents. Read by installRootBudget, where a CLI flag (env var) wins.
+   *  Undefined means "no config budget"; the guard installer then relies on the
+   *  env vars alone. */
+  budget?: { maxCost?: number; maxTimeMs?: number };
 
   // Memory layer (resolved decisions in
   // docs/superpowers/plans/2026-05-12-memory-layer.md and
@@ -244,6 +250,7 @@ export class RuntimeContext<T> {
     maxRestores?: number;
     maxCallDepth?: number;
     failurePropagation?: "off" | "warn" | "on";
+    budget?: { maxCost?: number; maxTimeMs?: number };
     traceConfig?: TraceConfig;
     verbose?: boolean;
     memory?: MemoryConfig;
@@ -283,6 +290,7 @@ export class RuntimeContext<T> {
     // fallback in failurePropagation.ts is a SEPARATE default serving unit
     // tests — this literal is the one that governs compiled programs.
     this.failurePropagation = args.failurePropagation ?? "on";
+    this.budget = args.budget;
     this.statelogClient = new StatelogClient(statelogConfig);
     this.stateStack = new StateStack();
     this.globals = GlobalStore.withTokenStats();

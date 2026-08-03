@@ -1,5 +1,6 @@
 import type { SmolConfig } from "smoltalk";
 
+import { parseDurationMs } from "../duration.js";
 import type { AgencyConfig } from "../config.js";
 import type { StatelogConfig } from "../statelogClient.js";
 import type { LogLevel } from "../logger.js";
@@ -15,6 +16,7 @@ export type RuntimeContextConstructorArgs = {
   maxRestores?: number;
   maxCallDepth?: number;
   failurePropagation?: "off" | "warn" | "on";
+  budget?: { maxCost?: number; maxTimeMs?: number };
   traceConfig?: TraceConfig;
   verbose?: boolean;
   memory?: MemoryConfig;
@@ -82,6 +84,9 @@ export async function withRuntimeConfigOverrides<T>(
  *     the same custom/local providers; de-duped at load time).
  *   • `maxCallDepth` → inherit the parent's runaway-recursion ceiling.
  *   • `failurePropagation` → inherit the parent's failure-propagation mode.
+ *   • `budget` → the root spend/time cap; the config shape (`maxTime` as a
+ *     duration string) is resolved to `{ maxCost, maxTimeMs }` here. This is how
+ *     a host (statelog) sets a served agent's per-agent spend limit.
  */
 export function applyRuntimeConfigOverridesToContextArgs(
   args: RuntimeContextConstructorArgs,
@@ -128,6 +133,20 @@ export function applyRuntimeConfigOverridesToContextArgs(
   // Let a subprocess inherit the parent's failure-propagation mode.
   if (overrides.failurePropagation !== undefined) {
     merged.failurePropagation = overrides.failurePropagation;
+  }
+
+  // Root budget: resolve the config shape (maxTime as a duration string) into
+  // the numeric shape the guard installer uses. A malformed maxTime throws —
+  // fail closed, never silently run a cost-capped agent unbounded.
+  if (overrides.budget !== undefined) {
+    const b = overrides.budget;
+    merged.budget = {
+      ...(merged.budget ?? {}),
+      ...(b.maxCost !== undefined ? { maxCost: b.maxCost } : {}),
+      ...(b.maxTime !== undefined
+        ? { maxTimeMs: parseDurationMs(b.maxTime, "budget.maxTime") }
+        : {}),
+    };
   }
 
   return merged;

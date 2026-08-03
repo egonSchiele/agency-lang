@@ -274,6 +274,16 @@ export interface AgencyConfig {
    * "off": no checks. */
   failurePropagation?: "off" | "warn" | "on";
 
+  /** Root spend/time budget for each run — the same ceiling as `agency run
+   * --max-cost` / `--max-time`, but declarative and honored when the agent is
+   * served remotely (a CLI flag, when given, wins). `maxCost` is dollars of LLM
+   * spend; `< 0` disables, `0` is a real limit (no paid spend). `maxTime` is a
+   * duration string like `30s`, `5m`, `1h`; `<= 0` disables. */
+  budget?: {
+    maxCost?: number;
+    maxTime?: string;
+  };
+
   /** Enable execution tracing — writes checkpoints to a .trace file */
   trace?: boolean;
 
@@ -507,6 +517,10 @@ export const AgencyConfigSchema = z
     // throw — reject it at config-load rather than bricking the program.
     maxCallDepth: z.number().int().positive(),
     failurePropagation: z.enum(["off", "warn", "on"]),
+    // maxCost is dollars: negatives (disable) and 0 (no paid spend) are both
+    // meaningful, so it is a plain number, not positive-only. maxTime is a
+    // duration string validated when parsed (parseDurationMs), fail-closed.
+    budget: z.object({ maxCost: z.number(), maxTime: z.string() }).partial(),
     trace: z.boolean(),
     traceFile: z.string(),
     traceDir: z.string(),

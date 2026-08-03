@@ -18,7 +18,7 @@ function writeFixture(name: string, source: string): string {
 afterAll(() => {
   const result = safeDeleteDirectory(fixturesRoot, false);
   if (!result.success) {
-    console.error(`exportedEndpoints fixture cleanup failed: ${result.error}`);
+    console.error(`exportedEndpoints fixture cleanup failed: ${result.message}`);
   }
 });
 

@@ -19,6 +19,12 @@ import {
 import { pack } from "@/cli/pack.js";
 import { deploy } from "@/cli/deploy/deploy.js";
 import { renderOutcome } from "@/cli/deploy/render.js";
+import { runLink } from "@/cli/remote/commands/link.js";
+import { runDeploy } from "@/cli/remote/commands/deploy.js";
+import { runLs } from "@/cli/remote/commands/ls.js";
+import { runCall } from "@/cli/remote/commands/call.js";
+import { runOpen } from "@/cli/remote/commands/open.js";
+import type { RemoteCommandContext } from "@/cli/remote/commands/util.js";
 import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
 import { resolveBudget } from "@/cli/budget.js";
@@ -192,6 +198,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
       config.verbose = true;
     }
     return config;
+  }
+
+  // Config plus the exact path it loaded from, so a remote binding writes back
+  // to that file rather than a re-derived one.
+  function getConfigContext(): RemoteCommandContext {
+    const opts = program.opts();
+    const configPath = opts.config ?? path.resolve(process.cwd(), "agency.json");
+    return { config: getConfig(), configPath };
   }
 
   function runWithOptions(input: string, options: RunOptions, nodeArgs: string[] = []) {
@@ -399,10 +413,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     );
 
   program
-    // Hidden while the hosted-serve feature is still in progress — the command
-    // works, it just isn't advertised in `--help` yet.
+    // Deprecated in favor of `agency remote deploy`. Kept as a hidden shim for
+    // compatibility: same behavior as before (no binding is written), plus a
+    // notice. Remove after one release.
     .command("deploy", { hidden: true })
-    .description("Upload an agent to a hosted statelog so it can be served")
+    .description("Deprecated: use 'agency remote deploy'")
     .argument("<file>", "Agency entrypoint file to deploy")
     .option("--host <url>", "statelog host (overrides agency.json log.host)")
     .option("--project <slug>", "project slug (overrides agency.json log.projectId)")
@@ -421,6 +436,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           dryRun?: boolean;
         },
       ) => {
+        console.error(color.yellow("agency deploy is deprecated; use agency remote deploy"));
         const outcome = await deploy(file, getConfig(), {
           host: opts.host,
           project: opts.project,
@@ -433,6 +449,76 @@ export function createProgram(deps: CliDependencies = {}): Command {
         }
       },
     );
+
+  // Hidden while the hosted feature matures. Every "how" (HTTP, interrupts,
+  // binding, arg coercion, prompts, browser launch) sits behind the modules in
+  // lib/cli/remote/; these actions are thin delegations.
+  const remoteCmd = program
+    .command("remote", { hidden: true })
+    .description("Interact with a hosted statelog agent");
+
+  remoteCmd
+    .command("link")
+    .description("Show, or set with --url, this directory's linked hosted agent")
+    .option("--url <serveBase>", "serve base URL to link (…/serve/:user/:project/:file)")
+    .action((opts: { url?: string }) => runLink(opts, getConfigContext()));
+
+  remoteCmd
+    .command("deploy")
+    .description("Upload an agent and link this directory to it")
+    .argument("<file>", "Agency entrypoint file to deploy")
+    .option("--host <url>", "statelog host (overrides agency.json log.host)")
+    .option("--project <slug>", "project slug (overrides agency.json log.projectId)")
+    .option("--api-key-env <name>", "env var to read the API key from (default: STATELOG_API_KEY)")
+    .option("--dry-run", "preview the deploy without uploading")
+    .action(
+      (file: string, opts: { host?: string; project?: string; apiKeyEnv?: string; dryRun?: boolean }) =>
+        runDeploy(file, opts, getConfigContext()),
+    );
+
+  remoteCmd
+    .command("ls")
+    .description("List the linked agent's callable nodes and functions")
+    .option("--api-key-env <name>", "env var to read the API key from (default: STATELOG_API_KEY)")
+    .action((opts: { apiKeyEnv?: string }) => runLs(opts, getConfigContext()));
+
+  remoteCmd
+    .command("call")
+    .description("Call a node (or --function) and drive the interrupt cycle")
+    .argument("<name>", "node or function name")
+    .option(
+      "--arg <name=value>",
+      "an argument as name=value (repeatable); values parse as JSON when they can",
+      (pair: string, prev: string[]) => [...prev, pair],
+      [] as string[],
+    )
+    .option("--data <json>", "all named arguments as one JSON object (alternative to --arg)")
+    .option("--function", "call a function instead of a node")
+    .option("-i, --interactive", "prompt on surfaced interrupts (else report and exit)")
+    .option("--policy <name|path>", "interrupt policy: a built-in or a policy JSON file")
+    .option("--approve <effects>", "comma-separated interrupt effects to auto-approve")
+    .option("--reject <effects>", "comma-separated interrupt effects to auto-reject")
+    .option("--api-key-env <name>", "env var to read the API key from (default: STATELOG_API_KEY)")
+    .action(
+      (
+        name: string,
+        opts: {
+          arg?: string[];
+          data?: string;
+          function?: boolean;
+          interactive?: boolean;
+          policy?: string;
+          approve?: string;
+          reject?: string;
+          apiKeyEnv?: string;
+        },
+      ) => runCall(name, opts, getConfigContext()),
+    );
+
+  remoteCmd
+    .command("open")
+    .description("Open the linked agent's project page in a browser")
+    .action(() => runOpen(getConfigContext()));
 
   const traceCmd = program
     .command("trace")

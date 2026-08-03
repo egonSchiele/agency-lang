@@ -116,6 +116,26 @@ describe("agency CLI command tree", () => {
       .toBe("function");
   });
 
+  it("registers the remote command group with its five subcommands", () => {
+    const program = createProgram();
+    const remote = program.commands.find((command) => command.name() === "remote");
+    expect(remote).toBeDefined();
+    expect(remote?.commands.map((command) => command.name()).sort()).toEqual([
+      "call",
+      "deploy",
+      "link",
+      "ls",
+      "open",
+    ]);
+  });
+
+  it("keeps a hidden top-level deploy shim, deprecated in favor of remote deploy", () => {
+    const program = createProgram();
+    const deploy = program.commands.find((command) => command.name() === "deploy");
+    expect(deploy).toBeDefined();
+    expect(deploy?.description()).toMatch(/deprecated/i);
+  });
+
   it("logs supports --csv for a headless runs-table export", () => {
     const program = createProgram();
     const logsCommand = program.commands.find((command) => command.name() === "logs");

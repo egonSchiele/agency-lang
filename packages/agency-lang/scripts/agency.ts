@@ -22,6 +22,12 @@ import { runDeploy } from "@/cli/remote/commands/deploy.js";
 import { runLs } from "@/cli/remote/commands/ls.js";
 import { runCall } from "@/cli/remote/commands/call.js";
 import { runOpen } from "@/cli/remote/commands/open.js";
+import { runWhoami } from "@/cli/remote/commands/whoami.js";
+import { runProjectsList, runProjectsCreate } from "@/cli/remote/commands/projects.js";
+import type { CreateProjectOptions } from "@/cli/remote/commands/projects.js";
+import { runKeysList, runKeysCreate } from "@/cli/remote/commands/keys.js";
+import type { CreateKeyOptions } from "@/cli/remote/commands/keys.js";
+import type { AccountCommandOptions } from "@/cli/remote/commands/util.js";
 import type { RemoteCommandContext } from "@/cli/remote/commands/util.js";
 import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
@@ -480,6 +486,57 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("open")
     .description("Open the linked agent's project page in a browser")
     .action(() => runOpen(getConfigContext()));
+
+  const HOST_OPTION = "--host <origin>";
+  const HOST_DESC = "statelog host (overrides agency.json log.host)";
+  const API_KEY_ENV_OPTION = "--api-key-env <name>";
+  const API_KEY_ENV_DESC = "env var to read the API key from (default: STATELOG_API_KEY)";
+
+  remoteCmd
+    .command("whoami")
+    .description("Show the authenticated statelog user")
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((opts: AccountCommandOptions) => runWhoami(opts, getConfigContext()));
+
+  const projectsCmd = remoteCmd
+    .command("projects")
+    .description("List or create statelog projects (account-scoped key)");
+  projectsCmd
+    .command("list", { isDefault: true })
+    .description("List the account's projects")
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((opts: AccountCommandOptions) => runProjectsList(opts, getConfigContext()));
+  projectsCmd
+    .command("create <project_id>")
+    .description("Create a project")
+    .requiredOption("--name <name>", "human-readable project name")
+    .option("--description <text>", "optional project description")
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((projectId: string, opts: CreateProjectOptions) =>
+      runProjectsCreate(projectId, opts, getConfigContext()),
+    );
+
+  const keysCmd = remoteCmd
+    .command("keys")
+    .description("List or create statelog API keys (account-scoped key)");
+  keysCmd
+    .command("list", { isDefault: true })
+    .description("List the account's API keys")
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((opts: AccountCommandOptions) => runKeysList(opts, getConfigContext()));
+  keysCmd
+    .command("create <name>")
+    .description("Create a project-scoped API key")
+    .requiredOption("--project <slug>", "project slug the key is scoped to")
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((name: string, opts: CreateKeyOptions) =>
+      runKeysCreate(name, opts, getConfigContext()),
+    );
 
   const traceCmd = program
     .command("trace")

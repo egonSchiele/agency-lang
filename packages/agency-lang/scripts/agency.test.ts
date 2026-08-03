@@ -4,6 +4,28 @@ import * as os from "os";
 import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import type { Command } from "commander";
+
+// Replace only the three new remote-management recipe modules so registration
+// can be exercised with real `parseAsync` without hitting the network.
+const remoteRecipeMocks = vi.hoisted(() => ({
+  runWhoami: vi.fn(),
+  runProjectsList: vi.fn(),
+  runProjectsCreate: vi.fn(),
+  runKeysList: vi.fn(),
+  runKeysCreate: vi.fn(),
+}));
+vi.mock("@/cli/remote/commands/whoami.js", () => ({
+  runWhoami: remoteRecipeMocks.runWhoami,
+}));
+vi.mock("@/cli/remote/commands/projects.js", () => ({
+  runProjectsList: remoteRecipeMocks.runProjectsList,
+  runProjectsCreate: remoteRecipeMocks.runProjectsCreate,
+}));
+vi.mock("@/cli/remote/commands/keys.js", () => ({
+  runKeysList: remoteRecipeMocks.runKeysList,
+  runKeysCreate: remoteRecipeMocks.runKeysCreate,
+}));
 
 import {
   createProgram,
@@ -116,16 +138,19 @@ describe("agency CLI command tree", () => {
       .toBe("function");
   });
 
-  it("registers the remote command group with its five subcommands", () => {
+  it("registers the remote command group with its subcommands", () => {
     const program = createProgram();
     const remote = program.commands.find((command) => command.name() === "remote");
     expect(remote).toBeDefined();
     expect(remote?.commands.map((command) => command.name()).sort()).toEqual([
       "call",
       "deploy",
+      "keys",
       "link",
       "ls",
       "open",
+      "projects",
+      "whoami",
     ]);
   });
 
@@ -254,5 +279,108 @@ describe("injectAgentSeparator", () => {
   it("is a no-op for other subcommands", () => {
     const run = [...N, "run", "foo.agency", "--max-cost", "5"];
     expect(injectAgentSeparator(run)).toEqual(run);
+  });
+});
+
+describe("remote management command registration", () => {
+  const CONTEXT = expect.objectContaining({
+    config: expect.any(Object),
+    configPath: expect.any(String),
+  });
+
+  function exitOverrideAll(cmd: Command): void {
+    cmd.exitOverride();
+    for (const sub of cmd.commands) {
+      exitOverrideAll(sub);
+    }
+  }
+
+  beforeEach(() => {
+    for (const fn of Object.values(remoteRecipeMocks)) {
+      fn.mockReset();
+    }
+  });
+
+  it("remote whoami forwards options and context", async () => {
+    await createProgram().parseAsync([
+      "node", "agency", "remote", "whoami", "--host", "https://h", "--api-key-env", "ACCOUNT_KEY",
+    ]);
+    expect(remoteRecipeMocks.runWhoami).toHaveBeenCalledWith(
+      { host: "https://h", apiKeyEnv: "ACCOUNT_KEY" },
+      CONTEXT,
+    );
+  });
+
+  it("remote projects defaults to list", async () => {
+    await createProgram().parseAsync([
+      "node", "agency", "remote", "projects", "--host", "https://h", "--api-key-env", "ACCOUNT_KEY",
+    ]);
+    expect(remoteRecipeMocks.runProjectsList).toHaveBeenCalledWith(
+      { host: "https://h", apiKeyEnv: "ACCOUNT_KEY" },
+      CONTEXT,
+    );
+    expect(remoteRecipeMocks.runProjectsCreate).not.toHaveBeenCalled();
+  });
+
+  it("remote projects list runs explicitly", async () => {
+    await createProgram().parseAsync(["node", "agency", "remote", "projects", "list"]);
+    expect(remoteRecipeMocks.runProjectsList).toHaveBeenCalledTimes(1);
+  });
+
+  it("remote projects create forwards the slug and options", async () => {
+    await createProgram().parseAsync([
+      "node", "agency", "remote", "projects", "create", "foo",
+      "--name", "Foo", "--description", "Text", "--host", "https://h", "--api-key-env", "ACCOUNT_KEY",
+    ]);
+    expect(remoteRecipeMocks.runProjectsCreate).toHaveBeenCalledWith(
+      "foo",
+      { name: "Foo", description: "Text", host: "https://h", apiKeyEnv: "ACCOUNT_KEY" },
+      CONTEXT,
+    );
+  });
+
+  it("remote keys defaults to list", async () => {
+    await createProgram().parseAsync([
+      "node", "agency", "remote", "keys", "--host", "https://h", "--api-key-env", "ACCOUNT_KEY",
+    ]);
+    expect(remoteRecipeMocks.runKeysList).toHaveBeenCalledWith(
+      { host: "https://h", apiKeyEnv: "ACCOUNT_KEY" },
+      CONTEXT,
+    );
+  });
+
+  it("remote keys list runs explicitly", async () => {
+    await createProgram().parseAsync(["node", "agency", "remote", "keys", "list"]);
+    expect(remoteRecipeMocks.runKeysList).toHaveBeenCalledTimes(1);
+  });
+
+  it("remote keys create forwards the name and --project", async () => {
+    await createProgram().parseAsync([
+      "node", "agency", "remote", "keys", "create", "ci",
+      "--project", "foo", "--host", "https://h", "--api-key-env", "ACCOUNT_KEY",
+    ]);
+    expect(remoteRecipeMocks.runKeysCreate).toHaveBeenCalledWith(
+      "ci",
+      { project: "foo", host: "https://h", apiKeyEnv: "ACCOUNT_KEY" },
+      CONTEXT,
+    );
+  });
+
+  it("projects create requires --name", async () => {
+    const program = createProgram();
+    exitOverrideAll(program);
+    await expect(
+      program.parseAsync(["node", "agency", "remote", "projects", "create", "foo"]),
+    ).rejects.toMatchObject({ code: "commander.missingMandatoryOptionValue" });
+    expect(remoteRecipeMocks.runProjectsCreate).not.toHaveBeenCalled();
+  });
+
+  it("keys create requires --project", async () => {
+    const program = createProgram();
+    exitOverrideAll(program);
+    await expect(
+      program.parseAsync(["node", "agency", "remote", "keys", "create", "ci"]),
+    ).rejects.toMatchObject({ code: "commander.missingMandatoryOptionValue" });
+    expect(remoteRecipeMocks.runKeysCreate).not.toHaveBeenCalled();
   });
 });

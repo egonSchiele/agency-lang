@@ -209,13 +209,28 @@ POST /serve/:userId/:projectId/:filename/resume
 
 ## 6. `agency remote` (agency-lang `lib/cli/remote/`)
 
-`agency remote` is the CLI surface for a hosted agent — the ceremony a client would otherwise hand-write against the serve routes. Five subcommands:
+`agency remote` is the CLI surface for a hosted agent — the ceremony a client would otherwise hand-write against the serve routes.
+
+Agent commands:
 
 - **`remote link`** — show, or set with `--url`, the linked agent (stored as `remote.serveUrl` in `agency.json`).
 - **`remote deploy <file>`** — upload + link (reuses the `deploy()` engine). Warns, and on a TTY confirms, if the agent exports no nodes/functions.
 - **`remote ls`** — the callable nodes/functions (`GET /list`).
 - **`remote call <name>`** — invoke a node (or `--function`) and drive the interrupt cycle.
 - **`remote open`** — the project page in a browser.
+
+Account-management commands (consume statelog's account API, `GET/POST /api/{whoami,projects,api_keys}`):
+
+- **`remote whoami`** — the authenticated user.
+- **`remote projects`** (list) and **`remote projects create <project_id> --name …`** — list and create projects.
+- **`remote keys`** (list) and **`remote keys create <name> --project <slug>`** — list and create API keys.
+
+Rules the CLI enforces around these:
+
+- **`whoami` accepts an account- or project-scoped key**; **projects and keys require an account-scoped key** (a project-scoped key is refused with 403 and the CLI names the env var to fix).
+- **`keys create` mints project-scoped keys only** — minting an account key is session/web-only on the server.
+- **CLI project arguments and output are public `project_id` slugs.** The sealed account client (`lib/cli/statelog/accountClient.ts`) translates statelog's internal database ids in both directions and never exposes them.
+- **A newly created key's plaintext is shown once** and must be copied immediately; the list view never returns it.
 
 **One interrupt mechanism, shared with `agency run`.** `remote call` reuses the runtime's `resolveInterrupts` + `buildDecider` (`lib/runtime/interruptResolution.ts`); it differs from a local run only in the resume transport (HTTP `/resume` vs in-process). It borrows run's flags — `--interactive`, `--policy`, `--approve`, `--reject` — through `resolveRunPolicy`. With no such flag a surfaced interrupt is reported unhandled and exits, exactly like `run`. **The remote policy acts on *surfaced* interrupts only** (the server's own handlers ran first), unlike run's in-chain policy.
 
@@ -225,7 +240,7 @@ POST /serve/:userId/:projectId/:filename/resume
 
 Top-level `agency deploy` has been **removed** (a breaking change) in favor of `agency remote deploy`; the `deploy()` engine in `lib/cli/deploy/` stays and is what `remote deploy` calls.
 
-**Deferred (need statelog changes):** `remote inspect` (files/last-upload), `remote pull` (source zip), and `remote logs` (traces in the CLI viewer) — all read routes that are browser-session-only today. A statelog "whoami" route would let the binding drop its cached `userId`.
+**Deferred (need statelog changes):** `remote inspect` (files/last-upload), `remote pull` (source zip), and `remote logs` (traces in the CLI viewer) — all read routes that are browser-session-only today. The statelog `whoami` route now exists and `remote whoami` uses it; a `remote link --project <slug>` that builds the serve URL from `host + whoami.userId + project + file` (dropping the pasted URL) is the remaining follow-up.
 
 ---
 

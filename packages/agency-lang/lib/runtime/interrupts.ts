@@ -814,9 +814,10 @@ export async function respondToInterrupts(args: {
     () => __initAllRegisteredCallbacks(execCtx),
   );
   execCtx.restoreState(checkpoint);
-  // Re-assert the root budget from the host context, dropping the checkpoint's
-  // serialized root guard (its limit/spend are caller-controllable on a
-  // stateless resume). Mirrors runNode's install; no-op in IPC.
+  // Re-assert the root budget's LIMIT from the host context (the checkpoint's
+  // ceiling is caller-controllable on a stateless resume), while preserving the
+  // guard's accumulated spend so the trusted CLI resume path stays cumulative.
+  // No-op in IPC.
   reinstallRootBudget(execCtx.stateStack, execCtx.budget);
   execCtx.setInterruptResponses(responseMap);
   if (metadata.callbacks) Object.assign(execCtx.callbacks, metadata.callbacks);

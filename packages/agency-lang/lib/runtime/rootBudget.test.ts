@@ -130,12 +130,12 @@ describe("installRootBudget with a context budget (config, no flag)", () => {
 });
 
 describe("reinstallRootBudget (resume: host-authoritative limit)", () => {
-  test("drops a restored root guard and re-installs from the context budget", () => {
+  test("clamps the restored root guard's limit to the host value, keeping the guard", () => {
     const stack = new StateStack();
     // A restored root guard whose limit the client inflated to 999.
-    const stale = new CostGuard(999);
-    stale.isRootBudget = true;
-    stack.pushGuard(stale);
+    const restored = new CostGuard(999);
+    restored.isRootBudget = true;
+    stack.pushGuard(restored);
 
     reinstallRootBudget(stack, { maxCost: 1 });
 
@@ -143,9 +143,35 @@ describe("reinstallRootBudget (resume: host-authoritative limit)", () => {
       (g): g is CostGuard => g instanceof CostGuard && g.isRootBudget,
     );
     expect(roots).toHaveLength(1);
-    expect(roots[0]).not.toBe(stale);
-    // The fresh guard carries the HOST limit, not the client's 999.
+    // SAME instance (so its accumulated spend survives), with the HOST limit.
+    expect(roots[0]).toBe(restored);
     expect(roots[0].costLimit).toBe(1);
+  });
+
+  test("clamps a restored time guard's limit too", () => {
+    const stack = new StateStack();
+    const restored = new TimeGuard(999_999);
+    restored.isRootBudget = true;
+    stack.pushGuard(restored);
+
+    reinstallRootBudget(stack, { maxTimeMs: 5000 });
+
+    const roots = stack.guards.filter(
+      (g): g is TimeGuard => g instanceof TimeGuard && g.isRootBudget,
+    );
+    expect(roots).toHaveLength(1);
+    expect(roots[0]).toBe(restored);
+    expect(roots[0].timeLimit).toBe(5000);
+  });
+
+  test("installs a fresh root guard when the checkpoint had none but the host caps", () => {
+    const stack = new StateStack();
+    reinstallRootBudget(stack, { maxCost: 2 });
+    const roots = stack.guards.filter(
+      (g): g is CostGuard => g instanceof CostGuard && g.isRootBudget,
+    );
+    expect(roots).toHaveLength(1);
+    expect(roots[0].costLimit).toBe(2);
   });
 
   test("preserves a non-root (user) guard", () => {
@@ -158,11 +184,11 @@ describe("reinstallRootBudget (resume: host-authoritative limit)", () => {
     expect(stack.guards).toContain(userGuard);
   });
 
-  test("no host budget: drops the restored root guard, installs nothing", () => {
+  test("no host budget: drops the restored root guard", () => {
     const stack = new StateStack();
-    const stale = new CostGuard(999);
-    stale.isRootBudget = true;
-    stack.pushGuard(stale);
+    const restored = new CostGuard(999);
+    restored.isRootBudget = true;
+    stack.pushGuard(restored);
 
     reinstallRootBudget(stack, undefined);
 
@@ -172,12 +198,13 @@ describe("reinstallRootBudget (resume: host-authoritative limit)", () => {
   test("no-op in IPC mode (parent owns the budget)", () => {
     process.env.AGENCY_IPC = "1";
     const stack = new StateStack();
-    const stale = new CostGuard(999);
-    stale.isRootBudget = true;
-    stack.pushGuard(stale);
+    const restored = new CostGuard(999);
+    restored.isRootBudget = true;
+    stack.pushGuard(restored);
 
     reinstallRootBudget(stack, { maxCost: 1 });
 
-    expect(stack.guards).toEqual([stale]);
+    expect(stack.guards).toEqual([restored]);
+    expect(restored.costLimit).toBe(999);
   });
 });

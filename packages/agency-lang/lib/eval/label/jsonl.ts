@@ -48,8 +48,22 @@ export type OpenedJsonl<Value> = {
 export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<Value> {
   const loaded = readAll(args);
   const canonicalById: Record<string, string> = Object.create(null);
-  for (const row of loaded) {
-    canonicalById[args.identityOf(row)] = canonicalize(row);
+  for (let index = 0; index < loaded.length; index += 1) {
+    const identity = args.identityOf(loaded[index]);
+    const canonical = canonicalize(loaded[index]);
+    const existing = canonicalById[identity];
+    // A duplicate identity already on disk is corruption either way: appendExact
+    // replays rather than writing a second copy, so no correct writer produces
+    // one. Detecting it only on append would let an already-broken file load
+    // clean and then be labelled against.
+    if (existing !== undefined) {
+      throw new LabelStoreCorruptionError(
+        `${args.filePath}: line ${index + 1} repeats identity "${identity}" ` +
+        `${existing === canonical ? "with identical content" : "with different content"}. ` +
+        `Each identity may appear once; remove the later line.`,
+      );
+    }
+    canonicalById[identity] = canonical;
   }
 
   return {

@@ -194,3 +194,17 @@ export const AnnotationRowSchema = z.object({
 }).strict();
 
 export type AnnotationRow = z.infer<typeof AnnotationRowSchema>;
+
+/** @internal Named durable boundaries inside the store's multi-file
+ *  operations. Tests interrupt execution at one of these and reopen, so
+ *  recovery is exercised at every point a crash could actually land. Declared
+ *  here rather than in store.ts because checklist publication needs to signal
+ *  them and must not import the store that imports it. */
+export type LabelStoreFaultPoint =
+  | "after-revision-temp-write"
+  | "after-revision-rename"
+  | "after-current-update"
+  | "after-external-definition-sync"
+  | "after-annotation-append";
+
+export type FaultHook = (point: LabelStoreFaultPoint) => void;

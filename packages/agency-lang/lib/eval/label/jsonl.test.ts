@@ -71,6 +71,16 @@ describe("openJsonlStrict", () => {
     fs.writeFileSync(file, '{"id":"a","n":1}\n{"id":"b"');
     expect(() => open()).toThrow(/last line/i);
   });
+
+  it("rejects a duplicate identity already on disk, not just on append", () => {
+    fs.writeFileSync(file, '{"id":"a","n":1}\n{"id":"a","n":2}\n');
+    expect(() => open()).toThrow(/repeats identity "a".*different content/is);
+  });
+
+  it("rejects an identical duplicate line too, because no correct writer makes one", () => {
+    fs.writeFileSync(file, '{"id":"a","n":1}\n{"id":"a","n":1}\n');
+    expect(() => open()).toThrow(/repeats identity "a".*identical content/is);
+  });
 });
 
 describe("appendExact", () => {

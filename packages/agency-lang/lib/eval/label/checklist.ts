@@ -13,6 +13,7 @@ import {
   type ChecklistDefinition,
   type ChecklistQuestion,
   type ChecklistRevision,
+  type FaultHook,
 } from "./types.js";
 
 const DEFAULT_QUESTION_WEIGHT = 1;
@@ -267,6 +268,7 @@ export function publishPendingRevision(args: {
   storeDir: string;
   pending: PendingRevision;
   definitionPath: string;
+  fault?: FaultHook;
 }): PublishRevisionResult {
   const revision = ChecklistRevisionSchema.parse(args.pending.revision);
   const existingCurrent = readCurrentPointer(args.storeDir, revision.checklistId);
@@ -284,8 +286,10 @@ export function publishPendingRevision(args: {
     }
     replayed = true;
   } else {
+    args.fault?.("after-revision-temp-write");
     atomicWriteValidated({ targetPath: target, value: revision, schema: ChecklistRevisionSchema });
   }
+  args.fault?.("after-revision-rename");
 
   const pointer: ChecklistCurrent = {
     schemaVersion: 1,
@@ -298,7 +302,10 @@ export function publishPendingRevision(args: {
     value: pointer,
     schema: ChecklistCurrentSchema,
   });
+  args.fault?.("after-current-update");
+
   syncChecklistDefinition({ definitionPath: args.definitionPath, revision });
+  args.fault?.("after-external-definition-sync");
 
   return { revision, replayed };
 }

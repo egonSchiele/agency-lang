@@ -264,6 +264,26 @@ describe("sign-off", () => {
   });
 });
 
+describe("an all-deleted checklist", () => {
+  it("refuses to sign off, rather than writing an annotation that undoes itself", async () => {
+    const controller = await open();
+    // Delete every question, so nothing is live.
+    await controller.dispatch({ kind: "toggleQuestionDeleted" });
+    await controller.dispatch({ kind: "nextQuestion" });
+    await controller.dispatch({ kind: "toggleQuestionDeleted" });
+    expect(controller.snapshot().canSignOff).toBe(false);
+
+    await controller.dispatch({ kind: "signOff" });
+    expect(readAnnotations()).toHaveLength(0);
+    await controller.close();
+
+    // And nothing claims to be reviewed after a reopen.
+    const reopened = await open();
+    expect(reopened.snapshot().progress.reviewed).toBe(0);
+    await reopened.close();
+  });
+});
+
 describe("resume", () => {
   it("restores answers and reviewed state", async () => {
     const first = await open();
@@ -348,6 +368,21 @@ describe("crash recovery", () => {
     const reopened = await open();
     expect(readAnnotations()).toHaveLength(1);
     expect(reopened.snapshot().progress.reviewed).toBe(1);
+    await reopened.close();
+  });
+
+  it("after-pending-annotation-save: recovery ALSO advances the cursor and resets the timer", async () => {
+    // Appending the row is only half the transition. Stopping there leaves the
+    // person back on an item they already judged, with its old time running.
+    await crashAt("after-pending-annotation-save", (controller) =>
+      controller.dispatch({ kind: "signOff" }));
+
+    const reopened = await open();
+    expect(reopened.snapshot().itemIndex).toBe(1);
+    const draft = loadDraftFile(storeDir, sessionIdOnDisk());
+    const signedOff = readAnnotations()[0].outputId;
+    expect(draft?.activeMsByOutputId[signedOff]).toBe(0);
+    expect(draft?.reviewedByOutputId[signedOff]).toHaveLength(2);
     await reopened.close();
   });
 

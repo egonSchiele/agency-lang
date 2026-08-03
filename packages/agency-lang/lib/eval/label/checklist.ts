@@ -369,12 +369,81 @@ export function readCurrentPointer(storeDir: string, checklistId: string): Check
   return ChecklistCurrentSchema.parse(JSON.parse(fs.readFileSync(file, "utf8")));
 }
 
+/**
+ * Read a published revision and prove it is the one the path claims.
+ *
+ * Schema parsing alone trusts the file: a revision could name a different
+ * version than its filename, or carry a hash that no longer matches its own
+ * questions. Annotations bind to `(version, hash)`, so a schema-valid edit
+ * would otherwise change what old answers mean while still matching the
+ * hash those annotations recorded.
+ */
 export function readRevision(storeDir: string, checklistId: string, version: number): ChecklistRevision {
   const file = revisionPath(storeDir, checklistId, version);
   if (!fs.existsSync(file)) {
     throw new Error(`Checklist revision not found: ${file}`);
   }
-  return ChecklistRevisionSchema.parse(JSON.parse(fs.readFileSync(file, "utf8")));
+  const revision = ChecklistRevisionSchema.parse(JSON.parse(fs.readFileSync(file, "utf8")));
+  if (revision.version !== version) {
+    throw new Error(
+      `${file} records version ${revision.version} but is stored as version ${version}.`,
+    );
+  }
+  if (revision.checklistId !== checklistId) {
+    throw new Error(
+      `${file} records lineage "${revision.checklistId}" but is stored under "${checklistId}".`,
+    );
+  }
+  const recomputed = checklistHashOf({
+    checklistId: revision.checklistId,
+    version: revision.version,
+    questions: revision.questions,
+  });
+  if (recomputed !== revision.hash) {
+    throw new Error(
+      `${file} has been edited: its questions hash to ${recomputed}, but it records ` +
+      `${revision.hash}. Published revisions are immutable because annotations bind to them.`,
+    );
+  }
+  return revision;
+}
+
+/**
+ * Check a whole lineage: contiguous versions from 1, and every adjacent pair
+ * obeying the same evolution rules publication enforces.
+ *
+ * Without the contiguity check, `1.json` and `3.json` pass while `2.json` is
+ * missing, because each file's recorded parent still lines up with the
+ * previous one present. Without re-applying the evolution rules, a text edit
+ * introduced between two revisions is never noticed on read.
+ */
+export function validateLineageContinuity(
+  storeDir: string,
+  checklistId: string,
+  versions: number[],
+): void {
+  let previous: ChecklistRevision | undefined;
+  for (let index = 0; index < versions.length; index += 1) {
+    const expectedVersion = index + 1;
+    if (versions[index] !== expectedVersion) {
+      throw new Error(
+        `Checklist "${checklistId}" is missing revision ${expectedVersion}; the stored versions ` +
+        `are ${versions.join(", ")}. Revisions are a chain, not a set.`,
+      );
+    }
+    const revision = readRevision(storeDir, checklistId, versions[index]);
+    const expectedParent = previous === undefined ? null : previous.version;
+    if (revision.parentVersion !== expectedParent) {
+      throw new Error(
+        `Revision ${checklistId}@${revision.version} records parent ${revision.parentVersion}, ` +
+        `but the previous published revision is ${expectedParent}.`,
+      );
+    }
+    if (previous !== undefined) {
+      assertQuestionsEvolveLegally(previous.questions, revision.questions);
+    }
+    previous = revision;
+  }
 }
 
 /** Every published revision id for a lineage, ascending. Used by store

@@ -5,6 +5,7 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { normalizeDefinition, prepareRevision, publishPendingRevision } from "./checklist.js";
+import { checklistHashOf } from "./ids.js";
 import { acquireStoreLock } from "./lock.js";
 import { openStore, StoreValidationError } from "./store.js";
 import type { AnnotationRow, ChecklistRevision, CorpusRow } from "./types.js";
@@ -58,6 +59,23 @@ function publishChecklist(): ChecklistRevision {
   const prepared = prepareRevision({ definition: normalized, current: undefined });
   if (prepared.kind !== "publish") throw new Error("expected publish");
   return publishPendingRevision({ storeDir, pending: prepared.pending, definitionPath }).revision;
+}
+
+
+/** Write a revision file with a correctly recomputed hash, so tests exercise
+ *  the invariant under test rather than tripping the hash check. */
+function writeRevisionFile(revision: ChecklistRevision): void {
+  const sealed = {
+    ...revision,
+    hash: checklistHashOf({
+      checklistId: revision.checklistId,
+      version: revision.version,
+      questions: revision.questions,
+    }),
+  };
+  const dir = path.join(storeDir, "checklists", revision.checklistId);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${revision.version}.json`), JSON.stringify(sealed));
 }
 
 function annotationRow(revision: ChecklistRevision, over: Partial<AnnotationRow> = {}): AnnotationRow {
@@ -174,10 +192,7 @@ describe("store invariants across files", () => {
     // Refusing here would make the state permanently unrepairable: recovery
     // runs after the store opens. It warns instead, and a session completes it.
     const revision = publishChecklist();
-    fs.writeFileSync(
-      path.join(storeDir, "checklists", revision.checklistId, "2.json"),
-      JSON.stringify({ ...revision, version: 2, parentVersion: 1 }),
-    );
+    writeRevisionFile({ ...revision, version: 2, parentVersion: 1 });
     const store = open();
     expect(warnings.join(" ")).toMatch(/publication was interrupted/i);
     store.close();
@@ -194,10 +209,39 @@ describe("store invariants across files", () => {
 
   it("rejects a broken parent chain", () => {
     const revision = publishChecklist();
-    const dir = path.join(storeDir, "checklists", revision.checklistId);
-    fs.writeFileSync(path.join(dir, "1.json"),
-      JSON.stringify({ ...revision, parentVersion: 5 }));
+    writeRevisionFile({ ...revision, parentVersion: 5 });
     expect(() => open()).toThrow(/records parent/i);
+  });
+
+  it("rejects a gap in the revision chain", () => {
+    const revision = publishChecklist();
+    writeRevisionFile({ ...revision, version: 3, parentVersion: 1 });
+    expect(() => open()).toThrow(/missing revision 2/i);
+  });
+
+  it("rejects a revision edited in place, because annotations bind to its hash", () => {
+    const revision = publishChecklist();
+    const edited = {
+      ...revision,
+      questions: [{ ...revision.questions[0], text: "Silently rewritten?" }],
+    };
+    // Keeps the ORIGINAL hash, which is what an in-place edit looks like.
+    fs.writeFileSync(
+      path.join(storeDir, "checklists", revision.checklistId, "1.json"),
+      JSON.stringify(edited),
+    );
+    expect(() => open()).toThrow(/has been edited/i);
+  });
+
+  it("rejects a text edit introduced between two revisions", () => {
+    const revision = publishChecklist();
+    writeRevisionFile({
+      ...revision,
+      version: 2,
+      parentVersion: 1,
+      questions: [{ ...revision.questions[0], text: "Changed meaning?" }],
+    });
+    expect(() => open()).toThrow(/changed text/i);
   });
 });
 

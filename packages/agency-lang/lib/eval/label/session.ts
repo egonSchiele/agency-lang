@@ -228,6 +228,12 @@ export function signOffPayload(state: SessionState): {
     return undefined;
   }
   const live = liveOf(state);
+  // An annotation covering nothing asserts nothing. It would mark the item
+  // reviewed in memory and then read as untouched after a reopen, because the
+  // fold finds no answers — a sign-off that silently undoes itself.
+  if (live.length === 0) {
+    return undefined;
+  }
   const answers: Record<string, boolean> = {};
   for (const question of live) {
     answers[question.id] = state.answersByOutputId[item.outputId]?.[question.id] === true;

@@ -88,7 +88,7 @@ export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<
       }
 
       fs.mkdirSync(path.dirname(args.filePath), { recursive: true });
-      fs.appendFileSync(args.filePath, `${JSON.stringify(validated)}\n`);
+      appendDurably(args.filePath, `${JSON.stringify(validated)}\n`);
       loaded.push(validated);
       canonicalById[identity] = canonical;
       return "appended";
@@ -147,6 +147,47 @@ function parseLine<Value>(args: OpenJsonlArgs<Value>, line: string, lineNumber: 
   return result.data;
 }
 
+/**
+ * Append and flush to disk before returning.
+ *
+ * `appendFileSync` returns once the write reaches the OS page cache, not the
+ * device. Without the fsync, a power loss can lose an annotation the tool
+ * already told the person was recorded — and this store exists precisely
+ * because those judgements cannot be regenerated.
+ */
+function appendDurably(filePath: string, line: string): void {
+  const handle = fs.openSync(filePath, "a");
+  try {
+    fs.writeSync(handle, line);
+    fs.fsyncSync(handle);
+  } finally {
+    fs.closeSync(handle);
+  }
+}
+
+/**
+ * Flush a directory entry, so a rename or creation survives a power loss.
+ *
+ * Renaming is atomic with respect to readers, but the directory entry itself
+ * sits in cache until it is synced. Failures to open a directory for sync are
+ * ignored: some platforms and filesystems refuse it, and that is not a reason
+ * to fail a write that otherwise succeeded.
+ */
+function syncDirectory(directoryPath: string): void {
+  let handle: number | undefined;
+  try {
+    handle = fs.openSync(directoryPath, "r");
+    fs.fsyncSync(handle);
+  } catch {
+    // Directory fsync is unsupported on some platforms; the rename still
+    // happened, and there is nothing further this layer can do about it.
+  } finally {
+    if (handle !== undefined) {
+      fs.closeSync(handle);
+    }
+  }
+}
+
 export type AtomicWriteArgs<Value> = {
   targetPath: string;
   value: Value;
@@ -166,9 +207,18 @@ export function atomicWriteValidated<Value>(args: AtomicWriteArgs<Value>): void 
   fs.mkdirSync(path.dirname(args.targetPath), { recursive: true });
   const temporaryPath = `${args.targetPath}.${process.pid}.tmp`;
 
-  fs.writeFileSync(temporaryPath, `${JSON.stringify(validated, null, 2)}\n`, { flag: "w" });
+  // Flush the temp file's contents before the rename: renaming a file whose
+  // bytes are still in cache can publish an empty or partial file.
+  const handle = fs.openSync(temporaryPath, "w");
+  try {
+    fs.writeSync(handle, `${JSON.stringify(validated, null, 2)}\n`);
+    fs.fsyncSync(handle);
+  } finally {
+    fs.closeSync(handle);
+  }
   try {
     fs.renameSync(temporaryPath, args.targetPath);
+    syncDirectory(path.dirname(args.targetPath));
   } catch (renameError) {
     // Report the cleanup failure alongside the real one rather than letting
     // either hide the other.

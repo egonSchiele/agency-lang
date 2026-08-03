@@ -31,6 +31,35 @@ export function stripAnsi(text: string): string {
   return text.replace(new RegExp(ESCAPE_SOURCE, "g"), "");
 }
 
+/**
+ * Neutralize control characters in text this tool did not author.
+ *
+ * Agent output, task text, question text and notes are all untrusted here: a
+ * model can emit cursor movement, clear-screen, or OSC 52 clipboard writes,
+ * and rendering those raw would let the thing being judged hide or forge the
+ * evidence on screen. Only newline and tab survive, because the layout uses
+ * them; everything else in C0, C1 and DEL becomes a visible replacement so the
+ * reader can see that something was there.
+ *
+ * Styling is applied by this module AFTER sanitizing, so the tool's own colour
+ * is unaffected.
+ */
+export function sanitizeUntrusted(text: string): string {
+  let out = "";
+  for (const character of text) {
+    const code = character.codePointAt(0) ?? 0;
+    if (character === "\n" || character === "\t") {
+      out += character;
+      continue;
+    }
+    const isC0 = code < 0x20;
+    const isDelete = code === 0x7f;
+    const isC1 = code >= 0x80 && code <= 0x9f;
+    out += isC0 || isDelete || isC1 ? "�" : character;
+  }
+  return out;
+}
+
 export function visibleLength(text: string): number {
   return stripAnsi(text).length;
 }
@@ -167,13 +196,17 @@ export function renderLabelScreen(args: RenderArgs): string {
     ` ${BOLD}${CYAN}${item.outputId.slice(0, 12)}${RESET} ` +
     `${GREY}${snapshot.itemIndex + 1}/${snapshot.items.length}${RESET}  ${chip}  ${scoreText}`,
   );
-  out.push(` ${DIM}${item.task.slice(0, args.columns - 4)}${RESET}`);
+  out.push(` ${DIM}${sanitizeUntrusted(item.task).split("\n")[0].slice(0, args.columns - 4)}${RESET}`);
   out.push("");
 
   const checklist = renderChecklist(snapshot, rightWidth);
+  const checklistView = checklist.lines.slice(
+    checklistOffset(checklist.focusLine, checklist.lines.length, bodyHeight),
+    checklistOffset(checklist.focusLine, checklist.lines.length, bodyHeight) + bodyHeight,
+  );
   const visibleBody = args.body.slice(args.scroll, args.scroll + bodyHeight);
   for (let row = 0; row < bodyHeight; row += 1) {
-    out.push(`${pad(visibleBody[row] ?? "", leftWidth)}${GREY}│${RESET} ${checklist[row] ?? ""}`);
+    out.push(`${pad(visibleBody[row] ?? "", leftWidth)}${GREY}│${RESET} ${checklistView[row] ?? ""}`);
   }
 
   out.push(`${GREY}${"━".repeat(args.columns)}${RESET}`);
@@ -216,8 +249,22 @@ function questionStyle(deleted: boolean, focused: boolean, checked: boolean): st
   return DIM;
 }
 
-function renderChecklist(snapshot: SessionSnapshot, width: number): string[] {
+/** Where the right pane starts, so the focused question is always on screen.
+ *  Without this, Space and Enter act on a checkbox the reader cannot see once
+ *  the checklist is longer than the pane. */
+function checklistOffset(focusLine: number, total: number, height: number): number {
+  if (total <= height || focusLine < height) {
+    return 0;
+  }
+  return Math.min(focusLine - height + 1, Math.max(0, total - height));
+}
+
+function renderChecklist(
+  snapshot: SessionSnapshot,
+  width: number,
+): { lines: string[]; focusLine: number } {
   const lines: string[] = [];
+  let focusLine = 0;
   snapshot.questions.forEach((question, index) => {
     const checked = snapshot.answers[question.id] === true;
     const deleted = question.deleted;
@@ -225,7 +272,10 @@ function renderChecklist(snapshot: SessionSnapshot, width: number): string[] {
     const box = checkbox(deleted, checked);
     const arrow = focused ? `${CYAN}${BOLD}▸${RESET}` : " ";
     const style = questionStyle(deleted, focused, checked);
-    const wrapped = wrapAnsi(question.text, Math.max(8, width - 7));
+    if (focused) {
+      focusLine = lines.length;
+    }
+    const wrapped = wrapAnsi(sanitizeUntrusted(question.text), Math.max(8, width - 7));
     lines.push(`${arrow} ${box} ${style}${wrapped[0] ?? ""}${RESET}`);
     for (const continuation of wrapped.slice(1)) {
       lines.push(`     ${style}${continuation}${RESET}`);
@@ -233,19 +283,22 @@ function renderChecklist(snapshot: SessionSnapshot, width: number): string[] {
   });
   lines.push("");
   lines.push(`${BLUE}${BOLD}note${RESET} ${snapshot.note.length === 0 ? `${GREY}—${RESET}` : ""}`);
-  for (const line of snapshot.note.length === 0 ? [] : wrapAnsi(snapshot.note, Math.max(8, width - 2))) {
+  const noteLines = snapshot.note.length === 0
+    ? []
+    : wrapAnsi(sanitizeUntrusted(snapshot.note), Math.max(8, width - 2));
+  for (const line of noteLines) {
     lines.push(` ${line}`);
   }
-  return lines;
+  return { lines, focusLine };
 }
 
 function renderFooter(snapshot: SessionSnapshot): string {
   if (snapshot.editor.kind === "question") {
-    return ` ${BOLD}${YELLOW}new question${RESET} ${snapshot.editor.draft}${CYAN}▏${RESET}\n` +
+    return ` ${BOLD}${YELLOW}new question${RESET} ${sanitizeUntrusted(snapshot.editor.draft)}${CYAN}▏${RESET}\n` +
       ` ${DIM}enter: add to every item   esc: cancel${RESET}`;
   }
   if (snapshot.editor.kind === "note") {
-    return ` ${BOLD}${BLUE}note${RESET} ${snapshot.editor.draft}${CYAN}▏${RESET}\n` +
+    return ` ${BOLD}${BLUE}note${RESET} ${sanitizeUntrusted(snapshot.editor.draft)}${CYAN}▏${RESET}\n` +
       ` ${DIM}enter: save   esc: cancel${RESET}`;
   }
   const deleteLabel = snapshot.currentQuestion?.deleted === true ? "undelete" : "delete";
@@ -264,25 +317,64 @@ export type Key =
   | { kind: "enter" } | { kind: "escape" } | { kind: "backspace" }
   | { kind: "char"; value: string };
 
-/** Escape sequences arrive as one chunk, so parse the chunk rather than
- *  inspecting characters in isolation. */
-export function parseKeys(chunk: string): Key[] {
+/** A prefix of a sequence we would recognise if more bytes arrived. */
+function isIncompleteSequence(rest: string): boolean {
+  if (rest === "\x1b") {
+    return true;
+  }
+  if (!rest.startsWith("\x1b[")) {
+    return false;
+  }
+  // "\x1b[" alone, or "\x1b[5" waiting for its "~".
+  return rest === "\x1b[" || /^\x1b\[[0-9]*$/.test(rest);
+}
+
+/**
+ * Parse a chunk into keys, returning any trailing partial escape sequence.
+ *
+ * A stream can split an arrow key as `"\x1b["` then `"A"`. Parsing each chunk
+ * independently reads that as Escape, `[`, `A` — which cancels the editor
+ * mid-word, and in normal mode turns fragments into character commands. The
+ * caller keeps `rest` and prepends it to the next chunk.
+ */
+export function parseKeysBuffered(chunk: string): { keys: Key[]; rest: string } {
   const keys: Key[] = [];
   let index = 0;
   while (index < chunk.length) {
     const rest = chunk.slice(index);
-    if (rest.startsWith("\x1b[5~")) { keys.push({ kind: "pageUp" }); index += 4; continue; }
-    if (rest.startsWith("\x1b[6~")) { keys.push({ kind: "pageDown" }); index += 4; continue; }
-    if (rest.startsWith("\x1b[A")) { keys.push({ kind: "up" }); index += 3; continue; }
-    if (rest.startsWith("\x1b[B")) { keys.push({ kind: "down" }); index += 3; continue; }
-    if (rest.startsWith("\x1b[C")) { keys.push({ kind: "right" }); index += 3; continue; }
-    if (rest.startsWith("\x1b[D")) { keys.push({ kind: "left" }); index += 3; continue; }
-    const character = chunk[index];
-    if (character === "\x1b") { keys.push({ kind: "escape" }); index += 1; continue; }
-    if (character === "\r" || character === "\n") { keys.push({ kind: "enter" }); index += 1; continue; }
-    if (character === "\x7f") { keys.push({ kind: "backspace" }); index += 1; continue; }
-    keys.push({ kind: "char", value: character });
-    index += 1;
+    if (isIncompleteSequence(rest)) {
+      return { keys, rest };
+    }
+    const parsed = parseOneKey(rest);
+    keys.push(parsed.key);
+    index += parsed.length;
+  }
+  return { keys, rest: "" };
+}
+
+function parseOneKey(rest: string): { key: Key; length: number } {
+  if (rest.startsWith("\x1b[5~")) return { key: { kind: "pageUp" }, length: 4 };
+  if (rest.startsWith("\x1b[6~")) return { key: { kind: "pageDown" }, length: 4 };
+  if (rest.startsWith("\x1b[A")) return { key: { kind: "up" }, length: 3 };
+  if (rest.startsWith("\x1b[B")) return { key: { kind: "down" }, length: 3 };
+  if (rest.startsWith("\x1b[C")) return { key: { kind: "right" }, length: 3 };
+  if (rest.startsWith("\x1b[D")) return { key: { kind: "left" }, length: 3 };
+  const character = rest[0];
+  if (character === "\x1b") return { key: { kind: "escape" }, length: 1 };
+  if (character === "\r" || character === "\n") return { key: { kind: "enter" }, length: 1 };
+  if (character === "\x7f") return { key: { kind: "backspace" }, length: 1 };
+  return { key: { kind: "char", value: character }, length: 1 };
+}
+
+/** Parse a complete chunk, treating any trailing partial sequence as literal
+ *  keys. Used where no more bytes are coming. */
+export function parseKeys(chunk: string): Key[] {
+  const keys: Key[] = [];
+  let index = 0;
+  while (index < chunk.length) {
+    const parsed = parseOneKey(chunk.slice(index));
+    keys.push(parsed.key);
+    index += parsed.length;
   }
   return keys;
 }
@@ -389,7 +481,7 @@ async function runInputLoop(args: RunLabelTuiArgs): Promise<void> {
       bodyCache = {
         outputId: item.outputId,
         width: leftWidth,
-        lines: renderMarkdownSafely(item.text).split("\n")
+        lines: renderMarkdownSafely(sanitizeUntrusted(item.text)).split("\n")
           .flatMap((line) => wrapAnsi(line, leftWidth)),
       };
     }
@@ -401,10 +493,13 @@ async function runInputLoop(args: RunLabelTuiArgs): Promise<void> {
   draw();
 
   await new Promise<void>((resolve, reject) => {
+    let pending = "";
     const onData = (chunk: string): void => {
       void (async () => {
         try {
-          for (const key of parseKeys(chunk)) {
+          const parsed = parseKeysBuffered(pending + chunk);
+          pending = parsed.rest;
+          for (const key of parsed.keys) {
             const snapshot = args.controller.snapshot();
             const editing = snapshot.editor.kind !== "none";
             if (!editing && isQuitKey(key)) {

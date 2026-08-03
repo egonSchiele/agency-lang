@@ -13,6 +13,7 @@ import {
   assertDraftMatches,
   type Draft,
 } from "./draft.js";
+import { atomicWriteValidated } from "./jsonl.js";
 import { acquireStoreLock, type StoreLock } from "./lock.js";
 import {
   initSession,
@@ -170,10 +171,20 @@ async function openSession(
   }
 }
 
-/** Write only the identity fields back, leaving the file otherwise as the
- *  author wrote it. Publication later rewrites it in full. */
+/**
+ * Write the allocated identities back to the checklist file.
+ *
+ * This must be atomic even though nothing durable references the file yet.
+ * The next open parses this file *before* it inspects the store, so a
+ * truncated half-write here is unrecoverable by the recovery path — and it
+ * would have destroyed the only copy of the questions the author wrote.
+ */
 function syncChecklistDefinitionIds(checklistFile: string, definition: NormalizedDefinition): void {
-  fs.writeFileSync(checklistFile, `${JSON.stringify(definition, null, 2)}\n`);
+  atomicWriteValidated({
+    targetPath: checklistFile,
+    value: definition,
+    schema: ChecklistDefinitionSchema,
+  });
 }
 
 type SessionConstruction = {
@@ -301,15 +312,42 @@ class LabelingSession {
     return this.recoverChecklist();
   }
 
-  private recoverAnnotation(): void {
+  /**
+   * Finish a sign-off that was interrupted, all the way.
+   *
+   * Appending the row and clearing the pending marker is not enough: a normal
+   * sign-off also advances the cursor, records what was reviewed, and resets
+   * that output's timer. Stopping halfway leaves the person back on an item
+   * they already judged, with its old accumulated time still running — so
+   * recovery applies the same post-append transition the live path does.
+   */
+  private recoverAnnotation(): AnnotationRow | undefined {
     const pending = this.draft.pendingAnnotation;
     if (pending === null) {
-      return;
+      return undefined;
     }
     this.parts.store.appendAnnotation(pending);
-    this.draft = { ...this.draft, pendingAnnotation: null };
+    this.draft = {
+      ...this.draft,
+      pendingAnnotation: null,
+      reviewedByOutputId: {
+        ...this.draft.reviewedByOutputId,
+        [pending.outputId]: [...pending.coveredQuestionIds],
+      },
+      answersByOutputId: {
+        ...this.draft.answersByOutputId,
+        [pending.outputId]: { ...this.draft.answersByOutputId[pending.outputId], ...pending.answers },
+      },
+      notesByOutputId: { ...this.draft.notesByOutputId, [pending.outputId]: pending.note },
+      activeMsByOutputId: { ...this.draft.activeMsByOutputId, [pending.outputId]: 0 },
+      currentIndex: Math.min(
+        this.draft.currentIndex + 1,
+        Math.max(this.parts.outputIds.length - 1, 0),
+      ),
+    };
     this.saveDraft();
     this.fault("after-annotation-commit-save");
+    return pending;
   }
 
   private overlayDraft(): void {

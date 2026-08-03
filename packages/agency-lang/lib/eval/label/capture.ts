@@ -79,22 +79,41 @@ export function describeCaptureSkip(skip: CaptureSkip): string {
  * "[object Object]" and merges unrelated structured outputs into one
  * meaningless string.
  */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function selectLabelingFinalOutput(record: unknown): FinalOutputSelection {
-  const outputs = (record as { evalOutputs?: unknown }).evalOutputs;
+  // A corrupt record can parse to a string, a number or null. Using `in` on
+  // one of those throws a TypeError and aborts the whole capture instead of
+  // skipping the single input that is broken.
+  if (!isPlainObject(record)) {
+    return { kind: "missing" };
+  }
+  const outputs = record.evalOutputs;
   if (!Array.isArray(outputs)) {
     // The legacy single-field shape cannot say which output was final, and
     // inventing a nullable index would weaken every identity derived from it.
-    return "finalResponse" in (record as object) ? { kind: "legacy" } : { kind: "missing" };
+    return "finalResponse" in record ? { kind: "legacy" } : { kind: "missing" };
   }
   if (outputs.length === 0) {
     return { kind: "missing" };
   }
   const index = outputs.length - 1;
-  const entry = outputs[index] as { value?: unknown; truncated?: unknown };
-  if (entry?.truncated === true) {
+  const entry = outputs[index];
+  if (!isPlainObject(entry)) {
+    return { kind: "missing" };
+  }
+  if (entry.truncated === true) {
     return { kind: "truncated", index };
   }
-  const parsed = JsonValueSchema.safeParse(entry?.value ?? null);
+  // An ABSENT value is not the value `null`. Coalescing the two would let a
+  // malformed entry be captured and durably labelled as though the agent had
+  // deliberately returned JSON null.
+  if (!Object.hasOwn(entry, "value")) {
+    return { kind: "missing" };
+  }
+  const parsed = JsonValueSchema.safeParse(entry.value);
   if (!parsed.success) {
     return { kind: "missing" };
   }

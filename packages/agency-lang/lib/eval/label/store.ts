@@ -16,6 +16,7 @@ import {
   readCurrentPointer,
   readRevision,
   syncChecklistDefinition,
+  validateLineageContinuity,
   type NormalizedDefinition,
   type PendingRevision,
   type PrepareChecklistResult,
@@ -101,6 +102,13 @@ export function openStore(args: OpenStoreArgs): LabelStore {
   const annotations = openAnnotationLog(args.storeDir);
   validateStore(args.storeDir, corpus, annotations, args.reportWarning);
 
+  // Built once, then kept current by captureSource, so grounding an annotation
+  // is O(1) rather than a scan of the whole corpus per append.
+  const knownOutputIds: Record<string, true> = Object.create(null);
+  for (const row of corpus.rows() as readonly CorpusRow[]) {
+    knownOutputIds[row.outputId] = true;
+  }
+
   let open = true;
   const assertOpen = (): void => {
     if (!open) {
@@ -111,11 +119,15 @@ export function openStore(args: OpenStoreArgs): LabelStore {
   return {
     captureSource(captureArgs: CaptureSourceArgs): CaptureResult {
       assertOpen();
-      return captureSourceOccurrences({
+      const result = captureSourceOccurrences({
         sourceDir: captureArgs.sourceDir,
         corpus,
         reportWarning: args.reportWarning,
       });
+      for (const row of result.rows) {
+        knownOutputIds[row.outputId] = true;
+      }
+      return result;
     },
 
     readSession(sessionId: string): DeepReadonly<LabelStoreSnapshot> {
@@ -174,7 +186,7 @@ export function openStore(args: OpenStoreArgs): LabelStore {
 
     appendAnnotation(row: AnnotationRow): "appended" | "replayed" {
       assertOpen();
-      assertAnnotationIsGrounded(args.storeDir, corpus, row);
+      assertAnnotationIsGrounded(args.storeDir, knownOutputIds, row);
       const outcome = annotations.appendExact(row);
       args.fault?.("after-annotation-append");
       return outcome;
@@ -274,23 +286,13 @@ function validateLineages(
     if (versions.length === 0) {
       continue;
     }
-    let previous: ChecklistRevision | undefined;
-    for (const version of versions) {
-      const revision = readCached(checklistId, version);
-      if (revision.checklistId !== checklistId) {
-        throw new StoreValidationError(
-          `Revision ${checklistId}@${version} records lineage "${revision.checklistId}"; ` +
-          `it is stored under "${checklistId}".`,
-        );
-      }
-      const expectedParent = previous === undefined ? null : previous.version;
-      if (revision.parentVersion !== expectedParent) {
-        throw new StoreValidationError(
-          `Revision ${checklistId}@${version} records parent ${revision.parentVersion}, ` +
-          `but the previous published revision is ${expectedParent}.`,
-        );
-      }
-      previous = revision;
+    // readRevision proves path/content agreement and recomputes the hash;
+    // validateLineageContinuity proves the chain is contiguous and that every
+    // adjacent pair obeys the same evolution rules publication enforces.
+    try {
+      validateLineageContinuity(storeDir, checklistId, versions);
+    } catch (error) {
+      throw new StoreValidationError((error as Error).message);
     }
     const pointer = readCurrentPointer(storeDir, checklistId);
     if (pointer === undefined) {
@@ -364,15 +366,17 @@ function assertAnswersCoverExactly(row: AnnotationRow, revision: ChecklistRevisi
 }
 
 /** Refuse an annotation whose output is not already in the corpus, so the
- *  capture-before-label ordering cannot be skipped by any caller. */
+ *  capture-before-label ordering cannot be skipped by any caller.
+ *
+ *  `knownOutputIds` is maintained by the caller rather than rebuilt here: a
+ *  linear scan per append would make grounding O(annotations × corpus rows)
+ *  over a session, when the log is already indexed by identity. */
 function assertAnnotationIsGrounded(
   storeDir: string,
-  corpus: OpenedJsonl<CorpusRow>,
+  knownOutputIds: Record<string, true>,
   row: AnnotationRow,
 ): void {
-  const present = (corpus.rows() as readonly CorpusRow[]).some(
-    (existing) => existing.outputId === row.outputId,
-  );
+  const present = knownOutputIds[row.outputId] === true;
   if (!present) {
     throw new StoreValidationError(
       `Cannot record a judgement of output "${row.outputId}": it is not in the corpus. ` +

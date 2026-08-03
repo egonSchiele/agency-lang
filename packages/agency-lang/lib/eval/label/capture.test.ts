@@ -114,6 +114,25 @@ describe("selectLabelingFinalOutput", () => {
   it("refuses the legacy finalResponse shape rather than inventing an index", () => {
     expect(selectLabelingFinalOutput({ finalResponse: "legacy" })).toEqual({ kind: "legacy" });
   });
+
+  it("treats a record that is not an object as missing, rather than throwing", () => {
+    // `"finalResponse" in "a string"` is a TypeError, which would abort the
+    // whole capture instead of skipping one broken input.
+    expect(selectLabelingFinalOutput("a string")).toEqual({ kind: "missing" });
+    expect(selectLabelingFinalOutput(null)).toEqual({ kind: "missing" });
+    expect(selectLabelingFinalOutput(42)).toEqual({ kind: "missing" });
+  });
+
+  it("distinguishes an ABSENT value from a deliberate JSON null", () => {
+    expect(selectLabelingFinalOutput({ evalOutputs: [{}] })).toEqual({ kind: "missing" });
+    expect(selectLabelingFinalOutput({ evalOutputs: [{ threadId: "0" }] })).toEqual({ kind: "missing" });
+    expect(selectLabelingFinalOutput({ evalOutputs: [{ value: null }] }))
+      .toEqual({ kind: "selected", value: null, text: "null", index: 0 });
+  });
+
+  it("treats a non-object output entry as missing", () => {
+    expect(selectLabelingFinalOutput({ evalOutputs: [null] })).toEqual({ kind: "missing" });
+  });
 });
 
 describe("captureSourceOccurrences", () => {

@@ -518,9 +518,18 @@ export const AgencyConfigSchema = z
     maxCallDepth: z.number().int().positive(),
     failurePropagation: z.enum(["off", "warn", "on"]),
     // maxCost is dollars: negatives (disable) and 0 (no paid spend) are both
-    // meaningful, so it is a plain number, not positive-only. maxTime is a
-    // duration string validated when parsed (parseDurationMs), fail-closed.
-    budget: z.object({ maxCost: z.number(), maxTime: z.string() }).partial(),
+    // meaningful, so it is a plain number, not positive-only — but it MUST be
+    // finite. A non-finite cap (e.g. a JSON `1e309` parsing to Infinity) would
+    // silently uncap spend, the wrong failure for a budget; reject it at load.
+    // maxTime is a duration string validated when parsed (parseDurationMs).
+    budget: z
+      .object({
+        maxCost: z
+          .number()
+          .refine((n) => Number.isFinite(n), "budget.maxCost must be a finite number"),
+        maxTime: z.string(),
+      })
+      .partial(),
     trace: z.boolean(),
     traceFile: z.string(),
     traceDir: z.string(),

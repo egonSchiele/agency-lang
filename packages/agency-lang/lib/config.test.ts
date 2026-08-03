@@ -27,6 +27,18 @@ describe("AgencyConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts a budget with a finite maxCost and a duration maxTime", () => {
+    const result = AgencyConfigSchema.safeParse({
+      budget: { maxCost: 0.5, maxTime: "30m" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a non-finite budget.maxCost (a 1e309 Infinity must not uncap spend)", () => {
+    const result = AgencyConfigSchema.safeParse({ budget: { maxCost: 1e309 } });
+    expect(result.success).toBe(false);
+  });
+
   it("accepts eval runsDir config", () => {
     const result = AgencyConfigSchema.safeParse({
       eval: { runsDir: "custom-runs" },

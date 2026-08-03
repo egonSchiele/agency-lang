@@ -30,7 +30,9 @@ export function installRootBudget(
   const cost =
     rawCost !== undefined
       ? parseBudgetValue(rawCost, AGENCY_MAX_COST)
-      : contextBudget?.maxCost;
+      : contextBudget?.maxCost !== undefined
+        ? finiteContextBudget(contextBudget.maxCost, "budget.maxCost")
+        : undefined;
   if (cost !== undefined && cost >= 0) {
     const g = new CostGuard(cost);
     // The operator's ceiling: never raises an interrupt, never
@@ -43,7 +45,9 @@ export function installRootBudget(
   const ms =
     rawTime !== undefined
       ? parseBudgetValue(rawTime, AGENCY_MAX_TIME)
-      : contextBudget?.maxTimeMs;
+      : contextBudget?.maxTimeMs !== undefined
+        ? finiteContextBudget(contextBudget.maxTimeMs, "budget.maxTime")
+        : undefined;
   if (ms !== undefined && ms > 0) {
     const g = new TimeGuard(ms);
     g.isRootBudget = true;
@@ -57,6 +61,23 @@ export function installRootBudget(
  *  feature, silently running UNBOUNDED is the wrong failure direction.
  *  Refuse the run instead. (Negative values are not malformed: they are
  *  the documented disable range and fall through the install checks.) */
+/** FAIL CLOSED on a non-finite config/override budget number. Env values go
+ *  through parseBudgetValue; this guards the RuntimeContext path (an agency.json
+ *  bake or a programmatic `withRuntimeConfigOverrides` value), where
+ *  TypeScript's `number` still admits NaN/Infinity. A non-finite cap is the
+ *  wrong direction for a budget — Infinity installs an effectively unbounded
+ *  guard, and NaN (NaN >= 0 is false) installs none at all — so refuse the run.
+ *  Negatives are fine: they are the documented disable range. */
+function finiteContextBudget(value: number, name: string): number {
+  if (!Number.isFinite(value)) {
+    throw new Error(
+      `${name} is not a finite number (got ${value}). Refusing to run without ` +
+        `the requested budget — fix the config or the runtime override.`,
+    );
+  }
+  return value;
+}
+
 function parseBudgetValue(raw: string, name: string): number {
   const n = Number(raw);
   if (raw.trim() === "" || !Number.isFinite(n)) {

@@ -113,4 +113,18 @@ describe("installRootBudget with a context budget (config, no flag)", () => {
     installRootBudget(stack, { maxCost: 5, maxTimeMs: 5000 });
     expect(stack.guards.length).toBe(0);
   });
+  test("a non-finite context budget FAILS CLOSED (Infinity/NaN never uncaps spend)", () => {
+    // Infinity would install an effectively unbounded guard; NaN (NaN >= 0 is
+    // false) would install none. Both must refuse the run instead. This is the
+    // gate for every non-env ingress: agency.json bake and runtime overrides.
+    expect(() => installRootBudget(new StateStack(), { maxCost: Infinity })).toThrow(
+      /budget\.maxCost is not a finite number/,
+    );
+    expect(() => installRootBudget(new StateStack(), { maxCost: NaN })).toThrow(
+      /budget\.maxCost is not a finite number/,
+    );
+    expect(() => installRootBudget(new StateStack(), { maxTimeMs: Infinity })).toThrow(
+      /budget\.maxTime is not a finite number/,
+    );
+  });
 });

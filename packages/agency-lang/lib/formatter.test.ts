@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatSource } from "./formatter.js";
-import { parseAgency } from "./parser.js";
+import { parseAgency, replaceBlankLines } from "./parser.js";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -425,6 +425,105 @@ describe("trailing comments in every body owner", () => {
     expect(once).toContain(`1 => "one" // first`);
     expect(once).toContain(`2 => "two" // second`);
     expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+    expect(formatSource(once as string)).toBe(once);
+  });
+});
+
+/** Every triple-quoted string's text, so a formatting change that alters one
+ *  shows up as a value difference rather than only as a layout difference. */
+function multilineStringValues(source: string): string[] {
+  const parsed = parseAgency(replaceBlankLines(source), {}, false, false);
+  if (!parsed.success) {
+    return ["<did not parse>"];
+  }
+  const values: string[] = [];
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(walk);
+      return;
+    }
+    if (value === null || typeof value !== "object") {
+      return;
+    }
+    const node = value as { type?: unknown; segments?: unknown };
+    if (node.type === "multiLineString" && Array.isArray(node.segments)) {
+      values.push(
+        node.segments
+          .map((segment: { value?: string }) => segment.value ?? "")
+          .join(""),
+      );
+    }
+    Object.values(value as Record<string, unknown>).forEach(walk);
+  };
+  walk(parsed.result.nodes);
+  return values;
+}
+
+describe("a multi-line item inside a wrapped list", () => {
+  // The list wraps on length, so its items were already rendered as strings
+  // at the outer indent. Only their first line used to be moved.
+  it("indents an object literal's continuation lines with the list", () => {
+    const source = `def f() {\n  return _bash(\n    command,\n    cwd,\n    timeout,\n    stdin,\n    {\n      blockedCommands: blockedCommands\n    },\n  )\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain(
+      "    {\n      blockedCommands: blockedCommands\n    },",
+    );
+    expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+    expect(formatSource(once as string)).toBe(once);
+  });
+
+  it("indents a nested array's continuation lines with the list", () => {
+    const source = `def f() {\n  return someFunctionWithALongName(\n    firstArgument,\n    secondArgument,\n    [\n      1, // one\n      2\n    ],\n    thirdArgument\n  )\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain("    [\n      1, // one\n      2\n    ],");
+    expect(parseAgency(once as string, {}, false, false).success).toBe(true);
+    expect(formatSource(once as string)).toBe(once);
+  });
+
+  // The array here wraps on its own, rather than being re-rendered by a
+  // surrounding call. That path cached its items before the wrapping
+  // decision, so it stayed stale while the nested-array case above passed.
+  it("indents an item inside an array that wraps by itself", () => {
+    const source = `def f() {\n  return [\n    firstArgument,\n    secondArgument,\n    thirdArgument,\n    {\n      blockedCommands: blockedCommands\n    },\n  ]\n}\n`;
+    const once = formatSource(source) as string;
+    expect(once).toContain(
+      "    {\n      blockedCommands: blockedCommands\n    },",
+    );
+    expect(parseAgency(once, {}, false, false).success).toBe(true);
+    expect(formatSource(once)).toBe(once);
+  });
+
+  it("keeps a multiline string intact inside an array that wraps", () => {
+    const source = `def f() {\n  return [\n    firstArgument,\n    secondArgument,\n    thirdArgument,\n    """line1\nline2""",\n  ]\n}\n`;
+    const once = formatSource(source) as string;
+    expect(multilineStringValues(once)).toEqual(multilineStringValues(source));
+    expect(formatSource(once)).toBe(once);
+  });
+
+  // A triple-quoted string's newlines are DATA. Indenting them to match the
+  // surrounding layout changes the value the program computes, which is a
+  // far worse bug than the misalignment this suite is about.
+  it("does not change a multiline string's value when the list wraps", () => {
+    const source = `def f() {\n  return someFunctionWithAnExtremelyLongName(\n    firstArgument,\n    """line1\nline2""",\n    thirdArgument\n  )\n}\n`;
+    const once = formatSource(source) as string;
+    expect(once).not.toBeNull();
+    expect(once).toContain('"""line1\nline2"""');
+    expect(multilineStringValues(once)).toEqual(multilineStringValues(source));
+    expect(formatSource(once)).toBe(once);
+  });
+
+  it("keeps an indented multiline string's own indentation", () => {
+    const source = `def f() {\n  return someFunctionWithAnExtremelyLongName(\n    firstArgument,\n    """line1\n  indented""",\n    thirdArgument\n  )\n}\n`;
+    const once = formatSource(source) as string;
+    expect(multilineStringValues(once)).toEqual(multilineStringValues(source));
+    expect(formatSource(once)).toBe(once);
+  });
+
+  it("leaves a blank line inside a wrapped item unindented", () => {
+    const source = `def f() {\n  return someFunctionWithALongName(\n    firstArgument,\n    secondArgument,\n    {\n      a: 1,\n\n      b: 2\n    },\n    thirdArgument\n  )\n}\n`;
+    const once = formatSource(source);
+    expect(once).toContain("\n\n      b: 2");
+    expect(once).not.toContain("  \n");
     expect(formatSource(once as string)).toBe(once);
   });
 });

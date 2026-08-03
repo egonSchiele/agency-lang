@@ -21,8 +21,8 @@ node main() {
   const result = llm(
     "What are my 5 most recently updated GitHub repositories?",
     {
-    tools: [...tools]
-  },
+      tools: [...tools]
+    },
   )
   return result
 }

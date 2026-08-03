@@ -1449,10 +1449,10 @@ export class AgencyGenerator {
     prefix: string,
     suffix: string,
   ): string {
-    const body = this.renderListIfTrivia(renderItems(), trivia, "(", ")");
-    if (body === undefined) {
+    if (!trivia?.length) {
       return this.wrapList(renderItems, prefix, "(", ")", suffix);
     }
+    const body = this.renderListIfTrivia(renderItems(), trivia, "(", ")");
     return `${prefix}${body}${suffix}`;
   }
 

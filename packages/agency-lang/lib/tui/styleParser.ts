@@ -15,10 +15,16 @@ type StyleEntry =
   | { type: "fg"; color: string; origin: Origin }
   | { type: "bg"; color: string; origin: Origin };
 
-// Matches either a `{tag}` (not preceded by a backslash) or an ANSI SGR
-// escape sequence `ESC[<params>m`. Tag bodies may not contain `}`, so an
-// escaped `}` inside a tag body is not supported by design.
-const TAG_PATTERN_SOURCE = String.raw`(?<!\\)\{(\/?)([^}]+)\}|\x1b\[([\d;]*)m`;
+// Matches a `{tag}` (not preceded by a backslash), an ANSI SGR escape
+// sequence `ESC[<params>m`, or an OSC sequence `ESC] … BEL/ST`. Tag bodies may
+// not contain `}`, so an escaped `}` inside a tag body is not supported by
+// design.
+//
+// OSC carries no styling and occupies no columns — OSC 8 is the terminal
+// hyperlink wrapper, whose URL is metadata. Without this alternative the whole
+// sequence, URL included, was emitted as literal cells, so a link in rendered
+// Markdown printed its own href across the screen.
+const TAG_PATTERN_SOURCE = String.raw`(?<!\\)\{(\/?)([^}]+)\}|\x1b\[([\d;]*)m|(\x1b\][^\x07\x1b]*(?:\x07|\x1b\\))`;
 const TAG_FLAGS = "g";
 
 // Map standard ANSI color codes (30-37, 40-47, 90-97, 100-107) to our
@@ -200,7 +206,7 @@ export function parseStyledText(input: string): StyledSpan[] {
   const tagRe = new RegExp(TAG_PATTERN_SOURCE, TAG_FLAGS);
   let match;
   while ((match = tagRe.exec(input)) !== null) {
-    const [fullMatch, isClosing, tagName, ansiParams] = match;
+    const [fullMatch, isClosing, tagName, ansiParams, oscSequence] = match;
 
     // Text before this tag
     if (match.index > lastIndex) {
@@ -208,7 +214,9 @@ export function parseStyledText(input: string): StyledSpan[] {
       spans.push(makeSpan(textBefore, currentStyle(stack)));
     }
 
-    if (ansiParams !== undefined) {
+    if (oscSequence !== undefined) {
+      // Consumed and dropped: no text, no style change.
+    } else if (ansiParams !== undefined) {
       // ANSI SGR sequence — apply codes to the style stack.
       const codes = ansiParams === "" ? [] : ansiParams.split(";").map((p) => parseInt(p, 10) || 0);
       applyAnsiCodes(stack, codes);

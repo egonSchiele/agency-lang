@@ -11,6 +11,7 @@ import {
   evalLabel,
   resolveAnnotator,
   resolveLabelStore,
+  terminalDimension,
   type EvalLabelDependencies,
 } from "./label.js";
 
@@ -44,8 +45,8 @@ function dependencies(over: Partial<EvalLabelDependencies> = {}): EvalLabelDepen
   return {
     openSession: vi.fn(async () => fakeController()) as never,
     runTui: vi.fn(async () => {}) as never,
-    input: { isTTY: true } as NodeJS.ReadStream,
-    output: { isTTY: true } as NodeJS.WriteStream,
+    makeScreen: () => ({ destroy: () => {} }) as never,
+    isInteractive: () => true,
     environment: { USER: "adit" },
     osUserName: () => "os-account",
     ...over,
@@ -124,6 +125,28 @@ describe("evalLabel", () => {
       .rejects.toThrow(/Source run directory not found/);
   });
 
+  it("refuses a non-interactive terminal before opening a session", async () => {
+    const openSession = vi.fn(async () => fakeController());
+    const deps = dependencies({ isInteractive: () => false, openSession: openSession as never });
+    await expect(evalLabel({ source: sourceDir, checklist: checklistFile }, deps))
+      .rejects.toThrow(/interactive terminal/i);
+    expect(openSession).not.toHaveBeenCalled();
+  });
+
+  it("destroys the screen even when the terminal loop throws", async () => {
+    const destroyed = vi.fn();
+    const controller = fakeController();
+    const deps = dependencies({
+      openSession: (async () => controller) as never,
+      makeScreen: () => ({ destroy: destroyed }) as never,
+      runTui: (async () => { throw new Error("tui exploded"); }) as never,
+    });
+    await expect(evalLabel({ source: sourceDir, checklist: checklistFile }, deps))
+      .rejects.toThrow(/tui exploded/);
+    expect(destroyed).toHaveBeenCalled();
+    expect(controller.closed()).toBe(1);
+  });
+
   it("opens a session with resolved paths and annotator", async () => {
     const openSession = vi.fn(async () => fakeController());
     await evalLabel(
@@ -162,5 +185,21 @@ describe("evalLabel", () => {
     });
     await expect(evalLabel({ source: sourceDir, checklist: checklistFile }, deps))
       .rejects.toThrow(/store is locked/);
+  });
+});
+
+describe("terminalDimension", () => {
+  it("uses a real dimension when the terminal reports one", () => {
+    expect(terminalDimension(120, 100)).toBe(120);
+  });
+
+  it("falls back when a PTY reports 0, which `??` would let through", () => {
+    expect(terminalDimension(0, 100)).toBe(100);
+  });
+
+  it("falls back for undefined, negative and non-finite values", () => {
+    expect(terminalDimension(undefined, 100)).toBe(100);
+    expect(terminalDimension(-5, 100)).toBe(100);
+    expect(terminalDimension(Number.NaN, 100)).toBe(100);
   });
 });

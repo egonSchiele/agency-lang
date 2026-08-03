@@ -6,6 +6,7 @@ import { color } from "@/utils/termcolors.js";
 import type { AgencyConfig } from "@/config.js";
 import { readBinding } from "../binding.js";
 import { canonicalOrigin } from "../../statelog/serveUrl.js";
+import { AccountScopeError } from "../../statelog/accountClient.js";
 
 /** What every remote command needs: the resolved config and the exact path it
  *  came from (so a binding writes back to that file, not a re-derived one). */
@@ -26,6 +27,12 @@ export type ResolvedApiKey = {
 /** An account-management target: a canonical origin plus the resolved key. */
 export type AccountTarget = ResolvedApiKey & {
   origin: string;
+};
+
+/** Options common to every account-management command. */
+export type AccountCommandOptions = {
+  host?: string;
+  apiKeyEnv?: string;
 };
 
 /** Print an error and exit non-zero. Typed `never` so callers can use it in an
@@ -73,4 +80,19 @@ export function resolveAccountTarget(
     );
   }
   return { origin, ...resolveApiKey(options) };
+}
+
+/** Turn a client error into a clean CLI exit. An AccountScopeError becomes
+ *  guidance naming the resolved API-key variable — the one place that knows both
+ *  the scope error (from the client) and the variable name (from the target). */
+export function failAccount(error: unknown, apiKeyEnvName: string): never {
+  if (error instanceof AccountScopeError) {
+    fail(
+      `$${apiKeyEnvName} is a project-scoped key; this needs an account-scoped key. Create one in the statelog web UI.`,
+    );
+  }
+  if (error instanceof Error) {
+    fail(error.message);
+  }
+  fail(String(error));
 }

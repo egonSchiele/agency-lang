@@ -1,3 +1,23 @@
+## Aug 3 2026 — v0.13.0
+
+### CLI / Hosting
+- **`agency remote`** — CLI surface for a hosted agent.
+- `deploy` supports multi-file agents (flat same-dir siblings).
+
+### Eval framework
+- **`agency eval label`** — a terminal checklist UI for labeling agent outputs by hand.
+- **`evals/smoke`** — four cheap, deterministic harness checks.
+
+### Language / Templates
+- A template must import the types it names.
+- A template can only use names it declares itself (AG8015).
+
+### Config
+- `agency.json` gains a top-level `budget` for per-run spend/time limits (`maxCost` / `maxTime`).
+
+### Formatter
+- **Trailing comments** now work.
+
 ## Aug 1 2026 — v0.12.0
 
 ### Language / Parser

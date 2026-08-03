@@ -13,6 +13,7 @@ export type ServeMetadata = {
    *  createServeHandler so discoverExports's module filter matches. */
   moduleId: string;
   exportedNodeNames: string[];
+  exportedFunctionNames: string[];
   interruptEffectsByName: Record<string, InterruptEffect[]>;
   /** Type-check diagnostics; the caller may format or ignore them. */
   errors: ReturnType<typeof typeCheck>["errors"];
@@ -34,9 +35,12 @@ export function collectServeMetadata({
   const absoluteFile = path.resolve(filePath);
   const symbolTable = SymbolTable.build(absoluteFile, config);
 
-  const fileSymbols = symbolTable.getFile(absoluteFile);
-  const exportedNodeNames = Object.values(fileSymbols ?? {})
+  const fileSymbols = Object.values(symbolTable.getFile(absoluteFile) ?? {});
+  const exportedNodeNames = fileSymbols
     .filter((sym) => sym.kind === "node" && sym.exported)
+    .map((sym) => sym.name);
+  const exportedFunctionNames = fileSymbols
+    .filter((sym) => sym.kind === "function" && sym.exported)
     .map((sym) => sym.name);
 
   const source = fs.readFileSync(absoluteFile, "utf-8");
@@ -52,5 +56,5 @@ export function collectServeMetadata({
   }
 
   const moduleId = path.relative(process.cwd(), absoluteFile);
-  return { moduleId, exportedNodeNames, interruptEffectsByName, errors };
+  return { moduleId, exportedNodeNames, exportedFunctionNames, interruptEffectsByName, errors };
 }

@@ -439,3 +439,166 @@ describe("AG8015: a template's own imported node", () => {
     expect(codesOf(source)).not.toContain("AG8015");
   });
 });
+
+describe("AG8015: type names a template does not define", () => {
+  it("reports a borrowed type on an annotated declaration", () => {
+    const source = [
+      "type Person = {",
+      "  name: string",
+      "}",
+      "",
+      "node host() {",
+      "  const template = [|",
+      '    const p: Person = { name: "a" }',
+      "  |]",
+      '  print("host")',
+      "}",
+      "",
+    ].join("\n");
+    expect(codesOf(source)).toContain("AG8015");
+    expect(messageFor(source, "AG8015")).toMatch(/Person/);
+  });
+
+  it("reports a borrowed type on a hole annotation", () => {
+    // The #719 case: the hole's type is one the template does not have,
+    // so fill cannot check it and the generated program will not compile.
+    const source = withLiteral([
+      "    node main(): string {",
+      "      const p: Person = #person",
+      '      return "x"',
+      "    }",
+    ]);
+    expect(codesOf(source)).toContain("AG8015");
+    expect(messageFor(source, "AG8015")).toMatch(/Person/);
+  });
+
+  it("reports a borrowed type on a parameter", () => {
+    const source = withLiteral([
+      "    def greet(who: Person): string {",
+      '      return "hi"',
+      "    }",
+    ]);
+    expect(codesOf(source)).toContain("AG8015");
+    expect(messageFor(source, "AG8015")).toMatch(/Person/);
+  });
+
+  it("reports a borrowed type on a return annotation", () => {
+    const source = withLiteral([
+      "    def make(): Person {",
+      '      return { name: "a" }',
+      "    }",
+    ]);
+    expect(codesOf(source)).toContain("AG8015");
+  });
+
+  it("reports a borrowed type on a node parameter", () => {
+    const source = withLiteral([
+      "    node main(who: Person): string {",
+      '      return "hi"',
+      "    }",
+    ]);
+    expect(codesOf(source)).toContain("AG8015");
+  });
+});
+
+describe("AG8015: type names a template does define", () => {
+  it("a type the template declares", () => {
+    const source = withLiteral([
+      "    type Person = {",
+      "      name: string",
+      "    }",
+      "",
+      '    const p: Person = { name: "a" }',
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+
+  it("a type the template declares, used in a signature", () => {
+    const source = withLiteral([
+      "    type Person = {",
+      "      name: string",
+      "    }",
+      "",
+      "    def greet(who: Person): Person {",
+      "      return who",
+      "    }",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+
+  it("a type the template imports", () => {
+    const source = withLiteral([
+      '    import { Person } from "./types.agency"',
+      "",
+      '    const p: Person = { name: "a" }',
+      "",
+      "    def greet(who: Person): Person {",
+      "      return who",
+      "    }",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+
+  it("a builtin generic", () => {
+    const source = withLiteral([
+      '    const r: Result<string> = success("a")',
+      "    const counts: Record<string, number> = {}",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+
+  it("primitives and arrays", () => {
+    const source = withLiteral([
+      "    const n: number = 1",
+      '    const names: string[] = ["a"]',
+      "    def add(x: number, y: number): number {",
+      "      return x + y",
+      "    }",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+
+  it("a generic parameter in an alias body", () => {
+    // Alias bodies are deliberately unchecked: `T` is bound here, and the
+    // resolver has no notion of bound names.
+    const source = withLiteral([
+      "    type Box<T> = {",
+      "      value: T",
+      "    }",
+      "",
+      "    const b: Box<number> = { value: 1 }",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+});
+
+describe("AG8015: type names in a template file", () => {
+  it("leaves an unknown type in a holey file to AG1006", () => {
+    // A file's own annotations resolve against its real imports, so that
+    // pass already covers them. Two codes for one name would be noise.
+    const source = 'node main(): string {\n  const p: Person = #person\n  return "x"\n}\n';
+    expect(codesOf(source)).toContain("AG1006");
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+});
+
+describe("AG8015: type names that collide with object methods", () => {
+  it("reports a borrowed type named after a prototype method", () => {
+    // A plain-object alias table would find Object.prototype.toString and
+    // treat the name as resolved.
+    const source = withLiteral(["    const x: toString = 1"]);
+    expect(codesOf(source)).toContain("AG8015");
+    expect(messageFor(source, "AG8015")).toMatch(/toString/);
+  });
+
+  it("says nothing when the template imports that name", () => {
+    // The alias map is a plain object too, so reading it needs the same
+    // care: without it the stub is keyed by a function.
+    const source = withLiteral([
+      '    import { toString } from "./types.agency"',
+      "",
+      "    const x: toString = 1",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+});

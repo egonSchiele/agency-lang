@@ -17,6 +17,10 @@ export node main(x: string) {
   raise app::confirm("proceed?")
   return x
 }
+
+export def helper(n: number): number {
+  return n
+}
 `;
 
 let tmpDir: string;
@@ -36,6 +40,12 @@ describe("collectServeMetadata", () => {
   it("returns the exported node names", () => {
     const meta = collectServeMetadata({ filePath, config: {} });
     expect(meta.exportedNodeNames).toContain("main");
+  });
+
+  it("returns the exported function names", () => {
+    const meta = collectServeMetadata({ filePath, config: {} });
+    expect(meta.exportedFunctionNames).toEqual(["helper"]);
+    expect(meta.exportedNodeNames).not.toContain("helper");
   });
 
   it("returns a moduleId derived from the file path", () => {

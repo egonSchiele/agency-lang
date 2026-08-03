@@ -31,6 +31,12 @@ export const BUILTIN_VARIABLES = ["color", "__dirname"];
 export const MAX_REPLY_ATTACHMENTS_PER_CALL = 10;
 export const MAX_REPLY_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
+/** Which hosted agent this directory is linked to. `serveUrl` is the canonical
+ *  serve base written by `agency remote deploy` / `remote link`. */
+export type RemoteConfig = {
+  serveUrl: string;
+};
+
 /**
  * Configuration options for the Agency compiler
  */
@@ -66,6 +72,9 @@ export interface AgencyConfig {
    * Set to true to activate structured event logging via the `log` config.
    */
   observability?: boolean;
+
+  /** The hosted agent this directory is linked to (agency remote). */
+  remote?: RemoteConfig;
 
   /** Statelog config */
   log?: Partial<{
@@ -395,6 +404,7 @@ export const AgencyConfigSchema = z
     // load rather than surprise. Mirrors maxCallDepth.
     maxToolCallRounds: z.number().int().positive(),
     observability: z.boolean(),
+    remote: z.object({ serveUrl: z.string() }),
     log: z
       .object({
         host: z.string(),

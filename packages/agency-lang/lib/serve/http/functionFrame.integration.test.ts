@@ -43,6 +43,11 @@ describe("serve http invokes exported functions inside a runtime frame", () => {
     '  return "${GREETING}, ${name}!"',
     "}",
     "",
+    "export def needsApproval(): string {",
+    '  raise app::confirm("proceed?")',
+    '  return "done"',
+    "}",
+    "",
     "node main() {",
     '  print(greet("world"))',
     "}",
@@ -95,5 +100,25 @@ describe("serve http invokes exported functions inside a runtime frame", () => {
     const result = await handler("GET", "/list", undefined);
     const body = result.body as { functions: Array<{ name: string }> };
     expect(body.functions.map((f) => f.name)).toContain("greet");
+  });
+
+  // Pins the real wire behavior of a served function that raises an unhandled
+  // interrupt: functions are one-shot (no checkpoint/resume), so this is NOT a
+  // node-style pause. The function fails at checkpoint creation, and the adapter
+  // wraps that failed AgencyResult in a success envelope. So `remote call
+  // --function` cannot offer a resume loop — it prints this as a normal serve
+  // result. (This is why the spec does not promise a special "unsupported"
+  // message; the wire carries only a generic failure.)
+  it("a served function raising an unhandled interrupt fails one-shot (no pause)", async () => {
+    const result = await handler("POST", "/function/needsApproval", {});
+    expect(result.status).toBe(200);
+    const body = result.body as {
+      success: boolean;
+      value: { __type?: string; success?: boolean; error?: string };
+    };
+    expect(body.success).toBe(true);
+    expect(body.value.__type).toBe("resultType");
+    expect(body.value.success).toBe(false);
+    expect(body.value.error).toContain("Cannot create checkpoint");
   });
 });

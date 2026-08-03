@@ -4,6 +4,11 @@ import type { Scope } from "./scope.js";
 import type { AgencyNode, FunctionCall } from "../types.js";
 import type { ValueAccess, AccessChainElement } from "../types/access.js";
 import { walkNodes } from "../utils/node.js";
+import { holeNames } from "../utils/holes.js";
+import {
+  hasFunctionOrNodeAncestor,
+  isResolvableBareCall,
+} from "./nameReferences.js";
 import {
   resolveCall,
   lookupJsMember,
@@ -35,6 +40,12 @@ export function checkUndefinedFunctions(
   const mode = ctx.config.typechecker?.undefinedFunctions ?? "warn";
   if (mode === "silent") return;
 
+  // A file with holes is a template. AG8015 owns bare call names in it, so
+  // reporting them here too would double up. It does not look at JS
+  // namespace members — `nosuch` in `Math.nosuch()` is a method to it, not
+  // a lexical name — so the chain check below keeps running.
+  const isTemplateFile = holeNames(ctx.programNodes).length > 0;
+
   const shadowing = collectProgramShadowing(ctx.programNodes);
 
   for (const info of scopes) {
@@ -48,12 +59,8 @@ export function checkUndefinedFunctions(
         if (isTopLevel && hasFunctionOrNodeAncestor(ancestors)) continue;
 
         if (node.type === "functionCall") {
-          // `walkNodes` descends into a `valueAccess`'s methodCall.functionCall.
-          // That method-call is already covered by checkAccessChain on its
-          // parent valueAccess; reporting it again here would double-fire and
-          // also incorrectly treat `obj.foo()` as a bare call to `foo`.
-          const parent = ancestors[ancestors.length - 1];
-          if (parent && (parent as AgencyNode).type === "valueAccess") continue;
+          if (isTemplateFile) continue;
+          if (!isResolvableBareCall(node, ancestors)) continue;
           checkBareCall(node, info.scope, ctx, mode, shadowing.importedNodeNames);
         } else if (node.type === "valueAccess") {
           checkAccessChain(node, info.scope, ctx, mode, shadowing);
@@ -63,13 +70,6 @@ export function checkUndefinedFunctions(
   }
 }
 
-function hasFunctionOrNodeAncestor(ancestors: readonly unknown[]): boolean {
-  for (const a of ancestors) {
-    const t = (a as AgencyNode | undefined)?.type;
-    if (t === "function" || t === "graphNode") return true;
-  }
-  return false;
-}
 
 // --- Internal helpers ---
 
@@ -93,9 +93,6 @@ function checkBareCall(
   mode: "warn" | "error",
   importedNodeNames: readonly string[],
 ): void {
-  // A call the lowerer synthesized, not one the user wrote. It has no
-  // declaration to find, and the builder compiles it away before runtime.
-  if (call.synthetic) return;
   const resolution = resolveCall(call.functionName, {
     functionDefs: ctx.functionDefs,
     nodeDefs: ctx.nodeDefs,

@@ -1,30 +1,38 @@
 import { fill, holesOf, toSource, runCode } from "std::agency"
 
-// The flagship inline workflow: three literals (expr body via the
-// relaxation, program-kind templates), partial fill, composition with a
-// hole still open, origin on the grafted hole, and the generated program
-// actually running. No template files, no loadTemplate interrupts.
+// The flagship inline workflow: partial fill, composition with a hole
+// still open, origin on the grafted hole, and the generated program
+// actually running. Every fragment declares the names it uses, because a
+// template may not depend on a declaration arriving through a hole.
 node main(): string {
-  const guardTpl = [|
+  const programTemplate = [|
     def guarded(): string {
       const ms: number = #minutes
       #body
       return "lit-ok"
     }
-  |]
-  const mainTpl = [|
-    #helpers
 
     export node main(): string {
       return guarded()
     }
   |]
   const body = [| print("step") |]
-  const partial = fill(guardTpl, { body: body })
+  // The wrapper declares something of its own, so `#helpers` sits at a
+  // declaration position. A body that is only a hole would be an
+  // expression, which a program fragment cannot fill.
+  const wrapper = [|
+    #helpers
+
+    def wrapperTag(): string {
+      return "wrapper"
+    }
+  |]
+
+  const partial = fill(programTemplate, { body: body })
   if (isFailure(partial)) {
-    return "guard fill failed: ${partial.error}"
+    return "program fill failed: ${partial.error}"
   }
-  const program = fill(mainTpl, { helpers: partial.value })
+  const program = fill(wrapper, { helpers: partial.value })
   if (isFailure(program)) {
     return "compose failed: ${program.error}"
   }
@@ -45,8 +53,8 @@ node main(): string {
       return "run failed: ${result.error}"
     }
     return result.value
-  } with (e) {
-    if (e.effect == "std::run") {
+  } with (effect) {
+    if (effect.effect == "std::run") {
       return approve()
     }
   }

@@ -5,7 +5,7 @@
       "input": "",
       "expectedOutput": "\"lit-ok\"",
       "evaluationCriteria": [{ "type": "exact" }],
-      "description": "Inline literals compose with a hole still open; the grafted hole carries origin and the completed program runs"
+      "description": "Self-contained inline literals compose with a hole still open; the grafted hole carries origin and the completed program runs"
     }
   ]
 }

@@ -77,9 +77,14 @@ describe("code literals: typechecking", () => {
     expect(codesOf(source)).toEqual([]);
   });
 
-  it("names inside a body produce no host diagnostics (quoted-leaf proof)", () => {
+  it("names inside a body are not checked against the HOST scope (quoted-leaf proof)", () => {
+    // The leaf property still holds: the host checker does not resolve a
+    // quoted name against host declarations. What changed is that the
+    // template pass now resolves it against the TEMPLATE's own scope, so
+    // an undefined name there is AG8015 rather than silence.
+    //
     // Non-vacuous by construction: the SAME undefined name at host level
-    // is the sanity anchor below.
+    // is the sanity anchor below, and it reports a different code.
     const quoted = [
       "node main(): number {",
       "  const t = [| definitelyNotAHostName() |]",
@@ -87,7 +92,8 @@ describe("code literals: typechecking", () => {
       "}",
       "",
     ].join("\n");
-    expect(messagesOf(quoted).filter((m) => m.includes("definitelyNotAHostName"))).toEqual([]);
+    expect(codesOf(quoted)).not.toContain("AG4004");
+    expect(codesOf(quoted)).toContain("AG8015");
   });
 
   it("sanity anchor: the same undefined name AT HOST LEVEL does diagnose", () => {

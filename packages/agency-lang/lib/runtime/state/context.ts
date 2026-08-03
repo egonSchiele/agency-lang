@@ -383,6 +383,10 @@ export class RuntimeContext<T> {
     execCtx.maxRestores = this.maxRestores;
     execCtx.maxCallDepth = this.maxCallDepth;
     execCtx.failurePropagation = this.failurePropagation;
+    // Non-serialized field — must be copied here (see the class comment) so
+    // installRootBudget, which reads execCtx.budget, actually sees the resolved
+    // config/override budget. Without this the root budget is a silent no-op.
+    execCtx.budget = this.budget;
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     // The execution context is built via Object.create, bypassing the
     // constructor, so carry the clock over from the global context. Without

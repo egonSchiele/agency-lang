@@ -10,6 +10,7 @@ import type {
 } from "./interruptResponse.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
+import { reinstallRootBudget } from "./rootBudget.js";
 import {
   AgencyCancelledError,
   HandlerRecursionError,
@@ -813,6 +814,11 @@ export async function respondToInterrupts(args: {
     () => __initAllRegisteredCallbacks(execCtx),
   );
   execCtx.restoreState(checkpoint);
+  // Re-assert the root budget's LIMIT from the host context (the checkpoint's
+  // ceiling is caller-controllable on a stateless resume), while preserving the
+  // guard's accumulated spend so the trusted CLI resume path stays cumulative.
+  // No-op in IPC.
+  reinstallRootBudget(execCtx.stateStack, execCtx.budget);
   execCtx.setInterruptResponses(responseMap);
   if (metadata.callbacks) Object.assign(execCtx.callbacks, metadata.callbacks);
   if (metadata.debugger) execCtx.debuggerState = metadata.debugger;

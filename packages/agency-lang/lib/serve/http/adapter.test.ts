@@ -8,6 +8,7 @@ import type { Interrupt } from "../../runtime/interrupts.js";
 import type { ExportedItem } from "../types.js";
 import { createLogger } from "../../logger.js";
 import type { Logger } from "../../logger.js";
+import { GuardExceededError } from "../../runtime/guard.js";
 
 // A fully-formed interrupt, as the runtime produces one — every identity field
 // present. Resume validation now requires these, so tests build real interrupts
@@ -526,5 +527,50 @@ describe("startHttpServer route logging", () => {
     // node `main` takes a single param
     expect(joined).toContain("POST  /node/main (message)");
     expect(joined).toContain("POST  /resume (interrupts, responses)");
+  });
+});
+
+describe("root-budget trips surface as a typed budgetExceeded", () => {
+  const silent = createLogger("error");
+
+  function handlerFor(invoke: () => Promise<unknown>): ReturnType<typeof createHttpHandler> {
+    const node: ExportedItem = {
+      kind: "node",
+      name: "run",
+      parameters: [],
+      interruptEffects: [],
+      invoke,
+    };
+    return createHttpHandler({
+      exports: [node],
+      logger: silent,
+      hasInterrupts: () => false,
+      respondToInterrupts: async () => ({ data: undefined }),
+    });
+  }
+
+  it("returns a 402 budgetExceeded with dimension/limit/spent", async () => {
+    const handler = handlerFor(async () => {
+      throw new GuardExceededError("cost", 1, 2, "g1");
+    });
+    const result = await handler("POST", "/node/run", {});
+    expect(result.status).toBe(402);
+    expect(result.body).toMatchObject({
+      success: false,
+      code: "budgetExceeded",
+      dimension: "cost",
+      limit: 1,
+      spent: 2,
+    });
+    expect((result.body as { error: string }).error).toContain("cost limit");
+  });
+
+  it("leaves a non-budget error as the generic tool error", async () => {
+    const handler = handlerFor(async () => {
+      throw new Error("kaboom");
+    });
+    const result = await handler("POST", "/node/run", {});
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({ success: false, error: "Tool execution failed" });
   });
 });

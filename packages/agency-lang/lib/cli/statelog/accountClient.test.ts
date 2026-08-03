@@ -285,3 +285,17 @@ describe("accountClient keys and id translation", () => {
     ).rejects.toThrow("created key missing plainKey");
   });
 });
+
+describe("accountClient id-map safety", () => {
+  it("resolves a project id like __proto__ without a prototype-chain collision", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        response(200, { success: true, value: [rawProject({ id: "__proto__", project_id: "polluted" })] }),
+      )
+      .mockResolvedValueOnce(
+        response(200, { success: true, value: [rawProjectKey({ projectId: "__proto__" })] }),
+      );
+    const keys = await client.listKeys();
+    expect(keys[0]?.projectId).toBe("polluted");
+  });
+});

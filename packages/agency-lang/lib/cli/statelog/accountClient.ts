@@ -203,9 +203,11 @@ function validateRawProject(value: unknown): RawProject {
   return { id, project_id, name, description: obj.description };
 }
 
-/** internal id → public slug, so a listed key's project can be shown by slug. */
+/** internal id → public slug, so a listed key's project can be shown by slug.
+ *  Null-prototype: the keys are server-provided ids, so an id like `__proto__`
+ *  or `constructor` must be a plain data property, not a prototype write. */
 function slugByInternalId(projects: RawProject[]): Record<string, string> {
-  const map: Record<string, string> = {};
+  const map: Record<string, string> = Object.create(null);
   for (const project of projects) {
     map[project.id] = project.project_id;
   }

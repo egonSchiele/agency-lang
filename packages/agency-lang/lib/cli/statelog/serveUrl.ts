@@ -103,3 +103,30 @@ export function projectPageUrl(address: ServeAddress): string {
   url.searchParams.set("id", address.projectId);
   return url.toString();
 }
+
+/** Reduce a host string to a bare origin (`scheme://host[:port]`), or null if it
+ *  is not a usable statelog origin. Account-management routes are built from this
+ *  with `new URL(...)`, so anything ambiguous is rejected: non-HTTP(S) schemes,
+ *  embedded credentials, a query or fragment, or a non-root path (statelog is
+ *  served at the root). A trailing slash is canonicalized away. */
+export function canonicalOrigin(host: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(host);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+  if (parsed.username || parsed.password) {
+    return null;
+  }
+  if (parsed.search || parsed.hash) {
+    return null;
+  }
+  if (parsed.pathname !== "/" && parsed.pathname !== "") {
+    return null;
+  }
+  return parsed.origin;
+}

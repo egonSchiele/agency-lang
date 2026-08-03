@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  canonicalOrigin,
   resolveTrustedEndpointUrl,
   parseServeBaseUrl,
   serveRouteUrl,
@@ -103,5 +104,27 @@ describe("projectPageUrl", () => {
   it("builds the project page URL, encoding the decoded project id", () => {
     const address = parseServeBaseUrl(`${HOST}/serve/u/p%20q/a`)!;
     expect(projectPageUrl(address)).toBe(`${HOST}/projects/show?id=p+q`);
+  });
+});
+
+describe("canonicalOrigin", () => {
+  it.each([
+    ["https://host.example/", "https://host.example"],
+    ["https://host.example", "https://host.example"],
+    ["http://localhost:3000", "http://localhost:3000"],
+  ])("canonicalizes %s", (input, expected) => {
+    expect(canonicalOrigin(input)).toBe(expected);
+  });
+
+  it.each([
+    "",
+    "not a url",
+    "ftp://host.example",
+    "https://user:password@host.example",
+    "https://host.example/api",
+    "https://host.example?query=1",
+    "https://host.example#fragment",
+  ])("rejects %s", (input) => {
+    expect(canonicalOrigin(input)).toBeNull();
   });
 });

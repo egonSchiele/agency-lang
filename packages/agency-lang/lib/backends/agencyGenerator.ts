@@ -1518,8 +1518,15 @@ export class AgencyGenerator {
     // (which may render on a single line). Trivia forces the multi-line form
     // so each comment gets its own line.
     if (!node.trivia?.length) {
-      const items = node.items.map((item) => this.renderArrayItem(item));
-      return this.wrapList(() => items, "", "[", "]");
+      // Built inside the callback, not before it: `wrapList` may increase the
+      // indent and ask again, and an item that spans lines has to be built at
+      // the depth it will print at.
+      return this.wrapList(
+        () => node.items.map((item) => this.renderArrayItem(item)),
+        "",
+        "[",
+        "]",
+      );
     }
 
     return this.renderListWithTrivia({
@@ -1899,7 +1906,13 @@ export class AgencyGenerator {
         return this.indentStr(`${importKeyword}${withTrivia}${suffix}`);
       }
       return this.indentStr(
-        this.wrapList(() => names, importKeyword, "{ ", " }", suffix),
+        this.wrapList(
+          () => this.renderImportNames(namedImport),
+          importKeyword,
+          "{ ",
+          " }",
+          suffix,
+        ),
       );
     }
 

@@ -480,6 +480,26 @@ describe("a multi-line item inside a wrapped list", () => {
     expect(formatSource(once as string)).toBe(once);
   });
 
+  // The array here wraps on its own, rather than being re-rendered by a
+  // surrounding call. That path cached its items before the wrapping
+  // decision, so it stayed stale while the nested-array case above passed.
+  it("indents an item inside an array that wraps by itself", () => {
+    const source = `def f() {\n  return [\n    firstArgument,\n    secondArgument,\n    thirdArgument,\n    {\n      blockedCommands: blockedCommands\n    },\n  ]\n}\n`;
+    const once = formatSource(source) as string;
+    expect(once).toContain(
+      "    {\n      blockedCommands: blockedCommands\n    },",
+    );
+    expect(parseAgency(once, {}, false, false).success).toBe(true);
+    expect(formatSource(once)).toBe(once);
+  });
+
+  it("keeps a multiline string intact inside an array that wraps", () => {
+    const source = `def f() {\n  return [\n    firstArgument,\n    secondArgument,\n    thirdArgument,\n    """line1\nline2""",\n  ]\n}\n`;
+    const once = formatSource(source) as string;
+    expect(multilineStringValues(once)).toEqual(multilineStringValues(source));
+    expect(formatSource(once)).toBe(once);
+  });
+
   // A triple-quoted string's newlines are DATA. Indenting them to match the
   // surrounding layout changes the value the program computes, which is a
   // far worse bug than the misalignment this suite is about.

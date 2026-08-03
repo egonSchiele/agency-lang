@@ -12,6 +12,7 @@ import {
   readRevision,
   revisionFromDefinition,
   syncChecklistDefinition,
+  type NormalizedDefinition,
 } from "./checklist.js";
 import type { ChecklistDefinition, ChecklistRevision } from "./types.js";
 
@@ -33,7 +34,7 @@ const rawDefinition: ChecklistDefinition = {
 };
 
 /** Normalize, publish version 1, and return the published state. */
-function publishFirst(): { definition: ChecklistDefinition; revision: ChecklistRevision } {
+function publishFirst(): { definition: NormalizedDefinition; revision: ChecklistRevision } {
   const normalized = normalizeDefinition(rawDefinition);
   fs.writeFileSync(definitionPath, JSON.stringify(normalized, null, 2));
   const prepared = prepareRevision({ definition: normalized, current: undefined });
@@ -44,8 +45,10 @@ function publishFirst(): { definition: ChecklistDefinition; revision: ChecklistR
   return { definition: readDefinition(), revision: published.revision };
 }
 
-function readDefinition(): ChecklistDefinition {
-  return JSON.parse(fs.readFileSync(definitionPath, "utf8"));
+/** The definition file after publication has written lineage into it, so it
+ *  is always normalized by the time a test reads it back. */
+function readDefinition(): NormalizedDefinition {
+  return normalizeDefinition(JSON.parse(fs.readFileSync(definitionPath, "utf8")));
 }
 
 function currentRevision(checklistId: string): ChecklistRevision {

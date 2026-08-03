@@ -49,6 +49,7 @@ export const modifiers = {
   dim: "\x1b[2m",
   italic: "\x1b[3m",
   underline: "\x1b[4m",
+  strikethrough: "\x1b[9m",
 } as const;
 
 // Combine all style codes

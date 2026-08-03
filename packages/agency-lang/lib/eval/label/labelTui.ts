@@ -1,19 +1,13 @@
 import { syntaxHighlight } from "@/stdlib/syntax.js";
+import { color, RESET } from "@/utils/termcolors.js";
 
 import type { LabelingSessionController } from "./controller.js";
 import type { SessionAction, SessionSnapshot } from "./session.js";
 
-const RESET = "\x1b[0m";
-const BOLD = "\x1b[1m";
-const DIM = "\x1b[2m";
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const BLUE = "\x1b[34m";
-const MAGENTA = "\x1b[35m";
-const CYAN = "\x1b[36m";
-const GREY = "\x1b[90m";
-const ON_BLUE = "\x1b[44m";
-const STRIKE = "\x1b[9m";
+// Styling goes through lib/utils/termcolors rather than raw escapes, so the
+// palette has one home. RESET is still needed directly: wrapAnsi ends each
+// wrapped line with it to stop colour bleeding into the next row, which is a
+// line-level concern rather than styling a span of text.
 
 /**
  * Two kinds of zero-width escape appear in highlighted markdown: SGR colour
@@ -168,13 +162,14 @@ export function renderLabelScreen(args: RenderArgs): string {
 
   const out: string[] = [];
   const staleNote = snapshot.progress.stale > 0
-    ? `  ${YELLOW}⟳ ${snapshot.progress.stale} stale${RESET}`
+    ? `  ${color.yellow(`⟳ ${snapshot.progress.stale} stale`)}`
     : "";
   out.push(
-    ` ${ON_BLUE}${BOLD} eval label ${RESET} ${GREY}${args.storeLabel}${RESET}  ` +
-    `${BOLD}${GREEN}${snapshot.progress.reviewed}${RESET}${DIM}/${snapshot.progress.total} reviewed${RESET}${staleNote}`,
+    ` ${color.bgBlue.bold(" eval label ")} ${color.brightBlack(args.storeLabel)}  ` +
+    `${color.bold.green(String(snapshot.progress.reviewed))}` +
+    `${color.dim(`/${snapshot.progress.total} reviewed`)}${staleNote}`,
   );
-  out.push(`${GREY}${"━".repeat(args.columns)}${RESET}`);
+  out.push(color.brightBlack("━".repeat(args.columns)));
 
   const item = snapshot.currentItem;
   if (item === null) {
@@ -184,19 +179,19 @@ export function renderLabelScreen(args: RenderArgs): string {
 
   const status = snapshot.statuses[item.outputId] ?? "untouched";
   const chip = {
-    untouched: `${GREY}○ untouched${RESET}`,
-    reviewed: `${GREEN}● reviewed${RESET}`,
-    stale: `${YELLOW}⟳ stale — a question was added since${RESET}`,
+    untouched: color.brightBlack("○ untouched"),
+    reviewed: color.green("● reviewed"),
+    stale: color.yellow("⟳ stale — a question was added since"),
   }[status];
   const score = snapshot.scores[item.outputId];
   const scoreText = score === null || score === undefined
-    ? `${GREY}—${RESET}`
-    : `${scoreColour(score)}${BOLD}${score.toFixed(2)}${RESET}`;
+    ? color.brightBlack("—")
+    : scoreColour(score)(score.toFixed(2));
   out.push(
-    ` ${BOLD}${CYAN}${item.outputId.slice(0, 12)}${RESET} ` +
-    `${GREY}${snapshot.itemIndex + 1}/${snapshot.items.length}${RESET}  ${chip}  ${scoreText}`,
+    ` ${color.bold.cyan(item.outputId.slice(0, 12))} ` +
+    `${color.brightBlack(`${snapshot.itemIndex + 1}/${snapshot.items.length}`)}  ${chip}  ${scoreText}`,
   );
-  out.push(` ${DIM}${sanitizeUntrusted(item.task).split("\n")[0].slice(0, args.columns - 4)}${RESET}`);
+  out.push(` ${color.dim(sanitizeUntrusted(item.task).split("\n")[0].slice(0, args.columns - 4))}`);
   out.push("");
 
   const checklist = renderChecklist(snapshot, rightWidth);
@@ -206,47 +201,49 @@ export function renderLabelScreen(args: RenderArgs): string {
   );
   const visibleBody = args.body.slice(args.scroll, args.scroll + bodyHeight);
   for (let row = 0; row < bodyHeight; row += 1) {
-    out.push(`${pad(visibleBody[row] ?? "", leftWidth)}${GREY}│${RESET} ${checklistView[row] ?? ""}`);
+    out.push(`${pad(visibleBody[row] ?? "", leftWidth)}${color.brightBlack("│")} ${checklistView[row] ?? ""}`);
   }
 
-  out.push(`${GREY}${"━".repeat(args.columns)}${RESET}`);
+  out.push(color.brightBlack("━".repeat(args.columns)));
   out.push(renderFooter(snapshot));
   return out.join("\n");
 }
 
-function scoreColour(score: number): string {
+function scoreColour(score: number) {
   if (score >= 0.75) {
-    return GREEN;
+    return color.bold.green;
   }
   if (score >= 0.4) {
-    return YELLOW;
+    return color.bold.yellow;
   }
-  return MAGENTA;
+  return color.bold.magenta;
 }
 
 /** A deleted question keeps its place in the list, struck through, because it
  *  still holds every answer recorded against it. */
 function checkbox(deleted: boolean, checked: boolean): string {
   if (deleted) {
-    return `${GREY}[·]${RESET}`;
+    return color.brightBlack("[·]");
   }
   if (checked) {
-    return `${GREEN}${BOLD}[✓]${RESET}`;
+    return color.bold.green("[✓]");
   }
-  return `${GREY}[ ]${RESET}`;
+  return color.brightBlack("[ ]");
 }
 
-function questionStyle(deleted: boolean, focused: boolean, checked: boolean): string {
+/** Returns a styler rather than an escape prefix, so callers wrap text instead
+ *  of concatenating codes. */
+function questionStyle(deleted: boolean, focused: boolean, checked: boolean) {
   if (deleted) {
-    return `${STRIKE}${GREY}`;
+    return color.strikethrough.brightBlack;
   }
   if (focused) {
-    return BOLD;
+    return color.bold;
   }
   if (checked) {
-    return "";
+    return (text: string) => text;
   }
-  return DIM;
+  return color.dim;
 }
 
 /** Where the right pane starts, so the focused question is always on screen.
@@ -270,19 +267,19 @@ function renderChecklist(
     const deleted = question.deleted;
     const focused = index === snapshot.questionIndex;
     const box = checkbox(deleted, checked);
-    const arrow = focused ? `${CYAN}${BOLD}▸${RESET}` : " ";
+    const arrow = focused ? color.bold.cyan("▸") : " ";
     const style = questionStyle(deleted, focused, checked);
     if (focused) {
       focusLine = lines.length;
     }
     const wrapped = wrapAnsi(sanitizeUntrusted(question.text), Math.max(8, width - 7));
-    lines.push(`${arrow} ${box} ${style}${wrapped[0] ?? ""}${RESET}`);
+    lines.push(`${arrow} ${box} ${style(wrapped[0] ?? "")}`);
     for (const continuation of wrapped.slice(1)) {
-      lines.push(`     ${style}${continuation}${RESET}`);
+      lines.push(`     ${style(continuation)}`);
     }
   });
   lines.push("");
-  lines.push(`${BLUE}${BOLD}note${RESET} ${snapshot.note.length === 0 ? `${GREY}—${RESET}` : ""}`);
+  lines.push(`${color.bold.blue("note")} ${snapshot.note.length === 0 ? color.brightBlack("—") : ""}`);
   const noteLines = snapshot.note.length === 0
     ? []
     : wrapAnsi(sanitizeUntrusted(snapshot.note), Math.max(8, width - 2));
@@ -294,19 +291,19 @@ function renderChecklist(
 
 function renderFooter(snapshot: SessionSnapshot): string {
   if (snapshot.editor.kind === "question") {
-    return ` ${BOLD}${YELLOW}new question${RESET} ${sanitizeUntrusted(snapshot.editor.draft)}${CYAN}▏${RESET}\n` +
-      ` ${DIM}enter: add to every item   esc: cancel${RESET}`;
+    return ` ${color.bold.yellow("new question")} ${sanitizeUntrusted(snapshot.editor.draft)}${color.cyan("▏")}\n` +
+      ` ${color.dim("enter: add to every item   esc: cancel")}`;
   }
   if (snapshot.editor.kind === "note") {
-    return ` ${BOLD}${BLUE}note${RESET} ${sanitizeUntrusted(snapshot.editor.draft)}${CYAN}▏${RESET}\n` +
-      ` ${DIM}enter: save   esc: cancel${RESET}`;
+    return ` ${color.bold.blue("note")} ${sanitizeUntrusted(snapshot.editor.draft)}${color.cyan("▏")}\n` +
+      ` ${color.dim("enter: save   esc: cancel")}`;
   }
   const deleteLabel = snapshot.currentQuestion?.deleted === true ? "undelete" : "delete";
-  return ` ${BOLD}space${RESET}${GREY} toggle${RESET}  ${BOLD}↑↓${RESET}${GREY} question${RESET}  ` +
-    `${BOLD}←→${RESET}${GREY} item${RESET}  ${BOLD}enter${RESET}${GREY} reviewed+next${RESET}  ` +
-    `${BOLD}a${RESET}${GREY} add${RESET}  ${BOLD}d${RESET}${GREY} ${deleteLabel}${RESET}  ` +
-    `${BOLD}m${RESET}${GREY} note${RESET}  ${BOLD}^f/^b${RESET}${GREY} scroll${RESET}  ` +
-    `${BOLD}q${RESET}${GREY} quit${RESET}`;
+  const key = (name: string, description: string) =>
+    `${color.bold(name)}${color.brightBlack(` ${description}`)}`;
+  return ` ${key("space", "toggle")}  ${key("↑↓", "question")}  ${key("←→", "item")}  ` +
+    `${key("enter", "reviewed+next")}  ${key("a", "add")}  ${key("d", deleteLabel)}  ` +
+    `${key("m", "note")}  ${key("^f/^b", "scroll")}  ${key("q", "quit")}`;
 }
 
 // --- input ---------------------------------------------------------------

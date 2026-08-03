@@ -317,7 +317,7 @@ describe("resume", () => {
  */
 async function crashAt(
   point: ControllerFaultPoint,
-  drive: (controller: LabelingSessionController) => Promise<void>,
+  drive: (controller: LabelingSessionController) => Promise<unknown>,
   occurrence = 1,
 ) {
   let seen = 0;

@@ -18,11 +18,17 @@ import {
 
 const DEFAULT_QUESTION_WEIGHT = 1;
 
-/** A definition with every optional field filled in. Not a separate schema:
- *  it is a `ChecklistDefinition` whose optional fields are all present. */
-export type NormalizedDefinition = ChecklistDefinition & {
+/** A definition with its identities allocated. Declared standalone rather than
+ *  as an intersection with `ChecklistDefinition`: intersecting the two makes
+ *  `questions` the intersection of the loose and strict element types, so
+ *  mapping over it infers back to the loose one. Still assignable to
+ *  `ChecklistDefinition`, which is all callers need. */
+export type NormalizedDefinition = {
+  name: string;
   checklistId: string;
-  questions: (ChecklistQuestion)[];
+  version?: number;
+  hash?: string;
+  questions: ChecklistQuestion[];
 };
 
 /** @internal Prepared but not yet durable. Carries the parent it was computed

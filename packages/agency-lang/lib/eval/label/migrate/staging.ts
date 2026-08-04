@@ -1,18 +1,56 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { z } from "zod";
+
 import { syncDirectory } from "../jsonl.js";
 
 export class StagingError extends Error {}
 
 export const STAGING_MARKER_NAME = ".migration.json";
 
-/** One thing this migration copied, recorded before the copy happens. */
-export type StagedEntry = {
-  /** Relative to the staging directory, forward slashes on every platform. */
-  path: string;
-  type: "file" | "dir";
-};
+/** The only subtree this migration ever copies. */
+const COPIED_ROOT = "checklists";
+
+/** Files the migration always writes at the top level of a staging directory.
+ *  The marker is handled separately: it must outlive every other removal. */
+const ALWAYS_WRITTEN = [
+  "manifest.json",
+  "outputs.jsonl",
+  "occurrences.jsonl",
+  "labels.jsonl",
+  ".lock",
+];
+
+/**
+ * A path inside the staging directory, and nothing else.
+ *
+ * The marker is a file on disk that anything could have written, so its entries
+ * are untrusted input. `{ path: "../precious" }` would otherwise resolve to a
+ * sibling of the staging directory and be unlinked.
+ */
+function isConfinedPath(candidate: string): boolean {
+  if (candidate.length === 0 || candidate.includes("\\") || path.posix.isAbsolute(candidate)) {
+    return false;
+  }
+  const segments = candidate.split("/");
+  if (segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")) {
+    return false;
+  }
+  if (path.posix.normalize(candidate) !== candidate) {
+    return false;
+  }
+  return candidate === COPIED_ROOT || candidate.startsWith(`${COPIED_ROOT}/`);
+}
+
+export const StagedEntrySchema = z.object({
+  path: z.string().refine(isConfinedPath, {
+    message: `must be "${COPIED_ROOT}" or a normalized path beneath it, with no ".." segments`,
+  }),
+  type: z.enum(["file", "dir"]),
+}).strict();
+
+export type StagedEntry = z.infer<typeof StagedEntrySchema>;
 
 /**
  * What a staging directory is, written before anything is copied into it.
@@ -23,24 +61,19 @@ export type StagedEntry = {
  * staged copy permanently unreclaimable, and a newly added source path could
  * make an unrelated staged file look owned.
  */
-export type StagingMarker = {
-  purpose: "agency-eval-label-migrate";
-  sourceDir: string;
-  destDir: string;
-  entries: StagedEntry[];
-};
+export const StagingMarkerSchema = z.object({
+  purpose: z.literal("agency-eval-label-migrate"),
+  sourceDir: z.string().min(1),
+  destDir: z.string().min(1),
+  entries: z.array(StagedEntrySchema).refine(
+    (entries) => new Set(entries.map((entry) => entry.path)).size === entries.length,
+    { message: "entry paths must be unique" },
+  ),
+}).strict();
+
+export type StagingMarker = z.infer<typeof StagingMarkerSchema>;
 
 export const MARKER_PURPOSE: StagingMarker["purpose"] = "agency-eval-label-migrate";
-
-/** Files the migration always writes at the top level of a staging directory. */
-const ALWAYS_WRITTEN = [
-  STAGING_MARKER_NAME,
-  "manifest.json",
-  "outputs.jsonl",
-  "occurrences.jsonl",
-  "labels.jsonl",
-  ".lock",
-];
 
 export function stagingDirFor(destDir: string): string {
   return `${destDir}.migrating`;
@@ -50,13 +83,17 @@ export function markerPath(directory: string): string {
   return path.join(directory, STAGING_MARKER_NAME);
 }
 
+/** Parse a marker as untrusted data. An unparseable or malformed one is simply
+ *  absent, which callers treat as "not ours". */
 export function readMarker(directory: string): StagingMarker | undefined {
+  let raw: unknown;
   try {
-    const parsed = JSON.parse(fs.readFileSync(markerPath(directory), "utf8")) as StagingMarker;
-    return parsed.purpose === MARKER_PURPOSE ? parsed : undefined;
+    raw = JSON.parse(fs.readFileSync(markerPath(directory), "utf8"));
   } catch {
     return undefined;
   }
+  const parsed = StagingMarkerSchema.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export function markerMatches(
@@ -71,38 +108,53 @@ export function markerMatches(
  * Inventory the source checklists, refusing anything that is not a plain file
  * or directory.
  *
- * `lstat`, never `stat`: a symbolic link must be seen as a link. `cpSync`
- * preserves links by default, so a staged `checklists/shared -> /elsewhere`
- * would let a later cleanup delete files through it, outside the staging
- * directory entirely. Refusing is better than silently dereferencing, which
- * would change what the migrated store contains.
+ * `lstat` throughout, including on the root: `existsSync` follows links, so a
+ * `checklists -> /external` would otherwise be inventoried straight through.
+ * A symlink is refused rather than dereferenced, because silently turning a
+ * link into a copy changes what the migrated store contains.
  */
 export function inventoryChecklists(sourceDir: string): StagedEntry[] {
-  const checklistsRoot = path.join(sourceDir, "checklists");
-  if (!fs.existsSync(checklistsRoot)) {
-    return [];
+  const checklistsRoot = path.join(sourceDir, COPIED_ROOT);
+  let rootStats: fs.Stats;
+  try {
+    rootStats = fs.lstatSync(checklistsRoot);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw error;
   }
-  const entries: StagedEntry[] = [{ path: "checklists", type: "dir" }];
+  if (rootStats.isSymbolicLink()) {
+    throw new StagingError(
+      `${checklistsRoot} is a symbolic link. Migration copies checklists literally and will not ` +
+      "follow links, because a link in the copy would let cleanup reach outside the store.",
+    );
+  }
+  if (!rootStats.isDirectory()) {
+    throw new StagingError(`${checklistsRoot} is not a directory, so migration cannot copy it.`);
+  }
 
+  const entries: StagedEntry[] = [{ path: COPIED_ROOT, type: "dir" }];
   const walk = (relative: string): void => {
     const absolute = path.join(checklistsRoot, relative);
     for (const name of fs.readdirSync(absolute).slice().sort()) {
       const childRelative = relative.length === 0 ? name : `${relative}/${name}`;
+      const childPath = `${COPIED_ROOT}/${childRelative}`;
       const stats = fs.lstatSync(path.join(absolute, name));
       if (stats.isSymbolicLink()) {
         throw new StagingError(
           `${path.join(checklistsRoot, childRelative)} is a symbolic link. Migration copies ` +
-          "checklists literally and will not follow links, because a link in the copy would " +
-          "let cleanup reach outside the store. Replace it with a real file or directory.",
+          "checklists literally and will not follow links. Replace it with a real file or " +
+          "directory.",
         );
       }
       if (stats.isDirectory()) {
-        entries.push({ path: `checklists/${childRelative}`, type: "dir" });
+        entries.push({ path: childPath, type: "dir" });
         walk(childRelative);
         continue;
       }
       if (stats.isFile()) {
-        entries.push({ path: `checklists/${childRelative}`, type: "file" });
+        entries.push({ path: childPath, type: "file" });
         continue;
       }
       throw new StagingError(
@@ -121,7 +173,7 @@ export function writeMarker(stagingDir: string, marker: StagingMarker): void {
   fs.mkdirSync(stagingDir, { recursive: true });
   const handle = fs.openSync(markerPath(stagingDir), "w");
   try {
-    fs.writeSync(handle, `${JSON.stringify(marker, null, 2)}\n`);
+    fs.writeSync(handle, `${JSON.stringify(StagingMarkerSchema.parse(marker), null, 2)}\n`);
     fs.fsyncSync(handle);
   } finally {
     fs.closeSync(handle);
@@ -130,8 +182,13 @@ export function writeMarker(stagingDir: string, marker: StagingMarker): void {
   syncDirectory(path.dirname(stagingDir));
 }
 
-/** Copy the inventoried entries and flush each one, so a power loss cannot
- *  publish a store whose checklists are missing or half-written. */
+/**
+ * Copy the inventoried entries and flush each one, so a power loss cannot
+ * publish a store whose checklists are missing or half-written.
+ *
+ * Each source path is re-checked with `lstat` as it is read: a file replaced by
+ * a symlink between inventory and copy must not be followed.
+ */
 export function copyInventory(
   sourceDir: string,
   stagingDir: string,
@@ -139,11 +196,23 @@ export function copyInventory(
 ): void {
   for (const entry of entries) {
     const to = path.join(stagingDir, entry.path);
+    const from = path.join(sourceDir, entry.path);
+    const stats = fs.lstatSync(from);
+    if (stats.isSymbolicLink()) {
+      throw new StagingError(
+        `${from} became a symbolic link while migration was running. Nothing was published.`,
+      );
+    }
     if (entry.type === "dir") {
+      if (!stats.isDirectory()) {
+        throw new StagingError(`${from} changed from a directory to a file while migrating.`);
+      }
       fs.mkdirSync(to, { recursive: true });
       continue;
     }
-    const from = path.join(sourceDir, entry.path);
+    if (!stats.isFile()) {
+      throw new StagingError(`${from} changed from a file to a directory while migrating.`);
+    }
     const handle = fs.openSync(to, "w");
     try {
       fs.writeSync(handle, fs.readFileSync(from));
@@ -163,80 +232,107 @@ export function copyInventory(
 /**
  * Remove a staging directory this migration created, and nothing else.
  *
- * Only paths named in the marker's inventory are touched, each checked with
- * `lstat` so a link is removed as a link rather than followed. Anything else
- * present survives and makes the final `rmdir` fail, which is reported rather
- * than forced.
+ * The walk descends from the staging root one component at a time, reading each
+ * directory and `lstat`ing its direct children. That is what keeps it confined:
+ * `lstat` only declines to follow the FINAL component of a path, so joining a
+ * multi-segment relative path and checking the result would still resolve an
+ * intermediate symlink and unlink a file outside staging. Descending never
+ * enters a symlink, so no intermediate component can redirect it.
+ *
+ * The marker is removed LAST. Removing it first would leave an unmarked
+ * half-cleaned directory that no later attempt could recognise, and so would
+ * refuse forever.
  */
 export function removeStaging(stagingDir: string, marker: StagingMarker): void {
-  if (fs.lstatSync(stagingDir).isSymbolicLink()) {
+  const rootStats = fs.lstatSync(stagingDir);
+  if (rootStats.isSymbolicLink() || !rootStats.isDirectory()) {
     throw new StagingError(
-      `${stagingDir} is a symbolic link, not a directory this migration created. Move it aside.`,
+      `${stagingDir} is not a directory this migration created. Move it aside and try again.`,
     );
   }
 
+  const owned: Record<string, "file" | "dir"> = Object.create(null);
   for (const name of ALWAYS_WRITTEN) {
-    removeLeaf(path.join(stagingDir, name));
+    owned[name] = "file";
   }
-  // Deepest first: a directory can only go once its own entries have.
-  const ordered = [...marker.entries].sort((left, right) => right.path.length - left.path.length);
-  for (const entry of ordered) {
-    const target = path.join(stagingDir, entry.path);
-    if (entry.type === "dir") {
-      removeOwnedDirectory(target);
+  for (const entry of marker.entries) {
+    owned[entry.path] = entry.type;
+  }
+
+  removeOwnedChildren(stagingDir, "", owned);
+
+  // Check BEFORE unlinking the marker, not after. Removing it and then failing
+  // to rmdir would leave an unmarked half-cleaned directory that no later
+  // attempt could recognise, and so would refuse forever.
+  const remaining = fs.readdirSync(stagingDir)
+    .filter((name) => name !== STAGING_MARKER_NAME);
+  if (remaining.length > 0) {
+    throw new StagingError(
+      `${stagingDir} still holds ${remaining.length} entr${remaining.length === 1 ? "y" : "ies"} ` +
+      `this migration did not write (${remaining.slice(0, 3).join(", ")}), so it was left in ` +
+      "place. Move it aside and try again.",
+    );
+  }
+
+  fs.unlinkSync(markerPath(stagingDir));
+  fs.rmdirSync(stagingDir);
+  syncDirectory(path.dirname(stagingDir));
+}
+
+function removeOwnedChildren(
+  absoluteDir: string,
+  relativeDir: string,
+  owned: Readonly<Record<string, "file" | "dir">>,
+): void {
+  for (const name of fs.readdirSync(absoluteDir)) {
+    const relative = relativeDir.length === 0 ? name : `${relativeDir}/${name}`;
+    if (relative === STAGING_MARKER_NAME) {
       continue;
     }
-    removeLeaf(target);
-  }
+    const absolute = path.join(absoluteDir, name);
+    const stats = fs.lstatSync(absolute);
+    const claim = owned[relative];
 
-  try {
-    fs.rmdirSync(stagingDir);
-  } catch (error) {
-    throw new StagingError(
-      `${stagingDir} still holds files this migration did not write, so it was left in place. ` +
-      `Move it aside and try again. (${(error as Error).message})`,
-    );
+    if (stats.isSymbolicLink()) {
+      // Owned as a link, or an owned entry replaced by one. Either way, unlink
+      // the link itself and never look at where it points.
+      if (claim !== undefined) {
+        fs.unlinkSync(absolute);
+      }
+      continue;
+    }
+    if (stats.isDirectory()) {
+      if (claim !== "dir") {
+        continue;
+      }
+      removeOwnedChildren(absolute, relative, owned);
+      try {
+        fs.rmdirSync(absolute);
+      } catch {
+        // Something unowned is still inside. The staging root's rmdir will
+        // report the whole situation.
+      }
+      continue;
+    }
+    if (claim === "file") {
+      fs.unlinkSync(absolute);
+    }
   }
 }
 
-/** Unlink a file or link. Never recursive, so it cannot reach through a link.
+/**
+ * Whether a leftover directory is an empty staging shell.
  *
- *  `rmSync` resolves a symlink to decide what it is removing and then refuses a
- *  directory, so a link pointing at a directory has to be unlinked directly. */
-function removeLeaf(target: string): void {
-  let stats: fs.Stats;
+ * Covers the last crash window: the marker has been unlinked but the `rmdir`
+ * that follows it did not run. Without this the directory is unmarked, so
+ * nothing recognises it, and every future attempt refuses.
+ */
+export function isEmptyDirectory(directory: string): boolean {
   try {
-    stats = fs.lstatSync(target);
+    const stats = fs.lstatSync(directory);
+    return !stats.isSymbolicLink() && stats.isDirectory() &&
+      fs.readdirSync(directory).length === 0;
   } catch {
-    return;
-  }
-  if (stats.isDirectory()) {
-    return;
-  }
-  fs.unlinkSync(target);
-}
-
-/** Remove a directory only if it is a real directory and is now empty. */
-function removeOwnedDirectory(target: string): void {
-  let stats: fs.Stats;
-  try {
-    stats = fs.lstatSync(target);
-  } catch {
-    return;
-  }
-  if (stats.isSymbolicLink()) {
-    // Somebody replaced an inventoried directory with a link. Unlink the link
-    // itself; do not follow it.
-    fs.unlinkSync(target);
-    return;
-  }
-  if (!stats.isDirectory()) {
-    return;
-  }
-  try {
-    fs.rmdirSync(target);
-  } catch {
-    // Not empty: something unexpected is inside. Leave it, and let the caller's
-    // rmdir of the staging root report the whole situation.
+    return false;
   }
 }

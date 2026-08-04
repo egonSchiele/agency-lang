@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import { InvalidArgumentError, type Command } from "commander";
 
 import type { AgencyConfig } from "@/config.js";
 
@@ -132,10 +132,26 @@ export function collectRepeated(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
-function parseByteCap(value: string): number {
+/**
+ * A positive whole number of bytes, or an option error.
+ *
+ * `parseInt` stops at the first character it cannot read, so "1.5", "12junk"
+ * and "1e6" become 1, 12 and 1 — each silently capping a batch far below what
+ * was asked for. Matching the whole string is the only way to reject them.
+ * `InvalidArgumentError` makes commander report it as a normal option problem
+ * rather than a crash.
+ */
+export function parseByteCap(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new InvalidArgumentError(
+      `--max-bytes must be a positive whole number of bytes; got "${value}"`,
+    );
+  }
   const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`--max-bytes must be a positive whole number of bytes; got "${value}"`);
+  if (parsed <= 0 || !Number.isSafeInteger(parsed)) {
+    throw new InvalidArgumentError(
+      `--max-bytes must be a positive whole number of bytes; got "${value}"`,
+    );
   }
   return parsed;
 }

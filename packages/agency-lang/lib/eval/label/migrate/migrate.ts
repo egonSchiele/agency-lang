@@ -10,6 +10,7 @@ import { readV1Store } from "./readV1.js";
 import {
   copyInventory,
   inventoryChecklists,
+  isEmptyDirectory,
   markerMatches,
   markerPath,
   MARKER_PURPOSE,
@@ -127,6 +128,14 @@ function reclaimStaging(stagingDir: string, sourceDir: string, destDir: string):
   }
   const marker = readMarker(stagingDir);
   if (!markerMatches(marker, sourceDir, destDir)) {
+    // A cleanup that got as far as unlinking the marker leaves an empty shell.
+    // Nothing else creates an empty directory at this exact name, and removing
+    // one destroys nothing.
+    if (isEmptyDirectory(stagingDir)) {
+      fs.rmdirSync(stagingDir);
+      syncDirectory(path.dirname(stagingDir));
+      return;
+    }
     throw new MigrationTargetError(
       `${stagingDir} already exists and was not created by this migration. Move it aside and ` +
       "try again; refusing to delete a directory this command does not recognise.",
@@ -172,11 +181,21 @@ function finishInterruptedPublication(
   return true;
 }
 
+/**
+ * Open the store the ordinary way, to prove it is readable.
+ *
+ * The directory is synced after the lock is released, on every path. Verifying
+ * creates and removes a transient `.lock`, and staging was last flushed before
+ * that; without this sync a power loss could resurrect the stale lock inside
+ * the published store, and recovery would then fail to open it and report the
+ * destination as an unrelated existing directory.
+ */
 function verifyStore(storeDir: string, warn: (message: string) => void): void {
   const lock = acquireStoreLock({ storeDir, reportWarning: warn });
   try {
     openStore({ storeDir, lock, reportWarning: warn }).close();
   } finally {
     lock.release();
+    syncDirectory(storeDir);
   }
 }

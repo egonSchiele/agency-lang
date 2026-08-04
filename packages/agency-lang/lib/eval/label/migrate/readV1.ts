@@ -5,7 +5,7 @@ import { createHash } from "crypto";
 
 import { z } from "zod";
 
-import { canonicalize } from "@/utils/canonicalize.js";
+import { canonicalize, type JsonValue } from "@/utils/canonicalize.js";
 
 import {
   AnnotationRowSchema,
@@ -122,8 +122,24 @@ function parseAll<Value>(
  * which cannot be done without it.
  */
 function v1OutputIdOf(execution: V1CorpusRow["execution"]): string {
-  const digest = createHash("sha256").update(canonicalize({ ...execution })).digest("hex");
-  return `out_${digest}`;
+  return `out_${digestOf({ ...execution })}`;
+}
+
+/**
+ * The version 1 content hash formula, reproduced for the same reason as the id.
+ *
+ * The id only witnesses `execution`. The migrated record's fields come from the
+ * task and the output, so a row whose task or value was edited while its
+ * execution stayed intact would carry its annotations onto different content
+ * with nothing to object. This hash is the only witness version 1 persisted for
+ * those fields.
+ */
+function v1ContentHashOf(input: V1CorpusRow["input"], value: JsonValue): string {
+  return `sha256:${digestOf({ input: { ...input }, value })}`;
+}
+
+function digestOf(value: JsonValue): string {
+  return createHash("sha256").update(canonicalize(value)).digest("hex");
 }
 
 /**
@@ -149,12 +165,21 @@ function assertV1CorpusIsSound(corpusFile: string, rows: readonly V1CorpusRow[])
     }
     seen[row.outputId] = index + 1;
 
-    const expected = v1OutputIdOf(row.execution);
-    if (row.outputId !== expected) {
+    const expectedId = v1OutputIdOf(row.execution);
+    if (row.outputId !== expectedId) {
       throw new V1ReadError(
         `${corpusFile}: line ${index + 1} has output id "${row.outputId}", but its recorded ` +
-        `execution hashes to "${expected}". The row was edited after it was written, so its ` +
+        `execution hashes to "${expectedId}". The row was edited after it was written, so its ` +
         "labels cannot be moved with confidence.",
+      );
+    }
+
+    const expectedContent = v1ContentHashOf(row.input, row.value);
+    if (row.contentHash !== expectedContent) {
+      throw new V1ReadError(
+        `${corpusFile}: line ${index + 1} records content hash "${row.contentHash}", but its ` +
+        `task and value hash to "${expectedContent}". The judged content was edited after it ` +
+        "was labelled, so migration will not move those labels onto it.",
       );
     }
   }

@@ -37,7 +37,18 @@ type V1Row = {
   capturedAt?: string;
   traceId?: string;
   inputId?: string;
+  /** Override the persisted display projection, to prove migration keeps what
+   *  the annotator actually saw rather than re-deriving it. */
+  text?: string;
 };
+
+/** The version 1 content hash: the witness for task and value. */
+function v1ContentHash(inputId: string, task: unknown, value: unknown): string {
+  const digest = createHash("sha256")
+    .update(canonicalize({ input: { inputId, task }, value } as never))
+    .digest("hex");
+  return `sha256:${digest}`;
+}
 
 /** The version 1 id formula. Fixtures must use real ids now that migration
  *  recomputes them: a hand-written one is exactly what it refuses. */
@@ -54,12 +65,12 @@ function v1Row(row: V1Row): unknown {
   return {
     schemaVersion: 1,
     outputId: v1OutputId(traceId, inputId),
-    contentHash: HASH,
+    contentHash: v1ContentHash(inputId, row.task, row.value),
     capturedAt: row.capturedAt ?? "2026-08-03T00:00:00.000Z",
     execution: { traceId, inputId, finalOutputIndex: 0 },
     input: { inputId, task: row.task },
     value: row.value,
-    text: typeof row.value === "string" ? row.value : JSON.stringify(row.value),
+    text: row.text ?? (typeof row.value === "string" ? row.value : JSON.stringify(row.value)),
     provenance: {
       runStartedAtMs: 1000,
       agent: { kind: "file", entry: "news.agency" },
@@ -536,5 +547,66 @@ describe("migrateStore publication", () => {
 
     expect(() => migrateStore({ sourceDir, destDir })).not.toThrow();
     expect(fs.existsSync(path.join(destDir, "checklists", "cl_deleted"))).toBe(false);
+  });
+});
+
+describe("the migrated artifact is what the annotator saw", () => {
+  it("uses the persisted display text, not a re-projection of the value", () => {
+    // v1 stored `text` precisely so the labelled artifact survives a change to
+    // the projection rule, and its session displayed that field. Re-deriving it
+    // would move labels onto different bytes while still validating.
+    writeV1Store([v1Row({ task: "S", value: { a: 1 }, text: "what the annotator saw" })]);
+    migrateStore({ sourceDir, destDir });
+    expect(records()[0].fields.output).toBe("what the annotator saw");
+  });
+
+  it("keeps the raw value as occurrence provenance", () => {
+    writeV1Store([v1Row({ task: "S", value: { a: 1 }, text: "what the annotator saw" })]);
+    migrateStore({ sourceDir, destDir });
+    expect(occurrences()[0].origin).toMatchObject({ rawValue: { a: 1 } });
+  });
+});
+
+describe("version 1 rows edited after they were labelled", () => {
+  it("refuses a row whose task no longer matches its content hash", () => {
+    const row = v1Row({ task: "S", value: "D" }) as Record<string, unknown>;
+    writeV1Store([{ ...row, input: { inputId: "a", task: "a different task" } }]);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/content hash/);
+  });
+
+  it("refuses a row whose value no longer matches its content hash", () => {
+    const row = v1Row({ task: "S", value: "D" }) as Record<string, unknown>;
+    writeV1Store([{ ...row, value: "edited" }]);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/content hash/);
+  });
+});
+
+describe("an empty judgement is still a judgement", () => {
+  it("refuses when a later empty note would clear an earlier one after merging", () => {
+    // B's note-only row has an empty effective state. Dropping it from the
+    // comparison let preflight pass, and after both ids were rewritten B's
+    // later row cleared A's note — making append order decide the result.
+    writeV1Store([
+      v1Row({ task: "S", value: "D" }),
+      v1Row({ traceId: "t-2", task: "S", value: "D" }),
+    ], [
+      annotation({ outputId: OUT_A, annotationId: "ann_one", note: "keep this" }),
+      annotation({
+        outputId: OUT_B,
+        annotationId: "ann_two",
+        coveredQuestionIds: [],
+        answers: {},
+        note: "",
+      }),
+    ]);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(MigrationConflictError);
+  });
+
+  it("still allows a merge when one old output has no annotation at all", () => {
+    writeV1Store([
+      v1Row({ task: "S", value: "D" }),
+      v1Row({ traceId: "t-2", task: "S", value: "D" }),
+    ], [annotation({ outputId: OUT_A, checklistHash: checklistHash() })]);
+    expect(() => migrateStore({ sourceDir, destDir })).not.toThrow();
   });
 });

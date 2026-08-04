@@ -37,11 +37,23 @@ export type MigrationPlan = {
   counts: MigrationCounts;
 };
 
-/** Version 1 always stored a task, so every migrated record has both fields. */
+/**
+ * The fields a version 1 row becomes.
+ *
+ * `output` comes from the persisted `text`, NOT from re-projecting `value`.
+ * Version 1 stored `text` precisely so the labelled artifact stays exactly what
+ * the annotator saw, and its session displayed that field. Recomputing it here
+ * would move annotations onto different bytes whenever the projection rule has
+ * changed since — and still produce a store that validates. `value` survives as
+ * occurrence provenance.
+ *
+ * `task` has no such witness: version 1 never persisted a rendering of it, so
+ * projecting is the only option.
+ */
 export function fieldsOfV1Row(row: V1CorpusRow): Fields {
   return {
     task: projectArtifactField(row.input.task),
-    output: projectArtifactField(row.value),
+    output: row.text,
   };
 }
 
@@ -105,11 +117,21 @@ function assertNoConflicts(group: Group, annotations: readonly AnnotationRow[]):
 
   for (const pairKey of Object.keys(pairs)) {
     const { checklistId, annotator } = pairs[pairKey];
-    const states = oldIds.map((outputId) => ({
-      outputId,
-      answers: effectiveAnswers(annotations, { outputId, checklistId, annotator }),
-      note: latestNote(annotations, { outputId, checklistId, annotator }),
-    })).filter((state) => Object.keys(state.answers).length > 0 || state.note.length > 0);
+    // "No annotation at all" and "an annotation whose effective state is empty"
+    // are different things. Dropping the second lets a later note-only row with
+    // an empty note clear an earlier note after the merge, which is exactly the
+    // order-dependence this guard exists to prevent.
+    const states = oldIds
+      .filter((outputId) => annotations.some((row) =>
+        row.outputId === outputId &&
+        row.checklistId === checklistId &&
+        row.annotator.kind === annotator.kind &&
+        row.annotator.id === annotator.id))
+      .map((outputId) => ({
+        outputId,
+        answers: effectiveAnswers(annotations, { outputId, checklistId, annotator }),
+        note: latestNote(annotations, { outputId, checklistId, annotator }),
+      }));
 
     if (states.length < 2) {
       continue;

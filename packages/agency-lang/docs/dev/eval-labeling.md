@@ -337,19 +337,48 @@ Publication is staged, and the ordering is the design:
 
 Each step exists because of a specific way a crash could otherwise strand you.
 
+**The migrated artifact is the persisted `text`, not a re-projection of
+`value`.** Version 1 stored `text` precisely so the labelled artifact stays
+exactly what the annotator saw, and its session displayed that field.
+Recomputing it would move labels onto different bytes whenever the projection
+rule has changed since, while still producing a store that validates. `value`
+survives as occurrence provenance. The task has no such witness — version 1
+never persisted a rendering of it — so it is projected.
+
+**Version 1 rows are checked against both hashes they carry.** The output id
+witnesses `execution`; the content hash witnesses the task and value that the
+migrated fields are built from. A row failing either was edited after it was
+labelled, and migration refuses rather than move labels onto changed content.
+Neither hash covers `text`, so a hand-edited display projection is the one edit
+this cannot detect.
+
 **The marker holds an inventory, not just a name.** Deriving what the migration
 owns from the live source at reclaim time is unsound: the source is unlocked
 between a crash and the retry, so a checklist deleted in that window would leave
 its staged copy permanently unreclaimable, and one added could make an unrelated
 staged file look owned.
 
-**Nothing is ever removed recursively, and a link is never followed.** Removal
-walks the inventory, `lstat`s each entry, and unlinks a symlink as a link rather
-than resolving it. Source checklists containing symlinks are refused outright at
-inventory time: `cpSync` preserves links, so a staged `checklists/shared ->
-/elsewhere` would let cleanup delete files outside the store entirely. That was
-a real bug, caught in review, and it is pinned by a test that asserts an
-external file survives.
+**The marker is untrusted input.** It is a file on disk that anything could have
+written, so it is parsed with a Zod schema that confines every entry path to the
+one subtree migration copies: no absolute paths, no `..`, no unnormalized
+segments, no duplicates. A malformed marker reads as absent.
+
+**Removal descends one verified component at a time and never enters a symlink.**
+This is subtler than it looks. `lstat` only declines to follow the **final**
+component of a path, so joining a multi-segment relative path and checking the
+result still resolves an intermediate link — an inventoried directory replaced
+by `checklists/cl_a -> /elsewhere` was enough to unlink a file outside staging.
+Reading each directory and `lstat`ing its direct children is what makes the walk
+confined. Source checklists containing symlinks are refused outright at
+inventory time, including the `checklists` root itself, since `existsSync`
+follows links.
+
+**The marker outlives every other removal.** The directory is checked for
+unowned entries *before* the marker is unlinked: removing it and then failing to
+`rmdir` would leave an unmarked half-cleaned directory that no later attempt
+could recognise, and so would refuse forever. An empty directory at the staging
+name is recognised too, covering the crash between the marker's unlink and the
+`rmdir`.
 
 **The marker outlives the rename.** Removing it first leaves a window where a
 reboot produces a complete store nobody recognises. A destination carrying a

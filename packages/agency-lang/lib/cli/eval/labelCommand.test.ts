@@ -148,3 +148,39 @@ describe("collectRepeated", () => {
     expect(first).toEqual([]);
   });
 });
+
+describe("--max-bytes is parsed strictly", () => {
+  // parseInt stops at the first character it cannot read, so each of these
+  // silently became a tiny cap and would have skipped most of a batch.
+  it("rejects a decimal", async () => {
+    await expect(run("label", "ingest", "./g", "--source", "s", "--max-bytes", "1.5"))
+      .rejects.toThrow(/positive whole number/);
+  });
+
+  it("rejects trailing junk", async () => {
+    await expect(run("label", "ingest", "./g", "--source", "s", "--max-bytes", "12junk"))
+      .rejects.toThrow(/positive whole number/);
+  });
+
+  it("rejects exponent notation", async () => {
+    await expect(run("label", "ingest", "./g", "--source", "s", "--max-bytes", "1e6"))
+      .rejects.toThrow(/positive whole number/);
+  });
+
+  it("rejects a negative value and zero", async () => {
+    await expect(run("label", "ingest", "./g", "--source", "s", "--max-bytes", "-1"))
+      .rejects.toThrow(/positive whole number/);
+    await expect(run("label", "ingest", "./g", "--source", "s", "--max-bytes", "0"))
+      .rejects.toThrow(/positive whole number/);
+  });
+
+  it("rejects a value beyond safe integer range", async () => {
+    await expect(run("label", "ingest", "./g", "--source", "s", "--max-bytes", "9".repeat(20)))
+      .rejects.toThrow(/positive whole number/);
+  });
+
+  it("accepts a plain positive integer", async () => {
+    await run("label", "ingest", "./g", "--source", "s", "--max-bytes", "2048");
+    expect(recorded.ingest[0]).toMatchObject({ maxBytes: 2048 });
+  });
+});

@@ -20,179 +20,31 @@ export type FileSelection = {
   files: readonly DiscoveredFile[];
 };
 
-const GLOB_CHARACTERS = /[*?[\]]/;
-
-export function looksLikeGlob(source: string): boolean {
-  return GLOB_CHARACTERS.test(source);
-}
-
 /**
- * Turn a directory or a quoted glob into one root and a sorted file list.
+ * List the files in a directory, sorted.
  *
- * Supported syntax is deliberately small: `*` (any run of characters within one
- * segment), `?` (one character), `[abc]` character classes, and `**` (any depth
- * of directories). Brace expansion is NOT supported — claiming it and then
- * mishandling `{a,b}` would be worse than refusing it.
+ * Directories only. Patterns are deliberately unsupported: a glob engine is a
+ * parser, and this one had grown a root-prefix rule, a Windows separator rule
+ * and two bugs before it was removed. Selecting a subset of a directory is a
+ * job for the shell, and the eligibility policy already skips what a broad
+ * selection sweeps up.
  */
 export function resolveFileSelection(source: string, recursive: boolean): FileSelection {
-  if (!looksLikeGlob(source)) {
-    const root = path.resolve(source);
-    if (!fs.existsSync(root)) {
-      throw new IngestSourceError(`Source not found: ${source}`);
-    }
-    if (!fs.statSync(root).isDirectory()) {
-      throw new IngestSourceError(
-        `${source} is a file, not a directory. Pass a directory, a quoted glob such as ` +
-        `"answers/*.txt", or a .json file.`,
-      );
-    }
-    return { root, files: walk(root, root, recursive) };
-  }
-
-  const { root, pattern } = splitPattern(source);
+  const root = path.resolve(source);
   if (!fs.existsSync(root)) {
+    throw new IngestSourceError(`Source not found: ${source}`);
+  }
+  if (!fs.statSync(root).isDirectory()) {
     throw new IngestSourceError(
-      `The directory the pattern starts from does not exist: ${root}`,
+      `${source} is a file, not a directory. Pass a directory of files, a run directory, or a ` +
+      ".json file holding an array of strings.",
     );
   }
-  // A `**` anywhere in the pattern implies descending regardless of --recursive:
-  // the pattern already said so, and honouring one and not the other would be
-  // two ways to express the same intent that disagree.
-  const descend = recursive || pattern.includes("**");
-  const matcher = globToRegExp(pattern);
-  const files = walk(root, root, descend).filter((file) => matcher.test(file.itemKey));
-  if (files.length === 0) {
-    throw new IngestSourceError(
-      `No files matched ${source}. Remember to quote the pattern so the shell passes it ` +
-      "through unexpanded.",
-    );
-  }
-  return { root, files };
-}
-
-/**
- * Rewrite a pattern's separators to `/`.
- *
- * Only on Windows. A backslash is a legal character in a POSIX filename, so
- * normalizing everywhere would corrupt a pattern that deliberately contains
- * one. `platformSeparator` is a parameter so the Windows behaviour is testable
- * from any machine.
- */
-export function normalizePatternSeparators(
-  source: string,
-  platformSeparator: string = path.sep,
-): string {
-  return platformSeparator === "\\" ? source.split("\\").join("/") : source;
-}
-
-/**
- * The absolute prefix a pattern starts from, if it has one.
- *
- * Kept separate from the literal segments because a root is not a segment: for
- * `/*.txt` the segments are `["", "*.txt"]`, and joining the literal `""` gives
- * an empty string that resolves to the working directory instead of `/`. On
- * Windows `C:` alone means that drive's *current* directory, not its root, so
- * the trailing separator matters too.
- */
-export function rootPrefixOf(normalized: string): string {
-  const unc = normalized.match(/^\/\/[^/]+\/[^/]+\//);
-  if (unc !== null) {
-    return unc[0];
-  }
-  const drive = normalized.match(/^[A-Za-z]:\//);
-  if (drive !== null) {
-    return drive[0];
-  }
-  return normalized.startsWith("/") ? "/" : "";
-}
-
-/**
- * Split "answers/**\/*.txt" into the deepest literal directory and the rest.
- *
- * Exported for tests, which pass a separator rather than requiring Windows.
- */
-export function splitPattern(
-  rawSource: string,
-  platformSeparator: string = path.sep,
-): { root: string; pattern: string } {
-  // Resolve with the matching platform's rules, so a Windows pattern is not
-  // resolved by POSIX semantics (and so these are testable from anywhere).
-  const api = platformSeparator === "\\" ? path.win32 : path.posix;
-  const source = normalizePatternSeparators(rawSource, platformSeparator);
-  const prefix = rootPrefixOf(source);
-  const segments = source.slice(prefix.length).split("/");
-
-  const literal: string[] = [];
-  let index = 0;
-  while (index < segments.length && !GLOB_CHARACTERS.test(segments[index])) {
-    literal.push(segments[index]);
-    index += 1;
-  }
-
-  const joined = literal.join("/");
-  const rootPart = prefix.length > 0 ? prefix + joined : joined;
-  return {
-    root: api.resolve(rootPart.length === 0 ? "." : rootPart),
-    pattern: segments.slice(index).join("/"),
-  };
-}
-
-function escapeLiteral(text: string): string {
-  return text.replace(/[.+^${}()|\\]/g, "\\$&");
-}
-
-/**
- * Compile the supported subset to an anchored regular expression.
- *
- * `**` is handled before `*` so the greedy case wins, and `*` never crosses a
- * `/` — otherwise `a/*.txt` would match `a/b/c.txt`, which is the difference
- * between recursive and not.
- */
-function globToRegExp(pattern: string): RegExp {
-  let out = "";
-  let index = 0;
-  while (index < pattern.length) {
-    const char = pattern[index];
-    if (char === "*" && pattern[index + 1] === "*") {
-      // `**/` should also match zero directories, so `a/**/b.txt` finds `a/b.txt`.
-      if (pattern[index + 2] === "/") {
-        out += "(?:.*/)?";
-        index += 3;
-        continue;
-      }
-      out += ".*";
-      index += 2;
-      continue;
-    }
-    if (char === "*") {
-      out += "[^/]*";
-      index += 1;
-      continue;
-    }
-    if (char === "?") {
-      out += "[^/]";
-      index += 1;
-      continue;
-    }
-    if (char === "[") {
-      const close = pattern.indexOf("]", index + 1);
-      if (close === -1) {
-        out += "\\[";
-        index += 1;
-        continue;
-      }
-      out += `[${pattern.slice(index + 1, close)}]`;
-      index = close + 1;
-      continue;
-    }
-    out += escapeLiteral(char);
-    index += 1;
-  }
-  return new RegExp(`^${out}$`);
+  return { root, files: walk(root, root, recursive) };
 }
 
 /** Sorted so ingest is deterministic: the order rows are written in is the
- *  order a labelling session presents them. */
+ *  order a labeling session presents them. */
 function walk(root: string, dir: string, recursive: boolean): DiscoveredFile[] {
   const entries = fs.readdirSync(dir, { withFileTypes: true })
     .slice()
@@ -219,7 +71,7 @@ function walk(root: string, dir: string, recursive: boolean): DiscoveredFile[] {
 }
 
 /** Byte order, not locale order: `localeCompare` varies by machine, and ingest
- *  order decides the order a labelling session presents records in. */
+ *  order decides the order a labeling session presents records in. */
 function compareNames(left: string, right: string): number {
   if (left === right) {
     return 0;

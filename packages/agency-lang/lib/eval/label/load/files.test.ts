@@ -105,14 +105,5 @@ describe("loadFiles", () => {
     expect(batch.occurrences).toHaveLength(2);
   });
 
-  it("reports the field names it discovered", () => {
-    write("a.txt", "answer");
-    expect(load({ constantFields: { task: "t" } }).discoveredFieldNames.slice().sort())
-      .toEqual(["output", "task"]);
-  });
 
-  it("reports no field names when every file was skipped", () => {
-    write("a.txt", "  ");
-    expect(load().discoveredFieldNames).toEqual([]);
-  });
 });

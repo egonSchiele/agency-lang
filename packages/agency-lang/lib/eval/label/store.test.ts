@@ -62,7 +62,6 @@ function batchOf(fields = DEFAULT_FIELDS, source = "agent-v1"): LoadedBatch {
       origin: { kind: "file", itemKey: "a.txt" },
     }],
     skips: [],
-    discoveredFieldNames: Object.keys(fields),
   };
 }
 

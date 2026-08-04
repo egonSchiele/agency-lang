@@ -31,7 +31,6 @@ export type IngestSkip = {
 export type LoadedBatch = {
   occurrences: readonly LoadedOccurrence[];
   skips: readonly IngestSkip[];
-  discoveredFieldNames: readonly string[];
 };
 
 /** A screen cannot show more than this, and a value this large is far more

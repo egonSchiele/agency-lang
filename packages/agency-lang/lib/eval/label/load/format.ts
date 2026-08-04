@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { looksLikeGlob } from "./discoverFiles.js";
 import { IngestSourceError } from "./types.js";
 
 export type Format = "auto" | "run" | "files" | "json";
@@ -41,10 +40,6 @@ export function resolveFormat(
 ): Exclude<Format, "auto"> {
   if (args.requested !== "auto") {
     return args.requested;
-  }
-
-  if (looksLikeGlob(args.source)) {
-    return "files";
   }
 
   const resolved = path.resolve(args.source);

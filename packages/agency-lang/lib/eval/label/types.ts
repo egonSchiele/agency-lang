@@ -169,7 +169,9 @@ export const OccurrenceOriginSchema = z.discriminatedUnion("kind", [
     inputId: z.string().min(1),
     finalOutputIndex: z.number().int().nonnegative(),
     runStartedAtMs: z.number().finite().nullable(),
-    models: z.array(z.string()),
+    /** Defaulted rather than optional: an eval record with no metrics block is
+     *  ordinary, but a metrics block holding non-strings is malformed. */
+    models: z.array(z.string()).default([]),
     agent: JsonValueSchema,
     rawTask: JsonValueSchema.nullable(),
     /** Pre-projection structured output. Provenance only: never hashed into a
@@ -189,20 +191,33 @@ export const OccurrenceOriginSchema = z.discriminatedUnion("kind", [
     itemKey: z.string().min(1),
     itemIndex: z.number().int().nonnegative(),
   }).strict(),
-  z.object({
-    kind: z.literal("legacy"),
-    traceId: z.string().min(1),
-    inputId: z.string().min(1),
-    finalOutputIndex: z.number().int().nonnegative(),
-    runStartedAtMs: z.number().finite().nullable(),
-    models: z.array(z.string()),
-    agent: JsonValueSchema,
-    rawTask: JsonValueSchema.nullable(),
-    rawValue: JsonValueSchema.nullable(),
-  }).strict(),
 ]);
 
 export type OccurrenceOrigin = z.infer<typeof OccurrenceOriginSchema>;
+
+/**
+ * What makes one observation distinct from another.
+ *
+ * Only the stable locator, never the descriptive fields beside it. Hashing
+ * `models` or `agent` into the identity would make a corrected model name look
+ * like a second observation of the same execution, and per-source counts would
+ * then overstate how many times a source produced a record — which is the one
+ * question this log exists to answer.
+ */
+export function occurrenceLocatorOf(origin: OccurrenceOrigin): JsonValue {
+  if (origin.kind === "run") {
+    return {
+      kind: origin.kind,
+      traceId: origin.traceId,
+      inputId: origin.inputId,
+      finalOutputIndex: origin.finalOutputIndex,
+    };
+  }
+  if (origin.kind === "json") {
+    return { kind: origin.kind, itemKey: origin.itemKey, itemIndex: origin.itemIndex };
+  }
+  return { kind: origin.kind, itemKey: origin.itemKey };
+}
 
 export const OccurrenceRowSchema = z.object({
   schemaVersion: z.literal(1),

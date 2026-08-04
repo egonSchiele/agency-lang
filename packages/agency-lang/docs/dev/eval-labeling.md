@@ -4,12 +4,11 @@
 registered twice — as `agency label` and as `agency eval label` — following the
 same dual registration `optimize` uses.
 
-Three commands:
+Two commands:
 
 ```bash
 agency label ingest <source> --source <name>   # add records
 agency label --checklist <file>                # judge what the store holds
-agency label migrate <old> <new>               # move a store to the current format
 ```
 
 **No option name may appear on both `label` and a subcommand.** Commander gives
@@ -94,7 +93,7 @@ reordered source hashes to a different session.
 Three sources, chosen by `--format` or guessed by `auto`: a run directory
 (needs **both** a `config.json` and an `inputs/` directory, so a folder that
 merely contains a `config.json` is not mistaken for one), a directory or quoted
-glob where each file is one record, or a `.json` file holding an array of
+directory of files where each file is one record, or a `.json` file holding an array of
 strings. A source that yields zero records is an error, never a quiet success.
 
 One eligibility policy applies to every loader's text — an empty string in a

@@ -28,8 +28,8 @@ export type EvalIngestOptions = {
   maxBytes?: number;
   store?: string;
   config?: AgencyConfig;
-  /** Extra positional arguments. Only ever non-empty when an unquoted glob was
-   *  expanded by the shell, which is worth saying out loud. */
+  /** Extra positional arguments. Non-empty when a shell pattern expanded into
+   *  several paths, which is worth saying out loud rather than ignoring. */
   extraArgs?: string[];
 };
 
@@ -125,8 +125,8 @@ export async function evalIngest(
 ): Promise<void> {
   if ((options.extraArgs ?? []).length > 0) {
     throw new IngestSourceError(
-      "This command takes one source, but the shell passed several. Quote the pattern so it " +
-      `reaches agency unexpanded, for example --format files "answers/*.txt".`,
+      "This command takes one source, but several were given. Pass a directory rather than a " +
+      "list of files, or a shell pattern that the shell has already expanded.",
     );
   }
 

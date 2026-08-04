@@ -41,8 +41,8 @@ export type { LabelStoreFaultPoint };
 
 export class StoreValidationError extends Error {}
 
-/** A store written by an older format. Separate from StoreValidationError so
- *  the CLI can tell "needs migrating" from "is broken". */
+/** A store this build does not understand. Separate from StoreValidationError
+ *  so the CLI can tell "wrong format" from "corrupt". */
 export class StoreVersionError extends Error {}
 
 export const CURRENT_STORE_VERSION = 2;
@@ -88,7 +88,6 @@ export type LabelStore = {
   readSession(sessionId: string): DeepReadonly<LabelStoreSnapshot>;
   saveDraft(draft: Draft): void;
   corpusSnapshot(): readonly DeepReadonly<CorpusRow>[];
-  occurrenceSnapshot(): readonly DeepReadonly<OccurrenceRow>[];
   checklistSnapshot(checklistId: string, version?: number): DeepReadonly<ChecklistRevision>;
   prepareChecklist(definition: NormalizedDefinition): PrepareChecklistResult;
   syncChecklistDefinition(definitionPath: string, revision: ChecklistRevision): void;
@@ -169,10 +168,20 @@ export function openStore(args: OpenStoreArgs): LabelStore {
       }
       args.fault?.("after-occurrence-append");
 
-      // The manifest is last for the same reason: a stale fieldOrder only
-      // affects display, and re-ingesting the same batch repairs it.
-      const newFieldNames = batch.discoveredFieldNames
-        .filter((name) => !manifest.fieldOrder.includes(name));
+      // Derived here, from the candidates actually accepted, rather than
+      // carried alongside them. A loader maintaining a second copy of a fact
+      // its own output already states is a copy that can drift.
+      const seen: string[] = [];
+      for (const candidate of batch.occurrences) {
+        for (const name of Object.keys(candidate.fields)) {
+          if (!seen.includes(name)) {
+            seen.push(name);
+          }
+        }
+      }
+      // The manifest is last for the same reason records precede occurrences: a
+      // stale fieldOrder only affects display, and re-ingesting repairs it.
+      const newFieldNames = seen.filter((name) => !manifest.fieldOrder.includes(name));
       if (newFieldNames.length > 0) {
         manifest = { ...manifest, fieldOrder: [...manifest.fieldOrder, ...newFieldNames] };
         atomicWriteValidated({
@@ -190,11 +199,6 @@ export function openStore(args: OpenStoreArgs): LabelStore {
         skips: batch.skips,
         newFieldNames,
       };
-    },
-
-    occurrenceSnapshot(): readonly DeepReadonly<OccurrenceRow>[] {
-      assertOpen();
-      return occurrences.rows();
     },
 
     readSession(sessionId: string): DeepReadonly<LabelStoreSnapshot> {
@@ -288,14 +292,12 @@ function assertStoreVersion(storeDir: string): void {
   if (found === CURRENT_STORE_VERSION) {
     return;
   }
-  // A NEWER store cannot be migrated backwards, and telling someone to run
-  // migrate would send them down a dead end. The two cases need different
-  // advice, so they get different messages.
+  // Rebuilding cannot help with a store from the FUTURE, so the two cases need
+  // different advice.
   if (typeof found === "number" && found > CURRENT_STORE_VERSION) {
     throw new StoreVersionError(
       `${storeDir} uses label store format ${found}, which is newer than this build ` +
-      `understands (${CURRENT_STORE_VERSION}). Upgrade Agency to read it. Migration only ` +
-      "moves a store forwards, so it cannot help here.",
+      `understands (${CURRENT_STORE_VERSION}). Upgrade Agency to read it.`,
     );
   }
   // No migration exists, deliberately. Version 1 identified an output by the

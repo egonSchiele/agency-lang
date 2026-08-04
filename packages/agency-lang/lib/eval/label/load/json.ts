@@ -39,7 +39,6 @@ export function loadJsonArray(args: LoadJsonArrayArgs): LoadedBatch {
 
   const occurrences: LoadedOccurrence[] = [];
   const skips: IngestSkip[] = [];
-  const fieldNames: Record<string, true> = Object.create(null);
 
   for (let index = 0; index < parsed.length; index += 1) {
     const element: unknown = parsed[index];
@@ -59,9 +58,6 @@ export function loadJsonArray(args: LoadJsonArrayArgs): LoadedBatch {
     }
 
     const fields: Fields = { ...args.constantFields, output: element };
-    for (const name of Object.keys(fields)) {
-      fieldNames[name] = true;
-    }
     occurrences.push({
       fields,
       source: args.source,
@@ -69,7 +65,7 @@ export function loadJsonArray(args: LoadJsonArrayArgs): LoadedBatch {
     });
   }
 
-  return { occurrences, skips, discoveredFieldNames: Object.keys(fieldNames) };
+  return { occurrences, skips };
 }
 
 function describeJsonType(value: unknown): string {

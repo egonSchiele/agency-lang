@@ -8,6 +8,7 @@ import {
   ANNOTATION_ID_RANDOM_LENGTH,
   CHECKLIST_ID_RANDOM_LENGTH,
   QUESTION_ID_RANDOM_LENGTH,
+  occurrenceLocatorOf,
   type Fields,
   type OccurrenceCandidate,
   type SessionIdentity,
@@ -36,13 +37,20 @@ export function makeOutputId(fields: Fields): string {
   return `out_${digestOf({ ...fields })}`;
 }
 
-/** Identity of one observation. Deliberately excludes the timestamp: when you
- *  observed something is not part of which observation it is. */
+/**
+ * Identity of one observation: which record, from which source, at which
+ * locator.
+ *
+ * Deliberately excludes the timestamp, and everything else descriptive. Only
+ * `occurrenceLocatorOf` contributes, so re-ingesting a run whose recorded model
+ * name or agent provenance has changed still replays the same observation
+ * rather than inventing a second one.
+ */
 export function makeOccurrenceId(candidate: OccurrenceCandidate): string {
   return `occ_${digestOf({
     outputId: candidate.outputId,
     source: candidate.source,
-    origin: { ...candidate.origin },
+    locator: occurrenceLocatorOf(candidate.origin),
   })}`;
 }
 

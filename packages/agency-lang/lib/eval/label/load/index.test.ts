@@ -9,7 +9,7 @@ import { DEFAULT_MAX_INGEST_BYTES, type LoadedBatch } from "./types.js";
 
 let root: string;
 
-const emptyBatch: LoadedBatch = { occurrences: [], skips: [], discoveredFieldNames: [] };
+const emptyBatch: LoadedBatch = { occurrences: [], skips: [] };
 
 type Calls = {
   run: unknown[];

@@ -5,7 +5,7 @@ import { readEvalRun } from "@/eval/readRun.js";
 import type { JsonValue } from "@/utils/canonicalize.js";
 
 import { projectArtifactField } from "../project.js";
-import { JsonValueSchema, type Fields } from "../types.js";
+import { JsonValueSchema, OccurrenceOriginSchema, type Fields } from "../types.js";
 
 import { checkEligibility } from "./eligibility.js";
 import type { IngestSkip, IngestSkipReason, LoadedBatch, LoadedOccurrence } from "./types.js";
@@ -98,7 +98,6 @@ export function loadRun(args: LoadRunArgs): LoadedBatch {
 
   const occurrences: LoadedOccurrence[] = [];
   const skips: IngestSkip[] = [];
-  const fieldNames: Record<string, true> = Object.create(null);
 
   for (const inputId of Object.keys(run.inputsById)) {
     const entry = run.inputsById[inputId];
@@ -146,31 +145,33 @@ export function loadRun(args: LoadRunArgs): LoadedBatch {
     const fields: Fields = args.includeTaskField
       ? { task: projectArtifactField(task.data), ...args.constantFields, output }
       : { ...args.constantFields, output };
-    for (const name of Object.keys(fields)) {
-      fieldNames[name] = true;
+
+    // Parsed with the durable schema HERE, not left for the store. `record` is
+    // `any`, so a metrics block like `{ models: [42] }` would otherwise type
+    // through as string[] and only fail inside ingest — after the corpus row
+    // had already been appended, leaving an orphan record behind.
+    const origin = OccurrenceOriginSchema.safeParse({
+      kind: "run",
+      traceId,
+      inputId,
+      finalOutputIndex: selection.index,
+      runStartedAtMs: typeof record.startedAtMs === "number" ? record.startedAtMs : null,
+      models: record?.metrics?.models,
+      agent,
+      // The pre-projection task and output. Provenance, so a structured output
+      // stays reconstructable even though the record holds its rendering.
+      rawTask: task.data,
+      rawValue: selection.value,
+    });
+    if (!origin.success) {
+      skips.push({ item: inputId, reason: "record-unreadable" });
+      continue;
     }
 
-    occurrences.push({
-      fields,
-      source: args.source,
-      origin: {
-        kind: "run",
-        traceId,
-        inputId,
-        finalOutputIndex: selection.index,
-        runStartedAtMs: typeof record.startedAtMs === "number" ? record.startedAtMs : null,
-        models: Array.isArray(record?.metrics?.models) ? record.metrics.models : [],
-        agent,
-        // The pre-projection task and output. Provenance, so a structured
-        // output stays reconstructable even though the record holds its
-        // rendering.
-        rawTask: task.data,
-        rawValue: selection.value,
-      },
-    });
+    occurrences.push({ fields, source: args.source, origin: origin.data });
   }
 
-  return { occurrences, skips, discoveredFieldNames: Object.keys(fieldNames) };
+  return { occurrences, skips };
 }
 
 function readRecord(recordPath: string | undefined): any | undefined {

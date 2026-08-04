@@ -24,7 +24,6 @@ export type LoadFilesArgs = {
 export function loadFiles(args: LoadFilesArgs): LoadedBatch {
   const occurrences: LoadedOccurrence[] = [];
   const skips: IngestSkip[] = [];
-  const fieldNames: Record<string, true> = Object.create(null);
 
   for (const file of args.selection.files) {
     if (file.isSymlink) {
@@ -45,9 +44,6 @@ export function loadFiles(args: LoadFilesArgs): LoadedBatch {
     }
 
     const fields: Fields = { ...args.constantFields, output: text };
-    for (const name of Object.keys(fields)) {
-      fieldNames[name] = true;
-    }
     occurrences.push({
       fields,
       source: args.source,
@@ -55,5 +51,5 @@ export function loadFiles(args: LoadFilesArgs): LoadedBatch {
     });
   }
 
-  return { occurrences, skips, discoveredFieldNames: Object.keys(fieldNames) };
+  return { occurrences, skips };
 }

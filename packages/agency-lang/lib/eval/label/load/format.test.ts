@@ -65,14 +65,7 @@ describe("resolveFormat auto", () => {
     expect(auto(makeDir("gold", ["a.txt"]))).toBe("files");
   });
 
-  it("treats a path containing a glob character as files", () => {
-    expect(auto(`${root}/answers/*.txt`)).toBe("files");
-  });
 
-  it("prefers the glob reading even when the literal prefix is a run directory", () => {
-    makeDir("run-dir", ["config.json", "inputs/a/input.json"]);
-    expect(auto(`${root}/run-dir/*.txt`)).toBe("files");
-  });
 
   it("treats a .json file as json", () => {
     fs.writeFileSync(path.join(root, "answers.json"), "[]");

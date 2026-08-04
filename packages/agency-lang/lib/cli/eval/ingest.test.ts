@@ -35,7 +35,6 @@ function batchOf(count: number, skips: LoadedBatch["skips"] = []): LoadedBatch {
       origin: { kind: "file" as const, itemKey: `${index}.txt` },
     })),
     skips,
-    discoveredFieldNames: ["output"],
   };
 }
 
@@ -132,9 +131,9 @@ describe("evalIngest", () => {
       .rejects.toThrow(/--source is required/);
   });
 
-  it("rejects extra positional arguments, which mean the shell expanded a glob", async () => {
+  it("rejects extra positional arguments rather than ingesting only the first", async () => {
     await expect(evalIngest(options({ extraArgs: ["b.txt", "c.txt"] }), dependencies()))
-      .rejects.toThrow(/Quote the pattern/);
+      .rejects.toThrow(/takes one source/);
   });
 
   it("rejects an unknown --format", async () => {

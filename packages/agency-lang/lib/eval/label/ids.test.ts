@@ -263,3 +263,49 @@ describe("canonicalize is collision-resistant", () => {
     expect(canonicalize([undefined])).toBe("[null]");
   });
 });
+
+describe("occurrence identity uses only the stable locator", () => {
+  const runOrigin = {
+    kind: "run" as const,
+    traceId: "t-1",
+    inputId: "news-01",
+    finalOutputIndex: 2,
+    runStartedAtMs: 1000,
+    models: ["gpt-4o"],
+    agent: { file: "news.agency" },
+    rawTask: "Summarize",
+    rawValue: { s: 1 },
+  };
+  const base: OccurrenceCandidate = {
+    outputId: `out_${"a".repeat(64)}`,
+    source: "agent-v1",
+    origin: runOrigin,
+  };
+
+  it("ignores a corrected model name", () => {
+    // Hashing descriptive provenance would make this a SECOND observation of
+    // the same execution, and per-source counts would overstate the run.
+    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, models: ["gpt-4o-2024"] } }))
+      .toBe(makeOccurrenceId(base));
+  });
+
+  it("ignores changed agent provenance, start time and raw values", () => {
+    expect(makeOccurrenceId({
+      ...base,
+      origin: {
+        ...runOrigin,
+        agent: { file: "other.agency" },
+        runStartedAtMs: 9999,
+        rawTask: "changed",
+        rawValue: null,
+      },
+    })).toBe(makeOccurrenceId(base));
+  });
+
+  it("still distinguishes a different execution", () => {
+    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, traceId: "t-2" } }))
+      .not.toBe(makeOccurrenceId(base));
+    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, finalOutputIndex: 3 } }))
+      .not.toBe(makeOccurrenceId(base));
+  });
+});

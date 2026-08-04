@@ -353,11 +353,12 @@ and an `output`.
 It guesses which kind you meant. Pass `--format run`, `--format files` or
 `--format json` when you want to say so yourself.
 
-You can also select files with a pattern. Quote it, so your shell passes it
-through untouched:
+A directory holds one record per file. Add `--recursive` to descend into
+subdirectories. There is no pattern matching, so point it at a directory that
+holds what you want:
 
 ```bash
-agency label ingest "answers/*.txt" --source handwritten --task "Summarize today's tech news"
+agency label ingest ./gold/ --source handwritten --task "Summarize today's tech news"
 ```
 
 `--task` adds the same task field to every record in the batch. That is the

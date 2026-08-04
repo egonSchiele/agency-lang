@@ -156,10 +156,6 @@ describe("loadRun fields", () => {
     expect(batch.occurrences[0].fields).toEqual({ task: "a better framing", output: "hello" });
   });
 
-  it("reports the field names it discovered", () => {
-    writeSource([{ inputId: "a" }]);
-    expect(load().discoveredFieldNames.slice().sort()).toEqual(["output", "task"]);
-  });
 });
 
 describe("loadRun provenance", () => {
@@ -279,5 +275,33 @@ describe("loadRun skips", () => {
     const batch = load();
     expect(batch.occurrences).toHaveLength(1);
     expect(batch.skips).toHaveLength(1);
+  });
+});
+
+describe("a malformed record is rejected by the loader, not by the store", () => {
+  it("skips a record whose models are not strings", () => {
+    // `record` is `any`. Without parsing here, [42] types through as string[]
+    // and only fails inside ingest, AFTER the corpus row has been appended —
+    // leaving a record with no occurrence behind.
+    writeSource([{ inputId: "a" }]);
+    const recordPath = path.join(sourceDir, "inputs", "a", "agent", "eval-record.json");
+    const record = JSON.parse(fs.readFileSync(recordPath, "utf8"));
+    record.metrics = { models: [42] };
+    fs.writeFileSync(recordPath, JSON.stringify(record));
+
+    const batch = load();
+    expect(batch.occurrences).toEqual([]);
+    expect(batch.skips).toEqual([{ item: "a", reason: "record-unreadable" }]);
+  });
+
+  it("treats a missing metrics block as no models, which is ordinary", () => {
+    writeSource([{ inputId: "a" }]);
+    const recordPath = path.join(sourceDir, "inputs", "a", "agent", "eval-record.json");
+    const record = JSON.parse(fs.readFileSync(recordPath, "utf8"));
+    delete record.metrics;
+    fs.writeFileSync(recordPath, JSON.stringify(record));
+
+    const origin = load().occurrences[0].origin;
+    expect(origin.kind === "run" && origin.models).toEqual([]);
   });
 });

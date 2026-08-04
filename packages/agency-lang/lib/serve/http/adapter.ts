@@ -141,7 +141,7 @@ async function callFunction(
 ): Promise<RouteResult> {
   let outcome: ServedInvocationOutcome<unknown>;
   try {
-    outcome = await fn.invoke(toArgs(body));
+    outcome = await fn.invokeServed(toArgs(body));
   } catch (err) {
     // A throw here is a pre-outcome internal failure (the core normally converts
     // agent errors into a threw-outcome), so there is no usage to report.
@@ -160,7 +160,7 @@ async function callNode(
   try {
     // The node receives its named args as a data object; the serve invoker maps
     // them to the node's params and returns the caller-facing data as the value.
-    outcome = await node.invoke(toArgs(body));
+    outcome = await node.invokeServed(toArgs(body));
   } catch (err) {
     return errorResult(err, logger, `node ${node.name}`);
   }

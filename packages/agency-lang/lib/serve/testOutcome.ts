@@ -23,3 +23,12 @@ export function threwOutcome(
 ): ServedInvocationOutcome<never> {
   return { status: "threw", error, ...ZERO_SNAPSHOT, ...overrides };
 }
+
+/** The PUBLIC raw `invoke` member on an ExportedFunction/Node. Adapter tests
+ *  drive the served path (`invokeServed`), never the public `invoke`, so a fake
+ *  can spread this stub to satisfy the type; calling it is a test bug. */
+export const unusedPublicInvoke = {
+  invoke: (async () => {
+    throw new Error("public invoke is not exercised in this test (use invokeServed)");
+  }) as (...args: any[]) => Promise<any>,
+};

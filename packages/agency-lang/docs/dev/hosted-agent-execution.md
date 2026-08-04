@@ -342,11 +342,23 @@ preserved).
 
 **The wire.** Generated modules export `__invokeNodeForServe` /
 `__invokeFunctionForServe` / `__respondToInterruptsForServe` (see
-`imports.mustache`); `discoverExports` **requires** them and fails fast with a
-recompile-required error otherwise (older bundles are already unsupported for
-served functions). The HTTP adapter's one `routeResultFor` mapper attaches
-`usage` (and `usageComplete`) to every post-execution `RouteResult` — success,
-interrupt, 402 `budgetExceeded`, generic failure, cancellation — and omits it on
-`/list`, 404, and validation 400. The host reads `usage` in-process; it is not
-part of the standalone HTTP body. MCP unwraps the outcome to the raw value (or
-rethrows) and does not expose usage in v1.
+`imports.mustache`). The **public** `ExportedFunction.invoke` /
+`ExportedNode.invoke` keep their original raw contract (value-or-throw; node
+positional args) for host apps that construct/consume these directly; the serve
+adapters use a separate internal `invokeServed` that `discoverExports` wires to
+the `…ForServe` invokers. `discoverExports` requires each serve invoker **only
+for the kind actually exported** (a node-only bundle needs just the node one) and
+fails fast with a recompile-required error otherwise — **served bundles must be
+recompiled** to report usage. The HTTP adapter's one `routeResultFor` mapper
+attaches `usage` (and the sibling `usageComplete`) to every post-execution
+`RouteResult` — success, interrupt, 402 `budgetExceeded`, generic failure,
+cancellation — and omits both on `/list`, 404, and validation 400. The host
+reads them in-process; they are not part of the standalone HTTP body. MCP unwraps
+the outcome to the raw value (or rethrows) and does not expose usage in v1.
+
+**In-process dispatch failures count too.** Beyond a returned-but-unpriced
+completion, a provider request that is *dispatched and then times out / is
+cancelled / errors after dispatch* may have incurred untracked spend with no
+price metadata, so each such attempt (each retry is a fresh attempt, via
+`meteredDispatch`) adds one to `unknownCostCallCount` and flips `pricingComplete`
+false. A failure proven *before* dispatch counts nothing.

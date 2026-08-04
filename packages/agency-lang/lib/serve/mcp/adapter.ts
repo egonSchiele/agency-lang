@@ -184,7 +184,7 @@ async function handleToolCall(
   if (fn) {
     return runToolInvocation(
       id,
-      () => fn.invoke(args as Record<string, unknown>).then(unwrapServedInvocationOutcome),
+      () => fn.invokeServed(args as Record<string, unknown>).then(unwrapServedInvocationOutcome),
       policyConfig,
     );
   }
@@ -193,7 +193,7 @@ async function handleToolCall(
   if (node) {
     return runToolInvocation(
       id,
-      () => node.invoke(args as Record<string, unknown>).then(unwrapServedInvocationOutcome),
+      () => node.invokeServed(args as Record<string, unknown>).then(unwrapServedInvocationOutcome),
       policyConfig,
     );
   }

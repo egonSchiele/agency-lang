@@ -6,7 +6,7 @@ import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import { interrupt } from "../../runtime/interrupts.js";
 import type { Interrupt } from "../../runtime/interrupts.js";
 import type { ExportedItem } from "../types.js";
-import { returnedOutcome, threwOutcome } from "../testOutcome.js";
+import { returnedOutcome, threwOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { createLogger } from "../../logger.js";
 import type { Logger } from "../../logger.js";
 import { GuardExceededError } from "../../runtime/guard.js";
@@ -67,21 +67,21 @@ function makeExports(): {
 
   const exports: ExportedItem[] = [
     {
-      kind: "function",
+      kind: "function", ...unusedPublicInvoke,
       name: "add",
       description: "Add two numbers",
       parameters: [{ name: "a" }, { name: "b" }],
       agencyFunction: addFn,
       interruptEffects: [],
-      invoke: async (namedArgs) => returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+      invokeServed: async (namedArgs) => returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
     },
     {
-      kind: "node",
+      kind: "node", ...unusedPublicInvoke,
       name: "main",
       parameters: [{ name: "message" }],
       // Serve node invoke: named args as a data object; value is the
       // caller-facing data (discovery would have unwrapped RunNodeResult.data).
-      invoke: async (data) => returnedOutcome({ echo: (data as { message?: unknown }).message }),
+      invokeServed: async (data) => returnedOutcome({ echo: (data as { message?: unknown }).message }),
       interruptEffects: [],
     },
   ];
@@ -187,13 +187,13 @@ describe("HTTP adapter", () => {
         ["plainFn", undefined],
       ] as const
     ).map(([name, markers]) => ({
-      kind: "function",
+      kind: "function", ...unusedPublicInvoke,
       name,
       description: name,
       parameters: [],
       agencyFunction: mk(name, markers),
       interruptEffects: [],
-      invoke: async (namedArgs: Record<string, unknown>) =>
+      invokeServed: async (namedArgs: Record<string, unknown>) =>
         returnedOutcome(await mk(name, markers).invoke({ type: "named", positionalArgs: [], namedArgs })),
     }));
     const h = createHttpHandler({
@@ -346,13 +346,13 @@ describe("HTTP adapter", () => {
     const h = createHttpHandler({
       exports: [
         {
-          kind: "function",
+          kind: "function", ...unusedPublicInvoke,
           name: "deploy",
           description: "Deploy",
           parameters: [],
           agencyFunction: deployFn,
           interruptEffects: [{ effect: "myapp::deploy" }],
-          invoke: async (namedArgs) => returnedOutcome(await deployFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+          invokeServed: async (namedArgs) => returnedOutcome(await deployFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
         },
       ],
       logger: createLogger("error"),
@@ -466,13 +466,13 @@ describe("startHttpServer auth and host validation", () => {
     const exportsWithFail: ExportedItem[] = [
       ...exports,
       {
-        kind: "function",
+        kind: "function", ...unusedPublicInvoke,
         name: "fail",
         description: "",
         parameters: [],
         agencyFunction: failFn,
         interruptEffects: [],
-        invoke: async (namedArgs) => returnedOutcome(await failFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+        invokeServed: async (namedArgs) => returnedOutcome(await failFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
       },
     ];
     await withServer(baseConfig({ exports: exportsWithFail }), async (port) => {
@@ -535,13 +535,13 @@ describe("root-budget trips surface as a typed budgetExceeded", () => {
 
   function handlerFor(invoke: () => Promise<unknown>): ReturnType<typeof createHttpHandler> {
     const node: ExportedItem = {
-      kind: "node",
+      kind: "node", ...unusedPublicInvoke,
       name: "run",
       parameters: [],
       interruptEffects: [],
       // The core turns a thrown guard trip / error into a threw-outcome; model
       // that here so the adapter maps it (402 / generic) with a usage snapshot.
-      invoke: async () => {
+      invokeServed: async () => {
         try {
           return returnedOutcome(await invoke());
         } catch (err) {

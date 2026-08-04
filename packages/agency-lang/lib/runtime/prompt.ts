@@ -21,7 +21,7 @@ import {
   type BoundaryContext,
 } from "./turnBoundary.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
-import { accountCompletionUsage } from "./recordPaidUsage.js";
+import { accountCompletionUsage, meteredDispatch } from "./recordPaidUsage.js";
 import { abortableSleep } from "../stdlib/abortable.js";
 import { decideRetry, decideValidationRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig, LLMRetryReason } from "./llmRetry.js";
@@ -491,21 +491,25 @@ async function dispatchWithRetry(args: {
       callHook({ ctx, name: "onLLMTimeout", data }),
   };
 
+  const targetStack = stateStack ?? ctx.stateStack;
   return runWithRetry(
     (signal) =>
-      dispatchLLMRequest({
-        ctx,
-        promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
-        prompt,
-        stream,
-        stateStack,
-      }),
+      meteredDispatch(ctx, targetStack, () =>
+        dispatchLLMRequest({
+          ctx,
+          promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
+          prompt,
+          stream,
+          stateStack,
+        }),
+      ),
     retryPolicy,
     parentSignal,
     retryHooks,
     normalizeError,
   );
 }
+
 
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */

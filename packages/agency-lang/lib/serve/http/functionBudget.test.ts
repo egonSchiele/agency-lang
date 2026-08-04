@@ -3,7 +3,7 @@ import { createHttpHandler } from "./adapter.js";
 import { createLogger } from "../../logger.js";
 import { RuntimeContext } from "../../runtime/state/context.js";
 import { runExportedFunctionForServe } from "../../runtime/node.js";
-import { returnedOutcome } from "../testOutcome.js";
+import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { addCost } from "../../runtime/cost.js";
 import type { GraphState } from "../../runtime/types.js";
 import type { AgencyFunction } from "../../runtime/agencyFunction.js";
@@ -68,13 +68,13 @@ describe("a served function respects the baked root budget", () => {
       },
     } as unknown as AgencyFunction;
     return {
-      kind: "function",
+      kind: "function", ...unusedPublicInvoke,
       name: "spend",
       description: "charges $1",
       parameters: [],
       agencyFunction: fn,
       interruptEffects: [],
-      invoke: (namedArgs) => runExportedFunctionForServe({ ctx, fn, namedArgs }),
+      invokeServed: (namedArgs) => runExportedFunctionForServe({ ctx, fn, namedArgs }),
     };
   }
 

@@ -12,25 +12,30 @@ export type ExportedFunction = {
   agencyFunction: AgencyFunction;
   interruptEffects: InterruptEffect[];
   /**
-   * Invoke the function for a single request, given its named arguments, and
-   * return a `ServedInvocationOutcome`: the raw function value (on `returned`)
-   * or the identical thrown error (on `threw`), plus a per-invocation usage
-   * snapshot. Populated by `discoverExports` from the compiled module's
-   * generated `__invokeFunctionForServe`, which runs the body inside a
-   * node-grade execution frame. An adapter unit test may supply a plain-JS
-   * invoke that returns an outcome directly.
+   * PUBLIC contract, unchanged: invoke the function for a single request and
+   * return its raw value, or throw the identical error. This is the member host
+   * apps that construct/consume `ExportedFunction` directly depend on.
    */
-  invoke: (namedArgs: Record<string, unknown>) => Promise<ServedInvocationOutcome<unknown>>;
+  invoke: (namedArgs: Record<string, unknown>) => Promise<unknown>;
+  /**
+   * INTERNAL, for the serve adapters: the same execution as `invoke`, but the
+   * value-or-error is returned inside a `ServedInvocationOutcome` alongside a
+   * per-invocation usage snapshot (never mutating the value/error). Populated by
+   * `discoverExports` from the compiled module's `__invokeFunctionForServe`.
+   */
+  invokeServed: (namedArgs: Record<string, unknown>) => Promise<ServedInvocationOutcome<unknown>>;
 };
 
 export type ExportedNode = {
   kind: "node";
   name: string;
   parameters: Array<{ name: string }>;
-  /** Invoke the node with its named args as a data object, returning a
+  /** PUBLIC contract, unchanged: positional args → raw `RunNodeResult`, or throw. */
+  invoke: (...args: unknown[]) => Promise<unknown>;
+  /** INTERNAL, for the serve adapters: named args as a data object → a
    *  `ServedInvocationOutcome` whose `value` is the node's caller-facing data
-   *  (the `RunNodeResult.data`, already unwrapped by `discoverExports`). */
-  invoke: (data: Record<string, unknown>) => Promise<ServedInvocationOutcome<unknown>>;
+   *  (`RunNodeResult.data`, already unwrapped by `discoverExports`) + usage. */
+  invokeServed: (data: Record<string, unknown>) => Promise<ServedInvocationOutcome<unknown>>;
   interruptEffects: InterruptEffect[];
 };
 

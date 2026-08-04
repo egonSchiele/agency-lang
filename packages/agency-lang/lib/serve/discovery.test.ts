@@ -12,10 +12,29 @@ const serveStubs = {
 };
 
 describe("discoverExports", () => {
-  it("fails fast when the bundle lacks the serve invokers (recompile required)", () => {
+  it("fails fast when a bundle EXPORTS a function but lacks its serve invoker (recompile required)", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    AgencyFunction.create(
+      { name: "f", module: "test", fn: async () => {}, params: [], toolDefinition: { name: "f", description: "", schema: null }, exported: true },
+      registry,
+    );
     expect(() =>
-      discoverExports({ toolRegistry: {}, moduleExports: {}, moduleId: "test" }),
+      discoverExports({ toolRegistry: registry, moduleExports: {}, moduleId: "test" }),
     ).toThrow(/predates the serve cost seam|Recompile/);
+  });
+
+  it("an empty bundle (no functions, no nodes) requires no serve invokers", () => {
+    expect(discoverExports({ toolRegistry: {}, moduleExports: {}, moduleId: "test" })).toEqual([]);
+  });
+
+  it("a node-only bundle needs only the node serve invoker, not the function one", () => {
+    const exports = discoverExports({
+      toolRegistry: {},
+      moduleExports: { main: async () => {}, __mainNodeParams: [], __invokeNodeForServe: async () => returnedOutcome({ data: undefined }) },
+      moduleId: "test",
+      exportedNodeNames: ["main"],
+    });
+    expect(exports.map((e) => e.name)).toEqual(["main"]);
   });
 
   it("returns exported functions from tool registry", () => {

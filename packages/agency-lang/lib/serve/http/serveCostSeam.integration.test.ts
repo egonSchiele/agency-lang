@@ -4,7 +4,7 @@ import { createLogger } from "../../logger.js";
 import { RuntimeContext } from "../../runtime/state/context.js";
 import { runExportedFunctionForServe } from "../../runtime/node.js";
 import { addCost } from "../../runtime/cost.js";
-import { returnedOutcome } from "../testOutcome.js";
+import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import type { GraphState } from "../../runtime/types.js";
 import type { AgencyFunction } from "../../runtime/agencyFunction.js";
 import type { ExportedFunction } from "../types.js";
@@ -39,13 +39,13 @@ describe("serve cost seam — end to end", () => {
   ): ExportedFunction {
     const fn = { invoke: async () => body() } as unknown as AgencyFunction;
     return {
-      kind: "function",
+      kind: "function", ...unusedPublicInvoke,
       name: "run",
       description: "run",
       parameters: [],
       agencyFunction: fn,
       interruptEffects: [],
-      invoke: (namedArgs) => runExportedFunctionForServe({ ctx, fn, namedArgs }),
+      invokeServed: (namedArgs) => runExportedFunctionForServe({ ctx, fn, namedArgs }),
     };
   }
 

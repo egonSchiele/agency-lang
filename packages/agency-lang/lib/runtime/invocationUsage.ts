@@ -39,6 +39,13 @@ export type InvocationUsageDelta = {
 
 export type InvocationUsageSnapshot = {
   usage: InvocationUsage;
+  /** ⚠️ A SIBLING of `usage`, not nested inside it — easy to miss. When `false`,
+   *  the whole `usage` figure (including `pricedCost`) is a trusted LOWER BOUND:
+   *  an abnormal subprocess termination means unsent child telemetry could not
+   *  be ruled out. A consumer MUST treat the dollar total conservatively
+   *  whenever this (or `usage.pricingComplete`) is false. Distinct axis from
+   *  `pricingComplete`: that is about price availability, this is about
+   *  telemetry delivery. */
   usageComplete: boolean;
 };
 

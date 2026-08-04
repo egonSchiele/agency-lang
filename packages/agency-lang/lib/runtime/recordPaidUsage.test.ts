@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   recordPaidUsageAt,
   recordPaidUsage,
+  recordUnknownCostAttempt,
   markInvocationUsageIncompleteAt,
 } from "./recordPaidUsage.js";
 import { completionUsageDelta, paidCostDelta } from "./invocationUsage.js";
@@ -100,6 +101,29 @@ describe("recordPaidUsage / addCost (ambient target)", () => {
       recordPaidUsage(paidCostDelta(0.4));
     });
     expect(ctx.invocationUsage.snapshot().usage.pricedCost).toBeCloseTo(0.4);
+  });
+});
+
+describe("recordUnknownCostAttempt", () => {
+  it("adds one unknown-cost call, no cost, and flips pricingComplete false", () => {
+    const ctx = makeCtx();
+    recordUnknownCostAttempt(ctx, ctx.stateStack);
+    const s = ctx.invocationUsage.snapshot();
+    expect(s.usage.unknownCostCallCount).toBe(1);
+    expect(s.usage.pricedCost).toBe(0);
+    expect(s.usage.pricingComplete).toBe(false);
+    expect(ctx.stateStack.localCost).toBe(0);
+  });
+
+  it("relays the unknown-cost delta upward in IPC mode", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    const ctx = makeCtx();
+    recordUnknownCostAttempt(ctx, ctx.stateStack);
+    expect(send).toHaveBeenCalledExactlyOnceWith({
+      type: "invocationUsage", pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 1,
+    });
   });
 });
 

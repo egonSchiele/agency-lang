@@ -64,6 +64,42 @@ export function accountCompletionUsage(
   targetStack.localTokens += completion.usage?.totalTokens ?? 0;
 }
 
+/** Record one UNKNOWN-cost provider attempt: a request that was dispatched to
+ *  the provider but did not resolve to a priced completion (timeout / cancel /
+ *  provider error after dispatch — possible spend, no price metadata). Adds one
+ *  to unknownCostCallCount (no cost, no tokens) so pricingComplete goes false;
+ *  relays upward once if this is a subprocess. A failure PROVEN before dispatch
+ *  never calls this. */
+export function recordUnknownCostAttempt(
+  ctx: RuntimeContext<GraphState>,
+  targetStack: StateStack,
+): void {
+  recordPaidUsageAt(
+    { ctx, stack: targetStack },
+    { pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 1 },
+  );
+}
+
+/** Run one provider dispatch as a metered attempt (serve cost seam; each retry
+ *  is a fresh attempt). A resolved dispatch is priced later at the completion
+ *  site; a dispatched-but-UNRESOLVED attempt (timeout/cancel/provider error
+ *  after dispatch — possible spend, no price) records one unknown-cost attempt
+ *  so pricingComplete goes false. A pre-dispatch failure never enters here. */
+export async function meteredDispatch<T>(
+  ctx: RuntimeContext<GraphState>,
+  targetStack: StateStack,
+  dispatch: () => Promise<T>,
+): Promise<T> {
+  let resolved = false;
+  try {
+    const result = await dispatch();
+    resolved = true;
+    return result;
+  } finally {
+    if (!resolved) recordUnknownCostAttempt(ctx, targetStack);
+  }
+}
+
 /** Mark this invocation's usage as no longer guaranteed complete (an abnormal
  *  subprocess termination). Relays the marker upward once, only on the first
  *  transition, so a mid-tier process forwards a descendant's incompleteness

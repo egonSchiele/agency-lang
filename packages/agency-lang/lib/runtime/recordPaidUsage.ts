@@ -84,20 +84,21 @@ export function recordUnknownCostAttempt(
  *  is a fresh attempt). A resolved dispatch is priced later at the completion
  *  site; a dispatched-but-UNRESOLVED attempt (timeout/cancel/provider error
  *  after dispatch — possible spend, no price) records one unknown-cost attempt
- *  so pricingComplete goes false. A pre-dispatch failure never enters here. */
-export async function meteredDispatch<T>(
+ *  so pricingComplete goes false. A pre-dispatch failure never enters here.
+ *
+ *  Returns the dispatch promise UNCHANGED (not wrapped in await/then): the
+ *  unknown-cost record is a fire-and-forget side effect on rejection, so this
+ *  adds no microtask tick to the caller's timing. That matters — race()
+ *  determinism (which loser calls complete before the abort fires) is timing-
+ *  sensitive, and wrapping the dispatch would shift it. */
+export function meteredDispatch<T>(
   ctx: RuntimeContext<GraphState>,
   targetStack: StateStack,
   dispatch: () => Promise<T>,
 ): Promise<T> {
-  let resolved = false;
-  try {
-    const result = await dispatch();
-    resolved = true;
-    return result;
-  } finally {
-    if (!resolved) recordUnknownCostAttempt(ctx, targetStack);
-  }
+  const pending = dispatch();
+  void pending.catch(() => recordUnknownCostAttempt(ctx, targetStack));
+  return pending;
 }
 
 /** Mark this invocation's usage as no longer guaranteed complete (an abnormal

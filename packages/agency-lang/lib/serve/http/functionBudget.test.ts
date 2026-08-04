@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createHttpHandler } from "./adapter.js";
 import { createLogger } from "../../logger.js";
 import { RuntimeContext } from "../../runtime/state/context.js";
@@ -26,12 +26,25 @@ import type { ExportedFunction } from "../types.js";
  * not trip and the call returned 200.
  */
 describe("a served function respects the baked root budget", () => {
-  // AGENCY_IPC would make installRootBudget a no-op (a child's budget is the
-  // parent's); clear it so a leak from another test can't mask the guard.
-  const savedIpc = process.env.AGENCY_IPC;
+  // installRootBudget consults the environment: AGENCY_IPC makes it a no-op (a
+  // child's budget is the parent's), and AGENCY_MAX_COST / AGENCY_MAX_TIME
+  // OVERRIDE ctx.budget (the flag wins). Any of these, set by the dev shell or
+  // leaked from another test, would flake these assertions (the limit wouldn't
+  // be 0, or the "no baked budget" control would still be capped). Snapshot and
+  // clear all three around each test, then restore.
+  const BUDGET_ENV = ["AGENCY_IPC", "AGENCY_MAX_COST", "AGENCY_MAX_TIME"] as const;
+  const saved: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    for (const key of BUDGET_ENV) {
+      saved[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
   afterEach(() => {
-    if (savedIpc === undefined) delete process.env.AGENCY_IPC;
-    else process.env.AGENCY_IPC = savedIpc;
+    for (const key of BUDGET_ENV) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
   });
 
   function makeCtx(budget?: { maxCost?: number; maxTimeMs?: number }): RuntimeContext<GraphState> {
@@ -74,7 +87,6 @@ describe("a served function respects the baked root budget", () => {
   }
 
   it("trips the root budget and returns a typed 402 budgetExceeded", async () => {
-    delete process.env.AGENCY_IPC;
     const result = await handlerFor(makeCtx({ maxCost: 0 }))("POST", "/function/spend", {});
     expect(result.status).toBe(402);
     expect(result.body).toMatchObject({
@@ -87,7 +99,6 @@ describe("a served function respects the baked root budget", () => {
   });
 
   it("without a baked budget the same spend runs uncapped (200) — proving the guard is what caps it", async () => {
-    delete process.env.AGENCY_IPC;
     const result = await handlerFor(makeCtx())("POST", "/function/spend", {});
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ success: true, value: "done" });

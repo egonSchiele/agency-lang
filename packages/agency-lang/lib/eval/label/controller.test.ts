@@ -11,6 +11,7 @@ import {
   type LabelingSessionController,
 } from "./controller.js";
 import { loadDraftFile } from "./draft.js";
+import { writeRunFixture } from "./runFixture.js";
 import { loadBatch } from "./load/index.js";
 import { DEFAULT_MAX_INGEST_BYTES } from "./load/types.js";
 import { acquireStoreLock } from "./lock.js";
@@ -42,25 +43,10 @@ function makeDependencies(over: Partial<ControllerDependencies> = {}): Controlle
 }
 
 function writeSource(inputIds: string[], traceId = "trace-1"): void {
-  fs.mkdirSync(sourceDir, { recursive: true });
-  fs.writeFileSync(path.join(sourceDir, "config.json"), JSON.stringify({ provenance: { agent: null } }));
-  fs.writeFileSync(path.join(sourceDir, "summary.json"), JSON.stringify({
-    runId: "r", runDir: sourceDir, agentLabel: "a", okCount: inputIds.length, errorCount: 0,
-    inputs: inputIds.map((inputId) => ({
-      inputId, status: "success",
-      evalRecordPath: path.join(sourceDir, "inputs", inputId, "agent", "eval-record.json"),
-      statelogPath: "", workdirPath: "",
-    })),
-  }));
-  for (const inputId of inputIds) {
-    const dir = path.join(sourceDir, "inputs", inputId, "agent");
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "..", "input.json"), JSON.stringify({ id: inputId, task: `task ${inputId}` }));
-    fs.writeFileSync(path.join(dir, "eval-record.json"), JSON.stringify({
-      traceId, startedAtMs: 1, durationMs: 1,
-      evalOutputs: [{ value: `output for ${inputId}` }], metrics: { models: [] },
-    }));
-  }
+  writeRunFixture({
+    dir: sourceDir,
+    inputs: inputIds.map((inputId) => ({ inputId, traceId, task: `task ${inputId}` })),
+  });
 }
 
 function writeChecklist(questions: string[]): void {

@@ -19,18 +19,9 @@ export type EnsureOccurrenceResult = {
 
 export type OpenedOccurrenceLog = {
   rows(): readonly OccurrenceRow[];
-  /**
-   * Append this occurrence, or return the one already recorded.
-   *
-   * Replay goes through `find`, NOT through `appendExact`, and that is not an
-   * oversight. `occurrenceId` excludes `firstObservedAt`, so re-ingesting the
-   * same source tomorrow would build the same id carrying a different
-   * timestamp; handing that to `appendExact` would look like identity reuse
-   * with different content and raise a corruption error on a completely
-   * legitimate operation. The stored timestamp is the truth, so an existing
-   * row is returned untouched. `appendExact` is still what writes a row the
-   * first time.
-   */
+  /** Add this occurrence, or return the one already recorded, keeping its first
+   *  `firstObservedAt`. See `findOrAppend` for why replay cannot go through
+   *  `appendExact`. */
   ensureOccurrence(candidate: OccurrenceCandidate): EnsureOccurrenceResult;
 };
 
@@ -51,21 +42,14 @@ export function openOccurrenceLog(storeDir: string): OpenedOccurrenceLog {
 
     ensureOccurrence(candidate: OccurrenceCandidate): EnsureOccurrenceResult {
       const occurrenceId = makeOccurrenceId(candidate);
-      const existing = log.find(occurrenceId);
-      if (existing !== undefined) {
-        return { row: existing as OccurrenceRow, added: false };
-      }
-
-      const row = OccurrenceRowSchema.parse({
+      return log.findOrAppend(occurrenceId, () => OccurrenceRowSchema.parse({
         schemaVersion: 1,
         occurrenceId,
         outputId: candidate.outputId,
         source: candidate.source,
         firstObservedAt: new Date().toISOString(),
         origin: candidate.origin,
-      });
-      log.appendExact(row);
-      return { row, added: true };
+      }));
     },
   };
 }

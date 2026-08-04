@@ -35,6 +35,17 @@ export type OpenedJsonl<Value> = {
    */
   find(identity: string): DeepReadonly<Value> | undefined;
   /**
+   * The row with this identity, or the one `build` produces, appended.
+   *
+   * Distinct from `appendExact`, which compares content and throws when it
+   * differs. A log whose rows carry a field outside their identity, such as a
+   * capture time or an observation time, cannot use that: rebuilding the row
+   * tomorrow yields the same identity with a different timestamp, and
+   * `appendExact` would call a legitimate re-ingest corruption. Here the stored
+   * row wins and the rebuilt one is discarded.
+   */
+  findOrAppend(identity: string, build: () => Value): { row: Value; added: boolean };
+  /**
    * Append unless this exact row is already present.
    *
    * `"replayed"` means the identity is present and the content matches
@@ -83,6 +94,16 @@ export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<
 
     find(identity: string): DeepReadonly<Value> | undefined {
       return rowById[identity] as DeepReadonly<Value> | undefined;
+    },
+
+    findOrAppend(identity: string, build: () => Value): { row: Value; added: boolean } {
+      const existing = rowById[identity];
+      if (existing !== undefined) {
+        return { row: existing, added: false };
+      }
+      const row = build();
+      this.appendExact(row);
+      return { row, added: true };
     },
 
     appendExact(value: Value): "appended" | "replayed" {

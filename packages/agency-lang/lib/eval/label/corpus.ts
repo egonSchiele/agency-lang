@@ -16,15 +16,9 @@ export type EnsureRecordResult = {
 export type OpenedCorpusLog = {
   rows(): readonly CorpusRow[];
   find(outputId: string): CorpusRow | undefined;
-  /**
-   * Add this record, or return the one already stored.
-   *
-   * Like `ensureOccurrence`, replay goes through `find` rather than
-   * `appendExact`: `capturedAt` is not part of the identity, so a later ingest
-   * of the same fields would build an identical id carrying a different
-   * timestamp and be rejected as corruption. The first capture time is the
-   * truth. `appendExact` still writes the row the first time.
-   */
+  /** Add this record, or return the one already stored, keeping its first
+   *  `capturedAt`. See `findOrAppend` for why replay cannot go through
+   *  `appendExact`. */
   ensureRecord(fields: Fields): EnsureRecordResult;
 };
 
@@ -49,19 +43,12 @@ export function openCorpusLog(storeDir: string): OpenedCorpusLog {
 
     ensureRecord(fields: Fields): EnsureRecordResult {
       const outputId = makeOutputId(fields);
-      const existing = log.find(outputId);
-      if (existing !== undefined) {
-        return { row: existing as CorpusRow, added: false };
-      }
-
-      const row = CorpusRowSchema.parse({
+      return log.findOrAppend(outputId, () => CorpusRowSchema.parse({
         schemaVersion: 2,
         outputId,
         capturedAt: new Date().toISOString(),
         fields,
-      });
-      log.appendExact(row);
-      return { row, added: true };
+      }));
     },
   };
 }

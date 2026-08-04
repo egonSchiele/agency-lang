@@ -289,10 +289,6 @@ export async function main({ messages, callbacks }: { messages?: any; callbacks?
 }
 export const __mainNodeParams = [];
 if (__process.argv[1] === fileURLToPath(import.meta.url)) {
-  if (__process.argv.length > 2) {
-  console.error(`main() takes 0 argument(s) but got ${__process.argv.length - 2}; extra: ${__process.argv.slice(2).join(" ")}`);
-  __process.exit(1);
-}
   try {
     const initialState = {
       messages: new ThreadStore(),

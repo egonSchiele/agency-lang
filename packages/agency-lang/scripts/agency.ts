@@ -394,7 +394,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .command("run")
       .description("Compile and run .agency file(s)")
       .argument("<input>", "Path to .agency input file")
-      .argument("[nodeArgs...]", "Arguments after -- are passed positionally to the entry node's parameters"),
+      .argument(
+        "[nodeArgs...]",
+        "Arguments passed through to the program; read them with std::args",
+      ),
   ).action((input: string, nodeArgs: string[], options: RunOptions) => {
     runWithOptions(input, options, nodeArgs);
   });

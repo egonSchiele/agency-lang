@@ -145,7 +145,6 @@ import type {
 } from "../ir/tsIR.js";
 import type { CompilationUnit } from "../compilationUnit.js";
 import { SourceMapBuilder } from "./sourceMap.js";
-import { directRunExtraArgsCheck } from "./typescriptBuilder/directRunArgsCheck.js";
 import { nodeWrapperParams } from "./typescriptBuilder/nodeWrapperParams.js";
 import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
@@ -4735,8 +4734,11 @@ export class TypeScriptBuilder {
         this.compilationUnit.graphNodes.find((n) => n.nodeName === "main")
           ?.parameters.length ?? 0;
       const mainCallArgs = [
-        ...Array.from({ length: mainParamCount }, (_unused, i) =>
-          $(ts.id("__process")).prop("argv").index(ts.num(2 + i)).done()),
+        // One `undefined` per declared parameter, so `initialState` lands in
+        // the hidden final slot rather than the first declared one. A program's
+        // command line belongs to the program: `std::args` reads it, and the
+        // compiler does not.
+        ...Array.from({ length: mainParamCount }, () => ts.id("undefined")),
         ts.id("initialState"),
       ];
       result.push(
@@ -4749,7 +4751,6 @@ export class TypeScriptBuilder {
             ]),
           ),
           ts.statements([
-            directRunExtraArgsCheck(mainParamCount),
             ts.tryCatch(
             ts.statements([
               ts.varDecl(

@@ -196,37 +196,68 @@ node main(task: string): string {
   }
   console.log("Test 7 passed");
 
-  // --- Test 8: run forwards trailing args to the entry node ---
-  console.log("--- Test 8: run argument passthrough ---");
+  // --- Test 8: a program reads its own command line ---
+  console.log("--- Test 8: command line reaches the program ---");
+  writeFile(dir, "greet.agency", `import { parseArgs } from "std::args"
+
+node main() {
+  const args = parseArgs({
+    programName: "greet",
+    flags: { name: { type: "string", default: "world" } },
+  })
+  print("Hello, " + args.flags.name + "!")
+}
+`);
+  // The installed binary, not npx: npx consumes `--` before agency sees it, and
+  // `--` is required for a dash-leading value. One assertion, three guarantees:
+  // the words reach process.argv, no guard rejects them, and std::args parses
+  // them.
+  const greeted = run(dir, "./node_modules/.bin/agency run greet.agency -- --name alice");
+  assertIncludes(greeted, "Hello, alice!");
+
+  // A short phrase: commander re-wraps help text to the terminal width, so a
+  // longer assertion can straddle a line break and fail on correct output.
+  const runHelp = run(dir, "./node_modules/.bin/agency run --help");
+  assertIncludes(runHelp, "Arguments passed through to the program");
+
+  // A declared parameter is no longer filled from the command line, and the
+  // runtime state object must never land in it. It used to arrive as the first
+  // argument, printing "[object Object]".
   writeFile(dir, "argful.agency", `node main(task: string): string {
   print("got: " + task)
   return task
 }
 `);
-  // No `--` here: npx consumes it before agency sees the args. Plain
-  // trailing positionals work; `--` also works when invoking the agency
-  // binary directly (needed for dash-leading args).
-  const withArg = run(dir, "npx agency run argful.agency hello");
-  assertIncludes(withArg, "got: hello");
-  // No argv: the parameter is undefined. This pins the direct-run bug fix —
-  // the runtime state object must never land in a declared parameter (it
-  // used to arrive as the first argument, printing "[object Object]").
-  const withoutArg = run(dir, "npx agency run argful.agency");
-  assertIncludes(withoutArg, "got: undefined");
+  // Supplying a word makes this assertion distinguish the new contract from
+  // the old argv-to-parameter mapping.
+  const withoutMappedArg = run(
+    dir,
+    "./node_modules/.bin/agency run argful.agency ignored",
+  );
+  assertIncludes(withoutMappedArg, "got: undefined");
   console.log("Test 8 passed");
 
   // --- Test 8b: a node parameter default applies on the direct-run path ---
-  console.log("--- Test 8b: direct-run argv with a parameter default ---");
+  console.log("--- Test 8b: direct-run parameter default ---");
   writeFile(dir, "argdefault.agency", `node main(name: string = "fallback"): string {
   print("got: " + name)
   return name
 }
 `);
-  const defaulted = run(dir, "npx agency run argdefault.agency");
+  const defaulted = run(
+    dir,
+    "./node_modules/.bin/agency run argdefault.agency Ada",
+  );
   assertIncludes(defaulted, "got: fallback");
-  const explicit = run(dir, "npx agency run argdefault.agency Ada");
-  assertIncludes(explicit, "got: Ada");
   console.log("Test 8b passed");
+
+  // --- Test 8c: a packed standalone program reads its command line too ---
+  console.log("--- Test 8c: packed output command line ---");
+  run(dir, "./node_modules/.bin/agency pack greet.agency -o packed-greet.mjs");
+  // No `--` here: node passes everything after the script through untouched.
+  const packedGreeting = run(dir, "node packed-greet.mjs --name alice");
+  assertIncludes(packedGreeting, "Hello, alice!");
+  console.log("Test 8c passed");
 
   console.log("=== All CLI tests passed ===");
   cleanup(dir);

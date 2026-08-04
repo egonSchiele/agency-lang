@@ -4,6 +4,7 @@
 // result and never see the transport shape. Every failure — network, HTTP,
 // JSON, schema, or a `success:false` body — surfaces as a ServeRequestError.
 
+import { z } from "zod";
 import { hasInterrupts } from "@/runtime/interrupts.js";
 import type { Interrupt } from "@/runtime/interrupts.js";
 import { isFailure } from "@/runtime/result.js";
@@ -33,6 +34,29 @@ export type ServeManifest = {
 
 /** Any serve request that did not produce a usable result. */
 export class ServeRequestError extends Error {}
+
+// Wire schemas for the serve manifest. The optional function fields tolerate a
+// wrong-typed value by falling back to `undefined` (via `.catch`), matching the
+// original hand-rolled leniency: a malformed optional is dropped, not fatal.
+const nodeManifestSchema = z.object({
+  name: z.string(),
+  parameters: z.array(z.string()),
+  interruptEffects: z.array(z.string()),
+});
+
+const functionManifestSchema = z.object({
+  name: z.string(),
+  parameters: z.array(z.string()),
+  interruptEffects: z.array(z.string()),
+  description: z.string().optional().catch(undefined),
+  destructive: z.boolean().optional().catch(undefined),
+  idempotent: z.boolean().optional().catch(undefined),
+});
+
+const manifestSchema = z.object({
+  nodes: z.array(nodeManifestSchema),
+  functions: z.array(functionManifestSchema),
+});
 
 export type ServeClient = {
   /** GET /list, validated. */
@@ -171,62 +195,21 @@ function throwIfAgentFailure(value: unknown): void {
 }
 
 function validateManifest(json: unknown): ServeManifest {
-  if (json === null || typeof json !== "object") {
-    throw new ServeRequestError("manifest is not an object");
-  }
-  const body = json as { nodes?: unknown; functions?: unknown };
-  if (!Array.isArray(body.nodes) || !Array.isArray(body.functions)) {
-    throw new ServeRequestError("manifest is missing nodes/functions arrays");
-  }
-  return {
-    nodes: body.nodes.map(validateNode),
-    functions: body.functions.map(validateFunction),
-  };
+  return parseValue(manifestSchema, json);
 }
 
-function validateNode(item: unknown): ServeNodeManifest {
-  const fields = asManifestObject(item, "node");
-  const name = requireString(fields.name, "node name");
-  return {
-    name,
-    parameters: requireStringArray(fields.parameters, `node ${name} parameters`),
-    interruptEffects: requireStringArray(fields.interruptEffects, `node ${name} interruptEffects`),
-  };
-}
-
-function validateFunction(item: unknown): ServeFunctionManifest {
-  const fields = asManifestObject(item, "function");
-  const name = requireString(fields.name, "function name");
-  const manifest: ServeFunctionManifest = {
-    name,
-    parameters: requireStringArray(fields.parameters, `function ${name} parameters`),
-    interruptEffects: requireStringArray(fields.interruptEffects, `function ${name} interruptEffects`),
-  };
-  if (typeof fields.description === "string") manifest.description = fields.description;
-  if (typeof fields.destructive === "boolean") manifest.destructive = fields.destructive;
-  if (typeof fields.idempotent === "boolean") manifest.idempotent = fields.idempotent;
-  return manifest;
-}
-
-function asManifestObject(item: unknown, kind: string): Record<string, unknown> {
-  if (item === null || typeof item !== "object" || Array.isArray(item)) {
-    throw new ServeRequestError(`each ${kind} entry must be an object`);
+/** Validate a wire value against a schema, surfacing any failure as a
+ *  ServeRequestError with the offending field path. */
+function parseValue<T>(schema: z.ZodType<T>, value: unknown): T {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const where = issue && issue.path.length > 0 ? `${issue.path.join(".")}: ` : "";
+    throw new ServeRequestError(
+      `unexpected serve manifest value: ${where}${issue?.message ?? "invalid"}`,
+    );
   }
-  return item as Record<string, unknown>;
-}
-
-function requireString(value: unknown, label: string): string {
-  if (typeof value !== "string") {
-    throw new ServeRequestError(`${label} must be a string`);
-  }
-  return value;
-}
-
-function requireStringArray(value: unknown, label: string): string[] {
-  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
-    throw new ServeRequestError(`${label} must be an array of strings`);
-  }
-  return value as string[];
+  return result.data;
 }
 
 function message(error: unknown): string {

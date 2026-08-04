@@ -14,7 +14,6 @@ const remoteRecipeMocks = vi.hoisted(() => ({
   runProjectsCreate: vi.fn(),
   runKeysList: vi.fn(),
   runKeysCreate: vi.fn(),
-  runInspect: vi.fn(),
   runPull: vi.fn(),
   runLogs: vi.fn(),
 }));
@@ -29,9 +28,8 @@ vi.mock("@/cli/remote/commands/keys.js", () => ({
   runKeysList: remoteRecipeMocks.runKeysList,
   runKeysCreate: remoteRecipeMocks.runKeysCreate,
 }));
-// inspect/pull/logs recipes are mocked; logsMode and util stay REAL so the
+// pull/logs recipes are mocked; logsMode and util stay REAL so the
 // registration's mode/TTY preflight and clean-exit are exercised.
-vi.mock("@/cli/remote/commands/inspect.js", () => ({ runInspect: remoteRecipeMocks.runInspect }));
 vi.mock("@/cli/remote/commands/pull.js", () => ({ runPull: remoteRecipeMocks.runPull }));
 vi.mock("@/cli/remote/commands/logs.js", () => ({ runLogs: remoteRecipeMocks.runLogs }));
 
@@ -153,7 +151,6 @@ describe("agency CLI command tree", () => {
     expect(remote?.commands.map((command) => command.name()).sort()).toEqual([
       "call",
       "deploy",
-      "inspect",
       "keys",
       "link",
       "logs",
@@ -393,16 +390,6 @@ describe("remote management command registration", () => {
       program.parseAsync(["node", "agency", "remote", "keys", "create", "ci"]),
     ).rejects.toMatchObject({ code: "commander.missingMandatoryOptionValue" });
     expect(remoteRecipeMocks.runKeysCreate).not.toHaveBeenCalled();
-  });
-
-  it("remote inspect forwards options and context", async () => {
-    await createProgram().parseAsync([
-      "node", "agency", "remote", "inspect", "--project", "p", "--host", "https://h",
-    ]);
-    expect(remoteRecipeMocks.runInspect).toHaveBeenCalledWith(
-      { project: "p", host: "https://h" },
-      CONTEXT,
-    );
   });
 
   it("remote pull forwards --out/--force and context", async () => {

@@ -5,6 +5,8 @@
 // internal id never leaves this file. Every failure — network, HTTP, JSON,
 // schema, or a `success:false` body — surfaces as an AccountRequestError.
 
+import { z } from "zod";
+
 export type ProjectSummary = {
   projectId: string;
   name: string;
@@ -58,6 +60,24 @@ export class AccountRequestError extends Error {}
 export class AccountScopeError extends AccountRequestError {}
 
 const ACCOUNT_SCOPE_ERROR = "This endpoint requires an account-scoped API key";
+
+// Wire schemas for statelog's account shapes. A project key's `projectId` here
+// is the internal database id (a string); the internal→slug translation happens
+// after parsing.
+const whoamiSchema = z.object({ userId: z.string() });
+
+const rawProjectSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+});
+
+const keyBaseSchema = { id: z.string(), name: z.string().nullable(), createdAt: z.string() };
+const rawKeySummarySchema = z.discriminatedUnion("scope", [
+  z.object({ ...keyBaseSchema, scope: z.literal("account"), projectId: z.null() }),
+  z.object({ ...keyBaseSchema, scope: z.literal("project"), projectId: z.string() }),
+]);
 
 export type AccountClient = {
   whoami(): Promise<{ userId: string }>;
@@ -182,25 +202,11 @@ function toProjectSummary(raw: RawProject): ProjectSummary {
 }
 
 function validateWhoami(value: unknown): { userId: string } {
-  const obj = asObject(value);
-  if (!obj || typeof obj.userId !== "string") {
-    throw new AccountRequestError("whoami response missing userId");
-  }
-  return { userId: obj.userId };
+  return parseValue(whoamiSchema, value);
 }
 
 function validateRawProject(value: unknown): RawProject {
-  const obj = asObject(value);
-  if (!obj) {
-    throw new AccountRequestError("each project entry must be an object");
-  }
-  const id = requireString(obj.id, "project id");
-  const project_id = requireString(obj.project_id, "project project_id");
-  const name = requireString(obj.name, "project name");
-  if (obj.description !== null && typeof obj.description !== "string") {
-    throw new AccountRequestError("project description must be a string or null");
-  }
-  return { id, project_id, name, description: obj.description };
+  return parseValue(rawProjectSchema, value);
 }
 
 /** internal id → public slug, so a listed key's project can be shown by slug.
@@ -215,26 +221,22 @@ function slugByInternalId(projects: RawProject[]): Record<string, string> {
 }
 
 function validateRawKeySummary(value: unknown): RawKeySummary {
-  const obj = asObject(value);
-  if (!obj) {
-    throw new AccountRequestError("each key entry must be an object");
+  return parseValue(rawKeySummarySchema, value);
+}
+
+/** Validate a wire value against a schema, surfacing any failure as an
+ *  AccountRequestError with the offending field path so the message stays
+ *  actionable. */
+function parseValue<T>(schema: z.ZodType<T>, value: unknown): T {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const where = issue && issue.path.length > 0 ? `${issue.path.join(".")}: ` : "";
+    throw new AccountRequestError(
+      `unexpected account response value: ${where}${issue?.message ?? "invalid"}`,
+    );
   }
-  const id = requireString(obj.id, "key id");
-  if (obj.name !== null && typeof obj.name !== "string") {
-    throw new AccountRequestError("key name must be a string or null");
-  }
-  const createdAt = requireString(obj.createdAt, "key createdAt");
-  const base: KeySummaryBase = { id, name: obj.name, createdAt };
-  if (obj.scope === "account") {
-    if (obj.projectId !== null) {
-      throw new AccountRequestError("account key must have a null projectId");
-    }
-    return { ...base, scope: "account", projectId: null };
-  }
-  if (obj.scope === "project") {
-    return { ...base, scope: "project", projectId: requireString(obj.projectId, "project key projectId") };
-  }
-  throw new AccountRequestError(`unknown key scope ${String(obj.scope)}`);
+  return result.data;
 }
 
 /** Replace a project key's internal id with its public slug (or a placeholder
@@ -271,13 +273,6 @@ function asObject(value: unknown): Record<string, unknown> | null {
 function asArray(value: unknown, label: string): unknown[] {
   if (!Array.isArray(value)) {
     throw new AccountRequestError(`${label} must be an array`);
-  }
-  return value;
-}
-
-function requireString(value: unknown, label: string): string {
-  if (typeof value !== "string") {
-    throw new AccountRequestError(`${label} must be a string`);
   }
   return value;
 }

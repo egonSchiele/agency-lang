@@ -27,7 +27,6 @@ import { runProjectsList, runProjectsCreate } from "@/cli/remote/commands/projec
 import type { CreateProjectOptions } from "@/cli/remote/commands/projects.js";
 import { runKeysList, runKeysCreate } from "@/cli/remote/commands/keys.js";
 import type { CreateKeyOptions } from "@/cli/remote/commands/keys.js";
-import { runInspect } from "@/cli/remote/commands/inspect.js";
 import { runPull } from "@/cli/remote/commands/pull.js";
 import type { PullOptions } from "@/cli/remote/commands/pull.js";
 import { runLogs } from "@/cli/remote/commands/logs.js";
@@ -553,14 +552,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   const PROJECT_OPTION = "--project <slug>";
   const PROJECT_DESC = "project slug (default: the linked project)";
-
-  remoteCmd
-    .command("inspect")
-    .description("Show what's deployed (files and their exported nodes)")
-    .option(PROJECT_OPTION, PROJECT_DESC)
-    .option(HOST_OPTION, HOST_DESC)
-    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
-    .action((opts: ProjectCommandOptions) => runInspect(opts, getConfigContext()));
 
   remoteCmd
     .command("pull")

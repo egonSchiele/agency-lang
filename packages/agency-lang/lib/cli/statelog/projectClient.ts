@@ -4,18 +4,7 @@
 // the HTTP-success `Trace not found`). Callers speak the public slug and get
 // validated typed values; every failure surfaces as a ProjectRequestError.
 
-export type AgentFile = {
-  name: string;
-  nodeNames: string[];
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type AgentMetadata = {
-  entryPoint: string | null;
-  lastUploadAt: string | null;
-  files: AgentFile[];
-};
+import { z } from "zod";
 
 export type SourceFile = { name: string; contents: string };
 
@@ -33,8 +22,33 @@ export type TraceLog = {
 /** Any project request that did not produce a usable result. */
 export class ProjectRequestError extends Error {}
 
+// Wire schemas: statelog's snake_case shapes, mapped to the camelCase types
+// above. `.passthrough()` on `data` keeps it opaque past `type` (the viewer
+// parses the rest); `.min(1)` ids reject empty strings that would slip past a
+// downstream truthiness check.
+const sourceBundleSchema = z.object({
+  files: z.array(z.object({ name: z.string(), contents: z.string() })),
+});
+
+const traceSummarySchema = z
+  .object({ id: z.string().min(1), created_at: z.string() })
+  .transform((trace) => ({ id: trace.id, createdAt: trace.created_at }));
+
+const traceLogSchema = z
+  .object({
+    trace_id: z.string().min(1),
+    span_id: z.string().nullable(),
+    parent_span_id: z.string().nullable(),
+    data: z.object({ type: z.string() }).passthrough(),
+  })
+  .transform((row) => ({
+    traceId: row.trace_id,
+    spanId: row.span_id,
+    parentSpanId: row.parent_span_id,
+    data: row.data as { type: string } & Record<string, unknown>,
+  }));
+
 export type ProjectClient = {
-  inspectAgent(): Promise<AgentMetadata>;
   pullSource(): Promise<SourceFile[]>;
   listTraces(): Promise<TraceSummary[]>;
   traceLogs(traceId: string): Promise<TraceLog[]>;
@@ -97,23 +111,42 @@ export function createProjectClient(
   }
 
   return {
-    async inspectAgent() {
-      return validateAgentMetadata(await request("agent"));
-    },
     async pullSource() {
-      return validateSourceFiles(await request("source"));
+      return parseWire(sourceBundleSchema, await request("source")).files;
     },
     async listTraces() {
-      return asArray(await request("traces"), "traces").map(validateTraceSummary);
+      return parseWire(z.array(traceSummarySchema), await request("traces"));
     },
     async traceLogs(traceId) {
       // Validate the argument BEFORE the request (an empty id would pass the
       // viewer's truthiness check nowhere).
-      const requested = requireNonEmptyString(traceId, "trace id");
-      const value = await request("traces", requested, "logs");
-      return asArray(value, "logs").map((row) => validateTraceLog(row, requested));
+      const requested = parseWire(
+        z.string().min(1, "trace id must not be empty"),
+        traceId,
+      );
+      const logs = parseWire(z.array(traceLogSchema), await request("traces", requested, "logs"));
+      for (const log of logs) {
+        if (log.traceId !== requested) {
+          throw new ProjectRequestError(
+            `log trace_id '${log.traceId}' does not match the requested trace '${requested}'`,
+          );
+        }
+      }
+      return logs;
     },
   };
+}
+
+/** Validate a wire value against a schema, surfacing any failure as a
+ *  ProjectRequestError (callers only care that it's the sealed error type). */
+function parseWire<T>(schema: z.ZodType<T>, value: unknown): T {
+  const result = schema.safeParse(value);
+  if (!result.success) {
+    throw new ProjectRequestError(
+      `unexpected project response value: ${result.error.issues[0]?.message ?? "invalid"}`,
+    );
+  }
+  return result.data;
 }
 
 async function parseResponseJson(
@@ -134,120 +167,11 @@ function validateEnvelope(value: unknown): { success: boolean; value?: unknown; 
   return obj as { success: boolean; value?: unknown; error?: unknown };
 }
 
-function validateAgentMetadata(value: unknown): AgentMetadata {
-  const obj = asObject(value);
-  if (!obj) {
-    throw new ProjectRequestError("agent metadata must be an object");
-  }
-  return {
-    entryPoint: nullableString(obj.entryPoint, "entryPoint"),
-    lastUploadAt: nullableString(obj.lastUploadAt, "lastUploadAt"),
-    files: asArray(obj.files, "agent files").map(validateAgentFile),
-  };
-}
-
-function validateAgentFile(value: unknown): AgentFile {
-  const obj = asObject(value);
-  if (!obj) {
-    throw new ProjectRequestError("each agent file must be an object");
-  }
-  return {
-    name: requireString(obj.name, "file name"),
-    nodeNames: requireStringArray(obj.nodeNames, "file nodeNames"),
-    createdAt: requireString(obj.createdAt, "file createdAt"),
-    updatedAt: requireString(obj.updatedAt, "file updatedAt"),
-  };
-}
-
-function validateSourceFiles(value: unknown): SourceFile[] {
-  const obj = asObject(value);
-  if (!obj) {
-    throw new ProjectRequestError("source response must be an object");
-  }
-  return asArray(obj.files, "source files").map((file) => {
-    const fileObj = asObject(file);
-    if (!fileObj) {
-      throw new ProjectRequestError("each source file must be an object");
-    }
-    return {
-      name: requireString(fileObj.name, "source file name"),
-      contents: requireString(fileObj.contents, "source file contents"),
-    };
-  });
-}
-
-function validateTraceSummary(value: unknown): TraceSummary {
-  const obj = asObject(value);
-  if (!obj) {
-    throw new ProjectRequestError("each trace must be an object");
-  }
-  return {
-    id: requireNonEmptyString(obj.id, "trace id"),
-    createdAt: requireString(obj.created_at, "trace created_at"),
-  };
-}
-
-function validateTraceLog(value: unknown, requestedTraceId: string): TraceLog {
-  const obj = asObject(value);
-  if (!obj) {
-    throw new ProjectRequestError("each log must be an object");
-  }
-  const traceId = requireNonEmptyString(obj.trace_id, "log trace_id");
-  if (traceId !== requestedTraceId) {
-    throw new ProjectRequestError(
-      `log trace_id '${traceId}' does not match the requested trace '${requestedTraceId}'`,
-    );
-  }
-  const data = asObject(obj.data);
-  if (!data || typeof data.type !== "string") {
-    throw new ProjectRequestError("log data must be an object with a string type");
-  }
-  return {
-    traceId,
-    spanId: nullableString(obj.span_id, "log span_id"),
-    parentSpanId: nullableString(obj.parent_span_id, "log parent_span_id"),
-    data: data as { type: string } & Record<string, unknown>,
-  };
-}
-
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
   return value as Record<string, unknown>;
-}
-
-function asArray(value: unknown, label: string): unknown[] {
-  if (!Array.isArray(value)) {
-    throw new ProjectRequestError(`${label} must be an array`);
-  }
-  return value;
-}
-
-function requireString(value: unknown, label: string): string {
-  if (typeof value !== "string") {
-    throw new ProjectRequestError(`${label} must be a string`);
-  }
-  return value;
-}
-
-function requireNonEmptyString(value: unknown, label: string): string {
-  const text = requireString(value, label);
-  if (text.length === 0) {
-    throw new ProjectRequestError(`${label} must not be empty`);
-  }
-  return text;
-}
-
-function nullableString(value: unknown, label: string): string | null {
-  return value === null ? null : requireString(value, label);
-}
-
-function requireStringArray(value: unknown, label: string): string[] {
-  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
-    throw new ProjectRequestError(`${label} must be an array of strings`);
-  }
-  return value as string[];
 }
 
 function message(error: unknown): string {

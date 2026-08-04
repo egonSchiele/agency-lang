@@ -15,6 +15,10 @@ function client() {
   return createProjectClient("https://h", "proj", "key");
 }
 
+// A well-formed `source` envelope, used as the transport vehicle for the
+// route/error tests that aren't about a specific value shape.
+const okSource = { success: true, value: { files: [] } };
+
 beforeEach(() => {
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
@@ -26,19 +30,10 @@ afterEach(() => {
 });
 
 describe("projectClient transport", () => {
-  it("GET /agent uses the encoded slug path, bearer header, no body", async () => {
-    fetchMock.mockResolvedValue(
-      response(200, {
-        success: true,
-        value: {
-          entryPoint: "main.agency",
-          lastUploadAt: "2026-08-03T00:00:00Z",
-          files: [{ name: "main.agency", nodeNames: ["main"], createdAt: "t", updatedAt: "t" }],
-        },
-      }),
-    );
-    await createProjectClient("https://h", "my proj", "key").inspectAgent();
-    expect(fetchMock).toHaveBeenCalledWith("https://h/api/projects/my%20proj/agent", {
+  it("GET /source uses the encoded slug path, bearer header, no body", async () => {
+    fetchMock.mockResolvedValue(response(200, okSource));
+    await createProjectClient("https://h", "my proj", "key").pullSource();
+    expect(fetchMock).toHaveBeenCalledWith("https://h/api/projects/my%20proj/source", {
       method: "GET",
       headers: { Authorization: "Bearer key" },
     });
@@ -55,14 +50,14 @@ describe("projectClient transport", () => {
 
   it("HTTP 404 → the actionable slug message", async () => {
     fetchMock.mockResolvedValue(response(404, { error: "Project not found" }));
-    await expect(client().inspectAgent()).rejects.toThrow(/not found — check the slug/);
+    await expect(client().pullSource()).rejects.toThrow(/not found — check the slug/);
   });
 
   it("HTTP 403 → the server message", async () => {
     fetchMock.mockResolvedValue(
       response(403, { error: "You do not have access to this project" }),
     );
-    await expect(client().inspectAgent()).rejects.toThrow("You do not have access to this project");
+    await expect(client().pullSource()).rejects.toThrow("You do not have access to this project");
   });
 
   it("HTTP 200 success:false 'Trace not found' passes through verbatim", async () => {
@@ -110,49 +105,37 @@ describe("projectClient transport", () => {
     expect((await client().listTraces()).map((t) => t.id)).toEqual(["b", "a"]);
   });
 
-  it("wraps a network error without exposing the key", async () => {
-    fetchMock.mockRejectedValue(new Error("socket closed"));
-    const error = await client().inspectAgent().catch((caughtError) => caughtError);
-    expect((error as Error).message).toContain("could not reach https://h");
-    expect((error as Error).message).not.toContain("key");
+  it("maps a source bundle to name/contents files", async () => {
+    fetchMock.mockResolvedValue(
+      response(200, { success: true, value: { files: [{ name: "a.agency", contents: "x" }] } }),
+    );
+    await expect(client().pullSource()).resolves.toEqual([{ name: "a.agency", contents: "x" }]);
   });
 
-  it("accepts null entryPoint/lastUploadAt", async () => {
-    fetchMock.mockResolvedValue(
-      response(200, { success: true, value: { entryPoint: null, lastUploadAt: null, files: [] } }),
-    );
-    await expect(client().inspectAgent()).resolves.toEqual({
-      entryPoint: null,
-      lastUploadAt: null,
-      files: [],
-    });
+  it("wraps a network error without exposing the key", async () => {
+    fetchMock.mockRejectedValue(new Error("socket closed"));
+    const error = await client().pullSource().catch((caughtError) => caughtError);
+    expect((error as Error).message).toContain("could not reach https://h");
+    expect((error as Error).message).not.toContain("key");
   });
 });
 
 // Every malformed success value must surface as a ProjectRequestError.
-const AGENT = (value: unknown) => ({ success: true, value });
-const okFile = { name: "a.agency", nodeNames: ["a"], createdAt: "t", updatedAt: "t" };
+const ENVELOPE = (value: unknown) => ({ success: true, value });
 
-describe.each<[string, unknown, "inspectAgent" | "pullSource" | "listTraces" | "traceLogs"]>([
-  ["agent entryPoint:42", AGENT({ entryPoint: 42, lastUploadAt: null, files: [] }), "inspectAgent"],
-  ["agent lastUploadAt:42", AGENT({ entryPoint: null, lastUploadAt: 42, files: [] }), "inspectAgent"],
-  ["agent files:{}", AGENT({ entryPoint: null, lastUploadAt: null, files: {} }), "inspectAgent"],
-  ["agent file name:42", AGENT({ entryPoint: null, lastUploadAt: null, files: [{ ...okFile, name: 42 }] }), "inspectAgent"],
-  ["agent file nodeNames:42", AGENT({ entryPoint: null, lastUploadAt: null, files: [{ ...okFile, nodeNames: 42 }] }), "inspectAgent"],
-  ["agent file createdAt:42", AGENT({ entryPoint: null, lastUploadAt: null, files: [{ ...okFile, createdAt: 42 }] }), "inspectAgent"],
-  ["agent file updatedAt:42", AGENT({ entryPoint: null, lastUploadAt: null, files: [{ ...okFile, updatedAt: 42 }] }), "inspectAgent"],
-  ["source bare array", AGENT([{ name: "a", contents: "x" }]), "pullSource"],
-  ["source files:{}", AGENT({ files: {} }), "pullSource"],
-  ["source name:42", AGENT({ files: [{ name: 42, contents: "x" }] }), "pullSource"],
-  ["source contents:42", AGENT({ files: [{ name: "a", contents: 42 }] }), "pullSource"],
-  ["traces non-array", AGENT({}), "listTraces"],
-  ["traces id:''", AGENT([{ id: "", created_at: "t" }]), "listTraces"],
-  ["traces id:42", AGENT([{ id: 42, created_at: "t" }]), "listTraces"],
-  ["traces created_at:42", AGENT([{ id: "a", created_at: 42 }]), "listTraces"],
-  ["logs trace_id:''", AGENT([{ trace_id: "", span_id: null, parent_span_id: null, data: { type: "x" } }]), "traceLogs"],
-  ["logs span numeric", AGENT([{ trace_id: "t1", span_id: 42, parent_span_id: null, data: { type: "x" } }]), "traceLogs"],
-  ["logs data array", AGENT([{ trace_id: "t1", span_id: null, parent_span_id: null, data: [] }]), "traceLogs"],
-  ["logs data.type non-string", AGENT([{ trace_id: "t1", span_id: null, parent_span_id: null, data: { type: 1 } }]), "traceLogs"],
+describe.each<[string, unknown, "pullSource" | "listTraces" | "traceLogs"]>([
+  ["source bare array", ENVELOPE([{ name: "a", contents: "x" }]), "pullSource"],
+  ["source files:{}", ENVELOPE({ files: {} }), "pullSource"],
+  ["source name:42", ENVELOPE({ files: [{ name: 42, contents: "x" }] }), "pullSource"],
+  ["source contents:42", ENVELOPE({ files: [{ name: "a", contents: 42 }] }), "pullSource"],
+  ["traces non-array", ENVELOPE({}), "listTraces"],
+  ["traces id:''", ENVELOPE([{ id: "", created_at: "t" }]), "listTraces"],
+  ["traces id:42", ENVELOPE([{ id: 42, created_at: "t" }]), "listTraces"],
+  ["traces created_at:42", ENVELOPE([{ id: "a", created_at: 42 }]), "listTraces"],
+  ["logs trace_id:''", ENVELOPE([{ trace_id: "", span_id: null, parent_span_id: null, data: { type: "x" } }]), "traceLogs"],
+  ["logs span numeric", ENVELOPE([{ trace_id: "t1", span_id: 42, parent_span_id: null, data: { type: "x" } }]), "traceLogs"],
+  ["logs data array", ENVELOPE([{ trace_id: "t1", span_id: null, parent_span_id: null, data: [] }]), "traceLogs"],
+  ["logs data.type non-string", ENVELOPE([{ trace_id: "t1", span_id: null, parent_span_id: null, data: { type: 1 } }]), "traceLogs"],
 ])("rejects malformed success value: %s", (_label, body, method) => {
   it("throws ProjectRequestError", async () => {
     fetchMock.mockResolvedValue(response(200, body));
@@ -168,12 +151,12 @@ describe("projectClient envelope/transport edge cases", () => {
       status: 200,
       json: vi.fn().mockRejectedValue(new SyntaxError("bad")),
     } as unknown as Response);
-    await expect(client().inspectAgent()).rejects.toThrow(/non-JSON response \(HTTP 200\)/);
+    await expect(client().pullSource()).rejects.toThrow(/non-JSON response \(HTTP 200\)/);
   });
 
   it("a malformed envelope (success not boolean) throws", async () => {
     fetchMock.mockResolvedValue(response(200, { success: "yes" }));
-    await expect(client().inspectAgent()).rejects.toThrow("unexpected project response shape");
+    await expect(client().pullSource()).rejects.toThrow("unexpected project response shape");
   });
 
   it("a non-JSON HTTP 500 mentions HTTP 500", async () => {
@@ -182,6 +165,6 @@ describe("projectClient envelope/transport edge cases", () => {
       status: 500,
       json: vi.fn().mockRejectedValue(new SyntaxError("bad")),
     } as unknown as Response);
-    await expect(client().inspectAgent()).rejects.toThrow("statelog request failed (HTTP 500)");
+    await expect(client().pullSource()).rejects.toThrow("statelog request failed (HTTP 500)");
   });
 });

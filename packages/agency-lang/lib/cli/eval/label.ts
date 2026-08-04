@@ -4,8 +4,6 @@ import * as path from "path";
 
 import type { AgencyConfig } from "@/config.js";
 import { openLabelingSession, type LabelingSessionController } from "@/eval/label/controller.js";
-import { loadBatch } from "@/eval/label/load/index.js";
-import { DEFAULT_MAX_INGEST_BYTES } from "@/eval/label/load/types.js";
 import { readFieldOrder } from "@/eval/label/store.js";
 import { runLabelTui } from "@/eval/label/labelTui.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
@@ -17,12 +15,6 @@ const DEFAULT_STORE_DIRECTORY = "labels";
 const FALLBACK_ANNOTATOR_ID = "human";
 
 export type EvalLabelOptions = {
-  /** A run directory to ingest before labelling. Optional: without it, the
-   *  session labels whatever the store already holds. */
-  runDir?: string;
-  /** Batch name recorded on every occurrence this ingest creates. Required
-   *  with `runDir`, meaningless without it. */
-  source?: string;
   checklist?: string;
   store?: string;
   annotator?: string;
@@ -34,7 +26,6 @@ export type EvalLabelOptions = {
 export type EvalLabelDependencies = {
   openSession: typeof openLabelingSession;
   runTui: typeof runLabelTui;
-  loadBatch: typeof loadBatch;
   /** Built here rather than inside the TUI so the terminal lifecycle has one
    *  owner, alongside the session it must be torn down with. */
   makeScreen(): Screen;
@@ -94,7 +85,6 @@ export function terminalDimension(value: number | undefined, fallback: number): 
 const defaultDependencies: EvalLabelDependencies = {
   openSession: openLabelingSession,
   runTui: runLabelTui,
-  loadBatch,
   makeScreen: () => new Screen({
     input: new TerminalInput({ suppressSigint: true }),
     output: new TerminalOutput(),
@@ -127,23 +117,6 @@ export async function evalLabel(
   if (!fs.existsSync(options.checklist)) {
     throw new Error(`Checklist file not found: ${options.checklist}`);
   }
-  if (options.runDir !== undefined && !fs.existsSync(options.runDir)) {
-    throw new Error(`Source run directory not found: ${options.runDir}`);
-  }
-  // Ingesting creates occurrences, and an occurrence without a source name
-  // cannot be told from any other batch when the labels are read back.
-  if (options.runDir !== undefined && (options.source ?? "").trim().length === 0) {
-    throw new Error(
-      "--source is required when a run directory is given: it names the batch on every " +
-      "occurrence, and is how you tell one agent's outputs from another's later.",
-    );
-  }
-  if (options.runDir === undefined && options.source !== undefined) {
-    throw new Error(
-      "--source only applies when ingesting. With no run directory there is nothing to ingest; " +
-      "this command labels what the store already holds.",
-    );
-  }
   if (!dependencies.isInteractive()) {
     throw new Error(
       "agency eval label needs an interactive terminal: it shows outputs and reads " +
@@ -153,21 +126,7 @@ export async function evalLabel(
 
   const config = options.config ?? {};
   const storeDir = resolveLabelStore(options, config);
-  const batch = options.runDir === undefined ? undefined : dependencies.loadBatch({
-    source: {
-      path: path.resolve(options.runDir),
-      requestedFormat: "run",
-      includeTaskField: true,
-      recursive: false,
-    },
-    sourceName: (options.source ?? "").trim(),
-    constantFields: {},
-    maxBytes: DEFAULT_MAX_INGEST_BYTES,
-    reportWarning: (message) => console.warn(message),
-  });
-
   const controller: LabelingSessionController = await dependencies.openSession({
-    ingest: batch,
     storeDir,
     checklistFile: path.resolve(options.checklist),
     annotator: resolveAnnotator(options, dependencies),

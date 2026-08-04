@@ -1,6 +1,21 @@
 # The human-label store
 
-`agency eval label` builds a dataset of human judgements about agent outputs.
+`agency label` builds a dataset of human judgements about agent outputs. It is
+registered twice — as `agency label` and as `agency eval label` — following the
+same dual registration `optimize` uses.
+
+Three commands:
+
+```bash
+agency label ingest <source> --source <name>   # add records
+agency label --checklist <file>                # judge what the store holds
+agency label migrate <old> <new>               # move a store to the current format
+```
+
+**No option name may appear on both `label` and a subcommand.** Commander gives
+the parent priority wherever the flag sits, so a duplicate is not a conflict
+error — the subcommand silently receives `undefined`. That is why `--store` is
+declared once, on `label`, and read back from the parent by the subcommands.
 This page is about the parts that are easy to get wrong: what identifies what,
 which order writes happen in, and why validation here is stricter than anywhere
 else in the eval framework.
@@ -290,7 +305,7 @@ the shared helper.
 
 Version 1 identified an output by its execution. Version 2 identifies a record
 by its content, so **every id changes** and annotations must be rewritten.
-`agency eval label-migrate <old> <new>` does it out of place: opening a version
+`agency label migrate <old> <new>` does it out of place: opening a version
 1 store is refused with a pointer to that command, and the original is never
 touched.
 

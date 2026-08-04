@@ -1,0 +1,150 @@
+import { Command } from "commander";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { addLabelCommand, collectRepeated, type LabelCommandDependencies } from "./labelCommand.js";
+
+type Recorder = {
+  label: unknown[];
+  ingest: unknown[];
+  migrate: unknown[];
+  failures: string[];
+};
+
+let recorded: Recorder;
+
+function dependencies(): LabelCommandDependencies {
+  return {
+    getConfig: () => ({}),
+    evalLabel: vi.fn(async (options) => {
+      recorded.label.push(options);
+    }) as never,
+    evalIngest: vi.fn(async (options) => {
+      recorded.ingest.push(options);
+    }) as never,
+    evalLabelMigrate: vi.fn(async (options) => {
+      recorded.migrate.push(options);
+    }) as never,
+    fail: (message) => recorded.failures.push(message),
+  };
+}
+
+/** Both registrations on one program, exactly as the CLI wires them. */
+function program(): Command {
+  const root = new Command();
+  root.exitOverride();
+  root.configureOutput({ writeErr: () => {}, writeOut: () => {} });
+  const evalCmd = root.command("eval");
+  addLabelCommand(evalCmd, dependencies());
+  addLabelCommand(root, dependencies());
+  return root;
+}
+
+async function run(...argv: string[]): Promise<void> {
+  await program().parseAsync(argv, { from: "user" });
+}
+
+beforeEach(() => {
+  recorded = { label: [], ingest: [], migrate: [], failures: [] };
+});
+
+describe("agency label", () => {
+  it("labels whatever the store holds", async () => {
+    await run("label", "--checklist", "news.json");
+    expect(recorded.label).toEqual([expect.objectContaining({ checklist: "news.json" })]);
+  });
+
+  it("takes no positional argument, so a path is a usage error", async () => {
+    await expect(run("label", "runs/abc", "--checklist", "news.json")).rejects.toThrow();
+    expect(recorded.label).toEqual([]);
+  });
+});
+
+describe("agency label ingest", () => {
+  it("dispatches to ingest rather than treating the word as a run directory", async () => {
+    await run("label", "ingest", "./gold", "--source", "handwritten");
+    expect(recorded.ingest[0]).toMatchObject({ path: "./gold", source: "handwritten" });
+    expect(recorded.label).toEqual([]);
+  });
+
+  it("accumulates repeated --field flags", async () => {
+    await run("label", "ingest", "./gold", "--source", "s", "--field", "a=1", "--field", "b=2");
+    expect(recorded.ingest[0]).toMatchObject({ field: ["a=1", "b=2"] });
+  });
+
+  it("collects extra positionals so an expanded glob can be reported", async () => {
+    await run("label", "ingest", "a.txt", "b.txt", "--source", "s");
+    expect(recorded.ingest[0]).toMatchObject({ path: "a.txt", extraArgs: ["b.txt"] });
+  });
+
+  it("reads --no-task-field as taskField false", async () => {
+    await run("label", "ingest", "runs/a", "--source", "s", "--no-task-field");
+    expect(recorded.ingest[0]).toMatchObject({ taskField: false });
+  });
+
+  it("rejects a --max-bytes that is not a positive number", async () => {
+    await expect(run("label", "ingest", "./gold", "--source", "s", "--max-bytes", "0"))
+      .rejects.toThrow(/positive whole number/);
+  });
+});
+
+describe("agency label migrate", () => {
+  it("passes both directories through", async () => {
+    await run("label", "migrate", "labels", "labels-v2");
+    expect(recorded.migrate[0]).toMatchObject({ sourceDir: "labels", destDir: "labels-v2" });
+  });
+});
+
+describe("option shadowing between a parent and its subcommand", () => {
+  it("delivers --source to ingest, which a --source on the parent would steal", async () => {
+    // Commander gives a parent's option priority over a same-named option on a
+    // subcommand: with --source declared on both, this arrived at ingest as
+    // undefined and the command failed claiming --source was missing. Pinned
+    // here because re-adding --source to `label` would silently break it again.
+    await run("label", "ingest", "./gold", "--source", "handwritten");
+    expect(recorded.ingest[0]).toMatchObject({ source: "handwritten" });
+  });
+
+  it("delivers --store to ingest when written after the subcommand", async () => {
+    // --store is declared once, on the parent, and read back from there. When it
+    // was declared on both, the parent silently absorbed it and ingest wrote to
+    // the default store.
+    await run("label", "ingest", "./gold", "--source", "s", "--store", "custom-labels");
+    expect(recorded.ingest[0]).toMatchObject({ store: "custom-labels" });
+  });
+
+  it("delivers --store to ingest when written before the subcommand", async () => {
+    await run("label", "--store", "custom-labels", "ingest", "./gold", "--source", "s");
+    expect(recorded.ingest[0]).toMatchObject({ store: "custom-labels" });
+  });
+
+  it("leaves store undefined when the flag is absent, so config still decides", async () => {
+    await run("label", "ingest", "./gold", "--source", "s");
+    expect(recorded.ingest[0]).toMatchObject({ store: undefined });
+  });
+});
+
+describe("both registrations", () => {
+  it("exposes the same subcommands under eval", async () => {
+    await run("eval", "label", "ingest", "./gold", "--source", "handwritten");
+    expect(recorded.ingest[0]).toMatchObject({ path: "./gold" });
+  });
+
+  it("exposes the labelling screen under eval", async () => {
+    await run("eval", "label", "--checklist", "news.json");
+    expect(recorded.label[0]).toMatchObject({ checklist: "news.json" });
+  });
+
+  it("exposes migrate under eval", async () => {
+    await run("eval", "label", "migrate", "old", "new");
+    expect(recorded.migrate[0]).toMatchObject({ sourceDir: "old" });
+  });
+});
+
+describe("collectRepeated", () => {
+  it("appends without mutating the previous array", () => {
+    const first: string[] = [];
+    const second = collectRepeated("a", first);
+    expect(second).toEqual(["a"]);
+    expect(first).toEqual([]);
+  });
+});

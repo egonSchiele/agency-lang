@@ -13,6 +13,8 @@ import {
 import { loadDraftFile } from "./draft.js";
 import { loadBatch } from "./load/index.js";
 import { DEFAULT_MAX_INGEST_BYTES } from "./load/types.js";
+import { acquireStoreLock } from "./lock.js";
+import { openStore } from "./store.js";
 import { readCurrentPointer } from "./checklist.js";
 import type { AnnotationRow } from "./types.js";
 
@@ -67,21 +69,48 @@ function writeChecklist(questions: string[]): void {
   }, null, 2));
 }
 
-/** Load the run the way the CLI does, so the controller receives exactly what
- *  it would in production. */
-function loadRunBatch() {
-  return loadBatch({
+/**
+ * Ingest the run into the store, the way the CLI does.
+ *
+ * Separate from opening a session: the controller labels what the store holds
+ * and no longer ingests anything itself.
+ */
+function ingestRun(source = "agent-v1"): void {
+  const batch = loadBatch({
     source: { path: sourceDir, requestedFormat: "run", includeTaskField: true, recursive: false },
-    sourceName: "agent-v1",
+    sourceName: source,
     constantFields: {},
     maxBytes: DEFAULT_MAX_INGEST_BYTES,
     reportWarning: (message) => warnings.push(message),
   });
+  const lock = acquireStoreLock({
+    storeDir,
+    reportWarning: (message) => warnings.push(message),
+  });
+  const store = openStore({
+    storeDir,
+    lock,
+    reportWarning: (message) => warnings.push(message),
+  });
+  try {
+    store.ingest(batch);
+  } finally {
+    store.close();
+    lock.release();
+  }
 }
 
+/** Ingest, then open — the order the CLI uses. Tests that need an empty store
+ *  call `openOnly` instead. */
 async function open(dependencies = makeDependencies()): Promise<LabelingSessionController> {
+  ingestRun();
+  return openOnly(dependencies);
+}
+
+async function openOnly(
+  dependencies = makeDependencies(),
+): Promise<LabelingSessionController> {
   return createLabelingSessionOpener(dependencies)({
-    ingest: loadRunBatch(),
     storeDir,
     checklistFile,
     annotator: { kind: "human", id: "adit" },
@@ -161,8 +190,7 @@ describe("opening", () => {
   });
 
   it("refuses when the store holds nothing to label", async () => {
-    fs.rmSync(path.join(sourceDir, "inputs"), { recursive: true, force: true });
-    await expect(open()).rejects.toThrow(/nothing to label/i);
+    await expect(openOnly()).rejects.toThrow(/nothing to label/i);
     expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
   });
 

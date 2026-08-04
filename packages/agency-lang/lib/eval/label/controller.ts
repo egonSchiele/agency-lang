@@ -7,8 +7,6 @@ import {
   type NormalizedDefinition,
   type PendingRevision,
 } from "./checklist.js";
-import { describeIngestSkip } from "./load/eligibility.js";
-import type { LoadedBatch } from "./load/types.js";
 import {
   assertBindingIsCoherent,
   assertDraftMatches,
@@ -42,11 +40,6 @@ export type WallClock = { nowIso(): string };
 export type EntityIds = { questionId(): string; annotationId(): string };
 
 export type OpenLabelingSessionArgs = {
-  /** Records to add before labelling, already loaded. The controller ingests
-   *  them rather than the caller, because ingesting must happen inside the
-   *  writer lock this function owns. Absent means "label what is already
-   *  stored". */
-  ingest?: LoadedBatch;
   storeDir: string;
   checklistFile: string;
   annotator: Annotator;
@@ -135,18 +128,11 @@ async function openSession(
       fault: dependencies.fault as FaultHook | undefined,
     });
 
-    if (args.ingest !== undefined) {
-      const result = store.ingest(args.ingest);
-      for (const skip of result.skips) {
-        args.reportWarning(describeIngestSkip(skip));
-      }
-    }
-
     const corpus = store.corpusSnapshot();
     if (corpus.length === 0) {
       throw new Error(
         "There is nothing to label: the store holds no records. Add some with " +
-        "`agency eval label-ingest <source> --source <name>`.",
+        "`agency label ingest <source> --source <name>`.",
       );
     }
 

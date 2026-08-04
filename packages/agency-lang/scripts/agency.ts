@@ -39,13 +39,7 @@ import { traceLog } from "@/cli/events.js";
 import { logsView } from "@/cli/logsView.js";
 import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
-import { evalLabel } from "@/cli/eval/label.js";
-import {
-  evalIngest,
-  INGEST_PATH_DESCRIPTION,
-  SOURCE_FLAG_DESCRIPTION,
-} from "@/cli/eval/ingest.js";
-import { evalLabelMigrate } from "@/cli/eval/migrate.js";
+import { addLabelCommand, labelCommandDependencies } from "@/cli/eval/labelCommand.js";
 import { evalGrade } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
@@ -140,11 +134,6 @@ function parseBoundedInt(value: string, min: number, label: string): number {
     throw new InvalidArgumentError(label);
   }
   return n;
-}
-
-/** commander calls this once per repeat of a flag, accumulating the values. */
-export function collectRepeated(value: string, previous: string[]): string[] {
-  return [...previous, value];
 }
 
 export function parsePositiveInt(value: string): number {
@@ -774,70 +763,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       }
     });
 
-  evalCmd
-    .command("label")
-    .description("Label agent outputs by hand, building a dataset of human judgements")
-    .argument("[rundir]", "Optional run directory to ingest first; omit to label what the store holds")
-    .option("--source <name>", `${SOURCE_FLAG_DESCRIPTION} (required with a run directory)`)
-    .option("--checklist <file>", "Checklist JSON: an existing one, or { name, questions }")
-    .option("--store <dir>", "Label store directory (default: eval.labelStore, else labels/)")
-    .option("--annotator <id>", "Who is labelling (default: $USER)")
-    .action(async (
-      rundir: string | undefined,
-      opts: { source?: string; checklist?: string; store?: string; annotator?: string },
-    ) => {
-      try {
-        await evalLabel({ ...opts, runDir: rundir, config: getConfig() });
-      } catch (e) {
-        console.error(`Error: ${(e as Error).message}`);
-        process.exit(2);
-      }
-    });
-
-  evalCmd
-    .command("label-ingest")
-    .description("Add outputs to a label store, from a run, a directory of files, or a JSON array")
-    .argument("<source>", INGEST_PATH_DESCRIPTION)
-    .argument("[extra...]", "Rejected: several arguments means the shell expanded an unquoted glob")
-    .option("--source <name>", SOURCE_FLAG_DESCRIPTION)
-    .option("--format <fmt>", "auto (default), run, files, or json")
-    .option("--task <text>", "Shorthand for --field task=<text>")
-    .option("--field <name=value>", "A constant field added to every record", collectRepeated, [])
-    .option("--no-task-field", "Run sources only: drop the run's own task field")
-    .option("--recursive", "Descend into subdirectories")
-    .option("--max-bytes <n>", "Per-value size cap in bytes (default 1048576)", parsePositiveInt)
-    .option("--store <dir>", "Label store directory (default: eval.labelStore, else labels/)")
-    .action(async (source: string, extra: string[], opts: {
-      source?: string;
-      format?: string;
-      task?: string;
-      field?: string[];
-      taskField?: boolean;
-      recursive?: boolean;
-      maxBytes?: number;
-      store?: string;
-    }) => {
-      try {
-        await evalIngest({ ...opts, path: source, extraArgs: extra, config: getConfig() });
-      } catch (e) {
-        console.error(`Error: ${(e as Error).message}`);
-        process.exit(2);
-      }
-    });
-
-  evalCmd
-    .command("label-migrate")
-    .description("Rewrite a label store in the current format, writing a new store")
-    .argument("<source>", "Existing label store directory")
-    .argument("<dest>", "Where to write the migrated store; must not exist")
-    .action(async (source: string, dest: string) => {
-      try {
-        await evalLabelMigrate({ sourceDir: source, destDir: dest });
-      } catch (e) {
-        console.error(`Error: ${(e as Error).message}`);
-        process.exit(2);
-      }
-    });
+  addLabelCommand(evalCmd, labelCommandDependencies(getConfig));
+  addLabelCommand(program, labelCommandDependencies(getConfig));
 
   evalCmd
     .command("judge")

@@ -301,7 +301,7 @@ function assertStoreVersion(storeDir: string): void {
   throw new StoreVersionError(
     `${storeDir} uses label store format ${String(found)}; this build writes ` +
     `format ${CURRENT_STORE_VERSION}. Migrate it with:\n\n` +
-    `  agency eval label-migrate ${storeDir} <new-store>\n\n` +
+    `  agency label migrate ${storeDir} <new-store>\n\n` +
     "The original store is left untouched.",
   );
 }

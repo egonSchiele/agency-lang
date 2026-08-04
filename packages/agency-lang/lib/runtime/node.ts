@@ -98,9 +98,28 @@ export function setupFunction(): {
  * callback registration — each inside a bootstrap ALS frame.
  *
  * Shared by the two fresh-run entry points (`runNode`, `runExportedFunction`).
- * The resume family (`respondToInterrupts`, `rewindFrom`) does NOT use this:
- * it restores statics/globals from a checkpoint and only re-registers
- * top-level callbacks.
+ * The resume family does NOT use this — it restores statics/globals from a
+ * checkpoint and only re-registers top-level callbacks — and each member
+ * handles the root budget differently:
+ *   - `respondToInterrupts` (interrupts.ts) re-asserts it via
+ *     `reinstallRootBudget` (and reinstalls the run-policy handler).
+ *   - `rewindFrom` (rewind.ts) does NEITHER today: it only
+ *     `createExecutionContext` + `restoreState`, so a rewound run installs no
+ *     root budget and, if the checkpoint carries a serialized root guard, runs
+ *     under the checkpoint's limit rather than a re-asserted host one. That is
+ *     a pre-existing gap, out of scope here (tracked separately).
+ *
+ * The root run-policy handler and root cost/time budget are installed here, at
+ * the end of bootstrap, so EVERY fresh-run entry point (including a served
+ * `/function/:name` call through runExportedFunction) is capped identically —
+ * a served function must not run uncapped. Both installers are root-only
+ * (no-op in IPC subprocesses, whose budgets the parent guard owns). They sit
+ * after global init and top-level callback registration, so they are outermost
+ * before the entry NODE/FUNCTION body runs and cannot be bypassed there; the
+ * small amount of user code that global-init expressions and top-level
+ * `callback(...)` blocks can run during bootstrap still runs before the guards
+ * exist (unchanged from before this hoist — runNode installed them after
+ * bootstrap too).
  */
 async function initFreshExecCtx(
   execCtx: RuntimeContext<GraphState>,
@@ -167,6 +186,18 @@ async function initFreshExecCtx(
   // single topLevelCallbacks reset. Keep this in sync with the resume
   // (interrupts.ts) and rewind (rewind.ts) paths.
   await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx));
+
+  // Install the CLI-driven root policy handler (agency run --policy) and the
+  // root cost/time budget (--max-cost / --max-time, via env / RuntimeContext).
+  // Both are root-only (isIpcMode gate inside each installer): no-op in IPC
+  // subprocesses. Installed at the end of bootstrap, so they are the outermost
+  // handler/guard before the entry node/function body runs and cannot be
+  // bypassed there — and so BOTH fresh-run entry points (nodes and served
+  // functions) inherit them. (Global-init and top-level-callback code above
+  // runs before these exist; that's unchanged — runNode installed them here
+  // too, just after initFreshExecCtx returned.)
+  installRunPolicyHandler(execCtx);
+  installRootBudget(execCtx.stateStack, execCtx.budget);
 }
 
 /**
@@ -314,22 +345,12 @@ export async function runNode({
   }
 
   const execCtx = await ctx.createExecutionContext(runId);
-  // Cross-module init, this module's globals, then top-level callbacks —
-  // see `initFreshExecCtx` for the full ordering rationale (and the
-  // `node main() { route({ systemPrompt: foreignStatic }) }` case where a
-  // foreign static is read only from a function body).
+  // Cross-module init, this module's globals, top-level callbacks, then the
+  // root run-policy handler and root cost/time budget — all inside
+  // initFreshExecCtx (see there for the full ordering rationale, e.g. the
+  // `node main() { route({ systemPrompt: foreignStatic }) }` foreign-static
+  // case), so nodes and served functions are bootstrapped and capped identically.
   await initFreshExecCtx(execCtx, { initializeGlobals });
-  // Install the CLI-driven root policy handler (agency run --policy). No-op
-  // unless AGENCY_RUN_POLICY is set and this is the root process (not an IPC
-  // subprocess). Installed here — after the exec context exists, before the
-  // node body runs — so it is the outermost handler and cannot be bypassed.
-  installRunPolicyHandler(execCtx);
-  // Install a root cost/time budget from --max-cost / --max-time (via env).
-  // Same root-only gate as the policy handler (isIpcMode, inside the
-  // installer): no-op in IPC subprocesses, whose budgets are owned by the
-  // parent's guard. Outermost, before the node body runs, so it cannot be
-  // bypassed.
-  installRootBudget(execCtx.stateStack, execCtx.budget);
   // Externally-passed callbacks are stored on ctx; hook execution merges them
   // with scoped/top-level callbacks at call time.
   if (callbacks) {

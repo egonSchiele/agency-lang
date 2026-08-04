@@ -21,6 +21,8 @@ import {
   type BoundaryContext,
 } from "./turnBoundary.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
+import { recordPaidUsageAt } from "./recordPaidUsage.js";
+import { completionUsageDelta } from "./invocationUsage.js";
 import { abortableSleep } from "../stdlib/abortable.js";
 import { decideRetry, decideValidationRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig, LLMRetryReason } from "./llmRetry.js";
@@ -765,8 +767,20 @@ async function _runPrompt({
   // descendants' spend in real time; mid-fork trips fire on the next
   // enforceGuards() call. See docs/superpowers/specs/2026-05-20-thread-
   // builtins-and-stdlib-design.md.
-  const callCost = completion.cost?.totalCost ?? 0;
-  targetStack.billCharge(callCost);
+  // Account this completion through the single paid-usage boundary: it bills
+  // the branch's cost guards (via billCharge), merges the per-invocation usage
+  // meter (priced cost + input/output tokens + unknown-price count for the
+  // serve cost seam), and relays the full delta once if this is a subprocess.
+  recordPaidUsageAt(
+    { ctx, stack: targetStack },
+    completionUsageDelta({
+      cost: completion.cost?.totalCost,
+      inputTokens: completion.usage?.inputTokens,
+      outputTokens: completion.usage?.outputTokens,
+    }),
+  );
+  // Per-branch total-token accumulator, complementary to the meter above, so
+  // std::thread's getTokens() reports per-branch totals.
   targetStack.localTokens += completion.usage?.totalTokens ?? 0;
   // NOTE: no post-charge enforceGuards here anymore. A trip caused by
   // THIS charge is raised resumably at the caller's next guard gate

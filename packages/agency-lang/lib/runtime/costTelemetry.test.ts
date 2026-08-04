@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { isPayableCost, sendCostTelemetryToParent } from "./costTelemetry.js";
+import {
+  isPayableCost,
+  sendInvocationUsageToParent,
+  sendInvocationUsageIncompleteToParent,
+} from "./costTelemetry.js";
 import { StateStack } from "./state/stateStack.js";
 import { CostGuard } from "./guard.js";
 
 // process.send has no vi.stubEnv equivalent — save/restore it manually.
-// Env vars are stubbed per test and reset via vi.unstubAllEnvs(): a leaked
-// AGENCY_IPC=1 would make every billCharge in later tests emit telemetry.
 const originalSend = process.send;
 
 afterEach(() => {
@@ -26,67 +28,66 @@ describe("isPayableCost", () => {
   });
 });
 
-describe("sendCostTelemetryToParent", () => {
-  it("sends the telemetry message when in IPC mode", () => {
+describe("sendInvocationUsageToParent", () => {
+  const delta = { pricedCost: 0.5, inputTokens: 100, outputTokens: 20, unknownCostCallCount: 0 };
+
+  it("sends the full delta when in IPC mode", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendCostTelemetryToParent(0.5);
-    expect(send).toHaveBeenCalledExactlyOnceWith({ type: "telemetry", costUsd: 0.5 });
+    sendInvocationUsageToParent(delta);
+    expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsage", ...delta });
+  });
+
+  it("sends a zero-cost unpriced delta (tokens/unknown must not be dropped)", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    sendInvocationUsageToParent({ pricedCost: 0, inputTokens: 3, outputTokens: 1, unknownCostCallCount: 1 });
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it("skips an all-zero delta", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    sendInvocationUsageToParent({ pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0 });
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("no-ops outside IPC mode", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
-    sendCostTelemetryToParent(0.5);
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  it("no-ops for zero, negative, and non-finite cost", () => {
-    vi.stubEnv("AGENCY_IPC", "1");
-    const send = vi.fn(() => true);
-    process.send = send as any;
-    sendCostTelemetryToParent(0);
-    sendCostTelemetryToParent(-1);
-    sendCostTelemetryToParent(NaN);
+    sendInvocationUsageToParent(delta);
     expect(send).not.toHaveBeenCalled();
   });
 
   it("swallows a dead-channel send error", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     process.send = vi.fn(() => { throw new Error("channel closed"); }) as any;
-    expect(() => sendCostTelemetryToParent(0.5)).not.toThrow();
+    expect(() => sendInvocationUsageToParent(delta)).not.toThrow();
+  });
+});
+
+describe("sendInvocationUsageIncompleteToParent", () => {
+  it("sends the marker in IPC mode and no-ops otherwise", () => {
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    sendInvocationUsageIncompleteToParent();
+    expect(send).not.toHaveBeenCalled();
+
+    vi.stubEnv("AGENCY_IPC", "1");
+    sendInvocationUsageIncompleteToParent();
+    expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsageIncomplete" });
   });
 });
 
 describe("StateStack.billCharge", () => {
-  it("emits exactly once per charge, even with zero guards installed", () => {
-    // Emission must be unconditional on guards being present: a mid-tier
-    // relay process may have NO local guards but must still forward the
-    // grandchild spend upward.
+  it("no longer emits telemetry (relay rides the recordPaidUsageAt boundary)", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     const send = vi.fn(() => true);
     process.send = send as any;
-    const stack = new StateStack();
-    stack.billCharge(0.25);
-    expect(send).toHaveBeenCalledExactlyOnceWith({ type: "telemetry", costUsd: 0.25 });
-  });
-
-  it("does not emit for a zero charge", () => {
-    vi.stubEnv("AGENCY_IPC", "1");
-    const send = vi.fn(() => true);
-    process.send = send as any;
-    new StateStack().billCharge(0);
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  it("a direct chargeGuards call does NOT emit — emission rides the fresh-paid-charge semantic", () => {
-    // Pins the hoist: re-applying spend to guard accumulators (restore /
-    // reconciliation paths) must never double-bill the parent.
-    vi.stubEnv("AGENCY_IPC", "1");
-    const send = vi.fn(() => true);
-    process.send = send as any;
-    new StateStack().chargeGuards(0.25);
+    new StateStack().billCharge(0.25);
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -96,8 +97,6 @@ describe("StateStack.billCharge", () => {
     stack.guards.push(guard);
     stack.billCharge(0.25);
     expect(stack.localCost).toBe(0.25);
-    // 0.25 > 0.1: check() reporting a trip proves the guard was charged,
-    // not just localCost.
     expect(guard.check(stack)).not.toBeNull();
   });
 });

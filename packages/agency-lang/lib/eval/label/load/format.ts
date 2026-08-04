@@ -36,7 +36,9 @@ function isRunDirectory(resolved: string): boolean {
  * test, and anything it cannot classify is an error naming the explicit
  * formats rather than a silent fallback.
  */
-export function resolveFormat(args: { source: string; requested: Format }): Format {
+export function resolveFormat(
+  args: { source: string; requested: Format },
+): Exclude<Format, "auto"> {
   if (args.requested !== "auto") {
     return args.requested;
   }

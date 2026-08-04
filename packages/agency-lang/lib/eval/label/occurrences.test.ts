@@ -34,8 +34,8 @@ describe("ensureOccurrence", () => {
   });
 
   it("returns the existing row on re-ingest rather than throwing", () => {
-    // The whole reason this log does not use appendExact: a second session
-    // builds the same id with a different timestamp.
+    // The whole reason replay goes through `find` rather than `appendExact`:
+    // a second session builds the same id carrying a different timestamp.
     const first = openOccurrenceLog(storeDir).ensureOccurrence(candidate());
     const second = openOccurrenceLog(storeDir).ensureOccurrence(candidate());
     expect(second.added).toBe(false);

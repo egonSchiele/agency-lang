@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { syncDirectory } from "../jsonl.js";
 import { acquireStoreLock } from "../lock.js";
 import { openStore } from "../store.js";
 
@@ -40,9 +41,9 @@ function markerPath(stagingDir: string): string {
   return path.join(stagingDir, ".migration.json");
 }
 
-/** Exactly what `writeStagedStore` and its verification step create. Removal
- *  walks this list rather than the directory, so anything unexpected inside
- *  survives and makes the final rmdir fail loudly. */
+/** Exactly what `writeStagedStore` and its verification step create at the top
+ *  level. Removal walks this list rather than the directory, so anything
+ *  unexpected inside survives and makes the final rmdir fail loudly. */
 const STAGED_FILES = [
   ".migration.json",
   "manifest.json",
@@ -51,7 +52,6 @@ const STAGED_FILES = [
   "labels.jsonl",
   ".lock",
 ];
-const STAGED_DIRECTORIES = ["checklists"];
 
 /**
  * Reclaim a staging directory left behind by an interrupted run.
@@ -66,6 +66,7 @@ const STAGED_DIRECTORIES = ["checklists"];
  * used — a wrong `destDir` would then be unrecoverable.
  */
 function reclaimStaging(stagingDir: string, expected: StagingMarker): void {
+  const { sourceDir } = expected;
   if (!fs.existsSync(stagingDir)) {
     return;
   }
@@ -89,18 +90,51 @@ function reclaimStaging(stagingDir: string, expected: StagingMarker): void {
   for (const name of STAGED_FILES) {
     fs.rmSync(path.join(stagingDir, name), { force: true });
   }
-  for (const name of STAGED_DIRECTORIES) {
-    // Recursive only within a subdirectory this migration copied in whole.
-    fs.rmSync(path.join(stagingDir, name), { recursive: true, force: true });
-  }
+  // Checklists are a copy of the source tree, so the source is the inventory of
+  // what this migration put there. Removing by that list rather than recursing
+  // means a file that appeared underneath — from any other writer — survives
+  // and makes the closing rmdir fail.
+  removeCopiedChecklists(sourceDir, path.join(stagingDir, "checklists"));
+
   try {
     fs.rmdirSync(stagingDir);
   } catch (error) {
     throw new MigrationTargetError(
-      `${stagingDir} still holds files this migration did not write, so it was left in place: ` +
-      `${(error as Error).message}`,
+      `${stagingDir} still holds files this migration did not write, so it was left in place. ` +
+      `Move it aside and try again. (${(error as Error).message})`,
     );
   }
+}
+
+/** Mirror the source checklist tree, deleting only paths that exist in both.
+ *  Directories go last and only when empty, so an unexpected file keeps its
+ *  whole parent chain alive. */
+function removeCopiedChecklists(sourceDir: string, stagedChecklists: string): void {
+  const sourceChecklists = path.join(sourceDir, "checklists");
+  if (!fs.existsSync(stagedChecklists) || !fs.existsSync(sourceChecklists)) {
+    return;
+  }
+  const walk = (relative: string): void => {
+    const from = path.join(sourceChecklists, relative);
+    const to = path.join(stagedChecklists, relative);
+    if (!fs.existsSync(from) || !fs.existsSync(to)) {
+      return;
+    }
+    if (fs.statSync(from).isDirectory()) {
+      for (const entry of fs.readdirSync(from)) {
+        walk(path.join(relative, entry));
+      }
+      try {
+        fs.rmdirSync(to);
+      } catch {
+        // Something else is in there. Leave it; rmdir on the staging root will
+        // report the whole situation.
+      }
+      return;
+    }
+    fs.rmSync(to, { force: true });
+  };
+  walk("");
 }
 
 /**
@@ -162,8 +196,13 @@ export function migrateStore(args: MigrateStoreArgs): MigrateResult {
     } finally {
       verifyLock.release();
     }
-    fs.rmSync(markerPath(stagingDir), { force: true });
+    // Publish FIRST, then drop the marker. Removing it before the rename opens
+    // a window where a crash, or a failing rename, leaves a complete staging
+    // directory that the next attempt cannot recognise and so refuses to
+    // reclaim. A marker briefly present in the published store is harmless.
     fs.renameSync(stagingDir, destDir);
+    fs.rmSync(markerPath(destDir), { force: true });
+    syncDirectory(path.dirname(destDir));
 
     return { ...plan.counts, sourceDir, destDir };
   } finally {

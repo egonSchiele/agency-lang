@@ -795,7 +795,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     });
 
   evalCmd
-    .command("ingest")
+    .command("label-ingest")
     .description("Add outputs to a label store, from a run, a directory of files, or a JSON array")
     .argument("<source>", INGEST_PATH_DESCRIPTION)
     .argument("[extra...]", "Rejected: several arguments means the shell expanded an unquoted glob")

@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LoadedBatch } from "@/eval/label/load/types.js";
 
 import {
-  assertNoLoaderCollision,
   evalIngest,
   parseFieldArgs,
   type EvalIngestDependencies,
@@ -102,23 +101,23 @@ describe("parseFieldArgs", () => {
   });
 });
 
-describe("assertNoLoaderCollision", () => {
-  it("rejects a constant colliding with a field the files loader produces", () => {
-    expect(() => assertNoLoaderCollision("files", { output: "x" }, true))
-      .toThrow(/already produces "output"/);
+describe("parseFieldArgs field names", () => {
+  it("rejects __proto__, which would set the prototype instead of a key", () => {
+    // On a normal object this assignment creates no own property, so a
+    // duplicate check would miss it and the failure would surface later as a
+    // confusing schema error deep inside ingest.
+    expect(() => parseFieldArgs({ field: ["__proto__=x"] })).toThrow(/not a valid field name/);
   });
 
-  it("rejects a constant task while a run still emits its own", () => {
-    expect(() => assertNoLoaderCollision("run", { task: "x" }, true))
-      .toThrow(/Pass --no-task-field/);
+  it("rejects a name the store's schema would refuse", () => {
+    expect(() => parseFieldArgs({ field: ["Output=x"] })).toThrow(/not a valid field name/);
+    expect(() => parseFieldArgs({ field: ["2nd=x"] })).toThrow(/not a valid field name/);
+    expect(() => parseFieldArgs({ field: ["bad{name}=x"] })).toThrow(/not a valid field name/);
   });
 
-  it("allows replacing a run's task with the explicit combination", () => {
-    expect(() => assertNoLoaderCollision("run", { task: "x" }, false)).not.toThrow();
-  });
-
-  it("allows an unrelated constant field", () => {
-    expect(() => assertNoLoaderCollision("files", { task: "x" }, true)).not.toThrow();
+  it("accumulates into a null-prototype object, so nothing is inherited", () => {
+    const fields = parseFieldArgs({ field: ["note=x"] });
+    expect(Object.getPrototypeOf(fields)).toBeNull();
   });
 });
 

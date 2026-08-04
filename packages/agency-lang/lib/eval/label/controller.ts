@@ -146,7 +146,7 @@ async function openSession(
     if (corpus.length === 0) {
       throw new Error(
         "There is nothing to label: the store holds no records. Add some with " +
-        "`agency eval label ingest <source> --source <name>`.",
+        "`agency eval label-ingest <source> --source <name>`.",
       );
     }
 

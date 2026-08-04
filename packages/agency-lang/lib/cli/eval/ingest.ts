@@ -2,7 +2,7 @@ import * as path from "path";
 
 import type { AgencyConfig } from "@/config.js";
 import { describeIngestSkip } from "@/eval/label/load/eligibility.js";
-import { parseFormat, type Format } from "@/eval/label/load/format.js";
+import { parseFormat } from "@/eval/label/load/format.js";
 import { loadBatch } from "@/eval/label/load/index.js";
 import {
   DEFAULT_MAX_INGEST_BYTES,
@@ -12,7 +12,7 @@ import {
 } from "@/eval/label/load/types.js";
 import { acquireStoreLock } from "@/eval/label/lock.js";
 import { openStore, type IngestResult, type LabelStore } from "@/eval/label/store.js";
-import type { Fields } from "@/eval/label/types.js";
+import { FieldNameSchema, type Fields } from "@/eval/label/types.js";
 import { color } from "@/utils/termcolors.js";
 
 import { resolveLabelStore } from "./label.js";
@@ -57,7 +57,11 @@ export function parseFieldArgs(options: {
   task?: string;
   field?: string[];
 }): Fields {
-  const fields: Fields = {};
+  // Null-prototype accumulator, and names validated before assignment. A key
+  // like "__proto__" assigned to a normal object sets the prototype instead of
+  // creating an own property, so it would slip past the duplicate check and
+  // surface later as a confusing schema failure deep inside ingest.
+  const fields: Fields = Object.create(null);
 
   for (const raw of options.field ?? []) {
     // Split on the FIRST `=` only, so a value may contain one without escaping.
@@ -68,6 +72,7 @@ export function parseFieldArgs(options: {
       );
     }
     const name = raw.slice(0, separator);
+    assertFieldName(name);
     if (Object.hasOwn(fields, name)) {
       throw new IngestSourceError(`--field ${name}= was given twice.`);
     }
@@ -86,34 +91,14 @@ export function parseFieldArgs(options: {
   return fields;
 }
 
-/** Field names a loader builds itself. A constant may not collide with one:
- *  the record would then depend on which assignment happened to run last. */
-const LOADER_FIELD_NAMES: Record<Format, readonly string[]> = {
-  auto: [],
-  run: ["task", "output"],
-  files: ["output"],
-  json: ["output"],
-};
-
-export function assertNoLoaderCollision(
-  format: Format,
-  constantFields: Fields,
-  includeTaskField: boolean,
-): void {
-  for (const name of LOADER_FIELD_NAMES[format]) {
-    // `--no-task-field --task "..."` is the documented way to replace a run's
-    // own task, so the task field only collides while the loader still emits it.
-    if (name === "task" && !includeTaskField) {
-      continue;
-    }
-    if (Object.hasOwn(constantFields, name)) {
-      throw new IngestSourceError(
-        `Cannot set "${name}" as a constant: the loader already produces "${name}" for this ` +
-        (name === "task"
-          ? "source. Pass --no-task-field as well if you mean to replace it."
-          : "source."),
-      );
-    }
+/** Reject a bad name here rather than letting the store's schema fail later:
+ *  the message can name the flag that caused it. */
+function assertFieldName(name: string): void {
+  if (!FieldNameSchema.safeParse(name).success) {
+    throw new IngestSourceError(
+      `"${name}" is not a valid field name. Use lowercase letters, digits and underscores, ` +
+      `starting with a letter — for example --field reference_answer=...`,
+    );
   }
 }
 
@@ -156,7 +141,6 @@ export async function evalIngest(
   const requestedFormat = parseFormat(options.format ?? "auto");
   const includeTaskField = options.taskField !== false;
   const constantFields = parseFieldArgs(options);
-  assertNoLoaderCollision(requestedFormat, constantFields, includeTaskField);
 
   const batch: LoadedBatch = dependencies.loadBatch({
     source: {

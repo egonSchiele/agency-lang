@@ -160,3 +160,57 @@ describe("loadBatch normalizes loader arguments", () => {
     }), dependencies)).toThrow(/not found/);
   });
 });
+
+describe("constant fields cannot collide with a loader's own fields", () => {
+  it("rejects a constant output for an auto-detected files source", () => {
+    // The blocking case: with `auto` the CLI does not know which loader will
+    // run, so this check has to live here. The loader's value wins on merge, so
+    // the constant would otherwise vanish and change the stored record.
+    const { dependencies } = spies();
+    expect(() => loadBatch(request({ constantFields: { output: "constant" } }), dependencies))
+      .toThrow(/already produces "output"/);
+  });
+
+  it("rejects a constant task for an auto-detected run source", () => {
+    const { dependencies } = spies();
+    expect(() => loadBatch(request({
+      source: { path: makeRunDir(), requestedFormat: "auto", includeTaskField: true, recursive: false },
+      constantFields: { task: "constant" },
+    }), dependencies)).toThrow(/Pass --no-task-field/);
+  });
+
+  it("rejects a constant output for an auto-detected json source", () => {
+    fs.writeFileSync(path.join(root, "answers.json"), "[]");
+    const { dependencies } = spies();
+    expect(() => loadBatch(request({
+      source: {
+        path: path.join(root, "answers.json"),
+        requestedFormat: "auto",
+        includeTaskField: true,
+        recursive: false,
+      },
+      constantFields: { output: "constant" },
+    }), dependencies)).toThrow(/already produces "output"/);
+  });
+
+  it("allows replacing a run's task with the explicit combination", () => {
+    const { calls, dependencies } = spies();
+    loadBatch(request({
+      source: { path: makeRunDir(), requestedFormat: "auto", includeTaskField: false, recursive: false },
+      constantFields: { task: "a better framing" },
+    }), dependencies);
+    expect(calls.run).toHaveLength(1);
+  });
+
+  it("allows a constant field no loader produces", () => {
+    const { calls, dependencies } = spies();
+    loadBatch(request({ constantFields: { task: "Summarize" } }), dependencies);
+    expect(calls.files).toHaveLength(1);
+  });
+
+  it("names the resolved format in the message, not the requested one", () => {
+    const { dependencies } = spies();
+    expect(() => loadBatch(request({ constantFields: { output: "x" } }), dependencies))
+      .toThrow(/files loader/);
+  });
+});

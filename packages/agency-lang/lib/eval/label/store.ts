@@ -284,11 +284,22 @@ function assertStoreVersion(storeDir: string): void {
   } catch (error) {
     throw new StoreValidationError(`${file} is not valid JSON: ${(error as Error).message}`);
   }
-  if (parsed.schemaVersion === CURRENT_STORE_VERSION) {
+  const found = parsed.schemaVersion;
+  if (found === CURRENT_STORE_VERSION) {
     return;
   }
+  // A NEWER store cannot be migrated backwards, and telling someone to run
+  // migrate would send them down a dead end. The two cases need different
+  // advice, so they get different messages.
+  if (typeof found === "number" && found > CURRENT_STORE_VERSION) {
+    throw new StoreVersionError(
+      `${storeDir} uses label store format ${found}, which is newer than this build ` +
+      `understands (${CURRENT_STORE_VERSION}). Upgrade Agency to read it. Migration only ` +
+      "moves a store forwards, so it cannot help here.",
+    );
+  }
   throw new StoreVersionError(
-    `${storeDir} uses label store format ${String(parsed.schemaVersion)}; this build writes ` +
+    `${storeDir} uses label store format ${String(found)}; this build writes ` +
     `format ${CURRENT_STORE_VERSION}. Migrate it with:\n\n` +
     `  agency eval label-migrate ${storeDir} <new-store>\n\n` +
     "The original store is left untouched.",

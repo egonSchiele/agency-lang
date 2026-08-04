@@ -1,7 +1,11 @@
 import * as fs from "fs";
 import * as path from "path";
 
+import { createHash } from "crypto";
+
 import { z } from "zod";
+
+import { canonicalize } from "@/utils/canonicalize.js";
 
 import {
   AnnotationRowSchema,
@@ -109,6 +113,53 @@ function parseAll<Value>(
   });
 }
 
+/**
+ * The version 1 output id formula, reproduced here.
+ *
+ * Version 1 derived an id from the execution rather than the content. It is
+ * gone from `ids.ts` because nothing current should compute one — but migration
+ * has to check that the ids on disk really are what that formula produces,
+ * which cannot be done without it.
+ */
+function v1OutputIdOf(execution: V1CorpusRow["execution"]): string {
+  const digest = createHash("sha256").update(canonicalize({ ...execution })).digest("hex");
+  return `out_${digest}`;
+}
+
+/**
+ * Reject a corpus that cannot be migrated faithfully.
+ *
+ * Two rows sharing an output id would collapse in the id map that rewrites
+ * annotations, silently moving every label for that id onto whichever row was
+ * read last. Recomputing each id catches the related case: a hand-edited row
+ * whose id no longer describes its own execution, which would map annotations
+ * onto content nobody judged. Both refuse rather than guess — a migration runs
+ * once, and a wrong answer here is not visible afterwards.
+ */
+function assertV1CorpusIsSound(corpusFile: string, rows: readonly V1CorpusRow[]): void {
+  const seen: Record<string, number> = Object.create(null);
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const previous = seen[row.outputId];
+    if (previous !== undefined) {
+      throw new V1ReadError(
+        `${corpusFile}: lines ${previous} and ${index + 1} share output id "${row.outputId}". ` +
+        "Each output may appear once; migration cannot tell which one an annotation judged.",
+      );
+    }
+    seen[row.outputId] = index + 1;
+
+    const expected = v1OutputIdOf(row.execution);
+    if (row.outputId !== expected) {
+      throw new V1ReadError(
+        `${corpusFile}: line ${index + 1} has output id "${row.outputId}", but its recorded ` +
+        `execution hashes to "${expected}". The row was edited after it was written, so its ` +
+        "labels cannot be moved with confidence.",
+      );
+    }
+  }
+}
+
 export function readV1Store(storeDir: string): V1StoreSnapshot {
   const manifestFile = path.join(storeDir, "manifest.json");
   if (!fs.existsSync(manifestFile)) {
@@ -127,9 +178,12 @@ export function readV1Store(storeDir: string): V1StoreSnapshot {
   const annotationsFile = path.join(storeDir, "labels.jsonl");
   const draftsDir = path.join(storeDir, "drafts");
 
+  const corpus = parseAll(corpusFile, V1CorpusRowSchema, readJsonlLines(corpusFile));
+  assertV1CorpusIsSound(corpusFile, corpus);
+
   return {
     storeDir,
-    corpus: parseAll(corpusFile, V1CorpusRowSchema, readJsonlLines(corpusFile)),
+    corpus,
     annotations: parseAll(annotationsFile, AnnotationRowSchema, readJsonlLines(annotationsFile)),
     checklistsDir: path.join(storeDir, "checklists"),
     draftFiles: fs.existsSync(draftsDir)

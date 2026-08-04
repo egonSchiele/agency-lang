@@ -4,7 +4,12 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { looksLikeGlob, resolveFileSelection } from "./discoverFiles.js";
+import {
+  looksLikeGlob,
+  normalizePatternSeparators,
+  resolveFileSelection,
+  splitPattern,
+} from "./discoverFiles.js";
 import { IngestSourceError } from "./types.js";
 
 let root: string;
@@ -129,5 +134,43 @@ describe("resolveFileSelection on a glob", () => {
   it("rejects a pattern whose literal prefix does not exist", () => {
     expect(() => resolveFileSelection(`${root}/missing/*.txt`, false))
       .toThrow(/does not exist/);
+  });
+});
+
+describe("pattern separators on Windows", () => {
+  // The separator is a parameter so these run anywhere. Without normalization a
+  // pattern like C:\answers\*.txt stays one segment, resolves against the
+  // current directory, and matches nothing.
+  const WINDOWS = "\\";
+
+  it("splits a drive-letter path on backslashes", () => {
+    const split = splitPattern("C:\\answers\\*.txt", WINDOWS);
+    expect(split.pattern).toBe("*.txt");
+    expect(split.root.endsWith("answers")).toBe(true);
+  });
+
+  it("keeps a UNC prefix in the literal root", () => {
+    const split = splitPattern("\\\\server\\share\\answers\\*.txt", WINDOWS);
+    expect(split.pattern).toBe("*.txt");
+    expect(split.root).toContain("answers");
+  });
+
+  it("handles a mixed-separator pattern, which shells do produce", () => {
+    expect(splitPattern("C:\\answers/gold\\*.txt", WINDOWS).pattern).toBe("*.txt");
+  });
+
+  it("keeps ** working across backslashes", () => {
+    expect(splitPattern("C:\\answers\\**\\*.txt", WINDOWS).pattern).toBe("**/*.txt");
+  });
+
+  it("leaves a backslash alone on POSIX, where it is a legal filename character", () => {
+    const split = splitPattern("odd\\name/*.txt", "/");
+    expect(split.pattern).toBe("*.txt");
+    expect(split.root.endsWith("odd\\name")).toBe(true);
+  });
+
+  it("normalizes only when the platform separator says to", () => {
+    expect(normalizePatternSeparators("a\\b", "/")).toBe("a\\b");
+    expect(normalizePatternSeparators("a\\b", "\\")).toBe("a/b");
   });
 });

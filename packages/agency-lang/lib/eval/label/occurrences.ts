@@ -22,13 +22,14 @@ export type OpenedOccurrenceLog = {
   /**
    * Append this occurrence, or return the one already recorded.
    *
-   * This log deliberately does NOT use `appendExact`, and that is not an
+   * Replay goes through `find`, NOT through `appendExact`, and that is not an
    * oversight. `occurrenceId` excludes `firstObservedAt`, so re-ingesting the
-   * same source tomorrow builds the same id with a different timestamp;
-   * `appendExact` would see identity reuse with different content and raise a
-   * corruption error on a completely legitimate operation. The stored
-   * timestamp is the truth, and a re-ingest must neither overwrite it nor fail
-   * against it.
+   * same source tomorrow would build the same id carrying a different
+   * timestamp; handing that to `appendExact` would look like identity reuse
+   * with different content and raise a corruption error on a completely
+   * legitimate operation. The stored timestamp is the truth, so an existing
+   * row is returned untouched. `appendExact` is still what writes a row the
+   * first time.
    */
   ensureOccurrence(candidate: OccurrenceCandidate): EnsureOccurrenceResult;
 };

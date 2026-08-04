@@ -11,6 +11,37 @@ import { loadJsonArray } from "./json.js";
 import { loadRun } from "./run.js";
 import { IngestSourceError, type LoadedBatch } from "./types.js";
 
+/** Field names each loader builds itself. A constant may not collide with one:
+ *  the loader's value wins on merge, so the constant would vanish without a
+ *  word. */
+const LOADER_FIELD_NAMES: Record<Exclude<Format, "auto">, readonly string[]> = {
+  run: ["task", "output"],
+  files: ["output"],
+  json: ["output"],
+};
+
+export function assertNoLoaderCollision(
+  format: Exclude<Format, "auto">,
+  constantFields: Fields,
+  includeTaskField: boolean,
+): void {
+  for (const name of LOADER_FIELD_NAMES[format]) {
+    // `--no-task-field --task "..."` is the documented way to replace a run's
+    // own task, so the task field only collides while the loader still emits it.
+    if (name === "task" && !includeTaskField) {
+      continue;
+    }
+    if (Object.hasOwn(constantFields, name)) {
+      throw new IngestSourceError(
+        `Cannot set "${name}" as a constant: the ${format} loader already produces "${name}"` +
+        (name === "task"
+          ? ". Pass --no-task-field as well if you mean to replace it."
+          : "."),
+      );
+    }
+  }
+}
+
 export type IngestSourceSpec = {
   path: string;
   requestedFormat: Format;
@@ -58,6 +89,11 @@ export function loadBatch(
     source: request.source.path,
     requested: request.source.requestedFormat,
   });
+  // Checked HERE, not in the CLI. With `auto` the caller does not yet know
+  // which loader will run, so a constant `output=` would pass a caller-side
+  // check and then be silently overwritten by the loader — changing the stored
+  // record, and its id, from what the arguments said.
+  assertNoLoaderCollision(format, request.constantFields, request.source.includeTaskField);
 
   if (format === "run") {
     return dependencies.loadRun({

@@ -19,10 +19,11 @@ export type OpenedCorpusLog = {
   /**
    * Add this record, or return the one already stored.
    *
-   * Like `ensureOccurrence`, this cannot be a plain `appendExact`: `capturedAt`
-   * is not part of the identity, so a later ingest of the same fields would
-   * build an identical id carrying a different timestamp and be rejected as
-   * corruption. The first capture time is the truth.
+   * Like `ensureOccurrence`, replay goes through `find` rather than
+   * `appendExact`: `capturedAt` is not part of the identity, so a later ingest
+   * of the same fields would build an identical id carrying a different
+   * timestamp and be rejected as corruption. The first capture time is the
+   * truth. `appendExact` still writes the row the first time.
    */
   ensureRecord(fields: Fields): EnsureRecordResult;
 };

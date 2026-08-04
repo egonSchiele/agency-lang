@@ -407,3 +407,14 @@ describe("readSession and saveDraft", () => {
     store.close();
   });
 });
+
+describe("store format advice", () => {
+  it("tells you to upgrade, not migrate, when the store is NEWER", () => {
+    // Migration only moves a store forwards, so pointing at it would be a dead
+    // end.
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 99 }));
+    expect(() => open()).toThrow(/Upgrade Agency/);
+    expect(() => open()).not.toThrow(/label-migrate/);
+  });
+});

@@ -70,8 +70,31 @@ export function resolveFileSelection(source: string, recursive: boolean): FileSe
   return { root, files };
 }
 
-/** Split "answers/**\/*.txt" into the deepest literal directory and the rest. */
-function splitPattern(source: string): { root: string; pattern: string } {
+/**
+ * Rewrite a pattern's separators to `/`.
+ *
+ * Only on Windows. A backslash is a legal character in a POSIX filename, so
+ * normalizing everywhere would corrupt a pattern that deliberately contains
+ * one. `platformSeparator` is a parameter so the Windows behaviour is testable
+ * from any machine.
+ */
+export function normalizePatternSeparators(
+  source: string,
+  platformSeparator: string = path.sep,
+): string {
+  return platformSeparator === "\\" ? source.split("\\").join("/") : source;
+}
+
+/**
+ * Split "answers/**\/*.txt" into the deepest literal directory and the rest.
+ *
+ * Exported for tests, which pass a separator rather than requiring Windows.
+ */
+export function splitPattern(
+  rawSource: string,
+  platformSeparator: string = path.sep,
+): { root: string; pattern: string } {
+  const source = normalizePatternSeparators(rawSource, platformSeparator);
   const segments = source.split("/");
   const literal: string[] = [];
   let index = 0;
@@ -79,6 +102,9 @@ function splitPattern(source: string): { root: string; pattern: string } {
     literal.push(segments[index]);
     index += 1;
   }
+  // Joining with "/" keeps a drive letter ("C:/answers") and a UNC prefix
+  // ("//server/share") intact; Node accepts forward slashes on Windows, and
+  // `path.resolve` turns either into a proper absolute root.
   const rootPart = literal.join("/");
   return {
     root: path.resolve(rootPart.length === 0 ? "." : rootPart),

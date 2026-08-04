@@ -4,6 +4,10 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createHash } from "crypto";
+
+import { canonicalize } from "@/utils/canonicalize.js";
+
 import { checklistHashOf } from "../ids.js";
 import type { AnnotationRow, CorpusRow, OccurrenceRow } from "../types.js";
 
@@ -28,7 +32,6 @@ afterEach(() => {
 });
 
 type V1Row = {
-  outputId: string;
   task: unknown;
   value: unknown;
   capturedAt?: string;
@@ -36,18 +39,25 @@ type V1Row = {
   inputId?: string;
 };
 
+/** The version 1 id formula. Fixtures must use real ids now that migration
+ *  recomputes them: a hand-written one is exactly what it refuses. */
+function v1OutputId(traceId: string, inputId: string, finalOutputIndex = 0): string {
+  const digest = createHash("sha256")
+    .update(canonicalize({ traceId, inputId, finalOutputIndex }))
+    .digest("hex");
+  return `out_${digest}`;
+}
+
 function v1Row(row: V1Row): unknown {
+  const traceId = row.traceId ?? "t-1";
+  const inputId = row.inputId ?? "a";
   return {
     schemaVersion: 1,
-    outputId: row.outputId,
+    outputId: v1OutputId(traceId, inputId),
     contentHash: HASH,
     capturedAt: row.capturedAt ?? "2026-08-03T00:00:00.000Z",
-    execution: {
-      traceId: row.traceId ?? "t-1",
-      inputId: row.inputId ?? "a",
-      finalOutputIndex: 0,
-    },
-    input: { inputId: row.inputId ?? "a", task: row.task },
+    execution: { traceId, inputId, finalOutputIndex: 0 },
+    input: { inputId, task: row.task },
     value: row.value,
     text: typeof row.value === "string" ? row.value : JSON.stringify(row.value),
     provenance: {
@@ -139,13 +149,13 @@ function migratedAnnotations(): AnnotationRow[] {
   return readJsonl<AnnotationRow>(path.join(destDir, "labels.jsonl"));
 }
 
-const OUT_A = `out_${"a".repeat(64)}`;
-const OUT_B = `out_${"b".repeat(64)}`;
-const OUT_C = `out_${"c".repeat(64)}`;
+const OUT_A = v1OutputId("t-1", "a");
+const OUT_B = v1OutputId("t-2", "a");
+const OUT_C = v1OutputId("t-3", "a");
 
 describe("migrateStore", () => {
   it("rewrites every record with a content-derived id", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "Summarize", value: "Done" })]);
+    writeV1Store([v1Row({ task: "Summarize", value: "Done" })]);
     migrateStore({ sourceDir, destDir });
     expect(records()).toHaveLength(1);
     expect(records()[0].fields).toEqual({ task: "Summarize", output: "Done" });
@@ -154,7 +164,7 @@ describe("migrateStore", () => {
 
   it("maps every annotation onto the record holding the same text", () => {
     writeV1Store(
-      [v1Row({ outputId: OUT_A, task: "Summarize", value: "Done" })],
+      [v1Row({ task: "Summarize", value: "Done" })],
       [annotation({ outputId: OUT_A, checklistHash: checklistHash() })],
     );
     migrateStore({ sourceDir, destDir });
@@ -162,16 +172,16 @@ describe("migrateStore", () => {
   });
 
   it("projects a structured task and output through the shared rule", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: { topic: "news" }, value: { s: 1 } })]);
+    writeV1Store([v1Row({ task: { topic: "news" }, value: { s: 1 } })]);
     migrateStore({ sourceDir, destDir });
     expect(records()[0].fields).toEqual({ task: '{"topic":"news"}', output: '{"s":1}' });
   });
 
   it("writes one record per distinct field map and one occurrence per old row", () => {
     writeV1Store([
-      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
-      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
-      v1Row({ outputId: OUT_C, task: "Summarize", value: "Different" }),
+      v1Row({ task: "Summarize", value: "Done" }),
+      v1Row({ traceId: "t-2", task: "Summarize", value: "Done" }),
+      v1Row({ traceId: "t-3", task: "Summarize", value: "Different" }),
     ]);
     const result = migrateStore({ sourceDir, destDir });
     expect(records()).toHaveLength(2);
@@ -180,14 +190,14 @@ describe("migrateStore", () => {
   });
 
   it("marks migrated occurrences legacy rather than inventing a source name", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "Summarize", value: "Done" })]);
+    writeV1Store([v1Row({ task: "Summarize", value: "Done" })]);
     migrateStore({ sourceDir, destDir });
     expect(occurrences().every((row) => row.source === "legacy")).toBe(true);
     expect(occurrences().every((row) => row.origin.kind === "legacy")).toBe(true);
   });
 
   it("preserves raw values and every existing provenance field", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: { topic: "news" }, value: { s: 1 } })]);
+    writeV1Store([v1Row({ task: { topic: "news" }, value: { s: 1 } })]);
     migrateStore({ sourceDir, destDir });
     expect(occurrences()[0].origin).toMatchObject({
       kind: "legacy",
@@ -202,8 +212,8 @@ describe("migrateStore", () => {
 
   it("collapses two merged rows whose effective answers agree", () => {
     writeV1Store([
-      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
-      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+      v1Row({ task: "Summarize", value: "Done" }),
+      v1Row({ traceId: "t-2", task: "Summarize", value: "Done" }),
     ], [
       annotation({ outputId: OUT_A, annotationId: "ann_one", checklistHash: checklistHash() }),
       annotation({ outputId: OUT_B, annotationId: "ann_two", checklistHash: checklistHash() }),
@@ -217,8 +227,8 @@ describe("migrateStore", () => {
 
   it("REFUSES when merged rows disagree, naming the old ids and the question", () => {
     writeV1Store([
-      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
-      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+      v1Row({ task: "Summarize", value: "Done" }),
+      v1Row({ traceId: "t-2", task: "Summarize", value: "Done" }),
     ], [
       annotation({ outputId: OUT_A, annotationId: "ann_one", answers: { q_accurate: true } }),
       annotation({ outputId: OUT_B, annotationId: "ann_two", answers: { q_accurate: false } }),
@@ -229,8 +239,8 @@ describe("migrateStore", () => {
 
   it("refuses when merged rows carry different notes", () => {
     writeV1Store([
-      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
-      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+      v1Row({ task: "Summarize", value: "Done" }),
+      v1Row({ traceId: "t-2", task: "Summarize", value: "Done" }),
     ], [
       annotation({ outputId: OUT_A, annotationId: "ann_one", note: "looks fine" }),
       annotation({ outputId: OUT_B, annotationId: "ann_two", note: "actually wrong" }),
@@ -240,8 +250,8 @@ describe("migrateStore", () => {
 
   it("writes nothing when it refuses, so there is no partial store to clean up", () => {
     writeV1Store([
-      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
-      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+      v1Row({ task: "Summarize", value: "Done" }),
+      v1Row({ traceId: "t-2", task: "Summarize", value: "Done" }),
     ], [
       annotation({ outputId: OUT_A, annotationId: "ann_one", answers: { q_accurate: true } }),
       annotation({ outputId: OUT_B, annotationId: "ann_two", answers: { q_accurate: false } }),
@@ -253,8 +263,8 @@ describe("migrateStore", () => {
 
   it("does not treat two rows judged by DIFFERENT people as a conflict", () => {
     writeV1Store([
-      v1Row({ outputId: OUT_A, task: "Summarize", value: "Done", traceId: "t-1" }),
-      v1Row({ outputId: OUT_B, task: "Summarize", value: "Done", traceId: "t-2" }),
+      v1Row({ task: "Summarize", value: "Done" }),
+      v1Row({ traceId: "t-2", task: "Summarize", value: "Done" }),
     ], [
       annotation({
         outputId: OUT_A, annotationId: "ann_one", checklistHash: checklistHash(),
@@ -270,15 +280,15 @@ describe("migrateStore", () => {
 
   it("uses the earliest capturedAt of a merged group, so order does not matter", () => {
     writeV1Store([
-      v1Row({ outputId: OUT_A, task: "S", value: "D", traceId: "t-1", capturedAt: "2026-08-05T00:00:00.000Z" }),
-      v1Row({ outputId: OUT_B, task: "S", value: "D", traceId: "t-2", capturedAt: "2026-08-01T00:00:00.000Z" }),
+      v1Row({ task: "S", value: "D", capturedAt: "2026-08-05T00:00:00.000Z" }),
+      v1Row({ traceId: "t-2", task: "S", value: "D", capturedAt: "2026-08-01T00:00:00.000Z" }),
     ]);
     migrateStore({ sourceDir, destDir });
     expect(records()[0].capturedAt).toBe("2026-08-01T00:00:00.000Z");
   });
 
   it("keeps annotations in their original append order, because the fold depends on it", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })], [
+    writeV1Store([v1Row({ task: "S", value: "D" })], [
       annotation({ outputId: OUT_A, annotationId: "ann_first", checklistHash: checklistHash() }),
       annotation({
         outputId: OUT_A, annotationId: "ann_second", checklistHash: checklistHash(),
@@ -291,7 +301,7 @@ describe("migrateStore", () => {
   });
 
   it("refuses while a draft exists in the source store", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
     fs.mkdirSync(path.join(sourceDir, "drafts"), { recursive: true });
     fs.writeFileSync(path.join(sourceDir, "drafts", "session_x.json"), "{}");
     expect(() => migrateStore({ sourceDir, destDir })).toThrow(MigrationBlockedError);
@@ -299,7 +309,7 @@ describe("migrateStore", () => {
   });
 
   it("copies checklists unchanged, since nothing about them is keyed by output", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
     const before = fs.readFileSync(
       path.join(sourceDir, "checklists", CHECKLIST_ID, "1.json"), "utf8");
     migrateStore({ sourceDir, destDir });
@@ -308,7 +318,7 @@ describe("migrateStore", () => {
   });
 
   it("leaves the source store untouched", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
     const before = fs.readFileSync(path.join(sourceDir, "outputs.jsonl"), "utf8");
     migrateStore({ sourceDir, destDir });
     expect(fs.readFileSync(path.join(sourceDir, "outputs.jsonl"), "utf8")).toBe(before);
@@ -317,7 +327,7 @@ describe("migrateStore", () => {
   });
 
   it("produces a store the ordinary read path can open", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })],
+    writeV1Store([v1Row({ task: "S", value: "D" })],
       [annotation({ outputId: OUT_A, checklistHash: checklistHash() })]);
     // migrateStore validates this itself before publishing; asserting it here
     // pins the guarantee rather than trusting the implementation to keep it.
@@ -327,7 +337,7 @@ describe("migrateStore", () => {
   });
 
   it("leaves no usable destination if interrupted before the manifest write", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
     expect(() => migrateStore({
       sourceDir,
       destDir,
@@ -339,7 +349,7 @@ describe("migrateStore", () => {
   });
 
   it("recovers from an interrupted run on the next attempt", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
     expect(() => migrateStore({
       sourceDir,
       destDir,
@@ -353,14 +363,14 @@ describe("migrateStore", () => {
   });
 
   it("refuses to delete a staging path it did not create", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
     fs.mkdirSync(`${destDir}.migrating`, { recursive: true });
     fs.writeFileSync(path.join(`${destDir}.migrating`, "someone-elses-file"), "important");
     expect(() => migrateStore({ sourceDir, destDir })).toThrow(/does not recognise/);
   });
 
   it("refuses an existing destination rather than merging into it", () => {
-    writeV1Store([v1Row({ outputId: OUT_A, task: "S", value: "D" })]);
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
     fs.mkdirSync(destDir, { recursive: true });
     expect(() => migrateStore({ sourceDir, destDir })).toThrow(MigrationTargetError);
   });
@@ -379,8 +389,8 @@ describe("migrateStore", () => {
 
   it("reports counts a person can check against their old store", () => {
     writeV1Store([
-      v1Row({ outputId: OUT_A, task: "S", value: "D", traceId: "t-1" }),
-      v1Row({ outputId: OUT_B, task: "S", value: "D", traceId: "t-2" }),
+      v1Row({ task: "S", value: "D" }),
+      v1Row({ traceId: "t-2", task: "S", value: "D" }),
     ], [annotation({ outputId: OUT_A, checklistHash: checklistHash() })]);
     expect(migrateStore({ sourceDir, destDir })).toMatchObject({
       oldRecords: 2,
@@ -389,5 +399,65 @@ describe("migrateStore", () => {
       occurrences: 2,
       annotations: 1,
     });
+  });
+});
+
+describe("migrateStore refuses a corpus it cannot move faithfully", () => {
+  it("refuses two rows sharing an output id", () => {
+    // Both annotations for that id would land on whichever row was read last.
+    const row = v1Row({ task: "S", value: "D" });
+    writeV1Store([row, row]);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/share output id/);
+  });
+
+  it("refuses a row whose id does not match its own execution", () => {
+    const row = v1Row({ task: "S", value: "D" }) as Record<string, unknown>;
+    writeV1Store([{ ...row, outputId: `out_${"f".repeat(64)}` }]);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/hashes to/);
+  });
+
+  it("writes nothing when it refuses on identity grounds", () => {
+    const row = v1Row({ task: "S", value: "D" });
+    writeV1Store([row, row]);
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow();
+    expect(fs.existsSync(destDir)).toBe(false);
+  });
+});
+
+describe("migrateStore publication", () => {
+  it("leaves no ownership marker in the published store", () => {
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
+    migrateStore({ sourceDir, destDir });
+    expect(fs.existsSync(path.join(destDir, ".migration.json"))).toBe(false);
+  });
+
+  it("keeps the marker until AFTER the rename, so an interrupted publish is reclaimable", () => {
+    // Removing the marker first would leave a complete .migrating directory the
+    // next run cannot recognise, and so refuses to touch.
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
+    expect(() => migrateStore({
+      sourceDir,
+      destDir,
+      faultBeforePublish: () => {
+        throw new Error("interrupted");
+      },
+    })).toThrow();
+    expect(fs.existsSync(path.join(`${destDir}.migrating`, ".migration.json"))).toBe(true);
+    expect(() => migrateStore({ sourceDir, destDir })).not.toThrow();
+  });
+
+  it("leaves an unexpected file in a leftover stage alone, and says so", () => {
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
+    expect(() => migrateStore({
+      sourceDir,
+      destDir,
+      faultBeforePublish: () => {
+        throw new Error("interrupted");
+      },
+    })).toThrow();
+    const intruder = path.join(`${destDir}.migrating`, "checklists", "not-ours.txt");
+    fs.writeFileSync(intruder, "important");
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/did not write/);
+    expect(fs.readFileSync(intruder, "utf8")).toBe("important");
   });
 });

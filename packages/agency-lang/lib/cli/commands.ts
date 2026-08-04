@@ -94,8 +94,10 @@ export function loadConfig(
 ): AgencyConfig {
   const finalConfigPath = configPath || path.join(process.cwd(), "agency.json");
 
+  // Diagnostics go to stderr so they never contaminate a command's
+  // machine-consumed stdout (e.g. `remote logs --json`).
   if (verbose) {
-    console.log(`Looking for config at: ${finalConfigPath}`);
+    console.error(`Looking for config at: ${finalConfigPath}`);
   }
 
   const { config, error } = loadConfigSafe(finalConfigPath);
@@ -104,7 +106,7 @@ export function loadConfig(
     process.exit(1);
   }
   if (config.verbose) {
-    console.log(`Loaded config from ${finalConfigPath}`);
+    console.error(`Loaded config from ${finalConfigPath}`);
   }
   return config;
 }

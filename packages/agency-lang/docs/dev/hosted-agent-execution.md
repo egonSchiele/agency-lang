@@ -232,6 +232,13 @@ Rules the CLI enforces around these:
 - **CLI project arguments and output are public `project_id` slugs.** The sealed account client (`lib/cli/statelog/accountClient.ts`) translates statelog's internal database ids in both directions and never exposes them.
 - **A newly created key's plaintext is shown once** and must be copied immediately; the list view never returns it.
 
+Introspection commands (project-scoped **reads**; a **project key on its own project** is enough — no account key):
+
+- **`remote pull [--out <dir>] [--force]`** — download the deployed source to disk (`GET …/source`). Server filenames are untrusted, so a non-mutating planner refuses traversal/duplicate/non-regular names and collects **all** conflicts before any write, and the applicator publishes each file **atomically** (create via `fs.link`; `--force` replaces a still-regular file). Output-directory symlinks are refused, and a pull bundle is **not transactional** — a later failure reports the files already committed. It refuses to overwrite without `--force`.
+- **`remote logs [traceId] [--json] [--list]`** — open a trace's logs in the same viewer `agency logs` uses (`GET …/traces` + `…/traces/:id/logs`, mapped to the viewer's JSONL through one owner). Defaults to the most recent trace; `--list` shows recent traces; `--json` writes raw JSON to stdout instead. **Viewer mode requires an interactive stdin/stdout** (`--json` is the headless alternative).
+
+The project-read wire is sealed in `lib/cli/statelog/projectClient.ts` (slug-addressed), keeping the project-**404** / wrong-project-**403** / HTTP-success **`Trace not found`** failure layers distinct. Like the account and serve clients, its success values are validated with **Zod** schemas (the `lib/cli/statelog/` clients share this convention).
+
 **One interrupt mechanism, shared with `agency run`.** `remote call` reuses the runtime's `resolveInterrupts` + `buildDecider` (`lib/runtime/interruptResolution.ts`); it differs from a local run only in the resume transport (HTTP `/resume` vs in-process). It borrows run's flags — `--interactive`, `--policy`, `--approve`, `--reject` — through `resolveRunPolicy`. With no such flag a surfaced interrupt is reported unhandled and exits, exactly like `run`. **The remote policy acts on *surfaced* interrupts only** (the server's own handlers ran first), unlike run's in-chain policy.
 
 **`--function` is one-shot.** Served functions have no resume path (`runExportedFunction` is a stateless frame; an unhandled function interrupt fails at checkpoint creation and comes back wrapped in a success envelope — see `functionFrame.integration.test.ts`). So `remote call --function` prints the result and never enters the resume loop.
@@ -240,7 +247,7 @@ Rules the CLI enforces around these:
 
 Top-level `agency deploy` has been **removed** (a breaking change) in favor of `agency remote deploy`; the `deploy()` engine in `lib/cli/deploy/` stays and is what `remote deploy` calls.
 
-**Deferred (need statelog changes):** `remote inspect` (files/last-upload), `remote pull` (source zip), and `remote logs` (traces in the CLI viewer) — all read routes that are browser-session-only today. The statelog `whoami` route now exists and `remote whoami` uses it; a `remote link --project <slug>` that builds the serve URL from `host + whoami.userId + project + file` (dropping the pasted URL) is the remaining follow-up.
+**Deferred:** a `remote link --project <slug>` convenience that builds the serve URL from `host + whoami.userId + project + file` (dropping the pasted URL). A **`remote inspect`** metadata view (entry point, last upload, per-file exported nodes) is also deferred until the statelog `/api/projects/:slug/agent` endpoint returns the full callable manifest — functions and typed/defaulted parameters — so it would launch differentiated from `remote ls` rather than as a thin subset. The management (`whoami`/`projects`/`keys`) and introspection (`pull`/`logs`) commands are shipped.
 
 ---
 

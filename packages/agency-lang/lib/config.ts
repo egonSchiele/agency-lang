@@ -610,7 +610,9 @@ export function loadConfigSafe(configPath: string): {
       };
     }
     if (result.data.verbose) {
-      console.log(`Loaded config from ${configPath}:`);
+      // stderr, not stdout: this fires under `config.verbose` and must not
+      // corrupt a command's machine-consumed output.
+      console.error(`Loaded config from ${configPath}:`);
     }
     return { config: result.data as AgencyConfig };
   } catch (err) {

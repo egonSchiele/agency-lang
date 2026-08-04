@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+// Spread the real fs so behavior is unchanged but the namespace is spyable — the
+// single-read test spies on readFileSync.
+vi.mock("fs", async (importOriginal) => ({ ...(await importOriginal<typeof import("fs")>()) }));
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -7,6 +10,7 @@ import {
   apiKeyOrExit,
   resolveApiKey,
   resolveAccountTarget,
+  resolveProjectTarget,
   type RemoteCommandContext,
 } from "./util.js";
 
@@ -28,7 +32,7 @@ function context(config: AgencyConfig = {}): RemoteCommandContext {
 function writeBinding(origin: string): void {
   fs.writeFileSync(
     configPath,
-    JSON.stringify({ remote: { serveUrl: `${origin}/serve/user/project/agent.agency` } }),
+    JSON.stringify({ remote: { serveUrl: `${origin}/serve/user/proj/agent.agency` } }),
   );
 }
 
@@ -108,5 +112,74 @@ describe("resolveApiKey", () => {
   it("names the selected missing variable", () => {
     expect(() => resolveApiKey({ apiKeyEnv: "MISSING_KEY" })).toThrow(ProcessExit);
     expect(errors.join("\n")).toContain("Missing API key — set $MISSING_KEY.");
+  });
+});
+
+describe("resolveProjectTarget", () => {
+  it("reads the binding exactly once", () => {
+    writeBinding("https://h"); // origin https://h, slug "proj"
+    const read = vi.spyOn(fs, "readFileSync");
+    resolveProjectTarget(context(), {});
+    expect(read.mock.calls.filter(([candidate]) => candidate === configPath)).toHaveLength(1);
+  });
+
+  it("uses the binding slug when the resolved origin equals the binding origin", () => {
+    writeBinding("https://h");
+    expect(resolveProjectTarget(context({ log: { host: "https://h" } }), {}).projectSlug).toBe("proj");
+  });
+
+  it("rejects a binding slug against a different resolved origin", () => {
+    writeBinding("https://prod");
+    expect(() => resolveProjectTarget(context({ log: { host: "https://staging" } }), {})).toThrow(
+      ProcessExit,
+    );
+    expect(errors.join("\n")).toContain("--project");
+  });
+
+  it("accepts an explicit non-empty --project against any origin and rejects empty", () => {
+    expect(
+      resolveProjectTarget(context({ log: { host: "https://h" } }), { project: "foo" }).projectSlug,
+    ).toBe("foo");
+    expect(() => resolveProjectTarget(context({ log: { host: "https://h" } }), { project: "" })).toThrow(
+      ProcessExit,
+    );
+  });
+
+  it("fails with no binding and no --project", () => {
+    expect(() => resolveProjectTarget(context({ log: { host: "https://h" } }), {})).toThrow(ProcessExit);
+    expect(errors.join("\n")).toContain("Pass --project");
+  });
+
+  // Key resolution runs LAST: with STATELOG_API_KEY unset AND a bad input, the
+  // input error is what the user sees — no credential access before the input
+  // is valid.
+  describe("with the API key unset, a CLI-input error is reported before the missing key", () => {
+    const expectInputError = (
+      config: AgencyConfig,
+      options: Parameters<typeof resolveProjectTarget>[1],
+      expected: string,
+    ): void => {
+      delete process.env.STATELOG_API_KEY;
+      expect(() => resolveProjectTarget(context(config), options)).toThrow(ProcessExit);
+      expect(errors.join("\n")).toContain(expected);
+      expect(errors.join("\n")).not.toContain("Missing API key");
+    };
+
+    it("an empty --project", () => {
+      expectInputError({ log: { host: "https://h" } }, { project: "" }, "--project must not be empty.");
+    });
+
+    it("no host source at all", () => {
+      expectInputError({}, {}, "No statelog host");
+    });
+
+    it("no project source at all", () => {
+      expectInputError({ log: { host: "https://h" } }, {}, "Pass --project");
+    });
+
+    it("a binding host that differs from the selected host", () => {
+      writeBinding("https://prod");
+      expectInputError({ log: { host: "https://staging" } }, {}, "--project");
+    });
   });
 });

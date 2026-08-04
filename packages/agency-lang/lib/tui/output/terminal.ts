@@ -21,6 +21,12 @@ const END_SYNC = "\x1b[?2026l";
 
 type TerminalOutputOptions = {
   synchronizedOutput?: boolean;
+  // When false, this output does NOT install SIGINT/SIGTERM handlers, leaving
+  // interrupt ownership to the caller so it can route a signal through its own
+  // cleanup before exiting. The suspend/resume (SIGTSTP/SIGCONT) and the `exit`
+  // safety-net handlers are unaffected. Default true: a standalone TUI owns its
+  // own interrupt teardown.
+  manageInterruptSignals?: boolean;
 };
 
 function moveTo(row: number, col: number): string {
@@ -65,6 +71,7 @@ export class TerminalOutput implements OutputTarget {
   private inAltScreen = false;
   private previousGrid: Cell[][] | null = null;
   private synchronizedOutput: boolean;
+  private manageInterruptSignals: boolean;
   // Tracks whether our SIGTSTP listener is currently installed. We
   // remove it during the suspend handoff and re-install it on resume,
   // and SIGCONT can be delivered independently of our SIGTSTP path
@@ -94,14 +101,17 @@ export class TerminalOutput implements OutputTarget {
 
   constructor(opts: TerminalOutputOptions = {}) {
     this.synchronizedOutput = opts.synchronizedOutput ?? true;
+    this.manageInterruptSignals = opts.manageInterruptSignals ?? true;
   }
 
   init(): void {
     process.stdout.write(ENTER_ALT_SCREEN + HIDE_CURSOR);
     this.inAltScreen = true;
     process.on("exit", this.exitHandler);
-    process.on("SIGINT", this.sigintHandler);
-    process.on("SIGTERM", this.sigtermHandler);
+    if (this.manageInterruptSignals) {
+      process.on("SIGINT", this.sigintHandler);
+      process.on("SIGTERM", this.sigtermHandler);
+    }
     process.on("SIGTSTP", this.sigtstpHandler);
     this.sigtstpInstalled = true;
     process.on("SIGCONT", this.sigcontHandler);

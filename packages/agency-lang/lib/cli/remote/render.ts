@@ -4,6 +4,7 @@
 
 import { color } from "@/utils/termcolors.js";
 import type { ServeManifest } from "../statelog/serveClient.js";
+import type { TraceSummary } from "../statelog/projectClient.js";
 import type { RemoteBinding } from "./binding.js";
 import type {
   ProjectSummary,
@@ -96,8 +97,21 @@ export function renderCreatedKey(key: CreatedKey): string {
   ].join("\n");
 }
 
-/** A plain, ANSI-free aligned table. Colour is applied around the table by the
- *  renderers, never inside a cell, so byte-width never skews alignment. */
+export function renderTraceList(traces: TraceSummary[]): string {
+  if (traces.length === 0) {
+    return color.dim("No traces yet.");
+  }
+  return formatStaticTable(
+    ["TRACE", "CREATED"],
+    traces.map((trace) => [trace.id, trace.createdAt]),
+  );
+}
+
+export function renderPullSummary(names: string[], outputDir: string): string {
+  const header = `${color.green("Pulled")} ${names.length} file${names.length === 1 ? "" : "s"} to ${outputDir}`;
+  return [header, ...names.map((name) => `  ${name}`)].join("\n");
+}
+
 function formatStaticTable(headers: string[], rows: string[][]): string {
   const widths = headers.map((header, columnIndex) => {
     const values = rows.map((row) => row[columnIndex] ?? "");

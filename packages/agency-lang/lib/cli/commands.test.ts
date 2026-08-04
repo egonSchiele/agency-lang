@@ -2,11 +2,35 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { forEachSource, resolveInputSources } from "./commands.js";
+import { forEachSource, loadConfig, resolveInputSources } from "./commands.js";
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "agency-resolve-"));
 }
+
+describe("loadConfig diagnostics", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // A machine-consumed command (e.g. `remote logs --json`) reads config on the
+  // way in; neither verbose source may write to stdout, or it corrupts the JSON.
+  it("routes both the --verbose and config.verbose diagnostics to stderr, never stdout", () => {
+    const dir = makeTempDir();
+    const configPath = path.join(dir, "agency.json");
+    fs.writeFileSync(configPath, JSON.stringify({ verbose: true }));
+    const out = vi.spyOn(console, "log").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    loadConfig(configPath, true);
+
+    expect(out).not.toHaveBeenCalled();
+    const stderr = err.mock.calls.map((c) => c.join(" ")).join("\n");
+    expect(stderr).toContain("Looking for config at"); // the --verbose flag source
+    expect(stderr).toContain("Loaded config from"); // the config.verbose source
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
 
 describe("resolveInputSources", () => {
   afterEach(() => {

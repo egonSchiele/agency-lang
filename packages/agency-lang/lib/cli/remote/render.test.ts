@@ -8,6 +8,8 @@ import {
   renderProjectCreated,
   renderKeys,
   renderCreatedKey,
+  renderTraceList,
+  renderPullSummary,
 } from "./render.js";
 import type { CreatedKey, KeySummary } from "../statelog/accountClient.js";
 
@@ -146,5 +148,28 @@ describe("renderCreatedKey", () => {
 
   it("never leaks the plaintext key into the list view", () => {
     expect(strip(renderKeys([createdKey]))).not.toContain("plain-once");
+  });
+});
+
+describe("renderTraceList", () => {
+  it("renders aligned rows and an empty state", () => {
+    expect(strip(renderTraceList([]))).toContain("No traces yet.");
+    const out = strip(
+      renderTraceList([
+        { id: "trace-b", createdAt: "2026-08-03T02:00:00Z" },
+        { id: "trace-a", createdAt: "2026-08-03T01:00:00Z" },
+      ]),
+    );
+    expect(out).toContain("trace-b");
+    expect(out).toContain("trace-a");
+  });
+});
+
+describe("renderPullSummary", () => {
+  it("lists the written files under the output directory", () => {
+    const out = strip(renderPullSummary(["main.agency", "helper.agency"], "/out"));
+    expect(out).toContain("Pulled 2 files to /out");
+    expect(out).toContain("main.agency");
+    expect(out).toContain("helper.agency");
   });
 });

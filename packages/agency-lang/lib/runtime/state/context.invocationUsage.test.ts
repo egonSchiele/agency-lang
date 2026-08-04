@@ -19,7 +19,11 @@ describe("execution-context invocation meter", () => {
     const b = await parent.createExecutionContext("run-b");
 
     expect(a.invocationUsage.snapshot()).toEqual({
-      usage: { pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0, pricingComplete: true },
+      usage: {
+        pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0, pricingComplete: true,
+        models: {}, unattributed: { pricedCost: 0, inputTokens: 0, outputTokens: 0 },
+        modelAttributionComplete: true,
+      },
       usageComplete: true,
     });
 

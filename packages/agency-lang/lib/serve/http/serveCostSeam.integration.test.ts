@@ -5,6 +5,7 @@ import { RuntimeContext } from "../../runtime/state/context.js";
 import { runExportedFunctionForServe } from "../../runtime/node.js";
 import { addCost } from "../../runtime/cost.js";
 import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
+import { usageReconcileTolerance } from "../../runtime/invocationUsage.js";
 import type { GraphState } from "../../runtime/types.js";
 import type { AgencyFunction } from "../../runtime/agencyFunction.js";
 import type { ServedExportedFunction } from "../types.js";
@@ -68,6 +69,18 @@ describe("serve cost seam — end to end", () => {
     expect(result.usageComplete).toBe(true);
   });
 
+  it("success carries a reconciled unattributed breakdown (addCost has no model)", async () => {
+    setup();
+    const result = await handlerFor(makeCtx(), () => { addCost(0.03); return "done"; })("POST", "/function/run", {});
+    // addCost is model-less, so it lands in the unattributed row, not models.
+    expect(result.usage?.models).toEqual({});
+    expect(result.usage?.unattributed?.pricedCost).toBeCloseTo(0.03);
+    expect(result.usage?.modelAttributionComplete).toBe(true);
+    const modelCost = Object.values(result.usage!.models ?? {}).reduce((total, row) => total + row.pricedCost, 0);
+    const attributed = modelCost + (result.usage!.unattributed?.pricedCost ?? 0);
+    expect(Math.abs(attributed - result.usage!.pricedCost)).toBeLessThanOrEqual(usageReconcileTolerance(result.usage!.pricedCost));
+  });
+
   it("two concurrent invocations report independent usage (own execCtx each)", async () => {
     setup();
     const cheap = handlerFor(makeCtx(), () => { addCost(0.01); return "a"; })("POST", "/function/run", {});
@@ -86,6 +99,9 @@ describe("serve cost seam — end to end", () => {
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ success: false, error: "Tool execution failed" });
     expect(result.usage?.pricedCost).toBeCloseTo(0.02);
+    // The breakdown is not dropped on the error path.
+    expect(result.usage?.unattributed?.pricedCost).toBeCloseTo(0.02);
+    expect(result.usage?.modelAttributionComplete).toBe(true);
   });
 
   it("a baked budget trip returns 402 carrying the cost up to the trip", async () => {

@@ -351,6 +351,14 @@ describe("handleTelemetryMessage", () => {
     handleTelemetryMessage(session, { type: "telemetry" } as any);
     expect(stack.localCost).toBe(0);
   });
+
+  it("books legacy cost to unattributed and flags degraded model attribution", () => {
+    const { session } = makeTelemetrySession(new StateStack());
+    handleTelemetryMessage(session, { type: "telemetry", costUsd: 0.05 });
+    const { usage } = session.ctx.invocationUsage.snapshot();
+    expect(usage.unattributed!.pricedCost).toBeCloseTo(0.05);
+    expect(usage.modelAttributionComplete).toBe(false);
+  });
 });
 
 describe("handleInvocationUsageMessage (full delta)", () => {
@@ -386,6 +394,60 @@ describe("handleInvocationUsageMessage (full delta)", () => {
     expect(s.usage.outputTokens).toBe(20);
   });
 
+  it("buckets a modeled child charge under its model", () => {
+    const { session, ctx } = makeUsageSession();
+    handleInvocationUsageMessage(session, {
+      type: "invocationUsage", pricedCost: 0.1, inputTokens: 100, outputTokens: 20, unknownCostCallCount: 0,
+      attribution: { kind: "model", model: "opus-4.8" },
+    });
+    const { usage } = ctx.invocationUsage.snapshot();
+    expect(usage.models!["opus-4.8"]).toEqual({ pricedCost: 0.1, inputTokens: 100, outputTokens: 20 });
+    expect(usage.modelAttributionComplete).toBe(true);
+  });
+
+  it("keeps two concurrent sessions' model rows independent", () => {
+    const first = makeUsageSession();
+    const second = makeUsageSession();
+    handleInvocationUsageMessage(first.session, {
+      type: "invocationUsage", pricedCost: 0.1, inputTokens: 1, outputTokens: 1, unknownCostCallCount: 0,
+      attribution: { kind: "model", model: "opus" },
+    });
+    handleInvocationUsageMessage(second.session, {
+      type: "invocationUsage", pricedCost: 0.2, inputTokens: 1, outputTokens: 1, unknownCostCallCount: 0,
+      attribution: { kind: "model", model: "haiku" },
+    });
+    expect(Object.keys(first.ctx.invocationUsage.snapshot().usage.models!)).toEqual(["opus"]);
+    expect(Object.keys(second.ctx.invocationUsage.snapshot().usage.models!)).toEqual(["haiku"]);
+  });
+
+  it("trips attribution incomplete on a #801 child delta with no attribution", () => {
+    const { session, ctx } = makeUsageSession();
+    handleInvocationUsageMessage(session, {
+      type: "invocationUsage", pricedCost: 0.1, inputTokens: 1, outputTokens: 1, unknownCostCallCount: 0,
+    });
+    const { usage } = ctx.invocationUsage.snapshot();
+    expect(usage.unattributed!.pricedCost).toBeCloseTo(0.1);
+    expect(usage.modelAttributionComplete).toBe(false);
+  });
+
+  it("does NOT trip for an explicitly unattributed child charge", () => {
+    const { session, ctx } = makeUsageSession();
+    handleInvocationUsageMessage(session, {
+      type: "invocationUsage", pricedCost: 0.05, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0,
+      attribution: { kind: "unattributed" },
+    });
+    expect(ctx.invocationUsage.snapshot().usage.modelAttributionComplete).toBe(true);
+  });
+
+  it("propagates a modelAttributionIncomplete marker through the dispatch entry point", async () => {
+    const { session, ctx } = makeUsageSession();
+    // The canonical mock caps ipcPayload at 1 byte; give this control message
+    // room so it dispatches instead of being dropped as oversize.
+    session.limits = { ...session.limits, ipcPayload: 1_000_000 };
+    await handleChildMessage(session, { type: "modelAttributionIncomplete" });
+    expect(ctx.invocationUsage.snapshot().usage.modelAttributionComplete).toBe(false);
+  });
+
   it("accumulates exact totals across multiple child messages (one-child)", () => {
     const { session, ctx } = makeUsageSession();
     handleInvocationUsageMessage(session, { type: "invocationUsage", pricedCost: 0.1, inputTokens: 5, outputTokens: 1, unknownCostCallCount: 0 });
@@ -403,7 +465,9 @@ describe("handleInvocationUsageMessage (full delta)", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
     const { session } = makeUsageSession();
-    const delta = { pricedCost: 0.15, inputTokens: 3, outputTokens: 1, unknownCostCallCount: 1 };
+    // A current-runtime relay carries attribution, so provenance detection does
+    // not fire and only the usage delta is re-relayed (exactly once).
+    const delta = { pricedCost: 0.15, inputTokens: 3, outputTokens: 1, unknownCostCallCount: 1, attribution: { kind: "model" as const, model: "opus" } };
     handleInvocationUsageMessage(session, { type: "invocationUsage", ...delta });
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsage", ...delta });
   });

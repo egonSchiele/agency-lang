@@ -4,6 +4,7 @@ import {
   recordPaidUsage,
   recordUnknownCostAttempt,
   markInvocationUsageIncompleteAt,
+  accountCompletionUsage,
 } from "./recordPaidUsage.js";
 import { completionUsageDelta, paidCostDelta } from "./invocationUsage.js";
 import { addCost } from "./cost.js";
@@ -57,7 +58,7 @@ describe("recordPaidUsageAt (explicit target)", () => {
   it("an unpriced completion records tokens/unknown without charging guards", () => {
     const ctx = makeCtx();
     const branch = new StateStack();
-    recordPaidUsageAt({ ctx, stack: branch }, completionUsageDelta({ cost: undefined, inputTokens: 5, outputTokens: 2 }));
+    recordPaidUsageAt({ ctx, stack: branch }, completionUsageDelta({ cost: undefined, inputTokens: 5, outputTokens: 2, model: "m" }));
     expect(branch.localCost).toBe(0);
     const s = ctx.invocationUsage.snapshot();
     expect(s.usage.pricedCost).toBe(0);
@@ -137,5 +138,21 @@ describe("markInvocationUsageIncompleteAt", () => {
     markInvocationUsageIncompleteAt(ctx);
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsageIncomplete" });
     expect(ctx.invocationUsage.snapshot().usageComplete).toBe(false);
+  });
+});
+
+describe("accountCompletionUsage", () => {
+  it("attributes the completion to the provided model", () => {
+    const ctx = makeCtx();
+    const stack = new StateStack();
+    accountCompletionUsage(
+      ctx,
+      stack,
+      { cost: { totalCost: 0.1 }, usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 } },
+      "opus-4.8",
+    );
+    const { usage } = ctx.invocationUsage.snapshot();
+    expect(usage.models!["opus-4.8"]).toEqual({ pricedCost: 0.1, inputTokens: 5, outputTokens: 2 });
+    expect(stack.localTokens).toBe(7);
   });
 });

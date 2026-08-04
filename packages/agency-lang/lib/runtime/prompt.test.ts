@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { SmolError } from "smoltalk";
 import { _internal } from "./prompt.js";
 import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
+import { RuntimeContext } from "./state/context.js";
+import { meteredDispatch } from "./recordPaidUsage.js";
+import type { GraphState } from "./types.js";
 
 const {
   DEFAULT_TOOL_RESULT_CHARS,
@@ -463,5 +466,45 @@ describe("dropNullDefaultedArgs", () => {
       [P("cwd", true)],
     );
     expect(out).toEqual({ extra: null });
+  });
+});
+
+describe("meteredDispatch — provider-attempt unknown-cost accounting", () => {
+  function makeCtx() {
+    return new RuntimeContext<GraphState>({
+      statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+      smoltalkDefaults: {},
+      dirname: "/project",
+    });
+  }
+
+  it("a resolved dispatch records no unknown-cost attempt", async () => {
+    const ctx = makeCtx();
+    const out = await meteredDispatch(ctx, ctx.stateStack, async () => "ok");
+    expect(out).toBe("ok");
+    expect(ctx.invocationUsage.snapshot().usage.unknownCostCallCount).toBe(0);
+    expect(ctx.invocationUsage.snapshot().usage.pricingComplete).toBe(true);
+  });
+
+  it("a dispatched-but-unresolved throw records one unknown-cost attempt and rethrows", async () => {
+    const ctx = makeCtx();
+    const err = new Error("provider 500 after dispatch");
+    await expect(
+      meteredDispatch(ctx, ctx.stateStack, async () => { throw err; }),
+    ).rejects.toBe(err);
+    const s = ctx.invocationUsage.snapshot();
+    expect(s.usage.unknownCostCallCount).toBe(1);
+    expect(s.usage.pricedCost).toBe(0);
+    expect(s.usage.pricingComplete).toBe(false);
+  });
+
+  it("failed-retry-then-success counts exactly one unknown attempt (each dispatch is an attempt)", async () => {
+    const ctx = makeCtx();
+    // First attempt throws (e.g. a timeout), second resolves.
+    await expect(
+      meteredDispatch(ctx, ctx.stateStack, async () => { throw new Error("timeout"); }),
+    ).rejects.toThrow();
+    await meteredDispatch(ctx, ctx.stateStack, async () => "recovered");
+    expect(ctx.invocationUsage.snapshot().usage.unknownCostCallCount).toBe(1);
   });
 });

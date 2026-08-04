@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { agencyStore } from "../runtime/asyncContext.js";
+import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import { _generateImage } from "./image.js";
 
 type ImageImpl = (input: any, config: any) => Promise<any>;
@@ -29,7 +30,9 @@ async function withClient(
   const stack = makeStack();
   const imageGeneration = vi.fn().mockResolvedValue(undefined);
   const store = {
-    ctx: { llmClient: { image: imageImpl }, statelogClient: { imageGeneration } },
+    // A real meter: image generation pays via addCost → recordPaidUsage, which
+    // merges ctx.invocationUsage (the serve cost seam's accounting boundary).
+    ctx: { llmClient: { image: imageImpl }, statelogClient: { imageGeneration }, invocationUsage: new InvocationUsageMeter() },
     stack,
     threads: {},
     globals: {},

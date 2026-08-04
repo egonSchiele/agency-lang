@@ -6,6 +6,8 @@ import { loadConfig } from "./commands.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { formatErrors } from "../typeChecker/index.js";
 import { collectServeMetadata } from "../serve/metadata.js";
+import { unwrapServedInvocationOutcome } from "../runtime/invocationUsage.js";
+import type { ServedInvocationOutcome } from "../runtime/invocationUsage.js";
 import { discoverExports } from "../serve/discovery.js";
 import { createMcpHandler, startStdioServer, mcpToolSummaryLines } from "../serve/mcp/adapter.js";
 import type { McpConfig } from "../serve/mcp/adapter.js";
@@ -18,7 +20,7 @@ import { startHttpServer } from "../serve/http/adapter.js";
 import { DEFAULT_HOST } from "../serve/http/security.js";
 import { createLogger } from "../logger.js";
 import { VERSION } from "../stdlib/version.js";
-import type { ExportedItem } from "../serve/types.js";
+import type { ServedExportedItem } from "../serve/types.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import type { InterruptHandlers } from "../serve/mcp/interruptLoop.js";
 import { PolicyStore } from "../serve/policyStore.js";
@@ -63,7 +65,7 @@ function compileForServe(file: string, options: { quiet?: boolean } = {}): Compi
 
 async function loadAndDiscover(
   compileResult: CompileResult,
-): Promise<{ exports: ExportedItem[]; moduleExports: Record<string, unknown> }> {
+): Promise<{ exports: ServedExportedItem[]; moduleExports: Record<string, unknown> }> {
   const moduleUrl = pathToFileURL(path.resolve(compileResult.outputPath)).href;
   // eslint-disable-next-line no-restricted-syntax -- compiled module URL is only known at runtime
   const mod = await import(moduleUrl);
@@ -136,16 +138,20 @@ export async function serveMcp(
   // returns { data: ... }. We normalize here so the interrupt loop sees a
   // consistent shape.
   const rawHasInterrupts = moduleExports.hasInterrupts as (data: unknown) => boolean;
-  const rawRespondToInterrupts = moduleExports.respondToInterrupts as (
+  const rawRespondToInterruptsForServe = moduleExports.__respondToInterruptsForServe as (
     interrupts: unknown[],
     responses: unknown[],
-  ) => Promise<{ data: unknown }>;
+  ) => Promise<ServedInvocationOutcome<{ data: unknown }>>;
 
   const interruptHandlers: InterruptHandlers = {
     hasInterrupts: rawHasInterrupts,
+    // Unwrap the serve outcome (rethrowing the original error) then the
+    // RunNodeResult's `{ data }`; MCP does not expose usage in v1.
     respondToInterrupts: async (interrupts, responses) => {
-      const wrapped = await rawRespondToInterrupts(interrupts, responses);
-      return wrapped.data;
+      const result = unwrapServedInvocationOutcome(
+        await rawRespondToInterruptsForServe(interrupts, responses),
+      );
+      return result.data;
     },
   };
 
@@ -321,10 +327,10 @@ export async function serveHttp(
     apiKey,
     logger,
     hasInterrupts: moduleExports.hasInterrupts as (data: unknown) => boolean,
-    respondToInterrupts: moduleExports.respondToInterrupts as (
+    respondToInterrupts: moduleExports.__respondToInterruptsForServe as (
       interrupts: unknown[],
       responses: unknown[],
-    ) => Promise<unknown>,
+    ) => Promise<ServedInvocationOutcome<unknown>>,
   });
 }
 

@@ -2,7 +2,6 @@ import type { Guard, GuardExceededError, GuardJSON } from "../guard.js";
 import type { HandlerEntry } from "../types.js";
 import type { ReplyAttachmentPart } from "../replyAttachments.js";
 import { guardFromJSON, TimeGuard } from "../guard.js";
-import { sendCostTelemetryToParent } from "../costTelemetry.js";
 import { Checkpoint } from "../index.js";
 import { MemoryFrame } from "../memory/frame.js";
 import { deepClone } from "../utils.js";
@@ -931,7 +930,10 @@ export class StateStack {
   billCharge(amount: number): void {
     this.localCost += amount;
     this.chargeGuards(amount);
-    sendCostTelemetryToParent(amount);
+    // NOTE: no telemetry/usage relay here anymore — it rides the
+    // recordPaidUsageAt accounting boundary (recordPaidUsage.ts), which owns
+    // the invocation-meter merge and the exactly-once upward relay of the full
+    // usage delta. billCharge is purely localCost + guard accumulation.
   }
 
   /**

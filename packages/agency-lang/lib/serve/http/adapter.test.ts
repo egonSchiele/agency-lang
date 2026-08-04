@@ -5,7 +5,8 @@ import { createHttpHandler, startHttpServer } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import { interrupt } from "../../runtime/interrupts.js";
 import type { Interrupt } from "../../runtime/interrupts.js";
-import type { ExportedItem } from "../types.js";
+import type { ServedExportedItem } from "../types.js";
+import { returnedOutcome, threwOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { createLogger } from "../../logger.js";
 import type { Logger } from "../../logger.js";
 import { GuardExceededError } from "../../runtime/guard.js";
@@ -31,7 +32,7 @@ function makeSpyHandler(): {
   respondSpy: ReturnType<typeof vi.fn>;
 } {
   const { exports } = makeExports();
-  const respondSpy = vi.fn(async () => ({ data: "resumed" }));
+  const respondSpy = vi.fn(async () => returnedOutcome({ data: "resumed" }));
   const handler = createHttpHandler({
     exports,
     logger: createLogger("error"),
@@ -42,7 +43,7 @@ function makeSpyHandler(): {
 }
 
 function makeExports(): {
-  exports: ExportedItem[];
+  exports: ServedExportedItem[];
 } {
   const registry: Record<string, AgencyFunction> = {};
   const addFn = AgencyFunction.create(
@@ -64,24 +65,23 @@ function makeExports(): {
     registry,
   );
 
-  const exports: ExportedItem[] = [
+  const exports: ServedExportedItem[] = [
     {
-      kind: "function",
+      kind: "function", ...unusedPublicInvoke,
       name: "add",
       description: "Add two numbers",
       parameters: [{ name: "a" }, { name: "b" }],
       agencyFunction: addFn,
       interruptEffects: [],
-      invoke: (namedArgs) => addFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
+      invokeServed: async (namedArgs) => returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
     },
     {
-      kind: "node",
+      kind: "node", ...unusedPublicInvoke,
       name: "main",
       parameters: [{ name: "message" }],
-      invoke: async (message: unknown) => ({
-        data: { echo: message },
-        messages: {},
-      }),
+      // Serve node invoke: named args as a data object; value is the
+      // caller-facing data (discovery would have unwrapped RunNodeResult.data).
+      invokeServed: async (data) => returnedOutcome({ echo: (data as { message?: unknown }).message }),
       interruptEffects: [],
     },
   ];
@@ -95,7 +95,7 @@ function makeHandler() {
     exports,
     logger: createLogger("error"),
     hasInterrupts: () => false,
-    respondToInterrupts: async () => ({ data: "resumed" }),
+    respondToInterrupts: async () => returnedOutcome({ data: "resumed" }),
   });
 }
 
@@ -180,27 +180,27 @@ describe("HTTP adapter", () => {
         },
         registry,
       );
-    const exports: ExportedItem[] = (
+    const exports: ServedExportedItem[] = (
       [
         ["rm", { destructive: true }],
         ["lookup", { idempotent: true }],
         ["plainFn", undefined],
       ] as const
     ).map(([name, markers]) => ({
-      kind: "function",
+      kind: "function", ...unusedPublicInvoke,
       name,
       description: name,
       parameters: [],
       agencyFunction: mk(name, markers),
       interruptEffects: [],
-      invoke: (namedArgs: Record<string, unknown>) =>
-        mk(name, markers).invoke({ type: "named", positionalArgs: [], namedArgs }),
+      invokeServed: async (namedArgs: Record<string, unknown>) =>
+        returnedOutcome(await mk(name, markers).invoke({ type: "named", positionalArgs: [], namedArgs })),
     }));
     const h = createHttpHandler({
       exports,
       logger: createLogger("error"),
       hasInterrupts: () => false,
-      respondToInterrupts: async () => ({ data: "resumed" }),
+      respondToInterrupts: async () => returnedOutcome({ data: "resumed" }),
     });
     const body = (await h("GET", "/list", undefined)).body as any;
     const byName = (n: string) => body.functions.find((f: any) => f.name === n);
@@ -346,18 +346,18 @@ describe("HTTP adapter", () => {
     const h = createHttpHandler({
       exports: [
         {
-          kind: "function",
+          kind: "function", ...unusedPublicInvoke,
           name: "deploy",
           description: "Deploy",
           parameters: [],
           agencyFunction: deployFn,
           interruptEffects: [{ effect: "myapp::deploy" }],
-          invoke: (namedArgs) => deployFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
+          invokeServed: async (namedArgs) => returnedOutcome(await deployFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
         },
       ],
       logger: createLogger("error"),
       hasInterrupts: () => false,
-      respondToInterrupts: async () => ({ data: "ok" }),
+      respondToInterrupts: async () => returnedOutcome({ data: "ok" }),
     });
     const result = await h("GET", "/list", undefined);
     const body = result.body as any;
@@ -373,7 +373,7 @@ describe("startHttpServer auth and host validation", () => {
       port: 0,
       logger: createLogger("error"),
       hasInterrupts: () => false,
-      respondToInterrupts: async () => ({ data: "resumed" }),
+      respondToInterrupts: async () => returnedOutcome({ data: "resumed" }),
       ...overrides,
     };
   }
@@ -442,7 +442,7 @@ describe("startHttpServer auth and host validation", () => {
         host: "0.0.0.0",
         logger: createLogger("error"),
         hasInterrupts: () => false,
-        respondToInterrupts: async () => ({ data: "x" }),
+        respondToInterrupts: async () => returnedOutcome({ data: "x" }),
       }),
     ).toThrow(/Refusing to start.*non-loopback/);
   });
@@ -463,16 +463,16 @@ describe("startHttpServer auth and host validation", () => {
       },
       registry,
     );
-    const exportsWithFail: ExportedItem[] = [
+    const exportsWithFail: ServedExportedItem[] = [
       ...exports,
       {
-        kind: "function",
+        kind: "function", ...unusedPublicInvoke,
         name: "fail",
         description: "",
         parameters: [],
         agencyFunction: failFn,
         interruptEffects: [],
-        invoke: (namedArgs) => failFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
+        invokeServed: async (namedArgs) => returnedOutcome(await failFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
       },
     ];
     await withServer(baseConfig({ exports: exportsWithFail }), async (port) => {
@@ -512,7 +512,7 @@ describe("startHttpServer route logging", () => {
         port: 0,
         logger,
         hasInterrupts: () => false,
-        respondToInterrupts: async () => ({ data: "resumed" }),
+        respondToInterrupts: async () => returnedOutcome({ data: "resumed" }),
       },
       async () => {
         // server is listening; the listen callback has already logged routes
@@ -534,18 +534,26 @@ describe("root-budget trips surface as a typed budgetExceeded", () => {
   const silent = createLogger("error");
 
   function handlerFor(invoke: () => Promise<unknown>): ReturnType<typeof createHttpHandler> {
-    const node: ExportedItem = {
-      kind: "node",
+    const node: ServedExportedItem = {
+      kind: "node", ...unusedPublicInvoke,
       name: "run",
       parameters: [],
       interruptEffects: [],
-      invoke,
+      // The core turns a thrown guard trip / error into a threw-outcome; model
+      // that here so the adapter maps it (402 / generic) with a usage snapshot.
+      invokeServed: async () => {
+        try {
+          return returnedOutcome(await invoke());
+        } catch (err) {
+          return threwOutcome(err);
+        }
+      },
     };
     return createHttpHandler({
       exports: [node],
       logger: silent,
       hasInterrupts: () => false,
-      respondToInterrupts: async () => ({ data: undefined }),
+      respondToInterrupts: async () => returnedOutcome({ data: undefined }),
     });
   }
 

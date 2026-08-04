@@ -290,3 +290,75 @@ These are accepted for the current trusted, single-tenant posture and tracked in
 ## PR history (the arc, for context)
 
 The feature landed as a sequence of small PRs. In agency-lang: the `./serve` public API; per-agent observability (`withRuntimeConfigOverrides`, released in 0.11.0); `/list` function parameters; `compileSource(sourcePath)` (released in 0.12.0); `agency deploy` (single-file, then multi-file). In statelog: migration to the newer agency-lang, the `/list` + `/function` + `/node` + `/resume` serve host, per-agent auto-observability, the `endpointUrls`-point-at-`/serve` fix, and multi-file serve support. The dependency direction is one-way: statelog consumes published agency-lang versions, so an agency-lang change ships first (merge + publish), then statelog bumps the dependency.
+
+---
+
+## Serve cost seam — per-invocation usage
+
+A host that runs an agent (statelog, "platform pays") needs the **authoritative**
+cost of each hosted invocation, read from the run it executed — not from
+client-supplied `/api/logs` telemetry, which the tracked party can forge. Every
+post-execution serve `RouteResult` therefore carries a `usage` figure.
+
+**The meter.** Each execution context owns a fresh `InvocationUsageMeter`
+(`lib/runtime/invocationUsage.ts`), set in `createExecutionContext` and **never
+serialized or restored** from a checkpoint. Because each `/node`, `/function`,
+and `/resume` invocation builds its own execCtx, per-leg and concurrent isolation
+are structural: a resume leg starts at zero (it does **not** inherit the
+checkpoint-carried `stateStack.localCost`), and two concurrent requests never
+share a meter.
+
+**One accounting boundary.** Every paid unit of work submits one
+`InvocationUsageDelta` to `recordPaidUsageAt({ ctx, stack }, delta)`
+(`lib/runtime/recordPaidUsage.ts`), which bills the branch's cost guards (reusing
+`StateStack.billCharge`), merges the invocation meter, and relays the full delta
+upward once when this process is a subprocess. The three paid sites route through
+it: the LLM completion (`prompt.ts` → `accountCompletionUsage`), `addCost`
+(memory / image generation), and the IPC telemetry handler. So `pricedCost` means
+*all* trusted billable spend and never depends on execution topology (an
+`addCost` charge counts identically in-process and in a child). `addCost` throws
+on invalid input rather than silently dropping a real charge.
+
+**Pricing vs delivery completeness — two axes, never conflated.**
+`pricingComplete` (on the usage) is derived: `unknownCostCallCount === 0`. A
+finite `0` price is a KNOWN free price; only an *absent* price is unknown.
+`usageComplete` (on the snapshot) starts true and becomes permanently false when
+an **abnormal subprocess termination** (a kill, error, or unexpected close) means
+unsent child telemetry cannot be ruled out — making `usage` a trusted **lower
+bound**, relayed upward once. Normal `result`/`interrupted` completions stay
+complete (IPC FIFO guarantees all telemetry preceded the terminal message).
+
+**The invocation boundary.** `runNode` / `runExportedFunction` /
+`respondToInterrupts` each split into an internal core that returns a
+`ServedInvocationOutcome<T>` (`{ status:"returned", value } | { status:"threw",
+error }` plus the usage snapshot) and a public wrapper that unwraps-or-rethrows —
+so the CLI/debugger contract is unchanged. The `…ForServe` variants hand the
+outcome to the serve adapters. The lifecycle boundary starts the moment the
+execution context exists, so an already-aborted signal or a setup failure still
+yields an outcome-with-usage and still runs cleanup; the meter snapshot is taken
+**after** cleanup so cleanup-incurred paid work counts. User values and thrown
+errors are never mutated or wrapped (identity, `readCause`, stack, cause
+preserved).
+
+**The wire.** Generated modules export `__invokeNodeForServe` /
+`__invokeFunctionForServe` / `__respondToInterruptsForServe` (see
+`imports.mustache`). The **public** `ExportedFunction.invoke` /
+`ExportedNode.invoke` keep their original raw contract (value-or-throw; node
+positional args) for host apps that construct/consume these directly; the serve
+adapters use a separate internal `invokeServed` that `discoverExports` wires to
+the `…ForServe` invokers. `discoverExports` requires each serve invoker **only
+for the kind actually exported** (a node-only bundle needs just the node one) and
+fails fast with a recompile-required error otherwise — **served bundles must be
+recompiled** to report usage. The HTTP adapter's one `routeResultFor` mapper
+attaches `usage` (and the sibling `usageComplete`) to every post-execution
+`RouteResult` — success, interrupt, 402 `budgetExceeded`, generic failure,
+cancellation — and omits both on `/list`, 404, and validation 400. The host
+reads them in-process; they are not part of the standalone HTTP body. MCP unwraps
+the outcome to the raw value (or rethrows) and does not expose usage in v1.
+
+**In-process dispatch failures count too.** Beyond a returned-but-unpriced
+completion, a provider request that is *dispatched and then times out / is
+cancelled / errors after dispatch* may have incurred untracked spend with no
+price metadata, so each such attempt (each retry is a fresh attempt, via
+`meteredDispatch`) adds one to `unknownCostCallCount` and flips `pricingComplete`
+false. A failure proven *before* dispatch counts nothing.

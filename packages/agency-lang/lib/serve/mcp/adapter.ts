@@ -1,10 +1,11 @@
 import process from "process";
 import type { InterruptEffect } from "../../symbolTable.js";
-import type { ExportedFunction, ExportedNode, ExportedItem } from "../types.js";
+import type { ServedExportedFunction, ServedExportedNode, ServedExportedItem } from "../types.js";
 import type { PolicyStore } from "../policyStore.js";
 import type { InterruptHandlers } from "./interruptLoop.js";
 import { runWithPolicy } from "./interruptLoop.js";
 import { errorMessage } from "../util.js";
+import { unwrapServedInvocationOutcome } from "../../runtime/invocationUsage.js";
 
 function formatToolDescription(description: string, interruptEffects: InterruptEffect[]): string {
   if (interruptEffects.length === 0) return description;
@@ -51,7 +52,7 @@ export type PolicyConfig = {
 export type McpConfig = {
   serverName: string;
   serverVersion: string;
-  exports: ExportedItem[];
+  exports: ServedExportedItem[];
   policyConfig?: PolicyConfig;
 };
 
@@ -144,14 +145,13 @@ async function runToolInvocation(
   id: string | number | null,
   invoke: () => Promise<unknown>,
   policyConfig: McpConfig["policyConfig"],
-  extractData: (result: unknown) => unknown = (r) => r,
 ): Promise<JsonRpcMessage> {
   try {
     const result = policyConfig
       ? await runWithPolicy(invoke, policyConfig.policyStore, policyConfig.interruptHandlers)
       : await invoke();
     return success(id, {
-      content: [{ type: "text", text: JSON.stringify(extractData(result), null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       isError: false,
     });
   } catch (err) {
@@ -164,8 +164,8 @@ async function runToolInvocation(
 
 async function handleToolCall(
   message: JsonRpcMessage,
-  functionsByName: Record<string, ExportedFunction>,
-  nodesByName: Record<string, ExportedNode>,
+  functionsByName: Record<string, ServedExportedFunction>,
+  nodesByName: Record<string, ServedExportedNode>,
   policyConfig: McpConfig["policyConfig"],
 ): Promise<JsonRpcMessage> {
   const name = message.params?.name;
@@ -177,23 +177,24 @@ async function handleToolCall(
     if (policyResult) return success(id, policyResult);
   }
 
+  // Both invokers return a ServedInvocationOutcome; MCP unwraps to the raw value
+  // (or rethrows the original error) before the policy loop, and does not expose
+  // usage in v1. Discovery already unwrapped a node's RunNodeResult to its data.
   const fn = functionsByName[name];
   if (fn) {
     return runToolInvocation(
       id,
-      () => fn.invoke(args as Record<string, unknown>),
+      () => fn.invokeServed(args as Record<string, unknown>).then(unwrapServedInvocationOutcome),
       policyConfig,
     );
   }
 
   const node = nodesByName[name];
   if (node) {
-    const positional = node.parameters.map((p) => args[p.name]);
     return runToolInvocation(
       id,
-      () => node.invoke(...positional),
+      () => node.invokeServed(args as Record<string, unknown>).then(unwrapServedInvocationOutcome),
       policyConfig,
-      (r) => (r && typeof r === "object" && "data" in r ? (r as any).data : r),
     );
   }
 
@@ -215,8 +216,8 @@ type ToolEntry = {
  */
 function buildToolsListPayload(config: McpConfig): ToolEntry[] {
   const { exports, policyConfig } = config;
-  const functions = exports.filter((e): e is ExportedFunction => e.kind === "function");
-  const nodes = exports.filter((e): e is ExportedNode => e.kind === "node");
+  const functions = exports.filter((e): e is ServedExportedFunction => e.kind === "function");
+  const nodes = exports.filter((e): e is ServedExportedNode => e.kind === "node");
 
   const functionToolEntries: ToolEntry[] = functions.map((f) => {
     const entry: ToolEntry = {
@@ -284,8 +285,8 @@ export function mcpToolSummaryLines(config: McpConfig): string[] {
 export function createMcpHandler(config: McpConfig): McpHandler {
   const { serverName, serverVersion, exports } = config;
 
-  const functions = exports.filter((e): e is ExportedFunction => e.kind === "function");
-  const nodes = exports.filter((e): e is ExportedNode => e.kind === "node");
+  const functions = exports.filter((e): e is ServedExportedFunction => e.kind === "function");
+  const nodes = exports.filter((e): e is ServedExportedNode => e.kind === "node");
   const functionsByName = Object.fromEntries(functions.map((f) => [f.name, f]));
   const nodesByName = Object.fromEntries(nodes.map((n) => [n.name, n]));
 

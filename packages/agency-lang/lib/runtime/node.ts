@@ -24,6 +24,11 @@ import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
+import {
+  unwrapServedInvocationOutcome,
+  type ServedInvocationOutcome,
+} from "./invocationUsage.js";
+import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 
 export function setupNode(args: { state: GraphState }): {
   stack: State;
@@ -216,10 +221,17 @@ async function finalizeExecCtx(execCtx: RuntimeContext<GraphState>): Promise<voi
       console.warn(`[memory] save failed: ${(err as Error).message}`);
     }
   }
-  // Remote statelog POSTs are fire-and-forget; drain any still in flight
-  // so telemetry is delivered before the context is released.
-  await execCtx.statelogClient.flush();
-  execCtx.cleanup();
+  // Remote statelog POSTs are fire-and-forget; drain any still in flight so
+  // telemetry is delivered before the context is released. cleanup() runs in a
+  // finally so a rejected flush never leaks the execution context — every
+  // invocation whose context was created releases it. A flush rejection still
+  // propagates (finishServedInvocation makes it the outcome when execution
+  // otherwise succeeded).
+  try {
+    await execCtx.statelogClient.flush();
+  } finally {
+    execCtx.cleanup();
+  }
 }
 
 /**
@@ -256,23 +268,25 @@ async function finalizeExecCtx(execCtx: RuntimeContext<GraphState>): Promise<voi
  *     is no `RestoreSignal` handling here (a `catch` would risk swallowing
  *     that and other control-flow signals).
  */
-export async function runExportedFunction({
-  ctx,
-  fn,
-  namedArgs,
-  initializeGlobals,
-}: {
+type RunExportedFunctionArgs = {
   ctx: RuntimeContext<GraphState>;
   fn: AgencyFunction;
   namedArgs: Record<string, unknown>;
   initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
-}): Promise<unknown> {
-  const execCtx = await ctx.createExecutionContext(nanoid());
-  await initFreshExecCtx(execCtx, { initializeGlobals });
+};
 
-  const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+/** The outcome-producing core. The lifecycle boundary starts the moment the
+ *  execution context exists (invocation started), so a bootstrap/setup failure
+ *  still yields an outcome with usage and still runs cleanup. */
+async function runExportedFunctionCore(
+  { ctx, fn, namedArgs, initializeGlobals }: RunExportedFunctionArgs,
+): Promise<ServedInvocationOutcome<unknown>> {
+  const execCtx = await ctx.createExecutionContext(nanoid());
+  let outcome: RawOutcome<unknown>;
   try {
-    return await agencyStore.run(
+    await initFreshExecCtx(execCtx, { initializeGlobals });
+    const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+    const value = await agencyStore.run(
       {
         ctx: execCtx,
         stack: execCtx.stateStack,
@@ -280,24 +294,53 @@ export async function runExportedFunction({
         globals: execCtx.globals,
       },
       async () => {
-        const result = await fn.invoke({
-          type: "named",
-          positionalArgs: [],
-          namedArgs,
-        });
+        const result = await fn.invoke({ type: "named", positionalArgs: [], namedArgs });
         // Drain any async work the function spawned (async calls, pending
         // promises) before returning, mirroring runNode's awaitAll.
         await execCtx.pendingPromises.awaitAll();
         return result;
       },
     );
-  } finally {
-    await finalizeExecCtx(execCtx);
+    outcome = { status: "returned", value };
+  } catch (error) {
+    outcome = { status: "threw", error };
   }
+  return finishServedInvocation(execCtx, outcome, () => finalizeExecCtx(execCtx));
 }
 
+/** Public entry point — unchanged contract: returns the raw function value or
+ *  throws the identical original error. */
+export async function runExportedFunction(args: RunExportedFunctionArgs): Promise<unknown> {
+  return unwrapServedInvocationOutcome(await runExportedFunctionCore(args));
+}
+
+/** Serve-only entry point: the same execution, but the outcome (value/error +
+ *  usage snapshot) is handed to the serve adapter instead of unwrapped. */
+export async function runExportedFunctionForServe(
+  args: RunExportedFunctionArgs,
+): Promise<ServedInvocationOutcome<unknown>> {
+  return runExportedFunctionCore(args);
+}
+
+type RunNodeArgs = {
+  // global execution context
+  ctx: RuntimeContext<GraphState>;
+  // name of node to run
+  nodeName: string;
+  // arbitrary data to pass to the node
+  data: Record<string, any>;
+  // any message history to pass to the node
+  messages?: MessageJSON[];
+  callbacks?: AgencyCallbacks;
+  // initializes global variables on the execution context
+  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+  // An AbortSignal for cancelling the agent mid-execution. When aborted,
+  // in-flight LLM requests are torn down and an AgencyCancelledError is thrown.
+  abortSignal?: AbortSignal;
+};
+
 // eslint-disable-next-line max-lines-per-function -- core node-execution loop; refactor tracked separately
-export async function runNode({
+async function runNodeCore({
   ctx,
   nodeName,
   data,
@@ -305,29 +348,7 @@ export async function runNode({
   callbacks,
   initializeGlobals,
   abortSignal,
-}: {
-  // global execution context
-  ctx: RuntimeContext<GraphState>;
-
-  // name of node to run
-  nodeName: string;
-
-  // arbitrary data to pass to the node
-  data: Record<string, any>;
-
-  // any message history to pass to the node
-  // tbd how this gets used. Which message thread does it get added to?
-  messages?: MessageJSON[];
-
-  callbacks?: AgencyCallbacks;
-
-  // initializes global variables on the execution context
-  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
-
-  // An AbortSignal for cancelling the agent mid-execution.
-  // When aborted, in-flight LLM requests are torn down and a AgencyCancelledError is thrown.
-  abortSignal?: AbortSignal;
-}): Promise<RunNodeResult<any>> {
+}: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
   // Subprocesses INHERIT the parent's runId (seeded by the bootstrap from
   // the run instruction) so child statelog events land in the same trace —
   // runIds persist across pause/resume cycles, in-process and out.
@@ -345,51 +366,58 @@ export async function runNode({
   }
 
   const execCtx = await ctx.createExecutionContext(runId);
-  // Cross-module init, this module's globals, top-level callbacks, then the
-  // root run-policy handler and root cost/time budget — all inside
-  // initFreshExecCtx (see there for the full ordering rationale, e.g. the
-  // `node main() { route({ systemPrompt: foreignStatic }) }` foreign-static
-  // case), so nodes and served functions are bootstrapped and capped identically.
-  await initFreshExecCtx(execCtx, { initializeGlobals });
-  // Externally-passed callbacks are stored on ctx; hook execution merges them
-  // with scoped/top-level callbacks at call time.
-  if (callbacks) {
-    Object.assign(execCtx.callbacks, callbacks);
-  }
-
-  // Wire external abort signal to the execution context
-  const cancel = (reason?: string) => execCtx.cancel(reason);
-  if (abortSignal) {
-    if (abortSignal.aborted) {
-      throw new AgencyCancelledError();
-    }
-    abortSignal.addEventListener("abort", () => execCtx.cancel(), {
-      once: true,
-    });
-  }
-
-  // onAgentStart fires BEFORE any agent node has executed, so there is
-  // no real per-run ThreadStore yet — use a bootstrap frame so user
-  // callbacks that reach for thread/message builtins get a clear error
-  // instead of writing into a placeholder. `messages` is still
-  // available to the callback via `data.messages`.
-  await runInBootstrapFrame(
-    execCtx,
-    () =>
-      callHook({
-        ctx: execCtx,
-        name: "onAgentStart",
-        data: { nodeName, args: data, messages: messages || [], cancel },
-      }),
-  );
-
-  const agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
-  execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data });
+  // === Invocation started (context exists). A SINGLE lifecycle boundary covers
+  // all remaining setup AND execution, so an already-aborted signal or a
+  // bootstrap/setup failure still yields an outcome-with-usage and still runs
+  // cleanup. Handler/budget registration order (inside initFreshExecCtx) is
+  // unchanged. ===
   const agentStartTime = performance.now();
-
-  let isResume = false;
-  let threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+  let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
+  let outcome: RawOutcome<RunNodeResult<any>>;
   try {
+    // Cross-module init, this module's globals, top-level callbacks, then the
+    // root run-policy handler and root cost/time budget — all inside
+    // initFreshExecCtx (see there for the full ordering rationale, e.g. the
+    // `node main() { route({ systemPrompt: foreignStatic }) }` foreign-static
+    // case), so nodes and served functions are bootstrapped and capped identically.
+    await initFreshExecCtx(execCtx, { initializeGlobals });
+    // Externally-passed callbacks are stored on ctx; hook execution merges them
+    // with scoped/top-level callbacks at call time.
+    if (callbacks) {
+      Object.assign(execCtx.callbacks, callbacks);
+    }
+
+    // Wire external abort signal to the execution context
+    const cancel = (reason?: string) => execCtx.cancel(reason);
+    if (abortSignal) {
+      if (abortSignal.aborted) {
+        throw new AgencyCancelledError();
+      }
+      abortSignal.addEventListener("abort", () => execCtx.cancel(), {
+        once: true,
+      });
+    }
+
+    // onAgentStart fires BEFORE any agent node has executed, so there is
+    // no real per-run ThreadStore yet — use a bootstrap frame so user
+    // callbacks that reach for thread/message builtins get a clear error
+    // instead of writing into a placeholder. `messages` is still
+    // available to the callback via `data.messages`.
+    await runInBootstrapFrame(
+      execCtx,
+      () =>
+        callHook({
+          ctx: execCtx,
+          name: "onAgentStart",
+          data: { nodeName, args: data, messages: messages || [], cancel },
+        }),
+    );
+
+    agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
+    execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data });
+
+    let isResume = false;
+    let threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
     while (true) {
       try {
         // Install an initial AsyncLocalStorage frame so stdlib helpers
@@ -462,7 +490,8 @@ export async function runNode({
           );
           await execCtx.closeTraceWriter();
         }
-        return returnObject;
+        outcome = { status: "returned", value: returnObject };
+        break;
       } catch (e) {
         if (e instanceof RestoreSignal) {
           execCtx._restoreCount++;
@@ -519,9 +548,26 @@ export async function runNode({
       timeTaken: performance.now() - agentStartTime,
       tokenStats: partialReturn.tokens,
     });
-    throw error;
+    outcome = { status: "threw", error };
   } finally {
-    execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
-    await finalizeExecCtx(execCtx);
+    // Guarded: a setup failure before the span was opened leaves it undefined.
+    if (agentRunSpanId !== undefined) {
+      execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
+    }
   }
+  return finishServedInvocation(execCtx, outcome, () => finalizeExecCtx(execCtx));
+}
+
+/** Public entry point — unchanged contract: returns the RunNodeResult or throws
+ *  the identical original error. */
+export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
+  return unwrapServedInvocationOutcome(await runNodeCore(args));
+}
+
+/** Serve-only entry point: hands the outcome (RunNodeResult/error + usage
+ *  snapshot) to the serve adapter instead of unwrapping it. */
+export async function runNodeForServe(
+  args: RunNodeArgs,
+): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
+  return runNodeCore(args);
 }

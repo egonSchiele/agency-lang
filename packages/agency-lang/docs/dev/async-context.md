@@ -99,3 +99,13 @@ The two external entry points called from host TS code — `respondToInterrupts`
 - PR [#200](https://github.com/egonSchiele/agency-lang/pull/200) — explicit `threads:` on the Runner constructor so per-scope ALS frames carry the right `ThreadStore`.
 - PR [#201](https://github.com/egonSchiele/agency-lang/pull/201) — first accessor migration (`__threads()`), template for the rest of Phase 4 cleanup.
 - [docs/dev/adding-a-module-to-the-agency-stdlib.md](./adding-a-module-to-the-agency-stdlib.md) — step-by-step recipe for adding a new module.
+
+## Paid-usage accounting reads the frame
+
+`recordPaidUsage(delta)` (the ambient half of `lib/runtime/recordPaidUsage.ts`,
+used only by `addCost`) reads `{ ctx, stack }` from the active `agencyStore`
+frame via `getRuntimeContext()`. Out-of-frame callers — notably the IPC
+telemetry handler, which runs from an event-loop message callback outside any
+frame — must use the explicit-target `recordPaidUsageAt({ ctx, stack }, delta)`
+with `RunSession.ctx/stateStack` instead, never the ambient form. See the serve
+cost seam section of `hosted-agent-execution.md`.

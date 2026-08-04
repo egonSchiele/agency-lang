@@ -11,6 +11,7 @@ import type { AbortCause } from "../errors.js";
 import { Clock, realClock, FakeClock } from "../clock.js";
 import { agencyStore } from "../asyncContext.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
+import { InvocationUsageMeter } from "../invocationUsage.js";
 import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
@@ -221,6 +222,15 @@ export class RuntimeContext<T> {
    *  env vars alone. */
   budget?: { maxCost?: number; maxTimeMs?: number };
 
+  /** Fresh per-invocation usage meter for the serve cost seam. One per
+   *  execution context, so each `/node` / `/function` / `/resume` leg meters
+   *  only its own newly-incurred spend. Deliberately NOT serialized and NOT
+   *  restored from a checkpoint — a resume leg must start at zero, never
+   *  inherit the checkpoint-carried cumulative cost. Set both here (for a
+   *  directly-`new`'d context) and explicitly in `createExecutionContext`
+   *  (which bypasses the constructor via Object.create). */
+  invocationUsage: InvocationUsageMeter = new InvocationUsageMeter();
+
   // Memory layer (resolved decisions in
   // docs/superpowers/plans/2026-05-12-memory-layer.md and
   // docs/superpowers/plans/2026-05-29-memory-config-in-code.md).
@@ -387,6 +397,9 @@ export class RuntimeContext<T> {
     // installRootBudget, which reads execCtx.budget, actually sees the resolved
     // config/override budget. Without this the root budget is a silent no-op.
     execCtx.budget = this.budget;
+    // Fresh meter per invocation/leg (Object.create bypasses the field
+    // initializer). Never carried from the parent context or a checkpoint.
+    execCtx.invocationUsage = new InvocationUsageMeter();
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     // The execution context is built via Object.create, bypassing the
     // constructor, so carry the clock over from the global context. Without

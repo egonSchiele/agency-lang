@@ -1,8 +1,42 @@
 import { describe, expect, it } from "vitest";
 import { discoverExports } from "./discovery.js";
 import { AgencyFunction } from "../runtime/agencyFunction.js";
+import { returnedOutcome } from "./testOutcome.js";
+
+// A current compile exports the three serve invokers; discoverExports requires
+// them. Fixtures spread these stubs so they exercise the normal path.
+const serveStubs = {
+  __invokeFunctionForServe: async () => returnedOutcome(undefined),
+  __invokeNodeForServe: async () => returnedOutcome({ data: undefined }),
+  __respondToInterruptsForServe: async () => returnedOutcome({ data: undefined }),
+};
 
 describe("discoverExports", () => {
+  it("fails fast when a bundle EXPORTS a function but lacks its serve invoker (recompile required)", () => {
+    const registry: Record<string, AgencyFunction> = {};
+    AgencyFunction.create(
+      { name: "f", module: "test", fn: async () => {}, params: [], toolDefinition: { name: "f", description: "", schema: null }, exported: true },
+      registry,
+    );
+    expect(() =>
+      discoverExports({ toolRegistry: registry, moduleExports: {}, moduleId: "test" }),
+    ).toThrow(/predates the serve cost seam|Recompile/);
+  });
+
+  it("an empty bundle (no functions, no nodes) requires no serve invokers", () => {
+    expect(discoverExports({ toolRegistry: {}, moduleExports: {}, moduleId: "test" })).toEqual([]);
+  });
+
+  it("a node-only bundle needs only the node serve invoker, not the function one", () => {
+    const exports = discoverExports({
+      toolRegistry: {},
+      moduleExports: { main: async () => {}, __mainNodeParams: [], __invokeNodeForServe: async () => returnedOutcome({ data: undefined }) },
+      moduleId: "test",
+      exportedNodeNames: ["main"],
+    });
+    expect(exports.map((e) => e.name)).toEqual(["main"]);
+  });
+
   it("returns exported functions from tool registry", () => {
     const registry: Record<string, AgencyFunction> = {};
     AgencyFunction.create(
@@ -41,7 +75,7 @@ describe("discoverExports", () => {
 
     const exports = discoverExports({
       toolRegistry: registry,
-      moduleExports: {},
+      moduleExports: { ...serveStubs },
       moduleId: "test",
     });
     const functions = exports.filter((e) => e.kind === "function");
@@ -72,7 +106,7 @@ describe("discoverExports", () => {
 
     const exports = discoverExports({
       toolRegistry: registry,
-      moduleExports: {},
+      moduleExports: { ...serveStubs },
       moduleId: "test",
     });
     const fn = exports.find((e) => e.name === "boundFn");
@@ -107,7 +141,7 @@ describe("discoverExports", () => {
 
     const exports = discoverExports({
       toolRegistry: registry,
-      moduleExports: {},
+      moduleExports: { ...serveStubs },
       moduleId: "myModule",
     });
     expect(exports).toHaveLength(1);
@@ -117,6 +151,7 @@ describe("discoverExports", () => {
   it("returns exported nodes from module exports", () => {
     const mockNodeFn = async () => ({ data: "result" });
     const moduleExports = {
+      ...serveStubs,
       main: mockNodeFn,
       __mainNodeParams: ["message"],
     };
@@ -138,6 +173,7 @@ describe("discoverExports", () => {
 
   it("skips non-exported nodes", () => {
     const moduleExports = {
+      ...serveStubs,
       main: async () => {},
       __mainNodeParams: [],
       helper: async () => {},
@@ -156,7 +192,7 @@ describe("discoverExports", () => {
 
   it("returns empty array when no exports found", () => {
     expect(
-      discoverExports({ toolRegistry: {}, moduleExports: {}, moduleId: "test" }),
+      discoverExports({ toolRegistry: {}, moduleExports: { ...serveStubs }, moduleId: "test" }),
     ).toEqual([]);
   });
 
@@ -177,6 +213,7 @@ describe("discoverExports", () => {
     const exports = discoverExports({
       toolRegistry: registry,
       moduleExports: {
+        ...serveStubs,
         checkout: async () => ({ data: "ok" }),
         __checkoutNodeParams: [],
       },

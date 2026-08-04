@@ -7,6 +7,7 @@ import { discoverExports } from "../discovery.js";
 import { createHttpHandler } from "./adapter.js";
 import { createLogger } from "../../logger.js";
 import type { AgencyFunction } from "../../runtime/agencyFunction.js";
+import type { ServedInvocationOutcome } from "../../runtime/invocationUsage.js";
 
 /**
  * Regression test for `agency serve` invoking exported FUNCTIONS.
@@ -79,10 +80,10 @@ describe("serve http invokes exported functions inside a runtime frame", () => {
       exports,
       logger: createLogger("error"),
       hasInterrupts: mod.hasInterrupts as (data: unknown) => boolean,
-      respondToInterrupts: mod.respondToInterrupts as (
+      respondToInterrupts: mod.__respondToInterruptsForServe as (
         i: unknown[],
         r: unknown[],
-      ) => Promise<unknown>,
+      ) => Promise<ServedInvocationOutcome<unknown>>,
     });
   });
 

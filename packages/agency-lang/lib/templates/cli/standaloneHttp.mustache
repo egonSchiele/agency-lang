@@ -31,7 +31,7 @@ try {
     apiKey,
     logger: createLogger("info"),
     hasInterrupts: mod.hasInterrupts,
-    respondToInterrupts: mod.respondToInterrupts,
+    respondToInterrupts: mod.__respondToInterruptsForServe,
   });
 } catch (err) {
   console.error(err instanceof Error ? err.message : String(err));

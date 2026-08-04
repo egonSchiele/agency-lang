@@ -1,9 +1,13 @@
 import http from "http";
-import type { ExportedItem, ExportedFunction, ExportedNode } from "../types.js";
+import type { ExportedItem, ServedExportedItem, ServedExportedFunction, ServedExportedNode } from "../types.js";
 import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import { validateResumeBatch } from "../../runtime/interrupts.js";
 import { readCause } from "../../runtime/errors.js";
 import { formatBudgetExceeded } from "../../runtime/budgetExit.js";
+import type {
+  ServedInvocationOutcome,
+  InvocationUsageSnapshot,
+} from "../../runtime/invocationUsage.js";
 import type { Logger } from "../../logger.js";
 import {
   DEFAULT_HOST,
@@ -13,6 +17,12 @@ import {
   makeGuardedRequestListener,
 } from "./security.js";
 
+/** PUBLIC config type (re-exported from `agency-lang/serve`) — kept
+ *  byte-compatible with the pre-seam contract: raw `ExportedItem`s and a
+ *  `respondToInterrupts` returning `Promise<unknown>`. Host apps that import
+ *  this type keep type-checking. The adapters run on the internal
+ *  `ServedHandlerConfig` below; `createServeHandler` builds that from a
+ *  discovered module. */
 export type HandlerConfig = {
   exports: ExportedItem[];
   logger: Logger;
@@ -20,7 +30,20 @@ export type HandlerConfig = {
   respondToInterrupts: (interrupts: unknown[], responses: unknown[]) => Promise<unknown>;
 };
 
-export type HttpConfig = HandlerConfig & {
+/** INTERNAL adapter config: the served contract the HTTP adapter actually runs
+ *  on — usage-bearing `ServedExportedItem`s and a `respondToInterrupts` that
+ *  returns a `ServedInvocationOutcome`. Not part of the public surface. */
+type ServedHandlerConfig = {
+  exports: ServedExportedItem[];
+  logger: Logger;
+  hasInterrupts: (data: unknown) => boolean;
+  respondToInterrupts: (
+    interrupts: unknown[],
+    responses: unknown[],
+  ) => Promise<ServedInvocationOutcome<unknown>>;
+};
+
+export type HttpConfig = ServedHandlerConfig & {
   port: number;
   apiKey?: string;
   /** Interface to bind to. Default "127.0.0.1" (loopback only). */
@@ -38,6 +61,12 @@ export type HttpConfig = HandlerConfig & {
 export type RouteResult = {
   status: number;
   body: unknown;
+  /** Per-invocation usage for the serve cost seam, present on every
+   *  post-execution outcome (success/interrupt/402/failure/cancel) and absent
+   *  on pre-execution results (/list, 404, validation 400). Read in-process by
+   *  the host (statelog); not part of the standalone HTTP body. */
+  usage?: InvocationUsageSnapshot["usage"];
+  usageComplete?: boolean;
 };
 
 function ok(value: unknown): RouteResult {
@@ -100,38 +129,66 @@ function errorResult(err: unknown, logger: Logger, what: string): RouteResult {
   return fail(TOOL_ERROR_MESSAGE);
 }
 
+/** Attach a per-invocation usage snapshot to any post-execution route result. */
+function withUsage(base: RouteResult, outcome: InvocationUsageSnapshot): RouteResult {
+  return { ...base, usage: outcome.usage, usageComplete: outcome.usageComplete };
+}
+
+/** Map one served outcome to a route result: `renderReturned` shapes the success
+ *  body (function → `ok`; node/resume → interrupt-aware), and a threw-outcome
+ *  runs the existing 402/generic classification on the ORIGINAL error (identity
+ *  preserved, so `readCause` still recognizes a guard trip). Usage is attached
+ *  once, here, for every branch. */
+function routeResultFor(
+  outcome: ServedInvocationOutcome<unknown>,
+  opts: { renderReturned: (value: unknown) => RouteResult; logger: Logger; what: string },
+): RouteResult {
+  const base =
+    outcome.status === "returned"
+      ? opts.renderReturned(outcome.value)
+      : errorResult(outcome.error, opts.logger, opts.what);
+  return withUsage(base, outcome);
+}
+
 async function callFunction(
-  fn: ExportedFunction,
+  fn: ServedExportedFunction,
   body: unknown,
   logger: Logger,
 ): Promise<RouteResult> {
+  let outcome: ServedInvocationOutcome<unknown>;
   try {
-    const result = await fn.invoke(toArgs(body));
-    return ok(result);
+    outcome = await fn.invokeServed(toArgs(body));
   } catch (err) {
+    // A throw here is a pre-outcome internal failure (the core normally converts
+    // agent errors into a threw-outcome), so there is no usage to report.
     return errorResult(err, logger, `function ${fn.name}`);
   }
+  return routeResultFor(outcome, { renderReturned: ok, logger, what: `function ${fn.name}` });
 }
 
 async function callNode(
-  node: ExportedNode,
+  node: ServedExportedNode,
   body: unknown,
   hasInterrupts: (data: unknown) => boolean,
   logger: Logger,
 ): Promise<RouteResult> {
+  let outcome: ServedInvocationOutcome<unknown>;
   try {
-    const args = toArgs(body);
-    const positional = node.parameters.map((p) => args[p.name]);
-    const result = (await node.invoke(...positional)) as { data: unknown };
-    if (hasInterrupts(result.data)) return interruptResult(result.data);
-    return ok(result.data);
+    // The node receives its named args as a data object; the serve invoker maps
+    // them to the node's params and returns the caller-facing data as the value.
+    outcome = await node.invokeServed(toArgs(body));
   } catch (err) {
     return errorResult(err, logger, `node ${node.name}`);
   }
+  return routeResultFor(outcome, {
+    renderReturned: (data) => (hasInterrupts(data) ? interruptResult(data) : ok(data)),
+    logger,
+    what: `node ${node.name}`,
+  });
 }
 
 async function resumeInterrupts(
-  respondToInterrupts: (i: unknown[], r: unknown[]) => Promise<unknown>,
+  respondToInterrupts: (i: unknown[], r: unknown[]) => Promise<ServedInvocationOutcome<unknown>>,
   hasInterrupts: (data: unknown) => boolean,
   body: unknown,
   logger: Logger,
@@ -149,19 +206,26 @@ async function resumeInterrupts(
     // reach the resume path, where an unknown type continues past the interrupt.
     return { status: 400, body: { error: validationError } };
   }
+  let outcome: ServedInvocationOutcome<unknown>;
   try {
-    const result = (await respondToInterrupts(interrupts, responses)) as { data: unknown };
-    if (hasInterrupts(result.data)) return interruptResult(result.data);
-    return ok(result.data);
+    outcome = await respondToInterrupts(interrupts, responses);
   } catch (err) {
     return errorResult(err, logger, "resume");
   }
+  return routeResultFor(outcome, {
+    renderReturned: (value) => {
+      const data = (value as { data: unknown }).data;
+      return hasInterrupts(data) ? interruptResult(data) : ok(data);
+    },
+    logger,
+    what: "resume",
+  });
 }
 
 const FUNCTION_ROUTE = /^\/function\/([^/]+)$/;
 const NODE_ROUTE = /^\/node\/([^/]+)$/;
 
-export function createHttpHandler(config: HandlerConfig): (
+export function createHttpHandler(config: ServedHandlerConfig): (
   method: string,
   path: string,
   body: unknown,
@@ -172,16 +236,16 @@ export function createHttpHandler(config: HandlerConfig): (
   // plain object would let a name like `/function/toString` resolve to an
   // inherited Object.prototype method, bypass the "unknown" 404 check, and
   // surface as a generic tool failure instead.
-  const functions: Record<string, ExportedFunction> = Object.assign(
+  const functions: Record<string, ServedExportedFunction> = Object.assign(
     Object.create(null),
     Object.fromEntries(
-      exports.filter((e): e is ExportedFunction => e.kind === "function").map((e) => [e.name, e]),
+      exports.filter((e): e is ServedExportedFunction => e.kind === "function").map((e) => [e.name, e]),
     ),
   );
-  const nodes: Record<string, ExportedNode> = Object.assign(
+  const nodes: Record<string, ServedExportedNode> = Object.assign(
     Object.create(null),
     Object.fromEntries(
-      exports.filter((e): e is ExportedNode => e.kind === "node").map((e) => [e.name, e]),
+      exports.filter((e): e is ServedExportedNode => e.kind === "node").map((e) => [e.name, e]),
     ),
   );
 

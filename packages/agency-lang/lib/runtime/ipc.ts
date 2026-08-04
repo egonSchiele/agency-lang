@@ -19,7 +19,13 @@ import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import type { State, StateStack } from "./state/stateStack.js";
 import { getSubprocessRunInfo, setSubprocessRunInfo, isIpcMode, type SubprocessRunInfo } from "./subprocessRunInfo.js";
 import { truncate } from "./truncate.js";
-import { isPayableCost, type IpcTelemetryMessage } from "./costTelemetry.js";
+import {
+  isPayableCost,
+  type IpcTelemetryMessage,
+  type IpcInvocationUsageMessage,
+} from "./costTelemetry.js";
+import { recordPaidUsageAt, markInvocationUsageIncompleteAt } from "./recordPaidUsage.js";
+import { normalizeUsageDelta, type InvocationUsageDelta } from "./invocationUsage.js";
 import { type IpcCallbackMessage, NON_FORWARDABLE_CALLBACKS } from "./callbackForwarding.js";
 import { invokeCallbacks } from "./hooks.js";
 import { VALID_CALLBACK_NAMES, type CallbackName } from "../types/function.js";
@@ -284,6 +290,8 @@ export type SubprocessToParent =
   | IpcLockAcquireMessage
   | IpcLockReleaseMessage
   | IpcTelemetryMessage
+  | IpcInvocationUsageMessage
+  | { type: "invocationUsageIncomplete" }
   | IpcCallbackMessage;
 export type ParentToSubprocess = IpcDecisionMessage | IpcLockGrantedMessage;
 
@@ -728,6 +736,12 @@ function killChildSafely(s: RunSession): void {
 
 function settle(s: RunSession, fn: (v: any) => void, value: any): void {
   if (s.settled) return;
+  // A reject settle is an abnormal termination (error, unexpected close,
+  // guard-trip kill, cancellation): the child did not complete normally, so
+  // unsent usage telemetry cannot be ruled out — mark this invocation's usage a
+  // trusted lower bound. Normal result/interrupted resolves keep it complete
+  // (IPC FIFO guarantees all telemetry preceded the terminal message).
+  if (fn === s.rejectPromise) markSessionUsageIncomplete(s);
   s.settled = true;
   clearTimer(s);
   if (s.detachAbortListener) {
@@ -753,6 +767,10 @@ function settleWithLimitFailure(
 ): void {
   if (s.settled) return;
   killChildSafely(s);
+  // A limit kill resolves with a structured failure (not a reject), so mark the
+  // usage incomplete here explicitly — the killed child may not have flushed all
+  // of its telemetry.
+  markSessionUsageIncomplete(s);
   settle(s, s.resolvePromise, {
     type: "result",
     value: makeLimitFailure(limit, threshold, value, extras),
@@ -929,9 +947,14 @@ function handleErrorMessage(s: RunSession, msg: any): void {
  * after a fork branch's cost delta has already propagated at join, so
  * getCost() may slightly undercount on abnormal termination. Budgets
  * never undercount; do not "fix" this by skipping post-settle billing. */
-export function handleTelemetryMessage(s: RunSession, msg: IpcTelemetryMessage): void {
-  if (!isPayableCost(msg.costUsd)) return;
-  s.stateStack.billCharge(msg.costUsd);
+/** Account a child's usage delta against THIS session's parent target (out of
+ * any ALS frame — we pass `s.ctx`/`s.stateStack` explicitly): bill the parent's
+ * cost guards, merge the parent's invocation meter, and re-relay the delta once
+ * if this process is itself a subprocess (grandchild propagation). Billing is
+ * unconditional (the spend already happened, even post-settle); enforcement only
+ * runs on a live session, and a trip kills the child and rejects the session. */
+function accountChildUsage(s: RunSession, delta: InvocationUsageDelta): void {
+  recordPaidUsageAt({ ctx: s.ctx, stack: s.stateStack }, delta);
   if (s.settled) return;
   try {
     s.stateStack.enforceGuards();
@@ -939,6 +962,34 @@ export function handleTelemetryMessage(s: RunSession, msg: IpcTelemetryMessage):
     killChildSafely(s);
     settle(s, s.rejectPromise, err);
   }
+}
+
+/** Legacy cost-only telemetry (version-skewed child). Bill only a payable
+ *  positive cost, preserving the old contract. */
+export function handleTelemetryMessage(s: RunSession, msg: IpcTelemetryMessage): void {
+  if (!isPayableCost(msg.costUsd)) return;
+  accountChildUsage(s, { pricedCost: msg.costUsd, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0 });
+}
+
+/** Full per-invocation usage delta from a child. Normalized (untrusted input;
+ *  an invalid cost becomes an unknown-cost call, valid tokens survive). */
+export function handleInvocationUsageMessage(s: RunSession, msg: IpcInvocationUsageMessage): void {
+  const delta = normalizeUsageDelta(msg);
+  if (!delta) return;
+  accountChildUsage(s, delta);
+}
+
+/** A child reported that its (or a descendant's) usage telemetry may be
+ *  incomplete. Mark this invocation's usage a lower bound and relay once. */
+export function handleInvocationUsageIncompleteMessage(s: RunSession): void {
+  markSessionUsageIncomplete(s);
+}
+
+/** Mark the owning invocation's usage as no longer guaranteed complete, guarding
+ *  a minimal test ctx. Used on every abnormal termination so a killed child's
+ *  unsent telemetry is never presented as an authoritative total. */
+function markSessionUsageIncomplete(s: RunSession): void {
+  if (s.ctx && s.ctx.invocationUsage) markInvocationUsageIncompleteAt(s.ctx);
 }
 
 function isForwardableCallbackName(name: unknown): name is CallbackName {
@@ -1085,6 +1136,10 @@ export async function handleChildMessage(s: RunSession, msg: any): Promise<void>
     settle(s, s.resolvePromise, { type: "interrupted", msg } satisfies SessionOutcome);
   } else if (msg.type === "telemetry") {
     handleTelemetryMessage(s, msg);
+  } else if (msg.type === "invocationUsage") {
+    handleInvocationUsageMessage(s, msg);
+  } else if (msg.type === "invocationUsageIncomplete") {
+    handleInvocationUsageIncompleteMessage(s);
   } else if (msg.type === "callback") {
     handleCallbackMessage(s, msg);
   } else if (msg.type === "error") {

@@ -4,6 +4,7 @@ import type { AgencyFunction } from "../runtime/agencyFunction.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import { createLogger } from "../logger.js";
 import type { Logger } from "../logger.js";
+import type { ServedInvocationOutcome } from "../runtime/invocationUsage.js";
 import { discoverExports } from "./discovery.js";
 import { createHttpHandler } from "./http/adapter.js";
 import type { RouteResult } from "./http/adapter.js";
@@ -64,15 +65,16 @@ export async function createServeHandler(
 
   // Public boundary check: fail fast with a clear message if the target is not
   // a compiled Agency serve module. `hasInterrupts` is called unguarded on the
-  // /node path and `respondToInterrupts` on /resume, so a non-Agency or stale
-  // bundle missing them would otherwise surface as a confusing runtime error.
+  // /node path and `__respondToInterruptsForServe` on /resume, so a non-Agency
+  // or stale bundle missing them would otherwise surface as a confusing runtime
+  // error. (discoverExports additionally requires the serve invokers.)
   if (
     typeof moduleExports.hasInterrupts !== "function" ||
-    typeof moduleExports.respondToInterrupts !== "function"
+    typeof moduleExports.__respondToInterruptsForServe !== "function"
   ) {
     throw new Error(
       `createServeHandler: ${compiledPath} is not a compiled Agency serve module ` +
-        `(missing hasInterrupts/respondToInterrupts exports).`,
+        `(missing hasInterrupts / serve exports — recompile with the current Agency).`,
     );
   }
 
@@ -90,12 +92,12 @@ export async function createServeHandler(
   return createHttpHandler({
     exports,
     logger,
-    // Passed RAW: the HTTP adapter unwraps respondToInterrupts's `{ data }`
-    // internally. Do not unwrap here (that is the MCP path's normalization).
+    // The serve resume returns a ServedInvocationOutcome (value/error + usage);
+    // the HTTP adapter maps it (and unwraps the RunNodeResult's `{ data }`).
     hasInterrupts: moduleExports.hasInterrupts as (data: unknown) => boolean,
-    respondToInterrupts: moduleExports.respondToInterrupts as (
+    respondToInterrupts: moduleExports.__respondToInterruptsForServe as (
       interrupts: unknown[],
       responses: unknown[],
-    ) => Promise<unknown>,
+    ) => Promise<ServedInvocationOutcome<unknown>>,
   });
 }

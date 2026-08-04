@@ -88,6 +88,7 @@ export {
   pass,
   interruptWithHandlers,
   respondToInterrupts,
+  respondToInterruptsForServe,
 } from "./interrupts.js";
 
 export { checkPolicy, checkPolicyExplicit, validatePolicy } from "./policy.js";
@@ -130,7 +131,19 @@ export {
 } from "./state/checkpointStore.js";
 export type { Checkpoint } from "./state/checkpointStore.js";
 
-export { setupNode, setupFunction, runNode, runExportedFunction } from "./node.js";
+export {
+  setupNode,
+  setupFunction,
+  runNode,
+  runExportedFunction,
+  runNodeForServe,
+  runExportedFunctionForServe,
+} from "./node.js";
+export type {
+  InvocationUsage,
+  InvocationUsageSnapshot,
+  ServedInvocationOutcome,
+} from "./invocationUsage.js";
 export { reportBudgetExceededAndExit, formatBudgetExceeded } from "./budgetExit.js";
 export { Runner } from "./runner.js";
 

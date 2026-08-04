@@ -4,7 +4,8 @@ import { AddressInfo } from "net";
 import { startMcpHttpServer } from "./httpTransport.js";
 import { createMcpHandler } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
-import type { ExportedItem } from "../types.js";
+import type { ServedExportedItem } from "../types.js";
+import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { createLogger } from "../../logger.js";
 
 function makeHandler() {
@@ -23,15 +24,15 @@ function makeHandler() {
     },
     registry,
   );
-  const exports: ExportedItem[] = [
+  const exports: ServedExportedItem[] = [
     {
-      kind: "function",
+      kind: "function", ...unusedPublicInvoke,
       name: "add",
       description: "Add two numbers",
       parameters: [{ name: "a" }, { name: "b" }],
       agencyFunction: addFn,
       interruptEffects: [],
-      invoke: (namedArgs) => addFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
+      invokeServed: async (namedArgs) => returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
     },
   ];
   return createMcpHandler({

@@ -8,6 +8,8 @@ import {
   resolveDepthCap,
   attachSessionHandlers,
   handleTelemetryMessage,
+  handleInvocationUsageMessage,
+  handleInvocationUsageIncompleteMessage,
   handleCallbackMessage,
   handleChildMessage,
   withParentStatelog,
@@ -16,6 +18,7 @@ import {
   SUBPROCESS_DEPTH_CEILING,
 } from "./ipc.js";
 import { State, StateStack } from "./state/stateStack.js";
+import { InvocationUsageMeter } from "./invocationUsage.js";
 import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import { CostGuard, isGuardExceededError } from "./guard.js";
 
@@ -170,7 +173,7 @@ const makeSession = (overrides: Record<string, any> = {}): any => ({
   sessionId: "test-session",
   child: { stdout: null, stderr: null, on: () => {}, send: () => true, connected: true, kill: () => true },
   limits: { wallClock: 1000, memory: 1, ipcPayload: 1, stdout: 1 },
-  ctx: { lockReleasers: {} },
+  ctx: { lockReleasers: {}, invocationUsage: new InvocationUsageMeter() },
   stateStack: {},
   resolvePromise: () => {},
   rejectPromise: () => {},
@@ -347,6 +350,106 @@ describe("handleTelemetryMessage", () => {
     handleTelemetryMessage(session, { type: "telemetry", costUsd: -5 } as any);
     handleTelemetryMessage(session, { type: "telemetry" } as any);
     expect(stack.localCost).toBe(0);
+  });
+});
+
+describe("handleInvocationUsageMessage (full delta)", () => {
+  const originalSend = process.send;
+  afterEach(() => {
+    process.send = originalSend;
+    vi.unstubAllEnvs();
+  });
+
+  const makeUsageSession = () => {
+    const stack = new StateStack();
+    const ctx = { lockReleasers: {}, invocationUsage: new InvocationUsageMeter() };
+    const rejections: any[] = [];
+    const kills: string[] = [];
+    const session = makeSession({
+      ctx,
+      stateStack: stack,
+      child: { kill: (sig: string) => { kills.push(sig); return true; }, connected: true },
+      rejectPromise: (err: any) => { rejections.push(err); },
+    });
+    return { session, ctx, stack, rejections, kills };
+  };
+
+  it("merges the full delta into the parent invocation meter and bills the stack", () => {
+    const { session, ctx, stack } = makeUsageSession();
+    handleInvocationUsageMessage(session, {
+      type: "invocationUsage", pricedCost: 0.5, inputTokens: 100, outputTokens: 20, unknownCostCallCount: 0,
+    });
+    expect(stack.localCost).toBeCloseTo(0.5);
+    const s = ctx.invocationUsage.snapshot();
+    expect(s.usage.pricedCost).toBeCloseTo(0.5);
+    expect(s.usage.inputTokens).toBe(100);
+    expect(s.usage.outputTokens).toBe(20);
+  });
+
+  it("accumulates exact totals across multiple child messages (one-child)", () => {
+    const { session, ctx } = makeUsageSession();
+    handleInvocationUsageMessage(session, { type: "invocationUsage", pricedCost: 0.1, inputTokens: 5, outputTokens: 1, unknownCostCallCount: 0 });
+    handleInvocationUsageMessage(session, { type: "invocationUsage", pricedCost: 0.2, inputTokens: 7, outputTokens: 2, unknownCostCallCount: 1 });
+    const s = ctx.invocationUsage.snapshot();
+    expect(s.usage.pricedCost).toBeCloseTo(0.3);
+    expect(s.usage.inputTokens).toBe(12);
+    expect(s.usage.outputTokens).toBe(3);
+    expect(s.usage.unknownCostCallCount).toBe(1);
+    expect(s.usage.pricingComplete).toBe(false);
+  });
+
+  it("re-relays the received delta upward once when this process is itself a child (grandchild path)", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    const { session } = makeUsageSession();
+    const delta = { pricedCost: 0.15, inputTokens: 3, outputTokens: 1, unknownCostCallCount: 1 };
+    handleInvocationUsageMessage(session, { type: "invocationUsage", ...delta });
+    expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsage", ...delta });
+  });
+
+  it("normalizes an invalid cost to an unknown-cost call without dropping tokens", () => {
+    const { session, ctx, stack } = makeUsageSession();
+    handleInvocationUsageMessage(session, { type: "invocationUsage", pricedCost: -1, inputTokens: 9, outputTokens: 3, unknownCostCallCount: 0 } as any);
+    expect(stack.localCost).toBe(0);
+    const s = ctx.invocationUsage.snapshot();
+    expect(s.usage.inputTokens).toBe(9);
+    expect(s.usage.unknownCostCallCount).toBe(1);
+  });
+
+  it("a guard trip from a usage message kills+rejects AND marks the invocation incomplete", () => {
+    const { session, ctx, stack, rejections, kills } = makeUsageSession();
+    stack.guards.push(new CostGuard(0.1));
+    handleInvocationUsageMessage(session, { type: "invocationUsage", pricedCost: 0.2, inputTokens: 1, outputTokens: 1, unknownCostCallCount: 0 });
+    expect(kills).toEqual(["SIGKILL"]);
+    expect(rejections).toHaveLength(1);
+    expect(session.settled).toBe(true);
+    expect(ctx.invocationUsage.snapshot().usageComplete).toBe(false);
+  });
+
+  it("post-settle usage still merges (lower bound) but does not enforce", () => {
+    const { session, ctx, stack } = makeUsageSession();
+    session.settled = true;
+    handleInvocationUsageMessage(session, { type: "invocationUsage", pricedCost: 0.2, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0 });
+    expect(stack.localCost).toBeCloseTo(0.2);
+    expect(ctx.invocationUsage.snapshot().usage.pricedCost).toBeCloseTo(0.2);
+  });
+});
+
+describe("handleInvocationUsageIncompleteMessage", () => {
+  const originalSend = process.send;
+  afterEach(() => { process.send = originalSend; vi.unstubAllEnvs(); });
+
+  it("marks the invocation incomplete and relays the marker once when a child", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    const ctx = { lockReleasers: {}, invocationUsage: new InvocationUsageMeter() };
+    const session = makeSession({ ctx });
+    handleInvocationUsageIncompleteMessage(session);
+    handleInvocationUsageIncompleteMessage(session);
+    expect(ctx.invocationUsage.snapshot().usageComplete).toBe(false);
+    expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsageIncomplete" });
   });
 });
 

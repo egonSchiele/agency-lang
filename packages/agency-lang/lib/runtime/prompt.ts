@@ -21,6 +21,7 @@ import {
   type BoundaryContext,
 } from "./turnBoundary.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
+import { accountCompletionUsage, meteredDispatch } from "./recordPaidUsage.js";
 import { abortableSleep } from "../stdlib/abortable.js";
 import { decideRetry, decideValidationRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig, LLMRetryReason } from "./llmRetry.js";
@@ -490,21 +491,25 @@ async function dispatchWithRetry(args: {
       callHook({ ctx, name: "onLLMTimeout", data }),
   };
 
+  const targetStack = stateStack ?? ctx.stateStack;
   return runWithRetry(
     (signal) =>
-      dispatchLLMRequest({
-        ctx,
-        promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
-        prompt,
-        stream,
-        stateStack,
-      }),
+      meteredDispatch(ctx, targetStack, () =>
+        dispatchLLMRequest({
+          ctx,
+          promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
+          prompt,
+          stream,
+          stateStack,
+        }),
+      ),
     retryPolicy,
     parentSignal,
     retryHooks,
     normalizeError,
   );
 }
+
 
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */
@@ -765,9 +770,7 @@ async function _runPrompt({
   // descendants' spend in real time; mid-fork trips fire on the next
   // enforceGuards() call. See docs/superpowers/specs/2026-05-20-thread-
   // builtins-and-stdlib-design.md.
-  const callCost = completion.cost?.totalCost ?? 0;
-  targetStack.billCharge(callCost);
-  targetStack.localTokens += completion.usage?.totalTokens ?? 0;
+  accountCompletionUsage(ctx, targetStack, completion);
   // NOTE: no post-charge enforceGuards here anymore. A trip caused by
   // THIS charge is raised resumably at the caller's next guard gate
   // (round.N.guardGate / guardGate.final in runPrompt) — the paid work

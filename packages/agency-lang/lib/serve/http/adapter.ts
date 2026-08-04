@@ -1,5 +1,5 @@
 import http from "http";
-import type { ServedExportedItem, ServedExportedFunction, ServedExportedNode } from "../types.js";
+import type { ExportedItem, ServedExportedItem, ServedExportedFunction, ServedExportedNode } from "../types.js";
 import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import { validateResumeBatch } from "../../runtime/interrupts.js";
 import { readCause } from "../../runtime/errors.js";
@@ -17,7 +17,23 @@ import {
   makeGuardedRequestListener,
 } from "./security.js";
 
+/** PUBLIC config type (re-exported from `agency-lang/serve`) — kept
+ *  byte-compatible with the pre-seam contract: raw `ExportedItem`s and a
+ *  `respondToInterrupts` returning `Promise<unknown>`. Host apps that import
+ *  this type keep type-checking. The adapters run on the internal
+ *  `ServedHandlerConfig` below; `createServeHandler` builds that from a
+ *  discovered module. */
 export type HandlerConfig = {
+  exports: ExportedItem[];
+  logger: Logger;
+  hasInterrupts: (data: unknown) => boolean;
+  respondToInterrupts: (interrupts: unknown[], responses: unknown[]) => Promise<unknown>;
+};
+
+/** INTERNAL adapter config: the served contract the HTTP adapter actually runs
+ *  on — usage-bearing `ServedExportedItem`s and a `respondToInterrupts` that
+ *  returns a `ServedInvocationOutcome`. Not part of the public surface. */
+type ServedHandlerConfig = {
   exports: ServedExportedItem[];
   logger: Logger;
   hasInterrupts: (data: unknown) => boolean;
@@ -27,7 +43,7 @@ export type HandlerConfig = {
   ) => Promise<ServedInvocationOutcome<unknown>>;
 };
 
-export type HttpConfig = HandlerConfig & {
+export type HttpConfig = ServedHandlerConfig & {
   port: number;
   apiKey?: string;
   /** Interface to bind to. Default "127.0.0.1" (loopback only). */
@@ -209,7 +225,7 @@ async function resumeInterrupts(
 const FUNCTION_ROUTE = /^\/function\/([^/]+)$/;
 const NODE_ROUTE = /^\/node\/([^/]+)$/;
 
-export function createHttpHandler(config: HandlerConfig): (
+export function createHttpHandler(config: ServedHandlerConfig): (
   method: string,
   path: string,
   body: unknown,

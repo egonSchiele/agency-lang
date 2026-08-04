@@ -25,8 +25,13 @@ import { loadProviderModules } from "./providerModules.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
-import { Approved, GraphState, Rejected } from "./types.js";
+import { Approved, GraphState, Rejected, RunNodeResult } from "./types.js";
 import type { HandlerEntry } from "./types.js";
+import {
+  unwrapServedInvocationOutcome,
+  type ServedInvocationOutcome,
+} from "./invocationUsage.js";
+import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
 import {
@@ -737,13 +742,17 @@ async function runResumeLoop(
   }
 }
 
-export async function respondToInterrupts(args: {
+type RespondToInterruptsArgs = {
   ctx: RuntimeContext<GraphState>;
   interrupts: Interrupt[];
   responses: InterruptResponse[];
   overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
-}): Promise<any> {
+};
+
+async function respondToInterruptsCore(
+  args: RespondToInterruptsArgs,
+): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
   const { ctx, interrupts, responses, metadata = {} } = args;
   const responseMap = buildResponseMap(interrupts, responses);
 
@@ -762,72 +771,79 @@ export async function respondToInterrupts(args: {
   if (args.overrides) applyOverrides(checkpoint, args.overrides);
 
   const execCtx = await ctx.createExecutionContext(interrupt.runId);
-  // Re-install the CLI-driven root policy handler on the resumed exec context
-  // (handlers are never checkpointed). Guarded no-op unless AGENCY_RUN_POLICY
-  // is set and this is the root process. Mirrors the runNode install so the
-  // policy survives a resumed leg.
-  installRunPolicyHandler(execCtx);
-  // A cross-process resume starts with an empty provider registry (registration
-  // is process-global, not part of serialized checkpoint state), so re-register
-  // before resuming. Idempotent in-process via loadProviderModules' guard.
-  await loadProviderModules(execCtx);
-  // This is the first restore on this execCtx — record it as such.
-  execCtx._restoreCount++;
-  execCtx.statelogClient.checkpointRestored({
-    checkpointId: checkpoint.id,
-    restoreCount: execCtx._restoreCount,
-  });
-  // Each user response resolves a previously-thrown interrupt. Emit the
-  // lifecycle event so dashboards can pair every interruptThrown with a
-  // terminal interruptResolved. Suppressed in IPC mode: a resumed
-  // subprocess segment re-enters respondToInterrupts with the SAME
-  // preserved interrupt ids in the same inherited trace, and the root
-  // process already emitted the user resolution — a second (or, nested,
-  // N+1th) emission would break thrown↔resolved pairing for consumers.
-  if (!isIpcMode()) {
-    for (let i = 0; i < interrupts.length; i++) {
-      const intr = interrupts[i];
-      const resp = responses[i];
-      const outcome =
-        resp.type === "approve" ? "approved" : ("rejected" as const);
-      execCtx.statelogClient.interruptResolved({
-        interruptId: intr.interruptId,
-        outcome,
-        resolvedBy: "user",
-      });
-    }
-  }
-  // Re-register top-level callbacks BEFORE restoreState so the
-  // `_callbackImpl` routing check (`stateStack.isGlobalContext()`)
-  // sees the still-empty stack and pushes onto `ctx.topLevelCallbacks`.
-  // After `restoreState`, the stack carries the checkpoint frames and
-  // the same registration would instead bind to a caller frame and be
-  // popped immediately as the restored frames unwind.
-  //
-  // The bootstrap frame mirrors `runNode` — top-level callback
-  // registration runs Agency code that goes through `__call`, which
-  // reads ctx/threads/stack from ALS after the
-  // drop-per-call-context-plumbing migration. See lib/runtime/node.ts
-  // and lib/runtime/asyncContext.ts (`runInBootstrapFrame`).
-  await runInBootstrapFrame(
-    execCtx,
-    () => __initAllRegisteredCallbacks(execCtx),
-  );
-  execCtx.restoreState(checkpoint);
-  // Re-assert the root budget's LIMIT from the host context (the checkpoint's
-  // ceiling is caller-controllable on a stateless resume), while preserving the
-  // guard's accumulated spend so the trusted CLI resume path stays cumulative.
-  // No-op in IPC.
-  reinstallRootBudget(execCtx.stateStack, execCtx.budget);
-  execCtx.setInterruptResponses(responseMap);
-  if (metadata.callbacks) Object.assign(execCtx.callbacks, metadata.callbacks);
-  if (metadata.debugger) execCtx.debuggerState = metadata.debugger;
-
-  const agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
-  execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
+  // === Invocation started (context exists): a SINGLE lifecycle boundary covers
+  // all resume setup AND execution, so a setup failure still yields an
+  // outcome-with-usage and still runs cleanup. reinstallRootBudget and handler
+  // registration order are preserved. ===
   const agentStartTime = performance.now();
+  let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
+  let outcome: RawOutcome<RunNodeResult<any>>;
   try {
-    return await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
+    // Re-install the CLI-driven root policy handler on the resumed exec context
+    // (handlers are never checkpointed). Guarded no-op unless AGENCY_RUN_POLICY
+    // is set and this is the root process. Mirrors the runNode install so the
+    // policy survives a resumed leg.
+    installRunPolicyHandler(execCtx);
+    // A cross-process resume starts with an empty provider registry (registration
+    // is process-global, not part of serialized checkpoint state), so re-register
+    // before resuming. Idempotent in-process via loadProviderModules' guard.
+    await loadProviderModules(execCtx);
+    // This is the first restore on this execCtx — record it as such.
+    execCtx._restoreCount++;
+    execCtx.statelogClient.checkpointRestored({
+      checkpointId: checkpoint.id,
+      restoreCount: execCtx._restoreCount,
+    });
+    // Each user response resolves a previously-thrown interrupt. Emit the
+    // lifecycle event so dashboards can pair every interruptThrown with a
+    // terminal interruptResolved. Suppressed in IPC mode: a resumed
+    // subprocess segment re-enters respondToInterrupts with the SAME
+    // preserved interrupt ids in the same inherited trace, and the root
+    // process already emitted the user resolution — a second (or, nested,
+    // N+1th) emission would break thrown↔resolved pairing for consumers.
+    if (!isIpcMode()) {
+      for (let i = 0; i < interrupts.length; i++) {
+        const intr = interrupts[i];
+        const resp = responses[i];
+        const resolvedOutcome =
+          resp.type === "approve" ? "approved" : ("rejected" as const);
+        execCtx.statelogClient.interruptResolved({
+          interruptId: intr.interruptId,
+          outcome: resolvedOutcome,
+          resolvedBy: "user",
+        });
+      }
+    }
+    // Re-register top-level callbacks BEFORE restoreState so the
+    // `_callbackImpl` routing check (`stateStack.isGlobalContext()`)
+    // sees the still-empty stack and pushes onto `ctx.topLevelCallbacks`.
+    // After `restoreState`, the stack carries the checkpoint frames and
+    // the same registration would instead bind to a caller frame and be
+    // popped immediately as the restored frames unwind.
+    //
+    // The bootstrap frame mirrors `runNode` — top-level callback
+    // registration runs Agency code that goes through `__call`, which
+    // reads ctx/threads/stack from ALS after the
+    // drop-per-call-context-plumbing migration. See lib/runtime/node.ts
+    // and lib/runtime/asyncContext.ts (`runInBootstrapFrame`).
+    await runInBootstrapFrame(
+      execCtx,
+      () => __initAllRegisteredCallbacks(execCtx),
+    );
+    execCtx.restoreState(checkpoint);
+    // Re-assert the root budget's LIMIT from the host context (the checkpoint's
+    // ceiling is caller-controllable on a stateless resume), while preserving the
+    // guard's accumulated spend so the trusted CLI resume path stays cumulative.
+    // No-op in IPC.
+    reinstallRootBudget(execCtx.stateStack, execCtx.budget);
+    execCtx.setInterruptResponses(responseMap);
+    if (metadata.callbacks) Object.assign(execCtx.callbacks, metadata.callbacks);
+    if (metadata.debugger) execCtx.debuggerState = metadata.debugger;
+
+    agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
+    execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
+    const value = await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
+    outcome = { status: "returned", value };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     execCtx.statelogClient.error({ errorType: "runtimeError", message: errorMessage });
@@ -835,10 +851,29 @@ export async function respondToInterrupts(args: {
       entryNode: checkpoint.nodeId,
       timeTaken: performance.now() - agentStartTime,
     });
-    throw error;
+    outcome = { status: "threw", error };
   } finally {
-    execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
-    execCtx.cleanup();
+    // Guarded: a setup failure before the span was opened leaves it undefined.
+    if (agentRunSpanId !== undefined) {
+      execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
+    }
   }
+  // Resume tears down with cleanup() (no memory-save/statelog-flush — that is
+  // the fresh-run path's finalizeExecCtx); wrap it to match the cleanup shape.
+  return finishServedInvocation(execCtx, outcome, async () => execCtx.cleanup());
+}
+
+/** Public entry point — unchanged contract: returns the resume result or throws
+ *  the identical original error. */
+export async function respondToInterrupts(args: RespondToInterruptsArgs): Promise<any> {
+  return unwrapServedInvocationOutcome(await respondToInterruptsCore(args));
+}
+
+/** Serve-only entry point: hands the resume outcome (result/error + usage
+ *  snapshot) to the serve adapter instead of unwrapping it. */
+export async function respondToInterruptsForServe(
+  args: RespondToInterruptsArgs,
+): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
+  return respondToInterruptsCore(args);
 }
 

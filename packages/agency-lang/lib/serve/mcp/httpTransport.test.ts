@@ -4,7 +4,7 @@ import { AddressInfo } from "net";
 import { startMcpHttpServer } from "./httpTransport.js";
 import { createMcpHandler } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
-import type { ExportedItem } from "../types.js";
+import type { ServedExportedItem } from "../types.js";
 import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { createLogger } from "../../logger.js";
 
@@ -24,7 +24,7 @@ function makeHandler() {
     },
     registry,
   );
-  const exports: ExportedItem[] = [
+  const exports: ServedExportedItem[] = [
     {
       kind: "function", ...unusedPublicInvoke,
       name: "add",

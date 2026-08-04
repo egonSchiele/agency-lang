@@ -1,5 +1,5 @@
 import http from "http";
-import type { ExportedItem, ExportedFunction, ExportedNode } from "../types.js";
+import type { ServedExportedItem, ServedExportedFunction, ServedExportedNode } from "../types.js";
 import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import { validateResumeBatch } from "../../runtime/interrupts.js";
 import { readCause } from "../../runtime/errors.js";
@@ -18,7 +18,7 @@ import {
 } from "./security.js";
 
 export type HandlerConfig = {
-  exports: ExportedItem[];
+  exports: ServedExportedItem[];
   logger: Logger;
   hasInterrupts: (data: unknown) => boolean;
   respondToInterrupts: (
@@ -135,7 +135,7 @@ function routeResultFor(
 }
 
 async function callFunction(
-  fn: ExportedFunction,
+  fn: ServedExportedFunction,
   body: unknown,
   logger: Logger,
 ): Promise<RouteResult> {
@@ -151,7 +151,7 @@ async function callFunction(
 }
 
 async function callNode(
-  node: ExportedNode,
+  node: ServedExportedNode,
   body: unknown,
   hasInterrupts: (data: unknown) => boolean,
   logger: Logger,
@@ -220,16 +220,16 @@ export function createHttpHandler(config: HandlerConfig): (
   // plain object would let a name like `/function/toString` resolve to an
   // inherited Object.prototype method, bypass the "unknown" 404 check, and
   // surface as a generic tool failure instead.
-  const functions: Record<string, ExportedFunction> = Object.assign(
+  const functions: Record<string, ServedExportedFunction> = Object.assign(
     Object.create(null),
     Object.fromEntries(
-      exports.filter((e): e is ExportedFunction => e.kind === "function").map((e) => [e.name, e]),
+      exports.filter((e): e is ServedExportedFunction => e.kind === "function").map((e) => [e.name, e]),
     ),
   );
-  const nodes: Record<string, ExportedNode> = Object.assign(
+  const nodes: Record<string, ServedExportedNode> = Object.assign(
     Object.create(null),
     Object.fromEntries(
-      exports.filter((e): e is ExportedNode => e.kind === "node").map((e) => [e.name, e]),
+      exports.filter((e): e is ServedExportedNode => e.kind === "node").map((e) => [e.name, e]),
     ),
   );
 

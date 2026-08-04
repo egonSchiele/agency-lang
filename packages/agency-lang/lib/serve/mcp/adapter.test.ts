@@ -2,14 +2,14 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { z } from "zod";
 import { createMcpHandler, mcpToolSummaryLines } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
-import type { ExportedItem } from "../types.js";
+import type { ServedExportedItem } from "../types.js";
 import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { PolicyStore } from "../policyStore.js";
 import { mkdtempSync, rmSync } from "fs";
 import path from "path";
 import os from "os";
 
-function makeTestExports(): ExportedItem[] {
+function makeTestExports(): ServedExportedItem[] {
   const registry: Record<string, AgencyFunction> = {};
   const addFn = AgencyFunction.create(
     {

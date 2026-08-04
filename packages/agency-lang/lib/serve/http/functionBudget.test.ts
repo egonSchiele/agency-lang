@@ -7,7 +7,7 @@ import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { addCost } from "../../runtime/cost.js";
 import type { GraphState } from "../../runtime/types.js";
 import type { AgencyFunction } from "../../runtime/agencyFunction.js";
-import type { ExportedFunction } from "../types.js";
+import type { ServedExportedFunction } from "../types.js";
 
 /**
  * Regression test for the root budget on the *served-function* path.
@@ -60,7 +60,7 @@ describe("a served function respects the baked root budget", () => {
   // A minimal exported function whose body charges $1, routed through the real
   // runExportedFunction so it runs inside a node-grade frame with the budget
   // installed.
-  function spendingFunction(ctx: RuntimeContext<GraphState>): ExportedFunction {
+  function spendingFunction(ctx: RuntimeContext<GraphState>): ServedExportedFunction {
     const fn = {
       invoke: async () => {
         addCost(1);

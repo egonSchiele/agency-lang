@@ -14,8 +14,11 @@ import {
   __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
+  respondToInterruptsForServe as _respondToInterruptsForServe,
   rewindFrom as _rewindFrom,
   runExportedFunction as _runExportedFunction,
+  runExportedFunctionForServe as _runExportedFunctionForServe,
+  runNodeForServe as _runNodeForServe,
   RestoreSignal,
   AgencyAbort,
   AbortedResult,
@@ -93,6 +96,14 @@ export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unk
 // `agency serve` to call a function from an HTTP/MCP request — outside any
 // Agency execution frame, which generated function bodies otherwise require.
 export const __invokeFunction = (fn: any, namedArgs: Record<string, unknown>) => _runExportedFunction({ ctx: __globalCtx, fn, namedArgs, initializeGlobals: __initializeGlobals });
+
+// Serve-only invokers: identical execution to the entries above, but they hand
+// back a ServedInvocationOutcome (value/error + per-invocation usage snapshot)
+// so the serve adapters can report authoritative cost. `discoverExports`
+// requires all three; a bundle without them must be recompiled.
+export const __invokeFunctionForServe = (fn: any, namedArgs: Record<string, unknown>) => _runExportedFunctionForServe({ ctx: __globalCtx, fn, namedArgs, initializeGlobals: __initializeGlobals });
+export const __invokeNodeForServe = (nodeName: string, data: Record<string, any>) => _runNodeForServe({ ctx: __globalCtx, nodeName, data, initializeGlobals: __initializeGlobals });
+export const __respondToInterruptsForServe = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterruptsForServe({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 // Reconfigure the trace file path at runtime. Mutates the module-level

@@ -20,7 +20,7 @@ import { startHttpServer } from "../serve/http/adapter.js";
 import { DEFAULT_HOST } from "../serve/http/security.js";
 import { createLogger } from "../logger.js";
 import { VERSION } from "../stdlib/version.js";
-import type { ExportedItem } from "../serve/types.js";
+import type { ServedExportedItem } from "../serve/types.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import type { InterruptHandlers } from "../serve/mcp/interruptLoop.js";
 import { PolicyStore } from "../serve/policyStore.js";
@@ -65,7 +65,7 @@ function compileForServe(file: string, options: { quiet?: boolean } = {}): Compi
 
 async function loadAndDiscover(
   compileResult: CompileResult,
-): Promise<{ exports: ExportedItem[]; moduleExports: Record<string, unknown> }> {
+): Promise<{ exports: ServedExportedItem[]; moduleExports: Record<string, unknown> }> {
   const moduleUrl = pathToFileURL(path.resolve(compileResult.outputPath)).href;
   // eslint-disable-next-line no-restricted-syntax -- compiled module URL is only known at runtime
   const mod = await import(moduleUrl);

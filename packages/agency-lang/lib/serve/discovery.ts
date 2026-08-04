@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { AgencyFunction } from "../runtime/agencyFunction.js";
 import type { InterruptEffect } from "../symbolTable.js";
-import type { ExportedFunction, ExportedNode, ExportedItem } from "./types.js";
+import type { ServedExportedFunction, ServedExportedNode, ServedExportedItem } from "./types.js";
 import type { ServedInvocationOutcome } from "../runtime/invocationUsage.js";
 
 export type DiscoverOptions = {
@@ -49,7 +49,7 @@ function toExportedFunction(
   interruptEffects: InterruptEffect[],
   moduleInvoke: ModuleInvokeFunction | undefined,
   serveFn: ServeFunctionInvoker,
-): ExportedFunction {
+): ServedExportedFunction {
   return {
     kind: "function",
     name: fn.name,
@@ -84,7 +84,7 @@ function toExportedNode(
   moduleExports: Record<string, unknown>,
   interruptEffects: InterruptEffect[],
   serveNode: ServeNodeInvoker,
-): ExportedNode | null {
+): ServedExportedNode | null {
   const rawNodeFn = moduleExports[nodeName];
   if (typeof rawNodeFn !== "function") return null;
   const raw = moduleExports[`__${nodeName}NodeParams`];
@@ -105,7 +105,7 @@ const RECOMPILE_HINT =
   "Recompile with the current Agency (agency deploy / build) and try again — " +
   "served bundles must be recompiled to report per-invocation usage.";
 
-export function discoverExports(options: DiscoverOptions): ExportedItem[] {
+export function discoverExports(options: DiscoverOptions): ServedExportedItem[] {
   const { toolRegistry, moduleExports, moduleId, exportedNodeNames = [], interruptEffectsByName = {} } = options;
 
   const moduleInvoke = moduleExports.__invokeFunction as ModuleInvokeFunction | undefined;
@@ -131,7 +131,7 @@ export function discoverExports(options: DiscoverOptions): ExportedItem[] {
   );
   const nodes = exportedNodeNames
     .map((name) => toExportedNode(name, moduleExports, interruptEffectsByName[name] ?? [], serveNode!))
-    .filter((n): n is ExportedNode => n !== null);
+    .filter((n): n is ServedExportedNode => n !== null);
 
   return [...functions, ...nodes];
 }

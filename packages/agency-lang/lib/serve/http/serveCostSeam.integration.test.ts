@@ -7,7 +7,7 @@ import { addCost } from "../../runtime/cost.js";
 import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import type { GraphState } from "../../runtime/types.js";
 import type { AgencyFunction } from "../../runtime/agencyFunction.js";
-import type { ExportedFunction } from "../types.js";
+import type { ServedExportedFunction } from "../types.js";
 
 // End-to-end usage accounting through the REAL HTTP adapter + the real
 // runExportedFunctionForServe core. Priced work is a fake `addCost` charge (the
@@ -36,7 +36,7 @@ describe("serve cost seam — end to end", () => {
   function servedFunction(
     ctx: RuntimeContext<GraphState>,
     body: () => unknown,
-  ): ExportedFunction {
+  ): ServedExportedFunction {
     const fn = { invoke: async () => body() } as unknown as AgencyFunction;
     return {
       kind: "function", ...unusedPublicInvoke,

@@ -5,7 +5,7 @@ import { createHttpHandler, startHttpServer } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import { interrupt } from "../../runtime/interrupts.js";
 import type { Interrupt } from "../../runtime/interrupts.js";
-import type { ExportedItem } from "../types.js";
+import type { ServedExportedItem } from "../types.js";
 import { returnedOutcome, threwOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { createLogger } from "../../logger.js";
 import type { Logger } from "../../logger.js";
@@ -43,7 +43,7 @@ function makeSpyHandler(): {
 }
 
 function makeExports(): {
-  exports: ExportedItem[];
+  exports: ServedExportedItem[];
 } {
   const registry: Record<string, AgencyFunction> = {};
   const addFn = AgencyFunction.create(
@@ -65,7 +65,7 @@ function makeExports(): {
     registry,
   );
 
-  const exports: ExportedItem[] = [
+  const exports: ServedExportedItem[] = [
     {
       kind: "function", ...unusedPublicInvoke,
       name: "add",
@@ -180,7 +180,7 @@ describe("HTTP adapter", () => {
         },
         registry,
       );
-    const exports: ExportedItem[] = (
+    const exports: ServedExportedItem[] = (
       [
         ["rm", { destructive: true }],
         ["lookup", { idempotent: true }],
@@ -463,7 +463,7 @@ describe("startHttpServer auth and host validation", () => {
       },
       registry,
     );
-    const exportsWithFail: ExportedItem[] = [
+    const exportsWithFail: ServedExportedItem[] = [
       ...exports,
       {
         kind: "function", ...unusedPublicInvoke,
@@ -534,7 +534,7 @@ describe("root-budget trips surface as a typed budgetExceeded", () => {
   const silent = createLogger("error");
 
   function handlerFor(invoke: () => Promise<unknown>): ReturnType<typeof createHttpHandler> {
-    const node: ExportedItem = {
+    const node: ServedExportedItem = {
       kind: "node", ...unusedPublicInvoke,
       name: "run",
       parameters: [],

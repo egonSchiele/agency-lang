@@ -12,31 +12,41 @@ export type ExportedFunction = {
   agencyFunction: AgencyFunction;
   interruptEffects: InterruptEffect[];
   /**
-   * PUBLIC contract, unchanged: invoke the function for a single request and
-   * return its raw value, or throw the identical error. This is the member host
-   * apps that construct/consume `ExportedFunction` directly depend on.
+   * Invoke the function for a single request and return its raw value, or throw
+   * the identical error. Unchanged public contract — the member host apps that
+   * construct/consume `ExportedFunction` directly depend on.
    */
   invoke: (namedArgs: Record<string, unknown>) => Promise<unknown>;
-  /**
-   * INTERNAL, for the serve adapters: the same execution as `invoke`, but the
-   * value-or-error is returned inside a `ServedInvocationOutcome` alongside a
-   * per-invocation usage snapshot (never mutating the value/error). Populated by
-   * `discoverExports` from the compiled module's `__invokeFunctionForServe`.
-   */
-  invokeServed: (namedArgs: Record<string, unknown>) => Promise<ServedInvocationOutcome<unknown>>;
 };
 
 export type ExportedNode = {
   kind: "node";
   name: string;
   parameters: Array<{ name: string }>;
-  /** PUBLIC contract, unchanged: positional args → raw `RunNodeResult`, or throw. */
+  /** Positional args → raw `RunNodeResult`, or throw. Unchanged public contract. */
   invoke: (...args: unknown[]) => Promise<unknown>;
-  /** INTERNAL, for the serve adapters: named args as a data object → a
-   *  `ServedInvocationOutcome` whose `value` is the node's caller-facing data
-   *  (`RunNodeResult.data`, already unwrapped by `discoverExports`) + usage. */
-  invokeServed: (data: Record<string, unknown>) => Promise<ServedInvocationOutcome<unknown>>;
   interruptEffects: InterruptEffect[];
 };
 
 export type ExportedItem = ExportedFunction | ExportedNode;
+
+// --- Internal, NOT part of the public `agency-lang/serve` surface. ---
+//
+// The serve adapters additionally need a usage-bearing invoker. Rather than add
+// a required member to the PUBLIC `ExportedFunction`/`ExportedNode` (which would
+// break host apps that construct them), the adapters use these internal
+// `Served*` supertypes: the same shape plus `invokeServed`, which
+// `discoverExports` populates from the compiled module's `…ForServe` invokers.
+// `invokeServed` returns the value-or-error inside a `ServedInvocationOutcome`
+// (never mutating either) with a per-invocation usage snapshot; a node's value
+// is its caller-facing `RunNodeResult.data`, already unwrapped by discovery.
+
+export type ServedExportedFunction = ExportedFunction & {
+  invokeServed: (namedArgs: Record<string, unknown>) => Promise<ServedInvocationOutcome<unknown>>;
+};
+
+export type ServedExportedNode = ExportedNode & {
+  invokeServed: (data: Record<string, unknown>) => Promise<ServedInvocationOutcome<unknown>>;
+};
+
+export type ServedExportedItem = ServedExportedFunction | ServedExportedNode;

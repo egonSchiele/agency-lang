@@ -1,6 +1,6 @@
 import process from "process";
 import type { InterruptEffect } from "../../symbolTable.js";
-import type { ExportedFunction, ExportedNode, ExportedItem } from "../types.js";
+import type { ServedExportedFunction, ServedExportedNode, ServedExportedItem } from "../types.js";
 import type { PolicyStore } from "../policyStore.js";
 import type { InterruptHandlers } from "./interruptLoop.js";
 import { runWithPolicy } from "./interruptLoop.js";
@@ -52,7 +52,7 @@ export type PolicyConfig = {
 export type McpConfig = {
   serverName: string;
   serverVersion: string;
-  exports: ExportedItem[];
+  exports: ServedExportedItem[];
   policyConfig?: PolicyConfig;
 };
 
@@ -164,8 +164,8 @@ async function runToolInvocation(
 
 async function handleToolCall(
   message: JsonRpcMessage,
-  functionsByName: Record<string, ExportedFunction>,
-  nodesByName: Record<string, ExportedNode>,
+  functionsByName: Record<string, ServedExportedFunction>,
+  nodesByName: Record<string, ServedExportedNode>,
   policyConfig: McpConfig["policyConfig"],
 ): Promise<JsonRpcMessage> {
   const name = message.params?.name;
@@ -216,8 +216,8 @@ type ToolEntry = {
  */
 function buildToolsListPayload(config: McpConfig): ToolEntry[] {
   const { exports, policyConfig } = config;
-  const functions = exports.filter((e): e is ExportedFunction => e.kind === "function");
-  const nodes = exports.filter((e): e is ExportedNode => e.kind === "node");
+  const functions = exports.filter((e): e is ServedExportedFunction => e.kind === "function");
+  const nodes = exports.filter((e): e is ServedExportedNode => e.kind === "node");
 
   const functionToolEntries: ToolEntry[] = functions.map((f) => {
     const entry: ToolEntry = {
@@ -285,8 +285,8 @@ export function mcpToolSummaryLines(config: McpConfig): string[] {
 export function createMcpHandler(config: McpConfig): McpHandler {
   const { serverName, serverVersion, exports } = config;
 
-  const functions = exports.filter((e): e is ExportedFunction => e.kind === "function");
-  const nodes = exports.filter((e): e is ExportedNode => e.kind === "node");
+  const functions = exports.filter((e): e is ServedExportedFunction => e.kind === "function");
+  const nodes = exports.filter((e): e is ServedExportedNode => e.kind === "node");
   const functionsByName = Object.fromEntries(functions.map((f) => [f.name, f]));
   const nodesByName = Object.fromEntries(nodes.map((n) => [n.name, n]));
 

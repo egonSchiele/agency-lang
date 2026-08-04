@@ -221,10 +221,17 @@ async function finalizeExecCtx(execCtx: RuntimeContext<GraphState>): Promise<voi
       console.warn(`[memory] save failed: ${(err as Error).message}`);
     }
   }
-  // Remote statelog POSTs are fire-and-forget; drain any still in flight
-  // so telemetry is delivered before the context is released.
-  await execCtx.statelogClient.flush();
-  execCtx.cleanup();
+  // Remote statelog POSTs are fire-and-forget; drain any still in flight so
+  // telemetry is delivered before the context is released. cleanup() runs in a
+  // finally so a rejected flush never leaks the execution context — every
+  // invocation whose context was created releases it. A flush rejection still
+  // propagates (finishServedInvocation makes it the outcome when execution
+  // otherwise succeeded).
+  try {
+    await execCtx.statelogClient.flush();
+  } finally {
+    execCtx.cleanup();
+  }
 }
 
 /**

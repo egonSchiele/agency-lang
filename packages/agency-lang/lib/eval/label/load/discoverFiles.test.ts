@@ -8,6 +8,7 @@ import {
   looksLikeGlob,
   normalizePatternSeparators,
   resolveFileSelection,
+  rootPrefixOf,
   splitPattern,
 } from "./discoverFiles.js";
 import { IngestSourceError } from "./types.js";
@@ -172,5 +173,50 @@ describe("pattern separators on Windows", () => {
   it("normalizes only when the platform separator says to", () => {
     expect(normalizePatternSeparators("a\\b", "/")).toBe("a\\b");
     expect(normalizePatternSeparators("a\\b", "\\")).toBe("a/b");
+  });
+});
+
+describe("a pattern anchored at a filesystem root", () => {
+  // `/*.txt` used to resolve to the working directory, silently reading a
+  // different batch than the one named.
+  it("keeps the POSIX root", () => {
+    expect(splitPattern("/*.txt", "/")).toEqual({ root: "/", pattern: "*.txt" });
+  });
+
+  it("keeps a POSIX root with a literal directory under it", () => {
+    expect(splitPattern("/answers/*.txt", "/")).toEqual({ root: "/answers", pattern: "*.txt" });
+  });
+
+  it("keeps a Windows drive root, which `C:` alone does not mean", () => {
+    // path.resolve("C:") is that drive's CURRENT directory, not its root.
+    expect(splitPattern("C:\\*.txt", "\\")).toEqual({ root: "C:\\", pattern: "*.txt" });
+  });
+
+  it("keeps a Windows drive root with a literal directory under it", () => {
+    expect(splitPattern("C:\\answers\\*.txt", "\\"))
+      .toEqual({ root: "C:\\answers", pattern: "*.txt" });
+  });
+
+  it("keeps a UNC root", () => {
+    expect(splitPattern("\\\\server\\share\\*.txt", "\\"))
+      .toEqual({ root: "\\\\server\\share\\", pattern: "*.txt" });
+  });
+
+  it("keeps a UNC root with a literal directory under it", () => {
+    expect(splitPattern("\\\\server\\share\\answers\\*.txt", "\\"))
+      .toEqual({ root: "\\\\server\\share\\answers", pattern: "*.txt" });
+  });
+
+  it("still resolves a relative pattern against the working directory", () => {
+    const split = splitPattern("answers/*.txt", "/");
+    expect(split.root).toBe(path.posix.resolve("answers"));
+    expect(split.pattern).toBe("*.txt");
+  });
+
+  it("reports the root prefix it recognised", () => {
+    expect(rootPrefixOf("/a/b")).toBe("/");
+    expect(rootPrefixOf("C:/a")).toBe("C:/");
+    expect(rootPrefixOf("//server/share/a")).toBe("//server/share/");
+    expect(rootPrefixOf("answers/a")).toBe("");
   });
 });

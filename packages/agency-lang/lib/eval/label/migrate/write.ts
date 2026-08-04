@@ -34,16 +34,6 @@ export function writeStagedStore(plan: MigrationPlan, stagingDir: string): void 
   syncDirectory(stagingDir);
 }
 
-/** Checklists carry over untouched: nothing about a revision is keyed by an
- *  output id, so migration has no opinion about them. */
-export function copyChecklists(sourceDir: string, stagingDir: string): void {
-  const from = path.join(sourceDir, "checklists");
-  if (!fs.existsSync(from)) {
-    return;
-  }
-  fs.cpSync(from, path.join(stagingDir, "checklists"), { recursive: true });
-}
-
 function writeJsonl(filePath: string, rows: readonly unknown[]): void {
   if (rows.length === 0) {
     return;

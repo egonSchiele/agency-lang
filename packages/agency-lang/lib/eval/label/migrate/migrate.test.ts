@@ -149,6 +149,17 @@ function migratedAnnotations(): AnnotationRow[] {
   return readJsonl<AnnotationRow>(path.join(destDir, "labels.jsonl"));
 }
 
+/** Run a migration that dies right after claiming its staging directory. */
+function interruptAfterClaim(): void {
+  expect(() => migrateStore({
+    sourceDir,
+    destDir,
+    faultBeforePublish: () => {
+      throw new Error("interrupted");
+    },
+  })).toThrow("interrupted");
+}
+
 const OUT_A = v1OutputId("t-1", "a");
 const OUT_B = v1OutputId("t-2", "a");
 const OUT_C = v1OutputId("t-3", "a");
@@ -338,28 +349,55 @@ describe("migrateStore", () => {
 
   it("leaves no usable destination if interrupted before the manifest write", () => {
     writeV1Store([v1Row({ task: "S", value: "D" })]);
-    expect(() => migrateStore({
-      sourceDir,
-      destDir,
-      faultBeforePublish: () => {
-        throw new Error("interrupted");
-      },
-    })).toThrow("interrupted");
+    interruptAfterClaim();
     expect(fs.existsSync(destDir)).toBe(false);
+  });
+
+  it("writes the marker before copying, so an early crash is still reclaimable", () => {
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
+    interruptAfterClaim();
+    expect(fs.existsSync(path.join(`${destDir}.migrating`, ".migration.json"))).toBe(true);
   });
 
   it("recovers from an interrupted run on the next attempt", () => {
     writeV1Store([v1Row({ task: "S", value: "D" })]);
-    expect(() => migrateStore({
-      sourceDir,
-      destDir,
-      faultBeforePublish: () => {
-        throw new Error("interrupted");
-      },
-    })).toThrow();
+    interruptAfterClaim();
     // The leftover staging directory must not make the retry refuse.
     expect(() => migrateStore({ sourceDir, destDir })).not.toThrow();
     expect(records()).toHaveLength(1);
+  });
+
+  it("never deletes through a symlink in a leftover stage", () => {
+    // cpSync preserves symlinks, so a staged `checklists/shared -> /elsewhere`
+    // once let cleanup delete files OUTSIDE the staging directory entirely.
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
+    const external = path.join(root, "external");
+    fs.mkdirSync(external, { recursive: true });
+    fs.writeFileSync(path.join(external, "precious.txt"), "DO NOT DELETE");
+
+    const stage = `${destDir}.migrating`;
+    fs.mkdirSync(path.join(stage, "checklists"), { recursive: true });
+    fs.symlinkSync(external, path.join(stage, "checklists", "shared"));
+    fs.writeFileSync(path.join(stage, ".migration.json"), JSON.stringify({
+      purpose: "agency-eval-label-migrate",
+      sourceDir: fs.realpathSync(sourceDir),
+      destDir: path.resolve(destDir),
+      entries: [
+        { path: "checklists", type: "dir" },
+        { path: "checklists/shared", type: "dir" },
+      ],
+    }));
+
+    migrateStore({ sourceDir, destDir });
+    expect(fs.readFileSync(path.join(external, "precious.txt"), "utf8")).toBe("DO NOT DELETE");
+  });
+
+  it("refuses a source checklist that is a symlink, rather than copying a link", () => {
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
+    const external = path.join(root, "external");
+    fs.mkdirSync(external, { recursive: true });
+    fs.symlinkSync(external, path.join(sourceDir, "checklists", "shared"));
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/symbolic link/);
   });
 
   it("refuses to delete a staging path it did not create", () => {
@@ -431,33 +469,72 @@ describe("migrateStore publication", () => {
     expect(fs.existsSync(path.join(destDir, ".migration.json"))).toBe(false);
   });
 
-  it("keeps the marker until AFTER the rename, so an interrupted publish is reclaimable", () => {
-    // Removing the marker first would leave a complete .migrating directory the
-    // next run cannot recognise, and so refuses to touch.
+  it("finishes a publication interrupted between the rename and the marker removal", () => {
+    // The store is already complete; refusing would strand it.
     writeV1Store([v1Row({ task: "S", value: "D" })]);
-    expect(() => migrateStore({
-      sourceDir,
-      destDir,
-      faultBeforePublish: () => {
-        throw new Error("interrupted");
-      },
-    })).toThrow();
+    migrateStore({ sourceDir, destDir });
+    fs.writeFileSync(path.join(destDir, ".migration.json"), JSON.stringify({
+      purpose: "agency-eval-label-migrate",
+      sourceDir: fs.realpathSync(sourceDir),
+      destDir: fs.realpathSync(destDir),
+      entries: [],
+    }));
+    const result = migrateStore({ sourceDir, destDir });
+    expect(result.completedEarlierRun).toBe(true);
+    expect(fs.existsSync(path.join(destDir, ".migration.json"))).toBe(false);
+    expect(records()).toHaveLength(1);
+  });
+
+  it("still refuses a destination carrying a marker it cannot open", () => {
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.writeFileSync(path.join(destDir, ".migration.json"), JSON.stringify({
+      purpose: "agency-eval-label-migrate",
+      sourceDir: fs.realpathSync(sourceDir),
+      destDir: fs.realpathSync(destDir),
+      entries: [],
+    }));
+    expect(() => migrateStore({ sourceDir, destDir })).toThrow(/already exists/);
+  });
+
+  it("keeps the marker until AFTER the rename, so an interrupted publish is reclaimable", () => {
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
+    interruptAfterClaim();
     expect(fs.existsSync(path.join(`${destDir}.migrating`, ".migration.json"))).toBe(true);
     expect(() => migrateStore({ sourceDir, destDir })).not.toThrow();
   });
 
   it("leaves an unexpected file in a leftover stage alone, and says so", () => {
     writeV1Store([v1Row({ task: "S", value: "D" })]);
-    expect(() => migrateStore({
-      sourceDir,
-      destDir,
-      faultBeforePublish: () => {
-        throw new Error("interrupted");
-      },
-    })).toThrow();
-    const intruder = path.join(`${destDir}.migrating`, "checklists", "not-ours.txt");
+    interruptAfterClaim();
+    const stage = `${destDir}.migrating`;
+    fs.mkdirSync(path.join(stage, "checklists"), { recursive: true });
+    const intruder = path.join(stage, "checklists", "not-ours.txt");
     fs.writeFileSync(intruder, "important");
     expect(() => migrateStore({ sourceDir, destDir })).toThrow(/did not write/);
     expect(fs.readFileSync(intruder, "utf8")).toBe("important");
+  });
+
+  it("reclaims a staged path the source no longer has", () => {
+    // The source is unlocked between a crash and the retry. Deriving ownership
+    // from the live source would leave a staged copy of a since-deleted
+    // checklist permanently unreclaimable, blocking every future attempt.
+    writeV1Store([v1Row({ task: "S", value: "D" })]);
+    const stage = `${destDir}.migrating`;
+    fs.mkdirSync(path.join(stage, "checklists", "cl_deleted"), { recursive: true });
+    fs.writeFileSync(path.join(stage, "checklists", "cl_deleted", "1.json"), "{}");
+    fs.writeFileSync(path.join(stage, ".migration.json"), JSON.stringify({
+      purpose: "agency-eval-label-migrate",
+      sourceDir: fs.realpathSync(sourceDir),
+      destDir: path.resolve(destDir),
+      entries: [
+        { path: "checklists", type: "dir" },
+        { path: "checklists/cl_deleted", type: "dir" },
+        { path: "checklists/cl_deleted/1.json", type: "file" },
+      ],
+    }));
+
+    expect(() => migrateStore({ sourceDir, destDir })).not.toThrow();
+    expect(fs.existsSync(path.join(destDir, "checklists", "cl_deleted"))).toBe(false);
   });
 });

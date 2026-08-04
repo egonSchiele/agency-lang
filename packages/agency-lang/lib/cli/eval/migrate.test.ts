@@ -17,6 +17,7 @@ function result(over: Partial<MigrateResult> = {}): MigrateResult {
     mergedGroups: 1,
     occurrences: 4,
     annotations: 2,
+    completedEarlierRun: false,
     ...over,
   };
 }
@@ -62,6 +63,22 @@ describe("describeMigration", () => {
       .join("\n");
     expect(text).toContain("1 old record became 1");
     expect(text).toContain("1 label carried across");
+  });
+});
+
+describe("describeMigration for a finished earlier run", () => {
+  it("says nothing was rewritten, rather than reporting zero records migrated", () => {
+    const text = describeMigration(result({
+      completedEarlierRun: true,
+      oldRecords: 0,
+      newRecords: 0,
+      mergedGroups: 0,
+      occurrences: 0,
+      annotations: 0,
+    })).join("\n");
+    expect(text).toContain("already held a completed migration");
+    expect(text).toContain("Nothing was rewritten");
+    expect(text).not.toContain("0 old records");
   });
 });
 

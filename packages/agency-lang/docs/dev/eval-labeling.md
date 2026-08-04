@@ -325,11 +325,38 @@ Two details that are easy to get wrong:
 - Annotations are rewritten in their original order, not collapsed into one
   synthetic row. Collapsing would discard history, timing and note edits.
 
-Publication is staged: everything is written to a sibling directory whose
-manifest goes last, the result is opened through the ordinary read path to prove
-it is readable, and only then is it renamed into place. A crash leaves a staging
-directory that the next run reclaims — after checking a marker file that says
-this exact migration created it, and removing only the entries this code writes.
+Publication is staged, and the ordering is the design:
+
+1. A marker file lists every path the migration will copy, written and fsynced
+   **before** any of it exists.
+2. Checklists are copied and flushed individually.
+3. The logs are written, then the manifest **last**.
+4. The result is opened through the ordinary read path to prove it is readable.
+5. It is renamed into place, and the parent directory is synced.
+6. Only then is the marker removed.
+
+Each step exists because of a specific way a crash could otherwise strand you.
+
+**The marker holds an inventory, not just a name.** Deriving what the migration
+owns from the live source at reclaim time is unsound: the source is unlocked
+between a crash and the retry, so a checklist deleted in that window would leave
+its staged copy permanently unreclaimable, and one added could make an unrelated
+staged file look owned.
+
+**Nothing is ever removed recursively, and a link is never followed.** Removal
+walks the inventory, `lstat`s each entry, and unlinks a symlink as a link rather
+than resolving it. Source checklists containing symlinks are refused outright at
+inventory time: `cpSync` preserves links, so a staged `checklists/shared ->
+/elsewhere` would let cleanup delete files outside the store entirely. That was
+a real bug, caught in review, and it is pinned by a test that asserts an
+external file survives.
+
+**The marker outlives the rename.** Removing it first leaves a window where a
+reboot produces a complete store nobody recognises. A destination carrying a
+matching marker AND a manifest is therefore treated as a publication interrupted
+after the rename, and simply finished. The manifest check matters: `openStore`
+creates one for an empty directory, so opening alone would declare a bare folder
+complete.
 
 ## What is not built yet
 

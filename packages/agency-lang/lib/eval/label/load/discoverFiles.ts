@@ -86,6 +86,27 @@ export function normalizePatternSeparators(
 }
 
 /**
+ * The absolute prefix a pattern starts from, if it has one.
+ *
+ * Kept separate from the literal segments because a root is not a segment: for
+ * `/*.txt` the segments are `["", "*.txt"]`, and joining the literal `""` gives
+ * an empty string that resolves to the working directory instead of `/`. On
+ * Windows `C:` alone means that drive's *current* directory, not its root, so
+ * the trailing separator matters too.
+ */
+export function rootPrefixOf(normalized: string): string {
+  const unc = normalized.match(/^\/\/[^/]+\/[^/]+\//);
+  if (unc !== null) {
+    return unc[0];
+  }
+  const drive = normalized.match(/^[A-Za-z]:\//);
+  if (drive !== null) {
+    return drive[0];
+  }
+  return normalized.startsWith("/") ? "/" : "";
+}
+
+/**
  * Split "answers/**\/*.txt" into the deepest literal directory and the rest.
  *
  * Exported for tests, which pass a separator rather than requiring Windows.
@@ -94,20 +115,24 @@ export function splitPattern(
   rawSource: string,
   platformSeparator: string = path.sep,
 ): { root: string; pattern: string } {
+  // Resolve with the matching platform's rules, so a Windows pattern is not
+  // resolved by POSIX semantics (and so these are testable from anywhere).
+  const api = platformSeparator === "\\" ? path.win32 : path.posix;
   const source = normalizePatternSeparators(rawSource, platformSeparator);
-  const segments = source.split("/");
+  const prefix = rootPrefixOf(source);
+  const segments = source.slice(prefix.length).split("/");
+
   const literal: string[] = [];
   let index = 0;
   while (index < segments.length && !GLOB_CHARACTERS.test(segments[index])) {
     literal.push(segments[index]);
     index += 1;
   }
-  // Joining with "/" keeps a drive letter ("C:/answers") and a UNC prefix
-  // ("//server/share") intact; Node accepts forward slashes on Windows, and
-  // `path.resolve` turns either into a proper absolute root.
-  const rootPart = literal.join("/");
+
+  const joined = literal.join("/");
+  const rootPart = prefix.length > 0 ? prefix + joined : joined;
   return {
-    root: path.resolve(rootPart.length === 0 ? "." : rootPart),
+    root: api.resolve(rootPart.length === 0 ? "." : rootPart),
     pattern: segments.slice(index).join("/"),
   };
 }

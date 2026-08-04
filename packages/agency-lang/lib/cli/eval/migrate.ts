@@ -18,6 +18,13 @@ const defaultDependencies: EvalLabelMigrateDependencies = {
 };
 
 export function describeMigration(result: MigrateResult): string[] {
+  if (result.completedEarlierRun) {
+    return [
+      `${result.destDir} already held a completed migration.`,
+      color.dim("  An earlier run was interrupted after writing it but before marking it done."),
+      color.dim("  Nothing was rewritten. The store is ready to use."),
+    ];
+  }
   const lines = [
     `Migrated ${result.sourceDir}`,
     `      to ${result.destDir}`,

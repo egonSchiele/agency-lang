@@ -7,7 +7,19 @@ import { openStore } from "../store.js";
 
 import { planMigration, type MigrationCounts } from "./plan.js";
 import { readV1Store } from "./readV1.js";
-import { copyChecklists, writeStagedStore } from "./write.js";
+import {
+  copyInventory,
+  inventoryChecklists,
+  markerMatches,
+  markerPath,
+  MARKER_PURPOSE,
+  readMarker,
+  removeStaging,
+  stagingDirFor,
+  writeMarker,
+  type StagingMarker,
+} from "./staging.js";
+import { writeStagedStore } from "./write.js";
 
 export class MigrationTargetError extends Error {}
 
@@ -15,196 +27,155 @@ export type MigrateStoreArgs = {
   sourceDir: string;
   destDir: string;
   reportWarning?(message: string): void;
-  /** @internal Test-only interruption point, fired after the logs are written
-   *  and before the manifest that makes the staged store readable. */
+  /** @internal Test-only interruption point, fired after the staging directory
+   *  is claimed and before anything is copied into it. */
   faultBeforePublish?(): void;
 };
 
 export type MigrateResult = MigrationCounts & {
   sourceDir: string;
   destDir: string;
+  /** True when the destination already held this migration's completed output,
+   *  left unfinished by a crash between the rename and the marker's removal. */
+  completedEarlierRun: boolean;
 };
 
-/** Marks a staging directory as ours, and says what it was for. Without it, a
- *  leftover directory is just an unexplained path we must not delete. */
-type StagingMarker = {
-  purpose: "agency-eval-label-migrate";
-  sourceDir: string;
-  destDir: string;
+const NO_COUNTS: MigrationCounts = {
+  oldRecords: 0,
+  newRecords: 0,
+  mergedGroups: 0,
+  occurrences: 0,
+  annotations: 0,
 };
-
-function stagingDirFor(destDir: string): string {
-  return `${destDir}.migrating`;
-}
-
-function markerPath(stagingDir: string): string {
-  return path.join(stagingDir, ".migration.json");
-}
-
-/** Exactly what `writeStagedStore` and its verification step create at the top
- *  level. Removal walks this list rather than the directory, so anything
- *  unexpected inside survives and makes the final rmdir fail loudly. */
-const STAGED_FILES = [
-  ".migration.json",
-  "manifest.json",
-  "outputs.jsonl",
-  "occurrences.jsonl",
-  "labels.jsonl",
-  ".lock",
-];
-
-/**
- * Reclaim a staging directory left behind by an interrupted run.
- *
- * Two independent safeguards, because deleting a directory is the most
- * destructive thing here. First a marker file must say this exact migration
- * created it. Then removal touches only the entries this code writes: if
- * anything else is present, the closing `rmdir` fails rather than taking an
- * unrelated file with it.
- *
- * `fs.rmSync(dir, { recursive: true })` on the whole path is deliberately not
- * used — a wrong `destDir` would then be unrecoverable.
- */
-function reclaimStaging(stagingDir: string, expected: StagingMarker): void {
-  const { sourceDir } = expected;
-  if (!fs.existsSync(stagingDir)) {
-    return;
-  }
-  let marker: StagingMarker | undefined;
-  try {
-    marker = JSON.parse(fs.readFileSync(markerPath(stagingDir), "utf8")) as StagingMarker;
-  } catch {
-    marker = undefined;
-  }
-  if (
-    marker?.purpose !== "agency-eval-label-migrate" ||
-    marker.sourceDir !== expected.sourceDir ||
-    marker.destDir !== expected.destDir
-  ) {
-    throw new MigrationTargetError(
-      `${stagingDir} already exists and was not created by this migration. Move it aside and ` +
-      "try again; refusing to delete a directory this command does not recognise.",
-    );
-  }
-
-  for (const name of STAGED_FILES) {
-    fs.rmSync(path.join(stagingDir, name), { force: true });
-  }
-  // Checklists are a copy of the source tree, so the source is the inventory of
-  // what this migration put there. Removing by that list rather than recursing
-  // means a file that appeared underneath — from any other writer — survives
-  // and makes the closing rmdir fail.
-  removeCopiedChecklists(sourceDir, path.join(stagingDir, "checklists"));
-
-  try {
-    fs.rmdirSync(stagingDir);
-  } catch (error) {
-    throw new MigrationTargetError(
-      `${stagingDir} still holds files this migration did not write, so it was left in place. ` +
-      `Move it aside and try again. (${(error as Error).message})`,
-    );
-  }
-}
-
-/** Mirror the source checklist tree, deleting only paths that exist in both.
- *  Directories go last and only when empty, so an unexpected file keeps its
- *  whole parent chain alive. */
-function removeCopiedChecklists(sourceDir: string, stagedChecklists: string): void {
-  const sourceChecklists = path.join(sourceDir, "checklists");
-  if (!fs.existsSync(stagedChecklists) || !fs.existsSync(sourceChecklists)) {
-    return;
-  }
-  const walk = (relative: string): void => {
-    const from = path.join(sourceChecklists, relative);
-    const to = path.join(stagedChecklists, relative);
-    if (!fs.existsSync(from) || !fs.existsSync(to)) {
-      return;
-    }
-    if (fs.statSync(from).isDirectory()) {
-      for (const entry of fs.readdirSync(from)) {
-        walk(path.join(relative, entry));
-      }
-      try {
-        fs.rmdirSync(to);
-      } catch {
-        // Something else is in there. Leave it; rmdir on the staging root will
-        // report the whole situation.
-      }
-      return;
-    }
-    fs.rmSync(to, { force: true });
-  };
-  walk("");
-}
 
 /**
  * Rewrite a version 1 label store as version 2, somewhere new.
  *
  * Out of place on purpose: every output id changes, because identity moves from
  * the execution that produced a record to the record's own content. Rewriting
- * in place would change every id in a file the user may have copied or
- * scripted against, and "your labels moved but it is fine" is not a message
- * worth trusting to a one-line notice.
+ * in place would change every id in a file the user may have copied or scripted
+ * against, and "your labels moved but it is fine" is not a message worth
+ * trusting to a one-line notice.
  */
 export function migrateStore(args: MigrateStoreArgs): MigrateResult {
   const sourceDir = path.resolve(args.sourceDir);
   const destDir = path.resolve(args.destDir);
+  const warn = args.reportWarning ?? ((message: string) => console.warn(message));
 
   if (!fs.existsSync(sourceDir)) {
     throw new MigrationTargetError(`Source store not found: ${args.sourceDir}`);
   }
+
   if (fs.existsSync(destDir)) {
+    // A destination carrying OUR marker is a publication interrupted after the
+    // rename. Finishing it is the only correct move: the store is already
+    // complete, and refusing would strand it.
+    if (finishInterruptedPublication(sourceDir, destDir, warn)) {
+      return { ...NO_COUNTS, sourceDir, destDir, completedEarlierRun: true };
+    }
     throw new MigrationTargetError(
       `${args.destDir} already exists. Migration writes a new store and never merges into an ` +
       "existing one; choose a path that does not exist yet.",
     );
   }
 
-  const marker: StagingMarker = { purpose: "agency-eval-label-migrate", sourceDir, destDir };
   const stagingDir = stagingDirFor(destDir);
 
   // Hold the SOURCE lock for the whole read: an annotation appended midway
   // would be silently absent from the migrated store.
-  const lock = acquireStoreLock({
-    storeDir: sourceDir,
-    reportWarning: args.reportWarning ?? ((message) => console.warn(message)),
-  });
+  const lock = acquireStoreLock({ storeDir: sourceDir, reportWarning: warn });
   try {
     const snapshot = readV1Store(sourceDir);
     const plan = planMigration(snapshot);
+    const entries = inventoryChecklists(sourceDir);
 
-    reclaimStaging(stagingDir, marker);
-    fs.mkdirSync(stagingDir, { recursive: true });
-    fs.writeFileSync(markerPath(stagingDir), JSON.stringify(marker));
+    reclaimStaging(stagingDir, sourceDir, destDir);
 
-    copyChecklists(sourceDir, stagingDir);
+    // The marker records what will be copied BEFORE any of it exists, so a
+    // crash at any point leaves a directory reclaimable from that inventory
+    // rather than from a source that may have moved on since.
+    const marker: StagingMarker = { purpose: MARKER_PURPOSE, sourceDir, destDir, entries };
+    writeMarker(stagingDir, marker);
     args.faultBeforePublish?.();
+
+    copyInventory(sourceDir, stagingDir, entries);
     writeStagedStore(plan, stagingDir);
 
     // Prove the result opens through the ordinary read path before publishing
     // it. A store that only this code can read is not a migration.
-    const verifyLock = acquireStoreLock({
-      storeDir: stagingDir,
-      reportWarning: args.reportWarning ?? (() => {}),
-    });
-    try {
-      openStore({
-        storeDir: stagingDir,
-        lock: verifyLock,
-        reportWarning: args.reportWarning ?? (() => {}),
-      }).close();
-    } finally {
-      verifyLock.release();
-    }
-    // Publish FIRST, then drop the marker. Removing it before the rename opens
-    // a window where a crash, or a failing rename, leaves a complete staging
-    // directory that the next attempt cannot recognise and so refuses to
-    // reclaim. A marker briefly present in the published store is harmless.
-    fs.renameSync(stagingDir, destDir);
-    fs.rmSync(markerPath(destDir), { force: true });
-    syncDirectory(path.dirname(destDir));
+    verifyStore(stagingDir, warn);
 
-    return { ...plan.counts, sourceDir, destDir };
+    // Publish, make the parent's new entry durable, and only then drop the
+    // marker. Removing it first opens a window where a reboot leaves a complete
+    // store nobody recognises.
+    fs.renameSync(stagingDir, destDir);
+    syncDirectory(path.dirname(destDir));
+    fs.rmSync(markerPath(destDir), { force: true });
+    syncDirectory(destDir);
+
+    return { ...plan.counts, sourceDir, destDir, completedEarlierRun: false };
+  } finally {
+    lock.release();
+  }
+}
+
+/** Reclaim a leftover staging directory, refusing anything this migration did
+ *  not create. */
+function reclaimStaging(stagingDir: string, sourceDir: string, destDir: string): void {
+  if (!fs.existsSync(stagingDir)) {
+    return;
+  }
+  const marker = readMarker(stagingDir);
+  if (!markerMatches(marker, sourceDir, destDir)) {
+    throw new MigrationTargetError(
+      `${stagingDir} already exists and was not created by this migration. Move it aside and ` +
+      "try again; refusing to delete a directory this command does not recognise.",
+    );
+  }
+  removeStaging(stagingDir, marker as StagingMarker);
+}
+
+/**
+ * Complete a publication interrupted between the rename and the marker's
+ * removal.
+ *
+ * Only when the marker matches AND the store opens: a directory that merely
+ * carries a marker but cannot be read is not something to declare finished.
+ */
+function finishInterruptedPublication(
+  sourceDir: string,
+  destDir: string,
+  warn: (message: string) => void,
+): boolean {
+  const marker = readMarker(destDir);
+  if (!markerMatches(marker, sourceDir, destDir)) {
+    return false;
+  }
+  // The manifest is written LAST, so its presence is what distinguishes a
+  // finished store from a directory that merely carries a marker. Checked
+  // before opening, because `openStore` creates a manifest for an empty
+  // directory and would otherwise declare it complete.
+  if (!fs.existsSync(path.join(destDir, "manifest.json"))) {
+    return false;
+  }
+  try {
+    verifyStore(destDir, warn);
+  } catch {
+    return false;
+  }
+  fs.rmSync(markerPath(destDir), { force: true });
+  syncDirectory(destDir);
+  warn(
+    `${destDir} already held a completed migration that was interrupted before it could be ` +
+    "marked finished. Nothing was rewritten; the store is now published.",
+  );
+  return true;
+}
+
+function verifyStore(storeDir: string, warn: (message: string) => void): void {
+  const lock = acquireStoreLock({ storeDir, reportWarning: warn });
+  try {
+    openStore({ storeDir, lock, reportWarning: warn }).close();
   } finally {
     lock.release();
   }

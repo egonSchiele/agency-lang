@@ -141,6 +141,22 @@ function resolveProjectSlug(
   fail("No project. Pass --project <slug>, or link this directory with 'agency remote deploy'/'link'.");
 }
 
+/** Turn a project-read command error into a clean CLI exit. The client is
+ *  responsible for secret-free messages; pull errors already carry their
+ *  committed-destinations context. No command prints a caught stack. */
+export function failProjectCommand(error: unknown): never {
+  if (error instanceof Error) {
+    fail(error.message);
+  }
+  fail(String(error));
+}
+
+/** Write exactly one JSON document to stdout and nothing else, so `--json`
+ *  output is never contaminated by prose or ANSI. */
+export function printJson(value: unknown): void {
+  process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
 /** Turn a client error into a clean CLI exit. An AccountScopeError becomes
  *  guidance naming the resolved API-key variable — the one place that knows both
  *  the scope error (from the client) and the variable name (from the target). */

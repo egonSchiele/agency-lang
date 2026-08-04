@@ -46,6 +46,14 @@ $ greet --name alice --out result.txt -v
 Hello, alice!
 ```
 
+During development, run the file directly. Everything after `--` reaches your
+program:
+
+```
+$ agency run greet.agency -- --name alice --out result.txt -v
+Hello, alice!
+```
+
 ```
 $ greet --help
 Usage: greet [options] [args...]
@@ -146,7 +154,7 @@ export type FlagSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L129))
 
 ### FlagGroups
 
@@ -166,7 +174,7 @@ export type FlagGroups = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L144))
 
 ### ArgsSchema
 
@@ -190,7 +198,7 @@ export type ArgsSchema = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L153))
 
 ### ParsedArgs
 
@@ -212,7 +220,7 @@ export type ParsedArgs = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L159))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L167))
 
 ## Functions
 
@@ -232,4 +240,4 @@ Given the schema, parse `process.argv`.
 
 **Returns:** [ParsedArgs](#parsedargs)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L172))

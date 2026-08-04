@@ -79,28 +79,20 @@ agency run foo.agency
 ```
 
 You can also use [pack](./pack) to produce a standalone script that has no dependencies at all. It inlines the agency package instead of importing it, so it will run anywhere with just Node installed.
-## Passing arguments to the entry node
 
-Arguments after the file (or after `--`, for dash-leading values) are passed
-positionally to the entry node's parameters:
+## Passing arguments to your program
+
+Arguments after the file are passed through to your program, and you read them
+with [`std::args`](../stdlib/args):
 
 ```bash
-agency run greet.agency hello
-# node main(name: string) receives "hello"
+agency run greet.agency -- --name alice
 ```
 
-Three things to know about the mapping:
-
-- Every argument arrives as a **string**, whatever the parameter's declared
-  type. `node main(n: number)` called as `agency run count.agency 3`
-  receives the string `"3"` — there is no coercion or check, so `n + 1`
-  concatenates to `"31"` instead of adding. Parse inside the node
-  (`parseInt(n)`) when a parameter is numeric.
-- An absent argument arrives as `undefined` (parameter defaults apply).
-- Extra arguments — more than the entry node has parameters — are an
-  error: the run prints which arguments were extra and exits non-zero. The
-  usual cause is a mis-quoted value splitting into several arguments.
+The entry node's parameters are **not** filled from the command line. A
+parameter you do not supply another way is `undefined`, and its default applies
+if it has one.
 
 Note when invoking through another tool: `npx agency run file.agency -- x`
-loses the `--` to npx — plain trailing arguments work everywhere, and `--`
-works when invoking the `agency` binary directly.
+loses the `--` to npx. `--` works when invoking the `agency` binary directly,
+and is needed for values that begin with a dash.

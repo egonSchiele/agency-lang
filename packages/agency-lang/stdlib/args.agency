@@ -42,6 +42,14 @@ $ greet --name alice --out result.txt -v
 Hello, alice!
 ```
 
+During development, run the file directly. Everything after `--` reaches your
+program:
+
+```
+$ agency run greet.agency -- --name alice --out result.txt -v
+Hello, alice!
+```
+
 ```
 $ greet --help
 Usage: greet [options] [args...]

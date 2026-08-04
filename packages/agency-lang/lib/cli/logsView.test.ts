@@ -1,9 +1,11 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { logsView, type LogsViewDeps } from "./logsView.js";
+import { logsView, createViewerHost, type LogsViewDeps } from "./logsView.js";
+import type { InputSource } from "@/tui/input/types.js";
+import type { OutputTarget } from "@/tui/output/types.js";
 import { writeGradedRun, writeMultiTraceStatelog } from "../runsExplorer/testFixtures.js";
 import { runRow } from "../runsExplorer/views/viewTestUtils.js";
 
@@ -148,5 +150,122 @@ describe("logsView routing", () => {
     expect(calls.errors).toHaveLength(1);
     expect(calls.errors[0]).toContain("statelog");
     expect(calls.errors[0]).toContain("run directory");
+  });
+});
+
+describe("createViewerHost lifecycle", () => {
+  function fakeInput(destroy = vi.fn()): { input: InputSource; destroy: ReturnType<typeof vi.fn> } {
+    return { input: { destroy } as unknown as InputSource, destroy };
+  }
+  function fakeOutput(destroy = vi.fn()): { output: OutputTarget; destroy: ReturnType<typeof vi.fn> } {
+    return { output: { destroy } as unknown as OutputTarget, destroy };
+  }
+  const viewport = () => ({ rows: 24, cols: 80 });
+
+  it("current-stdin does not swap stdin; controlling-tty swaps and restores once", async () => {
+    const restore = vi.fn();
+    const swap = vi.fn(() => restore);
+    const base = {
+      createInput: () => fakeInput().input,
+      createOutput: () => fakeOutput().output,
+      swapStdinToTty: swap,
+      runViewer: vi.fn().mockResolvedValue("quit"),
+      viewport,
+    };
+    await createViewerHost(base)({ kind: "text", jsonl: "{}", terminalInput: "current-stdin" });
+    expect(swap).not.toHaveBeenCalled();
+
+    await createViewerHost(base)({ kind: "text", jsonl: "{}", terminalInput: "controlling-tty" });
+    expect(swap).toHaveBeenCalledTimes(1);
+    expect(restore).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes jsonl for text and followPath/initialFollow for file", async () => {
+    const runViewer = vi.fn().mockResolvedValue("quit");
+    const host = createViewerHost({
+      createInput: () => fakeInput().input,
+      createOutput: () => fakeOutput().output,
+      swapStdinToTty: () => vi.fn(),
+      runViewer,
+      viewport,
+    });
+    await host({ kind: "text", jsonl: "L", terminalInput: "current-stdin" });
+    expect(runViewer).toHaveBeenCalledWith(expect.objectContaining({ jsonl: "L" }));
+    runViewer.mockClear();
+    await host({ kind: "file", followPath: "/f", initialFollow: true });
+    expect(runViewer).toHaveBeenCalledWith(
+      expect.objectContaining({ followPath: "/f", initialFollow: true }),
+    );
+  });
+
+  it("destroys input/output and restores stdin when runViewer throws", async () => {
+    const input = fakeInput();
+    const output = fakeOutput();
+    const restore = vi.fn();
+    await expect(
+      createViewerHost({
+        createInput: () => input.input,
+        createOutput: () => output.output,
+        swapStdinToTty: () => restore,
+        runViewer: vi.fn().mockRejectedValue(new Error("boom")),
+        viewport,
+      })({ kind: "text", jsonl: "{}", terminalInput: "controlling-tty" }),
+    ).rejects.toThrow("boom");
+    expect(input.destroy).toHaveBeenCalledTimes(1);
+    expect(output.destroy).toHaveBeenCalledTimes(1);
+    expect(restore).toHaveBeenCalledTimes(1);
+  });
+
+  it("destroys acquired input and restores stdin when output creation throws", async () => {
+    const input = fakeInput();
+    const restore = vi.fn();
+    await expect(
+      createViewerHost({
+        createInput: () => input.input,
+        createOutput: () => {
+          throw new Error("no output");
+        },
+        swapStdinToTty: () => restore,
+        runViewer: vi.fn(),
+        viewport,
+      })({ kind: "text", jsonl: "{}", terminalInput: "controlling-tty" }),
+    ).rejects.toThrow("no output");
+    expect(input.destroy).toHaveBeenCalledTimes(1);
+    expect(restore).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs restore when input creation throws", async () => {
+    const restore = vi.fn();
+    await expect(
+      createViewerHost({
+        createInput: () => {
+          throw new Error("no input");
+        },
+        createOutput: () => fakeOutput().output,
+        swapStdinToTty: () => restore,
+        runViewer: vi.fn(),
+        viewport,
+      })({ kind: "text", jsonl: "{}", terminalInput: "controlling-tty" }),
+    ).rejects.toThrow("no input");
+    expect(restore).toHaveBeenCalledTimes(1);
+  });
+
+  it("combines a primary error with a cleanup error", async () => {
+    const error = await createViewerHost({
+      createInput: () => fakeInput().input,
+      createOutput: () =>
+        ({
+          destroy: () => {
+            throw new Error("cleanup");
+          },
+        }) as unknown as OutputTarget,
+      swapStdinToTty: () => vi.fn(),
+      runViewer: vi.fn().mockRejectedValue(new Error("primary")),
+      viewport,
+    })({ kind: "text", jsonl: "{}", terminalInput: "current-stdin" }).catch((caught) => caught);
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors.map((e) => (e as Error).message)).toEqual(
+      expect.arrayContaining(["primary", "cleanup"]),
+    );
   });
 });

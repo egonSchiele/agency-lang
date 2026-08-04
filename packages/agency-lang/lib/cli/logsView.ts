@@ -14,6 +14,8 @@ import { discoverSources, type Source } from "@/runsExplorer/sources.js";
 import type { RunRow } from "@/runsExplorer/rows.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
 import { TerminalOutput } from "@/tui/output/terminal.js";
+import type { InputSource } from "@/tui/input/types.js";
+import type { OutputTarget } from "@/tui/output/types.js";
 
 export type LogsViewOpts = { follow?: boolean; csv?: boolean };
 
@@ -107,6 +109,126 @@ async function runExplorerOnTerminal(
   }
 }
 
+export type ViewerTerminalInput = "current-stdin" | "controlling-tty";
+
+/** What the one viewer host runs: in-memory text (with the input-source choice)
+ *  or a local file with follow. */
+type ViewerSource =
+  | { kind: "text"; jsonl: string; terminalInput: ViewerTerminalInput }
+  | { kind: "file"; followPath: string; initialFollow: boolean };
+
+type ViewerTerminalDependencies = {
+  createInput(): InputSource;
+  createOutput(): OutputTarget;
+  swapStdinToTty(): () => void;
+  runViewer: typeof runViewer;
+  viewport(): { rows: number; cols: number };
+};
+
+type ViewerLifecycleResult = { ok: true } | { ok: false; error: unknown };
+
+/** @internal Test seam for the viewer's terminal lifecycle; production consumers
+ *  use `openViewer` / `logsView`. This is the ONE owner of terminal
+ *  construction, the stdin→TTY swap, viewport, `runViewer`, and cleanup, and it
+ *  releases every acquired resource exactly once — combining a primary and any
+ *  cleanup errors rather than swallowing them. */
+export function createViewerHost(
+  dependencies: ViewerTerminalDependencies,
+): (source: ViewerSource) => Promise<void> {
+  return async function runViewerOnTerminal(source: ViewerSource): Promise<void> {
+    let restoreStdin: (() => void) | undefined;
+    let input: InputSource | undefined;
+    let output: OutputTarget | undefined;
+    let operation: ViewerLifecycleResult = { ok: true };
+    try {
+      // Only the drained-stdin case reopens the controlling TTY for keys.
+      if (source.kind === "text" && source.terminalInput === "controlling-tty") {
+        restoreStdin = dependencies.swapStdinToTty();
+      }
+      input = dependencies.createInput();
+      output = dependencies.createOutput();
+      await dependencies.runViewer(viewerOptions(source, input, output, dependencies.viewport()));
+    } catch (error) {
+      operation = { ok: false, error };
+    } finally {
+      const cleanupErrors = releaseViewerResources(output, input, restoreStdin);
+      throwCombinedLifecycleErrors(operation, cleanupErrors);
+    }
+  };
+}
+
+function viewerOptions(
+  source: ViewerSource,
+  input: InputSource,
+  output: OutputTarget,
+  viewport: { rows: number; cols: number },
+): Parameters<typeof runViewer>[0] {
+  if (source.kind === "text") {
+    return { jsonl: source.jsonl, input, output, viewport };
+  }
+  return {
+    input,
+    output,
+    viewport,
+    followPath: source.followPath,
+    initialFollow: source.initialFollow,
+  };
+}
+
+function releaseViewerResources(
+  output: OutputTarget | undefined,
+  input: InputSource | undefined,
+  restoreStdin: (() => void) | undefined,
+): unknown[] {
+  const errors: unknown[] = [];
+  const attempt = (release: (() => void) | undefined): void => {
+    if (release === undefined) {
+      return;
+    }
+    try {
+      release();
+    } catch (error) {
+      errors.push(error);
+    }
+  };
+  attempt(output?.destroy?.bind(output));
+  attempt(input ? input.destroy.bind(input) : undefined);
+  attempt(restoreStdin);
+  return errors;
+}
+
+function throwCombinedLifecycleErrors(
+  operation: ViewerLifecycleResult,
+  cleanupErrors: unknown[],
+): void {
+  const all = operation.ok ? cleanupErrors : [operation.error, ...cleanupErrors];
+  if (all.length === 0) {
+    return;
+  }
+  if (all.length === 1) {
+    throw all[0];
+  }
+  throw new AggregateError(all, "viewer terminal lifecycle failed");
+}
+
+const defaultViewerHost = createViewerHost({
+  createInput: () => new TerminalInput(),
+  createOutput: () => new TerminalOutput(),
+  swapStdinToTty,
+  runViewer,
+  viewport: () => ({ rows: process.stdout.rows ?? 24, cols: process.stdout.columns ?? 80 }),
+});
+
+/** Open the interactive statelog viewer on already-in-memory JSONL. `remote logs`
+ *  passes `current-stdin` (stdin is intact after an HTTP fetch); the piped local
+ *  `view -` passes `controlling-tty` (stdin was drained for the data). */
+export function openViewer(opts: {
+  jsonl: string;
+  terminalInput: ViewerTerminalInput;
+}): Promise<void> {
+  return defaultViewerHost({ kind: "text", jsonl: opts.jsonl, terminalInput: opts.terminalInput });
+}
+
 /** The original single-file viewer path, behavior unchanged. */
 async function viewStatelogFile(file: string, cliOpts: { follow?: boolean }): Promise<void> {
   if (file === "-") {
@@ -116,53 +238,19 @@ async function viewStatelogFile(file: string, cliOpts: { follow?: boolean }): Pr
     if (cliOpts.follow) {
       console.error("--follow ignored when reading from stdin");
     }
-    await runWith(jsonl, { stdinIsPipe: true });
+    // Piped stdin was drained for the data, so keys come from the controlling TTY.
+    await defaultViewerHost({ kind: "text", jsonl, terminalInput: "controlling-tty" });
     return;
   }
   if (!fs.existsSync(file)) {
     console.error(`File not found: ${file}`);
     process.exit(1);
   }
-  // No pre-read: the viewer reads the file through its own append
-  // reader, whose first read() is the boot read — the old separate
-  // pre-read left a gap the watcher never covered. `followPath` also
-  // lets the user toggle follow at runtime with `f`.
-  await runWith(undefined, {
-    stdinIsPipe: false,
+  await defaultViewerHost({
+    kind: "file",
     followPath: file,
     initialFollow: cliOpts.follow ?? false,
   });
-}
-
-async function runWith(
-  jsonl: string | undefined,
-  opts: { stdinIsPipe: boolean; followPath?: string; initialFollow?: boolean },
-): Promise<void> {
-  // When stdin was used to feed the JSONL data we cannot also use it
-  // for interactive keystrokes — it's been drained and isn't a TTY.
-  // Re-open the controlling terminal directly so the viewer stays
-  // usable for `cat run.jsonl | agency logs view -`.
-  const restore = opts.stdinIsPipe ? swapStdinToTty() : null;
-  const input = new TerminalInput();
-  const output = new TerminalOutput();
-  const viewport = {
-    rows: process.stdout.rows ?? 24,
-    cols: process.stdout.columns ?? 80,
-  };
-  try {
-    await runViewer({
-      jsonl,
-      input,
-      output,
-      viewport,
-      followPath: opts.followPath,
-      initialFollow: opts.initialFollow ?? false,
-    });
-  } finally {
-    input.destroy();
-    if (output.destroy) output.destroy();
-    if (restore) restore();
-  }
 }
 
 // Open the controlling terminal at /dev/tty and graft it onto

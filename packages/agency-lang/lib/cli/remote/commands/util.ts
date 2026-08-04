@@ -88,6 +88,18 @@ function resolveAccountTargetFromBinding(
   options: { host?: string; apiKeyEnv?: string },
   binding: RemoteBinding | null,
 ): AccountTarget {
+  const origin = resolveOrigin(context, options, binding);
+  return { origin, ...resolveApiKey(options) };
+}
+
+/** The canonical origin alone (from `--host`, then `agency.json` `log.host`, then
+ *  the binding), with no credential access. Split out so a project-read command
+ *  can validate its CLI input — origin and slug — BEFORE touching the key. */
+function resolveOrigin(
+  context: RemoteCommandContext,
+  options: { host?: string },
+  binding: RemoteBinding | null,
+): string {
   const selected = options.host ?? context.config.log?.host ?? binding?.origin;
   if (!selected) {
     fail(
@@ -100,20 +112,23 @@ function resolveAccountTargetFromBinding(
       `Invalid statelog host "${selected}". Use an HTTP(S) origin with no path, credentials, query, or fragment.`,
     );
   }
-  return { origin, ...resolveApiKey(options) };
+  return origin;
 }
 
 /** Resolve a project-read target — one coherent origin+slug+key from ONE binding
  *  snapshot. A binding slug is only used when the resolved origin matches the
  *  binding's origin, so a linked production project can't be spliced onto another
- *  host. */
+ *  host. The API key is read LAST, so a CLI-input error (missing host, empty or
+ *  absent `--project`, host/binding mismatch) is reported even with the key
+ *  unset — no credential access before the input is known good. */
 export function resolveProjectTarget(
   context: RemoteCommandContext,
   options: ProjectCommandOptions,
 ): ProjectTarget {
   const binding = readBinding(context.configPath);
-  const account = resolveAccountTargetFromBinding(context, options, binding);
-  return { ...account, projectSlug: resolveProjectSlug(account.origin, options, binding) };
+  const origin = resolveOrigin(context, options, binding);
+  const projectSlug = resolveProjectSlug(origin, options, binding);
+  return { origin, projectSlug, ...resolveApiKey(options) };
 }
 
 function resolveProjectSlug(

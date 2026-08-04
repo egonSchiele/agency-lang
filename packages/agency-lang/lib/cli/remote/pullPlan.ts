@@ -22,16 +22,27 @@ export type PullPlan = {
 };
 
 /** An application failure that names the destinations already committed (the
- *  bundle is not transactional) and any temp sibling left behind. */
+ *  bundle is not transactional) and any temp sibling left behind. The committed
+ *  list is folded into `message` so the sole `error.message` a command prints
+ *  still discloses the already-written files. */
 export class PullApplyError extends Error {
   constructor(
-    message: string,
+    detail: string,
     readonly committed: string[],
     readonly leftoverTemp?: string,
   ) {
-    super(message);
+    super(appendCommitted(detail, committed));
     this.name = "PullApplyError";
   }
+}
+
+/** Fold the already-written destinations into a failure message so a caller that
+ *  prints only `error.message` still tells the user what landed on disk. */
+function appendCommitted(detail: string, committed: string[]): string {
+  if (committed.length === 0) {
+    return detail;
+  }
+  return `${detail}\nAlready written to disk (not rolled back): ${committed.join(", ")}`;
 }
 
 /** Preflight the whole pull. Completes before any mutation; throws on any

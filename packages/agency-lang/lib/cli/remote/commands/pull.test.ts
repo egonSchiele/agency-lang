@@ -84,6 +84,24 @@ describe("runPull", () => {
     expect(errors.join("\n")).toContain("--force");
   });
 
+  it("a mid-apply failure exits non-zero and prints the whole message to stderr", async () => {
+    // The non-transactional contract: PullApplyError folds the committed files
+    // into its message (covered in pullPlan.test.ts); the command must print
+    // that whole message, so stderr names the already-written a.agency too.
+    hoisted.client.pullSource.mockResolvedValue([{ name: "b.agency", contents: "y" }]);
+    pullMocks.planSourcePull.mockReturnValue({ outputDir: "/out", files: [] });
+    pullMocks.applySourcePull.mockImplementation(() => {
+      throw new Error(
+        "pull failed writing b.agency: EEXIST\nAlready written to disk (not rolled back): /out/a.agency",
+      );
+    });
+    await expect(runPull({ project: "proj", host: "https://h" }, context())).rejects.toBeInstanceOf(
+      ProcessExit,
+    );
+    expect(errors.join("\n")).toContain("/out/a.agency");
+    expect(errors.join("\n")).toContain("b.agency");
+  });
+
   it("an unavailable-source failure writes nothing", async () => {
     hoisted.client.pullSource.mockRejectedValue(
       new hoisted.ProjectRequestError("Deployed source is unavailable for one or more files"),

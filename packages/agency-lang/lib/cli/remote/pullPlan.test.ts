@@ -98,9 +98,19 @@ describe("applySourcePull", () => {
       false,
     );
     fs.writeFileSync(path.join(dir, "b.agency"), "concurrent");
-    expect(() => applySourcePull(plan)).toThrowError(
+    let caught: unknown;
+    try {
+      applySourcePull(plan);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toEqual(
       expect.objectContaining({ committed: [path.join(dir, "a.agency")] }),
     );
+    // The message is self-contained: a caller that prints only error.message
+    // still discloses the already-written a.agency.
+    expect((caught as Error).message).toContain("b.agency");
+    expect((caught as Error).message).toContain(path.join(dir, "a.agency"));
     expect(fs.readFileSync(path.join(dir, "a.agency"), "utf8")).toBe("first");
     expect(fs.readFileSync(path.join(dir, "b.agency"), "utf8")).toBe("concurrent");
     expect(leftoverTempSiblings(dir)).toEqual([]);

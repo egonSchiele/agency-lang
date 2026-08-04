@@ -250,6 +250,39 @@ describe("createViewerHost lifecycle", () => {
     expect(restore).toHaveBeenCalledTimes(1);
   });
 
+  it("routes an external SIGINT through the full release path, then exits", async () => {
+    // The host — not the output — owns SIGINT, so an interrupt mid-run tears
+    // down input, output, AND the stdin restore before exiting, instead of the
+    // output's teardown alone.
+    const input = fakeInput();
+    const output = fakeOutput();
+    const restore = vi.fn();
+    const exit = vi
+      .spyOn(process, "exit")
+      .mockImplementation(((_code?: number) => undefined) as never);
+    const sigintBefore = process.listenerCount("SIGINT");
+    const host = createViewerHost({
+      createInput: () => input.input,
+      createOutput: () => output.output,
+      swapStdinToTty: () => restore,
+      // While "running", an external SIGINT arrives.
+      runViewer: vi.fn().mockImplementation(async () => {
+        process.emit("SIGINT");
+      }),
+      viewport,
+    });
+    await host({ kind: "text", jsonl: "{}", terminalInput: "controlling-tty" });
+
+    expect(exit).toHaveBeenCalledWith(130);
+    // release-once: each resource torn down exactly once, from the signal path.
+    expect(input.destroy).toHaveBeenCalledTimes(1);
+    expect(output.destroy).toHaveBeenCalledTimes(1);
+    expect(restore).toHaveBeenCalledTimes(1);
+    // The host removes its own listeners on the way out — no leak.
+    expect(process.listenerCount("SIGINT")).toBe(sigintBefore);
+    exit.mockRestore();
+  });
+
   it("combines a primary error with a cleanup error", async () => {
     const error = await createViewerHost({
       createInput: () => fakeInput().input,

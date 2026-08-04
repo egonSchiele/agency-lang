@@ -131,7 +131,10 @@ type ViewerLifecycleResult = { ok: true } | { ok: false; error: unknown };
  *  use `openViewer` / `logsView`. This is the ONE owner of terminal
  *  construction, the stdin→TTY swap, viewport, `runViewer`, and cleanup, and it
  *  releases every acquired resource exactly once — combining a primary and any
- *  cleanup errors rather than swallowing them. */
+ *  cleanup errors rather than swallowing them. It also owns SIGINT/SIGTERM (the
+ *  output is created without its own interrupt handlers), so an external signal
+ *  runs the SAME release path — output, input, and stdin restore — before
+ *  exiting, rather than the output's teardown alone. */
 export function createViewerHost(
   dependencies: ViewerTerminalDependencies,
 ): (source: ViewerSource) => Promise<void> {
@@ -139,6 +142,26 @@ export function createViewerHost(
     let restoreStdin: (() => void) | undefined;
     let input: InputSource | undefined;
     let output: OutputTarget | undefined;
+    let released = false;
+    // Release every acquired resource exactly once — whether from a signal or
+    // the finally block — so a signal mid-run and the normal path don't double
+    // up. Returns any cleanup errors for the finally to combine.
+    const releaseOnce = (): unknown[] => {
+      if (released) {
+        return [];
+      }
+      released = true;
+      return releaseViewerResources(output, input, restoreStdin);
+    };
+    const onSignal = (exitCode: number) => (): void => {
+      releaseOnce();
+      process.exit(exitCode);
+    };
+    const sigint = onSignal(130);
+    const sigterm = onSignal(143);
+    process.on("SIGINT", sigint);
+    process.on("SIGTERM", sigterm);
+
     let operation: ViewerLifecycleResult = { ok: true };
     try {
       // Only the drained-stdin case reopens the controlling TTY for keys.
@@ -151,8 +174,9 @@ export function createViewerHost(
     } catch (error) {
       operation = { ok: false, error };
     } finally {
-      const cleanupErrors = releaseViewerResources(output, input, restoreStdin);
-      throwCombinedLifecycleErrors(operation, cleanupErrors);
+      process.removeListener("SIGINT", sigint);
+      process.removeListener("SIGTERM", sigterm);
+      throwCombinedLifecycleErrors(operation, releaseOnce());
     }
   };
 }
@@ -213,7 +237,9 @@ function throwCombinedLifecycleErrors(
 
 const defaultViewerHost = createViewerHost({
   createInput: () => new TerminalInput(),
-  createOutput: () => new TerminalOutput(),
+  // The host owns SIGINT/SIGTERM so it can route them through the full release
+  // path; the output must not install its own interrupt-and-exit handlers.
+  createOutput: () => new TerminalOutput({ manageInterruptSignals: false }),
   swapStdinToTty,
   runViewer,
   viewport: () => ({ rows: process.stdout.rows ?? 24, cols: process.stdout.columns ?? 80 }),

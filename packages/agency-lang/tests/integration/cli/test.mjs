@@ -257,6 +257,13 @@ node main() {
   // No `--` here: node passes everything after the script through untouched.
   const packedGreeting = run(dir, "node packed-greet.mjs --name alice");
   assertIncludes(packedGreeting, "Hello, alice!");
+
+  // And `--` must NOT be carried over from the `agency run` form. std::args
+  // reads it as "stop reading flags", so the flag silently becomes a positional
+  // and the default wins. Documented, and pinned here because the failure is
+  // quiet.
+  const packedWithSeparator = run(dir, "node packed-greet.mjs -- --name alice");
+  assertIncludes(packedWithSeparator, "Hello, world!");
   console.log("Test 8c passed");
 
   console.log("=== All CLI tests passed ===");

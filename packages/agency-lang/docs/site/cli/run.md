@@ -93,6 +93,22 @@ The entry node's parameters are **not** filled from the command line. A
 parameter you do not supply another way is `undefined`, and its default applies
 if it has one.
 
+The `--` separates your program's flags from `agency run`'s own. Without it,
+`agency run greet.agency --name alice` fails with `unknown option '--name'`,
+because the CLI tries to claim `--name`. An argument that does not start with a
+dash needs no separator: `agency run greet.agency hello` works as written.
+
+**Only `agency run` needs `--`.** A compiled or packed program takes its flags
+directly:
+
+```bash
+agency compile greet.agency
+node greet.js --name alice
+```
+
+Adding `--` there would hide them. `std::args` reads `--` as "stop reading
+flags", so `node greet.js -- --name alice` leaves `name` at its default and puts
+`--name` and `alice` in `positionals`.
+
 Note when invoking through another tool: `npx agency run file.agency -- x`
-loses the `--` to npx. `--` works when invoking the `agency` binary directly,
-and is needed for values that begin with a dash.
+loses the `--` to npx. It works when invoking the `agency` binary directly.

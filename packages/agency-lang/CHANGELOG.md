@@ -1,8 +1,5 @@
 ## Aug 4 2026 — v0.13.2
 
-### Breaking
-- `agency run file.agency [args...]` no longer fills the entry node's parameters from the command line. Trailing arguments stay in the program's argv, where `std::args` reads them. A `main` parameter not supplied another way is now `undefined`. This makes `std::args` usable: previously any argument to a program whose `main` took no parameters was a fatal error.
-
 ### CLI / Hosting
 - **`agency remote`** gains `inspect`, `pull`, and `logs` introspection commands.
 - **Serve cost seam** — every serve outcome carries a trusted per-invocation usage figure (priced cost, tokens, unknown-price count, completeness) so a project owner cannot under-report hosted spend.

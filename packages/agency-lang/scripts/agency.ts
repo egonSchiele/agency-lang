@@ -27,7 +27,20 @@ import { runProjectsList, runProjectsCreate } from "@/cli/remote/commands/projec
 import type { CreateProjectOptions } from "@/cli/remote/commands/projects.js";
 import { runKeysList, runKeysCreate } from "@/cli/remote/commands/keys.js";
 import type { CreateKeyOptions } from "@/cli/remote/commands/keys.js";
-import type { AccountCommandOptions } from "@/cli/remote/commands/util.js";
+import { runInspect } from "@/cli/remote/commands/inspect.js";
+import { runPull } from "@/cli/remote/commands/pull.js";
+import type { PullOptions } from "@/cli/remote/commands/pull.js";
+import { runLogs } from "@/cli/remote/commands/logs.js";
+import {
+  resolveRemoteLogsMode,
+  requireRemoteLogsEnvironment,
+} from "@/cli/remote/commands/logsMode.js";
+import type { RemoteLogsMode } from "@/cli/remote/commands/logsMode.js";
+import { failProjectCommand } from "@/cli/remote/commands/util.js";
+import type {
+  AccountCommandOptions,
+  ProjectCommandOptions,
+} from "@/cli/remote/commands/util.js";
 import type { RemoteCommandContext } from "@/cli/remote/commands/util.js";
 import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
@@ -536,6 +549,57 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
     .action((name: string, opts: CreateKeyOptions) =>
       runKeysCreate(name, opts, getConfigContext()),
+    );
+
+  const PROJECT_OPTION = "--project <slug>";
+  const PROJECT_DESC = "project slug (default: the linked project)";
+
+  remoteCmd
+    .command("inspect")
+    .description("Show what's deployed (files and their exported nodes)")
+    .option(PROJECT_OPTION, PROJECT_DESC)
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((opts: ProjectCommandOptions) => runInspect(opts, getConfigContext()));
+
+  remoteCmd
+    .command("pull")
+    .description("Download the deployed source to disk")
+    .option("--out <dir>", "output directory (default: current directory)")
+    .option("--force", "overwrite existing files")
+    .option(PROJECT_OPTION, PROJECT_DESC)
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((opts: PullOptions) => runPull(opts, getConfigContext()));
+
+  remoteCmd
+    .command("logs")
+    .description("Open a trace's logs in the viewer (or --json), or --list recent traces")
+    .argument("[traceId]", "trace id (default: the most recent)")
+    .option("--json", "print raw JSON to stdout instead of opening the viewer")
+    .option("--list", "list recent traces instead of opening one")
+    .option(PROJECT_OPTION, PROJECT_DESC)
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action(
+      (
+        traceId: string | undefined,
+        opts: ProjectCommandOptions & { json?: boolean; list?: boolean },
+      ) => {
+        // Resolve and TTY-validate the mode BEFORE any config/credential/effect,
+        // so a bad invocation touches nothing. This is the only TTY-policy site.
+        let mode: RemoteLogsMode;
+        try {
+          mode = resolveRemoteLogsMode(traceId, opts);
+          requireRemoteLogsEnvironment(mode, {
+            stdinIsTTY: process.stdin.isTTY === true,
+            stdoutIsTTY: process.stdout.isTTY === true,
+          });
+        } catch (error) {
+          failProjectCommand(error);
+        }
+        return runLogs(mode, opts, getConfigContext());
+      },
     );
 
   const traceCmd = program

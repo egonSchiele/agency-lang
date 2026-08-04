@@ -14,6 +14,9 @@ const remoteRecipeMocks = vi.hoisted(() => ({
   runProjectsCreate: vi.fn(),
   runKeysList: vi.fn(),
   runKeysCreate: vi.fn(),
+  runInspect: vi.fn(),
+  runPull: vi.fn(),
+  runLogs: vi.fn(),
 }));
 vi.mock("@/cli/remote/commands/whoami.js", () => ({
   runWhoami: remoteRecipeMocks.runWhoami,
@@ -26,6 +29,11 @@ vi.mock("@/cli/remote/commands/keys.js", () => ({
   runKeysList: remoteRecipeMocks.runKeysList,
   runKeysCreate: remoteRecipeMocks.runKeysCreate,
 }));
+// inspect/pull/logs recipes are mocked; logsMode and util stay REAL so the
+// registration's mode/TTY preflight and clean-exit are exercised.
+vi.mock("@/cli/remote/commands/inspect.js", () => ({ runInspect: remoteRecipeMocks.runInspect }));
+vi.mock("@/cli/remote/commands/pull.js", () => ({ runPull: remoteRecipeMocks.runPull }));
+vi.mock("@/cli/remote/commands/logs.js", () => ({ runLogs: remoteRecipeMocks.runLogs }));
 
 import {
   createProgram,
@@ -145,11 +153,14 @@ describe("agency CLI command tree", () => {
     expect(remote?.commands.map((command) => command.name()).sort()).toEqual([
       "call",
       "deploy",
+      "inspect",
       "keys",
       "link",
+      "logs",
       "ls",
       "open",
       "projects",
+      "pull",
       "whoami",
     ]);
   });
@@ -382,5 +393,83 @@ describe("remote management command registration", () => {
       program.parseAsync(["node", "agency", "remote", "keys", "create", "ci"]),
     ).rejects.toMatchObject({ code: "commander.missingMandatoryOptionValue" });
     expect(remoteRecipeMocks.runKeysCreate).not.toHaveBeenCalled();
+  });
+
+  it("remote inspect forwards options and context", async () => {
+    await createProgram().parseAsync([
+      "node", "agency", "remote", "inspect", "--project", "p", "--host", "https://h",
+    ]);
+    expect(remoteRecipeMocks.runInspect).toHaveBeenCalledWith(
+      { project: "p", host: "https://h" },
+      CONTEXT,
+    );
+  });
+
+  it("remote pull forwards --out/--force and context", async () => {
+    await createProgram().parseAsync([
+      "node", "agency", "remote", "pull", "--out", "/o", "--force", "--project", "p",
+    ]);
+    expect(remoteRecipeMocks.runPull).toHaveBeenCalledWith(
+      { out: "/o", force: true, project: "p" },
+      CONTEXT,
+    );
+  });
+
+  it("remote logs --json forwards a fetch/json mode", async () => {
+    await createProgram().parseAsync(["node", "agency", "remote", "logs", "--json", "--project", "p"]);
+    expect(remoteRecipeMocks.runLogs).toHaveBeenCalledWith(
+      { kind: "fetch", traceId: undefined, output: "json" },
+      { json: true, project: "p" },
+      CONTEXT,
+    );
+  });
+
+  it("remote logs <id> --json forwards the trace id", async () => {
+    await createProgram().parseAsync(["node", "agency", "remote", "logs", "t1", "--json"]);
+    expect(remoteRecipeMocks.runLogs).toHaveBeenCalledWith(
+      { kind: "fetch", traceId: "t1", output: "json" },
+      { json: true },
+      CONTEXT,
+    );
+  });
+
+  it("remote logs --list forwards a list mode", async () => {
+    await createProgram().parseAsync(["node", "agency", "remote", "logs", "--list"]);
+    expect(remoteRecipeMocks.runLogs).toHaveBeenCalledWith(
+      { kind: "list", json: false },
+      { list: true },
+      CONTEXT,
+    );
+  });
+
+  it("remote logs <id> --list is rejected and runs no recipe", async () => {
+    const exit = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as never);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      createProgram().parseAsync(["node", "agency", "remote", "logs", "foo", "--list"]),
+    ).rejects.toThrow("exit 1");
+    expect(remoteRecipeMocks.runLogs).not.toHaveBeenCalled();
+    exit.mockRestore();
+    err.mockRestore();
+  });
+
+  it("remote logs viewer mode on a non-TTY exits before the recipe, suggesting --json", async () => {
+    const exit = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as never);
+    const messages: string[] = [];
+    const err = vi.spyOn(console, "error").mockImplementation((...a: unknown[]) => {
+      messages.push(a.join(" "));
+    });
+    // vitest runs without a TTY, so plain `remote logs` (viewer) trips the precondition.
+    await expect(
+      createProgram().parseAsync(["node", "agency", "remote", "logs", "--project", "p"]),
+    ).rejects.toThrow("exit 1");
+    expect(remoteRecipeMocks.runLogs).not.toHaveBeenCalled();
+    expect(messages.join("\n")).toContain("--json");
+    exit.mockRestore();
+    err.mockRestore();
   });
 });

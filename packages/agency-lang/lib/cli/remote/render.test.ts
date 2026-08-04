@@ -8,8 +8,12 @@ import {
   renderProjectCreated,
   renderKeys,
   renderCreatedKey,
+  renderAgent,
+  renderTraceList,
+  renderPullSummary,
 } from "./render.js";
 import type { CreatedKey, KeySummary } from "../statelog/accountClient.js";
+import type { AgentMetadata } from "../statelog/projectClient.js";
 
 // Colour wraps each token in ANSI codes; strip them so assertions read plainly.
 // eslint-disable-next-line no-control-regex
@@ -146,5 +150,54 @@ describe("renderCreatedKey", () => {
 
   it("never leaks the plaintext key into the list view", () => {
     expect(strip(renderKeys([createdKey]))).not.toContain("plain-once");
+  });
+});
+
+describe("renderAgent", () => {
+  const agent: AgentMetadata = {
+    entryPoint: "main.agency",
+    lastUploadAt: "2026-08-03T00:00:00Z",
+    files: [
+      { name: "main.agency", nodeNames: ["main", "step2"], createdAt: "t", updatedAt: "t" },
+      { name: "helper.agency", nodeNames: [], createdAt: "t", updatedAt: "t" },
+    ],
+  };
+
+  it("shows entry point, last upload, node names, and the ls hint", () => {
+    const out = strip(renderAgent(agent));
+    expect(out).toContain("main.agency");
+    expect(out).toContain("2026-08-03T00:00:00Z");
+    expect(out).toContain("main, step2");
+    expect(out).toContain("—"); // helper.agency has no nodes
+    expect(out).toContain("remote ls");
+    expect(out).toContain("exported nodes");
+  });
+
+  it("handles a null entry point and no files", () => {
+    const out = strip(renderAgent({ entryPoint: null, lastUploadAt: null, files: [] }));
+    expect(out).toContain("No files deployed.");
+  });
+});
+
+describe("renderTraceList", () => {
+  it("renders aligned rows and an empty state", () => {
+    expect(strip(renderTraceList([]))).toContain("No traces yet.");
+    const out = strip(
+      renderTraceList([
+        { id: "trace-b", createdAt: "2026-08-03T02:00:00Z" },
+        { id: "trace-a", createdAt: "2026-08-03T01:00:00Z" },
+      ]),
+    );
+    expect(out).toContain("trace-b");
+    expect(out).toContain("trace-a");
+  });
+});
+
+describe("renderPullSummary", () => {
+  it("lists the written files under the output directory", () => {
+    const out = strip(renderPullSummary(["main.agency", "helper.agency"], "/out"));
+    expect(out).toContain("Pulled 2 files to /out");
+    expect(out).toContain("main.agency");
+    expect(out).toContain("helper.agency");
   });
 });

@@ -4,6 +4,7 @@
 
 import { color } from "@/utils/termcolors.js";
 import type { ServeManifest } from "../statelog/serveClient.js";
+import type { AgentMetadata, TraceSummary } from "../statelog/projectClient.js";
 import type { RemoteBinding } from "./binding.js";
 import type {
   ProjectSummary,
@@ -98,6 +99,49 @@ export function renderCreatedKey(key: CreatedKey): string {
 
 /** A plain, ANSI-free aligned table. Colour is applied around the table by the
  *  renderers, never inside a cell, so byte-width never skews alignment. */
+export function renderAgent(agent: AgentMetadata): string {
+  const lines: string[] = [
+    `${color.bold("Entry point:")} ${agent.entryPoint ?? NONE}`,
+    `${color.bold("Last upload:")} ${agent.lastUploadAt ?? NONE}`,
+    "",
+  ];
+  if (agent.files.length === 0) {
+    lines.push(color.dim("No files deployed."));
+  } else {
+    lines.push(
+      formatStaticTable(
+        ["FILE", "NODES"],
+        agent.files.map((file) => [
+          file.name,
+          file.nodeNames.length > 0 ? file.nodeNames.join(", ") : NONE,
+        ]),
+      ),
+    );
+  }
+  lines.push(
+    "",
+    color.dim(
+      "Nodes shown are exported nodes; run `remote ls` for the full callable manifest (functions too).",
+    ),
+  );
+  return lines.join("\n");
+}
+
+export function renderTraceList(traces: TraceSummary[]): string {
+  if (traces.length === 0) {
+    return color.dim("No traces yet.");
+  }
+  return formatStaticTable(
+    ["TRACE", "CREATED"],
+    traces.map((trace) => [trace.id, trace.createdAt]),
+  );
+}
+
+export function renderPullSummary(names: string[], outputDir: string): string {
+  const header = `${color.green("Pulled")} ${names.length} file${names.length === 1 ? "" : "s"} to ${outputDir}`;
+  return [header, ...names.map((name) => `  ${name}`)].join("\n");
+}
+
 function formatStaticTable(headers: string[], rows: string[][]): string {
   const widths = headers.map((header, columnIndex) => {
     const values = rows.map((row) => row[columnIndex] ?? "");

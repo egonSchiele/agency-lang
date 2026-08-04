@@ -3,7 +3,9 @@ import {
   isPayableCost,
   sendInvocationUsageToParent,
   sendInvocationUsageIncompleteToParent,
+  sendModelAttributionIncompleteToParent,
 } from "./costTelemetry.js";
+import { completionUsageDelta, paidCostDelta } from "./invocationUsage.js";
 import { StateStack } from "./state/stateStack.js";
 import { CostGuard } from "./guard.js";
 
@@ -37,6 +39,25 @@ describe("sendInvocationUsageToParent", () => {
     process.send = send as any;
     sendInvocationUsageToParent(delta);
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsage", ...delta });
+  });
+
+  it("relays attribution for a completion and an addCost charge", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+
+    sendInvocationUsageToParent(completionUsageDelta({ cost: 0.1, inputTokens: 1, outputTokens: 1, model: "opus" }));
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({
+      type: "invocationUsage",
+      attribution: { kind: "model", model: "opus" },
+    }));
+
+    send.mockClear();
+    sendInvocationUsageToParent(paidCostDelta(0.03));
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({
+      type: "invocationUsage",
+      attribution: { kind: "unattributed" },
+    }));
   });
 
   it("sends a zero-cost unpriced delta (tokens/unknown must not be dropped)", () => {
@@ -79,6 +100,19 @@ describe("sendInvocationUsageIncompleteToParent", () => {
     vi.stubEnv("AGENCY_IPC", "1");
     sendInvocationUsageIncompleteToParent();
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsageIncomplete" });
+  });
+});
+
+describe("sendModelAttributionIncompleteToParent", () => {
+  it("sends the marker in IPC mode and no-ops otherwise", () => {
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    sendModelAttributionIncompleteToParent();
+    expect(send).not.toHaveBeenCalled();
+
+    vi.stubEnv("AGENCY_IPC", "1");
+    sendModelAttributionIncompleteToParent();
+    expect(send).toHaveBeenCalledExactlyOnceWith({ type: "modelAttributionIncomplete" });
   });
 });
 

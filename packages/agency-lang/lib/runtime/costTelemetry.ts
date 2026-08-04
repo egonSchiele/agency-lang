@@ -17,7 +17,7 @@
  */
 
 import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js";
-import type { InvocationUsageDelta } from "./invocationUsage.js";
+import type { InvocationUsageDelta, UsageAttribution } from "./invocationUsage.js";
 
 /** Legacy cost-only telemetry message. No longer emitted by this codebase (the
  *  full-delta message below supersedes it), but still ACCEPTED on receive so a
@@ -29,13 +29,16 @@ export type IpcTelemetryMessage = {
 
 /** Full per-invocation usage delta relayed to the parent. A legal delta may
  *  carry zero priced cost with nonzero tokens and/or one unknown-cost call (an
- *  unpriced completion). */
+ *  unpriced completion). `attribution` rides along so the parent can bucket the
+ *  charge per model; its ABSENCE on a measurable message means an older child
+ *  lost the model (the parent flags `modelAttributionComplete`). */
 export type IpcInvocationUsageMessage = {
   type: "invocationUsage";
   pricedCost: number;
   inputTokens: number;
   outputTokens: number;
   unknownCostCallCount: number;
+  attribution?: UsageAttribution;
 };
 
 /** Relayed once when a process can no longer guarantee that all of its (or a
@@ -45,10 +48,18 @@ export type IpcInvocationUsageIncompleteMessage = {
   type: "invocationUsageIncomplete";
 };
 
+/** Relayed once when a process booked priced spend to `unattributed` because a
+ *  descendant lost the charge's model (a version-skewed child) — flags the
+ *  owning invocation's `modelAttributionComplete` false. Carries no cost. */
+export type IpcModelAttributionIncompleteMessage = {
+  type: "modelAttributionIncomplete";
+};
+
 export type IpcUsageMessage =
   | IpcTelemetryMessage
   | IpcInvocationUsageMessage
-  | IpcInvocationUsageIncompleteMessage;
+  | IpcInvocationUsageIncompleteMessage
+  | IpcModelAttributionIncompleteMessage;
 
 /** The wire contract for a legacy billable cost: a positive finite number.
  *  Used only when normalizing a legacy `{ costUsd }` message on receive. */
@@ -91,4 +102,10 @@ export function sendInvocationUsageToParent(delta: InvocationUsageDelta): void {
 export function sendInvocationUsageIncompleteToParent(): void {
   if (!canSend()) return;
   trySend({ type: "invocationUsageIncomplete" });
+}
+
+/** Relay the model-attribution-incomplete marker to the parent, once. */
+export function sendModelAttributionIncompleteToParent(): void {
+  if (!canSend()) return;
+  trySend({ type: "modelAttributionIncomplete" });
 }

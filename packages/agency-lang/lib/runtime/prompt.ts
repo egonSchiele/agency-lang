@@ -22,6 +22,7 @@ import {
 } from "./turnBoundary.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
 import { accountCompletionUsage, meteredDispatch } from "./recordPaidUsage.js";
+import { resolveCompletionModel } from "./modelIdentity.js";
 import { abortableSleep } from "../stdlib/abortable.js";
 import { decideRetry, decideValidationRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig, LLMRetryReason } from "./llmRetry.js";
@@ -729,7 +730,7 @@ async function _runPrompt({
   // request setup, not the actual round-trip time.
   const endTime = performance.now();
 
-  const modelName = completion.model || clientConfig.model || "unknown model";
+  const modelName = resolveCompletionModel(completion.model, clientConfig.model);
 
   ctx.statelogClient.promptCompletion({
     messages: withMessageLabels(messages),
@@ -770,7 +771,7 @@ async function _runPrompt({
   // descendants' spend in real time; mid-fork trips fire on the next
   // enforceGuards() call. See docs/superpowers/specs/2026-05-20-thread-
   // builtins-and-stdlib-design.md.
-  accountCompletionUsage(ctx, targetStack, completion);
+  accountCompletionUsage(ctx, targetStack, completion, modelName);
   // NOTE: no post-charge enforceGuards here anymore. A trip caused by
   // THIS charge is raised resumably at the caller's next guard gate
   // (round.N.guardGate / guardGate.final in runPrompt) — the paid work

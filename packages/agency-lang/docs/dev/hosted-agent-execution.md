@@ -328,6 +328,48 @@ unsent child telemetry cannot be ruled out — making `usage` a trusted **lower
 bound**, relayed upward once. Normal `result`/`interrupted` completions stay
 complete (IPC FIFO guarantees all telemetry preceded the terminal message).
 
+**Per-model breakdown.** Alongside the flat totals, `usage` carries a
+`models` map (`{ [model]: { pricedCost, inputTokens, outputTokens } }`) and an
+`unattributed` row of the same shape. The breakdown rides the *same* delta and
+IPC wire as the total, so it includes subprocess-relayed spend that the
+process-local `__tokenStats.models` (used by `/cost`) cannot cross. Each charge
+carries a discriminated `attribution` — `{ kind:"model", model }` (a completion)
+or `{ kind:"unattributed" }` (`addCost`: memory / image, which has no model). A
+scalar model field would not do: the immediately-preceding runtime (#801) relays
+usage deltas with *no* attribution, and "no model" from `addCost` must stay
+distinct from "model lost by an old child." Cost per model is a single number —
+input-vs-output dollars are **not** split (the provider gives one `totalCost`
+through this seam). Rows plus `unattributed` reconcile to the flat `pricedCost`
+within `usageReconcileTolerance(pricedCost)` = `max(1e-9, 1e-9·|pricedCost|)`
+(relative+absolute, because float ulp drift scales with magnitude); tokens
+reconcile exactly. The flat total stays authoritative — a host bills
+`pricedCost`, not the row sum.
+
+**Model attribution — the third completeness axis.** `modelAttributionComplete`
+(on the usage) starts true and flips false the moment a *measurable* child
+delta arrives over IPC with **no** attribution: an older child (a #801 runtime,
+or the legacy `{ costUsd }` telemetry handler) whose real LLM spend books to
+`unattributed` with its model lost. This is distinct from both `pricingComplete`
+(price availability) and `usageComplete` (telemetry delivery): pricing and
+delivery can both be complete while the model labels are not. The flag is raised
+only at the IPC boundary (`accountChildUsageWithProvenance`) and relayed upward
+once, mirroring `usageComplete`; `addCost` and normal completions always carry
+an explicit attribution and never trip it. A host seeing it false should read
+`unattributed` as "includes spend of unknown model," not runtime overhead.
+
+**Model identity.** The per-model key is `resolveCompletionModel(completion.model,
+clientConfig.model)` (`lib/runtime/modelIdentity.ts`): the provider-reported model
+wins, else the requested/configured model, else the literal `"unknown model"`.
+The string is used verbatim (no provider-name normalization); a real model named
+`"unknown model"` is an ordinary row, never `unattributed`.
+
+**Rollout / absence.** `models`, `unattributed`, and `modelAttributionComplete`
+are optional on the public `InvocationUsage` type (a required field would break
+host code that constructs it); the current runtime always emits them. A host that
+sees them **absent** is reading an older runtime's snapshot — it must fall back
+to the flat totals and record "breakdown unavailable," never treat absence as
+zero spend.
+
 **The invocation boundary.** `runNode` / `runExportedFunction` /
 `respondToInterrupts` each split into an internal core that returns a
 `ServedInvocationOutcome<T>` (`{ status:"returned", value } | { status:"threw",

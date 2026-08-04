@@ -21,6 +21,7 @@ import {
 import {
   sendInvocationUsageToParent,
   sendInvocationUsageIncompleteToParent,
+  sendModelAttributionIncompleteToParent,
 } from "./costTelemetry.js";
 
 /** Account one paid delta against an EXPLICIT target (out-of-frame callers such
@@ -52,6 +53,7 @@ export function accountCompletionUsage(
     cost?: { totalCost?: number } | null;
     usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number } | null;
   },
+  model: string,
 ): void {
   recordPaidUsageAt(
     { ctx, stack: targetStack },
@@ -59,6 +61,7 @@ export function accountCompletionUsage(
       cost: completion.cost?.totalCost,
       inputTokens: completion.usage?.inputTokens,
       outputTokens: completion.usage?.outputTokens,
+      model,
     }),
   );
   targetStack.localTokens += completion.usage?.totalTokens ?? 0;
@@ -108,5 +111,16 @@ export function meteredDispatch<T>(
 export function markInvocationUsageIncompleteAt(ctx: RuntimeContext<GraphState>): void {
   if (ctx.invocationUsage.markIncomplete()) {
     sendInvocationUsageIncompleteToParent();
+  }
+}
+
+/** Mark this invocation's model attribution as no longer trustworthy (a
+ *  measurable child charge arrived with no attribution — a version-skewed
+ *  child). Relays the marker upward once, only on the first transition, so a
+ *  mid-tier process forwards a descendant's degraded attribution without
+ *  spamming. */
+export function markModelAttributionIncompleteAt(ctx: RuntimeContext<GraphState>): void {
+  if (ctx.invocationUsage.markModelAttributionIncomplete()) {
+    sendModelAttributionIncompleteToParent();
   }
 }

@@ -246,6 +246,39 @@ describe("HTTP adapter", () => {
     expect(body.value).toBe("resumed");
   });
 
+  it("preserves the usage breakdown on interrupt and resume results", async () => {
+    // The adapter copies the whole usage object on every branch (withUsage), so
+    // a synthetic populated snapshot proves the new per-model fields survive the
+    // generic node-interrupt and resume paths — the feature does not change
+    // interrupt execution, so a real meter is unnecessary here (that path is
+    // covered by serveCostSeam.integration.test.ts).
+    const breakdownUsage = {
+      pricedCost: 0.03, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0, pricingComplete: true,
+      models: {}, unattributed: { pricedCost: 0.03, inputTokens: 0, outputTokens: 0 },
+      modelAttributionComplete: true,
+    };
+    const pausedValue = { paused: true };
+    const { exports } = makeExports();
+    const mainNode = exports.find((item) => item.kind === "node")!;
+    mainNode.invokeServed = async () => returnedOutcome(pausedValue, { usage: breakdownUsage });
+
+    const handler = createHttpHandler({
+      exports,
+      logger: createLogger("error"),
+      hasInterrupts: (data) => data === pausedValue,
+      respondToInterrupts: async () => returnedOutcome({ data: "resumed" }, { usage: breakdownUsage }),
+    });
+
+    const paused = await handler("POST", "/node/main", {});
+    expect(paused.usage).toEqual(breakdownUsage);
+
+    const resumed = await handler("POST", "/resume", {
+      interrupts: [makeInterrupt("id-1")],
+      responses: [{ type: "approve" }],
+    });
+    expect(resumed.usage).toEqual(breakdownUsage);
+  });
+
   it("POST /resume rejects non-array inputs", async () => {
     const result = await handler("POST", "/resume", {
       interrupts: "not-array",

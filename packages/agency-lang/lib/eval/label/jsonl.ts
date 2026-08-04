@@ -27,6 +27,25 @@ export type OpenJsonlArgs<Value> = {
 export type OpenedJsonl<Value> = {
   rows(): readonly DeepReadonly<Value>[];
   /**
+   * The row with this identity, if the log holds one.
+   *
+   * Exposed so callers that need "already present?" reuse the index this log
+   * already maintains. A second index built outside would be a second owner of
+   * the same question, free to disagree with this one.
+   */
+  find(identity: string): DeepReadonly<Value> | undefined;
+  /**
+   * The row with this identity, or the one `build` produces, appended.
+   *
+   * Distinct from `appendExact`, which compares content and throws when it
+   * differs. A log whose rows carry a field outside their identity, such as a
+   * capture time or an observation time, cannot use that: rebuilding the row
+   * tomorrow yields the same identity with a different timestamp, and
+   * `appendExact` would call a legitimate re-ingest corruption. Here the stored
+   * row wins and the rebuilt one is discarded.
+   */
+  findOrAppend(identity: string, build: () => Value): { row: Value; added: boolean };
+  /**
    * Append unless this exact row is already present.
    *
    * `"replayed"` means the identity is present and the content matches
@@ -48,6 +67,7 @@ export type OpenedJsonl<Value> = {
 export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<Value> {
   const loaded = readAll(args);
   const canonicalById: Record<string, string> = Object.create(null);
+  const rowById: Record<string, Value> = Object.create(null);
   for (let index = 0; index < loaded.length; index += 1) {
     const identity = args.identityOf(loaded[index]);
     const canonical = canonicalize(loaded[index]);
@@ -64,11 +84,26 @@ export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<
       );
     }
     canonicalById[identity] = canonical;
+    rowById[identity] = loaded[index];
   }
 
   return {
     rows(): readonly DeepReadonly<Value>[] {
       return loaded as readonly DeepReadonly<Value>[];
+    },
+
+    find(identity: string): DeepReadonly<Value> | undefined {
+      return rowById[identity] as DeepReadonly<Value> | undefined;
+    },
+
+    findOrAppend(identity: string, build: () => Value): { row: Value; added: boolean } {
+      const existing = rowById[identity];
+      if (existing !== undefined) {
+        return { row: existing, added: false };
+      }
+      const row = build();
+      this.appendExact(row);
+      return { row, added: true };
     },
 
     appendExact(value: Value): "appended" | "replayed" {
@@ -91,6 +126,7 @@ export function openJsonlStrict<Value>(args: OpenJsonlArgs<Value>): OpenedJsonl<
       appendDurably(args.filePath, `${JSON.stringify(validated)}\n`);
       loaded.push(validated);
       canonicalById[identity] = canonical;
+      rowById[identity] = validated;
       return "appended";
     },
   };
@@ -155,7 +191,7 @@ function parseLine<Value>(args: OpenJsonlArgs<Value>, line: string, lineNumber: 
  * already told the person was recorded — and this store exists precisely
  * because those judgements cannot be regenerated.
  */
-function appendDurably(filePath: string, line: string): void {
+export function appendDurably(filePath: string, line: string): void {
   const handle = fs.openSync(filePath, "a");
   try {
     fs.writeSync(handle, line);
@@ -173,7 +209,7 @@ function appendDurably(filePath: string, line: string): void {
  * ignored: some platforms and filesystems refuse it, and that is not a reason
  * to fail a write that otherwise succeeded.
  */
-function syncDirectory(directoryPath: string): void {
+export function syncDirectory(directoryPath: string): void {
   let handle: number | undefined;
   try {
     handle = fs.openSync(directoryPath, "r");

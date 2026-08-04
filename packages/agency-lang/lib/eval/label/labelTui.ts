@@ -10,6 +10,7 @@ import { color } from "@/utils/termcolors.js";
 
 import type { LabelingSessionController } from "./controller.js";
 import type { SessionAction, SessionSnapshot } from "./session.js";
+import type { Fields } from "./types.js";
 
 /** Highlighting is a nice-to-have; showing the actual output is not. */
 const CONTENT_KEEP_RATIO = 0.9;
@@ -35,7 +36,7 @@ export { stripAnsi, visualWidth };
  *
  * Styling is applied afterwards, so the tool's own colour is unaffected.
  */
-export function sanitizeUntrusted(text: string): string {
+export function stripControlCharacters(text: string): string {
   let out = "";
   for (const character of text) {
     const code = character.codePointAt(0) ?? 0;
@@ -48,7 +49,11 @@ export function sanitizeUntrusted(text: string): string {
     const isC1 = code >= 0x80 && code <= 0x9f;
     out += isC0 || isDelete || isC1 ? "�" : character;
   }
-  return escapeStyleTags(out);
+  return out;
+}
+
+export function sanitizeUntrusted(text: string): string {
+  return escapeStyleTags(stripControlCharacters(text));
 }
 
 /**
@@ -274,7 +279,6 @@ export function labelScreen(args: RenderArgs): Element {
     line(headerLine(snapshot, args.storeLabel)),
     line("", { fill: "━", fg: "gray" }),
     line(itemLine(snapshot)),
-    line(` ${color.dim(sanitizeUntrusted(snapshot.currentItem.task).split("\n")[0])}`),
     row(
       { height: paneHeight },
       pane(args.body, { width: leftWidth, height: paneHeight, scrollOffset: args.scroll }),
@@ -369,6 +373,53 @@ export function isQuitKey(event: KeyEvent): boolean {
   return event.key === "q" || (event.key === "c" && event.ctrl === true);
 }
 
+/**
+ * Order the fields of one record for display.
+ *
+ * The store's `fieldOrder` decides what it knows about; anything else follows
+ * alphabetically rather than in object-key order, so the layout does not depend
+ * on which loader happened to build the record.
+ */
+export function orderFieldNames(
+  fields: Fields,
+  fieldOrder: readonly string[],
+): string[] {
+  const present = Object.keys(fields);
+  const known = fieldOrder.filter((name) => present.includes(name));
+  const rest = present.filter((name) => !known.includes(name)).sort();
+  return [...known, ...rest];
+}
+
+/**
+ * Every field as one scrollable block: a dim header, then the value.
+ *
+ * Field names come from a charset that cannot express a control character or a
+ * style tag, but the values are arbitrary text from a model, so they go through
+ * `sanitizeUntrusted` before anything else touches them.
+ */
+export function renderFields(
+  fields: Fields,
+  fieldOrder: readonly string[],
+  width: number,
+): string[] {
+  const out: string[] = [];
+  for (const name of orderFieldNames(fields, fieldOrder)) {
+    if (out.length > 0) {
+      out.push("");
+    }
+    out.push(color.brightBlack(`${name}:`));
+    // Order matters and is not interchangeable. Controls come off first, so the
+    // highlighter never sees them; style tags are escaped LAST, because the
+    // markdown highlighter strips backslash escapes — sanitizing before it runs
+    // hands the escaped text straight back as live markup.
+    const rendered = renderMarkdownSafely(stripControlCharacters(fields[name]));
+    for (const source of wrapText(escapeStyleTags(rendered), width)) {
+      out.push(source);
+    }
+  }
+  return out;
+}
+
 // --- the loop ------------------------------------------------------------
 
 export type RunLabelTuiArgs = {
@@ -379,6 +430,9 @@ export type RunLabelTuiArgs = {
    *  dimensions, so without this a resize leaves stale pane widths, wrapping
    *  and scroll bounds until restart. */
   currentSize?: () => { width: number; height: number };
+  /** The store's display order for fields. Anything not listed renders after
+   *  it, alphabetically, so a field added by a later ingest is never hidden. */
+  fieldOrder?: readonly string[];
 };
 
 type BodyCache = { outputId: string; width: number; lines: string[] };
@@ -414,8 +468,7 @@ export async function runLabelTui(args: RunLabelTuiArgs): Promise<void> {
     if (state.body?.outputId === item.outputId && state.body.width === leftWidth) {
       return state;
     }
-    const rendered = renderMarkdownSafely(sanitizeUntrusted(item.text));
-    const wrapped = rendered.split("\n").flatMap((source) => wrapText(source, leftWidth));
+    const wrapped = renderFields(item.fields, args.fieldOrder ?? [], leftWidth);
     return { ...state, body: { outputId: item.outputId, width: leftWidth, lines: wrapped } };
   };
 

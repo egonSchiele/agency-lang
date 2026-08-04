@@ -111,24 +111,19 @@ describe("resolveAnnotator", () => {
 
 describe("evalLabel", () => {
   it("requires a checklist", async () => {
-    await expect(evalLabel({ source: sourceDir }, dependencies()))
+    await expect(evalLabel({ }, dependencies()))
       .rejects.toThrow(/--checklist is required/);
   });
 
   it("reports a missing checklist file", async () => {
-    await expect(evalLabel({ source: sourceDir, checklist: path.join(root, "nope.json") }, dependencies()))
+    await expect(evalLabel({ checklist: path.join(root, "nope.json") }, dependencies()))
       .rejects.toThrow(/Checklist file not found/);
-  });
-
-  it("reports a missing source directory", async () => {
-    await expect(evalLabel({ source: path.join(root, "nope"), checklist: checklistFile }, dependencies()))
-      .rejects.toThrow(/Source run directory not found/);
   });
 
   it("refuses a non-interactive terminal before opening a session", async () => {
     const openSession = vi.fn(async () => fakeController());
     const deps = dependencies({ isInteractive: () => false, openSession: openSession as never });
-    await expect(evalLabel({ source: sourceDir, checklist: checklistFile }, deps))
+    await expect(evalLabel({ checklist: checklistFile }, deps))
       .rejects.toThrow(/interactive terminal/i);
     expect(openSession).not.toHaveBeenCalled();
   });
@@ -141,7 +136,7 @@ describe("evalLabel", () => {
       makeScreen: () => ({ destroy: destroyed }) as never,
       runTui: (async () => { throw new Error("tui exploded"); }) as never,
     });
-    await expect(evalLabel({ source: sourceDir, checklist: checklistFile }, deps))
+    await expect(evalLabel({ checklist: checklistFile }, deps))
       .rejects.toThrow(/tui exploded/);
     expect(destroyed).toHaveBeenCalled();
     expect(controller.closed()).toBe(1);
@@ -150,11 +145,10 @@ describe("evalLabel", () => {
   it("opens a session with resolved paths and annotator", async () => {
     const openSession = vi.fn(async () => fakeController());
     await evalLabel(
-      { source: sourceDir, checklist: checklistFile, store: path.join(root, "store") },
+      { checklist: checklistFile, store: path.join(root, "store") },
       dependencies({ openSession: openSession as never }),
     );
     expect(openSession).toHaveBeenCalledWith(expect.objectContaining({
-      sourceDir: path.resolve(sourceDir),
       storeDir: path.resolve(root, "store"),
       checklistFile: path.resolve(checklistFile),
       annotator: { kind: "human", id: "adit" },
@@ -167,7 +161,7 @@ describe("evalLabel", () => {
       openSession: (async () => controller) as never,
       runTui: (async () => { throw new Error("tui exploded"); }) as never,
     });
-    await expect(evalLabel({ source: sourceDir, checklist: checklistFile }, deps))
+    await expect(evalLabel({ checklist: checklistFile }, deps))
       .rejects.toThrow(/tui exploded/);
     expect(controller.closed()).toBe(1);
   });
@@ -175,7 +169,7 @@ describe("evalLabel", () => {
   it("closes the session on a clean exit", async () => {
     const controller = fakeController();
     const deps = dependencies({ openSession: (async () => controller) as never });
-    await evalLabel({ source: sourceDir, checklist: checklistFile }, deps);
+    await evalLabel({ checklist: checklistFile }, deps);
     expect(controller.closed()).toBe(1);
   });
 
@@ -183,7 +177,7 @@ describe("evalLabel", () => {
     const deps = dependencies({
       openSession: (async () => { throw new Error("store is locked"); }) as never,
     });
-    await expect(evalLabel({ source: sourceDir, checklist: checklistFile }, deps))
+    await expect(evalLabel({ checklist: checklistFile }, deps))
       .rejects.toThrow(/store is locked/);
   });
 });

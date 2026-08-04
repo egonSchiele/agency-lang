@@ -1,6 +1,6 @@
 ---
 title: Evaluating agent runs
-description: Documents the `agency eval extract` command for converting a captured statelog trace into a structured eval record suitable for LLM judging, pairwise comparison, or programmatic behavioral checks.
+description: How to run an Agency agent against an eval suite, score it with automatic graders, judge its output by hand, and extract an eval record from a statelog trace.
 ---
 
 # Evaluating agent runs
@@ -13,7 +13,12 @@ agency eval grade <runDir> [--graders <file>] [-o <path>]
 agency eval logs <runDir> [--input <id>] [-f]
 agency eval optimize <file>[:<node>] [--inputs <file|dir>] [--goal <text>] [--graders <file>] [--validation-inputs <file|dir> | --validation-split <ratio>]
 agency eval extract <file>
+agency label ingest <source> --source <name> [--format run|files|json] [--task <text>]
+agency label [--checklist <file>] [--store <dir>] [--annotator <id>]
 ```
+
+`agency label` also answers to `agency eval label`, if you prefer to keep the
+whole family under one name.
 
 ## Running an input suite
 
@@ -313,6 +318,147 @@ This costs nothing and is deterministic for `ExactMatch`, `Contains`,
 `Similarity`, and function graders that do not call `judge`. An `LlmJudge`, or a
 function grader calling `judge(...)`, still makes a live LLM call each time — much
 cheaper than re-running agents, and the outputs being judged stay fixed.
+
+## Judging output by hand
+
+Some questions have no automatic grader. Is this summary really about today? Do
+these citations point at pages that exist? Is this explanation worth reading?
+You find out by looking.
+
+`agency label` is the tool for those questions. You write a checklist of
+yes-or-no questions, then answer them one output at a time. Your answers are
+stored, so you can turn them into training data later, or measure how well an
+LLM judge agrees with you.
+
+Labelling takes two steps. First you add records, then you judge them.
+
+```bash
+agency label ingest runs/abc --source agent-v1
+agency label --checklist news.json
+```
+
+### Adding records
+
+A record is one thing you judge. It holds named pieces of text, usually a `task`
+and an `output`.
+
+`ingest` reads three kinds of source:
+
+| Source | Each record is |
+|---|---|
+| A run directory | one input's final output, together with its task |
+| A directory of files | one whole file |
+| A `.json` file holding an array of strings | one element of the array |
+
+It guesses which kind you meant. Pass `--format run`, `--format files` or
+`--format json` when you want to say so yourself.
+
+A directory holds one record per file. Add `--recursive` to descend into
+subdirectories. There is no pattern matching, so point it at a directory that
+holds what you want:
+
+```bash
+agency label ingest ./gold/ --source handwritten --task "Summarize today's tech news"
+```
+
+`--task` adds the same task field to every record in the batch. That is the
+usual shape for handwritten answers, because you wrote them all against one
+question.
+
+`--source` names the batch. It is how you tell one agent's outputs from
+another's when you read the labels back, so give each batch its own name.
+
+Two agents that produce identical text produce **one** record with two
+observations. You judge it once, and both agents get credit for that judgement.
+This is what makes "did version 2 beat version 1" a question you can answer.
+
+```bash
+agency label ingest runs/v1 --source agent-v1
+agency label ingest runs/v2 --source agent-v2
+agency label ingest ./gold/ --source handwritten --task "Summarize today's tech news"
+agency label --checklist news.json
+```
+
+Ingest reports what it skipped and why. It skips a failed run, an empty file,
+and a run that produced no output. Storing a placeholder for those would be
+worse than leaving a gap, because a placeholder can be labeled.
+
+### Writing a checklist
+
+A checklist is a JSON file listing your questions:
+
+```json
+{
+  "name": "news-quality",
+  "questions": [
+    { "text": "Is every story actually from today?" },
+    { "text": "Does each claim have a source?" },
+    { "text": "Would I want to read this?", "weight": 2 }
+  ]
+}
+```
+
+`weight` is optional and defaults to 1. A record's score is the weighted share
+of questions you answered yes.
+
+Do not agonize over the list. You add questions while labeling, and discovering
+them halfway through is the normal way this goes, not a planning failure.
+
+### One rule for questions
+
+**Every question must be answerable from the record's fields alone.**
+
+The record and your answer are the whole training example. An agent learning
+from your labels sees those two things and nothing else. A question that depends
+on anything outside the record produces a label about information the agent never
+receives.
+
+"Is every story from today?" breaks that rule when the output never says which
+day it was written. The fix is to make the output say so, not to reword the
+question. A code review is unjudgeable without the diff, so ingest the diff and
+the review as two fields of one record.
+
+Nothing checks this for you. It cannot: the tool has no way to know that "today"
+is unanchored, or that a review refers to a diff that is missing.
+
+### Labelling
+
+`agency label --checklist news.json` opens the screen. One record fills the
+left, the checklist fills the right.
+
+| Key | What it does |
+|---|---|
+| `space` | answer the current question yes or no |
+| `↑` `↓` | move between questions |
+| `←` `→` | move between records |
+| `enter` | sign off on this record and go to the next |
+| `a` | add a question |
+| `d` | remove a question, or bring one back |
+| `m` | write a note |
+| `q` | quit |
+
+Signing off is deliberate. Your answers are not recorded until you press
+`enter`, so moving through a record to read it changes nothing.
+
+Quitting halfway is safe. The session is saved as you go, and reopening it puts
+you back where you stopped.
+
+### Where your answers go
+
+Everything lives in one directory, `labels/` by default. Set another with
+`--store`, or with `eval.labelStore` in `agency.json`.
+
+| File | Holds |
+|---|---|
+| `outputs.jsonl` | copies of the records you are judging |
+| `labels.jsonl` | your answers |
+| `occurrences.jsonl` | which source each record came from |
+| `checklists/` | every version of your question list |
+
+The store keeps **copies**, so you can delete `runs/` and your labels survive.
+
+Each version of a checklist is kept. Editing a question does not rewrite
+history, so a label made against an older version still says what it meant.
 
 ## Optimizing marked declarations
 

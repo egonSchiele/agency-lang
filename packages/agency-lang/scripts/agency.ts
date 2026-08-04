@@ -39,7 +39,7 @@ import { traceLog } from "@/cli/events.js";
 import { logsView } from "@/cli/logsView.js";
 import { evalExtract } from "@/cli/evalExtract.js";
 import { evalJudge } from "@/cli/evalJudge.js";
-import { evalLabel } from "@/cli/eval/label.js";
+import { addLabelCommand, labelCommandDependencies } from "@/cli/eval/labelCommand.js";
 import { evalGrade } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalRun, totalRunCostUsd } from "@/cli/eval/run.js";
@@ -763,21 +763,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
       }
     });
 
-  evalCmd
-    .command("label")
-    .description("Label agent outputs by hand, building a dataset of human judgements")
-    .argument("<source>", "Path to a run directory produced by `agency eval run`")
-    .option("--checklist <file>", "Checklist JSON: an existing one, or { name, questions }")
-    .option("--store <dir>", "Label store directory (default: eval.labelStore, else labels/)")
-    .option("--annotator <id>", "Who is labelling (default: $USER)")
-    .action(async (source: string, opts: { checklist?: string; store?: string; annotator?: string }) => {
-      try {
-        await evalLabel({ ...opts, source, config: getConfig() });
-      } catch (e) {
-        console.error(`Error: ${(e as Error).message}`);
-        process.exit(2);
-      }
-    });
+  addLabelCommand(evalCmd, labelCommandDependencies(getConfig));
+  addLabelCommand(program, labelCommandDependencies(getConfig));
 
   evalCmd
     .command("judge")

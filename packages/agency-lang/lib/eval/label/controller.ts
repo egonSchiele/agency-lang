@@ -7,7 +7,6 @@ import {
   type NormalizedDefinition,
   type PendingRevision,
 } from "./checklist.js";
-import { describeCaptureSkip } from "./capture.js";
 import {
   assertBindingIsCoherent,
   assertDraftMatches,
@@ -41,7 +40,6 @@ export type WallClock = { nowIso(): string };
 export type EntityIds = { questionId(): string; annotationId(): string };
 
 export type OpenLabelingSessionArgs = {
-  sourceDir: string;
   storeDir: string;
   checklistFile: string;
   annotator: Annotator;
@@ -130,13 +128,11 @@ async function openSession(
       fault: dependencies.fault as FaultHook | undefined,
     });
 
-    const capture = store.captureSource({ sourceDir: args.sourceDir });
-    for (const skip of capture.skipped) {
-      args.reportWarning(describeCaptureSkip(skip));
-    }
-    if (capture.rows.length === 0) {
+    const corpus = store.corpusSnapshot();
+    if (corpus.length === 0) {
       throw new Error(
-        `No labellable outputs in ${args.sourceDir}. Every input was skipped; see the warnings above.`,
+        "There is nothing to label: the store holds no records. Add some with " +
+        "`agency label ingest <source> --source <name>`.",
       );
     }
 
@@ -148,14 +144,14 @@ async function openSession(
       syncChecklistDefinitionIds(args.checklistFile, definition);
     }
 
-    const outputIds = capture.rows.map((row) => row.outputId);
+    const outputIds = corpus.map((row) => row.outputId);
     const sessionId = makeSessionId({
       outputIds, checklistId: definition.checklistId, annotator: args.annotator,
     });
 
     const session = new LabelingSession({
       args, dependencies, store, lock, sessionId, outputIds, definition,
-      corpus: capture.rows,
+      corpus,
     });
     session.open();
     return session.controller();

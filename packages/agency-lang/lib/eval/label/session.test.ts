@@ -24,12 +24,12 @@ const revision: ChecklistRevision = {
   ],
 };
 
-function corpusRow(outputId: string, text: string): CorpusRow {
+function corpusRow(outputId: string, output: string): CorpusRow {
   return {
-    schemaVersion: 1, outputId, contentHash: HASH, capturedAt: "2026-08-03T00:00:00.000Z",
-    execution: { traceId: "t", inputId: outputId, finalOutputIndex: 0 },
-    input: { inputId: outputId, task: "a task" }, value: text, text,
-    provenance: { runStartedAtMs: null, agent: null, models: [] },
+    schemaVersion: 2,
+    outputId,
+    capturedAt: "2026-08-03T00:00:00.000Z",
+    fields: { task: "a task", output },
   };
 }
 

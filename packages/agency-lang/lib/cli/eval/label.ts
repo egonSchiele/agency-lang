@@ -4,6 +4,7 @@ import * as path from "path";
 
 import type { AgencyConfig } from "@/config.js";
 import { openLabelingSession, type LabelingSessionController } from "@/eval/label/controller.js";
+import { readFieldOrder } from "@/eval/label/store.js";
 import { runLabelTui } from "@/eval/label/labelTui.js";
 import { TerminalInput } from "@/tui/input/terminal.js";
 import { TerminalOutput } from "@/tui/output/terminal.js";
@@ -14,7 +15,6 @@ const DEFAULT_STORE_DIRECTORY = "labels";
 const FALLBACK_ANNOTATOR_ID = "human";
 
 export type EvalLabelOptions = {
-  source: string;
   checklist?: string;
   store?: string;
   annotator?: string;
@@ -117,9 +117,6 @@ export async function evalLabel(
   if (!fs.existsSync(options.checklist)) {
     throw new Error(`Checklist file not found: ${options.checklist}`);
   }
-  if (!fs.existsSync(options.source)) {
-    throw new Error(`Source run directory not found: ${options.source}`);
-  }
   if (!dependencies.isInteractive()) {
     throw new Error(
       "agency eval label needs an interactive terminal: it shows outputs and reads " +
@@ -130,7 +127,6 @@ export async function evalLabel(
   const config = options.config ?? {};
   const storeDir = resolveLabelStore(options, config);
   const controller: LabelingSessionController = await dependencies.openSession({
-    sourceDir: path.resolve(options.source),
     storeDir,
     checklistFile: path.resolve(options.checklist),
     annotator: resolveAnnotator(options, dependencies),
@@ -146,6 +142,7 @@ export async function evalLabel(
       controller,
       screen,
       storeLabel: path.basename(storeDir),
+      fieldOrder: readFieldOrder(storeDir),
       currentSize: () => ({
         width: terminalDimension(process.stdout.columns, DEFAULT_COLUMNS),
         height: terminalDimension(process.stdout.rows, DEFAULT_ROWS),

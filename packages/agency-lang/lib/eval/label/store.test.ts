@@ -5,16 +5,23 @@ import * as path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { normalizeDefinition, prepareRevision, publishPendingRevision } from "./checklist.js";
-import { checklistHashOf } from "./ids.js";
+import { checklistHashOf, makeOccurrenceId, makeOutputId } from "./ids.js";
+import type { LoadedBatch } from "./load/types.js";
 import { acquireStoreLock } from "./lock.js";
-import { openStore, StoreValidationError } from "./store.js";
+import { openStore, StoreValidationError, StoreVersionError } from "./store.js";
 import type { AnnotationRow, ChecklistRevision, CorpusRow } from "./types.js";
 
 let storeDir: string;
 let definitionPath: string;
 const warnings: string[] = [];
 
-const OUTPUT_ID = `out_${"a".repeat(64)}`;
+const DEFAULT_FIELDS = { task: "t", output: "v" };
+/** The id the store will derive for DEFAULT_FIELDS. Computed rather than
+ *  written down, because a hand-written id is exactly what open-time validation
+ *  now rejects. */
+const OUTPUT_ID = makeOutputId(DEFAULT_FIELDS);
+/** A well-formed id that is NOT the hash of any record here. */
+const UNGROUNDED_OUTPUT_ID = `out_${"a".repeat(64)}`;
 const SESSION_ID = `session_${"c".repeat(64)}`;
 const HASH_ZERO = `sha256:${"0".repeat(64)}`;
 
@@ -34,17 +41,27 @@ function open() {
 }
 
 function corpusRow(over: Partial<CorpusRow> = {}): CorpusRow {
+  const fields = over.fields ?? DEFAULT_FIELDS;
   return {
-    schemaVersion: 1,
-    outputId: OUTPUT_ID,
-    contentHash: HASH_ZERO,
+    schemaVersion: 2,
+    // Derived, so a row built here is one the store would accept: the open-time
+    // check recomputes this and refuses anything that does not match.
+    outputId: makeOutputId(fields),
     capturedAt: "2026-08-03T00:00:00.000Z",
-    execution: { traceId: "t", inputId: "a", finalOutputIndex: 0 },
-    input: { inputId: "a", task: "t" },
-    value: "v",
-    text: "v",
-    provenance: { runStartedAtMs: null, agent: null, models: [] },
+    fields,
     ...over,
+  };
+}
+
+/** One loaded candidate, as a loader would hand it to the store. */
+function batchOf(fields = DEFAULT_FIELDS, source = "agent-v1"): LoadedBatch {
+  return {
+    occurrences: [{
+      fields,
+      source,
+      origin: { kind: "file", itemKey: "a.txt" },
+    }],
+    skips: [],
   };
 }
 
@@ -102,21 +119,69 @@ describe("openStore", () => {
     const store = open();
     expect(store.readSession(SESSION_ID).annotations).toEqual([]);
     expect(JSON.parse(fs.readFileSync(path.join(storeDir, "manifest.json"), "utf8")))
-      .toEqual({ schemaVersion: 1 });
+      .toEqual({ schemaVersion: 2, fieldOrder: [] });
     store.close();
   });
 
   it("refuses a manifest from a newer schema rather than risking the dataset", () => {
     fs.mkdirSync(storeDir, { recursive: true });
-    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 2 }));
-    expect(() => open()).toThrow(StoreValidationError);
+    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 3 }));
+    expect(() => open()).toThrow(StoreVersionError);
+  });
+
+  it("refuses a version 1 store and says how to rebuild it", () => {
+    // There is no migration, deliberately: a label store is derived data, and
+    // the eval runs it came from are still on disk.
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
+    // One call, then assert on its message. Calling open() twice leaves the
+    // first lock held, so the second failure is about the lock and any further
+    // assertion passes or fails for the wrong reason.
+    expect(() => open()).toThrow(
+      /predates content-derived record ids[\s\S]*agency label ingest/,
+    );
+  });
+
+  it("checks the manifest BEFORE parsing any log", () => {
+    // A version 1 corpus line would produce a confusing deep validation error
+    // if the version gate ran second.
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
+    fs.writeFileSync(path.join(storeDir, "outputs.jsonl"), '{"schemaVersion":1,"nonsense":true}\n');
+    expect(() => open()).toThrow(/predates content-derived record ids/);
   });
 
   it("refuses a manifest with unknown keys", () => {
     fs.mkdirSync(storeDir, { recursive: true });
     fs.writeFileSync(path.join(storeDir, "manifest.json"),
-      JSON.stringify({ schemaVersion: 1, extra: true }));
+      JSON.stringify({ schemaVersion: 2, fieldOrder: [], extra: true }));
     expect(() => open()).toThrow(StoreValidationError);
+  });
+
+  it("refuses a corpus row whose id is not the hash of its own fields", () => {
+    appendRaw("outputs.jsonl", { ...corpusRow(), outputId: UNGROUNDED_OUTPUT_ID });
+    expect(() => open()).toThrow(/does not match the hash of its own fields/);
+  });
+
+  it("refuses an occurrence referencing a record nobody stored", () => {
+    appendRaw("occurrences.jsonl", {
+      schemaVersion: 1,
+      occurrenceId: makeOccurrenceId({
+        outputId: UNGROUNDED_OUTPUT_ID, source: "s", origin: { kind: "file", itemKey: "a.txt" },
+      }),
+      outputId: UNGROUNDED_OUTPUT_ID,
+      source: "s",
+      firstObservedAt: "2026-08-03T00:00:00.000Z",
+      origin: { kind: "file", itemKey: "a.txt" },
+    });
+    expect(() => open()).toThrow(/is not in the corpus/);
+  });
+
+  it("refuses a manifest listing a field twice", () => {
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(path.join(storeDir, "manifest.json"),
+      JSON.stringify({ schemaVersion: 2, fieldOrder: ["output", "output"] }));
+    expect(() => open()).toThrow(/more than once/);
   });
 
   it("releases the lock on close", () => {
@@ -126,7 +191,7 @@ describe("openStore", () => {
 
   it("rejects a duplicate output id in the corpus", () => {
     appendRaw("outputs.jsonl", corpusRow());
-    appendRaw("outputs.jsonl", corpusRow({ text: "different" }));
+    appendRaw("outputs.jsonl", { ...corpusRow(), capturedAt: "2026-08-04T00:00:00.000Z" });
     expect(() => open()).toThrow(/different content/i);
   });
 
@@ -346,5 +411,25 @@ describe("readSession and saveDraft", () => {
     const invalid = { ...draftFor(SESSION_ID), currentIndex: -1 };
     expect(() => store.saveDraft(invalid)).toThrow();
     store.close();
+  });
+});
+
+describe("store format advice", () => {
+  it("tells you to upgrade, not migrate, when the store is NEWER", () => {
+    // Migration only moves a store forwards, so pointing at it would be a dead
+    // end.
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 99 }));
+    let message = "";
+    try {
+      open();
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/Upgrade Agency/);
+    // Rebuilding cannot help a store from the FUTURE, so it must not be
+    // suggested. Asserted on the captured message: a second open() would fail
+    // on the still-held lock and pass this vacuously.
+    expect(message).not.toMatch(/agency label ingest/);
   });
 });

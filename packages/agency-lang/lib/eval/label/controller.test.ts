@@ -11,6 +11,11 @@ import {
   type LabelingSessionController,
 } from "./controller.js";
 import { loadDraftFile } from "./draft.js";
+import { writeRunFixture } from "./runFixture.js";
+import { loadBatch } from "./load/index.js";
+import { DEFAULT_MAX_INGEST_BYTES } from "./load/types.js";
+import { acquireStoreLock } from "./lock.js";
+import { openStore } from "./store.js";
 import { readCurrentPointer } from "./checklist.js";
 import type { AnnotationRow } from "./types.js";
 
@@ -38,25 +43,10 @@ function makeDependencies(over: Partial<ControllerDependencies> = {}): Controlle
 }
 
 function writeSource(inputIds: string[], traceId = "trace-1"): void {
-  fs.mkdirSync(sourceDir, { recursive: true });
-  fs.writeFileSync(path.join(sourceDir, "config.json"), JSON.stringify({ provenance: { agent: null } }));
-  fs.writeFileSync(path.join(sourceDir, "summary.json"), JSON.stringify({
-    runId: "r", runDir: sourceDir, agentLabel: "a", okCount: inputIds.length, errorCount: 0,
-    inputs: inputIds.map((inputId) => ({
-      inputId, status: "success",
-      evalRecordPath: path.join(sourceDir, "inputs", inputId, "agent", "eval-record.json"),
-      statelogPath: "", workdirPath: "",
-    })),
-  }));
-  for (const inputId of inputIds) {
-    const dir = path.join(sourceDir, "inputs", inputId, "agent");
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "..", "input.json"), JSON.stringify({ id: inputId, task: `task ${inputId}` }));
-    fs.writeFileSync(path.join(dir, "eval-record.json"), JSON.stringify({
-      traceId, startedAtMs: 1, durationMs: 1,
-      evalOutputs: [{ value: `output for ${inputId}` }], metrics: { models: [] },
-    }));
-  }
+  writeRunFixture({
+    dir: sourceDir,
+    inputs: inputIds.map((inputId) => ({ inputId, traceId, task: `task ${inputId}` })),
+  });
 }
 
 function writeChecklist(questions: string[]): void {
@@ -65,9 +55,50 @@ function writeChecklist(questions: string[]): void {
   }, null, 2));
 }
 
+/**
+ * Ingest the run into the store, the way the CLI does.
+ *
+ * Separate from opening a session: the controller labels what the store holds
+ * and no longer ingests anything itself.
+ */
+function ingestRun(source = "agent-v1"): void {
+  const batch = loadBatch({
+    source: { path: sourceDir, requestedFormat: "run", includeTaskField: true, recursive: false },
+    sourceName: source,
+    constantFields: {},
+    maxBytes: DEFAULT_MAX_INGEST_BYTES,
+    reportWarning: (message) => warnings.push(message),
+  });
+  const lock = acquireStoreLock({
+    storeDir,
+    reportWarning: (message) => warnings.push(message),
+  });
+  const store = openStore({
+    storeDir,
+    lock,
+    reportWarning: (message) => warnings.push(message),
+  });
+  try {
+    store.ingest(batch);
+  } finally {
+    store.close();
+    lock.release();
+  }
+}
+
+/** Ingest, then open — the order the CLI uses. Tests that need an empty store
+ *  call `openOnly` instead. */
 async function open(dependencies = makeDependencies()): Promise<LabelingSessionController> {
+  ingestRun();
+  return openOnly(dependencies);
+}
+
+async function openOnly(
+  dependencies = makeDependencies(),
+): Promise<LabelingSessionController> {
   return createLabelingSessionOpener(dependencies)({
-    sourceDir, storeDir, checklistFile,
+    storeDir,
+    checklistFile,
     annotator: { kind: "human", id: "adit" },
     reportWarning: (message) => warnings.push(message),
   });
@@ -144,9 +175,8 @@ describe("opening", () => {
     expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
   });
 
-  it("refuses a source with no labellable outputs", async () => {
-    fs.rmSync(path.join(sourceDir, "inputs"), { recursive: true, force: true });
-    await expect(open()).rejects.toThrow(/no labellable outputs/i);
+  it("refuses when the store holds nothing to label", async () => {
+    await expect(openOnly()).rejects.toThrow(/nothing to label/i);
     expect(fs.existsSync(path.join(storeDir, ".lock"))).toBe(false);
   });
 
@@ -157,9 +187,12 @@ describe("opening", () => {
     // so the earlier draft is never loaded against them. The draft-level guard
     // is defence in depth for that (see draft.test.ts).
     const controller = await open();
-    expect(controller.snapshot().items.map((item) => item.task)).toEqual(["task b", "task a"]);
+    // Records are content-identified, so a reordered source produces the same
+    // two records; the session id changes because the ORDER changed.
+    expect(controller.snapshot().items.map((item) => item.fields.task).slice().sort())
+      .toEqual(["task a", "task b"]);
     await controller.close();
-    expect(fs.readdirSync(path.join(storeDir, "drafts"))).toHaveLength(2);
+    expect(fs.readdirSync(path.join(storeDir, "drafts"))).toHaveLength(1);
   });
 });
 

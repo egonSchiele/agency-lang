@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { canonicalize } from "@/utils/canonicalize.js";
 
 import {
-  contentHashOf,
   makeAnnotationId,
   makeChecklistId,
+  makeOccurrenceId,
   makeOutputId,
   makeQuestionId,
   makeSessionId,
@@ -14,59 +14,104 @@ import {
   AnnotationRowSchema,
   ChecklistQuestionSchema,
   CorpusRowSchema,
+  FieldNameSchema,
   ManifestSchema,
-  type ExecutionIdentity,
+  type OccurrenceCandidate,
   type SessionIdentity,
 } from "./types.js";
 
-const executionIdentity: ExecutionIdentity = {
-  traceId: "trace-one",
-  inputId: "summary",
-  finalOutputIndex: 2,
-};
+const fields = { task: "Summarize", output: "A summary" };
 
 describe("makeOutputId", () => {
-  it("is stable for the same execution, so recapture is idempotent", () => {
-    expect(makeOutputId(executionIdentity)).toBe(makeOutputId(executionIdentity));
+  it("is stable across calls, so re-ingesting is idempotent", () => {
+    expect(makeOutputId(fields)).toBe(makeOutputId(fields));
   });
 
-  it("distinguishes two traces that share an input id", () => {
-    const other: ExecutionIdentity = { ...executionIdentity, traceId: "trace-two" };
-    expect(makeOutputId(executionIdentity)).not.toBe(makeOutputId(other));
+  it("ignores the order fields were added in", () => {
+    const reordered = { output: "A summary", task: "Summarize" };
+    expect(makeOutputId(reordered)).toBe(makeOutputId(fields));
   });
 
-  it("distinguishes a different selected output within one trace", () => {
-    const other: ExecutionIdentity = { ...executionIdentity, finalOutputIndex: 3 };
-    expect(makeOutputId(executionIdentity)).not.toBe(makeOutputId(other));
+  it("changes when a value changes", () => {
+    expect(makeOutputId({ ...fields, output: "different" })).not.toBe(makeOutputId(fields));
   });
 
-  it("cannot be confused by ids that contain the field separator", () => {
-    const left = makeOutputId({ traceId: "a\0b", inputId: "c", finalOutputIndex: 0 });
-    const right = makeOutputId({ traceId: "a", inputId: "b\0c", finalOutputIndex: 0 });
-    expect(left).not.toBe(right);
+  it("changes when a field NAME changes, because the record shape is content", () => {
+    expect(makeOutputId({ task: "Summarize", response: "A summary" }))
+      .not.toBe(makeOutputId(fields));
+  });
+
+  it("distinguishes a missing field from an empty one", () => {
+    expect(makeOutputId({ output: "A summary" }))
+      .not.toBe(makeOutputId({ task: "", output: "A summary" }));
+  });
+
+  it("cannot be confused by values that contain a field separator", () => {
+    expect(makeOutputId({ a: 'x","b":"y', b: "z" })).not.toBe(makeOutputId({ a: "x", b: "y" }));
   });
 
   it("produces a filesystem-safe prefixed digest", () => {
-    expect(makeOutputId(executionIdentity)).toMatch(/^out_[a-f0-9]{64}$/);
+    expect(makeOutputId(fields)).toMatch(/^out_[a-f0-9]{64}$/);
   });
 });
 
-describe("contentHashOf", () => {
-  it("separates identical text captured under different tasks", () => {
-    const review = contentHashOf({ inputId: "a", task: "Review this patch" }, "Looks good");
-    const release = contentHashOf({ inputId: "a", task: "Write a release note" }, "Looks good");
-    expect(review).not.toBe(release);
+const occurrence: OccurrenceCandidate = {
+  outputId: `out_${"a".repeat(64)}`,
+  source: "agent-v1",
+  origin: { kind: "file", itemKey: "good-1.txt" },
+};
+
+describe("makeOccurrenceId", () => {
+  it("is stable across calls", () => {
+    expect(makeOccurrenceId(occurrence)).toBe(makeOccurrenceId(occurrence));
   });
 
-  it("is stable across key order inside a structured task", () => {
-    const left = contentHashOf({ inputId: "a", task: { x: 1, y: 2 } }, "out");
-    const right = contentHashOf({ inputId: "a", task: { y: 2, x: 1 } }, "out");
-    expect(left).toBe(right);
+  it("separates two files whose contents are equal", () => {
+    const other: OccurrenceCandidate = {
+      ...occurrence,
+      origin: { kind: "file", itemKey: "good-2.txt" },
+    };
+    expect(makeOccurrenceId(other)).not.toBe(makeOccurrenceId(occurrence));
   });
 
-  it("changes when the value changes", () => {
-    const input = { inputId: "a", task: "t" };
-    expect(contentHashOf(input, "one")).not.toBe(contentHashOf(input, "two"));
+  it("separates equal elements in two JSON documents", () => {
+    const left: OccurrenceCandidate = {
+      ...occurrence,
+      origin: { kind: "json", itemKey: "a.json", itemIndex: 0 },
+    };
+    const right: OccurrenceCandidate = {
+      ...occurrence,
+      origin: { kind: "json", itemKey: "b.json", itemIndex: 0 },
+    };
+    expect(makeOccurrenceId(left)).not.toBe(makeOccurrenceId(right));
+  });
+
+  it("separates the same observation under two source names", () => {
+    expect(makeOccurrenceId({ ...occurrence, source: "agent-v2" }))
+      .not.toBe(makeOccurrenceId(occurrence));
+  });
+
+  it("produces a filesystem-safe prefixed digest", () => {
+    expect(makeOccurrenceId(occurrence)).toMatch(/^occ_[a-f0-9]{64}$/);
+  });
+});
+
+describe("FieldNameSchema", () => {
+  it("accepts a lowercase name with underscores and digits", () => {
+    expect(FieldNameSchema.safeParse("review_2").success).toBe(true);
+  });
+
+  it("rejects a name carrying a style tag, so a name can never be markup", () => {
+    expect(FieldNameSchema.safeParse("bad{name}").success).toBe(false);
+  });
+
+  it("rejects a name carrying a control character", () => {
+    expect(FieldNameSchema.safeParse("bad\x1b[2Jname").success).toBe(false);
+  });
+
+  it("rejects a name starting with a digit or an uppercase letter", () => {
+    expect(FieldNameSchema.safeParse("2nd").success).toBe(false);
+    expect(FieldNameSchema.safeParse("Output").success).toBe(false);
   });
 });
 
@@ -121,13 +166,18 @@ describe("canonicalize", () => {
 });
 
 describe("durable schemas", () => {
-  it("pins schemaVersion to exactly 1", () => {
-    expect(ManifestSchema.safeParse({ schemaVersion: 1 }).success).toBe(true);
-    expect(ManifestSchema.safeParse({ schemaVersion: 2 }).success).toBe(false);
+  it("pins the manifest schemaVersion to exactly 2", () => {
+    expect(ManifestSchema.safeParse({ schemaVersion: 2, fieldOrder: [] }).success).toBe(true);
+    expect(ManifestSchema.safeParse({ schemaVersion: 1, fieldOrder: [] }).success).toBe(false);
   });
 
   it("rejects unknown keys, so a typo cannot silently persist", () => {
-    expect(ManifestSchema.safeParse({ schemaVersion: 1, extra: true }).success).toBe(false);
+    expect(ManifestSchema.safeParse({ schemaVersion: 2, fieldOrder: [], extra: true }).success)
+      .toBe(false);
+  });
+
+  it("rejects a manifest field order holding a malformed field name", () => {
+    expect(ManifestSchema.safeParse({ schemaVersion: 2, fieldOrder: ["Bad"] }).success).toBe(false);
   });
 
   it("rejects a question weight that is zero, negative or not finite", () => {
@@ -140,15 +190,20 @@ describe("durable schemas", () => {
 
   it("rejects a corpus row whose outputId is not a well-formed digest", () => {
     const row = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       outputId: "not-an-output-id",
-      contentHash: `sha256:${"0".repeat(64)}`,
       capturedAt: "2026-08-03T00:00:00.000Z",
-      execution: { traceId: "t", inputId: "a", finalOutputIndex: 0 },
-      input: { inputId: "a", task: "t" },
-      value: "v",
-      text: "v",
-      provenance: { runStartedAtMs: null, agent: null, models: [] },
+      fields: { output: "v" },
+    };
+    expect(CorpusRowSchema.safeParse(row).success).toBe(false);
+  });
+
+  it("rejects a corpus row with no fields, which would be an unjudgeable record", () => {
+    const row = {
+      schemaVersion: 2,
+      outputId: `out_${"a".repeat(64)}`,
+      capturedAt: "2026-08-03T00:00:00.000Z",
+      fields: {},
     };
     expect(CorpusRowSchema.safeParse(row).success).toBe(false);
   });
@@ -198,13 +253,59 @@ describe("canonicalize is collision-resistant", () => {
     expect(canonicalize(withProto)).not.toBe(canonicalize(without));
   });
 
-  it("gives two different tasks different content hashes even via __proto__", () => {
-    const left = contentHashOf({ inputId: "a", task: JSON.parse('{"__proto__":{"x":1}}') }, "out");
-    const right = contentHashOf({ inputId: "a", task: JSON.parse("{}") }, "out");
+  it("gives two records different ids even when they differ only via __proto__", () => {
+    const left = makeOutputId(JSON.parse('{"__proto__":{"x":1},"output":"same"}'));
+    const right = makeOutputId(JSON.parse('{"output":"same"}'));
     expect(left).not.toBe(right);
   });
 
   it("keeps an undefined array element as null, as JSON.stringify does", () => {
     expect(canonicalize([undefined])).toBe("[null]");
+  });
+});
+
+describe("occurrence identity uses only the stable locator", () => {
+  const runOrigin = {
+    kind: "run" as const,
+    traceId: "t-1",
+    inputId: "news-01",
+    finalOutputIndex: 2,
+    runStartedAtMs: 1000,
+    models: ["gpt-4o"],
+    agent: { file: "news.agency" },
+    rawTask: "Summarize",
+    rawValue: { s: 1 },
+  };
+  const base: OccurrenceCandidate = {
+    outputId: `out_${"a".repeat(64)}`,
+    source: "agent-v1",
+    origin: runOrigin,
+  };
+
+  it("ignores a corrected model name", () => {
+    // Hashing descriptive provenance would make this a SECOND observation of
+    // the same execution, and per-source counts would overstate the run.
+    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, models: ["gpt-4o-2024"] } }))
+      .toBe(makeOccurrenceId(base));
+  });
+
+  it("ignores changed agent provenance, start time and raw values", () => {
+    expect(makeOccurrenceId({
+      ...base,
+      origin: {
+        ...runOrigin,
+        agent: { file: "other.agency" },
+        runStartedAtMs: 9999,
+        rawTask: "changed",
+        rawValue: null,
+      },
+    })).toBe(makeOccurrenceId(base));
+  });
+
+  it("still distinguishes a different execution", () => {
+    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, traceId: "t-2" } }))
+      .not.toBe(makeOccurrenceId(base));
+    expect(makeOccurrenceId({ ...base, origin: { ...runOrigin, finalOutputIndex: 3 } }))
+      .not.toBe(makeOccurrenceId(base));
   });
 });

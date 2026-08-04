@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createHttpHandler } from "./adapter.js";
 import { createLogger } from "../../logger.js";
 import { RuntimeContext } from "../../runtime/state/context.js";
-import { runExportedFunction } from "../../runtime/node.js";
+import { runExportedFunctionForServe } from "../../runtime/node.js";
+import { returnedOutcome } from "../testOutcome.js";
 import { addCost } from "../../runtime/cost.js";
 import type { GraphState } from "../../runtime/types.js";
 import type { AgencyFunction } from "../../runtime/agencyFunction.js";
@@ -73,7 +74,7 @@ describe("a served function respects the baked root budget", () => {
       parameters: [],
       agencyFunction: fn,
       interruptEffects: [],
-      invoke: (namedArgs) => runExportedFunction({ ctx, fn, namedArgs }),
+      invoke: (namedArgs) => runExportedFunctionForServe({ ctx, fn, namedArgs }),
     };
   }
 
@@ -82,7 +83,7 @@ describe("a served function respects the baked root budget", () => {
       exports: [spendingFunction(ctx)],
       logger: createLogger("error"),
       hasInterrupts: () => false,
-      respondToInterrupts: async () => ({ data: undefined }),
+      respondToInterrupts: async () => returnedOutcome({ data: undefined }),
     });
   }
 

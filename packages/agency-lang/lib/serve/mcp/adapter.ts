@@ -5,6 +5,7 @@ import type { PolicyStore } from "../policyStore.js";
 import type { InterruptHandlers } from "./interruptLoop.js";
 import { runWithPolicy } from "./interruptLoop.js";
 import { errorMessage } from "../util.js";
+import { unwrapServedInvocationOutcome } from "../../runtime/invocationUsage.js";
 
 function formatToolDescription(description: string, interruptEffects: InterruptEffect[]): string {
   if (interruptEffects.length === 0) return description;
@@ -144,14 +145,13 @@ async function runToolInvocation(
   id: string | number | null,
   invoke: () => Promise<unknown>,
   policyConfig: McpConfig["policyConfig"],
-  extractData: (result: unknown) => unknown = (r) => r,
 ): Promise<JsonRpcMessage> {
   try {
     const result = policyConfig
       ? await runWithPolicy(invoke, policyConfig.policyStore, policyConfig.interruptHandlers)
       : await invoke();
     return success(id, {
-      content: [{ type: "text", text: JSON.stringify(extractData(result), null, 2) }],
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       isError: false,
     });
   } catch (err) {
@@ -177,23 +177,24 @@ async function handleToolCall(
     if (policyResult) return success(id, policyResult);
   }
 
+  // Both invokers return a ServedInvocationOutcome; MCP unwraps to the raw value
+  // (or rethrows the original error) before the policy loop, and does not expose
+  // usage in v1. Discovery already unwrapped a node's RunNodeResult to its data.
   const fn = functionsByName[name];
   if (fn) {
     return runToolInvocation(
       id,
-      () => fn.invoke(args as Record<string, unknown>),
+      () => fn.invoke(args as Record<string, unknown>).then(unwrapServedInvocationOutcome),
       policyConfig,
     );
   }
 
   const node = nodesByName[name];
   if (node) {
-    const positional = node.parameters.map((p) => args[p.name]);
     return runToolInvocation(
       id,
-      () => node.invoke(...positional),
+      () => node.invoke(args as Record<string, unknown>).then(unwrapServedInvocationOutcome),
       policyConfig,
-      (r) => (r && typeof r === "object" && "data" in r ? (r as any).data : r),
     );
   }
 

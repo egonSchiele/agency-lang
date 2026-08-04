@@ -27,8 +27,9 @@ const policyStore = new PolicyStore(serverName);
 const interruptHandlers = {
   hasInterrupts: mod.hasInterrupts,
   respondToInterrupts: async (interrupts, responses) => {
-    const wrapped = await mod.respondToInterrupts(interrupts, responses);
-    return wrapped.data;
+    const outcome = await mod.__respondToInterruptsForServe(interrupts, responses);
+    if (outcome.status === "threw") throw outcome.error;
+    return outcome.value.data;
   },
 };
 

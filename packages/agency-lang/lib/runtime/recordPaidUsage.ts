@@ -11,8 +11,13 @@
 
 import { getRuntimeContext } from "./asyncContext.js";
 import type { RuntimeContext } from "./state/context.js";
+import type { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
-import type { InvocationAccountingTarget, InvocationUsageDelta } from "./invocationUsage.js";
+import {
+  completionUsageDelta,
+  type InvocationAccountingTarget,
+  type InvocationUsageDelta,
+} from "./invocationUsage.js";
 import {
   sendInvocationUsageToParent,
   sendInvocationUsageIncompleteToParent,
@@ -35,6 +40,28 @@ export function recordPaidUsageAt(
 export function recordPaidUsage(delta: InvocationUsageDelta): void {
   const { ctx, stack } = getRuntimeContext();
   recordPaidUsageAt({ ctx, stack }, delta);
+}
+
+/** Account one LLM completion through the paid-usage boundary (guards + meter +
+ *  subprocess relay) and update the per-branch total-token accumulator that
+ *  std::thread's getTokens() reports. Called from the prompt completion site. */
+export function accountCompletionUsage(
+  ctx: RuntimeContext<GraphState>,
+  targetStack: StateStack,
+  completion: {
+    cost?: { totalCost?: number } | null;
+    usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number } | null;
+  },
+): void {
+  recordPaidUsageAt(
+    { ctx, stack: targetStack },
+    completionUsageDelta({
+      cost: completion.cost?.totalCost,
+      inputTokens: completion.usage?.inputTokens,
+      outputTokens: completion.usage?.outputTokens,
+    }),
+  );
+  targetStack.localTokens += completion.usage?.totalTokens ?? 0;
 }
 
 /** Mark this invocation's usage as no longer guaranteed complete (an abnormal

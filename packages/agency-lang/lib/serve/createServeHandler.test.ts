@@ -45,6 +45,21 @@ export function hasInterrupts(data) {
 export async function respondToInterrupts(interrupts, responses) {
   return { data: { resumed: true, responses } };
 }
+// Serve-only invokers (a current compile exports these; discoverExports and
+// createServeHandler now require them). Each returns a ServedInvocationOutcome.
+const __zeroUsage = { pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0, pricingComplete: true };
+function __returned(value) { return { status: "returned", value, usage: __zeroUsage, usageComplete: true }; }
+export async function __invokeFunctionForServe(fn, namedArgs) {
+  return __returned(__invokeFunction(fn, namedArgs));
+}
+export async function __invokeNodeForServe(nodeName, data) {
+  if (nodeName === "main") return __returned(await main(data.message));
+  if (nodeName === "needsApproval") return __returned(await needsApproval());
+  throw new Error("unknown node: " + nodeName);
+}
+export async function __respondToInterruptsForServe(interrupts, responses) {
+  return __returned(await respondToInterrupts(interrupts, responses));
+}
 `;
 }
 

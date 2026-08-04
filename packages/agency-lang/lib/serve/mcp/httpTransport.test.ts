@@ -5,6 +5,7 @@ import { startMcpHttpServer } from "./httpTransport.js";
 import { createMcpHandler } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import type { ExportedItem } from "../types.js";
+import { returnedOutcome } from "../testOutcome.js";
 import { createLogger } from "../../logger.js";
 
 function makeHandler() {
@@ -31,7 +32,7 @@ function makeHandler() {
       parameters: [{ name: "a" }, { name: "b" }],
       agencyFunction: addFn,
       interruptEffects: [],
-      invoke: (namedArgs) => addFn.invoke({ type: "named", positionalArgs: [], namedArgs }),
+      invoke: async (namedArgs) => returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
     },
   ];
   return createMcpHandler({

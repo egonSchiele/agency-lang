@@ -1,3 +1,12 @@
+## Aug 4 2026 — v0.13.2
+
+### CLI / Hosting
+- **`agency remote`** gains `inspect`, `pull`, and `logs` introspection commands.
+- **Serve cost seam** — every serve outcome carries a trusted per-invocation usage figure (priced cost, tokens, unknown-price count, completeness) so a project owner cannot under-report hosted spend.
+
+### Eval framework
+- **`agency eval label`** can ingest data to label from sources beyond runs (files, JSON).
+
 ## Aug 3 2026 — v0.13.0
 
 ### CLI / Hosting

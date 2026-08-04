@@ -5,6 +5,7 @@
 import { color } from "@/utils/termcolors.js";
 import type { AgencyConfig } from "@/config.js";
 import { readBinding } from "../binding.js";
+import type { RemoteBinding } from "../binding.js";
 import { canonicalOrigin } from "../../statelog/serveUrl.js";
 import { AccountScopeError } from "../../statelog/accountClient.js";
 
@@ -33,6 +34,16 @@ export type AccountTarget = ResolvedApiKey & {
 export type AccountCommandOptions = {
   host?: string;
   apiKeyEnv?: string;
+};
+
+/** A project-read command additionally selects a project by slug. */
+export type ProjectCommandOptions = AccountCommandOptions & {
+  project?: string;
+};
+
+/** An account target with the project slug these reads operate on. */
+export type ProjectTarget = AccountTarget & {
+  projectSlug: string;
 };
 
 /** Print an error and exit non-zero. Typed `never` so callers can use it in an
@@ -66,8 +77,18 @@ export function resolveAccountTarget(
   context: RemoteCommandContext,
   options: { host?: string; apiKeyEnv?: string },
 ): AccountTarget {
-  const bindingOrigin = readBinding(context.configPath)?.origin;
-  const selected = options.host ?? context.config.log?.host ?? bindingOrigin;
+  return resolveAccountTargetFromBinding(context, options, readBinding(context.configPath));
+}
+
+/** The origin+key resolution given an already-read binding snapshot, so a caller
+ *  that also needs the binding's slug (resolveProjectTarget) derives both from
+ *  the SAME snapshot rather than reading the file twice. */
+function resolveAccountTargetFromBinding(
+  context: RemoteCommandContext,
+  options: { host?: string; apiKeyEnv?: string },
+  binding: RemoteBinding | null,
+): AccountTarget {
+  const selected = options.host ?? context.config.log?.host ?? binding?.origin;
   if (!selected) {
     fail(
       "No statelog host. Set log.host in agency.json, pass --host, or link this directory first.",
@@ -80,6 +101,44 @@ export function resolveAccountTarget(
     );
   }
   return { origin, ...resolveApiKey(options) };
+}
+
+/** Resolve a project-read target — one coherent origin+slug+key from ONE binding
+ *  snapshot. A binding slug is only used when the resolved origin matches the
+ *  binding's origin, so a linked production project can't be spliced onto another
+ *  host. */
+export function resolveProjectTarget(
+  context: RemoteCommandContext,
+  options: ProjectCommandOptions,
+): ProjectTarget {
+  const binding = readBinding(context.configPath);
+  const account = resolveAccountTargetFromBinding(context, options, binding);
+  return { ...account, projectSlug: resolveProjectSlug(account.origin, options, binding) };
+}
+
+function resolveProjectSlug(
+  resolvedOrigin: string,
+  options: ProjectCommandOptions,
+  binding: RemoteBinding | null,
+): string {
+  if (options.project !== undefined) {
+    if (options.project.length === 0) {
+      fail("--project must not be empty.");
+    }
+    return options.project;
+  }
+  if (binding !== null) {
+    if (canonicalOrigin(binding.origin) === resolvedOrigin) {
+      if (binding.projectId.length === 0) {
+        fail("The linked project has an empty slug; pass --project <slug>.");
+      }
+      return binding.projectId;
+    }
+    fail(
+      "The selected host differs from the linked project's host; pass --project <slug> to be explicit.",
+    );
+  }
+  fail("No project. Pass --project <slug>, or link this directory with 'agency remote deploy'/'link'.");
 }
 
 /** Turn a client error into a clean CLI exit. An AccountScopeError becomes

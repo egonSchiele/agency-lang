@@ -341,9 +341,12 @@ distinct from "model lost by an old child." Cost per model is a single number �
 input-vs-output dollars are **not** split (the provider gives one `totalCost`
 through this seam). Rows plus `unattributed` reconcile to the flat `pricedCost`
 within `usageReconcileTolerance(pricedCost)` = `max(1e-9, 1e-9·|pricedCost|)`
-(relative+absolute, because float ulp drift scales with magnitude); tokens
-reconcile exactly. The flat total stays authoritative — a host bills
-`pricedCost`, not the row sum.
+(relative+absolute, because float ulp drift scales with magnitude); token counts
+reconcile **exactly within the safe-integer range** — the meter rejects any
+individual count at or above 2**53 and real totals are far below it, so only a
+subprocess relaying absurd counts whose accumulation crosses 2**53 makes token
+attribution best-effort (like cost). The flat total stays authoritative for
+both — a host bills `pricedCost`, not the row sum.
 
 **Model attribution — the third completeness axis.** `modelAttributionComplete`
 (on the usage) starts true and flips false the moment a *measurable* child

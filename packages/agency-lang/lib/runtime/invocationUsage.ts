@@ -57,11 +57,16 @@ export type InvocationUsage = {
   outputTokens: number;
   unknownCostCallCount: number;
   pricingComplete: boolean;
-  /** Per-model priced cost + input/output tokens. Real models only. Rows plus
-   *  `unattributed` reconcile to the flat total within
-   *  `usageReconcileTolerance(pricedCost)` (cost) / exactly (tokens).
-   *  Null-prototype so a provider model name like `__proto__` is a plain own
-   *  key. Optional for back-compat; the current runtime always sets it. */
+  /** Per-model priced cost + input/output tokens. Real models only. The flat
+   *  totals are authoritative; the rows plus `unattributed` are attribution that
+   *  reconciles to them — cost within `usageReconcileTolerance(pricedCost)`, and
+   *  token counts exactly WITHIN THE SAFE-INTEGER RANGE. The meter rejects any
+   *  individual count at or above 2**53, and real token totals are far below it;
+   *  only a subprocess relaying many absurd-but-safe counts whose ACCUMULATION
+   *  crosses the safe range makes token reconciliation best-effort (like cost),
+   *  never the flat total. Null-prototype so a provider model name like
+   *  `__proto__` is a plain own key. Optional for back-compat; the current
+   *  runtime always sets it. */
   models?: Record<string, ModelUsageRow>;
   /** Paid spend with no model (addCost: memory, image generation), plus any
    *  spend whose model was lost in transit. A separate field, not a key in
@@ -116,9 +121,11 @@ function isValidCost(value: unknown): value is number {
 
 /** A nonnegative SAFE integer (used for token/count fields). Values at or above
  *  2**53 are rejected: counts arrive from untrusted IPC, and above the safe
- *  range integer addition loses precision, so flat accumulation and the
- *  regrouped per-model row accumulation could diverge — breaking the exact-token
- *  reconciliation guarantee. No real completion reports that many tokens. */
+ *  range integer addition loses precision. This bounds each INDIVIDUAL count, so
+ *  exact-token reconciliation holds within the safe range; it does not bound the
+ *  ACCUMULATED total, so a malicious child relaying many safe counts that sum
+ *  past the safe range makes token reconciliation best-effort (scoped on
+ *  InvocationUsage.models). No real completion reports counts near this. */
 function isValidCount(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }

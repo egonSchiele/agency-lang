@@ -4722,22 +4722,24 @@ export class TypeScriptBuilder {
     }
 
     if (this.compilationUnit.graphNodes.some((n) => n.nodeName === "main")) {
-      // Direct-run argv maps onto main's parameters positionally (argv[2]
-      // onward — `agency run file.agency -- <args>` forwards them), and
-      // initialState is the OPTIONS argument after them. Before this,
-      // initialState was always the first argument: harmless when mains took
-      // no parameters (it landed in the options slot), wrong once entry
-      // nodes take parameters (#739) — the state object arrived as the
-      // first parameter's value. Absent argv entries are undefined, so
-      // parameter defaults apply.
+      // The direct-run call reserves one slot per declared parameter and puts
+      // initialState after them, in main's hidden OPTIONS argument.
+      //
+      // The reservation is what matters: initialState used to be the FIRST
+      // argument, which was harmless while mains took no parameters (it landed
+      // in the options slot) and wrong once they did (#739) — the state object
+      // arrived as the first parameter's value. `undefined` in each slot keeps
+      // it where it belongs, and JavaScript treats an explicit `undefined` and
+      // an omitted argument alike, so parameter defaults still apply.
+      //
+      // The slots are filled with `undefined` rather than argv because a
+      // program's command line belongs to the program. `agency run` forwards
+      // trailing arguments to the child process, where `std::args` reads them;
+      // the compiler does not read them on the entry node's behalf.
       const mainParamCount =
         this.compilationUnit.graphNodes.find((n) => n.nodeName === "main")
           ?.parameters.length ?? 0;
       const mainCallArgs = [
-        // One `undefined` per declared parameter, so `initialState` lands in
-        // the hidden final slot rather than the first declared one. A program's
-        // command line belongs to the program: `std::args` reads it, and the
-        // compiler does not.
         ...Array.from({ length: mainParamCount }, () => ts.id("undefined")),
         ts.id("initialState"),
       ];

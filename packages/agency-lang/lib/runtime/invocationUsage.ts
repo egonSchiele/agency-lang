@@ -114,9 +114,13 @@ function isValidCost(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
-/** A finite, nonnegative integer (used for token/count fields). */
+/** A nonnegative SAFE integer (used for token/count fields). Values at or above
+ *  2**53 are rejected: counts arrive from untrusted IPC, and above the safe
+ *  range integer addition loses precision, so flat accumulation and the
+ *  regrouped per-model row accumulation could diverge — breaking the exact-token
+ *  reconciliation guarantee. No real completion reports that many tokens. */
 function isValidCount(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && Number.isInteger(value);
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
 /** Coerce an untrusted token/count field to a valid count, else 0. */

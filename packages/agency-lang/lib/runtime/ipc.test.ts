@@ -467,7 +467,7 @@ describe("handleInvocationUsageMessage (full delta)", () => {
     const { session } = makeUsageSession();
     // A current-runtime relay carries attribution, so provenance detection does
     // not fire and only the usage delta is re-relayed (exactly once).
-    const delta = { pricedCost: 0.15, inputTokens: 3, outputTokens: 1, unknownCostCallCount: 1, attribution: { kind: "model", model: "opus" } };
+    const delta = { pricedCost: 0.15, inputTokens: 3, outputTokens: 1, unknownCostCallCount: 1, attribution: { kind: "model" as const, model: "opus" } };
     handleInvocationUsageMessage(session, { type: "invocationUsage", ...delta });
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsage", ...delta });
   });

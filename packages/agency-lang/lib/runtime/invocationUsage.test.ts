@@ -289,4 +289,20 @@ describe("normalizeUsageDelta attribution", () => {
       expect(normalized?.attribution).toBeUndefined();
     }
   });
+
+  it("rejects an out-of-safe-range token count so exact-token reconciliation holds", () => {
+    // 2**53 is Number.isInteger but NOT safe; above it integer addition loses
+    // precision, which would break the exact-token reconciliation between the
+    // flat totals and the per-model rows. Untrusted IPC can send it.
+    const normalized = normalizeUsageDelta({
+      pricedCost: 0.1, inputTokens: 2 ** 53, outputTokens: 1, unknownCostCallCount: 0,
+    });
+    expect(normalized?.inputTokens).toBe(0);
+    expect(normalized?.outputTokens).toBe(1);
+    const meter = new InvocationUsageMeter();
+    meter.merge(normalized!);
+    const { usage } = meter.snapshot();
+    expect(usage.inputTokens).toBe(0);
+    expect(usage.unattributed!.inputTokens).toBe(0);
+  });
 });

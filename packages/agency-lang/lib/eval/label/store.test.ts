@@ -130,10 +130,17 @@ describe("openStore", () => {
     expect(() => open()).toThrow(StoreVersionError);
   });
 
-  it("refuses a version 1 store and names the migrate command", () => {
+  it("refuses a version 1 store and says how to rebuild it", () => {
+    // There is no migration, deliberately: a label store is derived data, and
+    // the eval runs it came from are still on disk.
     fs.mkdirSync(storeDir, { recursive: true });
     fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
-    expect(() => open()).toThrow(/agency label migrate/);
+    // One call, then assert on its message. Calling open() twice leaves the
+    // first lock held, so the second failure is about the lock and any further
+    // assertion passes or fails for the wrong reason.
+    expect(() => open()).toThrow(
+      /predates content-derived record ids[\s\S]*agency label ingest/,
+    );
   });
 
   it("checks the manifest BEFORE parsing any log", () => {
@@ -142,7 +149,7 @@ describe("openStore", () => {
     fs.mkdirSync(storeDir, { recursive: true });
     fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 1 }));
     fs.writeFileSync(path.join(storeDir, "outputs.jsonl"), '{"schemaVersion":1,"nonsense":true}\n');
-    expect(() => open()).toThrow(/agency label migrate/);
+    expect(() => open()).toThrow(/predates content-derived record ids/);
   });
 
   it("refuses a manifest with unknown keys", () => {
@@ -414,7 +421,16 @@ describe("store format advice", () => {
     // end.
     fs.mkdirSync(storeDir, { recursive: true });
     fs.writeFileSync(path.join(storeDir, "manifest.json"), JSON.stringify({ schemaVersion: 99 }));
-    expect(() => open()).toThrow(/Upgrade Agency/);
-    expect(() => open()).not.toThrow(/label migrate/);
+    let message = "";
+    try {
+      open();
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/Upgrade Agency/);
+    // Rebuilding cannot help a store from the FUTURE, so it must not be
+    // suggested. Asserted on the captured message: a second open() would fail
+    // on the still-held lock and pass this vacuously.
+    expect(message).not.toMatch(/agency label ingest/);
   });
 });

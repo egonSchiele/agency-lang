@@ -6,7 +6,6 @@ import { addLabelCommand, collectRepeated, type LabelCommandDependencies } from 
 type Recorder = {
   label: unknown[];
   ingest: unknown[];
-  migrate: unknown[];
   failures: string[];
 };
 
@@ -20,9 +19,6 @@ function dependencies(): LabelCommandDependencies {
     }) as never,
     evalIngest: vi.fn(async (options) => {
       recorded.ingest.push(options);
-    }) as never,
-    evalLabelMigrate: vi.fn(async (options) => {
-      recorded.migrate.push(options);
     }) as never,
     fail: (message) => recorded.failures.push(message),
   };
@@ -44,7 +40,7 @@ async function run(...argv: string[]): Promise<void> {
 }
 
 beforeEach(() => {
-  recorded = { label: [], ingest: [], migrate: [], failures: [] };
+  recorded = { label: [], ingest: [], failures: [] };
 });
 
 describe("agency label", () => {
@@ -84,13 +80,6 @@ describe("agency label ingest", () => {
   it("rejects a --max-bytes that is not a positive number", async () => {
     await expect(run("label", "ingest", "./gold", "--source", "s", "--max-bytes", "0"))
       .rejects.toThrow(/positive whole number/);
-  });
-});
-
-describe("agency label migrate", () => {
-  it("passes both directories through", async () => {
-    await run("label", "migrate", "labels", "labels-v2");
-    expect(recorded.migrate[0]).toMatchObject({ sourceDir: "labels", destDir: "labels-v2" });
   });
 });
 
@@ -134,10 +123,6 @@ describe("both registrations", () => {
     expect(recorded.label[0]).toMatchObject({ checklist: "news.json" });
   });
 
-  it("exposes migrate under eval", async () => {
-    await run("eval", "label", "migrate", "old", "new");
-    expect(recorded.migrate[0]).toMatchObject({ sourceDir: "old" });
-  });
 });
 
 describe("collectRepeated", () => {

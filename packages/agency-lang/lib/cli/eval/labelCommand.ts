@@ -8,13 +8,11 @@ import {
   SOURCE_FLAG_DESCRIPTION,
 } from "./ingest.js";
 import { evalLabel } from "./label.js";
-import { evalLabelMigrate } from "./migrate.js";
 
 export type LabelCommandDependencies = {
   getConfig(): AgencyConfig;
   evalLabel: typeof evalLabel;
   evalIngest: typeof evalIngest;
-  evalLabelMigrate: typeof evalLabelMigrate;
   fail(message: string): void;
 };
 
@@ -28,7 +26,7 @@ function defaultFail(message: string): void {
 export function labelCommandDependencies(
   getConfig: () => AgencyConfig,
 ): LabelCommandDependencies {
-  return { getConfig, evalLabel, evalIngest, evalLabelMigrate, fail: defaultFail };
+  return { getConfig, evalLabel, evalIngest, fail: defaultFail };
 }
 
 /**
@@ -101,19 +99,6 @@ export function addLabelCommand(
           extraArgs: extra,
           config: dependencies.getConfig(),
         });
-      } catch (error) {
-        dependencies.fail((error as Error).message);
-      }
-    });
-
-  label
-    .command("migrate")
-    .description("Rewrite a label store in the current format, writing a new store")
-    .argument("<source>", "Existing label store directory")
-    .argument("<dest>", "Where to write the migrated store; must not exist")
-    .action(async (source: string, dest: string) => {
-      try {
-        await dependencies.evalLabelMigrate({ sourceDir: source, destDir: dest });
       } catch (error) {
         dependencies.fail((error as Error).message);
       }

@@ -298,11 +298,16 @@ function assertStoreVersion(storeDir: string): void {
       "moves a store forwards, so it cannot help here.",
     );
   }
+  // No migration exists, deliberately. Version 1 identified an output by the
+  // run that produced it, so every id would change; and a label store is
+  // derived data — the eval runs it came from are still on disk, so re-ingesting
+  // rebuilds it. Refusing to open one is the part that matters: silently
+  // misreading an old file is the only outcome worth preventing.
   throw new StoreVersionError(
     `${storeDir} uses label store format ${String(found)}; this build writes ` +
-    `format ${CURRENT_STORE_VERSION}. Migrate it with:\n\n` +
-    `  agency label migrate ${storeDir} <new-store>\n\n` +
-    "The original store is left untouched.",
+    `format ${CURRENT_STORE_VERSION}. That store predates content-derived record ids, so its ` +
+    `labels cannot be carried across.\n\n` +
+    `  Delete ${storeDir} and rebuild it with \`agency label ingest\`.\n`,
   );
 }
 

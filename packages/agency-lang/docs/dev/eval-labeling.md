@@ -301,91 +301,31 @@ that is not part of its identity:
 Both are named and commented so a later reader does not "fix" them into using
 the shared helper.
 
-## Migration, and why it refuses
+## There is no migration, and that is deliberate
 
-Version 1 identified an output by its execution. Version 2 identifies a record
-by its content, so **every id changes** and annotations must be rewritten.
-`agency label migrate <old> <new>` does it out of place: opening a version
-1 store is refused with a pointer to that command, and the original is never
-touched.
+Version 1 of this store identified an output by the run that produced it. Version
+2 identifies a record by its content, so every id changes and every label would
+have to be rewritten to follow its record.
 
-Content identity merges equal field maps, so two version 1 rows can become one
-record. If the same annotator answered the same question differently on each,
-rewriting both onto the merged id would turn two independent judgements into one
-relabel history — and because answers fold in **append order**, whichever row
-happened to be written second would win. Migration order would silently decide
-the dataset. So migration compares the effective answers first and **refuses**,
-naming the old ids and the conflicting questions.
+A migration was written for exactly that, then deleted. The reasoning is worth
+keeping, because the same trap will come up again:
 
-Two details that are easy to get wrong:
+- **A label store is derived data.** The eval runs it was built from are still in
+  `runs/`, so `agency label ingest` rebuilds it. Nothing is unique to the store
+  except the human answers, and version 1 existed for one day.
+- **Migration was where all the danger was.** It is the only part of this
+  subsystem that deletes files, and it accounted for most of the review findings
+  on the pull request that introduced it — including every one that could reach
+  outside the store.
 
-- The comparison folds answers under each **old** output id. Asking for the
-  effective answers of the new id before anything is rewritten returns nothing,
-  and every conflict passes unnoticed.
-- Annotations are rewritten in their original order, not collapsed into one
-  synthetic row. Collapsing would discard history, timing and note edits.
+What survives is the part that matters: `openStore` reads the manifest before
+opening any log and refuses a store it does not understand, naming what to do.
+Silently misreading an old file is the outcome worth preventing; carrying its
+contents forward was not worth a third of the code.
 
-Publication is staged, and the ordering is the design:
-
-1. A marker file lists every path the migration will copy, written and fsynced
-   **before** any of it exists.
-2. Checklists are copied and flushed individually.
-3. The logs are written, then the manifest **last**.
-4. The result is opened through the ordinary read path to prove it is readable.
-5. It is renamed into place, and the parent directory is synced.
-6. Only then is the marker removed.
-
-Each step exists because of a specific way a crash could otherwise strand you.
-
-**The migrated artifact is the persisted `text`, not a re-projection of
-`value`.** Version 1 stored `text` precisely so the labelled artifact stays
-exactly what the annotator saw, and its session displayed that field.
-Recomputing it would move labels onto different bytes whenever the projection
-rule has changed since, while still producing a store that validates. `value`
-survives as occurrence provenance. The task has no such witness — version 1
-never persisted a rendering of it — so it is projected.
-
-**Version 1 rows are checked against both hashes they carry.** The output id
-witnesses `execution`; the content hash witnesses the task and value that the
-migrated fields are built from. A row failing either was edited after it was
-labelled, and migration refuses rather than move labels onto changed content.
-Neither hash covers `text`, so a hand-edited display projection is the one edit
-this cannot detect.
-
-**The marker holds an inventory, not just a name.** Deriving what the migration
-owns from the live source at reclaim time is unsound: the source is unlocked
-between a crash and the retry, so a checklist deleted in that window would leave
-its staged copy permanently unreclaimable, and one added could make an unrelated
-staged file look owned.
-
-**The marker is untrusted input.** It is a file on disk that anything could have
-written, so it is parsed with a Zod schema that confines every entry path to the
-one subtree migration copies: no absolute paths, no `..`, no unnormalized
-segments, no duplicates. A malformed marker reads as absent.
-
-**Removal descends one verified component at a time and never enters a symlink.**
-This is subtler than it looks. `lstat` only declines to follow the **final**
-component of a path, so joining a multi-segment relative path and checking the
-result still resolves an intermediate link — an inventoried directory replaced
-by `checklists/cl_a -> /elsewhere` was enough to unlink a file outside staging.
-Reading each directory and `lstat`ing its direct children is what makes the walk
-confined. Source checklists containing symlinks are refused outright at
-inventory time, including the `checklists` root itself, since `existsSync`
-follows links.
-
-**The marker outlives every other removal.** The directory is checked for
-unowned entries *before* the marker is unlinked: removing it and then failing to
-`rmdir` would leave an unmarked half-cleaned directory that no later attempt
-could recognise, and so would refuse forever. An empty directory at the staging
-name is recognised too, covering the crash between the marker's unlink and the
-`rmdir`.
-
-**The marker outlives the rename.** Removing it first leaves a window where a
-reboot produces a complete store nobody recognises. A destination carrying a
-matching marker AND a manifest is therefore treated as a publication interrupted
-after the rename, and simply finished. The manifest check matters: `openStore`
-creates one for an empty directory, so opening alone would declare a bare folder
-complete.
+If a future format change touches a store holding labels that cannot be
+regenerated, that is when a migration earns its cost — and the deleted version
+is in this branch's history.
 
 ## What is not built yet
 

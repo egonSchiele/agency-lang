@@ -2022,10 +2022,15 @@ export async function runCli(
   ];
   // Every name commander answers to, so the shorthand policy does not claim a
   // command. Aliases count: `agency fmt x.agency` must stay a format run.
-  const commandNames = program.commands.flatMap((cmd) => [
-    cmd.name(),
-    ...cmd.aliases(),
-  ]);
+  //
+  // Two sources, because neither is complete. `program.commands` omits the
+  // implicit `help` command commander adds itself, which would make
+  // `agency help --version` look like a program called `help`.
+  // `visibleCommands` has `help` but drops hidden commands such as `remote`.
+  const commandNames = [
+    ...program.commands,
+    ...program.createHelp().visibleCommands(program),
+  ].flatMap((cmd) => [cmd.name(), ...cmd.aliases()]);
   const prepared = splitCommandLine(argv, optionsOf(program), [
     {
       command: "run",

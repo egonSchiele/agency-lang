@@ -203,19 +203,23 @@ that doing so would break any program that legitimately wants positional
 arguments beginning with a dash, which is the reason POSIX has the convention at
 all.
 
-## One splitter, two policies
+## One splitter, three policies
 
-`agency agent` needs the same boundary for a different shape: it takes no
-filename, and it forwards its whole command line to an agent that has its own
-flag parser. It used to have its own copy of the walk, with a hand-written list
-of the flags to keep on agency's side.
+`agency agent` and the bare `agency greet.agency` shorthand need the same
+boundary in different shapes. The agent takes no filename and forwards its whole
+command line to a program with its own flag parser; it used to carry a second
+copy of the walk over a hand-written list of flags.
 
-Both now go through `splitCommandLine` with a policy each:
+All three now go through `splitCommandLine` with a policy each:
 
 ```ts
 { command: "run",   ownedPositionals: 1, options: run + root, warnOnCollision: true  }
 { command: "agent", ownedPositionals: 0, options: agent only, warnOnCollision: false }
+{ command: null,    ownedPositionals: 1, options: run + root, warnOnCollision: true  }
 ```
+
+The third is the shorthand, `agency greet.agency`; see below for what `null`
+means and why it needs the list of command names.
 
 `ownedPositionals` is the difference that matters: `run` owns the filename, so
 the line falls after it; `agent` owns nothing, so the line falls at the first
@@ -227,7 +231,7 @@ because forwarding a flag agency also defines is the entire point of the
 command, not a mistake.
 
 The walk itself — arity, attached values, short bundles — lives in one place, so
-a fix to short-option parsing reaches both.
+a fix to short-option parsing reaches all three.
 
 ## The shorthand is `run` with the word left out
 

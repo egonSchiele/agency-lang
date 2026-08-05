@@ -10,8 +10,11 @@ import {
   renderCreatedKey,
   renderTraceList,
   renderPullSummary,
+  renderProjectSpend,
+  renderAccountSpend,
 } from "./render.js";
 import type { CreatedKey, KeySummary } from "../statelog/accountClient.js";
+import type { ProjectSpend, AccountSpendRow } from "../statelog/spendTypes.js";
 
 // Colour wraps each token in ANSI codes; strip them so assertions read plainly.
 // eslint-disable-next-line no-control-regex
@@ -171,5 +174,76 @@ describe("renderPullSummary", () => {
     expect(out).toContain("Pulled 2 files to /out");
     expect(out).toContain("main.agency");
     expect(out).toContain("helper.agency");
+  });
+});
+
+const spend = (overrides: Partial<ProjectSpend> = {}): ProjectSpend => ({
+  pricedCost: 0.4212, inputTokens: 12400, outputTokens: 3010, invocationCount: 87, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, ...overrides,
+});
+
+describe("renderProjectSpend", () => {
+  it("shows cost, tokens, invocations, and the window label; no lower-bound/unpriced lines when complete", () => {
+    const out = strip(renderProjectSpend("my-agent", spend(), "last 7d"));
+    expect(out).toContain("Spend: my-agent");
+    expect(out).toContain("(last 7d)");
+    expect(out).toContain("$0.4212");
+    expect(out).toContain("↑ 12,400");
+    expect(out).toContain("↓ 3,010");
+    expect(out).toContain("Invocations:  87");
+    expect(out).not.toContain("lower bound");
+    expect(out).not.toContain("unpriced");
+  });
+  it("marks a lower bound when usage is incomplete", () => {
+    const out = strip(renderProjectSpend("a", spend({ usageComplete: false }), "all time"));
+    expect(out).toContain("≥ $0.4212");
+    expect(out).toContain("lower bound");
+  });
+  it("notes unpriced calls", () => {
+    const out = strip(renderProjectSpend("a", spend({ unpricedCallCount: 2, pricingComplete: false }), "all time"));
+    expect(out).toContain("2 unpriced call(s)");
+  });
+  it("shows $0.0000 for true zero and <$0.0001 for a tiny positive", () => {
+    expect(strip(renderProjectSpend("a", spend({ pricedCost: 0 }), "all time"))).toContain("$0.0000");
+    expect(strip(renderProjectSpend("a", spend({ pricedCost: 0.00004 }), "all time"))).toContain("<$0.0001");
+  });
+  it("never emits the incoherent '≥ <$0.0001' for a tiny incomplete amount", () => {
+    const out = strip(renderProjectSpend("a", spend({ pricedCost: 0.00004, usageComplete: false }), "all time"));
+    expect(out).not.toContain("≥ <");
+    expect(out).toContain("≥ $0.0000");
+  });
+});
+
+const row = (slug: string, pricedCost: number, over: Partial<ProjectSpend> = {}, deletedAt: string | null = null): AccountSpendRow => ({
+  projectSlug: slug, deletedAt, spend: spend({ pricedCost, ...over }),
+});
+
+describe("renderAccountSpend", () => {
+  it("empty → no projects", () => {
+    expect(strip(renderAccountSpend([], "all time"))).toBe("No projects yet.");
+  });
+  it("sorts active by cost desc then deleted, with slug tie-break, and totals correctly", () => {
+    const out = strip(renderAccountSpend([
+      row("b-cheap", 0.10),
+      row("gone", 0.99, {}, "2026-08-01T00:00:00.000Z"),
+      row("a-tie", 0.50),
+      row("b-tie", 0.50),
+    ], "last 7d"));
+    const lines = out.split("\n");
+    const order = lines.filter((l) => /a-tie|b-tie|b-cheap|gone|TOTAL/.test(l)).map((l) => l.trim().split(/\s+/)[0]);
+    expect(order).toEqual(["a-tie", "b-tie", "b-cheap", "gone", "TOTAL"]);
+    expect(out).toContain("PROJECT");
+    expect(out).toContain("UNPRICED");
+    expect(out).toContain("$2.0900"); // 0.10+0.99+0.50+0.50, all complete
+    expect(out).toContain("gone (deleted)");
+  });
+  it("degrades the TOTAL when a single row is incomplete or unpriced", () => {
+    const out = strip(renderAccountSpend([
+      row("ok", 1),
+      row("bad", 2, { usageComplete: false, unpricedCallCount: 3, pricingComplete: false }),
+    ], "all time"));
+    const total = out.split("\n").find((l) => l.includes("TOTAL")) ?? "";
+    expect(total).toContain("≥ $3.0000");
+    expect(out).toContain("incomplete telemetry");
+    expect(out).toContain("3 unpriced call(s) total");
   });
 });

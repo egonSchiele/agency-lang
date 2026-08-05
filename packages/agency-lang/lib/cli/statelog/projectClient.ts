@@ -5,6 +5,12 @@
 // validated typed values; every failure surfaces as a ProjectRequestError.
 
 import { z } from "zod";
+import {
+  projectSpendSchema,
+  toSpendQuery,
+  type ProjectSpend,
+  type SpendWindow,
+} from "./spendTypes.js";
 
 export type SourceFile = { name: string; contents: string };
 
@@ -52,13 +58,35 @@ export type ProjectClient = {
   pullSource(): Promise<SourceFile[]>;
   listTraces(): Promise<TraceSummary[]>;
   traceLogs(traceId: string): Promise<TraceLog[]>;
+  getSpend(window: SpendWindow): Promise<ProjectSpend>;
+};
+
+/** A single project request: the path segments after `/api/projects/:slug`, an
+ *  optional query, and — for a route a host may not have yet — the message to
+ *  raise when an unknown 404 means the route is unsupported. */
+type ProjectRequest = {
+  segments: string[];
+  query?: Record<string, string>;
+  unsupportedRouteMessage?: string;
 };
 
 /** Build a `/api/projects/:slug/…` URL, encoding the slug and every segment
- *  independently — never concatenate a partly-encoded pathname. */
-function projectRouteUrl(origin: string, slug: string, ...segments: string[]): string {
+ *  independently — never concatenate a partly-encoded pathname — then append any
+ *  query params. */
+function projectRouteUrl(
+  origin: string,
+  slug: string,
+  segments: string[],
+  query: Record<string, string> | undefined,
+): string {
   const path = ["api", "projects", slug, ...segments].map(encodeURIComponent).join("/");
-  return new URL(`/${path}`, origin).toString();
+  const url = new URL(`/${path}`, origin);
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return url.toString();
 }
 
 export function createProjectClient(
@@ -66,10 +94,10 @@ export function createProjectClient(
   projectSlug: string,
   apiKey: string,
 ): ProjectClient {
-  async function request(...segments: string[]): Promise<unknown> {
+  async function request(input: ProjectRequest): Promise<unknown> {
     let response: Response;
     try {
-      response = await fetch(projectRouteUrl(origin, projectSlug, ...segments), {
+      response = await fetch(projectRouteUrl(origin, projectSlug, input.segments, input.query), {
         method: "GET",
         headers: { Authorization: `Bearer ${apiKey}` },
       });
@@ -83,6 +111,13 @@ export function createProjectClient(
     if (!response.ok) {
       const serverError = parsed.ok ? asObject(parsed.value)?.error : undefined;
       if (response.status === 404) {
+        // A missing project always carries statelog's known JSON error. Any
+        // OTHER 404 on a route the caller flagged as host-optional means the
+        // host predates that route; without such a flag, keep the historical
+        // project-not-found message.
+        if (serverError !== "Project not found" && input.unsupportedRouteMessage !== undefined) {
+          throw new ProjectRequestError(input.unsupportedRouteMessage);
+        }
         throw new ProjectRequestError(
           `project '${projectSlug}' not found — check the slug, or that it's deployed`,
         );
@@ -112,10 +147,10 @@ export function createProjectClient(
 
   return {
     async pullSource() {
-      return parseWire(sourceBundleSchema, await request("source")).files;
+      return parseWire(sourceBundleSchema, await request({ segments: ["source"] })).files;
     },
     async listTraces() {
-      return parseWire(z.array(traceSummarySchema), await request("traces"));
+      return parseWire(z.array(traceSummarySchema), await request({ segments: ["traces"] }));
     },
     async traceLogs(traceId) {
       // Validate the argument BEFORE the request (an empty id would pass the
@@ -124,7 +159,10 @@ export function createProjectClient(
         z.string().min(1, "trace id must not be empty"),
         traceId,
       );
-      const logs = parseWire(z.array(traceLogSchema), await request("traces", requested, "logs"));
+      const logs = parseWire(
+        z.array(traceLogSchema),
+        await request({ segments: ["traces", requested, "logs"] }),
+      );
       for (const log of logs) {
         if (log.traceId !== requested) {
           throw new ProjectRequestError(
@@ -133,6 +171,14 @@ export function createProjectClient(
         }
       }
       return logs;
+    },
+    async getSpend(window) {
+      const value = await request({
+        segments: ["spend"],
+        query: toSpendQuery(window),
+        unsupportedRouteMessage: "this statelog host does not support the spend API (upgrade the host)",
+      });
+      return parseWire(projectSpendSchema, value);
     },
   };
 }

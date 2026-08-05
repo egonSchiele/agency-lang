@@ -6,6 +6,12 @@
 // schema, or a `success:false` body — surfaces as an AccountRequestError.
 
 import { z } from "zod";
+import {
+  accountSpendRowSchema,
+  toSpendQuery,
+  type AccountSpendRow,
+  type SpendWindow,
+} from "./spendTypes.js";
 
 export type ProjectSummary = {
   projectId: string;
@@ -85,30 +91,46 @@ export type AccountClient = {
   createProject(input: CreateProjectInput): Promise<ProjectSummary>;
   listKeys(): Promise<KeySummary[]>;
   createProjectKey(input: CreateProjectKeyInput): Promise<CreatedKey>;
+  getAccountSpend(window: SpendWindow): Promise<AccountSpendRow[]>;
 };
 
-type AccountRoute = "whoami" | "projects" | "api_keys";
+type AccountRoute = "whoami" | "projects" | "api_keys" | "spend";
 
-function accountRouteUrl(origin: string, route: AccountRoute): string {
-  return new URL(`/api/${route}`, origin).toString();
+/** One account request: a POST body, an optional query, and — for a route a host
+ *  may not have yet — the message to raise on a 404 that means the route is
+ *  unsupported. */
+type AccountRequestOptions = {
+  body?: unknown;
+  query?: Record<string, string>;
+  unsupportedRouteMessage?: string;
+};
+
+function accountRouteUrl(origin: string, route: AccountRoute, query: Record<string, string> | undefined): string {
+  const url = new URL(`/api/${route}`, origin);
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return url.toString();
 }
 
 export function createAccountClient(origin: string, apiKey: string): AccountClient {
   async function request(
     method: "GET" | "POST",
     route: AccountRoute,
-    body?: unknown,
+    options: AccountRequestOptions = {},
   ): Promise<unknown> {
     const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
     const init: RequestInit = { method, headers };
     if (method === "POST") {
       headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(body ?? {});
+      init.body = JSON.stringify(options.body ?? {});
     }
 
     let response: Response;
     try {
-      response = await fetch(accountRouteUrl(origin, route), init);
+      response = await fetch(accountRouteUrl(origin, route, options.query), init);
     } catch (error) {
       throw new AccountRequestError(`could not reach ${origin} (${message(error)})`);
     }
@@ -126,6 +148,12 @@ export function createAccountClient(origin: string, apiKey: string): AccountClie
       const serverError = parsed ? asObject(json)?.error : undefined;
       if (response.status === 403 && serverError === ACCOUNT_SCOPE_ERROR) {
         throw new AccountScopeError(ACCOUNT_SCOPE_ERROR);
+      }
+      // A 404 on a route the caller flagged host-optional means the host predates
+      // it — before the generic server-error branch, so a `{error}` 404 body does
+      // not mask it (account routes have no project-not-found case).
+      if (response.status === 404 && options.unsupportedRouteMessage !== undefined) {
+        throw new AccountRequestError(options.unsupportedRouteMessage);
       }
       if (typeof serverError === "string") {
         throw new AccountRequestError(serverError);
@@ -167,9 +195,11 @@ export function createAccountClient(origin: string, apiKey: string): AccountClie
     },
     async createProject(input) {
       const value = await request("POST", "projects", {
-        name: input.name,
-        project_id: input.projectId,
-        description: input.description ?? null,
+        body: {
+          name: input.name,
+          project_id: input.projectId,
+          description: input.description ?? null,
+        },
       });
       return toProjectSummary(validateRawProject(value));
     },
@@ -188,11 +218,20 @@ export function createAccountClient(origin: string, apiKey: string): AccountClie
         throw new AccountRequestError(`unknown project '${input.projectId}'`);
       }
       const value = await request("POST", "api_keys", {
-        name: input.name,
-        scope: "project",
-        projectId: match.id,
+        body: {
+          name: input.name,
+          scope: "project",
+          projectId: match.id,
+        },
       });
       return validateCreatedKey(value, slugByInternalId(projects));
+    },
+    async getAccountSpend(window) {
+      const value = await request("GET", "spend", {
+        query: toSpendQuery(window),
+        unsupportedRouteMessage: "this statelog host does not support the spend API (upgrade the host)",
+      });
+      return parseValue(z.array(accountSpendRowSchema), value);
     },
   };
 }

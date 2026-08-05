@@ -168,3 +168,52 @@ describe("projectClient envelope/transport edge cases", () => {
     await expect(client().pullSource()).rejects.toThrow("statelog request failed (HTTP 500)");
   });
 });
+
+describe("projectClient.getSpend", () => {
+  const okSpend = {
+    success: true,
+    value: { pricedCost: 0.5, inputTokens: 10, outputTokens: 2, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true },
+  };
+
+  it("GETs the spend route with both bounds as query params", async () => {
+    fetchMock.mockResolvedValue(response(200, okSpend));
+    const spend = await client().getSpend({ from: 1000, to: 2000 });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://h/api/projects/proj/spend?from=1000&to=2000",
+      { method: "GET", headers: { Authorization: "Bearer key" } },
+    );
+    expect(spend.pricedCost).toBe(0.5);
+  });
+
+  it("omits a null bound (from-only, to-only, neither)", async () => {
+    fetchMock.mockResolvedValue(response(200, okSpend));
+    await client().getSpend({ from: 1000, to: null });
+    expect(fetchMock).toHaveBeenLastCalledWith("https://h/api/projects/proj/spend?from=1000", expect.any(Object));
+    await client().getSpend({ from: null, to: 2000 });
+    expect(fetchMock).toHaveBeenLastCalledWith("https://h/api/projects/proj/spend?to=2000", expect.any(Object));
+    await client().getSpend({ from: null, to: null });
+    expect(fetchMock).toHaveBeenLastCalledWith("https://h/api/projects/proj/spend", expect.any(Object));
+  });
+
+  it("rejects a malformed spend shape as a ProjectRequestError", async () => {
+    fetchMock.mockResolvedValue(response(200, { success: true, value: { ...okSpend.value, pricedCost: -1 } }));
+    await expect(client().getSpend({ from: null, to: null })).rejects.toBeInstanceOf(ProjectRequestError);
+  });
+
+  it("keeps project-not-found for the known JSON 404", async () => {
+    fetchMock.mockResolvedValue(response(404, { error: "Project not found" }));
+    await expect(client().getSpend({ from: null, to: null })).rejects.toThrow(/not found — check the slug/);
+  });
+
+  it("reports an unsupported host for any other 404 (JSON and non-JSON)", async () => {
+    fetchMock.mockResolvedValue(response(404, { error: "Not Found" }));
+    await expect(client().getSpend({ from: null, to: null })).rejects.toThrow(/does not support the spend API/);
+    fetchMock.mockResolvedValue({ ok: false, status: 404, json: vi.fn().mockRejectedValue(new SyntaxError("bad")) } as unknown as Response);
+    await expect(client().getSpend({ from: null, to: null })).rejects.toThrow(/does not support the spend API/);
+  });
+
+  it("leaves a non-JSON 5xx as a server error (not unsupported host)", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 503, json: vi.fn().mockRejectedValue(new SyntaxError("bad")) } as unknown as Response);
+    await expect(client().getSpend({ from: null, to: null })).rejects.toThrow("statelog request failed (HTTP 503)");
+  });
+});

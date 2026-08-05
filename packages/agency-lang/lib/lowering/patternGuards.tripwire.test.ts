@@ -377,9 +377,10 @@ describe("lowering leaves no pattern-specific nodes behind", () => {
       // clone before lowering in place. This runs the same two passes
       // `parseAgency(..., lower: true)` runs (comprehension desugar then
       // pattern lowering, in that order) without a second full corpus parse.
-      // Some deliberate compile-error fixtures parse but THROW during lowering;
-      // `parseAgency(..., lower: true)` used to swallow that, so skip them here
-      // too (see corpusPatterns/parsedCorpus).
+      // A few deliberate compile-error fixtures parse but THROW during
+      // lowering. The previous version of this test skipped them because it
+      // wrapped `parseAgency(..., lower: true)` in a try/catch; the try/catch
+      // here preserves that (see corpusPatterns/parsedCorpus).
       let lowered: AgencyNode[];
       try {
         lowered = desugarComprehensionsInBody(structuredClone(nodes)) as AgencyNode[];

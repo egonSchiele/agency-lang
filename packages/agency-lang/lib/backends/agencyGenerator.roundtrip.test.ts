@@ -111,9 +111,10 @@ describe("formatter gate: unlowered template-mode round-trip", () => {
   // Both corpus tests below need the same four values per file. Parsing is the
   // dominant cost, so compute them once here (two parses per file) and share
   // the result, rather than the five parses per file the two tests used to do
-  // separately. generateAgency partitions program.nodes IN PLACE, but
-  // `normalized()` deep-copies before reading, so the baseline is captured
-  // BEFORE each generate runs on that same parse — no extra parse or clone.
+  // separately. generateAgency does not modify the program it is given (it
+  // partitions imports into a local array), and `normalized()` deep-copies
+  // before reading, so a single parse safely feeds both the baseline and the
+  // generate call — no extra parse or clone.
   type RoundTrip = {
     file: string;
     baseline: Partitioned; // normalized(parse(source))
@@ -129,10 +130,10 @@ describe("formatter gate: unlowered template-mode round-trip", () => {
     for (const file of files) {
       const parsedSource = parseTemplateMode(readFileSync(file, "utf8"));
       const baseline = normalized(parsedSource.nodes);
-      const printed = generateAgency(parsedSource); // consumes parsedSource
+      const printed = generateAgency(parsedSource);
       const parsedPrinted = parseTemplateMode(printed);
       const reprinted = normalized(parsedPrinted.nodes);
-      const twice = generateAgency(parsedPrinted); // consumes parsedPrinted
+      const twice = generateAgency(parsedPrinted);
       out.push({ file, baseline, printed, reprinted, twice });
     }
     roundTripCache = out;

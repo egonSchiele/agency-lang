@@ -26,10 +26,10 @@ concurrency:
 # The test suites are split across parallel jobs to cut wall-clock time. Each
 # job is self-contained — it runs its own `pnpm install && make` (~1 min)
 # rather than sharing a build artifact, which would serialize the jobs and
-# cost about as much in upload/download as it saves. The `build` job's heavy
-# steps used to run serially (unit tests, then integration, then agent tests),
-# which made it the critical path; they now fan out into `build`,
-# `integration`, and `agent-tests` so they run concurrently.
+# cost about as much in upload/download as it saves. The unit, integration, and
+# agent suites used to run serially in one job, which made it the critical
+# path; they now fan out into `unit-tests`, `integration`, and `agent-tests` so
+# they run concurrently. `unit-tests` is itself split into shards.
 jobs:
   # `unit-tests` runs the vitest unit suite. The big agency-lang suite (~740
   # files) is split into shards that run in parallel; each shard runs one slice
@@ -160,7 +160,7 @@ jobs:
 
   # Integration tests (tarball install, bundlers, CLI, StateLog, stdlib
   # sandbox). These are node-22-only and independent of the unit suite, so
-  # they run in parallel with `build` rather than serially behind it.
+  # they run in parallel with `unit-tests` rather than serially behind it.
   integration:
     runs-on: ubuntu-latest
     steps:

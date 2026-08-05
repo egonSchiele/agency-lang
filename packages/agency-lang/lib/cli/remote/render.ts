@@ -11,6 +11,7 @@ import type {
   KeySummary,
   CreatedKey,
 } from "../statelog/accountClient.js";
+import type { ProjectSpend, AccountSpendRow } from "../statelog/spendTypes.js";
 
 const NONE = "—";
 
@@ -110,6 +111,118 @@ export function renderTraceList(traces: TraceSummary[]): string {
 export function renderPullSummary(names: string[], outputDir: string): string {
   const header = `${color.green("Pulled")} ${names.length} file${names.length === 1 ? "" : "s"} to ${outputDir}`;
   return [header, ...names.map((name) => `  ${name}`)].join("\n");
+}
+
+/** A dollar amount that never renders a positive spend as `$0.0000` — a sub-cent
+ *  hosted cost must stay visible. */
+function formatUsd(amount: number): string {
+  if (amount === 0) {
+    return "$0.0000";
+  }
+  if (amount < 0.0001) {
+    return "<$0.0001";
+  }
+  return `$${amount.toFixed(4)}`;
+}
+
+/** A count with thousands separators, in a fixed locale for deterministic output. */
+function formatCount(count: number): string {
+  return count.toLocaleString("en-US");
+}
+
+/** Prefix `≥` when the figure is a trusted lower bound (telemetry incomplete). */
+function lowerBound(amount: number, complete: boolean): string {
+  return complete ? formatUsd(amount) : `≥ ${formatUsd(amount)}`;
+}
+
+export function renderProjectSpend(slug: string, spend: ProjectSpend, description: string): string {
+  const lines = [
+    `${color.bold("Spend:")} ${slug}  ${color.dim(`(${description})`)}`,
+    `  ${color.bold("Cost:")}         ${lowerBound(spend.pricedCost, spend.usageComplete)}`,
+    `  ${color.bold("Tokens:")}       ↑ ${formatCount(spend.inputTokens)}  ↓ ${formatCount(spend.outputTokens)}`,
+    `  ${color.bold("Invocations:")}  ${formatCount(spend.invocationCount)}`,
+  ];
+  if (!spend.usageComplete) {
+    lines.push(color.dim("  (lower bound — some telemetry incomplete)"));
+  }
+  if (spend.unpricedCallCount > 0) {
+    lines.push(color.dim(`  ${formatCount(spend.unpricedCallCount)} unpriced call(s) — cost may be understated`));
+  }
+  return lines.join("\n");
+}
+
+type SpendTotals = {
+  pricedCost: number;
+  inputTokens: number;
+  outputTokens: number;
+  invocationCount: number;
+  unpricedCallCount: number;
+  usageComplete: boolean;
+};
+
+function spendTotals(rows: AccountSpendRow[]): SpendTotals {
+  return rows.reduce<SpendTotals>(
+    (totals, row) => ({
+      pricedCost: totals.pricedCost + row.spend.pricedCost,
+      inputTokens: totals.inputTokens + row.spend.inputTokens,
+      outputTokens: totals.outputTokens + row.spend.outputTokens,
+      invocationCount: totals.invocationCount + row.spend.invocationCount,
+      unpricedCallCount: totals.unpricedCallCount + row.spend.unpricedCallCount,
+      usageComplete: totals.usageComplete && row.spend.usageComplete,
+    }),
+    { pricedCost: 0, inputTokens: 0, outputTokens: 0, invocationCount: 0, unpricedCallCount: 0, usageComplete: true },
+  );
+}
+
+/** Active projects first (by cost desc), then deleted ones (by cost desc), with
+ *  the slug as a deterministic tie-break. */
+function sortAccountRows(rows: AccountSpendRow[]): AccountSpendRow[] {
+  return [...rows].sort((left, right) => {
+    const leftDeleted = left.deletedAt !== null;
+    const rightDeleted = right.deletedAt !== null;
+    if (leftDeleted !== rightDeleted) {
+      return leftDeleted ? 1 : -1;
+    }
+    if (right.spend.pricedCost !== left.spend.pricedCost) {
+      return right.spend.pricedCost - left.spend.pricedCost;
+    }
+    return left.projectSlug < right.projectSlug ? -1 : left.projectSlug > right.projectSlug ? 1 : 0;
+  });
+}
+
+export function renderAccountSpend(rows: AccountSpendRow[], description: string): string {
+  if (rows.length === 0) {
+    return color.dim("No projects yet.");
+  }
+  const sorted = sortAccountRows(rows);
+  const tableRows = sorted.map((row) => [
+    row.deletedAt === null ? row.projectSlug : `${row.projectSlug} (deleted)`,
+    lowerBound(row.spend.pricedCost, row.spend.usageComplete),
+    formatCount(row.spend.inputTokens),
+    formatCount(row.spend.outputTokens),
+    formatCount(row.spend.invocationCount),
+    formatCount(row.spend.unpricedCallCount),
+  ]);
+  const totals = spendTotals(rows);
+  tableRows.push([
+    "TOTAL",
+    lowerBound(totals.pricedCost, totals.usageComplete),
+    formatCount(totals.inputTokens),
+    formatCount(totals.outputTokens),
+    formatCount(totals.invocationCount),
+    formatCount(totals.unpricedCallCount),
+  ]);
+  const lines = [
+    color.dim(`(${description})`),
+    formatStaticTable(["PROJECT", "COST", "↑IN", "↓OUT", "INVOCATIONS", "UNPRICED"], tableRows),
+  ];
+  if (!totals.usageComplete) {
+    lines.push(color.dim("Some projects have incomplete telemetry; totals are lower bounds."));
+  }
+  if (totals.unpricedCallCount > 0) {
+    lines.push(color.dim(`${formatCount(totals.unpricedCallCount)} unpriced call(s) total — cost may be understated.`));
+  }
+  return lines.join("\n");
 }
 
 function formatStaticTable(headers: string[], rows: string[][]): string {

@@ -254,8 +254,8 @@ jobs:
   #
   # Node 23.x is intentionally NOT in this job: running the full suite on two
   # node versions doubled the runner cost and put whichever runner was slower
-  # on the critical path. The cheaper `build` job still exercises node 23.x
-  # (unit tests + build), so 23.x is not left entirely uncovered.
+  # on the critical path. The `node23-build` job still installs and builds on
+  # node 23.x, so the toolchain is not left entirely uncovered there.
   agency-tests:
     permissions:
       contents: read
@@ -267,10 +267,10 @@ jobs:
       # pass/fail picture (and coverage from the shards that did finish).
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     env:
-      SHARD_COUNT: "4"
+      SHARD_COUNT: "8"
 
     steps:
     - name: Checkout repository

@@ -67,21 +67,22 @@ This was tried and reverted. If you find yourself reaching for
 rewritten argv to commander, which parses it normally. Commander removes the
 separator itself, so the program never sees it.
 
-`agency agent` already worked this way (`injectAgentSeparator` in
-`scripts/agency.ts`), so this is the mechanism the CLI already owned rather than
-a second one. The difference is only where the boundary falls: for `agent` it is
-right after the subcommand, and for `run` it is after the filename.
+`agency agent` already worked this way, so this is the mechanism the CLI already
+owned rather than a second one. Both commands now share `splitCommandLine`; see
+"One splitter, two policies" below for how they differ.
 
 Finding the filename means walking past agency's flags, which means knowing
 which ones take a value — `--policy strict` covers two tokens, `-i` covers one.
 That arity comes from commander's own option metadata, read in `runCli`:
 
 ```ts
-const flags = [...(runCmd?.options ?? []), ...program.options].map((option) => ({
-  short: option.short ?? undefined,
-  long: option.long ?? undefined,
-  takesValue: option.required || option.optional,
-}));
+function optionsOf(command: Command | undefined): CliOption[] {
+  return (command?.options ?? []).map((option) => ({
+    short: option.short ?? undefined,
+    long: option.long ?? undefined,
+    arity: option.required ? "required" : option.optional ? "optional" : "none",
+  }));
+}
 ```
 
 **Do not replace this with a hand-written list.** A second list would drift the
@@ -89,11 +90,27 @@ moment someone adds an option to `addRunOptions`, and it would fail silently in
 both directions: the walk would mistake a flag's value for the filename, and the
 warning below would stay quiet about the new flag.
 
-### Optional values swallow the next word too
+### The three arities are not interchangeable
 
-Commander reads `--trace greet.agency` as `trace="greet.agency"` even though the
-value is optional, so an optional-valued option cannot sit before the filename.
-That is why `--trace [file]` became two flags:
+`arity` is `"none" | "required" | "optional"`, and the walk has to honour all
+three because commander does:
+
+| written              | commander gives            | tokens covered |
+| -------------------- | -------------------------- | -------------- |
+| `--policy --verbose` | `policy="--verbose"`       | 2, always      |
+| `--trace --verbose`  | `trace=true`, verbose set  | 1              |
+| `--trace out.tr`     | `trace="out.tr"`           | 2              |
+| `--trace -5`         | `trace="-5"`               | 2              |
+
+A required value takes whatever follows, even another flag. An optional value
+steps over something that looks like a flag but still takes `-5`, because
+commander reads a digit after the dash as a negative number. `looksLikeOption`
+copies that test; getting it wrong makes the walk miscount and put the boundary
+in the wrong place.
+
+Because an optional value does swallow a plain next word, an optional-valued
+option cannot sit before a required positional. That is why `--trace [file]`
+became two flags:
 
 ```
 --trace              write to <input>.trace
@@ -131,8 +148,8 @@ Agency warns anyway, because its misplaced flags fail differently. In the
 precedents above the mistake announces itself: no debugger appears, or Deno's
 missing permission kills the script at the first socket. `--max-cost` fails the
 other way — the run proceeds uncapped and nothing downstream notices. So
-`insertProgramSeparator` forwards the flag as the rule requires and returns a
-warning alongside it.
+`splitCommandLine` forwards the flag as the rule requires and returns a warning
+alongside it.
 
 The warning is suppressed when the user wrote `--`, because that is how someone
 says "I meant this one for the program." This is why the check lives at
@@ -149,10 +166,19 @@ plainest one stays quiet for the rest:
 ```
 
 The last two are the easy ones to miss. `-cfile.json` attaches the value to the
-short flag, and `-iv` is a cluster of two boolean short flags. `flagNamesIn`
-handles them by naming every letter of a short token, so any letter matching an
-agency flag is caught. A letter that is not a flag matches nothing, so the extra
-candidates are harmless. `lib/cli/commandLine.test.ts` pins all four.
+short flag, and `-iv` is a cluster of two boolean short flags.
+
+`parseShortToken` reads a short token **left to right, stopping early**, the way
+commander does. Do not go back to naming every letter:
+
+- an unknown *first* letter means the whole token is the program's, so `-print`
+  forwards silently. Naming every letter would find the `i` and warn about
+  agency's `-i`;
+- an unknown *later* letter is the attached value of the option before it;
+- a value-taking option ends the bundle, because the rest of the token is its
+  value.
+
+`lib/cli/commandLine.test.ts` pins all four spellings and the `-print` case.
 
 ## The `--` asymmetry, which still exists
 
@@ -181,8 +207,8 @@ all.
 
 `agency agent` needs the same boundary for a different shape: it takes no
 filename, and it forwards its whole command line to an agent that has its own
-flag parser. It used to have its own copy of the walk (`injectAgentSeparator`)
-with a hand-written list of the flags to keep on agency's side.
+flag parser. It used to have its own copy of the walk, with a hand-written list
+of the flags to keep on agency's side.
 
 Both now go through `splitCommandLine` with a policy each:
 

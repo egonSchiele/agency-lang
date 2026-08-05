@@ -17,6 +17,10 @@ const RUN_OPTIONS: CliOption[] = [
   { long: "--policy", arity: "required" },
   { long: "--max-cost", arity: "required" },
   { long: "--trace", arity: "none" },
+  // No run option is optional-valued any more — splitting `--trace [file]` is
+  // what removed the last one. This synthetic flag keeps the optional path
+  // covered, because Boundary offers the arity and the walker must honour it.
+  { long: "--snapshot", arity: "optional" },
   { long: "--trace-file", arity: "required" },
 ];
 
@@ -115,7 +119,31 @@ describe("splitCommandLine: run", () => {
     expect(splitCommandLine(argv, ROOT, BOUNDARIES)).toEqual({ argv });
   });
 
-  it("treats a bare --trace as taking no value, so it keeps the filename", () => {
+  it("matches commander on what an optional value swallows", () => {
+    // A flag-looking next token is left alone, so --snapshot stays bare...
+    expect(split("run", "--snapshot", "-i", "greet.agency", "x")).toEqual({
+      argv: [...N, "run", "--snapshot", "-i", "greet.agency", "--", "x"],
+    });
+    expect(split("run", "--snapshot", "--interactive", "greet.agency", "x"))
+      .toEqual({
+        argv: [
+          ...N, "run", "--snapshot", "--interactive", "greet.agency", "--", "x",
+        ],
+      });
+    // ...but a negative number is a value, not a flag, so it is swallowed and
+    // the filename is the token after it.
+    expect(split("run", "--snapshot", "-5", "greet.agency", "x")).toEqual({
+      argv: [...N, "run", "--snapshot", "-5", "greet.agency", "--", "x"],
+    });
+  });
+
+  it("lets a required value swallow even a flag, as commander does", () => {
+    expect(split("run", "--policy", "--interactive", "greet.agency", "x")).toEqual({
+      argv: [...N, "run", "--policy", "--interactive", "greet.agency", "--", "x"],
+    });
+  });
+
+  it("keeps the filename for both trace spellings", () => {
     expect(split("run", "--trace", "greet.agency", "x")).toEqual({
       argv: [...N, "run", "--trace", "greet.agency", "--", "x"],
     });

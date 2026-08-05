@@ -258,7 +258,7 @@ node main() {
   // program, and the warning is the only thing standing between that and a
   // silent surprise. greet does not declare --max-cost, so its own parser then
   // rejects it — which is also the proof the flag really was forwarded. That it
-  // is forwarded rather than intercepted is pinned in runCommandLine.test.ts.
+  // is forwarded rather than intercepted is pinned in commandLine.test.ts.
   const warned = run(
     dir,
     "./node_modules/.bin/agency run greet.agency --max-cost 5 2>&1",

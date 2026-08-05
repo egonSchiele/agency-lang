@@ -56,7 +56,7 @@ export function splitCommandLine(
   while (isFlag(argv[i])) {
     // The user drew the line themselves.
     if (argv[i] === "--") return { argv };
-    const consumed = ownedFlagTokens(argv[i], boundary.options);
+    const consumed = ownedFlagTokens(argv[i], argv[i + 1], boundary.options);
     // A flag agency does not own is already the program's.
     if (consumed === undefined) break;
     i += consumed;
@@ -111,7 +111,7 @@ export function findSubcommandIndex(
     const token = argv[i];
     if (token === "--") return -1;
     if (!isFlag(token)) return i;
-    i += tokensConsumedBy(token, rootOptions);
+    i += tokensConsumedBy(token, argv[i + 1], rootOptions);
   }
   return -1;
 }
@@ -152,7 +152,7 @@ export function flagNamesIn(token: string, options: CliOption[]): string[] {
 function parseShortToken(
   token: string,
   options: CliOption[],
-): { names: string[]; consumesNext: boolean } {
+): { names: string[]; trailing?: CliOption } {
   const letters = [...token.slice(1)];
   const names: string[] = [];
   for (const [index, letter] of letters.entries()) {
@@ -160,21 +160,33 @@ function parseShortToken(
     // Unknown first letter: the whole token belongs to the program. Unknown
     // later: it is the attached value of the option before it.
     if (option === undefined) {
-      return { names: index === 0 ? [] : names, consumesNext: false };
+      return { names: index === 0 ? [] : names };
     }
     names.push(`-${letter}`);
-    // A value-taking option ends the bundle: the rest of the token is its
-    // value, or it takes the next word when nothing is attached.
+    // A value-taking option ends the bundle. Its value is the rest of the
+    // token, or the next word when it is the last letter.
     if (option.arity !== "none") {
-      return { names, consumesNext: index === letters.length - 1 };
+      return index === letters.length - 1
+        ? { names, trailing: option }
+        : { names };
     }
   }
-  return { names, consumesNext: false };
+  return { names };
 }
 
-/** How many tokens an agency flag covers, or undefined if it is not one. */
+/**
+ * How many tokens an agency flag covers, or undefined if it is not agency's.
+ *
+ * The next token is needed because commander treats the two value kinds
+ * differently. A required value takes whatever follows, even another flag:
+ * `--policy --verbose` gives policy="--verbose". An optional value steps over
+ * something that looks like a flag — `--trace --verbose` leaves trace bare —
+ * but still takes `-5`, because a digit after the dash reads as a negative
+ * number rather than a flag.
+ */
 function ownedFlagTokens(
   token: string,
+  next: string | undefined,
   options: CliOption[],
 ): number | undefined {
   if (token.startsWith("--")) {
@@ -183,16 +195,34 @@ function ownedFlagTokens(
     const arity = findOption(name, options)?.arity;
     if (arity === undefined) return undefined;
     if (equals !== -1) return 1;
-    // An optional value still consumes the next word: commander reads
-    // `--trace greet.agency` as trace="greet.agency", not as a bare flag.
-    return arity === "none" ? 1 : 2;
+    return tokensForValue(arity, next);
   }
   const short = parseShortToken(token, options);
   if (short.names.length === 0) return undefined;
-  return short.consumesNext ? 2 : 1;
+  if (short.trailing === undefined) return 1;
+  return tokensForValue(short.trailing.arity, next);
+}
+
+function tokensForValue(arity: Arity, next: string | undefined): number {
+  if (arity === "none") return 1;
+  if (arity === "required") return 2;
+  return next === undefined || looksLikeOption(next) ? 1 : 2;
+}
+
+/** Commander's own test for "this token is a flag, not a value". */
+function looksLikeOption(token: string): boolean {
+  return (
+    token.length > 1 &&
+    token[0] === "-" &&
+    (token[1] === "-" || Number.isNaN(Number.parseFloat(token[1])))
+  );
 }
 
 /** Root-flag walking, where an unknown flag simply covers itself. */
-function tokensConsumedBy(token: string, options: CliOption[]): number {
-  return ownedFlagTokens(token, options) ?? 1;
+function tokensConsumedBy(
+  token: string,
+  next: string | undefined,
+  options: CliOption[],
+): number {
+  return ownedFlagTokens(token, next, options) ?? 1;
 }

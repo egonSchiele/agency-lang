@@ -108,24 +108,47 @@ describe("formatter gate: unlowered template-mode round-trip", () => {
   ].filter((file) => !INTENTIONALLY_UNPARSEABLE.some((name) => file.endsWith(name)));
   expect(files.length).toBeGreaterThan(50);
 
-  it("print -> re-parse is structurally identity on the whole corpus", { timeout: 120_000 }, () => {
+  // Both corpus tests below need the same four values per file. Parsing is the
+  // dominant cost, so compute them once here (two parses per file) and share
+  // the result, rather than the five parses per file the two tests used to do
+  // separately. generateAgency does not modify the program it is given (it
+  // partitions imports into a local array), and `normalized()` deep-copies
+  // before reading, so a single parse safely feeds both the baseline and the
+  // generate call — no extra parse or clone.
+  type RoundTrip = {
+    file: string;
+    baseline: Partitioned; // normalized(parse(source))
+    printed: string; // generate(parse(source))
+    reprinted: Partitioned; // normalized(parse(printed))
+    twice: string; // generate(parse(printed))
+  };
+  let roundTripCache: RoundTrip[] | null = null;
+
+  function roundTrips(): RoundTrip[] {
+    if (roundTripCache) return roundTripCache;
+    const out: RoundTrip[] = [];
     for (const file of files) {
-      const source = readFileSync(file, "utf8");
-      const first = parseTemplateMode(source);
-      // generateAgency partitions program.nodes IN PLACE (header eating,
-      // import extraction) — printing `first` would corrupt the very
-      // baseline the comparison needs. Parse fresh for the print.
-      const printed = generateAgency(parseTemplateMode(source));
-      const second = parseTemplateMode(printed);
-      expect(normalized(second.nodes), file).toEqual(normalized(first.nodes));
+      const parsedSource = parseTemplateMode(readFileSync(file, "utf8"));
+      const baseline = normalized(parsedSource.nodes);
+      const printed = generateAgency(parsedSource);
+      const parsedPrinted = parseTemplateMode(printed);
+      const reprinted = normalized(parsedPrinted.nodes);
+      const twice = generateAgency(parsedPrinted);
+      out.push({ file, baseline, printed, reprinted, twice });
+    }
+    roundTripCache = out;
+    return out;
+  }
+
+  it("print -> re-parse is structurally identity on the whole corpus", { timeout: 120_000 }, () => {
+    for (const rt of roundTrips()) {
+      expect(rt.reprinted, rt.file).toEqual(rt.baseline);
     }
   });
 
   it("printing is idempotent on the whole corpus", { timeout: 120_000 }, () => {
-    for (const file of files) {
-      const once = generateAgency(parseTemplateMode(readFileSync(file, "utf8")));
-      const twice = generateAgency(parseTemplateMode(once));
-      expect(twice, file).toBe(once);
+    for (const rt of roundTrips()) {
+      expect(rt.twice, rt.file).toBe(rt.printed);
     }
   });
 });

@@ -112,3 +112,8 @@ flags", so `node greet.js -- --name alice` leaves `name` at its default and puts
 
 Note when invoking through another tool: `npx agency run file.agency -- x`
 loses the `--` to npx. It works when invoking the `agency` binary directly.
+
+This applies to `agency eval run --agent-cmd` too. A command like
+`agency run writer.agency -- {task}` delivers the task through the program's
+argv, so the agent reads it with `args()` from `std::system` rather than
+declaring a parameter on `main`.

@@ -1,6 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
-import os from "os";
 import path from "path";
 
 // Redirect the stdlib to a per-test fixture. Mocking getStdlibDir alone is
@@ -31,6 +30,7 @@ import { createBuildSession } from "./buildSession.js";
 import { loadManifest, hashFile, MANIFEST_DIR_NAME } from "./buildManifest.js";
 import { evictParseCache } from "../parseCache.js";
 import { clearSpliceCache } from "./splice/cache.js";
+import { safeDeleteDirectory } from "../utils.js";
 
 const EPOCH = new Date(0);
 
@@ -49,7 +49,7 @@ beforeEach(() => {
 
 afterEach(() => {
   clearSpliceCache();
-  fs.rmSync(root, { recursive: true, force: true });
+  safeDeleteDirectory(root, false);
 });
 
 // index ← helper ← consumer; index ← other. All non-templated under the

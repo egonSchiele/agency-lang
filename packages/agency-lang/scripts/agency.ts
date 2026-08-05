@@ -27,6 +27,8 @@ import { runProjectsList, runProjectsCreate } from "@/cli/remote/commands/projec
 import type { CreateProjectOptions } from "@/cli/remote/commands/projects.js";
 import { runKeysList, runKeysCreate } from "@/cli/remote/commands/keys.js";
 import type { CreateKeyOptions } from "@/cli/remote/commands/keys.js";
+import { runSpend } from "@/cli/remote/commands/spend.js";
+import type { SpendOptions } from "@/cli/remote/commands/spend.js";
 import { runPull } from "@/cli/remote/commands/pull.js";
 import type { PullOptions } from "@/cli/remote/commands/pull.js";
 import { runLogs } from "@/cli/remote/commands/logs.js";
@@ -552,6 +554,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action((name: string, opts: CreateKeyOptions) =>
       runKeysCreate(name, opts, getConfigContext()),
     );
+
+  remoteCmd
+    .command("spend")
+    .description("Show hosted spend for a project (or the whole account)")
+    .argument("[project]", "project slug (omit for the account-wide rollup)")
+    .option("--since <duration>", "window ending now, e.g. 24h, 7d, 2w")
+    .option("--from <when>", "window start — ISO-8601 (UTC/offset) or epoch-ms")
+    .option("--to <when>", "window end — ISO-8601 (UTC/offset) or epoch-ms")
+    .option("--json", "emit JSON for machine use")
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((project: string | undefined, opts: SpendOptions) => runSpend(project, opts, getConfigContext()));
 
   const PROJECT_OPTION = "--project <slug>";
   const PROJECT_DESC = "project slug (default: the linked project)";

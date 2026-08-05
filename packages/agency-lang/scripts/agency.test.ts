@@ -14,6 +14,7 @@ const remoteRecipeMocks = vi.hoisted(() => ({
   runProjectsCreate: vi.fn(),
   runKeysList: vi.fn(),
   runKeysCreate: vi.fn(),
+  runSpend: vi.fn(),
   runPull: vi.fn(),
   runLogs: vi.fn(),
 }));
@@ -27,6 +28,9 @@ vi.mock("@/cli/remote/commands/projects.js", () => ({
 vi.mock("@/cli/remote/commands/keys.js", () => ({
   runKeysList: remoteRecipeMocks.runKeysList,
   runKeysCreate: remoteRecipeMocks.runKeysCreate,
+}));
+vi.mock("@/cli/remote/commands/spend.js", () => ({
+  runSpend: remoteRecipeMocks.runSpend,
 }));
 // pull/logs recipes are mocked; logsMode and util stay REAL so the
 // registration's mode/TTY preflight and clean-exit are exercised.
@@ -158,8 +162,30 @@ describe("agency CLI command tree", () => {
       "open",
       "projects",
       "pull",
+      "spend",
       "whoami",
     ]);
+  });
+
+  it("forwards `remote spend <project>` args to runSpend", async () => {
+    remoteRecipeMocks.runSpend.mockClear();
+    const program = createProgram();
+    await program.parseAsync(
+      ["remote", "spend", "my-project", "--since", "7d", "--json", "--host", "https://h", "--api-key-env", "SPEND_KEY"],
+      { from: "user" },
+    );
+    expect(remoteRecipeMocks.runSpend).toHaveBeenCalledTimes(1);
+    const [project, options] = remoteRecipeMocks.runSpend.mock.calls[0];
+    expect(project).toBe("my-project");
+    expect(options).toMatchObject({ since: "7d", json: true, host: "https://h", apiKeyEnv: "SPEND_KEY" });
+  });
+
+  it("forwards bare `remote spend` with an undefined project", async () => {
+    remoteRecipeMocks.runSpend.mockClear();
+    const program = createProgram();
+    await program.parseAsync(["remote", "spend"], { from: "user" });
+    expect(remoteRecipeMocks.runSpend).toHaveBeenCalledTimes(1);
+    expect(remoteRecipeMocks.runSpend.mock.calls[0][0]).toBeUndefined();
   });
 
   it("no longer registers a top-level deploy command (moved to remote deploy)", () => {

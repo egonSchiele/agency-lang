@@ -46,6 +46,27 @@ $ greet --name alice --out result.txt -v
 Hello, alice!
 ```
 
+During development you can run the file with `agency run`. Put `--` first,
+because otherwise `agency run` claims `--name` as its own flag:
+
+```
+$ agency run greet.agency -- --name alice --out result.txt -v
+Hello, alice!
+```
+
+Only `agency run` needs that. A compiled or packed program takes its flags
+directly, and adding `--` there would hide them:
+
+```
+$ agency compile greet.agency
+$ node greet.js --name alice
+Hello, alice!
+```
+
+`--` means "stop reading flags" to `parseArgs`, so anything after it becomes a
+positional argument. `node greet.js -- --name alice` greets the world and puts
+`--name` and `alice` in `positionals`.
+
 ```
 $ greet --help
 Usage: greet [options] [args...]
@@ -146,7 +167,7 @@ export type FlagSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L142))
 
 ### FlagGroups
 
@@ -166,7 +187,7 @@ export type FlagGroups = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L157))
 
 ### ArgsSchema
 
@@ -190,7 +211,7 @@ export type ArgsSchema = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L145))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L166))
 
 ### ParsedArgs
 
@@ -212,7 +233,7 @@ export type ParsedArgs = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L159))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L180))
 
 ## Functions
 
@@ -232,4 +253,4 @@ Given the schema, parse `process.argv`.
 
 **Returns:** [ParsedArgs](#parsedargs)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L164))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L185))

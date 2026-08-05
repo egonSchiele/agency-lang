@@ -530,3 +530,19 @@ describe("function wrapper JS export", () => {
     expect(out).toContain("exported: false");
   });
 });
+
+describe("direct-run entry call", () => {
+  it("reserves every main parameter before the direct-run state argument", () => {
+    const output = generateWithBuilder(`
+node main(first: string, second: string) {
+  return first + second
+}
+`);
+
+    expect(output).toContain(
+      "await main(undefined, undefined, initialState)",
+    );
+    expect(output).not.toContain("__process.argv[2]");
+    expect(output).not.toContain("main() takes");
+  });
+});

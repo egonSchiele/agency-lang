@@ -270,8 +270,9 @@ export function run(
   resumeFile?: string,
   runPolicy?: { policyJson: string; interactive: boolean },
   budget?: { maxCost?: string; maxTime?: string },
-  /** Forwarded to the compiled entry's argv (positions 2+), which the
-   *  direct-run block maps onto main's parameters positionally. */
+  /** Forwarded to the compiled program's argv (positions 2+), for the program
+   *  itself to read — `std::args` is how. They are NOT mapped onto the entry
+   *  node's parameters, which receive `undefined` on this path. */
   nodeArgs: string[] = [],
 ): void {
   const output = compile(config, inputFile, outputFile, {

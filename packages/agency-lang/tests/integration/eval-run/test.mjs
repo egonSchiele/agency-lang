@@ -110,7 +110,14 @@ node main(task: string) {
   // env var (its unit test only pins mint order).
   const cmdFixtures = join(TMP_ROOT, "cmd-fixtures");
   mkdirSync(cmdFixtures, { recursive: true });
-  writeFileSync(join(cmdFixtures, "writer.agency"), `node main(task: string): string {
+  // A command target reaches the agent through the CLI, so the task arrives in
+  // the program's argv rather than in a node parameter. `args()` reads it raw:
+  // an eval task is arbitrary text and may begin with a dash, which `parseArgs`
+  // would try to read as a flag.
+  writeFileSync(join(cmdFixtures, "writer.agency"), `import { args } from "std::system"
+
+node main(): string {
+  const task = args()[0]
   handle {
     write("out.txt", task)
   } with (data) {

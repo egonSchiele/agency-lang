@@ -220,6 +220,15 @@ node main() {
   const runHelp = run(dir, "./node_modules/.bin/agency run --help");
   assertIncludes(runHelp, "Arguments passed through to the program");
 
+  // Why `--` is required at all, and why the docs say so: without it commander
+  // claims the flag as its own.
+  const withoutSeparator = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency --name alice",
+    { expectFail: true },
+  );
+  assertIncludes(withoutSeparator, "unknown option '--name'");
+
   // A declared parameter is no longer filled from the command line, and the
   // runtime state object must never land in it. It used to arrive as the first
   // argument, printing "[object Object]".
@@ -251,8 +260,14 @@ node main() {
   assertIncludes(defaulted, "got: fallback");
   console.log("Test 8b passed");
 
-  // --- Test 8c: a packed standalone program reads its command line too ---
-  console.log("--- Test 8c: packed output command line ---");
+  // --- Test 8c: a compiled or packed program reads its command line too ---
+  console.log("--- Test 8c: compiled and packed command line ---");
+  // The form the docs recommend for development: compile once, run with node.
+  // A separate output path from pack, which inlines the whole package.
+  run(dir, "./node_modules/.bin/agency compile greet.agency");
+  const compiledGreeting = run(dir, "node greet.js --name alice");
+  assertIncludes(compiledGreeting, "Hello, alice!");
+
   run(dir, "./node_modules/.bin/agency pack greet.agency -o packed-greet.mjs");
   // No `--` here: node passes everything after the script through untouched.
   const packedGreeting = run(dir, "node packed-greet.mjs --name alice");

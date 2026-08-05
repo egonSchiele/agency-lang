@@ -33,15 +33,19 @@
 | `lib/levenshtein.test.ts` | **Create.** Tests for the above. |
 | `lib/eval/grading/graders/builtinGraders.ts` | **Modify.** Delete its private `levenshtein` and import the shared one. |
 | `lib/config.ts` | **Modify.** Declare `ResolvedModelFlag`, add `model?: ResolvedModelFlag` to `CliFlags`, and map it in `applyCliFlags`. |
-| `lib/config.modelFlag.test.ts` | **Create.** Tests for the `applyCliFlags` mapping. |
+| `lib/config.test.ts` | **Modify.** Add cases to its existing `describe("applyCliFlags")` block at line 184. |
 | `lib/cli/modelFlag.ts` | **Create.** `resolveModelFlag` — parse `provider/model`, validate structure, validate a bare name against the text catalog, build the error message. |
 | `lib/cli/modelFlag.test.ts` | **Create.** Tests for the resolver. |
 | `scripts/agency.ts` | **Modify.** Add the option to `addRunOptions`, behind a one-line adapter. |
-| `scripts/agency.modelFlag.test.ts` | **Create.** Commander wiring test — proves a repeated `--model` takes the last value. |
+| `scripts/agency.test.ts` | **Modify.** Add Commander wiring cases; it already owns `createProgram` and CLI parsing. |
 | `lib/backends/smoltalkDefaults.codegen.test.ts` | **Modify.** Add cases proving the configuration reaches the generated client block. |
-| `lib/runtime/modelPrecedence.test.ts` | **Create.** Proves a stated provider survives a later model-only override. |
+| `lib/runtime/agencyLlm.test.ts` | **Modify.** Add four precedence cases observing the final client config via the existing `RecordingClient`. |
 | `tests/integration/cli/test.mjs` | **Modify.** End-to-end through the real binary, both commands, and the failure-before-compilation case. |
 | `docs/dev/config.md` | **Modify.** Document what `--model` means in configuration terms, beside the other flags. |
+
+Tests live in the suites that already own the behaviour rather than in new
+narrowly named files. Only `lib/cli/modelFlag.test.ts` and
+`lib/levenshtein.test.ts` are new, because their modules are new.
 
 Why the resolver and the configuration mapping are separate files: the resolver knows about catalogs, slashes and Commander errors; `applyCliFlags` knows about configuration shape. `lib/config.ts` imports nothing from `lib/cli/`, and this change must not be the first thing to do so — which is why `ResolvedModelFlag` is declared in `config.ts` and the CLI imports it with `import type`.
 
@@ -168,7 +172,7 @@ git commit -F .tmp/msg.txt && rm -rf .tmp
 
 **Files:**
 - Modify: `packages/agency-lang/lib/config.ts` (type near `CliFlags` at line 681; mapping inside `applyCliFlags`, which ends with `return next;` at line 755)
-- Create: `packages/agency-lang/lib/config.modelFlag.test.ts`
+- Modify: `packages/agency-lang/lib/config.test.ts` — the existing `describe("applyCliFlags")` block at line 184
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
@@ -189,76 +193,79 @@ The model mapping is unusual in one way: a bare model must **remove** `client.de
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `packages/agency-lang/lib/config.modelFlag.test.ts`:
+Append these to the existing `describe("applyCliFlags", ...)` block in
+`packages/agency-lang/lib/config.test.ts` (line 184). Do not create a new file —
+that block already owns this behaviour and its helpers.
+
+Note the fixtures need no casts: these objects already satisfy `AgencyConfig`,
+and casting through `unknown` would hide a bad fixture instead of asking
+TypeScript to check it.
 
 ```ts
-import { describe, expect, it } from "vitest";
-import { applyCliFlags, type AgencyConfig } from "./config.js";
+  describe("--model", () => {
+    /** A config with a provider already set, as agency.json might. */
+    function configWithProvider(): AgencyConfig {
+      return {
+        client: {
+          defaultModel: "gpt-4o-mini",
+          defaultProvider: "openrouter",
+          providerModules: ["./my-provider.mjs"],
+        },
+      };
+    }
 
-/** A config with a provider already set, as agency.json might. */
-function configWithProvider(): AgencyConfig {
-  return {
-    client: {
-      defaultModel: "gpt-4o-mini",
-      defaultProvider: "openrouter",
-      providerModules: ["./my-provider.mjs"],
-    },
-  } as unknown as AgencyConfig;
-}
-
-describe("applyCliFlags: --model", () => {
-  it("does nothing when the flag is absent", () => {
-    const before = configWithProvider();
-    const after = applyCliFlags(before, {});
-    expect(after.client?.defaultModel).toBe("gpt-4o-mini");
-    expect(after.client?.defaultProvider).toBe("openrouter");
-  });
-
-  it("a bare model sets the model and clears an inherited provider", () => {
-    const after = applyCliFlags(configWithProvider(), {
-      model: { model: "claude-opus-4-8" },
+    it("does nothing when the flag is absent", () => {
+      const after = applyCliFlags(configWithProvider(), {});
+      expect(after.client?.defaultModel).toBe("gpt-4o-mini");
+      expect(after.client?.defaultProvider).toBe("openrouter");
     });
-    expect(after.client?.defaultModel).toBe("claude-opus-4-8");
-    expect(after.client?.defaultProvider).toBeUndefined();
-  });
 
-  it("a prefixed model sets both fields", () => {
-    const after = applyCliFlags(configWithProvider(), {
-      model: { model: "my-tune", explicitProvider: "my-company" },
+    it("a bare model sets the model and clears an inherited provider", () => {
+      const after = applyCliFlags(configWithProvider(), {
+        model: { model: "claude-opus-4-8" },
+      });
+      expect(after.client?.defaultModel).toBe("claude-opus-4-8");
+      expect(after.client?.defaultProvider).toBeUndefined();
     });
-    expect(after.client?.defaultModel).toBe("my-tune");
-    expect(after.client?.defaultProvider).toBe("my-company");
-  });
 
-  it("leaves neighbouring client fields alone", () => {
-    const after = applyCliFlags(configWithProvider(), {
-      model: { model: "claude-opus-4-8" },
+    it("a prefixed model sets both fields", () => {
+      const after = applyCliFlags(configWithProvider(), {
+        model: { model: "my-tune", explicitProvider: "my-company" },
+      });
+      expect(after.client?.defaultModel).toBe("my-tune");
+      expect(after.client?.defaultProvider).toBe("my-company");
     });
-    expect(after.client?.providerModules).toEqual(["./my-provider.mjs"]);
-  });
 
-  it("does not mutate the config it was given", () => {
-    const before = configWithProvider();
-    applyCliFlags(before, { model: { model: "claude-opus-4-8" } });
-    expect(before.client?.defaultModel).toBe("gpt-4o-mini");
-    expect(before.client?.defaultProvider).toBe("openrouter");
-  });
-
-  it("works when the config has no client block at all", () => {
-    const after = applyCliFlags({} as AgencyConfig, {
-      model: { model: "claude-opus-4-8" },
+    it("leaves neighbouring client fields alone", () => {
+      const after = applyCliFlags(configWithProvider(), {
+        model: { model: "claude-opus-4-8" },
+      });
+      expect(after.client?.providerModules).toEqual(["./my-provider.mjs"]);
     });
-    expect(after.client?.defaultModel).toBe("claude-opus-4-8");
-    expect(after.client?.defaultProvider).toBeUndefined();
+
+    it("does not mutate the config it was given", () => {
+      const before = configWithProvider();
+      applyCliFlags(before, { model: { model: "claude-opus-4-8" } });
+      expect(before.client?.defaultModel).toBe("gpt-4o-mini");
+      expect(before.client?.defaultProvider).toBe("openrouter");
+    });
+
+    it("works when the config has no client block at all", () => {
+      const after = applyCliFlags({}, { model: { model: "claude-opus-4-8" } });
+      expect(after.client?.defaultModel).toBe("claude-opus-4-8");
+      expect(after.client?.defaultProvider).toBeUndefined();
+    });
   });
-});
 ```
+
+If `AgencyConfig` requires fields these fixtures omit, add only what the
+compiler demands — do not reach for a cast.
 
 - [ ] **Step 2: Run the tests and watch them fail**
 
 ```bash
 cd packages/agency-lang
-npx vitest run lib/config.modelFlag.test.ts > /tmp/agency-t2.log 2>&1; tail -25 /tmp/agency-t2.log
+npx vitest run lib/config.test.ts > /tmp/agency-t2.log 2>&1; tail -25 /tmp/agency-t2.log
 ```
 
 Expected: FAIL — TypeScript rejects `model` as a `CliFlags` property, and the assertions do not hold.
@@ -331,11 +338,10 @@ Also extend the doc comment above `applyCliFlags` (the list starting `--trace <f
 
 ```bash
 cd packages/agency-lang
-npx vitest run lib/config.modelFlag.test.ts lib/config.test.ts \
-  > /tmp/agency-t2b.log 2>&1; grep -E "Test Files|Tests |FAIL" /tmp/agency-t2b.log
+npx vitest run lib/config.test.ts > /tmp/agency-t2b.log 2>&1; grep -E "Test Files|Tests |FAIL" /tmp/agency-t2b.log
 ```
 
-Expected: all PASS. `lib/config.test.ts` is included to prove the existing `applyCliFlags` behaviour is untouched.
+Expected: all PASS — the new cases and every pre-existing `applyCliFlags` case, which together prove the mapping was added without disturbing the others.
 
 - [ ] **Step 6: Commit**
 
@@ -354,7 +360,7 @@ does not belong.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 EOF
-git add packages/agency-lang/lib/config.ts packages/agency-lang/lib/config.modelFlag.test.ts
+git add packages/agency-lang/lib/config.ts packages/agency-lang/lib/config.test.ts
 git commit -F .tmp/msg.txt && rm -rf .tmp
 ```
 
@@ -381,7 +387,7 @@ The catalog is the **hosted text models**. `_listHostedModels()` in `lib/stdlib/
 Create `packages/agency-lang/lib/cli/modelFlag.test.ts`:
 
 ```ts
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { resolveModelFlag } from "./modelFlag.js";
 
 const CATALOG = ["gpt-4o-mini", "gpt-4o", "claude-opus-4-8", "gemini-2.5-pro"];
@@ -446,15 +452,29 @@ describe("resolveModelFlag: structurally invalid values", () => {
   });
 });
 
+// The default catalog comes from `_listHostedModels()`. Mock it rather than
+// asserting on real model names: which models ship changes month to month, and
+// a test that breaks when a catalog is refreshed is a test nobody trusts. The
+// text-only filtering belongs to `_listHostedModels` and is already covered in
+// `lib/stdlib/llm.test.ts`; what matters here is that the resolver asks it.
+vi.mock("@/stdlib/llm.js", () => ({
+  _listHostedModels: () => [
+    { name: "catalog-model-one", provider: "openai" },
+    { name: "catalog-model-two", provider: "anthropic" },
+  ],
+}));
+
 describe("resolveModelFlag: the default catalog", () => {
-  it("excludes non-text models", () => {
-    // gpt-image-1 is in smoltalk's catalog, but as an image model. Accepting
-    // it here would fail at the first llm() call instead.
-    expect(() => resolveModelFlag("gpt-image-1")).toThrow(/Unknown model/);
+  it("accepts a name the adapter returns", () => {
+    expect(resolveModelFlag("catalog-model-one")).toEqual({
+      model: "catalog-model-one",
+    });
   });
 
-  it("accepts a real text model from the default catalog", () => {
-    expect(resolveModelFlag("gpt-4o-mini")).toEqual({ model: "gpt-4o-mini" });
+  it("rejects a name the adapter does not return", () => {
+    expect(() => resolveModelFlag("catalog-model-three")).toThrow(
+      /Unknown model/,
+    );
   });
 });
 ```
@@ -597,7 +617,7 @@ git commit -F .tmp/msg.txt && rm -rf .tmp
 
 **Files:**
 - Modify: `packages/agency-lang/scripts/agency.ts` — the `addRunOptions` function, and the `RunOptions` type at line 132
-- Create: `packages/agency-lang/scripts/agency.modelFlag.test.ts`
+- Modify: `packages/agency-lang/scripts/agency.test.ts` — it already owns `createProgram` and CLI parsing
 
 **Interfaces:**
 - Consumes: `resolveModelFlag` from Task 3, `ResolvedModelFlag` from Task 2.
@@ -619,35 +639,35 @@ the second call receives the first `ResolvedModelFlag` as its `catalogNames` arg
 
 - [ ] **Step 1: Write the failing wiring test**
 
-Create `packages/agency-lang/scripts/agency.modelFlag.test.ts`:
+Append to `packages/agency-lang/scripts/agency.test.ts`:
 
 ```ts
-import { describe, expect, it } from "vitest";
-import { createProgram } from "./agency.js";
-
-/** Parse an argv and hand back the RunOptions the `run` action would see. */
-function runOptionsFor(words: string[]): Record<string, unknown> {
-  const program = createProgram({});
-  const run = program.commands.find((cmd) => cmd.name() === "run");
-  if (run === undefined) throw new Error("no run command");
-  let captured: Record<string, unknown> = {};
-  run.action(() => {
-    captured = run.opts();
-  });
-  program.exitOverride();
-  run.exitOverride();
-  program.parse(["node", "agency", ...words], { from: "user" });
-  return captured;
-}
-
 describe("--model wiring", () => {
-  it("resolves a bare model", () => {
-    const opts = runOptionsFor(["run", "--model", "gpt-4o-mini", "f.agency"]);
+  /** Parse an argv and hand back the RunOptions the `run` action would see. */
+  async function runOptionsFor(words: string[]): Promise<Record<string, unknown>> {
+    const program = createProgram({});
+    const run = program.commands.find((cmd) => cmd.name() === "run");
+    if (run === undefined) throw new Error("no run command");
+    let captured: Record<string, unknown> = {};
+    run.action(() => {
+      captured = run.opts();
+    });
+    program.exitOverride();
+    run.exitOverride();
+    // `from: "user"` means every element is a user argument — commander does
+    // NOT strip a leading node/script pair in this mode. Passing them would
+    // send "node" through the hidden default command instead of testing `run`.
+    await program.parseAsync(words, { from: "user" });
+    return captured;
+  }
+
+  it("resolves a bare model", async () => {
+    const opts = await runOptionsFor(["run", "--model", "gpt-4o-mini", "f.agency"]);
     expect(opts.model).toEqual({ model: "gpt-4o-mini" });
   });
 
-  it("resolves a prefixed model", () => {
-    const opts = runOptionsFor([
+  it("resolves a prefixed model", async () => {
+    const opts = await runOptionsFor([
       "run", "--model", "openrouter/anthropic/claude-sonnet-4", "f.agency",
     ]);
     expect(opts.model).toEqual({
@@ -656,22 +676,28 @@ describe("--model wiring", () => {
     });
   });
 
-  it("takes the last value when the flag is repeated", () => {
+  it("takes the last value when the flag is repeated", async () => {
     // Commander passes the PREVIOUS parsed value as the parser's second
-    // argument. Without an adapter, that object lands in `catalogNames`.
-    const opts = runOptionsFor([
+    // argument. Without the adapter, that object lands in `catalogNames`.
+    const opts = await runOptionsFor([
       "run", "--model", "gpt-4o-mini", "--model", "claude-opus-4-8", "f.agency",
     ]);
     expect(opts.model).toEqual({ model: "claude-opus-4-8" });
   });
 
-  it("rejects an unknown bare model", () => {
-    expect(() =>
+  it("rejects an unknown bare model", async () => {
+    await expect(
       runOptionsFor(["run", "--model", "gpt-4o-minii", "f.agency"]),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 });
 ```
+
+The model names above must exist in the real catalog, because this test drives
+the real resolver through the real program. `gpt-4o-mini` and `claude-opus-4-8`
+are both in it today; if either has been retired, substitute a current name from
+`agency models list` rather than mocking here — the point of this suite is the
+wiring, end to end.
 
 If `createProgram` is not exported from `scripts/agency.ts`, export it — it is already used this way by `scripts/agency.test.ts`, so check there first.
 
@@ -679,7 +705,7 @@ If `createProgram` is not exported from `scripts/agency.ts`, export it — it is
 
 ```bash
 cd packages/agency-lang
-npx vitest run scripts/agency.modelFlag.test.ts > /tmp/agency-t4.log 2>&1; tail -20 /tmp/agency-t4.log
+npx vitest run scripts/agency.test.ts > /tmp/agency-t4.log 2>&1; tail -20 /tmp/agency-t4.log
 ```
 
 Expected: FAIL — `opts.model` is `undefined`, because the option does not exist yet.
@@ -727,7 +753,7 @@ Then, inside `addRunOptions`, add the option to the chain:
 
 ```bash
 cd packages/agency-lang
-npx vitest run scripts/agency.modelFlag.test.ts scripts/agency.test.ts \
+npx vitest run scripts/agency.test.ts \
   > /tmp/agency-t4b.log 2>&1; grep -E "Test Files|Tests |FAIL" /tmp/agency-t4b.log
 ```
 
@@ -739,7 +765,7 @@ Temporarily change the option's parser from `(value: string) => resolveModelFlag
 
 ```bash
 cd packages/agency-lang
-npx vitest run scripts/agency.modelFlag.test.ts -t "repeated" \
+npx vitest run scripts/agency.test.ts -t "repeated" \
   > /tmp/agency-t4c.log 2>&1; grep -E "Tests |FAIL" /tmp/agency-t4c.log
 ```
 
@@ -762,7 +788,7 @@ appears twice.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 EOF
-git add packages/agency-lang/scripts/agency.ts packages/agency-lang/scripts/agency.modelFlag.test.ts
+git add packages/agency-lang/scripts/agency.ts packages/agency-lang/scripts/agency.test.ts
 git commit -F .tmp/msg.txt && rm -rf .tmp
 ```
 
@@ -774,39 +800,39 @@ git commit -F .tmp/msg.txt && rm -rf .tmp
 - Modify: `packages/agency-lang/lib/backends/smoltalkDefaults.codegen.test.ts`
 
 **Interfaces:**
-- Consumes: the `applyCliFlags` mapping from Task 2.
+- Consumes: nothing. This task pins existing code-generation behaviour; it does
+  **not** exercise `applyCliFlags`, because the `generate` helper hands a
+  ready-made `AgencyConfig` straight to `TypeScriptBuilder`. Task 2 covers the
+  mapping and Task 7 covers the two joined together.
 - Produces: nothing for later tasks.
 
-**Background the implementer needs.** The compiler writes the smoltalk client configuration into the generated JavaScript. `lib/backends/typescriptBuilder.ts:4413` emits `model: <string>` always, and emits `provider: <string>` **only when `client.defaultProvider` is set** — the comment there says it leaves it unset otherwise so smoltalk's model-to-provider lookup still applies. That conditional is exactly what the bare-model rule depends on, so it is worth pinning.
+**Background the implementer needs.** The compiler writes the smoltalk client
+configuration into the generated JavaScript. `lib/backends/typescriptBuilder.ts:4413`
+emits `model: <string>` always, and emits `provider: <string>` **only when
+`client.defaultProvider` is set**.
 
-This file already has a `generate(source, config)` helper that runs the parser, preprocessor and builder and returns the printed TypeScript.
+**Most of this is already tested.** `smoltalkDefaults.codegen.test.ts` has
+`omits provider when defaultProvider is unset` (line 64) and `bakes provider when
+defaultProvider is set` (line 71). Leave both alone. Note the existing test
+anchors on `/provider:\s*"/` rather than the bare token, with a comment
+explaining that `provider` appears elsewhere in generated output — do not add a
+looser assertion beside it.
+
+Only one assertion is missing: that `client.defaultModel` is baked at all.
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to the `describe("smoltalkDefaults codegen", ...)` block in `packages/agency-lang/lib/backends/smoltalkDefaults.codegen.test.ts`:
+Append one case to the `describe("smoltalkDefaults codegen", ...)` block in
+`packages/agency-lang/lib/backends/smoltalkDefaults.codegen.test.ts`:
 
 ```ts
   it("bakes client.defaultModel into the generated client config", () => {
     const out = generate(PROGRAM, { client: { defaultModel: "claude-opus-4-8" } });
-    expect(out).toContain('model: "claude-opus-4-8"');
-  });
-
-  it("emits no provider when none is configured, so smoltalk infers one", () => {
-    const out = generate(PROGRAM, { client: { defaultModel: "claude-opus-4-8" } });
-    expect(out).not.toContain("provider:");
-  });
-
-  it("bakes both when a provider is configured", () => {
-    const out = generate(PROGRAM, {
-      client: {
-        defaultModel: "anthropic/claude-sonnet-4",
-        defaultProvider: "openrouter",
-      },
-    });
-    expect(out).toContain('model: "anthropic/claude-sonnet-4"');
-    expect(out).toContain('provider: "openrouter"');
+    expect(out).toMatch(/model:\s*"claude-opus-4-8"/);
   });
 ```
+
+Do not add provider cases; lines 64 and 71 already cover both directions.
 
 - [ ] **Step 2: Run the tests**
 
@@ -816,18 +842,17 @@ npx vitest run lib/backends/smoltalkDefaults.codegen.test.ts \
   > /tmp/agency-t5.log 2>&1; grep -E "Test Files|Tests |FAIL" /tmp/agency-t5.log
 ```
 
-Expected: all PASS immediately — this is existing behaviour being pinned, not new behaviour. If the second case fails because `provider:` appears for an unrelated reason, tighten the assertion to `expect(out).not.toContain('provider: "')` and note why in a comment.
+Expected: all PASS immediately — this is existing behaviour being pinned, not new behaviour.
 
 - [ ] **Step 3: Commit**
 
 ```bash
 cd /Users/adityabhargava/agency-lang/worktree-model-flag
 mkdir -p .tmp && cat > .tmp/msg.txt <<'EOF'
-test(codegen): pin the model and provider baked into the client config
+test(codegen): pin the model baked into the client config
 
-The bare-model rule depends on the code generator emitting no provider
-when none is configured, so smoltalk infers one from the model name.
-That conditional had no test.
+The provider cases were already covered; only the model itself had no
+assertion.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 EOF
@@ -837,98 +862,151 @@ git commit -F .tmp/msg.txt && rm -rf .tmp
 
 ---
 
-## Task 6: Prove a stated provider is sticky
+## Task 6: Prove precedence at the final client config
 
 **Files:**
-- Create: `packages/agency-lang/lib/runtime/modelPrecedence.test.ts`
+- Modify: `packages/agency-lang/lib/runtime/agencyLlm.test.ts`
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks — this pins existing runtime behaviour the design depends on.
 - Produces: nothing for later tasks.
 
-**Background the implementer needs.** The spec's central claim is that model and provider merge **independently**, so a provider set by a lower layer survives a higher layer that changes only the model. Two places do that merging:
+**Background the implementer needs.** The spec's central claim is that model and
+provider merge **independently**, so a provider set by a lower layer survives a
+higher layer that changes only the model. If someone later "fixes" that into a
+merge that clears the provider whenever the model changes, the sticky-provider
+rule silently stops holding and nothing in the suite notices.
 
-- `lib/runtime/state/context.ts:763` — `getSmoltalkConfig(config)` returns `{ ...this.smoltalkDefaults, ...config }`
-- `lib/runtime/prompt.ts:1026` — `ctx.getSmoltalkConfig({ ...stackSmolDefaults, ...restClientConfig })`
+This is observable end to end. `lib/runtime/agencyLlm.test.ts` already has a
+`RecordingClient` (line 35) that stores every `PromptConfig` it is handed in
+`configs[]`, and an existing test at line 103 asserts on
+`client.configs[0].provider` after `_setLlmOptions({ provider, model })`. Assert
+on the recorded pair rather than on any internal merge function.
 
-If someone later "fixes" either into a merge that clears the provider when the model changes, the sticky-provider rule this feature documents silently stops holding. Nothing in the suite would notice. That is what this test is for.
+Two facts that shape the cases:
 
-Note this test does **not** make an LLM call. The deterministic mock client reports `model: "deterministic"` in its result and does not expose the incoming model, so an end-to-end assertion is not available; the merge functions are the real mechanism and are tested directly.
+- `makeCtx()` (line 11) hard-codes `smoltalkDefaults: { model: "default-model" }`.
+  It needs a parameter so a test can bake a provider too. Give the parameter the
+  current value as its default so every existing caller is unaffected.
+- The TypeScript `agency.llm` facade forwards only `model` and `maxTokens` to
+  `clientConfig` (`lib/runtime/agencyLlm.ts:96`) — **not** `provider`. Generated
+  Agency code does forward it, but this facade does not, so the per-call
+  provider case uses `_setLlmOptions({ model, provider })`, which the spec names
+  as the supported way to move both.
 
-`lib/runtime/configOverrides.test.ts:159` shows how to construct a `RuntimeContext` in a test — copy its construction shape rather than inventing one.
+- [ ] **Step 1: Give `makeCtx` a defaults parameter**
 
-- [ ] **Step 1: Write the test**
-
-Create `packages/agency-lang/lib/runtime/modelPrecedence.test.ts`:
+In `packages/agency-lang/lib/runtime/agencyLlm.test.ts`, change `makeCtx` (line 11):
 
 ```ts
-import { describe, expect, it } from "vitest";
-import { RuntimeContext } from "./state/context.js";
-
-/**
- * A context whose baked defaults are what `--model openrouter/foo` would
- * produce: both a model and a provider.
- */
-function contextWithBakedPair() {
+function makeCtx(
+  smoltalkDefaults: Record<string, unknown> = { model: "default-model" },
+): RuntimeContext<any> {
   return new RuntimeContext({
-    smoltalkDefaults: { model: "foo", provider: "openrouter" },
-  } as never);
+    statelogConfig: {
+      host: "https://example.com",
+      apiKey: "test-api-key",
+      projectId: "test-project",
+      debugMode: false,
+    },
+    smoltalkDefaults,
+    dirname: "/tmp",
+  });
 }
+```
 
-describe("model and provider merge independently", () => {
-  it("keeps a baked provider when only the model is overridden", () => {
-    const ctx = contextWithBakedPair();
-    // What `setModel("claude-opus-4-8")` contributes: the model alone.
-    const merged = ctx.getSmoltalkConfig({ model: "claude-opus-4-8" });
-    expect(merged.model).toBe("claude-opus-4-8");
-    expect(merged.provider).toBe("openrouter");
-  });
+The default keeps every existing caller identical.
 
-  it("replaces the provider when the caller supplies one", () => {
-    const ctx = contextWithBakedPair();
-    const merged = ctx.getSmoltalkConfig({
-      model: "claude-opus-4-8",
-      provider: "anthropic",
+- [ ] **Step 2: Write the precedence cases**
+
+Append to `packages/agency-lang/lib/runtime/agencyLlm.test.ts`:
+
+```ts
+describe("model and provider precedence", () => {
+  /** The pair the client was actually asked for. */
+  async function effectivePair(
+    baked: Record<string, unknown>,
+    call: () => Promise<unknown>,
+  ): Promise<{ model?: string; provider?: string }> {
+    const ctx = makeCtx(baked);
+    const client = new RecordingClient(["ok"]);
+    ctx.setLLMClient(client);
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    await inFrame(ctx, threads, call);
+    const config = client.configs[0] as any;
+    return { model: config.model, provider: config.provider };
+  }
+
+  it("a branch model override leaves no provider when none was baked", async () => {
+    const pair = await effectivePair({ model: "baked-model" }, async () => {
+      _setLlmOptions({ model: "branch-model" });
+      return agency.llm("hi");
     });
-    expect(merged.model).toBe("claude-opus-4-8");
-    expect(merged.provider).toBe("anthropic");
+    expect(pair).toEqual({ model: "branch-model", provider: undefined });
   });
 
-  it("leaves the provider unset when nothing baked one", () => {
-    const ctx = new RuntimeContext({
-      smoltalkDefaults: { model: "gpt-4o-mini" },
-    } as never);
-    const merged = ctx.getSmoltalkConfig({ model: "claude-opus-4-8" });
-    expect(merged.provider).toBeUndefined();
+  it("a baked provider survives a branch model-only override", async () => {
+    const pair = await effectivePair(
+      { model: "baked-model", provider: "openrouter" },
+      async () => {
+        _setLlmOptions({ model: "branch-model" });
+        return agency.llm("hi");
+      },
+    );
+    expect(pair).toEqual({ model: "branch-model", provider: "openrouter" });
+  });
+
+  it("a baked provider survives a per-call model-only override", async () => {
+    const pair = await effectivePair(
+      { model: "baked-model", provider: "openrouter" },
+      () => agency.llm("hi", { model: "call-model" }),
+    );
+    expect(pair).toEqual({ model: "call-model", provider: "openrouter" });
+  });
+
+  it("supplying both replaces the baked provider", async () => {
+    const pair = await effectivePair(
+      { model: "baked-model", provider: "openrouter" },
+      async () => {
+        _setLlmOptions({ model: "branch-model", provider: "anthropic" });
+        return agency.llm("hi");
+      },
+    );
+    expect(pair).toEqual({ model: "branch-model", provider: "anthropic" });
   });
 });
 ```
 
-- [ ] **Step 2: Run the test**
+The first three cases are the sticky-provider rule the spec promises. The fourth
+is the escape it names.
+
+- [ ] **Step 3: Run the suite**
 
 ```bash
 cd packages/agency-lang
-npx vitest run lib/runtime/modelPrecedence.test.ts \
+npx vitest run lib/runtime/agencyLlm.test.ts \
   > /tmp/agency-t6.log 2>&1; grep -E "Test Files|Tests |FAIL" /tmp/agency-t6.log
 ```
 
-Expected: all PASS — this pins behaviour that already exists. If the `RuntimeContext` constructor rejects that argument shape, open `lib/runtime/configOverrides.test.ts` around line 159 and copy the fields it passes, keeping `smoltalkDefaults` as above.
+Expected: all PASS, new and pre-existing. These pin behaviour that already
+exists; if one fails, the merge does not work the way the spec claims and the
+spec is wrong — stop and say so rather than adjusting the assertion to match.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 cd /Users/adityabhargava/agency-lang/worktree-model-flag
 mkdir -p .tmp && cat > .tmp/msg.txt <<'EOF'
-test(runtime): pin that model and provider merge independently
+test(runtime): pin model and provider precedence at the client
 
 The --model design depends on a stated provider surviving a later
-model-only override, which follows from getSmoltalkConfig being a
-shallow spread. Nothing tested that, so a later merge change would break
-the documented rule in silence.
+model-only override. Asserted on the config the client is actually
+handed, via the RecordingClient this suite already has, rather than on
+an internal merge function.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 EOF
-git add packages/agency-lang/lib/runtime/modelPrecedence.test.ts
+git add packages/agency-lang/lib/runtime/agencyLlm.test.ts
 git commit -F .tmp/msg.txt && rm -rf .tmp
 ```
 
@@ -951,37 +1029,41 @@ Use `./node_modules/.bin/agency`, never `npx agency` — npx consumes `--`, and 
 
 - [ ] **Step 1: Add the test cases**
 
-In `packages/agency-lang/tests/integration/cli/test.mjs`, immediately before the line `console.log("Test 8 passed");`, insert:
+In `packages/agency-lang/tests/integration/cli/test.mjs`, immediately before the
+line `console.log("Test 8 passed");`, insert:
 
 ```js
   // --- --model reaches the compiled program ---
-  // An agency.json with a provider already set, so the bare-model case has
-  // something to clear. Without this the "no provider" assertion could pass
-  // for the wrong reason.
+  // `--model` lives on addRunOptions, which `run` and the shorthand share.
+  // `agency compile` has its own option list and does NOT take it, so these
+  // cases drive the two supported surfaces and read what they compiled.
+  //
+  // Start from an agency.json that already names a provider, so the bare-model
+  // case has something to clear and cannot pass for the wrong reason.
   writeFile(dir, "agency.json", JSON.stringify({
     client: { defaultModel: "gpt-4o-mini", defaultProvider: "openrouter" },
   }, null, 2));
 
   // A bare model replaces the model AND drops the inherited provider, so
   // smoltalk infers one from the name.
-  run(dir, "./node_modules/.bin/agency compile --model claude-opus-4-8 greet.agency");
+  const bareRun = run(dir, "./node_modules/.bin/agency run --model claude-opus-4-8 greet.agency --name alice");
+  assertIncludes(bareRun, "Hello, alice!");
   const bareOut = readFileSync(join(dir, "greet.js"), "utf-8");
   assertIncludes(bareOut, 'model: "claude-opus-4-8"');
-  if (bareOut.includes('provider: "')) {
+  // Anchored on a baked literal: the bare token `provider` also appears in
+  // unrelated generated output.
+  if (/provider:\s*"/.test(bareOut)) {
     throw new Error("a bare --model left a provider in the generated config");
   }
 
-  // A prefixed model sets both.
-  run(dir, "./node_modules/.bin/agency compile --model openrouter/anthropic/claude-sonnet-4 greet.agency");
+  // The shorthand takes the flag too, and a prefixed value sets both fields.
+  const prefixedRun = run(dir, "./node_modules/.bin/agency --model openrouter/anthropic/claude-sonnet-4 greet.agency --name alice");
+  assertIncludes(prefixedRun, "Hello, alice!");
   const prefixedOut = readFileSync(join(dir, "greet.js"), "utf-8");
   assertIncludes(prefixedOut, 'model: "anthropic/claude-sonnet-4"');
-  assertIncludes(prefixedOut, 'provider: "openrouter"');
-
-  // The flag works on `run` and on the shorthand, which share addRunOptions.
-  const modelRun = run(dir, "./node_modules/.bin/agency run --model claude-opus-4-8 greet.agency --name alice");
-  assertIncludes(modelRun, "Hello, alice!");
-  const modelShorthand = run(dir, "./node_modules/.bin/agency --model claude-opus-4-8 greet.agency --name alice");
-  assertIncludes(modelShorthand, "Hello, alice!");
+  if (!/provider:\s*"openrouter"/.test(prefixedOut)) {
+    throw new Error("a prefixed --model did not bake its provider");
+  }
 
   // An unknown bare model fails BEFORE compiling. Deleting the output first
   // and asserting it was never recreated is what proves the ordering — a test
@@ -1001,11 +1083,27 @@ In `packages/agency-lang/tests/integration/cli/test.mjs`, immediately before the
     throw new Error("compilation happened despite an invalid --model");
   }
 
+  // The position rule applies to the new flag like any other: after the
+  // filename it belongs to the program, is NOT validated by agency, and draws
+  // the standard warning. greet does not declare --model, so its own parser
+  // rejects it — which is also the proof the flag was forwarded.
+  const modelAfterFile = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency --model gpt-4o-mini 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(modelAfterFile, "Warning: --model went to your program");
+  assertIncludes(modelAfterFile, "unknown flag --model");
+  if (modelAfterFile.includes("Unknown model")) {
+    throw new Error("agency validated a --model that belonged to the program");
+  }
+
   // Leave no agency.json behind for the later cases in this file.
   rmSync(join(dir, "agency.json"), { force: true });
 ```
 
-Extend the `node:fs` import at the top of the file to cover the helpers used above:
+Extend the `node:fs` import at the top of the file to cover the helpers used
+above:
 
 ```js
 import { readFileSync, existsSync, rmSync } from "node:fs";
@@ -1024,7 +1122,9 @@ tail -30 /tmp/agency-t7.log
 
 Expected: `make=0`, `cli=0`, and the suite ends with `=== All CLI tests passed ===`.
 
-If the bare-model case fails because `greet.js` already existed from an earlier case in the file, add `rmSync(join(dir, "greet.js"), { force: true });` before the first compile as well.
+If the bare-model case reads a stale `greet.js` from an earlier case in this
+file, add `rmSync(join(dir, "greet.js"), { force: true });` before the first run
+as well.
 
 - [ ] **Step 3: Commit**
 
@@ -1036,8 +1136,9 @@ test(cli): --model end to end, on run and the shorthand
 Starts from an agency.json that already names a provider, so the
 bare-model case has something to clear and cannot pass for the wrong
 reason. The invalid-model case deletes the output first and asserts it
-was never written, which is what proves validation runs before
-compilation rather than after it.
+was never written, which proves validation runs before compilation. A
+last case puts --model after the filename and asserts agency forwards it
+without validating, so the new option obeys the position rule.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 EOF
@@ -1087,8 +1188,8 @@ proxy; name it (`--model litellm/gpt-4o-mini`) to keep it.
 (`lib/runtime/state/context.ts:763`), so a provider set by the flag survives a
 later `setModel("other")` in Agency code — the pair becomes that provider plus
 the new model. Code that wants to move provider too must say
-`setLlmOptions({ model, provider })`. `lib/runtime/modelPrecedence.test.ts` pins
-this.
+`setLlmOptions({ model, provider })`. The precedence cases in
+`lib/runtime/agencyLlm.test.ts` pin this.
 
 **Only a bare name is validated.** It is checked against the hosted **text**
 models from `_listHostedModels()` — not smoltalk's `getAllModels()`, which also
@@ -1133,14 +1234,12 @@ git commit -F .tmp/msg.txt && rm -rf .tmp
 cd packages/agency-lang
 npx vitest run \
   lib/levenshtein.test.ts \
-  lib/config.modelFlag.test.ts \
   lib/config.test.ts \
   lib/cli/modelFlag.test.ts \
   lib/eval/grading/graders/ \
-  scripts/agency.modelFlag.test.ts \
   scripts/agency.test.ts \
   lib/backends/smoltalkDefaults.codegen.test.ts \
-  lib/runtime/modelPrecedence.test.ts \
+  lib/runtime/agencyLlm.test.ts \
   > /tmp/agency-final.log 2>&1
 grep -E "Test Files|Tests |FAIL" /tmp/agency-final.log
 ```
@@ -1181,9 +1280,38 @@ Write the PR body to a file and pass it with `gh pr create --body-file`. Cover: 
 
 ## Self-review notes
 
-Checked against the spec, revision 3:
+Checked against the spec, revision 3, and revised after review.
 
-- **Every spec section has a task.** Reading the value → Task 3. Provider semantics → Tasks 2 and 6. Validation, both structural and catalog → Task 3. Suggestions → Tasks 1 and 3. Dataflow and the Commander adapter → Task 4. The `ResolvedModelFlag` location → Task 2. The codegen effect → Task 5. Integration coverage → Task 7. Documentation → Task 8.
-- **The spec's test list is covered**, with one deliberate substitution: the spec asked for an Agency execution test observing `{ model, provider }` for four flag-and-code combinations. The deterministic mock client reports `model: "deterministic"` and does not expose the incoming model, so that observation is not available end to end. Task 6 tests the merge functions directly instead, and Task 7 covers the flag-to-codegen half. The seam left untested is "generated JavaScript values become `smoltalkDefaults`", which is pre-existing behaviour this change does not touch. **This is a real reduction in coverage from what the spec asked for and should be raised in the PR description** rather than passed off as equivalent.
-- **Names are consistent across tasks**: `ResolvedModelFlag` (Task 2, used in 3 and 4), `resolveModelFlag` (Task 3, used in 4), `levenshtein` (Task 1, used in 3), `explicitProvider` throughout.
-- **Two steps ask the implementer to watch a test fail on purpose** — Task 4 Step 5 in particular, which temporarily removes the adapter. That step exists because the repeated-flag test is the only thing standing between this design and a bug that unit tests structurally cannot see.
+- **Every spec section has a task.** Reading the value → Task 3. Provider
+  semantics → Tasks 2 and 6. Validation, both structural and catalog → Task 3.
+  Suggestions → Tasks 1 and 3. Dataflow and the Commander adapter → Task 4. The
+  `ResolvedModelFlag` location → Task 2. The codegen effect → Task 5.
+  Integration coverage → Task 7. Documentation → Task 8.
+- **The spec's four-way precedence test is now delivered in full.** An earlier
+  revision of this plan claimed the observation was unavailable and substituted
+  a test of an internal merge function. That was wrong: `RecordingClient` in
+  `lib/runtime/agencyLlm.test.ts` records every `PromptConfig` handed to the
+  client, including both `model` and `provider`, and an existing test already
+  asserts on it. The claim came from checking the deterministic mock client and
+  stopping there. Task 6 now asserts on the configuration the client actually
+  receives.
+- **Tests live in the suites that own the behaviour.** `applyCliFlags` cases go
+  in `lib/config.test.ts`, Commander wiring in `scripts/agency.test.ts`,
+  precedence in `lib/runtime/agencyLlm.test.ts`. Only `lib/cli/modelFlag.test.ts`
+  and `lib/levenshtein.test.ts` are new files, because their modules are new.
+- **Task 5 adds one assertion, not three.** The two provider cases already exist
+  at lines 64 and 71 of `smoltalkDefaults.codegen.test.ts`, with an anchored
+  regex and a comment explaining why the bare `provider:` token is the wrong
+  thing to match. Only the model assertion was missing.
+- **Task 7 drives only the two surfaces that have the flag.** `--model` is on
+  `addRunOptions`, which `compile` does not use, so the integration cases use
+  `run` and the shorthand and read the files those runs compiled.
+- **Names are consistent across tasks**: `ResolvedModelFlag` (Task 2, used in 3
+  and 4), `resolveModelFlag` (Task 3, used in 4), `levenshtein` (Task 1, used in
+  3), `explicitProvider` throughout.
+- **Three steps ask the implementer to watch something fail on purpose.** Task 4
+  Step 5 temporarily removes the Commander adapter, because the repeated-flag
+  test is the only thing standing between this design and a bug that unit tests
+  structurally cannot see. Task 6 Step 3 says to stop and report if a precedence
+  case fails, rather than adjust the assertion to match — those cases encode the
+  spec's central claim, so a failure means the spec is wrong.

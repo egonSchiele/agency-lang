@@ -17,6 +17,10 @@ import {
   installDirFromUrl,
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
+import {
+  misplacedFlagMessage,
+  resolveForwardedArgs,
+} from "@/cli/forwardedArgs.js";
 import { runLink } from "@/cli/remote/commands/link.js";
 import { runDeploy } from "@/cli/remote/commands/deploy.js";
 import { runLs } from "@/cli/remote/commands/ls.js";
@@ -206,7 +210,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Agency Language CLI")
     .version("0.0.105")
     .option("-v, --verbose", "Enable verbose logging during parsing")
-    .option("-c, --config <path>", "Path to agency.json config file");
+    .option("-c, --config <path>", "Path to agency.json config file")
+    // Position decides who a flag belongs to, the way `node --flag script.js
+    // --script-flag` does: agency's own flags go before the subcommand, and
+    // `run` forwards everything after the filename to the program. Without
+    // this, `-v` and `-c` would still be claimed by agency wherever they sit,
+    // and `run` could not pass them on.
+    .enablePositionalOptions();
 
   function getConfig(): AgencyConfig {
     const opts = program.opts();
@@ -389,17 +399,31 @@ export function createProgram(deps: CliDependencies = {}): Command {
       );
   }
 
-  addRunOptions(
+  const runCmd = addRunOptions(
     program
       .command("run")
       .description("Compile and run .agency file(s)")
       .argument("<input>", "Path to .agency input file")
       .argument(
         "[nodeArgs...]",
-        "Arguments passed through to the program; read them with std::args",
-      ),
-  ).action((input: string, nodeArgs: string[], options: RunOptions) => {
-    runWithOptions(input, options, nodeArgs);
+        "Arguments after the filename go to the program; read them with std::args",
+      )
+      // Everything after the filename is the program's command line, flags
+      // included. Commander stops rejecting flags it does not recognize there,
+      // which is why the action guards against a misplaced agency flag.
+      .passThroughOptions(),
+  );
+  runCmd.action((input: string, nodeArgs: string[], options: RunOptions) => {
+    const agencyFlags = [...runCmd.options, ...program.options].flatMap(
+      (option) => [option.short, option.long].filter((f) => f !== undefined),
+    );
+    const forwarded = resolveForwardedArgs(nodeArgs, agencyFlags);
+    if (forwarded.misplaced !== undefined) {
+      console.error(misplacedFlagMessage(forwarded.misplaced, input));
+      process.exitCode = 1;
+      return;
+    }
+    runWithOptions(input, options, forwarded.args);
   });
 
   program

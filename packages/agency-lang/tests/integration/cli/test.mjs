@@ -208,26 +208,56 @@ node main() {
   print("Hello, " + args.flags.name + "!")
 }
 `);
-  // The installed binary, not npx: npx consumes `--` before agency sees it, and
-  // `--` is required for a dash-leading value. One assertion, three guarantees:
-  // the words reach process.argv, no guard rejects them, and std::args parses
-  // them.
-  const greeted = run(dir, "./node_modules/.bin/agency run greet.agency -- --name alice");
+  // The form the docs teach: a flag after the filename belongs to the program.
+  // Three guarantees in one assertion — the words reach process.argv, agency
+  // does not claim them, and std::args parses them.
+  const greeted = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency --name alice",
+  );
   assertIncludes(greeted, "Hello, alice!");
+
+  // The installed binary, not npx: npx consumes `--` before agency sees it.
+  // The separator still works for anyone who types it, and the program must
+  // never see the separator itself — std::args would read it as "stop reading
+  // flags" and quietly fall back to the default.
+  const greetedWithSeparator = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency -- --name alice",
+  );
+  assertIncludes(greetedWithSeparator, "Hello, alice!");
+
+  // Agency's own flags still work, before the filename.
+  const greetedWithAgencyFlag = run(
+    dir,
+    "./node_modules/.bin/agency run --max-cost 5 greet.agency --name alice",
+  );
+  assertIncludes(greetedWithAgencyFlag, "Hello, alice!");
+
+  // The guard: an agency flag after the filename would otherwise be forwarded
+  // and silently do nothing. `--max-cost` caps spend, so failing quietly there
+  // is worse than failing loudly.
+  const misplaced = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency --max-cost 5",
+    { expectFail: true },
+  );
+  assertIncludes(misplaced, "--max-cost is an agency flag");
+
+  // ...unless the user claims it for the program with a separator. greet does
+  // not declare a --max-cost flag, so it rejects it — and that rejection is the
+  // proof: the flag reached the program instead of being caught by the guard.
+  const claimed = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency -- --max-cost 5",
+    { expectFail: true },
+  );
+  assertIncludes(claimed, "unknown flag --max-cost");
 
   // A short phrase: commander re-wraps help text to the terminal width, so a
   // longer assertion can straddle a line break and fail on correct output.
   const runHelp = run(dir, "./node_modules/.bin/agency run --help");
-  assertIncludes(runHelp, "Arguments passed through to the program");
-
-  // Why `--` is required at all, and why the docs say so: without it commander
-  // claims the flag as its own.
-  const withoutSeparator = run(
-    dir,
-    "./node_modules/.bin/agency run greet.agency --name alice",
-    { expectFail: true },
-  );
-  assertIncludes(withoutSeparator, "unknown option '--name'");
+  assertIncludes(runHelp, "Arguments after the filename");
 
   // A declared parameter is no longer filled from the command line, and the
   // runtime state object must never land in it. It used to arrive as the first

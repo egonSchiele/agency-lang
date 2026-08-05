@@ -112,7 +112,9 @@ async function runCli(dir: string, args: string[]) {
   try {
     const { stdout, stderr } = await execFileAsync(
       process.execPath,
-      [CLI, "run", "writer.agency", ...args],
+      // Agency's flags go before the filename; everything after it is the
+      // program's own command line.
+      [CLI, "run", ...args, "writer.agency"],
       { cwd: dir, timeout: 60_000 },
     );
     return { stdout, stderr, code: 0 };

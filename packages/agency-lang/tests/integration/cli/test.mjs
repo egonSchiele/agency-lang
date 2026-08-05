@@ -234,6 +234,26 @@ node main() {
   );
   assertIncludes(greetedWithAgencyFlag, "Hello, alice!");
 
+  // Root flags keep working where they read most naturally, between the
+  // subcommand and the filename. An earlier approach to this feature broke
+  // exactly this.
+  const greetedWithRootFlag = run(
+    dir,
+    "./node_modules/.bin/agency run -v greet.agency --name alice",
+  );
+  assertIncludes(greetedWithRootFlag, "Hello, alice!");
+
+  // -c takes a value, so the boundary walk must not mistake its value for the
+  // filename. The attached spelling is the same flag written differently.
+  writeFile(dir, "custom.json", "{}\n");
+  for (const configFlag of ["-c custom.json", "-ccustom.json"]) {
+    const greetedWithConfig = run(
+      dir,
+      `./node_modules/.bin/agency run ${configFlag} greet.agency --name alice`,
+    );
+    assertIncludes(greetedWithConfig, "Hello, alice!");
+  }
+
   // The guard: an agency flag after the filename would otherwise be forwarded
   // and silently do nothing. `--max-cost` caps spend, so failing quietly there
   // is worse than failing loudly.
@@ -242,7 +262,35 @@ node main() {
     "./node_modules/.bin/agency run greet.agency --max-cost 5",
     { expectFail: true },
   );
-  assertIncludes(misplaced, "--max-cost is an agency flag");
+  assertIncludes(misplaced, "Error: --max-cost is an agency flag");
+
+  // The same flag written in the spellings a naive check would miss.
+  for (const [spelling, reported] of [
+    ["--max-cost=5", "--max-cost"],
+    ["-cfoo.json", "-c"],
+    ["-iv", "-i"],
+  ]) {
+    const missed = run(
+      dir,
+      `./node_modules/.bin/agency run greet.agency ${spelling}`,
+      { expectFail: true },
+    );
+    assertIncludes(missed, `Error: ${reported} is an agency flag`);
+  }
+
+  // A nested command reading an option declared on its parent. Enabling
+  // commander's positional parsing on the root would break this, so it is
+  // pinned here rather than left to the label suite.
+  // `--store` is declared on `label`, not on `ingest`. The source does not
+  // exist, so this fails either way; what matters is which error comes back.
+  const parentOption = run(
+    dir,
+    "./node_modules/.bin/agency eval label ingest no-such-dir --store label-store 2>&1",
+    { expectFail: true },
+  );
+  if (parentOption.includes("unknown option '--store'")) {
+    throw new Error("parent-command options stopped reaching subcommands");
+  }
 
   // ...unless the user claims it for the program with a separator. greet does
   // not declare a --max-cost flag, so it rejects it — and that rejection is the

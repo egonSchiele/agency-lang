@@ -38,84 +38,90 @@ That hands `--policy mine` to the program instead of to agency.
 
 ## How this is set up
 
-Two calls in `scripts/agency.ts`:
+Commander cannot express the position rule directly, and the way it *looks*
+like it can is a trap worth recording.
 
-- `program.enablePositionalOptions()` — agency's top-level flags (`-v`, `-c`)
-  must appear before the subcommand name.
-- `.passThroughOptions()` on the `run` command — options that appear after the
-  first positional argument (the filename) are treated as plain words and
-  handed to the action instead of being parsed.
+### What does not work: pass-through mode
 
-Three consequences are worth knowing, because none of them are obvious and all
-three were found by probing commander rather than by reading its documentation.
+`passThroughOptions()` on the `run` command does exactly the right thing — it
+treats options after the first positional as plain words. But it requires
+`enablePositionalOptions()` on the **root** command, and that setting is not
+scoped to `run`. It changes option parsing for the whole CLI:
 
-### Commander stops removing the `--`
+- `agency run -c custom.json greet.agency` stops working. Root flags would have
+  to move before the subcommand (`agency -c custom.json run greet.agency`),
+  which is a second boundary nobody asked for and the rule above does not
+  describe.
+- `agency label ingest --store x` fails with `unknown option '--store'`.
+  `--store` is declared on `label` and read by its subcommands, a pattern
+  documented in `lib/cli/eval/labelCommand.ts`. Every nested command that reads
+  a parent's option breaks the same way.
 
-Normally commander consumes the separator. With pass-through it does not: the
-action receives `["--", "--name", "alice"]`. If that literal `--` reached the
-program, `std::args` would read it as "stop parsing flags", `--name` would
-become a positional argument, and `name` would quietly fall back to its default.
-The program would print `Hello, world!` and look like it worked.
+This was tried and reverted. If you find yourself reaching for
+`enablePositionalOptions`, that is why it is not there.
 
-So `resolveForwardedArgs` in `lib/cli/forwardedArgs.ts` removes exactly one
-separator. A second `--` is left alone, since that one is the program's.
+### What is used: draw the boundary before commander runs
 
-### Top-level flags must come before the subcommand
+`lib/cli/runCommandLine.ts` inserts `--` after the filename, then hands the
+rewritten argv to commander, which parses it normally. Commander removes the
+separator itself, so the program never sees it.
 
-`agency run f.agency -c config.json` used to load `config.json`. It now forwards
-`-c config.json` to the program, and agency reads the default config. Write
-`agency -c config.json run f.agency` instead.
+`agency agent` already worked this way (`injectAgentSeparator` in
+`scripts/agency.ts`), so this is the mechanism the CLI already owned rather than
+a second one. The difference is only where the boundary falls: for `agent` it is
+right after the subcommand, and for `run` it is after the filename.
 
-The codebase already assumed this ordering before the change — see
-`findSubcommandIndex` in `scripts/agency.ts`, which walks past leading `-v` and
-`-c` to locate the subcommand — so the change made the parser agree with an
-assumption the surrounding code was already making.
+Finding the filename means walking past agency's flags, which means knowing
+which ones take a value — `--policy strict` covers two tokens, `-i` covers one.
+That arity comes from commander's own option metadata, read in `runCli`:
 
-### Unknown flags after the filename are no longer errors
+```ts
+const flags = [...(runCmd?.options ?? []), ...program.options].map((option) => ({
+  short: option.short ?? undefined,
+  long: option.long ?? undefined,
+  takesValue: option.required || option.optional,
+}));
+```
 
-This is the dangerous one, and it is why the guard exists.
+**Do not replace this with a hand-written list.** A second list would drift the
+moment someone adds an option to `addRunOptions`, and it would fail silently in
+both directions: the walk would mistake a flag's value for the filename, and the
+guard below would forward the new flag to the program where it does nothing.
 
-Pass-through means commander no longer complains about a flag it does not
-recognize after the filename. It forwards it. So a misplaced agency flag becomes
-a silent no-op:
+## The guard
+
+Once the boundary is drawn, anything after it reaches the program. That makes a
+misplaced agency flag a silent no-op:
 
 ```
-agency run f.agency --max-cost 5      # spend cap NOT applied, flag forwarded
+agency run f.agency --max-cost 5      # spend cap NOT applied
+agency run f.agency -c config.json    # config NOT loaded
 ```
 
 `--max-cost` and `--max-time` are spend and runtime guards. A guard that stops
 guarding because a flag moved four words to the right is worse than the
-confusion the change set out to fix.
+confusion this change set out to fix, so `insertProgramSeparator` refuses
+instead, naming the flag and both fixes.
 
-## The guard
+The check runs only when the user did **not** write `--`. Writing the separator
+is how someone says "I meant this one for the program", so a claimed flag passes
+through unexamined. This is why the check lives at argv-rewriting time rather
+than in the `run` action: by the time commander has parsed, it has removed the
+separator and that distinction is gone.
 
-`lib/cli/forwardedArgs.ts` holds both halves of the answer, because they are the
-same question asked once: given the words after the filename, which ones does
-the program get, and did any of them obviously belong to agency?
+### Four spellings, not one
 
-```ts
-resolveForwardedArgs(nodeArgs, agencyFlags) -> { args, misplaced? }
+Commander accepts a flag four ways, and a check that only understands the
+plainest one lets the rest through silently:
+
+```
+--policy strict     --policy=strict     -c file.json     -cfile.json     -iv
 ```
 
-Words before a `--` are checked against agency's own flag names. Words after a
-`--` are not, because writing the separator is how a user says "I meant this one
-for the program."
-
-The flag names are read off the commander options at call time:
-
-```ts
-const agencyFlags = [...runCmd.options, ...program.options].flatMap(
-  (option) => [option.short, option.long].filter((f) => f !== undefined),
-);
-```
-
-**Do not replace this with a hand-written list.** A second list of flag names
-would drift the moment someone adds an option to `addRunOptions`, and the way it
-would fail is silent: the new flag would be forwarded to the program and quietly
-do nothing.
-
-`--max-cost=5` and `--max-cost 5` name the same flag, so the check compares the
-part before any `=`.
+The last two are the easy ones to miss. `-cfile.json` attaches the value to the
+short flag, and `-iv` is a cluster of two boolean short flags. `flagNamesIn`
+handles them by naming every letter of a short token, so any letter matching an
+agency flag is caught. `lib/cli/runCommandLine.test.ts` pins all four.
 
 ## The `--` asymmetry, which still exists
 
@@ -140,25 +146,23 @@ that doing so would break any program that legitimately wants positional
 arguments beginning with a dash, which is the reason POSIX has the convention at
 all.
 
-## `agency agent` solves the same problem a different way
+## `agency agent`, the same mechanism with a different boundary
 
 `agency agent` forwards its entire remaining command line to an agent program.
-It does not use pass-through. Instead `injectAgentSeparator` in
-`scripts/agency.ts` rewrites argv before commander sees it, inserting a `--`
-after the subcommand.
+`injectAgentSeparator` in `scripts/agency.ts` inserts `--` right after the
+subcommand, because `agent` takes no filename and so has no natural boundary
+token.
 
-It also has to skip past the agent command's own budget flags before inserting
-the separator, so `agency agent --max-cost 5 -p task` becomes `agency agent
---max-cost 5 -- -p task`. Without that step the budget flags would be forwarded
-and the cap would silently never apply — the same failure the `run` guard
-prevents, solved by a different mechanism.
+It has its own version of the misplaced-flag problem, solved differently: it
+skips past the agent command's budget flags before inserting the separator, so
+`agency agent --max-cost 5 -p task` becomes `agency agent --max-cost 5 -- -p
+task`. Without that step the cap would silently never apply.
 
-**These are two mechanisms for one problem.** They agree on the user-visible
-rule (agency's flags first, the program's after), so nothing is broken, but if
-you are touching either one, consider whether `agent` could move to pass-through
-plus the shared guard and let `injectAgentSeparator` be deleted. The blocker is
-that `agent` has no filename argument to act as the boundary, so "after the
-first positional" does not mean anything there.
+The two run in sequence in `runCli` — `injectAgentSeparator` first, then
+`insertProgramSeparator` — and each is a no-op for the other's subcommand. They
+share the idea and the user-visible rule but not the code, because the boundary
+and the skip logic differ. If a third command ever needs this, that is the point
+to factor out the walk rather than add another special case.
 
 ## Known limitation: the shorthand takes no program arguments
 

@@ -18,9 +18,10 @@ import {
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
 import {
+  findSubcommandIndex,
+  insertProgramSeparator,
   misplacedFlagMessage,
-  resolveForwardedArgs,
-} from "@/cli/forwardedArgs.js";
+} from "@/cli/runCommandLine.js";
 import { runLink } from "@/cli/remote/commands/link.js";
 import { runDeploy } from "@/cli/remote/commands/deploy.js";
 import { runLs } from "@/cli/remote/commands/ls.js";
@@ -210,13 +211,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Agency Language CLI")
     .version("0.0.105")
     .option("-v, --verbose", "Enable verbose logging during parsing")
-    .option("-c, --config <path>", "Path to agency.json config file")
-    // Position decides who a flag belongs to, the way `node --flag script.js
-    // --script-flag` does: agency's own flags go before the subcommand, and
-    // `run` forwards everything after the filename to the program. Without
-    // this, `-v` and `-c` would still be claimed by agency wherever they sit,
-    // and `run` could not pass them on.
-    .enablePositionalOptions();
+    .option("-c, --config <path>", "Path to agency.json config file");
 
   function getConfig(): AgencyConfig {
     const opts = program.opts();
@@ -399,7 +394,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       );
   }
 
-  const runCmd = addRunOptions(
+  addRunOptions(
     program
       .command("run")
       .description("Compile and run .agency file(s)")
@@ -407,23 +402,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
       .argument(
         "[nodeArgs...]",
         "Arguments after the filename go to the program; read them with std::args",
-      )
-      // Everything after the filename is the program's command line, flags
-      // included. Commander stops rejecting flags it does not recognize there,
-      // which is why the action guards against a misplaced agency flag.
-      .passThroughOptions(),
-  );
-  runCmd.action((input: string, nodeArgs: string[], options: RunOptions) => {
-    const agencyFlags = [...runCmd.options, ...program.options].flatMap(
-      (option) => [option.short, option.long].filter((f) => f !== undefined),
-    );
-    const forwarded = resolveForwardedArgs(nodeArgs, agencyFlags);
-    if (forwarded.misplaced !== undefined) {
-      console.error(misplacedFlagMessage(forwarded.misplaced, input));
-      process.exitCode = 1;
-      return;
-    }
-    runWithOptions(input, options, forwarded.args);
+      ),
+  ).action((input: string, nodeArgs: string[], options: RunOptions) => {
+    runWithOptions(input, options, nodeArgs);
   });
 
   program
@@ -1980,7 +1961,24 @@ export async function runCli(
 ): Promise<void> {
   loadEnv();
   const program = createProgram(deps);
-  await program.parseAsync(injectAgentSeparator(argv));
+  // The flag list comes from commander itself. A hand-written copy would drift
+  // the moment someone adds an option to addRunOptions, and it would fail
+  // silently: the new flag would be forwarded to the program and do nothing.
+  const runCmd = program.commands.find((cmd) => cmd.name() === "run");
+  const flags = [...(runCmd?.options ?? []), ...program.options].map(
+    (option) => ({
+      short: option.short ?? undefined,
+      long: option.long ?? undefined,
+      takesValue: option.required || option.optional,
+    }),
+  );
+  const prepared = insertProgramSeparator(injectAgentSeparator(argv), flags);
+  if (prepared.misplaced !== undefined) {
+    console.error(misplacedFlagMessage(prepared.misplaced, prepared.input));
+    process.exitCode = 1;
+    return;
+  }
+  await program.parseAsync(prepared.argv);
 }
 
 // `agency agent` forwards every remaining argv token to the agent program
@@ -2016,34 +2014,6 @@ export function injectAgentSeparator(argv: string[]): string[] {
   }
   if (argv[sep] === "--") return argv;
   return [...argv.slice(0, sep), "--", ...argv.slice(sep)];
-}
-
-// Walk past `node`, the script path, and any leading top-level options
-// (-v/--verbose, -c/--config <path>) to find the index of the subcommand
-// token. Returns -1 if no subcommand is present.
-const TOP_LEVEL_BOOLEAN_FLAGS = ["-v", "--verbose"];
-const TOP_LEVEL_VALUE_FLAGS = ["-c", "--config"];
-
-function findSubcommandIndex(argv: string[]): number {
-  // argv[0] = node, argv[1] = script path. Subcommand search starts at 2.
-  let i = 2;
-  while (i < argv.length) {
-    const token = argv[i];
-    if (TOP_LEVEL_BOOLEAN_FLAGS.includes(token)) {
-      i += 1;
-      continue;
-    }
-    if (TOP_LEVEL_VALUE_FLAGS.includes(token)) {
-      i += 2;
-      continue;
-    }
-    if (token.startsWith("--config=") || token.startsWith("--verbose=")) {
-      i += 1;
-      continue;
-    }
-    return i;
-  }
-  return -1;
 }
 
 const isMain =

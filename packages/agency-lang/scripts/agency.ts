@@ -1960,17 +1960,27 @@ export function createProgram(deps: CliDependencies = {}): Command {
       interruptsCmd(config, file);
     });
 
+  // `agency greet.agency` is `agency run greet.agency` with the word left out,
+  // so it takes the same options and splits its command line the same way.
   addRunOptions(
     program
       .command("default", { isDefault: true, hidden: true })
-      .argument("[file]"),
-  ).action((file: string | undefined, options: RunOptions) => {
+      .argument("[file]")
+      .argument(
+        "[nodeArgs...]",
+        "Arguments after the filename go to the program; read them with std::args",
+      ),
+  ).action((
+    file: string | undefined,
+    nodeArgs: string[],
+    options: RunOptions,
+  ) => {
     if (!file) {
       program.help();
       return;
     }
     if (file.endsWith(".agency") || fs.existsSync(file)) {
-      runWithOptions(file, options);
+      runWithOptions(file, options, nodeArgs);
     } else {
       console.error(`Error: Unknown command '${file}'`);
       console.error("Run 'agency help' for usage information");
@@ -2006,12 +2016,35 @@ export async function runCli(
   // The flag list comes from commander itself. A hand-written copy would drift
   // the moment someone adds an option to addRunOptions, and it would fail
   // silently: the new flag would be forwarded to the program and do nothing.
+  const runOptions = [
+    ...optionsOf(commandNamed(program, "run")),
+    ...optionsOf(program),
+  ];
+  // Every name commander answers to, so the shorthand policy does not claim a
+  // command. Aliases count: `agency fmt x.agency` must stay a format run.
+  //
+  // Two sources, because neither is complete. `program.commands` omits the
+  // implicit `help` command commander adds itself, which would make
+  // `agency help --version` look like a program called `help`.
+  // `visibleCommands` has `help` but drops hidden commands such as `remote`.
+  const commandNames = [
+    ...program.commands,
+    ...program.createHelp().visibleCommands(program),
+  ].flatMap((cmd) => [cmd.name(), ...cmd.aliases()]);
   const prepared = splitCommandLine(argv, optionsOf(program), [
     {
       command: "run",
       // The filename. Everything after it is the program's command line.
       ownedPositionals: 1,
-      options: [...optionsOf(commandNamed(program, "run")), ...optionsOf(program)],
+      options: runOptions,
+      warnOnCollision: true,
+    },
+    {
+      // `agency greet.agency --name alice`. Identical to run in every way that
+      // shows: same options, same owned filename, same warning.
+      command: null,
+      ownedPositionals: 1,
+      options: runOptions,
       warnOnCollision: true,
     },
     {
@@ -2024,7 +2057,7 @@ export async function runCli(
       options: optionsOf(commandNamed(program, "agent")),
       warnOnCollision: false,
     },
-  ]);
+  ], commandNames);
   if (prepared.warning !== undefined) console.warn(prepared.warning);
   await program.parseAsync(prepared.argv);
 }

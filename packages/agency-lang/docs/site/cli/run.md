@@ -19,6 +19,9 @@ This is also the default if no command is specified:
 agency foo.agency
 ```
 
+The shorthand takes the same options and splits its command line the same way,
+so `agency greet.agency --name alice` works exactly like the `run` form below.
+
 Note: This compiles the file to JavaScript and immediately executes it under the same Node binary that's running the CLI. You can also pass `--resume <statefile>` to resume a previously saved execution, or `--trace` to write an execution trace.
 
 ## Options

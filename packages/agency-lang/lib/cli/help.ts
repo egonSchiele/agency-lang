@@ -12,7 +12,7 @@ Usage:
   agency ast [input]                    Parse .agency file and show AST (reads from stdin if no input)
   agency preprocess [input]             Parse .agency file and show AST after preprocessing (reads from stdin if no input)
   agency graph [input]                  Render Mermaid graph from .agency file (reads from stdin if no input)
-  agency <input>                        Compile and run .agency file (shorthand)
+  agency <input> [args...]              Compile and run .agency file (shorthand for run)
 
 Arguments:
   input                                 Path to .agency input file or directory (or omit to read from stdin for format/parse)
@@ -43,6 +43,6 @@ Examples:
   agency format -i ./scripts            Format all .agency files in directory in-place
   cat script.agency | agency format     Format from stdin
   echo "x = 5" | agency parse           Parse from stdin
-  agency script.agency                  Compile and run (shorthand)
+  agency script.agency --name alice     Compile and run; flags after the file go to it
 `);
 }

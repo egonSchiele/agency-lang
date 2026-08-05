@@ -24,8 +24,11 @@ const RUN_OPTIONS: CliOption[] = [
   { long: "--trace-file", arity: "required" },
 ];
 
+const COMMAND_NAMES = ["run", "agent", "compile", "build", "format", "fmt"];
+
 const BOUNDARIES: Boundary[] = [
   { command: "run", ownedPositionals: 1, options: RUN_OPTIONS, warnOnCollision: true },
+  { command: null, ownedPositionals: 1, options: RUN_OPTIONS, warnOnCollision: true },
   {
     command: "agent",
     ownedPositionals: 0,
@@ -36,7 +39,7 @@ const BOUNDARIES: Boundary[] = [
 
 const N = ["node", "agency"];
 const split = (...words: string[]) =>
-  splitCommandLine([...N, ...words], ROOT, BOUNDARIES);
+  splitCommandLine([...N, ...words], ROOT, BOUNDARIES, COMMAND_NAMES);
 
 describe("splitCommandLine: run", () => {
   it("draws the line after the filename", () => {
@@ -81,7 +84,9 @@ describe("splitCommandLine: run", () => {
       [...N, "run", "greet.agency"],
       [...N, "run", "-v", "greet.agency"],
     ]) {
-      expect(splitCommandLine(argv, ROOT, BOUNDARIES)).toEqual({ argv });
+      expect(splitCommandLine(argv, ROOT, BOUNDARIES, COMMAND_NAMES)).toEqual({
+        argv,
+      });
     }
   });
 
@@ -116,7 +121,9 @@ describe("splitCommandLine: run", () => {
 
   it("stays quiet when the user claimed the flag with a separator", () => {
     const argv = [...N, "run", "greet.agency", "--", "--max-cost", "5"];
-    expect(splitCommandLine(argv, ROOT, BOUNDARIES)).toEqual({ argv });
+    expect(splitCommandLine(argv, ROOT, BOUNDARIES, COMMAND_NAMES)).toEqual({
+      argv,
+    });
   });
 
   it("matches commander on what an optional value swallows", () => {
@@ -175,10 +182,52 @@ describe("splitCommandLine: agent", () => {
   });
 });
 
+describe("splitCommandLine: the shorthand", () => {
+  it("splits `agency greet.agency` exactly like `agency run greet.agency`", () => {
+    expect(split("greet.agency", "--name", "alice")).toEqual({
+      argv: [...N, "greet.agency", "--", "--name", "alice"],
+    });
+    expect(split("--policy", "strict", "greet.agency", "--name", "a")).toEqual({
+      argv: [...N, "--policy", "strict", "greet.agency", "--", "--name", "a"],
+    });
+  });
+
+  it("warns about a misplaced agency flag, like run", () => {
+    expect(split("greet.agency", "--max-cost", "5").warning).toContain(
+      "--max-cost went to your program",
+    );
+  });
+
+  it("adds nothing when there are no program arguments", () => {
+    for (const argv of [[...N, "greet.agency"], [...N]]) {
+      expect(splitCommandLine(argv, ROOT, BOUNDARIES, COMMAND_NAMES)).toEqual({
+        argv,
+      });
+    }
+  });
+
+  it("does not claim a real command, including an alias", () => {
+    for (const words of [
+      ["compile", "a.agency", "b.agency"],
+      ["build", "a.agency", "b.agency"],
+      ["fmt", "a.agency", "-i"],
+      ["format", "a.agency", "-i"],
+    ]) {
+      const argv = [...N, ...words];
+      expect(splitCommandLine(argv, ROOT, BOUNDARIES, COMMAND_NAMES)).toEqual({
+        argv,
+      });
+    }
+  });
+});
+
 describe("splitCommandLine: other commands", () => {
   it("leaves a command with no boundary untouched", () => {
+    // `label` is a real command, so the shorthand policy must not claim it.
     const argv = [...N, "label", "ingest", "--store", "/tmp/s"];
-    expect(splitCommandLine(argv, ROOT, BOUNDARIES)).toEqual({ argv });
+    expect(
+      splitCommandLine(argv, ROOT, [...BOUNDARIES], ["label", ...COMMAND_NAMES]),
+    ).toEqual({ argv });
   });
 });
 

@@ -11,19 +11,21 @@
  * So the boundary is drawn before commander runs, by inserting `--`. Commander
  * removes the separator itself, so the program never sees it.
  *
- * Two commands need this and differ only in their policy, which is why they
+ * Three commands need this and differ only in their policy, which is why they
  * share one walk rather than one each:
  *
- *   run    one owned positional (the filename); warns on a collision
- *   agent  no owned positionals; forwards its own flags without comment
+ *   run       one owned positional (the filename); warns on a collision
+ *   agent     no owned positionals; forwards its own flags without comment
+ *   shorthand `agency greet.agency` — run without the word `run`
  */
 export type Arity = "none" | "required" | "optional";
 
 export type CliOption = { short?: string; long?: string; arity: Arity };
 
 export type Boundary = {
-  /** Subcommand this applies to. */
-  command: string;
+  /** Subcommand this applies to, or null for the bare `agency greet.agency`
+   *  form, which is whatever is left when the first word names no command. */
+  command: string | null;
   /** Agency's own positional arguments, which sit before the program's. */
   ownedPositionals: number;
   /** Options agency parses before the boundary. */
@@ -44,15 +46,33 @@ export function splitCommandLine(
   argv: string[],
   rootOptions: CliOption[],
   boundaries: Boundary[],
+  /** Every command and alias the CLI knows, so a filename can be told from a
+   *  command name. Without it `agency compile a.agency b.agency` would look
+   *  like the shorthand and have a separator pushed into its file list. */
+  commandNames: string[] = [],
 ): SplitCommandLine {
-  const subcommand = findSubcommandIndex(argv, rootOptions);
+  // The shorthand puts run's flags at the top level, so the scan for the
+  // subcommand has to recognize every flag agency owns anywhere — not just the
+  // root's. Otherwise `agency --policy strict greet.agency` stops on `strict`
+  // and treats it as the filename.
+  const subcommand = findSubcommandIndex(argv, [
+    ...rootOptions,
+    ...boundaries.flatMap((b) => b.options),
+  ]);
   if (subcommand === -1) return { argv };
-  const boundary = boundaries.find((b) => b.command === argv[subcommand]);
+  const named = boundaries.find((b) => b.command === argv[subcommand]);
+  const boundary =
+    named ??
+    (commandNames.includes(argv[subcommand])
+      ? undefined
+      : boundaries.find((b) => b.command === null));
   if (boundary === undefined) return { argv };
 
   // Agency's flags come first, then its own positionals. Anything after that
   // is the program's, flags included — which is what the position rule means.
-  let i = subcommand + 1;
+  // The shorthand has no command word to step over, so its walk starts on the
+  // filename itself.
+  let i = subcommand + (boundary.command === null ? 0 : 1);
   while (isFlag(argv[i])) {
     // The user drew the line themselves.
     if (argv[i] === "--") return { argv };

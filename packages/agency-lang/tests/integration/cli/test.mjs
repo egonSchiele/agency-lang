@@ -353,6 +353,50 @@ node main() {
     "./node_modules/.bin/agency run argful.agency ignored",
   );
   assertIncludes(withoutMappedArg, "got: undefined");
+  // --- The shorthand behaves exactly like `agency run` ---
+  // `agency greet.agency` is documented as shorthand for `agency run
+  // greet.agency`, so every case above must hold with the word left out.
+  const shortGreeted = run(dir, "./node_modules/.bin/agency greet.agency --name alice");
+  assertIncludes(shortGreeted, "Hello, alice!");
+
+  const shortWithAgencyFlag = run(
+    dir,
+    "./node_modules/.bin/agency --max-cost 5 greet.agency --name alice",
+  );
+  assertIncludes(shortWithAgencyFlag, "Hello, alice!");
+
+  const shortSeparator = run(
+    dir,
+    "./node_modules/.bin/agency greet.agency -- --name alice",
+  );
+  assertIncludes(shortSeparator, "Hello, alice!");
+
+  const shortWarned = run(
+    dir,
+    "./node_modules/.bin/agency greet.agency --max-cost 5 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(shortWarned, "Warning: --max-cost went to your program");
+
+  // A real command must not be mistaken for a filename. compile takes a list of
+  // files, so a separator pushed in here would break it.
+  run(dir, "./node_modules/.bin/agency compile greet.agency basic.agency");
+
+  // Including commander's implicit `help`, which is not in program.commands.
+  // Treating it as a filename turns these into failed runs of a missing
+  // program instead of printing help and the version.
+  const helpHelp = run(dir, "./node_modules/.bin/agency help --help 2>&1");
+  assertIncludes(helpHelp, "Usage: agency");
+  const helpVersion = run(dir, "./node_modules/.bin/agency help --version 2>&1");
+  if (helpVersion.includes("Warning:")) {
+    throw new Error(`the implicit help command was treated as a file: ${helpVersion}`);
+  }
+  // And a hidden command, which visibleCommands leaves out.
+  const remoteHelp = run(dir, "./node_modules/.bin/agency remote --help 2>&1");
+  if (remoteHelp.includes("Warning:")) {
+    throw new Error(`a hidden command was treated as a file: ${remoteHelp}`);
+  }
+
   console.log("Test 8 passed");
 
   // --- Test 8b: a node parameter default applies on the direct-run path ---

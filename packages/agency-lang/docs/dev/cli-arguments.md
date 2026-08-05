@@ -203,19 +203,23 @@ that doing so would break any program that legitimately wants positional
 arguments beginning with a dash, which is the reason POSIX has the convention at
 all.
 
-## One splitter, two policies
+## One splitter, three policies
 
-`agency agent` needs the same boundary for a different shape: it takes no
-filename, and it forwards its whole command line to an agent that has its own
-flag parser. It used to have its own copy of the walk, with a hand-written list
-of the flags to keep on agency's side.
+`agency agent` and the bare `agency greet.agency` shorthand need the same
+boundary in different shapes. The agent takes no filename and forwards its whole
+command line to a program with its own flag parser; it used to carry a second
+copy of the walk over a hand-written list of flags.
 
-Both now go through `splitCommandLine` with a policy each:
+All three now go through `splitCommandLine` with a policy each:
 
 ```ts
 { command: "run",   ownedPositionals: 1, options: run + root, warnOnCollision: true  }
 { command: "agent", ownedPositionals: 0, options: agent only, warnOnCollision: false }
+{ command: null,    ownedPositionals: 1, options: run + root, warnOnCollision: true  }
 ```
+
+The third is the shorthand, `agency greet.agency`; see below for what `null`
+means and why it needs the list of command names.
 
 `ownedPositionals` is the difference that matters: `run` owns the filename, so
 the line falls after it; `agent` owns nothing, so the line falls at the first
@@ -227,23 +231,35 @@ because forwarding a flag agency also defines is the entire point of the
 command, not a mistake.
 
 The walk itself — arity, attached values, short bundles — lives in one place, so
-a fix to short-option parsing reaches both.
+a fix to short-option parsing reaches all three.
 
-## Known limitation: the shorthand takes no program arguments
+## The shorthand is `run` with the word left out
 
-`agency greet.agency` is a shorthand for `agency run greet.agency`. It is a
-hidden default command declaring only `[file]`, with no variadic argument, so it
-cannot forward anything:
+`agency greet.agency` is a hidden default command. It carries the same options
+as `run` and the same boundary policy, so everything on this page applies to it
+unchanged:
 
 ```
-agency greet.agency --name bob      # error: unknown option '--name'
-agency greet.agency bob             # error: too many arguments for 'default'
+agency greet.agency --name alice
+agency --policy strict greet.agency --name alice
+agency greet.agency --max-cost 5     # same warning as run
 ```
 
-This predates the position rule and was not changed by it. Anyone who needs to
-pass arguments must write `agency run` in full. Fixing it means giving the
-default command the same `[nodeArgs...]` argument, pass-through, and guard that
-`run` has.
+Two things make it different from a named command, and both are in the policy
+rather than in the walk.
+
+**It has no command word to step over.** Its `command` is `null`, and the walk
+starts on the filename itself rather than one token later.
+
+**Its flags sit at the top level.** In `agency --policy strict greet.agency`,
+`--policy` appears where a root flag would. So the scan that locates the
+subcommand is given every option agency owns anywhere, not just the root's —
+otherwise it stops on `strict` and treats that as the filename.
+
+That second point is why `splitCommandLine` also takes the list of command
+names: without it, the shorthand policy would claim real commands, and
+`agency compile a.agency b.agency` would get a separator pushed into its file
+list. Aliases are included, so `agency fmt x.agency -i` stays a format run.
 
 ## Testing
 

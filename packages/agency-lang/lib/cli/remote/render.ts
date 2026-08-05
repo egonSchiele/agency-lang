@@ -130,9 +130,18 @@ function formatCount(count: number): string {
   return count.toLocaleString("en-US");
 }
 
-/** Prefix `≥` when the figure is a trusted lower bound (telemetry incomplete). */
+/** Prefix `≥` when the figure is a trusted lower bound (telemetry incomplete).
+ *  A lower bound never uses the `<$0.0001` sentinel — `≥ <$0.0001` ("at least
+ *  less than") is incoherent — so a sub-$0.0001 lower bound floors to
+ *  `≥ $0.0000` (still true: the total is at least ~zero and may be higher). */
 function lowerBound(amount: number, complete: boolean): string {
-  return complete ? formatUsd(amount) : `≥ ${formatUsd(amount)}`;
+  if (complete) {
+    return formatUsd(amount);
+  }
+  if (amount > 0 && amount < 0.0001) {
+    return "≥ $0.0000";
+  }
+  return `≥ ${formatUsd(amount)}`;
 }
 
 export function renderProjectSpend(slug: string, spend: ProjectSpend, description: string): string {
@@ -186,7 +195,13 @@ function sortAccountRows(rows: AccountSpendRow[]): AccountSpendRow[] {
     if (right.spend.pricedCost !== left.spend.pricedCost) {
       return right.spend.pricedCost - left.spend.pricedCost;
     }
-    return left.projectSlug < right.projectSlug ? -1 : left.projectSlug > right.projectSlug ? 1 : 0;
+    if (left.projectSlug < right.projectSlug) {
+      return -1;
+    }
+    if (left.projectSlug > right.projectSlug) {
+      return 1;
+    }
+    return 0;
   });
 }
 

@@ -206,6 +206,11 @@ describe("renderProjectSpend", () => {
     expect(strip(renderProjectSpend("a", spend({ pricedCost: 0 }), "all time"))).toContain("$0.0000");
     expect(strip(renderProjectSpend("a", spend({ pricedCost: 0.00004 }), "all time"))).toContain("<$0.0001");
   });
+  it("never emits the incoherent '≥ <$0.0001' for a tiny incomplete amount", () => {
+    const out = strip(renderProjectSpend("a", spend({ pricedCost: 0.00004, usageComplete: false }), "all time"));
+    expect(out).not.toContain("≥ <");
+    expect(out).toContain("≥ $0.0000");
+  });
 });
 
 const row = (slug: string, pricedCost: number, over: Partial<ProjectSpend> = {}, deletedAt: string | null = null): AccountSpendRow => ({

@@ -50,9 +50,9 @@ $ agency run greet.agency --name alice --out result.txt -v
 Hello, alice!
 ```
 
-Agency's own flags go before the filename. If you put one after it, the CLI
-stops and shows you both ways to fix it, rather than passing it to your program
-where it would silently do nothing.
+Agency's own flags go before the filename. Position decides even when the name
+collides: `agency run greet.agency --max-cost 5` sends `--max-cost` to your
+program rather than capping the run, and agency prints a warning saying so.
 
 A compiled or packed program works the same way:
 

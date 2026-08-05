@@ -67,37 +67,34 @@ describe("insertProgramSeparator", () => {
     expect(insertProgramSeparator(argv, FLAGS)).toEqual({ argv });
   });
 
-  it("reports an agency flag written after the filename", () => {
-    expect(prepare("run", "greet.agency", "--max-cost", "5")).toEqual({
-      misplaced: "--max-cost",
-      input: "greet.agency",
-    });
+  it("forwards an agency flag written after the filename, and says so", () => {
+    const result = prepare("run", "greet.agency", "--max-cost", "5");
+    expect(result.argv).toEqual([
+      ...N, "run", "greet.agency", "--", "--max-cost", "5",
+    ]);
+    expect(result.warning).toContain("--max-cost went to your program");
   });
 
-  it("reports an attached short agency flag after the filename", () => {
-    expect(prepare("run", "greet.agency", "-cfoo.json")).toEqual({
-      misplaced: "-c",
-      input: "greet.agency",
-    });
+  it("names the flag in the spellings a naive check would miss", () => {
+    for (const [spelling, reported] of [
+      ["--policy=strict", "--policy"],
+      ["-cfoo.json", "-c"],
+      ["-iv", "-i"],
+    ]) {
+      const result = prepare("run", "greet.agency", spelling);
+      expect(result.warning).toContain(`${reported} went to your program`);
+    }
   });
 
-  it("reports an agency flag hidden in a short cluster after the filename", () => {
-    expect(prepare("run", "greet.agency", "-iv")).toEqual({
-      misplaced: "-i",
-      input: "greet.agency",
-    });
-  });
-
-  it("reports an attached long agency flag after the filename", () => {
-    expect(prepare("run", "greet.agency", "--policy=strict")).toEqual({
-      misplaced: "--policy",
-      input: "greet.agency",
-    });
-  });
-
-  it("lets an agency flag through once the user claims it with a separator", () => {
+  it("says nothing when the user claims the flag with a separator", () => {
     const argv = [...N, "run", "greet.agency", "--", "--max-cost", "5"];
     expect(insertProgramSeparator(argv, FLAGS)).toEqual({ argv });
+  });
+
+  it("says nothing about a flag agency does not define", () => {
+    expect(
+      prepare("run", "greet.agency", "--name", "alice").warning,
+    ).toBeUndefined();
   });
 
   it("does not mistake a program's positional word for a flag", () => {

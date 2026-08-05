@@ -103,18 +103,20 @@ The entry node's parameters are **not** filled from the command line. A
 parameter you do not supply another way is `undefined`, and its default applies
 if it has one.
 
-If you put an agency flag after the filename, the CLI stops and tells you:
+Position always decides, even when the flag is one agency also defines. Writing
+`agency run greet.agency --max-cost 5` sends `--max-cost 5` to your program and
+does **not** cap the run's spend. Since that is easy to do by accident, agency
+says so:
 
 ```
 $ agency run greet.agency --max-cost 5
-Error: --max-cost is an agency flag, not an argument for your program.
-
-  Put it before the file:      agency run --max-cost ... greet.agency
-  Or hand it to the program:   agency run greet.agency -- --max-cost ...
+Warning: --max-cost went to your program, not to agency.
+  Agency flags go before the filename: agency run --max-cost ... greet.agency
+  Write -- before it to silence this:  agency run greet.agency -- --max-cost ...
 ```
 
-That second line is the escape hatch. If your program genuinely wants a flag
-agency also defines, put `--` before it and agency will hand it over.
+If your program really does own a flag by that name, the second line silences
+the warning. Nothing else needs `--`.
 
 A compiled or packed program works the same way, since there is no agency
 command line to separate from:

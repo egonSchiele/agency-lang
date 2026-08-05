@@ -27,14 +27,15 @@ This is the same rule `node` uses. In `node --inspect script.js --verbose`, the
 `--inspect` configures node and the `--verbose` is passed to the script. `docker
 run` and `ssh` work this way too, so most people already have the habit.
 
-`--` still works for anyone who types it, and it is the escape hatch for the one
-case position cannot resolve: a program that wants a flag agency also defines.
+`--` is never required. It survives only as a way to silence the warning below,
+for a program that genuinely owns a flag name agency also uses:
 
 ```
 agency run greet.agency -- --policy mine
 ```
 
-That hands `--policy mine` to the program instead of to agency.
+Position would have sent `--policy mine` to the program anyway; the separator
+just says it was deliberate.
 
 ## How this is set up
 
@@ -86,33 +87,42 @@ const flags = [...(runCmd?.options ?? []), ...program.options].map((option) => (
 **Do not replace this with a hand-written list.** A second list would drift the
 moment someone adds an option to `addRunOptions`, and it would fail silently in
 both directions: the walk would mistake a flag's value for the filename, and the
-guard below would forward the new flag to the program where it does nothing.
+warning below would stay quiet about the new flag.
 
-## The guard
+## The warning
 
-Once the boundary is drawn, anything after it reaches the program. That makes a
-misplaced agency flag a silent no-op:
+Once the boundary is drawn, anything after it reaches the program — including a
+flag agency also defines. That is the rule working as intended, but it means a
+misplaced flag does nothing:
 
 ```
-agency run f.agency --max-cost 5      # spend cap NOT applied
-agency run f.agency -c config.json    # config NOT loaded
+agency run f.agency --max-cost 5      # spend NOT capped; the program gets it
+agency run f.agency -c config.json    # config NOT loaded; the program gets it
 ```
 
-`--max-cost` and `--max-time` are spend and runtime guards. A guard that stops
-guarding because a flag moved four words to the right is worse than the
-confusion this change set out to fix, so `insertProgramSeparator` refuses
-instead, naming the flag and both fixes.
+Every mainstream interpreter behaves this way and says nothing. `node s.js
+--inspect` starts no debugger, `python s.py -v` is not verbose, and
+[Deno documents the same trap](https://docs.deno.com/runtime/getting_started/command_line_interface/)
+rather than fixing it in code. Cargo has had
+[an open issue](https://github.com/rust-lang/cargo/issues/10535) proposing a
+warning since 2022 with no implementation.
 
-The check runs only when the user did **not** write `--`. Writing the separator
-is how someone says "I meant this one for the program", so a claimed flag passes
-through unexamined. This is why the check lives at argv-rewriting time rather
-than in the `run` action: by the time commander has parsed, it has removed the
-separator and that distinction is gone.
+Agency warns anyway, because its misplaced flags fail differently. In the
+precedents above the mistake announces itself: no debugger appears, or Deno's
+missing permission kills the script at the first socket. `--max-cost` fails the
+other way — the run proceeds uncapped and nothing downstream notices. So
+`insertProgramSeparator` forwards the flag as the rule requires and returns a
+warning alongside it.
+
+The warning is suppressed when the user wrote `--`, because that is how someone
+says "I meant this one for the program." This is why the check lives at
+argv-rewriting time rather than in the `run` action: by the time commander has
+parsed, it has removed the separator and that distinction is gone.
 
 ### Four spellings, not one
 
 Commander accepts a flag four ways, and a check that only understands the
-plainest one lets the rest through silently:
+plainest one stays quiet for the rest:
 
 ```
 --policy strict     --policy=strict     -c file.json     -cfile.json     -iv
@@ -121,7 +131,8 @@ plainest one lets the rest through silently:
 The last two are the easy ones to miss. `-cfile.json` attaches the value to the
 short flag, and `-iv` is a cluster of two boolean short flags. `flagNamesIn`
 handles them by naming every letter of a short token, so any letter matching an
-agency flag is caught. `lib/cli/runCommandLine.test.ts` pins all four.
+agency flag is caught. A letter that is not a flag matches nothing, so the extra
+candidates are harmless. `lib/cli/runCommandLine.test.ts` pins all four.
 
 ## The `--` asymmetry, which still exists
 

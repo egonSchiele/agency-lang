@@ -20,7 +20,6 @@ import { pack } from "@/cli/pack.js";
 import {
   findSubcommandIndex,
   insertProgramSeparator,
-  misplacedFlagMessage,
 } from "@/cli/runCommandLine.js";
 import { runLink } from "@/cli/remote/commands/link.js";
 import { runDeploy } from "@/cli/remote/commands/deploy.js";
@@ -1973,11 +1972,7 @@ export async function runCli(
     }),
   );
   const prepared = insertProgramSeparator(injectAgentSeparator(argv), flags);
-  if (prepared.misplaced !== undefined) {
-    console.error(misplacedFlagMessage(prepared.misplaced, prepared.input));
-    process.exitCode = 1;
-    return;
-  }
+  if (prepared.warning !== undefined) console.warn(prepared.warning);
   await program.parseAsync(prepared.argv);
 }
 

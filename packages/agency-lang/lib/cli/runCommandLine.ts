@@ -19,12 +19,13 @@ export type CliFlag = {
   takesValue: boolean;
 };
 
-export type PreparedArgv =
+export type PreparedArgv = {
   /** argv with the separator inserted, ready for commander. */
-  | { argv: string[]; misplaced?: undefined }
-  /** An agency flag written after the filename, where it would be forwarded
-   *  to the program and silently do nothing. */
-  | { argv?: undefined; misplaced: string; input: string };
+  argv: string[];
+  /** An agency flag that went to the program because of where it was written.
+   *  Position still decides — this only says so out loud. */
+  warning?: string;
+};
 
 export function insertProgramSeparator(
   argv: string[],
@@ -47,20 +48,21 @@ export function insertProgramSeparator(
   const rest = argv.slice(i + 1);
   if (rest.length === 0 || rest[0] === "--") return { argv };
 
-  const misplaced = rest.flatMap(flagNamesIn).find((name) =>
+  const claimed = rest.flatMap(flagNamesIn).find((name) =>
     flags.some((flag) => flag.short === name || flag.long === name),
   );
-  if (misplaced !== undefined) return { misplaced, input: argv[i] };
-
-  return { argv: [...argv.slice(0, i + 1), "--", ...rest] };
+  return {
+    argv: [...argv.slice(0, i + 1), "--", ...rest],
+    warning:
+      claimed === undefined ? undefined : misplacedFlagWarning(claimed, argv[i]),
+  };
 }
 
-export function misplacedFlagMessage(flag: string, input: string): string {
+export function misplacedFlagWarning(flag: string, input: string): string {
   return [
-    `Error: ${flag} is an agency flag, not an argument for your program.`,
-    ``,
-    `  Put it before the file:      agency run ${flag} ... ${input}`,
-    `  Or hand it to the program:   agency run ${input} -- ${flag} ...`,
+    `Warning: ${flag} went to your program, not to agency.`,
+    `  Agency flags go before the filename: agency run ${flag} ... ${input}`,
+    `  Write -- before it to silence this:  agency run ${input} -- ${flag} ...`,
   ].join("\n");
 }
 

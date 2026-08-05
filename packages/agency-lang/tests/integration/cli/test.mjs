@@ -254,17 +254,20 @@ node main() {
     assertIncludes(greetedWithConfig, "Hello, alice!");
   }
 
-  // The guard: an agency flag after the filename would otherwise be forwarded
-  // and silently do nothing. `--max-cost` caps spend, so failing quietly there
-  // is worse than failing loudly.
-  const misplaced = run(
+  // Position always wins, so an agency flag after the filename goes to the
+  // program, and the warning is the only thing standing between that and a
+  // silent surprise. greet does not declare --max-cost, so its own parser then
+  // rejects it — which is also the proof the flag really was forwarded. That it
+  // is forwarded rather than intercepted is pinned in runCommandLine.test.ts.
+  const warned = run(
     dir,
-    "./node_modules/.bin/agency run greet.agency --max-cost 5",
+    "./node_modules/.bin/agency run greet.agency --max-cost 5 2>&1",
     { expectFail: true },
   );
-  assertIncludes(misplaced, "Error: --max-cost is an agency flag");
+  assertIncludes(warned, "Warning: --max-cost went to your program");
+  assertIncludes(warned, "unknown flag --max-cost");
 
-  // The same flag written in the spellings a naive check would miss.
+  // The same flag in the spellings a naive check would miss.
   for (const [spelling, reported] of [
     ["--max-cost=5", "--max-cost"],
     ["-cfoo.json", "-c"],
@@ -272,15 +275,31 @@ node main() {
   ]) {
     const missed = run(
       dir,
-      `./node_modules/.bin/agency run greet.agency ${spelling}`,
+      `./node_modules/.bin/agency run greet.agency ${spelling} 2>&1`,
       { expectFail: true },
     );
-    assertIncludes(missed, `Error: ${reported} is an agency flag`);
+    assertIncludes(missed, `Warning: ${reported} went to your program`);
   }
 
-  // A nested command reading an option declared on its parent. Enabling
-  // commander's positional parsing on the root would break this, so it is
-  // pinned here rather than left to the label suite.
+  // A flag the program owns draws no warning, and neither does one the user
+  // deliberately claimed with a separator.
+  const quiet = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency --name alice 2>&1",
+  );
+  if (quiet.includes("Warning:")) {
+    throw new Error(`warned about a flag agency does not define: ${quiet}`);
+  }
+  const claimed = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency -- --max-cost 5 2>&1",
+    { expectFail: true },
+  );
+  if (claimed.includes("Warning:")) {
+    throw new Error(`warned about a flag the user claimed with --: ${claimed}`);
+  }
+  assertIncludes(claimed, "unknown flag --max-cost");
+
   // `--store` is declared on `label`, not on `ingest`. The source does not
   // exist, so this fails either way; what matters is which error comes back.
   const parentOption = run(
@@ -291,16 +310,6 @@ node main() {
   if (parentOption.includes("unknown option '--store'")) {
     throw new Error("parent-command options stopped reaching subcommands");
   }
-
-  // ...unless the user claims it for the program with a separator. greet does
-  // not declare a --max-cost flag, so it rejects it — and that rejection is the
-  // proof: the flag reached the program instead of being caught by the guard.
-  const claimed = run(
-    dir,
-    "./node_modules/.bin/agency run greet.agency -- --max-cost 5",
-    { expectFail: true },
-  );
-  assertIncludes(claimed, "unknown flag --max-cost");
 
   // A short phrase: commander re-wraps help text to the terminal width, so a
   // longer assertion can straddle a line break and fail on correct output.

@@ -116,6 +116,7 @@ Pipeline and architecture:
 - `docs/dev/smoltalk.md` — External LLM client library for structured output requests
 - `docs/dev/statelog.md` — Observability and tracing system for execution events
 - `docs/dev/config.md` — AgencyConfig options for compiler and runtime configuration
+- `docs/dev/cli-arguments.md` — Splitting one command line between `agency` and the program it runs: the position rule, what commander's pass-through mode changes, the misplaced-flag guard and why a hand-written flag list would fail silently, the `--` asymmetry across launchers, and the second mechanism `agency agent` uses
 - `docs/dev/debugger.md` — Interactive debugger for stepping through and rewinding execution
 - `docs/dev/concurrent-interrupts.md` — Supporting multiple concurrent threads that interrupt simultaneously
 - `docs/dev/runBatch.md` — The `runBatch` primitive: signature, three modes, slice rule, invoke no-throw contract, defensive guards

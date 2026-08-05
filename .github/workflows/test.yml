@@ -31,26 +31,30 @@ concurrency:
 # which made it the critical path; they now fan out into `build`,
 # `integration`, and `agent-tests` so they run concurrently.
 jobs:
-  # `build` runs the vitest unit suite on both supported node versions and
-  # produces the docs. The integration and agent suites live in their own jobs
-  # (below) so they no longer serialize behind these unit tests.
-  build:
+  # `unit-tests` runs the vitest unit suite. The big agency-lang suite (~740
+  # files) is split into shards that run in parallel; each shard runs one slice
+  # via vitest's `--shard`, and together the shards cover every file exactly
+  # once. The small sibling packages (email, mcp, github, ...) and the docs
+  # build run once, on shard 1. The full suite runs on node 22.x only;
+  # `node23-build` below keeps a cheaper node 23.x signal.
+  unit-tests:
     runs-on: ubuntu-latest
 
     strategy:
+      # Keep every shard running even if one fails, so a failure in one slice
+      # still shows the results from the others.
+      fail-fast: false
       matrix:
-        node-version: [22.x, 23.x]
+        shard: [1, 2, 3, 4]
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
-        # Don't write GITHUB_TOKEN into .git/config: no step does
-        # authenticated git operations afterward (the coverage comment
-        # authenticates via github-script's injected client), and these
-        # jobs execute PR-controlled code — the agency tests compile and
-        # run programs from the PR — which could otherwise read the
-        # persisted token.
+        # Don't write GITHUB_TOKEN into .git/config: these jobs execute
+        # PR-controlled code — the unit suite compiles and runs Agency
+        # programs from the PR — which could otherwise read the persisted
+        # token.
         persist-credentials: false
 
     - name: Set up pnpm
@@ -59,17 +63,51 @@ jobs:
         version: 9
         run_install: false
 
-    - name: Set up Node.js ${{ matrix.node-version }}
+    - name: Set up Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 22.x
         cache: 'pnpm'
     - run: pnpm install
     - run: make
     - name: Build docs
-      if: matrix.node-version == '22.x'
+      if: matrix.shard == 1
       run: pnpm run docs
-    - run: pnpm test:run
+    - name: Unit tests (agency-lang, shard ${{ matrix.shard }}/4)
+      working-directory: packages/agency-lang
+      # Call vitest directly via `pnpm exec`: `pnpm run test:run -- --shard`
+      # passes the `--` through to vitest, which then reads `--shard` as a file
+      # filter and silently runs the whole suite.
+      run: pnpm exec vitest run --shard=${{ matrix.shard }}/4
+    - name: Unit tests (sibling packages)
+      # The sibling packages hold only a handful of tests each, so run them
+      # once rather than per shard. `-r run` skips the workspace root, and the
+      # filter drops the already-sharded agency-lang suite.
+      if: matrix.shard == 1
+      run: pnpm --filter '!agency-lang' -r --if-present --stream run test:run
+
+  # Node 23.x build check. The full unit suite runs on 22.x only (see
+  # `unit-tests`); this confirms the toolchain still installs, builds, and
+  # compiles the stdlib under node 23.x.
+  node23-build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        version: 9
+        run_install: false
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 23.x
+        cache: 'pnpm'
+    - run: pnpm install
+    - run: make
 
   # Performance regression suite, INFORMATIONAL ONLY: PERF_ENFORCE is unset (a
   # breach records but does not throw) and continue-on-error means nothing here

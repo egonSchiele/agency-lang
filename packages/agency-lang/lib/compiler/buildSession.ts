@@ -40,6 +40,7 @@ import {
   type ManifestTracker,
 } from "./manifestTracker.js";
 import { deriveConfigKey } from "./buildManifest.js";
+import { dependencyFingerprint } from "./depFingerprint.js";
 import { transformSync } from "esbuild";
 import * as fs from "fs";
 import * as path from "path";
@@ -255,7 +256,8 @@ export class BuildSession {
   }
 
   /** BFS over the closure import graph. Stdlib entries have no closure —
-   *  their deps are [] by construction (stdlibHash covers them). */
+   *  their deps come from dependencyFingerprint on the record path
+   *  instead (std::-resolved, per-file). */
   private transitiveDeps(absModule: string): string[] {
     const programs = this.currentClosure?.programs;
     if (!programs || !programs[absModule]) {
@@ -553,24 +555,28 @@ export class BuildSession {
       fs.writeFileSync(outputFile, result.code, "utf-8");
       const esbuildEndTime = performance.now();
       logTime({ label: `Transformed code for ${absoluteInputFile} with esbuild`, start: esbuildStartTime, end: esbuildEndTime, verbose });
-      // Record ONLY when the module's deps are knowable: covered by the
-      // session closure, or a stdlib module (compiled closure-free by
-      // design; deps [] is correct because stdlibHash covers all of
-      // stdlib). A module compiled with a caller-threaded symbolTable and
-      // no closure (agency serve) has REAL imports the session cannot see
-      // — recording deps: [] would poison the manifest with an entry that
-      // skips despite edited imports.
+      // Record ONLY when the module's deps are knowable. Stdlib modules
+      // compile closure-free by design; their deps come from
+      // dependencyFingerprint (std::-resolved), which also reports whether
+      // the subtree is safely cacheable (splices / unparseable reachable
+      // files are not). A module compiled with a caller-threaded
+      // symbolTable and no closure (agency serve) has REAL imports the
+      // session cannot see — recording deps: [] would poison the manifest
+      // with an entry that skips despite edited imports.
       const isStdlibModule = absoluteInputFile.startsWith(getStdlibDir() + path.sep);
-      const depsKnowable =
-        isStdlibModule || this.currentClosure?.programs[absoluteInputFile] !== undefined;
-      if (depsKnowable) {
-        const transitiveDeps = this.transitiveDeps(absoluteInputFile);
+      if (isStdlibModule) {
         this.tracker.record(
           absoluteInputFile,
           path.resolve(outputFile),
-          transitiveDeps,
-          subtreeHasPkgImport(this.currentClosure, absoluteInputFile, transitiveDeps),
+          dependencyFingerprint(absoluteInputFile, config, { resolveStdlib: true }),
         );
+      } else if (this.currentClosure?.programs[absoluteInputFile] !== undefined) {
+        const transitiveDeps = this.transitiveDeps(absoluteInputFile);
+        this.tracker.record(absoluteInputFile, path.resolve(outputFile), {
+          deps: transitiveDeps,
+          hasPkgImports: subtreeHasPkgImport(this.currentClosure, absoluteInputFile, transitiveDeps),
+          cacheable: true,
+        });
       }
     }
     const compileEndTime = performance.now();

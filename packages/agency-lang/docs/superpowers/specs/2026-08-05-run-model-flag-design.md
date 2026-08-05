@@ -3,7 +3,7 @@
 Adds a `--model` flag to `agency run` and to the bare `agency <file>` shorthand,
 which sets the default model for that run.
 
-Revision 2. Changes from revision 1 are listed at the end.
+Revision 3. Changes from earlier revisions are listed at the end.
 
 ## Background
 
@@ -188,7 +188,8 @@ that reads left to right beats two flags with a precedence rule between them.
 ## Provider semantics
 
 The resolved flag distinguishes a provider the user *stated* from one that is
-merely *inferred*:
+merely *inferred*. The type is declared in `lib/config.ts` beside `CliFlags`,
+because it is part of that contract:
 
 ```ts
 export type ResolvedModelFlag = {
@@ -197,6 +198,12 @@ export type ResolvedModelFlag = {
   explicitProvider?: string;
 };
 ```
+
+Declaring it there keeps dependencies pointing one way. `lib/config.ts` imports
+only `types`, `logger`, `zod`, `fs` and `path` today; if it reached into
+`lib/cli/modelFlag.ts` for this type it would gain a path toward the CLI, and
+through it toward `lib/stdlib/llm.ts` and the runtime. `modelFlag.ts` takes the
+type the other way with `import type`, so nothing new exists at runtime.
 
 Three rules follow.
 
@@ -309,15 +316,11 @@ Three pieces, each with one job.
 **`lib/cli/modelFlag.ts`** — parsing and validation, as a pure function:
 
 ```ts
-export type ResolvedModelFlag = {
-  model: string;
-  explicitProvider?: string;
-};
+import type { ResolvedModelFlag } from "@/config.js";
 
-/** Commander option parser. Throws InvalidArgumentError with a user-facing
- *  message for a structurally invalid value, or a bare name that is not a
- *  known text model. `catalogNames` defaults to the names from
- *  `_listHostedModels()`. */
+/** Throws InvalidArgumentError with a user-facing message for a structurally
+ *  invalid value, or a bare name that is not a known text model.
+ *  `catalogNames` defaults to the names from `_listHostedModels()`. */
 export function resolveModelFlag(
   value: string,
   catalogNames?: string[],
@@ -340,15 +343,34 @@ means in configuration terms.
 ### Dataflow
 
 The resolver is wired as Commander's own option parser, the way
-`parsePositiveInt` already is for `--max-tool-call-rounds`:
+`parsePositiveInt` already is for `--max-tool-call-rounds` — but behind a
+one-line adapter:
 
 ```ts
 .option(
   "--model <name>",
   "Model for this run's LLM calls, as `model` or `provider/model`",
-  resolveModelFlag,
+  (value: string) => resolveModelFlag(value),
 )
 ```
+
+**The adapter is not decoration.** Commander calls an option parser with
+`(value, previous)`, where `previous` is whatever the parser returned last time.
+Repeating the flag —
+
+```bash
+agency run --model gpt-4o-mini --model claude-opus-4-8 greet.agency
+```
+
+— calls the parser a second time with the first `ResolvedModelFlag` as its
+second argument. Passing `resolveModelFlag` in directly would hand that object
+to `catalogNames`, which expects `string[]`: the resolver would then validate
+against nonsense or throw something unrelated, instead of Commander's normal
+last-value-wins behaviour. I verified Commander does this.
+
+The existing parsers avoid the problem by accident: `parsePositiveInt(value:
+string)` declares one parameter, so the extra argument is ignored. A resolver
+with a meaningful second parameter cannot rely on that.
 
 So by the time the action runs, `RunOptions.model` is already a
 `ResolvedModelFlag`, and `runWithOptions` passes it to `applyCliFlags` through
@@ -380,6 +402,12 @@ mapping, and is called on paths that must not exit.
 - every structural case fails: ``, `/model`, `provider/`, `/`
 - the default catalog excludes non-text models: `gpt-image-1` is rejected as a
   bare name
+
+**A Commander wiring test** — build the program, parse
+`--model gpt-4o-mini --model claude-opus-4-8`, and assert the last value wins
+with a correctly resolved object. Unit tests of `resolveModelFlag` cannot catch
+this: the mismatch is between its second parameter and Commander's parser
+contract, which only appears once the two are wired together.
 
 **`lib/config.test.ts`** (or the existing `applyCliFlags` tests)
 
@@ -423,6 +451,16 @@ only the model would pass while requests went to the wrong provider. Four cases:
   misplaced `--max-cost` is forwarded to the agent, and root flags such as `-c`
   cannot reach agency at all. Both currently produce a clear error rather than
   failing silently. Noted here only so they are not lost.
+
+## Changes from revision 2
+
+1. **The Commander parser is wrapped in a one-line adapter.** Passing
+   `resolveModelFlag` directly would let Commander's `previous` argument arrive
+   as `catalogNames` when the flag is repeated. Added a wiring test for the
+   repeated flag.
+2. **`ResolvedModelFlag` moves to `lib/config.ts`**, beside `CliFlags`, with
+   `modelFlag.ts` importing it via `import type`. Keeps `config.ts` from
+   depending on a CLI module and the runtime graph behind it.
 
 ## Changes from revision 1
 

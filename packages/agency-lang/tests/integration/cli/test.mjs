@@ -353,6 +353,35 @@ node main() {
     "./node_modules/.bin/agency run argful.agency ignored",
   );
   assertIncludes(withoutMappedArg, "got: undefined");
+  // --- The shorthand behaves exactly like `agency run` ---
+  // `agency greet.agency` is documented as shorthand for `agency run
+  // greet.agency`, so every case above must hold with the word left out.
+  const shortGreeted = run(dir, "./node_modules/.bin/agency greet.agency --name alice");
+  assertIncludes(shortGreeted, "Hello, alice!");
+
+  const shortWithAgencyFlag = run(
+    dir,
+    "./node_modules/.bin/agency --max-cost 5 greet.agency --name alice",
+  );
+  assertIncludes(shortWithAgencyFlag, "Hello, alice!");
+
+  const shortSeparator = run(
+    dir,
+    "./node_modules/.bin/agency greet.agency -- --name alice",
+  );
+  assertIncludes(shortSeparator, "Hello, alice!");
+
+  const shortWarned = run(
+    dir,
+    "./node_modules/.bin/agency greet.agency --max-cost 5 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(shortWarned, "Warning: --max-cost went to your program");
+
+  // A real command must not be mistaken for a filename. compile takes a list of
+  // files, so a separator pushed in here would break it.
+  run(dir, "./node_modules/.bin/agency compile greet.agency basic.agency");
+
   console.log("Test 8 passed");
 
   // --- Test 8b: a node parameter default applies on the direct-run path ---

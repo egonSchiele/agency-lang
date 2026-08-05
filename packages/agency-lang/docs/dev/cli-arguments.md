@@ -229,21 +229,33 @@ command, not a mistake.
 The walk itself — arity, attached values, short bundles — lives in one place, so
 a fix to short-option parsing reaches both.
 
-## Known limitation: the shorthand takes no program arguments
+## The shorthand is `run` with the word left out
 
-`agency greet.agency` is a shorthand for `agency run greet.agency`. It is a
-hidden default command declaring only `[file]`, with no variadic argument, so it
-cannot forward anything:
+`agency greet.agency` is a hidden default command. It carries the same options
+as `run` and the same boundary policy, so everything on this page applies to it
+unchanged:
 
 ```
-agency greet.agency --name bob      # error: unknown option '--name'
-agency greet.agency bob             # error: too many arguments for 'default'
+agency greet.agency --name alice
+agency --policy strict greet.agency --name alice
+agency greet.agency --max-cost 5     # same warning as run
 ```
 
-This predates the position rule and was not changed by it. Anyone who needs to
-pass arguments must write `agency run` in full. Fixing it means giving the
-default command the same `[nodeArgs...]` argument, pass-through, and guard that
-`run` has.
+Two things make it different from a named command, and both are in the policy
+rather than in the walk.
+
+**It has no command word to step over.** Its `command` is `null`, and the walk
+starts on the filename itself rather than one token later.
+
+**Its flags sit at the top level.** In `agency --policy strict greet.agency`,
+`--policy` appears where a root flag would. So the scan that locates the
+subcommand is given every option agency owns anywhere, not just the root's —
+otherwise it stops on `strict` and treats that as the filename.
+
+That second point is why `splitCommandLine` also takes the list of command
+names: without it, the shorthand policy would claim real commands, and
+`agency compile a.agency b.agency` would get a separator pushed into its file
+list. Aliases are included, so `agency fmt x.agency -i` stays a format run.
 
 ## Testing
 

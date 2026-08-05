@@ -9,7 +9,7 @@ Execution traces capture a complete checkpoint at every step of an Agency progra
 agency run --trace my-agent.agency
 
 # Trace to custom file
-agency run --trace my-trace.agencytrace my-agent.agency
+agency run --trace-file my-trace.agencytrace my-agent.agency
 ```
 
 Or in `agency.json`:

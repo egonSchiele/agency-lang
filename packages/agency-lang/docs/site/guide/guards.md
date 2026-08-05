@@ -187,7 +187,7 @@ If you give the inner guard more budget, it does not give the outer guard more b
 You can also set a hard limit when you run an Agency agent on the command line:
 
 ```bash
-agency run my-agent.agency --max-cost 10.0 --max-time 30s
+agency run --max-cost 10.0 --max-time 30s my-agent.agency
 ```
 
 These limits are hard limits, you cannot give them more budget. Note that the time *has* to be specified in unit literals.

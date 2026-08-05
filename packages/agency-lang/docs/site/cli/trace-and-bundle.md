@@ -18,7 +18,7 @@ agency trace run foo.agency
 2. pass in `--trace` to the run command
 
 ```
-agency run foo.agency --trace
+agency run --trace foo.agency
 ```
 
 3. Set the `trace` and `traceFile` options in the [config file](../guide/agency-config-file.html).

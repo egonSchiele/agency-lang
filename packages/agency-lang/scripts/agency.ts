@@ -18,9 +18,10 @@ import {
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
 import {
-  findSubcommandIndex,
-  insertProgramSeparator,
-} from "@/cli/runCommandLine.js";
+  splitCommandLine,
+  type Arity,
+  type CliOption,
+} from "@/cli/commandLine.js";
 import { runLink } from "@/cli/remote/commands/link.js";
 import { runDeploy } from "@/cli/remote/commands/deploy.js";
 import { runLs } from "@/cli/remote/commands/ls.js";
@@ -128,7 +129,9 @@ import { serveMcp, serveHttp } from "@/cli/serve.js";
 // Per-run flags for `agency run` / the hidden default command: the shared
 // CliFlags (mapped onto config by applyCliFlags in config.ts) plus --resume,
 // which is a run-only concern, not a config field.
-type RunOptions = CliFlags & {
+type RunOptions = Omit<CliFlags, "trace"> & {
+  trace?: boolean;
+  traceFile?: string;
   resume?: string;
   policy?: string;
   approve?: string;
@@ -230,7 +233,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
   }
 
   function runWithOptions(input: string, options: RunOptions, nodeArgs: string[] = []) {
-    const config = applyCliFlags(getConfig(), options, input);
+    // applyCliFlags takes one field: a path, or `true` for the default path.
+    // The CLI splits that across two flags so neither swallows the filename.
+    const config = applyCliFlags(
+      getConfig(),
+      { ...options, trace: options.traceFile ?? (options.trace ? true : undefined) },
+      input,
+    );
     let runPolicy;
     try {
       runPolicy =
@@ -341,10 +350,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "--resume <statefile>",
         "Resume execution from a saved state file",
       )
-      .option(
-        "--trace [file]",
-        "Write execution trace to file (default: <input>.trace)",
-      )
+      // Two flags rather than `--trace [file]`: an optional-valued option
+      // swallows the next word, so `agency run --trace greet.agency` reads the
+      // filename as the trace path and then reports the input missing. That was
+      // broken before the position rule too; splitting it makes both spellings
+      // work.
+      .option("--trace", "Write an execution trace to <input>.trace")
+      .option("--trace-file <path>", "Write an execution trace to this path")
       .option(
         "--log-file <path>",
         "Append statelog events (one JSON object per line) to this file for this run",
@@ -615,7 +627,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--resume <statefile>", "Resume execution from a saved state file")
     .action((input: string, options: { output?: string; resume?: string }) => {
       const traceFile = options.output || input.replace(/\.agency$/, ".trace");
-      runWithOptions(input, { trace: traceFile, resume: options.resume });
+      runWithOptions(input, { traceFile, resume: options.resume });
     });
 
   traceCmd
@@ -1954,6 +1966,23 @@ export function createProgram(deps: CliDependencies = {}): Command {
   return program;
 }
 
+/** Commander's own option metadata, so no second list can drift out of step. */
+function optionsOf(command: Command | undefined): CliOption[] {
+  return (command?.options ?? []).map((option) => ({
+    short: option.short ?? undefined,
+    long: option.long ?? undefined,
+    arity: (option.required
+      ? "required"
+      : option.optional
+        ? "optional"
+        : "none") as Arity,
+  }));
+}
+
+function commandNamed(program: Command, name: string): Command | undefined {
+  return program.commands.find((cmd) => cmd.name() === name);
+}
+
 export async function runCli(
   argv: string[] = process.argv,
   deps: CliDependencies = {},
@@ -1963,52 +1992,27 @@ export async function runCli(
   // The flag list comes from commander itself. A hand-written copy would drift
   // the moment someone adds an option to addRunOptions, and it would fail
   // silently: the new flag would be forwarded to the program and do nothing.
-  const runCmd = program.commands.find((cmd) => cmd.name() === "run");
-  const flags = [...(runCmd?.options ?? []), ...program.options].map(
-    (option) => ({
-      short: option.short ?? undefined,
-      long: option.long ?? undefined,
-      takesValue: option.required || option.optional,
-    }),
-  );
-  const prepared = insertProgramSeparator(injectAgentSeparator(argv), flags);
+  const prepared = splitCommandLine(argv, optionsOf(program), [
+    {
+      command: "run",
+      // The filename. Everything after it is the program's command line.
+      ownedPositionals: 1,
+      options: [...optionsOf(commandNamed(program, "run")), ...optionsOf(program)],
+      warnOnCollision: true,
+    },
+    {
+      // `agency agent` forwards its whole command line to the agent, which has
+      // its own flag parser. Its budget flags must still reach commander, so
+      // they lead; the agent's own flags follow. Root flags are deliberately
+      // absent: they belong to the agent here, as they always have.
+      command: "agent",
+      ownedPositionals: 0,
+      options: optionsOf(commandNamed(program, "agent")),
+      warnOnCollision: false,
+    },
+  ]);
   if (prepared.warning !== undefined) console.warn(prepared.warning);
   await program.parseAsync(prepared.argv);
-}
-
-// `agency agent` forwards every remaining argv token to the agent program
-// (which has its own std::args-based flag parser). Insert `--` right after
-// `agent` so commander does not try to interpret the user's agent flags
-// (e.g. `agency agent --foo bar` becomes `agency agent -- --foo bar`).
-// No-op when the user already wrote `--`, or when `agent` is not the
-// subcommand being invoked.
-//
-// Exception: the agent command has its OWN commander options — --max-cost and
-// --max-time — which set the root budget guard and so MUST be parsed by
-// commander, not forwarded. Skip past any that lead the agent args (right
-// after `agent`) before inserting the separator, so `agency agent --max-cost 5
-// -p task` becomes `agency agent --max-cost 5 -- -p task`. Without this the
-// separator forwards them and the budget silently never applies. Budget flags
-// therefore must come first, before the agent program's own flags.
-const AGENT_BUDGET_OPTIONS = ["--max-cost", "--max-time"];
-
-export function injectAgentSeparator(argv: string[]): string[] {
-  const subcommandIdx = findSubcommandIndex(argv);
-  if (subcommandIdx === -1) return argv;
-  if (argv[subcommandIdx] !== "agent") return argv;
-  let sep = subcommandIdx + 1;
-  while (sep < argv.length) {
-    const tok = argv[sep];
-    if (AGENT_BUDGET_OPTIONS.includes(tok)) {
-      sep += 2; // `--max-cost 5`: skip the flag and its separate value
-    } else if (AGENT_BUDGET_OPTIONS.some((o) => tok.startsWith(`${o}=`))) {
-      sep += 1; // `--max-cost=5`: flag and value are one token
-    } else {
-      break;
-    }
-  }
-  if (argv[sep] === "--") return argv;
-  return [...argv.slice(0, sep), "--", ...argv.slice(sep)];
 }
 
 const isMain =

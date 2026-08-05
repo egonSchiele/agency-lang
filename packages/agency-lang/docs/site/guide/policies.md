@@ -72,13 +72,13 @@ You can also apply policies on the command line, when running an Agency program 
 
 ```bash
 # A named built-in policy
-agency run agent.agency --policy recommended
+agency run --policy recommended agent.agency
 
 # A policy JSON file
-agency run agent.agency --policy ./my-policy.json
+agency run --policy ./my-policy.json agent.agency
 
 # Inline effect lists
-agency run agent.agency --approve std::read,std::ls --reject std::write
+agency run --approve std::read,std::ls --reject std::write agent.agency
 ```
 
 Notes:

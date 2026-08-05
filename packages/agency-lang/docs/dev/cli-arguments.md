@@ -63,7 +63,7 @@ This was tried and reverted. If you find yourself reaching for
 
 ### What is used: draw the boundary before commander runs
 
-`lib/cli/runCommandLine.ts` inserts `--` after the filename, then hands the
+`lib/cli/commandLine.ts` inserts `--` after the filename, then hands the
 rewritten argv to commander, which parses it normally. Commander removes the
 separator itself, so the program never sees it.
 
@@ -88,6 +88,26 @@ const flags = [...(runCmd?.options ?? []), ...program.options].map((option) => (
 moment someone adds an option to `addRunOptions`, and it would fail silently in
 both directions: the walk would mistake a flag's value for the filename, and the
 warning below would stay quiet about the new flag.
+
+### Optional values swallow the next word too
+
+Commander reads `--trace greet.agency` as `trace="greet.agency"` even though the
+value is optional, so an optional-valued option cannot sit before the filename.
+That is why `--trace [file]` became two flags:
+
+```
+--trace              write to <input>.trace
+--trace-file <path>  write here
+```
+
+The old shape had no working spelling under the position rule, and in fact had
+none before it either: `agency run --trace foo.agency` failed with "missing
+required argument" on main as well, even though `docs/dev/trace.md` documented
+it. Only `agency run foo.agency --trace` worked, and the position rule sends
+that to the program.
+
+An option that takes `[an optional value]` and sits before a required positional
+is ambiguous by construction. Prefer two flags.
 
 ## The warning
 
@@ -132,7 +152,7 @@ The last two are the easy ones to miss. `-cfile.json` attaches the value to the
 short flag, and `-iv` is a cluster of two boolean short flags. `flagNamesIn`
 handles them by naming every letter of a short token, so any letter matching an
 agency flag is caught. A letter that is not a flag matches nothing, so the extra
-candidates are harmless. `lib/cli/runCommandLine.test.ts` pins all four.
+candidates are harmless. `lib/cli/commandLine.test.ts` pins all four.
 
 ## The `--` asymmetry, which still exists
 
@@ -157,23 +177,31 @@ that doing so would break any program that legitimately wants positional
 arguments beginning with a dash, which is the reason POSIX has the convention at
 all.
 
-## `agency agent`, the same mechanism with a different boundary
+## One splitter, two policies
 
-`agency agent` forwards its entire remaining command line to an agent program.
-`injectAgentSeparator` in `scripts/agency.ts` inserts `--` right after the
-subcommand, because `agent` takes no filename and so has no natural boundary
-token.
+`agency agent` needs the same boundary for a different shape: it takes no
+filename, and it forwards its whole command line to an agent that has its own
+flag parser. It used to have its own copy of the walk (`injectAgentSeparator`)
+with a hand-written list of the flags to keep on agency's side.
 
-It has its own version of the misplaced-flag problem, solved differently: it
-skips past the agent command's budget flags before inserting the separator, so
-`agency agent --max-cost 5 -p task` becomes `agency agent --max-cost 5 -- -p
-task`. Without that step the cap would silently never apply.
+Both now go through `splitCommandLine` with a policy each:
 
-The two run in sequence in `runCli` — `injectAgentSeparator` first, then
-`insertProgramSeparator` — and each is a no-op for the other's subcommand. They
-share the idea and the user-visible rule but not the code, because the boundary
-and the skip logic differ. If a third command ever needs this, that is the point
-to factor out the walk rather than add another special case.
+```ts
+{ command: "run",   ownedPositionals: 1, options: run + root, warnOnCollision: true  }
+{ command: "agent", ownedPositionals: 0, options: agent only, warnOnCollision: false }
+```
+
+`ownedPositionals` is the difference that matters: `run` owns the filename, so
+the line falls after it; `agent` owns nothing, so the line falls at the first
+token that is not one of agency's own flags.
+
+Two details of the agent policy are deliberate. Root options are absent, because
+`agency agent -c x` has always given `-c x` to the agent. And it never warns,
+because forwarding a flag agency also defines is the entire point of the
+command, not a mistake.
+
+The walk itself — arity, attached values, short bundles — lives in one place, so
+a fix to short-option parsing reaches both.
 
 ## Known limitation: the shorthand takes no program arguments
 
@@ -193,7 +221,7 @@ default command the same `[nodeArgs...]` argument, pass-through, and guard that
 
 ## Testing
 
-- `lib/cli/forwardedArgs.test.ts` — the splitting and detection logic in
+- `lib/cli/commandLine.test.ts` — the splitting and detection logic in
   isolation. Fast, and the right place for a new edge case.
 - `tests/integration/cli/test.mjs` Test 8 — the real binary, covering the new
   form, the separator form, an agency flag before the filename, a misplaced one,

@@ -2,7 +2,7 @@
 // All tests avoid LLM calls.
 
 import { resolve, join } from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import {
   createTempProject, initProject, installTarball,
   writeFile, run, assertIncludes, cleanup, getTarballPath,
@@ -299,6 +299,28 @@ node main() {
     throw new Error(`warned about a flag the user claimed with --: ${claimed}`);
   }
   assertIncludes(claimed, "unknown flag --max-cost");
+
+  // A short token agency does not own must forward without comment. Reading
+  // every letter would find the `i` in -print and warn about agency's -i.
+  const programShort = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency -print 2>&1",
+    { expectFail: true },
+  );
+  if (programShort.includes("Warning:")) {
+    throw new Error(`warned about a program-owned short token: ${programShort}`);
+  }
+
+  // Bare --trace and an explicit path both work before the filename. `--trace
+  // [file]` could do neither: it swallowed the filename as its value.
+  run(dir, "./node_modules/.bin/agency run --trace greet.agency");
+  if (!existsSync(join(dir, "greet.trace"))) {
+    throw new Error("bare --trace wrote no trace file");
+  }
+  run(dir, "./node_modules/.bin/agency run --trace-file custom.trace greet.agency");
+  if (!existsSync(join(dir, "custom.trace"))) {
+    throw new Error("--trace-file wrote no trace file");
+  }
 
   // `--store` is declared on `label`, not on `ingest`. The source does not
   // exist, so this fails either way; what matters is which error comes back.

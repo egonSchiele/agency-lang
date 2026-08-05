@@ -46,16 +46,19 @@ $ greet --name alice --out result.txt -v
 Hello, alice!
 ```
 
-During development you can run the file with `agency run`. Put `--` first,
-because otherwise `agency run` claims `--name` as its own flag:
+During development you can run the file with `agency run`. Your program's flags
+go after the filename, the way they do with `node`:
 
 ```
-$ agency run greet.agency -- --name alice --out result.txt -v
+$ agency run greet.agency --name alice --out result.txt -v
 Hello, alice!
 ```
 
-Only `agency run` needs that. A compiled or packed program takes its flags
-directly, and adding `--` there would hide them:
+Agency's own flags go before the filename. If you put one after it, the CLI
+stops and shows you both ways to fix it, rather than passing it to your program
+where it would silently do nothing.
+
+A compiled or packed program works the same way:
 
 ```
 $ agency compile greet.agency
@@ -63,9 +66,10 @@ $ node greet.js --name alice
 Hello, alice!
 ```
 
-`--` means "stop reading flags" to `parseArgs`, so anything after it becomes a
-positional argument. `node greet.js -- --name alice` greets the world and puts
-`--name` and `alice` in `positionals`.
+Do not carry a `--` over to that form. `--` means "stop reading flags" to
+`parseArgs`, so anything after it becomes a positional argument.
+`node greet.js -- --name alice` greets the world and puts `--name` and `alice`
+in `positionals`.
 
 ```
 $ greet --help
@@ -167,7 +171,7 @@ export type FlagSpec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L142))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L146))
 
 ### FlagGroups
 
@@ -187,7 +191,7 @@ export type FlagGroups = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L157))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L161))
 
 ### ArgsSchema
 
@@ -211,7 +215,7 @@ export type ArgsSchema = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L166))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L170))
 
 ### ParsedArgs
 
@@ -233,7 +237,7 @@ export type ParsedArgs = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L180))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L184))
 
 ## Functions
 
@@ -253,4 +257,4 @@ Given the schema, parse `process.argv`.
 
 **Returns:** [ParsedArgs](#parsedargs)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L185))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/args.agency#L189))

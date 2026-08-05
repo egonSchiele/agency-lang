@@ -86,27 +86,45 @@ Arguments after the file are passed through to your program, and you read them
 with [`std::args`](../stdlib/args):
 
 ```bash
-agency run greet.agency -- --name alice
+agency run greet.agency --name alice
 ```
+
+**Position decides who a flag belongs to.** Agency's own flags go before the
+filename; everything after it is your program's:
+
+```bash
+agency run --policy strict greet.agency --name alice
+#            agency's                     your program's
+```
+
+This is the rule `node` uses, in `node --inspect script.js --verbose`.
 
 The entry node's parameters are **not** filled from the command line. A
 parameter you do not supply another way is `undefined`, and its default applies
 if it has one.
 
-The `--` separates your program's flags from `agency run`'s own. Without it,
-`agency run greet.agency --name alice` fails with `unknown option '--name'`,
-because the CLI tries to claim `--name`. An argument that does not start with a
-dash needs no separator: `agency run greet.agency hello` works as written.
+If you put an agency flag after the filename, the CLI stops and tells you:
 
-**Only `agency run` needs `--`.** A compiled or packed program takes its flags
-directly:
+```
+$ agency run greet.agency --max-cost 5
+Error: --max-cost is an agency flag, not an argument for your program.
+
+  Put it before the file:      agency run --max-cost ... greet.agency
+  Or hand it to the program:   agency run greet.agency -- --max-cost ...
+```
+
+That second line is the escape hatch. If your program genuinely wants a flag
+agency also defines, put `--` before it and agency will hand it over.
+
+A compiled or packed program works the same way, since there is no agency
+command line to separate from:
 
 ```bash
 agency compile greet.agency
 node greet.js --name alice
 ```
 
-Adding `--` there would hide them. `std::args` reads `--` as "stop reading
+Do not carry a `--` over to that form. `std::args` reads `--` as "stop reading
 flags", so `node greet.js -- --name alice` leaves `name` at its default and puts
 `--name` and `alice` in `positionals`.
 
@@ -114,6 +132,6 @@ Note when invoking through another tool: `npx agency run file.agency -- x`
 loses the `--` to npx. It works when invoking the `agency` binary directly.
 
 This applies to `agency eval run --agent-cmd` too. A command like
-`agency run writer.agency -- {task}` delivers the task through the program's
+`agency run writer.agency {task}` delivers the task through the program's
 argv, so the agent reads it with `args()` from `std::system` rather than
 declaring a parameter on `main`.

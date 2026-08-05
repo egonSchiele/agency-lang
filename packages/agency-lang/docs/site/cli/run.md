@@ -19,12 +19,13 @@ This is also the default if no command is specified:
 agency foo.agency
 ```
 
-Note: This compiles the file to JavaScript and immediately executes it under the same Node binary that's running the CLI. You can also pass `--resume <statefile>` to resume a previously saved execution, or `--trace [file]` to write an execution trace.
+Note: This compiles the file to JavaScript and immediately executes it under the same Node binary that's running the CLI. You can also pass `--resume <statefile>` to resume a previously saved execution, or `--trace` to write an execution trace.
 
 ## Options
 
 - `--resume <statefile>` — resume execution from a saved state file. This is what you'd use to continue a run that paused at an interrupt, after writing the user's responses into the state file. *work in progress*
-- `--trace [file]` — write an execution trace as the program runs. If you don't pass a filename, the trace is written to `<input>.trace`. See [traces and bundles](./trace-and-bundle.html) for what you can do with a trace file.
+- `--trace` — write an execution trace as the program runs, to `<input>.trace`. See [traces and bundles](./trace-and-bundle.html) for what you can do with a trace file.
+- `--trace-file <path>` — write the execution trace to this path instead.
 - `--max-cost <dollars>` — abort the run if its LLM spend exceeds this many dollars, e.g. `--max-cost 0.50`. `0` means no paid spend at all (local models only). A negative value means no limit. A tripped budget exits with code 3 and prints the overrun.
 - `--max-time <duration>` — abort the run if its working time exceeds this duration, e.g. `--max-time 5m`. The value needs a unit: `500ms`, `30s`, `5m`, `1h`, `2d`, `1w`. Time spent waiting on a human does not count. Zero or negative means no limit. A tripped budget exits with code 3.
 
@@ -86,27 +87,47 @@ Arguments after the file are passed through to your program, and you read them
 with [`std::args`](../stdlib/args):
 
 ```bash
-agency run greet.agency -- --name alice
+agency run greet.agency --name alice
 ```
+
+**Position decides who a flag belongs to.** Agency's own flags go before the
+filename; everything after it is your program's:
+
+```bash
+agency run --policy strict greet.agency --name alice
+#            agency's                     your program's
+```
+
+This is the rule `node` uses, in `node --inspect script.js --verbose`.
 
 The entry node's parameters are **not** filled from the command line. A
 parameter you do not supply another way is `undefined`, and its default applies
 if it has one.
 
-The `--` separates your program's flags from `agency run`'s own. Without it,
-`agency run greet.agency --name alice` fails with `unknown option '--name'`,
-because the CLI tries to claim `--name`. An argument that does not start with a
-dash needs no separator: `agency run greet.agency hello` works as written.
+Position always decides, even when the flag is one agency also defines. Writing
+`agency run greet.agency --max-cost 5` sends `--max-cost 5` to your program and
+does **not** cap the run's spend. Since that is easy to do by accident, agency
+says so:
 
-**Only `agency run` needs `--`.** A compiled or packed program takes its flags
-directly:
+```
+$ agency run greet.agency --max-cost 5
+Warning: --max-cost went to your program, not to agency.
+  Agency flags go before the filename: agency run --max-cost ... greet.agency
+  Write -- before it to silence this:  agency run greet.agency -- --max-cost ...
+```
+
+If your program really does own a flag by that name, the second line silences
+the warning. Nothing else needs `--`.
+
+A compiled or packed program works the same way, since there is no agency
+command line to separate from:
 
 ```bash
 agency compile greet.agency
 node greet.js --name alice
 ```
 
-Adding `--` there would hide them. `std::args` reads `--` as "stop reading
+Do not carry a `--` over to that form. `std::args` reads `--` as "stop reading
 flags", so `node greet.js -- --name alice` leaves `name` at its default and puts
 `--name` and `alice` in `positionals`.
 
@@ -114,6 +135,6 @@ Note when invoking through another tool: `npx agency run file.agency -- x`
 loses the `--` to npx. It works when invoking the `agency` binary directly.
 
 This applies to `agency eval run --agent-cmd` too. A command like
-`agency run writer.agency -- {task}` delivers the task through the program's
+`agency run writer.agency {task}` delivers the task through the program's
 argv, so the agent reads it with `args()` from `std::system` rather than
 declaring a parameter on `main`.

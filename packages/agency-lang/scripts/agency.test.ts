@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { splitCommandLine } from "@/cli/commandLine.js";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -39,7 +40,6 @@ vi.mock("@/cli/remote/commands/logs.js", () => ({ runLogs: remoteRecipeMocks.run
 
 import {
   createProgram,
-  injectAgentSeparator,
   parseNonNegativeInt,
   parsePositiveInt,
   runCli,
@@ -273,46 +273,62 @@ describe("integer flag parsers reject parseInt footguns", () => {
   });
 });
 
-describe("injectAgentSeparator", () => {
+// The agent boundary now comes from splitCommandLine with an agent policy, so
+// these cases live beside the run cases in lib/cli/commandLine.test.ts. What is
+// asserted here is that the CLI wires that policy up: the budget flags must
+// stay on agency's side of the separator, or the cap silently never applies.
+describe("agent command line", () => {
   const N = ["node", "agency"];
+  const AGENT_POLICY = [
+    {
+      command: "agent",
+      ownedPositionals: 0,
+      options: [
+        { long: "--max-cost", arity: "required" as const },
+        { long: "--max-time", arity: "required" as const },
+      ],
+      warnOnCollision: false,
+    },
+  ];
+  const split = (...words: string[]) =>
+    splitCommandLine([...N, ...words], [], AGENT_POLICY).argv;
 
   it("inserts `--` right after `agent` so agent flags are forwarded", () => {
-    expect(injectAgentSeparator([...N, "agent", "--policy", "approve-all"])).toEqual(
-      [...N, "agent", "--", "--policy", "approve-all"],
-    );
+    expect(split("agent", "--policy", "approve-all")).toEqual([
+      ...N, "agent", "--", "--policy", "approve-all",
+    ]);
   });
 
   it("keeps --max-cost/--max-time BEFORE the `--` so commander parses them", () => {
-    // The bug this guards: without skipping the budget flags, they land after
-    // `--` and get forwarded to the agent instead of installing the budget.
+    expect(split("agent", "--max-cost", "5", "-p", "task")).toEqual([
+      ...N, "agent", "--max-cost", "5", "--", "-p", "task",
+    ]);
     expect(
-      injectAgentSeparator([...N, "agent", "--max-cost", "5", "-p", "task"]),
-    ).toEqual([...N, "agent", "--max-cost", "5", "--", "-p", "task"]);
-    expect(
-      injectAgentSeparator([
-        ...N, "agent", "--max-cost", "5", "--max-time", "30m", "--policy", "reject",
-      ]),
+      split("agent", "--max-cost", "5", "--max-time", "30m", "--policy", "reject"),
     ).toEqual([
       ...N, "agent", "--max-cost", "5", "--max-time", "30m", "--", "--policy", "reject",
     ]);
   });
 
   it("handles the --flag=value form of the budget options", () => {
-    expect(
-      injectAgentSeparator([...N, "agent", "--max-time=30m", "-p", "task"]),
-    ).toEqual([...N, "agent", "--max-time=30m", "--", "-p", "task"]);
+    expect(split("agent", "--max-time=30m", "-p", "task")).toEqual([
+      ...N, "agent", "--max-time=30m", "--", "-p", "task",
+    ]);
   });
 
   it("leaves argv untouched when the user already wrote `--`", () => {
-    const already = [...N, "agent", "--max-cost", "5", "--", "-p", "task"];
-    expect(injectAgentSeparator(already)).toEqual(already);
-    const bare = [...N, "agent", "--", "-p", "task"];
-    expect(injectAgentSeparator(bare)).toEqual(bare);
+    for (const words of [
+      ["agent", "--max-cost", "5", "--", "-p", "task"],
+      ["agent", "--", "-p", "task"],
+    ]) {
+      expect(split(...words)).toEqual([...N, ...words]);
+    }
   });
 
-  it("is a no-op for other subcommands", () => {
-    const run = [...N, "run", "foo.agency", "--max-cost", "5"];
-    expect(injectAgentSeparator(run)).toEqual(run);
+  it("is a no-op for a subcommand with no policy", () => {
+    expect(split("run", "foo.agency", "--max-cost", "5")).toEqual([
+      ...N, "run", "foo.agency", "--max-cost", "5",
+    ]);
   });
 });
 

@@ -61,7 +61,9 @@ async function runCli(
   try {
     const { stdout, stderr } = await execFileAsync(
       process.execPath,
-      [CLI, "run", "sleeper.agency", ...args],
+      // Agency's flags go before the filename; everything after it is the
+      // program's own command line.
+      [CLI, "run", ...args, "sleeper.agency"],
       { cwd: dir, timeout: 60_000, env: { ...process.env, ...env } },
     );
     return { stdout, stderr, code: 0 };

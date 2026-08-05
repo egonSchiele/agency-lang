@@ -132,7 +132,7 @@ node main(): string {
   writeFileSync(join(TMP_ROOT, "cmd-inputs.json"), JSON.stringify({
     inputs: [{ id: "cmd-e2e", goal: "writes the task to out.txt", task: "hello from a command target", files: cmdFixtures }],
   }));
-  const agentCmd = `node ${AGENCY_CLI} run writer.agency --policy approve-all -- {task}`;
+  const agentCmd = `node ${AGENCY_CLI} run --policy approve-all writer.agency -- {task}`;
   let cmdOutput;
   try {
     cmdOutput = execSync(

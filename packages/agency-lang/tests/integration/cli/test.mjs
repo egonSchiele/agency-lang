@@ -2,7 +2,7 @@
 // All tests avoid LLM calls.
 
 import { resolve, join } from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import {
   createTempProject, initProject, installTarball,
   writeFile, run, assertIncludes, cleanup, getTarballPath,
@@ -208,26 +208,135 @@ node main() {
   print("Hello, " + args.flags.name + "!")
 }
 `);
-  // The installed binary, not npx: npx consumes `--` before agency sees it, and
-  // `--` is required for a dash-leading value. One assertion, three guarantees:
-  // the words reach process.argv, no guard rejects them, and std::args parses
-  // them.
-  const greeted = run(dir, "./node_modules/.bin/agency run greet.agency -- --name alice");
+  // The form the docs teach: a flag after the filename belongs to the program.
+  // Three guarantees in one assertion — the words reach process.argv, agency
+  // does not claim them, and std::args parses them.
+  const greeted = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency --name alice",
+  );
   assertIncludes(greeted, "Hello, alice!");
+
+  // The installed binary, not npx: npx consumes `--` before agency sees it.
+  // The separator still works for anyone who types it, and the program must
+  // never see the separator itself — std::args would read it as "stop reading
+  // flags" and quietly fall back to the default.
+  const greetedWithSeparator = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency -- --name alice",
+  );
+  assertIncludes(greetedWithSeparator, "Hello, alice!");
+
+  // Agency's own flags still work, before the filename.
+  const greetedWithAgencyFlag = run(
+    dir,
+    "./node_modules/.bin/agency run --max-cost 5 greet.agency --name alice",
+  );
+  assertIncludes(greetedWithAgencyFlag, "Hello, alice!");
+
+  // Root flags keep working where they read most naturally, between the
+  // subcommand and the filename. An earlier approach to this feature broke
+  // exactly this.
+  const greetedWithRootFlag = run(
+    dir,
+    "./node_modules/.bin/agency run -v greet.agency --name alice",
+  );
+  assertIncludes(greetedWithRootFlag, "Hello, alice!");
+
+  // -c takes a value, so the boundary walk must not mistake its value for the
+  // filename. The attached spelling is the same flag written differently.
+  writeFile(dir, "custom.json", "{}\n");
+  for (const configFlag of ["-c custom.json", "-ccustom.json"]) {
+    const greetedWithConfig = run(
+      dir,
+      `./node_modules/.bin/agency run ${configFlag} greet.agency --name alice`,
+    );
+    assertIncludes(greetedWithConfig, "Hello, alice!");
+  }
+
+  // Position always wins, so an agency flag after the filename goes to the
+  // program, and the warning is the only thing standing between that and a
+  // silent surprise. greet does not declare --max-cost, so its own parser then
+  // rejects it — which is also the proof the flag really was forwarded. That it
+  // is forwarded rather than intercepted is pinned in commandLine.test.ts.
+  const warned = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency --max-cost 5 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(warned, "Warning: --max-cost went to your program");
+  assertIncludes(warned, "unknown flag --max-cost");
+
+  // The same flag in the spellings a naive check would miss.
+  for (const [spelling, reported] of [
+    ["--max-cost=5", "--max-cost"],
+    ["-cfoo.json", "-c"],
+    ["-iv", "-i"],
+  ]) {
+    const missed = run(
+      dir,
+      `./node_modules/.bin/agency run greet.agency ${spelling} 2>&1`,
+      { expectFail: true },
+    );
+    assertIncludes(missed, `Warning: ${reported} went to your program`);
+  }
+
+  // A flag the program owns draws no warning, and neither does one the user
+  // deliberately claimed with a separator.
+  const quiet = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency --name alice 2>&1",
+  );
+  if (quiet.includes("Warning:")) {
+    throw new Error(`warned about a flag agency does not define: ${quiet}`);
+  }
+  const claimed = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency -- --max-cost 5 2>&1",
+    { expectFail: true },
+  );
+  if (claimed.includes("Warning:")) {
+    throw new Error(`warned about a flag the user claimed with --: ${claimed}`);
+  }
+  assertIncludes(claimed, "unknown flag --max-cost");
+
+  // A short token agency does not own must forward without comment. Reading
+  // every letter would find the `i` in -print and warn about agency's -i.
+  const programShort = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency -print 2>&1",
+    { expectFail: true },
+  );
+  if (programShort.includes("Warning:")) {
+    throw new Error(`warned about a program-owned short token: ${programShort}`);
+  }
+
+  // Bare --trace and an explicit path both work before the filename. `--trace
+  // [file]` could do neither: it swallowed the filename as its value.
+  run(dir, "./node_modules/.bin/agency run --trace greet.agency");
+  if (!existsSync(join(dir, "greet.trace"))) {
+    throw new Error("bare --trace wrote no trace file");
+  }
+  run(dir, "./node_modules/.bin/agency run --trace-file custom.trace greet.agency");
+  if (!existsSync(join(dir, "custom.trace"))) {
+    throw new Error("--trace-file wrote no trace file");
+  }
+
+  // `--store` is declared on `label`, not on `ingest`. The source does not
+  // exist, so this fails either way; what matters is which error comes back.
+  const parentOption = run(
+    dir,
+    "./node_modules/.bin/agency eval label ingest no-such-dir --store label-store 2>&1",
+    { expectFail: true },
+  );
+  if (parentOption.includes("unknown option '--store'")) {
+    throw new Error("parent-command options stopped reaching subcommands");
+  }
 
   // A short phrase: commander re-wraps help text to the terminal width, so a
   // longer assertion can straddle a line break and fail on correct output.
   const runHelp = run(dir, "./node_modules/.bin/agency run --help");
-  assertIncludes(runHelp, "Arguments passed through to the program");
-
-  // Why `--` is required at all, and why the docs say so: without it commander
-  // claims the flag as its own.
-  const withoutSeparator = run(
-    dir,
-    "./node_modules/.bin/agency run greet.agency --name alice",
-    { expectFail: true },
-  );
-  assertIncludes(withoutSeparator, "unknown option '--name'");
+  assertIncludes(runHelp, "Arguments after the filename");
 
   // A declared parameter is no longer filled from the command line, and the
   // runtime state object must never land in it. It used to arrive as the first

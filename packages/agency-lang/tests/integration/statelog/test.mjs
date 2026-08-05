@@ -67,7 +67,7 @@ function runAgency(dir, { allowFailure = false } = {}) {
   // generated TS imports `agency-lang/runtime` which resolves via the
   // workspace's node_modules.
   try {
-    execSync(`node ${JSON.stringify(AGENCY_CLI)} run ${JSON.stringify(join(dir, "main.agency"))} -c ${JSON.stringify(join(dir, "agency.json"))}`, {
+    execSync(`node ${JSON.stringify(AGENCY_CLI)} run -c ${JSON.stringify(join(dir, "agency.json"))} ${JSON.stringify(join(dir, "main.agency"))}`, {
       cwd: REPO_ROOT,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],

@@ -30,6 +30,7 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { lowerPatterns } from "./patternLowering.js";
+import { desugarComprehensionsInBody } from "./comprehensionDesugar.js";
 import { parseAgency } from "../parser.js";
 import type { AgencyNode, Expression, IfElse, MatchBlock } from "../types.js";
 import type { MatchPattern } from "../types/pattern.js";
@@ -105,14 +106,17 @@ function* walkEveryNode(value: unknown): Generator<Record<string, unknown>> {
 }
 
 /**
- * Every pattern the corpus actually writes, taken from the two positions that
- * feed `patternToCondition`: a match arm's `caseValue` and the pattern after
- * `is`. Parsed UNLOWERED — lowering is what we are about to run ourselves.
+ * One UNLOWERED parse of the whole corpus, shared by every test in this file.
+ * Parsing is ~98% of this file's cost (lowering the entire corpus in memory is
+ * ~2% of a single parse), so we parse once here and derive both the pattern
+ * list and the post-lowering leak check from these same trees. Trees are kept
+ * unlowered; the leak check clones before running the lowering passes so this
+ * cache is never mutated.
  */
-let corpusCache: { file: string; pattern: MatchPattern }[] | null = null;
+let parsedCorpusCache: { file: string; nodes: AgencyNode[] }[] | null = null;
 
-function corpusPatterns(): { file: string; pattern: MatchPattern }[] {
-  if (corpusCache) return corpusCache;
+function parsedCorpus(): { file: string; nodes: AgencyNode[] }[] {
+  if (parsedCorpusCache) return parsedCorpusCache;
   const root = join(__dirname, "../..");
   const files = [
     ...collectAgencyFiles(join(root, "stdlib")),
@@ -121,7 +125,7 @@ function corpusPatterns(): { file: string; pattern: MatchPattern }[] {
   ];
   expect(files.length).toBeGreaterThan(50);
 
-  const out: { file: string; pattern: MatchPattern }[] = [];
+  const out: { file: string; nodes: AgencyNode[] }[] = [];
   for (const file of files) {
     // Some corpus files are deliberate compile-error fixtures
     // (tests/agency/expectedCompileError). They fail two ways: a returned
@@ -134,7 +138,25 @@ function corpusPatterns(): { file: string; pattern: MatchPattern }[] {
       continue;
     }
     if (!parsed.success) continue;
-    for (const node of walkEveryNode(parsed.result.nodes)) {
+    out.push({ file, nodes: parsed.result.nodes });
+  }
+  parsedCorpusCache = out;
+  return out;
+}
+
+/**
+ * Every pattern the corpus actually writes, taken from the two positions that
+ * feed `patternToCondition`: a match arm's `caseValue` and the pattern after
+ * `is`. Read off the UNLOWERED trees — lowering is what we are about to run
+ * ourselves.
+ */
+let corpusCache: { file: string; pattern: MatchPattern }[] | null = null;
+
+function corpusPatterns(): { file: string; pattern: MatchPattern }[] {
+  if (corpusCache) return corpusCache;
+  const out: { file: string; pattern: MatchPattern }[] = [];
+  for (const { file, nodes } of parsedCorpus()) {
+    for (const node of walkEveryNode(nodes)) {
       if (node.type === "matchBlock") {
         for (const c of (node as unknown as MatchBlock).cases) {
           if (c.type === "matchBlockCase" && c.caseValue !== "_") {
@@ -349,22 +371,23 @@ function* walkSkippingMatchSource(value: unknown): Generator<Record<string, unkn
 
 describe("lowering leaves no pattern-specific nodes behind", () => {
   it("no corpus program keeps a pattern node after lowering", { timeout: 60_000 }, () => {
-    const root = join(__dirname, "../..");
-    const files = [
-      ...collectAgencyFiles(join(root, "stdlib")),
-      ...collectAgencyFiles(join(root, "tests/typescriptGenerator")),
-      ...collectAgencyFiles(join(root, "tests/agency")),
-    ];
     const failures: string[] = [];
-    for (const file of files) {
-      let parsed;
+    for (const { file, nodes } of parsedCorpus()) {
+      // parsedCorpus() is cached UNLOWERED and shared with the tests above, so
+      // clone before lowering in place. This runs the same two passes
+      // `parseAgency(..., lower: true)` runs (comprehension desugar then
+      // pattern lowering, in that order) without a second full corpus parse.
+      // Some deliberate compile-error fixtures parse but THROW during lowering;
+      // `parseAgency(..., lower: true)` used to swallow that, so skip them here
+      // too (see corpusPatterns/parsedCorpus).
+      let lowered: AgencyNode[];
       try {
-        parsed = parseAgency(readFileSync(file, "utf8"), {}, true, true);
+        lowered = desugarComprehensionsInBody(structuredClone(nodes)) as AgencyNode[];
+        lowered = lowerPatterns(lowered);
       } catch {
-        continue; // deliberate compile-error fixture; see corpusPatterns
+        continue;
       }
-      if (!parsed.success) continue;
-      for (const node of walkSkippingMatchSource(parsed.result.nodes)) {
+      for (const node of walkSkippingMatchSource(lowered)) {
         if (MUST_NOT_SURVIVE.includes(node.type as string)) {
           failures.push(`${file}: ${node.type as string} survived lowering`);
         }

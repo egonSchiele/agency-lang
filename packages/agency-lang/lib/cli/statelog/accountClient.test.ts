@@ -299,3 +299,34 @@ describe("accountClient id-map safety", () => {
     expect(keys[0]?.projectId).toBe("polluted");
   });
 });
+
+describe("accountClient.getAccountSpend", () => {
+  const validSpend = { pricedCost: 0.5, inputTokens: 10, outputTokens: 2, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true };
+  const okRows = { success: true, value: [{ projectSlug: "p", deletedAt: null, spend: validSpend }] };
+
+  it("GETs /api/spend with both bounds, omitting null ones", async () => {
+    fetchMock.mockResolvedValue(response(200, okRows));
+    const rows = await client.getAccountSpend({ from: 1000, to: 2000 });
+    expect(fetchMock).toHaveBeenCalledWith("https://host.example/api/spend?from=1000&to=2000", expect.any(Object));
+    expect(rows[0]?.projectSlug).toBe("p");
+    await client.getAccountSpend({ from: null, to: null });
+    expect(fetchMock).toHaveBeenLastCalledWith("https://host.example/api/spend", expect.any(Object));
+  });
+
+  it("rejects a malformed row as an AccountRequestError", async () => {
+    fetchMock.mockResolvedValue(response(200, { success: true, value: [{ projectSlug: "p", deletedAt: null, spend: { ...validSpend, pricedCost: -1 } }] }));
+    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toBeInstanceOf(AccountRequestError);
+  });
+
+  it("reports an unsupported host for a spend-route 404 (JSON and non-JSON)", async () => {
+    fetchMock.mockResolvedValue(response(404, { error: "Not Found" }));
+    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toThrow(/does not support the spend API/);
+    fetchMock.mockResolvedValue({ ok: false, status: 404, json: vi.fn().mockRejectedValue(new SyntaxError("bad")) } as unknown as Response);
+    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toThrow(/does not support the spend API/);
+  });
+
+  it("leaves a non-JSON 5xx as a server error", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 503, json: vi.fn().mockRejectedValue(new SyntaxError("bad")) } as unknown as Response);
+    await expect(client.getAccountSpend({ from: null, to: null })).rejects.toThrow("statelog request failed (HTTP 503)");
+  });
+});

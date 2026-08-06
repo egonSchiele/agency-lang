@@ -36,6 +36,7 @@ define stage-stdlib-docs
 	cp -r docs/site/cli stdlib/docs/cli
 	cp -r docs/site/diagnostics stdlib/docs/diagnostics
 	cp -r docs/site/stdlib stdlib/docs/stdlib
+	rm -f stdlib/docs/stdlib/.agency-doc*
 endef
 
 all:
@@ -116,17 +117,11 @@ fixtures:
 	pnpm run templates && pnpm run build
 	node dist/scripts/regenerate-fixtures.js
 
-# Regenerate stdlib docs only when stdlib content OR the compiler (which
-# includes the doc generator) changed. `make clean` wipes .agency-build
-# and forces regeneration.
+# The doc command owns its output directory: a per-page cache in
+# docs/site/stdlib/.agency-doc.json decides freshness, repairs deleted or
+# hand-edited pages, and deletes orphans. No wipe, no outer stamp.
 doc:
-	@STAMP=$$(node ./dist/scripts/stdlib-stamp.js); \
-	if [ -f .agency-build/doc.stamp ] && [ "$$(cat .agency-build/doc.stamp)" = "$$STAMP" ]; then \
-	  echo "stdlib docs up to date"; \
-	else \
-	  rm -rf docs/site/stdlib/ && node ./dist/scripts/agency.js doc stdlib -o docs/site/stdlib/ && \
-	  mkdir -p .agency-build && echo "$$STAMP" > .agency-build/doc.stamp; \
-	fi
+	node ./dist/scripts/agency.js doc stdlib -o docs/site/stdlib/
 
 examples:
 	pnpm run agency literate weave examples/ -o docs/site/examples/ --lang ts --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/examples/
@@ -144,7 +139,6 @@ DOC_PACKAGES = web-fetch mcp email github whisper-local
 packages-doc:
 	@for pkg in $(DOC_PACKAGES); do \
 	  echo "Generating docs for $$pkg..."; \
-	  rm -rf docs/site/packages/$$pkg/; \
 	  pnpm run agency doc ../$$pkg -o docs/site/packages/$$pkg/ --ignore tests --base-url https://github.com/egonSchiele/agency-lang/blob/main/packages/$$pkg/ || exit 1; \
 	done
 

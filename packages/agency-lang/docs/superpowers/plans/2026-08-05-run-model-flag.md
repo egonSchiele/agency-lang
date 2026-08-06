@@ -13,14 +13,14 @@
 ## Global Constraints
 
 - **Do not edit `CHANGELOG.md`.** The owner maintains it.
-- **Do not edit anything under `docs/site/**`.** User-facing documentation is out of scope for this change. `docs/dev/**` is in scope and Task 7 updates it.
+- **Do not edit anything under `docs/site/**`.** User-facing documentation is out of scope for this change. `docs/dev/**` is in scope and Task 8 updates it.
 - Never commit to `main`. Work happens on the branch this worktree is on (`adit/run-model-flag`).
 - Never force-push or amend commits.
 - Write commit messages to a file and pass it with `git commit -F <file>` — apostrophes and backticks break inline `-m`.
 - Stage named paths, never `git add -A`. This worktree may hold other work.
 - Save every test run's output to a file so a failure does not need a re-run to diagnose. This repo's tests are slow.
 - Do not run the whole test suite. Run only the tests named in each task; CI runs the rest.
-- Run `make` only where a task says to. It is slow, and only the two tasks that need a rebuilt CLI ask for it.
+- Run `make` only where a task says to. It is slow, and only Task 7 needs a rebuilt CLI.
 - Types, not interfaces. Objects, not Maps. Arrays, not Sets. No dynamic imports.
 
 ---
@@ -38,7 +38,7 @@
 | `lib/cli/modelFlag.test.ts` | **Create.** Tests for the resolver. |
 | `scripts/agency.ts` | **Modify.** Add the option to `addRunOptions`, behind a one-line adapter. |
 | `scripts/agency.test.ts` | **Modify.** Add Commander wiring cases; it already owns `createProgram` and CLI parsing. |
-| `lib/backends/smoltalkDefaults.codegen.test.ts` | **Modify.** Add cases proving the configuration reaches the generated client block. |
+| `lib/backends/smoltalkDefaults.codegen.test.ts` | **Modify.** Add the missing model case proving the configuration reaches the generated client block. |
 | `lib/runtime/agencyLlm.test.ts` | **Modify.** Add four precedence cases observing the final client config via the existing `RecordingClient`. |
 | `tests/integration/cli/test.mjs` | **Modify.** End-to-end through the real binary, both commands, and the failure-before-compilation case. |
 | `docs/dev/config.md` | **Modify.** Document what `--model` means in configuration terms, beside the other flags. |
@@ -60,7 +60,7 @@ Why the resolver and the configuration mapping are separate files: the resolver 
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `export function levenshtein(a: string, b: string): number`
+- Produces: `export function levenshtein(left: string, right: string): number`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -108,22 +108,31 @@ Expected: FAIL — cannot resolve `./levenshtein.js`.
 
 - [ ] **Step 3: Create the shared module**
 
-Create `packages/agency-lang/lib/levenshtein.ts` with the body moved verbatim from `builtinGraders.ts`:
+Create `packages/agency-lang/lib/levenshtein.ts` with the existing algorithm
+moved from `builtinGraders.ts`. Give its inputs and indices descriptive names
+rather than carrying the old single-character locals into the new shared API:
 
 ```ts
 /** Classic Levenshtein edit distance (deterministic, dependency-free). */
-export function levenshtein(a: string, b: string): number {
-  const cols = b.length + 1;
-  let prev = Array.from({ length: cols }, (_unused, j) => j);
-  for (let i = 1; i <= a.length; i += 1) {
-    const curr = [i];
-    for (let j = 1; j < cols; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+export function levenshtein(left: string, right: string): number {
+  const columnCount = right.length + 1;
+  let previousRow = Array.from(
+    { length: columnCount },
+    (_unused, columnIndex) => columnIndex,
+  );
+  for (let rowIndex = 1; rowIndex <= left.length; rowIndex += 1) {
+    const currentRow = [rowIndex];
+    for (let columnIndex = 1; columnIndex < columnCount; columnIndex += 1) {
+      const cost = left[rowIndex - 1] === right[columnIndex - 1] ? 0 : 1;
+      currentRow[columnIndex] = Math.min(
+        previousRow[columnIndex] + 1,
+        currentRow[columnIndex - 1] + 1,
+        previousRow[columnIndex - 1] + cost,
+      );
     }
-    prev = curr;
+    previousRow = currentRow;
   }
-  return prev[cols - 1];
+  return previousRow[columnCount - 1];
 }
 ```
 
@@ -226,6 +235,7 @@ TypeScript to check it.
       });
       expect(after.client?.defaultModel).toBe("claude-opus-4-8");
       expect(after.client?.defaultProvider).toBeUndefined();
+      expect(after.client).not.toHaveProperty("defaultProvider");
     });
 
     it("a prefixed model sets both fields", () => {
@@ -245,9 +255,9 @@ TypeScript to check it.
 
     it("does not mutate the config it was given", () => {
       const before = configWithProvider();
+      const snapshot = structuredClone(before);
       applyCliFlags(before, { model: { model: "claude-opus-4-8" } });
-      expect(before.client?.defaultModel).toBe("gpt-4o-mini");
-      expect(before.client?.defaultProvider).toBe("openrouter");
+      expect(before).toEqual(snapshot);
     });
 
     it("works when the config has no client block at all", () => {
@@ -388,6 +398,7 @@ Create `packages/agency-lang/lib/cli/modelFlag.test.ts`:
 
 ```ts
 import { describe, expect, it, vi } from "vitest";
+import { InvalidArgumentError } from "commander";
 import { resolveModelFlag } from "./modelFlag.js";
 
 const CATALOG = ["gpt-4o-mini", "gpt-4o", "claude-opus-4-8", "gemini-2.5-pro"];
@@ -400,6 +411,7 @@ describe("resolveModelFlag: bare names", () => {
   });
 
   it("rejects an unknown name and suggests the closest catalog entry", () => {
+    expect(() => resolve("gpt-4o-minii")).toThrow(InvalidArgumentError);
     expect(() => resolve("gpt-4o-minii")).toThrow(/Unknown model "gpt-4o-minii"/);
     expect(() => resolve("gpt-4o-minii")).toThrow(/Did you mean "gpt-4o-mini"/);
   });
@@ -448,7 +460,7 @@ describe("resolveModelFlag: structurally invalid values", () => {
     ["anthropic/", "empty model"],
     ["/", "both empty"],
   ])("rejects %s (%s)", (value) => {
-    expect(() => resolve(value)).toThrow();
+    expect(() => resolve(value)).toThrow(InvalidArgumentError);
   });
 });
 
@@ -639,15 +651,34 @@ the second call receives the first `ResolvedModelFlag` as its `catalogNames` arg
 
 - [ ] **Step 1: Write the failing wiring test**
 
-Append to `packages/agency-lang/scripts/agency.test.ts`:
+Add this import to `packages/agency-lang/scripts/agency.test.ts` beside its other
+CLI/runtime imports:
+
+```ts
+import { _listHostedModels } from "@/stdlib/llm.js";
+```
+
+Append to the same file. Derive two names from the installed catalog rather
+than hard-coding models that can later be retired. This suite owns Commander
+wiring, not monthly catalog membership; the resolver suite owns catalog
+behavior.
 
 ```ts
 describe("--model wiring", () => {
+  const [firstCatalogModel, secondCatalogModel] = _listHostedModels().map(
+    (model) => model.name,
+  );
+  if (firstCatalogModel === undefined || secondCatalogModel === undefined) {
+    throw new Error("the hosted text catalog needs at least two models");
+  }
+
   /** Parse an argv and hand back the RunOptions the `run` action would see. */
   async function runOptionsFor(words: string[]): Promise<Record<string, unknown>> {
     const program = createProgram({});
     const run = program.commands.find((cmd) => cmd.name() === "run");
-    if (run === undefined) throw new Error("no run command");
+    if (run === undefined) {
+      throw new Error("no run command");
+    }
     let captured: Record<string, unknown> = {};
     run.action(() => {
       captured = run.opts();
@@ -662,8 +693,10 @@ describe("--model wiring", () => {
   }
 
   it("resolves a bare model", async () => {
-    const opts = await runOptionsFor(["run", "--model", "gpt-4o-mini", "f.agency"]);
-    expect(opts.model).toEqual({ model: "gpt-4o-mini" });
+    const opts = await runOptionsFor([
+      "run", "--model", firstCatalogModel, "f.agency",
+    ]);
+    expect(opts.model).toEqual({ model: firstCatalogModel });
   });
 
   it("resolves a prefixed model", async () => {
@@ -680,24 +713,26 @@ describe("--model wiring", () => {
     // Commander passes the PREVIOUS parsed value as the parser's second
     // argument. Without the adapter, that object lands in `catalogNames`.
     const opts = await runOptionsFor([
-      "run", "--model", "gpt-4o-mini", "--model", "claude-opus-4-8", "f.agency",
+      "run", "--model", firstCatalogModel,
+      "--model", secondCatalogModel, "f.agency",
     ]);
-    expect(opts.model).toEqual({ model: "claude-opus-4-8" });
+    expect(opts.model).toEqual({ model: secondCatalogModel });
   });
 
   it("rejects an unknown bare model", async () => {
     await expect(
-      runOptionsFor(["run", "--model", "gpt-4o-minii", "f.agency"]),
+      runOptionsFor([
+        "run", "--model", "definitely-not-a-hosted-model", "f.agency",
+      ]),
     ).rejects.toThrow();
   });
 });
 ```
 
-The model names above must exist in the real catalog, because this test drives
-the real resolver through the real program. `gpt-4o-mini` and `claude-opus-4-8`
-are both in it today; if either has been retired, substitute a current name from
-`agency models list` rather than mocking here — the point of this suite is the
-wiring, end to end.
+The test still drives the real resolver through the real program, but it does
+not fail merely because one particular model was retired. Keep both repeated
+values bare: a prefixed second value returns before consulting `catalogNames`
+and would no longer prove that the one-argument adapter is necessary.
 
 If `createProgram` is not exported from `scripts/agency.ts`, export it — it is already used this way by `scripts/agency.test.ts`, so check there first.
 
@@ -890,17 +925,25 @@ Two facts that shape the cases:
   current value as its default so every existing caller is unaffected.
 - The TypeScript `agency.llm` facade forwards only `model` and `maxTokens` to
   `clientConfig` (`lib/runtime/agencyLlm.ts:96`) — **not** `provider`. Generated
-  Agency code does forward it, but this facade does not, so the per-call
-  provider case uses `_setLlmOptions({ model, provider })`, which the spec names
-  as the supported way to move both.
+  Agency code does forward it. The per-call provider case therefore invokes the
+  exported `runPrompt` seam directly rather than substituting a branch-level
+  `_setLlmOptions` update or expanding the TypeScript facade for a test.
 
 - [ ] **Step 1: Give `makeCtx` a defaults parameter**
 
-In `packages/agency-lang/lib/runtime/agencyLlm.test.ts`, change `makeCtx` (line 11):
+In `packages/agency-lang/lib/runtime/agencyLlm.test.ts`, add `SmolConfig` to the
+existing type import from `smoltalk`, and import `runPrompt`:
+
+```ts
+import type { Result, PromptResult, SmolConfig, StreamChunk } from "smoltalk";
+import { runPrompt } from "./prompt.js";
+```
+
+Then change `makeCtx` (line 11):
 
 ```ts
 function makeCtx(
-  smoltalkDefaults: Record<string, unknown> = { model: "default-model" },
+  smoltalkDefaults: Partial<SmolConfig> = { model: "default-model" },
 ): RuntimeContext<any> {
   return new RuntimeContext({
     statelogConfig: {
@@ -925,7 +968,7 @@ Append to `packages/agency-lang/lib/runtime/agencyLlm.test.ts`:
 describe("model and provider precedence", () => {
   /** The pair the client was actually asked for. */
   async function effectivePair(
-    baked: Record<string, unknown>,
+    baked: Partial<SmolConfig>,
     call: () => Promise<unknown>,
   ): Promise<{ model?: string; provider?: string }> {
     const ctx = makeCtx(baked);
@@ -933,7 +976,10 @@ describe("model and provider precedence", () => {
     ctx.setLLMClient(client);
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
     await inFrame(ctx, threads, call);
-    const config = client.configs[0] as any;
+    const config = client.configs[0];
+    if (config === undefined) {
+      throw new Error("the prompt never reached the recording client");
+    }
     return { model: config.model, provider: config.provider };
   }
 
@@ -964,21 +1010,27 @@ describe("model and provider precedence", () => {
     expect(pair).toEqual({ model: "call-model", provider: "openrouter" });
   });
 
-  it("supplying both replaces the baked provider", async () => {
+  it("per-call model and provider replace the baked pair", async () => {
     const pair = await effectivePair(
       { model: "baked-model", provider: "openrouter" },
-      async () => {
-        _setLlmOptions({ model: "branch-model", provider: "anthropic" });
-        return agency.llm("hi");
-      },
+      () =>
+        runPrompt({
+          prompt: "hi",
+          messages: agency.thread.current(),
+          clientConfig: {
+            model: "call-model",
+            provider: "anthropic",
+          },
+        }),
     );
-    expect(pair).toEqual({ model: "branch-model", provider: "anthropic" });
+    expect(pair).toEqual({ model: "call-model", provider: "anthropic" });
   });
 });
 ```
 
-The first three cases are the sticky-provider rule the spec promises. The fourth
-is the escape it names.
+The first three cases are the sticky-provider rule the spec promises. The
+fourth reaches the per-call `restClientConfig` spread and proves that supplying
+both fields there replaces the lower-precedence pair.
 
 - [ ] **Step 3: Run the suite**
 
@@ -1065,13 +1117,16 @@ line `console.log("Test 8 passed");`, insert:
     throw new Error("a prefixed --model did not bake its provider");
   }
 
-  // An unknown bare model fails BEFORE compiling. Deleting the output first
-  // and asserting it was never recreated is what proves the ordering — a test
-  // that only checked the message would pass even if validation ran last.
-  rmSync(join(dir, "greet.js"), { force: true });
+  // An unknown bare model fails BEFORE compiling. Give it a fresh source name
+  // whose output cannot exist from an earlier case; asserting that output was
+  // never created proves the ordering without deleting a test artifact first.
+  writeFile(dir, "invalid-model.agency", `node main() {
+  print("must not execute")
+}
+`);
   const badModel = run(
     dir,
-    "./node_modules/.bin/agency run --model gpt-4o-minii greet.agency 2>&1",
+    "./node_modules/.bin/agency run --model gpt-4o-minii invalid-model.agency 2>&1",
     { expectFail: true },
   );
   assertIncludes(badModel, 'Unknown model "gpt-4o-minii"');
@@ -1079,17 +1134,20 @@ line `console.log("Test 8 passed");`, insert:
   if (badModel.includes("    at ")) {
     throw new Error(`an unknown model printed a stack trace: ${badModel}`);
   }
-  if (existsSync(join(dir, "greet.js"))) {
+  if (existsSync(join(dir, "invalid-model.js"))) {
     throw new Error("compilation happened despite an invalid --model");
   }
 
   // The position rule applies to the new flag like any other: after the
   // filename it belongs to the program, is NOT validated by agency, and draws
   // the standard warning. greet does not declare --model, so its own parser
-  // rejects it — which is also the proof the flag was forwarded.
+  // rejects it — which is also the proof the flag was forwarded. Use an
+  // unknown attached value: that distinguishes "not validated" from a valid
+  // value that agency might have validated successfully, and covers
+  // `--model=value` in the boundary scanner at the same time.
   const modelAfterFile = run(
     dir,
-    "./node_modules/.bin/agency run greet.agency --model gpt-4o-mini 2>&1",
+    "./node_modules/.bin/agency run greet.agency --model=definitely-not-a-real-model 2>&1",
     { expectFail: true },
   );
   assertIncludes(modelAfterFile, "Warning: --model went to your program");
@@ -1098,16 +1156,13 @@ line `console.log("Test 8 passed");`, insert:
     throw new Error("agency validated a --model that belonged to the program");
   }
 
-  // Leave no agency.json behind for the later cases in this file.
-  rmSync(join(dir, "agency.json"), { force: true });
+  // Restore neutral configuration for the later cases in this file. Writing
+  // the fixture is safer and clearer than deleting a path during a test.
+  writeFile(dir, "agency.json", "{}\n");
 ```
 
-Extend the `node:fs` import at the top of the file to cover the helpers used
-above:
-
-```js
-import { readFileSync, existsSync, rmSync } from "node:fs";
-```
+The file already imports `readFileSync` and `existsSync` from `node:fs`; no new
+filesystem import is needed.
 
 - [ ] **Step 2: Build and run the suite**
 
@@ -1122,10 +1177,6 @@ tail -30 /tmp/agency-t7.log
 
 Expected: `make=0`, `cli=0`, and the suite ends with `=== All CLI tests passed ===`.
 
-If the bare-model case reads a stale `greet.js` from an earlier case in this
-file, add `rmSync(join(dir, "greet.js"), { force: true });` before the first run
-as well.
-
 - [ ] **Step 3: Commit**
 
 ```bash
@@ -1135,10 +1186,11 @@ test(cli): --model end to end, on run and the shorthand
 
 Starts from an agency.json that already names a provider, so the
 bare-model case has something to clear and cannot pass for the wrong
-reason. The invalid-model case deletes the output first and asserts it
+reason. The invalid-model case uses a fresh output path and asserts it
 was never written, which proves validation runs before compilation. A
-last case puts --model after the filename and asserts agency forwards it
-without validating, so the new option obeys the position rule.
+last case puts an unknown attached --model after the filename and
+asserts agency forwards it without validating, so the new option obeys
+the position rule.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 EOF
@@ -1294,7 +1346,9 @@ Checked against the spec, revision 3, and revised after review.
   client, including both `model` and `provider`, and an existing test already
   asserts on it. The claim came from checking the deterministic mock client and
   stopping there. Task 6 now asserts on the configuration the client actually
-  receives.
+  receives; its fourth case calls `runPrompt` directly so the per-call
+  `{ model, provider }` spread is covered rather than replaced with a branch
+  default.
 - **Tests live in the suites that own the behaviour.** `applyCliFlags` cases go
   in `lib/config.test.ts`, Commander wiring in `scripts/agency.test.ts`,
   precedence in `lib/runtime/agencyLlm.test.ts`. Only `lib/cli/modelFlag.test.ts`
@@ -1306,6 +1360,11 @@ Checked against the spec, revision 3, and revised after review.
 - **Task 7 drives only the two surfaces that have the flag.** `--model` is on
   `addRunOptions`, which `compile` does not use, so the integration cases use
   `run` and the shorthand and read the files those runs compiled.
+- **Tests cannot pass for the wrong absence.** Task 2 asserts that a bare model
+  removes the `defaultProvider` property rather than merely reading as
+  `undefined`. Task 7 gives invalid input a fresh source/output name, and its
+  post-filename case uses an unknown attached value so successful Agency
+  validation cannot masquerade as no validation.
 - **Names are consistent across tasks**: `ResolvedModelFlag` (Task 2, used in 3
   and 4), `resolveModelFlag` (Task 3, used in 4), `levenshtein` (Task 1, used in
   3), `explicitProvider` throughout.

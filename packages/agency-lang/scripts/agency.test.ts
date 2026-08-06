@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { splitCommandLine } from "@/cli/commandLine.js";
+import { _listHostedModels } from "@/stdlib/llm.js";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -500,5 +501,71 @@ describe("remote management command registration", () => {
     expect(messages.join("\n")).toContain("--json");
     exit.mockRestore();
     err.mockRestore();
+  });
+});
+
+describe("--model wiring", () => {
+  const [firstCatalogModel, secondCatalogModel] = _listHostedModels().map(
+    (model) => model.name,
+  );
+  if (firstCatalogModel === undefined || secondCatalogModel === undefined) {
+    throw new Error("the hosted text catalog needs at least two models");
+  }
+
+  /** Parse an argv and hand back the RunOptions the `run` action would see. */
+  async function runOptionsFor(words: string[]): Promise<Record<string, unknown>> {
+    const program = createProgram({});
+    const run = program.commands.find((cmd) => cmd.name() === "run");
+    if (run === undefined) {
+      throw new Error("no run command");
+    }
+    let captured: Record<string, unknown> = {};
+    run.action(() => {
+      captured = run.opts();
+    });
+    program.exitOverride();
+    run.exitOverride();
+    // `from: "user"` means every element is a user argument — commander does
+    // NOT strip a leading node/script pair in this mode. Passing them would
+    // send "node" through the hidden default command instead of testing `run`.
+    await program.parseAsync(words, { from: "user" });
+    return captured;
+  }
+
+  it("resolves a bare model", async () => {
+    const opts = await runOptionsFor([
+      "run", "--model", firstCatalogModel, "f.agency",
+    ]);
+    expect(opts.model).toEqual({ model: firstCatalogModel });
+  });
+
+  it("resolves a prefixed model", async () => {
+    const opts = await runOptionsFor([
+      "run", "--model", "openrouter/anthropic/claude-sonnet-4", "f.agency",
+    ]);
+    expect(opts.model).toEqual({
+      model: "anthropic/claude-sonnet-4",
+      explicitProvider: "openrouter",
+    });
+  });
+
+  it("takes the last value when the flag is repeated", async () => {
+    // Commander passes the PREVIOUS parsed value as the parser's second
+    // argument. Without the adapter, that object lands in `catalogNames`.
+    // Both values stay bare on purpose: a prefixed second value returns
+    // before consulting the catalog and would prove nothing.
+    const opts = await runOptionsFor([
+      "run", "--model", firstCatalogModel,
+      "--model", secondCatalogModel, "f.agency",
+    ]);
+    expect(opts.model).toEqual({ model: secondCatalogModel });
+  });
+
+  it("rejects an unknown bare model", async () => {
+    await expect(
+      runOptionsFor([
+        "run", "--model", "definitely-not-a-hosted-model", "f.agency",
+      ]),
+    ).rejects.toThrow();
   });
 });

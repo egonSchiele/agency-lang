@@ -265,8 +265,11 @@ describe("applyCliFlags", () => {
       });
       expect(after.client?.defaultModel).toBe("claude-opus-4-8");
       expect(after.client?.defaultProvider).toBeUndefined();
-      // Stronger than toBeUndefined: the key must be GONE, because the code
-      // generator emits a provider whenever the key is present.
+      // Stronger than toBeUndefined, and deliberate: the mapping removes the
+      // key rather than setting it to undefined, so the resulting config
+      // carries no dangling field. (The code generator tests truthiness, so an
+      // explicit undefined would also omit the provider — this pins the
+      // contract, not a codegen requirement.)
       expect(after.client).not.toHaveProperty("defaultProvider");
     });
 

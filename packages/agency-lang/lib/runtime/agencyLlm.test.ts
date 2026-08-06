@@ -272,10 +272,7 @@ describe("model and provider precedence", () => {
     if (config === undefined) {
       throw new Error("the prompt never reached the recording client");
     }
-    return {
-      model: (config as any).model,
-      provider: (config as any).provider,
-    };
+    return { model: config.model, provider: config.provider };
   }
 
   it("a branch model override leaves no provider when none was baked", async () => {

@@ -43,13 +43,16 @@ identifier survive as the model name.
 
 Three things about this are easy to get wrong later.
 
-**A bare model deletes the provider rather than leaving it.** The code generator
-emits a provider only when one is configured, so deleting it is how smoltalk is
-allowed to infer the provider from the model name. If your `agency.json` sets
-`defaultProvider` to route through a proxy, a bare `--model` bypasses that
-proxy; name it (`--model litellm/gpt-4o-mini`) to keep it. The mapping deletes
-the key, rather than setting it to `undefined`, because the generator checks for
-presence.
+**A bare model drops the provider rather than leaving it.** The code generator
+emits a provider only when `client.defaultProvider` is truthy, so clearing it is
+how smoltalk is allowed to infer the provider from the model name. If your
+`agency.json` sets `defaultProvider` to route through a proxy, a bare `--model`
+bypasses that proxy; name it (`--model litellm/gpt-4o-mini`) to keep it.
+
+The mapping removes the key rather than setting it to `undefined`. Either would
+satisfy the generator; removing it keeps the resolved config free of dangling
+fields, which is what `agency config show` and any other consumer sees. The test
+asserts the key is absent, so that contract cannot drift unnoticed.
 
 **A stated provider is sticky.** The layers merge field by field
 (`lib/runtime/state/context.ts` `getSmoltalkConfig`), so a provider set by the

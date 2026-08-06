@@ -277,7 +277,12 @@ export class DeterministicClient implements LLMClient {
           { data: new Uint8Array(Buffer.from(pngBase64, "base64")), mimeType: "image/png" },
         ],
         model: "deterministic-image",
-        costEstimate: { totalCost: DETERMINISTIC_IMAGE_COST } as any,
+        costEstimate: {
+          inputCost: 0,
+          outputCost: DETERMINISTIC_IMAGE_COST,
+          totalCost: DETERMINISTIC_IMAGE_COST,
+          currency: "USD",
+        },
       },
     };
   }

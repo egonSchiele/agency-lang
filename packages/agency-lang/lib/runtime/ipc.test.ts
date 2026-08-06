@@ -373,10 +373,13 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
     const { session } = makeUsageSession();
+    const wireTokens = { inputTokens: 3, outputTokens: 1, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 4 };
     handleInvocationUsageMessage(session, {
-      type: "invocationUsage", cost: { totalCost: 0.15, currency: "USD" }, tokens: { inputTokens: 3, outputTokens: 1, totalTokens: 4 }, unknownCostCallCount: 1,
-      entry: { kind: "completion", model: "opus", cost: { totalCost: 0.15, currency: "USD" }, tokens: { inputTokens: 3, outputTokens: 1, totalTokens: 4 } },
+      type: "invocationUsage", cost: fullCost, tokens: wireTokens, unknownCostCallCount: 0,
+      entry: { kind: "completion", model: "opus", cost: fullCost, tokens: wireTokens },
     });
+    // A fully well-formed message recovers cleanly, so exactly the usage delta is
+    // re-relayed (no incompleteness marker).
     const relayed = (send.mock.calls as any[]).map((c) => c[0].type);
     expect(relayed).toEqual(["invocationUsage"]);
   });

@@ -157,6 +157,41 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
     expect(d?.entry?.cost.totalCost).toBe(0);
     expect(d?.entry?.tokens.totalTokens).toBe(128);
   });
+  it("recovers a missing total as an input+output lower bound (never sums cache) and degrades", () => {
+    // The trusted completion fallback would give 130; the untrusted boundary must
+    // not — cache may overlap input, so the safe lower bound is input+output.
+    const d = normalizeIpcUsageDelta({ cost: fullCost, unknownCostCallCount: 0, tokens: { inputTokens: 100, outputTokens: 0, cachedInputTokens: 30, cacheCreationInputTokens: 0 }, entry: { kind: "image", model: "img", cost: fullCost, tokens: fullTokens } });
+    expect(d?.tokens.totalTokens).toBe(100);
+    expect(d?.attributionLost).toBe(true);
+  });
+  it("an absent IPC token field becomes zero and degrades (no benign absence here)", () => {
+    const d = normalizeIpcUsageDelta({ cost: fullCost, tokens: { inputTokens: 5, outputTokens: 1, totalTokens: 6 }, unknownCostCallCount: 0, entry: { kind: "completion", model: "m", cost: fullCost, tokens: fullTokens } });
+    expect(d?.tokens.cachedInputTokens).toBe(0);
+    expect(d?.attributionLost).toBe(true);
+  });
+  it("a measurable flat delta with NO entry degrades (attribution lost in transit)", () => {
+    const d = normalizeIpcUsageDelta({ cost: fullCost, tokens: fullTokens, unknownCostCallCount: 0 });
+    expect(d?.entry).toBeUndefined();
+    expect(d?.cost.totalCost).toBe(0.42);
+    expect(d?.attributionLost).toBe(true);
+  });
+  it("an all-zero unresolved attempt with no entry stays complete", () => {
+    const d = normalizeIpcUsageDelta({ cost: { totalCost: 0, currency: "USD" }, tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 }, unknownCostCallCount: 1 });
+    expect(d?.entry).toBeUndefined();
+    expect(d?.unknownCostCallCount).toBe(1);
+    expect(d?.attributionLost).toBe(false);
+  });
+  it("a valid-kind/model entry with malformed components survives but degrades", () => {
+    const d = normalizeIpcUsageDelta({ cost: fullCost, tokens: fullTokens, unknownCostCallCount: 0, entry: { kind: "completion", model: "opus", cost: { totalCost: -1, currency: "USD" }, tokens: fullTokens } });
+    expect(d?.entry?.model).toBe("opus");
+    expect(d?.entry?.cost.totalCost).toBe(0);
+    expect(d?.attributionLost).toBe(true);
+  });
+  it("a malformed-cost bump that saturates unknownCostCallCount degrades", () => {
+    const d = normalizeIpcUsageDelta({ cost: { totalCost: -1, currency: "USD" }, tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 }, unknownCostCallCount: MAX });
+    expect(d?.unknownCostCallCount).toBe(MAX);
+    expect(d?.attributionLost).toBe(true);
+  });
   it("a non-object message is dropped", () => {
     expect(normalizeIpcUsageDelta(42)).toBeNull();
     expect(normalizeIpcUsageDelta(null)).toBeNull();

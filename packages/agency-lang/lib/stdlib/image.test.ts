@@ -25,20 +25,21 @@ function makeStack() {
  *  statelog. Returns the frame's stack + statelog spy for assertions. */
 async function withClient(
   imageImpl: ImageImpl | undefined,
-  fn: (helpers: { stack: ReturnType<typeof makeStack>; imageGeneration: ReturnType<typeof vi.fn> }) => Promise<void>,
+  fn: (helpers: { stack: ReturnType<typeof makeStack>; imageGeneration: ReturnType<typeof vi.fn>; meter: InvocationUsageMeter }) => Promise<void>,
 ) {
   const stack = makeStack();
   const imageGeneration = vi.fn().mockResolvedValue(undefined);
+  const meter = new InvocationUsageMeter();
   const store = {
     // A real meter: image generation accounts via recordUsage, which merges
     // ctx.invocationUsage (the serve cost seam's accounting boundary).
-    ctx: { llmClient: { image: imageImpl }, statelogClient: { imageGeneration }, invocationUsage: new InvocationUsageMeter() },
+    ctx: { llmClient: { image: imageImpl }, statelogClient: { imageGeneration }, invocationUsage: meter },
     stack,
     threads: {},
     globals: {},
     callsite: { moduleId: "test", scopeName: "main", stepPath: "" },
   } as any;
-  await agencyStore.run(store, () => fn({ stack, imageGeneration }));
+  await agencyStore.run(store, () => fn({ stack, imageGeneration, meter }));
 }
 
 const okResult = (overrides: any = {}) => ({
@@ -119,6 +120,16 @@ describe("_generateImage", () => {
         expect(imageGeneration).not.toHaveBeenCalled();
       },
     );
+  });
+
+  it("a rejected image dispatch records one unresolved attempt (pricingComplete goes false)", async () => {
+    await withClient(async () => { throw new Error("provider 500 after dispatch"); }, async ({ meter }) => {
+      await expect(_generateImage("x", "", "", "", "", [], "", "")).rejects.toThrow(/provider 500/);
+      await Promise.resolve();
+      const { usage } = meter.snapshot();
+      expect(usage.unknownCostCallCount).toBe(1);
+      expect(usage.pricingComplete).toBe(false);
+    });
   });
 
   it("returns a descriptive failure when the client has no image() support", async () => {

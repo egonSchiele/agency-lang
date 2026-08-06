@@ -275,14 +275,29 @@ describe("renderAccountSpend", () => {
     expect(out).toContain("$2.0900"); // 0.10+0.99+0.50+0.50, all complete
     expect(out).toContain("gone (deleted)");
   });
-  it("degrades the TOTAL when a single row is incomplete or unpriced", () => {
+  it("degrades the TOTAL cost AND token columns when a single row is incomplete or unpriced", () => {
     const out = strip(renderAccountSpend([
       row("ok", 1),
-      row("bad", 2, { usageComplete: false, unpricedCallCount: 3, pricingComplete: false }),
+      row("bad", 2, { usageComplete: false, unpricedCallCount: 3, pricingComplete: false, tokens: toks(999, 111) }),
     ], "all time"));
     const total = out.split("\n").find((l) => l.includes("TOTAL")) ?? "";
+    const badRow = out.split("\n").find((l) => l.includes("bad")) ?? "";
     expect(total).toContain("≥ $3.0000");
+    // Tokens are a lower bound too when telemetry is incomplete — cost is not the
+    // only degraded column.
+    expect(badRow).toContain("≥ 999");
+    expect(total).toContain("≥ ");
     expect(out).toContain("incomplete telemetry");
     expect(out).toContain("3 unpriced call(s) total");
+  });
+
+  it("does NOT mark token columns as lower bounds for an unpriced-but-complete row", () => {
+    // Unpriced affects cost, not token counts: the token column stays exact.
+    const out = strip(renderAccountSpend([
+      row("only-unpriced", 1, { usageComplete: true, unpricedCallCount: 2, pricingComplete: false, tokens: toks(500, 50) }),
+    ], "all time"));
+    const dataRow = out.split("\n").find((l) => l.includes("only-unpriced")) ?? "";
+    expect(dataRow).toContain("500"); // exact, no ≥
+    expect(dataRow).not.toMatch(/≥ 500/);
   });
 });

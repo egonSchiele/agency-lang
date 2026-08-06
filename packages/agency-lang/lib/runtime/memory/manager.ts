@@ -26,8 +26,8 @@ import forgetTemplate from "../../templates/prompts/memory/forget.js";
 import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
 import type { LLMClient } from "../llmClient.js";
 import { agencyStore, getRuntimeContext } from "../asyncContext.js";
-import { recordUsage } from "../recordPaidUsage.js";
-import type { UsageObservation } from "../invocationUsage.js";
+import { recordUsage, meteredDispatch } from "../recordPaidUsage.js";
+import type { ProviderUsageKind, UsageObservation } from "../invocationUsage.js";
 import { isGuardExceededError } from "../guard.js";
 
 /**
@@ -50,6 +50,18 @@ function recordMemoryUsageIfInFrame(observation: UsageObservation): void {
   const { ctx, stack } = getRuntimeContext();
   recordUsage(ctx, stack, observation);
   stack.enforceGuards();
+}
+
+/** Run a memory provider dispatch as a metered attempt WHEN in an execution
+ *  frame: a rejected dispatch records one unresolved attempt (so
+ *  `pricingComplete` cannot stay true after a post-dispatch throw), mirroring the
+ *  prompt path. Outside a frame (direct-construction unit tests) it just runs
+ *  the dispatch — there is no meter to record into. A resolved `Result.failure`
+ *  is NOT metered here (deferred to agency-lang #809). */
+function meteredMemoryDispatch<T>(kind: ProviderUsageKind, dispatch: () => Promise<T>): Promise<T> {
+  if (!agencyStore.getStore()) return dispatch();
+  const { ctx, stack } = getRuntimeContext();
+  return meteredDispatch(ctx, stack, kind, dispatch);
 }
 
 /**
@@ -244,14 +256,14 @@ export class MemoryManager {
     const spanId = this.statelogClient?.startSpan("llmCall");
     const startTime = performance.now();
     try {
-      const result = await this.llmClient.text({
+      const result = await meteredMemoryDispatch("completion", () => this.llmClient.text({
         ...this.smoltalkDefaults,
         messages: [smoltalk.userMessage(prompt)],
         model,
         ...(options?.responseFormat
           ? { responseFormat: options.responseFormat }
           : {}),
-      } as any);
+      } as any));
       const timeTaken = performance.now() - startTime;
       if (!result.success) {
         this.logger.warn(
@@ -325,7 +337,7 @@ export class MemoryManager {
     const spanId = this.statelogClient?.startSpan("embedding");
     const startTime = performance.now();
     try {
-      const result = await this.llmClient.embed(text, {
+      const result = await meteredMemoryDispatch("embedding", () => this.llmClient.embed(text, {
         model: options?.model,
         // Pass the provider explicitly so smoltalk routes to the right embed
         // endpoint even when the model name doesn't imply it (e.g. ollama).
@@ -335,7 +347,7 @@ export class MemoryManager {
           google: (this.smoltalkDefaults as any).apiKey?.google,
         },
         baseUrl: { ollama: (this.smoltalkDefaults as any).baseUrl?.ollama },
-      } as any);
+      } as any));
       const timeTaken = performance.now() - startTime;
       if (!result.success) {
         this.logger.warn(

@@ -60,22 +60,29 @@ function trySend(msg: IpcUsageMessage): void {
   }
 }
 
+function tokensAreZero(tokens: NormalizedDelta["tokens"]): boolean {
+  return (
+    tokens.inputTokens === 0 &&
+    tokens.outputTokens === 0 &&
+    tokens.cachedInputTokens === 0 &&
+    tokens.cacheCreationInputTokens === 0 &&
+    tokens.totalTokens === 0
+  );
+}
+
 /** A delta carries nothing worth relaying: no cost, no tokens, no unknown-cost
- *  call, no attribution entry, and no attribution loss. A no-op charge (e.g.
- *  `addCost(0)`) is skipped so it never spams the parent channel. */
+ *  call, no attribution loss, and — crucially — no VALUE-BEARING entry. A no-op
+ *  charge such as `addCost(0)` still produces a manual entry, but with all-zero
+ *  cost and tokens, so it too is skipped and never spams the parent channel. */
 function isNoOpDelta(delta: NormalizedDelta): boolean {
-  if (delta.entry !== undefined) return false;
   if (delta.attributionLost) return false;
   if (delta.unknownCostCallCount !== 0) return false;
   if (delta.cost.totalCost !== 0) return false;
-  const t = delta.tokens;
-  return (
-    t.inputTokens === 0 &&
-    t.outputTokens === 0 &&
-    t.cachedInputTokens === 0 &&
-    t.cacheCreationInputTokens === 0 &&
-    t.totalTokens === 0
-  );
+  if (!tokensAreZero(delta.tokens)) return false;
+  if (delta.entry !== undefined && (delta.entry.cost.totalCost !== 0 || !tokensAreZero(delta.entry.tokens))) {
+    return false;
+  }
+  return true;
 }
 
 /** Relay a full normalized usage delta to the parent, once. Sends the complete

@@ -216,6 +216,60 @@ function buildTokens(raw: unknown, kind: UsageKind, absentDegrades: boolean): { 
   return { tokens: { ...partial, totalTokens }, malformed };
 }
 
+/** One UNTRUSTED IPC token field: a nonnegative safe integer survives; anything
+ *  else (absent, negative, NaN, non-number) becomes 0 and degrades. Distinct
+ *  from `tokenCounter`: at this boundary an absent field is never benign, and
+ *  there is NO provider-kind fallback (a well-formed sender always transmits a
+ *  full `NormalizedDelta`, so a gap is a broken/skewed child). */
+function ipcCounter(value: unknown): { value: number; malformed: boolean } {
+  if (isSafeCount(value)) {
+    return { value, malformed: false };
+  }
+  return { value: 0, malformed: true };
+}
+
+/** Recover a token breakdown from UNTRUSTED IPC input, field by field. Each
+ *  component follows the strict IPC rule (`ipcCounter`). `totalTokens`, when
+ *  absent or malformed, falls back to a CONSERVATIVE `input + output` lower
+ *  bound — never summing cache counters (they may overlap input) and never a
+ *  provider-kind fallback — and degrades. */
+function buildIpcTokens(raw: unknown): { tokens: TokenBreakdown; malformed: boolean } {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : undefined;
+  const input = ipcCounter(obj?.inputTokens);
+  const output = ipcCounter(obj?.outputTokens);
+  const cachedInput = ipcCounter(obj?.cachedInputTokens);
+  const cacheCreation = ipcCounter(obj?.cacheCreationInputTokens);
+  let malformed = input.malformed || output.malformed || cachedInput.malformed || cacheCreation.malformed;
+
+  let totalTokens: number;
+  if (isSafeCount(obj?.totalTokens)) {
+    totalTokens = obj.totalTokens as number;
+  } else {
+    totalTokens = checkedAddCount(input.value, output.value).value;
+    malformed = true;
+  }
+  return {
+    tokens: {
+      inputTokens: input.value,
+      outputTokens: output.value,
+      cachedInputTokens: cachedInput.value,
+      cacheCreationInputTokens: cacheCreation.value,
+      totalTokens,
+    },
+    malformed,
+  };
+}
+
+function anyToken(tokens: TokenBreakdown): boolean {
+  return (
+    tokens.inputTokens > 0 ||
+    tokens.outputTokens > 0 ||
+    tokens.cachedInputTokens > 0 ||
+    tokens.cacheCreationInputTokens > 0 ||
+    tokens.totalTokens > 0
+  );
+}
+
 /** Turn a trusted domain observation into a normalized delta (the four
  *  provider outcomes + manual). `attributionLost` is set only by token
  *  malformation/saturation — never by pricing (which uses unknownCostCallCount). */
@@ -252,42 +306,57 @@ export function normalizeIpcUsageDelta(raw: unknown): NormalizedDelta | null {
   let attributionLost = obj.attributionLost === true;
 
   const { cost, priced } = buildCost(obj.cost);
-  const { tokens, malformed } = buildTokens(obj.tokens, "completion", true);
+  const { tokens, malformed } = buildIpcTokens(obj.tokens);
   if (malformed) attributionLost = true;
 
   let unknownCostCallCount = 0;
   if (isSafeCount(obj.unknownCostCallCount)) {
     unknownCostCallCount = obj.unknownCostCallCount;
-  } else if (obj.unknownCostCallCount !== undefined) {
-    attributionLost = true; // present-but-malformed
   } else {
-    attributionLost = true; // missing
+    attributionLost = true; // absent or present-but-malformed
   }
   if (!priced) {
-    unknownCostCallCount = checkedAddCount(unknownCostCallCount, 1).value;
+    const bumped = checkedAddCount(unknownCostCallCount, 1);
+    unknownCostCallCount = bumped.value;
+    if (bumped.saturated) attributionLost = true;
   }
 
-  const entry = recoverIpcEntry(obj.entry);
-  if (entry === "invalid") {
-    attributionLost = true;
+  const recovery = recoverIpcEntry(obj.entry);
+  if (recovery.status === "invalid") {
+    return { cost, tokens, unknownCostCallCount, attributionLost: true };
+  }
+  if (recovery.status === "absent") {
+    // A well-formed provider/manual delta always carries its entry; an entry-less
+    // delta is legitimate ONLY as an all-zero unresolved attempt. Measurable
+    // money/tokens with no entry means attribution was lost in transit.
+    if (cost.totalCost > 0 || anyToken(tokens)) attributionLost = true;
     return { cost, tokens, unknownCostCallCount, attributionLost };
   }
-  return { entry, cost, tokens, unknownCostCallCount, attributionLost };
+  if (recovery.malformed) attributionLost = true;
+  return { entry: recovery.entry, cost, tokens, unknownCostCallCount, attributionLost };
 }
+
+type IpcEntryRecovery =
+  | { status: "absent" }
+  | { status: "invalid" }
+  | { status: "ok"; entry: UsageEntry; malformed: boolean };
 
 /** Recover an untrusted entry: valid iff kind ∈ UsageKind and the model sentinel
  *  invariant holds. Its cost/tokens are normalized independently and NEVER
- *  override the flat totals. Returns "invalid" to omit the entry + degrade. */
-function recoverIpcEntry(raw: unknown): UsageEntry | undefined | "invalid" {
+ *  override the flat totals. `"invalid"` omits the entry and degrades; `"ok"`
+ *  reports whether the entry's OWN components were malformed (an unpriced entry
+ *  cost or a malformed token field), so the caller can degrade while keeping the
+ *  usable entry. */
+function recoverIpcEntry(raw: unknown): IpcEntryRecovery {
   if (raw === undefined || raw === null) {
-    return undefined;
+    return { status: "absent" };
   }
   if (typeof raw !== "object") {
-    return "invalid";
+    return { status: "invalid" };
   }
   const obj = raw as Record<string, unknown>;
   if (!isUsageKind(obj.kind)) {
-    return "invalid";
+    return { status: "invalid" };
   }
   const kind = obj.kind;
   const model = obj.model;
@@ -295,11 +364,11 @@ function recoverIpcEntry(raw: unknown): UsageEntry | undefined | "invalid" {
     ? model === ""
     : typeof model === "string" && model.length > 0;
   if (!modelOk) {
-    return "invalid";
+    return { status: "invalid" };
   }
-  const { cost } = buildCost(obj.cost);
-  const { tokens } = buildTokens(obj.tokens, kind, false);
-  return { kind, model: model as string, cost, tokens };
+  const { cost, priced } = buildCost(obj.cost);
+  const { tokens, malformed } = buildIpcTokens(obj.tokens);
+  return { status: "ok", entry: { kind, model: model as string, cost, tokens }, malformed: !priced || malformed };
 }
 
 /** A fresh, non-serialized accumulator for one invocation/leg. Buckets attribution

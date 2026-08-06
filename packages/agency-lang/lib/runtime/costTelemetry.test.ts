@@ -64,6 +64,22 @@ describe("sendInvocationUsageToParent", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("skips an all-zero manual entry (addCost(0) must not spam the channel)", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    sendInvocationUsageToParent(delta({ entry: { kind: "manual", model: "", cost: cost(), tokens: tokens() } }));
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("sends a manual entry that DOES carry cost", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    sendInvocationUsageToParent(delta({ cost: cost({ totalCost: 0.03 }), entry: { kind: "manual", model: "", cost: cost({ totalCost: 0.03 }), tokens: tokens() } }));
+    expect(send).toHaveBeenCalledOnce();
+  });
+
   it("no-ops outside IPC mode", () => {
     const send = vi.fn(() => true);
     process.send = send as any;

@@ -225,7 +225,7 @@ function groupBreakdown(rows: ModelKindSpend[], grouping: SpendGrouping): SpendG
   for (const row of rows) {
     const model = grouping.byModel ? row.model : null;
     const kind = grouping.byKind ? row.kind : null;
-    const key = `${model ?? ""} ${kind ?? ""}`;
+    const key = JSON.stringify([model, kind]);
     let group = groups[key];
     if (group === undefined) {
       group = { model, kind, cost: zeroCost(), tokens: zeroTokens() };
@@ -357,8 +357,10 @@ export function renderAccountSpend(rows: AccountSpendRow[], description: string)
   const tableRows = sorted.map((row) => [
     row.deletedAt === null ? row.projectSlug : `${row.projectSlug} (deleted)`,
     lowerBound(row.spend.cost.totalCost, spendIsComplete(row.spend)),
-    formatCount(row.spend.tokens.inputTokens),
-    formatCount(row.spend.tokens.outputTokens),
+    // Token counts are a lower bound whenever telemetry is incomplete — that is
+    // `usageComplete` alone (unpriced calls affect cost, not counts).
+    lowerBoundCount(row.spend.tokens.inputTokens, row.spend.usageComplete),
+    lowerBoundCount(row.spend.tokens.outputTokens, row.spend.usageComplete),
     formatCount(row.spend.invocationCount),
     formatCount(row.spend.unpricedCallCount),
   ]);
@@ -366,8 +368,8 @@ export function renderAccountSpend(rows: AccountSpendRow[], description: string)
   tableRows.push([
     "TOTAL",
     lowerBound(totals.totalCost, totals.usageComplete && totals.pricingComplete),
-    formatCount(totals.inputTokens),
-    formatCount(totals.outputTokens),
+    lowerBoundCount(totals.inputTokens, totals.usageComplete),
+    lowerBoundCount(totals.outputTokens, totals.usageComplete),
     formatCount(totals.invocationCount),
     formatCount(totals.unpricedCallCount),
   ]);

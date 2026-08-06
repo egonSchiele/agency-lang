@@ -2,26 +2,26 @@
 // Each integration test creates a fresh project in a temp directory,
 // installs Agency from a tarball, and verifies user-facing workflows.
 
-import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { execSync, spawnSync } from "node:child_process";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 
-// The single process boundary for running the installed `agency` CLI. It is the
-// only layer that knows about spawnSync, `npx --no-install` (which forbids an
-// npm registry fallback, so a missing local bin is a real failure), the default
-// timeout, environment merging, spawn errors, and status enforcement. Callers
-// declare the exact expected exit status rather than bypassing the helper for
-// failure cases, and always get stdout and stderr back separately.
-export function runInstalledAgency(
-  dir,
+// The single process boundary for the integration tests. It is the only layer
+// that knows about spawnSync, the default timeout, environment merging, spawn
+// errors, and exact-status enforcement. Callers declare the expected status
+// rather than bypassing the helper for failure cases, and always get stdout and
+// stderr back separately. On a spawn error or wrong status it throws with the
+// captured streams and status attached, so callers can log on failure.
+export function runProcess(
+  executable,
   args,
-  { expectedStatus = 0, input, env, timeout = DEFAULT_COMMAND_TIMEOUT_MS } = {},
+  { expectedStatus = 0, cwd, input, env, timeout = DEFAULT_COMMAND_TIMEOUT_MS } = {},
 ) {
-  const result = spawnSync("npx", ["--no-install", "agency", ...args], {
-    cwd: dir,
+  const result = spawnSync(executable, args, {
+    cwd,
     encoding: "utf8",
     timeout,
     input,
@@ -30,10 +30,8 @@ export function runInstalledAgency(
   });
   const stdout = result.stdout || "";
   const stderr = result.stderr || "";
-  const command = ["npx", "--no-install", "agency", ...args].join(" ");
+  const command = [executable, ...args].join(" ");
 
-  // Both throw paths attach the captured streams and status so callers can log
-  // per-command output on failure (that is exactly when the log matters).
   if (result.error) {
     const error = new Error(
       `Command failed to start: ${command}\n${result.error.message}\n${stdout}${stderr}`,
@@ -57,6 +55,55 @@ export function runInstalledAgency(
   }
 
   return { status: result.status, stdout, stderr, signal: result.signal };
+}
+
+// Run the installed `agency` CLI in `dir`. `--no-install` forbids an npm
+// registry fallback, so a missing local bin is a real failure rather than a
+// silent download. Thin wrapper over the generic runProcess boundary.
+export function runInstalledAgency(dir, args, opts = {}) {
+  return runProcess("npx", ["--no-install", "agency", ...args], { ...opts, cwd: dir });
+}
+
+// --- Shared file / JSONL helpers (used by cli-main and cli-tier2) ---
+
+export function normalizeNewline(text) {
+  return text.replace(/\r\n/g, "\n");
+}
+
+export function normalizeOptionalFinalNewline(text) {
+  return normalizeNewline(text).replace(/\n*$/, "\n");
+}
+
+export function readText(path) {
+  return normalizeNewline(readFileSync(path, "utf8"));
+}
+
+export function assertFile(path, message) {
+  assert(existsSync(path), message || `Expected file to exist: ${path}`);
+}
+
+// Read a `.jsonl` file into an array of parsed objects, one per non-empty line.
+export function readJsonLines(path) {
+  return readText(path)
+    .trim()
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line));
+}
+
+// Compare two files. By default strict (line-for-line, trailing newlines kept);
+// pass `{ normalizeTrailingNewline: true }` to collapse trailing-newline
+// differences before comparing.
+export function assertFileEquals(actualPath, expectedPath, opts = {}) {
+  const normalize = opts.normalizeTrailingNewline
+    ? normalizeOptionalFinalNewline
+    : normalizeNewline;
+  const actual = normalize(readFileSync(actualPath, "utf8"));
+  const expected = normalize(readFileSync(expectedPath, "utf8"));
+  assert(
+    actual === expected,
+    `Expected ${actualPath} to match ${expectedPath}\n--- actual ---\n${actual}\n--- expected ---\n${expected}`,
+  );
 }
 
 export function createTempProject(name) {

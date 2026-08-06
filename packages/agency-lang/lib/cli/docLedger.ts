@@ -126,10 +126,14 @@ export function resolveOwnedOutputPath(
     throw new OwnedPathError(`absolute owned path: ${outRel}`);
   }
   const abs = path.resolve(outDirReal, outRel);
-  if (!abs.startsWith(outDirReal + path.sep)) {
+  // path.relative-based escape check, not startsWith: a prefix comparison
+  // misbehaves for a root outDirReal ("//") and is fragile across
+  // normalization differences.
+  const rel = path.relative(outDirReal, abs);
+  if (rel === "" || path.isAbsolute(rel) || rel.split(path.sep)[0] === "..") {
     throw new OwnedPathError(`escapes output root: ${outRel}`);
   }
-  const parts = path.relative(outDirReal, abs).split(path.sep);
+  const parts = rel.split(path.sep);
   let current = outDirReal;
   for (let i = 0; i < parts.length - 1; i++) {
     current = path.join(current, parts[i]);
@@ -248,9 +252,16 @@ export function saveDocLedger(outDirReal: string, ledger: DocLedger): void {
     }
   }
   const file = path.join(outDirReal, DOC_LEDGER_NAME);
-  const tmpFile = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmpFile, JSON.stringify(ledger, null, 2));
-  fs.renameSync(tmpFile, file);
+  // Unpredictable temp name + exclusive create: a predictable name (the
+  // old `.${pid}.tmp`) could be pre-planted as a symlink, and a default
+  // truncating write would follow it to an external target.
+  const tmpFile = `${file}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(tmpFile, JSON.stringify(ledger, null, 2), { flag: "wx" });
+    fs.renameSync(tmpFile, file);
+  } finally {
+    fs.rmSync(tmpFile, { force: true });
+  }
 }
 
 export type DocLock = { lockPath: string; token: string };
@@ -402,6 +413,12 @@ export function buildDocLedgerEntry(args: {
   registrySymbols: string[];
   linkTargets: Record<string, string | null>;
   writtenBytes: string;
+  /** Source hash captured when the page's program was PARSED. Rendering
+   *  happens between that parse and this builder; if an editor saved the
+   *  file in that window, the Markdown describes old bytes while we would
+   *  record new hashes — the drift forces cacheable:false so the next run
+   *  repairs the page instead of accepting it as fresh. */
+  sourceHashAtParse?: string;
 }): DocLedgerEntry {
   const { sourceRel, ctx, config, registrySymbols, linkTargets, writtenBytes } = args;
   const absSource = path.join(ctx.inputDir, sourceRel);
@@ -419,8 +436,23 @@ export function buildDocLedgerEntry(args: {
       depHashes.push(h);
     }
   }
+  const sourceHash = hashFile(absSource) ?? "";
+  if (args.sourceHashAtParse !== undefined && args.sourceHashAtParse !== sourceHash) {
+    cacheable = false;
+  }
+  // Re-read the inputs once more after the fingerprint walk: a dep saved
+  // between its hash above and here would otherwise pin stale content.
+  for (let i = 0; i < fp.deps.length; i++) {
+    if ((hashFile(fp.deps[i]) ?? "") !== depHashes[i]) {
+      cacheable = false;
+      break;
+    }
+  }
+  if ((hashFile(absSource) ?? "") !== sourceHash) {
+    cacheable = false;
+  }
   return {
-    sourceHash: hashFile(absSource) ?? "",
+    sourceHash,
     deps: fp.deps,
     depsHash: computeDepsHash(depHashes),
     cacheable,

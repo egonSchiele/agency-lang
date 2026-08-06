@@ -164,6 +164,23 @@ describe("ledger load/save authority", () => {
     expect(loadDocLedger(out)).toEqual({ ledger: null, authority: false });
   });
 
+  test("save temp cannot be symlink-hijacked: old predictable name is ignored, victim untouched", () => {
+    const out = tmp();
+    const victim = tmp();
+    fs.writeFileSync(path.join(victim, "precious"), "precious\n");
+    // Pre-plant a symlink at the OLD predictable temp name.
+    fs.symlinkSync(
+      path.join(victim, "precious"),
+      path.join(out, `${DOC_LEDGER_NAME}.${process.pid}.tmp`),
+    );
+    saveDocLedger(out, validLedger(out));
+    expect(fs.readFileSync(path.join(victim, "precious"), "utf-8")).toBe("precious\n");
+    expect(loadDocLedger(out).authority).toBe(true);
+    // No stray temps left behind (the planted one is not ours to remove).
+    const temps = fs.readdirSync(out).filter((f) => f.endsWith(".tmp"));
+    expect(temps).toEqual([`${DOC_LEDGER_NAME}.${process.pid}.tmp`]);
+  });
+
   test("saveDocLedger refuses an unsafe key and leaves the valid ledger intact", () => {
     const out = tmp();
     saveDocLedger(out, validLedger(out));
@@ -263,6 +280,25 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
     expect(
       isDocEntryFresh("a.agency", f.entry, { ...f.ctx, stdlibDir: f.ctx.inputDir, stdlibNamesHash: "N" }),
     ).toBe(false);
+  });
+
+  test("source drift between parse and entry-build forces cacheable:false", () => {
+    const inputDir = tmp();
+    const outDir = tmp();
+    fs.writeFileSync(path.join(inputDir, "a.agency"), `export def a(): number { return 1 }\n`);
+    const ctx = buildDocFreshnessContext(inputDir, outDir);
+    const entry = buildDocLedgerEntry({
+      sourceRel: "a.agency",
+      ctx,
+      config: {},
+      registrySymbols: ["a"],
+      linkTargets: {},
+      writtenBytes: "x",
+      // Simulates an editor save mid-render: the hash captured at parse
+      // time no longer matches the bytes on disk now.
+      sourceHashAtParse: "hash-of-older-bytes",
+    });
+    expect(entry.cacheable).toBe(false);
   });
 
   test("missing dep at BUILD time forces cacheable:false", () => {

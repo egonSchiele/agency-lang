@@ -72,3 +72,4 @@ tests/integration/eval-run/.tmp/
 packages/agency-lang/a.vs.b.verdict.json
 docs/superpowers/**/*
 packages/agency-lang/docs/site/stdlib/.agency-doc*
+packages/agency-lang/docs/site/packages/**/.agency-doc*

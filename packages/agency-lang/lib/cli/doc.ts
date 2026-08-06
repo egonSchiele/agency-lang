@@ -3,7 +3,9 @@ import type { CompilationUnit } from "@/compilationUnit.js";
 import { declaredName } from "../types/hole.js";
 import { AgencyConfig } from "@/config.js";
 import { AgencyGenerator, generateAgency } from "@/backends/agencyGenerator.js";
-import { parse, readFile } from "./commands.js";
+import { readFile } from "./commands.js";
+import { parseAgency } from "../parser.js";
+import { hashFile } from "@/compiler/buildManifest.js";
 import { findRecursively } from "@/utils/findRecursively.js";
 import { variableTypeToString } from "@/backends/typescriptGenerator/typeToString.js";
 import { AgencyMultiLineComment, AgencyProgram, Assignment } from "@/types.js";
@@ -59,6 +61,23 @@ type DocContext = {
   linkRecorder?: Record<string, string | null>;
 };
 
+/** A parse failure inside a doc run. Thrown (never process.exit) so the
+ *  lock's finally can unwind — commands.ts's exiting parse() would leave
+ *  a permanent stale lock on an ordinary syntax error. */
+class DocParseError extends Error {}
+
+function parseDocSource(contents: string, config: AgencyConfig): AgencyProgram {
+  const result = parseAgency(contents, config, true);
+  if (!result.success) {
+    throw new DocParseError(
+      result.message
+        ? `Failed to parse Agency program: ${result.message}`
+        : `Failed to parse Agency program. ${contents.slice(0, 400)}`,
+    );
+  }
+  return result.result;
+}
+
 export function generateDoc(
   config: AgencyConfig,
   inputPath: string,
@@ -80,14 +99,22 @@ export function generateDoc(
       generateDocDirectory(config, inputPath, outDirReal, ignoreDirs, baseUrl);
     } else {
       const baseName = path.basename(inputPath).replace(/\.agency$/, ".md");
-      const outputPath = path.join(outDirReal, baseName);
+      // Same owned-output boundary as directory mode: without it, a
+      // symlink planted at out/<name>.md would be followed and an
+      // external file overwritten.
+      const resolved = resolveOwnedOutputPath(outDirReal, baseName);
+      if (resolved.leafIsSymlink) {
+        throw new OwnedPathError(
+          `refusing to write documentation through a symlink: ${baseName}`,
+        );
+      }
       const program = preprocessProgram(
-        parse(readFile(inputPath), config),
+        parseDocSource(readFile(inputPath), config),
         config,
       );
       generateDocForFile(
         inputPath,
-        outputPath,
+        resolved.abs,
         {
           baseUrl,
           sourceRelPath: path.basename(inputPath),
@@ -97,6 +124,15 @@ export function generateDoc(
         program,
       );
     }
+  } catch (e) {
+    if (e instanceof DocParseError) {
+      // process.exit skips finally, so release explicitly first
+      // (releasing twice is a token-checked no-op).
+      releaseDocLock(lock);
+      console.error(e.message);
+      process.exit(1);
+    }
+    throw e; // finally releases on this path
   } finally {
     releaseDocLock(lock);
   }
@@ -154,11 +190,15 @@ function generateDocDirectory(
 
   // Pass 1 — the symbol registry, in traversal order. Fresh files
   // contribute their cached registrySymbols without being parsed; that is
-  // the cache's entire point (parsing is ~80% of a doc run).
+  // the cache's entire point (parsing is ~80% of a doc run). The source
+  // hash is captured AT PARSE TIME so the entry builder can detect an
+  // editor save landing mid-render and refuse to cache the stale page.
   const symbolRegistry: SymbolRegistry = {};
   const parsedPrograms = new Map<string, AgencyProgram>();
+  const sourceHashAtParse = new Map<string, string>();
   const parseFor = (filePath: string): AgencyProgram => {
-    const program = preprocessProgram(parse(readFile(filePath), config), config);
+    sourceHashAtParse.set(filePath, hashFile(filePath) ?? "");
+    const program = preprocessProgram(parseDocSource(readFile(filePath), config), config);
     parsedPrograms.set(filePath, program);
     return program;
   };
@@ -231,6 +271,7 @@ function generateDocDirectory(
         registrySymbols: extractRegistrySymbols(program),
         linkTargets: linkRecorder,
         writtenBytes: written,
+        sourceHashAtParse: sourceHashAtParse.get(info.filePath),
       });
     }
   }
@@ -249,6 +290,18 @@ function generateDocDirectory(
       try {
         target = resolveOwnedOutputPath(outDirReal, outRel);
       } catch {
+        continue;
+      }
+      // Delete only what a generated page can be — a regular file, or a
+      // leaf symlink (removed as a link). Anything else (e.g. a directory
+      // now occupying the path) is not ours; skip rather than crash.
+      let leaf: fs.Stats;
+      try {
+        leaf = fs.lstatSync(target.abs);
+      } catch {
+        continue; // already gone
+      }
+      if (!leaf.isFile() && !leaf.isSymbolicLink()) {
         continue;
       }
       fs.rmSync(target.abs, { force: true });
@@ -460,7 +513,11 @@ function sourceLink(
   return `([source](${ctx.baseUrl}/${toPosixPath(ctx.sourceRelPath)}#L${loc.line + 1}))`;
 }
 
-const generator = new AgencyGenerator();
+// Debug-independent on purpose: AGENCY_DEBUG makes the generator wrap
+// rendered code in trace markers, which would both pollute doc pages and
+// make cached output diverge from a cold run under a different
+// environment (the render key deliberately excludes the environment).
+const generator = new AgencyGenerator({ debug: false });
 
 function formatDefaultValue(node: FunctionParameter["defaultValue"]): string {
   if (!node) return "";
@@ -499,7 +556,7 @@ function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
   const code = generateAgency({
     type: "agencyProgram",
     nodes: [alias],
-  });
+  }, { debug: false });
   return section(
     heading(3, alias.aliasName),
     alias.docComment ? formatDocComment(alias.docComment) : null,
@@ -527,7 +584,7 @@ function formatEffectDeclaration(
   const code = generateAgency({
     type: "agencyProgram",
     nodes: [decl],
-  });
+  }, { debug: false });
   return section(
     heading(3, decl.effect),
     decl.docComment ? formatDocComment(decl.docComment) : null,
@@ -601,7 +658,7 @@ function formatConstant(c: Assignment, ctx: DocContext): string {
   const code = generateAgency({
     type: "agencyProgram",
     nodes: [c],
-  });
+  }, { debug: false });
   return section(
     heading(3, c.variableName),
     codeFence(code),

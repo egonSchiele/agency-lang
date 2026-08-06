@@ -216,9 +216,14 @@ export class AgencyGenerator {
    */
   protected preserveOrder: boolean = false;
 
-  constructor(args: { config?: AgencyConfig; preserveOrder?: boolean } = {}) {
+  constructor(
+    args: { config?: AgencyConfig; preserveOrder?: boolean; debug?: boolean } = {},
+  ) {
     this.agencyConfig = mergeDeep(this.configDefaults(), args.config || {});
     this.preserveOrder = args.preserveOrder ?? false;
+    // Explicit override for callers whose output must not vary with the
+    // environment (agency doc); default keeps the AGENCY_DEBUG behavior.
+    this.debug = args.debug ?? this.debug;
     if (this.agencyConfig.verbose) {
       console.log("Generator config:", this.agencyConfig);
     }
@@ -2383,9 +2388,12 @@ export function printCodeLiteralBody(node: CodeLiteral): string {
 
 export function generateAgency(
   program: AgencyProgram,
-  opts: { preserveOrder?: boolean } = {},
+  opts: { preserveOrder?: boolean; debug?: boolean } = {},
 ): string {
-  const generator = new AgencyGenerator({ preserveOrder: opts.preserveOrder });
+  const generator = new AgencyGenerator({
+    preserveOrder: opts.preserveOrder,
+    debug: opts.debug,
+  });
   return (
     generator
       .generate(program)

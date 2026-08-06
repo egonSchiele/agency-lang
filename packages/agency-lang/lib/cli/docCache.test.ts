@@ -433,6 +433,25 @@ describe("ownership, transitions, and deletion safety", () => {
     expect(fs.readFileSync(path.join(victimDir, "a.md"), "utf-8")).toBe("victim bytes\n");
   });
 
+  test("single-file mode refuses to write through a leaf symlink (owned-output boundary)", () => {
+    const { inputDir, out } = baseFixture();
+    const victimDir = tmp("agency-doccache-victim-");
+    fs.writeFileSync(path.join(victimDir, "victim.md"), "precious\n");
+    const single = tmp("agency-doccache-single-");
+    fs.symlinkSync(path.join(victimDir, "victim.md"), path.join(single, "a.md"));
+    expect(() => generateDoc({}, path.join(inputDir, "a.agency"), single, [])).toThrow(/symlink/);
+    expect(fs.readFileSync(path.join(victimDir, "victim.md"), "utf-8")).toBe("precious\n");
+  });
+
+  test("reconciliation skips (not crashes) when an owned path is now a directory", () => {
+    const { inputDir, out } = baseFixture();
+    rmSource(inputDir, "b.agency");
+    fs.rmSync(path.join(out, "b.md"));
+    fs.mkdirSync(path.join(out, "b.md")); // a directory now occupies the path
+    generateDoc({}, inputDir, out, []); // must not throw
+    expect(fs.statSync(path.join(out, "b.md")).isDirectory()).toBe(true); // untouched
+  });
+
   test("descendant symlink: stale rendering refuses to write through out/sub -> victim", () => {
     const inputDir = tmp("agency-doccache-in-");
     writeSource(inputDir, path.join("sub", "a.agency"), `export def a(): number { return 1 }\n`);

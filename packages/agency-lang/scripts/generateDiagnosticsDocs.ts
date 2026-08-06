@@ -1,6 +1,6 @@
 // Regenerates docs/site/diagnostics/ from the diagnostics registry +
-// explanations table. A BUILD script (compiled to dist/scripts/ like
-// stdlib-stamp), invoked from the Makefile — never a user command. One fast
+// explanations table. A BUILD script (compiled to dist/scripts/),
+// invoked from the Makefile — never a user command. One fast
 // node invocation, no stamp machinery: it wipes and rewrites the whole dir.
 import * as fs from "fs";
 import * as path from "path";

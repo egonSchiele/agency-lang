@@ -15,6 +15,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   assert,
   assertFile,
@@ -325,8 +326,13 @@ function checkModelsList() {
       "",
     ].join("\n"),
   );
+  // Use the single-option `--import=<file-url>` form: NODE_OPTIONS is
+  // space-tokenized, so a raw path breaks when TMPDIR contains a space, and a
+  // bare path is not a safe ESM specifier on Windows. A pathToFileURL href
+  // encodes spaces and is platform-correct.
+  const preloadUrl = pathToFileURL(join(modelsDir, "blocknet.mjs")).href;
   const result = runInstalledAgency(modelsDir, ["models", "list"], {
-    env: { NODE_OPTIONS: `--import ${join(modelsDir, "blocknet.mjs")}` },
+    env: { NODE_OPTIONS: `--import=${preloadUrl}` },
   });
   assertBlank(result.stderr, "[models list] stderr");
   const lines = result.stdout.split("\n");

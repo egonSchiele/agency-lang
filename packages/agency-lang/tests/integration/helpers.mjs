@@ -9,9 +9,10 @@ import { tmpdir } from "node:os";
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
 
-// The single process boundary for the integration tests. It is the only layer
-// that knows about spawnSync, the default timeout, environment merging, spawn
-// errors, and exact-status enforcement. Callers declare the expected status
+// The single spawnSync boundary for the integration tests (setup/install still
+// use execSync via `run` below). It is the only layer that knows about
+// spawnSync, the default timeout, environment merging, spawn errors, and
+// exact-status enforcement. Callers declare the expected status
 // rather than bypassing the helper for failure cases, and always get stdout and
 // stderr back separately. On a spawn error or wrong status it throws with the
 // captured streams and status attached, so callers can log on failure.

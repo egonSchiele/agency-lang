@@ -397,6 +397,81 @@ node main() {
     throw new Error(`a hidden command was treated as a file: ${remoteHelp}`);
   }
 
+  // --- --model reaches the compiled program ---
+  // `--model` lives on addRunOptions, which `run` and the shorthand share.
+  // `agency compile` has its own option list and does NOT take it, so these
+  // cases drive the two supported surfaces and read what they compiled.
+  //
+  // Start from an agency.json that already names a provider, so the bare-model
+  // case has something to clear and cannot pass for the wrong reason.
+  writeFile(dir, "agency.json", JSON.stringify({
+    client: { defaultModel: "gpt-4o-mini", defaultProvider: "openrouter" },
+  }, null, 2));
+
+  // A bare model replaces the model AND drops the inherited provider, so
+  // smoltalk infers one from the name.
+  const bareRun = run(dir, "./node_modules/.bin/agency run --model claude-opus-4-8 greet.agency --name alice");
+  assertIncludes(bareRun, "Hello, alice!");
+  const bareOut = readFileSync(join(dir, "greet.js"), "utf-8");
+  assertIncludes(bareOut, 'model: "claude-opus-4-8"');
+  // Anchored on a baked literal: the bare token `provider` also appears in
+  // unrelated generated output.
+  if (/provider:\s*"/.test(bareOut)) {
+    throw new Error("a bare --model left a provider in the generated config");
+  }
+
+  // The shorthand takes the flag too, and a prefixed value sets both fields.
+  const prefixedRun = run(dir, "./node_modules/.bin/agency --model openrouter/anthropic/claude-sonnet-4 greet.agency --name alice");
+  assertIncludes(prefixedRun, "Hello, alice!");
+  const prefixedOut = readFileSync(join(dir, "greet.js"), "utf-8");
+  assertIncludes(prefixedOut, 'model: "anthropic/claude-sonnet-4"');
+  if (!/provider:\s*"openrouter"/.test(prefixedOut)) {
+    throw new Error("a prefixed --model did not bake its provider");
+  }
+
+  // An unknown bare model fails BEFORE compiling. Give it a fresh source name
+  // whose output cannot exist from an earlier case; asserting that output was
+  // never created proves the ordering without deleting a test artifact first.
+  writeFile(dir, "invalid-model.agency", `node main() {
+  print("must not execute")
+}
+`);
+  const badModel = run(
+    dir,
+    "./node_modules/.bin/agency run --model gpt-4o-minii invalid-model.agency 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(badModel, 'Unknown model "gpt-4o-minii"');
+  assertIncludes(badModel, 'Did you mean "gpt-4o-mini"');
+  if (badModel.includes("    at ")) {
+    throw new Error(`an unknown model printed a stack trace: ${badModel}`);
+  }
+  if (existsSync(join(dir, "invalid-model.js"))) {
+    throw new Error("compilation happened despite an invalid --model");
+  }
+
+  // The position rule applies to the new flag like any other: after the
+  // filename it belongs to the program, is NOT validated by agency, and draws
+  // the standard warning. greet does not declare --model, so its own parser
+  // rejects it — which is also the proof the flag was forwarded. Use an
+  // unknown attached value: that distinguishes "not validated" from a valid
+  // value that agency might have validated successfully, and covers
+  // `--model=value` in the boundary scanner at the same time.
+  const modelAfterFile = run(
+    dir,
+    "./node_modules/.bin/agency run greet.agency --model=definitely-not-a-real-model 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(modelAfterFile, "Warning: --model went to your program");
+  assertIncludes(modelAfterFile, "unknown flag --model");
+  if (modelAfterFile.includes("Unknown model")) {
+    throw new Error("agency validated a --model that belonged to the program");
+  }
+
+  // Restore neutral configuration for the later cases in this file. Writing
+  // the fixture is safer and clearer than deleting a path during a test.
+  writeFile(dir, "agency.json", "{}\n");
+
   console.log("Test 8 passed");
 
   // --- Test 8b: a node parameter default applies on the direct-run path ---

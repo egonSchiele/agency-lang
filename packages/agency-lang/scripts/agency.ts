@@ -1182,15 +1182,25 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(async (inputs: string[]) => {
       // Route through parseAgency so the payload is the normalized
       // ParseAgencyErrorData (zero-indexed user-source coordinates), covering
-      // both committed and recoverable parse failures. applyTemplate:false keeps
+      // both committed and recoverable parse failures. Parsing does not depend
+      // on config, so pass {} rather than getConfig(): a broken agency.json
+      // must not take editor diagnostics down with it. applyTemplate:false keeps
       // coordinates in the exact source the editor supplied; lower:false keeps
       // this to syntax diagnostics.
-      const config = getConfig();
       await forEachSource(inputs, (contents) => {
-        const result = parseAgency(contents, config, false, false);
-        if (!result.success && result.errorData) {
-          console.log(JSON.stringify(result.errorData, null, 2));
-        }
+        const result = parseAgency(contents, {}, false, false);
+        if (result.success) return;
+        // Always emit a payload for a failure. A rare failure path returns no
+        // errorData; fall back to a minimal one built from the message so the
+        // editor still gets JSON.
+        const errorData = result.errorData ?? {
+          line: 0,
+          column: 0,
+          length: 1,
+          message: result.message,
+          prettyMessage: result.message,
+        };
+        console.log(JSON.stringify(errorData, null, 2));
       });
     });
 

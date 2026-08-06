@@ -91,9 +91,13 @@ node preprocessProbe(): string {
 }
 `;
 
+// The body carries a unique sentinel found nowhere in the signature or
+// docstring. `doc` documents the public API, not the body, so the sentinel must
+// be absent from the generated Markdown — a check that survives any body
+// reformatting a broken generator might apply.
 const docProbe = `export def greet(name: string): string {
   """Greet a person by name."""
-  return "Hello, " + name
+  return "Hello, " + name + " DOC_BODY_SENTINEL"
 }
 `;
 
@@ -103,6 +107,14 @@ const diagnosticsBad = `def brokenParams(first: string; second: string) {}
 const diagnosticsGood = `def joinStrings(first: string, second: string): string {
   return first + second
 }
+`;
+
+// A RECOVERABLE parse failure (not a thrown TarsecError). The old diagnostics
+// path emitted nothing for these; the whole point of this PR's change is that
+// they now produce JSON. The bad token is on the second line, so this also
+// proves line mapping rather than only column mapping on line 0.
+const diagnosticsRecoverable = `const x = 5
+!!!
 `;
 
 // outDir + log.projectId are echoed by `config show`. verbose is deliberately
@@ -250,7 +262,7 @@ function checkDoc() {
   assertIncludes(doc, "### greet");
   assertIncludes(doc, "```ts\ngreet(name: string): string\n```");
   assertIncludes(doc, "Greet a person by name.");
-  assert(!doc.includes('return "Hello, " + name'), "[doc] must not copy the function body into the docs");
+  assert(!doc.includes("DOC_BODY_SENTINEL"), "[doc] must not copy the function body into the docs");
   console.log("[cli-lang] doc behavior ✓");
 }
 
@@ -294,6 +306,25 @@ function checkDiagnostics() {
   const goodResult = runInstalledAgency(dir, ["diagnostics", "diagnostics-good.agency"]);
   assertBlank(goodResult.stdout, "[diagnostics valid] stdout");
   assertBlank(goodResult.stderr, "[diagnostics valid] stderr");
+
+  // Recoverable failure: proves the non-committed branch emits JSON and that
+  // line mapping works (the bad token is on the second line).
+  const recoverableLine = diagnosticsRecoverable.slice(0, diagnosticsRecoverable.indexOf("!!!")).split("\n").length - 1;
+  const recResult = runInstalledAgency(dir, ["diagnostics", "diagnostics-recoverable.agency"]);
+  assertBlank(recResult.stderr, "[diagnostics recoverable] stderr");
+  const recDiagnostic = JSON.parse(recResult.stdout);
+  assert(
+    recDiagnostic.line === recoverableLine,
+    `[diagnostics recoverable] line was ${recDiagnostic.line}, expected ${recoverableLine}`,
+  );
+  assert(recDiagnostic.length === 1, `[diagnostics recoverable] length was ${recDiagnostic.length}`);
+  assert(
+    typeof recDiagnostic.message === "string" && recDiagnostic.message.length > 0,
+    "[diagnostics recoverable] message must be a non-empty string",
+  );
+  // prettyMessage carries a 1-indexed "Line N" prefix, so this confirms the
+  // reported line rather than only the column.
+  assertIncludes(recDiagnostic.prettyMessage, `Line ${recoverableLine + 1}`);
   console.log("[cli-lang] diagnostics behavior ✓");
 }
 
@@ -311,6 +342,7 @@ try {
   writeFile(dir, "doc-probe.agency", docProbe);
   writeFile(dir, "diagnostics-bad.agency", diagnosticsBad);
   writeFile(dir, "diagnostics-good.agency", diagnosticsGood);
+  writeFile(dir, "diagnostics-recoverable.agency", diagnosticsRecoverable);
   writeFile(dir, "config-probe.json", configProbe);
 
   for (const testCase of commandCases) runCommandCase(testCase);

@@ -32,15 +32,28 @@ export function runInstalledAgency(
   const stderr = result.stderr || "";
   const command = ["npx", "--no-install", "agency", ...args].join(" ");
 
+  // Both throw paths attach the captured streams and status so callers can log
+  // per-command output on failure (that is exactly when the log matters).
   if (result.error) {
-    throw new Error(
+    const error = new Error(
       `Command failed to start: ${command}\n${result.error.message}\n${stdout}${stderr}`,
     );
+    error.cause = result.error;
+    error.stdout = stdout;
+    error.stderr = stderr;
+    error.status = result.status;
+    error.signal = result.signal;
+    throw error;
   }
   if (result.status !== expectedStatus) {
-    throw new Error(
+    const error = new Error(
       `Expected exit ${expectedStatus}, got ${result.status}: ${command}\n${stdout}${stderr}`,
     );
+    error.stdout = stdout;
+    error.stderr = stderr;
+    error.status = result.status;
+    error.signal = result.signal;
+    throw error;
   }
 
   return { status: result.status, stdout, stderr, signal: result.signal };

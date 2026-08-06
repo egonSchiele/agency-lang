@@ -116,14 +116,24 @@ function runLogged(label, file, args = [], opts = {}) {
 // expected status via `opts.expectedStatus` (default 0) instead of the old
 // boolean `expectFail`.
 function runAgency(label, args, opts = {}) {
-  const result = runInstalledAgency(dir, args, {
-    expectedStatus: opts.expectedStatus ?? 0,
-    input: opts.input,
-    env: opts.env,
-    timeout: opts.timeout,
-  });
+  const logPath = join(logsDir, `${label}.txt`);
+  let result;
+  try {
+    result = runInstalledAgency(dir, args, {
+      expectedStatus: opts.expectedStatus ?? 0,
+      input: opts.input,
+      env: opts.env,
+      timeout: opts.timeout,
+    });
+  } catch (err) {
+    // runInstalledAgency throws on an unexpected status, timeout, or spawn
+    // error. Preserve the per-command log before rethrowing — that is when it
+    // is most useful. The helper attaches the captured streams to the error.
+    writeFileSync(logPath, `${err.stdout ?? ""}${err.stderr ?? ""}`);
+    throw err;
+  }
   const output = `${result.stdout}${result.stderr}`;
-  writeFileSync(join(logsDir, `${label}.txt`), output);
+  writeFileSync(logPath, output);
   return opts.combined ? output : result.stdout;
 }
 

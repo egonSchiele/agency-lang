@@ -70,7 +70,15 @@ export const projectSpendSchema = z
     unpricedCallCount: nonNegativeSafeInt,
     pricingComplete: z.boolean(),
     usageComplete: z.boolean(),
+    // The top spenders by cost; `breakdown` is at most the host's top-N.
     breakdown: z.array(modelKindSpendSchema),
+    // True when more distinct (model, kind) groups existed than `breakdown`
+    // returns; the omitted tail is summed into `otherSpend`. Authoritative
+    // `cost`/`tokens` totals are unaffected.
+    breakdownTruncated: z.boolean(),
+    otherSpend: z
+      .object({ cost: costBreakdownSchema, tokens: tokenBreakdownSchema })
+      .strict(),
   })
   .strict()
   .refine(

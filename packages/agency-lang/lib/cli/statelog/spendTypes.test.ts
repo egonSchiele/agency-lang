@@ -3,6 +3,8 @@ import { projectSpendSchema, accountSpendRowSchema, toSpendQuery } from "./spend
 
 const usd = { inputCost: 0.3, outputCost: 0.2, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" as const };
 const tok = { inputTokens: 10, outputTokens: 2, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 12 };
+const zeroUsd = { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" as const };
+const zeroTok = { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 };
 const valid = {
   cost: usd,
   tokens: tok,
@@ -11,15 +13,19 @@ const valid = {
   pricingComplete: true,
   usageComplete: true,
   breakdown: [{ model: "opus", kind: "completion" as const, cost: usd, tokens: tok }],
+  breakdownTruncated: false,
+  otherSpend: { cost: zeroUsd, tokens: zeroTok },
 };
 const empty = {
-  cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" as const },
-  tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 },
+  cost: zeroUsd,
+  tokens: zeroTok,
   invocationCount: 0,
   unpricedCallCount: 0,
   pricingComplete: true,
   usageComplete: true,
   breakdown: [],
+  breakdownTruncated: false,
+  otherSpend: { cost: zeroUsd, tokens: zeroTok },
 };
 
 describe("projectSpendSchema", () => {
@@ -42,6 +48,16 @@ describe("projectSpendSchema", () => {
     expect(() => projectSpendSchema.parse({ ...valid, unpricedCallCount: 1, pricingComplete: true })).toThrow();
     expect(() => projectSpendSchema.parse({ ...valid, unpricedCallCount: 0, pricingComplete: false })).toThrow();
     expect(projectSpendSchema.parse({ ...valid, unpricedCallCount: 1, pricingComplete: false }).pricingComplete).toBe(false);
+  });
+
+  it("requires breakdownTruncated and otherSpend, and parses a truncated spend", () => {
+    const { breakdownTruncated: _bt, ...noTruncated } = valid;
+    expect(() => projectSpendSchema.parse(noTruncated)).toThrow();
+    const { otherSpend: _os, ...noOther } = valid;
+    expect(() => projectSpendSchema.parse(noOther)).toThrow();
+    const parsed = projectSpendSchema.parse({ ...valid, breakdownTruncated: true, otherSpend: { cost: usd, tokens: tok } });
+    expect(parsed.breakdownTruncated).toBe(true);
+    expect(parsed.otherSpend.cost.totalCost).toBe(0.5);
   });
 
   it("rejects extra fields and a mismatched model sentinel", () => {

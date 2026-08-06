@@ -186,7 +186,7 @@ function toks(input: number, output: number) {
 const NONE_GROUP = { byModel: false, byKind: false };
 
 const spend = (overrides: Partial<ProjectSpend> = {}): ProjectSpend => ({
-  cost: usd(0.4212), tokens: toks(12400, 3010), invocationCount: 87, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, breakdown: [], ...overrides,
+  cost: usd(0.4212), tokens: toks(12400, 3010), invocationCount: 87, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, breakdown: [], breakdownTruncated: false, otherSpend: { cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" }, tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 } }, ...overrides,
 });
 
 describe("renderProjectSpend", () => {
@@ -271,6 +271,17 @@ describe("renderProjectSpend", () => {
     expect(out).toContain("embedding");
     expect(out).toContain("completion");
     expect(out).not.toContain("MODEL");
+  });
+  it("notes the omitted tail when the breakdown is truncated", () => {
+    const breakdown = [{ model: "opus", kind: "completion" as const, cost: usd(1), tokens: toks(10, 2) }];
+    const out = strip(renderProjectSpend("a", spend({ breakdown, breakdownTruncated: true, otherSpend: { cost: usd(3), tokens: toks(5, 5) } }), "all time", { byModel: true, byKind: false }));
+    expect(out).toContain("more across other groups");
+    expect(out).toContain("$3.0000");
+  });
+  it("shows no truncation note when the breakdown is complete", () => {
+    const breakdown = [{ model: "opus", kind: "completion" as const, cost: usd(1), tokens: toks(10, 2) }];
+    const out = strip(renderProjectSpend("a", spend({ breakdown }), "all time", { byModel: true, byKind: false }));
+    expect(out).not.toContain("more across other groups");
   });
 });
 

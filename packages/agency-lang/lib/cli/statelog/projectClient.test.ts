@@ -174,7 +174,7 @@ describe("projectClient.getSpend", () => {
   const tok = { inputTokens: 10, outputTokens: 2, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 12 };
   const okSpend = {
     success: true,
-    value: { cost: usd, tokens: tok, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, breakdown: [] },
+    value: { cost: usd, tokens: tok, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, breakdown: [], breakdownTruncated: false, otherSpend: { cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" }, tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 } } },
   };
 
   it("GETs the spend route with both bounds as query params", async () => {

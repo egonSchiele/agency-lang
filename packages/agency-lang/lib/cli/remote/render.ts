@@ -278,6 +278,11 @@ export function renderProjectSpend(
   ];
   if (grouping.byModel || grouping.byKind) {
     lines.push("", renderGroupTable(groupBreakdown(spend.breakdown, grouping), grouping));
+    if (spend.breakdownTruncated) {
+      // The host caps the breakdown to its top spenders; the rest is summed into
+      // `otherSpend` (the grouped rows above therefore omit it).
+      lines.push(color.dim(`  top ${formatCount(spend.breakdown.length)} (model, kind) shown; ${formatUsd(spend.otherSpend.cost.totalCost)} more across other groups`));
+    }
   }
   lines.push(...trustNotes(spend, "  "));
   return lines.join("\n");

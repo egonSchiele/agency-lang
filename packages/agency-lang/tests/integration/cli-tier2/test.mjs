@@ -403,6 +403,69 @@ function checkLocalIsolated() {
   console.log("[cli-tier2] local isolated ✓");
 }
 
+// --- label ingest (store mutation + persistence oracle) ---------------------
+
+function checkLabelIngest() {
+  const labelDir = subdir("label");
+  const fixture = ["tier2 first output", "tier2 second output", "tier2 third output"];
+  const n = fixture.length;
+  // A top-level JSON array of strings is the only shape the JSON loader accepts.
+  writeFile(labelDir, "data.json", JSON.stringify(fixture) + "\n");
+
+  const first = runInstalledAgency(labelDir, ["label", "ingest", "data.json", "--store", "labels", "--source", "batch"]);
+  assertBlank(first.stderr, "[label ingest] stderr");
+  const firstOut = stripAnsi(first.stdout);
+  assertIncludes(firstOut, `${n} new records, 0 already stored`);
+  assertIncludes(firstOut, `${n} new occurrences, 0 already recorded`);
+
+  // outputs.jsonl: exactly one record per fixture string (order-independent).
+  const outputs = readJsonLines(join(labelDir, "labels", "outputs.jsonl"));
+  assert(outputs.length === n, `expected ${n} output records, got ${outputs.length}`);
+  const outputIdByString = {};
+  for (const record of outputs) {
+    const value = record.fields.output;
+    assert(fixture.includes(value), `unexpected output record: "${value}"`);
+    outputIdByString[value] = record.outputId;
+  }
+  for (const value of fixture) {
+    assert(value in outputIdByString, `outputs.jsonl is missing a record for "${value}"`);
+  }
+
+  // occurrences.jsonl: one per fixture item, each referencing the right output.
+  const occurrences = readJsonLines(join(labelDir, "labels", "occurrences.jsonl"));
+  assert(occurrences.length === n, `expected ${n} occurrences, got ${occurrences.length}`);
+  const seenIndexes = [];
+  for (const occ of occurrences) {
+    assert(occ.source === "batch", `occurrence source was "${occ.source}"`);
+    assert(occ.origin.kind === "json", `occurrence origin.kind was "${occ.origin.kind}"`);
+    assert(occ.origin.itemKey === "data.json", `occurrence origin.itemKey was "${occ.origin.itemKey}"`);
+    const idx = occ.origin.itemIndex;
+    assert(!seenIndexes.includes(idx), `duplicate itemIndex ${idx}`);
+    seenIndexes.push(idx);
+    assert(
+      occ.outputId === outputIdByString[fixture[idx]],
+      `occurrence ${idx} outputId does not reference the output for "${fixture[idx]}"`,
+    );
+  }
+  seenIndexes.sort((a, b) => a - b);
+  assert(
+    JSON.stringify(seenIndexes) === JSON.stringify([...Array(n).keys()]),
+    `expected itemIndexes 0..${n - 1}, got ${seenIndexes}`,
+  );
+
+  // Re-ingesting the same data is idempotent: nothing new, both files unchanged.
+  const outputsBefore = readText(join(labelDir, "labels", "outputs.jsonl"));
+  const occurrencesBefore = readText(join(labelDir, "labels", "occurrences.jsonl"));
+  const second = runInstalledAgency(labelDir, ["label", "ingest", "data.json", "--store", "labels", "--source", "batch"]);
+  assertBlank(second.stderr, "[label ingest re-run] stderr");
+  const secondOut = stripAnsi(second.stdout);
+  assertIncludes(secondOut, `0 new records, ${n} already stored`);
+  assertIncludes(secondOut, `0 new occurrences, ${n} already recorded`);
+  assert(readText(join(labelDir, "labels", "outputs.jsonl")) === outputsBefore, "outputs.jsonl changed on re-ingest");
+  assert(readText(join(labelDir, "labels", "occurrences.jsonl")) === occurrencesBefore, "occurrences.jsonl changed on re-ingest");
+  console.log("[cli-tier2] label ingest ✓");
+}
+
 // --- Run everything ---------------------------------------------------------
 
 try {
@@ -415,6 +478,7 @@ try {
   checkDefinition();
   checkModelsList();
   checkLocalIsolated();
+  checkLabelIngest();
 
   console.log("=== cli-tier2 test passed ===");
   cleanup(dir);

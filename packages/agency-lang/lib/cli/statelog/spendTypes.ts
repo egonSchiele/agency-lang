@@ -84,7 +84,29 @@ export const projectSpendSchema = z
   .refine(
     (spend) => spend.pricingComplete === (spend.unpricedCallCount === 0),
     "pricingComplete must equal (unpricedCallCount === 0)",
-  );
+  )
+  .refine((spend) => {
+    // A complete breakdown has no omitted tail, so otherSpend must be the zero
+    // identity — otherwise a non-truncated response carries hidden spend that the
+    // renderer would silently ignore.
+    if (spend.breakdownTruncated) {
+      return true;
+    }
+    const { cost, tokens } = spend.otherSpend;
+    return (
+      cost.inputCost === 0 &&
+      cost.outputCost === 0 &&
+      cost.cachedInputCost === 0 &&
+      cost.cacheCreationInputCost === 0 &&
+      cost.hostedToolsCost === 0 &&
+      cost.totalCost === 0 &&
+      tokens.inputTokens === 0 &&
+      tokens.outputTokens === 0 &&
+      tokens.cachedInputTokens === 0 &&
+      tokens.cacheCreationInputTokens === 0 &&
+      tokens.totalTokens === 0
+    );
+  }, "otherSpend must be the zero identity when breakdownTruncated is false");
 export type ProjectSpend = z.infer<typeof projectSpendSchema>;
 
 export const accountSpendRowSchema = z

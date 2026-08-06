@@ -60,6 +60,15 @@ describe("projectSpendSchema", () => {
     expect(parsed.otherSpend.cost.totalCost).toBe(0.5);
   });
 
+  it("requires otherSpend to be zero when breakdownTruncated is false", () => {
+    // non-zero tail without truncation → rejected
+    expect(() => projectSpendSchema.parse({ ...valid, breakdownTruncated: false, otherSpend: { cost: usd, tokens: tok } })).toThrow();
+    // zero tail without truncation → accepted (the valid fixture already is this)
+    expect(projectSpendSchema.parse(valid).breakdownTruncated).toBe(false);
+    // a truncated response may carry a zero tail too (omitted groups were free)
+    expect(projectSpendSchema.parse({ ...valid, breakdownTruncated: true }).breakdownTruncated).toBe(true);
+  });
+
   it("rejects extra fields and a mismatched model sentinel", () => {
     expect(() => projectSpendSchema.parse({ ...valid, surprise: 1 })).toThrow();
     // manual rows must use model "" and provider rows a non-empty model.

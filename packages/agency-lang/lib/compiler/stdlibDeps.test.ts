@@ -9,16 +9,24 @@ import path from "path";
 // one. isNonTemplatedStdlib reports EVERY fixture file as non-templated so
 // real compiles need no prelude surface (the templated prelude edge is
 // covered against the real stdlib in depFingerprint.test.ts).
-const fake = vi.hoisted(() => ({ stdlibDir: "", fixtureRoot: "" }));
+const fake = vi.hoisted(() => ({
+  stdlibDir: "",
+  fixtureRoot: "",
+  /** Absolute fixture paths that KEEP template application (they get the
+   *  auto-prelude import), for the templated-edge wiring test. */
+  templated: [] as string[],
+}));
 vi.mock("../importPaths.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../importPaths.js")>();
   return {
     ...real,
     getStdlibDir: () => fake.stdlibDir,
-    // EVERY fixture file (stdlib and user alike) is non-templated, so no
-    // fixture needs the ~30-name prelude surface stubbed out.
+    // Fixture files default to non-templated, so most fixtures need no
+    // prelude surface; files listed in fake.templated opt back in.
     isNonTemplatedStdlib: (p: string) =>
-      fake.fixtureRoot !== "" && p.startsWith(fake.fixtureRoot + path.sep),
+      fake.fixtureRoot !== "" &&
+      p.startsWith(fake.fixtureRoot + path.sep) &&
+      !fake.templated.includes(p),
     resolveAgencyImportPath: (importPath: string, fromFile: string) =>
       real.isStdlibImport(importPath)
         ? path.join(fake.stdlibDir, real.normalizeStdlibPath(importPath) + ".agency")
@@ -44,12 +52,18 @@ beforeEach(() => {
   root = fs.mkdtempSync(path.join(process.cwd(), ".agency-tmp", "stdlibdeps-"));
   fake.fixtureRoot = root;
   fake.stdlibDir = path.join(root, "stdlib");
+  fake.templated = [];
   clearSpliceCache();
 });
 
 afterEach(() => {
   clearSpliceCache();
-  safeDeleteDirectory(root, false);
+  // Guard the empty-string state (beforeEach failed before assigning):
+  // safeDeleteDirectory("") would resolve to the package root itself.
+  if (root !== "") {
+    safeDeleteDirectory(root, false);
+    root = "";
+  }
 });
 
 // index ← helper ← consumer; index ← other. All non-templated under the
@@ -236,6 +250,32 @@ describe("production manifest wiring", () => {
     clearSpliceCache();
     compileDir();
     expect(rewrittenJs()).toContain("spliceUser.js"); // never skipped
+  });
+
+  test("TEMPLATED stdlib module records the implicit prelude index.agency dep", async () => {
+    // The other fixtures are all non-templated (a deliberate harness
+    // simplification), so this is the one case proving the
+    // session→fingerprint→manifest path for the template-added
+    // `std::index` edge. The fake index stubs the full prelude surface so
+    // the templated file's auto-import resolves.
+    const { PRELUDE_NAMES } = await import("../prelude.js");
+    const stubs = PRELUDE_NAMES.map((n) => `export def ${n}(): number { return 0 }`).join("\n");
+    makeFixture({
+      ...BASE_FIXTURE,
+      "index.agency": `export def i(): number { return 1 }\n${stubs}\n`,
+      "tpl.agency": `export def t(): number { return 1 }\n`,
+    });
+    fake.templated = [path.join(fake.stdlibDir, "tpl.agency")];
+    compileDir();
+    const entry = loadManifest(root).entries[stdlibRel("tpl.agency")];
+    expect(entry).toBeDefined();
+    expect(entry.deps).toEqual([stdlibRel("index.agency")]);   // prelude edge, nothing else
+    expect(entry.cacheable).toBe(true);
+    // And the edge is load-bearing: editing index stales tpl.
+    backdateAllJs();
+    write("index.agency", `export def i(): number { return 2 }\n${stubs}\n`);
+    compileDir();
+    expect(rewrittenJs()).toContain("tpl.js");
   });
 
   test("stdlib-copy sibling gets contents flavor and no std:: deps", () => {

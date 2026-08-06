@@ -262,9 +262,13 @@ describe("isEntryFresh — each field is load-bearing", () => {
 
 describe("stdlib hash flavors", () => {
   test("stdlibHashFlavor: names inside stdlibDir, contents outside, boundary exact", () => {
-    expect(stdlibHashFlavor("/m/stdlib/math.agency", "/m/stdlib", "N", "C")).toBe("N");
-    expect(stdlibHashFlavor("/m/src/app.agency", "/m/stdlib", "N", "C")).toBe("C");
-    expect(stdlibHashFlavor("/m/stdlib-copy/x.agency", "/m/stdlib", "N", "C")).toBe("C");
+    // path.join throughout: production compares with path.sep appended,
+    // so hard-coded "/" separators would miss the boundary on Windows.
+    const m = path.join(os.tmpdir(), "m");
+    const stdlibDir = path.join(m, "stdlib");
+    expect(stdlibHashFlavor(path.join(stdlibDir, "math.agency"), stdlibDir, "N", "C")).toBe("N");
+    expect(stdlibHashFlavor(path.join(m, "src", "app.agency"), stdlibDir, "N", "C")).toBe("C");
+    expect(stdlibHashFlavor(path.join(m, "stdlib-copy", "x.agency"), stdlibDir, "N", "C")).toBe("C");
   });
 
   test("computeStdlibNamesHash: edits invisible; add/rename visible; recursive; .agency-only; order-insensitive", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, vi } from "vitest";
+import { describe, expect, test, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -31,13 +31,22 @@ vi.mock("../parseCache.js", async (importOriginal) => {
 import { dependencyFingerprint } from "./depFingerprint.js";
 import { getStdlibDir } from "../importPaths.js";
 
+const createdTrees: string[] = [];
+
 beforeEach(() => {
   seam.throwNext = null;
   seam.calls.length = 0;
 });
 
+afterEach(() => {
+  for (const dir of createdTrees.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 function tree(files: Record<string, string>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-fp-"));
+  createdTrees.push(dir);
   for (const [rel, content] of Object.entries(files)) {
     const p = path.join(dir, rel);
     fs.mkdirSync(path.dirname(p), { recursive: true });

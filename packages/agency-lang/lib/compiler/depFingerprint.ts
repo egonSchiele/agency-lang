@@ -53,7 +53,9 @@ export function dependencyFingerprint(
   config: AgencyConfig,
   opts: { resolveStdlib: boolean },
 ): DependencyFingerprint {
-  const visited: Record<string, true> = {};
+  // Null-prototype: keyed by absolute file paths, which can legally
+  // collide with inherited keys like __proto__.
+  const visited: Record<string, true> = Object.create(null);
   let hasPkgImports = false;
   let cacheable = true;
   let reason: string | undefined;

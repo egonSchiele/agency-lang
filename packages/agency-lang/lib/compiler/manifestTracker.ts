@@ -15,15 +15,18 @@ import {
   computeCompilerStamp,
   computeDepsHash,
   computeStdlibHash,
+  computeStdlibNamesHash,
   deriveConfigKey,
   hashFile,
   isEntryFresh,
   loadManifest,
   manifestDirFor,
   saveManifest,
+  stdlibHashFor,
   type BuildManifest,
   type FreshnessContext,
 } from "./buildManifest.js";
+import type { DependencyFingerprint } from "./depFingerprint.js";
 
 /** "incremental" consults and records the manifest; "force" recompiles
  *  everything but rewrites it (--force); "always" is internal
@@ -37,9 +40,15 @@ export type ManifestTracker = {
   allFresh(absModules: string[]): boolean;
   /** The recorded output path for a module (fast-path return value). */
   outputFor(absModule: string): string | null;
-  /** No-op unless policy allows writes. deps/hasPkgImports supplied by the
-   *  session (it owns the closure); the tracker owns hashing and storage. */
-  record(absModule: string, absOutput: string, deps: string[], hasPkgImports: boolean): void;
+  /** No-op unless policy allows writes. The fingerprint is supplied by the
+   *  session (it owns dependency discovery — closure walk for user
+   *  modules, dependencyFingerprint for stdlib-resident ones); the tracker
+   *  owns hashing and storage. */
+  record(
+    absModule: string,
+    absOutput: string,
+    fp: Pick<DependencyFingerprint, "deps" | "hasPkgImports" | "cacheable">,
+  ): void;
   /** Persist (atomic). No-op unless something was recorded. */
   flush(): void;
 };
@@ -73,6 +82,8 @@ class RealManifestTracker implements ManifestTracker {
     this.ctx = {
       manifestDir,
       stdlibHash: computeStdlibHash(getStdlibDir()),
+      stdlibNamesHash: computeStdlibNamesHash(getStdlibDir()),
+      stdlibDir: getStdlibDir(),
       compilerStamp: computeCompilerStamp(distLib),
       configKey,
     };
@@ -107,15 +118,23 @@ class RealManifestTracker implements ManifestTracker {
     return path.join(this.manifestDir, entry.outputPath);
   }
 
-  record(absModule: string, absOutput: string, deps: string[], hasPkgImports: boolean): void {
-    const relDeps = deps.map((d) => path.relative(this.manifestDir, d)).sort();
+  record(
+    absModule: string,
+    absOutput: string,
+    fp: Pick<DependencyFingerprint, "deps" | "hasPkgImports" | "cacheable">,
+  ): void {
+    // Relativize, THEN sort, THEN hash in exactly that stored order —
+    // isEntryFresh re-hashes the stored list in list order, and sorting
+    // absolute paths can differ from sorting relative ones.
+    const relDeps = fp.deps.map((d) => path.relative(this.manifestDir, d)).sort();
     const depHashes = relDeps.map((d) => hashFile(path.join(this.manifestDir, d)) ?? "");
     this.manifest.entries[path.relative(this.manifestDir, absModule)] = {
       sourceHash: hashFile(absModule) ?? "",
       deps: relDeps,
       depsHash: computeDepsHash(depHashes),
-      stdlibHash: this.ctx.stdlibHash,
-      hasPkgImports,
+      stdlibHash: stdlibHashFor(absModule, this.ctx),
+      hasPkgImports: fp.hasPkgImports,
+      cacheable: fp.cacheable,
       configKey: this.ctx.configKey,
       compilerStamp: this.ctx.compilerStamp,
       outputPath: path.relative(this.manifestDir, absOutput),

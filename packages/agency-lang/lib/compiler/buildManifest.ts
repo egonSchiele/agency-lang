@@ -19,12 +19,22 @@
  *    Freshness ALSO requires every recorded dep to have a manifest entry
  *    whose OUTPUT exists: a skip never recurses into deps, so a deleted
  *    dep .js would otherwise survive the skip and ship a broken import.
- *  - stdlibHash: the closure walker EXCLUDES std:: imports, so no depsHash
- *    can see a stdlib edit — yet stdlib content genuinely shapes emitted
- *    output (resolveReExports bakes resolved stdlib paths in). Any stdlib
- *    edit rebuilds the world.
+ *  - stdlibHash, two flavors selected by stdlibHashFor: NON-stdlib entries
+ *    store the full-content stdlib hash — the closure walker excludes
+ *    std:: imports, so no depsHash can see a stdlib edit, yet stdlib
+ *    content shapes their output (resolveReExports bakes resolved stdlib
+ *    paths in); any stdlib edit rebuilds their world. STDLIB-RESIDENT
+ *    entries instead store the names-only hash (computeStdlibNamesHash):
+ *    their deps DO include std::-resolved per-file edges (recorded via
+ *    dependencyFingerprint), so content changes are tracked per file and
+ *    only add/remove/rename of a stdlib file rebuilds all of stdlib.
  *  - hasPkgImports: pkg:: imports are likewise closure-invisible and shape
- *    emitted imports; modules touching pkg:: are NEVER skipped.
+ *    emitted imports; modules touching pkg:: are NEVER skipped. Subtree-
+ *    wide when recorded via dependencyFingerprint.
+ *  - cacheable: false when dependency discovery could not fully establish
+ *    the subtree — a splice anywhere in it (splices expand at compile time
+ *    and may legally emit imports, so raw-parse edges are not the true
+ *    edges), or an unparseable/missing reachable file. Never fresh.
  *  - compilerStamp: content hash of the compiled compiler (dist/lib minus
  *    runtime/ and agents/). runtime/ because generated TEXT does not
  *    depend on runtime internals; agents/ because those are the agency
@@ -48,6 +58,10 @@ export type ManifestEntry = {
   depsHash: string;
   stdlibHash: string;
   hasPkgImports: boolean;
+  /** False when dependency discovery could not fully establish the
+   *  subtree (splice anywhere in it, unparseable/missing reachable file).
+   *  Such entries are recorded (outputFor keeps working) but never fresh. */
+  cacheable: boolean;
   configKey: string;
   compilerStamp: string;
   /** Manifest-dir-relative output path. */
@@ -55,7 +69,7 @@ export type ManifestEntry = {
 };
 
 export type BuildManifest = {
-  version: 1;
+  version: 2;
   /** Keyed by manifest-dir-relative module path. */
   entries: Record<string, ManifestEntry>;
 };
@@ -76,7 +90,7 @@ export function manifestDirFor(entryFile: string): string {
 }
 
 function emptyManifest(): BuildManifest {
-  return { version: 1, entries: Object.create(null) };
+  return { version: 2, entries: Object.create(null) };
 }
 
 export function loadManifest(manifestDir: string): BuildManifest {
@@ -86,10 +100,10 @@ export function loadManifest(manifestDir: string): BuildManifest {
   }
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf-8"));
-    if (parsed?.version !== 1 || typeof parsed.entries !== "object" || parsed.entries === null) {
+    if (parsed?.version !== 2 || typeof parsed.entries !== "object" || parsed.entries === null) {
       return emptyManifest();
     }
-    return { version: 1, entries: Object.assign(Object.create(null), parsed.entries) };
+    return { version: 2, entries: Object.assign(Object.create(null), parsed.entries) };
   } catch (e) {
     // A corrupt manifest only costs a full rebuild; log for traceability.
     console.warn(`agency: ignoring corrupt build manifest at ${file}: ${e}`);
@@ -171,6 +185,20 @@ export function computeStdlibHash(stdlibDir: string): string {
   return hashTree(stdlibDir, ".agency", []);
 }
 
+/** Stdlib STRUCTURE only (sorted file list, no contents). Stdlib-resident
+ *  entries carry this flavor: their per-file `deps` already track stdlib
+ *  CONTENT, but re-export resolution bakes resolved stdlib PATHS into
+ *  emitted output, so add/remove/rename must still rebuild the stdlib
+ *  world while a plain edit no longer does. */
+export function computeStdlibNamesHash(stdlibDir: string): string {
+  const hash = crypto.createHash("sha256");
+  for (const file of walkFiles(stdlibDir, ".agency", [])) {
+    hash.update(path.relative(stdlibDir, file));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
 export function computeCompilerStamp(distLibDir: string): string {
   return hashTree(distLibDir, ".js", ["runtime", "agents"]);
 }
@@ -178,9 +206,32 @@ export function computeCompilerStamp(distLibDir: string): string {
 export type FreshnessContext = {
   manifestDir: string;
   stdlibHash: string;
+  /** Names-only flavor (computeStdlibNamesHash) for stdlib-resident
+   *  entries; see stdlibHashFor. */
+  stdlibNamesHash: string;
+  /** Canonical absolute stdlib dir. Supplied by the tracker so this file
+   *  never imports importPaths.ts (leaf-ness, see the header). */
+  stdlibDir: string;
   compilerStamp: string;
   configKey: string;
 };
+
+/** ONE selection rule for which stdlib-hash flavor an entry carries.
+ *  Pure and argument-only so non-compile consumers (the doc cache) can
+ *  use it without fabricating a FreshnessContext. Writer and checker
+ *  both route through it — never inline the comparison. */
+export function stdlibHashFlavor(
+  absModule: string,
+  stdlibDir: string,
+  namesHash: string,
+  contentsHash: string,
+): string {
+  return absModule.startsWith(stdlibDir + path.sep) ? namesHash : contentsHash;
+}
+
+export function stdlibHashFor(absModule: string, ctx: FreshnessContext): string {
+  return stdlibHashFlavor(absModule, ctx.stdlibDir, ctx.stdlibNamesHash, ctx.stdlibHash);
+}
 
 /**
  * The skip algorithm, from the manifest alone — no parsing:
@@ -203,6 +254,7 @@ function entryHasValidShape(entry: ManifestEntry): boolean {
     typeof entry.depsHash === "string" &&
     typeof entry.stdlibHash === "string" &&
     typeof entry.hasPkgImports === "boolean" &&
+    typeof entry.cacheable === "boolean" &&
     typeof entry.configKey === "string" &&
     typeof entry.compilerStamp === "string" &&
     typeof entry.outputPath === "string"
@@ -221,7 +273,10 @@ export function isEntryFresh(
   if (entry.hasPkgImports) {
     return false;
   }
-  if (entry.stdlibHash !== ctx.stdlibHash) {
+  if (entry.cacheable === false) {
+    return false;
+  }
+  if (entry.stdlibHash !== stdlibHashFor(path.join(ctx.manifestDir, moduleRel), ctx)) {
     return false;
   }
   if (entry.compilerStamp !== ctx.compilerStamp) {

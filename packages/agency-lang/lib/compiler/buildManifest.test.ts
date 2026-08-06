@@ -9,9 +9,11 @@ import {
   loadManifest,
   saveManifest,
   computeStdlibHash,
+  computeStdlibNamesHash,
   computeCompilerStamp,
   isEntryFresh,
   manifestDirFor,
+  stdlibHashFlavor,
   MANIFEST_DIR_NAME,
   type BuildManifest,
   type FreshnessContext,
@@ -33,11 +35,12 @@ function freshFixture(): { dir: string; manifest: BuildManifest; ctx: FreshnessC
   const shared = {
     stdlibHash: "STDLIB",
     hasPkgImports: false,
+    cacheable: true,
     configKey: "{}",
     compilerStamp: "COMPILER",
   };
   const manifest: BuildManifest = {
-    version: 1,
+    version: 2,
     entries: {
       "main.agency": {
         ...shared,
@@ -58,6 +61,10 @@ function freshFixture(): { dir: string; manifest: BuildManifest; ctx: FreshnessC
   const ctx: FreshnessContext = {
     manifestDir: dir,
     stdlibHash: "STDLIB",
+    stdlibNamesHash: "NAMES",
+    // A subdir the fixture modules are NOT in, so they carry the contents
+    // flavor and every pre-existing expectation holds unchanged.
+    stdlibDir: path.join(dir, "stdlib"),
     compilerStamp: "COMPILER",
     configKey: "{}",
   };
@@ -80,7 +87,7 @@ describe("manifest IO", () => {
 
   test("saveManifest round-trips atomically and leaves no tmp file", () => {
     const dir = tmp();
-    const manifest: BuildManifest = { version: 1, entries: {} };
+    const manifest: BuildManifest = { version: 2, entries: {} };
     saveManifest(dir, manifest);
     expect(loadManifest(dir)).toEqual(manifest);
     expect(fs.readdirSync(path.join(dir, MANIFEST_DIR_NAME))).toEqual(["manifest.json"]);
@@ -213,5 +220,92 @@ describe("isEntryFresh — each field is load-bearing", () => {
     const { dir, manifest, ctx } = freshFixture();
     fs.unlinkSync(path.join(dir, "main.js"));
     expect(isEntryFresh("main.agency", manifest, ctx)).toBe(false);
+  });
+
+  test("cacheable:false → never fresh; true restores", () => {
+    const { manifest, ctx } = freshFixture();
+    manifest.entries["main.agency"].cacheable = false;
+    expect(isEntryFresh("main.agency", manifest, ctx)).toBe(false);
+    manifest.entries["main.agency"].cacheable = true;
+    expect(isEntryFresh("main.agency", manifest, ctx)).toBe(true);
+  });
+
+  test("stdlib-resident module compares against the NAMES flavor", () => {
+    const { dir, manifest, ctx } = freshFixture();
+    // Relocate the fixture module under ctx.stdlibDir so the flavor flips.
+    fs.mkdirSync(ctx.stdlibDir, { recursive: true });
+    for (const f of ["main.agency", "dep.agency", "main.js", "dep.js"]) {
+      fs.renameSync(path.join(dir, f), path.join(ctx.stdlibDir, f));
+    }
+    const relocate = (rel: string) => path.join("stdlib", rel);
+    const entries = manifest.entries;
+    manifest.entries = {
+      [relocate("main.agency")]: {
+        ...entries["main.agency"],
+        deps: [relocate("dep.agency")],
+        outputPath: relocate("main.js"),
+        stdlibHash: "NAMES",
+      },
+      [relocate("dep.agency")]: {
+        ...entries["dep.agency"],
+        outputPath: relocate("dep.js"),
+        stdlibHash: "NAMES",
+      },
+    };
+    expect(isEntryFresh(relocate("main.agency"), manifest, ctx)).toBe(true);
+    // Contents flavor changing does NOT stale a stdlib-resident entry…
+    expect(isEntryFresh(relocate("main.agency"), manifest, { ...ctx, stdlibHash: "OTHER" })).toBe(true);
+    // …but the names flavor changing does.
+    expect(isEntryFresh(relocate("main.agency"), manifest, { ...ctx, stdlibNamesHash: "OTHER" })).toBe(false);
+  });
+});
+
+describe("stdlib hash flavors", () => {
+  test("stdlibHashFlavor: names inside stdlibDir, contents outside, boundary exact", () => {
+    // path.join throughout: production compares with path.sep appended,
+    // so hard-coded "/" separators would miss the boundary on Windows.
+    const m = path.join(os.tmpdir(), "m");
+    const stdlibDir = path.join(m, "stdlib");
+    expect(stdlibHashFlavor(path.join(stdlibDir, "math.agency"), stdlibDir, "N", "C")).toBe("N");
+    expect(stdlibHashFlavor(path.join(m, "src", "app.agency"), stdlibDir, "N", "C")).toBe("C");
+    expect(stdlibHashFlavor(path.join(m, "stdlib-copy", "x.agency"), stdlibDir, "N", "C")).toBe("C");
+  });
+
+  test("computeStdlibNamesHash: edits invisible; add/rename visible; recursive; .agency-only; order-insensitive", () => {
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, "a.agency"), "v1");
+    fs.mkdirSync(path.join(dir, "web"));
+    fs.writeFileSync(path.join(dir, "web", "n.agency"), "nested");
+    const h1 = computeStdlibNamesHash(dir);
+    fs.writeFileSync(path.join(dir, "a.agency"), "v2 different content");
+    expect(computeStdlibNamesHash(dir)).toBe(h1); // edit invisible
+    fs.writeFileSync(path.join(dir, "notes.md"), "x");
+    expect(computeStdlibNamesHash(dir)).toBe(h1); // non-.agency ignored
+    fs.renameSync(path.join(dir, "web", "n.agency"), path.join(dir, "web", "m.agency"));
+    const h2 = computeStdlibNamesHash(dir);
+    expect(h2).not.toBe(h1); // NESTED rename visible
+    fs.rmSync(path.join(dir, "web", "m.agency"));
+    const h3 = computeStdlibNamesHash(dir);
+    expect(h3).not.toBe(h2); // nested delete visible
+    fs.writeFileSync(path.join(dir, "b.agency"), "new");
+    expect(computeStdlibNamesHash(dir)).not.toBe(h3); // add visible
+    // Equivalent trees hash identically regardless of creation order.
+    const dir2 = tmp();
+    fs.writeFileSync(path.join(dir2, "b.agency"), "other content");
+    fs.writeFileSync(path.join(dir2, "a.agency"), "yet more");
+    const dir3 = tmp();
+    fs.writeFileSync(path.join(dir3, "a.agency"), "1");
+    fs.writeFileSync(path.join(dir3, "b.agency"), "2");
+    expect(computeStdlibNamesHash(dir2)).toBe(computeStdlibNamesHash(dir3));
+  });
+
+  test("version-1 (or any wrong-version) manifest is discarded", () => {
+    const dir = tmp();
+    fs.mkdirSync(path.join(dir, MANIFEST_DIR_NAME), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, MANIFEST_DIR_NAME, "manifest.json"),
+      JSON.stringify({ version: 1, entries: { "x.agency": { sourceHash: "s" } } }),
+    );
+    expect(loadManifest(dir).entries).toEqual({});
   });
 });

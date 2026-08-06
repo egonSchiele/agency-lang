@@ -3,11 +3,13 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import {
+  agencyImportTargets,
   buildCompiledClosure,
   CompileClosureError,
   programHasPkgImport,
 } from "./compileClosure.js";
 import { parseAgency } from "../parser.js";
+import { getStdlibDir } from "../importPaths.js";
 
 let dir: string;
 
@@ -206,5 +208,45 @@ describe("programHasPkgImport", () => {
         parse('import { map } from "std::index"\nimport { y } from "./local.agency"\n'),
       ),
     ).toBe(false);
+  });
+});
+
+describe("agencyImportTargets resolveStdlib option", () => {
+  function parse(source: string) {
+    const result = parseAgency(source, {}, false);
+    if (!result.success) {
+      throw new Error("fixture parse failed");
+    }
+    return result.result;
+  }
+  const src = `import { getAgentCwd } from "std::index"\nexport { glob } from "std::shell"\n`;
+
+  test("default drops std:: targets (regression pin)", () => {
+    expect(agencyImportTargets(parse(src), "/x/mod.agency")).toEqual([]);
+  });
+
+  test("resolveStdlib maps std:: to absolute stdlib paths, incl. re-exports", () => {
+    expect(
+      agencyImportTargets(parse(src), "/x/mod.agency", { resolveStdlib: true }),
+    ).toEqual([
+      path.join(getStdlibDir(), "index.agency"),
+      path.join(getStdlibDir(), "shell.agency"),
+    ]);
+  });
+
+  test("node-import std:: edge resolves too", () => {
+    expect(
+      agencyImportTargets(parse(`import node { main } from "std::shell"\n`), "/x/mod.agency", {
+        resolveStdlib: true,
+      }),
+    ).toEqual([path.join(getStdlibDir(), "shell.agency")]);
+  });
+
+  test("pkg:: dropped even with resolveStdlib (regression pin)", () => {
+    expect(
+      agencyImportTargets(parse(`import { x } from "pkg::toolbox"\n`), "/x/mod.agency", {
+        resolveStdlib: true,
+      }),
+    ).toEqual([]);
   });
 });

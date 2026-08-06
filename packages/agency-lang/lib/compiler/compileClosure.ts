@@ -268,12 +268,22 @@ function loadModule(
 export function agencyImportTargets(
   program: AgencyProgram,
   moduleId: string,
+  opts?: { resolveStdlib?: boolean },
 ): string[] {
   const out: string[] = [];
   for (const node of program.nodes) {
     const target = agencyImportTarget(node);
     if (!target) continue;
-    if (isStdlibImport(target) || isPkgImport(target)) continue;
+    if (isPkgImport(target)) continue;
+    if (isStdlibImport(target)) {
+      // Resolved only for the manifest's dependency fingerprint of
+      // stdlib-resident modules; the closure/init machinery keeps
+      // skipping std:: edges.
+      if (opts?.resolveStdlib) {
+        out.push(resolveAgencyImportPath(target, moduleId));
+      }
+      continue;
+    }
     if (!isAgencyImport(target)) continue;
     out.push(resolveAgencyImportPath(target, moduleId));
   }

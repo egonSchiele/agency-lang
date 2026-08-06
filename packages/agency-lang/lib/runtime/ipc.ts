@@ -20,12 +20,10 @@ import type { State, StateStack } from "./state/stateStack.js";
 import { getSubprocessRunInfo, setSubprocessRunInfo, isIpcMode, type SubprocessRunInfo } from "./subprocessRunInfo.js";
 import { truncate } from "./truncate.js";
 import {
-  isPayableCost,
-  type IpcTelemetryMessage,
   type IpcInvocationUsageMessage,
 } from "./costTelemetry.js";
-import { recordPaidUsageAt, markInvocationUsageIncompleteAt, markModelAttributionIncompleteAt } from "./recordPaidUsage.js";
-import { normalizeUsageDelta, isMeasurableDelta, type InvocationUsageDelta } from "./invocationUsage.js";
+import { recordNormalizedUsageDelta, markInvocationUsageIncompleteAt } from "./recordPaidUsage.js";
+import { normalizeIpcUsageDelta, type NormalizedDelta } from "./invocationUsage.js";
 import { type IpcCallbackMessage, NON_FORWARDABLE_CALLBACKS } from "./callbackForwarding.js";
 import { invokeCallbacks } from "./hooks.js";
 import { VALID_CALLBACK_NAMES, type CallbackName } from "../types/function.js";
@@ -289,10 +287,8 @@ export type SubprocessToParent =
   | IpcErrorMessage
   | IpcLockAcquireMessage
   | IpcLockReleaseMessage
-  | IpcTelemetryMessage
   | IpcInvocationUsageMessage
   | { type: "invocationUsageIncomplete" }
-  | { type: "modelAttributionIncomplete" }
   | IpcCallbackMessage;
 export type ParentToSubprocess = IpcDecisionMessage | IpcLockGrantedMessage;
 
@@ -954,8 +950,8 @@ function handleErrorMessage(s: RunSession, msg: any): void {
  * if this process is itself a subprocess (grandchild propagation). Billing is
  * unconditional (the spend already happened, even post-settle); enforcement only
  * runs on a live session, and a trip kills the child and rejects the session. */
-function accountChildUsage(s: RunSession, delta: InvocationUsageDelta): void {
-  recordPaidUsageAt({ ctx: s.ctx, stack: s.stateStack }, delta);
+function accountChildUsage(s: RunSession, delta: NormalizedDelta): void {
+  recordNormalizedUsageDelta(s.ctx, s.stateStack, delta);
   if (s.settled) return;
   try {
     s.stateStack.enforceGuards();
@@ -965,34 +961,16 @@ function accountChildUsage(s: RunSession, delta: InvocationUsageDelta): void {
   }
 }
 
-/** Account a child delta AND detect lost model provenance: a measurable delta
- * with no `attribution` came from a child whose runtime predates the model
- * field, so the spend books to `unattributed` and this invocation's
- * `modelAttributionComplete` flips (relayed once). A deliberately-unattributed
- * or modeled charge carries an attribution and never trips it. */
-function accountChildUsageWithProvenance(s: RunSession, delta: InvocationUsageDelta): void {
-  if (isMeasurableDelta(delta) && delta.attribution === undefined) {
-    markSessionModelAttributionIncomplete(s);
-  }
-  accountChildUsage(s, delta);
-}
-
-/** Legacy cost-only telemetry (version-skewed child). Bill only a payable
- *  positive cost, preserving the old contract. The delta has no attribution, so
- *  provenance detection flags degraded model attribution. */
-export function handleTelemetryMessage(s: RunSession, msg: IpcTelemetryMessage): void {
-  if (!isPayableCost(msg.costUsd)) return;
-  accountChildUsageWithProvenance(s, { pricedCost: msg.costUsd, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0 });
-}
-
-/** Full per-invocation usage delta from a child. Normalized (untrusted input;
- *  an invalid cost becomes an unknown-cost call, valid tokens survive). Routed
- *  through provenance detection so a child that sent no attribution (a #801
- *  runtime) flags degraded model attribution. */
+/** Full per-invocation usage delta from a child. Recovered field-by-field from
+ *  untrusted input by `normalizeIpcUsageDelta`: independently-valid money and
+ *  tokens survive a malformed sibling, an unusable attribution entry is omitted
+ *  and degrades `usageComplete`, and only a wholly non-object message is
+ *  dropped. The recovered delta (including its `attributionLost`) then flows
+ *  through the same accounting sink as an in-process charge. */
 export function handleInvocationUsageMessage(s: RunSession, msg: IpcInvocationUsageMessage): void {
-  const delta = normalizeUsageDelta(msg);
+  const delta = normalizeIpcUsageDelta(msg);
   if (!delta) return;
-  accountChildUsageWithProvenance(s, delta);
+  accountChildUsage(s, delta);
 }
 
 /** A child reported that its (or a descendant's) usage telemetry may be
@@ -1006,12 +984,6 @@ export function handleInvocationUsageIncompleteMessage(s: RunSession): void {
  *  unsent telemetry is never presented as an authoritative total. */
 function markSessionUsageIncomplete(s: RunSession): void {
   if (s.ctx && s.ctx.invocationUsage) markInvocationUsageIncompleteAt(s.ctx);
-}
-
-/** Mark the owning invocation's model attribution as no longer trustworthy,
- *  guarding a minimal test ctx. Mirrors markSessionUsageIncomplete. */
-function markSessionModelAttributionIncomplete(s: RunSession): void {
-  if (s.ctx && s.ctx.invocationUsage) markModelAttributionIncompleteAt(s.ctx);
 }
 
 function isForwardableCallbackName(name: unknown): name is CallbackName {
@@ -1156,14 +1128,10 @@ export async function handleChildMessage(s: RunSession, msg: any): Promise<void>
     settle(s, s.resolvePromise, { type: "result", value: msg.value } satisfies SessionOutcome);
   } else if (msg.type === "interrupted") {
     settle(s, s.resolvePromise, { type: "interrupted", msg } satisfies SessionOutcome);
-  } else if (msg.type === "telemetry") {
-    handleTelemetryMessage(s, msg);
   } else if (msg.type === "invocationUsage") {
     handleInvocationUsageMessage(s, msg);
   } else if (msg.type === "invocationUsageIncomplete") {
     handleInvocationUsageIncompleteMessage(s);
-  } else if (msg.type === "modelAttributionIncomplete") {
-    markSessionModelAttributionIncomplete(s);
   } else if (msg.type === "callback") {
     handleCallbackMessage(s, msg);
   } else if (msg.type === "error") {

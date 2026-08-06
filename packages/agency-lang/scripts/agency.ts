@@ -587,6 +587,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--from <when>", "window start — ISO-8601 (UTC/offset) or epoch-ms")
     .option("--to <when>", "window end — ISO-8601 (UTC/offset) or epoch-ms")
     .option("--json", "emit JSON for machine use")
+    .option("--by-model", "group the breakdown by model")
+    .option("--by-kind", "group the breakdown by operation kind")
     .option(HOST_OPTION, HOST_DESC)
     .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
     .action((project: string | undefined, opts: SpendOptions) => runSpend(project, opts, getConfigContext()));

@@ -39,7 +39,9 @@ class ProcessExit extends Error {
   }
 }
 
-const spend = { pricedCost: 0.5, inputTokens: 10, outputTokens: 2, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true };
+const usd = { inputCost: 0.3, outputCost: 0.2, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" };
+const tok = { inputTokens: 10, outputTokens: 2, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 12 };
+const spend = { cost: usd, tokens: tok, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, breakdown: [] };
 const accountRows = [{ projectSlug: "p", deletedAt: null, spend }];
 
 let dir: string;

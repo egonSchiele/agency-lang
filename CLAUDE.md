@@ -141,6 +141,7 @@ Pipeline and architecture:
 - `docs/dev/template-agency.md` — Template Agency internals: the Hole node and per-position parsing, `Code` fragment kinds, the never-parse lifting rule and its two escaping conventions, scope-keyed hygiene with `__hyg` seeding, AG8001/AG8002 refusals, and the walker-completeness tripwire
 - `docs/dev/hosted-agent-execution.md` — Hosting agents on statelog (`agency deploy` + the `./serve` API): the serve wire contract and moduleId gotcha, per-agent observability via `withRuntimeConfigOverrides`, `compileSource(sourcePath)` for multi-file, the deploy CLI's module layout, the statelog host pieces, and the known limitations
 - `docs/dev/eval-labeling.md` — The human-label store behind `agency eval label`: why it lives outside `runs/`, occurrence vs content identity, immutable checklist revisions, the per-question annotation fold, the sign-off commit protocol and its recovery boundaries, and why validation is strict where grading is tolerant
+- `docs/dev/invocation-usage-accounting.md` — The serve cost seam's full cost/token breakdown: the authoritative-flat-total vs best-effort-attribution split, the valid-price and kind-specific-token rules, the one `recordUsageDelta` sink, untrusted IPC recovery that never drops money, the #809 rejected-promise boundary, and the `agency remote spend` schema/rendering
 
 Other references:
 - `docs/misc/TESTING.md` — Full testing guide (unit tests, fixtures, execution tests, agency-js tests)

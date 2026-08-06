@@ -25,23 +25,43 @@ import type { StatelogClient } from "../../statelogClient.js";
 import forgetTemplate from "../../templates/prompts/memory/forget.js";
 import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
 import type { LLMClient } from "../llmClient.js";
-import { agency } from "../agency.js";
-import { agencyStore } from "../asyncContext.js";
+import { agencyStore, getRuntimeContext } from "../asyncContext.js";
+import { recordUsage, meteredDispatch } from "../recordPaidUsage.js";
+import type { ProviderUsageKind, UsageObservation } from "../invocationUsage.js";
 import { isGuardExceededError } from "../guard.js";
 
 /**
- * Charge `amount` against the active branch's `withCostGuard` budget
- * if (and only if) we're inside an Agency execution frame. Memory's
- * text + embed calls run from inside `runPrompt`'s post-completion
- * hook or from stdlib agency calls — both reach this code with an
- * `agencyStore` frame already installed, so production paths always
- * charge correctly. The frame check is for direct-construction unit
- * tests that exercise `MemoryManager` without going through the
- * runner.
+ * Record one memory provider outcome (a text completion or an embedding)
+ * against the active branch — accounting its cost/tokens into the invocation
+ * usage meter and the branch's `withCostGuard` budget — if (and only if) we're
+ * inside an Agency execution frame. Memory's text + embed calls run from inside
+ * `runPrompt`'s post-completion hook or from stdlib agency calls — both reach
+ * this code with an `agencyStore` frame already installed, so production paths
+ * always account correctly. The frame check is for direct-construction unit
+ * tests that exercise `MemoryManager` without going through the runner.
+ *
+ * `recordUsage` bills the guards but does not throw; this enforces the active
+ * stack once afterwards, so an over-budget memory charge trips its surrounding
+ * `withCostGuard` — the trip is a `GuardExceededError` that `rethrowIfGuard`
+ * re-raises out of memory's best-effort catches.
  */
-function chargeCostIfInFrame(amount: number): void {
+function recordMemoryUsageIfInFrame(observation: UsageObservation): void {
   if (!agencyStore.getStore()) return;
-  agency.addCost(amount);
+  const { ctx, stack } = getRuntimeContext();
+  recordUsage(ctx, stack, observation);
+  stack.enforceGuards();
+}
+
+/** Run a memory provider dispatch as a metered attempt WHEN in an execution
+ *  frame: a rejected dispatch records one unresolved attempt (so
+ *  `pricingComplete` cannot stay true after a post-dispatch throw), mirroring the
+ *  prompt path. Outside a frame (direct-construction unit tests) it just runs
+ *  the dispatch — there is no meter to record into. A resolved `Result.failure`
+ *  is NOT metered here (deferred to agency-lang #809). */
+function meteredMemoryDispatch<T>(kind: ProviderUsageKind, dispatch: () => Promise<T>): Promise<T> {
+  if (!agencyStore.getStore()) return dispatch();
+  const { ctx, stack } = getRuntimeContext();
+  return meteredDispatch(ctx, stack, kind, dispatch);
 }
 
 /**
@@ -236,14 +256,14 @@ export class MemoryManager {
     const spanId = this.statelogClient?.startSpan("llmCall");
     const startTime = performance.now();
     try {
-      const result = await this.llmClient.text({
+      const result = await meteredMemoryDispatch("completion", () => this.llmClient.text({
         ...this.smoltalkDefaults,
         messages: [smoltalk.userMessage(prompt)],
         model,
         ...(options?.responseFormat
           ? { responseFormat: options.responseFormat }
           : {}),
-      } as any);
+      } as any));
       const timeTaken = performance.now() - startTime;
       if (!result.success) {
         this.logger.warn(
@@ -284,12 +304,18 @@ export class MemoryManager {
           `[memory] statelog promptCompletion failed: ${(err as Error).message}`,
         );
       }
-      // Charge this call's spend against the surrounding branch's
-      // cost budget. Mirrors the post-completion charge that
-      // `prompt.ts` performs for agency-side `llm()` calls, so a
-      // `withCostGuard($X)` wrapping the agent now sees memory's
-      // extraction / compaction / tier-3 spend too.
-      chargeCostIfInFrame(result.value.cost?.totalCost ?? 0);
+      // Account this call's full cost/tokens against the surrounding branch.
+      // Mirrors the post-completion accounting that `prompt.ts` performs for
+      // agency-side `llm()` calls, so a `withCostGuard($X)` wrapping the agent
+      // now sees memory's extraction / compaction / tier-3 spend too.
+      recordMemoryUsageIfInFrame({
+        type: "provider",
+        kind: "completion",
+        reportedModel: result.value.model,
+        configuredModel: model,
+        cost: result.value.cost,
+        tokens: result.value.usage,
+      });
       return result.value.output ?? "";
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -311,7 +337,7 @@ export class MemoryManager {
     const spanId = this.statelogClient?.startSpan("embedding");
     const startTime = performance.now();
     try {
-      const result = await this.llmClient.embed(text, {
+      const result = await meteredMemoryDispatch("embedding", () => this.llmClient.embed(text, {
         model: options?.model,
         // Pass the provider explicitly so smoltalk routes to the right embed
         // endpoint even when the model name doesn't imply it (e.g. ollama).
@@ -321,7 +347,7 @@ export class MemoryManager {
           google: (this.smoltalkDefaults as any).apiKey?.google,
         },
         baseUrl: { ollama: (this.smoltalkDefaults as any).baseUrl?.ollama },
-      } as any);
+      } as any));
       const timeTaken = performance.now() - startTime;
       if (!result.success) {
         this.logger.warn(
@@ -343,31 +369,47 @@ export class MemoryManager {
         throw new Error(`memory embed call failed: ${result.error}`);
       }
       const vector = result.value.embeddings[0];
-      if (!vector) {
+      // A resolved provider response charged us even if it returned no vectors,
+      // so the trace event fires only when a vector exists (its contract needs
+      // `dimensions`) but the usage is accounted either way — the embedding
+      // analogue of the empty-image path. The no-vector error is thrown only
+      // AFTER accounting + guard enforcement, so a guard trip wins over it.
+      if (vector) {
+        try {
+          await this.statelogClient?.embedCompletion({
+            inputPreview: text.slice(0, EMBED_PREVIEW_CHARS),
+            inputCount: 1,
+            model: result.value.model ?? options?.model,
+            dimensions: vector.length,
+            timeTaken,
+            phase,
+          });
+        } catch (err) {
+          this.logger.debug(
+            `[memory] statelog embedCompletion failed: ${(err as Error).message}`,
+          );
+        }
+      } else {
         this.logger.warn(
           `[memory] embed returned no vectors (phase=${phase}, model=${result.value.model ?? "?"})`,
         );
+      }
+      // Same rationale as `_text` above — embed calls contribute to the
+      // surrounding branch's cost/token totals too. `EmbedResult.costEstimate`
+      // and `tokenUsage` (smoltalk's names) are optional; an absent estimate is
+      // recorded as an unpriced embedding rather than dropped. Recorded (and
+      // guards enforced) BEFORE the no-vector throw below, so a guard trip wins.
+      recordMemoryUsageIfInFrame({
+        type: "provider",
+        kind: "embedding",
+        reportedModel: result.value.model,
+        configuredModel: options?.model,
+        cost: result.value.costEstimate,
+        tokens: result.value.tokenUsage,
+      });
+      if (!vector) {
         throw new Error("memory embed returned no vectors");
       }
-      try {
-        await this.statelogClient?.embedCompletion({
-          inputPreview: text.slice(0, EMBED_PREVIEW_CHARS),
-          inputCount: 1,
-          model: result.value.model ?? options?.model,
-          dimensions: vector.length,
-          timeTaken,
-          phase,
-        });
-      } catch (err) {
-        this.logger.debug(
-          `[memory] statelog embedCompletion failed: ${(err as Error).message}`,
-        );
-      }
-      // Same rationale as `_text` above — embed calls contribute to
-      // the surrounding branch's cost budget too. `EmbedResult.costEstimate`
-      // (smoltalk's name) is optional; absent / zero means "free or
-      // unknown" and the charge is skipped.
-      chargeCostIfInFrame(result.value.costEstimate?.totalCost ?? 0);
       return vector;
     } finally {
       this.statelogClient?.endSpan(spanId);

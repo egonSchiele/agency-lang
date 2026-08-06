@@ -177,44 +177,105 @@ describe("renderPullSummary", () => {
   });
 });
 
+function usd(totalCost: number) {
+  return { inputCost: totalCost, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost, currency: "USD" as const };
+}
+function toks(input: number, output: number) {
+  return { inputTokens: input, outputTokens: output, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: input + output };
+}
+const NONE_GROUP = { byModel: false, byKind: false };
+
 const spend = (overrides: Partial<ProjectSpend> = {}): ProjectSpend => ({
-  pricedCost: 0.4212, inputTokens: 12400, outputTokens: 3010, invocationCount: 87, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, ...overrides,
+  cost: usd(0.4212), tokens: toks(12400, 3010), invocationCount: 87, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, breakdown: [], ...overrides,
 });
 
 describe("renderProjectSpend", () => {
-  it("shows cost, tokens, invocations, and the window label; no lower-bound/unpriced lines when complete", () => {
-    const out = strip(renderProjectSpend("my-agent", spend(), "last 7d"));
+  it("shows cost, token components/total, invocations, and the window label; no notes when complete", () => {
+    const out = strip(renderProjectSpend("my-agent", spend(), "last 7d", NONE_GROUP));
     expect(out).toContain("Spend: my-agent");
     expect(out).toContain("(last 7d)");
     expect(out).toContain("$0.4212");
-    expect(out).toContain("↑ 12,400");
-    expect(out).toContain("↓ 3,010");
+    expect(out).toContain("12,400"); // input-token component
+    expect(out).toContain("3,010"); // output-token component
+    expect(out).toContain("15,410 total"); // authoritative total tokens
     expect(out).toContain("Invocations:  87");
     expect(out).not.toContain("lower bound");
     expect(out).not.toContain("unpriced");
   });
+  it("prints No spend for a zero-invocation project", () => {
+    expect(strip(renderProjectSpend("a", spend({ invocationCount: 0, cost: usd(0), tokens: toks(0, 0) }), "last 7d", NONE_GROUP)))
+      .toBe("No spend in last 7d.");
+  });
   it("marks a lower bound when usage is incomplete", () => {
-    const out = strip(renderProjectSpend("a", spend({ usageComplete: false }), "all time"));
+    const out = strip(renderProjectSpend("a", spend({ usageComplete: false }), "all time", NONE_GROUP));
     expect(out).toContain("≥ $0.4212");
     expect(out).toContain("lower bound");
   });
-  it("notes unpriced calls", () => {
-    const out = strip(renderProjectSpend("a", spend({ unpricedCallCount: 2, pricingComplete: false }), "all time"));
+  it("marks a lower bound when a call was unpriced, and notes it separately", () => {
+    const out = strip(renderProjectSpend("a", spend({ unpricedCallCount: 2, pricingComplete: false }), "all time", NONE_GROUP));
+    expect(out).toContain("≥ $0.4212");
     expect(out).toContain("2 unpriced call(s)");
+    expect(out).not.toContain("lower bound"); // telemetry note only fires on !usageComplete
   });
   it("shows $0.0000 for true zero and <$0.0001 for a tiny positive", () => {
-    expect(strip(renderProjectSpend("a", spend({ pricedCost: 0 }), "all time"))).toContain("$0.0000");
-    expect(strip(renderProjectSpend("a", spend({ pricedCost: 0.00004 }), "all time"))).toContain("<$0.0001");
+    expect(strip(renderProjectSpend("a", spend({ cost: usd(0) }), "all time", NONE_GROUP))).toContain("$0.0000");
+    expect(strip(renderProjectSpend("a", spend({ cost: usd(0.00004) }), "all time", NONE_GROUP))).toContain("<$0.0001");
   });
-  it("never emits the incoherent '≥ <$0.0001' for a tiny incomplete amount", () => {
-    const out = strip(renderProjectSpend("a", spend({ pricedCost: 0.00004, usageComplete: false }), "all time"));
-    expect(out).not.toContain("≥ <");
-    expect(out).toContain("≥ $0.0000");
+  it("keeps a tiny positive lower bound visible (neither '≥ <$0.0001' nor a floored '≥ $0.0000')", () => {
+    const out = strip(renderProjectSpend("a", spend({ cost: usd(0.00004), usageComplete: false }), "all time", NONE_GROUP));
+    const costLine = out.split("\n").find((l) => l.includes("Cost:")) ?? "";
+    expect(costLine).not.toContain("≥ <");
+    expect(costLine).toContain("≥ $0.00004");
+    // Must NOT floor a known positive amount to zero.
+    expect(costLine).not.toMatch(/≥ \$0\.0000(?!\d)/);
+  });
+  it("keeps a positive lower bound below 1e-8 visible via scientific notation", () => {
+    const out = strip(renderProjectSpend("a", spend({ cost: usd(1e-10), usageComplete: false }), "all time", NONE_GROUP));
+    const costLine = out.split("\n").find((l) => l.includes("Cost:")) ?? "";
+    expect(costLine).toContain("≥ $");
+    expect(costLine).toMatch(/e-\d+/); // scientific notation, not a floored $0
+    expect(costLine).not.toMatch(/≥ \$0\b/);
+  });
+  it("groups the breakdown by model, sorts by cost desc, and labels the manual sentinel", () => {
+    const breakdown = [
+      { model: "opus", kind: "completion" as const, cost: usd(0.1), tokens: toks(10, 2) },
+      { model: "", kind: "manual" as const, cost: usd(0.9), tokens: toks(0, 0) },
+    ];
+    const out = strip(renderProjectSpend("a", spend({ breakdown }), "all time", { byModel: true, byKind: false }));
+    expect(out).toContain("MODEL");
+    expect(out).toContain("(manual)");
+    const bodyLines = out.split("\n").filter((l) => /opus|\(manual\)/.test(l));
+    // (manual) at $0.9000 sorts above opus at $0.1000.
+    expect(bodyLines[0]).toContain("(manual)");
+    expect(bodyLines[1]).toContain("opus");
+  });
+  it("aggregates grouped breakdown token counters as bigint across the safe-integer boundary", () => {
+    const big = Number.MAX_SAFE_INTEGER; // 9,007,199,254,740,991
+    const breakdown = [
+      { model: "opus", kind: "completion" as const, cost: usd(0.1), tokens: { inputTokens: big, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: big } },
+      { model: "sonnet", kind: "completion" as const, cost: usd(0.2), tokens: { inputTokens: 2, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 2 } },
+    ];
+    // Grouped by kind → both models collapse into one "completion" group.
+    const out = strip(renderProjectSpend("a", spend({ breakdown }), "all time", { byModel: false, byKind: true }));
+    expect(out).toContain("9,007,199,254,740,993");
+    expect(out).not.toContain("9,007,199,254,740,992");
+  });
+
+  it("groups by kind when only --by-kind is set", () => {
+    const breakdown = [
+      { model: "opus", kind: "completion" as const, cost: usd(0.1), tokens: toks(10, 2) },
+      { model: "ada", kind: "embedding" as const, cost: usd(0.2), tokens: toks(5, 0) },
+    ];
+    const out = strip(renderProjectSpend("a", spend({ breakdown }), "all time", { byModel: false, byKind: true }));
+    expect(out).toContain("KIND");
+    expect(out).toContain("embedding");
+    expect(out).toContain("completion");
+    expect(out).not.toContain("MODEL");
   });
 });
 
 const row = (slug: string, pricedCost: number, over: Partial<ProjectSpend> = {}, deletedAt: string | null = null): AccountSpendRow => ({
-  projectSlug: slug, deletedAt, spend: spend({ pricedCost, ...over }),
+  projectSlug: slug, deletedAt, spend: spend({ cost: usd(pricedCost), ...over }),
 });
 
 describe("renderAccountSpend", () => {
@@ -236,14 +297,41 @@ describe("renderAccountSpend", () => {
     expect(out).toContain("$2.0900"); // 0.10+0.99+0.50+0.50, all complete
     expect(out).toContain("gone (deleted)");
   });
-  it("degrades the TOTAL when a single row is incomplete or unpriced", () => {
+  it("degrades the TOTAL cost AND token columns when a single row is incomplete or unpriced", () => {
     const out = strip(renderAccountSpend([
       row("ok", 1),
-      row("bad", 2, { usageComplete: false, unpricedCallCount: 3, pricingComplete: false }),
+      row("bad", 2, { usageComplete: false, unpricedCallCount: 3, pricingComplete: false, tokens: toks(999, 111) }),
     ], "all time"));
     const total = out.split("\n").find((l) => l.includes("TOTAL")) ?? "";
+    const badRow = out.split("\n").find((l) => l.includes("bad")) ?? "";
     expect(total).toContain("≥ $3.0000");
+    // Tokens are a lower bound too when telemetry is incomplete — cost is not the
+    // only degraded column.
+    expect(badRow).toContain("≥ 999");
+    expect(total).toContain("≥ ");
     expect(out).toContain("incomplete telemetry");
     expect(out).toContain("3 unpriced call(s) total");
+  });
+
+  it("sums token counts as bigint so a TOTAL crossing MAX_SAFE_INTEGER stays exact", () => {
+    const big = Number.MAX_SAFE_INTEGER; // 9,007,199,254,740,991
+    const out = strip(renderAccountSpend([
+      row("a", 1, { tokens: { inputTokens: big, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: big } }),
+      row("b", 1, { tokens: { inputTokens: 2, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 2 } }),
+    ], "all time"));
+    const total = out.split("\n").find((l) => l.includes("TOTAL")) ?? "";
+    // big + 2 = 9,007,199,254,740,993 exactly; Number addition rounds to ...992.
+    expect(total).toContain("9,007,199,254,740,993");
+    expect(total).not.toContain("9,007,199,254,740,992");
+  });
+
+  it("does NOT mark token columns as lower bounds for an unpriced-but-complete row", () => {
+    // Unpriced affects cost, not token counts: the token column stays exact.
+    const out = strip(renderAccountSpend([
+      row("only-unpriced", 1, { usageComplete: true, unpricedCallCount: 2, pricingComplete: false, tokens: toks(500, 50) }),
+    ], "all time"));
+    const dataRow = out.split("\n").find((l) => l.includes("only-unpriced")) ?? "";
+    expect(dataRow).toContain("500"); // exact, no ≥
+    expect(dataRow).not.toMatch(/≥ 500/);
   });
 });

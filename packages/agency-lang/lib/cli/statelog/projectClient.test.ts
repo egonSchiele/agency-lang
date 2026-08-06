@@ -170,9 +170,11 @@ describe("projectClient envelope/transport edge cases", () => {
 });
 
 describe("projectClient.getSpend", () => {
+  const usd = { inputCost: 0.3, outputCost: 0.2, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" };
+  const tok = { inputTokens: 10, outputTokens: 2, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 12 };
   const okSpend = {
     success: true,
-    value: { pricedCost: 0.5, inputTokens: 10, outputTokens: 2, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true },
+    value: { cost: usd, tokens: tok, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, breakdown: [] },
   };
 
   it("GETs the spend route with both bounds as query params", async () => {
@@ -182,7 +184,7 @@ describe("projectClient.getSpend", () => {
       "https://h/api/projects/proj/spend?from=1000&to=2000",
       { method: "GET", headers: { Authorization: "Bearer key" } },
     );
-    expect(spend.pricedCost).toBe(0.5);
+    expect(spend.cost.totalCost).toBe(0.5);
   });
 
   it("omits a null bound (from-only, to-only, neither)", async () => {
@@ -196,7 +198,7 @@ describe("projectClient.getSpend", () => {
   });
 
   it("rejects a malformed spend shape as a ProjectRequestError", async () => {
-    fetchMock.mockResolvedValue(response(200, { success: true, value: { ...okSpend.value, pricedCost: -1 } }));
+    fetchMock.mockResolvedValue(response(200, { success: true, value: { ...okSpend.value, cost: { ...usd, totalCost: -1 } } }));
     await expect(client().getSpend({ from: null, to: null })).rejects.toBeInstanceOf(ProjectRequestError);
   });
 

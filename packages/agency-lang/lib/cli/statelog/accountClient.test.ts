@@ -301,7 +301,9 @@ describe("accountClient id-map safety", () => {
 });
 
 describe("accountClient.getAccountSpend", () => {
-  const validSpend = { pricedCost: 0.5, inputTokens: 10, outputTokens: 2, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true };
+  const usd = { inputCost: 0.3, outputCost: 0.2, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" };
+  const tok = { inputTokens: 10, outputTokens: 2, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 12 };
+  const validSpend = { cost: usd, tokens: tok, invocationCount: 3, unpricedCallCount: 0, pricingComplete: true, usageComplete: true, breakdown: [] };
   const okRows = { success: true, value: [{ projectSlug: "p", deletedAt: null, spend: validSpend }] };
 
   it("GETs /api/spend with both bounds, omitting null ones", async () => {
@@ -314,7 +316,7 @@ describe("accountClient.getAccountSpend", () => {
   });
 
   it("rejects a malformed row as an AccountRequestError", async () => {
-    fetchMock.mockResolvedValue(response(200, { success: true, value: [{ projectSlug: "p", deletedAt: null, spend: { ...validSpend, pricedCost: -1 } }] }));
+    fetchMock.mockResolvedValue(response(200, { success: true, value: [{ projectSlug: "p", deletedAt: null, spend: { ...validSpend, cost: { ...usd, totalCost: -1 } } }] }));
     await expect(client.getAccountSpend({ from: null, to: null })).rejects.toBeInstanceOf(AccountRequestError);
   });
 

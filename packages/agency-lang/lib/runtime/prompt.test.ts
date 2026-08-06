@@ -480,7 +480,7 @@ describe("meteredDispatch — provider-attempt unknown-cost accounting", () => {
 
   it("a resolved dispatch records no unknown-cost attempt", async () => {
     const ctx = makeCtx();
-    const out = await meteredDispatch(ctx, ctx.stateStack, async () => "ok");
+    const out = await meteredDispatch(ctx, ctx.stateStack, "completion", async () => "ok");
     expect(out).toBe("ok");
     expect(ctx.invocationUsage.snapshot().usage.unknownCostCallCount).toBe(0);
     expect(ctx.invocationUsage.snapshot().usage.pricingComplete).toBe(true);
@@ -490,11 +490,11 @@ describe("meteredDispatch — provider-attempt unknown-cost accounting", () => {
     const ctx = makeCtx();
     const err = new Error("provider 500 after dispatch");
     await expect(
-      meteredDispatch(ctx, ctx.stateStack, async () => { throw err; }),
+      meteredDispatch(ctx, ctx.stateStack, "completion", async () => { throw err; }),
     ).rejects.toBe(err);
     const s = ctx.invocationUsage.snapshot();
     expect(s.usage.unknownCostCallCount).toBe(1);
-    expect(s.usage.pricedCost).toBe(0);
+    expect(s.usage.cost.totalCost).toBe(0);
     expect(s.usage.pricingComplete).toBe(false);
   });
 
@@ -502,9 +502,9 @@ describe("meteredDispatch — provider-attempt unknown-cost accounting", () => {
     const ctx = makeCtx();
     // First attempt throws (e.g. a timeout), second resolves.
     await expect(
-      meteredDispatch(ctx, ctx.stateStack, async () => { throw new Error("timeout"); }),
+      meteredDispatch(ctx, ctx.stateStack, "completion", async () => { throw new Error("timeout"); }),
     ).rejects.toThrow();
-    await meteredDispatch(ctx, ctx.stateStack, async () => "recovered");
+    await meteredDispatch(ctx, ctx.stateStack, "completion", async () => "recovered");
     expect(ctx.invocationUsage.snapshot().usage.unknownCostCallCount).toBe(1);
   });
 });

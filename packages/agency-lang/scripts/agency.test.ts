@@ -172,13 +172,13 @@ describe("agency CLI command tree", () => {
     remoteRecipeMocks.runSpend.mockClear();
     const program = createProgram();
     await program.parseAsync(
-      ["remote", "spend", "my-project", "--since", "7d", "--json", "--host", "https://h", "--api-key-env", "SPEND_KEY"],
+      ["remote", "spend", "my-project", "--since", "7d", "--json", "--by-model", "--by-kind", "--host", "https://h", "--api-key-env", "SPEND_KEY"],
       { from: "user" },
     );
     expect(remoteRecipeMocks.runSpend).toHaveBeenCalledTimes(1);
     const [project, options] = remoteRecipeMocks.runSpend.mock.calls[0];
     expect(project).toBe("my-project");
-    expect(options).toMatchObject({ since: "7d", json: true, host: "https://h", apiKeyEnv: "SPEND_KEY" });
+    expect(options).toMatchObject({ since: "7d", json: true, byModel: true, byKind: true, host: "https://h", apiKeyEnv: "SPEND_KEY" });
   });
 
   it("forwards bare `remote spend` with an undefined project", async () => {

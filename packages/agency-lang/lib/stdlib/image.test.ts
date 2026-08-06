@@ -25,20 +25,21 @@ function makeStack() {
  *  statelog. Returns the frame's stack + statelog spy for assertions. */
 async function withClient(
   imageImpl: ImageImpl | undefined,
-  fn: (helpers: { stack: ReturnType<typeof makeStack>; imageGeneration: ReturnType<typeof vi.fn> }) => Promise<void>,
+  fn: (helpers: { stack: ReturnType<typeof makeStack>; imageGeneration: ReturnType<typeof vi.fn>; meter: InvocationUsageMeter }) => Promise<void>,
 ) {
   const stack = makeStack();
   const imageGeneration = vi.fn().mockResolvedValue(undefined);
+  const meter = new InvocationUsageMeter();
   const store = {
-    // A real meter: image generation pays via addCost → recordPaidUsage, which
-    // merges ctx.invocationUsage (the serve cost seam's accounting boundary).
-    ctx: { llmClient: { image: imageImpl }, statelogClient: { imageGeneration }, invocationUsage: new InvocationUsageMeter() },
+    // A real meter: image generation accounts via recordUsage, which merges
+    // ctx.invocationUsage (the serve cost seam's accounting boundary).
+    ctx: { llmClient: { image: imageImpl }, statelogClient: { imageGeneration }, invocationUsage: meter },
     stack,
     threads: {},
     globals: {},
     callsite: { moduleId: "test", scopeName: "main", stepPath: "" },
   } as any;
-  await agencyStore.run(store, () => fn({ stack, imageGeneration }));
+  await agencyStore.run(store, () => fn({ stack, imageGeneration, meter }));
 }
 
 const okResult = (overrides: any = {}) => ({
@@ -46,7 +47,7 @@ const okResult = (overrides: any = {}) => ({
   value: {
     images: [{ data: new Uint8Array([1, 2, 3]), mimeType: "image/png" }],
     model: "m",
-    costEstimate: { totalCost: 0.04 },
+    costEstimate: { totalCost: 0.04, currency: "USD" },
     tokenUsage: { totalTokens: 10 },
     ...overrides,
   },
@@ -79,7 +80,7 @@ describe("_generateImage", () => {
   });
 
   it("propagates a guard trip, but still traces the spend + tokens first", async () => {
-    await withClient(async () => okResult({ costEstimate: { totalCost: 5.0 } }), async ({ stack, imageGeneration }) => {
+    await withClient(async () => okResult({ costEstimate: { totalCost: 5.0, currency: "USD" } }), async ({ stack, imageGeneration }) => {
       stack.enforceGuards.mockImplementation(() => {
         throw new Error("budget exceeded");
       });
@@ -90,6 +91,21 @@ describe("_generateImage", () => {
       // before the trip propagates (same ordering as llm()).
       expect(stack.localTokens).toBe(10);
       expect(imageGeneration).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("a successful result with no image accounts usage + tokens, skips the event, and fails", async () => {
+    await withClient(async () => okResult({ images: [] }), async ({ stack, imageGeneration }) => {
+      const r = await _generateImage("x", "", "", "", "", [], "", "");
+      expect(r.success).toBe(false);
+      if (!r.success) expect(r.error).toMatch(/returned no images/);
+      // The provider still charged us: full usage + tokens are accounted and the
+      // guard gate runs, even though there is no image to return.
+      expect(stack.localCost).toBeCloseTo(0.04);
+      expect(stack.localTokens).toBe(10);
+      expect(stack.enforceGuards).toHaveBeenCalled();
+      // No image → no imageGeneration event (its contract requires an image).
+      expect(imageGeneration).not.toHaveBeenCalled();
     });
   });
 
@@ -106,6 +122,16 @@ describe("_generateImage", () => {
     );
   });
 
+  it("a rejected image dispatch records one unresolved attempt (pricingComplete goes false)", async () => {
+    await withClient(async () => { throw new Error("provider 500 after dispatch"); }, async ({ meter }) => {
+      await expect(_generateImage("x", "", "", "", "", [], "", "")).rejects.toThrow(/provider 500/);
+      await Promise.resolve();
+      const { usage } = meter.snapshot();
+      expect(usage.unknownCostCallCount).toBe(1);
+      expect(usage.pricingComplete).toBe(false);
+    });
+  });
+
   it("returns a descriptive failure when the client has no image() support", async () => {
     await withClient(undefined, async () => {
       const r = await _generateImage("x", "", "", "", "", [], "", "");
@@ -118,7 +144,7 @@ describe("_generateImage", () => {
     let captured: any;
     const impl: ImageImpl = async (input) => {
       captured = input;
-      return okResult({ costEstimate: { totalCost: 0 } });
+      return okResult({ costEstimate: { totalCost: 0, currency: "USD" } });
     };
     await withClient(impl, async () => {
       await _generateImage("edit", "", "", "", "", ["./a.png", "https://x/b.png"], "", "");

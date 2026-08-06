@@ -22,7 +22,11 @@ import {
 } from "./util.js";
 import type { AccountCommandOptions, RemoteCommandContext } from "./util.js";
 
-export type SpendOptions = AccountCommandOptions & SpendWindowOptions & { json?: boolean };
+export type SpendOptions = AccountCommandOptions & SpendWindowOptions & {
+  json?: boolean;
+  byModel?: boolean;
+  byKind?: boolean;
+};
 
 export async function runSpend(
   project: string | undefined,
@@ -57,7 +61,10 @@ export async function runSpend(
     if (options.json) {
       printJson(spend);
     } else {
-      console.log(renderProjectSpend(target.projectSlug, spend, window.description));
+      console.log(renderProjectSpend(target.projectSlug, spend, window.description, {
+        byModel: options.byModel ?? false,
+        byKind: options.byKind ?? false,
+      }));
     }
   } catch (error) {
     failProjectCommand(error);

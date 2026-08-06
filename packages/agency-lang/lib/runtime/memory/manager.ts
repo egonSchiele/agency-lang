@@ -25,23 +25,31 @@ import type { StatelogClient } from "../../statelogClient.js";
 import forgetTemplate from "../../templates/prompts/memory/forget.js";
 import retrievalTemplate from "../../templates/prompts/memory/retrieval.js";
 import type { LLMClient } from "../llmClient.js";
-import { agency } from "../agency.js";
-import { agencyStore } from "../asyncContext.js";
+import { agencyStore, getRuntimeContext } from "../asyncContext.js";
+import { recordUsage } from "../recordPaidUsage.js";
+import type { UsageObservation } from "../invocationUsage.js";
 import { isGuardExceededError } from "../guard.js";
 
 /**
- * Charge `amount` against the active branch's `withCostGuard` budget
- * if (and only if) we're inside an Agency execution frame. Memory's
- * text + embed calls run from inside `runPrompt`'s post-completion
- * hook or from stdlib agency calls — both reach this code with an
- * `agencyStore` frame already installed, so production paths always
- * charge correctly. The frame check is for direct-construction unit
- * tests that exercise `MemoryManager` without going through the
- * runner.
+ * Record one memory provider outcome (a text completion or an embedding)
+ * against the active branch — accounting its cost/tokens into the invocation
+ * usage meter and the branch's `withCostGuard` budget — if (and only if) we're
+ * inside an Agency execution frame. Memory's text + embed calls run from inside
+ * `runPrompt`'s post-completion hook or from stdlib agency calls — both reach
+ * this code with an `agencyStore` frame already installed, so production paths
+ * always account correctly. The frame check is for direct-construction unit
+ * tests that exercise `MemoryManager` without going through the runner.
+ *
+ * `recordUsage` bills the guards but does not throw; this enforces the active
+ * stack once afterwards, so an over-budget memory charge trips its surrounding
+ * `withCostGuard` — the trip is a `GuardExceededError` that `rethrowIfGuard`
+ * re-raises out of memory's best-effort catches.
  */
-function chargeCostIfInFrame(amount: number): void {
+function recordMemoryUsageIfInFrame(observation: UsageObservation): void {
   if (!agencyStore.getStore()) return;
-  agency.addCost(amount);
+  const { ctx, stack } = getRuntimeContext();
+  recordUsage(ctx, stack, observation);
+  stack.enforceGuards();
 }
 
 /**
@@ -284,12 +292,18 @@ export class MemoryManager {
           `[memory] statelog promptCompletion failed: ${(err as Error).message}`,
         );
       }
-      // Charge this call's spend against the surrounding branch's
-      // cost budget. Mirrors the post-completion charge that
-      // `prompt.ts` performs for agency-side `llm()` calls, so a
-      // `withCostGuard($X)` wrapping the agent now sees memory's
-      // extraction / compaction / tier-3 spend too.
-      chargeCostIfInFrame(result.value.cost?.totalCost ?? 0);
+      // Account this call's full cost/tokens against the surrounding branch.
+      // Mirrors the post-completion accounting that `prompt.ts` performs for
+      // agency-side `llm()` calls, so a `withCostGuard($X)` wrapping the agent
+      // now sees memory's extraction / compaction / tier-3 spend too.
+      recordMemoryUsageIfInFrame({
+        type: "provider",
+        kind: "completion",
+        reportedModel: result.value.model,
+        configuredModel: model,
+        cost: result.value.cost,
+        tokens: result.value.usage,
+      });
       return result.value.output ?? "";
     } finally {
       this.statelogClient?.endSpan(spanId);
@@ -363,11 +377,18 @@ export class MemoryManager {
           `[memory] statelog embedCompletion failed: ${(err as Error).message}`,
         );
       }
-      // Same rationale as `_text` above — embed calls contribute to
-      // the surrounding branch's cost budget too. `EmbedResult.costEstimate`
-      // (smoltalk's name) is optional; absent / zero means "free or
-      // unknown" and the charge is skipped.
-      chargeCostIfInFrame(result.value.costEstimate?.totalCost ?? 0);
+      // Same rationale as `_text` above — embed calls contribute to the
+      // surrounding branch's cost/token totals too. `EmbedResult.costEstimate`
+      // and `tokenUsage` (smoltalk's names) are optional; an absent estimate is
+      // recorded as an unpriced embedding rather than dropped.
+      recordMemoryUsageIfInFrame({
+        type: "provider",
+        kind: "embedding",
+        reportedModel: result.value.model,
+        configuredModel: options?.model,
+        cost: result.value.costEstimate,
+        tokens: result.value.tokenUsage,
+      });
       return vector;
     } finally {
       this.statelogClient?.endSpan(spanId);

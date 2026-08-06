@@ -1,56 +1,130 @@
 import { describe, it, expect } from "vitest";
 import {
   InvocationUsageMeter,
-  completionUsageDelta,
-  paidCostDelta,
-  normalizeUsageDelta,
+  normalizeObservation,
+  normalizeIpcUsageDelta,
   usageReconcileTolerance,
   unwrapServedInvocationOutcome,
+  type NormalizedDelta,
   type ServedInvocationOutcome,
 } from "./invocationUsage.js";
 
-type Usage = ReturnType<InvocationUsageMeter["snapshot"]>["usage"];
-function rowSumCost(usage: Usage) {
-  const modelCost = Object.values(usage.models ?? {})
-    .reduce((total, row) => total + row.pricedCost, 0);
-  return modelCost + (usage.unattributed?.pricedCost ?? 0);
-}
-function reconciles(usage: Usage) {
-  return Math.abs(rowSumCost(usage) - usage.pricedCost)
-    <= usageReconcileTolerance(usage.pricedCost);
-}
+const MAX = Number.MAX_SAFE_INTEGER;
+const fullCost = { inputCost: 0.1, outputCost: 0.2, cachedInputCost: 0.03, cacheCreationInputCost: 0.04, hostedToolsCost: 0.05, totalCost: 0.42, currency: "USD" };
+const fullTokens = { inputTokens: 100, outputTokens: 20, cachedInputTokens: 5, cacheCreationInputTokens: 3, totalTokens: 128 };
+
+describe("normalizeObservation — provider cost", () => {
+  it("keeps each component and the authoritative total for a valid USD cost", () => {
+    const d = normalizeObservation({ type: "provider", kind: "completion", reportedModel: "opus", cost: fullCost as any, tokens: fullTokens as any });
+    expect(d.cost).toEqual(fullCost);
+    expect(d.unknownCostCallCount).toBe(0);
+    expect(d.attributionLost).toBe(false);
+    expect(d.entry).toMatchObject({ kind: "completion", model: "opus" });
+  });
+  it("maps absent/negative/NaN/±Infinity components to 0 without touching the total", () => {
+    const d = normalizeObservation({ type: "provider", kind: "completion", reportedModel: "m", cost: { totalCost: 0.42, currency: "USD", inputCost: -1, outputCost: Number.NaN, cachedInputCost: Number.POSITIVE_INFINITY, cacheCreationInputCost: Number.NEGATIVE_INFINITY } as any });
+    expect(d.cost.totalCost).toBe(0.42);
+    expect(d.cost.inputCost).toBe(0);
+    expect(d.cost.outputCost).toBe(0);
+    expect(d.cost.cachedInputCost).toBe(0);
+    expect(d.cost.cacheCreationInputCost).toBe(0);
+    expect(d.cost.hostedToolsCost).toBe(0);
+  });
+  it("treats an invalid or non-USD total as unpriced (all cost zero, +1 unknown) but keeps the entry+tokens", () => {
+    const nonUsd = normalizeObservation({ type: "provider", kind: "completion", reportedModel: "m", cost: { ...fullCost, currency: "EUR" } as any, tokens: fullTokens as any });
+    expect(nonUsd.cost).toEqual({ inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" });
+    expect(nonUsd.unknownCostCallCount).toBe(1);
+    expect(nonUsd.entry?.tokens.totalTokens).toBe(128);
+    const noCost = normalizeObservation({ type: "provider", kind: "completion", reportedModel: "m" });
+    expect(noCost.unknownCostCallCount).toBe(1);
+    expect(noCost.cost.totalCost).toBe(0);
+  });
+  it("known-free (totalCost 0) is priced", () => {
+    const d = normalizeObservation({ type: "provider", kind: "embedding", reportedModel: "e", cost: { totalCost: 0, currency: "USD" } as any });
+    expect(d.unknownCostCallCount).toBe(0);
+    expect(d.cost.totalCost).toBe(0);
+  });
+});
+
+describe("normalizeObservation — tokens & model", () => {
+  it("uses the provider totalTokens verbatim (cached-image not double-counted)", () => {
+    const d = normalizeObservation({ type: "provider", kind: "image", reportedModel: "img", tokens: { inputTokens: 100, outputTokens: 0, cachedInputTokens: 30, totalTokens: 100 } as any });
+    expect(d.tokens.totalTokens).toBe(100);
+  });
+  it("kind-specific fallback when totalTokens absent", () => {
+    const comp = normalizeObservation({ type: "provider", kind: "completion", reportedModel: "c", tokens: { inputTokens: 10, outputTokens: 2, cachedInputTokens: 5, cacheCreationInputTokens: 3 } as any });
+    expect(comp.tokens.totalTokens).toBe(20);
+    const img = normalizeObservation({ type: "provider", kind: "image", reportedModel: "i", tokens: { inputTokens: 10, outputTokens: 2, cachedInputTokens: 5 } as any });
+    expect(img.tokens.totalTokens).toBe(12);
+  });
+  it("present-malformed totalTokens falls back and degrades", () => {
+    const d = normalizeObservation({ type: "provider", kind: "completion", reportedModel: "c", tokens: { inputTokens: 4, outputTokens: 2, totalTokens: -1 } as any });
+    expect(d.tokens.totalTokens).toBe(6);
+    expect(d.attributionLost).toBe(true);
+  });
+  it("resolves reported → configured → unknown model", () => {
+    expect(normalizeObservation({ type: "provider", kind: "completion", reportedModel: "opus", configuredModel: "sonnet" }).entry?.model).toBe("opus");
+    expect(normalizeObservation({ type: "provider", kind: "completion", reportedModel: "", configuredModel: "sonnet" }).entry?.model).toBe("sonnet");
+    expect(normalizeObservation({ type: "provider", kind: "completion" }).entry?.model).toBe("unknown model");
+  });
+});
+
+describe("normalizeObservation — manual & attempt", () => {
+  it("manual → entry with model '' and totalCost=amount", () => {
+    const d = normalizeObservation({ type: "manual", amount: 0.03 });
+    expect(d.entry).toMatchObject({ kind: "manual", model: "" });
+    expect(d.entry?.cost.totalCost).toBe(0.03);
+    expect(d.cost.totalCost).toBe(0.03);
+    expect(d.unknownCostCallCount).toBe(0);
+  });
+  it("attempt → no entry, +1 unknown, zero money", () => {
+    const d = normalizeObservation({ type: "attempt", kind: "completion" });
+    expect(d.entry).toBeUndefined();
+    expect(d.unknownCostCallCount).toBe(1);
+    expect(d.cost.totalCost).toBe(0);
+  });
+});
 
 describe("InvocationUsageMeter", () => {
-  it("accumulates deltas and derives pricingComplete", () => {
+  it("keeps separate (kind, model) buckets in first-seen order and reconciles when complete", () => {
     const m = new InvocationUsageMeter();
-    m.merge({ pricedCost: 0.01, inputTokens: 100, outputTokens: 20, unknownCostCallCount: 0 });
-    m.merge({ pricedCost: 0.02, inputTokens: 5, outputTokens: 1, unknownCostCallCount: 0 });
+    m.merge(normalizeObservation({ type: "provider", kind: "completion", reportedModel: "opus", cost: { totalCost: 0.1, currency: "USD" } as any }));
+    m.merge(normalizeObservation({ type: "provider", kind: "embedding", reportedModel: "opus", cost: { totalCost: 0.2, currency: "USD" } as any }));
+    m.merge(normalizeObservation({ type: "provider", kind: "completion", reportedModel: "opus", cost: { totalCost: 0.05, currency: "USD" } as any }));
+    const { usage, usageComplete } = m.snapshot();
+    expect(usageComplete).toBe(true);
+    expect(usage.entries.map((e) => `${e.kind}:${e.model}`)).toEqual(["completion:opus", "embedding:opus"]);
+    expect(usage.cost.totalCost).toBeCloseTo(0.35);
+    const sum = usage.entries.reduce((a, e) => a + e.cost.totalCost, 0);
+    expect(Math.abs(sum - usage.cost.totalCost)).toBeLessThanOrEqual(usageReconcileTolerance(usage.cost.totalCost));
+  });
+  it("snapshot returns deep copies (top-level + nested entry fields)", () => {
+    const m = new InvocationUsageMeter();
+    m.merge(normalizeObservation({ type: "provider", kind: "completion", reportedModel: "opus", cost: { totalCost: 0.1, currency: "USD" } as any, tokens: { inputTokens: 5, outputTokens: 1, totalTokens: 6 } as any }));
+    const a = m.snapshot();
+    a.usage.cost.totalCost = 999;
+    a.usage.tokens.inputTokens = 999;
+    a.usage.entries[0].cost.totalCost = 999;
+    a.usage.entries[0].tokens.inputTokens = 999;
+    a.usage.entries.push({ kind: "manual", model: "", cost: {} as any, tokens: {} as any });
+    const b = m.snapshot();
+    expect(b.usage.cost.totalCost).toBeCloseTo(0.1);
+    expect(b.usage.entries).toHaveLength(1);
+    expect(b.usage.entries[0].cost.totalCost).toBeCloseTo(0.1);
+    expect(b.usage.entries[0].tokens.inputTokens).toBe(5);
+  });
+  it("saturates a token overflow, marks incomplete, and merge reports only the first transition", () => {
+    const m = new InvocationUsageMeter();
+    const near: NormalizedDelta = { cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" }, tokens: { inputTokens: MAX, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: MAX }, unknownCostCallCount: 0, attributionLost: false };
+    const one: NormalizedDelta = { ...near, tokens: { inputTokens: 1, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 1 } };
+    expect(m.merge(near)).toBe(false);
+    expect(m.merge(one)).toBe(true);
+    expect(m.merge(one)).toBe(false);
     const s = m.snapshot();
-    expect(s.usage.pricedCost).toBeCloseTo(0.03);
-    expect(s.usage.inputTokens).toBe(105);
-    expect(s.usage.outputTokens).toBe(21);
-    expect(s.usage.unknownCostCallCount).toBe(0);
-    expect(s.usage.pricingComplete).toBe(true);
-    expect(s.usageComplete).toBe(true);
+    expect(s.usageComplete).toBe(false);
+    expect(s.usage.tokens.inputTokens).toBe(MAX);
   });
-
-  it("a fresh meter is complete and zeroed", () => {
-    const s = new InvocationUsageMeter().snapshot();
-    expect(s.usage).toEqual({
-      pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0, pricingComplete: true,
-      models: {}, unattributed: { pricedCost: 0, inputTokens: 0, outputTokens: 0 },
-      modelAttributionComplete: true,
-    });
-    expect(s.usageComplete).toBe(true);
-  });
-
-  it("any unknown-cost call flips pricingComplete false", () => {
-    const m = new InvocationUsageMeter();
-    m.merge({ pricedCost: 0, inputTokens: 3, outputTokens: 1, unknownCostCallCount: 1 });
-    expect(m.snapshot().usage.pricingComplete).toBe(false);
-  });
-
-  it("markIncomplete is permanent and reports only the first transition", () => {
+  it("markIncomplete is idempotent", () => {
     const m = new InvocationUsageMeter();
     expect(m.markIncomplete()).toBe(true);
     expect(m.markIncomplete()).toBe(false);
@@ -58,251 +132,42 @@ describe("InvocationUsageMeter", () => {
   });
 });
 
-describe("completionUsageDelta", () => {
-  it("finite zero is a known free price (not unknown)", () => {
-    expect(completionUsageDelta({ cost: 0, inputTokens: 10, outputTokens: 2, model: "m" })).toEqual({
-      pricedCost: 0, inputTokens: 10, outputTokens: 2, unknownCostCallCount: 0,
-      attribution: { kind: "model", model: "m" },
-    });
+describe("normalizeIpcUsageDelta — recover, never drop", () => {
+  it("recovers a well-formed delta", () => {
+    const d = normalizeIpcUsageDelta({ cost: fullCost, tokens: fullTokens, unknownCostCallCount: 0, entry: { kind: "completion", model: "opus", cost: fullCost, tokens: fullTokens } });
+    expect(d?.cost.totalCost).toBe(0.42);
+    expect(d?.entry?.model).toBe("opus");
+    expect(d?.attributionLost).toBe(false);
   });
-
-  it("positive price is priced", () => {
-    expect(completionUsageDelta({ cost: 0.5, inputTokens: 1, outputTokens: 1, model: "m" })).toEqual({
-      pricedCost: 0.5, inputTokens: 1, outputTokens: 1, unknownCostCallCount: 0,
-      attribution: { kind: "model", model: "m" },
-    });
+  it("invalid cost + valid tokens → keep tokens, +1 unknown, not a known-free zero", () => {
+    const d = normalizeIpcUsageDelta({ cost: { totalCost: -1, currency: "USD" }, tokens: { inputTokens: 5, outputTokens: 1, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 6 }, unknownCostCallCount: 0 });
+    expect(d?.cost.totalCost).toBe(0);
+    expect(d?.unknownCostCallCount).toBe(1);
+    expect(d?.tokens.inputTokens).toBe(5);
   });
-
-  it.each([
-    ["undefined", undefined],
-    ["null", null],
-    ["negative", -1],
-    ["NaN", NaN],
-    ["Infinity", Infinity],
-  ])("%s price is unknown, contributes no cost, one unknown call", (_label, cost) => {
-    expect(completionUsageDelta({ cost: cost as number, inputTokens: 4, outputTokens: 2, model: "m" })).toEqual({
-      pricedCost: 0, inputTokens: 4, outputTokens: 2, unknownCostCallCount: 1,
-      attribution: { kind: "model", model: "m" },
-    });
+  it("unusable entry kind → preserve flat money, omit entry, degrade", () => {
+    const d = normalizeIpcUsageDelta({ cost: fullCost, tokens: fullTokens, unknownCostCallCount: 0, entry: { kind: "nope", model: "x", cost: fullCost, tokens: fullTokens } });
+    expect(d?.cost.totalCost).toBe(0.42);
+    expect(d?.entry).toBeUndefined();
+    expect(d?.attributionLost).toBe(true);
   });
-
-  it("absent or invalid tokens count as zero", () => {
-    expect(completionUsageDelta({ cost: 0.1, inputTokens: undefined, outputTokens: null, model: "m" })).toMatchObject({
-      inputTokens: 0, outputTokens: 0,
-    });
-    expect(completionUsageDelta({ cost: 0.1, inputTokens: -5, outputTokens: 1.5, model: "m" })).toMatchObject({
-      inputTokens: 0, outputTokens: 0,
-    });
+  it("token-only entry (valid kind/model, invalid entry cost) survives with zero cost", () => {
+    const d = normalizeIpcUsageDelta({ cost: fullCost, tokens: fullTokens, unknownCostCallCount: 0, entry: { kind: "completion", model: "opus", cost: { totalCost: -1, currency: "USD" }, tokens: fullTokens } });
+    expect(d?.entry?.model).toBe("opus");
+    expect(d?.entry?.cost.totalCost).toBe(0);
+    expect(d?.entry?.tokens.totalTokens).toBe(128);
   });
-});
-
-describe("paidCostDelta", () => {
-  it("wraps a valid nonnegative amount as unattributed", () => {
-    expect(paidCostDelta(0.25)).toEqual({
-      pricedCost: 0.25, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0,
-      attribution: { kind: "unattributed" },
-    });
-    expect(paidCostDelta(0)).toMatchObject({ pricedCost: 0 });
-  });
-
-  it.each([-1, NaN, Infinity])("throws on invalid amount %s (never silently zero)", (amount) => {
-    expect(() => paidCostDelta(amount)).toThrow();
-  });
-});
-
-describe("normalizeUsageDelta", () => {
-  it("returns null for a non-object", () => {
-    expect(normalizeUsageDelta(null)).toBeNull();
-    expect(normalizeUsageDelta(42)).toBeNull();
-  });
-
-  it("passes through a valid delta", () => {
-    expect(normalizeUsageDelta({ pricedCost: 0.3, inputTokens: 9, outputTokens: 3, unknownCostCallCount: 1 })).toEqual({
-      pricedCost: 0.3, inputTokens: 9, outputTokens: 3, unknownCostCallCount: 1,
-    });
-  });
-
-  it("an invalid cost becomes one unknown-cost call while valid fields survive", () => {
-    expect(normalizeUsageDelta({ pricedCost: -5, inputTokens: 9, outputTokens: 3, unknownCostCallCount: 0 })).toEqual({
-      pricedCost: 0, inputTokens: 9, outputTokens: 3, unknownCostCallCount: 1,
-    });
-  });
-
-  it("invalid token/count fields become zero", () => {
-    expect(normalizeUsageDelta({ pricedCost: 0.1, inputTokens: "x", outputTokens: -2, unknownCostCallCount: 1.5 })).toEqual({
-      pricedCost: 0.1, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0,
-    });
+  it("a non-object message is dropped", () => {
+    expect(normalizeIpcUsageDelta(42)).toBeNull();
+    expect(normalizeIpcUsageDelta(null)).toBeNull();
   });
 });
 
 describe("unwrapServedInvocationOutcome", () => {
-  it("returns the value for a returned outcome", () => {
-    const o: ServedInvocationOutcome<string> = {
-      status: "returned", value: "hi",
-      usage: { pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0, pricingComplete: true },
-      usageComplete: true,
-    };
-    expect(unwrapServedInvocationOutcome(o)).toBe("hi");
-  });
-
-  it("rethrows the identical error (string, frozen object)", () => {
-    const snap = {
-      usage: { pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0, pricingComplete: true },
-      usageComplete: true,
-    };
-    expect(() => unwrapServedInvocationOutcome({ status: "threw", error: "boom", ...snap })).toThrow("boom");
-    const frozen = Object.freeze(new Error("frozen"));
-    try {
-      unwrapServedInvocationOutcome({ status: "threw", error: frozen, ...snap });
-      expect.fail("should have thrown");
-    } catch (e) {
-      expect(e).toBe(frozen);
-    }
-  });
-});
-
-describe("InvocationUsageMeter per-model breakdown", () => {
-  it("files a priced completion under its model row and reconciles", () => {
-    const meter = new InvocationUsageMeter();
-    meter.merge(completionUsageDelta({ cost: 0.1, inputTokens: 100, outputTokens: 20, model: "opus" }));
-    const { usage } = meter.snapshot();
-    expect(usage.models!["opus"]).toEqual({ pricedCost: 0.1, inputTokens: 100, outputTokens: 20 });
-    expect(reconciles(usage)).toBe(true);
-  });
-
-  it("routes addCost spend to unattributed, not models", () => {
-    const meter = new InvocationUsageMeter();
-    meter.merge(paidCostDelta(0.03));
-    const { usage } = meter.snapshot();
-    expect(usage.models).toEqual({});
-    expect(usage.unattributed).toEqual({ pricedCost: 0.03, inputTokens: 0, outputTokens: 0 });
-    expect(reconciles(usage)).toBe(true);
-  });
-
-  it("mixes a model row and unattributed", () => {
-    const meter = new InvocationUsageMeter();
-    meter.merge(completionUsageDelta({ cost: 0.1, inputTokens: 1, outputTokens: 1, model: "opus" }));
-    meter.merge(paidCostDelta(0.03));
-    const { usage } = meter.snapshot();
-    expect(usage.models!["opus"].pricedCost).toBeCloseTo(0.1);
-    expect(usage.unattributed!.pricedCost).toBeCloseTo(0.03);
-    expect(reconciles(usage)).toBe(true);
-  });
-
-  it("makes no row for a pure unknown-cost delta and keeps attribution complete", () => {
-    const meter = new InvocationUsageMeter();
-    meter.merge({ pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 1 });
-    const { usage } = meter.snapshot();
-    expect(usage.models).toEqual({});
-    expect(usage.unattributed).toEqual({ pricedCost: 0, inputTokens: 0, outputTokens: 0 });
-    expect(usage.pricingComplete).toBe(false);
-    expect(usage.modelAttributionComplete).toBe(true);
-  });
-
-  it("treats __proto__ as a plain own key", () => {
-    const meter = new InvocationUsageMeter();
-    meter.merge(completionUsageDelta({ cost: 0.01, inputTokens: 1, outputTokens: 1, model: "__proto__" }));
-    expect(Object.prototype.hasOwnProperty.call(meter.snapshot().usage.models, "__proto__")).toBe(true);
-    expect(({} as any).pricedCost).toBeUndefined();
-  });
-
-  it("aggregates repeated charges for one model into one row", () => {
-    const meter = new InvocationUsageMeter();
-    meter.merge(completionUsageDelta({ cost: 0.01, inputTokens: 10, outputTokens: 2, model: "opus" }));
-    meter.merge(completionUsageDelta({ cost: 0.02, inputTokens: 20, outputTokens: 4, model: "opus" }));
-    expect(meter.snapshot().usage.models!["opus"]).toEqual({ pricedCost: 0.03, inputTokens: 30, outputTokens: 6 });
-  });
-
-  it("reconciles a regrouping-sensitive interleave within tolerance where === fails", () => {
-    const meter = new InvocationUsageMeter();
-    const sequence: [string, number][] = [
-      ["alpha", 0.1], ["beta", 0.1], ["alpha", 0.1], ["beta", 0.1], ["alpha", 0.1], ["beta", 0.1], ["alpha", 0.1],
-    ];
-    for (const [model, cost] of sequence) {
-      meter.merge(completionUsageDelta({ cost, inputTokens: 1, outputTokens: 1, model }));
-    }
-    const { usage } = meter.snapshot();
-    const rowSum = usage.models!["alpha"].pricedCost + usage.models!["beta"].pricedCost;
-    expect(rowSum).not.toBe(usage.pricedCost);                 // 0.7000000000000001 vs 0.7
-    expect(Math.abs(rowSum - usage.pricedCost)).toBeLessThanOrEqual(usageReconcileTolerance(usage.pricedCost));
-  });
-
-  it("keeps a real model named 'unknown model' as an ordinary row", () => {
-    const meter = new InvocationUsageMeter();
-    meter.merge(completionUsageDelta({ cost: 0.01, inputTokens: 1, outputTokens: 1, model: "unknown model" }));
-    const { usage } = meter.snapshot();
-    expect(usage.models!["unknown model"].pricedCost).toBeCloseTo(0.01);
-    expect(usage.unattributed).toEqual({ pricedCost: 0, inputTokens: 0, outputTokens: 0 });
-  });
-
-  it("returns independent copies from snapshot", () => {
-    const meter = new InvocationUsageMeter();
-    meter.merge(completionUsageDelta({ cost: 0.1, inputTokens: 1, outputTokens: 1, model: "opus" }));
-    const firstSnapshot = meter.snapshot().usage;
-    firstSnapshot.models!["opus"].pricedCost = 999;
-    firstSnapshot.models!["extra"] = { pricedCost: 5, inputTokens: 0, outputTokens: 0 };
-    firstSnapshot.unattributed!.pricedCost = 999;
-
-    const secondSnapshot = meter.snapshot().usage;
-    expect(secondSnapshot.models!["opus"].pricedCost).toBeCloseTo(0.1);
-    expect(secondSnapshot.models!["extra"]).toBeUndefined();
-    expect(secondSnapshot.unattributed!.pricedCost).toBe(0);
-  });
-
-  it("flips modelAttributionComplete once, idempotently", () => {
-    const meter = new InvocationUsageMeter();
-    expect(meter.snapshot().usage.modelAttributionComplete).toBe(true);
-    expect(meter.markModelAttributionIncomplete()).toBe(true);
-    expect(meter.markModelAttributionIncomplete()).toBe(false);
-    expect(meter.snapshot().usage.modelAttributionComplete).toBe(false);
-  });
-
-  it("fails reconciliation when a row is corrupted above tolerance (check has teeth)", () => {
-    const meter = new InvocationUsageMeter();
-    meter.merge(completionUsageDelta({ cost: 0.1, inputTokens: 1, outputTokens: 1, model: "opus" }));
-    const { usage } = meter.snapshot();
-    usage.models!["opus"].pricedCost -= 2 * usageReconcileTolerance(usage.pricedCost) + 0.001;
-    expect(reconciles(usage)).toBe(false);
-  });
-});
-
-describe("normalizeUsageDelta attribution", () => {
-  it("preserves model and unattributed, drops malformed/absent to undefined", () => {
-    const modelDelta = normalizeUsageDelta({
-      pricedCost: 0.1, inputTokens: 1, outputTokens: 1, unknownCostCallCount: 0,
-      attribution: { kind: "model", model: "opus" },
-    });
-    expect(modelDelta?.attribution).toEqual({ kind: "model", model: "opus" });
-
-    const unattributedDelta = normalizeUsageDelta({
-      pricedCost: 0.1, inputTokens: 1, outputTokens: 1, unknownCostCallCount: 0,
-      attribution: { kind: "unattributed" },
-    });
-    expect(unattributedDelta?.attribution).toEqual({ kind: "unattributed" });
-
-    const malformedAttributions = [undefined, null, 42, { kind: "model" }, { kind: "model", model: "" }, { kind: "nope" }];
-    for (const malformedAttribution of malformedAttributions) {
-      const normalized = normalizeUsageDelta({
-        pricedCost: 0.1, inputTokens: 1, outputTokens: 1, unknownCostCallCount: 0,
-        attribution: malformedAttribution,
-      });
-      expect(normalized?.attribution).toBeUndefined();
-    }
-  });
-
-  it("rejects an out-of-safe-range token count so exact-token reconciliation holds", () => {
-    // 2**53 is Number.isInteger but NOT safe; above it integer addition loses
-    // precision, which would break the exact-token reconciliation between the
-    // flat totals and the per-model rows. Untrusted IPC can send it.
-    const normalized = normalizeUsageDelta({
-      pricedCost: 0.1, inputTokens: 2 ** 53, outputTokens: 1, unknownCostCallCount: 0,
-    });
-    expect(normalized?.inputTokens).toBe(0);
-    expect(normalized?.outputTokens).toBe(1);
-    const meter = new InvocationUsageMeter();
-    meter.merge(normalized!);
-    const { usage } = meter.snapshot();
-    expect(usage.inputTokens).toBe(0);
-    expect(usage.unattributed!.inputTokens).toBe(0);
+  const snap = { usage: { cost: {} as any, tokens: {} as any, unknownCostCallCount: 0, pricingComplete: true, entries: [] }, usageComplete: true };
+  it("returns / rethrows identity", () => {
+    expect(unwrapServedInvocationOutcome({ status: "returned", value: "hi", ...snap } as ServedInvocationOutcome<string>)).toBe("hi");
+    const frozen = Object.freeze(new Error("x"));
+    try { unwrapServedInvocationOutcome({ status: "threw", error: frozen, ...snap }); expect.fail("throw"); } catch (e) { expect(e).toBe(frozen); }
   });
 });

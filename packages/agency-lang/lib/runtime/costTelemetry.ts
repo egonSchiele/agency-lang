@@ -1,15 +1,15 @@
 /**
  * Fire-and-forget usage telemetry from a subprocess to its parent, so
  * parent-side cost guards see child LLM spend live AND the parent's
- * per-invocation usage meter (the serve cost seam) accrues the child's
- * cost/tokens/unknown-count (see
- * docs/superpowers/specs/2026-07-02-subprocess-cost-telemetry-design.md).
+ * per-invocation usage meter (the serve cost seam) accrues the child's full
+ * cost/token/attribution breakdown (see
+ * docs/superpowers/specs/2026-08-04-full-cost-token-breakdown-design.md).
  *
  * Deliberately dependency-light (the subprocessRunInfo.ts layering pattern):
- * the only runtime import is subprocessRunInfo; `InvocationUsageDelta` is a
- * type-only import (erased at runtime), so this stays a leaf module.
- * `recordPaidUsageAt` calls the sender here on every paid charge; stateStack /
- * accounting must not import ipc.ts.
+ * the only runtime import is subprocessRunInfo; `NormalizedDelta` is a type-only
+ * import (erased at runtime), so this stays a leaf module. The recordPaidUsage
+ * sink calls the sender here on every accounted delta; stateStack / accounting
+ * must not import ipc.ts.
  *
  * Never blocks and never throws: there is no reply, no listener, and a dead
  * channel is swallowed — the bootstrap disconnect watchdog is about to reap
@@ -17,28 +17,20 @@
  */
 
 import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js";
-import type { InvocationUsageDelta, UsageAttribution } from "./invocationUsage.js";
+import type { NormalizedDelta } from "./invocationUsage.js";
 
-/** Legacy cost-only telemetry message. No longer emitted by this codebase (the
- *  full-delta message below supersedes it), but still ACCEPTED on receive so a
- *  version-skewed child cannot silently drop cost. */
-export type IpcTelemetryMessage = {
-  type: "telemetry";
-  costUsd: number;
-};
-
-/** Full per-invocation usage delta relayed to the parent. A legal delta may
- *  carry zero priced cost with nonzero tokens and/or one unknown-cost call (an
- *  unpriced completion). `attribution` rides along so the parent can bucket the
- *  charge per model; its ABSENCE on a measurable message means an older child
- *  lost the model (the parent flags `modelAttributionComplete`). */
+/** The UNTRUSTED wire shape a parent receives on `invocationUsage`. Every field
+ *  is `unknown`: a version-skewed or malicious child may send anything, so the
+ *  parent recovers it field-by-field via `normalizeIpcUsageDelta` before it
+ *  reaches the accounting sink. The trusted SEND-side payload is a
+ *  `NormalizedDelta` (this message minus `type`). */
 export type IpcInvocationUsageMessage = {
   type: "invocationUsage";
-  pricedCost: number;
-  inputTokens: number;
-  outputTokens: number;
-  unknownCostCallCount: number;
-  attribution?: UsageAttribution;
+  cost?: unknown;
+  tokens?: unknown;
+  unknownCostCallCount?: unknown;
+  entry?: unknown;
+  attributionLost?: unknown;
 };
 
 /** Relayed once when a process can no longer guarantee that all of its (or a
@@ -48,24 +40,9 @@ export type IpcInvocationUsageIncompleteMessage = {
   type: "invocationUsageIncomplete";
 };
 
-/** Relayed once when a process booked priced spend to `unattributed` because a
- *  descendant lost the charge's model (a version-skewed child) — flags the
- *  owning invocation's `modelAttributionComplete` false. Carries no cost. */
-export type IpcModelAttributionIncompleteMessage = {
-  type: "modelAttributionIncomplete";
-};
-
 export type IpcUsageMessage =
-  | IpcTelemetryMessage
   | IpcInvocationUsageMessage
-  | IpcInvocationUsageIncompleteMessage
-  | IpcModelAttributionIncompleteMessage;
-
-/** The wire contract for a legacy billable cost: a positive finite number.
- *  Used only when normalizing a legacy `{ costUsd }` message on receive. */
-export function isPayableCost(costUsd: unknown): costUsd is number {
-  return typeof costUsd === "number" && Number.isFinite(costUsd) && costUsd > 0;
-}
+  | IpcInvocationUsageIncompleteMessage;
 
 function canSend(): boolean {
   return isIpcMode() && typeof process.send === "function";
@@ -83,18 +60,30 @@ function trySend(msg: IpcUsageMessage): void {
   }
 }
 
-/** Relay a full usage delta to the parent, once. Skips an all-zero delta (a
- *  no-op charge carries nothing worth relaying). */
-export function sendInvocationUsageToParent(delta: InvocationUsageDelta): void {
+/** A delta carries nothing worth relaying: no cost, no tokens, no unknown-cost
+ *  call, no attribution entry, and no attribution loss. A no-op charge (e.g.
+ *  `addCost(0)`) is skipped so it never spams the parent channel. */
+function isNoOpDelta(delta: NormalizedDelta): boolean {
+  if (delta.entry !== undefined) return false;
+  if (delta.attributionLost) return false;
+  if (delta.unknownCostCallCount !== 0) return false;
+  if (delta.cost.totalCost !== 0) return false;
+  const t = delta.tokens;
+  return (
+    t.inputTokens === 0 &&
+    t.outputTokens === 0 &&
+    t.cachedInputTokens === 0 &&
+    t.cacheCreationInputTokens === 0 &&
+    t.totalTokens === 0
+  );
+}
+
+/** Relay a full normalized usage delta to the parent, once. Sends the complete
+ *  nested breakdown (`cost`, `tokens`, `entry`, `unknownCostCallCount`,
+ *  `attributionLost`). Skips an all-zero delta. */
+export function sendInvocationUsageToParent(delta: NormalizedDelta): void {
   if (!canSend()) return;
-  if (
-    delta.pricedCost === 0 &&
-    delta.inputTokens === 0 &&
-    delta.outputTokens === 0 &&
-    delta.unknownCostCallCount === 0
-  ) {
-    return;
-  }
+  if (isNoOpDelta(delta)) return;
   trySend({ type: "invocationUsage", ...delta });
 }
 
@@ -102,10 +91,4 @@ export function sendInvocationUsageToParent(delta: InvocationUsageDelta): void {
 export function sendInvocationUsageIncompleteToParent(): void {
   if (!canSend()) return;
   trySend({ type: "invocationUsageIncomplete" });
-}
-
-/** Relay the model-attribution-incomplete marker to the parent, once. */
-export function sendModelAttributionIncompleteToParent(): void {
-  if (!canSend()) return;
-  trySend({ type: "modelAttributionIncomplete" });
 }

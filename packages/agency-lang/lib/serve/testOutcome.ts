@@ -1,11 +1,17 @@
 // Test-only builders for ServedInvocationOutcome, so adapter/discovery unit
 // tests can supply plain-JS invokers without spinning up a real runtime.
-import type { ServedInvocationOutcome } from "../runtime/invocationUsage.js";
+import type { InvocationUsageSnapshot, ServedInvocationOutcome } from "../runtime/invocationUsage.js";
 
-const ZERO_SNAPSHOT = {
-  usage: { pricedCost: 0, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0, pricingComplete: true },
+const ZERO_SNAPSHOT: InvocationUsageSnapshot = {
+  usage: {
+    cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" },
+    tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 },
+    unknownCostCallCount: 0,
+    pricingComplete: true,
+    entries: [],
+  },
   usageComplete: true,
-} as const;
+};
 
 /** A returned outcome carrying a fixed usage snapshot (override `usage` when a
  *  test asserts specific figures). */

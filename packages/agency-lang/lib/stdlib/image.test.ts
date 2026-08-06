@@ -30,8 +30,8 @@ async function withClient(
   const stack = makeStack();
   const imageGeneration = vi.fn().mockResolvedValue(undefined);
   const store = {
-    // A real meter: image generation pays via addCost → recordPaidUsage, which
-    // merges ctx.invocationUsage (the serve cost seam's accounting boundary).
+    // A real meter: image generation accounts via recordUsage, which merges
+    // ctx.invocationUsage (the serve cost seam's accounting boundary).
     ctx: { llmClient: { image: imageImpl }, statelogClient: { imageGeneration }, invocationUsage: new InvocationUsageMeter() },
     stack,
     threads: {},
@@ -46,7 +46,7 @@ const okResult = (overrides: any = {}) => ({
   value: {
     images: [{ data: new Uint8Array([1, 2, 3]), mimeType: "image/png" }],
     model: "m",
-    costEstimate: { totalCost: 0.04 },
+    costEstimate: { totalCost: 0.04, currency: "USD" },
     tokenUsage: { totalTokens: 10 },
     ...overrides,
   },
@@ -79,7 +79,7 @@ describe("_generateImage", () => {
   });
 
   it("propagates a guard trip, but still traces the spend + tokens first", async () => {
-    await withClient(async () => okResult({ costEstimate: { totalCost: 5.0 } }), async ({ stack, imageGeneration }) => {
+    await withClient(async () => okResult({ costEstimate: { totalCost: 5.0, currency: "USD" } }), async ({ stack, imageGeneration }) => {
       stack.enforceGuards.mockImplementation(() => {
         throw new Error("budget exceeded");
       });
@@ -90,6 +90,21 @@ describe("_generateImage", () => {
       // before the trip propagates (same ordering as llm()).
       expect(stack.localTokens).toBe(10);
       expect(imageGeneration).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("a successful result with no image accounts usage + tokens, skips the event, and fails", async () => {
+    await withClient(async () => okResult({ images: [] }), async ({ stack, imageGeneration }) => {
+      const r = await _generateImage("x", "", "", "", "", [], "", "");
+      expect(r.success).toBe(false);
+      if (!r.success) expect(r.error).toMatch(/returned no images/);
+      // The provider still charged us: full usage + tokens are accounted and the
+      // guard gate runs, even though there is no image to return.
+      expect(stack.localCost).toBeCloseTo(0.04);
+      expect(stack.localTokens).toBe(10);
+      expect(stack.enforceGuards).toHaveBeenCalled();
+      // No image → no imageGeneration event (its contract requires an image).
+      expect(imageGeneration).not.toHaveBeenCalled();
     });
   });
 
@@ -118,7 +133,7 @@ describe("_generateImage", () => {
     let captured: any;
     const impl: ImageImpl = async (input) => {
       captured = input;
-      return okResult({ costEstimate: { totalCost: 0 } });
+      return okResult({ costEstimate: { totalCost: 0, currency: "USD" } });
     };
     await withClient(impl, async () => {
       await _generateImage("edit", "", "", "", "", ["./a.png", "https://x/b.png"], "", "");

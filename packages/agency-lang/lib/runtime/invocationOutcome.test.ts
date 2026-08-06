@@ -35,7 +35,7 @@ describe("runExportedFunctionForServe outcomes", () => {
     const outcome = await runExportedFunctionForServe({ ctx: makeCtx(), fn: fakeFn(() => value), namedArgs: {} });
     expect(outcome.status).toBe("returned");
     if (outcome.status === "returned") expect(outcome.value).toEqual(value);
-    expect(outcome.usage).toMatchObject({ pricedCost: 0, pricingComplete: true });
+    expect(outcome.usage).toMatchObject({ cost: { totalCost: 0 }, pricingComplete: true });
     expect(outcome.usageComplete).toBe(true);
   });
 
@@ -61,7 +61,7 @@ describe("runExportedFunctionForServe outcomes", () => {
       namedArgs: {},
     });
     expect(outcome.status).toBe("threw");
-    expect(outcome.usage.pricedCost).toBeCloseTo(1);
+    expect(outcome.usage.cost.totalCost).toBeCloseTo(1);
   });
 });
 
@@ -127,8 +127,15 @@ describe("finishServedInvocation cleanup semantics", () => {
     const outcome = await finishServedInvocation(
       ctx,
       { status: "returned", value: "ok" },
-      async () => { ctx.invocationUsage.merge({ pricedCost: 0.5, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0 }); },
+      async () => {
+        ctx.invocationUsage.merge({
+          cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" },
+          tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 },
+          unknownCostCallCount: 0,
+          attributionLost: false,
+        });
+      },
     );
-    expect(outcome.usage.pricedCost).toBeCloseTo(0.5);
+    expect(outcome.usage.cost.totalCost).toBeCloseTo(0.5);
   });
 });

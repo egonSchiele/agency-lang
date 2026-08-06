@@ -21,7 +21,7 @@ import {
   type BoundaryContext,
 } from "./turnBoundary.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
-import { accountCompletionUsage, meteredDispatch } from "./recordPaidUsage.js";
+import { recordCompletionUsage, meteredDispatch } from "./recordPaidUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { abortableSleep } from "../stdlib/abortable.js";
 import { decideRetry, decideValidationRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
@@ -495,7 +495,7 @@ async function dispatchWithRetry(args: {
   const targetStack = stateStack ?? ctx.stateStack;
   return runWithRetry(
     (signal) =>
-      meteredDispatch(ctx, targetStack, () =>
+      meteredDispatch(ctx, targetStack, "completion", () =>
         dispatchLLMRequest({
           ctx,
           promptConfig: { ...promptConfig, abortSignal: signal } as PromptConfig,
@@ -771,7 +771,7 @@ async function _runPrompt({
   // descendants' spend in real time; mid-fork trips fire on the next
   // enforceGuards() call. See docs/superpowers/specs/2026-05-20-thread-
   // builtins-and-stdlib-design.md.
-  accountCompletionUsage(ctx, targetStack, completion, modelName);
+  recordCompletionUsage(ctx, targetStack, completion, clientConfig.model);
   // NOTE: no post-charge enforceGuards here anymore. A trip caused by
   // THIS charge is raised resumably at the caller's next guard gate
   // (round.N.guardGate / guardGate.final in runPrompt) — the paid work

@@ -1,7 +1,8 @@
 import { performance } from "node:perf_hooks";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { success, failure, type ResultValue } from "../runtime/result.js";
-import { addCost, addTokens } from "../runtime/cost.js";
+import { addTokens } from "../runtime/cost.js";
+import { recordUsage } from "../runtime/recordPaidUsage.js";
 import { classifySource } from "./thread.js";
 // One image type surface — imported from llmClient.ts, not smoltalk directly.
 import type { ImageConfig, ImageInput, ImageRef } from "../runtime/llmClient.js";
@@ -40,7 +41,7 @@ export async function _generateImage(
   apiKey: string,
   baseUrl: string,
 ): Promise<ResultValue> {
-  const { ctx } = getRuntimeContext();
+  const { ctx, stack } = getRuntimeContext();
   if (!ctx.llmClient.image) {
     return failure(
       "The active LLM client does not support image generation. Use the default client or register one with image() support.",
@@ -72,29 +73,41 @@ export async function _generateImage(
   }
   const gen = result.value;
   const first = gen.images[0];
+
+  // The provider dispatch resolved and cost real money whether or not it handed
+  // back an image, so account its full usage in BOTH cases. Record usage and
+  // tokens, trace the event (only when there is an image — the statelog contract
+  // requires one), and enforce guards LAST — same ordering as the llm() path
+  // (lib/runtime/prompt.ts). `recordUsage` bills the guards but does not throw;
+  // the explicit `enforceGuards()` is the guard gate, so a trip still leaves the
+  // spend accounted and (for a returned image) traced before it propagates, and
+  // a trip wins over either return below.
+  recordUsage(ctx, stack, {
+    type: "provider",
+    kind: "image",
+    reportedModel: gen.model,
+    configuredModel: model,
+    cost: gen.costEstimate,
+    tokens: gen.tokenUsage,
+  });
+  addTokens(gen.tokenUsage?.totalTokens ?? 0);
+  if (first) {
+    ctx.statelogClient.imageGeneration({
+      promptPreview: prompt.slice(0, PROMPT_PREVIEW_MAX),
+      model: gen.model,
+      timeTaken,
+      usage: gen.tokenUsage,
+      cost:
+        gen.costEstimate === undefined
+          ? undefined
+          : { totalCost: gen.costEstimate.totalCost },
+    });
+  }
+  stack.enforceGuards();
+
   if (!first) {
     return failure("Image generation returned no images.");
   }
-
-  // The generation already happened (and cost real money), so record tokens and
-  // trace the event BEFORE enforcing guards — same ordering as the llm() path
-  // (lib/runtime/prompt.ts). This way a guard trip inside addCost still leaves
-  // the spend traced and token accounting consistent; the trip then propagates.
-  addTokens(gen.tokenUsage?.totalTokens ?? 0);
-  ctx.statelogClient.imageGeneration({
-    promptPreview: prompt.slice(0, PROMPT_PREVIEW_MAX),
-    model: gen.model,
-    timeTaken,
-    usage: gen.tokenUsage,
-    cost:
-      gen.costEstimate === undefined
-        ? undefined
-        : { totalCost: gen.costEstimate.totalCost },
-  });
-  // addCost accrues localCost, bills guards, and enforces limits (may throw a
-  // guard trip, which must propagate — must be last).
-  addCost(gen.costEstimate?.totalCost ?? 0);
-
   return success({
     base64: Buffer.from(first.data).toString("base64"),
     mimeType: first.mimeType,

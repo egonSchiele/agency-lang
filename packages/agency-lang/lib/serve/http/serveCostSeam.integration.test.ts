@@ -64,21 +64,20 @@ describe("serve cost seam — end to end", () => {
     const result = await handlerFor(makeCtx(), () => { addCost(0.03); return "done"; })("POST", "/function/run", {});
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ success: true, value: "done" });
-    expect(result.usage?.pricedCost).toBeCloseTo(0.03);
+    expect(result.usage?.cost.totalCost).toBeCloseTo(0.03);
     expect(result.usage?.pricingComplete).toBe(true);
     expect(result.usageComplete).toBe(true);
   });
 
-  it("success carries a reconciled unattributed breakdown (addCost has no model)", async () => {
+  it("success carries a reconciled manual breakdown (addCost has model '')", async () => {
     setup();
     const result = await handlerFor(makeCtx(), () => { addCost(0.03); return "done"; })("POST", "/function/run", {});
-    // addCost is model-less, so it lands in the unattributed row, not models.
-    expect(result.usage?.models).toEqual({});
-    expect(result.usage?.unattributed?.pricedCost).toBeCloseTo(0.03);
-    expect(result.usage?.modelAttributionComplete).toBe(true);
-    const modelCost = Object.values(result.usage!.models ?? {}).reduce((total, row) => total + row.pricedCost, 0);
-    const attributed = modelCost + (result.usage!.unattributed?.pricedCost ?? 0);
-    expect(Math.abs(attributed - result.usage!.pricedCost)).toBeLessThanOrEqual(usageReconcileTolerance(result.usage!.pricedCost));
+    // addCost is a manual charge, so it lands in a single manual entry (model "").
+    expect(result.usage?.entries).toHaveLength(1);
+    expect(result.usage?.entries[0]).toMatchObject({ kind: "manual", model: "" });
+    expect(result.usage?.entries[0].cost.totalCost).toBeCloseTo(0.03);
+    const attributed = result.usage!.entries.reduce((total, entry) => total + entry.cost.totalCost, 0);
+    expect(Math.abs(attributed - result.usage!.cost.totalCost)).toBeLessThanOrEqual(usageReconcileTolerance(result.usage!.cost.totalCost));
   });
 
   it("two concurrent invocations report independent usage (own execCtx each)", async () => {
@@ -86,8 +85,8 @@ describe("serve cost seam — end to end", () => {
     const cheap = handlerFor(makeCtx(), () => { addCost(0.01); return "a"; })("POST", "/function/run", {});
     const dear = handlerFor(makeCtx(), () => { addCost(0.5); return "b"; })("POST", "/function/run", {});
     const [a, b] = await Promise.all([cheap, dear]);
-    expect(a.usage?.pricedCost).toBeCloseTo(0.01);
-    expect(b.usage?.pricedCost).toBeCloseTo(0.5);
+    expect(a.usage?.cost.totalCost).toBeCloseTo(0.01);
+    expect(b.usage?.cost.totalCost).toBeCloseTo(0.5);
   });
 
   it("a function that spends then throws still reports the pre-throw cost", async () => {
@@ -98,10 +97,10 @@ describe("serve cost seam — end to end", () => {
     })("POST", "/function/run", {});
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ success: false, error: "Tool execution failed" });
-    expect(result.usage?.pricedCost).toBeCloseTo(0.02);
+    expect(result.usage?.cost.totalCost).toBeCloseTo(0.02);
     // The breakdown is not dropped on the error path.
-    expect(result.usage?.unattributed?.pricedCost).toBeCloseTo(0.02);
-    expect(result.usage?.modelAttributionComplete).toBe(true);
+    expect(result.usage?.entries[0]?.cost.totalCost).toBeCloseTo(0.02);
+    expect(result.usageComplete).toBe(true);
   });
 
   it("a baked budget trip returns 402 carrying the cost up to the trip", async () => {
@@ -109,7 +108,7 @@ describe("serve cost seam — end to end", () => {
     const result = await handlerFor(makeCtx({ maxCost: 0 }), () => { addCost(1); return "x"; })("POST", "/function/run", {});
     expect(result.status).toBe(402);
     expect(result.body).toMatchObject({ code: "budgetExceeded", dimension: "cost", limit: 0 });
-    expect(result.usage?.pricedCost).toBeCloseTo(1);
+    expect(result.usage?.cost.totalCost).toBeCloseTo(1);
   });
 
   it("/list carries no usage (no invocation started)", async () => {

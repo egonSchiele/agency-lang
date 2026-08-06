@@ -253,9 +253,10 @@ describe("HTTP adapter", () => {
     // interrupt execution, so a real meter is unnecessary here (that path is
     // covered by serveCostSeam.integration.test.ts).
     const breakdownUsage = {
-      pricedCost: 0.03, inputTokens: 0, outputTokens: 0, unknownCostCallCount: 0, pricingComplete: true,
-      models: {}, unattributed: { pricedCost: 0.03, inputTokens: 0, outputTokens: 0 },
-      modelAttributionComplete: true,
+      cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.03, currency: "USD" as const },
+      tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 },
+      unknownCostCallCount: 0, pricingComplete: true,
+      entries: [{ kind: "manual" as const, model: "", cost: { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.03, currency: "USD" as const }, tokens: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 } }],
     };
     const pausedValue = { paused: true };
     const { exports } = makeExports();

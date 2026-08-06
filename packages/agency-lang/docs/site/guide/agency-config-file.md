@@ -42,7 +42,7 @@ This is where you set your default model, provider, and API keys.
 
 | Option | Description |
 | --- | --- |
-| `defaultModel` / `defaultProvider` | Used when a `llm()` call doesn't specify its own. [`agency run --model`](../cli/run#choosing-a-model) overrides both for a single run; note that a bare model name there clears `defaultProvider` so the provider is worked out from the name. |
+| `defaultModel` / `defaultProvider` | Used when a `llm()` call doesn't specify its own. |
 | `apiKey` | Keys for `openAi`, `google`, `anthropic`, `ollama`, `openRouter`, `deepInfra`, `liteLlm`, and `openAiCompat`. |
 | `baseUrl` | Needed if you're using a provider that provides an endpoint compatible with the OpenAI API, such as `openRouter`, `deepInfra`, `liteLlm` and others. |
 | `maxToolResultChars` | Caps how much of a single tool result the model sees (the full value still reaches your code). Default `100000`; `0` disables it. Keeps a chatty tool from blowing the context window. |

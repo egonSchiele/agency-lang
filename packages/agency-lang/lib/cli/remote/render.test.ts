@@ -229,6 +229,13 @@ describe("renderProjectSpend", () => {
     // Must NOT floor a known positive amount to zero.
     expect(costLine).not.toMatch(/≥ \$0\.0000(?!\d)/);
   });
+  it("keeps a positive lower bound below 1e-8 visible via scientific notation", () => {
+    const out = strip(renderProjectSpend("a", spend({ cost: usd(1e-10), usageComplete: false }), "all time", NONE_GROUP));
+    const costLine = out.split("\n").find((l) => l.includes("Cost:")) ?? "";
+    expect(costLine).toContain("≥ $");
+    expect(costLine).toMatch(/e-\d+/); // scientific notation, not a floored $0
+    expect(costLine).not.toMatch(/≥ \$0\b/);
+  });
   it("groups the breakdown by model, sorts by cost desc, and labels the manual sentinel", () => {
     const breakdown = [
       { model: "opus", kind: "completion" as const, cost: usd(0.1), tokens: toks(10, 2) },
@@ -242,6 +249,18 @@ describe("renderProjectSpend", () => {
     expect(bodyLines[0]).toContain("(manual)");
     expect(bodyLines[1]).toContain("opus");
   });
+  it("aggregates grouped breakdown token counters as bigint across the safe-integer boundary", () => {
+    const big = Number.MAX_SAFE_INTEGER; // 9,007,199,254,740,991
+    const breakdown = [
+      { model: "opus", kind: "completion" as const, cost: usd(0.1), tokens: { inputTokens: big, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: big } },
+      { model: "sonnet", kind: "completion" as const, cost: usd(0.2), tokens: { inputTokens: 2, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 2 } },
+    ];
+    // Grouped by kind → both models collapse into one "completion" group.
+    const out = strip(renderProjectSpend("a", spend({ breakdown }), "all time", { byModel: false, byKind: true }));
+    expect(out).toContain("9,007,199,254,740,993");
+    expect(out).not.toContain("9,007,199,254,740,992");
+  });
+
   it("groups by kind when only --by-kind is set", () => {
     const breakdown = [
       { model: "opus", kind: "completion" as const, cost: usd(0.1), tokens: toks(10, 2) },

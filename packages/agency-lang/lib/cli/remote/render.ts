@@ -140,9 +140,14 @@ function formatCount(count: number | bigint): string {
 }
 
 /** A sub-$0.0001 dollar amount rendered with enough precision that a positive
- *  value never collapses to `$0.0000`. Trailing zeros are trimmed. */
+ *  value never collapses to `$0.0000`. Trailing zeros are trimmed; a value below
+ *  the fixed 8-decimal resolution falls back to scientific notation (e.g.
+ *  `$1e-10`) rather than rounding a known positive spend to zero. */
 function formatTinyUsd(amount: number): string {
   const fixed = amount.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+  if (Number(fixed) === 0) {
+    return `$${amount.toExponential()}`;
+  }
   return `$${fixed}`;
 }
 
@@ -174,28 +179,6 @@ function spendIsComplete(spend: { usageComplete: boolean; pricingComplete: boole
   return spend.usageComplete && spend.pricingComplete;
 }
 
-function zeroCost(): CostBreakdown {
-  return { inputCost: 0, outputCost: 0, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0, currency: "USD" };
-}
-function zeroTokens(): TokenBreakdown {
-  return { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 0 };
-}
-function addCostInto(target: CostBreakdown, add: CostBreakdown): void {
-  target.inputCost += add.inputCost;
-  target.outputCost += add.outputCost;
-  target.cachedInputCost += add.cachedInputCost;
-  target.cacheCreationInputCost += add.cacheCreationInputCost;
-  target.hostedToolsCost += add.hostedToolsCost;
-  target.totalCost += add.totalCost;
-}
-function addTokensInto(target: TokenBreakdown, add: TokenBreakdown): void {
-  target.inputTokens += add.inputTokens;
-  target.outputTokens += add.outputTokens;
-  target.cachedInputTokens += add.cachedInputTokens;
-  target.cacheCreationInputTokens += add.cacheCreationInputTokens;
-  target.totalTokens += add.totalTokens;
-}
-
 /** Human label for a breakdown model — the manual sentinel `""` reads as
  *  `(manual)`. */
 function modelLabel(model: string): string {
@@ -224,7 +207,10 @@ function tokenComponentLines(tokens: TokenBreakdown): string[] {
 
 export type SpendGrouping = { byModel: boolean; byKind: boolean };
 
-type SpendGroup = { model: string | null; kind: UsageKind | null; cost: CostBreakdown; tokens: TokenBreakdown };
+// Token counters accumulate as bigint: a grouping can collapse many individually
+// safe breakdown rows, and the sum can cross Number.MAX_SAFE_INTEGER. Cost is a
+// float total (money, not an integer count), so it stays a number.
+type SpendGroup = { model: string | null; kind: UsageKind | null; totalCost: number; inputTokens: bigint; outputTokens: bigint };
 
 /** Fold the raw `(model, kind)` breakdown into the requested grouping. Both
  *  flags → one group per pair; one flag → collapse the other axis; the caller
@@ -238,15 +224,16 @@ function groupBreakdown(rows: ModelKindSpend[], grouping: SpendGrouping): SpendG
     const key = JSON.stringify([model, kind]);
     let group = groups[key];
     if (group === undefined) {
-      group = { model, kind, cost: zeroCost(), tokens: zeroTokens() };
+      group = { model, kind, totalCost: 0, inputTokens: 0n, outputTokens: 0n };
       groups[key] = group;
     }
-    addCostInto(group.cost, row.cost);
-    addTokensInto(group.tokens, row.tokens);
+    group.totalCost += row.cost.totalCost;
+    group.inputTokens += BigInt(row.tokens.inputTokens);
+    group.outputTokens += BigInt(row.tokens.outputTokens);
   }
   return Object.values(groups).sort((left, right) => {
-    if (right.cost.totalCost !== left.cost.totalCost) {
-      return right.cost.totalCost - left.cost.totalCost;
+    if (right.totalCost !== left.totalCost) {
+      return right.totalCost - left.totalCost;
     }
     const modelCmp = (left.model ?? "").localeCompare(right.model ?? "");
     if (modelCmp !== 0) {
@@ -265,7 +252,7 @@ function renderGroupTable(groups: SpendGroup[], grouping: SpendGrouping): string
     const cells: string[] = [];
     if (grouping.byModel) cells.push(modelLabel(group.model ?? ""));
     if (grouping.byKind) cells.push(group.kind ?? "");
-    cells.push(formatUsd(group.cost.totalCost), formatCount(group.tokens.inputTokens), formatCount(group.tokens.outputTokens));
+    cells.push(formatUsd(group.totalCost), formatCount(group.inputTokens), formatCount(group.outputTokens));
     return cells;
   });
   return formatStaticTable(headers, tableRows);

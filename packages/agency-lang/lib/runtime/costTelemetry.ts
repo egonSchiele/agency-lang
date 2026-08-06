@@ -70,17 +70,35 @@ function tokensAreZero(tokens: NormalizedDelta["tokens"]): boolean {
   );
 }
 
-/** A delta carries nothing worth relaying: no cost, no tokens, no unknown-cost
- *  call, no attribution loss, and — crucially — no VALUE-BEARING entry. A no-op
- *  charge such as `addCost(0)` still produces a manual entry, but with all-zero
- *  cost and tokens, so it too is skipped and never spams the parent channel. */
+/** Every named cost component AND the total is zero. Checking the whole
+ *  breakdown — not just `totalCost` — matters because a known-free provider
+ *  result (e.g. `{ inputCost: 0.01, totalCost: 0 }`) carries real component
+ *  detail that must survive the subprocess boundary. */
+function costIsZero(cost: NormalizedDelta["cost"]): boolean {
+  return (
+    cost.inputCost === 0 &&
+    cost.outputCost === 0 &&
+    cost.cachedInputCost === 0 &&
+    cost.cacheCreationInputCost === 0 &&
+    cost.hostedToolsCost === 0 &&
+    cost.totalCost === 0
+  );
+}
+
+/** A delta carries nothing worth relaying: no cost (any component), no tokens,
+ *  no unknown-cost call, no attribution loss, and no attribution the parent
+ *  needs. A no-op `addCost(0)` produces an all-zero MANUAL entry (no attribution
+ *  worth keeping), so it is suppressed. But an all-zero PROVIDER entry still
+ *  carries a `(kind, model)` bucket that must stay topology-invariant, so it is
+ *  never suppressed. */
 function isNoOpDelta(delta: NormalizedDelta): boolean {
   if (delta.attributionLost) return false;
   if (delta.unknownCostCallCount !== 0) return false;
-  if (delta.cost.totalCost !== 0) return false;
+  if (!costIsZero(delta.cost)) return false;
   if (!tokensAreZero(delta.tokens)) return false;
-  if (delta.entry !== undefined && (delta.entry.cost.totalCost !== 0 || !tokensAreZero(delta.entry.tokens))) {
-    return false;
+  if (delta.entry !== undefined) {
+    if (delta.entry.kind !== "manual") return false;
+    if (!costIsZero(delta.entry.cost) || !tokensAreZero(delta.entry.tokens)) return false;
   }
   return true;
 }

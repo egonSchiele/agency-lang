@@ -12,6 +12,9 @@ import { agency } from "../agency.js";
 import { RuntimeContext } from "../state/context.js";
 import { StateStack } from "../state/stateStack.js";
 import { ThreadStore } from "../state/threadStore.js";
+import { runInTestContext } from "../asyncContext.js";
+import { CostGuard, isGuardExceededError } from "../guard.js";
+import type { GraphState } from "../types.js";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -37,6 +40,14 @@ function mockLlmClient() {
       value: { embeddings: [[0.1, 0.2, 0.3]], model: "mock-embed" },
     }),
   };
+}
+
+function makeEmbedCtx() {
+  return new RuntimeContext<GraphState>({
+    statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
+    smoltalkDefaults: {},
+    dirname: "/project",
+  });
 }
 
 function wrapTextResult(output: string) {
@@ -71,6 +82,65 @@ describe("MemoryManager", () => {
       llmClient: mockLlmClient(),
     });
     expect(manager.getMemoryId()).toBe("default");
+  });
+
+  it("accounts a priced embedding that returns no vectors, then throws the no-vector error", async () => {
+    const pricedEmpty = {
+      success: true,
+      value: {
+        embeddings: [],
+        model: "mock-embed",
+        costEstimate: { inputCost: 0, outputCost: 0.5, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" },
+        tokenUsage: { inputTokens: 4, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 4 },
+      },
+    };
+    const client = mockLlmClient();
+    (client.embed as any).mockResolvedValue(pricedEmpty);
+    const manager = new MemoryManager({
+      store: new FileMemoryStore(tmpDir),
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
+      llmClient: client,
+    });
+    const ctx = makeEmbedCtx();
+    // The provider charged us even though it returned no vectors: usage is
+    // accounted (guards + meter), then the structural no-vector error is thrown.
+    await expect(
+      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () => (manager as any)._embed("hello")),
+    ).rejects.toThrow(/no vectors/);
+    expect(ctx.stateStack.localCost).toBeCloseTo(0.5);
+    const { usage } = ctx.invocationUsage.snapshot();
+    expect(usage.cost.totalCost).toBeCloseTo(0.5);
+    expect(usage.entries.some((entry) => entry.kind === "embedding")).toBe(true);
+  });
+
+  it("lets a guard trip win over the no-vector error for a priced empty embedding", async () => {
+    const pricedEmpty = {
+      success: true,
+      value: {
+        embeddings: [],
+        model: "mock-embed",
+        costEstimate: { inputCost: 0, outputCost: 0.5, cachedInputCost: 0, cacheCreationInputCost: 0, hostedToolsCost: 0, totalCost: 0.5, currency: "USD" },
+        tokenUsage: { inputTokens: 4, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 4 },
+      },
+    };
+    const client = mockLlmClient();
+    (client.embed as any).mockResolvedValue(pricedEmpty);
+    const manager = new MemoryManager({
+      store: new FileMemoryStore(tmpDir),
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
+      llmClient: client,
+    });
+    const ctx = makeEmbedCtx();
+    ctx.stateStack.guards.push(new CostGuard(0.1));
+    let caught: unknown;
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () => {
+      try {
+        await (manager as any)._embed("hello");
+      } catch (err) {
+        caught = err;
+      }
+    });
+    expect(isGuardExceededError(caught)).toBe(true);
   });
 
   it("sets memoryId", () => {

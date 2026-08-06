@@ -369,30 +369,36 @@ export class MemoryManager {
         throw new Error(`memory embed call failed: ${result.error}`);
       }
       const vector = result.value.embeddings[0];
-      if (!vector) {
+      // A resolved provider response charged us even if it returned no vectors,
+      // so the trace event fires only when a vector exists (its contract needs
+      // `dimensions`) but the usage is accounted either way — the embedding
+      // analogue of the empty-image path. The no-vector error is thrown only
+      // AFTER accounting + guard enforcement, so a guard trip wins over it.
+      if (vector) {
+        try {
+          await this.statelogClient?.embedCompletion({
+            inputPreview: text.slice(0, EMBED_PREVIEW_CHARS),
+            inputCount: 1,
+            model: result.value.model ?? options?.model,
+            dimensions: vector.length,
+            timeTaken,
+            phase,
+          });
+        } catch (err) {
+          this.logger.debug(
+            `[memory] statelog embedCompletion failed: ${(err as Error).message}`,
+          );
+        }
+      } else {
         this.logger.warn(
           `[memory] embed returned no vectors (phase=${phase}, model=${result.value.model ?? "?"})`,
-        );
-        throw new Error("memory embed returned no vectors");
-      }
-      try {
-        await this.statelogClient?.embedCompletion({
-          inputPreview: text.slice(0, EMBED_PREVIEW_CHARS),
-          inputCount: 1,
-          model: result.value.model ?? options?.model,
-          dimensions: vector.length,
-          timeTaken,
-          phase,
-        });
-      } catch (err) {
-        this.logger.debug(
-          `[memory] statelog embedCompletion failed: ${(err as Error).message}`,
         );
       }
       // Same rationale as `_text` above — embed calls contribute to the
       // surrounding branch's cost/token totals too. `EmbedResult.costEstimate`
       // and `tokenUsage` (smoltalk's names) are optional; an absent estimate is
-      // recorded as an unpriced embedding rather than dropped.
+      // recorded as an unpriced embedding rather than dropped. Recorded (and
+      // guards enforced) BEFORE the no-vector throw below, so a guard trip wins.
       recordMemoryUsageIfInFrame({
         type: "provider",
         kind: "embedding",
@@ -401,6 +407,9 @@ export class MemoryManager {
         cost: result.value.costEstimate,
         tokens: result.value.tokenUsage,
       });
+      if (!vector) {
+        throw new Error("memory embed returned no vectors");
+      }
       return vector;
     } finally {
       this.statelogClient?.endSpan(spanId);

@@ -132,28 +132,38 @@ function formatUsd(amount: number): string {
   return `$${amount.toFixed(4)}`;
 }
 
-/** A count with thousands separators, in a fixed locale for deterministic output. */
-function formatCount(count: number): string {
+/** A count with thousands separators, in a fixed locale for deterministic
+ *  output. Accepts `bigint` so aggregate totals can be summed without crossing
+ *  `Number.MAX_SAFE_INTEGER`. */
+function formatCount(count: number | bigint): string {
   return count.toLocaleString("en-US");
+}
+
+/** A sub-$0.0001 dollar amount rendered with enough precision that a positive
+ *  value never collapses to `$0.0000`. Trailing zeros are trimmed. */
+function formatTinyUsd(amount: number): string {
+  const fixed = amount.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+  return `$${fixed}`;
 }
 
 /** Prefix `≥` when the figure is a trusted lower bound (telemetry incomplete).
  *  A lower bound never uses the `<$0.0001` sentinel — `≥ <$0.0001` ("at least
- *  less than") is incoherent — so a sub-$0.0001 lower bound floors to
- *  `≥ $0.0000` (still true: the total is at least ~zero and may be higher). */
+ *  less than") is incoherent — but it must not floor a positive amount to
+ *  `≥ $0.0000` either (that hides a known positive spend), so a sub-$0.0001
+ *  lower bound keeps extra precision (e.g. `≥ $0.00004`). */
 function lowerBound(amount: number, complete: boolean): string {
   if (complete) {
     return formatUsd(amount);
   }
   if (amount > 0 && amount < 0.0001) {
-    return "≥ $0.0000";
+    return `≥ ${formatTinyUsd(amount)}`;
   }
   return `≥ ${formatUsd(amount)}`;
 }
 
 /** A count that keeps a lower-bound `≥` prefix when the figure is not trusted
  *  complete (telemetry incomplete or price unknown). */
-function lowerBoundCount(count: number, complete: boolean): string {
+function lowerBoundCount(count: number | bigint, complete: boolean): string {
   return complete ? formatCount(count) : `≥ ${formatCount(count)}`;
 }
 
@@ -304,10 +314,12 @@ function trustNotes(
 
 type SpendTotals = {
   totalCost: number;
-  inputTokens: number;
-  outputTokens: number;
-  invocationCount: number;
-  unpricedCallCount: number;
+  // Counters accumulate as bigint: each row's value is a safe integer, but a sum
+  // across many projects can cross Number.MAX_SAFE_INTEGER and silently round.
+  inputTokens: bigint;
+  outputTokens: bigint;
+  invocationCount: bigint;
+  unpricedCallCount: bigint;
   usageComplete: boolean;
   pricingComplete: boolean;
 };
@@ -316,14 +328,14 @@ function spendTotals(rows: AccountSpendRow[]): SpendTotals {
   return rows.reduce<SpendTotals>(
     (totals, row) => ({
       totalCost: totals.totalCost + row.spend.cost.totalCost,
-      inputTokens: totals.inputTokens + row.spend.tokens.inputTokens,
-      outputTokens: totals.outputTokens + row.spend.tokens.outputTokens,
-      invocationCount: totals.invocationCount + row.spend.invocationCount,
-      unpricedCallCount: totals.unpricedCallCount + row.spend.unpricedCallCount,
+      inputTokens: totals.inputTokens + BigInt(row.spend.tokens.inputTokens),
+      outputTokens: totals.outputTokens + BigInt(row.spend.tokens.outputTokens),
+      invocationCount: totals.invocationCount + BigInt(row.spend.invocationCount),
+      unpricedCallCount: totals.unpricedCallCount + BigInt(row.spend.unpricedCallCount),
       usageComplete: totals.usageComplete && row.spend.usageComplete,
       pricingComplete: totals.pricingComplete && row.spend.pricingComplete,
     }),
-    { totalCost: 0, inputTokens: 0, outputTokens: 0, invocationCount: 0, unpricedCallCount: 0, usageComplete: true, pricingComplete: true },
+    { totalCost: 0, inputTokens: 0n, outputTokens: 0n, invocationCount: 0n, unpricedCallCount: 0n, usageComplete: true, pricingComplete: true },
   );
 }
 
@@ -380,7 +392,7 @@ export function renderAccountSpend(rows: AccountSpendRow[], description: string)
   if (!totals.usageComplete) {
     lines.push(color.dim("Some projects have incomplete telemetry; totals are lower bounds."));
   }
-  if (totals.unpricedCallCount > 0) {
+  if (totals.unpricedCallCount > 0n) {
     lines.push(color.dim(`${formatCount(totals.unpricedCallCount)} unpriced call(s) total — cost may be understated.`));
   }
   return lines.join("\n");

@@ -80,6 +80,24 @@ describe("sendInvocationUsageToParent", () => {
     expect(send).toHaveBeenCalledOnce();
   });
 
+  it("sends a known-free result whose total is zero but a named component is not", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    // { inputCost: 0.01, totalCost: 0 } — retained in-process, so it must survive
+    // the subprocess boundary too (the component detail is real).
+    sendInvocationUsageToParent(delta({ cost: cost({ inputCost: 0.01, totalCost: 0 }) }));
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it("sends an all-zero PROVIDER entry (it still carries a (kind, model) bucket)", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    sendInvocationUsageToParent(delta({ entry: { kind: "completion", model: "opus", cost: cost(), tokens: tokens() } }));
+    expect(send).toHaveBeenCalledOnce();
+  });
+
   it("no-ops outside IPC mode", () => {
     const send = vi.fn(() => true);
     process.send = send as any;

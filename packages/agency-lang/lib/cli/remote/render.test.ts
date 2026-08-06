@@ -221,10 +221,13 @@ describe("renderProjectSpend", () => {
     expect(strip(renderProjectSpend("a", spend({ cost: usd(0) }), "all time", NONE_GROUP))).toContain("$0.0000");
     expect(strip(renderProjectSpend("a", spend({ cost: usd(0.00004) }), "all time", NONE_GROUP))).toContain("<$0.0001");
   });
-  it("never emits the incoherent '≥ <$0.0001' for a tiny incomplete amount", () => {
+  it("keeps a tiny positive lower bound visible (neither '≥ <$0.0001' nor a floored '≥ $0.0000')", () => {
     const out = strip(renderProjectSpend("a", spend({ cost: usd(0.00004), usageComplete: false }), "all time", NONE_GROUP));
-    expect(out).not.toContain("≥ <");
-    expect(out).toContain("≥ $0.0000");
+    const costLine = out.split("\n").find((l) => l.includes("Cost:")) ?? "";
+    expect(costLine).not.toContain("≥ <");
+    expect(costLine).toContain("≥ $0.00004");
+    // Must NOT floor a known positive amount to zero.
+    expect(costLine).not.toMatch(/≥ \$0\.0000(?!\d)/);
   });
   it("groups the breakdown by model, sorts by cost desc, and labels the manual sentinel", () => {
     const breakdown = [
@@ -289,6 +292,18 @@ describe("renderAccountSpend", () => {
     expect(total).toContain("≥ ");
     expect(out).toContain("incomplete telemetry");
     expect(out).toContain("3 unpriced call(s) total");
+  });
+
+  it("sums token counts as bigint so a TOTAL crossing MAX_SAFE_INTEGER stays exact", () => {
+    const big = Number.MAX_SAFE_INTEGER; // 9,007,199,254,740,991
+    const out = strip(renderAccountSpend([
+      row("a", 1, { tokens: { inputTokens: big, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: big } }),
+      row("b", 1, { tokens: { inputTokens: 2, outputTokens: 0, cachedInputTokens: 0, cacheCreationInputTokens: 0, totalTokens: 2 } }),
+    ], "all time"));
+    const total = out.split("\n").find((l) => l.includes("TOTAL")) ?? "";
+    // big + 2 = 9,007,199,254,740,993 exactly; Number addition rounds to ...992.
+    expect(total).toContain("9,007,199,254,740,993");
+    expect(total).not.toContain("9,007,199,254,740,992");
   });
 
   it("does NOT mark token columns as lower bounds for an unpriced-but-complete row", () => {

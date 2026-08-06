@@ -9,6 +9,7 @@ import {
   acquireDocLock,
   buildDocFreshnessContext,
   buildDocLedgerEntry,
+  captureDepSnapshot,
   docRenderKey,
   isDocEntryFresh,
   isSafeSourceRel,
@@ -22,6 +23,7 @@ import {
   type DocLedgerEntry,
 } from "./docLedger.js";
 import { hashBytes } from "@/compiler/buildManifest.js";
+import { evictParseCache } from "@/parseCache.js";
 
 const dirs: string[] = [];
 function tmp(): string {
@@ -297,6 +299,28 @@ describe("entry builder + freshness predicate (writer/checker pair)", () => {
       // Simulates an editor save mid-render: the hash captured at parse
       // time no longer matches the bytes on disk now.
       sourceHashAtParse: "hash-of-older-bytes",
+    });
+    expect(entry.cacheable).toBe(false);
+  });
+
+  test("dep drift between pre-render snapshot and entry-build forces cacheable:false", () => {
+    const inputDir = tmp();
+    const outDir = tmp();
+    fs.writeFileSync(path.join(inputDir, "a.agency"), `import { b } from "./b.agency"\nexport def a(): number { return b() }\n`);
+    fs.writeFileSync(path.join(inputDir, "b.agency"), `export def b(): number { return 2 }\n`);
+    const ctx = buildDocFreshnessContext(inputDir, outDir);
+    const preRender = captureDepSnapshot(path.join(inputDir, "a.agency"), {}, ctx.stdlibDir);
+    // The dep is saved after the snapshot (i.e. mid-render): bytes drift.
+    fs.writeFileSync(path.join(inputDir, "b.agency"), `export def b(): number { return 99 }\n`);
+    evictParseCache(path.join(inputDir, "b.agency"));
+    const entry = buildDocLedgerEntry({
+      sourceRel: "a.agency",
+      ctx,
+      config: {},
+      registrySymbols: ["a"],
+      linkTargets: {},
+      writtenBytes: "x",
+      preRender,
     });
     expect(entry.cacheable).toBe(false);
   });

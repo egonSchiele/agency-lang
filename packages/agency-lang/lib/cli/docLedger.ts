@@ -401,6 +401,28 @@ export function isDocEntryFresh(
   return outHash !== null && outHash === entry.outputHash;
 }
 
+/** The dependency state of a page's inputs at one instant: the resolved
+ *  transitive closure plus each member's content hash. Captured BEFORE
+ *  rendering (rendering is when SymbolTable.build consumes dependency
+ *  semantics) and compared against the post-render state by
+ *  buildDocLedgerEntry — a dep saved mid-render would otherwise pair
+ *  stale Markdown with fresh hashes, and the next run would accept it. */
+export type DepSnapshot = {
+  deps: string[];
+  depHashes: (string | null)[];
+};
+
+export function captureDepSnapshot(
+  absSource: string,
+  config: AgencyConfig,
+  stdlibDir: string,
+): DepSnapshot {
+  const fp = dependencyFingerprint(absSource, config, {
+    resolveStdlib: absSource.startsWith(stdlibDir + path.sep),
+  });
+  return { deps: fp.deps, depHashes: fp.deps.map((d) => hashFile(d)) };
+}
+
 /**
  * The one writer of entries, paired with isDocEntryFresh: dependencies
  * are stored in the fingerprint's exact sorted order and hashed in that
@@ -419,6 +441,11 @@ export function buildDocLedgerEntry(args: {
    *  record new hashes — the drift forces cacheable:false so the next run
    *  repairs the page instead of accepting it as fresh. */
   sourceHashAtParse?: string;
+  /** Dependency closure + hashes captured immediately BEFORE rendering.
+   *  Compared against the post-render state below: membership or byte
+   *  drift means the symbol table may have consumed different dependency
+   *  semantics than these hashes describe — never cacheable. */
+  preRender?: DepSnapshot;
 }): DocLedgerEntry {
   const { sourceRel, ctx, config, registrySymbols, linkTargets, writtenBytes } = args;
   const absSource = path.join(ctx.inputDir, sourceRel);
@@ -440,12 +467,17 @@ export function buildDocLedgerEntry(args: {
   if (args.sourceHashAtParse !== undefined && args.sourceHashAtParse !== sourceHash) {
     cacheable = false;
   }
-  // Re-read the inputs once more after the fingerprint walk: a dep saved
-  // between its hash above and here would otherwise pin stale content.
-  for (let i = 0; i < fp.deps.length; i++) {
-    if ((hashFile(fp.deps[i]) ?? "") !== depHashes[i]) {
+  // Pre-render vs post-render dependency drift: membership AND bytes must
+  // both be identical, or the rendered Markdown and these hashes describe
+  // different worlds.
+  if (args.preRender !== undefined) {
+    const pre = args.preRender;
+    const sameMembership =
+      pre.deps.length === fp.deps.length && pre.deps.every((d, i) => d === fp.deps[i]);
+    const sameBytes =
+      sameMembership && pre.depHashes.every((h, i) => (h ?? "") === depHashes[i]);
+    if (!sameMembership || !sameBytes) {
       cacheable = false;
-      break;
     }
   }
   if ((hashFile(absSource) ?? "") !== sourceHash) {

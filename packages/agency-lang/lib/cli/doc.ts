@@ -31,6 +31,7 @@ import {
   acquireDocLock,
   buildDocFreshnessContext,
   buildDocLedgerEntry,
+  captureDepSnapshot,
   docRenderKey,
   isDocEntryFresh,
   isSafeSourceRel,
@@ -248,6 +249,10 @@ function generateDocDirectory(
         `refusing to write documentation through a symlink: ${info.mdRelPath}`,
       );
     }
+    // Dependency snapshot BEFORE rendering: generateDocForFile's symbol
+    // table is what consumes dependency semantics, so this is the last
+    // instant the hashes are guaranteed to describe what rendering sees.
+    const preRender = captureDepSnapshot(info.filePath, config, ctx.stdlibDir);
     const linkRecorder: Record<string, string | null> = {};
     const program = parsedPrograms.get(info.filePath)!;
     const written = generateDocForFile(
@@ -272,6 +277,7 @@ function generateDocDirectory(
         linkTargets: linkRecorder,
         writtenBytes: written,
         sourceHashAtParse: sourceHashAtParse.get(info.filePath),
+        preRender,
       });
     }
   }

@@ -247,6 +247,117 @@ function checkCoverageLifecycle() {
   console.log("[cli-tier2] coverage lifecycle ✓");
 }
 
+// --- definition (LSP go-to-definition, reads source on stdin) ---------------
+
+function checkDefinition() {
+  // Two functions are called on one line; the cursor points at the SECOND call.
+  // Coordinates are derived from the fixture, and the line/column differ so that
+  // swapping them (below) lands off-target — proving the arguments are honored.
+  const source = [
+    "def alpha(): number {",
+    "  return 1",
+    "}",
+    "",
+    "def beta(): number {",
+    "  return 2",
+    "}",
+    "",
+    "node main(): number {",
+    "  return alpha() + beta()",
+    "}",
+    "",
+  ].join("\n");
+  const lines = source.split("\n");
+  const callLine = lines.findIndex((l) => l.includes("alpha() + beta()"));
+  const callColumn = lines[callLine].indexOf("beta()");
+  const defLine = lines.findIndex((l) => l.startsWith("def beta"));
+  assert(callLine !== callColumn, "fixture line and column must differ for the swap check");
+
+  const result = runInstalledAgency(
+    dir,
+    ["definition", "--line", String(callLine), "--column", String(callColumn), "--file", "probe.agency"],
+    { input: source },
+  );
+  assertBlank(result.stderr, "[definition] stderr");
+  const got = JSON.parse(result.stdout);
+  assert(
+    JSON.stringify(got) === JSON.stringify({ file: "probe.agency", line: defLine, column: 0 }),
+    `definition returned ${result.stdout}`,
+  );
+
+  // Swapping line and column must change the answer (here it resolves to
+  // nothing), proving the cursor arguments are honored rather than ignored.
+  const swapped = runInstalledAgency(
+    dir,
+    ["definition", "--line", String(callColumn), "--column", String(callLine), "--file", "probe.agency"],
+    { input: source },
+  );
+  assert(
+    swapped.stdout.trim() !== result.stdout.trim(),
+    `swapped cursor returned the same result as the real cursor: ${swapped.stdout}`,
+  );
+  console.log("[cli-tier2] definition ✓");
+}
+
+// --- models list (bundled catalog, offline) ---------------------------------
+
+function checkModelsList() {
+  const result = runInstalledAgency(dir, ["models", "list"]);
+  assertBlank(result.stderr, "[models list] stderr");
+  const lines = result.stdout.split("\n");
+  const headerIdx = lines.findIndex((l) => l.includes("NAME") && l.includes("PROVIDER"));
+  assert(headerIdx >= 0, "models list must print a NAME/PROVIDER header");
+  // The empty catalog still prints the header, so require a real data row.
+  const dataRow = lines.slice(headerIdx + 1).find((l) => l.trim().length > 0);
+  assert(dataRow, "models list must print at least one model row");
+  const fields = dataRow.trim().split(/\s+/);
+  assert(fields[0].length > 0, "model name must be non-empty");
+  assert(fields[1].length > 0, "model provider must be non-empty");
+  assert(/^\d+$/.test(fields[fields.length - 1]), `context column must be numeric, got "${fields[fields.length - 1]}"`);
+  console.log("[cli-tier2] models list ✓");
+}
+
+// --- local list / resolve, fully isolated from global state -----------------
+
+function checkLocalIsolated() {
+  const localDir = subdir("local");
+  const envModels = join(localDir, "env-models");
+  const configModels = join(localDir, "config-models");
+  const home = join(localDir, "home");
+  mkdirSync(home, { recursive: true });
+  // A sentinel in AGENCY_MODELS_DIR and a decoy in the config's modelsDir prove
+  // directory selection rather than coincidentally observing two empty dirs.
+  writeFile(envModels, "env-sentinel.gguf", "");
+  writeFile(configModels, "config-decoy.gguf", "");
+  writeFile(localDir, "agency.json", JSON.stringify({ client: { modelsDir: configModels } }, null, 2) + "\n");
+  writeFile(localDir, "provider.mjs", "export default {};\n");
+
+  // The provider gate needs AGENCY_LLAMA_PROVIDER_MODULE (smoltalk-llama-cpp is
+  // not installed on CI); the isolated HOME keeps ~/agency.json aliases out.
+  // A fresh HOME makes npm run its update check and print a notice to stderr, so
+  // disable the notifier to keep the empty-stderr assertions about the command.
+  const env = {
+    AGENCY_MODELS_DIR: envModels,
+    AGENCY_LLAMA_PROVIDER_MODULE: join(localDir, "provider.mjs"),
+    HOME: home,
+    npm_config_update_notifier: "false",
+  };
+
+  const list = runInstalledAgency(localDir, ["local", "list"], { env });
+  assertBlank(list.stderr, "[local list] stderr");
+  assertIncludes(list.stdout, "env-sentinel.gguf");
+  assert(!list.stdout.includes("config-decoy.gguf"), "AGENCY_MODELS_DIR must win over config modelsDir");
+  assert(!list.stdout.includes("No models downloaded."), "the env models dir should not read as empty");
+
+  const resolved = runInstalledAgency(localDir, ["local", "resolve", "smollm2-135m"], { env });
+  assertBlank(resolved.stderr, "[local resolve] stderr");
+  assert(
+    resolved.stdout.replace(/\r\n/g, "\n").trim() === "hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
+    `local resolve returned: ${resolved.stdout}`,
+  );
+  console.log("[cli-tier2] local isolated ✓");
+}
+
 // --- Run everything ---------------------------------------------------------
 
 try {
@@ -256,6 +367,9 @@ try {
   checkPackStandalone();
   checkTraceBundleRoundTrip();
   checkCoverageLifecycle();
+  checkDefinition();
+  checkModelsList();
+  checkLocalIsolated();
 
   console.log("=== cli-tier2 test passed ===");
   cleanup(dir);

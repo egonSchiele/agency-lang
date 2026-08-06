@@ -350,6 +350,13 @@ try {
   checkAstPreprocess();
   checkDoc();
   checkConfig();
+
+  // Guard the config-independence of `diagnostics`. With a malformed agency.json
+  // present, any config-loading command (e.g. `config show`) exits non-zero, so
+  // if `diagnostics` ever reverted to getConfig() its expected-status-0 checks
+  // below would fail. Because it parses with {}, it ignores project config and
+  // stays green. Written here, after every config-sensitive check above.
+  writeFile(dir, "agency.json", "{ this is not valid json ");
   checkDiagnostics();
 
   console.log("=== cli-lang test passed ===");

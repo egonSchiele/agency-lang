@@ -1191,14 +1191,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
         const result = parseAgency(contents, {}, false, false);
         if (result.success) return;
         // Always emit a payload for a failure. A rare failure path returns no
-        // errorData; fall back to a minimal one built from the message so the
-        // editor still gets JSON.
+        // errorData; fall back to a minimal one. `result.message` is optional,
+        // so normalize it to a non-empty string for both required message
+        // fields of ParseAgencyErrorData.
+        const message = result.message ?? "Parse error";
         const errorData = result.errorData ?? {
           line: 0,
           column: 0,
           length: 1,
-          message: result.message,
-          prettyMessage: result.message,
+          message,
+          prettyMessage: message,
         };
         console.log(JSON.stringify(errorData, null, 2));
       });

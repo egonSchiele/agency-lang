@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import type { AgencyConfig } from "./config.js";
 import {
   AgencyConfigSchema,
   applyCliFlags,
@@ -238,6 +239,64 @@ describe("applyCliFlags", () => {
     const input = {};
     applyCliFlags(input, { strict: true, logFile: "x", trace: "t", maxToolCallRounds: 5 });
     expect(input).toEqual({});
+  });
+
+  describe("--model", () => {
+    /** A config with a provider already set, as agency.json might. */
+    function configWithProvider(): AgencyConfig {
+      return {
+        client: {
+          defaultModel: "gpt-4o-mini",
+          defaultProvider: "openrouter",
+          providerModules: ["./my-provider.mjs"],
+        },
+      };
+    }
+
+    it("does nothing when the flag is absent", () => {
+      const after = applyCliFlags(configWithProvider(), {});
+      expect(after.client?.defaultModel).toBe("gpt-4o-mini");
+      expect(after.client?.defaultProvider).toBe("openrouter");
+    });
+
+    it("a bare model sets the model and clears an inherited provider", () => {
+      const after = applyCliFlags(configWithProvider(), {
+        model: { model: "claude-opus-4-8" },
+      });
+      expect(after.client?.defaultModel).toBe("claude-opus-4-8");
+      expect(after.client?.defaultProvider).toBeUndefined();
+      // Stronger than toBeUndefined: the key must be GONE, because the code
+      // generator emits a provider whenever the key is present.
+      expect(after.client).not.toHaveProperty("defaultProvider");
+    });
+
+    it("a prefixed model sets both fields", () => {
+      const after = applyCliFlags(configWithProvider(), {
+        model: { model: "my-tune", explicitProvider: "my-company" },
+      });
+      expect(after.client?.defaultModel).toBe("my-tune");
+      expect(after.client?.defaultProvider).toBe("my-company");
+    });
+
+    it("leaves neighbouring client fields alone", () => {
+      const after = applyCliFlags(configWithProvider(), {
+        model: { model: "claude-opus-4-8" },
+      });
+      expect(after.client?.providerModules).toEqual(["./my-provider.mjs"]);
+    });
+
+    it("does not mutate the config it was given", () => {
+      const before = configWithProvider();
+      const snapshot = structuredClone(before);
+      applyCliFlags(before, { model: { model: "claude-opus-4-8" } });
+      expect(before).toEqual(snapshot);
+    });
+
+    it("works when the config has no client block at all", () => {
+      const after = applyCliFlags({}, { model: { model: "claude-opus-4-8" } });
+      expect(after.client?.defaultModel).toBe("claude-opus-4-8");
+      expect(after.client?.defaultProvider).toBeUndefined();
+    });
   });
 });
 

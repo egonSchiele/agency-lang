@@ -24,6 +24,21 @@ import {
   section,
 } from "@/utils/markdown.js";
 import { docStringText } from "@/utils/docStringText.js";
+import {
+  OwnedPathError,
+  acquireDocLock,
+  buildDocFreshnessContext,
+  buildDocLedgerEntry,
+  docRenderKey,
+  isDocEntryFresh,
+  isSafeSourceRel,
+  loadDocLedger,
+  outputPathFor,
+  releaseDocLock,
+  resolveOwnedOutputPath,
+  saveDocLedger,
+  type DocLedgerEntry,
+} from "./docLedger.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -36,8 +51,12 @@ type DocContext = {
   symbolRegistry: SymbolRegistry;
   currentMdPath?: string;
   config: AgencyConfig;
-  /** Built on first use and reused for every file in the run. */
+  /** Built on first use, PER PAGE (each page gets a fresh DocContext). */
   symbolTable?: SymbolTable;
+  /** When set, formatTypeLinked records every registry lookup it makes:
+   *  name → target md path, or null for "rendered unlinked". This is the
+   *  cache's evidence for re-checking links against next run's registry. */
+  linkRecorder?: Record<string, string | null>;
 };
 
 export function generateDoc(
@@ -50,80 +69,226 @@ export function generateDoc(
   const rawBaseUrl = baseUrlOverride || config.doc?.baseUrl;
   const baseUrl = rawBaseUrl?.replace(/\/+$/, "");
 
-  if (fs.statSync(inputPath).isDirectory()) {
-    // First pass: parse and preprocess all files, build symbol registry
-    const symbolRegistry: SymbolRegistry = {};
-    const files = [...findRecursively(inputPath, ".agency", [], ignoreDirs)];
-    const parsedPrograms = new Map<
-      string,
-      { program: AgencyProgram; relativePath: string; mdRelPath: string }
-    >();
-
-    for (const { path: filePath } of files) {
-      const relativePath = path.relative(inputPath, filePath);
-      const mdRelPath = relativePath.replace(/\.agency$/, ".md");
-      const contents = readFile(filePath);
-      const program = preprocessProgram(parse(contents, config), config);
-
-      parsedPrograms.set(filePath, { program, relativePath, mdRelPath });
-
-      const info = buildCompilationUnit(program);
-      for (const name of Object.keys(info.functionDefinitions)) {
-        symbolRegistry[name] = mdRelPath;
-      }
-      for (const node of info.graphNodes) {
-        symbolRegistry[declaredName(node.nodeName)] = mdRelPath;
-      }
-      for (const name of Object.keys(
-        info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {},
-      )) {
-        symbolRegistry[name] = mdRelPath;
-      }
-      for (const c of collectExportedConstants(program)) {
-        symbolRegistry[c.variableName] = mdRelPath;
-      }
-    }
-
-    // Second pass: generate docs (reusing parsed programs)
-    for (const [
-      filePath,
-      { program, relativePath, mdRelPath },
-    ] of parsedPrograms) {
-      const outputPath = path.join(outputDir, mdRelPath);
-      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  // BOTH branches lock: single-file mode bypasses the cache (no ledger,
+  // no freshness, no reconciliation) but writes into the same physical
+  // output directory, so it must not interleave with a directory run.
+  fs.mkdirSync(outputDir, { recursive: true });
+  const outDirReal = fs.realpathSync(outputDir);
+  const lock = acquireDocLock(outDirReal);
+  try {
+    if (fs.statSync(inputPath).isDirectory()) {
+      generateDocDirectory(config, inputPath, outDirReal, ignoreDirs, baseUrl);
+    } else {
+      const baseName = path.basename(inputPath).replace(/\.agency$/, ".md");
+      const outputPath = path.join(outDirReal, baseName);
+      const program = preprocessProgram(
+        parse(readFile(inputPath), config),
+        config,
+      );
       generateDocForFile(
-        filePath,
+        inputPath,
         outputPath,
         {
           baseUrl,
-          sourceRelPath: relativePath,
-          symbolRegistry,
-          currentMdPath: mdRelPath,
+          sourceRelPath: path.basename(inputPath),
+          symbolRegistry: {},
           config,
         },
         program,
       );
     }
-  } else {
-    const baseName = path.basename(inputPath).replace(/\.agency$/, ".md");
-    const outputPath = path.join(outputDir, baseName);
-    fs.mkdirSync(outputDir, { recursive: true });
-    const program = preprocessProgram(
-      parse(readFile(inputPath), config),
-      config,
+  } finally {
+    releaseDocLock(lock);
+  }
+}
+
+/**
+ * Directory mode with the incremental cache. The flow's invariants:
+ *
+ *  - Freshness and ownership are separate evidence. Identity or
+ *    render-key changes mark every page stale but RETAIN prior entries —
+ *    they are what authorizes deleting obsolete pages. Only a ledger that
+ *    failed validation (authority=false) deletes nothing.
+ *  - The registry is rebuilt every run in TRAVERSAL ORDER (collisions are
+ *    last-writer-wins; fresh files contribute their cached symbols, stale
+ *    files their parsed ones). Never sort the traversal.
+ *  - Rendering is unchanged from the uncached path: each stale page goes
+ *    through today's generateDocForFile with its own per-page context
+ *    (and thus its own symbol table). Fresh pages build nothing.
+ */
+function generateDocDirectory(
+  config: AgencyConfig,
+  inputPath: string,
+  outDirReal: string,
+  ignoreDirs: string[],
+  baseUrl: string | undefined,
+): void {
+  const inputDirReal = fs.realpathSync(path.resolve(inputPath));
+  const { ledger: prior, authority } = loadDocLedger(outDirReal);
+  const renderKey = docRenderKey(config, baseUrl ?? "");
+  const sortedIgnore = [...ignoreDirs].sort();
+  const identityMatches =
+    prior !== null &&
+    prior.identity.inputDir === inputDirReal &&
+    sameStringList(prior.identity.ignoreDirs, sortedIgnore);
+  const allStale = !authority || !identityMatches || prior!.renderKey !== renderKey;
+
+  const files = [...findRecursively(inputDirReal, ".agency", [], ignoreDirs)];
+  const ctx = buildDocFreshnessContext(inputDirReal, outDirReal);
+
+  type FileInfo = { filePath: string; rel: string; mdRelPath: string; fresh: boolean };
+  const infos: FileInfo[] = files.map(({ path: filePath }) => {
+    const rel = path.relative(inputDirReal, filePath);
+    // Traversal from the realpath'd root cannot produce escaping keys,
+    // but the safety predicate stays load-bearing: an unsafe rel is
+    // rendered without ever becoming a ledger key.
+    const safe = isSafeSourceRel(rel);
+    const entry = safe ? prior?.entries[rel] : undefined;
+    return {
+      filePath,
+      rel,
+      mdRelPath: rel.replace(/\.agency$/, ".md"),
+      fresh: !allStale && entry !== undefined && isDocEntryFresh(rel, entry, ctx),
+    };
+  });
+
+  // Pass 1 — the symbol registry, in traversal order. Fresh files
+  // contribute their cached registrySymbols without being parsed; that is
+  // the cache's entire point (parsing is ~80% of a doc run).
+  const symbolRegistry: SymbolRegistry = {};
+  const parsedPrograms = new Map<string, AgencyProgram>();
+  const parseFor = (filePath: string): AgencyProgram => {
+    const program = preprocessProgram(parse(readFile(filePath), config), config);
+    parsedPrograms.set(filePath, program);
+    return program;
+  };
+  for (const info of infos) {
+    if (info.fresh) {
+      for (const name of prior!.entries[info.rel].registrySymbols) {
+        symbolRegistry[name] = info.mdRelPath;
+      }
+    } else {
+      for (const name of extractRegistrySymbols(parseFor(info.filePath))) {
+        symbolRegistry[name] = info.mdRelPath;
+      }
+    }
+  }
+
+  // Link re-check: a fresh page stays fresh only if every registry lookup
+  // it recorded still answers identically (including "still unresolved"
+  // for null records). This is what makes cross-closure link changes —
+  // a symbol moving, appearing, or winning a name collision in a file the
+  // page never imports — impossible to serve stale. The page's registry
+  // contribution stays as-cached: re-registering after the loop would
+  // flip last-writer-wins collision outcomes.
+  for (const info of infos) {
+    if (!info.fresh) continue;
+    const recorded = prior!.entries[info.rel].linkTargets;
+    const changed = Object.entries(recorded).some(
+      ([name, target]) => (symbolRegistry[name] ?? null) !== target,
     );
-    generateDocForFile(
-      inputPath,
-      outputPath,
+    if (changed) {
+      info.fresh = false;
+      parseFor(info.filePath);
+    }
+  }
+
+  // Pass 2 — render stale pages exactly as the uncached path does.
+  const newEntries: Record<string, DocLedgerEntry> = {};
+  for (const info of infos) {
+    if (info.fresh) {
+      newEntries[info.rel] = prior!.entries[info.rel];
+      continue;
+    }
+    const resolved = resolveOwnedOutputPath(outDirReal, info.mdRelPath, {
+      createParents: true,
+    });
+    if (resolved.leafIsSymlink) {
+      throw new OwnedPathError(
+        `refusing to write documentation through a symlink: ${info.mdRelPath}`,
+      );
+    }
+    const linkRecorder: Record<string, string | null> = {};
+    const program = parsedPrograms.get(info.filePath)!;
+    const written = generateDocForFile(
+      info.filePath,
+      resolved.abs,
       {
         baseUrl,
-        sourceRelPath: path.basename(inputPath),
-        symbolRegistry: {},
+        sourceRelPath: info.rel,
+        symbolRegistry,
+        currentMdPath: info.mdRelPath,
         config,
+        linkRecorder,
       },
       program,
     );
+    if (isSafeSourceRel(info.rel)) {
+      newEntries[info.rel] = buildDocLedgerEntry({
+        sourceRel: info.rel,
+        ctx,
+        config,
+        registrySymbols: extractRegistrySymbols(program),
+        linkTargets: linkRecorder,
+        writtenBytes: written,
+      });
+    }
   }
+
+  // Reconciliation: prior-owned pages absent from the new desired set.
+  // Deletion authority is the validated prior ledger; the path is always
+  // recomputed from the key (never the stored outputPath field), and a
+  // symlinked ancestor skips the delete entirely. A leaf symlink is
+  // unlinked as a link, never followed.
+  if (authority) {
+    const desired = new Set(Object.keys(newEntries).map(outputPathFor));
+    for (const rel of Object.keys(prior!.entries)) {
+      const outRel = outputPathFor(rel);
+      if (desired.has(outRel)) continue;
+      let target;
+      try {
+        target = resolveOwnedOutputPath(outDirReal, outRel);
+      } catch {
+        continue;
+      }
+      fs.rmSync(target.abs, { force: true });
+    }
+  }
+
+  saveDocLedger(outDirReal, {
+    version: 1,
+    outputDir: outDirReal,
+    identity: { inputDir: inputDirReal, ignoreDirs: sortedIgnore },
+    renderKey,
+    entries: newEntries,
+  });
+}
+
+function sameStringList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+/** A file's pass-1 registry contributions. NOT "exported symbols": all
+ *  function definitions (non-exported and underscore-prefixed included),
+ *  node names, global-scope type aliases, and exported constants — the
+ *  set link targets resolve against. Cached per page as
+ *  `registrySymbols`, so an unchanged file costs no parse. */
+export function extractRegistrySymbols(program: AgencyProgram): string[] {
+  const info = buildCompilationUnit(program);
+  const out: string[] = [];
+  for (const name of Object.keys(info.functionDefinitions)) {
+    out.push(name);
+  }
+  for (const node of info.graphNodes) {
+    out.push(declaredName(node.nodeName));
+  }
+  for (const name of Object.keys(info.typeAliases.get(GLOBAL_SCOPE_KEY) ?? {})) {
+    out.push(name);
+  }
+  for (const c of collectExportedConstants(program)) {
+    out.push(c.variableName);
+  }
+  return out;
 }
 
 function preprocessProgram(
@@ -140,12 +305,14 @@ function preprocessProgram(
 }
 
 /**
- * One symbol table per doc run, not per file.
+ * One symbol table PER PAGE, rooted at that page's own file.
  *
- * generateDocForFile runs for every file, and `agency doc stdlib` covers the
- * whole standard library. The crawl result is the same for every file in one
- * run once the entry has been crawled, so building it per file would clone the
- * reachable set dozens of times for no new information.
+ * The memo lives on the DocContext, and generateDoc constructs a fresh
+ * context for every page — so despite the memo, no table is ever shared
+ * across pages. (An older comment here claimed one table per run; the
+ * code never did that.) This per-page behavior is the parity baseline the
+ * incremental cache preserves: a page's Throws column is computed from a
+ * crawl rooted at that page, and fresh pages build no table at all.
  */
 function symbolTableFor(filePath: string, ctx: DocContext): SymbolTable {
   if (!ctx.symbolTable) {
@@ -159,7 +326,7 @@ function generateDocForFile(
   outputPath: string,
   ctx: DocContext,
   program: AgencyProgram,
-): void {
+): string {
   // A symbol table is what makes an imported function's effects visible. The
   // Throws column understated everything reached through an import without it
   // — a guard block in another module never showed up (GitHub issue 680).
@@ -237,8 +404,9 @@ function generateDocForFile(
     interruptEffectsByFunction,
   );
   if (nodeSection) sections.push(nodeSection);
-  const generatedOutput = sections.join("\n\n") + "\n";
-  fs.writeFileSync(outputPath, postprocessDoc(generatedOutput));
+  const generatedOutput = postprocessDoc(sections.join("\n\n") + "\n");
+  fs.writeFileSync(outputPath, generatedOutput);
+  return generatedOutput;
 }
 
 function postprocessDoc(doc: string): string {
@@ -258,7 +426,7 @@ function formatType(type: VariableType | undefined | null): string {
     .trim();
 }
 
-function formatTypeLinked(
+export function formatTypeLinked(
   type: VariableType | undefined | null,
   ctx: DocContext,
 ): string {
@@ -268,6 +436,11 @@ function formatTypeLinked(
 
   const name = type.aliasName;
   const targetMdPath = ctx.symbolRegistry[name];
+  if (ctx.linkRecorder) {
+    // Misses are recorded as null so a symbol APPEARING elsewhere later
+    // also invalidates this page.
+    ctx.linkRecorder[name] = targetMdPath ?? null;
+  }
   if (!targetMdPath) return "`" + plain + "`";
 
   if (targetMdPath === ctx.currentMdPath) {

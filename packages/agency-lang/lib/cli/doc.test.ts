@@ -911,3 +911,73 @@ node main() { print("hi") }
     expect(out).not.toContain("description:");
   });
 });
+
+// ——— incremental-cache seams (registry extraction + link recording) ———
+
+import { extractRegistrySymbols, formatTypeLinked } from "./doc.js";
+import { parseAgency } from "../parser.js";
+import type { AgencyProgram } from "@/types.js";
+import type { VariableType } from "@/types/typeHints.js";
+
+/** Parse Agency source for registry tests; throws on failure so a bad
+ *  fixture fails loudly. Template ON, matching doc's pass-1 parse. */
+function parseFixture(src: string): AgencyProgram {
+  const result = parseAgency(src, {}, true);
+  if (!result.success) {
+    throw new Error(`fixture parse failed: ${result.message}`);
+  }
+  return result.result;
+}
+
+/** The typeAliasVariable shape formatTypeLinked links. */
+function aliasType(name: string): VariableType {
+  return { type: "typeAliasVariable", aliasName: name } as VariableType;
+}
+
+describe("extractRegistrySymbols", () => {
+  it("registers all functions (non-exported and underscore included), nodes, global aliases, exported consts only", () => {
+    const program = parseFixture(
+      [
+        "def hidden(): number { return 1 }",
+        "export def _guardish(): number { return 2 }",
+        "export def visible(): number { return 3 }",
+        "node main() { return 4 }",
+        "export type Foo = { a: number }",
+        "type Unexported = { b: number }",
+        "export const BAR: number = 5",
+        "const PRIVATE: number = 6",
+      ].join("\n"),
+    );
+    // Pins exactly today's pass-1 set (doc.ts registry loops): aliases are
+    // registered from the GLOBAL scope regardless of export; constants
+    // only when exported.
+    expect(extractRegistrySymbols(program).sort()).toEqual(
+      ["BAR", "Foo", "Unexported", "_guardish", "hidden", "main", "visible"],
+    );
+  });
+});
+
+describe("link recording", () => {
+  it("records hits as target md paths and misses as null", () => {
+    const recorder: Record<string, string | null> = {};
+    const ctx = {
+      symbolRegistry: { Foo: "types.md" },
+      currentMdPath: "a.md",
+      config: {},
+      linkRecorder: recorder,
+    };
+    formatTypeLinked(aliasType("Foo"), ctx);
+    formatTypeLinked(aliasType("Nope"), ctx);
+    expect(recorder).toEqual({ Foo: "types.md", Nope: null });
+  });
+
+  it("does not record when no recorder is attached (uncached paths)", () => {
+    expect(() =>
+      formatTypeLinked(aliasType("Foo"), {
+        symbolRegistry: {},
+        currentMdPath: "a.md",
+        config: {},
+      }),
+    ).not.toThrow();
+  });
+});

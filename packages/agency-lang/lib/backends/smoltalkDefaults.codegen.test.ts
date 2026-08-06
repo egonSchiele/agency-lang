@@ -72,4 +72,9 @@ describe("smoltalkDefaults codegen", () => {
     const out = generate(PROGRAM, { client: { defaultProvider: "openrouter" } });
     expect(out).toMatch(/provider:\s*"openrouter"/);
   });
+
+  it("bakes client.defaultModel into the generated client config", () => {
+    const out = generate(PROGRAM, { client: { defaultModel: "claude-opus-4-8" } });
+    expect(out).toMatch(/model:\s*"claude-opus-4-8"/);
+  });
 });

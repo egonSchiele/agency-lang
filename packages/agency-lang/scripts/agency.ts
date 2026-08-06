@@ -17,6 +17,7 @@ import {
   installDirFromUrl,
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
+import { resolveModelFlag } from "@/cli/modelFlag.js";
 import {
   splitCommandLine,
   type Arity,
@@ -379,6 +380,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "--max-tool-result-chars <n>",
         "Max chars of a single tool result fed back to the model (0 disables; default 100000; overrides agency.json)",
         parseNonNegativeInt,
+      )
+      .option(
+        "--model <name>",
+        "Model for this run's LLM calls, as `model` or `provider/model` (e.g. gpt-4o-mini, openrouter/anthropic/claude-sonnet-4)",
+        // Adapter, not decoration: commander calls a parser with
+        // (value, previous), and `previous` would land in the resolver's
+        // catalogNames parameter when --model is repeated.
+        (value: string) => resolveModelFlag(value),
       )
       .option(
         "--policy <name|path>",

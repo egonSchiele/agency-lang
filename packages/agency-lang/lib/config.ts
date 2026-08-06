@@ -675,6 +675,18 @@ export function findProjectRoot(startPath: string): string | null {
 //     that has already been compiled.
 // ════════════════════════════════════════════════════════════════════════
 
+/** A `--model` value after parsing. `explicitProvider` is set only when the
+ *  user wrote `provider/model`; a bare model leaves it undefined so smoltalk
+ *  infers the provider from the model name.
+ *
+ *  Declared here rather than in the CLI so `CliFlags` stays self-contained:
+ *  `lib/config.ts` must not depend on `lib/cli/`, which would pull the CLI and
+ *  the runtime graph behind it into every consumer of the config module. */
+export type ResolvedModelFlag = {
+  model: string;
+  explicitProvider?: string;
+};
+
 /** Per-invocation flags accepted by `agency run`/`compile` and forwarded to the
  *  bundled agents. Mapped onto AgencyConfig by applyCliFlags. `trace` is
  *  `string` for `--trace <file>`, `true` for a bare `--trace`. */
@@ -686,6 +698,7 @@ export type CliFlags = {
   strict?: boolean;
   maxToolCallRounds?: number;
   maxToolResultChars?: number;
+  model?: ResolvedModelFlag;
 };
 
 /**
@@ -701,6 +714,9 @@ export type CliFlags = {
  *   --observability  → observability=true
  *   --strict         → typechecker.strict + strictTypes (the compile-path gate
  *                      never runs the checker on strictTypes alone)
+ *   --model <m>      → client.defaultModel=<m> and client.defaultProvider
+ *                      DELETED, so smoltalk infers the provider
+ *   --model <p>/<m>  → client.defaultModel=<m> + client.defaultProvider=<p>
  *   --max-tool-call-rounds <n> → maxToolCallRounds=<n> (baked into runPrompt at
  *                      compile time; overrides agency.json for this run)
  *   --max-tool-result-chars <n> → client.maxToolResultChars=<n> (0 disables the
@@ -751,6 +767,21 @@ export function applyCliFlags(
   }
   if (flags.maxToolResultChars !== undefined) {
     next.client = { ...next.client, maxToolResultChars: flags.maxToolResultChars };
+  }
+  if (flags.model !== undefined) {
+    // A bare model drops an inherited provider so smoltalk can infer one from
+    // the model name; a stated provider replaces it. The key is removed rather
+    // than set to undefined so the resulting config carries no dangling field.
+    // Destructuring is how that happens without mutating `next.client`.
+    const { defaultProvider: _dropped, ...client } = next.client ?? {};
+    next.client =
+      flags.model.explicitProvider === undefined
+        ? { ...client, defaultModel: flags.model.model }
+        : {
+            ...client,
+            defaultModel: flags.model.model,
+            defaultProvider: flags.model.explicitProvider,
+          };
   }
   return next;
 }

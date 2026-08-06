@@ -1,6 +1,7 @@
 import { BaseGrader } from "../baseGrader.js";
 import { getPath } from "../getPath.js";
 import type { Grade, GraderInput, GraderOptions, Input, JSONPath } from "../types.js";
+import { levenshtein } from "@/levenshtein.js";
 
 /** Graders that compare the agent output against a value read from the input.
  *  `matchOn` defaults to the first-class `expected` field. */
@@ -102,17 +103,3 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return aKeys.every((k) => Object.hasOwn(bObj, k) && deepEqual(aObj[k], bObj[k]));
 }
 
-/** Classic Levenshtein edit distance (deterministic, dependency-free). */
-function levenshtein(a: string, b: string): number {
-  const cols = b.length + 1;
-  let prev = Array.from({ length: cols }, (_unused, j) => j);
-  for (let i = 1; i <= a.length; i += 1) {
-    const curr = [i];
-    for (let j = 1; j < cols; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
-    }
-    prev = curr;
-  }
-  return prev[cols - 1];
-}

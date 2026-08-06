@@ -26,6 +26,50 @@ Where applied: sources 1⊕2 at the CLI (baked into the generated program);
 source 3 at runtime, in the `RuntimeContext` constructor. Inspect the resolved
 result with `agency config show` (secrets masked; `--show-secrets` to reveal).
 
+## What `--model` means
+
+`agency run --model` and the `agency <file>` shorthand set the run's default
+model. The value is parsed by `resolveModelFlag` in `lib/cli/modelFlag.ts` and
+mapped by `applyCliFlags`:
+
+| you write | `client.defaultModel` | `client.defaultProvider` |
+| --- | --- | --- |
+| `gpt-4o-mini` | `gpt-4o-mini` | **deleted** |
+| `anthropic/claude-opus-4-8` | `claude-opus-4-8` | `anthropic` |
+| `openrouter/anthropic/claude-sonnet-4` | `anthropic/claude-sonnet-4` | `openrouter` |
+
+The split is on the **first** slash only, which is what lets an OpenRouter model
+identifier survive as the model name.
+
+Three things about this are easy to get wrong later.
+
+**A bare model drops the provider rather than leaving it.** The code generator
+emits a provider only when `client.defaultProvider` is truthy, so clearing it is
+how smoltalk is allowed to infer the provider from the model name. If your
+`agency.json` sets `defaultProvider` to route through a proxy, a bare `--model`
+bypasses that proxy; name it (`--model litellm/gpt-4o-mini`) to keep it.
+
+The mapping removes the key rather than setting it to `undefined`. Either would
+satisfy the generator; removing it keeps the resolved config free of dangling
+fields, which is what `agency config show` and any other consumer sees. The test
+asserts the key is absent, so that contract cannot drift unnoticed.
+
+**A stated provider is sticky.** The layers merge field by field
+(`lib/runtime/state/context.ts` `getSmoltalkConfig`), so a provider set by the
+flag survives a later `setModel("other")` in Agency code — the pair becomes that
+provider plus the new model. Code that wants to move provider too must say
+`setLlmOptions({ model, provider })`, or pass both per call. The precedence
+cases in `lib/runtime/agencyLlm.test.ts` pin all four combinations.
+
+**Only a bare name is validated.** It is checked against the hosted **text**
+models from `_listHostedModels()` — not smoltalk's `getAllModels()`, which also
+returns image, embedding and speech models. A prefixed name is never checked,
+because `client.providerModules` can register a provider under any name at
+startup, so at flag-parse time a custom provider and a typo are the same thing.
+The escape for a model missing from the baked catalog is the prefix form; note
+that `agency models refresh` prints JSON to stdout and persists nothing, so it
+cannot affect a later process's validation.
+
 ## All options
 
 ### Basic

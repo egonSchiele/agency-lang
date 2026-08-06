@@ -23,6 +23,7 @@ import {
   getTarballPath,
   initProject,
   installTarball,
+  runInstalledAgency,
 } from "../helpers.mjs";
 
 const tarball = resolve(getTarballPath());
@@ -109,8 +110,21 @@ function runLogged(label, file, args = [], opts = {}) {
   return opts.combined ? output : stdout;
 }
 
+// The installed-CLI path now goes through the shared `runInstalledAgency`
+// boundary in helpers.mjs. This wrapper keeps the label/log-file behavior and
+// the stdout-vs-combined return contract. Failure cases declare their exact
+// expected status via `opts.expectedStatus` (default 0) instead of the old
+// boolean `expectFail`.
 function runAgency(label, args, opts = {}) {
-  return runLogged(label, "npx", ["--no-install", "agency", ...args], opts);
+  const result = runInstalledAgency(dir, args, {
+    expectedStatus: opts.expectedStatus ?? 0,
+    input: opts.input,
+    env: opts.env,
+    timeout: opts.timeout,
+  });
+  const output = `${result.stdout}${result.stderr}`;
+  writeFileSync(join(logsDir, `${label}.txt`), output);
+  return opts.combined ? output : result.stdout;
 }
 
 function runNode(label, args, opts = {}) {
@@ -355,7 +369,7 @@ try {
   const invalidPackTarget = runAgency(
     "10-pack-invalid-target",
     ["pack", "src/pack-target.agency", "--target", "browser"],
-    { expectFail: true },
+    { expectedStatus: 1, combined: true },
   );
   assertIncludes(invalidPackTarget, "Unsupported pack target: browser");
 
@@ -526,7 +540,7 @@ try {
   const thresholdFailure = stripAnsi(runAgency(
     "23-coverage-threshold-failure",
     ["coverage", "report", "src/coverage-partial.agency", "--threshold", "100"],
-    { expectFail: true },
+    { expectedStatus: 1, combined: true },
   ));
   assertIncludes(thresholdFailure, "below threshold 100%");
   runAgency("24-coverage-clean-partial", ["coverage", "clean"]);
@@ -542,7 +556,7 @@ try {
   const tcError = stripAnsi(runAgency(
     "26-tc-error",
     ["tc", "src/type-error.agency"],
-    { expectFail: true },
+    { expectedStatus: 1, combined: true },
   ));
   assertIncludes(tcError, "Type '\"oops\"' is not assignable to type 'number'");
   assertIncludes(tcError, "return in 'bad'");
@@ -558,7 +572,7 @@ try {
   const strictError = stripAnsi(runAgency(
     "28-tc-strict",
     ["tc", "src/type-strict.agency", "--strict"],
-    { expectFail: true },
+    { expectedStatus: 1, combined: true },
   ));
   assertIncludes(strictError, "no type annotation");
   assertIncludes(strictError, "strict mode");
@@ -636,7 +650,7 @@ node beeMain(): string {
 `,
   );
   const tcImportOut = stripAnsi(
-    runAgency("28a2-tc-dir-imports", ["tc", "tc-imports"], { expectFail: true }),
+    runAgency("28a2-tc-dir-imports", ["tc", "tc-imports"], { expectedStatus: 1, combined: true }),
   );
   assertIncludes(tcImportOut, "in call to 'xFromCee'");
   assertIncludes(tcImportOut, "in call to 'yFromDee'");
@@ -685,7 +699,7 @@ node u(): string {
 `,
   );
   const tcBadImportOut = stripAnsi(
-    runAgency("28e-tc-missing-import", ["tc", "tc-bad-import"], { expectFail: true }),
+    runAgency("28e-tc-missing-import", ["tc", "tc-bad-import"], { expectedStatus: 1, combined: true }),
   );
   assertIncludes(tcBadImportOut, "AG4008");
   assertIncludes(tcBadImportOut, "missingFn");
@@ -746,7 +760,7 @@ node u(): string {
   const removeOutput = stripAnsi(runAgency(
     "35-schedule-remove-missing",
     ["schedule", "remove", "nightly"],
-    { env: scheduleEnv, expectFail: true },
+    { env: scheduleEnv, expectedStatus: 1, combined: true },
   ));
   assertIncludes(removeOutput, "No schedule named \"nightly\"");
 
@@ -767,14 +781,14 @@ node u(): string {
   const existingSchedule = stripAnsi(runAgency(
     "38-schedule-existing-failure",
     ["schedule", "add", "agents/nightly.agency", "--backend", "github", "--every", "hourly", "--name", "nightly", "--no-pin"],
-    { env: scheduleEnv, expectFail: true },
+    { env: scheduleEnv, expectedStatus: 1, combined: true },
   ));
   assertIncludes(existingSchedule, "File already exists");
 
   const invalidBackend = stripAnsi(runAgency(
     "39-schedule-invalid-backend",
     ["schedule", "add", "agents/nightly.agency", "--backend", "local", "--every", "hourly", "--name", "bad"],
-    { env: scheduleEnv, expectFail: true },
+    { env: scheduleEnv, expectedStatus: 1, combined: true },
   ));
   assertIncludes(invalidBackend, "Unknown --backend value");
 

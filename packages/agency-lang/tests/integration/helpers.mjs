@@ -3,9 +3,48 @@
 // installs Agency from a tarball, and verifies user-facing workflows.
 
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
+
+const DEFAULT_COMMAND_TIMEOUT_MS = 120_000;
+
+// The single process boundary for running the installed `agency` CLI. It is the
+// only layer that knows about spawnSync, `npx --no-install` (which forbids an
+// npm registry fallback, so a missing local bin is a real failure), the default
+// timeout, environment merging, spawn errors, and status enforcement. Callers
+// declare the exact expected exit status rather than bypassing the helper for
+// failure cases, and always get stdout and stderr back separately.
+export function runInstalledAgency(
+  dir,
+  args,
+  { expectedStatus = 0, input, env, timeout = DEFAULT_COMMAND_TIMEOUT_MS } = {},
+) {
+  const result = spawnSync("npx", ["--no-install", "agency", ...args], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout,
+    input,
+    stdio: ["pipe", "pipe", "pipe"],
+    env: env ? { ...process.env, ...env } : process.env,
+  });
+  const stdout = result.stdout || "";
+  const stderr = result.stderr || "";
+  const command = ["npx", "--no-install", "agency", ...args].join(" ");
+
+  if (result.error) {
+    throw new Error(
+      `Command failed to start: ${command}\n${result.error.message}\n${stdout}${stderr}`,
+    );
+  }
+  if (result.status !== expectedStatus) {
+    throw new Error(
+      `Expected exit ${expectedStatus}, got ${result.status}: ${command}\n${stdout}${stderr}`,
+    );
+  }
+
+  return { status: result.status, stdout, stderr, signal: result.signal };
+}
 
 export function createTempProject(name) {
   const dir = mkdtempSync(join(tmpdir(), `agency-integration-${name}-`));

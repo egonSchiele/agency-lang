@@ -65,7 +65,7 @@ import {
   redactConfigSecrets,
 } from "@/config.js";
 import * as path from "path";
-import { _parseAgency } from "@/parser.js";
+import { parseAgency } from "@/parser.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
@@ -75,7 +75,6 @@ import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/in
 import { Command, InvalidArgumentError } from "commander";
 import * as fs from "fs";
 import { color } from "@/utils/termcolors.js";
-import { TarsecError } from "tarsec";
 import process from "process";
 import { agent } from "@/cli/agent.js";
 import { mcpAdd, mcpRemove, mcpList, type McpAddOptions } from "@/cli/mcp.js";
@@ -1181,15 +1180,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Run diagnostics for VSCode")
     .argument("[inputs...]", "Paths to .agency input files")
     .action(async (inputs: string[]) => {
+      // Route through parseAgency so the payload is the normalized
+      // ParseAgencyErrorData (zero-indexed user-source coordinates), covering
+      // both committed and recoverable parse failures. applyTemplate:false keeps
+      // coordinates in the exact source the editor supplied; lower:false keeps
+      // this to syntax diagnostics.
+      const config = getConfig();
       await forEachSource(inputs, (contents) => {
-        try {
-          _parseAgency(contents);
-        } catch (error) {
-          if (error instanceof TarsecError) {
-            console.log(JSON.stringify(error.data, null, 2));
-          } else {
-            throw error;
-          }
+        const result = parseAgency(contents, config, false, false);
+        if (!result.success && result.errorData) {
+          console.log(JSON.stringify(result.errorData, null, 2));
         }
       });
     });

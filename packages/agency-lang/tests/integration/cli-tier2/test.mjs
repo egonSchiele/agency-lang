@@ -10,6 +10,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   renameSync,
   rmSync,
 } from "node:fs";
@@ -421,14 +422,16 @@ function checkLabelIngest() {
   // outputs.jsonl: exactly one record per fixture string (order-independent).
   const outputs = readJsonLines(join(labelDir, "labels", "outputs.jsonl"));
   assert(outputs.length === n, `expected ${n} output records, got ${outputs.length}`);
-  const outputIdByString = {};
+  // Null-prototype object + Object.hasOwn, so a fixture string like "__proto__"
+  // cannot collide with prototype keys.
+  const outputIdByString = Object.create(null);
   for (const record of outputs) {
     const value = record.fields.output;
     assert(fixture.includes(value), `unexpected output record: "${value}"`);
     outputIdByString[value] = record.outputId;
   }
   for (const value of fixture) {
-    assert(value in outputIdByString, `outputs.jsonl is missing a record for "${value}"`);
+    assert(Object.hasOwn(outputIdByString, value), `outputs.jsonl is missing a record for "${value}"`);
   }
 
   // occurrences.jsonl: one per fixture item, each referencing the right output.
@@ -454,15 +457,19 @@ function checkLabelIngest() {
   );
 
   // Re-ingesting the same data is idempotent: nothing new, both files unchanged.
-  const outputsBefore = readText(join(labelDir, "labels", "outputs.jsonl"));
-  const occurrencesBefore = readText(join(labelDir, "labels", "occurrences.jsonl"));
+  // Snapshot raw bytes (not readText, which normalizes CRLF) so a re-ingest that
+  // rewrote LF as CRLF would still fail the byte-identical check.
+  const outputsPath = join(labelDir, "labels", "outputs.jsonl");
+  const occurrencesPath = join(labelDir, "labels", "occurrences.jsonl");
+  const outputsBefore = readFileSync(outputsPath);
+  const occurrencesBefore = readFileSync(occurrencesPath);
   const second = runInstalledAgency(labelDir, ["label", "ingest", "data.json", "--store", "labels", "--source", "batch"]);
   assertBlank(second.stderr, "[label ingest re-run] stderr");
   const secondOut = stripAnsi(second.stdout);
   assertIncludes(secondOut, `0 new records, ${n} already stored`);
   assertIncludes(secondOut, `0 new occurrences, ${n} already recorded`);
-  assert(readText(join(labelDir, "labels", "outputs.jsonl")) === outputsBefore, "outputs.jsonl changed on re-ingest");
-  assert(readText(join(labelDir, "labels", "occurrences.jsonl")) === occurrencesBefore, "occurrences.jsonl changed on re-ingest");
+  assert(readFileSync(outputsPath).equals(outputsBefore), "outputs.jsonl bytes changed on re-ingest");
+  assert(readFileSync(occurrencesPath).equals(occurrencesBefore), "occurrences.jsonl bytes changed on re-ingest");
   console.log("[cli-tier2] label ingest ✓");
 }
 

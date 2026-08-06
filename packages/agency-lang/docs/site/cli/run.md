@@ -31,6 +31,76 @@ Note: This compiles the file to JavaScript and immediately executes it under the
 - `--trace-file <path>` — write the execution trace to this path instead.
 - `--max-cost <dollars>` — abort the run if its LLM spend exceeds this many dollars, e.g. `--max-cost 0.50`. `0` means no paid spend at all (local models only). A negative value means no limit. A tripped budget exits with code 3 and prints the overrun.
 - `--max-time <duration>` — abort the run if its working time exceeds this duration, e.g. `--max-time 5m`. The value needs a unit: `500ms`, `30s`, `5m`, `1h`, `2d`, `1w`. Time spent waiting on a human does not count. Zero or negative means no limit. A tripped budget exits with code 3.
+- `--model <name>` — the model this run's `llm()` calls use by default, written as `model` or `provider/model`. See [choosing a model](#choosing-a-model) below.
+
+## Choosing a model
+
+`--model` sets the model for a run without editing any files, which is handy for
+comparing two models against the same program:
+
+```bash
+agency run --model claude-opus-4-8 greet.agency
+agency --model claude-opus-4-8 greet.agency
+```
+
+**It only changes the default.** A model chosen in your Agency code still wins,
+whether that is `setModel()` from [`std::llm`](../stdlib/llm) or a single
+`llm(prompt, { model: "..." })` call. The flag is the value used when nothing
+else says otherwise.
+
+### Naming a provider
+
+Most of the time the model name is enough — agency looks it up and knows which
+provider it belongs to. When it isn't, put the provider first, separated by a
+slash:
+
+```bash
+agency run --model anthropic/claude-opus-4-8 greet.agency
+agency run --model openrouter/anthropic/claude-sonnet-4 greet.agency
+agency run --model my-company/my-fine-tune greet.agency
+```
+
+Only the **first** slash separates the two parts. That matters for OpenRouter,
+whose model names contain a slash of their own: in the second example the
+provider is `openrouter` and the model is `anthropic/claude-sonnet-4`.
+
+Any name works as a provider, not just the built-in ones, so a provider you
+registered yourself with
+[`providerModules`](../guide/custom-providers) works the same way.
+
+### A bare name clears a configured provider
+
+If your `agency.json` sets `client.defaultProvider`, a bare `--model` clears it
+and lets agency work the provider out from the model name. That is what "just
+give me this model" means, but it is worth knowing if you use a provider to
+route requests somewhere specific:
+
+```bash
+# agency.json says defaultProvider is "litellm"
+
+agency run --model gpt-4o-mini greet.agency          # goes straight to OpenAI
+agency run --model litellm/gpt-4o-mini greet.agency  # keeps your proxy
+```
+
+Naming the provider keeps it.
+
+### Unknown names
+
+A bare name has to be one agency knows about, so a typo is caught before
+anything runs rather than after your program has already done work:
+
+```
+$ agency run --model gpt-4o-minii greet.agency
+error: option '--model <name>' argument 'gpt-4o-minii' is invalid. Unknown model "gpt-4o-minii".
+  Did you mean "gpt-4o-mini"?
+  For a model from another provider, write provider/model — e.g. openrouter/gpt-4o-minii.
+  Run `agency models list` to see the catalog.
+```
+
+A name with a provider in front is never checked, because agency has no way to
+know what models your provider offers. So if you want a model agency hasn't
+heard of — a brand new release, or anything behind a provider of your own — put
+the provider in front and it will be passed through untouched.
 
 ## A note on global installs
 If you have installed agency globally, you should be aware of a classic node gotcha. A global install means that the agency CLI will be available everywhere. However, the agency-lang package can't be imported everywhere. This matters because when you compile your agency code into js, the js code imports the `agency-lang` package.

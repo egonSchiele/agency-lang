@@ -6,7 +6,6 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
-  readFileSync,
   realpathSync,
   statSync,
   unlinkSync,
@@ -17,12 +16,17 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   assert,
+  assertFile,
+  assertFileEquals,
   assertIncludes,
   cleanup,
   createTempProject,
   getTarballPath,
   initProject,
   installTarball,
+  normalizeOptionalFinalNewline,
+  readJsonLines,
+  readText,
   runInstalledAgency,
 } from "../helpers.mjs";
 
@@ -37,38 +41,6 @@ mkdirSync(logsDir, { recursive: true });
 
 function stripAnsi(text) {
   return text.replace(/\x1b\[[0-9;]*m/g, "");
-}
-
-function normalizeNewline(text) {
-  return text.replace(/\r\n/g, "\n");
-}
-
-function readText(path) {
-  return normalizeNewline(readFileSync(path, "utf8"));
-}
-
-function assertFile(path, message) {
-  assert(existsSync(path), message || `Expected file to exist: ${path}`);
-}
-
-function normalizeOptionalFinalNewline(text) {
-  return normalizeNewline(text).replace(/\n*$/, "\n");
-}
-
-// Compares two files for equality. By default the comparison is strict
-// (line-for-line, preserving trailing newlines). Pass
-// `{ normalizeTrailingNewline: true }` to collapse trailing newline
-// differences before comparing.
-function assertFileEquals(actualPath, expectedPath, opts = {}) {
-  const normalize = opts.normalizeTrailingNewline
-    ? normalizeOptionalFinalNewline
-    : normalizeNewline;
-  const actual = normalize(readFileSync(actualPath, "utf8"));
-  const expected = normalize(readFileSync(expectedPath, "utf8"));
-  assert(
-    actual === expected,
-    `Expected ${actualPath} to match ${expectedPath}\n--- actual ---\n${actual}\n--- expected ---\n${expected}`,
-  );
 }
 
 function commandToString(file, args) {
@@ -157,13 +129,6 @@ function copyProjectFixtures() {
 
 // trace helpers
 
-function readJsonLines(path) {
-  return readText(path)
-    .trim()
-    .split("\n")
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line));
-}
 
 function collectHashStrings(value, out = []) {
   if (typeof value === "string") {

@@ -1,14 +1,17 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import type { Result, PromptResult, StreamChunk } from "smoltalk";
+import type { Result, PromptResult, SmolConfig, StreamChunk } from "smoltalk";
 import { agency } from "./agency.js";
 import { DeterministicClient } from "./deterministicClient.js";
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { RuntimeContext } from "./state/context.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { _setLlmOptions } from "../stdlib/llm.js";
+import { runPrompt } from "./prompt.js";
 
-function makeCtx(): RuntimeContext<any> {
+function makeCtx(
+  smoltalkDefaults: Partial<SmolConfig> = { model: "default-model" },
+): RuntimeContext<any> {
   return new RuntimeContext({
     statelogConfig: {
       host: "https://example.com",
@@ -16,7 +19,7 @@ function makeCtx(): RuntimeContext<any> {
       projectId: "test-project",
       debugMode: false,
     },
-    smoltalkDefaults: { model: "default-model" },
+    smoltalkDefaults,
     dirname: "/tmp",
   });
 }
@@ -251,5 +254,74 @@ describe("agency.llm — frame requirement", () => {
     await expect(agency.llm("hi")).rejects.toThrow(
       /outside an Agency execution frame/,
     );
+  });
+});
+
+describe("model and provider precedence", () => {
+  /** The pair the client was actually asked for. */
+  async function effectivePair(
+    baked: Partial<SmolConfig>,
+    call: (threads: ThreadStore) => Promise<unknown>,
+  ): Promise<{ model?: string; provider?: string }> {
+    const ctx = makeCtx(baked);
+    const client = new RecordingClient(["ok"]);
+    ctx.setLLMClient(client);
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    await inFrame(ctx, threads, () => call(threads));
+    const config = client.configs[0];
+    if (config === undefined) {
+      throw new Error("the prompt never reached the recording client");
+    }
+    return {
+      model: (config as any).model,
+      provider: (config as any).provider,
+    };
+  }
+
+  it("a branch model override leaves no provider when none was baked", async () => {
+    const pair = await effectivePair({ model: "baked-model" }, async () => {
+      _setLlmOptions({ model: "branch-model" });
+      return agency.llm("hi");
+    });
+    expect(pair).toEqual({ model: "branch-model", provider: undefined });
+  });
+
+  it("a baked provider survives a branch model-only override", async () => {
+    const pair = await effectivePair(
+      { model: "baked-model", provider: "openrouter" },
+      async () => {
+        _setLlmOptions({ model: "branch-model" });
+        return agency.llm("hi");
+      },
+    );
+    expect(pair).toEqual({ model: "branch-model", provider: "openrouter" });
+  });
+
+  it("a baked provider survives a per-call model-only override", async () => {
+    const pair = await effectivePair(
+      { model: "baked-model", provider: "openrouter" },
+      () => agency.llm("hi", { model: "call-model" }),
+    );
+    expect(pair).toEqual({ model: "call-model", provider: "openrouter" });
+  });
+
+  it("per-call model and provider replace the baked pair", async () => {
+    // The TypeScript `agency.llm` facade forwards only model and maxTokens,
+    // not provider. Generated Agency code passes its options object through
+    // verbatim, so this calls the runPrompt seam directly to exercise the
+    // per-call spread the way compiled code does.
+    const pair = await effectivePair(
+      { model: "baked-model", provider: "openrouter" },
+      (threads) =>
+        runPrompt({
+          prompt: "hi",
+          messages: threads.getOrCreateActive(),
+          clientConfig: {
+            model: "call-model",
+            provider: "anthropic",
+          },
+        }),
+    );
+    expect(pair).toEqual({ model: "call-model", provider: "anthropic" });
   });
 });

@@ -15,6 +15,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   assert,
   assertFile,
@@ -247,6 +248,161 @@ function checkCoverageLifecycle() {
   console.log("[cli-tier2] coverage lifecycle ✓");
 }
 
+// --- definition (LSP go-to-definition, reads source on stdin) ---------------
+
+function checkDefinition() {
+  // Two functions are called on one line; the cursor points at the SECOND call.
+  // Coordinates are derived from the fixture, and the line/column differ so that
+  // swapping them (below) lands off-target — proving the arguments are honored.
+  const source = [
+    "def alpha(): number {",
+    "  return 1",
+    "}",
+    "",
+    "def beta(): number {",
+    "  return 2",
+    "}",
+    "",
+    "node main(): number {",
+    "  return alpha() + beta()",
+    "}",
+    "",
+  ].join("\n");
+  const lines = source.split("\n");
+  const callLine = lines.findIndex((l) => l.includes("alpha() + beta()"));
+  assert(callLine >= 0, "fixture must contain the alpha() + beta() call line");
+  const callColumn = lines[callLine].indexOf("beta()");
+  assert(callColumn >= 0, "fixture call line must contain beta()");
+  const defLine = lines.findIndex((l) => l.startsWith("def beta"));
+  assert(defLine >= 0, "fixture must contain beta's declaration");
+  assert(callLine !== callColumn, "fixture line and column must differ for the swap check");
+
+  const result = runInstalledAgency(
+    dir,
+    ["definition", "--line", String(callLine), "--column", String(callColumn), "--file", "probe.agency"],
+    { input: source },
+  );
+  assertBlank(result.stderr, "[definition] stderr");
+  const got = JSON.parse(result.stdout);
+  assert(
+    JSON.stringify(got) === JSON.stringify({ file: "probe.agency", line: defLine, column: 0 }),
+    `definition returned ${result.stdout}`,
+  );
+
+  // Swapping line and column points at an out-of-range position, which must
+  // resolve to null — proving the cursor arguments are honored, not ignored.
+  const swapped = runInstalledAgency(
+    dir,
+    ["definition", "--line", String(callColumn), "--column", String(callLine), "--file", "probe.agency"],
+    { input: source },
+  );
+  assertBlank(swapped.stderr, "[definition swapped] stderr");
+  assert(
+    JSON.parse(swapped.stdout) === null,
+    `swapped cursor should resolve to null, got: ${swapped.stdout}`,
+  );
+  console.log("[cli-tier2] definition ✓");
+}
+
+// --- models list (bundled catalog, offline) ---------------------------------
+
+function checkModelsList() {
+  const modelsDir = subdir("models");
+  // Run with all outbound network entry points throwing, so if `models list`
+  // regressed to fetching the remote catalog it would fail here rather than
+  // pass on networked CI.
+  writeFile(
+    modelsDir,
+    "blocknet.mjs",
+    [
+      'import http from "node:http";',
+      'import https from "node:https";',
+      'import net from "node:net";',
+      'const boom = (w) => () => { throw new Error(`network blocked by test preload (${w})`); };',
+      'globalThis.fetch = boom("fetch");',
+      'http.request = boom("http.request"); http.get = boom("http.get");',
+      'https.request = boom("https.request"); https.get = boom("https.get");',
+      'net.Socket.prototype.connect = boom("socket.connect");',
+      "",
+    ].join("\n"),
+  );
+  // Use the single-option `--import=<file-url>` form: NODE_OPTIONS is
+  // space-tokenized, so a raw path breaks when TMPDIR contains a space, and a
+  // bare path is not a safe ESM specifier on Windows. A pathToFileURL href
+  // encodes spaces and is platform-correct.
+  const preloadUrl = pathToFileURL(join(modelsDir, "blocknet.mjs")).href;
+  const result = runInstalledAgency(modelsDir, ["models", "list"], {
+    env: { NODE_OPTIONS: `--import=${preloadUrl}` },
+  });
+  assertBlank(result.stderr, "[models list] stderr");
+  const lines = result.stdout.split("\n");
+  const headerIdx = lines.findIndex((l) => l.includes("NAME") && l.includes("PROVIDER"));
+  assert(headerIdx >= 0, "models list must print a NAME/PROVIDER header");
+  // The empty catalog still prints the header, so require a real, structurally
+  // complete data row — all six columns — without pinning volatile values.
+  const dataRow = lines.slice(headerIdx + 1).find((l) => l.trim().length > 0);
+  assert(dataRow, "models list must print at least one model row");
+  const fields = dataRow.trim().split(/\s+/);
+  assert(fields.length === 6, `expected 6 columns, got ${fields.length}: "${dataRow}"`);
+  const [name, provider, open, inPrice, outPrice, ctx] = fields;
+  assert(name.length > 0, "model name must be non-empty");
+  assert(provider.length > 0, "model provider must be non-empty");
+  assert(/^(yes|no)$/.test(open), `open-weights column must be yes|no, got "${open}"`);
+  assert(/^\d+(\.\d+)?$/.test(inPrice), `input price must be numeric, got "${inPrice}"`);
+  assert(/^\d+(\.\d+)?$/.test(outPrice), `output price must be numeric, got "${outPrice}"`);
+  assert(/^\d+$/.test(ctx) && Number(ctx) > 0, `context must be a positive integer, got "${ctx}"`);
+  console.log("[cli-tier2] models list ✓");
+}
+
+// --- local list / resolve, fully isolated from global state -----------------
+
+function checkLocalIsolated() {
+  const localDir = subdir("local");
+  const envModels = join(localDir, "env-models");
+  const configModels = join(localDir, "config-models");
+  const home = join(localDir, "home");
+  mkdirSync(home, { recursive: true });
+  // A sentinel in AGENCY_MODELS_DIR and a decoy in the config's modelsDir prove
+  // directory selection rather than coincidentally observing two empty dirs.
+  writeFile(envModels, "env-sentinel.gguf", "");
+  writeFile(configModels, "config-decoy.gguf", "");
+  writeFile(localDir, "agency.json", JSON.stringify({ client: { modelsDir: configModels } }, null, 2) + "\n");
+  writeFile(localDir, "provider.mjs", "export default {};\n");
+
+  // The provider gate needs AGENCY_LLAMA_PROVIDER_MODULE (smoltalk-llama-cpp is
+  // not installed on CI); the isolated HOME keeps ~/agency.json aliases out.
+  // The gate also discovers global installs via `npm/pnpm root -g`, so point
+  // both global prefixes at an empty project-owned dir — then the supplied
+  // provider override is the only support path, and the test is host-independent
+  // (a globally installed smoltalk-llama-cpp cannot silently satisfy the gate).
+  // A fresh HOME makes npm run its update check and print a notice to stderr, so
+  // disable the notifier to keep the empty-stderr assertions about the command.
+  const emptyGlobalRoot = join(localDir, "empty-global");
+  mkdirSync(emptyGlobalRoot, { recursive: true });
+  const env = {
+    AGENCY_MODELS_DIR: envModels,
+    AGENCY_LLAMA_PROVIDER_MODULE: join(localDir, "provider.mjs"),
+    HOME: home,
+    npm_config_update_notifier: "false",
+    npm_config_prefix: emptyGlobalRoot,
+    PNPM_HOME: emptyGlobalRoot,
+  };
+
+  const list = runInstalledAgency(localDir, ["local", "list"], { env });
+  assertBlank(list.stderr, "[local list] stderr");
+  assertIncludes(list.stdout, "env-sentinel.gguf");
+  assert(!list.stdout.includes("config-decoy.gguf"), "AGENCY_MODELS_DIR must win over config modelsDir");
+  assert(!list.stdout.includes("No models downloaded."), "the env models dir should not read as empty");
+
+  const resolved = runInstalledAgency(localDir, ["local", "resolve", "smollm2-135m"], { env });
+  assertBlank(resolved.stderr, "[local resolve] stderr");
+  assert(
+    resolved.stdout.replace(/\r\n/g, "\n").trim() === "hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
+    `local resolve returned: ${resolved.stdout}`,
+  );
+  console.log("[cli-tier2] local isolated ✓");
+}
+
 // --- Run everything ---------------------------------------------------------
 
 try {
@@ -256,6 +412,9 @@ try {
   checkPackStandalone();
   checkTraceBundleRoundTrip();
   checkCoverageLifecycle();
+  checkDefinition();
+  checkModelsList();
+  checkLocalIsolated();
 
   console.log("=== cli-tier2 test passed ===");
   cleanup(dir);

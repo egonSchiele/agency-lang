@@ -37,5 +37,9 @@ export async function finishServedInvocation<T>(
       console.warn(`[invocation] cleanup failed after an execution error: ${detail}`);
     }
   }
-  return { ...finalOutcome, ...execCtx.invocationUsage.snapshot() };
+  return {
+    ...finalOutcome,
+    ...execCtx.invocationUsage.snapshot(),
+    traceId: execCtx.getRunId(),
+  };
 }

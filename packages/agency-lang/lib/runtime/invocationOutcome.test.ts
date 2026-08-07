@@ -94,9 +94,15 @@ describe("runNodeForServe lifecycle boundary", () => {
   });
 });
 
+/** A real execution context (with a set run id), as finishServedInvocation is
+ *  always called with in production. */
+async function makeExecCtx(runId: string) {
+  return makeCtx().createExecutionContext({ runId });
+}
+
 describe("finishServedInvocation cleanup semantics", () => {
   it("a cleanup failure after success becomes the outcome error", async () => {
-    const ctx = makeCtx();
+    const ctx = await makeExecCtx("run-1");
     const cleanupErr = new Error("cleanup boom");
     const outcome = await finishServedInvocation(
       ctx,
@@ -108,7 +114,7 @@ describe("finishServedInvocation cleanup semantics", () => {
   });
 
   it("a cleanup failure after an execution error keeps the FIRST error and logs the cleanup one", async () => {
-    const ctx = makeCtx();
+    const ctx = await makeExecCtx("run-1");
     const firstErr = new Error("execution error");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const outcome = await finishServedInvocation(
@@ -122,8 +128,30 @@ describe("finishServedInvocation cleanup semantics", () => {
     warn.mockRestore();
   });
 
+  it("derives the outcome traceId from the execution context's run id", async () => {
+    const ctx = await makeExecCtx("effective-run");
+    const returned = await finishServedInvocation(ctx, { status: "returned", value: "ok" }, async () => {});
+    expect(returned.traceId).toBe("effective-run");
+    expect(returned.traceId).toBe(ctx.getRunId());
+
+    const threw = await finishServedInvocation(ctx, { status: "threw", error: new Error("x") }, async () => {});
+    expect(threw.traceId).toBe("effective-run");
+  });
+
+  it("carries the traceId even when cleanup fails", async () => {
+    const ctx = await makeExecCtx("effective-run");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const outcome = await finishServedInvocation(
+      ctx,
+      { status: "threw", error: new Error("execution error") },
+      async () => { throw new Error("cleanup boom"); },
+    );
+    expect(outcome.traceId).toBe("effective-run");
+    warn.mockRestore();
+  });
+
   it("snapshots usage AFTER cleanup (cleanup-incurred paid work counts)", async () => {
-    const ctx = makeCtx();
+    const ctx = await makeExecCtx("run-1");
     const outcome = await finishServedInvocation(
       ctx,
       { status: "returned", value: "ok" },

@@ -80,9 +80,12 @@ export type NormalizedDelta = {
   attributionLost: boolean;
 };
 
+// `traceId` is the invocation's effective root trace id (the id events were
+// stamped with). It rides the outcome so the serve adapter can echo it on the
+// RouteResult without re-deriving identity.
 export type ServedInvocationOutcome<T> =
-  | ({ status: "returned"; value: T } & InvocationUsageSnapshot)
-  | ({ status: "threw"; error: unknown } & InvocationUsageSnapshot);
+  | ({ status: "returned"; value: T; traceId: string } & InvocationUsageSnapshot)
+  | ({ status: "threw"; error: unknown; traceId: string } & InvocationUsageSnapshot);
 
 export type InvocationAccountingTarget = {
   ctx: RuntimeContext<GraphState>;

@@ -118,6 +118,7 @@ Pipeline and architecture:
 - `docs/dev/config.md` — AgencyConfig options for compiler and runtime configuration
 - `docs/dev/cli-arguments.md` — One command line, two programs: the position rule (agency's flags before the filename), the ownership rule (a flag is valid after its owning command, never before), the misplaced-flag warning and its `--` suppression, the shorthand being the real `run` command, the agent's full flag delegation with the minimal launcher pre-scan, and the `--` asymmetry across launchers
 - `docs/dev/vendored-commander.md` — The vendored commander fork: what was copied, the six ledgered modifications (duplicate-name guard, boundaries, provenance, fallback, ownership-aware parsing), the fork-discipline rules, and how to diff against upstream
+- `docs/dev/supply-chain.md` — Dependency supply-chain hardening: the 7-day release-age cooldown and its first-party exclusions, exotic-subdep blocking, install-script denials, and why the pnpm version is pinned in the root package.json (older pnpm silently ignores all of it)
 - `docs/dev/debugger.md` — Interactive debugger for stepping through and rewinding execution
 - `docs/dev/concurrent-interrupts.md` — Supporting multiple concurrent threads that interrupt simultaneously
 - `docs/dev/runBatch.md` — The `runBatch` primitive: signature, three modes, slice rule, invoke no-throw contract, defensive guards

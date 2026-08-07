@@ -1,3 +1,32 @@
 packages:
   - "packages/*"
   - "packages/agency-lang/docs/site"
+
+# Supply-chain hardening (needs pnpm >= 10.16; the root package.json
+# packageManager field keeps everyone on a new-enough pnpm).
+#
+# New versions of any dependency must be public for 7 days before pnpm will
+# resolve them. Malicious releases from compromised maintainer accounts are
+# almost always yanked within hours, so the cooldown closes the main
+# attack window for the whole transitive tree. Deliberate upgrades still
+# work — they just resolve to week-old versions.
+minimumReleaseAge: 10080
+# First-party packages are exempt: publishing smoltalk/tarsec/typestache and
+# immediately using the new version from agency is the normal dev loop.
+minimumReleaseAgeExclude:
+  - smoltalk
+  - tarsec
+  - typestache
+# Transitive dependencies may not come from git repos or raw tarball URLs —
+# every subdep resolves from the registry, where the cooldown and integrity
+# hashes apply.
+blockExoticSubdeps: true
+# Lifecycle (install) scripts are default-denied. These three ask to run one;
+# all three have been silently blocked since pnpm 10 and everything works:
+# esbuild ships platform binaries as optionalDependencies (its script is only
+# a validator fallback), and the genai/protobufjs postinstalls are not needed
+# at runtime. Flip to true only with a reason.
+allowBuilds:
+  '@google/genai': false
+  esbuild: false
+  protobufjs: false

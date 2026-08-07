@@ -2,7 +2,8 @@
 // All tests avoid LLM calls.
 
 import { resolve, join } from "node:path";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import {
   createTempProject, initProject, installTarball,
   writeFile, run, assertIncludes, cleanup, getTarballPath,
@@ -508,6 +509,216 @@ node main() {
   const packedWithSeparator = run(dir, "node packed-greet.mjs -- --name alice");
   assertIncludes(packedWithSeparator, "Hello, world!");
   console.log("Test 8c passed");
+
+  // --- Test 8d: flag ownership — a flag is valid after its owner, never before ---
+  console.log("--- Test 8d: flag ownership matrix ---");
+
+  // A subcommand flag written before the subcommand word is an ERROR naming
+  // the owner and the fix — never `Unknown command 'run'`.
+  for (const misplaced of [
+    "./node_modules/.bin/agency --model claude-opus-4-8 run greet.agency",
+    "./node_modules/.bin/agency --max-cost 5 run greet.agency",
+  ]) {
+    const ownerError = run(dir, `${misplaced} 2>&1`, { expectFail: true });
+    assertIncludes(ownerError, "write it after 'run'");
+    if (ownerError.includes("Unknown command")) {
+      throw new Error(`misplaced flag produced the old misdiagnosis: ${ownerError}`);
+    }
+  }
+
+  // A flag nobody owns is a plain unknown option, also not a file error.
+  const nonsense = run(
+    dir,
+    "./node_modules/.bin/agency --nonsense greet.agency 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(nonsense, "unknown option");
+
+  // Command typos get commander's suggestion; an explicit `run` with a missing
+  // input is only ever a file problem, never a command suggestion.
+  const typo = run(dir, "./node_modules/.bin/agency formt 2>&1", { expectFail: true });
+  assertIncludes(typo, "unknown command 'formt'");
+  assertIncludes(typo, "format");
+  const missingInput = run(
+    dir,
+    "./node_modules/.bin/agency run formt 2>&1",
+    { expectFail: true },
+  );
+  if (missingInput.includes("unknown command")) {
+    throw new Error(`explicit run suggested a command for its input: ${missingInput}`);
+  }
+
+  // A pre-input separator ends option parsing but the input is still agency's.
+  const preInputSeparator = run(
+    dir,
+    "./node_modules/.bin/agency run -- greet.agency --name alice",
+  );
+  assertIncludes(preInputSeparator, "Hello, alice!");
+
+  // The budget cap is REAL on the run path: the child process carries it in
+  // AGENCY_MAX_COST. Pure Agency + a js helper — no LLM call.
+  writeFile(dir, "budget-env.js", `export function maxCostEnv() {
+  return process.env.AGENCY_MAX_COST ?? "unset";
+}
+`);
+  writeFile(dir, "budget-probe.agency", `import { maxCostEnv } from "./budget-env.js"
+
+node main() {
+  print("AGENCY_MAX_COST=" + maxCostEnv())
+}
+`);
+  const budgeted = run(
+    dir,
+    "./node_modules/.bin/agency run --max-cost 5 budget-probe.agency",
+  );
+  assertIncludes(budgeted, "AGENCY_MAX_COST=5");
+
+  // Nested default commands still answer at the parent's position: the
+  // default `list` action runs and reports the missing credential by name.
+  // Asserting the exact action-level error (not just "no unknown option")
+  // proves the action executed rather than help or an unrelated failure.
+  for (const remoteDefault of ["projects", "keys"]) {
+    const credential = run(
+      dir,
+      `./node_modules/.bin/agency remote ${remoteDefault} --host https://h --api-key-env MISSING_KEY 2>&1`,
+      { expectFail: true },
+    );
+    assertIncludes(credential, "Missing API key — set $MISSING_KEY.");
+  }
+
+  // `trace` defaults to `trace run`: the probe executes (no LLM) and the
+  // requested trace file exists and is non-empty — exit status alone would
+  // not prove the default action ran.
+  writeFile(dir, "trace-probe.agency", `node main() {
+  print("traced")
+}
+`);
+  run(dir, "./node_modules/.bin/agency trace trace-probe.agency --output probe.trace");
+  if (!existsSync(join(dir, "probe.trace"))) {
+    throw new Error("trace default-run wrote no trace file");
+  }
+  if (readFileSync(join(dir, "probe.trace"), "utf-8").length === 0) {
+    throw new Error("trace default-run wrote an empty trace file");
+  }
+
+  // `test` defaults to `test run` and reports the passing test by name.
+  writeFile(dir, "passing.agency", `node main(): number {
+  return 42
+}
+`);
+  writeFile(dir, "passing.test.json", JSON.stringify({
+    tests: [{
+      nodeName: "main",
+      input: "",
+      expectedOutput: "42",
+      evaluationCriteria: [{ type: "exact" }],
+    }],
+  }, null, 2));
+  const agencyTest = run(dir, "./node_modules/.bin/agency test passing.agency 2>&1");
+  assertIncludes(agencyTest, "passing");
+  console.log("Test 8d passed");
+
+  // --- Test 8e: the agent surface — full delegation + explicit config ---
+  console.log("--- Test 8e: agent flag delegation and --config ---");
+
+  // The agent's own schema is the single help source, budget flags included.
+  const agentHelp = run(dir, "./node_modules/.bin/agency agent --help 2>&1");
+  for (const flag of ["--max-cost", "--max-time", "--config"]) {
+    assertIncludes(agentHelp, flag);
+  }
+
+  // An invalid duration is the LAUNCHER's rejection, before spawn — not a
+  // commander unknown-option, and the agent never starts.
+  const badDuration = run(
+    dir,
+    "./node_modules/.bin/agency agent -p hi --max-time bogus 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(badDuration, "--max-time");
+  if (badDuration.includes("unknown option")) {
+    throw new Error(`the launcher misread --max-time as commander's: ${badDuration}`);
+  }
+
+  // A bare budget flag is left for the AGENT's parser to report: the launcher
+  // ignores the empty value and forwards the original argv unchanged.
+  const bareBudget = run(
+    dir,
+    "./node_modules/.bin/agency agent -p hi --max-time 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(bareBudget, "--max-time");
+
+  // Full delegation: -c after `agent` reaches the agent program, whose own
+  // parser rejects it by name — proof it was forwarded, not intercepted.
+  const agentDashC = run(
+    dir,
+    "./node_modules/.bin/agency agent -c cfg.json 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(agentDashC, "unknown short flag -c");
+
+  // Hash every compiled .js in the installed agent tree before any configured
+  // run — agent.js alone is not enough, the compiler writes recursively.
+  const installedAgentDir = join(
+    dir, "node_modules", "agency-lang", "dist", "lib", "agents", "agency-agent",
+  );
+  // Canonical: sorted entries, because readdirSync order is not guaranteed
+  // and a plain-object JSON comparison would depend on insertion order.
+  const agentTreeHashes = () => {
+    const hashes = [];
+    const visit = (current) => {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        const full = join(current, entry.name);
+        if (entry.isDirectory()) visit(full);
+        else if (entry.name.endsWith(".js")) {
+          hashes.push([full, createHash("sha256").update(readFileSync(full)).digest("hex")]);
+        }
+      }
+    };
+    visit(installedAgentDir);
+    hashes.sort((a, b) => a[0].localeCompare(b[0]));
+    return hashes;
+  };
+  const hashesBefore = agentTreeHashes();
+
+  // A malformed explicit config is the exact config-load error, before any
+  // child output — this is the production proof that the forwarded-config
+  // path invokes staging rather than the shipped agent.js (which would have
+  // happily printed help).
+  writeFile(dir, "malformed.json", "{not json");
+  const badConfig = run(
+    dir,
+    "./node_modules/.bin/agency agent --config malformed.json --help 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(badConfig, "Error loading config from");
+
+  // Valid explicit configs run (forwarded and root forms). --help keeps these
+  // no-LLM; config precedence is proven by the deterministic orchestration
+  // tests, and these two prove installed-tree isolation on the real wiring.
+  writeFile(dir, "sentinel-cfg.json", JSON.stringify({
+    client: { defaultModel: "gpt-4o-mini" },
+  }));
+  const forwardedConfigHelp = run(
+    dir,
+    "./node_modules/.bin/agency agent --config sentinel-cfg.json --help 2>&1",
+  );
+  assertIncludes(forwardedConfigHelp, "--max-cost");
+  const rootConfigHelp = run(
+    dir,
+    "./node_modules/.bin/agency -c sentinel-cfg.json agent --help 2>&1",
+  );
+  assertIncludes(rootConfigHelp, "--max-cost");
+
+  // The installed tree is byte-for-byte unchanged, and a plain invocation
+  // still works afterwards (no configured build leaked into the fast path).
+  const hashesAfter = agentTreeHashes();
+  if (JSON.stringify(hashesAfter) !== JSON.stringify(hashesBefore)) {
+    throw new Error("a configured agent run modified the installed agent tree");
+  }
+  const plainAgentHelp = run(dir, "./node_modules/.bin/agency agent --help 2>&1");
+  assertIncludes(plainAgentHelp, "--max-cost");
+  console.log("Test 8e passed");
 
   console.log("=== All CLI tests passed ===");
   cleanup(dir);

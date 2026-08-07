@@ -18,11 +18,7 @@ import {
 } from "@/cli/installLocation.js";
 import { pack } from "@/cli/pack.js";
 import { resolveModelFlag } from "@/cli/modelFlag.js";
-import {
-  splitCommandLine,
-  type Arity,
-  type CliOption,
-} from "@/cli/commandLine.js";
+import { warnMisplacedAgencyFlags } from "@/cli/commandLine.js";
 import { runLink } from "@/cli/remote/commands/link.js";
 import { runDeploy } from "@/cli/remote/commands/deploy.js";
 import { runLs } from "@/cli/remote/commands/ls.js";
@@ -170,6 +166,7 @@ type CliDependencies = {
   loadLspStartServer?: () => Promise<() => void>;
   loadMcpStartServer?: () => Promise<() => void>;
   resolveMcpCommand?: () => string[];
+  launchAgent?: typeof agent;
 };
 
 function defaultResolveMcpCommand(): string[] {
@@ -418,15 +415,32 @@ export function createProgram(deps: CliDependencies = {}): Command {
   addRunOptions(
     program
       .command("run")
+      // The program boundary: agency's flags before the filename, the
+      // program's after. The fallback (`agency greet.agency`) dispatches this
+      // same command object, so both spellings share options, action, help.
+      .passThroughOptions()
       .description("Compile and run .agency file(s)")
       .argument("<input>", "Path to .agency input file")
       .argument(
         "[nodeArgs...]",
         "Arguments after the filename go to the program; read them with std::args",
       ),
-  ).action((input: string, nodeArgs: string[], options: RunOptions) => {
-    runWithOptions(input, options, nodeArgs);
-  });
+  ).action(
+    (input: string, nodeArgs: string[], options: RunOptions, command: Command) => {
+      const warning = warnMisplacedAgencyFlags(command, input);
+      if (warning !== undefined) console.warn(warning);
+      if (
+        command.invokedAsFallback() &&
+        !input.endsWith(".agency") &&
+        !fs.existsSync(input)
+      ) {
+        // `agency typo` may be a mistyped command, which plain run can never
+        // be; the diagnostic suggests near-miss command names.
+        command.unknownFallbackOperand(input);
+      }
+      runWithOptions(input, options, nodeArgs);
+    },
+  );
 
   program
     .command("pack")
@@ -686,9 +700,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("view")
     .description("Open an interactive TUI viewer for a statelog JSONL file")
     .argument("<file>", "Path to a .statelog.jsonl file, or '-' for stdin")
-    .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
-    .action(async (file: string, options: { follow?: boolean }) => {
-      await logsView(file, { follow: options.follow });
+    // -f/--follow is declared once, on `logs`. Commander gives the parent
+    // priority wherever the flag sits, so a second declaration here would
+    // silently receive undefined (the vendored fork now rejects that shape
+    // at registration). The action reads the parent's parsed value.
+    .action(async (file: string, _options: Record<string, never>, command: Command) => {
+      await logsView(file, { follow: command.parent?.opts().follow });
     });
 
   const evalCmd = program
@@ -1504,29 +1521,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
   modelsCmd.command("refresh").description("Fetch the latest model data and print it as JSON (redirect to a file, then load with std::llm.loadModelData)")
     .argument("[url]", "Optional URL to fetch model data from (defaults to the built-in source)").action((url?: string) => modelsRefresh(url));
 
+  // Full delegation: the agent command owns ZERO flags and its whole tail is
+  // the agent's. The agent's own parseArgs schema is the single source of
+  // help and flag errors; --max-cost/--max-time live there too, extracted by
+  // the launcher pre-scan (resolveAgentLaunchArgs) before spawn.
   program
     .command("agent")
+    .passThroughOptions({ boundary: "immediate" })
     .description("Launch the Agency language assistant agent (run `agency agent --help` for agent flags)")
     .argument("[args...]", "Arguments forwarded to the agent")
-    .option(
-      "--max-cost <dollars>",
-      "Abort if the agent's LLM spend exceeds this many dollars (0 = local models only; negative = no limit). Must come before the agent's own flags",
-    )
-    .option(
-      "--max-time <duration>",
-      "Abort if the agent's working time exceeds this duration (e.g. 30m or 2d); waiting on a human is not counted; zero/negative = no limit. Must come before the agent's own flags",
-    )
     .helpOption(false)
-    .action((args: string[], opts: { maxCost?: string; maxTime?: string }) => {
-      const config = getConfig();
-      let budget;
-      try {
-        budget = resolveBudget({ maxCost: opts.maxCost, maxTime: opts.maxTime });
-      } catch (e) {
-        console.error(`Error: ${(e as Error).message}`);
-        process.exit(2);
-      }
-      agent(config, args, budget);
+    .action((args: string[]) => {
+      const launchAgent = deps.launchAgent ?? agent;
+      launchAgent(getConfig(), args, {
+        // Present only when the user explicitly wrote -c; cwd config
+        // discovery never sets this option — the provenance the staged
+        // configured compile needs.
+        explicitConfigPath: program.opts().config as string | undefined,
+      });
     });
 
   program
@@ -1983,51 +1995,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
       interruptsCmd(config, file);
     });
 
-  // `agency greet.agency` is `agency run greet.agency` with the word left out,
-  // so it takes the same options and splits its command line the same way.
-  addRunOptions(
-    program
-      .command("default", { isDefault: true, hidden: true })
-      .argument("[file]")
-      .argument(
-        "[nodeArgs...]",
-        "Arguments after the filename go to the program; read them with std::args",
-      ),
-  ).action((
-    file: string | undefined,
-    nodeArgs: string[],
-    options: RunOptions,
-  ) => {
-    if (!file) {
-      program.help();
-      return;
-    }
-    if (file.endsWith(".agency") || fs.existsSync(file)) {
-      runWithOptions(file, options, nodeArgs);
-    } else {
-      console.error(`Error: Unknown command '${file}'`);
-      console.error("Run 'agency help' for usage information");
-      process.exit(1);
-    }
-  });
+  // `agency greet.agency` is `agency run greet.agency` with the word left
+  // out. The fallback dispatches the REAL run command object — one options
+  // list, one action, one help — with invokedAsFallback() provenance for the
+  // typo-vs-missing-file diagnosis in run's action.
+  program.fallbackCommand("run");
   return program;
-}
-
-/** Commander's own option metadata, so no second list can drift out of step. */
-function optionsOf(command: Command | undefined): CliOption[] {
-  return (command?.options ?? []).map((option) => ({
-    short: option.short ?? undefined,
-    long: option.long ?? undefined,
-    arity: (option.required
-      ? "required"
-      : option.optional
-        ? "optional"
-        : "none") as Arity,
-  }));
-}
-
-function commandNamed(program: Command, name: string): Command | undefined {
-  return program.commands.find((cmd) => cmd.name() === name);
 }
 
 export async function runCli(
@@ -2036,53 +2009,9 @@ export async function runCli(
 ): Promise<void> {
   loadEnv();
   const program = createProgram(deps);
-  // The flag list comes from commander itself. A hand-written copy would drift
-  // the moment someone adds an option to addRunOptions, and it would fail
-  // silently: the new flag would be forwarded to the program and do nothing.
-  const runOptions = [
-    ...optionsOf(commandNamed(program, "run")),
-    ...optionsOf(program),
-  ];
-  // Every name commander answers to, so the shorthand policy does not claim a
-  // command. Aliases count: `agency fmt x.agency` must stay a format run.
-  //
-  // Two sources, because neither is complete. `program.commands` omits the
-  // implicit `help` command commander adds itself, which would make
-  // `agency help --version` look like a program called `help`.
-  // `visibleCommands` has `help` but drops hidden commands such as `remote`.
-  const commandNames = [
-    ...program.commands,
-    ...program.createHelp().visibleCommands(program),
-  ].flatMap((cmd) => [cmd.name(), ...cmd.aliases()]);
-  const prepared = splitCommandLine(argv, optionsOf(program), [
-    {
-      command: "run",
-      // The filename. Everything after it is the program's command line.
-      ownedPositionals: 1,
-      options: runOptions,
-      warnOnCollision: true,
-    },
-    {
-      // `agency greet.agency --name alice`. Identical to run in every way that
-      // shows: same options, same owned filename, same warning.
-      command: null,
-      ownedPositionals: 1,
-      options: runOptions,
-      warnOnCollision: true,
-    },
-    {
-      // `agency agent` forwards its whole command line to the agent, which has
-      // its own flag parser. Its budget flags must still reach commander, so
-      // they lead; the agent's own flags follow. Root flags are deliberately
-      // absent: they belong to the agent here, as they always have.
-      command: "agent",
-      ownedPositionals: 0,
-      options: optionsOf(commandNamed(program, "agent")),
-      warnOnCollision: false,
-    },
-  ], commandNames);
-  if (prepared.warning !== undefined) console.warn(prepared.warning);
-  await program.parseAsync(prepared.argv);
+  // No argv rewriting: the program boundary and flag ownership live inside
+  // the vendored commander fork (passThroughOptions, fallbackCommand).
+  await program.parseAsync(argv);
 }
 
 const isMain =

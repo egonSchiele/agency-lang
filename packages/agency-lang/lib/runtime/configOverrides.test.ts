@@ -11,7 +11,7 @@ import {
   serializeConfigOverrides,
 } from "../config.js";
 import { RuntimeContext } from "./state/context.js";
-import { agentConfigOverride } from "../cli/runBundledAgent.js";
+import { resolveAgentLaunchArgs } from "../cli/runBundledAgent.js";
 
 describe("runtime config overrides", () => {
   it("applies eval run statelog overrides without replacing existing fields", () => {
@@ -194,7 +194,7 @@ describe("RuntimeContext honors AGENCY_CONFIG_OVERRIDES at construction", () => 
 });
 
 describe("writer→reader override contract", () => {
-  it("agentConfigOverride output applies cleanly through the runtime merge", () => {
+  it("resolveAgentLaunchArgs configOverrides apply cleanly through the runtime merge", () => {
     const base = {
       statelogConfig: { host: "", apiKey: "", projectId: "", debugMode: false, observability: false },
       smoltalkDefaults: {},
@@ -202,7 +202,7 @@ describe("writer→reader override contract", () => {
       traceConfig: { program: "agent" },
     };
     // The exact object runBundledAgent serializes into AGENCY_CONFIG_OVERRIDES.
-    const overrides = agentConfigOverride(["--trace", "t.trace", "--log", "l.jsonl"]);
+    const overrides = resolveAgentLaunchArgs(["--trace", "t.trace", "--log", "l.jsonl"]).configOverrides;
     const r = applyRuntimeConfigOverridesToContextArgs(base, overrides);
     expect(r.traceConfig?.traceFile).toBe("t.trace");
     expect(r.statelogConfig.logFile).toBe("l.jsonl");

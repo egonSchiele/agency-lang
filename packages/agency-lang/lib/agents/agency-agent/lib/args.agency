@@ -54,6 +54,10 @@ export def parseAgentArgs() {
         type: "string",
         description: "Directory to use instead of ~/.agency-agent for settings, policy, and history (equivalent to the AGENCY_AGENT_HOME env var; the flag wins when both are set)"
       },
+      config: {
+        type: "string",
+        description: "Path to an agency.json config file for this agent run (the agent is recompiled with it)"
+      },
       local: {
         type: "string",
         optional: true,
@@ -73,6 +77,14 @@ export def parseAgentArgs() {
         type: "string",
         optional: true,
         description: "Append structured statelog events (one JSON object per line) for debugging. Bare --log writes ./log.jsonl; --log <path> writes that file; --log stdout streams events to standard out."
+      },
+      "max-cost": {
+        type: "string",
+        description: "Abort if the agent's LLM spend exceeds this many dollars (0 = local models only; negative = no limit)"
+      },
+      "max-time": {
+        type: "string",
+        description: "Abort if the agent's working time exceeds this duration (e.g. 30m or 2d); waiting on a human is not counted; zero/negative = no limit"
       },
       "max-tool-call-rounds": {
         type: "number",

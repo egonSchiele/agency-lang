@@ -1,10 +1,12 @@
 import { AgencyConfig } from "@/config.js";
-import { runBundledAgent } from "./runBundledAgent.js";
+import { runBundledAgent, type AgentLaunchOptions } from "./runBundledAgent.js";
 
 export function agent(
   config: AgencyConfig,
   args: string[] = [],
-  budget?: { maxCost?: string; maxTime?: string },
+  options: AgentLaunchOptions = {},
 ): void {
-  runBundledAgent(config, "agency-agent", args, {}, budget);
+  // Budget flags travel inside args; the launcher pre-scans and validates
+  // them (resolveAgentLaunchArgs) before spawn.
+  runBundledAgent(config, "agency-agent", args, options);
 }

@@ -13,6 +13,14 @@ type LiteralUnion<LiteralType, BaseType extends string | number> =
   | LiteralType
   | (BaseType & Record<never, never>);
 
+// AGENCY FORK: program-tail provenance recorded when a parse reaches a
+// pass-through command's boundary (MODIFICATIONS.md #4, #6).
+export type BoundaryInfo = {
+  tail: string[];
+  viaSeparator: boolean;
+  firstPathOwnedOption?: string;
+};
+
 export class CommanderError extends Error {
   code: string;
   exitCode: number;
@@ -793,7 +801,25 @@ export class Command {
    *
    * @returns `this` command for chaining
    */
-  passThroughOptions(passThrough?: boolean): this;
+  // AGENCY FORK: per-command boundary config, no enablePositionalOptions
+  // prerequisite. "first-operand" (default) = boundary after the first
+  // positional; "immediate" = the whole tail belongs to the program.
+  passThroughOptions(
+    passThrough?: boolean | { boundary?: 'first-operand' | 'immediate' },
+  ): this;
+
+  // AGENCY FORK: program-tail provenance from the last parse that reached
+  // this command's boundary; undefined when none did.
+  boundaryInfo(): BoundaryInfo | undefined;
+
+  // AGENCY FORK: lines whose first operand names no known command dispatch
+  // the existing command `name`, with invokedAsFallback() provenance.
+  fallbackCommand(name: string): this;
+  invokedAsFallback(): boolean;
+
+  // AGENCY FORK: report a fallback operand naming neither file nor command,
+  // with commander's unknown-command error and real-command suggestions.
+  unknownFallbackOperand(operand: string): never;
 
   /**
    * Parse `argv`, setting options and invoking commands when defined.

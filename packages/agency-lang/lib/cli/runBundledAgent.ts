@@ -7,141 +7,225 @@ import {
   serializeConfigOverrides,
   type CliFlags,
 } from "@/config.js";
+import { resolveBudget } from "./budget.js";
+import { stageConfiguredAgent } from "./stageConfiguredAgent.js";
 import { compiledOutputNodeArgs } from "./commands.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { AGENCY_MAX_COST, AGENCY_MAX_TIME } from "@/constants.js";
 import { spawn as realSpawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import { parseArgs } from "node:util";
 
 const currentDir = path.dirname(new URL(import.meta.url).pathname);
 
-// The flags every bundled agent understands that this launcher pre-scans
-// out of the forwarded argv (the agent also declares them, for --help).
-const AGENT_PRESCAN_FLAGS = ["--trace", "--log", "--agent-home"] as const;
+/**
+ * The launcher pre-scan policy: the flags that must take effect BEFORE the
+ * agent process exists, and how each treats a missing value. This table and
+ * the one scan below are the single place launcher flags are recognized —
+ * every bundled agent gets them by going through `runBundledAgent`; the
+ * agency-agent's own schema declares them too, for --help and its parser.
+ *
+ * Membership is deliberately minimal (a pre-scan is a wart to keep small):
+ * config-shaped flags are consumed by static initialization, and trace/log/
+ * budget applied late would change what the feature means (a trace with a
+ * hole at startup; a spend cap that depends on agent-code discipline).
+ */
+// A bare flag always scans to "" here; what "" MEANS is decided in
+// resolveAgentLaunchArgs (meaningful default destination for trace/log,
+// absent for the rest — the agent's own parser reports the missing value).
+const LAUNCH_FLAG_POLICIES: Record<
+  string,
+  {
+    /** Budget values may be negative numbers, which look like flags. */
+    acceptsNegativeNumber: boolean;
+  }
+> = {
+  trace: { acceptsNegativeNumber: false },
+  log: { acceptsNegativeNumber: false },
+  "agent-home": { acceptsNegativeNumber: false },
+  "max-cost": { acceptsNegativeNumber: true },
+  "max-time": { acceptsNegativeNumber: true },
+  config: { acceptsNegativeNumber: false },
+};
+
+const NEGATIVE_NUMBER = /^-(\d+|\d*\.\d+)(e[+-]?\d+)?$/;
 
 /**
- * Rewrite a bare pre-scanned flag to its empty attached form (`--trace` →
- * `--trace=`) when its next token is absent or starts with `-`. This
- * replicates exactly what `std::args` does before parsing
- * (lib/stdlib/args.ts:499-505), so the agent's own parser and this pre-scan
- * agree: `--trace --print` and `--trace -p` are BOTH bare here, not a trace
- * file named "--print" / "-p". Stops at the `--` terminator (everything after
- * is positional).
+ * One raw-token walk over the forwarded argv. A required value is the next
+ * token unless that token is absent or another option (matching what the
+ * agent's own std::args parser does, so the two never disagree about what is
+ * a value); budget flags additionally accept a negative number. `--flag=value`
+ * attaches, `--` terminates, repeats are last-wins. Never mutates `args`.
  */
-function normalizeBareFlags(args: string[]): string[] {
-  const out: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const token = args[i];
-    if (token === "--") {
-      out.push(...args.slice(i));
-      break;
+function scanLaunchValues(args: readonly string[]): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (token === "--") break;
+    if (!token.startsWith("--")) continue;
+    const equalsIndex = token.indexOf("=");
+    const name = equalsIndex === -1 ? token.slice(2) : token.slice(2, equalsIndex);
+    const policy = LAUNCH_FLAG_POLICIES[name];
+    if (policy === undefined) continue;
+    if (equalsIndex !== -1) {
+      values[name] = token.slice(equalsIndex + 1);
+      continue;
     }
-    if ((AGENT_PRESCAN_FLAGS as readonly string[]).includes(token)) {
-      const next = args[i + 1];
-      const bare = next === undefined || next === "--" || next.startsWith("-");
-      out.push(bare ? `${token}=` : token);
+    const next = args[index + 1];
+    const nextIsValue =
+      next !== undefined &&
+      next !== "--" &&
+      (!next.startsWith("-") ||
+        (policy.acceptsNegativeNumber && NEGATIVE_NUMBER.test(next)));
+    if (nextIsValue) {
+      values[name] = next;
+      index += 1;
     } else {
-      out.push(token);
+      values[name] = "";
     }
   }
-  return out;
+  return values;
 }
 
+export type ResolvedAgentLaunch = {
+  configOverrides: Partial<AgencyConfig>;
+  agentHome: string | null;
+  budgetInput: { maxCost?: string; maxTime?: string };
+  /** A forwarded `--config <path>`; wins over the root-level `-c`. */
+  configPath?: string;
+};
+
+/** Launch behavior callers may set; test seams live in the separate
+ *  dependencies parameter, never here. */
+export type AgentLaunchOptions = {
+  /** An explicit root `-c <path>` — set only when the user wrote the flag
+   *  (cwd config discovery never sets it), which is the provenance the
+   *  staged configured compile needs. */
+  explicitConfigPath?: string;
+};
+
+/** The launcher's environment seams, injectable for orchestration tests.
+ *  Every field is used by exactly the branch it controls. */
+export type RunBundledAgentDependencies = {
+  resolveAgentDir: (agentName: string) => string;
+  fileExists: (file: string) => boolean;
+  stageConfiguredAgent: typeof stageConfiguredAgent;
+  compile: typeof compile;
+  spawn: typeof realSpawn;
+  exit: (code: number) => void;
+};
+
+const DEFAULT_RUN_BUNDLED_AGENT_DEPENDENCIES: RunBundledAgentDependencies = {
+  resolveAgentDir: (agentName) => path.resolve(currentDir, `../agents/${agentName}`),
+  fileExists: (file) => fs.existsSync(file),
+  stageConfiguredAgent,
+  compile,
+  spawn: realSpawn,
+  exit: (code) => process.exit(code),
+};
+
 /**
- * Extract the debug flags (`--trace`, `--log`) from a bundled agent's
- * forwarded argv, as a config override. This is the ONE place these flags are
- * handled — every bundled agent gets them for free by going through
- * `runBundledAgent`; no agent writes flag code.
- *
- * Tokenization is `node:util.parseArgs` (which `std::args` is itself built on)
- * after the same bare-flag normalization std::args applies, so `--flag=value`,
- * the `--` terminator, last-wins-on-repeat, AND a following-flag-is-not-a-value
- * all match the agent's own parser. An empty/bare `--trace` maps to a per-run
- * trace file in cwd; the flag→config meaning lives in `applyCliFlags`.
+ * The semantic result of the launcher pre-scan: trace/log projected into a
+ * config override (the flag→config meaning lives in `applyCliFlags`; a bare
+ * `--trace` maps to a per-run trace file in cwd, `--log stdout` to the stdout
+ * sink), agent-home resolved to an absolute path (the child would otherwise
+ * resolve a relative one against its own cwd) or null, and the raw budget
+ * inputs for `resolveBudget` validation. Callers never interpret scanner
+ * state, and the input array is never modified — the child always receives
+ * the original argv.
  */
-export function agentConfigOverride(args: string[]): Partial<AgencyConfig> {
-  const { values } = parseArgs({
-    args: normalizeBareFlags(args),
-    options: { trace: { type: "string" }, log: { type: "string" } },
-    strict: false,
-    allowPositionals: true,
-  });
+export function resolveAgentLaunchArgs(
+  args: readonly string[],
+): ResolvedAgentLaunch {
+  const scanned = scanLaunchValues(args);
   const flags: CliFlags = {};
-  // After normalization a present --trace is always a string ("" when bare).
-  if (typeof values.trace === "string") {
-    flags.trace = values.trace;
+  if (scanned.trace !== undefined) {
+    flags.trace = scanned.trace;
   }
-  // --log: bare (now "") → the default ./log.jsonl; `stdout` (any case) →
-  // stream to standard out (a host sink, not a file); anything else → that
-  // file path. The flag→config meaning lives in `applyCliFlags`.
-  if (typeof values.log === "string") {
-    if (values.log.toLowerCase() === "stdout") {
+  if (scanned.log !== undefined) {
+    if (scanned.log.toLowerCase() === "stdout") {
       flags.logStdout = true;
     } else {
-      flags.logFile = values.log === "" ? "log.jsonl" : values.log;
+      flags.logFile = scanned.log === "" ? "log.jsonl" : scanned.log;
     }
   }
-  return applyCliFlags({}, flags);
-}
-
-/**
- * Extract `--agent-home <dir>` — the flag form of the AGENCY_AGENT_HOME env
- * var — from a bundled agent's forwarded argv, using the same pre-scan
- * tokenization rules as `agentConfigOverride`. Returns the directory resolved
- * to an absolute path (the child would otherwise resolve a relative one
- * against whatever its cwd happens to be), or null when the flag is absent or
- * bare. A bare `--agent-home` is a usage error the agent's own parser
- * reports, so it is only skipped here, never defaulted.
- */
-export function agentHomeOverride(args: string[]): string | null {
-  const { values } = parseArgs({
-    args: normalizeBareFlags(args),
-    options: { "agent-home": { type: "string" } },
-    strict: false,
-    allowPositionals: true,
-  });
-  const home = values["agent-home"];
-  if (typeof home !== "string" || home === "") {
-    return null;
-  }
-  return path.resolve(home);
+  const home = scanned["agent-home"];
+  const nonEmpty = (value: string | undefined) =>
+    value !== undefined && value !== "" ? value : undefined;
+  return {
+    configOverrides: applyCliFlags({}, flags),
+    agentHome: home !== undefined && home !== "" ? path.resolve(home) : null,
+    budgetInput: {
+      maxCost: nonEmpty(scanned["max-cost"]),
+      maxTime: nonEmpty(scanned["max-time"]),
+    },
+    configPath: nonEmpty(scanned.config),
+  };
 }
 
 export function runBundledAgent(
   config: AgencyConfig,
   agentName: string,
   args: string[] = [],
-  deps: { spawn?: typeof realSpawn } = {},
-  budget?: { maxCost?: string; maxTime?: string },
+  options: AgentLaunchOptions = {},
+  deps: Partial<RunBundledAgentDependencies> = {},
 ): void {
-  const spawn = deps.spawn ?? realSpawn;
-  const agentDir = path.resolve(currentDir, `../agents/${agentName}`);
+  const launcher = { ...DEFAULT_RUN_BUNDLED_AGENT_DEPENDENCIES, ...deps };
+  const agentDir = launcher.resolveAgentDir(agentName);
   const agencyFile = path.join(agentDir, "agent.agency");
   const precompiledFile = path.join(agentDir, "agent.js");
 
-  // Prefer the precompiled agent.js produced by `make agents` so users
-  // don't pay the compile cost on every invocation. Falls back to a
-  // fresh compile if the bundle hasn't been built yet.
-  let runFile: string | null;
-  if (fs.existsSync(precompiledFile)) {
-    runFile = precompiledFile;
-  } else {
-    runFile = compile(config, agencyFile);
-  }
-  if (runFile === null) {
-    console.error(`Failed to compile agent ${agentName}.`);
-    process.exit(1);
+  // Parse, validate, and project the launcher flags in one place — before
+  // choosing a run file or spawning. An invalid budget never launches.
+  const launchArgs = resolveAgentLaunchArgs(args);
+  let budget: { maxCost?: string; maxTime?: string };
+  try {
+    budget = resolveBudget(launchArgs.budgetInput);
+  } catch (error) {
+    console.error(`Error: ${(error as Error).message}`);
+    launcher.exit(2);
+    return;
   }
 
-  const overrides = agentConfigOverride(args);
-  const agentHome = agentHomeOverride(args);
+  // An explicit config recompiles the agent in an isolated staged tree —
+  // baked fields (model, limits) never cross the override-env transport, and
+  // the shipped agent.js must never be overwritten. The forwarded
+  // `agent --config` beats the root `-c` (the more specific value). Without
+  // an explicit config: the precompiled fast path, falling back to a fresh
+  // compile only when the bundle has not been built.
+  const explicitConfig = launchArgs.configPath ?? options.explicitConfigPath;
+  let runFile: string | null;
+  let cleanup: () => void = () => {};
+  if (explicitConfig !== undefined) {
+    try {
+      ({ runFile, cleanup } = launcher.stageConfiguredAgent(explicitConfig, agentDir));
+    } catch (error) {
+      // A bad explicit config never launches — and never becomes an
+      // unconfigured run of the shipped agent.
+      console.error(`Error: ${(error as Error).message}`);
+      launcher.exit(2);
+      return;
+    }
+  } else if (launcher.fileExists(precompiledFile)) {
+    runFile = precompiledFile;
+  } else {
+    runFile = launcher.compile(config, agencyFile);
+  }
+  if (runFile === null) {
+    cleanup();
+    console.error(`Failed to compile agent ${agentName}.`);
+    launcher.exit(1);
+    return;
+  }
+
   const env = { ...process.env };
   // Inherited overrides matter: an eval harness hands this process its
   // statelog path via this env var, and flags must layer on top, not
   // replace it.
-  const merged = mergeConfigOverrides(readConfigOverrides(env), overrides);
+  const merged = mergeConfigOverrides(
+    readConfigOverrides(env),
+    launchArgs.configOverrides,
+  );
   if (Object.keys(merged).length > 0) {
     env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(merged);
   }
@@ -149,35 +233,45 @@ export function runBundledAgent(
   // config module derives its settings/policy/history paths from it in
   // static-const initializers, which run before the agent's main() could
   // parse any flag. The flag beats an inherited AGENCY_AGENT_HOME.
-  if (agentHome !== null) {
-    env.AGENCY_AGENT_HOME = agentHome;
+  if (launchArgs.agentHome !== null) {
+    env.AGENCY_AGENT_HOME = launchArgs.agentHome;
   }
   // Root budget carrier: cleared-then-set like AGENCY_RUN_POLICY, so a
   // stale value from the parent shell never constrains the agent.
   delete env[AGENCY_MAX_COST];
   delete env[AGENCY_MAX_TIME];
-  if (budget?.maxCost !== undefined) env[AGENCY_MAX_COST] = budget.maxCost;
-  if (budget?.maxTime !== undefined) env[AGENCY_MAX_TIME] = budget.maxTime;
+  if (budget.maxCost !== undefined) env[AGENCY_MAX_COST] = budget.maxCost;
+  if (budget.maxTime !== undefined) env[AGENCY_MAX_TIME] = budget.maxTime;
 
-  const nodeProcess = spawn(
-    process.execPath,
-    [...compiledOutputNodeArgs(), runFile, ...args],
-    {
-      stdio: "inherit",
-      shell: false,
-      env,
-    },
-  );
+  // Cleanup ownership: staging owns it until spawn succeeds, then the
+  // child's handlers own it. A synchronous spawn throw cleans up here.
+  let nodeProcess: ReturnType<typeof realSpawn>;
+  try {
+    nodeProcess = launcher.spawn(
+      process.execPath,
+      [...compiledOutputNodeArgs(), runFile, ...args],
+      {
+        stdio: "inherit",
+        shell: false,
+        env,
+      },
+    );
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
 
   nodeProcess.on("error", (error) => {
+    cleanup();
     console.error(`Failed to run ${agentName}:`, error);
-    process.exit(1);
+    launcher.exit(1);
   });
 
   nodeProcess.on("exit", (code) => {
+    cleanup();
     if (code !== 0) {
       console.error(`${agentName} exited with code ${code}.`);
-      process.exit(code || 1);
+      launcher.exit(code || 1);
     }
   });
 }

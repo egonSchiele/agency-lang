@@ -1,3 +1,11 @@
+## Aug 6 2026 — v0.13.3
+
+### CLI
+- **`agency remote spend`** — view hosted spend from the CLI, with per-model breakdown.
+
+### Build
+- Incremental per-page cache for `agency doc`, and for the stdlib too (it was previously excluded)
+
 ## Aug 4 2026 — v0.13.2
 
 ### CLI / Hosting

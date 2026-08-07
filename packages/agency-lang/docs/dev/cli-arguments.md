@@ -138,6 +138,16 @@ exists**, and the launcher (`lib/cli/runBundledAgent.ts`,
 - `--max-cost` / `--max-time` — a spend cap set before the process exists is
   structural, not a promise about agent-code discipline. The launcher
   validates the values (`resolveBudget`) and refuses to spawn on garbage;
+- `--config` — configuration is consumed by static initialization, and baked
+  fields (model, tool limits) never cross the runtime override transport. An
+  explicit config therefore triggers an isolated **staged recompile**
+  (`lib/cli/stageConfiguredAgent.ts`): the agent source tree is copied to an
+  owned temp directory, compiled with that config (`freshness: "always"`, no
+  manifest state near the install), spawned from there, and cleaned up on
+  child exit — the shipped `agent.js` is never written, so the next
+  unconfigured run cannot inherit the config. A forwarded `agent --config`
+  beats a root `-c` (the more specific value); a bad explicit config refuses
+  to launch rather than silently running unconfigured;
 - `--agent-home` — grandfathered: the agent reads it in static initializers.
   A candidate to move into the agent, not a pattern to extend.
 

@@ -2,7 +2,8 @@
 // All tests avoid LLM calls.
 
 import { resolve, join } from "node:path";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import {
   createTempProject, initProject, installTarball,
   writeFile, run, assertIncludes, cleanup, getTarballPath,
@@ -616,6 +617,105 @@ node main() {
   const agencyTest = run(dir, "./node_modules/.bin/agency test passing.agency 2>&1");
   assertIncludes(agencyTest, "passing");
   console.log("Test 8d passed");
+
+  // --- Test 8e: the agent surface — full delegation + explicit config ---
+  console.log("--- Test 8e: agent flag delegation and --config ---");
+
+  // The agent's own schema is the single help source, budget flags included.
+  const agentHelp = run(dir, "./node_modules/.bin/agency agent --help 2>&1");
+  for (const flag of ["--max-cost", "--max-time", "--config"]) {
+    assertIncludes(agentHelp, flag);
+  }
+
+  // An invalid duration is the LAUNCHER's rejection, before spawn — not a
+  // commander unknown-option, and the agent never starts.
+  const badDuration = run(
+    dir,
+    "./node_modules/.bin/agency agent -p hi --max-time bogus 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(badDuration, "--max-time");
+  if (badDuration.includes("unknown option")) {
+    throw new Error(`the launcher misread --max-time as commander's: ${badDuration}`);
+  }
+
+  // A bare budget flag is left for the AGENT's parser to report: the launcher
+  // ignores the empty value and forwards the original argv unchanged.
+  const bareBudget = run(
+    dir,
+    "./node_modules/.bin/agency agent -p hi --max-time 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(bareBudget, "--max-time");
+
+  // Full delegation: -c after `agent` reaches the agent program, whose own
+  // parser rejects it by name — proof it was forwarded, not intercepted.
+  const agentDashC = run(
+    dir,
+    "./node_modules/.bin/agency agent -c cfg.json 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(agentDashC, "unknown short flag -c");
+
+  // Hash every compiled .js in the installed agent tree before any configured
+  // run — agent.js alone is not enough, the compiler writes recursively.
+  const installedAgentDir = join(
+    dir, "node_modules", "agency-lang", "dist", "lib", "agents", "agency-agent",
+  );
+  const agentTreeHashes = () => {
+    const hashes = {};
+    const visit = (current) => {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        const full = join(current, entry.name);
+        if (entry.isDirectory()) visit(full);
+        else if (entry.name.endsWith(".js")) {
+          hashes[full] = createHash("sha256").update(readFileSync(full)).digest("hex");
+        }
+      }
+    };
+    visit(installedAgentDir);
+    return hashes;
+  };
+  const hashesBefore = agentTreeHashes();
+
+  // A malformed explicit config is the exact config-load error, before any
+  // child output — this is the production proof that the forwarded-config
+  // path invokes staging rather than the shipped agent.js (which would have
+  // happily printed help).
+  writeFile(dir, "malformed.json", "{not json");
+  const badConfig = run(
+    dir,
+    "./node_modules/.bin/agency agent --config malformed.json --help 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(badConfig, "Error loading config from");
+
+  // Valid explicit configs run (forwarded and root forms). --help keeps these
+  // no-LLM; config precedence is proven by the deterministic orchestration
+  // tests, and these two prove installed-tree isolation on the real wiring.
+  writeFile(dir, "sentinel-cfg.json", JSON.stringify({
+    client: { defaultModel: "gpt-4o-mini" },
+  }));
+  const forwardedConfigHelp = run(
+    dir,
+    "./node_modules/.bin/agency agent --config sentinel-cfg.json --help 2>&1",
+  );
+  assertIncludes(forwardedConfigHelp, "--max-cost");
+  const rootConfigHelp = run(
+    dir,
+    "./node_modules/.bin/agency -c sentinel-cfg.json agent --help 2>&1",
+  );
+  assertIncludes(rootConfigHelp, "--max-cost");
+
+  // The installed tree is byte-for-byte unchanged, and a plain invocation
+  // still works afterwards (no configured build leaked into the fast path).
+  const hashesAfter = agentTreeHashes();
+  if (JSON.stringify(hashesAfter) !== JSON.stringify(hashesBefore)) {
+    throw new Error("a configured agent run modified the installed agent tree");
+  }
+  const plainAgentHelp = run(dir, "./node_modules/.bin/agency agent --help 2>&1");
+  assertIncludes(plainAgentHelp, "--max-cost");
+  console.log("Test 8e passed");
 
   console.log("=== All CLI tests passed ===");
   cleanup(dir);

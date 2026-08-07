@@ -48,7 +48,10 @@ export function stageConfiguredAgent(
   }
   const config = { ...loaded, outDir: undefined };
 
-  const tempRoot = path.resolve(options.tempRoot ?? os.tmpdir());
+  // realpath, not resolve: macOS tmpdir is a symlink (/var/folders → /private/var),
+  // and the compiled program's is-main-module guard compares real paths — under
+  // the symlinked spelling the staged agent would load and silently never run.
+  const tempRoot = fs.realpathSync(path.resolve(options.tempRoot ?? os.tmpdir()));
   const staged = fs.mkdtempSync(path.join(tempRoot, "agency-agent-"));
   let cleaned = false;
   const cleanup = () => {

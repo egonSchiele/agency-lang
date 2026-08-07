@@ -197,7 +197,15 @@ export function runBundledAgent(
   let runFile: string | null;
   let cleanup: () => void = () => {};
   if (explicitConfig !== undefined) {
-    ({ runFile, cleanup } = launcher.stageConfiguredAgent(explicitConfig, agentDir));
+    try {
+      ({ runFile, cleanup } = launcher.stageConfiguredAgent(explicitConfig, agentDir));
+    } catch (error) {
+      // A bad explicit config never launches — and never becomes an
+      // unconfigured run of the shipped agent.
+      console.error(`Error: ${(error as Error).message}`);
+      launcher.exit(2);
+      return;
+    }
   } else if (launcher.fileExists(precompiledFile)) {
     runFile = precompiledFile;
   } else {

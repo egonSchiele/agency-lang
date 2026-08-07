@@ -110,6 +110,27 @@ describe("runBundledAgent config selection and cleanup", () => {
     expect(harness.cleanup).toHaveBeenCalledTimes(1);
   });
 
+  test("a staging failure prints the config error and exits 2 without spawning", () => {
+    const harness = makeLaunchHarness();
+    harness.stage.mockImplementation(() => {
+      throw new Error("Invalid agency.json config:\n  - client: boom");
+    });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    runBundledAgent(
+      harness.config,
+      "agency-agent",
+      ["--config", "bad.json"],
+      {},
+      harness.deps,
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/Invalid agency\.json config/),
+    );
+    expect(harness.deps.exit).toHaveBeenCalledWith(2);
+    expect(harness.deps.spawn).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   test.each([
     { forwarded: ["--max-time", "bogus"], message: /max-time/i },
     { forwarded: ["--max-cost", "bogus"], message: /max-cost/i },

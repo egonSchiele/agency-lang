@@ -18,7 +18,9 @@ function make() {
     .command("agent")
     .passThroughOptions({ boundary: "immediate" })
     .argument("[args...]")
-    .action((args) => Object.assign(seen, { agentArgs: args }));
+    .action((args) => {
+      Object.assign(seen, { agentArgs: args });
+    });
   return { program, run, agent, seen };
 }
 

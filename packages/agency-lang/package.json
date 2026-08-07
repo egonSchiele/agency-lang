@@ -103,7 +103,6 @@
   "dependencies": {
     "chokidar": "^4",
     "cli-highlight": "^2.1.11",
-    "commander": "^14.0.3",
     "diff-match-patch": "^1.0.5",
     "esbuild": "^0.27.4",
     "highlight.js": "^10.7.1",

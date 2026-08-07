@@ -1,4 +1,4 @@
-import { InvalidArgumentError, type Command } from "commander";
+import { InvalidArgumentError, type Command } from "@/vendor/commander/index.js";
 
 import type { AgencyConfig } from "@/config.js";
 

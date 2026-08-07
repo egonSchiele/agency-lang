@@ -80,7 +80,7 @@ import { expandSplices } from "@/preprocessors/expandSplices.js";
 import { formatSpliceDiagnostic } from "@/compiler/splice/report.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
-import { Command, InvalidArgumentError } from "commander";
+import { Command, InvalidArgumentError } from "@/vendor/commander/index.js";
 import * as fs from "fs";
 import { color } from "@/utils/termcolors.js";
 import process from "process";

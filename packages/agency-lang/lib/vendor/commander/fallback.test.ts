@@ -61,6 +61,17 @@ describe("fallbackCommand", () => {
     });
   });
 
+  test("pre-input -- works through the fallback shorthand too", () => {
+    const { program, run, seen } = make();
+    program.parse(["--", "foo.agency", "--tag", "5"], { from: "user" });
+    expect(seen.input).toBe("foo.agency");
+    expect(seen.nodeArgs).toEqual(["--tag", "5"]);
+    expect(run.boundaryInfo()).toEqual({
+      tail: ["--tag", "5"],
+      viaSeparator: true,
+    });
+  });
+
   test("bare line shows root help, does not dispatch", () => {
     const { program, seen, output } = make();
     expect(() => program.parse([], { from: "user" }))

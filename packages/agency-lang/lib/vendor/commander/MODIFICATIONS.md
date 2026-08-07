@@ -27,7 +27,9 @@ here. Do not restyle upstream code.
    _prepareForParse; the parent stops option consumption at a fallback-bound
    operand (separator preserved for the child), and a first-operand boundary
    child dispatched with its input already consumed treats the whole unknown
-   as program tail (spec: modification 4).
+   as program tail; a PRE-input separator on a fallback parent keeps `--` at
+   the head of the dispatched tail so the child records viaSeparator (spec:
+   modification 4).
 6. command.js + index.d.ts — ownership-aware parent parsing: one pure
    _consumeOptionToken primitive is the only place option-token shapes are
    decided (parseOptions performs its returned mutations; nothing else

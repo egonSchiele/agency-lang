@@ -30,22 +30,22 @@ const currentDir = path.dirname(new URL(import.meta.url).pathname);
  * budget applied late would change what the feature means (a trace with a
  * hole at startup; a spend cap that depends on agent-code discipline).
  */
+// A bare flag always scans to "" here; what "" MEANS is decided in
+// resolveAgentLaunchArgs (meaningful default destination for trace/log,
+// absent for the rest — the agent's own parser reports the missing value).
 const LAUNCH_FLAG_POLICIES: Record<
   string,
   {
-    /** Bare `--trace` means "default destination" (empty string); a bare
-     *  budget or agent-home flag is a usage error left to the agent. */
-    bareIsMeaningful: boolean;
     /** Budget values may be negative numbers, which look like flags. */
     acceptsNegativeNumber: boolean;
   }
 > = {
-  trace: { bareIsMeaningful: true, acceptsNegativeNumber: false },
-  log: { bareIsMeaningful: true, acceptsNegativeNumber: false },
-  "agent-home": { bareIsMeaningful: false, acceptsNegativeNumber: false },
-  "max-cost": { bareIsMeaningful: false, acceptsNegativeNumber: true },
-  "max-time": { bareIsMeaningful: false, acceptsNegativeNumber: true },
-  config: { bareIsMeaningful: false, acceptsNegativeNumber: false },
+  trace: { acceptsNegativeNumber: false },
+  log: { acceptsNegativeNumber: false },
+  "agent-home": { acceptsNegativeNumber: false },
+  "max-cost": { acceptsNegativeNumber: true },
+  "max-time": { acceptsNegativeNumber: true },
+  config: { acceptsNegativeNumber: false },
 };
 
 const NEGATIVE_NUMBER = /^-(\d+|\d*\.\d+)(e[+-]?\d+)?$/;
@@ -212,8 +212,10 @@ export function runBundledAgent(
     runFile = launcher.compile(config, agencyFile);
   }
   if (runFile === null) {
+    cleanup();
     console.error(`Failed to compile agent ${agentName}.`);
-    process.exit(1);
+    launcher.exit(1);
+    return;
   }
 
   const env = { ...process.env };

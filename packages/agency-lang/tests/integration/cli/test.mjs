@@ -662,18 +662,21 @@ node main() {
   const installedAgentDir = join(
     dir, "node_modules", "agency-lang", "dist", "lib", "agents", "agency-agent",
   );
+  // Canonical: sorted entries, because readdirSync order is not guaranteed
+  // and a plain-object JSON comparison would depend on insertion order.
   const agentTreeHashes = () => {
-    const hashes = {};
+    const hashes = [];
     const visit = (current) => {
       for (const entry of readdirSync(current, { withFileTypes: true })) {
         const full = join(current, entry.name);
         if (entry.isDirectory()) visit(full);
         else if (entry.name.endsWith(".js")) {
-          hashes[full] = createHash("sha256").update(readFileSync(full)).digest("hex");
+          hashes.push([full, createHash("sha256").update(readFileSync(full)).digest("hex")]);
         }
       }
     };
     visit(installedAgentDir);
+    hashes.sort((a, b) => a[0].localeCompare(b[0]));
     return hashes;
   };
   const hashesBefore = agentTreeHashes();

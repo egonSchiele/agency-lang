@@ -75,6 +75,9 @@ export function stageConfiguredAgent(
     if (runFile === null) {
       throw new Error(`Failed to compile agent with config ${configPath}`);
     }
+    // Re-tighten after compilation: outputs that OVERWROTE a copied file keep
+    // its 0600, but any file the compiler CREATED got umask defaults.
+    makeTreeWritable(staged);
     return { runFile, cleanup };
   } catch (error) {
     cleanup();
@@ -82,16 +85,20 @@ export function stageConfiguredAgent(
   }
 }
 
-/** Owner read/write on files, read/write/execute on directories — applied to
- *  the COPY only, so a read-only installed tree stages compilable. */
+/** Owner-only permissions (0700 dirs, 0600 files) on the COPY, so a
+ *  read-only installed tree stages compilable — and nothing more. The staged
+ *  agent.js can carry literal credentials baked from the explicit config
+ *  (client.apiKey, statelog keys) and lives for the child's whole lifetime,
+ *  so on a shared machine the tree must never be group/world readable.
+ *  mkdtempSync already creates the root 0700; keep it that way. */
 function makeTreeWritable(directory: string): void {
-  fs.chmodSync(directory, 0o755);
+  fs.chmodSync(directory, 0o700);
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const fullPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       makeTreeWritable(fullPath);
     } else {
-      fs.chmodSync(fullPath, 0o644);
+      fs.chmodSync(fullPath, 0o600);
     }
   }
 }

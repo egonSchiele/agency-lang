@@ -110,6 +110,18 @@ describe("runBundledAgent config selection and cleanup", () => {
     expect(harness.cleanup).toHaveBeenCalledTimes(1);
   });
 
+  test("a failed fallback compile exits 1 through the seam without spawning", () => {
+    const harness = makeLaunchHarness();
+    harness.deps.fileExists = () => false;
+    vi.mocked(harness.deps.compile).mockReturnValue(null);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    runBundledAgent(harness.config, "agency-agent", [], {}, harness.deps);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/Failed to compile/));
+    expect(harness.deps.exit).toHaveBeenCalledWith(1);
+    expect(harness.deps.spawn).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   test("a staging failure prints the config error and exits 2 without spawning", () => {
     const harness = makeLaunchHarness();
     harness.stage.mockImplementation(() => {

@@ -99,6 +99,22 @@ describe("stageConfiguredAgent", () => {
     expect(runFile.startsWith(agentDir)).toBe(false);
   });
 
+  test("the staged tree is owner-only: 0700 root, 0600 generated run file", () => {
+    // The staged agent.js can bake credentials from the explicit config and
+    // lives for the child's lifetime; on a shared machine it must not be
+    // group/world readable.
+    const root = freshRoot();
+    const agentDir = makeAgentDir(root);
+    const cfg = path.join(root, "agency.json");
+    fs.writeFileSync(cfg, "{}");
+    const { runFile, cleanup } = stageConfiguredAgent(cfg, agentDir);
+    cleanupFns.push(cleanup);
+    const stageRoot = path.dirname(runFile);
+    expect(fs.statSync(stageRoot).mode & 0o777).toBe(0o700);
+    expect(fs.statSync(runFile).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(path.join(stageRoot, "lib")).mode & 0o777).toBe(0o700);
+  });
+
   test("leaves the source tree byte-for-byte unchanged, even when read-only", () => {
     const root = freshRoot();
     const agentDir = makeAgentDir(root);

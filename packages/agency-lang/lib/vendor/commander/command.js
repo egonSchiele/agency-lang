@@ -2383,6 +2383,21 @@ Expecting one of '${allowedValues.join("', '")}'`);
         if (this._passThroughOptions && dest === operands) {
           this._boundaryRecord = { tail: args.slice(i + 1), viaSeparator: true };
         }
+        // AGENCY FORK: a pre-input separator on a fallback parent — the next
+        // token is the fallback command's input. Keep the separator at the
+        // head of the tail so the dispatched boundary child records
+        // viaSeparator instead of losing the provenance (MODIFICATIONS.md #5).
+        if (
+          this._fallbackCommandName &&
+          dest === operands &&
+          operands.length === 0 &&
+          unknown.length === 0 &&
+          args[i] !== undefined
+        ) {
+          operands.push(args[i]);
+          unknown.push('--', ...args.slice(i + 1));
+          break;
+        }
         if (dest === unknown) dest.push(arg);
         dest.push(...args.slice(i));
         break;

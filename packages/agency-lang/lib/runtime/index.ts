@@ -5,6 +5,7 @@ export type {
   HandlerFn,
 } from "./types.js";
 export type { Interrupt, InterruptResponse } from "./interrupts.js";
+export type { InvocationOptions } from "./invocationOptions.js";
 export { RuntimeContext } from "./state/context.js";
 export { agency } from "./agency.js";
 export type { InterruptOpts, ResumableScope, ResumableScopeOpts } from "./agency.js";

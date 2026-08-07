@@ -283,7 +283,14 @@ type RunExportedFunctionArgs = {
 async function runExportedFunctionCore(
   { ctx, fn, namedArgs, initializeGlobals, invocation }: RunExportedFunctionArgs,
 ): Promise<ServedInvocationOutcome<unknown>> {
-  const resolved = resolveInvocation({ kind: "fresh", options: invocation });
+  // Inherit the subprocess run id (as runNodeCore does) so a served function
+  // executed in subprocess mode joins the parent's trace instead of minting a
+  // new one.
+  const resolved = resolveInvocation({
+    kind: "fresh",
+    options: invocation,
+    inheritedRunId: getSubprocessRunInfo().runId,
+  });
   const execCtx = await ctx.createExecutionContext(resolved);
   let outcome: RawOutcome<unknown>;
   try {

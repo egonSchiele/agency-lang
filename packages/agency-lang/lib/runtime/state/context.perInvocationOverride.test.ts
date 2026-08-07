@@ -60,4 +60,25 @@ describe("createExecutionContext per-invocation override", () => {
     expect(parent.budget).toEqual({ maxCost: 5, maxTimeMs: 60_000 });
     expect(parent.maxCallDepth).toBe(100);
   });
+
+  // A subprocess spawned by this run inherits its telemetry sink via
+  // getStatelogSink() → withParentStatelog. So the effective per-invocation sink
+  // (host/apiKey/projectId) must be visible there, not the frozen parent's.
+  it("exposes the per-invocation remote sink through getStatelogSink", async () => {
+    const parent = makeParent();
+    const execCtx = await parent.createExecutionContext({
+      runId: "run",
+      contextOverride: {
+        observability: true,
+        log: { host: "https://call", apiKey: "call-key", projectId: "call-proj" },
+      },
+    });
+
+    expect(execCtx.getStatelogSink()).toEqual({
+      observability: true,
+      host: "https://call",
+      apiKey: "call-key",
+      projectId: "call-proj",
+    });
+  });
 });

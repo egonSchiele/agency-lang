@@ -371,10 +371,28 @@ export class RuntimeContext<T> {
   /** The statelog sink identity a subprocess should inherit — see
    * `withParentStatelog` in ipc.ts. Narrow accessor so the full (private)
    * statelog config stays encapsulated. */
-  getStatelogSink(): { observability: boolean; logFile?: string } {
+  /** The effective remote telemetry sink a spawned subprocess should inherit, so
+   *  a child traces to the SAME destination/credential as this context —
+   *  including a per-invocation override. Only the allow-listed telemetry fields
+   *  are exposed (never client/provider config). */
+  getStatelogSink(): {
+    observability: boolean;
+    host?: string;
+    apiKey?: string;
+    projectId?: string;
+    requestTimeoutMs?: number;
+    metadata?: StatelogConfig["metadata"];
+    logFile?: string;
+  } {
+    const config = this.statelogConfig;
     return {
-      observability: this.statelogConfig?.observability ?? false,
-      ...(this.statelogConfig?.logFile ? { logFile: this.statelogConfig.logFile } : {}),
+      observability: config?.observability ?? false,
+      ...(config?.host ? { host: config.host } : {}),
+      ...(config?.apiKey ? { apiKey: config.apiKey } : {}),
+      ...(config?.projectId ? { projectId: config.projectId } : {}),
+      ...(config?.requestTimeoutMs !== undefined ? { requestTimeoutMs: config.requestTimeoutMs } : {}),
+      ...(config?.metadata ? { metadata: config.metadata } : {}),
+      ...(config?.logFile ? { logFile: config.logFile } : {}),
     };
   }
 

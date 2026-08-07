@@ -1480,7 +1480,15 @@ export async function _run(
  */
 export function withParentStatelog(
   overrides: Partial<AgencyConfig> | undefined,
-  parentConfig: { observability?: boolean; logFile?: string },
+  parentConfig: {
+    observability?: boolean;
+    host?: string;
+    apiKey?: string;
+    projectId?: string;
+    requestTimeoutMs?: number;
+    metadata?: NonNullable<AgencyConfig["log"]>["metadata"];
+    logFile?: string;
+  },
 ): Partial<AgencyConfig> | undefined {
   if (overrides?.log?.logFile) return overrides;
   if (!parentConfig.observability) return overrides;
@@ -1489,10 +1497,23 @@ export function withParentStatelog(
       ? parentConfig.logFile
       : path.resolve(process.cwd(), parentConfig.logFile)
     : undefined;
+  // Forward the parent's EFFECTIVE remote sink (host/apiKey/projectId/…) so the
+  // child traces to the same destination and credential — this is what carries a
+  // per-invocation observability override into a subprocess. Parent values win
+  // over the child's own `log` (the child inherits the parent's trace).
+  const inheritedLog: NonNullable<AgencyConfig["log"]> = {
+    ...(parentConfig.host !== undefined ? { host: parentConfig.host } : {}),
+    ...(parentConfig.apiKey !== undefined ? { apiKey: parentConfig.apiKey } : {}),
+    ...(parentConfig.projectId !== undefined ? { projectId: parentConfig.projectId } : {}),
+    ...(parentConfig.requestTimeoutMs !== undefined ? { requestTimeoutMs: parentConfig.requestTimeoutMs } : {}),
+    ...(parentConfig.metadata !== undefined ? { metadata: parentConfig.metadata } : {}),
+    ...(logFile ? { logFile } : {}),
+  };
+  const mergedLog = { ...overrides?.log, ...inheritedLog };
   return {
     ...overrides,
     observability: true,
-    ...(logFile ? { log: { ...overrides?.log, logFile } } : {}),
+    ...(Object.keys(mergedLog).length > 0 ? { log: mergedLog } : {}),
   };
 }
 

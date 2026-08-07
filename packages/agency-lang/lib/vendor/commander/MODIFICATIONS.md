@@ -21,3 +21,10 @@ here. Do not restyle upstream code.
    drew the line (post-input separators are detected at the pass-through stop
    and stripped; pre-input separators at the literal branch); reset per parse
    in _prepareForParse (spec: modification 2).
+5. command.js + index.d.ts — fallbackCommand(name): lines whose first operand
+   names no known command dispatch the existing command object, with
+   invokedAsFallback() provenance threaded through _dispatchSubcommand after
+   _prepareForParse; the parent stops option consumption at a fallback-bound
+   operand (separator preserved for the child), and a first-operand boundary
+   child dispatched with its input already consumed treats the whole unknown
+   as program tail (spec: modification 4).

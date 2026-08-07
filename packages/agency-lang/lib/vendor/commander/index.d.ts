@@ -812,6 +812,11 @@ export class Command {
   // this command's boundary; undefined when none did.
   boundaryInfo(): BoundaryInfo | undefined;
 
+  // AGENCY FORK: lines whose first operand names no known command dispatch
+  // the existing command `name`, with invokedAsFallback() provenance.
+  fallbackCommand(name: string): this;
+  invokedAsFallback(): boolean;
+
   /**
    * Parse `argv`, setting options and invoking commands when defined.
    *

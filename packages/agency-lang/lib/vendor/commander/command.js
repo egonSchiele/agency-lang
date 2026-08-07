@@ -58,6 +58,9 @@ export class Command extends EventEmitter {
     // AGENCY FORK: { tail, viaSeparator, firstPathOwnedOption? } recorded when
     // a parse reaches this command's program boundary (MODIFICATIONS.md #4).
     this._boundaryRecord = undefined;
+    // AGENCY FORK: fallback-to-a-real-command state (MODIFICATIONS.md #5).
+    this._fallbackCommandName = null;
+    this._invokedAsFallback = false;
     this._lifeCycleHooks = {}; // a hash of arrays
     /** @type {(boolean | string)} */
     this._showHelpAfterError = false;
@@ -991,6 +994,33 @@ Expecting one of '${allowedValues.join("', '")}'`);
   }
 
   /**
+   * AGENCY FORK: fallback to a real command (MODIFICATIONS.md #5). Unlike a
+   * hidden default command, lines whose first operand names no known command
+   * dispatch the EXISTING command object — one options list, one action, one
+   * help — and the dispatch is recorded as provenance.
+   *
+   * @param {string} name - an already-registered subcommand name
+   * @return {Command} `this` command for chaining
+   */
+  fallbackCommand(name) {
+    if (!this._findCommand(name)) {
+      throw new Error(`fallbackCommand: no command named '${name}'`);
+    }
+    this._fallbackCommandName = name;
+    return this;
+  }
+
+  /**
+   * AGENCY FORK: whether the last dispatch of this command came through the
+   * fallback (e.g. `agency greet.agency`) rather than its own name.
+   *
+   * @return {boolean}
+   */
+  invokedAsFallback() {
+    return this._invokedAsFallback;
+  }
+
+  /**
    * Whether to store option values as properties on command object,
    * or store separately (specify false). In both cases the option values can be accessed using .opts().
    *
@@ -1471,11 +1501,15 @@ Expecting one of '${allowedValues.join("', '")}'`);
    * @private
    */
 
-  _dispatchSubcommand(commandName, operands, unknown) {
+  // AGENCY FORK: the extra parameter carries fallback provenance through
+  // dispatch — it must be assigned AFTER _prepareForParse, which resets
+  // per-parse state (MODIFICATIONS.md #5).
+  _dispatchSubcommand(commandName, operands, unknown, invokedAsFallback = false) {
     const subCommand = this._findCommand(commandName);
     if (!subCommand) this.help({ error: true });
 
     subCommand._prepareForParse();
+    subCommand._invokedAsFallback = invokedAsFallback;
     let promiseChain;
     promiseChain = this._chainOrCallSubCommandHook(
       promiseChain,
@@ -1670,6 +1704,22 @@ Expecting one of '${allowedValues.join("', '")}'`);
    */
 
   _parseCommand(operands, unknown) {
+    // AGENCY FORK: a first-operand boundary command dispatched with its input
+    // already consumed by the parent (the fallback shorthand). The boundary
+    // has already fallen, so the entire unknown is the program tail — parsing
+    // it would misread the program's flags as unknown options
+    // (MODIFICATIONS.md #5).
+    if (
+      this._passThroughOptions &&
+      this._boundaryMode === 'first-operand' &&
+      operands.length > 0
+    ) {
+      const viaSeparator = unknown[0] === '--';
+      const tail = viaSeparator ? unknown.slice(1) : unknown;
+      this._boundaryRecord = { tail, viaSeparator };
+      operands = operands.concat(tail);
+      unknown = [];
+    }
     const parsed = this.parseOptions(unknown);
     this._parseOptionsEnv(); // after cli, so parseArg not called on both cli and env
     this._parseOptionsImplied();
@@ -1685,6 +1735,19 @@ Expecting one of '${allowedValues.join("', '")}'`);
       operands[0] === this._getHelpCommand().name()
     ) {
       return this._dispatchHelpCommand(operands[1]);
+    }
+    // AGENCY FORK: fallback dispatch (MODIFICATIONS.md #5) — only when a
+    // non-option operand exists, so bare lines and root --help/--version keep
+    // upstream behavior. Dispatches the EXISTING command object with
+    // provenance. No help interception here: with an operand present,
+    // anything after it (--help included) is the program's.
+    if (this._fallbackCommandName && operands.length > 0) {
+      return this._dispatchSubcommand(
+        this._fallbackCommandName,
+        operands,
+        unknown,
+        true,
+      );
     }
     if (this._defaultCommandName) {
       this._outputHelpIfRequested(unknown); // Run the help for default command from parent rather than passing to default command
@@ -2029,6 +2092,23 @@ Expecting one of '${allowedValues.join("', '")}'`);
         unknown.length === 0 &&
         !maybeOption(arg) &&
         this._findCommand(arg)?._passThroughOptions
+      ) {
+        operands.push(arg);
+        unknown.push(...args.slice(i));
+        break;
+      }
+
+      // AGENCY FORK: with a fallback command configured, an operand naming no
+      // command is the fallback's input and ends this parent's option
+      // consumption — the rest of the line (separator included, for
+      // provenance) is the program's (MODIFICATIONS.md #5).
+      if (
+        this._fallbackCommandName &&
+        operands.length === 0 &&
+        unknown.length === 0 &&
+        !maybeOption(arg) &&
+        !this._findCommand(arg) &&
+        arg !== this._getHelpCommand()?.name()
       ) {
         operands.push(arg);
         unknown.push(...args.slice(i));

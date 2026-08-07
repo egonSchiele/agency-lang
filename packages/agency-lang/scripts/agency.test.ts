@@ -278,6 +278,34 @@ describe("integer flag parsers reject parseInt footguns", () => {
 // and the budget flags are the launcher pre-scan's
 // (lib/cli/runBundledAgent.test.ts). Nothing splits argv before commander.
 
+// Action-level proof that root -c provenance reaches the agent launch: a
+// wrapper-only test could not catch the action dropping the flag.
+describe("agent action provenance", () => {
+  it("passes an explicit root -c path and exactly the forwarded tail", async () => {
+    const launchAgent = vi.fn();
+    const configPath = path.join(tmpDir, "agency.json");
+    fs.writeFileSync(configPath, "{}\n");
+
+    await runCli(["node", "agency", "-c", configPath, "agent", "--help"], {
+      launchAgent,
+    });
+
+    expect(launchAgent).toHaveBeenCalledTimes(1);
+    const [, forwarded, options] = launchAgent.mock.calls[0];
+    expect(forwarded).toEqual(["--help"]);
+    expect(options).toEqual({ explicitConfigPath: configPath });
+  });
+
+  it("passes no config path when -c was not written", async () => {
+    const launchAgent = vi.fn();
+    await runCli(["node", "agency", "agent", "--help"], { launchAgent });
+    expect(launchAgent).toHaveBeenCalledTimes(1);
+    expect(launchAgent.mock.calls[0][2]).toEqual({
+      explicitConfigPath: undefined,
+    });
+  });
+});
+
 describe("remote management command registration", () => {
   const CONTEXT = expect.objectContaining({
     config: expect.any(Object),

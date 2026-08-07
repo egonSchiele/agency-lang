@@ -44,6 +44,7 @@ const LAUNCH_FLAG_POLICIES: Record<
   "agent-home": { bareIsMeaningful: false, acceptsNegativeNumber: false },
   "max-cost": { bareIsMeaningful: false, acceptsNegativeNumber: true },
   "max-time": { bareIsMeaningful: false, acceptsNegativeNumber: true },
+  config: { bareIsMeaningful: false, acceptsNegativeNumber: false },
 };
 
 const NEGATIVE_NUMBER = /^-(\d+|\d*\.\d+)(e[+-]?\d+)?$/;
@@ -89,6 +90,17 @@ export type ResolvedAgentLaunch = {
   configOverrides: Partial<AgencyConfig>;
   agentHome: string | null;
   budgetInput: { maxCost?: string; maxTime?: string };
+  /** A forwarded `--config <path>`; wins over the root-level `-c`. */
+  configPath?: string;
+};
+
+/** Launch behavior callers may set; test seams live in the separate
+ *  dependencies parameter, never here. */
+export type AgentLaunchOptions = {
+  /** An explicit root `-c <path>` — set only when the user wrote the flag
+   *  (cwd config discovery never sets it), which is the provenance the
+   *  staged configured compile needs. */
+  explicitConfigPath?: string;
 };
 
 /**
@@ -117,15 +129,16 @@ export function resolveAgentLaunchArgs(
     }
   }
   const home = scanned["agent-home"];
-  const budgetValue = (value: string | undefined) =>
+  const nonEmpty = (value: string | undefined) =>
     value !== undefined && value !== "" ? value : undefined;
   return {
     configOverrides: applyCliFlags({}, flags),
     agentHome: home !== undefined && home !== "" ? path.resolve(home) : null,
     budgetInput: {
-      maxCost: budgetValue(scanned["max-cost"]),
-      maxTime: budgetValue(scanned["max-time"]),
+      maxCost: nonEmpty(scanned["max-cost"]),
+      maxTime: nonEmpty(scanned["max-time"]),
     },
+    configPath: nonEmpty(scanned.config),
   };
 }
 
@@ -133,6 +146,7 @@ export function runBundledAgent(
   config: AgencyConfig,
   agentName: string,
   args: string[] = [],
+  options: AgentLaunchOptions = {},
   deps: { spawn?: typeof realSpawn; exit?: (code: number) => void } = {},
 ): void {
   const spawn = deps.spawn ?? realSpawn;

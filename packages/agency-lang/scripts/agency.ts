@@ -166,6 +166,7 @@ type CliDependencies = {
   loadLspStartServer?: () => Promise<() => void>;
   loadMcpStartServer?: () => Promise<() => void>;
   resolveMcpCommand?: () => string[];
+  launchAgent?: typeof agent;
 };
 
 function defaultResolveMcpCommand(): string[] {
@@ -1531,7 +1532,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("[args...]", "Arguments forwarded to the agent")
     .helpOption(false)
     .action((args: string[]) => {
-      agent(getConfig(), args);
+      const launchAgent = deps.launchAgent ?? agent;
+      launchAgent(getConfig(), args, {
+        // Present only when the user explicitly wrote -c; cwd config
+        // discovery never sets this option — the provenance the staged
+        // configured compile needs.
+        explicitConfigPath: program.opts().config as string | undefined,
+      });
     });
 
   program

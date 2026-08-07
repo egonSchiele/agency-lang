@@ -54,6 +54,10 @@ export def parseAgentArgs() {
         type: "string",
         description: "Directory to use instead of ~/.agency-agent for settings, policy, and history (equivalent to the AGENCY_AGENT_HOME env var; the flag wins when both are set)"
       },
+      config: {
+        type: "string",
+        description: "Path to an agency.json config file for this agent run (the agent is recompiled with it)"
+      },
       local: {
         type: "string",
         optional: true,

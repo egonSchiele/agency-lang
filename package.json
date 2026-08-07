@@ -1,5 +1,6 @@
 {
   "name": "agency-lang-workspace",
+  "packageManager": "pnpm@11.20.0",
   "private": true,
   "scripts": {
     "build": "pnpm -r --if-present --stream run build",

@@ -60,15 +60,16 @@ jobs:
     - name: Set up pnpm
       uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
       with:
-        version: 9
         run_install: false
 
     - name: Set up Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
-        # Pinned to the exact engines minimum (package.json "node": ">=22.12.0")
+        # Pinned to the exact engines minimum (package.json "node": ">=22.13.0")
         # so the declared floor is the tested floor, not whatever 22.x floats to.
-        node-version: 22.12.0
+        # 22.13 rather than commander v15's 22.12 because pnpm 11 requires it —
+        # this pin is what catches such contradictions.
+        node-version: 22.13.0
         cache: 'pnpm'
     - run: pnpm install
     - run: make
@@ -101,7 +102,6 @@ jobs:
     - name: Set up pnpm
       uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
       with:
-        version: 9
         run_install: false
     - name: Set up Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -129,7 +129,6 @@ jobs:
     - name: Set up pnpm
       uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
       with:
-        version: 9
         run_install: false
 
     - name: Set up Node.js
@@ -173,7 +172,6 @@ jobs:
     - name: Set up pnpm
       uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
       with:
-        version: 9
         run_install: false
     - name: Set up Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -235,7 +233,6 @@ jobs:
     - name: Set up pnpm
       uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
       with:
-        version: 9
         run_install: false
     - name: Set up Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -289,7 +286,6 @@ jobs:
     - name: Set up pnpm
       uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
       with:
-        version: 9
         run_install: false
 
     - name: Set up Node.js
@@ -390,7 +386,6 @@ jobs:
     - name: Set up pnpm
       uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
       with:
-        version: 9
         run_install: false
     - name: Set up Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -494,7 +489,6 @@ jobs:
           persist-credentials: false
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
-          version: 9
           run_install: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:

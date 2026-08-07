@@ -1,3 +1,38 @@
 packages:
   - "packages/*"
   - "packages/agency-lang/docs/site"
+
+# Supply-chain hardening. Needs pnpm >= 10.16 — OLDER PNPM SILENTLY IGNORES
+# ALL OF THIS. The root package.json packageManager field pins pnpm@11.x;
+# pnpm >= 10 self-switches to it natively, Corepack and CI's pnpm/action-setup
+# read the same field. A pre-10 global pnpm honors none of that: if
+# `pnpm --version` in this repo does not print the pinned version, upgrade.
+#
+# New versions of any dependency must be public for 7 days before pnpm will
+# resolve them. Malicious releases from compromised maintainer accounts are
+# almost always yanked within hours, so the cooldown closes the main
+# attack window for the whole transitive tree. Deliberate upgrades still
+# work — they just resolve to week-old versions.
+minimumReleaseAge: 10080
+# First-party packages are exempt: publishing one and immediately using the
+# new version from agency is the normal dev loop. Exact-version requests are
+# gated too, which is why smoltalk-llama-cpp is here — the local-model CI
+# workflow installs it at a freshly-bumped pin.
+minimumReleaseAgeExclude:
+  - smoltalk
+  - smoltalk-llama-cpp
+  - tarsec
+  - typestache
+# Transitive dependencies may not come from git repos or raw tarball URLs —
+# every subdep resolves from the registry, where the cooldown and integrity
+# hashes apply.
+blockExoticSubdeps: true
+# Lifecycle (install) scripts are default-denied. These three ask to run one;
+# all three have been silently blocked since pnpm 10 and everything works:
+# esbuild ships platform binaries as optionalDependencies (its script is only
+# a validator fallback), and the genai/protobufjs postinstalls are not needed
+# at runtime. Flip to true only with a reason.
+allowBuilds:
+  '@google/genai': false
+  esbuild: false
+  protobufjs: false

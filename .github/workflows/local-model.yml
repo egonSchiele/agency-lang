@@ -44,7 +44,6 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
-          version: 9
           run_install: false
 
       - name: Set up Node.js
@@ -59,12 +58,13 @@ jobs:
       - name: Build
         run: make
 
-      # Install smoltalk-llama-cpp ONLY here, at a pinned version. pnpm 9's
-      # `add` rejects `--save=false` (ERR_PNPM_OPTION_NOT_SUPPORTED), so we add
-      # it directly: the package.json / lockfile edits it makes live only on the
+      # Install smoltalk-llama-cpp ONLY here, at a pinned version, via a plain
+      # `pnpm add`: the package.json / lockfile edits it makes live only on the
       # ephemeral CI runner and are never committed, and no later step runs a
       # `--frozen-lockfile` check. It stays out of the *committed* manifests,
       # which is what keeps a normal `pnpm install` from pulling node-llama-cpp.
+      # (First-party, so it is in minimumReleaseAgeExclude — a freshly-bumped
+      # pin would otherwise be refused by the release-age cooldown for a week.)
       - name: Install smoltalk-llama-cpp (pinned, off-lockfile)
         working-directory: packages/agency-lang
         run: pnpm add smoltalk-llama-cpp@${{ env.SMOLTALK_LLAMA_CPP_VERSION }}

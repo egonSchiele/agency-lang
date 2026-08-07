@@ -1,3 +1,7 @@
+## Aug 6 2026 — v0.13.4
+- Per-invocation config overrides
+- Commander fork, fixes to command-line flags
+
 ## Aug 6 2026 — v0.13.3
 
 ### CLI

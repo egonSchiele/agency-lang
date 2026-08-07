@@ -1,6 +1,6 @@
 {
   "name": "agency-lang",
-  "version": "0.13.3",
+  "version": "0.13.4",
   "description": "The Agency language",
   "main": "./dist/lib/index.js",
   "scripts": {
@@ -91,7 +91,9 @@
     "./stdlib/*": "./stdlib/*"
   },
   "type": "module",
-  "engines": { "node": ">=22.13.0" },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "types": "./dist/lib/index.d.ts",
   "keywords": [],
   "author": "Aditya Bhargava",

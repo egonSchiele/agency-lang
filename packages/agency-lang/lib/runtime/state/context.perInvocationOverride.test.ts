@@ -81,4 +81,19 @@ describe("createExecutionContext per-invocation override", () => {
       projectId: "call-proj",
     });
   });
+
+  // An explicit empty apiKey disables the remote POST; it must survive into the
+  // sink so a subprocess does not fall back to its baked non-empty credential.
+  it("preserves an empty-string apiKey override through getStatelogSink", async () => {
+    const parent = makeParent();
+    const execCtx = await parent.createExecutionContext({
+      runId: "run",
+      contextOverride: { observability: true, log: { apiKey: "" } },
+    });
+
+    const sink = execCtx.getStatelogSink();
+    expect(sink.apiKey).toBe("");
+    // the frozen base credential must NOT leak through
+    expect(sink.apiKey).not.toBe("base-key");
+  });
 });

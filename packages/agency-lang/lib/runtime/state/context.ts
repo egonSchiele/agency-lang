@@ -385,14 +385,19 @@ export class RuntimeContext<T> {
     logFile?: string;
   } {
     const config = this.statelogConfig;
+    // Use `!== undefined`, not truthiness: an explicit empty string is a
+    // meaningful override. `apiKey: ""` intentionally disables the remote POST
+    // (host with no key keeps local sinks only); dropping it here would let a
+    // child fall back to its baked non-empty credential and emit telemetry the
+    // caller meant to suppress.
     return {
       observability: config?.observability ?? false,
-      ...(config?.host ? { host: config.host } : {}),
-      ...(config?.apiKey ? { apiKey: config.apiKey } : {}),
-      ...(config?.projectId ? { projectId: config.projectId } : {}),
+      ...(config?.host !== undefined ? { host: config.host } : {}),
+      ...(config?.apiKey !== undefined ? { apiKey: config.apiKey } : {}),
+      ...(config?.projectId !== undefined ? { projectId: config.projectId } : {}),
       ...(config?.requestTimeoutMs !== undefined ? { requestTimeoutMs: config.requestTimeoutMs } : {}),
-      ...(config?.metadata ? { metadata: config.metadata } : {}),
-      ...(config?.logFile ? { logFile: config.logFile } : {}),
+      ...(config?.metadata !== undefined ? { metadata: config.metadata } : {}),
+      ...(config?.logFile !== undefined ? { logFile: config.logFile } : {}),
     };
   }
 

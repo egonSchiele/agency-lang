@@ -281,7 +281,7 @@ type RunExportedFunctionArgs = {
 async function runExportedFunctionCore(
   { ctx, fn, namedArgs, initializeGlobals }: RunExportedFunctionArgs,
 ): Promise<ServedInvocationOutcome<unknown>> {
-  const execCtx = await ctx.createExecutionContext(nanoid());
+  const execCtx = await ctx.createExecutionContext({ runId: nanoid() });
   let outcome: RawOutcome<unknown>;
   try {
     await initFreshExecCtx(execCtx, { initializeGlobals });
@@ -365,7 +365,7 @@ async function runNodeCore({
     fs.writeFileSync(tracePath, "");
   }
 
-  const execCtx = await ctx.createExecutionContext(runId);
+  const execCtx = await ctx.createExecutionContext({ runId });
   // === Invocation started (context exists). A SINGLE lifecycle boundary covers
   // all remaining setup AND execution, so an already-aborted signal or a
   // bootstrap/setup failure still yields an outcome-with-usage and still runs

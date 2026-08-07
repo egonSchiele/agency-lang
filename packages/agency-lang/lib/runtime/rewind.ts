@@ -36,7 +36,7 @@ export async function rewindFrom(args: {
   // mint one for trace correlation. Replays therefore appear as distinct
   // runs in trace files, which matches the actual execution semantics.
   const runId = (ctx as any).runId ?? nanoid();
-  const execCtx = await ctx.createExecutionContext(runId);
+  const execCtx = await ctx.createExecutionContext({ runId });
   // Must run before restoreState so the empty stack routes the
   // registration to `ctx.topLevelCallbacks`. See the matching comment
   // in `respondToInterrupts`. The bootstrap frame is also mirrored

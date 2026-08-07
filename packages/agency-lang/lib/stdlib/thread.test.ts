@@ -27,7 +27,7 @@ describe("_runGuarded — FailureOpts parity (C2)", () => {
     // { ownedGuardIds } would silently drop the Failure metadata that
     // retry/checkpoint + error reporting depend on.
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       const block = () => {
         throw new AgencyAbort(
@@ -50,7 +50,7 @@ describe("_runGuarded — FailureOpts parity (C2)", () => {
 
   it("re-throws a trip it does NOT own (outer guard's id), preserving the abort", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       const block = () => {
         throw new AgencyAbort(

@@ -770,7 +770,7 @@ async function respondToInterruptsCore(
   }
   if (args.overrides) applyOverrides(checkpoint, args.overrides);
 
-  const execCtx = await ctx.createExecutionContext(interrupt.runId);
+  const execCtx = await ctx.createExecutionContext({ runId: interrupt.runId });
   // === Invocation started (context exists): a SINGLE lifecycle boundary covers
   // all resume setup AND execution, so a setup failure still yields an
   // outcome-with-usage and still runs cleanup. reinstallRootBudget and handler

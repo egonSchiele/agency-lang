@@ -16,3 +16,8 @@ here. Do not restyle upstream code.
    boundary command options resolve by ownership (self or ancestor, with
    variadic continuations emitted on the owner); immediate mode hands the
    whole tail to the program, stripping one leading -- (spec: modification 1).
+4. command.js + index.d.ts — boundaryInfo() provenance: parses that reach a
+   boundary record the original program tail and whether an explicit --
+   drew the line (post-input separators are detected at the pass-through stop
+   and stripped; pre-input separators at the literal branch); reset per parse
+   in _prepareForParse (spec: modification 2).

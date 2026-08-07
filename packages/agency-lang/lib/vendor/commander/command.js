@@ -55,6 +55,9 @@ export class Command extends EventEmitter {
     // AGENCY FORK: 'first-operand' | 'immediate' — where a pass-through
     // command's program boundary falls (MODIFICATIONS.md #3).
     this._boundaryMode = 'first-operand';
+    // AGENCY FORK: { tail, viaSeparator, firstPathOwnedOption? } recorded when
+    // a parse reaches this command's program boundary (MODIFICATIONS.md #4).
+    this._boundaryRecord = undefined;
     this._lifeCycleHooks = {}; // a hash of arrays
     /** @type {(boolean | string)} */
     this._showHelpAfterError = false;
@@ -974,6 +977,20 @@ Expecting one of '${allowedValues.join("', '")}'`);
   }
 
   /**
+   * AGENCY FORK: boundary provenance (MODIFICATIONS.md #4). After a parse
+   * that reached this command's program boundary, returns the original
+   * program tail and whether an explicit `--` drew the line — the two facts a
+   * misplaced-flag warning needs and commander's normal parse discards.
+   * `firstPathOwnedOption` is filled by semantic invocation resolution
+   * (MODIFICATIONS.md #6). Undefined when no parse reached a boundary.
+   *
+   * @return {{ tail: string[], viaSeparator: boolean, firstPathOwnedOption?: string } | undefined}
+   */
+  boundaryInfo() {
+    return this._boundaryRecord;
+  }
+
+  /**
    * Whether to store option values as properties on command object,
    * or store separately (specify false). In both cases the option values can be accessed using .opts().
    *
@@ -1204,6 +1221,11 @@ Expecting one of '${allowedValues.join("', '")}'`);
   }
 
   _prepareForParse() {
+    // AGENCY FORK: boundary provenance is per-parse — a stale record from a
+    // previous parse must never feed the misplaced-flag warning
+    // (MODIFICATIONS.md #4).
+    this._boundaryRecord = undefined;
+
     // Save the state the first time, then restore the state before each subsequent parse.
     if (this._savedState === null) {
       // Do the special default of lone negated option to true, now that we have all the options.
@@ -1869,10 +1891,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
     // leading -- is the user drawing the line explicitly (MODIFICATIONS.md #3).
     if (this._passThroughOptions && this._boundaryMode === 'immediate') {
       const viaSeparator = args[0] === '--';
-      return {
-        operands: viaSeparator ? args.slice(1) : args.slice(),
-        unknown: [],
-      };
+      const tail = viaSeparator ? args.slice(1) : args.slice();
+      this._boundaryRecord = { tail, viaSeparator };
+      return { operands: tail, unknown: [] };
     }
 
     // AGENCY FORK: inside a boundary command, options are recognised by
@@ -1903,6 +1924,14 @@ Expecting one of '${allowedValues.join("', '")}'`);
 
       // literal
       if (arg === '--') {
+        // AGENCY FORK: a pre-input separator on a boundary command — the next
+        // token is still this command's input; the rest is the program's,
+        // explicitly claimed (MODIFICATIONS.md #4). The post-input separator
+        // never reaches this branch: the pass-through stop below fires on the
+        // input operand first and detects it there.
+        if (this._passThroughOptions && dest === operands) {
+          this._boundaryRecord = { tail: args.slice(i + 1), viaSeparator: true };
+        }
         if (dest === unknown) dest.push(arg);
         dest.push(...args.slice(i));
         break;
@@ -2030,7 +2059,14 @@ Expecting one of '${allowedValues.join("', '")}'`);
 
       // If using passThroughOptions, stop processing options at first command-argument.
       if (this._passThroughOptions) {
-        dest.push(arg, ...args.slice(i));
+        // AGENCY FORK: boundary provenance (MODIFICATIONS.md #4). arg is the
+        // input operand; a -- immediately after it is the user explicitly
+        // claiming the tail, and is stripped so the program never receives a
+        // literal separator.
+        const viaSeparator = args[i] === '--';
+        const tail = args.slice(viaSeparator ? i + 1 : i);
+        this._boundaryRecord = { tail, viaSeparator };
+        dest.push(arg, ...tail);
         break;
       }
 

@@ -13,6 +13,14 @@ type LiteralUnion<LiteralType, BaseType extends string | number> =
   | LiteralType
   | (BaseType & Record<never, never>);
 
+// AGENCY FORK: program-tail provenance recorded when a parse reaches a
+// pass-through command's boundary (MODIFICATIONS.md #4, #6).
+export type BoundaryInfo = {
+  tail: string[];
+  viaSeparator: boolean;
+  firstPathOwnedOption?: string;
+};
+
 export class CommanderError extends Error {
   code: string;
   exitCode: number;
@@ -799,6 +807,10 @@ export class Command {
   passThroughOptions(
     passThrough?: boolean | { boundary?: 'first-operand' | 'immediate' },
   ): this;
+
+  // AGENCY FORK: program-tail provenance from the last parse that reached
+  // this command's boundary; undefined when none did.
+  boundaryInfo(): BoundaryInfo | undefined;
 
   /**
    * Parse `argv`, setting options and invoking commands when defined.

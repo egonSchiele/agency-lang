@@ -64,6 +64,53 @@ describe("boundary-aware delegation", () => {
     expect(program.opts().include).toEqual(["a", "b"]);
   });
 
+  test("positional boundary records tail, viaSeparator false", () => {
+    const { program, run } = make();
+    program.parse(["run", "foo.agency", "--max-cost", "5"], { from: "user" });
+    expect(run.boundaryInfo()).toEqual({
+      tail: ["--max-cost", "5"],
+      viaSeparator: false,
+    });
+  });
+
+  test("post-input -- records viaSeparator true, -- stripped from tail", () => {
+    const { program, run, seen } = make();
+    program.parse(["run", "foo.agency", "--", "--max-cost", "5"], { from: "user" });
+    expect(seen.nodeArgs).toEqual(["--max-cost", "5"]);
+    expect(run.boundaryInfo()).toEqual({
+      tail: ["--max-cost", "5"],
+      viaSeparator: true,
+    });
+  });
+
+  test("pre-input -- still consumes the input and suppresses (viaSeparator true)", () => {
+    const { program, run, seen } = make();
+    program.parse(["run", "--", "foo.agency", "--max-cost", "5"], { from: "user" });
+    expect(seen.input).toBe("foo.agency");
+    expect(seen.nodeArgs).toEqual(["--max-cost", "5"]);
+    expect(run.boundaryInfo()).toEqual({
+      tail: ["--max-cost", "5"],
+      viaSeparator: true,
+    });
+  });
+
+  test("immediate boundary records the whole tail", () => {
+    const { program, agent } = make();
+    program.parse(["agent", "-p", "hi"], { from: "user" });
+    expect(agent.boundaryInfo()).toEqual({
+      tail: ["-p", "hi"],
+      viaSeparator: false,
+    });
+  });
+
+  test("re-parsing the same instance clears stale provenance", () => {
+    const { program, run } = make();
+    program.parse(["run", "foo.agency", "--max-cost", "5"], { from: "user" });
+    expect(run.boundaryInfo()).toBeDefined();
+    program.parse(["run", "bar.agency"], { from: "user" });
+    expect(run.boundaryInfo()).toEqual({ tail: [], viaSeparator: false });
+  });
+
   test("commands without a boundary keep parent-priority behavior", () => {
     const program = new Command().exitOverride();
     const label = program.command("label").option("--store <dir>", "");

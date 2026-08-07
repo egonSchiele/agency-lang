@@ -19,6 +19,8 @@
 !**/test.js
 # Stage-2 helper of the subprocess durability test (spawned by its test.js)
 !**/tests/agency-js/subprocess-durable-resume/resume-stage.js
+# Vendored commander fork: hand-maintained JS sources, not compiled output
+!**/lib/vendor/commander/*.js
 skills/*
 *__result.json
 **/docs/local/

@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { Command } from "@/vendor/commander/index.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { addLabelCommand, collectRepeated, type LabelCommandDependencies } from "./labelCommand.js";

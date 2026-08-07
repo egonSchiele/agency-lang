@@ -64,6 +64,17 @@ all:
 build:
 	@if [ ! -d dist/lib ]; then rm -f .agency-build/tsc.tsbuildinfo; fi
 	$(TSC)
+	# Vendored commander must be in dist BEFORE tsc-alias runs: tsc-alias only
+	# rewrites an @/ alias whose target exists on disk, so on a clean build the
+	# "@/vendor/..." imports would otherwise ship unrewritten and fail at
+	# runtime with ERR_MODULE_NOT_FOUND. Incremental builds mask this (the
+	# previous build's copy is still there), which is how it escaped locally.
+	mkdir -p dist/lib/vendor/commander
+	rm -f dist/lib/vendor/commander/*.js dist/lib/vendor/commander/*.d.ts
+	cp lib/vendor/commander/*.js dist/lib/vendor/commander/
+	cp lib/vendor/commander/index.d.ts dist/lib/vendor/commander/
+	cp lib/vendor/commander/LICENSE dist/lib/vendor/commander/
+	cp lib/vendor/commander/MODIFICATIONS.md dist/lib/vendor/commander/
 	$(TSC_ALIAS)
 	mkdir -p dist/lib/cli/runShim
 	rm -f dist/lib/cli/runShim/*.mjs

@@ -9,6 +9,7 @@ export default [
       "stdlib/**/*.js",
       "node_modules/**",
       "lib/agents/**",
+      "lib/vendor/**",
     ],
   },
   ...tseslint.configs.recommended,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { InvalidArgumentError } from "commander";
+import { InvalidArgumentError } from "@/vendor/commander/index.js";
 import { resolveModelFlag } from "./modelFlag.js";
 
 // The default catalog comes from `_listHostedModels()`. Mock it rather than

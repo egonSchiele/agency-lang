@@ -6,7 +6,7 @@ import * as os from "os";
 import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import type { Command } from "commander";
+import type { Command } from "@/vendor/commander/index.js";
 
 // Replace only the three new remote-management recipe modules so registration
 // can be exercised with real `parseAsync` without hitting the network.

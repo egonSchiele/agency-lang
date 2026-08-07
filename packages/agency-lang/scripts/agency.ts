@@ -686,9 +686,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("view")
     .description("Open an interactive TUI viewer for a statelog JSONL file")
     .argument("<file>", "Path to a .statelog.jsonl file, or '-' for stdin")
-    .option("-f, --follow", "Tail the file — re-read and re-render as new events are appended")
-    .action(async (file: string, options: { follow?: boolean }) => {
-      await logsView(file, { follow: options.follow });
+    // -f/--follow is declared once, on `logs`. Commander gives the parent
+    // priority wherever the flag sits, so a second declaration here would
+    // silently receive undefined (the vendored fork now rejects that shape
+    // at registration). The action reads the parent's parsed value.
+    .action(async (file: string, _options: Record<string, never>, command: Command) => {
+      await logsView(file, { follow: command.parent?.opts().follow });
     });
 
   const evalCmd = program

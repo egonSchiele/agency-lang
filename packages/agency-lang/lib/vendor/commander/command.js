@@ -293,6 +293,11 @@ export class Command extends EventEmitter {
     }
 
     opts = opts || {};
+
+    // AGENCY FORK: validate the detached tree before mutating either tree
+    // (MODIFICATIONS.md #2). A collision must leave parent and child unchanged.
+    this._checkAttachedTreeForPathOptionCollisions(cmd);
+
     if (opts.isDefault) this._defaultCommandName = cmd._name;
     if (opts.noHelp || opts.hidden) cmd._hidden = true; // modifying passed command due to existing implementation
 
@@ -630,8 +635,88 @@ Expecting one of '${allowedValues.join("', '")}'`);
 -  already used by option '${matchingOption.flags}'`);
     }
 
+    // AGENCY FORK: duplicate-name registration error (MODIFICATIONS.md #2).
+    this._checkForPathOptionCollision(option, this);
+
     this._initOptionGroup(option);
     this.options.push(option);
+  }
+
+  /**
+   * AGENCY FORK: duplicate-name registration error (MODIFICATIONS.md #2).
+   * A collision is a match on either spelling (short or long) between the
+   * option being added and any option on an ancestor or descendant of its
+   * owner. The error names the spelling of the NEW option that matched, so
+   * `--config` colliding with an existing `-c, --config` reports `--config`.
+   *
+   * @param {Option} option
+   * @param {Command} owner - the command the option is being added to
+   * @private
+   */
+  _checkForPathOptionCollision(option, owner) {
+    const spellings = [option.short, option.long].filter(Boolean);
+    const collidingSpelling = (cmd) => {
+      for (const existing of cmd.options) {
+        if (existing === option) continue;
+        const hit = spellings.find(
+          (spelling) => spelling === existing.short || spelling === existing.long,
+        );
+        if (hit !== undefined) return hit;
+      }
+      return undefined;
+    };
+    for (let cmd = owner.parent; cmd; cmd = cmd.parent) {
+      const hit = collidingSpelling(cmd);
+      if (hit !== undefined) {
+        throw new Error(
+          `duplicate option ${hit} on command path '${owner._name}' (already on '${cmd._name || 'program'}')`,
+        );
+      }
+    }
+    const walkDown = (cmd) => {
+      for (const child of cmd.commands) {
+        const hit = collidingSpelling(child);
+        if (hit !== undefined) {
+          throw new Error(
+            `duplicate option ${hit} on command path '${child._name}' (already on '${owner._name || 'program'}')`,
+          );
+        }
+        walkDown(child);
+      }
+    };
+    walkDown(owner);
+  }
+
+  /**
+   * AGENCY FORK: duplicate-name registration error (MODIFICATIONS.md #2).
+   * Validate a detached command tree against this prospective parent and its
+   * ancestors, without mutating either tree. Called by addCommand() BEFORE
+   * attachment so a failed validation leaves both trees untouched.
+   *
+   * @param {Command} cmd
+   * @private
+   */
+  _checkAttachedTreeForPathOptionCollisions(cmd) {
+    const spellingsOf = (option) => [option.short, option.long].filter(Boolean);
+    for (const option of cmd.options) {
+      const spellings = spellingsOf(option);
+      for (let ancestor = this; ancestor; ancestor = ancestor.parent) {
+        for (const existing of ancestor.options) {
+          const hit = spellings.find(
+            (spelling) =>
+              spelling === existing.short || spelling === existing.long,
+          );
+          if (hit !== undefined) {
+            throw new Error(
+              `duplicate option ${hit} on command path '${cmd._name}' (already on '${ancestor._name || 'program'}')`,
+            );
+          }
+        }
+      }
+    }
+    cmd.commands.forEach((child) =>
+      this._checkAttachedTreeForPathOptionCollisions(child),
+    );
   }
 
   /**

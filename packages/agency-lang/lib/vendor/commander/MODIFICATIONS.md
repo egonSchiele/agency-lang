@@ -5,3 +5,7 @@ Rule: modifications are minimal, marked `// AGENCY FORK:` in place, and listed
 here. Do not restyle upstream code.
 
 1. index.js — import paths flattened from ./lib/<f>.js to ./<f>.js (packaging only).
+2. command.js — duplicate option spellings on one command path (ancestor or
+   descendant, either spelling) throw at registration instead of silently
+   shadowing; addCommand validates the detached tree before attaching (spec:
+   modification 5).

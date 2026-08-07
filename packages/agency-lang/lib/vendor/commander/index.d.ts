@@ -817,6 +817,10 @@ export class Command {
   fallbackCommand(name: string): this;
   invokedAsFallback(): boolean;
 
+  // AGENCY FORK: report a fallback operand naming neither file nor command,
+  // with commander's unknown-command error and real-command suggestions.
+  unknownFallbackOperand(operand: string): never;
+
   /**
    * Parse `argv`, setting options and invoking commands when defined.
    *

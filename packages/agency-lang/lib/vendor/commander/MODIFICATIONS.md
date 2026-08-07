@@ -28,3 +28,12 @@ here. Do not restyle upstream code.
    operand (separator preserved for the child), and a first-operand boundary
    child dispatched with its input already consumed treats the whole unknown
    as program tail (spec: modification 4).
+6. command.js + index.d.ts — ownership-aware parent parsing: one pure
+   _consumeOptionToken primitive is the only place option-token shapes are
+   decided (parseOptions performs its returned mutations; nothing else
+   tokenizes); _resolveInvocation walks every viable interpretation and scopes
+   owner errors to the canonical typed command/alias path (unselected siblings
+   never supply an owner); the parent boundary stop follows the selected chain
+   of typed command words; boundary records carry firstPathOwnedOption for the
+   presentation-layer warning; unknownFallbackOperand(operand) emits the
+   normal unknown-command error with suggestions (spec: modification 3).

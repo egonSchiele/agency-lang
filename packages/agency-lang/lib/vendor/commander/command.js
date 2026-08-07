@@ -994,6 +994,331 @@ Expecting one of '${allowedValues.join("', '")}'`);
   }
 
   /**
+   * AGENCY FORK (MODIFICATIONS.md #6): the ONE place an option token's shape
+   * is decided. Pure — no emits, no state. Both parseOptions (which performs
+   * the returned mutations) and _resolveInvocation (which never mutates) call
+   * this, so the two can never drift.
+   *
+   * @typedef {{ command: Command, option: Option }} OptionCandidate
+   * @typedef {{ source: 'attached', text: string } | { source: 'next' } |
+   *   { source: 'bare-optional' } | { source: 'none' } |
+   *   { source: 'missing' }} OptionValue
+   * @typedef {{ kind: 'separator' } | { kind: 'not-option' } |
+   *   { kind: 'unknown-option', spelling: string } |
+   *   { kind: 'option', spelling: string,
+   *     matches: Array<{ candidate: OptionCandidate, value: OptionValue,
+   *       remainderGroup: string | undefined }> }} OptionConsumption
+   *
+   * @param {string} token
+   * @param {string | undefined} nextToken
+   * @param {(flag: string) => OptionCandidate[]} candidatesFor
+   * @param {(arg: string) => boolean} negativeNumber
+   * @return {OptionConsumption}
+   * @private
+   */
+  _consumeOptionToken(token, nextToken, candidatesFor, negativeNumber) {
+    const maybeOption = (arg) => arg.length > 1 && arg[0] === '-';
+    if (token === '--') return { kind: 'separator' };
+    if (!maybeOption(token)) return { kind: 'not-option' };
+
+    const equalsIndex = token.startsWith('--') ? token.indexOf('=') : -1;
+    const exactSpelling = equalsIndex === -1 ? token : token.slice(0, equalsIndex);
+    const exact = candidatesFor(exactSpelling);
+    if (exact.length > 0 && equalsIndex !== -1) {
+      // --foo=bar: only value-taking options accept the = form; a boolean
+      // --flag=x falls through to unknown with the FULL token, as upstream.
+      const valueTaking = exact.filter(
+        (candidate) => candidate.option.required || candidate.option.optional,
+      );
+      if (valueTaking.length > 0) {
+        return {
+          kind: 'option',
+          spelling: exactSpelling,
+          matches: valueTaking.map((candidate) => ({
+            candidate,
+            value: { source: 'attached', text: token.slice(equalsIndex + 1) },
+            remainderGroup: undefined,
+          })),
+        };
+      }
+      return { kind: 'unknown-option', spelling: token };
+    }
+    if (exact.length > 0) {
+      return {
+        kind: 'option',
+        spelling: exactSpelling,
+        matches: exact.map((candidate) => {
+          const { option } = candidate;
+          if (option.required) {
+            return {
+              candidate,
+              value:
+                nextToken === undefined
+                  ? { source: 'missing' }
+                  : { source: 'next' },
+              remainderGroup: undefined,
+            };
+          }
+          if (option.optional) {
+            // historical behaviour is optional value is following arg unless an option
+            const takesNext =
+              nextToken !== undefined &&
+              (!maybeOption(nextToken) || negativeNumber(nextToken));
+            return {
+              candidate,
+              value: takesNext ? { source: 'next' } : { source: 'bare-optional' },
+              remainderGroup: undefined,
+            };
+          }
+          return { candidate, value: { source: 'none' }, remainderGroup: undefined };
+        }),
+      };
+    }
+    // Combo short group, like -abc: eat the first letter if known.
+    if (token.length > 2 && token[0] === '-' && token[1] !== '-') {
+      const groupCandidates = candidatesFor(`-${token[1]}`);
+      if (groupCandidates.length > 0) {
+        return {
+          kind: 'option',
+          spelling: `-${token[1]}`,
+          matches: groupCandidates.map((candidate) => {
+            const { option } = candidate;
+            const combine = candidate.command._combineFlagAndOptionalValue;
+            if (option.required || (option.optional && combine)) {
+              // option with value following in same argument
+              return {
+                candidate,
+                value: { source: 'attached', text: token.slice(2) },
+                remainderGroup: undefined,
+              };
+            }
+            // boolean (or optional without combine): rest of group reprocessed
+            return {
+              candidate,
+              value: { source: 'none' },
+              remainderGroup: `-${token.slice(2)}`,
+            };
+          }),
+        };
+      }
+    }
+    return { kind: 'unknown-option', spelling: token };
+  }
+
+  /**
+   * AGENCY FORK (MODIFICATIONS.md #6): non-mutating semantic resolution of a
+   * leading-flags token list at a parent command. Walks every viable
+   * interpretation using _consumeOptionToken (candidates: self + ancestors,
+   * the fallback command, the default child, and descendants — the last so a
+   * later command word can be discovered), then decides:
+   *
+   *   { kind: 'misplaced', spelling, owner, path }  a typed command/alias
+   *       path was selected and a command ON THAT PATH owns the leading flag
+   *   { kind: 'unknown', spelling }                 selected path (or nothing)
+   *       owns the flag — commander's normal unknown-option handling applies
+   *   { kind: 'fallback' }                          dispatch the fallback with
+   *       the original tokens
+   *   { kind: 'passthrough' }                       leave to upstream behavior
+   *       (e.g. a default child's flags)
+   *
+   * Unselected sibling branches can never supply an owner error.
+   *
+   * @param {string[]} tokens
+   * @private
+   */
+  _resolveInvocation(tokens) {
+    const negativeNumber = (arg) => {
+      if (!/^-(\d+|\d*\.\d+)(e[+-]?\d+)?$/.test(arg)) return false;
+      return !this._getCommandAndAncestors().some((cmd) =>
+        cmd.options.map((opt) => opt.short).some((short) => /^-\d$/.test(short)),
+      );
+    };
+    const descendants = [];
+    const gather = (cmd) => {
+      cmd.commands.forEach((child) => {
+        descendants.push(child);
+        gather(child);
+      });
+    };
+    gather(this);
+    const chain = [];
+    for (let cmd = this; cmd; cmd = cmd.parent) chain.push(cmd);
+    const fallback = this._fallbackCommandName
+      ? this._findCommand(this._fallbackCommandName)
+      : undefined;
+    const defaultChild = this._defaultCommandName
+      ? this._findCommand(this._defaultCommandName)
+      : undefined;
+    const sources = [...new Set([...chain, fallback, defaultChild, ...descendants])].filter(Boolean);
+    const candidatesFor = (flag) => {
+      const out = [];
+      for (const command of sources) {
+        const option = command._findOption(flag);
+        if (option) out.push({ command, option });
+      }
+      return out;
+    };
+
+    // Interpretations: { index, group, variadic } — group mirrors
+    // parseOptions' activeGroup, variadic its continuation state.
+    const visited = [];
+    let states = [{ index: 0, group: null, variadic: null }];
+    let firstUnresolved;
+    let sawExhausted = false;
+    const operandHits = [];
+    while (states.length > 0) {
+      const nextStates = [];
+      for (const state of states) {
+        const key = `${state.index}|${state.group ?? ''}|${state.variadic ? state.variadic.flags : ''}`;
+        if (visited.includes(key)) continue;
+        visited.push(key);
+        if (state.group === null && state.index >= tokens.length) {
+          sawExhausted = true;
+          continue;
+        }
+        const token = state.group ?? tokens[state.index];
+        const lookaheadIndex = state.group === null ? state.index + 1 : state.index;
+        const consumption = this._consumeOptionToken(
+          token,
+          tokens[lookaheadIndex],
+          candidatesFor,
+          negativeNumber,
+        );
+        const consumedIndex = state.group === null ? state.index + 1 : state.index;
+        if (consumption.kind === 'separator') {
+          operandHits.push({ operand: tokens[consumedIndex], index: consumedIndex + 1 });
+          continue;
+        }
+        const negNum = negativeNumber(token);
+        if (consumption.kind === 'not-option' || (consumption.kind === 'unknown-option' && negNum)) {
+          if (state.variadic) {
+            nextStates.push({ index: consumedIndex, group: null, variadic: state.variadic });
+            continue;
+          }
+          operandHits.push({ operand: token, index: consumedIndex });
+          continue;
+        }
+        if (consumption.kind === 'unknown-option') {
+          if (firstUnresolved === undefined) firstUnresolved = consumption.spelling;
+          continue;
+        }
+        for (const match of consumption.matches) {
+          if (match.value.source === 'missing') continue;
+          const advance = match.value.source === 'next' ? consumedIndex + 1 : consumedIndex;
+          nextStates.push({
+            index: advance,
+            group: match.remainderGroup ?? null,
+            variadic: match.candidate.option.variadic ? match.candidate.option : null,
+          });
+        }
+      }
+      states = nextStates;
+    }
+
+    const leading = this._consumeOptionToken(
+      tokens[0],
+      tokens[1],
+      candidatesFor,
+      negativeNumber,
+    );
+    const leadingSpelling =
+      leading.kind === 'option' || leading.kind === 'unknown-option'
+        ? leading.spelling
+        : tokens[0];
+
+    const selection = operandHits.find(
+      (hit) => hit.operand !== undefined && this._findCommand(hit.operand),
+    );
+    if (selection) {
+      // Extend the typed path through consecutive command/alias words.
+      const path = [this._findCommand(selection.operand)];
+      let index = selection.index;
+      for (;;) {
+        const deeper = path[path.length - 1]._findCommand(tokens[index]);
+        if (!deeper) break;
+        path.push(deeper);
+        index += 1;
+      }
+      const owner = path.find((command) => command._findOption(leadingSpelling));
+      if (owner) {
+        return { kind: 'misplaced', spelling: leadingSpelling, owner, path };
+      }
+      return { kind: 'unknown', spelling: leadingSpelling };
+    }
+    if (fallback && (operandHits.length > 0 || sawExhausted)) {
+      return { kind: 'fallback' };
+    }
+    if (sawExhausted) {
+      return { kind: 'passthrough' };
+    }
+    return { kind: 'unknown', spelling: firstUnresolved ?? leadingSpelling };
+  }
+
+  /**
+   * AGENCY FORK (MODIFICATIONS.md #6): the first agency-owned option spelling
+   * in a program tail, for the misplaced-flag warning. Scans token by token
+   * with the shared consumer against this command's path (self + ancestors) —
+   * the same semantics the old external splitter had.
+   *
+   * @param {string[]} tail
+   * @return {string | undefined}
+   * @private
+   */
+  _firstPathOwnedOptionIn(tail) {
+    const negativeNumber = (arg) => {
+      if (!/^-(\d+|\d*\.\d+)(e[+-]?\d+)?$/.test(arg)) return false;
+      return !this._getCommandAndAncestors().some((cmd) =>
+        cmd.options.map((opt) => opt.short).some((short) => /^-\d$/.test(short)),
+      );
+    };
+    const candidatesFor = (flag) => {
+      for (let cmd = this; cmd; cmd = cmd.parent) {
+        const option = cmd._findOption(flag);
+        if (option) return [{ command: cmd, option }];
+      }
+      return [];
+    };
+    for (let index = 0; index < tail.length; index += 1) {
+      const consumption = this._consumeOptionToken(
+        tail[index],
+        tail[index + 1],
+        candidatesFor,
+        negativeNumber,
+      );
+      if (consumption.kind === 'option') return consumption.spelling;
+    }
+    return undefined;
+  }
+
+  /**
+   * AGENCY FORK (MODIFICATIONS.md #6): report a fallback operand that turned
+   * out to name neither a file nor a command, with commander's normal
+   * unknown-command error and suggestions from the root's real command names.
+   * Called by a fallback target's action; encapsulates diagnosis so callers
+   * never enumerate command names.
+   *
+   * @param {string} operand
+   */
+  unknownFallbackOperand(operand) {
+    const root = this.parent ?? this;
+    let suggestion = '';
+    if (root._showSuggestionAfterError) {
+      const candidateNames = [];
+      root
+        .createHelp()
+        .visibleCommands(root)
+        .forEach((command) => {
+          candidateNames.push(command.name());
+          if (command.alias()) candidateNames.push(command.alias());
+        });
+      suggestion = suggestSimilar(operand, candidateNames);
+    }
+    root.error(`error: unknown command '${operand}'${suggestion}`, {
+      code: 'commander.unknownCommand',
+    });
+  }
+
+  /**
    * AGENCY FORK: fallback to a real command (MODIFICATIONS.md #5). Unlike a
    * hidden default command, lines whose first operand names no known command
    * dispatch the EXISTING command object — one options list, one action, one
@@ -1717,6 +2042,12 @@ Expecting one of '${allowedValues.join("', '")}'`);
       const viaSeparator = unknown[0] === '--';
       const tail = viaSeparator ? unknown.slice(1) : unknown;
       this._boundaryRecord = { tail, viaSeparator };
+      if (!viaSeparator) {
+        const owned = this._firstPathOwnedOptionIn(tail);
+        if (owned !== undefined) {
+          this._boundaryRecord.firstPathOwnedOption = owned;
+        }
+      }
       operands = operands.concat(tail);
       unknown = [];
     }
@@ -1736,6 +2067,55 @@ Expecting one of '${allowedValues.join("', '")}'`);
     ) {
       return this._dispatchHelpCommand(operands[1]);
     }
+    // AGENCY FORK: ownership-aware parent parsing (MODIFICATIONS.md #6). A
+    // leading flag this command did not own is resolved semantically: it may
+    // belong to the fallback command (dispatch), to a command named later on
+    // the line (error naming the owner and the fix), or to nobody (normal
+    // unknown-option handling, suggestions included).
+    if (
+      this.commands.length > 0 &&
+      operands.length === 0 &&
+      unknown.length > 0 &&
+      unknown[0].length > 1 &&
+      unknown[0][0] === '-' &&
+      unknown[0] !== '--'
+    ) {
+      // A leading --help/--version belongs to this command, not to semantic
+      // resolution — without an operand there is no program tail to claim it.
+      this._outputHelpIfRequested(unknown);
+      const resolution = this._resolveInvocation(unknown);
+      if (resolution.kind === 'misplaced') {
+        const ownerIndex = resolution.path.indexOf(resolution.owner);
+        const displayPath = [
+          this._name,
+          ...resolution.path
+            .slice(0, ownerIndex + 1)
+            .map((command) => command._name),
+        ]
+          .filter(Boolean)
+          .join(' ');
+        this.error(
+          `error: unknown option '${resolution.spelling}' (${resolution.spelling} belongs to '${displayPath}'; write it after '${resolution.owner._name}')`,
+          { code: 'commander.unknownOption' },
+        );
+      }
+      if (resolution.kind === 'unknown') {
+        const reporter = this._fallbackCommandName
+          ? this._findCommand(this._fallbackCommandName)
+          : this;
+        reporter.unknownOption(resolution.spelling);
+      }
+      if (resolution.kind === 'fallback') {
+        return this._dispatchSubcommand(
+          this._fallbackCommandName,
+          [],
+          unknown,
+          true,
+        );
+      }
+      // 'passthrough': e.g. a default child's flags — upstream handles below.
+    }
+
     // AGENCY FORK: fallback dispatch (MODIFICATIONS.md #5) — only when a
     // non-option operand exists, so bare lines and root --help/--version keep
     // upstream behavior. Dispatches the EXISTING command object with
@@ -1959,20 +2339,21 @@ Expecting one of '${allowedValues.join("', '")}'`);
       return { operands: tail, unknown: [] };
     }
 
-    // AGENCY FORK: inside a boundary command, options are recognised by
-    // ownership — the command itself or any ancestor. Safe because duplicate
-    // spellings on one command path are a registration error
+    // AGENCY FORK (MODIFICATIONS.md #6): token shapes are decided by the one
+    // shared consumer; this loop only performs the returned mutations. Inside
+    // a boundary command, candidates cover the command and its ancestors —
+    // safe because duplicate spellings on one path are a registration error
     // (MODIFICATIONS.md #2). Non-boundary commands keep local-only lookup.
-    const findOptionAndOwner = (flag) => {
+    const candidatesFor = (flag) => {
       if (!this._passThroughOptions) {
         const option = this._findOption(flag);
-        return option ? { option, owner: this } : undefined;
+        return option ? [{ command: this, option }] : [];
       }
       for (let cmd = this; cmd; cmd = cmd.parent) {
         const option = cmd._findOption(flag);
-        if (option) return { option, owner: cmd };
+        if (option) return [{ command: cmd, option }];
       }
-      return undefined;
+      return [];
     };
 
     // parse options
@@ -1985,8 +2366,15 @@ Expecting one of '${allowedValues.join("', '")}'`);
       const arg = activeGroup ?? args[i++];
       activeGroup = null;
 
+      const consumption = this._consumeOptionToken(
+        arg,
+        args[i],
+        candidatesFor,
+        negativeNumberArg,
+      );
+
       // literal
-      if (arg === '--') {
+      if (consumption.kind === 'separator') {
         // AGENCY FORK: a pre-input separator on a boundary command — the next
         // token is still this command's input; the rest is the program's,
         // explicitly claimed (MODIFICATIONS.md #4). The post-input separator
@@ -2000,7 +2388,10 @@ Expecting one of '${allowedValues.join("', '")}'`);
         break;
       }
 
-      if (activeVariadic && (!maybeOption(arg) || negativeNumberArg(arg))) {
+      if (
+        activeVariadic &&
+        (consumption.kind === 'not-option' || negativeNumberArg(arg))
+      ) {
         activeVariadic.owner.emit(
           `option:${activeVariadic.option.name()}`,
           arg,
@@ -2009,66 +2400,31 @@ Expecting one of '${allowedValues.join("', '")}'`);
       }
       activeVariadic = null;
 
-      if (maybeOption(arg)) {
-        const found = findOptionAndOwner(arg);
+      if (consumption.kind === 'option') {
         // recognised option, call listener to assign value with possible custom processing
-        if (found) {
-          const { option, owner } = found;
-          if (option.required) {
-            const value = args[i++];
-            if (value === undefined) this.optionMissingArgument(option);
-            owner.emit(`option:${option.name()}`, value);
-          } else if (option.optional) {
-            let value = null;
-            // historical behaviour is optional value is following arg unless an option
-            if (
-              i < args.length &&
-              (!maybeOption(args[i]) || negativeNumberArg(args[i]))
-            ) {
-              value = args[i++];
-            }
-            owner.emit(`option:${option.name()}`, value);
-          } else {
-            // boolean flag
-            owner.emit(`option:${option.name()}`);
-          }
-          activeVariadic = option.variadic ? { option, owner } : null;
-          continue;
+        const match = consumption.matches[0];
+        const { option } = match.candidate;
+        const owner = match.candidate.command;
+        if (match.value.source === 'missing') {
+          this.optionMissingArgument(option);
+        } else if (match.value.source === 'attached') {
+          owner.emit(`option:${option.name()}`, match.value.text);
+        } else if (match.value.source === 'next') {
+          owner.emit(`option:${option.name()}`, args[i++]);
+        } else if (match.value.source === 'bare-optional') {
+          owner.emit(`option:${option.name()}`, null);
+        } else {
+          // boolean flag (or a group letter whose remainder continues below)
+          owner.emit(`option:${option.name()}`);
         }
-      }
-
-      // Look for combo options following single dash, eat first one if known.
-      if (arg.length > 2 && arg[0] === '-' && arg[1] !== '-') {
-        const found = findOptionAndOwner(`-${arg[1]}`);
-        if (found) {
-          const { option, owner } = found;
-          if (
-            option.required ||
-            (option.optional && this._combineFlagAndOptionalValue)
-          ) {
-            // option with value following in same argument
-            owner.emit(`option:${option.name()}`, arg.slice(2));
-          } else {
-            // boolean option
-            owner.emit(`option:${option.name()}`);
-            // remove the processed option and keep processing group
-            activeGroup = `-${arg.slice(2)}`;
-          }
-          continue;
+        if (match.remainderGroup !== undefined) {
+          // remove the processed option and keep processing group
+          activeGroup = match.remainderGroup;
         }
-      }
-
-      // Look for known long flag with value, like --foo=bar
-      if (/^--[^=]+=/.test(arg)) {
-        const index = arg.indexOf('=');
-        const found = findOptionAndOwner(arg.slice(0, index));
-        if (found && (found.option.required || found.option.optional)) {
-          found.owner.emit(
-            `option:${found.option.name()}`,
-            arg.slice(index + 1),
-          );
-          continue;
-        }
+        activeVariadic = option.variadic
+          ? { option, owner }
+          : null;
+        continue;
       }
 
       // Not a recognised option by this command.
@@ -2078,24 +2434,39 @@ Expecting one of '${allowedValues.join("', '")}'`);
       // A negative number in a leaf command is not an unknown option.
       if (
         dest === operands &&
-        maybeOption(arg) &&
+        consumption.kind === 'unknown-option' &&
         !(this.commands.length === 0 && negativeNumberArg(arg))
       ) {
         dest = unknown;
       }
 
       // AGENCY FORK: a parent stops consuming its own options once the line
-      // dispatches into a direct subcommand that owns a program boundary —
-      // the rest of the line is that child's to parse (MODIFICATIONS.md #3).
+      // dispatches into a subcommand path that reaches a program boundary —
+      // directly, or through intermediate command words (`group run ...`).
+      // The lookahead follows only the SELECTED chain of typed command words,
+      // so a non-boundary sibling (`group list`) keeps parent-priority
+      // parsing (MODIFICATIONS.md #3, #6).
       if (
         operands.length === 0 &&
         unknown.length === 0 &&
         !maybeOption(arg) &&
-        this._findCommand(arg)?._passThroughOptions
+        this._findCommand(arg)
       ) {
-        operands.push(arg);
-        unknown.push(...args.slice(i));
-        break;
+        let cursor = this._findCommand(arg);
+        let lookahead = i;
+        let reachesBoundary = cursor._passThroughOptions;
+        while (!reachesBoundary && lookahead < args.length) {
+          const deeper = cursor._findCommand(args[lookahead]);
+          if (!deeper) break;
+          cursor = deeper;
+          lookahead += 1;
+          reachesBoundary = cursor._passThroughOptions;
+        }
+        if (reachesBoundary) {
+          operands.push(arg);
+          unknown.push(...args.slice(i));
+          break;
+        }
       }
 
       // AGENCY FORK: with a fallback command configured, an operand naming no
@@ -2142,10 +2513,17 @@ Expecting one of '${allowedValues.join("', '")}'`);
         // AGENCY FORK: boundary provenance (MODIFICATIONS.md #4). arg is the
         // input operand; a -- immediately after it is the user explicitly
         // claiming the tail, and is stripped so the program never receives a
-        // literal separator.
+        // literal separator. firstPathOwnedOption feeds the misplaced-flag
+        // warning, so an explicitly claimed tail skips it (MODIFICATIONS.md #6).
         const viaSeparator = args[i] === '--';
         const tail = args.slice(viaSeparator ? i + 1 : i);
         this._boundaryRecord = { tail, viaSeparator };
+        if (!viaSeparator) {
+          const owned = this._firstPathOwnedOptionIn(tail);
+          if (owned !== undefined) {
+            this._boundaryRecord.firstPathOwnedOption = owned;
+          }
+        }
         dest.push(arg, ...tail);
         break;
       }

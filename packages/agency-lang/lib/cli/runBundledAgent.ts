@@ -8,6 +8,7 @@ import {
   type CliFlags,
 } from "@/config.js";
 import { resolveBudget } from "./budget.js";
+import { stageConfiguredAgent } from "./stageConfiguredAgent.js";
 import { compiledOutputNodeArgs } from "./commands.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { AGENCY_MAX_COST, AGENCY_MAX_TIME } from "@/constants.js";
@@ -103,6 +104,26 @@ export type AgentLaunchOptions = {
   explicitConfigPath?: string;
 };
 
+/** The launcher's environment seams, injectable for orchestration tests.
+ *  Every field is used by exactly the branch it controls. */
+export type RunBundledAgentDependencies = {
+  resolveAgentDir: (agentName: string) => string;
+  fileExists: (file: string) => boolean;
+  stageConfiguredAgent: typeof stageConfiguredAgent;
+  compile: typeof compile;
+  spawn: typeof realSpawn;
+  exit: (code: number) => void;
+};
+
+const DEFAULT_RUN_BUNDLED_AGENT_DEPENDENCIES: RunBundledAgentDependencies = {
+  resolveAgentDir: (agentName) => path.resolve(currentDir, `../agents/${agentName}`),
+  fileExists: (file) => fs.existsSync(file),
+  stageConfiguredAgent,
+  compile,
+  spawn: realSpawn,
+  exit: (code) => process.exit(code),
+};
+
 /**
  * The semantic result of the launcher pre-scan: trace/log projected into a
  * config override (the flag→config meaning lives in `applyCliFlags`; a bare
@@ -147,11 +168,10 @@ export function runBundledAgent(
   agentName: string,
   args: string[] = [],
   options: AgentLaunchOptions = {},
-  deps: { spawn?: typeof realSpawn; exit?: (code: number) => void } = {},
+  deps: Partial<RunBundledAgentDependencies> = {},
 ): void {
-  const spawn = deps.spawn ?? realSpawn;
-  const exit = deps.exit ?? ((code: number) => process.exit(code));
-  const agentDir = path.resolve(currentDir, `../agents/${agentName}`);
+  const launcher = { ...DEFAULT_RUN_BUNDLED_AGENT_DEPENDENCIES, ...deps };
+  const agentDir = launcher.resolveAgentDir(agentName);
   const agencyFile = path.join(agentDir, "agent.agency");
   const precompiledFile = path.join(agentDir, "agent.js");
 
@@ -163,18 +183,25 @@ export function runBundledAgent(
     budget = resolveBudget(launchArgs.budgetInput);
   } catch (error) {
     console.error(`Error: ${(error as Error).message}`);
-    exit(2);
+    launcher.exit(2);
     return;
   }
 
-  // Prefer the precompiled agent.js produced by `make agents` so users
-  // don't pay the compile cost on every invocation. Falls back to a
-  // fresh compile if the bundle hasn't been built yet.
+  // An explicit config recompiles the agent in an isolated staged tree —
+  // baked fields (model, limits) never cross the override-env transport, and
+  // the shipped agent.js must never be overwritten. The forwarded
+  // `agent --config` beats the root `-c` (the more specific value). Without
+  // an explicit config: the precompiled fast path, falling back to a fresh
+  // compile only when the bundle has not been built.
+  const explicitConfig = launchArgs.configPath ?? options.explicitConfigPath;
   let runFile: string | null;
-  if (fs.existsSync(precompiledFile)) {
+  let cleanup: () => void = () => {};
+  if (explicitConfig !== undefined) {
+    ({ runFile, cleanup } = launcher.stageConfiguredAgent(explicitConfig, agentDir));
+  } else if (launcher.fileExists(precompiledFile)) {
     runFile = precompiledFile;
   } else {
-    runFile = compile(config, agencyFile);
+    runFile = launcher.compile(config, agencyFile);
   }
   if (runFile === null) {
     console.error(`Failed to compile agent ${agentName}.`);
@@ -206,25 +233,35 @@ export function runBundledAgent(
   if (budget.maxCost !== undefined) env[AGENCY_MAX_COST] = budget.maxCost;
   if (budget.maxTime !== undefined) env[AGENCY_MAX_TIME] = budget.maxTime;
 
-  const nodeProcess = spawn(
-    process.execPath,
-    [...compiledOutputNodeArgs(), runFile, ...args],
-    {
-      stdio: "inherit",
-      shell: false,
-      env,
-    },
-  );
+  // Cleanup ownership: staging owns it until spawn succeeds, then the
+  // child's handlers own it. A synchronous spawn throw cleans up here.
+  let nodeProcess: ReturnType<typeof realSpawn>;
+  try {
+    nodeProcess = launcher.spawn(
+      process.execPath,
+      [...compiledOutputNodeArgs(), runFile, ...args],
+      {
+        stdio: "inherit",
+        shell: false,
+        env,
+      },
+    );
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
 
   nodeProcess.on("error", (error) => {
+    cleanup();
     console.error(`Failed to run ${agentName}:`, error);
-    process.exit(1);
+    launcher.exit(1);
   });
 
   nodeProcess.on("exit", (code) => {
+    cleanup();
     if (code !== 0) {
       console.error(`${agentName} exited with code ${code}.`);
-      process.exit(code || 1);
+      launcher.exit(code || 1);
     }
   });
 }

@@ -72,6 +72,12 @@ build:
 	rm -f dist/lib/stdlib/providers/*.mjs
 	cp lib/stdlib/providers/*.mjs dist/lib/stdlib/providers/
 	cp lib/stdlib/mcpBridge.mjs dist/lib/stdlib/mcpBridge.mjs
+	mkdir -p dist/lib/vendor/commander
+	rm -f dist/lib/vendor/commander/*.js dist/lib/vendor/commander/*.d.ts
+	cp lib/vendor/commander/*.js dist/lib/vendor/commander/
+	cp lib/vendor/commander/index.d.ts dist/lib/vendor/commander/
+	cp lib/vendor/commander/LICENSE dist/lib/vendor/commander/
+	cp lib/vendor/commander/MODIFICATIONS.md dist/lib/vendor/commander/
 
 # Full reset: compiled TS, incremental scratch state, and the gitignored
 # stdlib .js siblings. Both dist/ AND stdlib/**/*.js ship in the npm

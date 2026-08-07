@@ -2,8 +2,11 @@ packages:
   - "packages/*"
   - "packages/agency-lang/docs/site"
 
-# Supply-chain hardening (needs pnpm >= 10.16; the root package.json
-# packageManager field keeps everyone on a new-enough pnpm).
+# Supply-chain hardening. Needs pnpm >= 10.16 — OLDER PNPM SILENTLY IGNORES
+# ALL OF THIS. The root package.json packageManager field pins pnpm@11.x;
+# pnpm >= 10 self-switches to it natively, Corepack and CI's pnpm/action-setup
+# read the same field. A pre-10 global pnpm honors none of that: if
+# `pnpm --version` in this repo does not print the pinned version, upgrade.
 #
 # New versions of any dependency must be public for 7 days before pnpm will
 # resolve them. Malicious releases from compromised maintainer accounts are
@@ -11,10 +14,13 @@ packages:
 # attack window for the whole transitive tree. Deliberate upgrades still
 # work — they just resolve to week-old versions.
 minimumReleaseAge: 10080
-# First-party packages are exempt: publishing smoltalk/tarsec/typestache and
-# immediately using the new version from agency is the normal dev loop.
+# First-party packages are exempt: publishing one and immediately using the
+# new version from agency is the normal dev loop. Exact-version requests are
+# gated too, which is why smoltalk-llama-cpp is here — the local-model CI
+# workflow installs it at a freshly-bumped pin.
 minimumReleaseAgeExclude:
   - smoltalk
+  - smoltalk-llama-cpp
   - tarsec
   - typestache
 # Transitive dependencies may not come from git repos or raw tarball URLs —

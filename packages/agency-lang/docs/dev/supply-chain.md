@@ -49,10 +49,16 @@ form (`name@x.y.z`, pnpm ≥ 10.19) over lowering the global window.
 These settings need pnpm ≥ 10.16 and are **silently ignored** by older pnpm —
 which is the failure mode that would quietly turn all of this off. The
 repo-root `"packageManager": "pnpm@11.20.0"` field is the single source of
-truth: modern pnpm self-switches to that exact version, and CI's
-`pnpm/action-setup` reads the same field (the per-workflow `version: 9` pins
-were removed for exactly this reason — never reintroduce one, or that
-workflow resolves dependencies with the cooldown off).
+truth, honored by three separate mechanisms: pnpm ≥ 10 itself switches to the
+pinned version natively (`managePackageManagerVersions`, on by default —
+verified here with a standalone pnpm 10.2.1 running 11.20.0 in this repo),
+Corepack shims do the same where Corepack is enabled, and CI's
+`pnpm/action-setup` reads the field when no `version` input is given (the
+per-workflow `version: 9` pins were removed for exactly this reason — never
+reintroduce one, or that workflow resolves dependencies with the cooldown
+off). The unprotected case is a global pnpm older than 10: it ignores both
+the field and the settings, so if `pnpm --version` inside the repo does not
+print 11.20.0, upgrade it.
 
 pnpm 11 itself requires Node ≥ 22.13, which is why the engines floor (and the
 CI job pinned to the exact floor) sits at 22.13.0 rather than commander v15's

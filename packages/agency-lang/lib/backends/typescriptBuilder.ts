@@ -4696,8 +4696,12 @@ export class TypeScriptBuilder {
                   ctx: ts.runtime.globalCtx,
                   nodeName: ts.str(declaredName(node.nodeName)),
                   data: ts.obj(dataObj),
-                  messages: ts.id("messages"),
-                  callbacks: ts.id("callbacks"),
+                  messages: ts.id("__invocationMessages"),
+                  callbacks: ts.id("__invocationCallbacks"),
+                  invocation: ts.obj({
+                    config: ts.id("__invocationConfig"),
+                    traceId: ts.id("__invocationTraceId"),
+                  }),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),
               ])

@@ -9,6 +9,7 @@ import type {
   InterruptResponse,
 } from "./interruptResponse.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
+import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import { reinstallRootBudget } from "./rootBudget.js";
 import {
@@ -748,6 +749,10 @@ type RespondToInterruptsArgs = {
   responses: InterruptResponse[];
   overrides?: Record<string, unknown>;
   metadata?: Record<string, any>;
+  // Per-invocation config override for this resume leg. The resolver keeps the
+  // original interrupt.runId and ignores any supplied traceId; only the config
+  // projection is applied.
+  invocation?: InvocationOptions;
 };
 
 async function respondToInterruptsCore(
@@ -770,7 +775,14 @@ async function respondToInterruptsCore(
   }
   if (args.overrides) applyOverrides(checkpoint, args.overrides);
 
-  const execCtx = await ctx.createExecutionContext(interrupt.runId);
+  // Resume always keeps interrupt.runId; the resolver ignores any supplied
+  // traceId and applies only the per-invocation config projection.
+  const resolved = resolveInvocation({
+    kind: "resume",
+    options: args.invocation,
+    runId: interrupt.runId,
+  });
+  const execCtx = await ctx.createExecutionContext(resolved);
   // === Invocation started (context exists): a SINGLE lifecycle boundary covers
   // all resume setup AND execution, so a setup failure still yields an
   // outcome-with-usage and still runs cleanup. reinstallRootBudget and handler

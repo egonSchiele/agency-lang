@@ -28,7 +28,7 @@ describe("StatelogClient redaction", () => {
   it("replaces a redact-tagged primitive in a posted event with [REDACTED]", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = makeStdoutCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       execCtx.globals.markRedacted("sk-secret");
       await execCtx.statelogClient.post({ event: "toolCall", args: { apiKey: "sk-secret" } });
@@ -40,7 +40,7 @@ describe("StatelogClient redaction", () => {
   it("leaves untagged values untouched", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = makeStdoutCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       await execCtx.statelogClient.post({ event: "toolCall", args: { city: "Mumbai" } });
     });
@@ -50,7 +50,7 @@ describe("StatelogClient redaction", () => {
   it("redacts a tagged object node end-to-end", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = makeStdoutCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       const creds = { user: "alice", pass: "hunter2" };
       execCtx.globals.markRedacted(creds);
@@ -63,7 +63,7 @@ describe("StatelogClient redaction", () => {
   it("does not corrupt an untagged Date in the body (native-type guard)", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = makeStdoutCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       // Redaction is live (a tag exists) but the Date is untagged: it must
       // still serialize to its ISO string, not {}.
@@ -79,7 +79,7 @@ describe("StatelogClient redaction", () => {
   it("never redacts envelope fields even when a colliding value is tagged", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = makeStdoutCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       // 1 === STATELOG_FORMAT_VERSION. A pathological value-tag on 1 must NOT
       // touch the envelope's format_version (scoped-to-data redaction), but the
@@ -94,7 +94,7 @@ describe("StatelogClient redaction", () => {
   it("redacts a durably-tagged object after it survives serialization", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = makeStdoutCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       const creds = { user: "alice", pass: "hunter2" };
       execCtx.globals.setTag(creds, "redact", true); // durable (on-object)
@@ -110,7 +110,7 @@ describe("StatelogClient redaction", () => {
   it("redacts an out-of-frame post via the fallback globals (agentEnd path)", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = makeStdoutCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     execCtx.globals.markRedacted("sk-final");
     // NO runInTestContext: this post fires outside any ALS frame, exactly like
     // the result-bearing agentEnd event after the run's frame has ended. The
@@ -126,7 +126,7 @@ describe("StatelogClient redaction", () => {
   it("redaction survives a fork-style globals clone (durable primitive path)", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = makeStdoutCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     // Tag on the parent store, then run post() against a CLONE of it — exactly
     // what runInBranchAlsFrame does when entering a fork/parallel/race branch.
     // This pins the headline claim: a primitive redact tag set before a fork is

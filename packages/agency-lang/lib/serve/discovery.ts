@@ -3,6 +3,7 @@ import type { AgencyFunction } from "../runtime/agencyFunction.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import type { ServedExportedFunction, ServedExportedNode, ServedExportedItem } from "./types.js";
 import type { ServedInvocationOutcome } from "../runtime/invocationUsage.js";
+import type { InvocationOptions } from "../runtime/invocationOptions.js";
 
 export type DiscoverOptions = {
   toolRegistry: Record<string, AgencyFunction>;
@@ -24,10 +25,12 @@ type ModuleInvokeFunction = (
 type ServeFunctionInvoker = (
   fn: AgencyFunction,
   namedArgs: Record<string, unknown>,
+  invocation?: InvocationOptions,
 ) => Promise<ServedInvocationOutcome<unknown>>;
 type ServeNodeInvoker = (
   nodeName: string,
   data: Record<string, any>,
+  invocation?: InvocationOptions,
 ) => Promise<ServedInvocationOutcome<unknown>>;
 
 function isExportedFromModule(fn: AgencyFunction, moduleId: string): boolean {
@@ -62,7 +65,7 @@ function toExportedFunction(
     agencyFunction: fn,
     interruptEffects,
     invoke: makeRawInvoker(fn, moduleInvoke),
-    invokeServed: (namedArgs) => serveFn(fn, namedArgs),
+    invokeServed: (namedArgs, invocation) => serveFn(fn, namedArgs, invocation),
   };
 }
 
@@ -96,7 +99,8 @@ function toExportedNode(
     // Public: the raw node export (positional args → RunNodeResult).
     invoke: rawNodeFn as (...args: unknown[]) => Promise<unknown>,
     // Internal: serve invoker (data object → outcome, node .data unwrapped).
-    invokeServed: async (data) => unwrapNodeOutcome(await serveNode(nodeName, data)),
+    invokeServed: async (data, invocation) =>
+      unwrapNodeOutcome(await serveNode(nodeName, data, invocation)),
     interruptEffects,
   };
 }

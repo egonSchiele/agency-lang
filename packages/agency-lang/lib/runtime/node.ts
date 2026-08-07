@@ -17,6 +17,7 @@ import { __initAllRegistered, __initAllRegisteredCallbacks } from "./crossModule
 import { loadProviderModules } from "./providerModules.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
+import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import { installRootBudget } from "./rootBudget.js";
 import { GraphState, RunNodeResult } from "./types.js";
@@ -273,15 +274,24 @@ type RunExportedFunctionArgs = {
   fn: AgencyFunction;
   namedArgs: Record<string, unknown>;
   initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+  invocation?: InvocationOptions;
 };
 
 /** The outcome-producing core. The lifecycle boundary starts the moment the
  *  execution context exists (invocation started), so a bootstrap/setup failure
  *  still yields an outcome with usage and still runs cleanup. */
 async function runExportedFunctionCore(
-  { ctx, fn, namedArgs, initializeGlobals }: RunExportedFunctionArgs,
+  { ctx, fn, namedArgs, initializeGlobals, invocation }: RunExportedFunctionArgs,
 ): Promise<ServedInvocationOutcome<unknown>> {
-  const execCtx = await ctx.createExecutionContext(nanoid());
+  // Inherit the subprocess run id (as runNodeCore does) so a served function
+  // executed in subprocess mode joins the parent's trace instead of minting a
+  // new one.
+  const resolved = resolveInvocation({
+    kind: "fresh",
+    options: invocation,
+    inheritedRunId: getSubprocessRunInfo().runId,
+  });
+  const execCtx = await ctx.createExecutionContext(resolved);
   let outcome: RawOutcome<unknown>;
   try {
     await initFreshExecCtx(execCtx, { initializeGlobals });
@@ -337,6 +347,8 @@ type RunNodeArgs = {
   // An AbortSignal for cancelling the agent mid-execution. When aborted,
   // in-flight LLM requests are torn down and an AgencyCancelledError is thrown.
   abortSignal?: AbortSignal;
+  // Per-invocation config override + optional root trace id for this run.
+  invocation?: InvocationOptions;
 };
 
 // eslint-disable-next-line max-lines-per-function -- core node-execution loop; refactor tracked separately
@@ -348,24 +360,29 @@ async function runNodeCore({
   callbacks,
   initializeGlobals,
   abortSignal,
+  invocation,
 }: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
-  // Subprocesses INHERIT the parent's runId (seeded by the bootstrap from
-  // the run instruction) so child statelog events land in the same trace —
-  // runIds persist across pause/resume cycles, in-process and out.
-  const runId = getSubprocessRunInfo().runId ?? nanoid();
+  // The resolver owns run-id policy: a subprocess INHERITS the parent's runId
+  // (seeded from the run instruction) so child statelog events land in the same
+  // trace; otherwise an injected traceId wins, else a fresh id is minted.
+  const resolved = resolveInvocation({
+    kind: "fresh",
+    options: invocation,
+    inheritedRunId: getSubprocessRunInfo().runId,
+  });
 
   // runNode is the entry point for a fresh agent run (resumes go through
   // respondToInterrupts instead). If trace output is enabled, truncate the
   // target file so this run starts with a clean slate. FileSink opens in
   // append mode, so subsequent per-execCtx writers within this same run
   // accumulate into the same file naturally.
-  const tracePath = resolveTraceFilePath(ctx.traceConfig, runId);
+  const tracePath = resolveTraceFilePath(ctx.traceConfig, resolved.runId);
   if (tracePath) {
     fs.mkdirSync(path.dirname(tracePath), { recursive: true });
     fs.writeFileSync(tracePath, "");
   }
 
-  const execCtx = await ctx.createExecutionContext(runId);
+  const execCtx = await ctx.createExecutionContext(resolved);
   // === Invocation started (context exists). A SINGLE lifecycle boundary covers
   // all remaining setup AND execution, so an already-aborted signal or a
   // bootstrap/setup failure still yields an outcome-with-usage and still runs

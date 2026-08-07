@@ -199,7 +199,7 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
 });
 
 describe("unwrapServedInvocationOutcome", () => {
-  const snap = { usage: { cost: {} as any, tokens: {} as any, unknownCostCallCount: 0, pricingComplete: true, entries: [] }, usageComplete: true };
+  const snap = { usage: { cost: {} as any, tokens: {} as any, unknownCostCallCount: 0, pricingComplete: true, entries: [] }, usageComplete: true, traceId: "test-trace" };
   it("returns / rethrows identity", () => {
     expect(unwrapServedInvocationOutcome({ status: "returned", value: "hi", ...snap } as ServedInvocationOutcome<string>)).toBe("hi");
     const frozen = Object.freeze(new Error("x"));

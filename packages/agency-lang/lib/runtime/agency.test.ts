@@ -470,7 +470,7 @@ describe("agency.memory.*", () => {
 
   it("agency.memory.enabled returns false when no frame is active", async () => {
     const ctx = makeMemCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       () => {
@@ -481,7 +481,7 @@ describe("agency.memory.*", () => {
 
   it("agency.memory.enable pushes a frame and enabled() returns true", async () => {
     const ctx = makeMemCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       async () => {
@@ -493,7 +493,7 @@ describe("agency.memory.*", () => {
 
   it("agency.memory.disable pops the active frame; enabled() returns false again", async () => {
     const ctx = makeMemCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       async () => {
@@ -507,7 +507,7 @@ describe("agency.memory.*", () => {
 
   it("agency.memory.setId updates the memoryId on the active stack", async () => {
     const ctx = makeMemCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       async () => {
@@ -520,7 +520,7 @@ describe("agency.memory.*", () => {
 
   it("agency.memory.remember / recall round-trips through the active store", async () => {
     const ctx = makeMemCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       async () => {
@@ -537,7 +537,7 @@ describe("agency.memory.*", () => {
 
   it("agency.memory.forget no-ops when memory is off", async () => {
     const ctx = makeMemCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       async () => {

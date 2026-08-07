@@ -28,7 +28,7 @@ function makeCtx() {
 describe("std::tag TS helpers", () => {
   it("tags and reads back a primitive by value; _tag returns current tags", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       expect(_tag("secret", "color", "blue")).toEqual({ color: "blue" });
       expect(_getTags("secret")).toEqual({ color: "blue" });
@@ -38,7 +38,7 @@ describe("std::tag TS helpers", () => {
 
   it("setTags merges multiple tags; removeTag/removeAllTags return remaining", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       expect(_setTags("v", { a: 1, b: 2 })).toEqual({ a: 1, b: 2 });
       expect(_removeTag("v", "a")).toEqual({ b: 2 });
@@ -49,7 +49,7 @@ describe("std::tag TS helpers", () => {
 
   it("tags an object by reference", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       const o = { id: 1 };
       _tag(o, "source", "upload");
@@ -60,7 +60,7 @@ describe("std::tag TS helpers", () => {
 
   it("redact() sets redact:true (via GlobalStore.markRedacted) and returns tags", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       expect(_redact("sk-1")).toEqual({ redact: true });
       expect(_getTags("sk-1")).toEqual({ redact: true });
@@ -70,7 +70,7 @@ describe("std::tag TS helpers", () => {
 
   it("_getTags returns a copy, not the live store object", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       _tag("k", "a", 1);
       const t = _getTags("k");

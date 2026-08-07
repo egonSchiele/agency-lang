@@ -26,8 +26,8 @@ function delta(totalCost: number, over: Partial<NormalizedDelta> = {}): Normaliz
 describe("execution-context invocation meter", () => {
   it("each createExecutionContext gets an independent, complete, zeroed meter", async () => {
     const parent = makeContext();
-    const a = await parent.createExecutionContext("run-a");
-    const b = await parent.createExecutionContext("run-b");
+    const a = await parent.createExecutionContext({ runId: "run-a" });
+    const b = await parent.createExecutionContext({ runId: "run-b" });
 
     expect(a.invocationUsage.snapshot()).toEqual({
       usage: {
@@ -47,7 +47,7 @@ describe("execution-context invocation meter", () => {
   });
 
   it("restoreState neither resets nor hydrates the meter (resume-leg isolation is structural)", async () => {
-    const execCtx = await makeContext().createExecutionContext("run-1");
+    const execCtx = await makeContext().createExecutionContext({ runId: "run-1" });
     execCtx.invocationUsage.merge(delta(0.5));
 
     const checkpoint = execCtx.stateToJSON() as unknown as Checkpoint;
@@ -60,7 +60,7 @@ describe("execution-context invocation meter", () => {
   });
 
   it("no serialization includes the meter", async () => {
-    const execCtx = await makeContext().createExecutionContext("run-2");
+    const execCtx = await makeContext().createExecutionContext({ runId: "run-2" });
     execCtx.invocationUsage.merge(delta(9.99));
     expect(JSON.stringify(execCtx.toJSON())).not.toContain("invocationUsage");
     expect(JSON.stringify(execCtx.stateToJSON())).not.toContain("9.99");

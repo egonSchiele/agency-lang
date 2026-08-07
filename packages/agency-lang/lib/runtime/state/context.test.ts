@@ -85,7 +85,7 @@ describe("RuntimeContext", () => {
 
     it("createExecutionContext should get a fresh AbortController", async () => {
       const ctx = makeMockCtx();
-      const execCtx = await ctx.createExecutionContext("foo");
+      const execCtx = await ctx.createExecutionContext({ runId: "foo" });
       expect(execCtx.abortController).toBeInstanceOf(AbortController);
       expect(execCtx.abortController).not.toBe(ctx.abortController);
       expect(execCtx.aborted).toBe(false);
@@ -138,20 +138,20 @@ describe("RuntimeContext memory frames", () => {
 
   it("getActiveMemoryManager() returns undefined when nothing is configured", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     expect(execCtx.getActiveMemoryManager()).toBeUndefined();
   });
 
   it("returns a JSON-seeded manager when only agency.json is set", async () => {
     const ctx = makeCtx({ dir: dirJson });
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     const m = execCtx.getActiveMemoryManager();
     expect(m).toBeDefined();
   });
 
   it("frame push overrides JSON; pop returns to JSON manager (same instance)", async () => {
     const ctx = makeCtx({ dir: dirJson });
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     const jsonManager = execCtx.getActiveMemoryManager();
     expect(jsonManager).toBeDefined();
 
@@ -166,7 +166,7 @@ describe("RuntimeContext memory frames", () => {
 
   it("manager cache survives push/pop/push (pop back returns the cached A)", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirA }));
     const a1 = execCtx.getActiveMemoryManager();
 
@@ -181,7 +181,7 @@ describe("RuntimeContext memory frames", () => {
 
   it("re-seeds the JSON bottom frame when restoring an old checkpoint without memoryFrames", async () => {
     const ctx = makeCtx({ dir: dirJson });
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
 
     // Simulate an old-format stateStack: has `other.memoryId` but no
     // `other.memoryFrames` (predates this feature).
@@ -205,7 +205,7 @@ describe("RuntimeContext memory frames", () => {
     // stack so we can distinguish "never set" from "explicitly
     // emptied."
     const ctx = makeCtx({ dir: dirJson });
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     expect(execCtx.getActiveMemoryManager()).toBeDefined();
 
     execCtx.stateStack.popMemoryFrame();

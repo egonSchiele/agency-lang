@@ -36,7 +36,7 @@ describe("RuntimeContext.providerModules", () => {
       dirname: "/x",
       providerModules: ["./a.mjs"],
     });
-    const child = await ctx.createExecutionContext("run-1");
+    const child = await ctx.createExecutionContext({ runId: "run-1" });
     expect(child.providerModules).toEqual(["./a.mjs"]);
   });
 });

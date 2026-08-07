@@ -45,7 +45,7 @@ describe("RuntimeContext.clock", () => {
     // meters against `undefined` and _advanceTime never sees the FakeClock.
     const clock = new FakeClock();
     const ctx = makeCtx(clock);
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     expect(execCtx.clock).toBe(clock);
   });
 });

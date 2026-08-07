@@ -42,6 +42,38 @@ describe("withParentStatelog", () => {
   it("forwards observability alone when the parent has no file sink", () => {
     expect(withParentStatelog(undefined, { observability: true })).toEqual({ observability: true });
   });
+
+  it("forwards the parent's effective remote sink (host/apiKey/projectId/…) so a child traces to the same destination", () => {
+    const out = withParentStatelog(undefined, {
+      observability: true,
+      host: "https://ingest.example",
+      apiKey: "call-key",
+      projectId: "call-proj",
+      requestTimeoutMs: 500,
+      metadata: { environment: "test" },
+    });
+    expect(out).toEqual({
+      observability: true,
+      log: {
+        host: "https://ingest.example",
+        apiKey: "call-key",
+        projectId: "call-proj",
+        requestTimeoutMs: 500,
+        metadata: { environment: "test" },
+      },
+    });
+  });
+
+  it("the parent's effective sink wins over the child's own log fields", () => {
+    const out = withParentStatelog(
+      { observability: true, log: { host: "https://child", apiKey: "child-key" } },
+      { observability: true, host: "https://parent", apiKey: "parent-key", projectId: "parent-proj" },
+    );
+    expect(out).toEqual({
+      observability: true,
+      log: { host: "https://parent", apiKey: "parent-key", projectId: "parent-proj" },
+    });
+  });
 });
 
 describe("resolveDepthCap", () => {

@@ -118,7 +118,7 @@ describe("std::memory enable/disable/block", () => {
   }
 
   async function withCtx(ctx: RuntimeContext<any>, fn: () => Promise<void>): Promise<void> {
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), fn);
   }
 
@@ -143,7 +143,7 @@ describe("std::memory enable/disable/block", () => {
 
   it("_enableMemory is a no-op when pushing the same dir as the top frame", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       await _enableMemory({ dir: dirA });
       const beforeFrames = (execCtx.stateStack.other.memoryFrames as any[]).length;
@@ -155,7 +155,7 @@ describe("std::memory enable/disable/block", () => {
 
   it("_enableMemory with a different dir stacks on top", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       await _enableMemory({ dir: dirA });
       await _enableMemory({ dir: dirB });
@@ -167,7 +167,7 @@ describe("std::memory enable/disable/block", () => {
 
   it("_disableMemory pops one frame", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       await _enableMemory({ dir: dirA });
       await _enableMemory({ dir: dirB });
@@ -180,7 +180,7 @@ describe("std::memory enable/disable/block", () => {
 
   it("frames survive serialize/deserialize with nested config intact", async () => {
     const ctx = makeCtx();
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     const richConfig = {
       dir: dirA,
       model: "gpt-4o",
@@ -202,7 +202,7 @@ describe("std::memory enable/disable/block", () => {
     const dirJson = path.join(tmpRoot, "json");
     fs.mkdirSync(dirJson);
     const ctx = makeCtx({ dir: dirJson });
-    const execCtx = await ctx.createExecutionContext("r1");
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     expect(execCtx.getActiveMemoryManager()).toBeDefined();
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
       _disableMemory();

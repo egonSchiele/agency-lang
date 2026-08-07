@@ -28,7 +28,9 @@ import type { HandlerEntry, HandlerFn } from "../types.js";
 import {
   applyRuntimeConfigOverridesToContextArgs,
   getRuntimeConfigOverrides,
+  type RuntimeContextConstructorArgs,
 } from "../configOverrides.js";
+import type { ResolvedInvocation } from "../invocationOptions.js";
 import { readConfigOverrides, TRACE_ID_ENV } from "../../config.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
@@ -369,14 +371,58 @@ export class RuntimeContext<T> {
   /** The statelog sink identity a subprocess should inherit — see
    * `withParentStatelog` in ipc.ts. Narrow accessor so the full (private)
    * statelog config stays encapsulated. */
-  getStatelogSink(): { observability: boolean; logFile?: string } {
+  /** The effective remote telemetry sink a spawned subprocess should inherit, so
+   *  a child traces to the SAME destination/credential as this context —
+   *  including a per-invocation override. Only the allow-listed telemetry fields
+   *  are exposed (never client/provider config). */
+  getStatelogSink(): {
+    observability: boolean;
+    host?: string;
+    apiKey?: string;
+    projectId?: string;
+    requestTimeoutMs?: number;
+    metadata?: StatelogConfig["metadata"];
+    logFile?: string;
+  } {
+    const config = this.statelogConfig;
+    // Use `!== undefined`, not truthiness: an explicit empty string is a
+    // meaningful override. `apiKey: ""` intentionally disables the remote POST
+    // (host with no key keeps local sinks only); dropping it here would let a
+    // child fall back to its baked non-empty credential and emit telemetry the
+    // caller meant to suppress.
     return {
-      observability: this.statelogConfig?.observability ?? false,
-      ...(this.statelogConfig?.logFile ? { logFile: this.statelogConfig.logFile } : {}),
+      observability: config?.observability ?? false,
+      ...(config?.host !== undefined ? { host: config.host } : {}),
+      ...(config?.apiKey !== undefined ? { apiKey: config.apiKey } : {}),
+      ...(config?.projectId !== undefined ? { projectId: config.projectId } : {}),
+      ...(config?.requestTimeoutMs !== undefined ? { requestTimeoutMs: config.requestTimeoutMs } : {}),
+      ...(config?.metadata !== undefined ? { metadata: config.metadata } : {}),
+      ...(config?.logFile !== undefined ? { logFile: config.logFile } : {}),
     };
   }
 
-  async createExecutionContext(runId: string): Promise<RuntimeContext<T>> {
+  async createExecutionContext(
+    invocation: ResolvedInvocation,
+  ): Promise<RuntimeContext<T>> {
+    const { runId, contextOverride } = invocation;
+    // Layer the already-narrowed per-invocation override on top of this frozen
+    // parent's config, through the ONE runtime merge. `contextOverride` is
+    // undefined for a plain run, in which case `effective` is just the parent's
+    // values. The resolver has already projected the allow-list, so this method
+    // never re-derives it.
+    const effective: RuntimeContextConstructorArgs =
+      applyRuntimeConfigOverridesToContextArgs(
+        {
+          statelogConfig: this.statelogConfig,
+          smoltalkDefaults: this.smoltalkDefaults,
+          dirname: this.dirname,
+          budget: this.budget,
+          maxCallDepth: this.maxCallDepth,
+          failurePropagation: this.failurePropagation,
+        },
+        contextOverride,
+      );
+
     const execCtx = Object.create(
       RuntimeContext.prototype,
     ) as RuntimeContext<T>;
@@ -387,16 +433,17 @@ export class RuntimeContext<T> {
     execCtx.providerModules = this.providerModules;
     execCtx._llmClient = this._llmClient;
     execCtx.dirname = this.dirname;
-    execCtx.statelogConfig = this.statelogConfig;
+    execCtx.statelogConfig = effective.statelogConfig;
     execCtx.stateStack = new StateStack();
     execCtx.globals = GlobalStore.withTokenStats();
     execCtx.maxRestores = this.maxRestores;
-    execCtx.maxCallDepth = this.maxCallDepth;
-    execCtx.failurePropagation = this.failurePropagation;
+    execCtx.maxCallDepth = effective.maxCallDepth ?? this.maxCallDepth;
+    execCtx.failurePropagation =
+      effective.failurePropagation ?? this.failurePropagation;
     // Non-serialized field — must be copied here (see the class comment) so
     // installRootBudget, which reads execCtx.budget, actually sees the resolved
     // config/override budget. Without this the root budget is a silent no-op.
-    execCtx.budget = this.budget;
+    execCtx.budget = effective.budget;
     // Fresh meter per invocation/leg (Object.create bypasses the field
     // initializer). Never carried from the parent context or a checkpoint.
     execCtx.invocationUsage = new InvocationUsageMeter();
@@ -431,7 +478,7 @@ export class RuntimeContext<T> {
     execCtx.pendingPromises = new PendingPromiseStore();
     execCtx.abortController = new AbortController();
     execCtx.statelogClient = new StatelogClient({
-      ...this.statelogConfig,
+      ...effective.statelogConfig,
       traceId: runId,
     });
     // Out-of-frame posts (e.g. agentEnd) redact against the CURRENT top-level

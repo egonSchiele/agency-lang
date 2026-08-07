@@ -31,9 +31,12 @@ export function nodeWrapperParams(
     typeAnnotation: arg.typeHint ? formatTypeHintTs(arg.typeHint) : "any",
     defaultValue: arg.defaultValue ? processNode(arg.defaultValue) : undefined,
   }));
+  // Alias each option to a hidden name so a node parameter named `config`,
+  // `traceId`, `messages`, or `callbacks` cannot collide with the destructured
+  // options. The runtime owns all behavior; this only packages the arguments.
   params.push({
-    name: "{ messages, callbacks }",
-    typeAnnotation: "{ messages?: any; callbacks?: any }",
+    name: "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId }",
+    typeAnnotation: "({ messages?: any; callbacks?: any } & InvocationOptions)",
     defaultValue: ts.obj({}),
   });
   return params;

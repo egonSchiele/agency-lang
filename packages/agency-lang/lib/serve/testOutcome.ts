@@ -13,21 +13,21 @@ const ZERO_SNAPSHOT: InvocationUsageSnapshot = {
   usageComplete: true,
 };
 
-/** A returned outcome carrying a fixed usage snapshot (override `usage` when a
- *  test asserts specific figures). */
+/** A returned outcome carrying a fixed usage snapshot and trace id (override
+ *  `usage`/`traceId` when a test asserts specific figures or identity). */
 export function returnedOutcome<T>(
   value: T,
-  overrides: Partial<Pick<ServedInvocationOutcome<T>, "usage" | "usageComplete">> = {},
+  overrides: Partial<Pick<ServedInvocationOutcome<T>, "usage" | "usageComplete" | "traceId">> = {},
 ): ServedInvocationOutcome<T> {
-  return { status: "returned", value, ...ZERO_SNAPSHOT, ...overrides };
+  return { status: "returned", value, traceId: "test-trace", ...ZERO_SNAPSHOT, ...overrides };
 }
 
 /** A threw outcome carrying the identical error. */
 export function threwOutcome(
   error: unknown,
-  overrides: Partial<Pick<ServedInvocationOutcome<never>, "usage" | "usageComplete">> = {},
+  overrides: Partial<Pick<ServedInvocationOutcome<never>, "usage" | "usageComplete" | "traceId">> = {},
 ): ServedInvocationOutcome<never> {
-  return { status: "threw", error, ...ZERO_SNAPSHOT, ...overrides };
+  return { status: "threw", error, traceId: "test-trace", ...ZERO_SNAPSHOT, ...overrides };
 }
 
 /** The PUBLIC raw `invoke` member on an ExportedFunction/Node. Adapter tests

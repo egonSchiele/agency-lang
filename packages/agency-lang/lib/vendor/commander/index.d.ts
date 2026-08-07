@@ -793,7 +793,12 @@ export class Command {
    *
    * @returns `this` command for chaining
    */
-  passThroughOptions(passThrough?: boolean): this;
+  // AGENCY FORK: per-command boundary config, no enablePositionalOptions
+  // prerequisite. "first-operand" (default) = boundary after the first
+  // positional; "immediate" = the whole tail belongs to the program.
+  passThroughOptions(
+    passThrough?: boolean | { boundary?: 'first-operand' | 'immediate' },
+  ): this;
 
   /**
    * Parse `argv`, setting options and invoking commands when defined.

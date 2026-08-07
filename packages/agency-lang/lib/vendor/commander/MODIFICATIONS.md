@@ -9,3 +9,10 @@ here. Do not restyle upstream code.
    descendant, either spelling) throw at registration instead of silently
    shadowing; addCommand validates the detached tree before attaching (spec:
    modification 5).
+3. command.js + index.d.ts — boundary-aware delegation: passThroughOptions is
+   per-command (the enablePositionalOptions prerequisite is removed) and takes
+   an optional { boundary: "first-operand" | "immediate" } config; a parent
+   stops consuming its own options at a direct boundary subcommand; inside a
+   boundary command options resolve by ownership (self or ancestor, with
+   variadic continuations emitted on the owner); immediate mode hands the
+   whole tail to the program, stripping one leading -- (spec: modification 1).

@@ -52,6 +52,9 @@ export class Command extends EventEmitter {
     this._argsDescription = undefined; // legacy
     this._enablePositionalOptions = false;
     this._passThroughOptions = false;
+    // AGENCY FORK: 'first-operand' | 'immediate' — where a pass-through
+    // command's program boundary falls (MODIFICATIONS.md #3).
+    this._boundaryMode = 'first-operand';
     this._lifeCycleHooks = {}; // a hash of arrays
     /** @type {(boolean | string)} */
     this._showHelpAfterError = false;
@@ -948,9 +951,16 @@ Expecting one of '${allowedValues.join("', '")}'`);
    * @param {boolean} [passThrough] for unknown options.
    * @return {Command} `this` command for chaining
    */
+  // AGENCY FORK: boundary-aware delegation (MODIFICATIONS.md #3) — accepts a
+  // config object, works per-command with no enablePositionalOptions
+  // prerequisite, and supports an "immediate" boundary where the whole tail
+  // belongs to the program.
   passThroughOptions(passThrough = true) {
     this._passThroughOptions = !!passThrough;
-    this._checkForBrokenPassThrough();
+    this._boundaryMode =
+      passThrough && typeof passThrough === 'object'
+        ? (passThrough.boundary ?? 'first-operand')
+        : 'first-operand';
     return this;
   }
 
@@ -959,15 +969,8 @@ Expecting one of '${allowedValues.join("', '")}'`);
    */
 
   _checkForBrokenPassThrough() {
-    if (
-      this.parent &&
-      this._passThroughOptions &&
-      !this.parent._enablePositionalOptions
-    ) {
-      throw new Error(
-        `passThroughOptions cannot be used for '${this._name}' without turning on enablePositionalOptions for parent command(s)`,
-      );
-    }
+    // AGENCY FORK: the upstream prerequisite (enablePositionalOptions on the
+    // parent) is gone — ancestors stop at boundary subcommands on their own.
   }
 
   /**
@@ -1862,8 +1865,36 @@ Expecting one of '${allowedValues.join("', '")}'`);
       );
     };
 
+    // AGENCY FORK: immediate boundary — the whole tail is the program's, a
+    // leading -- is the user drawing the line explicitly (MODIFICATIONS.md #3).
+    if (this._passThroughOptions && this._boundaryMode === 'immediate') {
+      const viaSeparator = args[0] === '--';
+      return {
+        operands: viaSeparator ? args.slice(1) : args.slice(),
+        unknown: [],
+      };
+    }
+
+    // AGENCY FORK: inside a boundary command, options are recognised by
+    // ownership — the command itself or any ancestor. Safe because duplicate
+    // spellings on one command path are a registration error
+    // (MODIFICATIONS.md #2). Non-boundary commands keep local-only lookup.
+    const findOptionAndOwner = (flag) => {
+      if (!this._passThroughOptions) {
+        const option = this._findOption(flag);
+        return option ? { option, owner: this } : undefined;
+      }
+      for (let cmd = this; cmd; cmd = cmd.parent) {
+        const option = cmd._findOption(flag);
+        if (option) return { option, owner: cmd };
+      }
+      return undefined;
+    };
+
     // parse options
-    let activeVariadicOption = null;
+    // AGENCY FORK: variadic state carries { option, owner } so continuations
+    // reach an ancestor-owned option's listeners, not just the first value.
+    let activeVariadic = null;
     let activeGroup = null; // working through group of short options, like -abc
     let i = 0;
     while (i < args.length || activeGroup) {
@@ -1877,23 +1908,24 @@ Expecting one of '${allowedValues.join("', '")}'`);
         break;
       }
 
-      if (
-        activeVariadicOption &&
-        (!maybeOption(arg) || negativeNumberArg(arg))
-      ) {
-        this.emit(`option:${activeVariadicOption.name()}`, arg);
+      if (activeVariadic && (!maybeOption(arg) || negativeNumberArg(arg))) {
+        activeVariadic.owner.emit(
+          `option:${activeVariadic.option.name()}`,
+          arg,
+        );
         continue;
       }
-      activeVariadicOption = null;
+      activeVariadic = null;
 
       if (maybeOption(arg)) {
-        const option = this._findOption(arg);
+        const found = findOptionAndOwner(arg);
         // recognised option, call listener to assign value with possible custom processing
-        if (option) {
+        if (found) {
+          const { option, owner } = found;
           if (option.required) {
             const value = args[i++];
             if (value === undefined) this.optionMissingArgument(option);
-            this.emit(`option:${option.name()}`, value);
+            owner.emit(`option:${option.name()}`, value);
           } else if (option.optional) {
             let value = null;
             // historical behaviour is optional value is following arg unless an option
@@ -1903,29 +1935,30 @@ Expecting one of '${allowedValues.join("', '")}'`);
             ) {
               value = args[i++];
             }
-            this.emit(`option:${option.name()}`, value);
+            owner.emit(`option:${option.name()}`, value);
           } else {
             // boolean flag
-            this.emit(`option:${option.name()}`);
+            owner.emit(`option:${option.name()}`);
           }
-          activeVariadicOption = option.variadic ? option : null;
+          activeVariadic = option.variadic ? { option, owner } : null;
           continue;
         }
       }
 
       // Look for combo options following single dash, eat first one if known.
       if (arg.length > 2 && arg[0] === '-' && arg[1] !== '-') {
-        const option = this._findOption(`-${arg[1]}`);
-        if (option) {
+        const found = findOptionAndOwner(`-${arg[1]}`);
+        if (found) {
+          const { option, owner } = found;
           if (
             option.required ||
             (option.optional && this._combineFlagAndOptionalValue)
           ) {
             // option with value following in same argument
-            this.emit(`option:${option.name()}`, arg.slice(2));
+            owner.emit(`option:${option.name()}`, arg.slice(2));
           } else {
             // boolean option
-            this.emit(`option:${option.name()}`);
+            owner.emit(`option:${option.name()}`);
             // remove the processed option and keep processing group
             activeGroup = `-${arg.slice(2)}`;
           }
@@ -1936,9 +1969,12 @@ Expecting one of '${allowedValues.join("', '")}'`);
       // Look for known long flag with value, like --foo=bar
       if (/^--[^=]+=/.test(arg)) {
         const index = arg.indexOf('=');
-        const option = this._findOption(arg.slice(0, index));
-        if (option && (option.required || option.optional)) {
-          this.emit(`option:${option.name()}`, arg.slice(index + 1));
+        const found = findOptionAndOwner(arg.slice(0, index));
+        if (found && (found.option.required || found.option.optional)) {
+          found.owner.emit(
+            `option:${found.option.name()}`,
+            arg.slice(index + 1),
+          );
           continue;
         }
       }
@@ -1954,6 +1990,20 @@ Expecting one of '${allowedValues.join("', '")}'`);
         !(this.commands.length === 0 && negativeNumberArg(arg))
       ) {
         dest = unknown;
+      }
+
+      // AGENCY FORK: a parent stops consuming its own options once the line
+      // dispatches into a direct subcommand that owns a program boundary —
+      // the rest of the line is that child's to parse (MODIFICATIONS.md #3).
+      if (
+        operands.length === 0 &&
+        unknown.length === 0 &&
+        !maybeOption(arg) &&
+        this._findCommand(arg)?._passThroughOptions
+      ) {
+        operands.push(arg);
+        unknown.push(...args.slice(i));
+        break;
       }
 
       // If using positionalOptions, stop processing our options at subcommand.

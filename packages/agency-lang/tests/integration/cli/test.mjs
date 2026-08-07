@@ -509,6 +509,114 @@ node main() {
   assertIncludes(packedWithSeparator, "Hello, world!");
   console.log("Test 8c passed");
 
+  // --- Test 8d: flag ownership — a flag is valid after its owner, never before ---
+  console.log("--- Test 8d: flag ownership matrix ---");
+
+  // A subcommand flag written before the subcommand word is an ERROR naming
+  // the owner and the fix — never `Unknown command 'run'`.
+  for (const misplaced of [
+    "./node_modules/.bin/agency --model claude-opus-4-8 run greet.agency",
+    "./node_modules/.bin/agency --max-cost 5 run greet.agency",
+  ]) {
+    const ownerError = run(dir, `${misplaced} 2>&1`, { expectFail: true });
+    assertIncludes(ownerError, "write it after 'run'");
+    if (ownerError.includes("Unknown command")) {
+      throw new Error(`misplaced flag produced the old misdiagnosis: ${ownerError}`);
+    }
+  }
+
+  // A flag nobody owns is a plain unknown option, also not a file error.
+  const nonsense = run(
+    dir,
+    "./node_modules/.bin/agency --nonsense greet.agency 2>&1",
+    { expectFail: true },
+  );
+  assertIncludes(nonsense, "unknown option");
+
+  // Command typos get commander's suggestion; an explicit `run` with a missing
+  // input is only ever a file problem, never a command suggestion.
+  const typo = run(dir, "./node_modules/.bin/agency formt 2>&1", { expectFail: true });
+  assertIncludes(typo, "unknown command 'formt'");
+  assertIncludes(typo, "format");
+  const missingInput = run(
+    dir,
+    "./node_modules/.bin/agency run formt 2>&1",
+    { expectFail: true },
+  );
+  if (missingInput.includes("unknown command")) {
+    throw new Error(`explicit run suggested a command for its input: ${missingInput}`);
+  }
+
+  // A pre-input separator ends option parsing but the input is still agency's.
+  const preInputSeparator = run(
+    dir,
+    "./node_modules/.bin/agency run -- greet.agency --name alice",
+  );
+  assertIncludes(preInputSeparator, "Hello, alice!");
+
+  // The budget cap is REAL on the run path: the child process carries it in
+  // AGENCY_MAX_COST. Pure Agency + a js helper — no LLM call.
+  writeFile(dir, "budget-env.js", `export function maxCostEnv() {
+  return process.env.AGENCY_MAX_COST ?? "unset";
+}
+`);
+  writeFile(dir, "budget-probe.agency", `import { maxCostEnv } from "./budget-env.js"
+
+node main() {
+  print("AGENCY_MAX_COST=" + maxCostEnv())
+}
+`);
+  const budgeted = run(
+    dir,
+    "./node_modules/.bin/agency run --max-cost 5 budget-probe.agency",
+  );
+  assertIncludes(budgeted, "AGENCY_MAX_COST=5");
+
+  // Nested default commands still answer at the parent's position: the
+  // default `list` action runs and reports the missing credential by name.
+  // Asserting the exact action-level error (not just "no unknown option")
+  // proves the action executed rather than help or an unrelated failure.
+  for (const remoteDefault of ["projects", "keys"]) {
+    const credential = run(
+      dir,
+      `./node_modules/.bin/agency remote ${remoteDefault} --host https://h --api-key-env MISSING_KEY 2>&1`,
+      { expectFail: true },
+    );
+    assertIncludes(credential, "Missing API key — set $MISSING_KEY.");
+  }
+
+  // `trace` defaults to `trace run`: the probe executes (no LLM) and the
+  // requested trace file exists and is non-empty — exit status alone would
+  // not prove the default action ran.
+  writeFile(dir, "trace-probe.agency", `node main() {
+  print("traced")
+}
+`);
+  run(dir, "./node_modules/.bin/agency trace trace-probe.agency --output probe.trace");
+  if (!existsSync(join(dir, "probe.trace"))) {
+    throw new Error("trace default-run wrote no trace file");
+  }
+  if (readFileSync(join(dir, "probe.trace"), "utf-8").length === 0) {
+    throw new Error("trace default-run wrote an empty trace file");
+  }
+
+  // `test` defaults to `test run` and reports the passing test by name.
+  writeFile(dir, "passing.agency", `node main(): number {
+  return 42
+}
+`);
+  writeFile(dir, "passing.test.json", JSON.stringify({
+    tests: [{
+      nodeName: "main",
+      input: "",
+      expectedOutput: "42",
+      evaluationCriteria: [{ type: "exact" }],
+    }],
+  }, null, 2));
+  const agencyTest = run(dir, "./node_modules/.bin/agency test passing.agency 2>&1");
+  assertIncludes(agencyTest, "passing");
+  console.log("Test 8d passed");
+
   console.log("=== All CLI tests passed ===");
   cleanup(dir);
 } catch (err) {

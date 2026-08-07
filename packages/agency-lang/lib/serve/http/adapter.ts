@@ -8,6 +8,7 @@ import type {
   ServedInvocationOutcome,
   InvocationUsageSnapshot,
 } from "../../runtime/invocationUsage.js";
+import type { InvocationOptions } from "../../runtime/invocationOptions.js";
 import type { Logger } from "../../logger.js";
 import {
   DEFAULT_HOST,
@@ -40,6 +41,7 @@ type ServedHandlerConfig = {
   respondToInterrupts: (
     interrupts: unknown[],
     responses: unknown[],
+    invocation?: InvocationOptions,
   ) => Promise<ServedInvocationOutcome<unknown>>;
 };
 
@@ -67,6 +69,10 @@ export type RouteResult = {
    *  the host (statelog); not part of the standalone HTTP body. */
   usage?: InvocationUsageSnapshot["usage"];
   usageComplete?: boolean;
+  /** The run's effective root trace id. Present on the same post-execution
+   *  outcomes as `usage` (absent on /list, 404, validation 400). Lets a host
+   *  correlate a call to its trace even when it did not pre-supply an id. */
+  traceId?: string;
 };
 
 function ok(value: unknown): RouteResult {
@@ -129,9 +135,15 @@ function errorResult(err: unknown, logger: Logger, what: string): RouteResult {
   return fail(TOOL_ERROR_MESSAGE);
 }
 
-/** Attach a per-invocation usage snapshot to any post-execution route result. */
-function withUsage(base: RouteResult, outcome: InvocationUsageSnapshot): RouteResult {
-  return { ...base, usage: outcome.usage, usageComplete: outcome.usageComplete };
+/** Attach the per-invocation usage snapshot and effective trace id to any
+ *  post-execution route result. */
+function withUsage(base: RouteResult, outcome: ServedInvocationOutcome<unknown>): RouteResult {
+  return {
+    ...base,
+    usage: outcome.usage,
+    usageComplete: outcome.usageComplete,
+    traceId: outcome.traceId,
+  };
 }
 
 /** Map one served outcome to a route result: `renderReturned` shapes the success
@@ -154,10 +166,11 @@ async function callFunction(
   fn: ServedExportedFunction,
   body: unknown,
   logger: Logger,
+  invocation: InvocationOptions | undefined,
 ): Promise<RouteResult> {
   let outcome: ServedInvocationOutcome<unknown>;
   try {
-    outcome = await fn.invokeServed(toArgs(body));
+    outcome = await fn.invokeServed(toArgs(body), invocation);
   } catch (err) {
     // A throw here is a pre-outcome internal failure (the core normally converts
     // agent errors into a threw-outcome), so there is no usage to report.
@@ -171,12 +184,13 @@ async function callNode(
   body: unknown,
   hasInterrupts: (data: unknown) => boolean,
   logger: Logger,
+  invocation: InvocationOptions | undefined,
 ): Promise<RouteResult> {
   let outcome: ServedInvocationOutcome<unknown>;
   try {
     // The node receives its named args as a data object; the serve invoker maps
     // them to the node's params and returns the caller-facing data as the value.
-    outcome = await node.invokeServed(toArgs(body));
+    outcome = await node.invokeServed(toArgs(body), invocation);
   } catch (err) {
     return errorResult(err, logger, `node ${node.name}`);
   }
@@ -188,10 +202,15 @@ async function callNode(
 }
 
 async function resumeInterrupts(
-  respondToInterrupts: (i: unknown[], r: unknown[]) => Promise<ServedInvocationOutcome<unknown>>,
+  respondToInterrupts: (
+    i: unknown[],
+    r: unknown[],
+    invocation?: InvocationOptions,
+  ) => Promise<ServedInvocationOutcome<unknown>>,
   hasInterrupts: (data: unknown) => boolean,
   body: unknown,
   logger: Logger,
+  invocation: InvocationOptions | undefined,
 ): Promise<RouteResult> {
   if (body == null || typeof body !== "object" || Array.isArray(body)) {
     return { status: 400, body: { error: "Request body must be a JSON object" } };
@@ -208,7 +227,7 @@ async function resumeInterrupts(
   }
   let outcome: ServedInvocationOutcome<unknown>;
   try {
-    outcome = await respondToInterrupts(interrupts, responses);
+    outcome = await respondToInterrupts(interrupts, responses, invocation);
   } catch (err) {
     return errorResult(err, logger, "resume");
   }
@@ -229,6 +248,7 @@ export function createHttpHandler(config: ServedHandlerConfig): (
   method: string,
   path: string,
   body: unknown,
+  invocation?: InvocationOptions,
 ) => Promise<RouteResult> {
   const { exports, hasInterrupts, respondToInterrupts, logger } = config;
 
@@ -249,7 +269,7 @@ export function createHttpHandler(config: ServedHandlerConfig): (
     ),
   );
 
-  return async (method, path, body): Promise<RouteResult> => {
+  return async (method, path, body, invocation): Promise<RouteResult> => {
     if (method === "GET" && path === "/list") {
       return {
         status: 200,
@@ -278,21 +298,21 @@ export function createHttpHandler(config: ServedHandlerConfig): (
       if (functionMatch) {
         const fn = functions[functionMatch[1]];
         if (!fn) return notFound(`Unknown function '${functionMatch[1]}'`);
-        return callFunction(fn, body, logger);
+        return callFunction(fn, body, logger, invocation);
       }
 
       const nodeMatch = path.match(NODE_ROUTE);
       if (nodeMatch) {
         const node = nodes[nodeMatch[1]];
         if (!node) return notFound(`Unknown node '${nodeMatch[1]}'`);
-        return callNode(node, body, hasInterrupts, logger);
+        return callNode(node, body, hasInterrupts, logger, invocation);
       }
 
       if (path === "/resume") {
         if (!respondToInterrupts) {
           return { status: 400, body: { error: "Module does not support interrupt resume" } };
         }
-        return resumeInterrupts(respondToInterrupts, hasInterrupts, body, logger);
+        return resumeInterrupts(respondToInterrupts, hasInterrupts, body, logger, invocation);
       }
     }
 

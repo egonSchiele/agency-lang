@@ -8,11 +8,13 @@ import type { ServedInvocationOutcome } from "../runtime/invocationUsage.js";
 import { discoverExports } from "./discovery.js";
 import { createHttpHandler } from "./http/adapter.js";
 import type { RouteResult } from "./http/adapter.js";
+import type { InvocationOptions } from "../runtime/invocationOptions.js";
 
 export type ServeHandler = (
   method: string,
   path: string,
   body: unknown,
+  invocation?: InvocationOptions,
 ) => Promise<RouteResult>;
 
 export type CreateServeHandlerOptions = {
@@ -89,15 +91,24 @@ export async function createServeHandler(
     interruptEffectsByName,
   });
 
+  // The generated resume export takes an options bag (checkpoint overrides,
+  // metadata, and the per-invocation options). The HTTP adapter deals only in
+  // InvocationOptions, so wrap the module export to forward the 4th arg as
+  // `{ invocation }` — keeping the adapter unaware of checkpoint overrides and
+  // leaving direct generated-module callers unchanged.
+  const moduleResume = moduleExports.__respondToInterruptsForServe as (
+    interrupts: unknown[],
+    responses: unknown[],
+    opts?: { invocation?: InvocationOptions },
+  ) => Promise<ServedInvocationOutcome<unknown>>;
+
   return createHttpHandler({
     exports,
     logger,
     // The serve resume returns a ServedInvocationOutcome (value/error + usage);
     // the HTTP adapter maps it (and unwraps the RunNodeResult's `{ data }`).
     hasInterrupts: moduleExports.hasInterrupts as (data: unknown) => boolean,
-    respondToInterrupts: moduleExports.__respondToInterruptsForServe as (
-      interrupts: unknown[],
-      responses: unknown[],
-    ) => Promise<ServedInvocationOutcome<unknown>>,
+    respondToInterrupts: (interrupts, responses, invocation) =>
+      moduleResume(interrupts, responses, { invocation }),
   });
 }

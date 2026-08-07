@@ -11,7 +11,7 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient } from "agency-lang/runtime";
+import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient, InvocationOptions } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
@@ -69,9 +69,10 @@ export const __invokeFunction = (fn: any, namedArgs: Record<string, unknown>) =>
 // back a ServedInvocationOutcome (value/error + per-invocation usage snapshot)
 // so the serve adapters can report authoritative cost. \`discoverExports\`
 // requires all three; a bundle without them must be recompiled.
-export const __invokeFunctionForServe = (fn: any, namedArgs: Record<string, unknown>) => _runExportedFunctionForServe({ ctx: __globalCtx, fn, namedArgs, initializeGlobals: __initializeGlobals });
-export const __invokeNodeForServe = (nodeName: string, data: Record<string, any>) => _runNodeForServe({ ctx: __globalCtx, nodeName, data, initializeGlobals: __initializeGlobals });
-export const __respondToInterruptsForServe = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterruptsForServe({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
+export const __invokeFunctionForServe = (fn: any, namedArgs: Record<string, unknown>, invocation?: InvocationOptions) => _runExportedFunctionForServe({ ctx: __globalCtx, fn, namedArgs, invocation, initializeGlobals: __initializeGlobals });
+export const __invokeNodeForServe = (nodeName: string, data: Record<string, any>, invocation?: InvocationOptions) => _runNodeForServe({ ctx: __globalCtx, nodeName, data, invocation, initializeGlobals: __initializeGlobals });
+type ServeResumeOptions = { overrides?: Record<string, unknown>; metadata?: Record<string, any>; invocation?: InvocationOptions };
+export const __respondToInterruptsForServe = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: ServeResumeOptions) => _respondToInterruptsForServe({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, invocation: opts?.invocation });
 
 export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 // Reconfigure the trace file path at runtime. Mutates the module-level

@@ -1,6 +1,7 @@
 import type { AgencyFunction } from "../runtime/agencyFunction.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import type { ServedInvocationOutcome } from "../runtime/invocationUsage.js";
+import type { InvocationOptions } from "../runtime/invocationOptions.js";
 
 export type ExportedFunction = {
   kind: "function";
@@ -42,11 +43,17 @@ export type ExportedItem = ExportedFunction | ExportedNode;
 // is its caller-facing `RunNodeResult.data`, already unwrapped by discovery.
 
 export type ServedExportedFunction = ExportedFunction & {
-  invokeServed: (namedArgs: Record<string, unknown>) => Promise<ServedInvocationOutcome<unknown>>;
+  invokeServed: (
+    namedArgs: Record<string, unknown>,
+    invocation?: InvocationOptions,
+  ) => Promise<ServedInvocationOutcome<unknown>>;
 };
 
 export type ServedExportedNode = ExportedNode & {
-  invokeServed: (data: Record<string, unknown>) => Promise<ServedInvocationOutcome<unknown>>;
+  invokeServed: (
+    data: Record<string, unknown>,
+    invocation?: InvocationOptions,
+  ) => Promise<ServedInvocationOutcome<unknown>>;
 };
 
 export type ServedExportedItem = ServedExportedFunction | ServedExportedNode;

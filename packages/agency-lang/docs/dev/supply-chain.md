@@ -54,6 +54,10 @@ truth: modern pnpm self-switches to that exact version, and CI's
 were removed for exactly this reason — never reintroduce one, or that
 workflow resolves dependencies with the cooldown off).
 
+pnpm 11 itself requires Node ≥ 22.13, which is why the engines floor (and the
+CI job pinned to the exact floor) sits at 22.13.0 rather than commander v15's
+22.12.
+
 ## What this deliberately does not do
 
 Vendoring the tree was considered and rejected: the closure includes

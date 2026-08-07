@@ -66,7 +66,9 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
       with:
-        node-version: 22.x
+        # Pinned to the exact engines minimum (package.json "node": ">=22.12.0")
+        # so the declared floor is the tested floor, not whatever 22.x floats to.
+        node-version: 22.12.0
         cache: 'pnpm'
     - run: pnpm install
     - run: make

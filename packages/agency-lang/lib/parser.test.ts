@@ -231,6 +231,37 @@ describe("parseAgency structured errors", () => {
     expect(result.errorData!.column).toBe(3);
   });
 
+  // A committed failure's "Line X, col Y: " prefix used to be computed in
+  // wrapped-input coordinates, so the CLI (which prints `message`) reported
+  // a line AGENCY_TEMPLATE_OFFSET below the real one whenever the template
+  // wrapper was applied — even though `errorData.line` was already correct.
+  // Parse the same source in both modes and assert the reported line agrees;
+  // any future committed-failure diagnostic would inherit the shift silently
+  // without a cross-mode comparison like this.
+  it("reports the same committed-failure line with and without the template wrapper", () => {
+    // `node inner()` inside a node body is a committed failure: node/def are
+    // only legal at the top level. The declaration is on user-source line 2.
+    const source = "node main() {\n  node inner() {\n    print(1)\n  }\n}\n";
+
+    const plain = parseAgency(source, {}, false);
+    const templated = parseAgency(source, {}, true);
+    expect(plain.success).toBe(false);
+    expect(templated.success).toBe(false);
+    if (plain.success || templated.success) return;
+
+    const lineOf = (message: string | undefined): string | undefined =>
+      message?.match(/^Line (\d+),/)?.[1];
+
+    // Both modes name line 2 (1-indexed), not line 4 in templated mode.
+    expect(lineOf(plain.message)).toBe("2");
+    expect(lineOf(templated.message)).toBe("2");
+    // errorData.message embeds the same prefix, so it must agree too.
+    expect(lineOf(plain.errorData?.message)).toBe("2");
+    expect(lineOf(templated.errorData?.message)).toBe("2");
+    // The structured line was already correct; keep it pinned to that.
+    expect(plain.errorData!.line).toBe(templated.errorData!.line);
+  });
+
   // Pins the targeted message produced by the `parseError` wrapper
   // around `def`'s parameter-list close-paren. Before this, the same
   // input dumped the full top-level alternatives list ("expected

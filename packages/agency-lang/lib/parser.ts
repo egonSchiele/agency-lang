@@ -244,6 +244,26 @@ export type ParseAgencyResult =
  * is applied. Used by both the recoverable-failure branch and the
  * `TarsecError` branch in `parseAgency`.
  */
+/**
+ * A committed-failure message from tarsec carries a "Line X, col Y: "
+ * prefix that tarsec computes in wrapped-input coordinates. When the
+ * template wrapper was applied, X is too high by the prelude length
+ * (`AGENCY_TEMPLATE_OFFSET`), so it names a line `offset` below the real
+ * one. Rewrite the line number back into the user's source coordinates.
+ *
+ * `buildErrorData` already corrects the structured `errorData.line`; this
+ * keeps the message text — which the CLI prints and `errorData` embeds —
+ * consistent with it. No-op when the wrapper wasn't applied (offset 0) or
+ * the message has no such prefix.
+ */
+function correctCommittedFailureLine(message: string, offset: number): string {
+  if (offset === 0) return message;
+  return message.replace(
+    /^Line (\d+)(, col \d+: )/,
+    (_full, line: string, rest: string) => `Line ${Number(line) - offset}${rest}`,
+  );
+}
+
 function buildErrorData(
   input: string,
   rightmostPos: number | null,
@@ -311,14 +331,17 @@ export function parseAgency(
       "rightmostPos" in result && typeof result.rightmostPos === "number"
         ? result.rightmostPos
         : null;
+    // The "Line X, col Y: " prefix is in wrapped coordinates; pull it back
+    // to the user's source line before it reaches the message or errorData.
+    const correctedMessage = correctCommittedFailureLine(result.message, offset);
     if (rightmostPos != null) {
       // Strip the "Line X, col Y: " prefix that getErrorMessage prepends
       // so the LSP / CLI can render the location separately without
       // duplicating it inside the message body.
-      const cleanMessage = result.message.replace(/^Line \d+, col \d+: /, "");
+      const cleanMessage = correctedMessage.replace(/^Line \d+, col \d+: /, "");
       return {
         success: false,
-        message: result.message,
+        message: correctedMessage,
         rest: input,
         errorData: buildErrorData(
           input,
@@ -326,11 +349,11 @@ export function parseAgency(
           offset,
           { line: 0, column: 0, length: 1 },
           cleanMessage,
-          result.message,
+          correctedMessage,
         ),
       };
     }
-    return { success: false, message: result.message, rest: result.rest };
+    return { success: false, message: correctedMessage, rest: result.rest };
   } catch (error) {
     if (error instanceof TarsecError) {
       // A committed failure (tarsec `committed`, e.g. a malformed code
@@ -343,20 +366,23 @@ export function parseAgency(
       if (committedCaught !== null) {
         const committedMessage = getErrorMessage();
         if (committedMessage !== null) {
+          // The "Line X, col Y: " prefix is in wrapped coordinates; pull it
+          // back to the user's source line so message and errorData agree.
+          const correctedMessage = correctCommittedFailureLine(committedMessage, offset);
           // Position from the COMMITTED failure, not the rightmost
           // record — the record is the misleading one here, and the LSP
           // squiggle must land where the message points (review finding).
           return {
             success: false,
-            message: committedMessage,
+            message: correctedMessage,
             rest: input,
             errorData: buildErrorData(
               input,
               getInputStr().length - committedCaught.rest.length,
               offset,
               { line: 0, column: 0, length: 1 },
-              committedMessage,
-              committedMessage,
+              correctedMessage,
+              correctedMessage,
             ),
           };
         }

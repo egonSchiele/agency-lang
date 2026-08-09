@@ -96,6 +96,12 @@ Net result:
 
 Both modes produce the same `loc.line`. Same for `errorData.line`. There is **one** convention; consumers don't compensate.
 
+### The `"Line X, col Y: "` message prefix is offset-corrected too
+
+A *committed failure* (tarsec `committed`, e.g. a node/def declared inside a body, or a malformed code literal) produces its message via `getErrorMessage()`, which prepends a `"Line X, col Y: "` prefix computed in **wrapped-input coordinates**. That prefix does not flow through `withLoc`, so with the template applied it named a line `AGENCY_TEMPLATE_OFFSET` below the real one — the CLI prints `parseResult.message`, so a user saw the wrong line even though `errorData.line` was already correct (`buildErrorData` subtracts `offset`).
+
+`correctCommittedFailureLine(message, offset)` rewrites the number in that prefix back into user-source coordinates. It runs at both committed-failure exits in `parseAgency` (the recoverable-failure branch and the `TarsecError` catch), so `message`, `errorData.message`, and `errorData.prettyMessage` all agree with `errorData.line`. It is a no-op when the wrapper wasn't applied (offset 0) or the message has no such prefix. The `parseAgency structured errors` tests parse one committed-failure source in both modes and assert the reported line agrees — the bug existed precisely because nothing compared the two modes.
+
 ## About `start` / `end`
 
 `loc.start` and `loc.end` are byte offsets into the input the parser saw. In `applyTemplate=true` mode, they're offsets into the templated string (which includes the prelude bytes); in `applyTemplate=false` mode, they're offsets into the user source directly.

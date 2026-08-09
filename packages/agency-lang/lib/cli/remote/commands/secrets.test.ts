@@ -321,7 +321,7 @@ describe("runSecretsImport", () => {
     await runSecretsImport(file, options, context, importIo({ stdinIsTty: false }));
     const failureLines = logSpy.mock.calls
       .map((call: unknown[]) => call.join(" "))
-      .filter((line) => line.includes("full-access API key"));
+      .filter((line: string) => line.includes("full-access API key"));
     expect(failureLines).toHaveLength(1);
     expect(failureLines[0]).not.toContain("\n");
   });

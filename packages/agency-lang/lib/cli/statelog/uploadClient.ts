@@ -9,6 +9,7 @@ import type { AgencyBundle } from "../deploy/bundle.js";
 import { resolveTrustedEndpointUrl, parseServeBaseUrl } from "./serveUrl.js";
 import { createServeClient, ServeRequestError } from "./serveClient.js";
 import type { ServeManifest } from "./serveClient.js";
+import { readJsonBody } from "./jsonBody.js";
 
 export type UploadResult =
   | { ok: true; endpointUrls: string[]; manifest?: ServeManifest }
@@ -48,12 +49,11 @@ export async function uploadBundle(
     return { ok: false, error: `Could not reach ${target.host} (${detail}).` };
   }
 
-  let envelope: unknown;
-  try {
-    envelope = await response.json();
-  } catch {
-    return { ok: false, error: `statelog returned a non-JSON response (HTTP ${response.status}).` };
+  const parsed = await readJsonBody(response, { method: "POST", url });
+  if (!parsed.ok) {
+    return { ok: false, error: parsed.error };
   }
+  const envelope = parsed.value;
 
   const endpointUrls = readEndpointUrls(envelope);
   if (!endpointUrls) {

@@ -5,7 +5,17 @@ function response(status: number, body: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: vi.fn().mockResolvedValue(body),
+    url: "",
+    text: vi.fn().mockResolvedValue(JSON.stringify(body)),
+  } as unknown as Response;
+}
+
+function nonJsonResponse(status: number, body = "<!doctype html><p>oops</p>"): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    url: "",
+    text: vi.fn().mockResolvedValue(body),
   } as unknown as Response;
 }
 
@@ -145,13 +155,17 @@ describe.each<[string, unknown, "pullSource" | "listTraces" | "traceLogs"]>([
 });
 
 describe("projectClient envelope/transport edge cases", () => {
-  it("a 2xx whose json() rejects → non-JSON error", async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockRejectedValue(new SyntaxError("bad")),
-    } as unknown as Response);
-    await expect(client().pullSource()).rejects.toThrow(/non-JSON response \(HTTP 200\)/);
+  it("a 2xx non-JSON body → non-JSON error naming the request and body", async () => {
+    fetchMock.mockResolvedValue(nonJsonResponse(200));
+    const failure = await client()
+      .pullSource()
+      .then(
+        () => null,
+        (error: Error) => error.message,
+      );
+    expect(failure).toMatch(/non-JSON response \(HTTP 200\)/);
+    expect(failure).toContain("GET https://h/api/projects/proj/source");
+    expect(failure).toContain("<!doctype html><p>oops</p>");
   });
 
   it("a malformed envelope (success not boolean) throws", async () => {
@@ -160,11 +174,7 @@ describe("projectClient envelope/transport edge cases", () => {
   });
 
   it("a non-JSON HTTP 500 mentions HTTP 500", async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: vi.fn().mockRejectedValue(new SyntaxError("bad")),
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(nonJsonResponse(500));
     await expect(client().pullSource()).rejects.toThrow("statelog request failed (HTTP 500)");
   });
 });
@@ -210,12 +220,12 @@ describe("projectClient.getSpend", () => {
   it("reports an unsupported host for any other 404 (JSON and non-JSON)", async () => {
     fetchMock.mockResolvedValue(response(404, { error: "Not Found" }));
     await expect(client().getSpend({ from: null, to: null })).rejects.toThrow(/does not support the spend API/);
-    fetchMock.mockResolvedValue({ ok: false, status: 404, json: vi.fn().mockRejectedValue(new SyntaxError("bad")) } as unknown as Response);
+    fetchMock.mockResolvedValue({ ok: false, status: 404, url: "", text: vi.fn().mockResolvedValue("<html>bad</html>") } as unknown as Response);
     await expect(client().getSpend({ from: null, to: null })).rejects.toThrow(/does not support the spend API/);
   });
 
   it("leaves a non-JSON 5xx as a server error (not unsupported host)", async () => {
-    fetchMock.mockResolvedValue({ ok: false, status: 503, json: vi.fn().mockRejectedValue(new SyntaxError("bad")) } as unknown as Response);
+    fetchMock.mockResolvedValue({ ok: false, status: 503, url: "", text: vi.fn().mockResolvedValue("<html>bad</html>") } as unknown as Response);
     await expect(client().getSpend({ from: null, to: null })).rejects.toThrow("statelog request failed (HTTP 503)");
   });
 });

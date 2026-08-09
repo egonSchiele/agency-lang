@@ -5,7 +5,8 @@
 // JSON, schema, or a `success:false` body — surfaces as a ServeRequestError.
 
 import { z } from "zod";
-import { readJsonBody } from "./jsonBody.js";
+import { statelogRequest } from "./statelogRequest.js";
+import type { StatelogFailure } from "./statelogRequest.js";
 import { hasInterrupts } from "@/runtime/interrupts.js";
 import type { Interrupt } from "@/runtime/interrupts.js";
 import { isFailure } from "@/runtime/result.js";
@@ -71,62 +72,57 @@ export type ServeClient = {
 };
 
 export function createServeClient(address: ServeAddress, apiKey: string): ServeClient {
-  const authHeaders: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
-    "Content-Type": "application/json",
-  };
-
-  async function requestJson(
-    url: string,
-    method: "GET" | "POST",
-    body?: unknown,
-  ): Promise<unknown> {
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method,
-        headers: authHeaders,
-        body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
-      });
-    } catch (error) {
-      throw new ServeRequestError(`could not reach ${url} (${message(error)})`);
+  function toServeError(failure: StatelogFailure, url: string): ServeRequestError {
+    switch (failure.kind) {
+      case "unreachable":
+        // Serve names the full URL, not the origin.
+        return new ServeRequestError(`could not reach ${url} (${failure.cause})`);
+      case "http":
+        // A non-2xx is a failure even with a valid JSON body — surface the
+        // server's message when it gave one rather than letting a 404/500
+        // body flow on as a bogus value or manifest.
+        return new ServeRequestError(
+          failure.serverError ?? `statelog request failed (HTTP ${failure.status})`,
+        );
+      case "non-json":
+        return new ServeRequestError(failure.diagnostic);
+      case "bad-envelope":
+        return new ServeRequestError("unexpected serve response shape");
+      case "envelope-error":
+        return new ServeRequestError(failure.serverError ?? "serve request failed");
     }
-
-    const parsed = await readJsonBody(response, { method, url });
-
-    // A non-2xx is a failure even with a valid JSON body — surface it as a
-    // ServeRequestError (with the server's message when it gave one) rather than
-    // letting a 404/500 body flow on as a bogus value or manifest.
-    if (!response.ok) {
-      const envelopeError =
-        parsed.ok && parsed.value !== null && typeof parsed.value === "object"
-          ? (parsed.value as { error?: unknown }).error
-          : undefined;
-      throw new ServeRequestError(
-        typeof envelopeError === "string"
-          ? envelopeError
-          : `statelog request failed (HTTP ${response.status})`,
-      );
-    }
-    if (!parsed.ok) {
-      throw new ServeRequestError(parsed.error);
-    }
-    return parsed.value;
   }
 
   // node/function/resume speak the { success, value } envelope; /list does not.
+  // Serve has always sent Content-Type on every call (bodyless GET /list
+  // included) and serialized {} for an undefined POST body — wire behavior,
+  // preserved via contentType:"always" and body ?? {}.
+  async function request(
+    url: string,
+    method: "GET" | "POST",
+    body: unknown,
+    envelope: boolean,
+  ): Promise<unknown> {
+    const result = await statelogRequest({
+      method,
+      url,
+      apiKey,
+      body: method === "POST" ? (body ?? {}) : undefined,
+      envelope,
+      contentType: "always",
+    });
+    if (!result.ok) {
+      throw toServeError(result.failure, url);
+    }
+    return result.value;
+  }
+
+  async function requestJson(url: string, method: "GET" | "POST", body?: unknown): Promise<unknown> {
+    return request(url, method, body, false);
+  }
+
   async function requestValue(url: string, body: unknown): Promise<unknown> {
-    const json = await requestJson(url, "POST", body);
-    if (json === null || typeof json !== "object" || typeof (json as { success?: unknown }).success !== "boolean") {
-      throw new ServeRequestError("unexpected serve response shape");
-    }
-    const envelope = json as { success: boolean; value?: unknown; error?: unknown };
-    if (!envelope.success) {
-      throw new ServeRequestError(
-        typeof envelope.error === "string" ? envelope.error : "serve request failed",
-      );
-    }
-    return envelope.value;
+    return request(url, "POST", body, true);
   }
 
   async function fetchManifest(): Promise<ServeManifest> {
@@ -205,8 +201,4 @@ function parseValue<T>(schema: z.ZodType<T>, value: unknown): T {
     );
   }
   return result.data;
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

@@ -93,12 +93,21 @@ const SYNTHETIC_COST = {
   currency: "USD",
 };
 
+/** The abort reason to reject with: the signal's reason UNCHANGED (an explicit
+ *  `null`/string/object is preserved), synthesizing one only when `undefined`. */
+function abortReason(signal?: AbortSignal): unknown {
+  if (signal && signal.reason !== undefined) {
+    return signal.reason;
+  }
+  return new Error("Request was aborted.");
+}
+
 /** Reject immediately if already aborted, with the signal's reason unchanged —
  *  the entry guard for the audio methods so a pre-aborted call never "succeeds"
  *  even at the default zero delay. */
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
-    throw signal.reason ?? new Error("Request was aborted.");
+    throw abortReason(signal);
   }
 }
 
@@ -107,7 +116,7 @@ function throwIfAborted(signal: AbortSignal): void {
 function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(signal.reason ?? new Error("Request was aborted."));
+      reject(abortReason(signal));
       return;
     }
     const timer = setTimeout(() => {
@@ -116,7 +125,7 @@ function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
     }, ms);
     const onAbort = () => {
       clearTimeout(timer);
-      reject(signal?.reason ?? new Error("Request was aborted."));
+      reject(abortReason(signal));
     };
     signal?.addEventListener("abort", onAbort, { once: true });
   });

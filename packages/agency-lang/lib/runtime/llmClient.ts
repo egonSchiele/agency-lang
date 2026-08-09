@@ -305,10 +305,14 @@ export class SmoltalkClient implements LLMClient {
  *  surfaces as the runtime's abort cause rather than smoltalk's resolved
  *  `failure("Request was aborted")`. Identity is preserved — `abort()` accepts
  *  strings/objects/null and that can matter to race/cancellation handling — and
- *  a reason is only synthesized when genuinely absent. See the adapters. */
+ *  a reason is synthesized ONLY when genuinely `undefined` (an explicit `null`
+ *  is a valid reason and is preserved). See the adapters. */
 function rejectIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
-    throw signal.reason ?? new Error("Request was aborted");
+    if (signal.reason !== undefined) {
+      throw signal.reason;
+    }
+    throw new Error("Request was aborted");
   }
 }
 

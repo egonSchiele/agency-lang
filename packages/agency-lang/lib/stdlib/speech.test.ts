@@ -140,6 +140,22 @@ describe("_transcribe", () => {
     });
   });
 
+  it("accepts a contained symlink to a readable regular file (follows the link)", async () => {
+    const target = await makeAudioFile(); // real readable file inside root
+    const linkPath = path.join(root, "link.wav");
+    await symlink(target, linkPath);
+    let calls = 0;
+    const transcribe: TranscribeImpl = async () => {
+      calls++;
+      return trOk();
+    };
+    await withClient({ transcribe }, async () => {
+      const text = await _transcribe(linkPath, "", [root], "whisper-1", "", "", "", "");
+      expect(text).toBe("hello world");
+      expect(calls).toBe(1); // stat followed the symlink; not rejected as non-file
+    });
+  });
+
   it("throws a clear error when the client has no transcribe() support", async () => {
     const filepath = await makeAudioFile();
     await withClient({}, async () => {

@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 import { constants as fsConstants } from "fs";
-import { writeFile, unlink, lstat, access, link, open } from "fs/promises";
+import { writeFile, unlink, stat, lstat, access, link, open } from "fs/promises";
 import { performance } from "node:perf_hooks";
 import { nanoid } from "nanoid";
 import os from "os";
@@ -224,10 +224,14 @@ export async function _record(
 // failure Result becomes a thrown Error with its already-redacted message.
 
 /** Throw the branch signal's abort reason UNCHANGED (identity preserved — a
- *  string/object reason can matter to cancellation handling). Only synthesize an
- *  error when the reason is genuinely absent. */
+ *  string/object/null reason can matter to cancellation handling). Only
+ *  synthesize an error when the reason is genuinely `undefined` (an explicit
+ *  `null` is a valid reason and is preserved). */
 function throwAbortReason(signal: AbortSignal): never {
-  throw signal.reason ?? new AgencyCancelledError("operation cancelled");
+  if (signal.reason !== undefined) {
+    throw signal.reason;
+  }
+  throw new AgencyCancelledError("operation cancelled");
 }
 
 /** Strip cost to its total for statelog (never the raw provider cost object). */
@@ -312,11 +316,12 @@ export async function _transcribe(
 
   // Local preflight — Agency's allow-list + a real, readable, regular file —
   // before the metered boundary, so a missing/unreadable path never looks like
-  // paid work. `lstat` (no symlink follow) surfaces a dangling symlink here
-  // rather than as a post-dispatch link() EEXIST; `access` proves readability,
-  // which `stat`/`isFile` alone does not.
+  // paid work. `stat` (follows symlinks) accepts a contained symlink to a real
+  // readable file — `resolveDir` already enforced allow-list containment on the
+  // resolved target — and a dangling symlink surfaces here as ENOENT. `access`
+  // proves readability, which `stat`/`isFile` alone does not.
   const resolvedPath = await resolveDir(filepath, allowedPaths ?? []);
-  const info = await lstat(resolvedPath); // throws ENOENT for a missing file
+  const info = await stat(resolvedPath); // throws ENOENT for a missing/dangling target
   if (!info.isFile()) {
     throw new Error(`transcribe: not a regular file: ${resolvedPath}`);
   }

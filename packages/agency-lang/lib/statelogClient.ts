@@ -114,6 +114,19 @@ export type TokenCost = {
   totalCost?: number;
 };
 
+/** Keep only the declared `TokenUsage` fields — drops any extra runtime field a
+ *  provider tacks on (e.g. audio-token counters) so it can't be serialized into
+ *  a sink through an echoed `completion.usage`. */
+function conformTokenUsage(usage: Record<string, unknown>): TokenUsage {
+  return {
+    inputTokens: usage.inputTokens as number | undefined,
+    outputTokens: usage.outputTokens as number | undefined,
+    cachedInputTokens: usage.cachedInputTokens as number | undefined,
+    cacheCreationInputTokens: usage.cacheCreationInputTokens as number | undefined,
+    totalTokens: usage.totalTokens as number | undefined,
+  };
+}
+
 // === Client ===
 
 // Shared empty stack returned by `snapshotStack()` when the client is
@@ -584,7 +597,15 @@ export class StatelogClient {
     await this.post({
       type: "promptCompletion",
       messages,
-      completion,
+      // The echoed completion carries its own `usage`; conform it to statelog's
+      // declared TokenUsage shape so a provider's extra runtime fields (e.g. the
+      // audio-token counters) never ride along into a sink through this nested
+      // path. Callers also pass a projected top-level `usage` with the correct
+      // total; this is the field-hygiene backstop for the nested copy.
+      completion:
+        completion && typeof completion === "object" && completion.usage
+          ? { ...completion, usage: conformTokenUsage(completion.usage) }
+          : completion,
       model,
       timeTaken,
       tools,

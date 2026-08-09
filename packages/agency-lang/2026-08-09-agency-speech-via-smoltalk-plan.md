@@ -1,12 +1,22 @@
 # Wiring Agency's speech support to smoltalk's new audio API
 
+> **Revision 4 (2026-08-09) — implementation supersedes the ABI-freeze decision.**
+> During PR review the owner decided there is NO backwards compatibility to keep
+> (Agency has no users), so the old `_speak` / `__internal_speak` /
+> `__internal_record` runtime exports were **removed**, not preserved as aliases,
+> and the frozen-ABI compatibility fixture was **not** built. Wherever this plan
+> below still says to keep those aliases or add a frozen fixture (§11a, §12i, §15
+> steps 2/7, §16), read it as REVERSED: `say()`→`_say`, cloud `speak()`→
+> `_synthesizeSpeech`, `transcribe()`→`_transcribe`, and nothing is kept for
+> old artifacts. Everything else in the plan stands.
+>
 > **Revision 3 (2026-08-09).** Rewritten after two plan reviews, an anti-pattern
 > audit, and a mutation-sensitivity review of the test plan. The direction (thin
 > wrapper over smoltalk) is unchanged. This revision closes the remaining
-> decisions: old `_speak` artifacts remain local, request defaults
-> have one owner, failure accounting follows one conservative rule, statelog kind
-> changes are unconditional, TTS publishes atomically through an owned staging
-> file, and every test names the seam and exact state transition it must prove.
+> decisions: request defaults have one owner, failure accounting follows one
+> conservative rule, statelog kind changes are unconditional, TTS publishes
+> atomically through an owned staging file, and every test names the seam and
+> exact state transition it must prove.
 
 ## What this is
 
@@ -505,18 +515,16 @@ dedicated span with aggregation, that is a separate, explicit piece.
 - No new provider-error normalization is needed unless the released API introduces a new typed
   error. Rejected dispatches remain possible and flow through `meteredDispatch`.
 
-### 11a. Preserve the old local `_speak` ABI
+### 11a. ~~Preserve the old local `_speak` ABI~~ — REVERSED (revision 4)
 
-`_speak` and `__internal_speak` are exported runtime symbols that currently mean local macOS
-playback. Already-compiled stdlib artifacts can resolve those imports against a newer runtime.
-Changing `_speak` to cloud TTS would let an artifact approved only for old `std::speak` reach a
-cloud call without raising `std::synthesizeSpeech`.
-
-Therefore `_speak` and `__internal_speak` remain local-playback-compatible deprecated aliases.
-New local `say()` calls `_say`, which shares the same private local implementation. New cloud
-`speak()` calls a **new** `_synthesizeSpeech` helper after its cloud effect. No runtime symbol
-ever changes from local to cloud semantics. A frozen pre-change compiled fixture pins this ABI
-and must not be regenerated (§12).
+This section originally proposed keeping `_speak` / `__internal_speak` as
+local-playback aliases (and a frozen fixture to pin them) so already-compiled
+artifacts couldn't reach a cloud call. **The owner reversed this in PR review:**
+Agency has no users, so there are no compiled artifacts to protect and no reason
+to carry dead code. `_speak`, `__internal_speak`, and `__internal_record` were
+DELETED. Local `say()` calls `_say`; cloud `speak()` calls `_synthesizeSpeech`;
+`transcribe()` calls `_transcribe`. No runtime symbol means both local and cloud,
+and there is no frozen fixture.
 
 **Other implementations:**
 
@@ -720,7 +728,7 @@ and `src/backend/postgres-integration/spendLedger.test.ts`.
   asserts the exact diagnostic code, severity, location/call, and message. Existing image/file
   reply cases remain diagnostic-free.
 
-### 12i. Effects, handlers, and frozen ABI tests
+### 12i. Effects and handlers tests
 
 Agency execution/JS harness tests assert exact effect identifiers and payloads. Rejection and
 an unhandled interrupt both produce zero provider calls; approval dispatches exactly once; an
@@ -729,17 +737,8 @@ and `std::synthesizeSpeech` gates only cloud TTS. Explicit empty model/voice thr
 public validation error before any interrupt or provider call; defaults produce the exact
 non-empty effect payload and downstream request.
 
-A frozen **pre-change compiled fixture** imports old `_speak`; never regenerate it with
-`make fixtures`. Store it under `tests/integration/compat/speech-v1-compiled.mjs` with a focused
-runner `tests/integration/compat/speech-v1.test.mjs`, and record the source revision beside it.
-Capture and commit it before changing speech stdlib/runtime code. Running it against the new
-runtime proves the symbol remains importable and `llmClient.speak` is invoked zero times. A
-separate Vitest unit test mocks the imported `detectPlatform`/`abortableExec` executable seams and
-proves old `_speak` arguments still reach local playback exactly; neither test launches the OS
-`say` executable. New cloud TTS is reachable only
-through `_synthesizeSpeech` after the new effect. New Agency effect fixtures live under
-`tests/agency-js/speech-effects/` so their JS harness can install counting local/cloud seams and
-inspect call order.
+*(Revision 4: the frozen pre-change `_speak` compatibility fixture described here was DROPPED —
+there are no compiled artifacts to protect, see §11a.)*
 
 ### 12j. Test safety and commands
 
@@ -766,18 +765,17 @@ inspect call order.
     lib/typeChecker/attachments.test.ts \
     > .tmp/speech-unit-tests.log 2>&1
   ```
-- Run the focused Agency-JS and compatibility fixtures only (not the full Agency suite):
+- Run the focused Agency-JS fixtures only (not the full Agency suite):
   ```bash
   make > .tmp/speech-make.log 2>&1
   AGENCY_USE_TEST_LLM_PROVIDER=1 pnpm run agency test js \
     tests/agency-js/speech-effects \
     tests/agency-js/multimodal-attachments \
     > .tmp/speech-agency-tests.log 2>&1
-  node --test tests/integration/compat/speech-v1.test.mjs \
-    > .tmp/speech-compat-tests.log 2>&1
   pnpm run lint:structure > .tmp/speech-structure-lint.log 2>&1
   ```
-  Remove these temporary logs after inspection.
+  Remove these temporary logs after inspection. *(Revision 4: the compat-fixture
+  runner was dropped — no back-compat, §11a.)*
 - In the statelog checkout, run focused mapping and PostgreSQL tests separately:
   ```bash
   pnpm exec vitest run src/backend/db/usage_event.test.ts \
@@ -852,8 +850,7 @@ enforce guards → stage → final abort check → exclusive atomic publication 
 0. **Coding gate met** (§0): smoltalk merged/released with real cancellation and final
    config/result/error/token contracts re-audited.
 1. Pin the released smoltalk version in Agency.
-2. Before editing speech stdlib/runtime, capture and commit the frozen current compiled `_speak`
-   compatibility artifact and record its source revision (§12i). Never regenerate this fixture.
+2. *(Revision 4: the frozen `_speak` compatibility artifact step was DROPPED — no back-compat, §11a.)*
 3. **Statelog first:** add both usage kinds to API/server/types, ship the forward database
    migration, and prove persistence/aggregation. Deployment is the separate emission gate; it
    must complete before an Agency release emits the new kinds.
@@ -862,12 +859,13 @@ enforce guards → stage → final abort check → exclusive atomic publication 
 5. Accounting/wire: add both provider kinds throughout normalization, fixed meter indexes, IPC,
    strict spend schemas, projected token fields, and focused tests (§7/§12g).
 6. Statelog: add `transcription` + `speechSynthesis` leaf events and privacy serialization tests.
-7. Runtime helpers: preserve local `_speak`/`__internal_speak`, add `_say`, rewrite `_transcribe`,
-   add cloud `_synthesizeSpeech`, and add focused atomic `publishSpeechOutput`. Implement the
-   conservative accounting and output matrices with tests first (§6/§12b–f/§13).
+7. Runtime helpers (revision 4 — no back-compat): add `_say`, rewrite `_transcribe`, add cloud
+   `_synthesizeSpeech`, add focused atomic `publishSpeechOutput`, and REMOVE the old
+   `_speak`/`__internal_speak`/`__internal_record`. Implement the conservative accounting and
+   output matrices with tests first (§6/§12b–f/§13).
 8. `stdlib/speech.agency`: local `speak`→`say` (effect `std::say`); re-backed `transcribe`
    (effect `std::transcribe`, provider-honest); new cloud `speak` (effect
-   `std::synthesizeSpeech`) using the exact signatures in §4. Add effect/ABI tests (§12i).
+   `std::synthesizeSpeech`) using the exact signatures in §4. Add effect tests (§12i).
 9. `DeterministicClient`: exact fixed audio results plus optional delays and abort tests (§11/§12a).
 10. Audio-in-chat: `_audioAttachment` + `std::thread.audio()`; split `MessageAttachment` vs the
    narrow `Attachment` so `attachToReply` stays image/file-only (§9); typechecker arm; extend
@@ -884,7 +882,8 @@ All decisions are fixed for implementation:
 - **Public contract:** natural `string` values; throw on failure; complete defaults in `.agency`.
 - **Effects:** `std::say` is local; new `std::synthesizeSpeech` is cloud; `std::transcribe`
   carries requested/configured values without pretending to know actual routing.
-- **ABI:** `_speak` and `__internal_speak` remain local; cloud uses `_synthesizeSpeech`.
+- **ABI (revision 4):** no back-compat — `_speak` / `__internal_speak` /
+  `__internal_record` were removed; local is `_say`, cloud is `_synthesizeSpeech`.
 - **Cancellation:** released provider cancellation is mandatory; publication is the file commit point.
 - **Failure accounting:** every entered resolved failure is conservatively one unresolved attempt.
 - **Tokens:** v1 preserves authoritative totals but does not expose modality-specific buckets.

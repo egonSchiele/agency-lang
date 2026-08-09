@@ -740,7 +740,9 @@ async function _runPrompt({
 
   ctx.statelogClient.promptCompletion({
     messages: withMessageLabels(messages),
-    completion,
+    // Sanitize the nested usage too — the top-level `usage` alone isn't enough,
+    // the echoed completion carries its own raw `usage` (see projectProviderTokenUsage).
+    completion: { ...completion, usage: projectedUsage },
     model: JSON.stringify(modelName),
     timeTaken: endTime - startTime,
     tools,

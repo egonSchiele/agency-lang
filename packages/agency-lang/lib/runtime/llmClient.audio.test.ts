@@ -99,6 +99,17 @@ describe("SmoltalkClient.transcribe / speak adapters", () => {
     ).rejects.toBe(reason); // the exact object, not a wrapped Error
   });
 
+  it("preserves an explicit null abort reason (only undefined falls back)", async () => {
+    const controller = new AbortController();
+    vi.mocked(smoltalk.transcribe).mockImplementation(async () => {
+      controller.abort(null); // abort() accepts null — it must survive as-is
+      return { success: false, error: "Request was aborted" } as any;
+    });
+    await expect(
+      client.transcribe(source, { model: "whisper-1" }, controller.signal),
+    ).rejects.toBeNull();
+  });
+
   it("keeps a SUCCESS that raced ahead of a late abort (not discarded as cancellation)", async () => {
     const controller = new AbortController();
     const value = { text: "done before abort" };

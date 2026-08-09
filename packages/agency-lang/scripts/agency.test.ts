@@ -38,6 +38,35 @@ vi.mock("@/cli/remote/commands/spend.js", () => ({
 vi.mock("@/cli/remote/commands/pull.js", () => ({ runPull: remoteRecipeMocks.runPull }));
 vi.mock("@/cli/remote/commands/logs.js", () => ({ runLogs: remoteRecipeMocks.runLogs }));
 
+// Remote schedule recipes are mocked so dispatch/normalization can be tested
+// with real parseAsync; the LOCAL schedule functions are mocked too, so a test
+// can prove which side of the backend branch ran.
+const scheduleRemoteMocks = vi.hoisted(() => ({
+  addRemote: vi.fn(),
+  listRemote: vi.fn(),
+  removeRemote: vi.fn(),
+  editRemote: vi.fn(),
+}));
+vi.mock("@/cli/schedule/remote.js", () => scheduleRemoteMocks);
+
+const scheduleLocalMocks = vi.hoisted(() => {
+  class ScheduleExistsError extends Error {
+    constructor(public readonly scheduleName: string) {
+      super(`exists: ${scheduleName}`);
+    }
+  }
+  return {
+    scheduleAdd: vi.fn(),
+    scheduleList: vi.fn(() => []),
+    scheduleRemove: vi.fn(),
+    scheduleEdit: vi.fn(),
+    formatListTable: vi.fn(() => "TABLE"),
+    promptScheduleOverwrite: vi.fn(),
+    ScheduleExistsError,
+  };
+});
+vi.mock("@/cli/schedule/index.js", () => scheduleLocalMocks);
+
 import {
   createProgram,
   parseNonNegativeInt,
@@ -540,5 +569,196 @@ describe("--model wiring", () => {
         "run", "--model", "definitely-not-a-hosted-model", "f.agency",
       ]),
     ).rejects.toThrow();
+  });
+});
+
+describe("schedule --backend remote dispatch", () => {
+  class ExitError extends Error {}
+
+  const parse = (args: string[]) =>
+    createProgram().parseAsync(["node", "agency", "schedule", ...args]);
+
+  const expectContext = expect.objectContaining({
+    config: expect.anything(),
+    configPath: expect.any(String),
+  });
+
+  beforeEach(() => {
+    for (const mock of Object.values(scheduleRemoteMocks)) mock.mockReset();
+    scheduleLocalMocks.scheduleAdd.mockReset();
+    scheduleLocalMocks.scheduleList.mockReset().mockReturnValue([]);
+    scheduleLocalMocks.scheduleRemove.mockReset();
+    scheduleLocalMocks.scheduleEdit.mockReset();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new ExitError();
+    }) as never);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("registers without tripping the duplicate-flag guard", () => {
+    expect(() => createProgram()).not.toThrow();
+  });
+
+  it("routes add to addRemote with normalized options and a config context", async () => {
+    await parse([
+      "add", "daily.agency", "--backend", "remote",
+      "--node", "refresh", "--every", "daily", "--timezone", "UTC",
+      "--arg", "a=1", "--data", '{"b":2}', "--name", "mine",
+      "--host", "https://h", "--project", "proj", "--api-key-env", "K",
+    ]);
+    expect(scheduleRemoteMocks.addRemote).toHaveBeenCalledTimes(1);
+    const [file, options, context] = scheduleRemoteMocks.addRemote.mock.calls[0]!;
+    expect(file).toBe("daily.agency");
+    expect(options).toMatchObject({
+      node: "refresh",
+      every: "daily",
+      timezone: "UTC",
+      arg: ["a=1"],
+      data: '{"b":2}',
+      name: "mine",
+      host: "https://h",
+      project: "proj",
+      apiKeyEnv: "K",
+      deploy: true,
+    });
+    expect(context).toEqual(expectContext);
+    expect(scheduleLocalMocks.scheduleAdd).not.toHaveBeenCalled();
+  });
+
+  it("--no-deploy arrives as deploy:false; absence as deploy:true", async () => {
+    await parse(["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--no-deploy"]);
+    expect(scheduleRemoteMocks.addRemote.mock.calls[0]![1]).toMatchObject({ deploy: false });
+
+    scheduleRemoteMocks.addRemote.mockClear();
+    await parse(["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily"]);
+    expect(scheduleRemoteMocks.addRemote.mock.calls[0]![1]).toMatchObject({ deploy: true });
+  });
+
+  it("--function and --cron values are preserved", async () => {
+    await parse([
+      "add", "a.agency", "--backend", "remote", "--function", "sum", "--cron", "*/5 * * * *",
+    ]);
+    expect(scheduleRemoteMocks.addRemote.mock.calls[0]![1]).toMatchObject({
+      function: "sum",
+      cron: "*/5 * * * *",
+    });
+  });
+
+  it("routes list to listRemote and never touches the local registry path", async () => {
+    await parse(["list", "--backend", "remote"]);
+    expect(scheduleRemoteMocks.listRemote).toHaveBeenCalledTimes(1);
+    expect(scheduleRemoteMocks.listRemote).toHaveBeenCalledWith(
+      expect.objectContaining({ backend: "remote" }),
+      expectContext,
+    );
+    expect(scheduleLocalMocks.scheduleList).not.toHaveBeenCalled();
+  });
+
+  it("the ls alias routes to listRemote", async () => {
+    await parse(["ls", "--backend", "remote"]);
+    expect(scheduleRemoteMocks.listRemote).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes remove to removeRemote with the positional id", async () => {
+    await parse(["remove", "id123", "--backend", "remote"]);
+    expect(scheduleRemoteMocks.removeRemote).toHaveBeenCalledWith(
+      "id123",
+      expect.objectContaining({ backend: "remote" }),
+      expectContext,
+    );
+    expect(scheduleLocalMocks.scheduleRemove).not.toHaveBeenCalled();
+  });
+
+  it("the rm alias routes to removeRemote", async () => {
+    await parse(["rm", "id123", "--backend", "remote"]);
+    expect(scheduleRemoteMocks.removeRemote).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes edit to editRemote with the positional id and independent enabled flags", async () => {
+    await parse(["edit", "id123", "--backend", "remote", "--enabled"]);
+    expect(scheduleRemoteMocks.editRemote).toHaveBeenCalledTimes(1);
+    const [id, options] = scheduleRemoteMocks.editRemote.mock.calls[0]!;
+    expect(id).toBe("id123");
+    expect(options).toMatchObject({ enabled: true });
+    expect(options.disabled).toBeUndefined();
+    expect(scheduleLocalMocks.scheduleEdit).not.toHaveBeenCalled();
+
+    scheduleRemoteMocks.editRemote.mockClear();
+    await parse(["edit", "id123", "--backend", "remote", "--disabled"]);
+    const disabledOptions = scheduleRemoteMocks.editRemote.mock.calls[0]![1];
+    expect(disabledOptions).toMatchObject({ disabled: true });
+    expect(disabledOptions.enabled).toBeUndefined();
+  });
+
+  it("awaits the remote recipe before completing the command", async () => {
+    let resolveAdd!: () => void;
+    scheduleRemoteMocks.addRemote.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveAdd = () => resolve();
+        }),
+    );
+    const parsing = parse([
+      "add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily",
+    ]).then(() => "done");
+    await Promise.resolve();
+    await Promise.resolve();
+    await expect(Promise.race([parsing, Promise.resolve("pending")])).resolves.toBe("pending");
+    resolveAdd();
+    await expect(parsing).resolves.toBe("done");
+  });
+
+  it("default local add still dispatches to the local function", async () => {
+    await parse(["add", "a.agency", "--every", "daily"]);
+    expect(scheduleLocalMocks.scheduleAdd).toHaveBeenCalledTimes(1);
+    expect(scheduleRemoteMocks.addRemote).not.toHaveBeenCalled();
+  });
+
+  it("github add still dispatches to the local function", async () => {
+    await parse(["add", "a.agency", "--every", "daily", "--backend", "github"]);
+    expect(scheduleLocalMocks.scheduleAdd).toHaveBeenCalledTimes(1);
+    expect(scheduleLocalMocks.scheduleAdd.mock.calls[0]![0]).toMatchObject({ backend: "github" });
+    expect(scheduleRemoteMocks.addRemote).not.toHaveBeenCalled();
+  });
+
+  it("an unknown backend on add calls neither path", async () => {
+    await expect(parse(["add", "a.agency", "--every", "daily", "--backend", "bogus"]))
+      .rejects.toBeInstanceOf(ExitError);
+    expect(scheduleLocalMocks.scheduleAdd).not.toHaveBeenCalled();
+    expect(scheduleRemoteMocks.addRemote).not.toHaveBeenCalled();
+  });
+
+  it("github is not a valid backend for list", async () => {
+    await expect(parse(["list", "--backend", "github"])).rejects.toBeInstanceOf(ExitError);
+    expect(scheduleLocalMocks.scheduleList).not.toHaveBeenCalled();
+    expect(scheduleRemoteMocks.listRemote).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [["add", "a.agency", "--every", "daily", "--node", "n"]],
+    [["add", "a.agency", "--every", "daily", "--backend", "github", "--no-deploy"]],
+    [["add", "a.agency", "--every", "daily", "--backend", "github", "--timezone", "UTC"]],
+    [["edit", "x", "--timezone", "UTC"]],
+    [["list", "--project", "p"]],
+    // The inverse direction: flags the remote backend cannot honor must fail
+    // loudly rather than be silently discarded.
+    [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--env-file", ".env"]],
+    [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--secret", "S"]],
+    [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--write"]],
+    [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--no-pin"]],
+    [["edit", "x", "--backend", "remote", "--enabled", "--env-file", ".env"]],
+  ])("rejects backend-inapplicable flags: %j", async (args) => {
+    await expect(parse(args)).rejects.toBeInstanceOf(ExitError);
+    expect(scheduleLocalMocks.scheduleAdd).not.toHaveBeenCalled();
+    expect(scheduleLocalMocks.scheduleEdit).not.toHaveBeenCalled();
+    expect(scheduleLocalMocks.scheduleList).not.toHaveBeenCalled();
+    for (const mock of Object.values(scheduleRemoteMocks)) {
+      expect(mock).not.toHaveBeenCalled();
+    }
   });
 });

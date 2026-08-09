@@ -16,11 +16,16 @@ export type RemoteDeployOptions = {
   dryRun?: boolean;
 };
 
+/** What actually happened, for callers that gate follow-up work on a real
+ *  upload (schedule add's deploy-if-missing). A deploy error never produces an
+ *  outcome — that path exits the process. */
+export type RunDeployOutcome = "deployed" | "aborted" | "preview";
+
 export async function runDeploy(
   file: string,
   options: RemoteDeployOptions,
   context: RemoteCommandContext,
-): Promise<void> {
+): Promise<RunDeployOutcome> {
   // Catch the common mistake — a forgotten `export` — before uploading. A
   // parse/compile error here is swallowed so deploy()'s own validation reports
   // it with a better message.
@@ -33,7 +38,7 @@ export async function runDeploy(
     );
     if (!(await confirmDeployWithoutExports({ dryRun: options.dryRun }))) {
       console.log("Aborted.");
-      return;
+      return "aborted";
     }
   }
 
@@ -43,17 +48,18 @@ export async function runDeploy(
     process.exit(1);
   }
   if (outcome.kind !== "deployed") {
-    return; // a --dry-run preview never writes a binding
+    return "preview"; // a --dry-run preview never writes a binding
   }
 
   const base = serveBaseUrl(outcome.endpointUrls);
   const address = base ? parseServeBaseUrl(base) : null;
   if (!address) {
     console.log(color.yellow("Deployed, but could not derive a serve URL to link."));
-    return;
+    return "deployed";
   }
   writeBinding(context.configPath, address);
   console.log(`\n${color.green("Linked")} this directory to ${color.bold(address.filename)}.`);
+  return "deployed";
 }
 
 function tryCountExports(

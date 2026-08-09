@@ -7,12 +7,18 @@
 import * as path from "path";
 import { color } from "@/utils/termcolors.js";
 import { resolveProjectTarget, fail } from "../remote/commands/util.js";
-import type { ProjectCommandOptions, RemoteCommandContext } from "../remote/commands/util.js";
+import type {
+  ProjectCommandOptions,
+  ProjectTarget,
+  RemoteCommandContext,
+} from "../remote/commands/util.js";
 import { buildArgs } from "../remote/args.js";
 import type { RemoteArgsOptions } from "../remote/args.js";
+import { runDeploy } from "../remote/commands/deploy.js";
 import { resolveCron } from "./cron.js";
 import { createSchedulesClient, ScheduleRequestError } from "../statelog/schedulesClient.js";
 import type { CreateScheduleInput, ScheduleTarget } from "../statelog/schedulesClient.js";
+import { createProjectClient, ProjectRequestError } from "../statelog/projectClient.js";
 
 export type DeployMode = "if-missing" | "always" | "never";
 
@@ -102,6 +108,7 @@ export async function addRemote(
     fail(errorMessage(error));
   }
   const target = resolveProjectTarget(context, options);
+  await ensureDeployed(file, resolved.input.fileName, resolved.deployMode, target, context);
   const client = createSchedulesClient(target.origin, target.projectSlug, target.apiKey);
 
   let schedule;
@@ -116,6 +123,48 @@ export async function addRemote(
   console.log(
     `${color.green("Created")} schedule ${schedule.id}: ${input.target.kind} ${input.target.name} in ${input.fileName} (${input.cronExpr}, timezone ${input.timezone})`,
   );
+}
+
+/** Enforce the deploy policy before creating a schedule. Returns only when the
+ *  agent is on the server or the policy says to trust the server's own
+ *  validation ("never"). The deploy runs against the SAME resolved target as
+ *  the schedule request — never re-derived from config — so the schedule can't
+ *  point at a different project than the upload. */
+async function ensureDeployed(
+  file: string,
+  fileName: string,
+  mode: DeployMode,
+  target: ProjectTarget,
+  context: RemoteCommandContext,
+): Promise<void> {
+  if (mode === "never") {
+    return;
+  }
+  if (mode === "if-missing" && (await sourceExists(target, fileName))) {
+    return;
+  }
+  const outcome = await runDeploy(
+    file,
+    { host: target.origin, project: target.projectSlug, apiKeyEnv: target.apiKeyEnvName },
+    context,
+  );
+  if (outcome !== "deployed") {
+    fail("Deploy did not complete, so the schedule was not created.");
+  }
+}
+
+async function sourceExists(target: ProjectTarget, fileName: string): Promise<boolean> {
+  const client = createProjectClient(target.origin, target.projectSlug, target.apiKey);
+  let files;
+  try {
+    files = await client.pullSource();
+  } catch (error) {
+    if (error instanceof ProjectRequestError) {
+      fail(error.message);
+    }
+    throw error;
+  }
+  return files.some((source) => source.name === `${fileName}.agency`);
 }
 
 /** Exit with the server's message, adding guidance for the two failures a user

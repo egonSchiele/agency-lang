@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { resolveScheduleAdd, addRemote } from "./remote.js";
 import { ScheduleRequestError } from "../statelog/schedulesClient.js";
+import { ProjectRequestError } from "../statelog/projectClient.js";
 import type { RemoteSchedule } from "../statelog/schedulesClient.js";
 import type { RemoteCommandContext } from "../remote/commands/util.js";
 import { color } from "@/utils/termcolors.js";
@@ -33,6 +34,20 @@ vi.mock("./registry.js", () => ({
     }
   },
 }));
+
+const runDeployMock = vi.fn();
+vi.mock("../remote/commands/deploy.js", () => ({
+  runDeploy: (...deployArgs: unknown[]) => runDeployMock(...deployArgs),
+}));
+
+const pullSourceMock = vi.fn();
+vi.mock("../statelog/projectClient.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../statelog/projectClient.js")>();
+  return {
+    ...original,
+    createProjectClient: () => ({ pullSource: (...a: unknown[]) => pullSourceMock(...a) }),
+  };
+});
 
 const KEY_ENV = "SCHEDULE_REMOTE_TEST_KEY";
 
@@ -94,7 +109,11 @@ afterEach(() => {
   patchMock.mockReset();
   deleteMock.mockReset();
   clientFactoryMock.mockClear();
+  runDeployMock.mockReset();
+  pullSourceMock.mockReset();
 });
+
+const sources = (names: string[]) => names.map((name) => ({ name, contents: "" }));
 
 describe("resolveScheduleAdd", () => {
   it("resolves a node target with a preset cadence", () => {
@@ -294,5 +313,112 @@ describe("addRemote", () => {
     expect(errorOutput()).toContain("--node <name> or --function <name>");
     expect(errorOutput()).not.toContain("No statelog host");
     expect(clientFactoryMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("addRemote deployment policy", () => {
+  it("skips deployment when the agent's source is already on the server", async () => {
+    pullSourceMock.mockResolvedValue(sources(["other.agency", "daily.agency"]));
+    createMock.mockResolvedValue(returnedSchedule);
+    await addRemote("agents/daily.agency", baseOptions, context);
+    expect(runDeployMock).not.toHaveBeenCalled();
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("matches server sources by exact basename only", async () => {
+    pullSourceMock.mockResolvedValue(
+      sources(["dailyx.agency", "notdaily.agency", "daily.agency.bak"]),
+    );
+    runDeployMock.mockResolvedValue("deployed");
+    createMock.mockResolvedValue(returnedSchedule);
+    await addRemote("agents/daily.agency", baseOptions, context);
+    expect(runDeployMock).toHaveBeenCalledTimes(1);
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("deploys then creates, in that order, when the source is missing", async () => {
+    pullSourceMock.mockResolvedValue(sources([]));
+    runDeployMock.mockResolvedValue("deployed");
+    createMock.mockResolvedValue(returnedSchedule);
+    await addRemote("agents/daily.agency", baseOptions, context);
+    const pullOrder = pullSourceMock.mock.invocationCallOrder[0]!;
+    const deployOrder = runDeployMock.mock.invocationCallOrder[0]!;
+    const createOrder = createMock.mock.invocationCallOrder[0]!;
+    expect(pullOrder).toBeLessThan(deployOrder);
+    expect(deployOrder).toBeLessThan(createOrder);
+  });
+
+  it("passes the resolved target and the same context to runDeploy", async () => {
+    pullSourceMock.mockResolvedValue(sources([]));
+    runDeployMock.mockResolvedValue("deployed");
+    createMock.mockResolvedValue(returnedSchedule);
+    await addRemote("agents/daily.agency", baseOptions, context);
+    expect(runDeployMock).toHaveBeenCalledWith(
+      "agents/daily.agency",
+      { host: "https://h", project: "proj", apiKeyEnv: KEY_ENV },
+      context,
+    );
+  });
+
+  it("redeploy always deploys without checking server sources", async () => {
+    runDeployMock.mockResolvedValue("deployed");
+    createMock.mockResolvedValue(returnedSchedule);
+    await addRemote("agents/daily.agency", { ...baseOptions, redeploy: true }, context);
+    expect(pullSourceMock).not.toHaveBeenCalled();
+    expect(runDeployMock).toHaveBeenCalledTimes(1);
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("no-deploy neither pulls source nor deploys", async () => {
+    createMock.mockResolvedValue(returnedSchedule);
+    await addRemote("agents/daily.agency", { ...baseOptions, deploy: false }, context);
+    expect(pullSourceMock).not.toHaveBeenCalled();
+    expect(runDeployMock).not.toHaveBeenCalled();
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([["aborted"], ["preview"]])(
+    "a %s deploy outcome creates no schedule",
+    async (outcome) => {
+      pullSourceMock.mockResolvedValue(sources([]));
+      runDeployMock.mockResolvedValue(outcome);
+      await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
+        "exit:1",
+      );
+      expect(errorOutput()).toContain("Deploy did not complete");
+      expect(createMock).not.toHaveBeenCalled();
+      expect(logSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  it("a deploy that exits creates no schedule", async () => {
+    pullSourceMock.mockResolvedValue(sources([]));
+    runDeployMock.mockRejectedValue(new Error("exit:1"));
+    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
+      "exit:1",
+    );
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("a source-listing failure deploys nothing and creates nothing", async () => {
+    pullSourceMock.mockRejectedValue(new ProjectRequestError("project 'proj' not found"));
+    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
+      "exit:1",
+    );
+    expect(errorOutput()).toContain("project 'proj' not found");
+    expect(runDeployMock).not.toHaveBeenCalled();
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("a create failure after a deploy surfaces once and is not retried", async () => {
+    pullSourceMock.mockResolvedValue(sources([]));
+    runDeployMock.mockResolvedValue("deployed");
+    createMock.mockRejectedValue(new ScheduleRequestError("cap reached", 200));
+    await expect(addRemote("agents/daily.agency", baseOptions, context)).rejects.toThrow(
+      "exit:1",
+    );
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(runDeployMock).toHaveBeenCalledTimes(1);
+    expect(errorOutput()).toContain("cap reached");
   });
 });

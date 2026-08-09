@@ -230,3 +230,21 @@ describe("secretsClient hostile-response redaction", () => {
     },
   );
 });
+
+// Characterization: the rejected-fetch message is redacted as a WHOLE — the
+// current client wraps `could not reach ${origin} (…)` in its redactor, so a
+// sensitive value appearing in the ORIGIN is redacted too, not only one in the
+// exception's cause. The transport-core mapper must redact the complete
+// constructed message, not just failure.cause.
+describe("secretsClient whole-message unreachable redaction", () => {
+  it("redacts a value embedded in the origin, not only in the cause", async () => {
+    fetchMock.mockRejectedValue(new Error("plain network error"));
+    const leakyOrigin = `https://${SENTINEL}.example`;
+    const error = await failureOf(
+      createSecretsClient(leakyOrigin, "proj", API_KEY).set("N", SENTINEL),
+    );
+    expect(error.message).toContain("could not reach");
+    expect(error.message).toContain("[redacted]");
+    expect(error.message).not.toContain(SENTINEL);
+  });
+});

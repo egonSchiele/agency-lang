@@ -8,7 +8,8 @@
 // survive); parsed server messages are redacted here, post-parse.
 
 import { z } from "zod";
-import { readJsonBody } from "./jsonBody.js";
+import { statelogRequest } from "./statelogRequest.js";
+import type { StatelogFailure } from "./statelogRequest.js";
 import { redactValues } from "./redact.js";
 
 export type SecretMetadata = { name: string; createdAt: string; updatedAt: string };
@@ -58,72 +59,65 @@ export function createSecretsClient(
     return new URL(`/${path}`, origin).toString();
   }
 
-  async function request(input: SecretRequest): Promise<{ value: unknown; status: number }> {
-    const redact = (text: string) => redactValues(text, [apiKey, ...input.sensitive]);
-    const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
-    const init: RequestInit = { method: input.method, headers };
-    if (input.body !== undefined) {
-      headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(input.body);
-    }
-
-    const url = routeUrl(input.segments);
-    let response: Response;
-    try {
-      response = await fetch(url, init);
-    } catch (error) {
-      throw new SecretRequestError(redact(`could not reach ${origin} (${message(error)})`));
-    }
-
-    const parsed = await readJsonBody(
-      response,
-      { method: input.method, url },
-      { sanitizeDiagnostic: redact },
-    );
-
-    // Non-2xx first: auth middleware returns a bare `{ error }`, not an envelope.
-    if (!response.ok) {
-      const serverError = parsed.ok ? asObject(parsed.value)?.error : undefined;
-      if (response.status === 404) {
-        // Match the error FIELD, not the whole object — extra response fields
-        // must not turn a project error into an upgrade message. Any other 404
-        // means the host predates the secrets routes.
-        if (serverError === "Project not found") {
-          throw new SecretRequestError(
-            `project '${projectSlug}' not found — check the slug, or that it's deployed`,
+  /** The mapper owns redaction: every string a failure can carry — the
+   *  unreachable message as a WHOLE (a sensitive value in the ORIGIN must
+   *  redact, not only one in the cause), server errors, and diagnostics
+   *  (already sanitized by the seam; redacting again is harmless defense in
+   *  depth) — passes through the per-verb redactor before an error exists. */
+  function toSecretError(
+    failure: StatelogFailure,
+    redact: (text: string) => string,
+  ): SecretRequestError {
+    switch (failure.kind) {
+      case "unreachable":
+        return new SecretRequestError(redact(`could not reach ${origin} (${failure.cause})`));
+      case "http":
+        if (failure.status === 404) {
+          // Match the error FIELD, not the whole object — extra response
+          // fields must not turn a project error into an upgrade message. Any
+          // other 404 means the host predates the secrets routes.
+          if (failure.serverError === "Project not found") {
+            return new SecretRequestError(
+              `project '${projectSlug}' not found — check the slug, or that it's deployed`,
+              404,
+            );
+          }
+          return new SecretRequestError(
+            "this statelog host does not support the secrets API (upgrade the host)",
             404,
           );
         }
-        throw new SecretRequestError(
-          "this statelog host does not support the secrets API (upgrade the host)",
-          404,
+        return new SecretRequestError(
+          failure.serverError !== undefined
+            ? redact(failure.serverError)
+            : `statelog request failed (HTTP ${failure.status})`,
+          failure.status,
         );
-      }
-      if (typeof serverError === "string") {
-        throw new SecretRequestError(redact(serverError), response.status);
-      }
-      throw new SecretRequestError(
-        `statelog request failed (HTTP ${response.status})`,
-        response.status,
-      );
+      case "non-json":
+        return new SecretRequestError(redact(failure.diagnostic), failure.status);
+      case "bad-envelope":
+        return new SecretRequestError("unexpected secrets response shape", failure.status);
+      case "envelope-error":
+        return new SecretRequestError(
+          failure.serverError !== undefined ? redact(failure.serverError) : "secrets request failed",
+          failure.status,
+        );
     }
+  }
 
-    if (!parsed.ok) {
-      // Already sanitized by the diagnostic seam; redact again for the
-      // post-parse fields the seam cannot see. Double redaction is harmless.
-      throw new SecretRequestError(redact(parsed.error), response.status);
+  async function request(input: SecretRequest): Promise<{ value: unknown; status: number }> {
+    const redact = (text: string) => redactValues(text, [apiKey, ...input.sensitive]);
+    const result = await statelogRequest({
+      method: input.method,
+      url: routeUrl(input.segments),
+      apiKey,
+      body: input.body,
+      sanitizeDiagnostic: redact,
+    });
+    if (!result.ok) {
+      throw toSecretError(result.failure, redact);
     }
-    const envelope = asObject(parsed.value);
-    if (!envelope || typeof envelope.success !== "boolean") {
-      throw new SecretRequestError("unexpected secrets response shape", response.status);
-    }
-    if (!envelope.success) {
-      throw new SecretRequestError(
-        typeof envelope.error === "string" ? redact(envelope.error) : "secrets request failed",
-        response.status,
-      );
-    }
-    return { value: envelope.value, status: response.status };
+    return { value: result.value, status: result.status };
   }
 
   function parseWire<T>(
@@ -170,13 +164,3 @@ export function createSecretsClient(
   };
 }
 
-function asObject(value: unknown): Record<string, unknown> | null {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}

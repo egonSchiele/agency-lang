@@ -175,7 +175,9 @@ describe("serveClient wire characterization", () => {
 
   it("a POST given undefined args preserves the {} fallback", async () => {
     const spy = captureFetch({ success: true, value: 42 });
-    await client().invokeNode("main", undefined);
+    // The public signature requires args; the wire fallback still exists for
+    // any looser caller, so exercise it past the type.
+    await client().invokeNode("main", undefined as unknown as Record<string, unknown>);
     const [, init] = spy.mock.calls[0]! as [unknown, RequestInit];
     expect(init.body).toBe("{}");
   });

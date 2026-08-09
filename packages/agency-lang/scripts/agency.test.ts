@@ -36,6 +36,13 @@ vi.mock("@/cli/remote/commands/spend.js", () => ({
 // pull/logs recipes are mocked; logsMode and util stay REAL so the
 // registration's mode/TTY preflight and clean-exit are exercised.
 vi.mock("@/cli/remote/commands/pull.js", () => ({ runPull: remoteRecipeMocks.runPull }));
+const secretsRecipeMocks = vi.hoisted(() => ({
+  runSecretsSet: vi.fn(),
+  runSecretsList: vi.fn(),
+  runSecretsRm: vi.fn(),
+  runSecretsImport: vi.fn(),
+}));
+vi.mock("@/cli/remote/commands/secrets.js", () => secretsRecipeMocks);
 vi.mock("@/cli/remote/commands/logs.js", () => ({ runLogs: remoteRecipeMocks.runLogs }));
 
 // Remote schedule recipes are mocked so dispatch/normalization can be tested
@@ -73,6 +80,7 @@ import {
   parsePositiveInt,
   runCli,
 } from "./agency.js";
+import { confirmQuestion, promptSecretValue } from "@/cli/remote/confirmation.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -191,6 +199,7 @@ describe("agency CLI command tree", () => {
       "open",
       "projects",
       "pull",
+      "secrets",
       "spend",
       "whoami",
     ]);
@@ -435,6 +444,100 @@ describe("remote management command registration", () => {
       program.parseAsync(["node", "agency", "remote", "keys", "create", "ci"]),
     ).rejects.toMatchObject({ code: "commander.missingMandatoryOptionValue" });
     expect(remoteRecipeMocks.runKeysCreate).not.toHaveBeenCalled();
+  });
+
+  describe("remote secrets", () => {
+    beforeEach(() => {
+      for (const mock of Object.values(secretsRecipeMocks)) mock.mockReset();
+      secretsRecipeMocks.runSecretsSet.mockResolvedValue({ kind: "set" });
+      secretsRecipeMocks.runSecretsImport.mockResolvedValue({ kind: "succeeded" });
+    });
+
+    afterEach(() => {
+      process.exitCode = undefined;
+    });
+
+    it("set forwards the name, options, context, and the production io adapters", async () => {
+      await createProgram().parseAsync([
+        "node", "agency", "remote", "secrets", "set", "OPENAI_API_KEY",
+        "--from-env", "SRC", "--project", "p",
+      ]);
+      expect(secretsRecipeMocks.runSecretsSet).toHaveBeenCalledTimes(1);
+      const [name, opts, cmdContext, ioArg] = secretsRecipeMocks.runSecretsSet.mock.calls[0]!;
+      expect(name).toBe("OPENAI_API_KEY");
+      expect(opts).toMatchObject({ fromEnv: "SRC", project: "p" });
+      expect(cmdContext).toEqual(CONTEXT);
+      expect(ioArg.promptHidden).toBe(promptSecretValue);
+      expect(typeof ioArg.readStdin).toBe("function");
+      expect(typeof ioArg.stdinIsTty).toBe("boolean");
+      expect(ioArg.env).toBe(process.env);
+      expect(process.exitCode).toBeUndefined();
+    });
+
+    it("a canceled set maps to exit code 1", async () => {
+      secretsRecipeMocks.runSecretsSet.mockResolvedValue({ kind: "canceled" });
+      await createProgram().parseAsync([
+        "node", "agency", "remote", "secrets", "set", "N", "--project", "p",
+      ]);
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("there is no --value flag", async () => {
+      // Commander reports the unknown option and exits; vitest's process.exit
+      // guard surfaces that as a rejection. What matters: the recipe never ran,
+      // so a value passed via argv is never sent anywhere.
+      await expect(
+        createProgram().parseAsync([
+          "node", "agency", "remote", "secrets", "set", "N", "--value", "leak",
+        ]),
+      ).rejects.toThrow();
+      expect(secretsRecipeMocks.runSecretsSet).not.toHaveBeenCalled();
+    });
+
+    it("list routes with target options; ls is an alias", async () => {
+      await createProgram().parseAsync([
+        "node", "agency", "remote", "secrets", "list", "--project", "p",
+      ]);
+      expect(secretsRecipeMocks.runSecretsList).toHaveBeenCalledWith(
+        { project: "p" },
+        CONTEXT,
+      );
+      await createProgram().parseAsync(["node", "agency", "remote", "secrets", "ls", "--project", "p"]);
+      expect(secretsRecipeMocks.runSecretsList).toHaveBeenCalledTimes(2);
+    });
+
+    it("rm forwards the positional name", async () => {
+      await createProgram().parseAsync([
+        "node", "agency", "remote", "secrets", "rm", "OPENAI_API_KEY", "--project", "p",
+      ]);
+      expect(secretsRecipeMocks.runSecretsRm).toHaveBeenCalledWith(
+        "OPENAI_API_KEY",
+        { project: "p" },
+        CONTEXT,
+      );
+    });
+
+    it("import forwards the optional file and the production confirm adapter", async () => {
+      await createProgram().parseAsync([
+        "node", "agency", "remote", "secrets", "import", "prod.env", "--project", "p",
+      ]);
+      const [file, , , ioArg] = secretsRecipeMocks.runSecretsImport.mock.calls[0]!;
+      expect(file).toBe("prod.env");
+      expect(ioArg.confirm).toBe(confirmQuestion);
+      expect(process.exitCode).toBeUndefined();
+    });
+
+    it.each([["declined"], ["failed"]])("an import that %s maps to exit code 1", async (kind) => {
+      secretsRecipeMocks.runSecretsImport.mockResolvedValue({ kind });
+      await createProgram().parseAsync(["node", "agency", "remote", "secrets", "import"]);
+      expect(process.exitCode).toBe(1);
+    });
+
+    it("a succeeded import leaves the exit code unset", async () => {
+      secretsRecipeMocks.runSecretsImport.mockResolvedValue({ kind: "succeeded" });
+      await createProgram().parseAsync(["node", "agency", "remote", "secrets", "import"]);
+      expect(process.exitCode).toBeUndefined();
+    });
   });
 
   it("remote pull forwards --out/--force and context", async () => {

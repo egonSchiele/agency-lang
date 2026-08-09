@@ -8,40 +8,54 @@
 
 export type JsonBodyResult = { ok: true; value: unknown } | { ok: false; error: string };
 
+export type JsonBodyOptions = {
+  /** Applied to DIAGNOSTIC text only — the raw body snippet, a body-read
+   *  exception message, and the displayed final URL — BEFORE whitespace
+   *  normalization and truncation, so a sensitive value containing whitespace
+   *  or spanning the snippet cutoff cannot survive into an error message.
+   *  Never applied to text handed to JSON.parse: protocol data is parsed from
+   *  the original response text unchanged. */
+  sanitizeDiagnostic?: (raw: string) => string;
+};
+
 const SNIPPET_LIMIT = 200;
 
 export async function readJsonBody(
   response: Response,
   request: { method: string; url: string },
+  options: JsonBodyOptions = {},
 ): Promise<JsonBodyResult> {
+  const sanitize = options.sanitizeDiagnostic ?? ((raw: string) => raw);
   let text: string;
   try {
     text = await response.text();
   } catch (error) {
     return {
       ok: false,
-      error: `${headline(response, request)}\nThe response body could not be read (${message(error)}).`,
+      error: `${headline(response, request)}\nThe response body could not be read (${sanitize(message(error))}).`,
     };
   }
   try {
     return { ok: true, value: JSON.parse(text) };
   } catch {
-    return { ok: false, error: describeNonJson(response, request, text) };
+    return { ok: false, error: describeNonJson(response, request, text, sanitize) };
   }
 }
 
 function describeNonJson(
   response: Response,
   request: { method: string; url: string },
-  text: string,
+  rawText: string,
+  sanitize: (raw: string) => string,
 ): string {
+  const text = sanitize(rawText);
   const lines = [headline(response, request)];
   // response.url is the FINAL URL after fetch followed any redirects — when it
   // differs from what we asked for, that detour is almost always the story.
   const finalUrl = typeof response.url === "string" ? response.url : "";
   if (finalUrl !== "" && finalUrl !== request.url) {
     lines.push(
-      `The request was redirected to ${finalUrl}. An http:// host URL is the usual cause — ` +
+      `The request was redirected to ${sanitize(finalUrl)}. An http:// host URL is the usual cause — ` +
         `the https redirect turns a POST into an unauthenticated GET; use https:// in the host.`,
     );
   }

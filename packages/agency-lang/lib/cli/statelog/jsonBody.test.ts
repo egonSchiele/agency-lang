@@ -85,3 +85,61 @@ describe("readJsonBody", () => {
     expect(error).toContain("socket closed");
   });
 });
+
+describe("readJsonBody diagnostic sanitizer", () => {
+  const SENTINEL = "sk-live-EXTREMELY-SECRET";
+  const sanitize = (raw: string) => raw.split(SENTINEL).join("[redacted]");
+  const options = { sanitizeDiagnostic: sanitize };
+
+  it("sanitizes a whitespace-containing sentinel before whitespace collapsing", async () => {
+    // The sentinel spans a newline in the raw body; after the collapse it would
+    // no longer exist as one string, so sanitization must run on the RAW text.
+    const brokenSentinel = "sk-live\nEXTREMELY-SECRET";
+    const sanitizeBroken = (raw: string) => raw.split(brokenSentinel).join("[redacted]");
+    const error = failure(
+      await readJsonBody(textResponse(200, `<html>${brokenSentinel}</html>`), request, {
+        sanitizeDiagnostic: sanitizeBroken,
+      }),
+    );
+    expect(error).toContain("[redacted]");
+    expect(error).not.toContain("EXTREMELY-SECRET");
+  });
+
+  it("leaves no visible prefix of a sentinel spanning the snippet cutoff", async () => {
+    const body = "x".repeat(190) + SENTINEL + "y".repeat(50);
+    const error = failure(await readJsonBody(textResponse(200, body), request, options));
+    expect(error).not.toContain("sk-live");
+    expect(error).toContain("[redacted]");
+  });
+
+  it("sanitizes a body-read exception message", async () => {
+    const response = {
+      ok: true,
+      status: 200,
+      url: "",
+      text: vi.fn().mockRejectedValue(new Error(`stream broke carrying ${SENTINEL}`)),
+    } as unknown as Response;
+    const error = failure(await readJsonBody(response, request, options));
+    expect(error).toContain("[redacted]");
+    expect(error).not.toContain(SENTINEL);
+  });
+
+  it("sanitizes a redirect URL before display", async () => {
+    const error = failure(
+      await readJsonBody(
+        textResponse(200, "<html>", `https://h/signin?leak=${SENTINEL}`),
+        request,
+        options,
+      ),
+    );
+    expect(error).toContain("redirected");
+    expect(error).toContain("[redacted]");
+    expect(error).not.toContain(SENTINEL);
+  });
+
+  it("parses valid JSON from the original text even when the sanitizer would change it", async () => {
+    const body = JSON.stringify({ success: true, value: SENTINEL });
+    const result = await readJsonBody(textResponse(200, body), request, options);
+    expect(result).toEqual({ ok: true, value: { success: true, value: SENTINEL } });
+  });
+});

@@ -105,12 +105,25 @@ describe("secretsClient transport", () => {
     await expect(client().set("OPENAI_API_KEY", SENTINEL)).resolves.toEqual(wireSecret);
   });
 
-  it("rejects a malformed DTO and sanitizes a planted value from the diagnostic", async () => {
+  it("rejects a malformed DTO, sanitized, preserving the HTTP status", async () => {
     fetchMock.mockResolvedValue(
       response(200, { success: true, value: { ...wireSecret, createdAt: SENTINEL, updatedAt: 7 } }),
     );
     const error = await failureOf(client().set("OPENAI_API_KEY", SENTINEL));
     expect(error.message).not.toContain(SENTINEL);
+    expect(error.status).toBe(200);
+  });
+
+  it("set's alsoRedact values join the first redaction pass", async () => {
+    const other = "another-import-value";
+    fetchMock.mockResolvedValue(
+      response(200, { success: false, error: `echoing a different secret: ${other}` }),
+    );
+    const error = await failureOf(
+      client().set("N", SENTINEL, { alsoRedact: [other] }),
+    );
+    expect(error.message).toContain("[redacted]");
+    expect(error.message).not.toContain(other);
   });
 });
 

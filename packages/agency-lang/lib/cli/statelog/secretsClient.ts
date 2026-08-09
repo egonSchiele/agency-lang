@@ -23,7 +23,11 @@ export class SecretRequestError extends Error {
 }
 
 export type SecretsClient = {
-  set(name: string, value: string): Promise<SecretMetadata>;
+  /** `alsoRedact`: additional sensitive values (e.g. the whole import batch)
+   *  that must join the FIRST redaction pass. A later pass cannot recover a
+   *  value the first pass partially destroyed — if one value overlaps another,
+   *  redacting only the current one can leave the other's suffix visible. */
+  set(name: string, value: string, options?: { alsoRedact?: string[] }): Promise<SecretMetadata>;
   list(): Promise<SecretMetadata[]>;
   delete(name: string): Promise<SecretMetadata>;
 };
@@ -54,7 +58,7 @@ export function createSecretsClient(
     return new URL(`/${path}`, origin).toString();
   }
 
-  async function request(input: SecretRequest): Promise<unknown> {
+  async function request(input: SecretRequest): Promise<{ value: unknown; status: number }> {
     const redact = (text: string) => redactValues(text, [apiKey, ...input.sensitive]);
     const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
     const init: RequestInit = { method: input.method, headers };
@@ -119,28 +123,34 @@ export function createSecretsClient(
         response.status,
       );
     }
-    return envelope.value;
+    return { value: envelope.value, status: response.status };
   }
 
-  function parseWire<T>(schema: z.ZodType<T>, value: unknown, sensitive: string[]): T {
-    const result = schema.safeParse(value);
+  function parseWire<T>(
+    schema: z.ZodType<T>,
+    response: { value: unknown; status: number },
+    sensitive: string[],
+  ): T {
+    const result = schema.safeParse(response.value);
     if (!result.success) {
       throw new SecretRequestError(
         redactValues(
           `unexpected secrets response value: ${result.error.issues[0]?.message ?? "invalid"}`,
           [apiKey, ...sensitive],
         ),
+        response.status,
       );
     }
     return result.data;
   }
 
   return {
-    async set(name, value) {
+    async set(name, value, options = {}) {
+      const sensitive = [value, ...(options.alsoRedact ?? [])];
       return parseWire(
         secretMetadataSchema,
-        await request({ method: "POST", segments: [], body: { name, value }, sensitive: [value] }),
-        [value],
+        await request({ method: "POST", segments: [], body: { name, value }, sensitive }),
+        sensitive,
       );
     },
     async list() {

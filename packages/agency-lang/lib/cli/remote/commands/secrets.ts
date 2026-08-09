@@ -61,9 +61,11 @@ export async function runSecretsSet(
   } catch (error) {
     failSecretRequest(error);
   }
-  const safeName = terminalSafe(name);
-  console.log(`${color.green("Set")} secret ${safeName}.`);
-  console.log(`Available to hosted runs as env("${safeName}") from the next invocation.`);
+  console.log(`${color.green("Set")} secret ${terminalSafe(name)}.`);
+  // The hint shows real call-site syntax, so the name renders as an actual
+  // string literal — JSON.stringify quotes AND escapes it in one step (a
+  // terminalSafe'd name would end up double-quoted here).
+  console.log(`Available to hosted runs as env(${JSON.stringify(name)}) from the next invocation.`);
   return { kind: "set" };
 }
 
@@ -117,6 +119,8 @@ export async function runSecretsImport(
   const target = resolveProjectTarget(context, options);
   const fromStdin = file === "-";
   const sourceName = fromStdin ? "<stdin>" : (file ?? ".env");
+  // The file argument is user/argv-controlled display text like any other.
+  const safeSource = terminalSafe(sourceName);
 
   let text: string;
   if (fromStdin) {
@@ -126,13 +130,13 @@ export async function runSecretsImport(
     try {
       text = fs.readFileSync(sourcePath, "utf-8");
     } catch (error) {
-      fail(`Could not read ${sourceName}: ${errorMessage(error)}`);
+      fail(`Could not read ${safeSource}: ${errorMessage(error)}`);
     }
   }
 
   const { entries } = parseEnvSource(text);
   if (entries.length === 0) {
-    fail(`No variables found in ${sourceName}.`);
+    fail(`No variables found in ${safeSource}.`);
   }
 
   // Confirmation is for FILE sources on a TTY only. An explicit `-` never
@@ -141,7 +145,7 @@ export async function runSecretsImport(
   if (!fromStdin && io.stdinIsTty) {
     const plural = entries.length === 1 ? "" : "s";
     console.log(
-      `Import ${entries.length} secret${plural} into project ${target.projectSlug} from ${sourceName}:`,
+      `Import ${entries.length} secret${plural} into project ${target.projectSlug} from ${safeSource}:`,
     );
     for (const entry of entries) {
       console.log(`  ${terminalSafe(entry.name)}`);
@@ -161,7 +165,10 @@ export async function runSecretsImport(
       continue;
     }
     try {
-      await client.set(entry.name, entry.value);
+      // The whole batch joins the FIRST redaction pass: a response echoing a
+      // DIFFERENT import's value that overlaps this one would otherwise be
+      // partially destroyed before the presenter's pass could match it.
+      await client.set(entry.name, entry.value, { alsoRedact: allValues });
       outcomes.push({ name: entry.name, ok: true });
     } catch (error) {
       if (!(error instanceof SecretRequestError)) {

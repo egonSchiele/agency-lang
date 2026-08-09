@@ -159,6 +159,17 @@ describe("terminalSafe", () => {
   it("JSON-quotes a name containing a newline", () => {
     expect(terminalSafe("TWO\nLINES")).toBe(JSON.stringify("TWO\nLINES"));
   });
+
+  it.each([
+    ["a bare C1 CSI (U+009B)", 0x9b],
+    ["DEL (U+007F)", 0x7f],
+    ["the U+2028 line separator", 0x2028],
+  ])("escapes %s, which JSON.stringify leaves raw", (_label, code) => {
+    const character = String.fromCodePoint(code);
+    const safe = terminalSafe(`A${character}B`);
+    expect(safe).not.toContain(character);
+    expect(safe).toContain(`\\u${code.toString(16).padStart(4, "0")}`);
+  });
 });
 
 describe("stripOneTrailingNewline", () => {

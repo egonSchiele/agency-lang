@@ -253,8 +253,8 @@ describe("runSecretsImport", () => {
     const result = await runSecretsImport(file, options, context, io);
     expect(result).toEqual({ kind: "succeeded" });
     expect(io.confirm).toHaveBeenCalledWith("Continue?");
-    expect(setMock).toHaveBeenNthCalledWith(1, "A", "1");
-    expect(setMock).toHaveBeenNthCalledWith(2, "B", SENTINEL);
+    expect(setMock).toHaveBeenNthCalledWith(1, "A", "1", { alsoRedact: ["1", SENTINEL] });
+    expect(setMock).toHaveBeenNthCalledWith(2, "B", SENTINEL, { alsoRedact: ["1", SENTINEL] });
     const confirmOutput = logSpy.mock.calls.map((call: unknown[]) => call.join(" ")).join("\n");
     expect(confirmOutput).toContain("A");
     expect(confirmOutput).not.toContain(SENTINEL);
@@ -288,7 +288,7 @@ describe("runSecretsImport", () => {
     const result = await runSecretsImport("-", options, context, io);
     expect(result).toEqual({ kind: "succeeded" });
     expect(io.confirm).not.toHaveBeenCalled();
-    expect(setMock).toHaveBeenCalledWith("A", "1");
+    expect(setMock).toHaveBeenCalledWith("A", "1", { alsoRedact: ["1"] });
   });
 
   it("defaults to .env in the working directory", async () => {
@@ -296,7 +296,7 @@ describe("runSecretsImport", () => {
     vi.spyOn(process, "cwd").mockReturnValue(dir);
     setMock.mockResolvedValue(metadata);
     await runSecretsImport(undefined, options, context, importIo({ stdinIsTty: false }));
-    expect(setMock).toHaveBeenCalledWith("FROM_DEFAULT", "1");
+    expect(setMock).toHaveBeenCalledWith("FROM_DEFAULT", "1", { alsoRedact: ["1"] });
   });
 
   it("continues past failures and returns failed after the full summary", async () => {
@@ -332,7 +332,7 @@ describe("runSecretsImport", () => {
     const result = await runSecretsImport(file, options, context, importIo({ stdinIsTty: false }));
     expect(result).toEqual({ kind: "failed" });
     expect(setMock).toHaveBeenCalledTimes(1);
-    expect(setMock).toHaveBeenCalledWith("REAL", "x");
+    expect(setMock).toHaveBeenCalledWith("REAL", "x", { alsoRedact: ["", "x"] });
     expect(allOutput()).toContain("EMPTY");
   });
 
@@ -353,6 +353,19 @@ describe("runSecretsImport", () => {
     await runSecretsImport(file, options, context, importIo({ stdinIsTty: false }));
     expect(allOutput()).not.toContain("line-secret-value");
     expect(allOutput()).toContain("[redacted]");
+  });
+
+  it("every set call carries the whole batch as alsoRedact (first-pass overlap defense)", async () => {
+    // If the client redacted only the current value, a response to SHORT
+    // echoing LONG's value would come back as "[redacted]-SENSITIVE-SUFFIX"
+    // and no later pass could match LONG. The client-level alsoRedact plus
+    // longest-first ordering in redactValues closes that.
+    const file = writeEnv("prod.env", "LONG=prefix-SENSITIVE-SUFFIX\nSHORT=prefix\n");
+    setMock.mockResolvedValue(metadata);
+    await runSecretsImport(file, options, context, importIo({ stdinIsTty: false }));
+    for (const call of setMock.mock.calls) {
+      expect(call[2]).toEqual({ alsoRedact: ["prefix-SENSITIVE-SUFFIX", "prefix"] });
+    }
   });
 
   it("an empty parse fails naming the file", async () => {

@@ -636,7 +636,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   secretsCmd
     .command("set")
     .description("Set a secret's value (hidden prompt, piped stdin, or --from-env; never argv)")
-    .argument("<NAME>", "Environment variable name the hosted agent reads with env(NAME)")
+    .argument("<NAME>", 'Environment variable name the hosted agent reads with env("NAME")')
     .option("--from-env <VAR>", "copy the value of a local environment variable")
     .option(PROJECT_OPTION, PROJECT_DESC)
     .option(HOST_OPTION, HOST_DESC)

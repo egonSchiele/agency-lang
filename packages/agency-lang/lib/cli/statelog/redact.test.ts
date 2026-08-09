@@ -23,4 +23,11 @@ describe("redactValues", () => {
   it("is identity for an empty values array", () => {
     expect(redactValues("as-is", [])).toBe("as-is");
   });
+
+  it("replaces longer values before their prefixes so no suffix leaks", () => {
+    const long = "prefix-SENSITIVE-SUFFIX";
+    const short = "prefix";
+    expect(redactValues(`echo ${long} end`, [short, long])).toBe("echo [redacted] end");
+    expect(redactValues(`echo ${long} end`, [short, long])).not.toContain("SENSITIVE");
+  });
 });

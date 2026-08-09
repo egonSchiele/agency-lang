@@ -100,21 +100,28 @@ Type split (`stdlib/thread.agency`):
   compares them as unresolved aliases by name (assignability.ts) — a single alias
   would reject whichever builder returns the other name.
 
-## Branch-build caveat (remove when smoltalk #36 ships)
+## Cancellation is not yet supported by smoltalk (0.10.0)
 
-This work was built against the unreleased smoltalk `audio-stt-tts` branch
-(PR #36), overlaid into the worktree's `node_modules`. Two things depend on the
-released API and are currently forward-compatible stubs:
+Agency pins `smoltalk ^0.10.0`, which shipped the audio operations (#36) but
+**without cancellation**: `TranscribeOptions`/`SpeakOptions` carry no
+`AbortSignal`, and the OpenAI-SDK calls inside smoltalk never pass one.
 
-1. **Cancellation.** smoltalk's `TranscribeOptions`/`SpeakOptions` do not yet
-   carry an `AbortSignal`. `SmoltalkClient` forwards the branch signal into the
-   opts via `withSignal` (one cast), so it "just works" once upstream adds the
-   field — but until then mid-flight cancellation is INERT; only the wrapper's
-   already-aborted preflight applies. The `AbortSignal` is already the sole
-   cancellation channel on the `LLMClient.transcribe`/`speak` methods.
-2. **Version pin.** Agency still pins `smoltalk ^0.8.4`. Pinning the released
-   audio version is the first step once #36 lands.
+`AbortSignal` is already the sole cancellation channel on the
+`LLMClient.transcribe`/`speak` methods, and `SmoltalkClient` forwards the branch
+signal into the opts via `withSignal` (one cast), so real cancellation activates
+the moment smoltalk adds the field. Until then:
 
-When #36 releases: pin it, drop the `withSignal` cast if the option becomes
-first-class, re-audit result field names / error provenance, and add the
-`SmoltalkClient` adapter forwarding + cancellation unit tests deferred here.
+- **Works:** the wrapper's already-aborted preflight (an aborted branch throws
+  before any dispatch), and — for TTS — the pre-publication abort check (a
+  cancelled synthesis never writes its file).
+- **Inert:** mid-flight cancellation of an in-progress request. This is a
+  behavior REGRESSION for `transcribe` specifically — the old direct-`fetch`
+  path threaded the abort signal into `fetch`, so Ctrl-C / race-loss / a time
+  guard tore down the in-flight upload. Routing through smoltalk 0.10.0 loses
+  that until smoltalk exposes a signal.
+
+Follow-up when smoltalk adds a signal option: drop the `withSignal` cast if the
+option becomes first-class, and add the `SmoltalkClient` adapter forwarding +
+real mid-flight cancellation unit tests deferred here (the DeterministicClient
+already honors the signal, so the wrapper/deterministic cancellation paths are
+covered; only the real-smoltalk forwarding is pending).

@@ -225,11 +225,13 @@ export class SmoltalkClient implements LLMClient {
   // resolved every required field — see plan §8), attach the branch abort signal,
   // and return smoltalk's Result unchanged. No defaults, no routing policy here.
   //
-  // NOTE (branch build): smoltalk's released TranscribeOptions/SpeakOptions do
-  // not yet carry `signal` (PR #36 adds it). We forward it anyway so the code is
-  // correct the moment upstream lands; until then mid-flight cancellation is
-  // inert and only the wrapper's already-aborted preflight applies. The
+  // NOTE (smoltalk 0.10.0): the released TranscribeOptions/SpeakOptions still do
+  // NOT carry `signal` — audio landed without cancellation. We forward it anyway
+  // so the code is correct the moment smoltalk adds the field; until then
+  // mid-flight cancellation is inert and only the wrapper's already-aborted
+  // preflight (and, for TTS, the pre-publication abort check) applies. The
   // `withSignal` cast is the single spot that tolerates the missing field.
+  // See docs/dev/speech-via-smoltalk.md "cancellation" for the follow-up.
   async transcribe(
     source: AudioInput,
     config: TranscribeConfig,
@@ -288,9 +290,10 @@ export class SmoltalkClient implements LLMClient {
 }
 
 /** Attach the branch abort signal to a smoltalk audio options object. Kept in
- *  one place because the released smoltalk audio options type does not yet
- *  declare `signal` (PR #36 adds it); this is the only cast that bridges that
- *  gap, so when upstream lands the field the cast can be dropped wholesale. */
+ *  one place because smoltalk 0.10.0's audio options type does not declare
+ *  `signal` (audio shipped without cancellation); this is the only cast that
+ *  bridges that gap, so when smoltalk adds the field the cast can be dropped
+ *  wholesale. Until then the forwarded signal is inert on smoltalk's side. */
 function withSignal<T extends object>(config: T, signal: AbortSignal): T {
   return { ...config, signal } as T;
 }

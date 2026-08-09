@@ -100,6 +100,8 @@ the request always carries an explicit zone.
 
 ## Current limitations
 
-- `--function` targets are accepted by the CLI but rejected by the server
-  until statelog's execution PR lands; the server's message is surfaced as-is.
-- No per-run result retrieval; runs are observed through statelog traces.
+- No per-run result retrieval; scheduled runs are fire-and-forget (the agent
+  must deliver its own results) and are observed through statelog's
+  schedule-run history and traces.
+- Scheduled runs are unattended: a node that interrupts has no responder, and
+  the server records the run as a terminal error.

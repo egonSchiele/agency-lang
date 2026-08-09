@@ -74,6 +74,32 @@ export type ImageGenResult = smoltalk.ImageGenResult;
 export type ImageInput = smoltalk.ImageInput;
 export type ImageRef = smoltalk.ImageRef;
 
+// The single audio (speech-to-text / text-to-speech) type surface. Result and
+// input types are re-exported unchanged from smoltalk; the *request* configs are
+// DERIVED aliases (not raw re-exports) so Agency owns which fields are required.
+//
+// The `.agency` signatures (stdlib/speech.agency) resolve model/voice/format to
+// non-empty values before dispatch, so those become REQUIRED here — a client can
+// never fall back to its own defaults (see plan §8). Cancellation travels as a
+// separate `signal` argument on the methods below, never inside the config, so
+// there is exactly one authoritative cancellation channel.
+export type TranscriptionResult = smoltalk.TranscriptionResult;
+export type SpeechResult = smoltalk.SpeechResult;
+/** A source for audio bytes: a local path, a URL, or inline bytes/base64. */
+export type AudioInput = smoltalk.BlobRef;
+
+export type TranscribeConfig = Omit<smoltalk.TranscribeOptions, "model"> & {
+  model: string;
+};
+export type SpeakConfig = Omit<
+  smoltalk.SpeakOptions,
+  "model" | "voice" | "format"
+> & {
+  model: string;
+  voice: string;
+  format: NonNullable<smoltalk.SpeakOptions["format"]>;
+};
+
 /**
  * Provider-neutral view of an error thrown by an `LLMClient`. Lets agency's
  * retry classifier decide policy without importing any provider SDK. The
@@ -138,6 +164,24 @@ export type LLMClient = {
     input: ImageInput,
     config?: Partial<ImageConfig>,
   ): Promise<Result<ImageGenResult>>;
+  /** Speech-to-text. Optional — clients that don't support it omit the method;
+   *  the std::speech wrapper throws a clear "unsupported client" error. `config`
+   *  is COMPLETE (model required — see TranscribeConfig); the client must not
+   *  inject its own defaults. `signal` is the sole cancellation channel: once
+   *  dispatch starts, an abort must reject promptly with `signal.reason` (a
+   *  resolved failure Result means a non-cancellation failure). */
+  transcribe?(
+    source: AudioInput,
+    config: TranscribeConfig,
+    signal: AbortSignal,
+  ): Promise<Result<TranscriptionResult>>;
+  /** Text-to-speech. Optional — same contract as `transcribe`: complete config
+   *  (model/voice/format required), `signal` the sole cancellation channel. */
+  speak?(
+    text: string,
+    config: SpeakConfig,
+    signal: AbortSignal,
+  ): Promise<Result<SpeechResult>>;
   /** Translate an error this client threw into provider-neutral fields for
    *  agency's retry classifier. Optional — agency falls back to `{ message }`
    *  when omitted, which still works (message-pattern matching) but loses
@@ -175,6 +219,31 @@ export class SmoltalkClient implements LLMClient {
       model: DEFAULT_IMAGE_MODEL,
       ...config,
     } as ImageConfig);
+  }
+
+  // Thin adapter: pass the complete config straight through (the wrapper already
+  // resolved every required field — see plan §8), attach the branch abort signal,
+  // and return smoltalk's Result unchanged. No defaults, no routing policy here.
+  //
+  // NOTE (branch build): smoltalk's released TranscribeOptions/SpeakOptions do
+  // not yet carry `signal` (PR #36 adds it). We forward it anyway so the code is
+  // correct the moment upstream lands; until then mid-flight cancellation is
+  // inert and only the wrapper's already-aborted preflight applies. The
+  // `withSignal` cast is the single spot that tolerates the missing field.
+  async transcribe(
+    source: AudioInput,
+    config: TranscribeConfig,
+    signal: AbortSignal,
+  ): Promise<Result<TranscriptionResult>> {
+    return smoltalk.transcribe(source, withSignal(config, signal));
+  }
+
+  async speak(
+    text: string,
+    config: SpeakConfig,
+    signal: AbortSignal,
+  ): Promise<Result<SpeechResult>> {
+    return smoltalk.speak(text, withSignal(config, signal));
   }
 
   normalizeError(err: unknown): NormalizedLLMError {
@@ -216,6 +285,14 @@ export class SmoltalkClient implements LLMClient {
     return normalized;
   }
 
+}
+
+/** Attach the branch abort signal to a smoltalk audio options object. Kept in
+ *  one place because the released smoltalk audio options type does not yet
+ *  declare `signal` (PR #36 adds it); this is the only cast that bridges that
+ *  gap, so when upstream lands the field the cast can be dropped wholesale. */
+function withSignal<T extends object>(config: T, signal: AbortSignal): T {
+  return { ...config, signal } as T;
 }
 
 /** Convert agency's PromptConfig into smoltalk's SmolConfig.

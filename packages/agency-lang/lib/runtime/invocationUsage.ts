@@ -21,9 +21,21 @@ type SmoltalkTokens = NonNullable<
   PromptResult["usage"] | EmbedResult["tokenUsage"] | ImageGenResult["tokenUsage"]
 >;
 
-export type ProviderUsageKind = "completion" | "embedding" | "image";
+export type ProviderUsageKind =
+  | "completion"
+  | "embedding"
+  | "image"
+  | "transcription"
+  | "speech";
 export type UsageKind = ProviderUsageKind | "manual";
-const USAGE_KINDS: readonly UsageKind[] = ["completion", "embedding", "image", "manual"];
+const USAGE_KINDS: readonly UsageKind[] = [
+  "completion",
+  "embedding",
+  "image",
+  "transcription",
+  "speech",
+  "manual",
+];
 
 export type CostBreakdown = {
   inputCost: number;
@@ -203,18 +215,34 @@ function buildTokens(raw: unknown, kind: UsageKind, absentDegrades: boolean): { 
   };
   let malformed = input.malformed || output.malformed || cachedInput.malformed || cacheCreation.malformed;
 
+  // Audio tokens (gpt-audio-1.5 chat) are collapsed into `totalTokens` and never
+  // surface as their own fields (see plan §7a option A). When the provider's
+  // `totalTokens` is authoritative it already includes them, so we do nothing.
+  // Only in the FALLBACK branch — total absent/malformed — do we widen the lower
+  // bound so an audio-heavy call is never undercounted: the plan's
+  // max(text-sum, audio-sum) rule (a malformed audio counter contributes 0).
+  const inputAudio = tokenCounter(obj?.inputAudioTokens, false);
+  const outputAudio = tokenCounter(obj?.outputAudioTokens, false);
+  const audioSum = checkedAddCount(inputAudio.value, outputAudio.value);
+  const audioPresent = obj?.inputAudioTokens !== undefined || obj?.outputAudioTokens !== undefined;
+
   const rawTotal = obj?.totalTokens;
   let totalTokens: number;
-  if (rawTotal === undefined || rawTotal === null) {
-    const fb = fallbackTotalTokens(kind, partial);
-    totalTokens = fb.value;
-    malformed = malformed || fb.saturated;
-  } else if (isSafeCount(rawTotal)) {
+  if (isSafeCount(rawTotal)) {
     totalTokens = rawTotal;
   } else {
     const fb = fallbackTotalTokens(kind, partial);
-    totalTokens = fb.value;
-    malformed = true; // present-but-malformed provider total
+    totalTokens = Math.max(fb.value, audioSum.value);
+    malformed = malformed || fb.saturated || audioSum.saturated;
+    if (rawTotal !== undefined && rawTotal !== null) {
+      malformed = true; // present-but-malformed provider total
+    }
+    // When audio counters are present but there is no authoritative total, the
+    // max() is only a lower bound (we cannot tell whether the text counters
+    // already include audio), so attribution is degraded — see plan §7a.
+    if (audioPresent) {
+      malformed = true;
+    }
   }
   return { tokens: { ...partial, totalTokens }, malformed };
 }
@@ -387,6 +415,8 @@ export class InvocationUsageMeter {
     completion: Object.create(null),
     embedding: Object.create(null),
     image: Object.create(null),
+    transcription: Object.create(null),
+    speech: Object.create(null),
     manual: Object.create(null),
   };
 

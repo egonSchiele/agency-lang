@@ -2,6 +2,7 @@ import type { PromptResult, StreamChunk, Result } from "smoltalk";
 import { ToolCall } from "smoltalk";
 import { agencyStore } from "./asyncContext.js";
 import type {
+  AudioInput,
   EmbedConfig,
   EmbedResult,
   ImageConfig,
@@ -9,8 +10,36 @@ import type {
   ImageInput,
   LLMClient,
   PromptConfig,
+  SpeakConfig,
+  SpeechResult,
+  TranscribeConfig,
+  TranscriptionResult,
 } from "./llmClient.js";
-import { DETERMINISTIC_IMAGE_COST } from "../constants.js";
+import {
+  DETERMINISTIC_IMAGE_COST,
+  DETERMINISTIC_SPEECH_BYTES,
+  DETERMINISTIC_SPEECH_COST,
+  DETERMINISTIC_TRANSCRIBE_COST,
+  DETERMINISTIC_TRANSCRIPT,
+} from "../constants.js";
+
+/** Format → returned MIME, matching smoltalk's `SPEECH_FORMAT_TO_MIME`, so the
+ *  deterministic speak() returns a MIME the std::speech wrapper accepts. */
+const DETERMINISTIC_SPEECH_MIME: Record<string, string> = {
+  mp3: "audio/mpeg",
+  opus: "audio/ogg",
+  aac: "audio/aac",
+  flac: "audio/flac",
+  wav: "audio/wav",
+  pcm: "application/octet-stream",
+};
+
+/** Optional delays so tests can exercise mid-request cancellation of the audio
+ *  capabilities without touching the existing text/tool mock queues. */
+export type DeterministicClientOptions = {
+  transcriptionDelayMs?: number;
+  speechDelayMs?: number;
+};
 
 export type ReturnMock = {
   return: any;
@@ -103,8 +132,13 @@ export class DeterministicClient implements LLMClient {
   private queues: Record<string, MockQueue>;
   /** Array form: one anonymous queue, original error messages. */
   private readonly scoped: boolean;
+  private readonly speechOptions: DeterministicClientOptions;
 
-  constructor(mocks: LLMMock[] | ScopedLLMMocks) {
+  constructor(
+    mocks: LLMMock[] | ScopedLLMMocks,
+    options: DeterministicClientOptions = {},
+  ) {
+    this.speechOptions = options;
     this.scoped = !Array.isArray(mocks);
     // Null prototype: scope keys come from user-controlled JSON
     // (AGENCY_LLM_MOCKS / test.json), so a plain `{}` would let
@@ -281,6 +315,59 @@ export class DeterministicClient implements LLMClient {
           inputCost: 0,
           outputCost: DETERMINISTIC_IMAGE_COST,
           totalCost: DETERMINISTIC_IMAGE_COST,
+          currency: "USD",
+        },
+      },
+    };
+  }
+
+  // Fixed transcript + fixed cost so tests can exercise the STT pipeline (cost,
+  // guards, statelog) offline. Honors the abort signal via the optional delay so
+  // mid-request cancellation is testable. Never reports a `model` field — real
+  // TranscriptionResult has none, and the wrapper owns the effective model.
+  async transcribe(
+    _source: AudioInput,
+    _config: TranscribeConfig,
+    signal: AbortSignal,
+  ): Promise<Result<TranscriptionResult>> {
+    if (this.speechOptions.transcriptionDelayMs) {
+      await abortableDelay(this.speechOptions.transcriptionDelayMs, signal);
+    }
+    return {
+      success: true,
+      value: {
+        text: DETERMINISTIC_TRANSCRIPT,
+        cost: {
+          inputCost: 0,
+          outputCost: DETERMINISTIC_TRANSCRIBE_COST,
+          totalCost: DETERMINISTIC_TRANSCRIBE_COST,
+          currency: "USD",
+        },
+      },
+    };
+  }
+
+  // Fixed audio bytes + fixed cost. Returns a MIME matching the requested format
+  // so the std::speech wrapper's post-dispatch MIME check passes.
+  async speak(
+    _text: string,
+    config: SpeakConfig,
+    signal: AbortSignal,
+  ): Promise<Result<SpeechResult>> {
+    if (this.speechOptions.speechDelayMs) {
+      await abortableDelay(this.speechOptions.speechDelayMs, signal);
+    }
+    const mimeType =
+      DETERMINISTIC_SPEECH_MIME[config.format] ?? "application/octet-stream";
+    return {
+      success: true,
+      value: {
+        audio: new Uint8Array(DETERMINISTIC_SPEECH_BYTES),
+        mimeType,
+        cost: {
+          inputCost: 0,
+          outputCost: DETERMINISTIC_SPEECH_COST,
+          totalCost: DETERMINISTIC_SPEECH_COST,
           currency: "USD",
         },
       },

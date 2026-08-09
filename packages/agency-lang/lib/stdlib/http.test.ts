@@ -9,8 +9,11 @@ import {
   __internal_fetchJSON,
   __internal_fetchMarkdown,
   checkAllowedDomains,
+  readBodyBytesCapped,
   resolveUrl,
+  runHttp,
 } from "./http.js";
+import { AWS_OBJECT_BYTE_LIMIT } from "./objectBytes.js";
 
 function makeMockCtx(): RuntimeContext<any> {
   return new RuntimeContext({
@@ -233,5 +236,62 @@ describe("HTTP fetch abort integration", () => {
     await new Promise((r) => setTimeout(r, 30));
     ctx.cancel();
     await expect(p).rejects.toBeInstanceOf(AgencyCancelledError);
+  });
+});
+
+describe("readBodyBytesCapped", () => {
+  function pendingStreamResponse(firstChunk: Uint8Array): Response {
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start(streamController) {
+          streamController.enqueue(firstChunk);
+          return new Promise<void>(() => {});
+        },
+      }),
+    );
+  }
+
+  it("rejects a pending read on abort instead of returning the prefix", async () => {
+    const response = pendingStreamResponse(new Uint8Array([1, 2]));
+    const abortController = new AbortController();
+    const read = readBodyBytesCapped(
+      response,
+      "https://example.com/pending",
+      abortController.signal,
+    );
+    abortController.abort();
+    await expect(read).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("surfaces a pending-read abort as AgencyCancelledError through runHttp", async () => {
+    const integrationUrl = "https://example.com/pending-integration";
+    const integrationResponse = pendingStreamResponse(new Uint8Array([3, 4]));
+    const integrationAbortController = new AbortController();
+    const integratedRead = runHttp(
+      () =>
+        readBodyBytesCapped(
+          integrationResponse,
+          integrationUrl,
+          integrationAbortController.signal,
+        ),
+      integrationUrl,
+    );
+    integrationAbortController.abort();
+    await expect(integratedRead).rejects.toBeInstanceOf(AgencyCancelledError);
+  });
+
+  it("rejects a body one byte over the cap", async () => {
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(streamController) {
+          streamController.enqueue(new Uint8Array(AWS_OBJECT_BYTE_LIMIT + 1));
+          streamController.close();
+        },
+      }),
+    );
+    const abortController = new AbortController();
+    await expect(
+      readBodyBytesCapped(response, "https://example.com/big", abortController.signal),
+    ).rejects.toThrow(/exceeds/);
   });
 });

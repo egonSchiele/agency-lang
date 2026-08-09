@@ -8,52 +8,88 @@ import { failure, type ResultFailure } from "../runtime/result.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
+import { AWS_OBJECT_BYTE_LIMIT } from "./objectBytes.js";
 
-const MAX_BODY_BYTES = 10 * 1024 * 1024;
+// Cancellation is best-effort cleanup; a cancel error must never replace the
+// primary abort or size-cap error we are about to throw.
+function cancelReaderBestEffort(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): void {
+  reader.cancel().catch(() => {});
+}
+
+// Releasing the lock can throw if the reader is mid-read; that must not mask the
+// real outcome we are returning or throwing from the surrounding `finally`.
+function releaseReaderBestEffort(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): void {
+  try {
+    reader.releaseLock();
+  } catch {
+    /* release is cleanup-only; see comment above */
+  }
+}
+
+/**
+ * Read a response body into bytes with a hard size cap and abort safety. On
+ * abort we cancel the reader to unblock the pending `read()`, then
+ * `throwIfAborted()` turns that into an `AbortError` rather than resolving to the
+ * partial prefix. The cap and abort policy live here once; the text reader and
+ * the AWS pipeline both decode this primitive.
+ */
+export async function readBodyBytesCapped(
+  response: Response,
+  url: string,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
+  if (!response.body) {
+    return new Uint8Array(0);
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const onAbort = () => {
+    cancelReaderBestEffort(reader);
+  };
+  signal.throwIfAborted();
+  signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      // Check before handling `done`: a cancel from onAbort resolves the pending
+      // read as done, and we must throw rather than return the prefix.
+      signal.throwIfAborted();
+      if (done) break;
+      total += value.byteLength;
+      if (total > AWS_OBJECT_BYTE_LIMIT) {
+        cancelReaderBestEffort(reader);
+        throw new Error(
+          `Response from ${url} exceeds ${AWS_OBJECT_BYTE_LIMIT} bytes`,
+        );
+      }
+      chunks.push(value);
+    }
+    signal.throwIfAborted();
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+    releaseReaderBestEffort(reader);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
 
 async function readBodyCapped(
   response: Response,
   url: string,
   signal: AbortSignal,
 ): Promise<string> {
-  if (!response.body) {
-    return "";
-  }
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder("utf-8");
-  const chunks: string[] = [];
-  let total = 0;
-  // Cancel the body read when the AbortSignal fires (e.g., user
-  // hit Ctrl-C while we're streaming a large response). `fetch`'s
-  // signal handles connect/headers; the streaming body read needs
-  // its own listener because the in-flight reader.read() promise
-  // won't auto-reject on signal abort.
-  const onAbort = () => {
-    reader.cancel().catch(() => {});
-  };
-  if (signal.aborted) onAbort();
-  else signal.addEventListener("abort", onAbort, { once: true });
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_BODY_BYTES) {
-        await reader.cancel().catch(() => {});
-        throw new Error(
-          `Response from ${url} exceeds ${MAX_BODY_BYTES} bytes`,
-        );
-      }
-      chunks.push(decoder.decode(value, { stream: true }));
-    }
-  } finally {
-    signal.removeEventListener("abort", onAbort);
-    try {
-      reader.releaseLock();
-    } catch {}
-  }
-  chunks.push(decoder.decode());
-  return chunks.join("");
+  const bytes = await readBodyBytesCapped(response, url, signal);
+  return new TextDecoder("utf-8").decode(bytes);
 }
 
 function validateUrl(
@@ -129,7 +165,7 @@ function httpStatusFailure(
 }
 
 /** Collapse whitespace and truncate a response body into a failure snippet. */
-function normalizeSnippet(body: string, max = 300): string {
+export function normalizeSnippet(body: string, max = 300): string {
   const collapsed = body.replace(/\s+/g, " ").trim();
   return collapsed.length > max ? `${collapsed.slice(0, max)}…` : collapsed;
 }

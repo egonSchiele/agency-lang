@@ -156,3 +156,67 @@ describe("serveBaseUrl", () => {
     expect(serveBaseUrl([])).toBeUndefined();
   });
 });
+
+// Characterization: upload deliberately never inspects response.ok — the
+// envelope decides the outcome, whatever the HTTP status. These pin that
+// settled semantics before the transport-core refactor.
+describe("uploadBundle status-agnostic characterization", () => {
+  function fetchWith(status: number, rawBody: string): ReturnType<typeof vi.spyOn> {
+    return vi.spyOn(globalThis, "fetch").mockImplementation((async (url: unknown) => ({
+      ok: status >= 200 && status < 300,
+      status,
+      url: String(url),
+      text: async () => rawBody,
+    })) as unknown as typeof fetch);
+  }
+
+  it("an HTTP 500 carrying a valid success envelope still succeeds", async () => {
+    fetchWith(
+      500,
+      JSON.stringify({ success: true, value: { endpointUrls: ["/serve/u/proj/greeter/list"] } }),
+    );
+    const result = await uploadBundle(target, bundle);
+    expect(result.ok).toBe(true);
+  });
+
+  it("an HTTP 500 non-JSON body returns the detailed readJsonBody diagnostic", async () => {
+    fetchWith(500, "<html>gateway error</html>");
+    const result = await uploadBundle(target, bundle);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain("non-JSON response (HTTP 500)");
+    expect(result.error).toContain("<html>gateway error</html>");
+  });
+
+  it("an HTTP 500 rejection envelope returns its error string", async () => {
+    fetchWith(500, JSON.stringify({ success: false, error: "x" }));
+    const result = await uploadBundle(target, bundle);
+    expect(result).toEqual({ ok: false, error: "x" });
+  });
+
+  it("an HTTP 500 malformed parsed body produces exactly the rejection fallback", async () => {
+    fetchWith(500, JSON.stringify({ weird: true }));
+    const result = await uploadBundle(target, bundle);
+    expect(result).toEqual({ ok: false, error: "Upload rejected (HTTP 500)." });
+  });
+
+  it("the upload request carries exact auth, content type, and a once-serialized body", async () => {
+    const spy = fetchWith(
+      200,
+      JSON.stringify({ success: true, value: { endpointUrls: ["/serve/u/proj/greeter/list"] } }),
+    );
+    await uploadBundle(target, bundle);
+    const [, init] = spy.mock.calls[0]! as [unknown, RequestInit];
+    expect(init.method).toBe("POST");
+    expect(init.headers).toEqual({
+      Authorization: "Bearer k",
+      "Content-Type": "application/json",
+    });
+    expect(init.body).toBe(
+      JSON.stringify({
+        entrypoint: bundle.entrypoint,
+        files: bundle.files.map((file) => ({ name: file.name, contents: file.contents })),
+      }),
+    );
+  });
+});

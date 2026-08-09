@@ -154,6 +154,46 @@ describe.each<[string, unknown, "pullSource" | "listTraces" | "traceLogs"]>([
   });
 });
 
+describe("projectClient.listFiles", () => {
+  const wireFile = {
+    id: "f1",
+    fileName: "daily",
+    nodeNames: ["main"],
+    hasSource: true,
+    bundleEntrypoints: ["daily"],
+    updatedAt: "2026-08-09T00:00:00.000Z",
+  };
+
+  it("GETs the agency_files listing and returns validated rows", async () => {
+    fetchMock.mockResolvedValue(response(200, { success: true, value: [wireFile] }));
+    await expect(client().listFiles()).resolves.toEqual([wireFile]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://h/api/projects/proj/agency_files",
+      expect.any(Object),
+    );
+  });
+
+  it("preserves untracked/missing-source rows as data", async () => {
+    const legacy = { ...wireFile, id: "f2", hasSource: false, bundleEntrypoints: [] };
+    fetchMock.mockResolvedValue(response(200, { success: true, value: [legacy] }));
+    await expect(client().listFiles()).resolves.toEqual([legacy]);
+  });
+
+  it("rejects a malformed row", async () => {
+    fetchMock.mockResolvedValue(
+      response(200, { success: true, value: [{ ...wireFile, hasSource: "yes" }] }),
+    );
+    await expect(client().listFiles()).rejects.toBeInstanceOf(ProjectRequestError);
+  });
+
+  it("maps an unknown 404 to the unsupported-host message", async () => {
+    fetchMock.mockResolvedValue(response(404, { error: "Not found" }));
+    await expect(client().listFiles()).rejects.toThrow(
+      /does not support the file listing API/,
+    );
+  });
+});
+
 describe("projectClient envelope/transport edge cases", () => {
   it("a 2xx non-JSON body → non-JSON error naming the request and body", async () => {
     fetchMock.mockResolvedValue(nonJsonResponse(200));

@@ -17,6 +17,7 @@ const remoteRecipeMocks = vi.hoisted(() => ({
   runKeysCreate: vi.fn(),
   runSpend: vi.fn(),
   runPull: vi.fn(),
+  runFilesList: vi.fn(),
   runLogs: vi.fn(),
 }));
 vi.mock("@/cli/remote/commands/whoami.js", () => ({
@@ -36,6 +37,9 @@ vi.mock("@/cli/remote/commands/spend.js", () => ({
 // pull/logs recipes are mocked; logsMode and util stay REAL so the
 // registration's mode/TTY preflight and clean-exit are exercised.
 vi.mock("@/cli/remote/commands/pull.js", () => ({ runPull: remoteRecipeMocks.runPull }));
+vi.mock("@/cli/remote/commands/files.js", () => ({
+  runFilesList: remoteRecipeMocks.runFilesList,
+}));
 vi.mock("@/cli/remote/commands/logs.js", () => ({ runLogs: remoteRecipeMocks.runLogs }));
 
 // Remote schedule recipes are mocked so dispatch/normalization can be tested
@@ -184,6 +188,7 @@ describe("agency CLI command tree", () => {
     expect(remote?.commands.map((command) => command.name()).sort()).toEqual([
       "call",
       "deploy",
+      "files",
       "keys",
       "link",
       "logs",
@@ -445,6 +450,21 @@ describe("remote management command registration", () => {
       { out: "/o", force: true, project: "p" },
       CONTEXT,
     );
+  });
+
+  it("remote files list forwards target options and context", async () => {
+    await createProgram().parseAsync([
+      "node", "agency", "remote", "files", "list", "--project", "p", "--host", "https://h",
+    ]);
+    expect(remoteRecipeMocks.runFilesList).toHaveBeenCalledWith(
+      { project: "p", host: "https://h" },
+      CONTEXT,
+    );
+  });
+
+  it("remote files ls is an alias for list", async () => {
+    await createProgram().parseAsync(["node", "agency", "remote", "files", "ls", "--project", "p"]);
+    expect(remoteRecipeMocks.runFilesList).toHaveBeenCalledTimes(1);
   });
 
   it("remote logs --json forwards a fetch/json mode", async () => {

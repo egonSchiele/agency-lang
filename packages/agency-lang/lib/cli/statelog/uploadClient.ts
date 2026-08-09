@@ -11,8 +11,26 @@ import { createServeClient, ServeRequestError } from "./serveClient.js";
 import type { ServeManifest } from "./serveClient.js";
 import { readJsonBody } from "./jsonBody.js";
 
+/** A schedule left pointing at a file this deploy removed (statelog's
+ *  bundle-replacement warning). */
+export type OrphanedSchedule = {
+  id: string;
+  name: string | null;
+  fileName: string;
+  targetKind: "node" | "function";
+  targetName: string;
+};
+
 export type UploadResult =
-  | { ok: true; endpointUrls: string[]; manifest?: ServeManifest }
+  | {
+      ok: true;
+      endpointUrls: string[];
+      manifest?: ServeManifest;
+      /** Files soft-deleted because they fell out of this entrypoint's bundle.
+       *  Empty on hosts that predate bundle replacement. */
+      removedFiles: string[];
+      orphanedSchedules: OrphanedSchedule[];
+    }
   | { ok: false; error: string };
 
 /**
@@ -72,7 +90,55 @@ export async function uploadBundle(
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
   const manifest = await enrichManifest(absoluteUrls, target.apiKey);
-  return { ok: true, endpointUrls: absoluteUrls, manifest };
+  return {
+    ok: true,
+    endpointUrls: absoluteUrls,
+    manifest,
+    removedFiles: readRemovedFiles(envelope),
+    orphanedSchedules: readOrphanedSchedules(envelope),
+  };
+}
+
+// The replacement fields are best-effort presentation data on a deploy that
+// already landed, and older hosts don't send them at all — so absent or
+// malformed values become empty, never an error.
+function readRemovedFiles(envelope: unknown): string[] {
+  const value = (envelope as { value?: { removedFiles?: unknown } }).value?.removedFiles;
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((name): name is string => typeof name === "string");
+}
+
+function readOrphanedSchedules(envelope: unknown): OrphanedSchedule[] {
+  const value = (envelope as { value?: { orphanedSchedules?: unknown } }).value
+    ?.orphanedSchedules;
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const schedules: OrphanedSchedule[] = [];
+  for (const row of value) {
+    if (row === null || typeof row !== "object") {
+      continue;
+    }
+    const { id, name, fileName, targetKind, targetName } = row as Record<string, unknown>;
+    if (
+      typeof id !== "string" ||
+      typeof fileName !== "string" ||
+      typeof targetName !== "string" ||
+      (targetKind !== "node" && targetKind !== "function")
+    ) {
+      continue;
+    }
+    schedules.push({
+      id,
+      name: typeof name === "string" ? name : null,
+      fileName,
+      targetKind,
+      targetName,
+    });
+  }
+  return schedules;
 }
 
 /** Endpoint URLs from a `{ success: true, value: { endpointUrls } }` envelope,

@@ -32,6 +32,7 @@ import type { CreateKeyOptions } from "@/cli/remote/commands/keys.js";
 import { runSpend } from "@/cli/remote/commands/spend.js";
 import type { SpendOptions } from "@/cli/remote/commands/spend.js";
 import { runPull } from "@/cli/remote/commands/pull.js";
+import { runFilesList } from "@/cli/remote/commands/files.js";
 import type { PullOptions } from "@/cli/remote/commands/pull.js";
 import { runLogs } from "@/cli/remote/commands/logs.js";
 import {
@@ -621,6 +622,19 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option(HOST_OPTION, HOST_DESC)
     .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
     .action((opts: PullOptions) => runPull(opts, getConfigContext()));
+
+  const filesCmd = remoteCmd
+    .command("files")
+    .description("Inspect the files deployed to a project");
+
+  filesCmd
+    .command("list")
+    .alias("ls")
+    .description("List deployed files: their bundles and source availability")
+    .option(PROJECT_OPTION, PROJECT_DESC)
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((opts: ProjectCommandOptions) => runFilesList(opts, getConfigContext()));
 
   remoteCmd
     .command("logs")

@@ -23,6 +23,25 @@ it, and on failure reports:
   HTML with HTTP 200),
 - how the **body starts** (whitespace-collapsed, truncated).
 
+## Bundle-replacement fields on the upload response
+
+statelog's bundle-replacement change (spec:
+`statelog/docs/superpowers/specs/2026-08-09-bundle-replacement-design.md`)
+adds `removedFiles` and `orphanedSchedules` to the upload response.
+`uploadClient` reads them **tolerantly**: hosts that predate the feature send
+neither, and malformed values are dropped, because they are presentation data
+about a deploy that already landed — a deploy must never fail over its
+warning payload. `renderOutcome` prints them as a "Replaced previous bundle"
+section with a warning per orphaned schedule.
+
+`projectClient.listFiles()` reads the API-key-accessible file listing
+(`GET /api/projects/:slug/agency_files`) behind the same route-tolerance
+mechanism as the spend API: on a host that predates the route, an unknown 404
+becomes "this statelog host does not support the file listing API". It backs
+`agency remote files list`, the CLI's only file verb besides deploy —
+deliberately read-only, since files are mutated through whole-bundle deploys
+and per-file deletion stays a web-app action.
+
 Two rules for future changes:
 
 - New statelog client code must go through `readJsonBody`, not

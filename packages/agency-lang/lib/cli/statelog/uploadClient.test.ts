@@ -42,7 +42,60 @@ describe("uploadBundle", () => {
         "https://statelog.example/serve/u/proj/greeter/node/main",
       ],
       manifest,
+      // A host that predates bundle replacement sends neither field.
+      removedFiles: [],
+      orphanedSchedules: [],
     });
+  });
+
+  it("carries the bundle-replacement fields when the host sends them", async () => {
+    const orphan = {
+      id: "s1",
+      name: "mine",
+      fileName: "helpers",
+      targetKind: "node",
+      targetName: "refresh",
+    };
+    mockFetch(() => ({
+      success: true,
+      value: {
+        endpointUrls: ["/serve/u/proj/greeter/list"],
+        removedFiles: ["helpers.agency"],
+        orphanedSchedules: [orphan],
+      },
+    }));
+    const result = await uploadBundle(target, bundle);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.removedFiles).toEqual(["helpers.agency"]);
+    expect(result.orphanedSchedules).toEqual([orphan]);
+  });
+
+  it("drops malformed replacement values instead of failing a landed deploy", async () => {
+    mockFetch(() => ({
+      success: true,
+      value: {
+        endpointUrls: ["/serve/u/proj/greeter/list"],
+        removedFiles: ["ok.agency", 42, null],
+        orphanedSchedules: [
+          { id: "s1", name: null, fileName: "f", targetKind: "node", targetName: "n" },
+          { id: 7, fileName: "f", targetKind: "node", targetName: "n" },
+          { id: "s2", name: null, fileName: "f", targetKind: "job", targetName: "n" },
+          "not an object",
+        ],
+      },
+    }));
+    const result = await uploadBundle(target, bundle);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.removedFiles).toEqual(["ok.agency"]);
+    expect(result.orphanedSchedules).toEqual([
+      { id: "s1", name: null, fileName: "f", targetKind: "node", targetName: "n" },
+    ]);
   });
 
   it("surfaces a rejection envelope as an error", async () => {

@@ -8,6 +8,7 @@ import { color } from "@/utils/termcolors.js";
 import renderDeployReport from "@/templates/cli/deployReport.js";
 import type { DeployOutcome, DeployPlan } from "./deploy.js";
 import { serveBaseUrl } from "../statelog/uploadClient.js";
+import type { OrphanedSchedule } from "../statelog/uploadClient.js";
 import type { ServeManifest } from "../statelog/serveClient.js";
 import { curlExamples } from "./curlExamples.js";
 
@@ -25,9 +26,33 @@ export function renderOutcome(outcome: DeployOutcome): void {
       dryRun: outcome.kind === "preview",
       dryRunNote: `\n\n${color.yellow("dry run")} — nothing uploaded. Re-run without ${color.bold("--dry-run")} to deploy.`,
       deployed,
-      deployedBody: deployed ? deployedBody(outcome.endpointUrls, outcome.manifest) : "",
+      deployedBody:
+        outcome.kind === "deployed"
+          ? deployedBody(outcome.endpointUrls, outcome.manifest) +
+            replacementSection(outcome.removedFiles, outcome.orphanedSchedules)
+          : "",
     }),
   );
+}
+
+/** What this deploy removed from the project (bundle replacement), and any
+ *  schedules now pointing at a removed file. Empty on hosts that predate
+ *  bundle replacement, and on deploys that removed nothing. */
+function replacementSection(
+  removedFiles: string[],
+  orphanedSchedules: OrphanedSchedule[],
+): string {
+  if (removedFiles.length === 0) {
+    return "";
+  }
+  const rows = removedFiles.map((name) => `  ${color.dim("removed")} ${name}`);
+  for (const schedule of orphanedSchedules) {
+    const label = schedule.name === null ? schedule.id : `${schedule.id} (${schedule.name})`;
+    rows.push(
+      `  ${color.yellow("warning")} schedule ${label} targets ${schedule.targetKind} ${schedule.targetName} in removed file ${schedule.fileName} — its runs will fail until it is removed or the file returns`,
+    );
+  }
+  return section(color.bold("Replaced previous bundle"), rows);
 }
 
 function targetBlock(plan: DeployPlan): string {

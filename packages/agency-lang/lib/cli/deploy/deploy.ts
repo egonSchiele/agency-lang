@@ -8,6 +8,7 @@ import type { DeployTarget, TargetProvenance } from "./target.js";
 import { collectAgencyBundle, validateBundleCompiles } from "./bundle.js";
 import type { AgencyBundle } from "./bundle.js";
 import { uploadBundle } from "../statelog/uploadClient.js";
+import type { OrphanedSchedule } from "../statelog/uploadClient.js";
 import type { ServeManifest } from "../statelog/serveClient.js";
 
 export type DeployOptions = {
@@ -27,7 +28,14 @@ export type DeployPlan = {
 export type DeployOutcome =
   | { kind: "error"; error: string }
   | { kind: "preview"; plan: DeployPlan }
-  | { kind: "deployed"; plan: DeployPlan; endpointUrls: string[]; manifest?: ServeManifest };
+  | {
+      kind: "deployed";
+      plan: DeployPlan;
+      endpointUrls: string[];
+      manifest?: ServeManifest;
+      removedFiles: string[];
+      orphanedSchedules: OrphanedSchedule[];
+    };
 
 export async function deploy(
   entrypointPath: string,
@@ -69,5 +77,7 @@ export async function deploy(
     plan,
     endpointUrls: uploaded.endpointUrls,
     manifest: uploaded.manifest,
+    removedFiles: uploaded.removedFiles,
+    orphanedSchedules: uploaded.orphanedSchedules,
   };
 }

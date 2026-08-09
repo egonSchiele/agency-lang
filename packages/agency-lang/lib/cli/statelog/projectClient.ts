@@ -15,6 +15,18 @@ import { readJsonBody } from "./jsonBody.js";
 
 export type SourceFile = { name: string; contents: string };
 
+/** One deployed file's metadata, from the API-key-readable listing. `hasSource`
+ *  false marks the legacy rows that break the `/source` route; an empty
+ *  `bundleEntrypoints` marks a row untracked by bundle replacement. */
+export type ProjectFile = {
+  id: string;
+  fileName: string;
+  nodeNames: string[];
+  hasSource: boolean;
+  bundleEntrypoints: string[];
+  updatedAt: string;
+};
+
 export type TraceSummary = { id: string; createdAt: string };
 
 /** A statelog log row, narrowed to what the viewer bridge needs. `data` stays
@@ -55,8 +67,18 @@ const traceLogSchema = z
     data: row.data as { type: string } & Record<string, unknown>,
   }));
 
+const projectFileSchema: z.ZodType<ProjectFile> = z.object({
+  id: z.string().min(1),
+  fileName: z.string(),
+  nodeNames: z.array(z.string()),
+  hasSource: z.boolean(),
+  bundleEntrypoints: z.array(z.string()),
+  updatedAt: z.string(),
+});
+
 export type ProjectClient = {
   pullSource(): Promise<SourceFile[]>;
+  listFiles(): Promise<ProjectFile[]>;
   listTraces(): Promise<TraceSummary[]>;
   traceLogs(traceId: string): Promise<TraceLog[]>;
   getSpend(window: SpendWindow): Promise<ProjectSpend>;
@@ -148,6 +170,16 @@ export function createProjectClient(
   return {
     async pullSource() {
       return parseWire(sourceBundleSchema, await request({ segments: ["source"] })).files;
+    },
+    async listFiles() {
+      return parseWire(
+        z.array(projectFileSchema),
+        await request({
+          segments: ["agency_files"],
+          unsupportedRouteMessage:
+            "this statelog host does not support the file listing API (upgrade the host)",
+        }),
+      );
     },
     async listTraces() {
       return parseWire(z.array(traceSummarySchema), await request({ segments: ["traces"] }));

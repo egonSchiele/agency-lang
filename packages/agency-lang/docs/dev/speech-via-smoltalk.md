@@ -100,28 +100,34 @@ Type split (`stdlib/thread.agency`):
   compares them as unresolved aliases by name (assignability.ts) — a single alias
   would reject whichever builder returns the other name.
 
-## Cancellation is not yet supported by smoltalk (0.10.0)
+## Cancellation
 
-Agency pins `smoltalk ^0.10.0`, which shipped the audio operations (#36) but
-**without cancellation**: `TranscribeOptions`/`SpeakOptions` carry no
-`AbortSignal`, and the OpenAI-SDK calls inside smoltalk never pass one.
+Agency pins `smoltalk ^0.10.1`, which added `abortSignal` to the audio
+operations. The branch abort signal (`ctx.getAbortSignal(stack)`) is the SOLE
+cancellation channel: it is a method argument on `LLMClient.transcribe`/`speak`,
+deliberately NOT a config field (the derived `TranscribeConfig`/`SpeakConfig`
+`Omit` `abortSignal`), so there is exactly one place a signal can enter.
 
-`AbortSignal` is already the sole cancellation channel on the
-`LLMClient.transcribe`/`speak` methods, and `SmoltalkClient` forwards the branch
-signal into the opts via `withSignal` (one cast), so real cancellation activates
-the moment smoltalk adds the field. Until then:
+`SmoltalkClient` passes it as smoltalk's `abortSignal`, which forwards it to the
+provider SDK call — so a Ctrl-C / `race()` loss / time-guard trip aborts the
+in-flight request, not just Agency's wait.
 
-- **Works:** the wrapper's already-aborted preflight (an aborted branch throws
-  before any dispatch), and — for TTS — the pre-publication abort check (a
-  cancelled synthesis never writes its file).
-- **Inert:** mid-flight cancellation of an in-progress request. This is a
-  behavior REGRESSION for `transcribe` specifically — the old direct-`fetch`
-  path threaded the abort signal into `fetch`, so Ctrl-C / race-loss / a time
-  guard tore down the in-flight upload. Routing through smoltalk 0.10.0 loses
-  that until smoltalk exposes a signal.
+**Abort outcome adaptation.** smoltalk never throws for audio; on cancellation it
+resolves a distinguishable `failure("Request was aborted")`. The `LLMClient`
+contract (plan §5) is the opposite — cancellation must REJECT with the branch
+reason; a resolved failure means a non-cancellation failure. So the
+`SmoltalkClient` adapters call `rejectIfAborted(signal)` after the smoltalk call:
+if our OWN branch signal aborted, throw `signal.reason` (the runtime's
+`AgencyCancelledError`). Detection is by our signal, not by string-matching
+smoltalk's message, so it holds even if that string changes. `meteredDispatch`
+then records exactly one unresolved attempt for the rejection.
 
-Follow-up when smoltalk adds a signal option: drop the `withSignal` cast if the
-option becomes first-class, and add the `SmoltalkClient` adapter forwarding +
-real mid-flight cancellation unit tests deferred here (the DeterministicClient
-already honors the signal, so the wrapper/deterministic cancellation paths are
-covered; only the real-smoltalk forwarding is pending).
+Layers, all covered by tests: the wrapper's already-aborted preflight (throws
+before any dispatch), the `SmoltalkClient` mid-flight abort→reject adaptation,
+and — for TTS — the pre-publication abort check (a cancelled synthesis never
+writes its file). The `DeterministicClient` also honors the signal (rejects with
+its reason) so wrapper tests can exercise mid-request cancellation offline.
+
+Note: for a non-OpenAI provider (Gemini), smoltalk documents its cancellation as
+client-only (tears down the client request, not server-side billing). Agency's
+`std::speech` defaults to OpenAI (`whisper-1`/`tts-1`), which cancels fully.

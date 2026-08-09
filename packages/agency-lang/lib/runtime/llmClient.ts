@@ -88,12 +88,15 @@ export type SpeechResult = smoltalk.SpeechResult;
 /** A source for audio bytes: a local path, a URL, or inline bytes/base64. */
 export type AudioInput = smoltalk.BlobRef;
 
-export type TranscribeConfig = Omit<smoltalk.TranscribeOptions, "model"> & {
+export type TranscribeConfig = Omit<
+  smoltalk.TranscribeOptions,
+  "model" | "abortSignal"
+> & {
   model: string;
 };
 export type SpeakConfig = Omit<
   smoltalk.SpeakOptions,
-  "model" | "voice" | "format"
+  "model" | "voice" | "format" | "abortSignal"
 > & {
   model: string;
   voice: string;
@@ -221,23 +224,28 @@ export class SmoltalkClient implements LLMClient {
     } as ImageConfig);
   }
 
-  // Thin adapter: pass the complete config straight through (the wrapper already
-  // resolved every required field — see plan §8), attach the branch abort signal,
-  // and return smoltalk's Result unchanged. No defaults, no routing policy here.
+  // Thin adapter: pass the complete config through (the wrapper already resolved
+  // every required field — see plan §8) with the branch abort signal as smoltalk's
+  // `abortSignal`. No defaults, no routing policy here.
   //
-  // NOTE (smoltalk 0.10.0): the released TranscribeOptions/SpeakOptions still do
-  // NOT carry `signal` — audio landed without cancellation. We forward it anyway
-  // so the code is correct the moment smoltalk adds the field; until then
-  // mid-flight cancellation is inert and only the wrapper's already-aborted
-  // preflight (and, for TTS, the pre-publication abort check) applies. The
-  // `withSignal` cast is the single spot that tolerates the missing field.
-  // See docs/dev/speech-via-smoltalk.md "cancellation" for the follow-up.
+  // smoltalk never throws for audio: on cancellation it resolves a distinguishable
+  // `failure("Request was aborted")`. The `LLMClient` contract (plan §5) is instead
+  // "cancellation REJECTS with the branch reason; a resolved failure means a
+  // non-cancellation failure" — so `rejectIfAborted` converts an aborted outcome
+  // into a rejection carrying `signal.reason`. Detection is by our OWN signal, not
+  // by string-matching smoltalk's message, so it holds even if that string changes.
+  // meteredDispatch then records exactly one unresolved attempt for the rejection.
   async transcribe(
     source: AudioInput,
     config: TranscribeConfig,
     signal: AbortSignal,
   ): Promise<Result<TranscriptionResult>> {
-    return smoltalk.transcribe(source, withSignal(config, signal));
+    const result = await smoltalk.transcribe(source, {
+      ...config,
+      abortSignal: signal,
+    });
+    rejectIfAborted(signal);
+    return result;
   }
 
   async speak(
@@ -245,7 +253,9 @@ export class SmoltalkClient implements LLMClient {
     config: SpeakConfig,
     signal: AbortSignal,
   ): Promise<Result<SpeechResult>> {
-    return smoltalk.speak(text, withSignal(config, signal));
+    const result = await smoltalk.speak(text, { ...config, abortSignal: signal });
+    rejectIfAborted(signal);
+    return result;
   }
 
   normalizeError(err: unknown): NormalizedLLMError {
@@ -289,13 +299,15 @@ export class SmoltalkClient implements LLMClient {
 
 }
 
-/** Attach the branch abort signal to a smoltalk audio options object. Kept in
- *  one place because smoltalk 0.10.0's audio options type does not declare
- *  `signal` (audio shipped without cancellation); this is the only cast that
- *  bridges that gap, so when smoltalk adds the field the cast can be dropped
- *  wholesale. Until then the forwarded signal is inert on smoltalk's side. */
-function withSignal<T extends object>(config: T, signal: AbortSignal): T {
-  return { ...config, signal } as T;
+/** If the branch signal has aborted, throw its reason so cancellation surfaces
+ *  as the runtime's abort cause (an AgencyCancelledError) rather than smoltalk's
+ *  resolved `failure("Request was aborted")`. See the transcribe/speak adapters. */
+function rejectIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw signal.reason instanceof Error
+      ? signal.reason
+      : new Error("Request was aborted");
+  }
 }
 
 /** Convert agency's PromptConfig into smoltalk's SmolConfig.

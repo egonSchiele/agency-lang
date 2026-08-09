@@ -188,6 +188,25 @@ describe("_transcribe", () => {
       expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
     });
   });
+
+  it("a client that rejects on mid-flight abort records exactly one unresolved attempt and propagates the reason", async () => {
+    const filepath = await makeAudioFile();
+    const reason = new AgencyCancelledError("time guard");
+    // Mirrors SmoltalkClient's abort→reject adaptation: the dispatched call
+    // rejects with the branch reason once the signal fires mid-flight.
+    const transcribe: TranscribeImpl = async () => {
+      throw reason;
+    };
+    await withClient({ transcribe }, async ({ meter, transcription }) => {
+      await expect(
+        _transcribe(filepath, "", [root], "whisper-1", "", "", "", ""),
+      ).rejects.toBe(reason);
+      const { usage } = meter.snapshot();
+      expect(usage.unknownCostCallCount).toBe(1); // meteredDispatch records it
+      expect(usage.pricingComplete).toBe(false);
+      expect(transcription).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("_synthesizeSpeech", () => {

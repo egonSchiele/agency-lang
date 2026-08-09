@@ -6,13 +6,15 @@
 // guidance, in that order. Recipes render and return semantic outcomes; the
 // Commander actions own process.exitCode.
 
+import * as fs from "fs";
+import * as path from "path";
 import { color } from "@/utils/termcolors.js";
 import { resolveProjectTarget, fail } from "./util.js";
 import type { ProjectCommandOptions, RemoteCommandContext } from "./util.js";
 import { createSecretsClient, SecretRequestError } from "../../statelog/secretsClient.js";
 import type { SecretMetadata, SecretsClient } from "../../statelog/secretsClient.js";
 import { redactValues } from "../../statelog/redact.js";
-import { resolveSecretValue, terminalSafe } from "../secretsInput.js";
+import { resolveSecretValue, parseEnvSource, terminalSafe } from "../secretsInput.js";
 import type { SecretValueSources } from "../secretsInput.js";
 
 /** The set recipe's terminal dependencies, injected by the Commander action
@@ -91,6 +93,108 @@ export async function runSecretsRm(
     failSecretRequest(error);
   }
   console.log(`${color.green("Removed")} secret ${terminalSafe(name)}.`);
+}
+
+export type ImportResult =
+  | { kind: "declined" }
+  | { kind: "succeeded" }
+  | { kind: "failed" };
+
+export type SecretsImportIO = {
+  stdinIsTty: boolean;
+  readStdin: () => Promise<string>;
+  confirm: (question: string) => Promise<boolean>;
+};
+
+type ImportOutcome = { name: string; ok: boolean; message?: string };
+
+export async function runSecretsImport(
+  file: string | undefined,
+  options: ProjectCommandOptions,
+  context: RemoteCommandContext,
+  io: SecretsImportIO,
+): Promise<ImportResult> {
+  const target = resolveProjectTarget(context, options);
+  const fromStdin = file === "-";
+  const sourceName = fromStdin ? "<stdin>" : (file ?? ".env");
+
+  let text: string;
+  if (fromStdin) {
+    text = await io.readStdin();
+  } else {
+    const sourcePath = path.resolve(process.cwd(), sourceName);
+    try {
+      text = fs.readFileSync(sourcePath, "utf-8");
+    } catch (error) {
+      fail(`Could not read ${sourceName}: ${errorMessage(error)}`);
+    }
+  }
+
+  const { entries } = parseEnvSource(text);
+  if (entries.length === 0) {
+    fail(`No variables found in ${sourceName}.`);
+  }
+
+  // Confirmation is for FILE sources on a TTY only. An explicit `-` never
+  // prompts: after an interactive stdin entry the stream is exhausted at EOF,
+  // and choosing `-` is itself the authorization.
+  if (!fromStdin && io.stdinIsTty) {
+    const plural = entries.length === 1 ? "" : "s";
+    console.log(
+      `Import ${entries.length} secret${plural} into project ${target.projectSlug} from ${sourceName}:`,
+    );
+    for (const entry of entries) {
+      console.log(`  ${terminalSafe(entry.name)}`);
+    }
+    if (!(await io.confirm("Continue?"))) {
+      console.log("Canceled.");
+      return { kind: "declined" };
+    }
+  }
+
+  const allValues = entries.map((entry) => entry.value);
+  const client = createSecretsClient(target.origin, target.projectSlug, target.apiKey);
+  const outcomes: ImportOutcome[] = [];
+  for (const entry of entries) {
+    if (entry.value === "") {
+      outcomes.push({ name: entry.name, ok: false, message: "empty value — nothing sent" });
+      continue;
+    }
+    try {
+      await client.set(entry.name, entry.value);
+      outcomes.push({ name: entry.name, ok: true });
+    } catch (error) {
+      if (!(error instanceof SecretRequestError)) {
+        throw error;
+      }
+      outcomes.push({
+        name: entry.name,
+        ok: false,
+        message: presentSecretError(error, allValues),
+      });
+    }
+  }
+
+  renderImportSummary(outcomes);
+  return outcomes.some((outcome) => !outcome.ok) ? { kind: "failed" } : { kind: "succeeded" };
+}
+
+function renderImportSummary(outcomes: ImportOutcome[]): void {
+  const failed = outcomes.filter((outcome) => !outcome.ok);
+  const setCount = outcomes.length - failed.length;
+  if (failed.length === 0) {
+    const plural = setCount === 1 ? "" : "s";
+    console.log(`${color.green("Imported")} ${setCount} secret${plural}.`);
+    return;
+  }
+  console.log(`Imported ${setCount} of ${outcomes.length}; ${failed.length} failed:`);
+  for (const outcome of failed) {
+    console.log(`  ${terminalSafe(outcome.name)}: ${outcome.message}`);
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function clientFor(

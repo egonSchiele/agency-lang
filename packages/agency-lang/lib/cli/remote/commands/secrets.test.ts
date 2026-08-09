@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import {
   runSecretsSet,
   runSecretsList,
   runSecretsRm,
+  runSecretsImport,
   presentSecretError,
 } from "./secrets.js";
 import { SecretRequestError } from "../../statelog/secretsClient.js";
@@ -213,6 +217,171 @@ describe("runSecretsList", () => {
     listMock.mockRejectedValue(new SecretRequestError("boom", 500));
     await expect(runSecretsList(options, context)).rejects.toThrow("exit:1");
     expect(logSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("runSecretsImport", () => {
+  let dir: string;
+
+  function importIo(overrides: Partial<Parameters<typeof runSecretsImport>[3]> = {}) {
+    return {
+      stdinIsTty: true,
+      readStdin: vi.fn().mockResolvedValue(""),
+      confirm: vi.fn().mockResolvedValue(true),
+      ...overrides,
+    };
+  }
+
+  function writeEnv(name: string, contents: string): string {
+    const filePath = path.join(dir, name);
+    fs.writeFileSync(filePath, contents, "utf-8");
+    return filePath;
+  }
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), "secrets-import-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("confirms a file source with names only, then imports", async () => {
+    const file = writeEnv("prod.env", `A=1\nB=${SENTINEL}\n`);
+    setMock.mockResolvedValue(metadata);
+    const io = importIo();
+    const result = await runSecretsImport(file, options, context, io);
+    expect(result).toEqual({ kind: "succeeded" });
+    expect(io.confirm).toHaveBeenCalledWith("Continue?");
+    expect(setMock).toHaveBeenNthCalledWith(1, "A", "1");
+    expect(setMock).toHaveBeenNthCalledWith(2, "B", SENTINEL);
+    const confirmOutput = logSpy.mock.calls.map((call: unknown[]) => call.join(" ")).join("\n");
+    expect(confirmOutput).toContain("A");
+    expect(confirmOutput).not.toContain(SENTINEL);
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("declining imports nothing and returns declined without touching exitCode", async () => {
+    const file = writeEnv("prod.env", "A=1\n");
+    const io = importIo({ confirm: vi.fn().mockResolvedValue(false) });
+    const result = await runSecretsImport(file, options, context, io);
+    expect(result).toEqual({ kind: "declined" });
+    expect(setMock).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith("Canceled.");
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("skips confirmation for a file source when stdin is not a TTY", async () => {
+    const file = writeEnv("prod.env", "A=1\n");
+    setMock.mockResolvedValue(metadata);
+    const io = importIo({ stdinIsTty: false });
+    await runSecretsImport(file, options, context, io);
+    expect(io.confirm).not.toHaveBeenCalled();
+  });
+
+  it("a '-' source never confirms, even on a TTY", async () => {
+    setMock.mockResolvedValue(metadata);
+    const io = importIo({
+      stdinIsTty: true,
+      readStdin: vi.fn().mockResolvedValue("A=1\n"),
+    });
+    const result = await runSecretsImport("-", options, context, io);
+    expect(result).toEqual({ kind: "succeeded" });
+    expect(io.confirm).not.toHaveBeenCalled();
+    expect(setMock).toHaveBeenCalledWith("A", "1");
+  });
+
+  it("defaults to .env in the working directory", async () => {
+    writeEnv(".env", "FROM_DEFAULT=1\n");
+    vi.spyOn(process, "cwd").mockReturnValue(dir);
+    setMock.mockResolvedValue(metadata);
+    await runSecretsImport(undefined, options, context, importIo({ stdinIsTty: false }));
+    expect(setMock).toHaveBeenCalledWith("FROM_DEFAULT", "1");
+  });
+
+  it("continues past failures and returns failed after the full summary", async () => {
+    const file = writeEnv("prod.env", "A=1\nB=2\nC=3\n");
+    setMock
+      .mockResolvedValueOnce(metadata)
+      .mockRejectedValueOnce(
+        new SecretRequestError("This project has reached the maximum number of secrets.", 200),
+      )
+      .mockResolvedValueOnce(metadata);
+    const result = await runSecretsImport(file, options, context, importIo({ stdinIsTty: false }));
+    expect(result).toEqual({ kind: "failed" });
+    expect(setMock).toHaveBeenCalledTimes(3);
+    const output = allOutput();
+    expect(output).toContain("maximum number of secrets");
+    expect(output).toContain("B:");
+  });
+
+  it("401 outcomes carry the one-line guidance inside a one-line summary row", async () => {
+    const file = writeEnv("prod.env", "A=1\n");
+    setMock.mockRejectedValue(new SecretRequestError("nope", 401));
+    await runSecretsImport(file, options, context, importIo({ stdinIsTty: false }));
+    const failureLines = logSpy.mock.calls
+      .map((call: unknown[]) => call.join(" "))
+      .filter((line) => line.includes("full-access API key"));
+    expect(failureLines).toHaveLength(1);
+    expect(failureLines[0]).not.toContain("\n");
+  });
+
+  it("an empty value is a per-name failure with no POST; others are attempted", async () => {
+    const file = writeEnv("prod.env", "EMPTY=\nREAL=x\n");
+    setMock.mockResolvedValue(metadata);
+    const result = await runSecretsImport(file, options, context, importIo({ stdinIsTty: false }));
+    expect(result).toEqual({ kind: "failed" });
+    expect(setMock).toHaveBeenCalledTimes(1);
+    expect(setMock).toHaveBeenCalledWith("REAL", "x");
+    expect(allOutput()).toContain("EMPTY");
+  });
+
+  it("a non-SecretRequestError from the client rethrows", async () => {
+    const file = writeEnv("prod.env", "A=1\n");
+    setMock.mockRejectedValue(new TypeError("bug"));
+    await expect(
+      runSecretsImport(file, options, context, importIo({ stdinIsTty: false })),
+    ).rejects.toThrow("bug");
+  });
+
+  it("cross-name defense in depth: a failure for A never leaks B's value", async () => {
+    const bValue = "multi\nline-secret-value";
+    const file = writeEnv("prod.env", `A=1\nB="${bValue}"\n`);
+    setMock
+      .mockRejectedValueOnce(new SecretRequestError(`server echoed ${bValue}`, 200))
+      .mockResolvedValueOnce(metadata);
+    await runSecretsImport(file, options, context, importIo({ stdinIsTty: false }));
+    expect(allOutput()).not.toContain("line-secret-value");
+    expect(allOutput()).toContain("[redacted]");
+  });
+
+  it("an empty parse fails naming the file", async () => {
+    const file = writeEnv("empty.env", "# only comments\n");
+    await expect(
+      runSecretsImport(file, options, context, importIo({ stdinIsTty: false })),
+    ).rejects.toThrow("exit:1");
+    expect(allOutput()).toContain("empty.env");
+    expect(setMock).not.toHaveBeenCalled();
+  });
+
+  it("an empty stdin parse fails naming <stdin>", async () => {
+    await expect(
+      runSecretsImport(
+        "-",
+        options,
+        context,
+        importIo({ readStdin: vi.fn().mockResolvedValue("") }),
+      ),
+    ).rejects.toThrow("exit:1");
+    expect(allOutput()).toContain("<stdin>");
+  });
+
+  it("total success prints the count and returns succeeded", async () => {
+    const file = writeEnv("prod.env", "A=1\nB=2\n");
+    setMock.mockResolvedValue(metadata);
+    const result = await runSecretsImport(file, options, context, importIo({ stdinIsTty: false }));
+    expect(result).toEqual({ kind: "succeeded" });
+    expect(allOutput()).toContain("2");
   });
 });
 

@@ -86,4 +86,30 @@ describe("SmoltalkClient.transcribe / speak adapters", () => {
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error).toBe("no api key");
   });
+
+  it("rejects with a NON-Error abort reason unchanged (identity preserved)", async () => {
+    const controller = new AbortController();
+    const reason = { kind: "sentinel-object-reason" }; // abort() accepts non-Error values
+    vi.mocked(smoltalk.speak).mockImplementation(async () => {
+      controller.abort(reason);
+      return { success: false, error: "Request was aborted" } as any;
+    });
+    await expect(
+      client.speak("hi", { model: "tts-1", voice: "alloy", format: "mp3" }, controller.signal),
+    ).rejects.toBe(reason); // the exact object, not a wrapped Error
+  });
+
+  it("keeps a SUCCESS that raced ahead of a late abort (not discarded as cancellation)", async () => {
+    const controller = new AbortController();
+    const value = { text: "done before abort" };
+    vi.mocked(smoltalk.transcribe).mockImplementation(async () => {
+      // The request resolved successfully; the branch aborts a tick later.
+      const result = { success: true, value } as any;
+      controller.abort(new AgencyCancelledError("late"));
+      return result;
+    });
+    const r = await client.transcribe(source, { model: "whisper-1" }, controller.signal);
+    expect(r.success).toBe(true); // success + its real cost survive the late abort
+    if (r.success) expect(r.value).toBe(value);
+  });
 });

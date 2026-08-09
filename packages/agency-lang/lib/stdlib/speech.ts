@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
-import { writeFile, unlink, stat, link } from "fs/promises";
+import { constants as fsConstants } from "fs";
+import { writeFile, unlink, lstat, access, link, open } from "fs/promises";
 import { performance } from "node:perf_hooks";
 import { nanoid } from "nanoid";
 import os from "os";
@@ -16,6 +17,13 @@ import {
   recordUnresolvedAttempt,
 } from "../runtime/recordPaidUsage.js";
 import { addTokens } from "../runtime/cost.js";
+import { projectProviderTokenUsage } from "../runtime/invocationUsage.js";
+import {
+  SPEAK_FORMATS,
+  SPEECH_FORMAT_TO_MIME,
+  isSpeakFormat,
+  type SpeakFormat,
+} from "../runtime/audioFormats.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
 import type {
   AudioInput,
@@ -24,7 +32,15 @@ import type {
 } from "../runtime/llmClient.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
-import type { ThreadStore } from "../runtime/state/threadStore.js";
+
+/** TTS speed bounds (OpenAI). Validated before the interrupt in speech.agency
+ *  and again defensively at the runtime boundary for direct/deterministic callers. */
+const MIN_SPEECH_SPEED = 0.25;
+const MAX_SPEECH_SPEED = 4;
+
+/** Transcription timestamp granularities `std::speech.transcribe` accepts;
+ *  `""` requests none. */
+const TRANSCRIBE_GRANULARITIES = ["", "segment", "word"] as const;
 
 /**
  * `say` blocks until the whole utterance has been spoken, which can be
@@ -72,41 +88,7 @@ async function speakImpl(
   }
 }
 
-/** Deprecated context-injected wrapper kept during the ALS migration;
- *  see `_speak`. */
-export async function __internal_speak(
-  ctx: RuntimeContext<any>,
-  stack: StateStack,
-  _threads: ThreadStore,
-  text: string,
-  voice: string,
-  rate: number,
-  outputFile: string,
-): Promise<void> {
-  return speakImpl(ctx, stack, text, voice, rate, outputFile);
-}
-
-/**
- * DEPRECATED local-playback alias. `_speak` used to back `std::speech.speak`,
- * which was macOS local playback. The public function is now named `say` and
- * `speak` is CLOUD text-to-speech (`_synthesizeSpeech`). This symbol is kept —
- * with its exact old local-playback behavior — so an already-compiled artifact
- * that imports `_speak` can never silently reach a cloud call. New code calls
- * `_say`. See plan §11a and the frozen ABI fixture.
- */
-export async function _speak(
-  text: string,
-  voice: string,
-  rate: number,
-  outputFile: string,
-  allowedPaths?: string[],
-): Promise<void> {
-  const { ctx, stack } = getRuntimeContext();
-  return speakImpl(ctx, stack, text, voice, rate, outputFile, allowedPaths);
-}
-
-/** Backs `std::speech.say` (local macOS text-to-speech playback). Shares the
- *  exact private implementation as the deprecated `_speak`. */
+/** Backs `std::speech.say` (local macOS text-to-speech playback). */
 export async function _say(
   text: string,
   voice: string,
@@ -219,19 +201,7 @@ async function recordImpl(
   return outPath;
 }
 
-/** Deprecated context-injected wrapper kept during the ALS migration;
- *  see `_record`. */
-export async function __internal_record(
-  ctx: RuntimeContext<any>,
-  stack: StateStack,
-  _threads: ThreadStore,
-  outputFile: string,
-  silenceTimeout: number,
-): Promise<string> {
-  return recordImpl(ctx, stack, outputFile, silenceTimeout);
-}
-
-/** ALS-reading replacement for `__internal_record`. */
+/** Backs `std::speech.record`. */
 export async function _record(
   outputFile: string,
   silenceTimeout: number,
@@ -253,43 +223,61 @@ export async function _record(
 // Both helpers THROW on failure (the std::speech / std::fs idiom) — a smoltalk
 // failure Result becomes a thrown Error with its already-redacted message.
 
-/** Requested audio output format → expected returned MIME. Mirrors smoltalk's
- *  `SPEECH_FORMAT_TO_MIME` so the post-dispatch MIME check agrees with what
- *  `speak()` returns. Kept local to avoid importing a smoltalk internal path. */
-const SPEECH_FORMAT_TO_MIME: Record<string, string> = {
-  mp3: "audio/mpeg",
-  opus: "audio/ogg",
-  aac: "audio/aac",
-  flac: "audio/flac",
-  wav: "audio/wav",
-  pcm: "application/octet-stream",
-};
-
-/** The abort reason to surface for an already-aborted branch signal. */
-function abortReasonError(signal: AbortSignal): Error {
-  return signal.reason instanceof Error
-    ? signal.reason
-    : new AgencyCancelledError("operation cancelled");
+/** Throw the branch signal's abort reason UNCHANGED (identity preserved — a
+ *  string/object reason can matter to cancellation handling). Only synthesize an
+ *  error when the reason is genuinely absent. */
+function throwAbortReason(signal: AbortSignal): never {
+  throw signal.reason ?? new AgencyCancelledError("operation cancelled");
 }
 
-/** Statelog projections: strip everything except the closed field sets, so a
- *  transcript's raw provider payload (audio-token fields, `raw`, PCM metadata,
- *  audio bytes) can never reach a remote sink. */
-function projectStatelogUsage(
-  usage: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; cacheCreationInputTokens?: number; totalTokens?: number } | undefined,
-) {
-  if (!usage) return undefined;
-  return {
-    inputTokens: usage.inputTokens,
-    outputTokens: usage.outputTokens,
-    cachedInputTokens: usage.cachedInputTokens,
-    cacheCreationInputTokens: usage.cacheCreationInputTokens,
-    totalTokens: usage.totalTokens,
-  };
-}
+/** Strip cost to its total for statelog (never the raw provider cost object). */
 function projectStatelogCost(cost: { totalCost?: number } | undefined) {
   if (!cost) return undefined;
   return { totalCost: cost.totalCost };
+}
+
+/** Normalize a caller-supplied format (case + a leading dot) to the canonical
+ *  form, or throw if it is not a supported format. Used by the runtime helpers so
+ *  a direct/deterministic caller cannot slip an unsupported format past the
+ *  extension / MIME checks. */
+function normalizeSpeakFormat(format: string): SpeakFormat {
+  const normalized = format.toLowerCase().replace(/^\./, "");
+  if (!isSpeakFormat(normalized)) {
+    throw new Error(
+      `speak: unsupported format "${format}" (supported: ${SPEAK_FORMATS.join(", ")}).`,
+    );
+  }
+  return normalized;
+}
+
+/** Validate speak's format + speed. Runs BEFORE the interrupt (via
+ *  `_validateSpeakArgs`) and again at the runtime boundary. */
+function validateSpeakArgs(format: string, speed: number): void {
+  normalizeSpeakFormat(format); // throws on an unsupported format
+  if (!Number.isFinite(speed) || speed < MIN_SPEECH_SPEED || speed > MAX_SPEECH_SPEED) {
+    throw new Error(
+      `speak: speed must be a finite number in [${MIN_SPEECH_SPEED}, ${MAX_SPEECH_SPEED}] (got ${speed}).`,
+    );
+  }
+}
+
+/** Validate transcribe's timestamp granularity. */
+function validateTranscribeGranularity(granularity: string): void {
+  if (!(TRANSCRIBE_GRANULARITIES as readonly string[]).includes(granularity)) {
+    throw new Error(
+      `transcribe: timestampGranularity must be one of ${TRANSCRIBE_GRANULARITIES.map((g) => `"${g}"`).join(", ")} (got "${granularity}").`,
+    );
+  }
+}
+
+/** Pre-interrupt validation hook for `std::speech.speak` — see speech.agency. */
+export function _validateSpeakArgs(format: string, speed: number): void {
+  validateSpeakArgs(format, speed);
+}
+
+/** Pre-interrupt validation hook for `std::speech.transcribe` — see speech.agency. */
+export function _validateTranscribeArgs(timestampGranularity: string): void {
+  validateTranscribeGranularity(timestampGranularity);
 }
 
 /**
@@ -309,6 +297,8 @@ export async function _transcribe(
   timestampGranularity: string,
   apiKey: string,
 ): Promise<string> {
+  validateTranscribeGranularity(timestampGranularity);
+
   const { ctx, stack } = getRuntimeContext();
   const client = ctx.llmClient;
   if (!client.transcribe) {
@@ -318,27 +308,29 @@ export async function _transcribe(
   }
 
   const signal = ctx.getAbortSignal(stack);
-  if (signal.aborted) throw abortReasonError(signal); // preflight: no dispatch
+  if (signal.aborted) throwAbortReason(signal); // preflight: no dispatch
 
-  // Local preflight — Agency's allow-list + a real readable file — before the
-  // metered boundary, so a missing/unreadable path never looks like paid work.
+  // Local preflight — Agency's allow-list + a real, readable, regular file —
+  // before the metered boundary, so a missing/unreadable path never looks like
+  // paid work. `lstat` (no symlink follow) surfaces a dangling symlink here
+  // rather than as a post-dispatch link() EEXIST; `access` proves readability,
+  // which `stat`/`isFile` alone does not.
   const resolvedPath = await resolveDir(filepath, allowedPaths ?? []);
-  const info = await stat(resolvedPath); // throws ENOENT for a missing file
+  const info = await lstat(resolvedPath); // throws ENOENT for a missing file
   if (!info.isFile()) {
     throw new Error(`transcribe: not a regular file: ${resolvedPath}`);
   }
+  await access(resolvedPath, fsConstants.R_OK); // throws EACCES if unreadable
 
   const source: AudioInput = { kind: "path", path: resolvedPath };
-  const config: TranscribeConfig = {
-    model,
-    ...(provider ? { provider } : {}),
-    ...(language ? { language } : {}),
-    ...(prompt ? { prompt } : {}),
-    ...(timestampGranularity
-      ? { timestampGranularity: timestampGranularity as "segment" | "word" }
-      : {}),
-    ...(apiKey ? { apiKey: { openAi: apiKey } } : {}),
-  };
+  const config: TranscribeConfig = { model };
+  if (provider) config.provider = provider;
+  if (language) config.language = language;
+  if (prompt) config.prompt = prompt;
+  if (timestampGranularity) {
+    config.timestampGranularity = timestampGranularity as "segment" | "word";
+  }
+  if (apiKey) config.apiKey = { openAi: apiKey };
 
   const start = performance.now();
   const result = await meteredDispatch(ctx, stack, "transcription", () =>
@@ -354,6 +346,9 @@ export async function _transcribe(
   }
   const tr = result.value;
 
+  // One projection feeds the meter (via recordUsage), the branch total (addTokens),
+  // and statelog — so they agree and no audio-token field leaks to a sink.
+  const projected = projectProviderTokenUsage(tr.usage, "transcription").usage;
   recordUsage(ctx, stack, {
     type: "provider",
     kind: "transcription",
@@ -361,13 +356,13 @@ export async function _transcribe(
     cost: tr.cost,
     tokens: tr.usage,
   });
-  addTokens(tr.usage?.totalTokens ?? 0);
+  addTokens(projected.totalTokens);
   ctx.statelogClient.transcription({
     textPreview: tr.text.slice(0, PROMPT_PREVIEW_MAX),
     model,
     durationSeconds: tr.durationSeconds,
     timeTaken,
-    usage: projectStatelogUsage(tr.usage),
+    usage: projected,
     cost: projectStatelogCost(tr.cost),
   });
   stack.enforceGuards(); // LAST — a trip still leaves spend accounted + traced
@@ -391,22 +386,31 @@ export async function publishSpeechOutput(
     dir,
     `.${path.basename(finalPath)}.agency-tts-${nanoid()}.part`,
   );
-  let staged = false;
+  // Open with "wx" FIRST and only mark ownership once the exclusive create
+  // SUCCEEDS. A failed open (e.g. an EEXIST collision on an unowned path) must
+  // never lead cleanup to delete a path we do not own. A create that succeeds
+  // then fails mid-write (ENOSPC) leaves an owned partial stage that cleanup
+  // must remove — hence ownership tracks the open, not the write.
+  let handle: Awaited<ReturnType<typeof open>>;
   try {
-    await writeFile(stage, audio, { flag: "wx" }); // exclusive create of the stage
-    staged = true;
-    if (signal.aborted) throw abortReasonError(signal); // last abort check before commit
+    handle = await open(stage, "wx");
+  } catch (openError) {
+    throw openError; // never created the stage — nothing owned to clean up
+  }
+  try {
+    await handle.writeFile(audio);
+    await handle.close();
+    if (signal.aborted) throwAbortReason(signal); // last abort check before commit
     await link(stage, finalPath); // atomic no-clobber commit (EEXIST if target appeared)
   } catch (primaryError) {
-    if (staged) {
-      try {
-        await unlink(stage);
-      } catch (cleanupError) {
-        throw new AggregateError(
-          [primaryError, cleanupError],
-          "Speech output failed and staging cleanup failed",
-        );
-      }
+    await handle.close().catch(() => {}); // idempotent; already closed on the happy path
+    try {
+      await unlink(stage);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [primaryError, cleanupError],
+        "Speech output failed and staging cleanup failed",
+      );
     }
     throw primaryError;
   }
@@ -438,6 +442,12 @@ export async function _synthesizeSpeech(
   allowedPaths: string[],
   apiKey: string,
 ): Promise<string> {
+  // Normalize + validate before any work: an unsupported format or out-of-range
+  // speed must never reach dispatch or publish a mislabeled artifact, even for a
+  // direct/deterministic caller that bypassed speech.agency's pre-interrupt check.
+  const canonicalFormat = normalizeSpeakFormat(format);
+  validateSpeakArgs(canonicalFormat, speed);
+
   const { ctx, stack } = getRuntimeContext();
   const client = ctx.llmClient;
   if (!client.speak) {
@@ -447,22 +457,21 @@ export async function _synthesizeSpeech(
   }
 
   const signal = ctx.getAbortSignal(stack);
-  if (signal.aborted) throw abortReasonError(signal); // preflight: no dispatch
+  if (signal.aborted) throwAbortReason(signal); // preflight: no dispatch
 
-  const ext = format;
   // Resolve + authorize the destination. An empty outputFile auto-generates a
   // runtime-owned temp path (exempt from allowedPaths, like record()).
   let finalPath: string;
   if (outputFile) {
     finalPath = await resolveDir(outputFile, allowedPaths ?? []);
-    const explicitExt = path.extname(finalPath).replace(/^\./, "");
-    if (explicitExt && explicitExt.toLowerCase() !== ext) {
+    const explicitExt = path.extname(finalPath).replace(/^\./, "").toLowerCase();
+    if (explicitExt && explicitExt !== canonicalFormat) {
       throw new Error(
-        `speak: output file extension ".${explicitExt}" does not match format "${format}".`,
+        `speak: output file extension ".${explicitExt}" does not match format "${canonicalFormat}".`,
       );
     }
   } else {
-    finalPath = path.join(os.tmpdir(), `agency-tts-${nanoid()}.${ext}`);
+    finalPath = path.join(os.tmpdir(), `agency-tts-${nanoid()}.${canonicalFormat}`);
   }
   // No-clobber preflight: new speech output never overwrites an existing file.
   if (await pathExists(finalPath)) {
@@ -472,11 +481,11 @@ export async function _synthesizeSpeech(
   const config: SpeakConfig = {
     model,
     voice,
-    format: format as SpeakConfig["format"],
+    format: canonicalFormat,
     speed,
-    ...(provider ? { provider } : {}),
-    ...(apiKey ? { apiKey: { openAi: apiKey } } : {}),
   };
+  if (provider) config.provider = provider;
+  if (apiKey) config.apiKey = { openAi: apiKey };
 
   const start = performance.now();
   const result = await meteredDispatch(ctx, stack, "speech", () =>
@@ -503,17 +512,17 @@ export async function _synthesizeSpeech(
     textPreview: text.slice(0, PROMPT_PREVIEW_MAX),
     model,
     voice,
-    format,
+    format: canonicalFormat,
     timeTaken,
     cost: projectStatelogCost(speech.cost),
   });
   stack.enforceGuards(); // LAST accounting gate — a trip means no file is written
 
-  const expectedMime = SPEECH_FORMAT_TO_MIME[format];
-  if (expectedMime && speech.mimeType !== expectedMime) {
+  const expectedMime = SPEECH_FORMAT_TO_MIME[canonicalFormat];
+  if (speech.mimeType !== expectedMime) {
     // Usage is already accounted; we simply do not publish a mismatched artifact.
     throw new Error(
-      `speak: provider returned "${speech.mimeType}" but format "${format}" expects "${expectedMime}".`,
+      `speak: provider returned "${speech.mimeType}" but format "${canonicalFormat}" expects "${expectedMime}".`,
     );
   }
 
@@ -521,12 +530,18 @@ export async function _synthesizeSpeech(
   return finalPath;
 }
 
-/** True when `p` exists (any type). A missing path is the normal case. */
+/** True when `p` exists (any kind, symlink NOT followed). Only a genuine
+ *  ENOENT counts as "missing" and returns false; EACCES / ELOOP / I/O errors
+ *  rethrow so paid synthesis never proceeds toward a predictably-failing commit,
+ *  and a dangling symlink (which `stat` would mask as ENOENT) is surfaced. */
 async function pathExists(p: string): Promise<boolean> {
   try {
-    await stat(p);
+    await lstat(p);
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+    throw err;
   }
 }

@@ -22,17 +22,7 @@ import {
   DETERMINISTIC_TRANSCRIBE_COST,
   DETERMINISTIC_TRANSCRIPT,
 } from "../constants.js";
-
-/** Format → returned MIME, matching smoltalk's `SPEECH_FORMAT_TO_MIME`, so the
- *  deterministic speak() returns a MIME the std::speech wrapper accepts. */
-const DETERMINISTIC_SPEECH_MIME: Record<string, string> = {
-  mp3: "audio/mpeg",
-  opus: "audio/ogg",
-  aac: "audio/aac",
-  flac: "audio/flac",
-  wav: "audio/wav",
-  pcm: "application/octet-stream",
-};
+import { SPEECH_FORMAT_TO_MIME, type SpeakFormat } from "./audioFormats.js";
 
 /** Optional delays so tests can exercise mid-request cancellation of the audio
  *  capabilities without touching the existing text/tool mock queues. */
@@ -102,6 +92,15 @@ const SYNTHETIC_COST = {
   totalCost: 0.000002,
   currency: "USD",
 };
+
+/** Reject immediately if already aborted, with the signal's reason unchanged —
+ *  the entry guard for the audio methods so a pre-aborted call never "succeeds"
+ *  even at the default zero delay. */
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw signal.reason ?? new Error("Request was aborted.");
+  }
+}
 
 /** Sleep that a request abort interrupts, rejecting with the signal's
  *  reason — the same observable behavior as a cancelled provider call. */
@@ -330,6 +329,7 @@ export class DeterministicClient implements LLMClient {
     _config: TranscribeConfig,
     signal: AbortSignal,
   ): Promise<Result<TranscriptionResult>> {
+    throwIfAborted(signal); // entry check: a pre-aborted signal never "succeeds"
     if (this.speechOptions.transcriptionDelayMs) {
       await abortableDelay(this.speechOptions.transcriptionDelayMs, signal);
     }
@@ -354,11 +354,12 @@ export class DeterministicClient implements LLMClient {
     config: SpeakConfig,
     signal: AbortSignal,
   ): Promise<Result<SpeechResult>> {
+    throwIfAborted(signal); // entry check: a pre-aborted signal never "succeeds"
     if (this.speechOptions.speechDelayMs) {
       await abortableDelay(this.speechOptions.speechDelayMs, signal);
     }
     const mimeType =
-      DETERMINISTIC_SPEECH_MIME[config.format] ?? "application/octet-stream";
+      SPEECH_FORMAT_TO_MIME[config.format as SpeakFormat] ?? "application/octet-stream";
     return {
       success: true,
       value: {

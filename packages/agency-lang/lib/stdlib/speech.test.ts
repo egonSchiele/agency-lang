@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm, readFile, stat } from "fs/promises";
+import { mkdtemp, writeFile, rm, readFile, stat, symlink, chmod } from "fs/promises";
 import os from "os";
 import path from "path";
 import { agencyStore } from "../runtime/asyncContext.js";
@@ -294,6 +294,85 @@ describe("_synthesizeSpeech", () => {
   });
 });
 
+describe("argument validation + preflight (before any paid dispatch)", () => {
+  it("rejects an unsupported speak format before dispatch", async () => {
+    const speak = vi.fn();
+    await withClient({ speak: speak as any }, async ({ meter }) => {
+      await expect(
+        _synthesizeSpeech("hi", path.join(root, "o.mp3"), "alloy", "tts-1", "", "bogus", 1, [root], ""),
+      ).rejects.toThrow(/unsupported format/);
+      expect(speak).not.toHaveBeenCalled();
+      expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
+    });
+  });
+
+  it("rejects an out-of-range / non-finite speak speed before dispatch", async () => {
+    const speak = vi.fn();
+    await withClient({ speak: speak as any }, async () => {
+      await expect(
+        _synthesizeSpeech("hi", path.join(root, "o.mp3"), "alloy", "tts-1", "", "mp3", 9, [root], ""),
+      ).rejects.toThrow(/speed/);
+      await expect(
+        _synthesizeSpeech("hi", path.join(root, "o2.mp3"), "alloy", "tts-1", "", "mp3", NaN, [root], ""),
+      ).rejects.toThrow(/speed/);
+      expect(speak).not.toHaveBeenCalled();
+    });
+  });
+
+  it("normalizes format case + a leading dot (a valid call still dispatches)", async () => {
+    let seenFormat: string | undefined;
+    const speak: SpeakImpl = async (_t, config) => {
+      seenFormat = config.format;
+      return speakOk();
+    };
+    await withClient({ speak }, async () => {
+      const out = await _synthesizeSpeech("hi", "", "alloy", "tts-1", "", ".MP3", 1, [root], "");
+      expect(seenFormat).toBe("mp3");
+      expect(out.endsWith(".mp3")).toBe(true);
+    });
+  });
+
+  it("rejects an invalid transcribe timestampGranularity before dispatch", async () => {
+    const filepath = await makeAudioFile();
+    const transcribe = vi.fn();
+    await withClient({ transcribe: transcribe as any }, async ({ meter }) => {
+      await expect(
+        _transcribe(filepath, "", [root], "whisper-1", "", "", "bogus", ""),
+      ).rejects.toThrow(/timestampGranularity/);
+      expect(transcribe).not.toHaveBeenCalled();
+      expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
+    });
+  });
+
+  it("refuses a dangling-symlink output target before dispatch (no clobber, no dispatch)", async () => {
+    const link = path.join(root, "dangling.mp3");
+    await symlink(path.join(root, "does-not-exist"), link);
+    const speak = vi.fn();
+    await withClient({ speak: speak as any }, async () => {
+      await expect(
+        _synthesizeSpeech("hi", link, "alloy", "tts-1", "", "mp3", 1, [root], ""),
+      ).rejects.toThrow(/already exists/);
+      expect(speak).not.toHaveBeenCalled();
+    });
+  });
+
+  it("refuses an unreadable input file before dispatch (access R_OK)", async () => {
+    if (typeof process.getuid === "function" && process.getuid() === 0) return; // root bypasses perms
+    const filepath = path.join(root, "unreadable.wav");
+    await writeFile(filepath, Buffer.from([1, 2, 3]));
+    await chmod(filepath, 0o000);
+    const transcribe = vi.fn();
+    await withClient({ transcribe: transcribe as any }, async ({ meter }) => {
+      await expect(
+        _transcribe(filepath, "", [root], "whisper-1", "", "", "", ""),
+      ).rejects.toThrow();
+      expect(transcribe).not.toHaveBeenCalled();
+      expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
+    });
+    await chmod(filepath, 0o644); // let afterEach rm the temp root
+  });
+});
+
 describe("publishSpeechOutput", () => {
   it("publishes the exact bytes atomically", async () => {
     const out = path.join(root, "pub.mp3");
@@ -323,5 +402,18 @@ describe("publishSpeechOutput", () => {
       publishSpeechOutput(out, new Uint8Array([1, 2, 3]), controller.signal),
     ).rejects.toThrow(/stop/);
     await expect(stat(out)).rejects.toThrow();
+  });
+
+  it("a failed stage open (unwritable dir) throws without touching an unowned path", async () => {
+    if (typeof process.getuid === "function" && process.getuid() === 0) return; // root bypasses perms
+    const dir = path.join(root, "ro");
+    const { mkdir } = await import("fs/promises");
+    await mkdir(dir);
+    await chmod(dir, 0o500); // read+execute, no write → open("wx") fails
+    const signal = new AbortController().signal;
+    await expect(
+      publishSpeechOutput(path.join(dir, "x.mp3"), new Uint8Array([1, 2, 3]), signal),
+    ).rejects.toThrow();
+    await chmod(dir, 0o700); // restore so afterEach can remove it
   });
 });

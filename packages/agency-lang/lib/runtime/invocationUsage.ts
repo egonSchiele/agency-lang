@@ -201,6 +201,24 @@ function fallbackTotalTokens(kind: UsageKind, t: { inputTokens: number; outputTo
   return { value: acc, saturated };
 }
 
+/**
+ * The ONE closed projection of a provider's raw token usage. Every consumer of a
+ * completion/audio usage — the invocation meter (via `recordUsage`), the branch
+ * total (`stack.localTokens`), the global token stats, and every statelog payload
+ * — must run raw usage through this before using it, so they all agree on the
+ * total and none of them serialize an undeclared audio-token field. Wraps the
+ * same `buildTokens` normalization the meter uses, so the numbers are identical
+ * by construction. `attributionLost` is true when the total is only a lower bound
+ * (audio counters present, no authoritative `totalTokens`).
+ */
+export function projectProviderTokenUsage(
+  raw: unknown,
+  kind: UsageKind = "completion",
+): { usage: TokenBreakdown; attributionLost: boolean } {
+  const { tokens, malformed } = buildTokens(raw, kind, false);
+  return { usage: tokens, attributionLost: malformed };
+}
+
 function buildTokens(raw: unknown, kind: UsageKind, absentDegrades: boolean): { tokens: TokenBreakdown; malformed: boolean } {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : undefined;
   const input = tokenCounter(obj?.inputTokens, absentDegrades);

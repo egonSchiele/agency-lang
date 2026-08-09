@@ -267,6 +267,19 @@ describe("DeterministicClient scoped mocks", () => {
       }
     });
 
+    it("rejects a pre-aborted signal at the default ZERO delay (entry check), with the exact reason", async () => {
+      const client = new DeterministicClient([]); // no delay configured
+      const controller = new AbortController();
+      const reason = new AgencyCancelledError("already gone");
+      controller.abort(reason);
+      await expect(
+        client.transcribe({ kind: "path", path: "a.wav" }, { model: "whisper-1" }, controller.signal),
+      ).rejects.toBe(reason);
+      await expect(
+        client.speak("hi", { model: "tts-1", voice: "alloy", format: "mp3" }, controller.signal),
+      ).rejects.toBe(reason);
+    });
+
     it("honors a mid-request abort via the configured delay, rejecting with the reason", async () => {
       const client = new DeterministicClient([], { transcriptionDelayMs: 10_000, speechDelayMs: 10_000 });
       const controller = new AbortController();

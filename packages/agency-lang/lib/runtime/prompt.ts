@@ -22,6 +22,7 @@ import {
 } from "./turnBoundary.js";
 import { AgencyCancelledError, isAbortError, makeAbortCause, readCause } from "./errors.js";
 import { recordCompletionUsage, meteredDispatch } from "./recordPaidUsage.js";
+import { projectProviderTokenUsage } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { abortableSleep } from "../stdlib/abortable.js";
 import { decideRetry, decideValidationRetry, enrichSchemaLimitationError, resolveRetryPolicy } from "./llmRetry.js";
@@ -732,6 +733,11 @@ async function _runPrompt({
 
   const modelName = resolveCompletionModel(completion.model, clientConfig.model);
 
+  // Project raw provider usage into the closed shape ONCE, so statelog, the
+  // global stats, the branch total, and the invocation meter all see the same
+  // total and none serialize an audio-token field (see projectProviderTokenUsage).
+  const projectedUsage = projectProviderTokenUsage(completion.usage, "completion").usage;
+
   ctx.statelogClient.promptCompletion({
     messages: withMessageLabels(messages),
     completion,
@@ -739,7 +745,7 @@ async function _runPrompt({
     timeTaken: endTime - startTime,
     tools,
     responseFormat,
-    usage: completion.usage,
+    usage: projectedUsage,
     cost: completion.cost,
     finishReason: (completion as any).finishReason ?? (completion as any).finish_reason,
     stream,
@@ -759,7 +765,7 @@ async function _runPrompt({
 
   updateTokenStats({
     globals: ctx.globals,
-    usage: completion.usage,
+    usage: projectedUsage,
     cost: completion.cost,
     model: modelName,
   });

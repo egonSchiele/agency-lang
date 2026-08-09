@@ -204,7 +204,7 @@ export function abortableSpawn(
 
 /**
  * Spawn a child that we don't need to read output from, with the
- * same abort-on-signal behavior. Used for `_speak` (the `say`
+ * same abort-on-signal behavior. Used for `_say` (the `say`
  * command), `_screenshot`, `_openUrl`, etc. — anything where we
  * just want to wait for the child to exit, getting an
  * `AgencyCancelledError` if the run is cancelled.

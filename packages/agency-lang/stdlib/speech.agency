@@ -5,14 +5,16 @@
 //
 // `_transcribe` and `_synthesizeSpeech` are CLOUD calls that route
 // through the active LLM client (like `std::image`), so they inherit
-// Agency's cost accounting, spend guards, and statelog. The deprecated
-// `_speak`/`__internal_*` runtime exports still mean LOCAL playback and
-// are kept only so already-compiled artifacts keep resolving.
+// Agency's cost accounting, spend guards, and statelog. `_validateSpeakArgs`
+// / `_validateTranscribeArgs` validate the closed-set arguments BEFORE the
+// approval interrupt, so an invalid call never prompts and never dispatches.
 import {
   _say,
   _record,
   _transcribe,
   _synthesizeSpeech,
+  _validateSpeakArgs,
+  _validateTranscribeArgs,
 } from "agency-lang/stdlib-lib/speech.js"
 
 /** @module Speak text aloud locally, synthesize and transcribe speech in the
@@ -128,6 +130,7 @@ export def transcribe(
   if (model == "") {
     throw("transcribe model cannot be empty")
   }
+  _validateTranscribeArgs(timestampGranularity)
 
   return interrupt std::transcribe("Send this audio to the active cloud speech provider?", {
     requestedProvider: provider,
@@ -182,6 +185,7 @@ export def speak(
   if (voice == "") {
     throw("speak voice cannot be empty")
   }
+  _validateSpeakArgs(format, speed)
 
   return interrupt std::synthesizeSpeech("Send this text to the active cloud speech provider?", {
     requestedProvider: provider,

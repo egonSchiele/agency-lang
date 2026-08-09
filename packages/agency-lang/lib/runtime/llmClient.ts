@@ -231,9 +231,11 @@ export class SmoltalkClient implements LLMClient {
   // smoltalk never throws for audio: on cancellation it resolves a distinguishable
   // `failure("Request was aborted")`. The `LLMClient` contract (plan §5) is instead
   // "cancellation REJECTS with the branch reason; a resolved failure means a
-  // non-cancellation failure" — so `rejectIfAborted` converts an aborted outcome
-  // into a rejection carrying `signal.reason`. Detection is by our OWN signal, not
-  // by string-matching smoltalk's message, so it holds even if that string changes.
+  // non-cancellation failure" — so on a FAILURE result `rejectIfAborted` converts
+  // an aborted outcome into a rejection carrying `signal.reason` (detected by our
+  // OWN signal, not by string-matching smoltalk's message). We only do this when
+  // the result FAILED: a request that raced to a real success before a late abort
+  // keeps its success + real cost, rather than being discarded as a cancellation.
   // meteredDispatch then records exactly one unresolved attempt for the rejection.
   async transcribe(
     source: AudioInput,
@@ -244,7 +246,7 @@ export class SmoltalkClient implements LLMClient {
       ...config,
       abortSignal: signal,
     });
-    rejectIfAborted(signal);
+    if (!result.success) rejectIfAborted(signal);
     return result;
   }
 
@@ -254,7 +256,7 @@ export class SmoltalkClient implements LLMClient {
     signal: AbortSignal,
   ): Promise<Result<SpeechResult>> {
     const result = await smoltalk.speak(text, { ...config, abortSignal: signal });
-    rejectIfAborted(signal);
+    if (!result.success) rejectIfAborted(signal);
     return result;
   }
 
@@ -299,14 +301,14 @@ export class SmoltalkClient implements LLMClient {
 
 }
 
-/** If the branch signal has aborted, throw its reason so cancellation surfaces
- *  as the runtime's abort cause (an AgencyCancelledError) rather than smoltalk's
- *  resolved `failure("Request was aborted")`. See the transcribe/speak adapters. */
+/** If the branch signal has aborted, throw its reason UNCHANGED so cancellation
+ *  surfaces as the runtime's abort cause rather than smoltalk's resolved
+ *  `failure("Request was aborted")`. Identity is preserved — `abort()` accepts
+ *  strings/objects/null and that can matter to race/cancellation handling — and
+ *  a reason is only synthesized when genuinely absent. See the adapters. */
 function rejectIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
-    throw signal.reason instanceof Error
-      ? signal.reason
-      : new Error("Request was aborted");
+    throw signal.reason ?? new Error("Request was aborted");
   }
 }
 

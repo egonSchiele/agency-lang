@@ -19,8 +19,10 @@ package). Read it for the full rationale; this note is the code map.
 | `speak(text, …)` | CLOUD text-to-speech → file path | `std::synthesizeSpeech` | `_synthesizeSpeech` |
 
 Breaking rename (Agency has no users): the old local-playback `speak` is now
-`say`. The `speak` name is the new CLOUD TTS. This is a deliberate,
-approval-safety-relevant change — see the effect note below.
+`say`, and `speak` is the new CLOUD TTS. Because there are no users, there is no
+back-compat shim — the old `_speak` / `__internal_*` runtime exports were
+removed, not kept as aliases. This is a deliberate, approval-safety-relevant
+change — see the effect note below.
 
 ## Effects are capability boundaries, not just prompts
 
@@ -34,13 +36,22 @@ approval-safety-relevant change — see the effect note below.
   (may be `""` = automatic); a custom `LLMClient` still owns actual routing, so
   the prompt says "the active cloud speech provider", not a resolved destination.
 
-## ABI freeze: `_speak` stays local (`lib/stdlib/speech.ts`)
+## Runtime helpers (`lib/stdlib/speech.ts`)
 
-`_speak` and `__internal_speak` are exported runtime symbols that meant LOCAL
-playback. An already-compiled artifact can import them against a newer runtime,
-so they are kept with their exact old local behavior. New local `say()` calls
-`_say` (same private `speakImpl`); new cloud `speak()` calls the NEW
-`_synthesizeSpeech`. No runtime symbol ever changes from local to cloud meaning.
+Local `say()` calls `_say`; cloud `speak()` calls `_synthesizeSpeech`; cloud
+`transcribe()` calls `_transcribe`. No runtime symbol means both local and cloud.
+There is no back-compat alias: with no users, the old `_speak` / `__internal_*`
+exports were deleted rather than frozen.
+
+Argument validation (format, speed, timestamp granularity) lives in
+`validateSpeakArgs` / `validateTranscribeGranularity` and runs at TWO points:
+`speech.agency` calls the `_validateSpeakArgs` / `_validateTranscribeArgs` exports
+BEFORE the approval interrupt (an invalid call never prompts), and the runtime
+helpers validate again at their boundary (a direct/deterministic caller that
+bypassed the `.agency` still can't publish a mislabeled artifact). `format` is
+normalized (case + a leading dot) against the shared `SPEAK_FORMATS` /
+`SPEECH_FORMAT_TO_MIME` in `lib/runtime/audioFormats.ts` — the single source both
+this helper and the `DeterministicClient` use.
 
 ## Failure accounting: honest #809 provenance (`lib/stdlib/speech.ts`)
 
@@ -72,15 +83,22 @@ failure is logged and the published file is kept.
   companion statelog server/DB `usage_events.kind` migration is a SEPARATE
   cross-repo change (see the plan §7); this PR is Agency-only.
 - Audio tokens (`inputAudioTokens`/`outputAudioTokens`, gpt-audio-1.5 chat) are
-  COLLAPSED into `totalTokens` for v1 — they never surface as their own fields
-  in the normalized `TokenBreakdown`. `buildTokens` only uses them to widen the
-  FALLBACK total to a conservative `max(text-sum, audio-sum)` lower bound when
-  the provider's `totalTokens` is absent/malformed, and marks attribution lost
-  in that case.
-- Leaf events `transcription` + `speechSynthesis` (`lib/statelogClient.ts`)
-  mirror `imageGeneration`. Previews are `PROMPT_PREVIEW_MAX`-capped; audio
-  bytes / `raw` / `pcm` are never logged. The wrapper projects usage/cost to the
-  closed field sets before handing them to the event.
+  COLLAPSED into `totalTokens` for v1 — they never surface as their own fields in
+  the normalized `TokenBreakdown`. `buildTokens` only uses them to widen the
+  FALLBACK total to a conservative `max(text-sum, audio-sum)` lower bound when the
+  provider's `totalTokens` is absent/malformed, marking attribution lost.
+- **One projection, every consumer.** `projectProviderTokenUsage(raw, kind)`
+  (`lib/runtime/invocationUsage.ts`) wraps that same `buildTokens`, so the
+  invocation meter (via `recordUsage`), the branch total (`stack.localTokens` in
+  `recordCompletionUsage`; `addTokens` in `_transcribe`), the global token stats
+  (`updateTokenStats`), and every statelog payload all use the identical projected
+  total and never serialize an audio-token field. Before this, the completion path
+  fed the meter one number (44) and the branch/global/statelog the raw one (0) for
+  the same call — that skew is what the single projection closes.
+- Leaf events `transcription` + `speechSynthesis` (`lib/statelogClient.ts`) mirror
+  `imageGeneration`. Previews are `PROMPT_PREVIEW_MAX`-capped; audio bytes / `raw`
+  / `pcm` are never logged. The wrapper hands the projected usage + a total-only
+  cost to the event.
 
 ## Audio in chat messages (`std::thread`)
 

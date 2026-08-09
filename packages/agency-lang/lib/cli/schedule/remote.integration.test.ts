@@ -16,7 +16,8 @@ function response(status: number, body: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: vi.fn().mockResolvedValue(body),
+    url: "",
+    text: vi.fn().mockResolvedValue(JSON.stringify(body)),
   } as unknown as Response;
 }
 

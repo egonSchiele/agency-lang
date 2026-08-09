@@ -11,6 +11,7 @@ import {
   type ProjectSpend,
   type SpendWindow,
 } from "./spendTypes.js";
+import { readJsonBody } from "./jsonBody.js";
 
 export type SourceFile = { name: string; contents: string };
 
@@ -95,9 +96,10 @@ export function createProjectClient(
   apiKey: string,
 ): ProjectClient {
   async function request(input: ProjectRequest): Promise<unknown> {
+    const url = projectRouteUrl(origin, projectSlug, input.segments, input.query);
     let response: Response;
     try {
-      response = await fetch(projectRouteUrl(origin, projectSlug, input.segments, input.query), {
+      response = await fetch(url, {
         method: "GET",
         headers: { Authorization: `Bearer ${apiKey}` },
       });
@@ -105,7 +107,7 @@ export function createProjectClient(
       throw new ProjectRequestError(`could not reach ${origin} (${message(error)})`);
     }
 
-    const parsed = await parseResponseJson(response);
+    const parsed = await readJsonBody(response, { method: "GET", url });
 
     // Non-2xx first: auth middleware returns a bare `{ error }`, not an envelope.
     if (!response.ok) {
@@ -132,9 +134,7 @@ export function createProjectClient(
     }
 
     if (!parsed.ok) {
-      throw new ProjectRequestError(
-        `statelog returned a non-JSON response (HTTP ${response.status})`,
-      );
+      throw new ProjectRequestError(parsed.error);
     }
     const envelope = validateEnvelope(parsed.value);
     if (!envelope.success) {
@@ -193,16 +193,6 @@ function parseWire<T>(schema: z.ZodType<T>, value: unknown): T {
     );
   }
   return result.data;
-}
-
-async function parseResponseJson(
-  response: Response,
-): Promise<{ ok: true; value: unknown } | { ok: false }> {
-  try {
-    return { ok: true, value: await response.json() };
-  } catch {
-    return { ok: false };
-  }
 }
 
 function validateEnvelope(value: unknown): { success: boolean; value?: unknown; error?: unknown } {

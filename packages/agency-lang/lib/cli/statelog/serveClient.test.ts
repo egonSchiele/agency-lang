@@ -17,7 +17,8 @@ function mockFetch(handler: (url: string) => { status?: number; json: unknown })
     return {
       ok: status >= 200 && status < 300,
       status,
-      json: async () => json,
+      url: String(url),
+      text: async () => JSON.stringify(json),
     } as unknown as globalThis.Response;
   }) as unknown as typeof fetch);
   return { urls };
@@ -69,9 +70,8 @@ describe("createServeClient", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((async () => ({
       ok: false,
       status: 500,
-      json: async () => {
-        throw new Error("not json");
-      },
+      url: "",
+      text: async () => "<html>Internal Server Error</html>",
     })) as unknown as typeof fetch);
     await expect(client().invokeNode("main", {})).rejects.toBeInstanceOf(ServeRequestError);
   });

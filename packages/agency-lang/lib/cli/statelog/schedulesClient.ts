@@ -8,6 +8,7 @@
 // success by status — this client already does not.
 
 import { z } from "zod";
+import { readJsonBody } from "./jsonBody.js";
 
 export type ScheduleTarget = {
   kind: "node" | "function";
@@ -105,14 +106,15 @@ export function createSchedulesClient(
       init.body = JSON.stringify(input.body);
     }
 
+    const url = routeUrl(input.segments);
     let response: Response;
     try {
-      response = await fetch(routeUrl(input.segments), init);
+      response = await fetch(url, init);
     } catch (error) {
       throw new ScheduleRequestError(`could not reach ${origin} (${message(error)})`);
     }
 
-    const parsed = await parseResponseJson(response);
+    const parsed = await readJsonBody(response, { method: input.method, url });
 
     // Non-2xx first: auth middleware returns a bare `{ error }`, not an envelope.
     if (!response.ok) {
@@ -127,10 +129,7 @@ export function createSchedulesClient(
     }
 
     if (!parsed.ok) {
-      throw new ScheduleRequestError(
-        `statelog returned a non-JSON response (HTTP ${response.status})`,
-        response.status,
-      );
+      throw new ScheduleRequestError(parsed.error, response.status);
     }
     const envelope = asObject(parsed.value);
     if (!envelope || typeof envelope.success !== "boolean") {
@@ -192,16 +191,6 @@ function parseWire<T>(schema: z.ZodType<T>, value: unknown): T {
     );
   }
   return result.data;
-}
-
-async function parseResponseJson(
-  response: Response,
-): Promise<{ ok: true; value: unknown } | { ok: false }> {
-  try {
-    return { ok: true, value: await response.json() };
-  } catch {
-    return { ok: false };
-  }
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {

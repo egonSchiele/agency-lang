@@ -10,7 +10,12 @@ const bundle = {
 function mockFetch(handler: (url: string, init?: { method?: string }) => unknown): void {
   vi.spyOn(globalThis, "fetch").mockImplementation((async (url: unknown, init?: { method?: string }) => {
     const body = handler(String(url), init);
-    return { ok: true, status: 200, json: async () => body } as unknown as globalThis.Response;
+    return {
+      ok: true,
+      status: 200,
+      url: String(url),
+      text: async () => JSON.stringify(body),
+    } as unknown as globalThis.Response;
   }) as unknown as typeof fetch);
 }
 
@@ -58,10 +63,17 @@ describe("uploadBundle", () => {
         return {
           ok: true,
           status: 200,
-          json: async () => ({ success: true, value: { endpointUrls: ["/serve/u/p/g/list"] } }),
+          url: String(url),
+          text: async () =>
+            JSON.stringify({ success: true, value: { endpointUrls: ["/serve/u/p/g/list"] } }),
         } as unknown as globalThis.Response;
       }
-      return { ok: false, status: 500, json: async () => ({}) } as unknown as globalThis.Response;
+      return {
+        ok: false,
+        status: 500,
+        url: String(url),
+        text: async () => "{}",
+      } as unknown as globalThis.Response;
     }) as unknown as typeof fetch);
 
     const result = await uploadBundle(target, bundle);
@@ -70,6 +82,31 @@ describe("uploadBundle", () => {
       return;
     }
     expect(result.manifest).toBeUndefined();
+  });
+
+  // The http:// misconfiguration in the wild: the https redirect turns the
+  // POST into an unauthenticated GET, and the sign-in page comes back as
+  // HTML with HTTP 200. The error must say all of that, not just "non-JSON".
+  it("describes a redirect to the sign-in page instead of a bare non-JSON error", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((async () => ({
+      ok: true,
+      status: 200,
+      url: "https://statelog.example/signin?redirect=/api/projects/proj/upload",
+      text: async () => "<!doctype html><title>Sign in</title>",
+    })) as unknown as typeof fetch);
+
+    const result = await uploadBundle(target, bundle);
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error).toContain("non-JSON response (HTTP 200)");
+    expect(result.error).toContain("POST https://statelog.example/api/projects/proj/upload");
+    expect(result.error).toContain(
+      "redirected to https://statelog.example/signin?redirect=/api/projects/proj/upload",
+    );
+    expect(result.error).toContain("use https://");
+    expect(result.error).toContain("<!doctype html><title>Sign in</title>");
   });
 
   it("rejects a cross-origin endpoint URL and never fetches the manifest", async () => {

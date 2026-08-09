@@ -6,6 +6,7 @@
 // schema, or a `success:false` body — surfaces as an AccountRequestError.
 
 import { z } from "zod";
+import { readJsonBody } from "./jsonBody.js";
 import {
   accountSpendRowSchema,
   toSpendQuery,
@@ -128,24 +129,19 @@ export function createAccountClient(origin: string, apiKey: string): AccountClie
       init.body = JSON.stringify(options.body ?? {});
     }
 
+    const url = accountRouteUrl(origin, route, options.query);
     let response: Response;
     try {
-      response = await fetch(accountRouteUrl(origin, route, options.query), init);
+      response = await fetch(url, init);
     } catch (error) {
       throw new AccountRequestError(`could not reach ${origin} (${message(error)})`);
     }
 
-    let json: unknown;
-    let parsed = true;
-    try {
-      json = await response.json();
-    } catch {
-      parsed = false;
-    }
+    const parsed = await readJsonBody(response, { method, url });
 
     // Non-2xx first: auth middleware returns a bare `{ error }`, not an envelope.
     if (!response.ok) {
-      const serverError = parsed ? asObject(json)?.error : undefined;
+      const serverError = parsed.ok ? asObject(parsed.value)?.error : undefined;
       if (response.status === 403 && serverError === ACCOUNT_SCOPE_ERROR) {
         throw new AccountScopeError(ACCOUNT_SCOPE_ERROR);
       }
@@ -164,12 +160,10 @@ export function createAccountClient(origin: string, apiKey: string): AccountClie
       throw new AccountRequestError(`statelog request failed (HTTP ${response.status})`);
     }
 
-    if (!parsed) {
-      throw new AccountRequestError(
-        `statelog returned a non-JSON response (HTTP ${response.status})`,
-      );
+    if (!parsed.ok) {
+      throw new AccountRequestError(parsed.error);
     }
-    const envelope = asObject(json);
+    const envelope = asObject(parsed.value);
     if (!envelope || typeof envelope.success !== "boolean") {
       throw new AccountRequestError("unexpected account response shape");
     }

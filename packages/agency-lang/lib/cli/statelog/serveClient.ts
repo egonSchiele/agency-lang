@@ -5,6 +5,7 @@
 // JSON, schema, or a `success:false` body — surfaces as a ServeRequestError.
 
 import { z } from "zod";
+import { readJsonBody } from "./jsonBody.js";
 import { hasInterrupts } from "@/runtime/interrupts.js";
 import type { Interrupt } from "@/runtime/interrupts.js";
 import { isFailure } from "@/runtime/result.js";
@@ -91,21 +92,15 @@ export function createServeClient(address: ServeAddress, apiKey: string): ServeC
       throw new ServeRequestError(`could not reach ${url} (${message(error)})`);
     }
 
-    let json: unknown;
-    let parsed = true;
-    try {
-      json = await response.json();
-    } catch {
-      parsed = false;
-    }
+    const parsed = await readJsonBody(response, { method, url });
 
     // A non-2xx is a failure even with a valid JSON body — surface it as a
     // ServeRequestError (with the server's message when it gave one) rather than
     // letting a 404/500 body flow on as a bogus value or manifest.
     if (!response.ok) {
       const envelopeError =
-        parsed && json !== null && typeof json === "object"
-          ? (json as { error?: unknown }).error
+        parsed.ok && parsed.value !== null && typeof parsed.value === "object"
+          ? (parsed.value as { error?: unknown }).error
           : undefined;
       throw new ServeRequestError(
         typeof envelopeError === "string"
@@ -113,10 +108,10 @@ export function createServeClient(address: ServeAddress, apiKey: string): ServeC
           : `statelog request failed (HTTP ${response.status})`,
       );
     }
-    if (!parsed) {
-      throw new ServeRequestError(`statelog returned a non-JSON response (HTTP ${response.status})`);
+    if (!parsed.ok) {
+      throw new ServeRequestError(parsed.error);
     }
-    return json;
+    return parsed.value;
   }
 
   // node/function/resume speak the { success, value } envelope; /list does not.

@@ -1,0 +1,191 @@
+/** @module
+  Amazon S3 access from Agency code — get and put objects (text or binary) and
+  create buckets — with no AWS SDK dependency. Requests are signed with AWS
+  Signature Version 4 using only Node's built-in crypto.
+
+  Credentials come from the standard AWS environment variables
+  (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and optionally
+  `AWS_SESSION_TOKEN`). The region defaults to `AWS_REGION`, then `us-east-1`,
+  and can be overridden per call.
+
+  ```ts
+  import { s3Put, s3Get } from "std::aws/s3"
+
+  node main() {
+    s3Put("my-bucket", "notes.txt", "hello") with approve
+    const text = s3Get("my-bucket", "notes.txt") with approve
+    print(text)
+  }
+  ```
+
+  Every operation raises an interrupt before it runs, so an S3 function handed to
+  an LLM as a tool cannot read or write a bucket without going through a handler.
+  Lock the `bucket` parameter with `.partial(bucket: ...)` to scope an agent to a
+  single bucket.
+
+  Scope: plain SigV4; virtual-hosted and path-style endpoints across the
+  commercial, GovCloud, China, and ISO partitions. Binary is base64 in and out.
+*/
+
+import {
+  _s3Get,
+  _s3GetBinary,
+  _s3Put,
+  _s3PutBinary,
+  _createBucket,
+} from "agency-lang/stdlib-lib/aws/s3.js"
+
+effect std::aws::s3::get {
+  bucket: string,
+  key: string,
+  region: string,
+}
+
+effect std::aws::s3::getBinary {
+  bucket: string,
+  key: string,
+  region: string,
+}
+
+effect std::aws::s3::put {
+  bucket: string,
+  key: string,
+  region: string,
+}
+
+effect std::aws::s3::putBinary {
+  bucket: string,
+  key: string,
+  region: string,
+}
+
+effect std::aws::s3::createBucket {
+  bucket: string,
+  region: string,
+}
+
+export def s3Get(
+  bucket: string,
+  key: string,
+  region: string = "",
+): Result {
+  """
+  Download an S3 object as UTF-8 text. Complete `.` and `..` key segments are rejected.
+
+  @param bucket - The S3 bucket name
+  @param key - The object key (path within the bucket)
+  @param region - AWS region; defaults to AWS_REGION, then us-east-1
+  """
+  return interrupt std::aws::s3::get(
+    "Allow reading the object '${key}' from S3 bucket '${bucket}'?",
+    {
+      bucket: bucket,
+      key: key,
+      region: region,
+    },
+  )
+  return try _s3Get(bucket, key, region)
+}
+
+export def s3GetBinary(
+  bucket: string,
+  key: string,
+  region: string = "",
+): Result {
+  """
+  Download an S3 object as base64, not readable text. Complete `.` and `..` key segments are rejected.
+
+  @param bucket - The S3 bucket name
+  @param key - The object key (path within the bucket)
+  @param region - AWS region; defaults to AWS_REGION, then us-east-1
+  """
+  return interrupt std::aws::s3::getBinary(
+    "Allow reading the binary object '${key}' from S3 bucket '${bucket}'?",
+    {
+      bucket: bucket,
+      key: key,
+      region: region,
+    },
+  )
+  return try _s3GetBinary(bucket, key, region)
+}
+
+export def s3Put(
+  bucket: string,
+  key: string,
+  content: string,
+  region: string = "",
+  contentType: string = "text/plain",
+): Result {
+  """
+  Upload UTF-8 text to S3. Returns the bucket, key, URL, and ETag. Complete `.` and `..` key segments are rejected.
+
+  @param bucket - The S3 bucket name
+  @param key - The object key (path within the bucket)
+  @param content - The text to write
+  @param region - AWS region; defaults to AWS_REGION, then us-east-1
+  @param contentType - The Content-Type for the object
+  """
+  return interrupt std::aws::s3::put(
+    "Allow writing the object '${key}' to S3 bucket '${bucket}'?",
+    {
+      bucket: bucket,
+      key: key,
+      region: region,
+    },
+  )
+  destructive {
+    return try _s3Put(bucket, key, content, region, contentType)
+  }
+}
+
+export def s3PutBinary(
+  bucket: string,
+  key: string,
+  base64: string,
+  region: string = "",
+  contentType: string = "application/octet-stream",
+): Result {
+  """
+  Upload strict base64-decoded binary to S3. Returns the bucket, key, URL, and ETag. Complete `.` and `..` key segments are rejected.
+
+  @param bucket - The S3 bucket name
+  @param key - The object key (path within the bucket)
+  @param base64 - The binary content, base64-encoded
+  @param region - AWS region; defaults to AWS_REGION, then us-east-1
+  @param contentType - The Content-Type for the object
+  """
+  return interrupt std::aws::s3::putBinary(
+    "Allow writing the binary object '${key}' to S3 bucket '${bucket}'?",
+    {
+      bucket: bucket,
+      key: key,
+      region: region,
+    },
+  )
+  destructive {
+    return try _s3PutBinary(bucket, key, base64, region, contentType)
+  }
+}
+
+export def createBucket(
+  bucket: string,
+  region: string = "",
+): Result {
+  """
+  Create an S3 bucket and return its bucket, region, and location.
+
+  @param bucket - The globally-unique bucket name to create
+  @param region - AWS region; defaults to AWS_REGION, then us-east-1
+  """
+  return interrupt std::aws::s3::createBucket(
+    "Allow creating the S3 bucket '${bucket}'?",
+    {
+      bucket: bucket,
+      region: region,
+    },
+  )
+  destructive {
+    return try _createBucket(bucket, region)
+  }
+}

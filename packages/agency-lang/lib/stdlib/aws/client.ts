@@ -110,7 +110,12 @@ export async function sendAwsRequest(
     const response = await fetch(wireUrl, {
       method: request.method,
       headers,
-      body: request.method === "GET" ? undefined : request.body,
+      // Node's fetch accepts a Uint8Array body at runtime; the cast sidesteps
+      // TS 5.x's ArrayBufferLike-vs-ArrayBuffer strictness on BufferSource.
+      body:
+        request.method === "GET"
+          ? undefined
+          : (request.body as BodyInit | undefined),
       signal,
     });
     const bytes = await readBodyBytesCapped(response, wireUrl, signal);

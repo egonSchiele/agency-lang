@@ -1,0 +1,36 @@
+{
+  "sourceFile": "aws-s3.agency",
+  "fetchMocks": [],
+  "tests": [
+    {
+      "nodeName": "rejectedWriteIsFailure",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "reject"
+        }
+      ]
+    },
+    {
+      "nodeName": "approvedWriteTracksDestructive",
+      "input": "",
+      "expectedOutput": "[false,true]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "interruptHandlers": [
+        {
+          "action": "approve"
+        }
+      ]
+    }
+  ]
+}

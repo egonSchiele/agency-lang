@@ -32,6 +32,13 @@ import type { CreateKeyOptions } from "@/cli/remote/commands/keys.js";
 import { runSpend } from "@/cli/remote/commands/spend.js";
 import type { SpendOptions } from "@/cli/remote/commands/spend.js";
 import { runPull } from "@/cli/remote/commands/pull.js";
+import {
+  runSecretsSet,
+  runSecretsList,
+  runSecretsRm,
+  runSecretsImport,
+} from "@/cli/remote/commands/secrets.js";
+import { confirmQuestion, promptSecretValue } from "@/cli/remote/confirmation.js";
 import type { PullOptions } from "@/cli/remote/commands/pull.js";
 import { runLogs } from "@/cli/remote/commands/logs.js";
 import {
@@ -621,6 +628,68 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option(HOST_OPTION, HOST_DESC)
     .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
     .action((opts: PullOptions) => runPull(opts, getConfigContext()));
+
+  const secretsCmd = remoteCmd
+    .command("secrets")
+    .description("Manage the project's hosted environment secrets (write-only store)");
+
+  secretsCmd
+    .command("set")
+    .description("Set a secret's value (hidden prompt, piped stdin, or --from-env; never argv)")
+    .argument("<NAME>", "Environment variable name the hosted agent reads with env(NAME)")
+    .option("--from-env <VAR>", "copy the value of a local environment variable")
+    .option(PROJECT_OPTION, PROJECT_DESC)
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action(async (name: string, opts: ProjectCommandOptions & { fromEnv?: string }) => {
+      const result = await runSecretsSet(name, opts, getConfigContext(), {
+        stdinIsTty: process.stdin.isTTY === true,
+        readStdin,
+        promptHidden: promptSecretValue,
+        env: process.env,
+      });
+      if (result.kind === "canceled") {
+        process.exitCode = 1;
+      }
+    });
+
+  secretsCmd
+    .command("list")
+    .alias("ls")
+    .description("List secret names and timestamps (values are never returned)")
+    .option(PROJECT_OPTION, PROJECT_DESC)
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((opts: ProjectCommandOptions) => runSecretsList(opts, getConfigContext()));
+
+  secretsCmd
+    .command("rm")
+    .description("Delete a secret")
+    .argument("<NAME>", "Name of the secret to delete")
+    .option(PROJECT_OPTION, PROJECT_DESC)
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action((name: string, opts: ProjectCommandOptions) =>
+      runSecretsRm(name, opts, getConfigContext()),
+    );
+
+  secretsCmd
+    .command("import")
+    .description("Bulk-import secrets from a dotenv file (default .env; '-' reads stdin)")
+    .argument("[file]", "dotenv file to import (default: .env; '-' for stdin)")
+    .option(PROJECT_OPTION, PROJECT_DESC)
+    .option(HOST_OPTION, HOST_DESC)
+    .option(API_KEY_ENV_OPTION, API_KEY_ENV_DESC)
+    .action(async (file: string | undefined, opts: ProjectCommandOptions) => {
+      const result = await runSecretsImport(file, opts, getConfigContext(), {
+        stdinIsTty: process.stdin.isTTY === true,
+        readStdin,
+        confirm: confirmQuestion,
+      });
+      if (result.kind !== "succeeded") {
+        process.exitCode = 1;
+      }
+    });
 
   remoteCmd
     .command("logs")

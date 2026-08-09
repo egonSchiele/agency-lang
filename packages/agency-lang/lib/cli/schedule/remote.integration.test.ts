@@ -103,7 +103,7 @@ describe("addRemote vertical contract", () => {
       timezone: "UTC",
     });
 
-    const output = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    const output = logSpy.mock.calls.map((call: unknown[]) => call.join(" ")).join("\n");
     expect(output).toContain("sched-42");
     // Server-authoritative: the slice must not have written any local state.
     expect(fs.readFileSync(configPath, "utf-8")).toBe(configBytes);
@@ -120,7 +120,7 @@ describe("addRemote vertical contract", () => {
     );
 
     expect(logSpy).not.toHaveBeenCalled();
-    const errors = errorSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+    const errors = errorSpy.mock.calls.map((call: unknown[]) => call.join(" ")).join("\n");
     expect(errors).toContain("Project already has the maximum of 20 schedules");
     expect(errors).not.toContain("vertical-secret");
     expect(fs.readFileSync(configPath, "utf-8")).toBe(configBytes);

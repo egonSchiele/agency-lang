@@ -68,7 +68,7 @@ const remoteScheduleSchema: z.ZodType<RemoteSchedule> = z.object({
   fileName: z.string(),
   targetKind: z.enum(["node", "function"]),
   targetName: z.string(),
-  args: z.record(z.unknown()),
+  args: z.record(z.string(), z.unknown()),
   cronExpr: z.string(),
   timezone: z.string(),
   enabled: z.boolean(),

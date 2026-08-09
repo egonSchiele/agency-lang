@@ -17,7 +17,7 @@ const createMock = vi.fn();
 const listMock = vi.fn();
 const patchMock = vi.fn();
 const deleteMock = vi.fn();
-const clientFactoryMock = vi.fn(() => ({
+const clientFactoryMock = vi.fn((..._factoryArgs: unknown[]) => ({
   create: createMock,
   list: listMock,
   patch: patchMock,
@@ -96,7 +96,7 @@ let errorSpy: ReturnType<typeof vi.spyOn>;
 let exitSpy: ReturnType<typeof vi.spyOn>;
 
 function errorOutput(): string {
-  return errorSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+  return errorSpy.mock.calls.map((call: unknown[]) => call.join(" ")).join("\n");
 }
 
 beforeEach(() => {

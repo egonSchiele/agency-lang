@@ -495,8 +495,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--api-key-env <name>", "env var to read the API key from (default: STATELOG_API_KEY)")
     .option("--dry-run", "preview the deploy without uploading")
     .action(
-      (file: string, opts: { host?: string; project?: string; apiKeyEnv?: string; dryRun?: boolean }) =>
-        runDeploy(file, opts, getConfigContext()),
+      async (file: string, opts: { host?: string; project?: string; apiKeyEnv?: string; dryRun?: boolean }) => {
+        await runDeploy(file, opts, getConfigContext());
+      },
     );
 
   remoteCmd

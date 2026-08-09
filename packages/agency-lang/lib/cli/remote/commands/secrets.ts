@@ -12,7 +12,7 @@ import { color } from "@/utils/termcolors.js";
 import { resolveProjectTarget, fail } from "./util.js";
 import type { ProjectCommandOptions, RemoteCommandContext } from "./util.js";
 import { createSecretsClient, SecretRequestError } from "../../statelog/secretsClient.js";
-import type { SecretMetadata, SecretsClient } from "../../statelog/secretsClient.js";
+import type { SecretMetadata } from "../../statelog/secretsClient.js";
 import { redactValues } from "../../statelog/redact.js";
 import { resolveSecretValue, parseEnvSource, terminalSafe } from "../secretsInput.js";
 import type { SecretValueSources } from "../secretsInput.js";
@@ -73,7 +73,8 @@ export async function runSecretsList(
   options: ProjectCommandOptions,
   context: RemoteCommandContext,
 ): Promise<void> {
-  const client = clientFor(options, context);
+  const target = resolveProjectTarget(context, options);
+  const client = createSecretsClient(target.origin, target.projectSlug, target.apiKey);
   let secrets: SecretMetadata[];
   try {
     secrets = await client.list();
@@ -88,7 +89,8 @@ export async function runSecretsRm(
   options: ProjectCommandOptions,
   context: RemoteCommandContext,
 ): Promise<void> {
-  const client = clientFor(options, context);
+  const target = resolveProjectTarget(context, options);
+  const client = createSecretsClient(target.origin, target.projectSlug, target.apiKey);
   try {
     await client.delete(name);
   } catch (error) {
@@ -202,14 +204,6 @@ function renderImportSummary(outcomes: ImportOutcome[]): void {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function clientFor(
-  options: ProjectCommandOptions,
-  context: RemoteCommandContext,
-): SecretsClient {
-  const target = resolveProjectTarget(context, options);
-  return createSecretsClient(target.origin, target.projectSlug, target.apiKey);
 }
 
 function failSecretRequest(error: unknown): never {

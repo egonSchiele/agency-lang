@@ -28,7 +28,9 @@ function request(overrides: Partial<StatelogRequestOptions> = {}) {
 
 async function failureOf(overrides: Partial<StatelogRequestOptions> = {}) {
   const result = await request(overrides);
-  if (result.ok) throw new Error("expected a failure");
+  if (result.ok) {
+    throw new Error("expected a failure");
+  }
   return result.failure;
 }
 
@@ -47,7 +49,9 @@ describe("statelogRequest precedence matrix", () => {
     fetchMock.mockResolvedValue(textResponse(200, "<html>"));
     const failure = await failureOf();
     expect(failure.kind).toBe("non-json");
-    if (failure.kind !== "non-json") return;
+    if (failure.kind !== "non-json") {
+      return;
+    }
     expect(failure.status).toBe(200);
     expect(failure.diagnostic).toContain("non-JSON response (HTTP 200)");
   });
@@ -141,6 +145,18 @@ describe("statelogRequest construction", () => {
     });
   });
 
+  it("a provided body whose toJSON returns undefined keeps the header", async () => {
+    // JSON.stringify({ toJSON: () => undefined }) === undefined: header
+    // presence must follow the PROVIDED body, matching the old clients.
+    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, value: 1 }));
+    await request({ method: "POST", body: { toJSON: () => undefined } });
+    expect(fetchMock.mock.calls[0]![1]).toEqual({
+      method: "POST",
+      headers: { Authorization: "Bearer key", "Content-Type": "application/json" },
+      body: undefined,
+    });
+  });
+
   it("contentType:'always' adds the header on a bodyless GET", async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, { success: true, value: 1 }));
     await request({ contentType: "always" });
@@ -157,7 +173,9 @@ describe("statelogRequest construction", () => {
       sanitizeDiagnostic: (raw) => raw.split("sk-live-EXTREMELY-SECRET").join("[redacted]"),
     });
     expect(failure.kind).toBe("non-json");
-    if (failure.kind !== "non-json") return;
+    if (failure.kind !== "non-json") {
+      return;
+    }
     expect(failure.diagnostic).toContain("[redacted]");
     expect(failure.diagnostic).not.toContain("sk-live-EXTREMELY-SECRET");
   });

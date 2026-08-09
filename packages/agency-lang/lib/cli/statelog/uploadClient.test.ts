@@ -183,7 +183,9 @@ describe("uploadBundle status-agnostic characterization", () => {
     fetchWith(500, "<html>gateway error</html>");
     const result = await uploadBundle(target, bundle);
     expect(result.ok).toBe(false);
-    if (result.ok) return;
+    if (result.ok) {
+      return;
+    }
     expect(result.error).toContain("non-JSON response (HTTP 500)");
     expect(result.error).toContain("<html>gateway error</html>");
   });

@@ -6,7 +6,7 @@
 
 import { z } from "zod";
 import { statelogRequest } from "./statelogRequest.js";
-import type { StatelogFailure } from "./statelogRequest.js";
+import type { StatelogFailure, StatelogRequestResult } from "./statelogRequest.js";
 import { hasInterrupts } from "@/runtime/interrupts.js";
 import type { Interrupt } from "@/runtime/interrupts.js";
 import { isFailure } from "@/runtime/result.js";
@@ -103,18 +103,31 @@ export function createServeClient(address: ServeAddress, apiKey: string): ServeC
     body: unknown,
     envelope: boolean,
   ): Promise<unknown> {
-    const result = await statelogRequest({
-      method,
-      url,
-      apiKey,
-      body: method === "POST" ? (body ?? {}) : undefined,
-      envelope,
-      contentType: "always",
-    });
+    let result: StatelogRequestResult;
+    try {
+      result = await statelogRequest({
+        method,
+        url,
+        apiKey,
+        body: method === "POST" ? (body ?? {}) : undefined,
+        envelope,
+        contentType: "always",
+      });
+    } catch (error) {
+      // Serve historically serialized the body inside its fetch try, so an
+      // unserializable body surfaced as could-not-reach. The core's only
+      // pre-fetch throw here is serialization (serve passes no sanitizer);
+      // preserve that serve-specific mapping.
+      throw new ServeRequestError(`could not reach ${url} (${message(error)})`);
+    }
     if (!result.ok) {
       throw toServeError(result.failure, url);
     }
     return result.value;
+  }
+
+  function message(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   async function requestJson(url: string, method: "GET" | "POST", body?: unknown): Promise<unknown> {

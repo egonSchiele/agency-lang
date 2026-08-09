@@ -182,6 +182,16 @@ describe("serveClient wire characterization", () => {
     expect(init.body).toBe("{}");
   });
 
+  it("an unserializable body maps to serve's could-not-reach error, not a native throw", async () => {
+    // On main, serve serialized the body INSIDE its fetch try, so a BigInt or
+    // circular body surfaced as ServeRequestError("could not reach …"). Pinned
+    // so the transport core preserves that mapping for serve specifically.
+    captureFetch({ success: true, value: 42 });
+    await expect(
+      client().invokeNode("main", { n: 1n } as unknown as Record<string, unknown>),
+    ).rejects.toThrow(/could not reach https:\/\/statelog\.example\/.*BigInt/);
+  });
+
   it("a rejected fetch names the full URL in the unreachable message", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((async () => {
       throw new Error("ECONNREFUSED");

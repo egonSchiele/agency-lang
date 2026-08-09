@@ -53,7 +53,11 @@ export async function statelogRequest(
   // Serialize before the fetch try: an unserializable body is a programmer
   // error and must propagate, never classify as `unreachable`.
   const serializedBody = options.body === undefined ? undefined : JSON.stringify(options.body);
-  const sendContentType = options.contentType === "always" || serializedBody !== undefined;
+  // Header presence follows whether a body was PROVIDED, not whether it
+  // serialized to a string — JSON.stringify legitimately returns undefined
+  // for a toJSON that returns undefined, and the old clients sent the header
+  // in that case.
+  const sendContentType = options.contentType === "always" || options.body !== undefined;
   const headers: Record<string, string> = { Authorization: `Bearer ${options.apiKey}` };
   if (sendContentType) {
     headers["Content-Type"] = "application/json";
@@ -80,14 +84,13 @@ export async function statelogRequest(
   // precedence): extract a string server error only when parsing succeeded —
   // from a bare { error } or an envelope's error field.
   if (requireOk && !response.ok) {
-    const failure: StatelogFailure = { kind: "http", status: response.status };
     if (parsed.ok) {
       const serverError = asObject(parsed.value)?.error;
       if (typeof serverError === "string") {
-        failure.serverError = serverError;
+        return { ok: false, failure: { kind: "http", status: response.status, serverError } };
       }
     }
-    return { ok: false, failure };
+    return { ok: false, failure: { kind: "http", status: response.status } };
   }
 
   if (!parsed.ok) {
@@ -106,11 +109,17 @@ export async function statelogRequest(
     return { ok: false, failure: { kind: "bad-envelope", status: response.status } };
   }
   if (!envelopeObject.success) {
-    const failure: StatelogFailure = { kind: "envelope-error", status: response.status };
     if (typeof envelopeObject.error === "string") {
-      failure.serverError = envelopeObject.error;
+      return {
+        ok: false,
+        failure: {
+          kind: "envelope-error",
+          status: response.status,
+          serverError: envelopeObject.error,
+        },
+      };
     }
-    return { ok: false, failure };
+    return { ok: false, failure: { kind: "envelope-error", status: response.status } };
   }
   return { ok: true, value: envelopeObject.value, status: response.status };
 }

@@ -9,7 +9,7 @@ import type { AgencyBundle } from "../deploy/bundle.js";
 import { resolveTrustedEndpointUrl, parseServeBaseUrl } from "./serveUrl.js";
 import { createServeClient, ServeRequestError } from "./serveClient.js";
 import type { ServeManifest } from "./serveClient.js";
-import { readJsonBody } from "./jsonBody.js";
+import { statelogRequest } from "./statelogRequest.js";
 
 export type UploadResult =
   | { ok: true; endpointUrls: string[]; manifest?: ServeManifest }
@@ -29,35 +29,40 @@ export async function uploadBundle(
     target.host,
   ).toString();
 
-  const body = JSON.stringify({
-    entrypoint: bundle.entrypoint,
-    files: bundle.files.map((file) => ({ name: file.name, contents: file.contents })),
+  // requireOk:false + envelope:false — upload deliberately never inspects
+  // response.ok: the envelope decides the outcome whatever the HTTP status (a
+  // non-2xx success envelope succeeds). The core serializes the body once.
+  const result = await statelogRequest({
+    method: "POST",
+    url,
+    apiKey: target.apiKey,
+    body: {
+      entrypoint: bundle.entrypoint,
+      files: bundle.files.map((file) => ({ name: file.name, contents: file.contents })),
+    },
+    envelope: false,
+    requireOk: false,
   });
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${target.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body,
-    });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    return { ok: false, error: `Could not reach ${target.host} (${detail}).` };
+  if (!result.ok) {
+    switch (result.failure.kind) {
+      case "unreachable":
+        return { ok: false, error: `Could not reach ${target.host} (${result.failure.cause}).` };
+      case "non-json":
+        return { ok: false, error: result.failure.diagnostic };
+      // With requireOk:false and envelope:false the core can produce no other
+      // failure kind, but the switch stays exhaustive rather than silently
+      // absorbing a future one.
+      case "http":
+      case "bad-envelope":
+      case "envelope-error":
+        return { ok: false, error: `Upload rejected (HTTP ${result.failure.status}).` };
+    }
   }
-
-  const parsed = await readJsonBody(response, { method: "POST", url });
-  if (!parsed.ok) {
-    return { ok: false, error: parsed.error };
-  }
-  const envelope = parsed.value;
+  const envelope = result.value;
 
   const endpointUrls = readEndpointUrls(envelope);
   if (!endpointUrls) {
-    return { ok: false, error: rejectionMessage(envelope, response.status) };
+    return { ok: false, error: rejectionMessage(envelope, result.status) };
   }
 
   // Resolve and origin-check every response URL BEFORE the Bearer token follows

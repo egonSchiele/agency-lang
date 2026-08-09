@@ -11,7 +11,8 @@ import {
   type ProjectSpend,
   type SpendWindow,
 } from "./spendTypes.js";
-import { readJsonBody } from "./jsonBody.js";
+import { statelogRequest } from "./statelogRequest.js";
+import type { StatelogFailure } from "./statelogRequest.js";
 
 export type SourceFile = { name: string; contents: string };
 
@@ -95,54 +96,52 @@ export function createProjectClient(
   projectSlug: string,
   apiKey: string,
 ): ProjectClient {
-  async function request(input: ProjectRequest): Promise<unknown> {
-    const url = projectRouteUrl(origin, projectSlug, input.segments, input.query);
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-    } catch (error) {
-      throw new ProjectRequestError(`could not reach ${origin} (${message(error)})`);
-    }
-
-    const parsed = await readJsonBody(response, { method: "GET", url });
-
-    // Non-2xx first: auth middleware returns a bare `{ error }`, not an envelope.
-    if (!response.ok) {
-      const serverError = parsed.ok ? asObject(parsed.value)?.error : undefined;
-      if (response.status === 404) {
-        // A missing project always carries statelog's known JSON error. Any
-        // OTHER 404 on a route the caller flagged as host-optional means the
-        // host predates that route; without such a flag, keep the historical
-        // project-not-found message.
-        if (serverError !== "Project not found" && input.unsupportedRouteMessage !== undefined) {
-          throw new ProjectRequestError(input.unsupportedRouteMessage);
+  function toProjectError(
+    failure: StatelogFailure,
+    unsupportedRouteMessage: string | undefined,
+  ): ProjectRequestError {
+    switch (failure.kind) {
+      case "unreachable":
+        return new ProjectRequestError(`could not reach ${origin} (${failure.cause})`);
+      case "http":
+        if (failure.status === 404) {
+          // A missing project always carries statelog's known JSON error. Any
+          // OTHER 404 on a route the caller flagged as host-optional means the
+          // host predates that route; without such a flag, keep the historical
+          // project-not-found message.
+          if (failure.serverError !== "Project not found" && unsupportedRouteMessage !== undefined) {
+            return new ProjectRequestError(unsupportedRouteMessage);
+          }
+          return new ProjectRequestError(
+            `project '${projectSlug}' not found — check the slug, or that it's deployed`,
+          );
         }
-        throw new ProjectRequestError(
-          `project '${projectSlug}' not found — check the slug, or that it's deployed`,
-        );
-      }
-      if (typeof serverError === "string") {
-        throw new ProjectRequestError(serverError);
-      }
-      if (response.status === 401) {
-        throw new ProjectRequestError("not authenticated (HTTP 401)");
-      }
-      throw new ProjectRequestError(`statelog request failed (HTTP ${response.status})`);
+        if (failure.serverError !== undefined) {
+          return new ProjectRequestError(failure.serverError);
+        }
+        if (failure.status === 401) {
+          return new ProjectRequestError("not authenticated (HTTP 401)");
+        }
+        return new ProjectRequestError(`statelog request failed (HTTP ${failure.status})`);
+      case "non-json":
+        return new ProjectRequestError(failure.diagnostic);
+      case "bad-envelope":
+        return new ProjectRequestError("unexpected project response shape");
+      case "envelope-error":
+        return new ProjectRequestError(failure.serverError ?? "project request failed");
     }
+  }
 
-    if (!parsed.ok) {
-      throw new ProjectRequestError(parsed.error);
+  async function request(input: ProjectRequest): Promise<unknown> {
+    const result = await statelogRequest({
+      method: "GET",
+      url: projectRouteUrl(origin, projectSlug, input.segments, input.query),
+      apiKey,
+    });
+    if (!result.ok) {
+      throw toProjectError(result.failure, input.unsupportedRouteMessage);
     }
-    const envelope = validateEnvelope(parsed.value);
-    if (!envelope.success) {
-      throw new ProjectRequestError(
-        typeof envelope.error === "string" ? envelope.error : "project request failed",
-      );
-    }
-    return envelope.value;
+    return result.value;
   }
 
   return {
@@ -195,21 +194,3 @@ function parseWire<T>(schema: z.ZodType<T>, value: unknown): T {
   return result.data;
 }
 
-function validateEnvelope(value: unknown): { success: boolean; value?: unknown; error?: unknown } {
-  const obj = asObject(value);
-  if (!obj || typeof obj.success !== "boolean") {
-    throw new ProjectRequestError("unexpected project response shape");
-  }
-  return obj as { success: boolean; value?: unknown; error?: unknown };
-}
-
-function asObject(value: unknown): Record<string, unknown> | null {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}

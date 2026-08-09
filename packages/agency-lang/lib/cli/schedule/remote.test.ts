@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { resolveScheduleAdd, addRemote } from "./remote.js";
+import {
+  resolveScheduleAdd,
+  resolveSchedulePatch,
+  addRemote,
+  listRemote,
+  removeRemote,
+  editRemote,
+} from "./remote.js";
 import { ScheduleRequestError } from "../statelog/schedulesClient.js";
 import { ProjectRequestError } from "../statelog/projectClient.js";
 import type { RemoteSchedule } from "../statelog/schedulesClient.js";
@@ -420,5 +427,194 @@ describe("addRemote deployment policy", () => {
     expect(createMock).toHaveBeenCalledTimes(1);
     expect(runDeployMock).toHaveBeenCalledTimes(1);
     expect(errorOutput()).toContain("cap reached");
+  });
+});
+
+describe("resolveSchedulePatch", () => {
+  it("maps a preset to cronExpr", () => {
+    expect(resolveSchedulePatch({ every: "hourly" })).toStrictEqual({ cronExpr: "0 * * * *" });
+  });
+
+  it("maps a raw cron to cronExpr", () => {
+    expect(resolveSchedulePatch({ cron: "*/10 * * * *" })).toStrictEqual({
+      cronExpr: "*/10 * * * *",
+    });
+  });
+
+  it("maps timezone alone", () => {
+    expect(resolveSchedulePatch({ timezone: "Asia/Kolkata" })).toStrictEqual({
+      timezone: "Asia/Kolkata",
+    });
+  });
+
+  it("maps enabled alone", () => {
+    expect(resolveSchedulePatch({ enabled: true })).toStrictEqual({ enabled: true });
+  });
+
+  it("maps disabled alone", () => {
+    expect(resolveSchedulePatch({ disabled: true })).toStrictEqual({ enabled: false });
+  });
+
+  it("combines cron, timezone, and disabled into one exact patch", () => {
+    expect(
+      resolveSchedulePatch({ every: "daily", timezone: "UTC", disabled: true }),
+    ).toStrictEqual({ cronExpr: "0 9 * * *", timezone: "UTC", enabled: false });
+  });
+
+  it("a timezone-only patch has no cronExpr key", () => {
+    expect(Object.keys(resolveSchedulePatch({ timezone: "UTC" }))).toEqual(["timezone"]);
+  });
+
+  it.each([
+    ["both cadences", { every: "daily", cron: "0 * * * *" }, /--every <preset> or --cron/],
+    [
+      "enabled with disabled",
+      { enabled: true, disabled: true },
+      /--enabled conflicts with --disabled/,
+    ],
+    ["an empty edit", {}, /Nothing to change/],
+    ["invalid cron", { cron: "nope" }, /Invalid cron expression/],
+    ["invalid preset", { every: "fortnightly" }, /Unknown preset/],
+  ])("rejects %s", (_label, options, expected) => {
+    expect(() => resolveSchedulePatch(options)).toThrow(expected);
+  });
+});
+
+describe("listRemote", () => {
+  const second = {
+    ...returnedSchedule,
+    id: "sched2",
+    name: "second",
+    fileName: "report",
+    targetKind: "function" as const,
+    targetName: "sum",
+    cronExpr: "*/5 * * * *",
+    timezone: "Asia/Kolkata",
+    enabled: false,
+  };
+
+  it("renders the exact table in server order", async () => {
+    listMock.mockResolvedValue([returnedSchedule, second]);
+    await listRemote({ project: "proj", apiKeyEnv: KEY_ENV }, context);
+    const expected = [
+      "ID".padEnd(8) +
+        "Name".padEnd(8) +
+        "Target".padEnd(14) +
+        "Agent".padEnd(8) +
+        "Cron".padEnd(13) +
+        "Timezone".padEnd(14) +
+        "Enabled",
+      "s1".padEnd(8) +
+        "-".padEnd(8) +
+        "node:refresh".padEnd(14) +
+        "daily".padEnd(8) +
+        "0 9 * * *".padEnd(13) +
+        "UTC".padEnd(14) +
+        "yes",
+      "sched2".padEnd(8) +
+        "second".padEnd(8) +
+        "function:sum".padEnd(14) +
+        "report".padEnd(8) +
+        "*/5 * * * *".padEnd(13) +
+        "Asia/Kolkata".padEnd(14) +
+        "no",
+    ].join("\n");
+    expect(logSpy).toHaveBeenCalledWith(expected);
+  });
+
+  it("renders the friendly empty-state line", async () => {
+    listMock.mockResolvedValue([]);
+    await listRemote({ project: "proj", apiKeyEnv: KEY_ENV }, context);
+    expect(logSpy).toHaveBeenCalledWith(
+      "No remote schedules. Use 'agency schedule add <file> --backend remote' to create one.",
+    );
+  });
+
+  it("prints no partial table when the list request fails", async () => {
+    listMock.mockRejectedValue(new ScheduleRequestError("boom", 500));
+    await expect(
+      listRemote({ project: "proj", apiKeyEnv: KEY_ENV }, context),
+    ).rejects.toThrow("exit:1");
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(errorOutput()).toContain("boom");
+  });
+});
+
+describe("removeRemote", () => {
+  it("deletes by the exact server id and reports success", async () => {
+    deleteMock.mockResolvedValue({ deleted: true });
+    await removeRemote("id/one", { project: "proj", apiKeyEnv: KEY_ENV }, context);
+    expect(deleteMock).toHaveBeenCalledTimes(1);
+    expect(deleteMock).toHaveBeenCalledWith("id/one");
+    expect(logSpy).toHaveBeenCalledWith(`${color.green("Removed")} schedule id/one.`);
+  });
+
+  it("maps a not-found failure to id-specific guidance", async () => {
+    deleteMock.mockRejectedValue(new ScheduleRequestError("Schedule not found", 200));
+    await expect(
+      removeRemote("nope", { project: "proj", apiKeyEnv: KEY_ENV }, context),
+    ).rejects.toThrow("exit:1");
+    expect(errorOutput()).toContain('No schedule with id "nope"');
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it("passes an ordinary failure through without success output", async () => {
+    deleteMock.mockRejectedValue(new ScheduleRequestError("db down", 500));
+    await expect(
+      removeRemote("s1", { project: "proj", apiKeyEnv: KEY_ENV }, context),
+    ).rejects.toThrow("exit:1");
+    expect(errorOutput()).toContain("db down");
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("editRemote", () => {
+  it("patches the exact server id with the exact resolved patch", async () => {
+    patchMock.mockResolvedValue({ ...returnedSchedule, enabled: false });
+    await editRemote(
+      "id/one",
+      { project: "proj", apiKeyEnv: KEY_ENV, disabled: true, timezone: "UTC" },
+      context,
+    );
+    expect(patchMock).toHaveBeenCalledTimes(1);
+    expect(patchMock).toHaveBeenCalledWith("id/one", { timezone: "UTC", enabled: false });
+    expect(logSpy).toHaveBeenCalledWith(`${color.green("Updated")} schedule id/one.`);
+  });
+
+  it("fails validation before any patch call", async () => {
+    await expect(
+      editRemote("s1", { project: "proj", apiKeyEnv: KEY_ENV }, context),
+    ).rejects.toThrow("exit:1");
+    expect(errorOutput()).toContain("Nothing to change");
+    expect(patchMock).not.toHaveBeenCalled();
+    expect(clientFactoryMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects both cadence flags before any patch call", async () => {
+    await expect(
+      editRemote(
+        "s1",
+        { project: "proj", apiKeyEnv: KEY_ENV, every: "daily", cron: "0 * * * *" },
+        context,
+      ),
+    ).rejects.toThrow("exit:1");
+    expect(patchMock).not.toHaveBeenCalled();
+  });
+
+  it("maps not-found to id-specific guidance and prints no success", async () => {
+    patchMock.mockRejectedValue(new ScheduleRequestError("Schedule not found", 200));
+    await expect(
+      editRemote("nope", { project: "proj", apiKeyEnv: KEY_ENV, enabled: true }, context),
+    ).rejects.toThrow("exit:1");
+    expect(errorOutput()).toContain('No schedule with id "nope"');
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it("passes an ordinary failure through", async () => {
+    patchMock.mockRejectedValue(new ScheduleRequestError("Invalid input: bad tz", 200));
+    await expect(
+      editRemote("s1", { project: "proj", apiKeyEnv: KEY_ENV, timezone: "Nope/Nope" }, context),
+    ).rejects.toThrow("exit:1");
+    expect(errorOutput()).toContain("Invalid input: bad tz");
   });
 });

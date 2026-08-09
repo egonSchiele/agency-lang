@@ -17,7 +17,12 @@ import type { RemoteArgsOptions } from "../remote/args.js";
 import { runDeploy } from "../remote/commands/deploy.js";
 import { resolveCron } from "./cron.js";
 import { createSchedulesClient, ScheduleRequestError } from "../statelog/schedulesClient.js";
-import type { CreateScheduleInput, ScheduleTarget } from "../statelog/schedulesClient.js";
+import type {
+  CreateScheduleInput,
+  PatchScheduleInput,
+  RemoteSchedule,
+  ScheduleTarget,
+} from "../statelog/schedulesClient.js";
 import { createProjectClient, ProjectRequestError } from "../statelog/projectClient.js";
 
 export type DeployMode = "if-missing" | "always" | "never";
@@ -193,4 +198,133 @@ function failScheduleRequest(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+export type EditRemoteOptions = ProjectCommandOptions & {
+  every?: string;
+  cron?: string;
+  timezone?: string;
+  enabled?: boolean;
+  disabled?: boolean;
+};
+
+/** Translate edit flags into the server's PATCH body. Only cadence, timezone,
+ *  and enabled are patchable — target, name, and args are immutable on the
+ *  server (delete and re-add to change them). Pure; throws on any invalid or
+ *  empty combination. */
+export function resolveSchedulePatch(options: EditRemoteOptions): PatchScheduleInput {
+  if (options.every !== undefined && options.cron !== undefined) {
+    throw new Error("Pass at most one of --every <preset> or --cron <expression>.");
+  }
+  if (options.enabled && options.disabled) {
+    throw new Error("--enabled conflicts with --disabled.");
+  }
+  const patch: PatchScheduleInput = {};
+  if (options.every !== undefined || options.cron !== undefined) {
+    patch.cronExpr = resolveCron({ every: options.every, cron: options.cron }).cron;
+  }
+  if (options.timezone !== undefined) {
+    patch.timezone = options.timezone;
+  }
+  if (options.enabled) {
+    patch.enabled = true;
+  }
+  if (options.disabled) {
+    patch.enabled = false;
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new Error(
+      "Nothing to change — pass --every/--cron, --timezone, or --enabled/--disabled.",
+    );
+  }
+  return patch;
+}
+
+export async function listRemote(
+  options: ProjectCommandOptions,
+  context: RemoteCommandContext,
+): Promise<void> {
+  const target = resolveProjectTarget(context, options);
+  const client = createSchedulesClient(target.origin, target.projectSlug, target.apiKey);
+  let schedules: RemoteSchedule[];
+  try {
+    schedules = await client.list();
+  } catch (error) {
+    failScheduleRequest(error);
+  }
+  console.log(formatRemoteListTable(schedules));
+}
+
+export async function removeRemote(
+  id: string,
+  options: ProjectCommandOptions,
+  context: RemoteCommandContext,
+): Promise<void> {
+  const target = resolveProjectTarget(context, options);
+  const client = createSchedulesClient(target.origin, target.projectSlug, target.apiKey);
+  try {
+    await client.delete(id);
+  } catch (error) {
+    failScheduleRequest(error, { notFoundId: notFoundGuidance(id) });
+  }
+  console.log(`${color.green("Removed")} schedule ${id}.`);
+}
+
+export async function editRemote(
+  id: string,
+  options: EditRemoteOptions,
+  context: RemoteCommandContext,
+): Promise<void> {
+  let patch: PatchScheduleInput;
+  try {
+    patch = resolveSchedulePatch(options);
+  } catch (error) {
+    fail(errorMessage(error));
+  }
+  const target = resolveProjectTarget(context, options);
+  const client = createSchedulesClient(target.origin, target.projectSlug, target.apiKey);
+  try {
+    await client.patch(id, patch);
+  } catch (error) {
+    failScheduleRequest(error, { notFoundId: notFoundGuidance(id) });
+  }
+  console.log(`${color.green("Updated")} schedule ${id}.`);
+}
+
+function notFoundGuidance(id: string): string {
+  return `No schedule with id "${id}". Run 'agency schedule list --backend remote' to see schedules.`;
+}
+
+function formatRemoteListTable(schedules: RemoteSchedule[]): string {
+  if (schedules.length === 0) {
+    return "No remote schedules. Use 'agency schedule add <file> --backend remote' to create one.";
+  }
+  const rows = schedules.map((schedule) => ({
+    id: schedule.id,
+    name: schedule.name ?? "-",
+    target: `${schedule.targetKind}:${schedule.targetName}`,
+    file: schedule.fileName,
+    cron: schedule.cronExpr,
+    timezone: schedule.timezone,
+    enabled: schedule.enabled ? "yes" : "no",
+  }));
+  const headers = {
+    id: "ID",
+    name: "Name",
+    target: "Target",
+    file: "Agent",
+    cron: "Cron",
+    timezone: "Timezone",
+    enabled: "Enabled",
+  };
+  const columns = ["id", "name", "target", "file", "cron", "timezone", "enabled"] as const;
+  const width = (column: (typeof columns)[number]) =>
+    Math.max(headers[column].length, ...rows.map((row) => row[column].length)) + 2;
+  const render = (row: Record<(typeof columns)[number], string>) =>
+    columns
+      .map((column, index) =>
+        index === columns.length - 1 ? row[column] : row[column].padEnd(width(column)),
+      )
+      .join("");
+  return [render(headers), ...rows.map(render)].join("\n");
 }

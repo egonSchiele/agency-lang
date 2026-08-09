@@ -1639,7 +1639,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<file>", "Path to .agency file")
     .option(
       "--every <preset>",
-      "Schedule preset: minute, hourly, daily, weekdays, weekends, weekly, monthly",
+      "Schedule preset: minute, hourly, daily, weekdays, weekends (Sat+Sun), weekly, monthly — singular forms (hour, day, weekday, weekend, week, month) also accepted",
     )
     .option("--cron <expression>", "Cron expression (5 fields)")
     .option(
@@ -1828,7 +1828,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<name>", "Name of the schedule to edit (remote backend: the schedule id)")
     .option(
       "--every <preset>",
-      "Schedule preset: minute, hourly, daily, weekdays, weekends, weekly, monthly",
+      "Schedule preset: minute, hourly, daily, weekdays, weekends (Sat+Sun), weekly, monthly — singular forms (hour, day, weekday, weekend, week, month) also accepted",
     )
     .option("--cron <expression>", "Cron expression (5 fields)")
     .option("--env-file <path>", "Path to .env file")

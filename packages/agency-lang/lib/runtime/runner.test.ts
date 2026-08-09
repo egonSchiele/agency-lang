@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { Runner, stripSlug, safeStatelogValue } from "./runner.js";
+import { makeRedactReplacer } from "./redactForStatelog.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -1224,5 +1225,61 @@ describe("thread() — abandoned-turn repair on reopen", () => {
 
     expect(reEntered).toBe(true); // proves we exercised the guard branch, not a step skip
     expect(threads.get(tid)!.repairs).toBe(0);
+  });
+});
+
+describe("custom redaction markers across both statelog paths", () => {
+  const SECRET_PREFIX = "distinctive-aws-secret-";
+  const replacement = "[binary output truncated]";
+
+  it("uses the custom label in the ordinary replacer and safeStatelogValue", () => {
+    const runtimeContext = makeMockCtx();
+    const secret = { value: `${SECRET_PREFIX}value` };
+    runtimeContext.globals.markRedacted(secret, replacement);
+
+    const ordinaryOutput = JSON.stringify(
+      { secret },
+      makeRedactReplacer(runtimeContext.globals),
+    );
+    if (ordinaryOutput === undefined) {
+      throw new Error("Expected the redaction fixture to serialize");
+    }
+    expect(JSON.parse(ordinaryOutput)).toEqual({ secret: replacement });
+    expect(ordinaryOutput).not.toContain(SECRET_PREFIX);
+
+    const safeSmallOutput = runInTestContext(
+      runtimeContext,
+      runtimeContext.stateStack,
+      new ThreadStore(),
+      () => safeStatelogValue({ secret }),
+    );
+    expect(safeSmallOutput).toEqual({ secret: replacement });
+    expect(JSON.stringify(safeSmallOutput)).not.toContain(SECRET_PREFIX);
+
+    const safeOversizedOutput = runInTestContext(
+      runtimeContext,
+      runtimeContext.stateStack,
+      new ThreadStore(),
+      () =>
+        safeStatelogValue({
+          secret,
+          filler: "x".repeat(4_101),
+        }),
+    );
+    expect(typeof safeOversizedOutput).toBe("string");
+    expect(safeOversizedOutput).toContain(replacement);
+    expect(safeOversizedOutput).not.toContain(SECRET_PREFIX);
+    expect(safeOversizedOutput).toMatch(/…\[truncated\]$/);
+  });
+
+  it("uses the default [REDACTED] marker when no label is given", () => {
+    const runtimeContext = makeMockCtx();
+    const secret = { value: `${SECRET_PREFIX}plain` };
+    runtimeContext.globals.markRedacted(secret);
+    const output = JSON.stringify(
+      { secret },
+      makeRedactReplacer(runtimeContext.globals),
+    );
+    expect(JSON.parse(output as string)).toEqual({ secret: "[REDACTED]" });
   });
 });

@@ -34,7 +34,7 @@ export function makeRedactReplacer(
     // so always read from there for non-root keys. (Root is the wrapper's ""
     // key, where this[""] === value anyway.)
     const raw = key === "" ? value : (this as Record<string, unknown>)[key];
-    if (globals.isRedacted(raw)) return REDACTED;
-    return value;
+    const replacement = globals.redactionReplacement(raw);
+    return replacement !== undefined ? replacement : value;
   };
 }

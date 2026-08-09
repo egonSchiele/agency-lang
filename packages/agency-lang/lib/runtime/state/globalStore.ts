@@ -1,4 +1,7 @@
 import { nativeTypeReplacer, nativeTypeReviver } from "../revivers/index.js";
+// Value import only; redactForStatelog imports GlobalStore type-only, so this is
+// a one-way runtime edge (no cycle). Keeps the default marker single-sourced.
+import { REDACTED } from "../redactForStatelog.js";
 import {
   canHoldDurableTag,
   attachTag,
@@ -162,20 +165,34 @@ export class GlobalStore {
 
   /**
    * Mark a value for statelog redaction. Sole *writer* of the redact tag, so
-   * the tag's representation lives in exactly one place. Equivalent to the
-   * user-facing tag(value, "redact", true).
+   * the tag's representation lives in exactly one place. An optional `label`
+   * replaces the default "[REDACTED]" marker in logs (stored as the tag value);
+   * absent, the tag stores `true`. Equivalent to `tag(value, "redact", …)`.
    */
-  markRedacted(value: unknown): void {
-    this.setTag(value, GlobalStore.REDACT_TAG, true);
+  markRedacted(value: unknown, label?: string): void {
+    this.setTag(value, GlobalStore.REDACT_TAG, label ?? true);
   }
 
   /**
-   * True when a value is marked redact:true. Sole *reader* of the redact tag
-   * (the statelog replacer calls this), so the walker never hard-codes the
-   * tag shape.
+   * True when a value is marked for redaction — either the default marker
+   * (`true`) or a custom label string.
    */
   isRedacted(value: unknown): boolean {
-    return this.getTagsFor(value)?.[GlobalStore.REDACT_TAG] === true;
+    const tag = this.getTagsFor(value)?.[GlobalStore.REDACT_TAG];
+    return tag === true || typeof tag === "string";
+  }
+
+  /**
+   * The marker string to substitute for a redacted value in state logs — the
+   * custom label if one was given, otherwise the default — or `undefined` when
+   * the value is not redacted. Sole *reader* of the redact tag; both statelog
+   * serialization paths call this rather than comparing against one constant.
+   */
+  redactionReplacement(value: unknown): string | undefined {
+    const tag = this.getTagsFor(value)?.[GlobalStore.REDACT_TAG];
+    if (tag === true) return REDACTED;
+    if (typeof tag === "string") return tag;
+    return undefined;
   }
 
   /**

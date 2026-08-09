@@ -1,0 +1,6 @@
+import { redact } from "std::tag"
+
+node main(): any {
+  const redacted: any = redact("distinctive-secret", "[custom marker]")
+  return redacted
+}

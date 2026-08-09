@@ -1599,12 +1599,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("schedule")
     .description("Manage scheduled agent runs");
 
-  // Flags that only mean something with `--backend remote` must fail loudly on
-  // the local/github paths, not be silently ignored.
+  // A flag the selected backend cannot honor must fail loudly, not be
+  // silently ignored — in BOTH directions (remote-only flags on the
+  // local/github paths, local/github-only flags on the remote path).
   function rejectRemoteOnlyFlags(used: string[]): void {
     if (used.length > 0) {
       console.error(
         color.red(`${used.join(", ")} require${used.length === 1 ? "s" : ""} --backend remote.`),
+      );
+      process.exit(1);
+    }
+  }
+
+  function rejectFlagsUnsupportedByRemote(used: string[]): void {
+    if (used.length > 0) {
+      console.error(
+        color.red(
+          `${used.join(", ")} ${used.length === 1 ? "is" : "are"} not supported with --backend remote.`,
+        ),
       );
       process.exit(1);
     }
@@ -1699,6 +1711,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
       ) => {
         rejectUnknownScheduleBackend(opts.backend, ["github", "remote"]);
         if (opts.backend === "remote") {
+          const unsupported: string[] = [];
+          if (opts.envFile !== undefined) unsupported.push("--env-file");
+          if (opts.secret !== undefined && opts.secret.length > 0) unsupported.push("--secret");
+          if (opts.write) unsupported.push("--write");
+          if (opts.pin === false) unsupported.push("--no-pin");
+          rejectFlagsUnsupportedByRemote(unsupported);
           await addRemote(file, opts, getConfigContext());
           return;
         }
@@ -1836,6 +1854,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
       ) => {
         rejectUnknownScheduleBackend(opts.backend, ["remote"]);
         if (opts.backend === "remote") {
+          const unsupported: string[] = [];
+          if (opts.envFile !== undefined) unsupported.push("--env-file");
+          rejectFlagsUnsupportedByRemote(unsupported);
           await editRemote(name, opts, getConfigContext());
           return;
         }

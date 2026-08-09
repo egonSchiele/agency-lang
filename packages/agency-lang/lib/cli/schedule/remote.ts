@@ -120,8 +120,13 @@ export async function addRemote(
   try {
     schedule = await client.create(resolved.input);
   } catch (error) {
+    // Point back at THIS command, not `agency remote deploy` — the standalone
+    // deploy resolves its target differently (no binding, no --host/--project
+    // carry-over) and could upload somewhere other than where this schedule
+    // request was aimed.
     failScheduleRequest(error, {
-      missingAgent: `Deploy it first: agency remote deploy ${file}`,
+      missingAgent:
+        "Rerun this command without --no-deploy to deploy it first (or pass --redeploy).",
     });
   }
   const { input } = resolved;
@@ -190,7 +195,9 @@ function failScheduleRequest(
   if (guidance.missingAgent && /^Agent '.*' not found/.test(error.message)) {
     fail(`${error.message}\n${guidance.missingAgent}`);
   }
-  if (guidance.notFoundId && /not found/i.test(error.message)) {
+  // Exactly the schedule route's own message — a broader match would rewrite
+  // unrelated failures (e.g. "Project not found") into bogus id guidance.
+  if (guidance.notFoundId && error.message === "Schedule not found") {
     fail(guidance.notFoundId);
   }
   fail(error.message);

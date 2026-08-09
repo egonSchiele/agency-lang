@@ -247,13 +247,16 @@ describe("addRemote", () => {
     );
   });
 
-  it("guides toward deploy when the agent is not on the server", async () => {
+  it("guides toward rerunning without --no-deploy when the agent is not on the server", async () => {
     createMock.mockRejectedValue(new ScheduleRequestError("Agent 'daily' not found", 200));
     await expect(
       addRemote("agents/daily.agency", { ...baseOptions, deploy: false }, context),
     ).rejects.toThrow("exit:1");
     expect(errorOutput()).toContain("Agent 'daily' not found");
-    expect(errorOutput()).toContain("agency remote deploy agents/daily.agency");
+    expect(errorOutput()).toContain("without --no-deploy");
+    // The standalone deploy command resolves its target differently and must
+    // not be suggested here.
+    expect(errorOutput()).not.toContain("agency remote deploy");
     expect(logSpy).not.toHaveBeenCalled();
   });
 
@@ -566,6 +569,15 @@ describe("removeRemote", () => {
     expect(errorOutput()).toContain("db down");
     expect(logSpy).not.toHaveBeenCalled();
   });
+
+  it("a project 404 passes through unchanged, not as schedule-id guidance", async () => {
+    deleteMock.mockRejectedValue(new ScheduleRequestError("Project not found", 404));
+    await expect(
+      removeRemote("s1", { project: "gone", apiKeyEnv: KEY_ENV }, context),
+    ).rejects.toThrow("exit:1");
+    expect(errorOutput()).toContain("Project not found");
+    expect(errorOutput()).not.toContain("No schedule with id");
+  });
 });
 
 describe("editRemote", () => {
@@ -608,6 +620,15 @@ describe("editRemote", () => {
     ).rejects.toThrow("exit:1");
     expect(errorOutput()).toContain('No schedule with id "nope"');
     expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it("a project 404 passes through unchanged, not as schedule-id guidance", async () => {
+    patchMock.mockRejectedValue(new ScheduleRequestError("Project not found", 404));
+    await expect(
+      editRemote("s1", { project: "gone", apiKeyEnv: KEY_ENV, enabled: true }, context),
+    ).rejects.toThrow("exit:1");
+    expect(errorOutput()).toContain("Project not found");
+    expect(errorOutput()).not.toContain("No schedule with id");
   });
 
   it("passes an ordinary failure through", async () => {

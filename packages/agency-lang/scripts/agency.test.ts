@@ -745,6 +745,13 @@ describe("schedule --backend remote dispatch", () => {
     [["add", "a.agency", "--every", "daily", "--backend", "github", "--timezone", "UTC"]],
     [["edit", "x", "--timezone", "UTC"]],
     [["list", "--project", "p"]],
+    // The inverse direction: flags the remote backend cannot honor must fail
+    // loudly rather than be silently discarded.
+    [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--env-file", ".env"]],
+    [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--secret", "S"]],
+    [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--write"]],
+    [["add", "a.agency", "--backend", "remote", "--node", "n", "--every", "daily", "--no-pin"]],
+    [["edit", "x", "--backend", "remote", "--enabled", "--env-file", ".env"]],
   ])("rejects backend-inapplicable flags: %j", async (args) => {
     await expect(parse(args)).rejects.toBeInstanceOf(ExitError);
     expect(scheduleLocalMocks.scheduleAdd).not.toHaveBeenCalled();

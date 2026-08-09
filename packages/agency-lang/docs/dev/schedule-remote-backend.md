@@ -86,11 +86,14 @@ together is an error. `resolveCron` does not reject `--every` combined with
 `--cron` (it silently prefers `--every`), so the remote resolvers check flag
 presence themselves before calling it.
 
-## Flags that need `--backend remote` fail loudly elsewhere
+## A flag the backend cannot honor fails loudly — in both directions
 
 `--node`, `--timezone`, `--host`, and friends on a local or github schedule
 command are an error, not a no-op — otherwise a typo'd `--backend` would
-silently create a local schedule that ignores half its flags. The timezone
+silently create a local schedule that ignores half its flags. The inverse
+holds too: `--env-file`, `--secret`, `--write`, and `--no-pin` with
+`--backend remote` are errors, so the command can never report success while
+requested environment, secrets, or permissions were silently dropped. The timezone
 default (when `--timezone` is omitted) is the machine's IANA zone from
 `Intl.DateTimeFormat().resolvedOptions().timeZone`, applied in the resolver so
 the request always carries an explicit zone.

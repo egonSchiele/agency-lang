@@ -8,7 +8,8 @@
 // success by status — this client already does not.
 
 import { z } from "zod";
-import { readJsonBody } from "./jsonBody.js";
+import { statelogRequest } from "./statelogRequest.js";
+import type { StatelogFailure } from "./statelogRequest.js";
 
 export type ScheduleTarget = {
   kind: "node" | "function";
@@ -98,50 +99,38 @@ export function createSchedulesClient(
     return new URL(`/${path}`, origin).toString();
   }
 
+  function toScheduleError(failure: StatelogFailure): ScheduleRequestError {
+    switch (failure.kind) {
+      case "unreachable":
+        return new ScheduleRequestError(`could not reach ${origin} (${failure.cause})`);
+      case "http":
+        return new ScheduleRequestError(
+          failure.serverError ?? `statelog request failed (HTTP ${failure.status})`,
+          failure.status,
+        );
+      case "non-json":
+        return new ScheduleRequestError(failure.diagnostic, failure.status);
+      case "bad-envelope":
+        return new ScheduleRequestError("unexpected schedules response shape", failure.status);
+      case "envelope-error":
+        return new ScheduleRequestError(
+          failure.serverError ?? "schedules request failed",
+          failure.status,
+        );
+    }
+  }
+
   async function request(input: ScheduleRequest): Promise<unknown> {
-    const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
-    const init: RequestInit = { method: input.method, headers };
-    if (input.body !== undefined) {
-      headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(input.body);
+    const result = await statelogRequest({
+      method: input.method,
+      url: routeUrl(input.segments),
+      apiKey,
+      body: input.body,
+    });
+    if (!result.ok) {
+      throw toScheduleError(result.failure);
     }
-
-    const url = routeUrl(input.segments);
-    let response: Response;
-    try {
-      response = await fetch(url, init);
-    } catch (error) {
-      throw new ScheduleRequestError(`could not reach ${origin} (${message(error)})`);
-    }
-
-    const parsed = await readJsonBody(response, { method: input.method, url });
-
-    // Non-2xx first: auth middleware returns a bare `{ error }`, not an envelope.
-    if (!response.ok) {
-      const serverError = parsed.ok ? asObject(parsed.value)?.error : undefined;
-      if (typeof serverError === "string") {
-        throw new ScheduleRequestError(serverError, response.status);
-      }
-      throw new ScheduleRequestError(
-        `statelog request failed (HTTP ${response.status})`,
-        response.status,
-      );
-    }
-
-    if (!parsed.ok) {
-      throw new ScheduleRequestError(parsed.error, response.status);
-    }
-    const envelope = asObject(parsed.value);
-    if (!envelope || typeof envelope.success !== "boolean") {
-      throw new ScheduleRequestError("unexpected schedules response shape", response.status);
-    }
-    if (!envelope.success) {
-      throw new ScheduleRequestError(
-        typeof envelope.error === "string" ? envelope.error : "schedules request failed",
-        response.status,
-      );
-    }
-    return envelope.value;
+    return result.value;
   }
 
   return {
@@ -193,13 +182,3 @@ function parseWire<T>(schema: z.ZodType<T>, value: unknown): T {
   return result.data;
 }
 
-function asObject(value: unknown): Record<string, unknown> | null {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
-}
-
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}

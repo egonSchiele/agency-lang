@@ -108,6 +108,7 @@ import {
   formatListTable,
 } from "@/cli/schedule/index.js";
 import { scheduleTest } from "@/cli/schedule/test.js";
+import { addRemote, listRemote, removeRemote, editRemote } from "@/cli/schedule/remote.js";
 import { loadEnv } from "@/utils/envfile.js";
 import { debug } from "@/cli/debug.js";
 import { generateDoc } from "@/cli/doc.js";
@@ -1597,6 +1598,28 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("schedule")
     .description("Manage scheduled agent runs");
 
+  // Flags that only mean something with `--backend remote` must fail loudly on
+  // the local/github paths, not be silently ignored.
+  function rejectRemoteOnlyFlags(used: string[]): void {
+    if (used.length > 0) {
+      console.error(
+        color.red(`${used.join(", ")} require${used.length === 1 ? "s" : ""} --backend remote.`),
+      );
+      process.exit(1);
+    }
+  }
+
+  function rejectUnknownScheduleBackend(backend: string | undefined, allowed: string[]): void {
+    if (backend !== undefined && !allowed.includes(backend)) {
+      console.error(
+        color.red(
+          `Unknown --backend value: "${backend}". Accepted here: ${allowed.join(", ")}. Local backends (launchd, systemd, crontab) are auto-detected.`,
+        ),
+      );
+      process.exit(1);
+    }
+  }
+
   scheduleCmd
     .command("add")
     .description("Schedule an agent to run on a recurring basis")
@@ -1613,7 +1636,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--env-file <path>", "Path to .env file")
     .option(
       "--backend <type>",
-      "Force a non-default backend. Currently only 'github' is supported; local backends (launchd, systemd, crontab) are auto-detected.",
+      "Force a non-default backend: 'github' or 'remote' (hosted statelog). Local backends (launchd, systemd, crontab) are auto-detected.",
     )
     .option(
       "--secret <name>",
@@ -1629,6 +1652,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "--no-pin",
       "github backend: emit @<tag> instead of @<sha> for action references",
     )
+    .option("--node <name>", "remote backend: the exported node to schedule")
+    .option("--function <name>", "remote backend: the exported function to schedule")
+    .option(
+      "--arg <name=value>",
+      "remote backend: a named argument for the target (repeatable)",
+      (value: string, prev: string[] = []) => [...prev, value],
+      [] as string[],
+    )
+    .option("--data <json>", "remote backend: a JSON object of arguments for the target")
+    .option(
+      "--timezone <iana>",
+      "remote backend: IANA timezone for the cron (default: this machine's zone)",
+    )
+    .option("--redeploy", "remote backend: deploy the agent before scheduling, even if present")
+    .option("--no-deploy", "remote backend: never deploy; fail if the agent is not on the server")
+    .option("--host <url>", "remote backend: statelog host (default: agency.json log.host)")
+    .option("--project <slug>", "remote backend: statelog project (default: the linked project)")
+    .option("--api-key-env <NAME>", "remote backend: env var holding the API key")
     .action(
       async (
         file: string,
@@ -1642,19 +1683,36 @@ export function createProgram(deps: CliDependencies = {}): Command {
           write?: boolean;
           // commander exposes `--no-pin` as `pin: false` (defaults to true).
           pin?: boolean;
+          node?: string;
+          function?: string;
+          arg?: string[];
+          data?: string;
+          timezone?: string;
+          redeploy?: boolean;
+          // commander exposes `--no-deploy` as `deploy: false` (defaults to true).
+          deploy?: boolean;
+          host?: string;
+          project?: string;
+          apiKeyEnv?: string;
         },
       ) => {
-        // Only `--backend github` is supported today; local backends are
-        // auto-detected. Reject any other value with a clear error rather
-        // than silently routing to auto-detect.
-        if (opts.backend !== undefined && opts.backend !== "github") {
-          console.error(
-            color.red(
-              `Unknown --backend value: "${opts.backend}". The only value accepted today is "github". Local backends (launchd, systemd, crontab) are auto-detected.`,
-            ),
-          );
-          process.exit(1);
+        rejectUnknownScheduleBackend(opts.backend, ["github", "remote"]);
+        if (opts.backend === "remote") {
+          await addRemote(file, opts, getConfigContext());
+          return;
         }
+        const usedRemoteFlags: string[] = [];
+        if (opts.node !== undefined) usedRemoteFlags.push("--node");
+        if (opts.function !== undefined) usedRemoteFlags.push("--function");
+        if (opts.arg !== undefined && opts.arg.length > 0) usedRemoteFlags.push("--arg");
+        if (opts.data !== undefined) usedRemoteFlags.push("--data");
+        if (opts.timezone !== undefined) usedRemoteFlags.push("--timezone");
+        if (opts.redeploy) usedRemoteFlags.push("--redeploy");
+        if (opts.deploy === false) usedRemoteFlags.push("--no-deploy");
+        if (opts.host !== undefined) usedRemoteFlags.push("--host");
+        if (opts.project !== undefined) usedRemoteFlags.push("--project");
+        if (opts.apiKeyEnv !== undefined) usedRemoteFlags.push("--api-key-env");
+        rejectRemoteOnlyFlags(usedRemoteFlags);
         const addOpts = {
           ...opts,
           file,
@@ -1692,11 +1750,31 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     );
 
+  type RemoteTargetFlags = { host?: string; project?: string; apiKeyEnv?: string };
+
+  function usedRemoteTargetFlags(opts: RemoteTargetFlags): string[] {
+    const used: string[] = [];
+    if (opts.host !== undefined) used.push("--host");
+    if (opts.project !== undefined) used.push("--project");
+    if (opts.apiKeyEnv !== undefined) used.push("--api-key-env");
+    return used;
+  }
+
   scheduleCmd
     .command("list")
     .alias("ls")
     .description("List all scheduled agents")
-    .action(() => {
+    .option("--backend <type>", "'remote' lists schedules on the hosted statelog server")
+    .option("--host <url>", "remote backend: statelog host (default: agency.json log.host)")
+    .option("--project <slug>", "remote backend: statelog project (default: the linked project)")
+    .option("--api-key-env <NAME>", "remote backend: env var holding the API key")
+    .action(async (opts: RemoteTargetFlags & { backend?: string }) => {
+      rejectUnknownScheduleBackend(opts.backend, ["remote"]);
+      if (opts.backend === "remote") {
+        await listRemote(opts, getConfigContext());
+        return;
+      }
+      rejectRemoteOnlyFlags(usedRemoteTargetFlags(opts));
       console.log(formatListTable(scheduleList({})));
     });
 
@@ -1704,8 +1782,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("remove")
     .alias("rm")
     .description("Remove a scheduled agent")
-    .argument("<name>", "Name of the schedule to remove")
-    .action((name: string) => {
+    .argument("<name>", "Name of the schedule to remove (remote backend: the schedule id)")
+    .option("--backend <type>", "'remote' removes a schedule on the hosted statelog server")
+    .option("--host <url>", "remote backend: statelog host (default: agency.json log.host)")
+    .option("--project <slug>", "remote backend: statelog project (default: the linked project)")
+    .option("--api-key-env <NAME>", "remote backend: env var holding the API key")
+    .action(async (name: string, opts: RemoteTargetFlags & { backend?: string }) => {
+      rejectUnknownScheduleBackend(opts.backend, ["remote"]);
+      if (opts.backend === "remote") {
+        await removeRemote(name, opts, getConfigContext());
+        return;
+      }
+      rejectRemoteOnlyFlags(usedRemoteTargetFlags(opts));
       try {
         scheduleRemove({ name });
         console.log(color.green(`Schedule "${name}" removed.`));
@@ -1718,22 +1806,43 @@ export function createProgram(deps: CliDependencies = {}): Command {
   scheduleCmd
     .command("edit")
     .description("Edit an existing scheduled agent")
-    .argument("<name>", "Name of the schedule to edit")
+    .argument("<name>", "Name of the schedule to edit (remote backend: the schedule id)")
     .option(
       "--every <preset>",
       "Schedule preset: minute, hourly, daily, weekdays, weekends, weekly, monthly",
     )
     .option("--cron <expression>", "Cron expression (5 fields)")
     .option("--env-file <path>", "Path to .env file")
+    .option("--backend <type>", "'remote' edits a schedule on the hosted statelog server")
+    .option("--timezone <iana>", "remote backend: IANA timezone for the cron")
+    .option("--enabled", "remote backend: enable the schedule")
+    .option("--disabled", "remote backend: disable the schedule")
+    .option("--host <url>", "remote backend: statelog host (default: agency.json log.host)")
+    .option("--project <slug>", "remote backend: statelog project (default: the linked project)")
+    .option("--api-key-env <NAME>", "remote backend: env var holding the API key")
     .action(
-      (
+      async (
         name: string,
-        opts: {
+        opts: RemoteTargetFlags & {
           every?: string;
           cron?: string;
           envFile?: string;
+          backend?: string;
+          timezone?: string;
+          enabled?: boolean;
+          disabled?: boolean;
         },
       ) => {
+        rejectUnknownScheduleBackend(opts.backend, ["remote"]);
+        if (opts.backend === "remote") {
+          await editRemote(name, opts, getConfigContext());
+          return;
+        }
+        const usedFlags = usedRemoteTargetFlags(opts);
+        if (opts.timezone !== undefined) usedFlags.push("--timezone");
+        if (opts.enabled) usedFlags.push("--enabled");
+        if (opts.disabled) usedFlags.push("--disabled");
+        rejectRemoteOnlyFlags(usedFlags);
         try {
           scheduleEdit({ name, ...opts });
           console.log(color.green(`Schedule "${name}" updated.`));
